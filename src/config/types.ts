@@ -1,0 +1,55 @@
+export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'silent';
+
+export interface LLMChainSlot {
+  provider: string;
+  model: string;
+  label?: string;
+}
+
+export interface GlobalConfig {
+  backendUrl: string;
+  defaultProvider: string;
+  defaultModel: string;
+  logLevel: LogLevel;
+  theme: 'dark' | 'light' | 'auto';
+  telemetry: boolean;
+  autoUpdate: boolean;
+}
+
+export interface ProjectConfig {
+  provider?: string;
+  model?: string;
+  systemPromptFile?: string;
+  contextFile?: string;
+  tools?: {
+    enabled?: string[];
+    disabled?: string[];
+    dangerousSkipApproval?: boolean;
+  };
+  maxIterations?: number;
+  autoCompressAt?: number;
+  /** Priority-ordered list of LLM provider+model slots (up to 5) for failover. */
+  llmChain?: LLMChainSlot[];
+}
+
+export interface ResolvedConfig {
+  backendUrl: string;
+  provider: string;
+  model: string;
+  logLevel: LogLevel;
+  theme: 'dark' | 'light' | 'auto';
+  telemetry: boolean;
+  autoUpdate: boolean;
+  systemPromptFile: string | null;
+  contextFile: string;
+  tools: {
+    enabled: string[];
+    disabled: string[];
+    dangerousSkipApproval: boolean;
+  };
+  maxIterations: number;
+  autoCompressAt: number;
+  projectRoot: string | null;
+  /** Priority-ordered failover chain. First entry mirrors provider+model when not explicitly set. */
+  llmChain: LLMChainSlot[];
+}

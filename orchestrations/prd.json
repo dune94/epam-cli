@@ -1,0 +1,798 @@
+{
+  "id": "epam-cli-v1",
+  "title": "EPAM CLI — AI Coding Assistant",
+  "version": "1.0.0",
+  "lastUpdated": "2026-02-25",
+  "project": {
+    "name": "epam-cli",
+    "description": "Multi-LLM AI coding assistant CLI with agent orchestration, failover chain, OAuth auth, and enterprise features",
+    "stack": {
+      "language": "TypeScript",
+      "runtime": "Node.js 20",
+      "bundler": "tsup (CJS)",
+      "testing": "vitest",
+      "devEnvironment": "Ubuntu WSL2 + Docker Compose"
+    }
+  },
+  "stories": [
+    {
+      "id": "EPAM-001",
+      "title": "Budget Guardrails",
+      "description": "When session cost approaches a user-defined threshold (default $5), automatically switch from expensive to cheaper model in the ProviderChain (e.g. claude-opus to claude-haiku), show a warning at 80% threshold, and pause for user approval at 100% threshold. Config key: budgetGuardrails: { warningAt: 4.00, hardLimit: 5.00, autoDowngrade: true } in .epam/settings.json.",
+      "priority": "high",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "billing-engineer",
+      "acceptanceCriteria": [
+        "budgetGuardrails config block (warningAt, hardLimit, autoDowngrade) is read from .epam/settings.json via ConfigResolver",
+        "BudgetGuard.ts tracks cumulative session cost in real-time by subscribing to cost events emitted after each LLM call",
+        "When session cost reaches warningAt, a yellow warning banner is shown in the REPL with current cost and limit",
+        "When session cost reaches hardLimit and autoDowngrade is true, ProviderChain automatically switches to the next cheaper model in the chain",
+        "When session cost reaches hardLimit and autoDowngrade is false, the REPL pauses and prompts user for approval before continuing",
+        "Model downgrade is logged to session JSONL with event type budget_downgrade, previous model, new model, and cost at switch",
+        "BudgetGuard exposes getCurrentCost() and getRemainingBudget() methods",
+        "Unit tests cover: warning threshold trigger, hard limit with autoDowngrade, hard limit without autoDowngrade, cost accumulation across multiple turns",
+        "Config type for budgetGuardrails added to ProjectConfig and ResolvedConfig in types.ts"
+      ],
+      "dependencies": [],
+      "estimatedHours": 6,
+      "technicalNotes": {
+        "files": [
+          "src/billing/BudgetGuard.ts",
+          "src/billing/pricing.ts",
+          "src/cli/repl/Repl.ts",
+          "src/config/types.ts",
+          "src/providers/ProviderChain.ts"
+        ],
+        "requiredSkills": [
+          "TypeScript",
+          "cost-tracking",
+          "provider-chain-integration"
+        ]
+      },
+      "storyType": "implementation"
+    },
+    {
+      "id": "EPAM-002",
+      "title": "Burn-up Reports",
+      "description": "Implement the `epam report [--client name] [--format md|json]` command that reads all session JSONL files for the project, aggregates token and cost data per session, and produces a markdown or JSON summary including: total cost, cost by model, session count, average tokens per turn, and date range.",
+      "priority": "medium",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "cli-ux-engineer",
+      "acceptanceCriteria": [
+        "Command `epam report` is registered in the Commander.js CLI and listed in `epam --help`",
+        "--client flag filters sessions by client name stored in session metadata",
+        "--format md produces a formatted markdown report; --format json produces a machine-readable JSON object",
+        "Report includes: total cost (USD), cost breakdown by model, total session count, average tokens per turn, and date range of sessions",
+        "SessionStore.listSessions() is updated to return parsed session metadata including model, tokenUsage, and cost fields",
+        "Report handles missing or malformed JSONL files gracefully with a warning line in output",
+        "Unit tests cover: markdown output format, JSON output format, filtering by client, empty session directory"
+      ],
+      "dependencies": [],
+      "estimatedHours": 5,
+      "technicalNotes": {
+        "files": [
+          "src/cli/commands/report.ts",
+          "src/context/SessionStore.ts",
+          "src/billing/pricing.ts"
+        ],
+        "requiredSkills": [
+          "TypeScript",
+          "JSONL-processing",
+          "commander"
+        ]
+      },
+      "storyType": "implementation"
+    },
+    {
+      "id": "EPAM-003",
+      "title": "Infra Test — FinOps Phase",
+      "description": "Verify that the budget guardrail configuration loads correctly and that the report command exists and is registered. Write unit tests for BudgetGuard and the report command to confirm the finops phase implementation is complete and correct.",
+      "priority": "medium",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "test-engineer",
+      "acceptanceCriteria": [
+        "test/unit/billing/BudgetGuard.test.ts exists and all tests pass",
+        "test/unit/commands/report.test.ts exists and all tests pass",
+        "BudgetGuard tests cover: config loading, warning threshold event, hard limit event with autoDowngrade true, hard limit event with autoDowngrade false",
+        "Report command tests cover: command registration, markdown output, JSON output, empty state",
+        "All 42 pre-existing tests continue to pass after adding new tests",
+        "`vitest run` exits with code 0"
+      ],
+      "dependencies": [
+        "EPAM-001",
+        "EPAM-002"
+      ],
+      "estimatedHours": 2,
+      "technicalNotes": {
+        "files": [
+          "test/unit/billing/BudgetGuard.test.ts",
+          "test/unit/commands/report.test.ts"
+        ],
+        "requiredSkills": [
+          "TypeScript",
+          "vitest",
+          "unit-testing"
+        ]
+      },
+      "storyType": "review"
+    },
+    {
+      "id": "EPAM-004",
+      "title": "Agent Gold Profiles",
+      "description": "Implement the `epam profile [list|load|save|delete] [name]` command. Profiles are YAML or JSON files stored in ~/.epam/profiles/ or .epam/profiles/. Each profile has: name, description, systemPromptAppend, tools (enabled/disabled overrides), model, maxIterations, and tags. The `/profile [name]` slash command loads a profile into the current REPL session, merging its settings into the active AgentRunOptions.",
+      "priority": "high",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "agent-systems-engineer",
+      "acceptanceCriteria": [
+        "ProfileStore reads from ~/.epam/profiles/ (global) and .epam/profiles/ (project-local, takes precedence)",
+        "Profile schema (name, description, systemPromptAppend, tools, model, maxIterations, tags) is defined in src/agent/profiles/types.ts",
+        "ProfileLoader merges profile into AgentRunOptions: systemPromptAppend is appended to base system prompt, tool overrides are applied, model and maxIterations override defaults if set",
+        "`epam profile list` prints all available profiles (global + local) with name, description, and tags",
+        "`epam profile save [name]` saves current session config as a profile YAML file",
+        "`epam profile load [name]` prints confirmation of what would be loaded (non-interactive mode)",
+        "`epam profile delete [name]` removes the profile file with confirmation prompt",
+        "SlashCommands.ts includes `/profile [name]` which calls ProfileLoader.load() and logs confirmation to REPL",
+        "Unit tests cover: list combining global+local, load/merge precedence, save serialization, delete confirmation"
+      ],
+      "dependencies": [],
+      "estimatedHours": 8,
+      "technicalNotes": {
+        "files": [
+          "src/agent/profiles/types.ts",
+          "src/agent/profiles/ProfileStore.ts",
+          "src/agent/profiles/ProfileLoader.ts",
+          "src/cli/commands/profile.ts",
+          "src/cli/repl/SlashCommands.ts"
+        ],
+        "requiredSkills": [
+          "TypeScript",
+          "YAML",
+          "file-system",
+          "agent-context"
+        ]
+      },
+      "storyType": "implementation"
+    },
+    {
+      "id": "EPAM-005",
+      "title": "/plan Mode",
+      "description": "Implement the `/plan` slash command that enters plan mode: the agent generates a step-by-step plan, presents it for user approval (Y/n/edit), then executes only after the user approves. The plan is stored as structured JSON with steps, affected files, and estimated complexity. Each step is shown in the REPL as it executes.",
+      "priority": "high",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "cli-ux-engineer",
+      "acceptanceCriteria": [
+        "/plan slash command is registered in SlashCommands.ts and triggers PlanMode.generatePlan()",
+        "PlanMode.generatePlan() sends a structured planning prompt to the LLM and parses the response into a PlanStep[] JSON array",
+        "Each PlanStep has: stepNumber, description, affectedFiles (string[]), estimatedComplexity (low/medium/high)",
+        "The plan is displayed in the REPL with numbered steps, affected files, and complexity indicators using chalk formatting",
+        "User is prompted: 'Approve plan? [Y/n/edit]'. Y proceeds, n cancels, edit opens the plan JSON in $EDITOR",
+        "After approval, each step executes sequentially with a step counter header shown before each step",
+        "If a step fails, execution pauses and user is prompted to retry, skip, or abort",
+        "The approved plan JSON is stored in .epam/plans/ with a timestamped filename for later review",
+        "Unit tests cover: plan generation prompt structure, approval flow (Y/n/edit), step execution loop, failure pause"
+      ],
+      "dependencies": [],
+      "estimatedHours": 7,
+      "technicalNotes": {
+        "files": [
+          "src/cli/repl/SlashCommands.ts",
+          "src/agent/PlanMode.ts",
+          "src/cli/repl/Repl.ts"
+        ],
+        "requiredSkills": [
+          "TypeScript",
+          "readline",
+          "agent-orchestration"
+        ]
+      },
+      "storyType": "implementation"
+    },
+    {
+      "id": "EPAM-006",
+      "title": "Decision Records / Architectural DNA",
+      "description": "Implement the `epam decision [add|list|search]` command. Decisions are stored as JSONL in .epam/decisions.jsonl. Each record has: id, title, description, rationale, pattern_to_avoid, approved_alternative, tags, author, createdAt. A pre-call hook in AgentRunner loads relevant decisions and injects them into the system prompt before each LLM call.",
+      "priority": "medium",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "typescript-engineer",
+      "acceptanceCriteria": [
+        "Decision schema (id, title, description, rationale, pattern_to_avoid, approved_alternative, tags, author, createdAt) defined in src/decisions/types.ts",
+        "DecisionStore.add() appends a new record to .epam/decisions.jsonl with auto-generated id (DEC-001, DEC-002, etc.) and ISO createdAt timestamp",
+        "DecisionStore.list() returns all decisions parsed from JSONL",
+        "DecisionStore.search(query) performs case-insensitive keyword match across title, description, tags fields",
+        "`epam decision add` prompts for title, rationale, pattern_to_avoid, approved_alternative, tags via readline",
+        "`epam decision list` prints a formatted table of all decisions",
+        "`epam decision search [query]` prints matching decisions",
+        "ContextBuilder.ts injects the top 5 most relevant decisions as a '[DECISION RECORDS]' block in the system prompt before each agent call",
+        "Unit tests cover: add/list/search, injection into system prompt, empty decisions file gracefully handled"
+      ],
+      "dependencies": [],
+      "estimatedHours": 6,
+      "technicalNotes": {
+        "files": [
+          "src/decisions/types.ts",
+          "src/decisions/DecisionStore.ts",
+          "src/cli/commands/decision.ts",
+          "src/context/ContextBuilder.ts"
+        ],
+        "requiredSkills": [
+          "TypeScript",
+          "JSONL",
+          "system-prompt-injection"
+        ]
+      },
+      "storyType": "implementation"
+    },
+    {
+      "id": "EPAM-007",
+      "title": "MCP Server Mode",
+      "description": "Expose epam-cli as an MCP server so other agents and Claude instances can call epam-cli's built-in tools (ReadFile, WriteFile, Bash, ListFiles, Search, FetchUrl) via JSON-RPC 2.0 over SSE. Command: `epam mcp serve [--port 3100]`. Also implement MCP client mode: read .mcp.json in the project root and register external MCP tool servers into the agent's tool registry.",
+      "priority": "high",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "agent-systems-engineer",
+      "acceptanceCriteria": [
+        "`epam mcp serve [--port 3100]` starts an HTTP server exposing MCP endpoints: POST /mcp/tools/list, POST /mcp/tools/call, GET /mcp/sse",
+        "McpServer.ts implements JSON-RPC 2.0 dispatch for all six built-in tools (ReadFile, WriteFile, Bash, ListFiles, Search, FetchUrl)",
+        "SSE endpoint streams tool call progress events to connected clients",
+        "McpClient.ts reads .mcp.json from project root (format: { servers: [{ name, url, transport }] }) and registers remote tools into the tool registry",
+        "Remote MCP tool calls are proxied: McpClient serializes the call, sends to remote server, returns result",
+        ".mcp.json example file with one example server entry is included in the project root",
+        "Tool registry (src/tools/registry.ts) updated to support registering dynamically discovered MCP tools at runtime",
+        "Unit tests cover: tool list endpoint, tool call dispatch, .mcp.json parsing, remote tool registration"
+      ],
+      "dependencies": [],
+      "estimatedHours": 10,
+      "technicalNotes": {
+        "files": [
+          "src/mcp/types.ts",
+          "src/mcp/McpServer.ts",
+          "src/mcp/McpClient.ts",
+          "src/cli/commands/mcp.ts",
+          ".mcp.json",
+          "src/tools/registry.ts"
+        ],
+        "requiredSkills": [
+          "TypeScript",
+          "MCP-protocol",
+          "JSON-RPC",
+          "SSE-streaming"
+        ]
+      },
+      "storyType": "implementation"
+    },
+    {
+      "id": "EPAM-008",
+      "title": "Review — Agent Intelligence Phase",
+      "description": "Review all stories in the agent_intelligence phase (EPAM-004 through EPAM-007). Verify TypeScript strict compliance, test coverage, slash command patterns, profile loading behaviour, plan mode approval flow, decision injection correctness, and MCP protocol implementation quality.",
+      "priority": "medium",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "review-agent",
+      "acceptanceCriteria": [
+        "All EPAM-004 through EPAM-007 acceptance criteria are met and verified",
+        "No TypeScript strict violations (no untyped `any` without explanatory comment)",
+        "All new slash commands follow the SlashCommandContext callback pattern",
+        "ProfileLoader correctly merges systemPromptAppend without overwriting the base system prompt",
+        "PlanMode plan JSON is valid and parseable across varied LLM outputs",
+        "DecisionStore JSONL append is atomic (no partial writes on crash)",
+        "MCP server endpoints respond with correct JSON-RPC 2.0 error structures on invalid input",
+        "All new features have corresponding vitest unit tests",
+        "`tsc --noEmit` passes with zero errors after all four stories are merged"
+      ],
+      "dependencies": [
+        "EPAM-004",
+        "EPAM-005",
+        "EPAM-006",
+        "EPAM-007"
+      ],
+      "estimatedHours": 3,
+      "technicalNotes": {
+        "files": [],
+        "requiredSkills": [
+          "TypeScript",
+          "code-review",
+          "vitest"
+        ]
+      },
+      "storyType": "review"
+    },
+    {
+      "id": "EPAM-009",
+      "title": "/replay Command",
+      "description": "Implement `epam replay [session_id]` CLI command and `/replay` slash command. Reads a session JSONL file and replays each turn: shows user message, assistant response, and tool calls in sequence with a configurable delay. Supports --speed flag (1x/2x/4x). Useful for team leads to review agent reasoning.",
+      "priority": "medium",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "cli-ux-engineer",
+      "acceptanceCriteria": [
+        "`epam replay [session_id]` command is registered in Commander.js; without session_id, shows an interactive session picker using the prompts library",
+        "--speed flag accepts 1, 2, or 4; default is 1x; higher speeds reduce inter-turn delay",
+        "Each replayed turn displays: turn number, user message (cyan), assistant response (white), tool calls (yellow) with tool name and truncated args",
+        "Replay pauses at each turn for the speed-adjusted delay (1x=2s, 2x=1s, 4x=0.5s)",
+        "SessionStore.getSession(id) updated to return full parsed turn array from JSONL",
+        "`/replay` slash command in the REPL shows the interactive session picker and replays the chosen session inline",
+        "Replay gracefully handles malformed JSONL lines with a [SKIPPED: malformed turn] notice",
+        "Unit tests cover: speed flag parsing, turn rendering format, session picker logic, malformed line handling"
+      ],
+      "dependencies": [],
+      "estimatedHours": 5,
+      "technicalNotes": {
+        "files": [
+          "src/cli/commands/replay.ts",
+          "src/context/SessionStore.ts",
+          "src/cli/repl/SlashCommands.ts"
+        ],
+        "requiredSkills": [
+          "TypeScript",
+          "session-replay",
+          "chalk-rendering"
+        ]
+      },
+      "storyType": "implementation"
+    },
+    {
+      "id": "EPAM-010",
+      "title": "Shared Team Memory",
+      "description": "Implement `epam sync [push|pull|status]` command to sync .epam/context.md and .epam/decisions.jsonl to a shared backend endpoint (POST /v1/projects/{id}/context). Pull fetches the latest shared context. Requires auth token from KeychainKeyStore. Conflict resolution: last-write-wins with ISO timestamp comparison.",
+      "priority": "medium",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "typescript-engineer",
+      "acceptanceCriteria": [
+        "`epam sync push` reads .epam/context.md and .epam/decisions.jsonl, POSTs to /v1/projects/{projectId}/context with Authorization header from auth token",
+        "`epam sync pull` fetches the remote context and decisions; writes to .epam/context.md and .epam/decisions.jsonl only if remote timestamp is newer",
+        "`epam sync status` shows: last push timestamp, last pull timestamp, local-vs-remote diff summary (lines added/removed)",
+        "Conflict resolution uses last-write-wins: each file carries a lastModified ISO timestamp in the POST body and response",
+        "BackendClient.ts updated with syncPush(projectId, payload) and syncPull(projectId) methods",
+        "ContextLoader.ts updated to check for a pulled remote context on startup and merge it with local context",
+        "Auth token is read from the existing KeychainKeyStore; if absent, command prints actionable error and exits 1",
+        "Unit tests cover: push payload structure, pull timestamp comparison (remote newer wins, local newer skips), status output, missing token error"
+      ],
+      "dependencies": [],
+      "estimatedHours": 8,
+      "technicalNotes": {
+        "files": [
+          "src/cli/commands/sync.ts",
+          "src/http/BackendClient.ts",
+          "src/context/ContextLoader.ts"
+        ],
+        "requiredSkills": [
+          "TypeScript",
+          "HTTP-client",
+          "auth-token",
+          "conflict-resolution"
+        ]
+      },
+      "storyType": "implementation"
+    },
+    {
+      "id": "EPAM-011",
+      "title": "Review — Team Features Phase",
+      "description": "Review all stories in the team_features phase (EPAM-009 and EPAM-010). Verify session replay rendering, speed flag behaviour, sync push/pull correctness, conflict resolution logic, auth token handling, and test coverage.",
+      "priority": "medium",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "review-agent",
+      "acceptanceCriteria": [
+        "All EPAM-009 and EPAM-010 acceptance criteria are met and verified",
+        "Replay command renders all three turn element types (user, assistant, tool call) with correct chalk colours",
+        "Sync pull does not overwrite local context when local is newer than remote",
+        "Sync push includes correct Authorization header format",
+        "No hardcoded endpoint strings — sync endpoint URL comes from config",
+        "All new features have corresponding vitest unit tests",
+        "`tsc --noEmit` passes with zero errors after both stories are merged"
+      ],
+      "dependencies": [
+        "EPAM-009",
+        "EPAM-010"
+      ],
+      "estimatedHours": 2,
+      "technicalNotes": {
+        "files": [],
+        "requiredSkills": [
+          "TypeScript",
+          "code-review",
+          "vitest"
+        ]
+      },
+      "storyType": "review"
+    },
+    {
+      "id": "EPAM-012",
+      "title": "Ralph Wiggum Loop",
+      "description": "When a Bash tool call returns a non-zero exit code, spawn N parallel AgentRunner instances (default 3) each attempting a different fix strategy. Each instance receives the error output plus full context. The first instance to succeed wins and its output is used; the others are cancelled. Quality scoring prefers the fix with the lowest token complexity that also passes the original failing command on re-run.",
+      "priority": "high",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "agent-systems-engineer",
+      "acceptanceCriteria": [
+        "RalphWiggumLoop.ts accepts: original command, stderr output, context messages, N (default 3), and a quality scorer function",
+        "N AgentRunner instances are spawned in parallel using Promise.race() with a cancellation token pattern",
+        "Each instance receives a unique fix strategy hint in its system prompt: 'Strategy 1: minimal change', 'Strategy 2: refactor approach', 'Strategy 3: alternative implementation'",
+        "After an instance produces a fix, the original failing Bash command is re-run to verify the fix actually works",
+        "Quality scoring ranks successful fixes by: (1) original command passes, (2) lowest total token count of fix diff",
+        "Losing instances are cancelled via AbortController signal passed to AgentRunner",
+        "AgentRunner.ts updated to call RalphWiggumLoop on recoverable Bash tool errors (non-zero exit with stderr)",
+        "Bash.ts updated to classify errors as recoverable (exit 1/2, stderr present) vs non-recoverable (SIGKILL, permission denied)",
+        "Unit tests cover: parallel spawn, first-success cancellation, quality scoring, non-recoverable error passthrough"
+      ],
+      "dependencies": [],
+      "estimatedHours": 10,
+      "technicalNotes": {
+        "files": [
+          "src/agent/RalphWiggumLoop.ts",
+          "src/agent/AgentRunner.ts",
+          "src/tools/builtin/Bash.ts"
+        ],
+        "requiredSkills": [
+          "TypeScript",
+          "parallel-async",
+          "agent-orchestration",
+          "quality-scoring"
+        ]
+      },
+      "storyType": "implementation"
+    },
+    {
+      "id": "EPAM-013",
+      "title": "Multi-Agent Squad Execution",
+      "description": "Implement `epam squad \"task description\"` command. Spawns a Leader agent that decomposes the task into subtasks, delegates to specialized sub-agents (Coder, Tester, SecurityAuditor) running in parallel, then runs a peer-review loop where the Auditor must approve the Coder's output before it is presented to the user. Uses AgentHandoff for delegation.",
+      "priority": "high",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "agent-systems-engineer",
+      "acceptanceCriteria": [
+        "SquadRunner.ts orchestrates the full lifecycle: Leader → decompose → parallel Coder+Tester+SecurityAuditor → peer-review → present",
+        "Leader agent produces a SquadPlan JSON: { subtasks: [{ id, role, description, dependsOn }] }",
+        "Coder, Tester, SecurityAuditor roles defined in roles.ts with distinct system prompts and tool access",
+        "Coder and Tester run in parallel (Promise.all); SecurityAuditor runs after Coder completes",
+        "SecurityAuditor review: approves (proceed) or blocks (return to Coder with findings); max 2 re-review cycles",
+        "AgentHandoff.ts updated to support delegate_to_squad action type in addition to delegate_to_agent",
+        "`epam squad` command streams progress to terminal: [Leader] Decomposing... [Coder] Working... [SecurityAuditor] Reviewing...",
+        "Final output presented only after SecurityAuditor approval",
+        "Unit tests cover: decomposition parsing, parallel execution, Auditor block/approve cycle, max re-review limit"
+      ],
+      "dependencies": [],
+      "estimatedHours": 12,
+      "technicalNotes": {
+        "files": [
+          "src/agent/squad/SquadRunner.ts",
+          "src/agent/squad/roles.ts",
+          "src/agent/AgentHandoff.ts",
+          "src/cli/commands/squad.ts"
+        ],
+        "requiredSkills": [
+          "TypeScript",
+          "multi-agent",
+          "delegation",
+          "peer-review"
+        ]
+      },
+      "storyType": "implementation"
+    },
+    {
+      "id": "EPAM-014",
+      "title": "Review — Multi-Agent Phase",
+      "description": "Review all stories in the multi_agent phase (EPAM-012 and EPAM-013). Verify Ralph Wiggum Loop parallel execution safety, cancellation correctness, quality scoring logic, and squad execution delegation chain. Confirm no goroutine-equivalent leaks (unresolved Promises), proper AbortController usage, and peer-review loop bounds.",
+      "priority": "medium",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "review-agent",
+      "acceptanceCriteria": [
+        "All EPAM-012 and EPAM-013 acceptance criteria are met and verified",
+        "Ralph Wiggum Loop never leaves unresolved Promise chains after the winner is selected",
+        "AbortController signals are properly propagated to all child AgentRunner instances",
+        "Squad Coder/Tester parallel execution does not share mutable state",
+        "SecurityAuditor max re-review cycle (2) is enforced and the task fails gracefully when exceeded",
+        "AgentHandoff delegate_to_squad is backwards-compatible with existing delegate_to_agent calls",
+        "All new features have corresponding vitest unit tests",
+        "`tsc --noEmit` passes with zero errors after both stories are merged"
+      ],
+      "dependencies": [
+        "EPAM-012",
+        "EPAM-013"
+      ],
+      "estimatedHours": 3,
+      "technicalNotes": {
+        "files": [],
+        "requiredSkills": [
+          "TypeScript",
+          "code-review",
+          "async-safety"
+        ]
+      },
+      "storyType": "review"
+    },
+    {
+      "id": "EPAM-015",
+      "title": "Remote Constraint Injection",
+      "description": "Implement a backend polling mechanism that calls GET /v1/projects/{id}/constraints at session start. The response contains active constraint rules that are injected into the system prompt. Each constraint has: id, rule, severity (warn/block), createdBy, expiresAt. Block-severity constraints are prepended prominently; warn-severity constraints are appended as notes.",
+      "priority": "medium",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "typescript-engineer",
+      "acceptanceCriteria": [
+        "ConstraintLoader fetches GET /v1/projects/{id}/constraints with auth token on AgentRunner session start",
+        "Constraint schema (id, rule, severity, createdBy, expiresAt) is defined and validated with zod",
+        "Expired constraints (expiresAt < now) are filtered out before injection",
+        "Block-severity constraints are injected at the top of the system prompt under a [CONSTRAINTS — MUST FOLLOW] header",
+        "Warn-severity constraints are injected at the bottom of the system prompt under a [ADVISORY CONSTRAINTS] header",
+        "If the endpoint is unreachable, a warning is logged but the session proceeds without constraints",
+        "Constraint fetch result is cached for the session duration (no re-fetch per turn)",
+        "Unit tests cover: constraint fetch, expiry filtering, severity separation in prompt, unreachable endpoint fallback"
+      ],
+      "dependencies": [],
+      "estimatedHours": 6,
+      "technicalNotes": {
+        "files": [
+          "src/constraints/types.ts",
+          "src/constraints/ConstraintLoader.ts",
+          "src/context/ContextBuilder.ts",
+          "src/agent/AgentRunner.ts"
+        ],
+        "requiredSkills": [
+          "TypeScript",
+          "HTTP-client",
+          "zod-validation",
+          "system-prompt-injection"
+        ]
+      },
+      "storyType": "implementation"
+    },
+    {
+      "id": "EPAM-016",
+      "title": "Signature Auditor Agents",
+      "description": "Define named auditor personas (e.g. 'security-sarah', 'performance-paul') in .epam/auditors.json. After each agent response, the selected auditors run in parallel and produce critique transcripts. The user sees the debate — each auditor's findings — before the final answer is confirmed.",
+      "priority": "medium",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "agent-systems-engineer",
+      "acceptanceCriteria": [
+        "Auditor schema defined: { name, persona, focus, severity_threshold, model } in .epam/auditors.json",
+        "AuditorRegistry.ts reads .epam/auditors.json and instantiates auditor AgentRunner instances with persona-specific system prompts",
+        "After each primary agent response, enabled auditors run in parallel via Promise.all",
+        "Each auditor receives: the user message, the agent's proposed response, and the full conversation context",
+        "Auditor output is rendered in the REPL: '[AUDITOR: security-sarah] Finding: ...' in a distinct colour (magenta)",
+        "If any auditor raises a severity above the configured threshold (e.g. critical), the response is held and the user prompted to proceed or reject",
+        "Auditors can be toggled per-session via `/auditors [on|off|list]` slash command",
+        "Unit tests cover: parallel auditor execution, severity threshold gate, toggle on/off, persona injection"
+      ],
+      "dependencies": [],
+      "estimatedHours": 10,
+      "technicalNotes": {
+        "files": [
+          "src/auditors/types.ts",
+          "src/auditors/AuditorRegistry.ts",
+          "src/auditors/AuditorRunner.ts",
+          "src/agent/AgentRunner.ts",
+          "src/cli/repl/SlashCommands.ts"
+        ],
+        "requiredSkills": [
+          "TypeScript",
+          "multi-agent",
+          "agent-orchestration",
+          "chalk-rendering"
+        ]
+      },
+      "storyType": "implementation"
+    },
+    {
+      "id": "EPAM-017",
+      "title": "Expertise Marketplace",
+      "description": "Implement `epam consult @profile-name` which pulls a named profile's systemPromptAppend and recent decision records into the current session context. Profiles are sourced from ~/.epam/profiles/ (implemented in EPAM-004). The consultation context is injected as a '[CONSULTING: @profile-name]' block in the next LLM call only.",
+      "priority": "medium",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "typescript-engineer",
+      "acceptanceCriteria": [
+        "`epam consult @profile-name` resolves the named profile via ProfileStore (from EPAM-004)",
+        "The profile's systemPromptAppend is injected as a '[CONSULTING: @profile-name]' block prepended to the next user message",
+        "The 3 most recently created decision records (from .epam/decisions.jsonl) tagged with matching profile tags are also injected",
+        "Consultation context applies only to the next single LLM call, then reverts to baseline session context",
+        "If profile does not exist, command prints error listing available profiles and exits 1",
+        "Consultation injection is visible in the REPL with a confirmation line: 'Consulting @profile-name for next response...'",
+        "Unit tests cover: profile resolution, single-turn context injection, tag-matched decision filtering, unknown profile error"
+      ],
+      "dependencies": [
+        "EPAM-004"
+      ],
+      "estimatedHours": 5,
+      "technicalNotes": {
+        "files": [
+          "src/cli/commands/consult.ts",
+          "src/agent/profiles/ProfileLoader.ts",
+          "src/context/ContextBuilder.ts"
+        ],
+        "requiredSkills": [
+          "TypeScript",
+          "system-prompt-injection",
+          "agent-context"
+        ]
+      },
+      "storyType": "implementation"
+    },
+    {
+      "id": "EPAM-018",
+      "title": "Review — Enterprise Phase",
+      "description": "Review all stories in the enterprise phase (EPAM-015, EPAM-016, EPAM-017). Verify constraint injection security (no constraint bypass), auditor parallel safety, severity gate correctness, consultation single-turn scoping, and full TypeScript strict compliance.",
+      "priority": "medium",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "review-agent",
+      "acceptanceCriteria": [
+        "All EPAM-015, EPAM-016, and EPAM-017 acceptance criteria are met and verified",
+        "ConstraintLoader cannot be bypassed: block constraints are always prepended regardless of ContextBuilder ordering",
+        "Auditor parallel execution does not leak agent state between auditor instances",
+        "Consultation context is confirmed to apply only to one turn (no bleed into subsequent turns)",
+        "Zod validation on constraint schema rejects malformed API responses without crashing the session",
+        "All new features have corresponding vitest unit tests",
+        "`tsc --noEmit` passes with zero errors after all three stories are merged"
+      ],
+      "dependencies": [
+        "EPAM-015",
+        "EPAM-016",
+        "EPAM-017"
+      ],
+      "estimatedHours": 3,
+      "technicalNotes": {
+        "files": [],
+        "requiredSkills": [
+          "TypeScript",
+          "code-review",
+          "security-review"
+        ]
+      },
+      "storyType": "review"
+    },
+    {
+      "id": "EPAM-019",
+      "title": "RAG Asset Discovery POC",
+      "description": "Mock implementation of enterprise asset discovery. .epam/assets.json contains mock asset records (id, title, description, tags, repoUrl). Before each agent LLM call, perform fuzzy keyword matching against the user message and inject the top 3 matching assets as an '[ASSET ALERT]' block in the system prompt. No vector database — pure keyword matching for POC.",
+      "priority": "low",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "typescript-engineer",
+      "acceptanceCriteria": [
+        "Asset schema (id, title, description, tags, repoUrl) defined in src/assets/types.ts",
+        "AssetStore.ts reads .epam/assets.json at session start; gracefully skips if file absent",
+        "AssetStore.search(query) performs keyword matching: tokenises query, scores each asset by term overlap in title+description+tags, returns top 3 by score",
+        "If top match score is below threshold (0.1), no assets are injected (avoid noise)",
+        "ContextBuilder.ts updated to call AssetStore.search(userMessage) before each LLM call and inject top matches as '[ASSET ALERT]' block",
+        "Asset injection block format: '[ASSET ALERT]\\n- {title} ({repoUrl}): {description}\\n' for each matched asset",
+        ".epam/assets.json example file with 5 mock assets covering common patterns (auth, payments, logging, etc.) is included",
+        "Unit tests cover: keyword scoring, threshold filtering, ContextBuilder injection, missing assets.json no-op"
+      ],
+      "dependencies": [],
+      "estimatedHours": 6,
+      "technicalNotes": {
+        "files": [
+          "src/assets/types.ts",
+          "src/assets/AssetStore.ts",
+          "src/context/ContextBuilder.ts"
+        ],
+        "requiredSkills": [
+          "TypeScript",
+          "fuzzy-search",
+          "POC"
+        ]
+      },
+      "storyType": "implementation"
+    },
+    {
+      "id": "EPAM-020",
+      "title": "Review — RAG POC Phase",
+      "description": "Review EPAM-019 (RAG Asset Discovery POC). Verify keyword matching correctness, score threshold behaviour, injection format in system prompt, absence handling, and that the POC implementation does not introduce performance regressions on the ContextBuilder hot path.",
+      "priority": "low",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "review-agent",
+      "acceptanceCriteria": [
+        "EPAM-019 acceptance criteria are met and verified",
+        "AssetStore.search() is synchronous or uses pre-loaded in-memory index — no blocking I/O on the ContextBuilder hot path",
+        "Score threshold (0.1) is configurable via config rather than a magic number constant",
+        "Asset injection does not exceed 500 tokens in the worst case (3 assets with long descriptions)",
+        "Unit tests exist and pass for all AssetStore.search() edge cases",
+        "`tsc --noEmit` passes with zero errors after EPAM-019 is merged"
+      ],
+      "dependencies": [
+        "EPAM-019"
+      ],
+      "estimatedHours": 2,
+      "technicalNotes": {
+        "files": [],
+        "requiredSkills": [
+          "TypeScript",
+          "code-review",
+          "performance-review"
+        ]
+      },
+      "storyType": "review"
+    }
+  ],
+  "configuration": {
+    "profilesPath": "orchestrations/agents/profiles.json",
+    "autoCommit": false,
+    "requireTests": true
+  },
+  "implementationOrder": {
+    "finops": [
+      "EPAM-001",
+      "EPAM-002",
+      "EPAM-003"
+    ],
+    "agent_intelligence": [
+      "EPAM-004",
+      "EPAM-005",
+      "EPAM-006",
+      "EPAM-007",
+      "EPAM-008"
+    ],
+    "team_features": [
+      "EPAM-009",
+      "EPAM-010",
+      "EPAM-011"
+    ],
+    "multi_agent": [
+      "EPAM-012",
+      "EPAM-013",
+      "EPAM-014"
+    ],
+    "enterprise": [
+      "EPAM-015",
+      "EPAM-016",
+      "EPAM-017",
+      "EPAM-018"
+    ],
+    "rag_poc": [
+      "EPAM-019",
+      "EPAM-020"
+    ]
+  },
+  "totalEstimatedHours": 119,
+  "phasesConfig": {
+    "finops": {
+      "orchestrationMode": "bash"
+    },
+    "agent_intelligence": {
+      "orchestrationMode": "bash"
+    },
+    "team_features": {
+      "orchestrationMode": "bash"
+    },
+    "multi_agent": {
+      "orchestrationMode": "hybrid"
+    },
+    "enterprise": {
+      "orchestrationMode": "hybrid"
+    },
+    "rag_poc": {
+      "orchestrationMode": "bash"
+    }
+  }
+}

@@ -1,0 +1,31 @@
+import chalk from 'chalk';
+import { formatUsage } from '../output/Formatter.js';
+
+export class Renderer {
+  renderPrompt(provider: string, model: string): string {
+    return chalk.cyan.bold('epam') + chalk.dim(` [${provider}/${model}]`) + chalk.cyan(' › ');
+  }
+
+  renderWelcome(version: string, provider: string, model: string, projectRoot: string | null): void {
+    console.log();
+    console.log(chalk.bold.cyan('EPAM CLI') + chalk.dim(` v${version}`));
+    console.log(chalk.dim(`Provider: ${provider} | Model: ${model}`));
+    if (projectRoot) {
+      console.log(chalk.dim(`Project: ${projectRoot}`));
+    }
+    console.log(chalk.dim('Type /help for commands, Ctrl+C or /exit to quit'));
+    console.log();
+  }
+
+  renderUsage(inputTokens: number, outputTokens: number, sessionCost?: number): void {
+    process.stderr.write(formatUsage(inputTokens, outputTokens, sessionCost) + '\n');
+  }
+
+  renderError(message: string): void {
+    console.error(chalk.red(`\nError: ${message}`));
+  }
+
+  renderThinking(): void {
+    process.stderr.write(chalk.dim('\nThinking...\n'));
+  }
+}

@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shadow Play — Agent Profiles</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:          #050a0f;
+  --bg1:         #0a1420;
+  --bg2:         #0f1e30;
+  --bg3:         #142540;
+  --border:      #1a3050;
+  --border2:     #1a2d40;
+  --text:        #e2f0f8;
+  --text2:       #8ab4cc;
+  --text3:       #4a7090;
+  --teal:        #06b6d4;
+  --teal2:       #22d3ee;
+  --teal-dim:    rgba(6,182,212,0.12);
+  --violet:      #7c3aed;
+  --violet2:     #a78bfa;
+  --violet-dim:  rgba(124,58,237,0.15);
+  --green:       #4ade80;
+  --green-dim:   rgba(74,222,128,0.12);
+  --amber:       #fbbf24;
+  --amber-dim:   rgba(251,191,36,0.15);
+  --pink:        #f472b6;
+  --pink-dim:    rgba(244,114,182,0.15);
+  --blue:        #60a5fa;
+  --blue-dim:    rgba(96,165,250,0.15);
+  --red:         #f87171;
+  --red-dim:     rgba(248,113,113,0.15);
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* Scanline overlay */
+body::after {
+  content: '';
+  position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(6,182,212,0.015) 2px, rgba(6,182,212,0.015) 4px
+  );
+}
+
+/* ── Header ── */
+.header {
+  background: linear-gradient(135deg, #05101e 0%, #0a0820 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 28px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 200;
+  box-shadow: 0 4px 24px rgba(6,182,212,0.08);
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.header-icon {
+  width: 34px; height: 34px;
+  background: linear-gradient(135deg, #06b6d4, #7c3aed);
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; flex-shrink: 0;
+  box-shadow: 0 0 12px rgba(6,182,212,0.35);
+}
+.header-title {
+  font-size: 18px; font-weight: 800;
+  background: linear-gradient(90deg, #06b6d4 0%, #a78bfa 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text; letter-spacing: -0.3px;
+}
+.header-sub { color: var(--text3); font-size: 10px; margin-top: 1px; letter-spacing: 0.3px; }
+.header-right { text-align: right; }
+.header-meta {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--text3); font-size: 11px; margin-bottom: 5px;
+}
+.live-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  animation: pulse 1.8s infinite;
+  flex-shrink: 0;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.8); }
+}
+.nav-links { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.nav-links a {
+  color: var(--teal); text-decoration: none; font-size: 10px;
+  opacity: 0.6; transition: opacity .15s, text-shadow .15s;
+}
+.nav-links a:hover { opacity: 1; text-shadow: 0 0 8px rgba(6,182,212,0.6); }
+
+/* ── Layout ── */
+.container { padding: 20px 28px; max-width: 1500px; margin: 0 auto; }
+
+/* ── Section heading ── */
+.section-heading {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1.5px; color: var(--text3);
+  margin: 24px 0 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-heading::after {
+  content: ''; flex: 1; height: 1px;
+  background: linear-gradient(90deg, var(--border) 0%, transparent 100%);
+}
+
+/* ── Summary cards ── */
+.summary-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 8px;
+}
+@media (max-width: 900px) { .summary-row { grid-template-columns: repeat(2, 1fr); } }
+.summary-card {
+  background: var(--bg1);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.summary-card .s-label {
+  font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 1px;
+}
+.summary-card .s-value {
+  font-size: 24px; font-weight: 800; color: var(--teal);
+  font-variant-numeric: tabular-nums;
+}
+.summary-card .s-value.violet { color: var(--violet2); }
+.summary-card .s-value.amber  { color: var(--amber); }
+.summary-card .s-value.green  { color: var(--green); }
+.summary-card .s-sub { font-size: 10px; color: var(--text3); }
+
+/* ── Upcoming phase ── */
+.upcoming-block {
+  background: var(--bg1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+}
+.upcoming-phase-name {
+  font-size: 13px; font-weight: 700; color: var(--violet2);
+  margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+}
+.upcoming-phase-name .label { color: var(--text3); font-weight: 400; font-size: 11px; }
+.story-row {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 7px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap;
+}
+.story-row-id {
+  font-family: 'Courier New', monospace;
+  font-size: 11px; color: var(--teal);
+  white-space: nowrap; margin-top: 1px;
+}
+.story-row-body { flex: 1; min-width: 0; }
+.story-row-title { font-size: 12px; color: var(--text); margin-bottom: 5px; }
+.story-badges { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+
+/* ── Generic badges ── */
+.badge {
+  display: inline-flex; align-items: center;
+  font-size: 9px; font-weight: 800; letter-spacing: 0.5px;
+  padding: 2px 7px; border-radius: 3px; white-space: nowrap;
+}
+.badge-teal   { background: rgba(6,182,212,0.15); color: var(--teal);   border: 1px solid rgba(6,182,212,0.3); }
+.badge-violet { background: rgba(124,58,237,0.15); color: var(--violet2); border: 1px solid rgba(124,58,237,0.3); }
+.badge-green  { background: rgba(74,222,128,0.12); color: var(--green);  border: 1px solid rgba(74,222,128,0.25); }
+.badge-amber  { background: rgba(251,191,36,0.15); color: var(--amber);  border: 1px solid rgba(251,191,36,0.3); }
+.badge-pink   { background: rgba(244,114,182,0.15); color: var(--pink);  border: 1px solid rgba(244,114,182,0.3); }
+.badge-blue   { background: rgba(96,165,250,0.15);  color: var(--blue);  border: 1px solid rgba(96,165,250,0.3); }
+.badge-grey   { background: rgba(100,130,160,0.1);  color: var(--text3); border: 1px solid rgba(100,130,160,0.2); }
+
+/* ── Profile cards grid ── */
+.lane-group-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px;
+  padding: 5px 0; margin-bottom: 8px;
+}
+.lane-label-main        { color: var(--violet2); }
+.lane-label-primary     { color: var(--teal); }
+.lane-label-independent { color: var(--green); }
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.profile-card {
+  background: var(--bg1);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 16px;
+  transition: border-color .2s, box-shadow .2s;
+  position: relative;
+}
+.profile-card:hover { border-color: var(--border); box-shadow: 0 0 18px rgba(6,182,212,0.06); }
+.profile-card.lane-main        { border-left: 2px solid rgba(124,58,237,0.5); }
+.profile-card.lane-primary     { border-left: 2px solid rgba(6,182,212,0.5); }
+.profile-card.lane-independent { border-left: 2px solid rgba(74,222,128,0.5); }
+
+.card-role {
+  font-family: 'Courier New', monospace;
+  font-size: 14px; font-weight: 700; margin-bottom: 8px;
+}
+.card-role.lane-main        { color: var(--violet2); }
+.card-role.lane-primary     { color: var(--teal2); }
+.card-role.lane-independent { color: var(--green); }
+
+.card-meta { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+
+.card-story-count {
+  font-size: 11px; color: var(--text2); margin-bottom: 10px;
+}
+.card-story-count strong { color: var(--text); }
+
+/* ── Skills ── */
+.skills-section { margin-bottom: 10px; }
+.skills-label {
+  font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--text3); margin-bottom: 5px;
+}
+.skills-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.skill-chip {
+  font-size: 10px; padding: 2px 8px; border-radius: 10px;
+  white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;
+}
+/* By category */
+.skill-chip.cat-go-backend  { background: rgba(6,182,212,0.1);   color: var(--teal);   border: 1px solid rgba(6,182,212,0.2); }
+.skill-chip.cat-ue5-gfx     { background: rgba(124,58,237,0.1);  color: var(--violet2); border: 1px solid rgba(124,58,237,0.2); }
+.skill-chip.cat-ai-llm      { background: rgba(251,191,36,0.1);  color: var(--amber);  border: 1px solid rgba(251,191,36,0.2); }
+.skill-chip.cat-infra       { background: rgba(74,222,128,0.08); color: var(--green);  border: 1px solid rgba(74,222,128,0.2); }
+.skill-chip.cat-db          { background: rgba(96,165,250,0.1);  color: var(--blue);   border: 1px solid rgba(96,165,250,0.2); }
+/* Augmented skill: amber glow + dim styling */
+.skill-chip.augmented {
+  background: rgba(251,191,36,0.15);
+  color: var(--amber);
+  border: 1px solid rgba(251,191,36,0.4);
+  box-shadow: 0 0 6px rgba(251,191,36,0.2);
+  animation: amber-pulse 3s infinite;
+}
+@keyframes amber-pulse {
+  0%, 100% { box-shadow: 0 0 6px rgba(251,191,36,0.2); }
+  50%       { box-shadow: 0 0 10px rgba(251,191,36,0.45); }
+}
+.skill-chip.augmented .aug-phase {
+  font-size: 8px; background: rgba(0,0,0,0.3);
+  padding: 1px 4px; border-radius: 4px; opacity: 0.85;
+}
+.aug-indicator {
+  font-size: 9px; color: var(--amber);
+  margin-top: 4px; display: flex; align-items: center; gap: 4px;
+}
+.aug-indicator::before {
+  content: ''; display: inline-block; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--amber);
+  box-shadow: 0 0 5px var(--amber);
+}
+
+/* Updated-recently highlight */
+.card-updated {
+  font-size: 9px; color: var(--text3);
+  margin-bottom: 8px; display: flex; align-items: center; gap: 4px;
+}
+.card-updated.recent { color: var(--amber); }
+.card-updated.recent::before {
+  content: ''; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--amber); display: inline-block;
+}
+
+/* Expandable profile text */
+.expand-toggle {
+  font-size: 11px; color: var(--teal); cursor: pointer;
+  background: none; border: none; padding: 3px 0;
+  font-family: inherit; opacity: 0.75;
+  transition: opacity .15s;
+}
+.expand-toggle:hover { opacity: 1; text-decoration: underline; }
+.profile-text-block {
+  display: none; font-size: 11px; color: var(--text3);
+  line-height: 1.6; margin-top: 8px; padding: 10px 12px;
+  background: var(--bg); border: 1px solid var(--border2); border-radius: 6px;
+  white-space: pre-wrap; word-break: break-word;
+}
+.profile-text-block.expanded { display: block; }
+
+/* ── Audit trail ── */
+.filters-row {
+  display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;
+}
+.filter-group { display: flex; align-items: center; gap: 6px; }
+.filter-group label { font-size: 11px; color: var(--text3); }
+.filter-group select {
+  font-family: inherit; font-size: 11px;
+  background: var(--bg1); color: var(--text);
+  border: 1px solid var(--border); border-radius: 5px;
+  padding: 4px 8px; cursor: pointer;
+}
+.filter-group select:focus { outline: none; border-color: var(--teal); }
+
+.table-wrap { overflow-x: auto; }
+table {
+  width: 100%; border-collapse: collapse; font-size: 12px;
+}
+thead th {
+  background: var(--bg1); border: 1px solid var(--border2);
+  padding: 7px 12px; text-align: left; color: var(--text3);
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;
+  white-space: nowrap;
+}
+tbody td {
+  border: 1px solid rgba(26,48,80,0.5); padding: 7px 12px; color: var(--text2);
+}
+tbody tr:hover td { background: var(--bg2); }
+
+/* Source badges */
+.src-badge {
+  font-size: 9px; font-weight: 800; padding: 2px 6px;
+  border-radius: 3px; letter-spacing: 0.5px;
+}
+.src-kb         { background: rgba(251,191,36,0.15); color: var(--amber);   border: 1px solid rgba(251,191,36,0.3); }
+.src-assessment { background: rgba(124,58,237,0.15); color: var(--violet2); border: 1px solid rgba(124,58,237,0.3); }
+.src-manual     { background: rgba(6,182,212,0.12);  color: var(--teal);    border: 1px solid rgba(6,182,212,0.25); }
+
+/* Empty / offline states */
+.empty-state {
+  text-align: center; padding: 36px 20px;
+  color: var(--text3); font-size: 12px; line-height: 1.8;
+}
+.offline-banner {
+  background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3);
+  color: var(--red); border-radius: 8px; padding: 12px 18px;
+  font-size: 12px; margin-bottom: 16px; display: none;
+}
+
+.footer-note {
+  text-align: center; font-size: 10px; color: var(--text3);
+  padding: 20px 0 32px;
+}
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header class="header">
+  <div class="header-left">
+    <div class="header-icon">&#127918;</div>
+    <div>
+      <div class="header-title">Shadow Play — Agent Profiles</div>
+      <div class="header-sub">Role capabilities, skill augmentation, story assignments</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="header-meta">
+      <div class="live-dot"></div>
+      <span id="hdr-refresh">–</span>
+    </div>
+    <div class="nav-links">
+      <a href="shadow-play-monitor.html">Monitor</a>
+      <a href="shadow-play-prd-viewer.html">PRD Viewer</a>
+      <a href="shadow-play-phase-cost-monitor.html">Cost</a>
+      <a href="shadow-play-game-plan.html">Game Plan</a>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Offline banner -->
+  <div class="offline-banner" id="offline-banner">API Offline — cannot reach /shadow-play-api/profiles. Retrying every 5 seconds.</div>
+
+  <!-- ── Summary cards ── -->
+  <div class="section-heading">Overview</div>
+  <div class="summary-row">
+    <div class="summary-card">
+      <div class="s-label">Total Roles</div>
+      <div class="s-value" id="stat-total-roles">–</div>
+      <div class="s-sub">from /api/profiles</div>
+    </div>
+    <div class="summary-card">
+      <div class="s-label">Roles w/ Skill Updates</div>
+      <div class="s-value violet" id="stat-augmented-roles">–</div>
+      <div class="s-sub">unique roles in audit log</div>
+    </div>
+    <div class="summary-card">
+      <div class="s-label">Skill Events Total</div>
+      <div class="s-value amber" id="stat-skill-events">–</div>
+      <div class="s-sub">total audit entries</div>
+    </div>
+    <div class="summary-card">
+      <div class="s-label">Profiles Last Updated</div>
+      <div class="s-value green" id="stat-last-updated" style="font-size:14px; padding-top:4px;">–</div>
+      <div class="s-sub">most recent updatedAt</div>
+    </div>
+  </div>
+
+  <!-- ── Upcoming Phase Requirements ── -->
+  <div class="section-heading">Upcoming Phase Requirements</div>
+  <div class="upcoming-block" id="upcoming-block">
+    <div class="empty-state">Loading upcoming phase…</div>
+  </div>
+
+  <!-- ── Profile Cards Grid ── -->
+  <div class="section-heading">Agent Profile Cards</div>
+  <div id="profiles-root">
+    <div class="empty-state">Loading profiles…</div>
+  </div>
+
+  <!-- ── Skill Audit Trail ── -->
+  <div class="section-heading">Skill Audit Trail</div>
+  <div class="filters-row">
+    <div class="filter-group">
+      <label for="f-role">Role:</label>
+      <select id="f-role"><option value="">All</option></select>
+    </div>
+    <div class="filter-group">
+      <label for="f-phase">Phase:</label>
+      <select id="f-phase"><option value="">All</option></select>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table id="audit-table">
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Role</th>
+          <th>Phase</th>
+          <th>Skill Added</th>
+          <th>Source</th>
+          <th>Note</th>
+        </tr>
+      </thead>
+      <tbody id="audit-tbody"></tbody>
+    </table>
+  </div>
+  <div class="empty-state" id="audit-empty" style="display:none">
+    No skill augmentations recorded yet — will populate during hybrid phase execution
+  </div>
+
+  <div class="footer-note">Auto-refreshing every 5 seconds</div>
+</div>
+
+<script>
+// ── Config ─────────────────────────────────────────────────────────────────
+const API = '/shadow-play-api';
+const AUDIT_LOG_PATH = 'logs/shadow-play-profiles-audit.jsonl';
+const REFRESH_MS = 5000;
+
+// Orchestration scripts update profiles via:
+// curl -X PATCH http://localhost:8093/api/profiles/{role_id} \
+//   -H 'Content-Type: application/json' \
+//   -d '{"profileText": "..."}'
+// And append to automation/logs/shadow-play-profiles-audit.jsonl for the audit trail
+
+// ── Skill keyword list with category mapping ───────────────────────────────
+const SKILL_CATEGORIES = {
+  // Go/backend (teal)
+  'grpc':              'cat-go-backend',
+  'protobuf':          'cat-go-backend',
+  'goroutines':        'cat-go-backend',
+  'rest-api':          'cat-go-backend',
+  'jwt':               'cat-go-backend',
+  'websocket':         'cat-go-backend',
+  'go':                'cat-go-backend',
+  'grpc-gateway':      'cat-go-backend',
+  'gorm':              'cat-go-backend',
+  'sqlc':              'cat-go-backend',
+  'testify':           'cat-go-backend',
+  // UE5/graphics (violet)
+  'unreal-engine':     'cat-ue5-gfx',
+  'nanite':            'cat-ue5-gfx',
+  'lumen':             'cat-ue5-gfx',
+  'niagara':           'cat-ue5-gfx',
+  'metahuman':         'cat-ue5-gfx',
+  'c++':               'cat-ue5-gfx',
+  'hlsl':              'cat-ue5-gfx',
+  'fmod':              'cat-ue5-gfx',
+  'blueprint':         'cat-ue5-gfx',
+  'sequencer':         'cat-ue5-gfx',
+  'chaos-physics':     'cat-ue5-gfx',
+  'procedural-generation': 'cat-ue5-gfx',
+  'ue5-gameplay-framework': 'cat-ue5-gfx',
+  // AI/LLM (amber)
+  'claude-api':        'cat-ai-llm',
+  'llm':               'cat-ai-llm',
+  'tts':               'cat-ai-llm',
+  'openai':            'cat-ai-llm',
+  'replicate':         'cat-ai-llm',
+  'sdxl':              'cat-ai-llm',
+  'lora':              'cat-ai-llm',
+  // Infra/DevOps (green)
+  'docker':            'cat-infra',
+  'docker-compose':    'cat-infra',
+  'github-actions':    'cat-infra',
+  'migration':         'cat-infra',
+  'kafka':             'cat-infra',
+  'redis-pubsub':      'cat-infra',
+  // Database (blue)
+  'postgresql':        'cat-db',
+  'redis':             'cat-db',
+};
+const SKILL_KEYS = Object.keys(SKILL_CATEGORIES);
+
+// ── State ──────────────────────────────────────────────────────────────────
+let apiProfiles = [];   // from GET /shadow-play-api/profiles
+let apiStories  = [];   // from GET /shadow-play-api/stories
+let auditLog    = [];   // from logs/shadow-play-profiles-audit.jsonl
+let filterRole  = '';
+let filterPhase = '';
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function esc(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function fmtTs(ts) {
+  if (!ts) return '';
+  try {
+    const d = new Date(ts);
+    if (isNaN(d)) return ts;
+    return d.toLocaleString();
+  } catch { return ts; }
+}
+
+function relativeTime(ts) {
+  if (!ts) return null;
+  const diff = Date.now() - new Date(ts).getTime();
+  if (isNaN(diff)) return null;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1)   return 'just now';
+  if (mins < 60)  return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)   return hrs + 'h ago';
+  return Math.floor(hrs / 24) + 'd ago';
+}
+
+function providerBadge(aiProvider) {
+  if (!aiProvider) return '';
+  const p = String(aiProvider).toLowerCase();
+  if (p.includes('claude'))    return '<span class="badge badge-violet">CLAUDE</span>';
+  if (p.includes('opencode'))  return '<span class="badge badge-green">OPENCODE</span>';
+  if (p.includes('codex'))     return '<span class="badge badge-pink">CODEX</span>';
+  return '<span class="badge badge-grey">' + esc(aiProvider.toUpperCase()) + '</span>';
+}
+
+function extractSkills(profileText) {
+  if (!profileText) return [];
+  const lower = profileText.toLowerCase();
+  return SKILL_KEYS.filter(skill => {
+    // word-boundary-aware match
+    const re = new RegExp('(?:^|[\\s,;(/])' + skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:$|[\\s,;)/.])', 'i');
+    return re.test(lower);
+  });
+}
+
+function laneBadge(lane) {
+  if (!lane) return '';
+  switch (lane) {
+    case 'main':        return '<span class="badge badge-violet">MAIN</span>';
+    case 'primary':     return '<span class="badge badge-teal">PRIMARY</span>';
+    case 'independent': return '<span class="badge badge-green">INDEPENDENT</span>';
+    default:            return '<span class="badge badge-grey">' + esc(lane.toUpperCase()) + '</span>';
+  }
+}
+
+function agentTypeBadge(agentType) {
+  if (!agentType) return '';
+  return agentType === 'claude-code'
+    ? '<span class="badge badge-teal">CLAUDE-CODE</span>'
+    : '<span class="badge badge-grey">' + esc(String(agentType).toUpperCase()) + '</span>';
+}
+
+function laneClass(lane) {
+  switch (lane) {
+    case 'main':        return 'lane-main';
+    case 'primary':     return 'lane-primary';
+    case 'independent': return 'lane-independent';
+    default:            return 'lane-primary';
+  }
+}
+
+// ── Fetch helpers ──────────────────────────────────────────────────────────
+async function fetchJSON(url) {
+  const resp = await fetch(url + '?t=' + Date.now());
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  return resp.json();
+}
+
+async function fetchJSONL(url) {
+  try {
+    const resp = await fetch(url + '?t=' + Date.now());
+    if (!resp.ok) return [];
+    const text = await resp.text();
+    if (!text.trim()) return [];
+    return text.trim().split('\n').filter(l => l.trim()).map(l => {
+      try { return JSON.parse(l); } catch { return null; }
+    }).filter(Boolean);
+  } catch { return []; }
+}
+
+// ── Render: Summary cards ──────────────────────────────────────────────────
+function renderSummary() {
+  document.getElementById('stat-total-roles').textContent = apiProfiles.length;
+
+  const augRoles = new Set(auditLog.map(e => e.role).filter(Boolean));
+  document.getElementById('stat-augmented-roles').textContent = augRoles.size;
+
+  document.getElementById('stat-skill-events').textContent = auditLog.length;
+
+  // Most recent updatedAt
+  let mostRecent = null;
+  for (const p of apiProfiles) {
+    if (p.updatedAt) {
+      const d = new Date(p.updatedAt);
+      if (!mostRecent || d > mostRecent) mostRecent = d;
+    }
+  }
+  const el = document.getElementById('stat-last-updated');
+  if (mostRecent && !isNaN(mostRecent)) {
+    const rt = relativeTime(mostRecent);
+    el.textContent = rt || mostRecent.toLocaleTimeString();
+  } else {
+    el.textContent = '–';
+  }
+}
+
+// ── Render: Upcoming phase requirements ───────────────────────────────────
+function renderUpcoming() {
+  const container = document.getElementById('upcoming-block');
+
+  // Find first phase that has pending/in_progress stories
+  const pendingStories = apiStories.filter(s =>
+    s.status === 'pending' || s.status === 'in_progress' || !s.status
+  );
+
+  if (pendingStories.length === 0) {
+    container.innerHTML = '<div class="empty-state">All stories complete or no stories loaded.</div>';
+    return;
+  }
+
+  // Determine the first upcoming phase (lowest phase name alphabetically/by order)
+  const phaseOrder = {};
+  apiStories.forEach(s => { if (s.phase) phaseOrder[s.phase] = true; });
+  const phases = Object.keys(phaseOrder).sort();
+
+  let upcomingPhase = null;
+  for (const ph of phases) {
+    if (pendingStories.some(s => s.phase === ph)) { upcomingPhase = ph; break; }
+  }
+  if (!upcomingPhase) {
+    container.innerHTML = '<div class="empty-state">No upcoming phase detected.</div>';
+    return;
+  }
+
+  const phaseStories = pendingStories.filter(s => s.phase === upcomingPhase);
+
+  let html = '<div class="upcoming-phase-name">'
+    + '<span class="label">Next Phase:</span>&nbsp;'
+    + esc(upcomingPhase)
+    + '&nbsp;<span style="font-size:10px;color:var(--text3);">(' + phaseStories.length + ' pending stories)</span>'
+    + '</div>';
+
+  for (const story of phaseStories) {
+    const roleProfile = apiProfiles.find(p => p.roleId === story.agentRole);
+    const roleLane = roleProfile ? roleProfile.lane : null;
+
+    html += '<div class="story-row">'
+      + '<div class="story-row-id">' + esc(story.id || story.storyId || '–') + '</div>'
+      + '<div class="story-row-body">'
+        + '<div class="story-row-title">' + esc(story.title || story.name || 'Untitled') + '</div>'
+        + '<div class="story-badges">'
+          + (story.agentRole ? '<span class="badge badge-grey" style="font-family:monospace">' + esc(story.agentRole) + '</span>' : '')
+          + providerBadge(story.aiProvider)
+          + (story.model ? '<span class="badge badge-grey">' + esc(story.model) + '</span>' : '')
+          + (roleLane ? laneBadge(roleLane) : '')
+        + '</div>'
+      + '</div>'
+      + '</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+// ── Render: Profile cards ──────────────────────────────────────────────────
+function renderProfiles() {
+  const root = document.getElementById('profiles-root');
+
+  if (apiProfiles.length === 0) {
+    root.innerHTML = '<div class="empty-state">No profiles loaded from API.</div>';
+    return;
+  }
+
+  // Group by lane
+  const laneOrder = ['main', 'primary', 'independent'];
+  const grouped = {};
+  for (const p of apiProfiles) {
+    const lane = p.lane || 'primary';
+    if (!grouped[lane]) grouped[lane] = [];
+    grouped[lane].push(p);
+  }
+
+  let html = '';
+
+  const lanesToRender = [...laneOrder, ...Object.keys(grouped).filter(l => !laneOrder.includes(l))];
+  for (const lane of lanesToRender) {
+    const roles = grouped[lane];
+    if (!roles || roles.length === 0) continue;
+
+    const laneLabels = { main: 'Main Lane', primary: 'Primary Lane', independent: 'Independent Lane' };
+    const laneLabel = laneLabels[lane] || lane;
+    html += '<div class="lane-group-label lane-label-' + esc(lane) + '">' + esc(laneLabel) + '</div>';
+    html += '<div class="profile-grid">';
+
+    for (const profile of roles) {
+      html += renderProfileCard(profile);
+    }
+
+    html += '</div>';
+  }
+
+  root.innerHTML = html;
+
+  // Attach expand toggles
+  root.querySelectorAll('.expand-toggle').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const tgt = document.getElementById(this.dataset.target);
+      if (!tgt) return;
+      const open = tgt.classList.toggle('expanded');
+      this.textContent = open ? 'Hide profile text' : 'Show profile text';
+    });
+  });
+}
+
+function renderProfileCard(profile) {
+  const roleId = profile.roleId || '(unknown)';
+  const lane   = profile.lane || 'primary';
+  const lc     = laneClass(lane);
+
+  // Provider derivation from stories
+  const roleStories = apiStories.filter(s => s.agentRole === roleId);
+  const providers   = [...new Set(roleStories.map(s => s.aiProvider).filter(Boolean))];
+  const totalCount  = roleStories.length;
+  const doneCount   = roleStories.filter(s => s.status === 'done' || s.status === 'completed').length;
+
+  // Skills from profileText
+  const originalSkills = extractSkills(profile.profileText || '');
+
+  // Augmented skills from audit log
+  const roleAudit = auditLog.filter(e => e.role === roleId);
+  const augSkills = {}; // skill → phase
+  for (const e of roleAudit) {
+    if (e.skill && !augSkills[e.skill]) {
+      augSkills[e.skill] = e.phase || '';
+    }
+  }
+  const augCount = Object.keys(augSkills).length;
+
+  // updatedAt
+  const updatedAt = profile.updatedAt;
+  const isRecent  = updatedAt && (Date.now() - new Date(updatedAt).getTime()) < 3600000;
+  const updatedStr = updatedAt ? relativeTime(updatedAt) : null;
+
+  // Build badges row
+  let metaHtml = '';
+  metaHtml += laneBadge(lane);
+  if (profile.agentType) metaHtml += agentTypeBadge(profile.agentType);
+  for (const prov of providers) metaHtml += providerBadge(prov);
+
+  // Build skills chips
+  let skillsHtml = '';
+  for (const skill of originalSkills) {
+    const cat = SKILL_CATEGORIES[skill] || 'cat-go-backend';
+    skillsHtml += '<span class="skill-chip ' + cat + '">' + esc(skill) + '</span>';
+  }
+  for (const [skill, phase] of Object.entries(augSkills)) {
+    const cat = SKILL_CATEGORIES[skill] || 'cat-ai-llm';
+    // augmented overrides category styling
+    skillsHtml += '<span class="skill-chip augmented">'
+      + esc(skill)
+      + (phase ? ' <span class="aug-phase">' + esc(phase) + '</span>' : '')
+      + '</span>';
+  }
+  if (!skillsHtml) {
+    skillsHtml = '<span style="font-size:10px;color:var(--text3)">No recognized skills detected</span>';
+  }
+
+  const cardId = 'pt-' + roleId.replace(/[^a-zA-Z0-9]/g, '_');
+
+  return '<div class="profile-card ' + lc + '">'
+    + '<div class="card-role ' + lc + '">' + esc(roleId) + '</div>'
+    + '<div class="card-meta">' + metaHtml + '</div>'
+    + (totalCount > 0
+      ? '<div class="card-story-count"><strong>' + doneCount + '</strong> / ' + totalCount + ' stories completed</div>'
+      : '')
+    + (updatedStr
+      ? '<div class="card-updated' + (isRecent ? ' recent' : '') + '">Updated ' + esc(updatedStr) + '</div>'
+      : '')
+    + '<div class="skills-section">'
+      + '<div class="skills-label">Skills</div>'
+      + '<div class="skills-chips">' + skillsHtml + '</div>'
+    + '</div>'
+    + (augCount > 0
+      ? '<div class="aug-indicator">' + augCount + ' skill' + (augCount !== 1 ? 's' : '') + ' augmented via KB / assessment</div>'
+      : '')
+    + '<div style="margin-top:8px">'
+      + '<button class="expand-toggle" data-target="' + cardId + '">Show profile text</button>'
+      + '<div class="profile-text-block" id="' + cardId + '">' + esc(profile.profileText || '(no profile text)') + '</div>'
+    + '</div>'
+    + '</div>';
+}
+
+// ── Render: Audit trail ────────────────────────────────────────────────────
+function renderAudit() {
+  const tbody   = document.getElementById('audit-tbody');
+  const emptyEl = document.getElementById('audit-empty');
+  const tableEl = document.getElementById('audit-table');
+
+  let rows = [...auditLog].sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
+
+  if (filterRole)  rows = rows.filter(r => r.role  === filterRole);
+  if (filterPhase) rows = rows.filter(r => r.phase === filterPhase);
+
+  if (rows.length === 0) {
+    tableEl.style.display = 'none';
+    emptyEl.style.display = '';
+    return;
+  }
+
+  tableEl.style.display = '';
+  emptyEl.style.display = 'none';
+
+  tbody.innerHTML = rows.map(r => {
+    const srcCls = r.source === 'kb_md' ? 'src-kb'
+      : r.source === 'assessment' ? 'src-assessment'
+      : 'src-manual';
+    const srcLbl = r.source === 'kb_md' ? 'KB.MD'
+      : r.source === 'assessment' ? 'ASSESSMENT'
+      : r.source ? r.source.toUpperCase() : 'MANUAL';
+
+    return '<tr>'
+      + '<td style="white-space:nowrap;color:var(--text3)">' + esc(fmtTs(r.ts)) + '</td>'
+      + '<td style="font-family:monospace;color:var(--teal2)">' + esc(r.role  || '') + '</td>'
+      + '<td style="color:var(--violet2)">' + esc(r.phase || '') + '</td>'
+      + '<td><span class="skill-chip cat-ai-llm">' + esc(r.skill || '') + '</span></td>'
+      + '<td><span class="src-badge ' + srcCls + '">' + esc(srcLbl) + '</span></td>'
+      + '<td style="color:var(--text3)">' + esc(r.note || '') + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function updateFilterDropdowns() {
+  const roles  = [...new Set(auditLog.map(e => e.role).filter(Boolean))].sort();
+  const phases = [...new Set(auditLog.map(e => e.phase).filter(Boolean))].sort();
+
+  const rf = document.getElementById('f-role');
+  const pf = document.getElementById('f-phase');
+  const cv = rf.value, pv = pf.value;
+
+  rf.innerHTML = '<option value="">All</option>'
+    + roles.map(r => '<option value="' + esc(r) + '"' + (r === cv ? ' selected' : '') + '>' + esc(r) + '</option>').join('');
+  pf.innerHTML = '<option value="">All</option>'
+    + phases.map(p => '<option value="' + esc(p) + '"' + (p === pv ? ' selected' : '') + '>' + esc(p) + '</option>').join('');
+}
+
+// ── Main refresh loop ──────────────────────────────────────────────────────
+async function refresh() {
+  try {
+    const [profiles, stories] = await Promise.all([
+      fetchJSON(API + '/profiles'),
+      fetchJSON(API + '/stories'),
+    ]);
+    apiProfiles = Array.isArray(profiles) ? profiles : (profiles ? Object.values(profiles) : []);
+    apiStories  = Array.isArray(stories)  ? stories  : [];
+    document.getElementById('offline-banner').style.display = 'none';
+  } catch (err) {
+    document.getElementById('offline-banner').style.display = '';
+    // keep stale data if any
+  }
+
+  // Audit log is optional — graceful fail returns []
+  auditLog = await fetchJSONL(AUDIT_LOG_PATH);
+
+  document.getElementById('hdr-refresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+  renderSummary();
+  renderUpcoming();
+  renderProfiles();
+  updateFilterDropdowns();
+  renderAudit();
+}
+
+// ── Event listeners ────────────────────────────────────────────────────────
+document.getElementById('f-role').addEventListener('change', function() {
+  filterRole = this.value;
+  renderAudit();
+});
+document.getElementById('f-phase').addEventListener('change', function() {
+  filterPhase = this.value;
+  renderAudit();
+});
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+refresh();
+setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>

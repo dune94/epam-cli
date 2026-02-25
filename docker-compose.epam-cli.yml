@@ -1,0 +1,169 @@
+version: '3.8'
+
+services:
+
+  # ── Primary Database ──────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: epam
+      POSTGRES_PASSWORD: epam_dev
+      POSTGRES_DB: epam
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/db/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U epam"]
+      interval: 5s
+      retries: 5
+
+  # ── Cache / Rate-limiting / OAuth state ──────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  # ── OAuth 2.0 / OIDC Server (Ory Hydra) ─────────────────────────
+  hydra-migrate:
+    image: oryd/hydra:v2.3.0
+    command: migrate sql -e --yes
+    environment:
+      DSN: postgres://epam:epam_dev@postgres:5432/epam?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+
+  hydra:
+    image: oryd/hydra:v2.3.0
+    command: serve all --dev
+    ports:
+      - "4444:4444"
+      - "4445:4445"
+    environment:
+      DSN: postgres://epam:epam_dev@postgres:5432/epam?sslmode=disable
+      URLS_SELF_ISSUER: http://localhost:4444
+      URLS_CONSENT: http://localhost:3001/consent
+      URLS_LOGIN: http://localhost:3001/login
+      SECRETS_SYSTEM: dev-secret-change-in-production-32chars
+      OAUTH2_EXPOSE_INTERNAL_ERRORS: "true"
+      LOG_LEVEL: debug
+    depends_on:
+      hydra-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4444/health/ready"]
+      interval: 10s
+      retries: 10
+
+  # ── Identity / Login UI (Ory Kratos) ────────────────────────────
+  kratos-migrate:
+    image: oryd/kratos:v1.3.1
+    command: migrate sql -e --yes
+    environment:
+      DSN: postgres://epam:epam_dev@postgres:5432/epam?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+
+  kratos:
+    image: oryd/kratos:v1.3.1
+    command: serve -c /etc/config/kratos.yml --dev --watch-courier
+    ports:
+      - "4433:4433"
+      - "4434:4434"
+    environment:
+      DSN: postgres://epam:epam_dev@postgres:5432/epam?sslmode=disable
+      LOG_LEVEL: debug
+    volumes:
+      - ./infra/kratos:/etc/config
+    depends_on:
+      kratos-migrate:
+        condition: service_completed_successfully
+      mailhog:
+        condition: service_started
+    restart: on-failure
+
+  # ── Login / Consent UI ───────────────────────────────────────────
+  login-ui:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install && node server.js"
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./infra/login-ui:/app
+    environment:
+      HYDRA_ADMIN_URL: http://hydra:4445
+      KRATOS_PUBLIC_URL: http://kratos:4433
+      PORT: "3001"
+    depends_on:
+      - hydra
+      - kratos
+
+  # ── Email Testing ────────────────────────────────────────────────
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  # ── Backend API Stub ─────────────────────────────────────────────
+  backend-stub:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install && node server.js"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./infra/backend-stub:/app
+    environment:
+      DATABASE_URL: postgres://epam:epam_dev@postgres:5432/epam
+      REDIS_URL: redis://redis:6379
+      HYDRA_ADMIN_URL: http://hydra:4445
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      PORT: "8080"
+      JWT_SECRET: dev-jwt-secret-change-in-production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      hydra:
+        condition: service_healthy
+
+  # ── Agent Orchestration Monitor Dashboard ────────────────────────
+  # Serves the orchestrations/dashboards/ HTML files at http://localhost:8090
+  # Open monitor.html, prd-viewer.html, agent-profiles.html, etc.
+  agent-monitor:
+    image: nginx:alpine
+    ports:
+      - "8090:80"
+    volumes:
+      - ./orchestrations/dashboards:/usr/share/nginx/html:ro
+      - ./orchestrations/logs:/usr/share/nginx/html/logs:ro
+      - ./orchestrations/prd.json:/usr/share/nginx/html/prd.json:ro
+      - ./orchestrations/agents/profiles.json:/usr/share/nginx/html/profiles.json:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      interval: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+  redis_data:

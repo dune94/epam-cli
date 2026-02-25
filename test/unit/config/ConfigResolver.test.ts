@@ -1,0 +1,74 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { resolveConfig, resetResolvedConfig } from '../../../src/config/ConfigResolver.js';
+
+describe('ConfigResolver', () => {
+  beforeEach(() => resetResolvedConfig());
+  afterEach(() => resetResolvedConfig());
+
+  it('returns defaults when no config exists', async () => {
+    const config = await resolveConfig();
+    expect(config.provider).toBe('anthropic');
+    expect(config.model).toBe('claude-sonnet-4-6');
+    expect(config.maxIterations).toBe(20);
+  });
+
+  it('CLI flags override defaults', async () => {
+    const config = await resolveConfig({ provider: 'openai', model: 'gpt-4o' });
+    expect(config.provider).toBe('openai');
+    expect(config.model).toBe('gpt-4o');
+  });
+
+  it('EPAM_PROVIDER env var overrides defaults', async () => {
+    process.env.EPAM_PROVIDER = 'gemini';
+    process.env.EPAM_MODEL = 'gemini-1.5-pro';
+    try {
+      const config = await resolveConfig();
+      expect(config.provider).toBe('gemini');
+      expect(config.model).toBe('gemini-1.5-pro');
+    } finally {
+      delete process.env.EPAM_PROVIDER;
+      delete process.env.EPAM_MODEL;
+      resetResolvedConfig();
+    }
+  });
+
+  it('CLI flags override env vars', async () => {
+    process.env.EPAM_PROVIDER = 'gemini';
+    try {
+      const config = await resolveConfig({ provider: 'openai' });
+      expect(config.provider).toBe('openai');
+    } finally {
+      delete process.env.EPAM_PROVIDER;
+      resetResolvedConfig();
+    }
+  });
+
+  it('dangerousSkipApproval is false by default', async () => {
+    const config = await resolveConfig();
+    expect(config.tools.dangerousSkipApproval).toBe(false);
+  });
+
+  it('EPAM_DANGEROUS_SKIP_APPROVAL=1 enables skip approval', async () => {
+    process.env.EPAM_DANGEROUS_SKIP_APPROVAL = '1';
+    try {
+      const config = await resolveConfig();
+      expect(config.tools.dangerousSkipApproval).toBe(true);
+    } finally {
+      delete process.env.EPAM_DANGEROUS_SKIP_APPROVAL;
+      resetResolvedConfig();
+    }
+  });
+
+  it('caches resolved config on repeated calls', async () => {
+    const config1 = await resolveConfig();
+    const config2 = await resolveConfig();
+    expect(config1).toBe(config2);
+  });
+
+  it('resetResolvedConfig clears the cache', async () => {
+    const config1 = await resolveConfig();
+    resetResolvedConfig();
+    const config2 = await resolveConfig();
+    expect(config1).not.toBe(config2);
+  });
+});

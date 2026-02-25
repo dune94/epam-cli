@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Messages Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            min-height: 100vh;
+        }
+
+        header {
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            padding: 18px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        h1 {
+            font-size: 22px;
+            color: #d29922;
+            font-weight: 600;
+        }
+
+        .subtitle {
+            font-size: 15px;
+            color: #8b949e;
+            margin-left: 16px;
+        }
+
+        .container {
+            padding: 24px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .filters {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filter-group label {
+            font-size: 15px;
+            color: #8b949e;
+            font-weight: 600;
+        }
+
+        .filter-group select {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid #30363d;
+            background: #0d1117;
+            color: #c9d1d9;
+            font-size: 15px;
+        }
+
+        .filter-group select:hover {
+            border-color: #58a6ff;
+        }
+
+        .messages-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .message-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 16px;
+            transition: border-color 0.2s;
+        }
+
+        .message-card:hover {
+            border-color: #58a6ff;
+        }
+
+        .message-card.priority-urgent {
+            border-left: 3px solid #f85149;
+        }
+
+        .message-card.priority-high {
+            border-left: 3px solid #d29922;
+        }
+
+        .message-card.priority-normal {
+            border-left: 3px solid #1f6feb;
+        }
+
+        .message-card.priority-low {
+            border-left: 3px solid #3fb950;
+        }
+
+        .message-card.type-approval {
+            background: #0f2d16;
+        }
+
+        .message-card.type-review_feedback {
+            background: #3d2b00;
+        }
+
+        .message-card.type-rejection {
+            background: #3d1014;
+        }
+
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #30363d;
+            padding-bottom: 10px;
+        }
+
+        .message-meta {
+            flex: 1;
+        }
+
+        .message-subject {
+            font-size: 17px;
+            font-weight: 600;
+            color: #f0f6fc;
+            margin-bottom: 6px;
+        }
+
+        .message-from-to {
+            font-size: 14px;
+            color: #8b949e;
+            margin-bottom: 3px;
+        }
+
+        .message-from-to strong {
+            color: #58a6ff;
+        }
+
+        .message-timestamp {
+            font-size: 13px;
+            color: #6e7681;
+            font-family: monospace;
+        }
+
+        .message-badges {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            align-items: start;
+        }
+
+        .badge {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge.type {
+            background: #0d419d;
+            color: #58a6ff;
+        }
+
+        .badge.type-approval {
+            background: #0f2d16;
+            color: #3fb950;
+        }
+
+        .badge.type-review_feedback {
+            background: #3d2b00;
+            color: #d29922;
+        }
+
+        .badge.type-rejection {
+            background: #3d1014;
+            color: #f85149;
+        }
+
+        .badge.type-response {
+            background: #0d2745;
+            color: #58a6ff;
+        }
+
+        .badge.priority-urgent {
+            background: #3d1014;
+            color: #f85149;
+        }
+
+        .badge.priority-high {
+            background: #3d2b00;
+            color: #d29922;
+        }
+
+        .badge.status {
+            background: #21262d;
+            color: #8b949e;
+        }
+
+        .badge.status-read {
+            background: #0f2d16;
+            color: #3fb950;
+        }
+
+        .message-body {
+            margin-bottom: 12px;
+        }
+
+        .message-text {
+            line-height: 1.6;
+            margin-bottom: 10px;
+            color: #c9d1d9;
+            font-size: 15px;
+        }
+
+        .message-data {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .message-data h4 {
+            margin-bottom: 8px;
+            color: #8b949e;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .issue-item {
+            padding: 6px 0;
+            border-bottom: 1px solid #21262d;
+            font-size: 14px;
+        }
+
+        .issue-item:last-child {
+            border-bottom: none;
+        }
+
+        .severity-error {
+            color: #f85149;
+            font-weight: 600;
+        }
+
+        .severity-warning {
+            color: #d29922;
+            font-weight: 600;
+        }
+
+        .severity-info {
+            color: #58a6ff;
+            font-weight: 600;
+        }
+
+        .stats {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .stat-card {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            color: #58a6ff;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+        }
+
+        .empty-state h2 {
+            margin-bottom: 10px;
+            color: #8b949e;
+            font-size: 20px;
+        }
+
+        .empty-state p {
+            color: #6e7681;
+            font-size: 15px;
+        }
+
+        .auto-refresh {
+            text-align: center;
+            margin-top: 20px;
+            color: #6e7681;
+            font-size: 14px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+
+        .source-badge {
+            font-size: 9px; font-weight: 800;
+            padding: 1px 5px; border-radius: 3px;
+            letter-spacing: 0.4px; text-transform: uppercase;
+        }
+        .source-bus    { background:#1c0f30; color:#d2a8ff; border:1px solid #6e40c9; }
+        .source-inbox  { background:#0d2745; color:#58a6ff; border:1px solid #1f6feb; }
+        .source-outbox { background:#1c2206; color:#7ee787; border:1px solid #3fb950; }
+
+        .story-link {
+            font-family: monospace; font-size: 11px;
+            background: #4a3800; color: #fef08a;
+            border: 1px solid #facc15;
+            padding: 1px 6px; border-radius: 3px;
+        }
+
+        .no-bus-note {
+            text-align: center; padding: 16px;
+            color: #6e7681; font-size: 13px;
+            background: #161b22; border: 1px solid #30363d;
+            border-radius: 8px; margin-bottom: 16px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>📬 Agent Messages Dashboard</h1>
+        <span class="subtitle">Team Lead Code Review &amp; Agent Communication
+          &nbsp;·&nbsp;
+          <a href="monitor.html">Monitor</a>
+          &nbsp;<a href="prd-viewer.html">PRD</a>
+          &nbsp;<a href="agents-profiles.html">Profiles</a>
+          &nbsp;<a href="agents-orchestration.html">Agents</a>
+          &nbsp;<a href="orchestration-technical.html">Technical</a>
+          &nbsp;<a href="test-plan.html">Test Plan</a>
+          &nbsp;<a href="phase-cost-monitor.html">Costs</a>
+          &nbsp;<a href="phase-process.html">Graph</a>
+        </span>
+    </header>
+    <div class="container">
+
+        <div class="stats" id="stats">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="total-messages">0</div>
+                    <div class="stat-label">Total Messages</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="unread-messages">0</div>
+                    <div class="stat-label">Unread Messages</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="approvals-count">0</div>
+                    <div class="stat-label">Approvals</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="feedback-count">0</div>
+                    <div class="stat-label">Feedback/Changes</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="filters">
+            <div class="filter-group">
+                <label>Agent:</label>
+                <select id="filter-agent">
+                    <option value="">All Agents</option>
+                    <option value="backend-engineer">Backend Engineer</option>
+                    <option value="frontend-engineer">Frontend Engineer</option>
+                    <option value="devops-engineer">DevOps Engineer</option>
+                    <option value="qa-engineer">QA Engineer</option>
+                    <option value="db-architect">DB Architect</option>
+                    <option value="pipeline-engineer">Pipeline Engineer</option>
+                    <option value="docs-engineer">Docs Engineer</option>
+                    <option value="unit-test-runner">Unit Test Runner</option>
+                    <option value="review-agent">Review Agent</option>
+                    <option value="mock-data-generator">Mock Data Generator</option>
+                    <option value="agent-skill-assessment-agent">Skill Assessment</option>
+                </select>
+
+                <label>Type:</label>
+                <select id="filter-type">
+                    <option value="">All Types</option>
+                    <option value="approval">Approval</option>
+                    <option value="review_feedback">Review Feedback</option>
+                    <option value="rejection">Rejection</option>
+                    <option value="info">Info</option>
+                    <option value="request">Request</option>
+                    <option value="response">Response</option>
+                    <option value="alert">Alert</option>
+                    <option value="warning">Warning</option>
+                    <option value="update">Update</option>
+                </select>
+
+                <label>Status:</label>
+                <select id="filter-status">
+                    <option value="">All Status</option>
+                    <option value="sent">Sent</option>
+                    <option value="new">New</option>
+                    <option value="read">Read</option>
+                    <option value="archived">Archived</option>
+                </select>
+
+                <label>Story:</label>
+                <input id="filter-story" type="text" placeholder="Story ID…"
+                    style="padding:6px 10px;border-radius:6px;border:1px solid #30363d;background:#0d1117;color:#c9d1d9;font-size:14px;width:130px"
+                    oninput="applyFilters()"/>
+            </div>
+        </div>
+
+        <div id="messages-container">
+            <div class="empty-state">
+                <h2>Loading messages...</h2>
+            </div>
+        </div>
+
+        <div class="auto-refresh">
+            Auto-refreshing every 5 seconds
+        </div>
+    </div>
+
+    <script>
+        const AGENTS = [
+            'game-engineer', 'flutter-ui-engineer', 'ghost-ai-engineer',
+            'game-qa-engineer', 'review-agent', 'coordination-agent',
+            'agent-skill-assessment-agent'
+        ];
+        let allMessages = [];
+
+        function parseNdjson(text) {
+            return (text||'').trim().split('\n')
+                .filter(l => l.trim())
+                .map(l => { try { return JSON.parse(l); } catch(e) { return null; } })
+                .filter(Boolean);
+        }
+
+        async function fetchInboxMessages() {
+            const messages = [];
+            for (const agent of AGENTS) {
+                try {
+                    const res = await fetch(`logs/messages/inbox/${agent}/`);
+                    if (!res.ok) continue;
+                    const html = await res.text();
+                    const doc  = new DOMParser().parseFromString(html, 'text/html');
+                    for (const link of doc.querySelectorAll('a')) {
+                        const href = link.getAttribute('href');
+                        if (href && href.endsWith('.json')) {
+                            try {
+                                const msg = await fetch(`logs/messages/inbox/${agent}/${href}`).then(r => r.json());
+                                msg._source = 'inbox';
+                                messages.push(msg);
+                            } catch(e) {}
+                        }
+                    }
+                } catch(e) {}
+            }
+            return messages;
+        }
+
+        async function fetchOutboxMessages() {
+            const messages = [];
+            try {
+                const res = await fetch('logs/messages/outbox/');
+                if (!res.ok) return messages;
+                const html = await res.text();
+                const doc  = new DOMParser().parseFromString(html, 'text/html');
+                for (const link of doc.querySelectorAll('a')) {
+                    const href = link.getAttribute('href');
+                    if (href && href.endsWith('.json')) {
+                        try {
+                            const msg = await fetch(`logs/messages/outbox/${href}`).then(r => r.json());
+                            msg._source = 'outbox';
+                            messages.push(msg);
+                        } catch(e) {}
+                    }
+                }
+            } catch(e) {}
+            return messages;
+        }
+
+        async function fetchBusMessages() {
+            try {
+                const res = await fetch('logs/agent-messages.jsonl?t=' + Date.now());
+                if (!res.ok) return [];
+                return parseNdjson(await res.text()).map(m => ({ ...m, _source: 'bus' }));
+            } catch(e) { return []; }
+        }
+
+        async function fetchMessages() {
+            const [inbox, outbox, bus] = await Promise.all([
+                fetchInboxMessages(),
+                fetchOutboxMessages(),
+                fetchBusMessages()
+            ]);
+
+            // Merge and deduplicate by message_id
+            const seen = new Set();
+            const all  = [];
+            for (const msg of [...bus, ...outbox, ...inbox]) {
+                const key = msg.message_id || JSON.stringify({ from: msg.from_agent, ts: msg.timestamp, subj: msg.subject });
+                if (seen.has(key)) continue;
+                seen.add(key);
+                all.push(msg);
+            }
+            return all.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        }
+
+        function updateStats(messages) {
+            document.getElementById('total-messages').textContent    = messages.length;
+            document.getElementById('unread-messages').textContent   = messages.filter(m => m.status === 'new' || m.status === 'sent').length;
+            document.getElementById('approvals-count').textContent   = messages.filter(m => m.type === 'approval').length;
+            document.getElementById('feedback-count').textContent    = messages.filter(m => m.type === 'review_feedback' || m.type === 'rejection').length;
+        }
+
+        function sourceBadge(src) {
+            if (src === 'bus')    return `<span class="source-badge source-bus">BUS</span>`;
+            if (src === 'outbox') return `<span class="source-badge source-outbox">OUTBOX</span>`;
+            return `<span class="source-badge source-inbox">INBOX</span>`;
+        }
+
+        function renderMessages(messages) {
+            const container = document.getElementById('messages-container');
+            if (!messages.length) {
+                container.innerHTML = `
+                    <div class="no-bus-note">ℹ️ Agent messages appear here during pipeline execution. Bus messages (hybrid mode only) are shown with a <span class="source-badge source-bus">BUS</span> badge.</div>
+                    <div class="empty-state"><h2>No messages found</h2><p>Messages will appear here when agents communicate.</p></div>`;
+                return;
+            }
+
+            const grid = document.createElement('div');
+            grid.className = 'messages-grid';
+
+            for (const msg of messages) {
+                const card = document.createElement('div');
+                card.className = `message-card priority-${msg.priority || 'normal'} type-${msg.type}`;
+
+                const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '—';
+                const storyId   = msg.body?.story_id || msg.story_id;
+                const phaseId   = msg.body?.phase_id  || msg.phase_id;
+                const bodyText  = msg.body?.text || (typeof msg.body === 'string' ? msg.body : '');
+
+                let bodyHTML = bodyText ? `<p class="message-text">${bodyText}</p>` : '';
+                if (msg.body?.data?.issues?.length) {
+                    bodyHTML += '<div class="message-data"><h4>Issues Found:</h4>';
+                    for (const issue of msg.body.data.issues) {
+                        bodyHTML += `<div class="issue-item">
+                            <span class="severity-${issue.severity}">[${issue.severity.toUpperCase()}]</span>
+                            ${issue.message}
+                        </div>`;
+                    }
+                    bodyHTML += '</div>';
+                }
+
+                card.innerHTML = `
+                    <div class="message-header">
+                        <div class="message-meta">
+                            <div class="message-subject">${msg.subject || 'No Subject'}</div>
+                            <div class="message-from-to">
+                                <strong>From:</strong> ${msg.from_agent || '?'} → <strong>To:</strong> ${msg.to_agent || '?'}
+                            </div>
+                            ${storyId ? `<div class="message-from-to"><strong>Story:</strong> <span class="story-link">${storyId}</span></div>` : ''}
+                            ${phaseId ? `<div class="message-from-to"><strong>Phase:</strong> ${phaseId}</div>` : ''}
+                            <div class="message-timestamp">${timestamp}</div>
+                        </div>
+                        <div class="message-badges">
+                            ${sourceBadge(msg._source)}
+                            <span class="badge type type-${msg.type}">${(msg.type||'msg').replace('_', ' ')}</span>
+                            ${msg.priority && msg.priority !== 'normal' ? `<span class="badge priority-${msg.priority}">${msg.priority}</span>` : ''}
+                            <span class="badge status status-${msg.status}">${msg.status || '—'}</span>
+                        </div>
+                    </div>
+                    <div class="message-body">${bodyHTML}</div>`;
+                grid.appendChild(card);
+            }
+
+            container.innerHTML = '';
+            container.appendChild(grid);
+        }
+
+        function applyFilters() {
+            const agentFilter  = document.getElementById('filter-agent').value;
+            const typeFilter   = document.getElementById('filter-type').value;
+            const statusFilter = document.getElementById('filter-status').value;
+            const storyFilter  = (document.getElementById('filter-story').value || '').trim().toLowerCase();
+
+            let filtered = allMessages;
+            if (agentFilter)  filtered = filtered.filter(m => m.to_agent === agentFilter || m.from_agent === agentFilter);
+            if (typeFilter)   filtered = filtered.filter(m => m.type === typeFilter);
+            if (statusFilter) filtered = filtered.filter(m => m.status === statusFilter);
+            if (storyFilter)  filtered = filtered.filter(m => {
+                const sid = (m.body?.story_id || m.story_id || '').toLowerCase();
+                return sid.includes(storyFilter);
+            });
+
+            updateStats(filtered);
+            renderMessages(filtered);
+        }
+
+        async function refresh() {
+            try {
+                allMessages = await fetchMessages();
+                applyFilters();
+            } catch(e) { console.error('Error refreshing messages:', e); }
+        }
+
+        // Event listeners
+        ['filter-agent','filter-type','filter-status'].forEach(id =>
+            document.getElementById(id).addEventListener('change', applyFilters));
+
+        // Initial load and auto-refresh
+        refresh();
+        setInterval(refresh, 5000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+Building a CLI AI tool in 2026 requires moving beyond the "chat-with-your-repo" model of Claude Code or Aider. To truly differentiate in a multi-client, agency-style environment, your CLI should function as a **Collaborative Operating System for Engineering.**
+
+Here is a blueprint for your CLI features and unique differentiators.
+
+---
+
+## **1. The "Multi-Tenant" Core (Key Differentiators)**
+
+Standard tools assume a single user and a single repository. Your tool should treat "Context" as a shared, database-backed asset.
+
+* **Tenant-Aware Context Switching:**
+* **Feature:** `ai-cli switch client [client_name]`
+* **Differentiator:** Automatically loads client-specific security protocols, coding standards (e.g., "Use our internal UI library, not Tailwind"), and architectural constraints from your DB.
+
+
+* **Shared Ephemeral Memory:**
+* **Feature:** Synchronized project history across the dev team.
+* **Differentiator:** If Dev A fixes a bug in the auth flow, Dev B’s CLI agent is immediately "aware" of that change and the reasoning behind it without a manual pull.
+
+
+* **Agent "Gold" Profiles:**
+* **Feature:** `ai-cli agent load --profile Senior-Backend-Architect`
+* **Differentiator:** Share specific agent personas (prompts + toolsets) within the company. A junior dev can invoke the "Cloud-Ops-Specialist" agent profile curated by your lead DevOps engineer.
+
+
+
+---
+
+## **2. Integrated Orchestration & "Parallel Loops"**
+
+Instead of a single linear thought process, your CLI should manage a hierarchy of agents.
+
+* **Multi-Agent "Squad" Execution:**
+* **Feature:** `ai-cli task "Build feature X"` triggers a Leader agent that delegates to specialized sub-agents (e.g., a "Coder," a "Tester," and a "Security Auditor").
+* **Differentiator:** A **"Peer-Review" Loop** where the Coder agent must pass a code review by the Auditor agent before the CLI presents the changes to the human dev.
+
+
+* **The "Ralph Wiggum" Loop (Parallel Error Recovery):** * **Feature:** When a build fails, the CLI launches 4-5 parallel agents to try different fix strategies simultaneously.
+* **Differentiator:** The system evaluates which fix has the best "Quality Score" (lowest complexity, highest test coverage) and presents only the winner.
+
+
+
+---
+
+## **3. FinOps & Quality Reporting (The "Executive" Layer)**
+
+Standard tools "torch credits" invisibly. Your tool treats tokens as a billable resource.
+
+* **Live Token-to-Dollar HUD:**
+* **Feature:** A real-time display in the terminal header showing the cost of the current session in $USD.
+* **Differentiator:** **Budget Guardrails.** Set a `$10/task` limit; the CLI will automatically switch from expensive models (Opus) to cheaper ones (Haiku) as it nears the limit, or pause for human approval.
+
+
+* **Automated Project "Burn-Up" Reports:**
+* **Feature:** `ai-cli report --client [name]`
+* **Differentiator:** Generates a PDF/Markdown summary for the client showing exactly what the AI accomplished, the cost incurred per feature, and the "Human vs. AI" contribution ratio.
+
+
+
+---
+
+## **4. Developer Experience (CLI Flow)**
+
+* **`ai-cli replay [session_id]`**: Allows a lead dev to "replay" an agent's reasoning process in the terminal to debug why a specific architectural choice was made.
+* **Headless "Ghost" Mode**: Run the CLI in a background container that watches a specific branch. If a PR is opened, the agent automatically runs a "Impact Evaluation" (using your open bug/context logic) and posts it as a comment.
+* **Interactive "Diff-Zoom"**: When the agent proposes changes to 20 files, a keyboard-driven UI (like `lazygit`) allows the dev to selectively "check off" or "edit" specific AI lines before they hit the disk.
+
+---
+
+### **Comparative Value Proposition**
+
+| Feature | Claude Code / Codex | **Your Tool (The "Orchestrator")** |
+| --- | --- | --- |
+| **Data Scope** | Local Files + Git | **Cloud DB + Multi-Client Context** |
+| **Collaboration** | Isolated to local machine | **Team-wide Shared Context & Memory** |
+| **Cost Control** | Black box (Usage based) | **Client-specific Budgets & FinOps** |
+| **Logic** | Single-agent linear | **Parallel Multi-agent squads** |
+| **Reporting** | None | **Auto-generated Stakeholder Reports** |
+

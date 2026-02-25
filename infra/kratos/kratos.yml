@@ -1,0 +1,98 @@
+version: v1.3.1
+
+dsn: memory
+
+serve:
+  public:
+    base_url: http://localhost:4433/
+    cors:
+      enabled: true
+      allowed_origins:
+        - http://localhost:3001
+  admin:
+    base_url: http://localhost:4434/
+
+selfservice:
+  default_browser_return_url: http://localhost:3001/
+
+  allowed_return_urls:
+    - http://localhost:3001
+
+  methods:
+    password:
+      enabled: true
+    totp:
+      enabled: false
+    lookup_secret:
+      enabled: false
+    link:
+      enabled: true
+    code:
+      enabled: true
+
+  flows:
+    error:
+      ui_url: http://localhost:3001/error
+
+    settings:
+      ui_url: http://localhost:3001/settings
+      privileged_session_max_age: 15m
+
+    recovery:
+      enabled: true
+      ui_url: http://localhost:3001/recovery
+      use: code
+
+    verification:
+      enabled: true
+      ui_url: http://localhost:3001/verification
+      use: code
+      after:
+        default_browser_return_url: http://localhost:3001/
+
+    logout:
+      after:
+        default_browser_return_url: http://localhost:3001/login
+
+    login:
+      ui_url: http://localhost:3001/login
+      lifespan: 10m
+
+    registration:
+      lifespan: 10m
+      ui_url: http://localhost:3001/registration
+      after:
+        password:
+          hooks:
+            - hook: session
+
+log:
+  level: debug
+  format: text
+  leak_sensitive_values: true
+
+secrets:
+  cookie:
+    - PLEASE-CHANGE-ME-I-AM-DEV-SECRET-1
+  cipher:
+    - 32-LONG-SECRET-NOT-SECURE-FOR-DEV-ONLY
+
+ciphers:
+  algorithm: xchacha20-poly1305
+
+hashers:
+  algorithm: bcrypt
+  bcrypt:
+    cost: 8
+
+identity:
+  default_schema_id: default
+  schemas:
+    - id: default
+      url: base64://ewogICIkaWQiOiAiaHR0cHM6Ly9zY2hlbWFzLm9yeS5zaC9wcmVzZXRzL2tyYXRvcy9xdWlja3N0YXJ0L2VtYWlsLXBhc3N3b3JkL2lkZW50aXR5LnNjaGVtYS5qc29uIiwKICAiJHNjaGVtYSI6ICJodHRwOi8vanNvbi1zY2hlbWEub3JnL2RyYWZ0LTA3L3NjaGVtYSMiLAogICJ0aXRsZSI6ICJQZXJzb24iLAogICJ0eXBlIjogIm9iamVjdCIsCiAgInByb3BlcnRpZXMiOiB7CiAgICAidHJhaXRzIjogewogICAgICAidHlwZSI6ICJvYmplY3QiLAogICAgICAicHJvcGVydGllcyI6IHsKICAgICAgICAiZW1haWwiOiB7CiAgICAgICAgICAidHlwZSI6ICJzdHJpbmciLAogICAgICAgICAgImZvcm1hdCI6ICJlbWFpbCIsCiAgICAgICAgICAidGl0bGUiOiAiRS1NYWlsIiwKICAgICAgICAgICJtaW5MZW5ndGgiOiAzLAogICAgICAgICAgIm9yeSI6IHsKICAgICAgICAgICAgImNyZWRlbnRpYWxzIjogewogICAgICAgICAgICAgICJwYXNzd29yZCI6IHsKICAgICAgICAgICAgICAgICJpZGVudGlmaWVyIjogdHJ1ZQogICAgICAgICAgICAgIH0KICAgICAgICAgICAgfSwKICAgICAgICAgICAgInZlcmlmaWNhdGlvbiI6IHsKICAgICAgICAgICAgICAidmlhIjogImVtYWlsIgogICAgICAgICAgICB9LAogICAgICAgICAgICAicmVjb3ZlcnkiOiB7CiAgICAgICAgICAgICAgInZpYSI6ICJlbWFpbCIKICAgICAgICAgICAgfQogICAgICAgICAgfQogICAgICAgIH0KICAgICAgfSwKICAgICAgInJlcXVpcmVkIjogWyJlbWFpbCJdLAogICAgICAiYWRkaXRpb25hbFByb3BlcnRpZXMiOiBmYWxzZQogICAgfQogIH0KfQ==
+
+courier:
+  smtp:
+    connection_uri: smtps://test:test@mailhog:1025/?skip_ssl_verify=true
+    from_address: noreply@epam.example.com
+    from_name: EPAM CLI

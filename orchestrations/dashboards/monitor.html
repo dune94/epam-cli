@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shadow Play — Execution Monitor</title>
+<style>
+/* ─────────────────────────────────────────────────────────────────────────────
+   CSS Custom Properties — Shadow Play palette
+───────────────────────────────────────────────────────────────────────────── */
+:root {
+  --bg:          #050a0f;
+  --bg1:         #0a1420;
+  --bg2:         #0f1e30;
+  --bg3:         #142540;
+  --border:      #1a3050;
+  --border2:     #1e3860;
+  --text:        #e2f0f8;
+  --text2:       #8ab4cc;
+  --text3:       #4a7090;
+  --teal:        #06b6d4;
+  --teal2:       #22d3ee;
+  --teal-dim:    rgba(6,182,212,0.12);
+  --violet:      #7c3aed;
+  --violet2:     #a78bfa;
+  --violet-dim:  rgba(124,58,237,0.15);
+  --green:       #4ade80;
+  --green-dim:   rgba(74,222,128,0.12);
+  --amber:       #fbbf24;
+  --amber-dim:   rgba(251,191,36,0.15);
+  --red:         #f87171;
+  --red-dim:     rgba(248,113,113,0.15);
+  --pink:        #f472b6;
+  --pink-dim:    rgba(244,114,182,0.15);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* ── Glitch-Brutalism scanline overlay ── */
+body::after {
+  content: '';
+  position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(6,182,212,0.018) 2px, rgba(6,182,212,0.018) 4px
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Header
+───────────────────────────────────────────────────────────────────────────── */
+.header {
+  background: linear-gradient(135deg, #05101e 0%, #0a0820 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 28px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 200;
+  box-shadow: 0 4px 24px rgba(6,182,212,0.08);
+  gap: 16px; flex-wrap: wrap;
+}
+
+.header-left { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+
+.header-icon {
+  width: 34px; height: 34px;
+  background: linear-gradient(135deg, #06b6d4, #7c3aed);
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px; flex-shrink: 0;
+  box-shadow: 0 0 12px rgba(6,182,212,0.4);
+}
+
+.header-title {
+  font-size: 18px; font-weight: 800;
+  background: linear-gradient(90deg, #06b6d4 0%, #a78bfa 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text; letter-spacing: -0.3px;
+}
+.header-sub { color: var(--text3); font-size: 11px; margin-top: 1px; letter-spacing: 0.3px; }
+
+.header-right { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+
+/* Pulsing status indicator */
+.status-indicator { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.status-dot {
+  width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+}
+.status-dot.live   { background: var(--green); animation: blink 2s ease-in-out infinite; }
+.status-dot.paused { background: var(--amber); }
+.status-dot.offline { background: var(--red); }
+
+@keyframes blink { 0%,100% { opacity: 1; box-shadow: 0 0 4px currentColor; } 50% { opacity: 0.35; box-shadow: none; } }
+
+.refresh-time { color: var(--text3); font-size: 11px; }
+
+/* Nav links */
+.nav-links { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; }
+.nav-links a {
+  color: var(--teal); text-decoration: none; opacity: 0.6;
+  transition: opacity .15s, text-shadow .15s;
+}
+.nav-links a:hover { opacity: 1; text-shadow: 0 0 8px rgba(6,182,212,0.6); }
+.nav-links a.active { opacity: 1; text-shadow: 0 0 8px rgba(6,182,212,0.5); }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Main layout
+───────────────────────────────────────────────────────────────────────────── */
+.container { padding: 20px 28px; max-width: 1440px; margin: 0 auto; }
+
+.section-title {
+  font-size: 11px; color: var(--text3); text-transform: uppercase;
+  letter-spacing: 1.2px; margin: 24px 0 10px; font-weight: 600;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Summary stats row
+───────────────────────────────────────────────────────────────────────────── */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px; margin-bottom: 4px;
+}
+
+.stat-card {
+  background: var(--bg1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  position: relative; overflow: hidden;
+  transition: border-color .2s;
+}
+.stat-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--teal), var(--violet));
+  opacity: 0.5;
+}
+.stat-card:hover { border-color: var(--border2); }
+.stat-card .label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; }
+.stat-card .value { font-size: 26px; font-weight: 800; line-height: 1; color: var(--teal); }
+.stat-card .sub   { font-size: 11px; color: var(--text3); margin-top: 4px; }
+
+.stat-card.amber .value  { color: var(--amber); }
+.stat-card.green .value  { color: var(--green); }
+.stat-card.violet .value { color: var(--violet2); }
+.stat-card.red    .value { color: var(--red); }
+
+/* API offline banner */
+.offline-banner {
+  background: var(--red-dim); border: 1px solid var(--red);
+  border-radius: 8px; padding: 14px 20px; margin-bottom: 16px;
+  color: var(--red); font-size: 13px; display: none; align-items: center; gap: 10px;
+}
+.offline-banner.visible { display: flex; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Phase Progress
+───────────────────────────────────────────────────────────────────────────── */
+.phase-list { display: flex; flex-direction: column; gap: 8px; }
+
+.phase-row {
+  background: var(--bg1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 16px;
+  display: grid;
+  grid-template-columns: 160px 1fr 120px 120px 120px;
+  align-items: center; gap: 14px;
+  transition: border-color .2s, opacity .2s;
+}
+.phase-row.dim    { opacity: 0.4; }
+.phase-row.active { border-color: var(--teal); box-shadow: 0 0 12px rgba(6,182,212,0.1); }
+.phase-row.done   { border-color: rgba(74,222,128,0.35); }
+.phase-row.infra  { }
+
+.phase-name-badge {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;
+  padding: 3px 10px; border-radius: 12px; display: inline-block; white-space: nowrap;
+  background: var(--teal-dim); color: var(--teal2);
+}
+.phase-name-badge.infra  { background: var(--amber-dim); color: var(--amber); }
+.phase-name-badge.active { background: rgba(6,182,212,0.22); color: var(--teal2); }
+.phase-name-badge.done   { background: var(--green-dim); color: var(--green); }
+
+.phase-bar-wrap { position: relative; }
+.phase-bar-track {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 4px; height: 8px; overflow: hidden; width: 100%;
+}
+.phase-bar-fill {
+  height: 100%; border-radius: 4px;
+  background: linear-gradient(90deg, var(--teal), var(--violet));
+  transition: width 0.5s ease;
+}
+.phase-bar-fill.infra  { background: linear-gradient(90deg, #d97706, var(--amber)); }
+.phase-bar-fill.done   { background: linear-gradient(90deg, #16a34a, var(--green)); }
+.phase-bar-fill.full   { background: linear-gradient(90deg, #16a34a, var(--green)); }
+
+.phase-counts { font-size: 12px; color: var(--text2); text-align: right; white-space: nowrap; }
+.phase-counts .done-n { color: var(--green); font-weight: 700; }
+
+.phase-cost { font-size: 12px; color: var(--text3); text-align: right; white-space: nowrap; }
+.phase-cost .actual { color: var(--teal2); font-weight: 700; font-family: 'Courier New', monospace; }
+.phase-cost .of     { color: var(--text3); }
+
+.phase-check { font-size: 16px; text-align: center; color: var(--green); }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Story Grid
+───────────────────────────────────────────────────────────────────────────── */
+.phase-selector-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;
+}
+.phase-selector-row label { font-size: 12px; color: var(--text3); }
+.phase-select {
+  background: var(--bg2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 6px; padding: 4px 10px;
+  font-size: 12px; cursor: pointer; outline: none;
+}
+.phase-select:focus { border-color: var(--teal); }
+
+.story-lanes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.lane-col { }
+.lane-col-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1px; color: var(--text3);
+  padding: 6px 0 8px; border-bottom: 1px solid var(--border);
+  margin-bottom: 8px; display: flex; align-items: center; gap: 7px;
+}
+.lane-col-title .lane-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--teal);
+}
+.lane-col-title.wt1 .lane-dot { background: var(--violet2); }
+.lane-col-title.wt2 .lane-dot { background: var(--pink); }
+
+.story-card {
+  background: var(--bg1); border: 1px solid var(--border);
+  border-radius: 7px; padding: 11px 13px; margin-bottom: 8px;
+  transition: border-color .2s; position: relative; overflow: hidden;
+}
+.story-card:hover { border-color: var(--border2); }
+.story-card.in-progress { border-color: var(--amber); }
+.story-card.completed   { border-color: rgba(74,222,128,0.3); }
+.story-card.blocked     { border-color: var(--red); }
+
+/* Side accent stripe */
+.story-card::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--border2);
+}
+.story-card.in-progress::before { background: var(--amber); }
+.story-card.completed::before   { background: var(--green); }
+.story-card.blocked::before     { background: var(--red); }
+
+.story-id {
+  font-family: 'Courier New', monospace; font-size: 11px;
+  color: var(--teal); font-weight: 700; letter-spacing: 0.3px;
+  margin-bottom: 4px;
+}
+
+.story-title {
+  font-size: 12px; color: var(--text2); line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.story-meta {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 7px;
+}
+
+/* Status badge */
+.badge {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; padding: 2px 7px; border-radius: 10px;
+  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+}
+.badge-pending     { background: var(--bg3); color: var(--text3); }
+.badge-in-progress { background: var(--amber-dim); color: var(--amber); }
+.badge-completed   { background: var(--green-dim); color: var(--green); }
+.badge-blocked     { background: var(--red-dim);   color: var(--red); }
+
+/* Provider badge */
+.badge-claude      { background: var(--violet-dim); color: var(--violet2); }
+.badge-opencode    { background: var(--green-dim);  color: var(--green); }
+.badge-codex       { background: var(--pink-dim);   color: var(--pink); }
+
+/* Pulsing dot for in_progress */
+.pulse-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--amber); display: inline-block;
+  animation: pulse-amber 1.4s ease-in-out infinite;
+}
+@keyframes pulse-amber {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+
+.story-cost {
+  font-family: 'Courier New', monospace; font-size: 11px;
+  color: var(--green); margin-left: auto; white-space: nowrap;
+}
+
+.lane-empty { color: var(--text3); font-size: 12px; padding: 10px 0; }
+
+/* Skeleton placeholder */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg1) 0%, var(--bg2) 50%, var(--bg1) 100%);
+  background-size: 200% 100%; animation: shimmer 1.6s infinite;
+  border-radius: 5px; height: 14px; margin: 4px 0;
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Activity Feed
+───────────────────────────────────────────────────────────────────────────── */
+.activity-feed { display: flex; flex-direction: column; gap: 6px; }
+
+.event-row {
+  background: var(--bg1); border: 1px solid var(--border);
+  border-radius: 7px; padding: 10px 14px;
+  display: grid;
+  grid-template-columns: 70px 100px 90px auto 80px 80px 80px 80px;
+  align-items: center; gap: 10px; font-size: 12px;
+  transition: border-color .2s;
+}
+.event-row:hover { border-color: var(--border2); }
+
+.event-time   { color: var(--text3); font-size: 11px; white-space: nowrap; }
+.event-story  { font-family: 'Courier New', monospace; color: var(--teal); font-weight: 700; font-size: 11px; }
+.event-phase  { color: var(--text3); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.event-model  { color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.event-cost   { font-family: 'Courier New', monospace; color: var(--green); text-align: right; white-space: nowrap; }
+.event-tokens { color: var(--text3); text-align: right; white-space: nowrap; font-size: 11px; }
+.event-dur    { color: var(--text3); text-align: right; white-space: nowrap; font-size: 11px; }
+
+.outcome-badge { }
+.badge-success { background: var(--green-dim); color: var(--green); }
+.badge-failure { background: var(--red-dim);   color: var(--red); }
+.badge-skipped { background: var(--bg3);        color: var(--text3); }
+
+.activity-empty {
+  text-align: center; padding: 32px; color: var(--text3); font-size: 13px;
+  background: var(--bg1); border: 1px dashed var(--border); border-radius: 8px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Live State Panel
+───────────────────────────────────────────────────────────────────────────── */
+.live-panel {
+  background: var(--bg1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px 20px;
+}
+.live-panel.active-exec { border-color: var(--teal); box-shadow: 0 0 16px rgba(6,182,212,0.1); }
+.live-panel .lp-header {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+}
+.live-panel .lp-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.live-panel .lp-sub   { font-size: 11px; color: var(--text3); margin-left: auto; }
+
+.lp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.lp-field { }
+.lp-field .lf-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 3px; }
+.lp-field .lf-value { font-size: 14px; color: var(--teal2); font-weight: 700; }
+
+.lp-log {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 10px 12px; max-height: 120px; overflow-y: auto;
+  font-family: 'Courier New', monospace; font-size: 11px; color: var(--text3); line-height: 1.7;
+}
+.lp-log .log-entry-ts  { color: var(--text3); margin-right: 6px; }
+.lp-log .log-entry-msg { color: var(--text2); }
+
+.lp-inactive { opacity: 0.45; }
+.lp-inactive-msg { color: var(--text3); font-size: 13px; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Responsive tweaks
+───────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .story-lanes  { grid-template-columns: 1fr; }
+  .phase-row    { grid-template-columns: 140px 1fr 80px; }
+  .phase-row .phase-cost,
+  .phase-row .phase-check { display: none; }
+  .event-row    { grid-template-columns: 70px 90px auto 80px; }
+  .event-row .event-phase,
+  .event-row .event-tokens,
+  .event-row .event-dur { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     HEADER
+═══════════════════════════════════════════════════════════════════════════ -->
+<header class="header">
+  <div class="header-left">
+    <div class="header-icon">&#9671;</div>
+    <div>
+      <div class="header-title">Shadow Play — Execution Monitor</div>
+      <div class="header-sub">Live orchestration dashboard · auto-refreshes every 3s</div>
+    </div>
+  </div>
+
+  <div class="header-right">
+    <!-- Status indicator -->
+    <div class="status-indicator">
+      <div class="status-dot offline" id="statusDot"></div>
+      <span id="statusLabel" style="color:var(--text3)">Connecting…</span>
+    </div>
+    <div class="refresh-time" id="refreshTime">–</div>
+
+    <!-- Nav links -->
+    <nav class="nav-links">
+      <a href="shadow-play-prd-viewer.html">PRD Viewer</a>
+      <a href="shadow-play-game-plan.html">Game Plan</a>
+      <a href="shadow-play-phase-cost-monitor.html">Cost Monitor</a>
+      <a href="shadow-play-agent-profiles.html">Agent Profiles</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     BODY
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="container">
+
+  <!-- Offline banner (hidden by default) -->
+  <div class="offline-banner" id="offlineBanner">
+    <span>&#9888;</span>
+    <span>API OFFLINE — cannot reach <code>/shadow-play-api</code>. Retrying every 3 s…</span>
+  </div>
+
+  <!-- ── 1. Summary stats ───────────────────────────────────────────────── -->
+  <div class="section-title">Overview</div>
+  <div class="stats-row">
+    <div class="stat-card amber">
+      <div class="label">Active Phase</div>
+      <div class="value" id="statActivePhase" style="font-size:16px;margin-top:3px;">—</div>
+      <div class="sub" id="statActivePhaseSub">loading…</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Stories</div>
+      <div class="value" id="statStoriesCount">–</div>
+      <div class="sub" id="statStoriesSub">completed / total</div>
+    </div>
+    <div class="stat-card green">
+      <div class="label">% Complete</div>
+      <div class="value" id="statPct">–</div>
+      <div class="sub">overall</div>
+    </div>
+    <div class="stat-card violet">
+      <div class="label">Total Spent</div>
+      <div class="value" id="statSpent">–</div>
+      <div class="sub">USD</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Budget Remaining</div>
+      <div class="value" id="statBudget">–</div>
+      <div class="sub">of $504.60 est.</div>
+    </div>
+    <div class="stat-card amber">
+      <div class="label">In Progress</div>
+      <div class="value" id="statInProgress">–</div>
+      <div class="sub">stories</div>
+    </div>
+  </div>
+
+  <!-- ── 2. Phase Progress ──────────────────────────────────────────────── -->
+  <div class="section-title">Phase Progress</div>
+  <div class="phase-list" id="phaseList">
+    <!-- skeleton rows while loading -->
+    <div class="phase-row">
+      <div class="skeleton" style="width:120px;height:22px;border-radius:12px;"></div>
+      <div class="skeleton" style="height:8px;"></div>
+      <div class="skeleton" style="width:80px;height:14px;"></div>
+      <div class="skeleton" style="width:90px;height:14px;"></div>
+      <div class="skeleton" style="width:20px;height:20px;border-radius:50%;"></div>
+    </div>
+  </div>
+
+  <!-- ── 3. Story Grid by Lane ─────────────────────────────────────────── -->
+  <div class="section-title" style="display:flex;align-items:center;gap:14px;">
+    <span>Stories by Lane</span>
+    <div class="phase-selector-row" style="margin:0;">
+      <label for="phaseSelect">Phase:</label>
+      <select class="phase-select" id="phaseSelect" onchange="onPhaseSelectChange()">
+        <option value="">Loading…</option>
+      </select>
+    </div>
+  </div>
+  <div class="story-lanes">
+    <div class="lane-col">
+      <div class="lane-col-title">
+        <span class="lane-dot"></span> Main Lane
+      </div>
+      <div id="laneMain"><div class="lane-empty">Loading…</div></div>
+    </div>
+    <div class="lane-col">
+      <div class="lane-col-title wt1">
+        <span class="lane-dot"></span> Primary Lane (WT1)
+      </div>
+      <div id="laneWT1"><div class="lane-empty">Loading…</div></div>
+    </div>
+    <div class="lane-col">
+      <div class="lane-col-title wt2">
+        <span class="lane-dot"></span> Independent Lane (WT2)
+      </div>
+      <div id="laneWT2"><div class="lane-empty">Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- ── 4. Activity Feed ──────────────────────────────────────────────── -->
+  <div class="section-title">Activity Feed <span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">(last 20 events, newest first)</span></div>
+  <div id="activityFeed">
+    <div class="activity-empty">Loading activity…</div>
+  </div>
+
+  <!-- ── 5. Live State Panel ───────────────────────────────────────────── -->
+  <div class="section-title">Live Execution State</div>
+  <div class="live-panel lp-inactive" id="livePanel">
+    <div class="lp-header">
+      <div class="status-dot paused" id="lpDot"></div>
+      <div class="lp-title" id="lpTitle">No Active Execution</div>
+      <div class="lp-sub" id="lpSub"></div>
+    </div>
+    <div id="lpBody" class="lp-inactive-msg">
+      Run a phase to see live state here. Reads from <code>logs/agent-status.json</code>.
+    </div>
+  </div>
+
+  <div style="height:32px;"></div>
+</div><!-- /.container -->
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════════════════════════════════ -->
+<script>
+/* ─── Constants ──────────────────────────────────────────────────────────── */
+const API           = '/shadow-play-api';
+const BUDGET_TOTAL  = 504.60;
+const REFRESH_MS    = 3000;
+
+/* ─── State ──────────────────────────────────────────────────────────────── */
+let allPhases     = [];
+let allStories    = [];
+let selectedPhase = null;   // phase name string; null = auto-detect active
+
+/* ─── Helpers ────────────────────────────────────────────────────────────── */
+function fmt$(n) {
+  if (n == null || n === '') return '—';
+  const v = parseFloat(n);
+  return isNaN(v) ? '—' : '$' + v.toFixed(4);
+}
+
+function fmt$2(n) {
+  if (n == null || n === '') return '—';
+  const v = parseFloat(n);
+  return isNaN(v) ? '—' : '$' + v.toFixed(2);
+}
+
+/** Return a "Xm ago" / "just now" string given an ISO timestamp. */
+function relTime(iso) {
+  if (!iso) return '—';
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (diff < 5)  return 'just now';
+  if (diff < 60) return diff + 's ago';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  return Math.floor(diff / 86400) + 'd ago';
+}
+
+/** Provider → badge class + label */
+function providerBadge(provider, model) {
+  const p = (provider || model || '').toLowerCase();
+  if (p.includes('claude') || p.includes('anthropic') || p.includes('opus') || p.includes('sonnet') || p.includes('haiku')) {
+    return { cls: 'badge-claude', label: 'CLAUDE' };
+  }
+  if (p.includes('opencode') || p.includes('open-code')) {
+    return { cls: 'badge-opencode', label: 'OPENCODE' };
+  }
+  if (p.includes('codex') || p.includes('o1') || p.includes('gpt')) {
+    return { cls: 'badge-codex', label: 'CODEX' };
+  }
+  return { cls: 'badge-pending', label: (provider || 'unknown').toUpperCase() };
+}
+
+/** Status → badge html */
+function statusBadgeHtml(status) {
+  switch ((status || '').toLowerCase()) {
+    case 'in_progress':
+    case 'inprogress':
+      return `<span class="badge badge-in-progress"><span class="pulse-dot"></span>IN PROGRESS</span>`;
+    case 'completed':
+    case 'done':
+      return `<span class="badge badge-completed">&#10003; DONE</span>`;
+    case 'blocked':
+    case 'failed':
+      return `<span class="badge badge-blocked">BLOCKED</span>`;
+    default:
+      return `<span class="badge badge-pending">PENDING</span>`;
+  }
+}
+
+/** Outcome → badge html */
+function outcomeBadgeHtml(outcome) {
+  switch ((outcome || '').toLowerCase()) {
+    case 'success': return `<span class="badge badge-success outcome-badge">&#10003;</span>`;
+    case 'failure':
+    case 'failed':  return `<span class="badge badge-failure outcome-badge">&#10007;</span>`;
+    case 'skipped': return `<span class="badge badge-skipped outcome-badge">SKIP</span>`;
+    default:        return `<span class="badge badge-pending outcome-badge">${outcome || '—'}</span>`;
+  }
+}
+
+/** Truncate text */
+function trunc(s, n) {
+  if (!s) return '—';
+  return s.length > n ? s.slice(0, n) + '…' : s;
+}
+
+/* ─── Fetch helpers ──────────────────────────────────────────────────────── */
+async function apiGet(path) {
+  try {
+    const r = await fetch(`${API}${path}?t=${Date.now()}`);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
+
+async function fetchAgentStatus() {
+  try {
+    const r = await fetch(`logs/agent-status.json?t=${Date.now()}`);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
+
+/* ─── Render: status header ──────────────────────────────────────────────── */
+function renderStatus(online) {
+  const dot   = document.getElementById('statusDot');
+  const label = document.getElementById('statusLabel');
+  const banner = document.getElementById('offlineBanner');
+  const now   = new Date().toLocaleTimeString();
+
+  if (online) {
+    dot.className   = 'status-dot live';
+    label.textContent = 'LIVE';
+    label.style.color = 'var(--green)';
+    banner.classList.remove('visible');
+  } else {
+    dot.className   = 'status-dot offline';
+    label.textContent = 'API OFFLINE';
+    label.style.color = 'var(--red)';
+    banner.classList.add('visible');
+  }
+  document.getElementById('refreshTime').textContent = 'Last refresh: ' + now;
+}
+
+/* ─── Render: summary stats ──────────────────────────────────────────────── */
+function renderStats(phases, stories) {
+  /* Determine active phase */
+  let activePh = phases.find(p => (p.inProgressStories || 0) > 0);
+  if (!activePh) {
+    // Fall back: last phase that has any completed stories
+    for (let i = phases.length - 1; i >= 0; i--) {
+      if ((phases[i].completedStories || 0) > 0) { activePh = phases[i]; break; }
+    }
+  }
+
+  const totalStories     = stories.length;
+  const completedStories = stories.filter(s => ['completed','done'].includes((s.status||'').toLowerCase())).length;
+  const inProgressCount  = stories.filter(s => ['in_progress','inprogress'].includes((s.status||'').toLowerCase())).length;
+  const pct              = totalStories > 0 ? Math.round(completedStories / totalStories * 100) : 0;
+  const totalSpent       = stories.reduce((a, s) => a + (parseFloat(s.actualCost) || 0), 0);
+  const budgetRemaining  = BUDGET_TOTAL - totalSpent;
+
+  const phName = activePh ? (activePh.phaseName || activePh.name || '—') : '—';
+  const el = id => document.getElementById(id);
+
+  el('statActivePhase').textContent = phName;
+  el('statActivePhaseSub').textContent = activePh
+    ? `${activePh.pctComplete || 0}% complete`
+    : 'no active phase';
+
+  // Color active phase card based on phase name
+  const statCard = el('statActivePhase').closest('.stat-card');
+  if (phName.includes('infra')) {
+    statCard.className = 'stat-card amber';
+  } else if (phName.includes('foundation')) {
+    statCard.className = 'stat-card green';
+  } else {
+    statCard.className = 'stat-card';
+    el('statActivePhase').style.color = 'var(--teal)';
+  }
+
+  el('statStoriesCount').textContent = completedStories;
+  el('statStoriesSub').textContent   = `completed / ${totalStories} total`;
+  el('statPct').textContent          = pct + '%';
+  el('statSpent').textContent        = fmt$2(totalSpent);
+  el('statBudget').textContent       = fmt$2(budgetRemaining);
+  el('statInProgress').textContent   = inProgressCount;
+}
+
+/* ─── Render: phases ─────────────────────────────────────────────────────── */
+function renderPhases(phases) {
+  const container = document.getElementById('phaseList');
+  if (!phases || !phases.length) {
+    container.innerHTML = '<div class="lane-empty" style="padding:16px;">No phase data available.</div>';
+    return;
+  }
+
+  // Sort: infra first, then by natural order (rely on API ordering)
+  const rows = phases.map(ph => {
+    const name    = ph.phaseName || ph.name || '—';
+    const total   = ph.totalStories   || 0;
+    const comp    = ph.completedStories || 0;
+    const inProg  = ph.inProgressStories || 0;
+    const pct     = ph.pctComplete != null ? ph.pctComplete : (total > 0 ? Math.round(comp/total*100) : 0);
+    const actual  = parseFloat(ph.actualCost   || ph.totalActualCost  || 0);
+    const est     = parseFloat(ph.estimatedCost || ph.totalEstimatedCost || 0);
+
+    const isInfra  = name.toLowerCase().includes('infra');
+    const isActive = inProg > 0;
+    const isDone   = pct >= 100;
+    const isDim    = pct === 0 && !isActive;
+
+    let rowCls = 'phase-row';
+    if (isDim)    rowCls += ' dim';
+    if (isActive) rowCls += ' active';
+    if (isDone)   rowCls += ' done';
+
+    let badgeCls  = 'phase-name-badge';
+    let fillCls   = 'phase-bar-fill';
+    if (isInfra)  { badgeCls += ' infra'; fillCls += ' infra'; }
+    if (isActive) { badgeCls += ' active'; }
+    if (isDone)   { badgeCls += ' done';  fillCls += ' full'; }
+
+    const width = Math.min(pct, 100) + '%';
+    const check = isDone ? '&#10003;' : (isActive ? '<span class="pulse-dot" style="background:var(--teal);"></span>' : '');
+
+    return `
+      <div class="${rowCls}">
+        <div><span class="${badgeCls}">${name}</span></div>
+        <div class="phase-bar-wrap">
+          <div class="phase-bar-track">
+            <div class="${fillCls}" style="width:${width}"></div>
+          </div>
+        </div>
+        <div class="phase-counts">
+          <span class="done-n">${comp}</span> / ${total} stories
+          ${inProg > 0 ? `<br><span style="color:var(--amber);font-size:11px;">${inProg} running</span>` : ''}
+        </div>
+        <div class="phase-cost">
+          <span class="actual">${actual > 0 ? fmt$2(actual) : '—'}</span>
+          ${est > 0 ? `<span class="of"> / ${fmt$2(est)} est.</span>` : ''}
+        </div>
+        <div class="phase-check">${check}</div>
+      </div>`;
+  }).join('');
+
+  container.innerHTML = rows;
+}
+
+/* ─── Story grid phase selector ──────────────────────────────────────────── */
+function populatePhaseSelector(phases, autoPhase) {
+  const sel = document.getElementById('phaseSelect');
+  const prev = sel.value;
+
+  sel.innerHTML = '';
+  phases.forEach(ph => {
+    const name = ph.phaseName || ph.name || '—';
+    const opt  = document.createElement('option');
+    opt.value  = name;
+    opt.textContent = name + (ph.pctComplete >= 100 ? ' ✓' : '');
+    sel.appendChild(opt);
+  });
+
+  // Restore selection or set to auto-detected
+  const names = phases.map(p => p.phaseName || p.name);
+  if (selectedPhase && names.includes(selectedPhase)) {
+    sel.value = selectedPhase;
+  } else if (autoPhase) {
+    sel.value = autoPhase;
+    selectedPhase = autoPhase;
+  } else if (phases.length > 0) {
+    sel.value = names[0];
+    selectedPhase = names[0];
+  }
+}
+
+function onPhaseSelectChange() {
+  selectedPhase = document.getElementById('phaseSelect').value;
+  renderStoryGrid(allStories, selectedPhase);
+}
+
+/* ─── Render: story grid ─────────────────────────────────────────────────── */
+function storyCard(s) {
+  const st   = (s.status || 'pending').toLowerCase();
+  const stNorm = st.replace(/[_\s]/g, '');
+
+  let cardCls = 'story-card';
+  if (st === 'in_progress' || stNorm === 'inprogress') cardCls += ' in-progress';
+  else if (st === 'completed' || st === 'done') cardCls += ' completed';
+  else if (st === 'blocked' || st === 'failed') cardCls += ' blocked';
+
+  const pb = providerBadge(s.aiProvider || s.provider, s.model || '');
+  const cost = parseFloat(s.actualCost || 0);
+
+  return `
+    <div class="${cardCls}">
+      <div class="story-id">${s.storyId || s.id || '?'}</div>
+      <div class="story-title">${trunc(s.title || s.name || '—', 80)}</div>
+      <div class="story-meta">
+        ${statusBadgeHtml(s.status)}
+        <span class="badge ${pb.cls}">${pb.label}</span>
+        ${cost > 0 ? `<span class="story-cost">${fmt$(cost)}</span>` : ''}
+      </div>
+    </div>`;
+}
+
+function renderStoryGrid(stories, phaseName) {
+  if (!stories || !stories.length) {
+    ['laneMain','laneWT1','laneWT2'].forEach(id => {
+      document.getElementById(id).innerHTML = '<div class="lane-empty">No stories.</div>';
+    });
+    return;
+  }
+
+  // Filter to selected phase
+  const phStories = phaseName
+    ? stories.filter(s => (s.phaseId || s.phase || '') === phaseName)
+    : stories;
+
+  // Group by agentGroup / lane
+  const main = phStories.filter(s => {
+    const ag = (s.agentGroup || s.lane || '').toLowerCase();
+    return ag === 'main' || ag === 'main_lane' || ag === '';
+  });
+  const wt1  = phStories.filter(s => {
+    const ag = (s.agentGroup || s.lane || '').toLowerCase();
+    return ag.includes('primary') || ag === 'wt1' || ag === 'worktree1';
+  });
+  const wt2  = phStories.filter(s => {
+    const ag = (s.agentGroup || s.lane || '').toLowerCase();
+    return ag.includes('independent') || ag === 'wt2' || ag === 'worktree2';
+  });
+
+  // Stories not caught by above groups — toss into main
+  const assigned = new Set([...main, ...wt1, ...wt2].map(s => s.storyId || s.id));
+  const unassigned = phStories.filter(s => !assigned.has(s.storyId || s.id));
+  const mainAll = [...main, ...unassigned];
+
+  const render = (arr) => arr.length
+    ? arr.map(storyCard).join('')
+    : '<div class="lane-empty">No stories in this lane.</div>';
+
+  document.getElementById('laneMain').innerHTML = render(mainAll);
+  document.getElementById('laneWT1').innerHTML  = render(wt1);
+  document.getElementById('laneWT2').innerHTML  = render(wt2);
+}
+
+/* ─── Render: activity feed ──────────────────────────────────────────────── */
+function renderActivity(events) {
+  const container = document.getElementById('activityFeed');
+
+  if (!events || !events.length) {
+    container.innerHTML = `
+      <div class="activity-empty">
+        No activity yet — run a phase to begin
+      </div>`;
+    return;
+  }
+
+  // Newest first, cap at 20
+  const rows = events.slice(0, 20).map(ev => {
+    const pb = providerBadge(ev.aiProvider || ev.provider, ev.model || '');
+    const tokens = ev.totalTokens || ev.tokens
+      ? ((ev.totalTokens || ev.tokens) / 1000).toFixed(1) + 'k'
+      : '—';
+    const dur = ev.durationSeconds != null
+      ? ev.durationSeconds.toFixed(1) + 's'
+      : (ev.duration ? ev.duration + 's' : '—');
+
+    return `
+      <div class="event-row">
+        <div class="event-time">${relTime(ev.createdAt || ev.timestamp)}</div>
+        <div class="event-story">${ev.storyId || ev.story_id || '—'}</div>
+        <div class="event-phase">${trunc(ev.phaseId || ev.phase || '—', 14)}</div>
+        <div class="event-model">
+          <span class="badge ${pb.cls}">${pb.label}</span>
+          <span style="color:var(--text3);font-size:11px;margin-left:4px;">${trunc(ev.model || '', 20)}</span>
+        </div>
+        <div class="event-cost">${fmt$(ev.costUsd || ev.cost || ev.actualCost)}</div>
+        <div class="event-tokens">${tokens}</div>
+        <div class="event-dur">${dur}</div>
+        <div>${outcomeBadgeHtml(ev.outcome || ev.status)}</div>
+      </div>`;
+  }).join('');
+
+  container.innerHTML = `<div class="activity-feed">${rows}</div>`;
+}
+
+/* ─── Render: live state panel ───────────────────────────────────────────── */
+function renderLivePanel(status) {
+  const panel = document.getElementById('livePanel');
+  const dot   = document.getElementById('lpDot');
+  const title = document.getElementById('lpTitle');
+  const sub   = document.getElementById('lpSub');
+  const body  = document.getElementById('lpBody');
+
+  if (!status) {
+    panel.className = 'live-panel lp-inactive';
+    dot.className   = 'status-dot paused';
+    title.textContent = 'No Active Execution';
+    sub.textContent   = '';
+    body.innerHTML    = '<span class="lp-inactive-msg">Run a phase to see live state here. Reads from <code>logs/agent-status.json</code>.</span>';
+    return;
+  }
+
+  panel.className = 'live-panel active-exec';
+  dot.className   = 'status-dot live';
+  title.textContent = `Running: ${status.currentStory || status.story || '—'}`;
+  sub.textContent   = status.phase ? `Phase: ${status.phase}` : '';
+
+  // Build info grid
+  const elapsed = status.elapsedSeconds != null
+    ? status.elapsedSeconds.toFixed(0) + 's'
+    : (status.elapsed || '—');
+  const lane = status.lane || status.agentGroup || '—';
+  const provider = status.aiProvider || status.provider || '—';
+
+  const logEntries = (status.recentEvents || status.events || [])
+    .slice(-8)
+    .map(e => {
+      const ts  = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '';
+      const msg = e.message || e.msg || JSON.stringify(e);
+      return `<div><span class="log-entry-ts">${ts}</span><span class="log-entry-msg">${msg}</span></div>`;
+    }).join('');
+
+  body.innerHTML = `
+    <div class="lp-grid">
+      <div class="lp-field">
+        <div class="lf-label">Story</div>
+        <div class="lf-value" style="font-family:monospace;font-size:13px;">${status.currentStory || '—'}</div>
+      </div>
+      <div class="lp-field">
+        <div class="lf-label">Lane</div>
+        <div class="lf-value">${lane}</div>
+      </div>
+      <div class="lp-field">
+        <div class="lf-label">Provider</div>
+        <div class="lf-value">${provider}</div>
+      </div>
+      <div class="lp-field">
+        <div class="lf-label">Elapsed</div>
+        <div class="lf-value">${elapsed}</div>
+      </div>
+      <div class="lp-field">
+        <div class="lf-label">Phase</div>
+        <div class="lf-value" style="font-size:13px;">${status.phase || '—'}</div>
+      </div>
+    </div>
+    ${logEntries ? `<div class="lp-log">${logEntries}</div>` : ''}`;
+}
+
+/* ─── Detect active phase for story grid default ─────────────────────────── */
+function detectActivePhase(phases) {
+  let ph = phases.find(p => (p.inProgressStories || 0) > 0);
+  if (!ph) {
+    for (let i = phases.length - 1; i >= 0; i--) {
+      if ((phases[i].completedStories || 0) > 0) { ph = phases[i]; break; }
+    }
+  }
+  return ph ? (ph.phaseName || ph.name) : (phases[0] ? (phases[0].phaseName || phases[0].name) : null);
+}
+
+/* ─── Main refresh loop ──────────────────────────────────────────────────── */
+async function refresh() {
+  // Fetch all data sources in parallel
+  const [phases, stories, events, liveStatus] = await Promise.all([
+    apiGet('/phases'),
+    apiGet('/stories'),
+    apiGet('/cost-events'),
+    fetchAgentStatus()
+  ]);
+
+  const apiOnline = phases !== null || stories !== null;
+  renderStatus(apiOnline);
+
+  if (phases)  allPhases  = Array.isArray(phases)  ? phases  : (phases.data  || []);
+  if (stories) allStories = Array.isArray(stories) ? stories : (stories.data || []);
+
+  const evList = events ? (Array.isArray(events) ? events : (events.data || [])) : [];
+
+  // Stats
+  renderStats(allPhases, allStories);
+
+  // Phase list
+  renderPhases(allPhases);
+
+  // Phase selector + story grid
+  const autoPhase = detectActivePhase(allPhases);
+  populatePhaseSelector(allPhases, autoPhase);
+  renderStoryGrid(allStories, selectedPhase || autoPhase);
+
+  // Activity feed
+  renderActivity(evList);
+
+  // Live state panel
+  renderLivePanel(liveStatus);
+}
+
+/* ─── Bootstrap ──────────────────────────────────────────────────────────── */
+refresh();
+setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>

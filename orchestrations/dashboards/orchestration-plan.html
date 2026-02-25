@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shadow Play — Hybrid Orchestration Plan</title>
+    <style>
+        :root {
+            --bg:          #050a0f;
+            --surface:     #0d1520;
+            --surface2:    #111d2b;
+            --border:      #1a2d40;
+            --text:        #d4dfe8;
+            --text-muted:  #5a7a8a;
+            --teal:        #06b6d4;
+            --teal-dim:    rgba(6, 182, 212, 0.12);
+            --violet:      #7c3aed;
+            --violet-dim:  rgba(124, 58, 237, 0.15);
+            --green:       #4ade80;
+            --green-dim:   rgba(74, 222, 128, 0.12);
+            --amber:       #fbbf24;
+            --amber-dim:   rgba(251, 191, 36, 0.15);
+            --red:         #f87171;
+            --red-dim:     rgba(248, 113, 113, 0.15);
+            --orange:      #fb923c;
+            --orange-dim:  rgba(251, 146, 60, 0.15);
+            --blue:        #60a5fa;
+            --blue-dim:    rgba(96, 165, 250, 0.15);
+            --pink:        #f472b6;
+            --pink-dim:    rgba(244, 114, 182, 0.15);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            padding: 2rem;
+            position: relative;
+        }
+
+        /* Glitch-Brutalism scanline overlay */
+        body::after {
+            content: '';
+            position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(6,182,212,0.015) 2px,
+                rgba(6,182,212,0.015) 4px
+            );
+        }
+
+        .container { max-width: 1400px; margin: 0 auto; }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--teal), var(--violet));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: none;
+            letter-spacing: -0.5px;
+        }
+
+        h2 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin: 2.5rem 0 1rem;
+            color: var(--text);
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        h3 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; color: var(--text-muted); }
+
+        .subtitle { color: var(--text-muted); font-size: 1rem; margin-bottom: 2rem; }
+
+        .nav-links { font-size: 0.8rem; margin-bottom: 1.5rem; }
+        .nav-links a { color: var(--teal); text-decoration: none; margin-right: 1.25rem; }
+        .nav-links a:hover { text-decoration: underline; }
+
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .badge-opus    { background: var(--violet-dim); color: var(--violet); }
+        .badge-sonnet  { background: var(--teal-dim);   color: var(--teal); }
+        .badge-critical { background: var(--red-dim);   color: var(--red); }
+        .badge-high    { background: var(--orange-dim); color: var(--orange); }
+        .badge-bash    { background: var(--green-dim);  color: var(--green); }
+        .badge-hybrid  { background: var(--orange-dim); color: var(--orange); }
+        .badge-plan    { background: var(--amber-dim);  color: var(--amber); }
+        .badge-opencode { background: var(--green-dim);  color: var(--green); }
+        .badge-codex    { background: var(--pink-dim);   color: var(--pink); }
+        .badge-claude   { background: var(--violet-dim); color: var(--violet2); border:1px solid var(--violet); }
+
+        .alert { padding: 1rem 1.25rem; border-radius: 8px; margin: 1rem 0; font-size: 0.9rem; }
+        .alert-teal    { background: var(--teal-dim);   border: 1px solid rgba(6,182,212,0.3);  color: var(--teal); }
+        .alert-violet  { background: var(--violet-dim); border: 1px solid rgba(124,58,237,0.3); color: #a78bfa; }
+        .alert-warning { background: var(--amber-dim);  border: 1px solid rgba(251,191,36,0.3); color: var(--amber); }
+        .alert-info    { background: var(--blue-dim);   border: 1px solid rgba(96,165,250,0.3); color: var(--blue); }
+
+        /* Summary cards */
+        .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+        .summary-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .summary-card .sc-value { font-size: 1.9rem; font-weight: 700; }
+        .summary-card .sc-label { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.25rem; }
+        .sc-teal   { color: var(--teal); }
+        .sc-violet { color: #a78bfa; }
+        .sc-green  { color: var(--green); }
+        .sc-amber  { color: var(--amber); }
+        .sc-orange { color: var(--orange); }
+        .sc-pink   { color: var(--pink); }
+
+        /* Phase cards */
+        .phase-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+        }
+        @media (max-width: 1200px) { .phase-cards { grid-template-columns: repeat(3,1fr); } }
+
+        .phase-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1.1rem;
+        }
+        .phase-card.p-infra   { border-top: 3px solid var(--amber); }
+        .phase-card.p-bash    { border-top: 3px solid var(--green); }
+        .phase-card.p-hybrid  { border-top: 3px solid var(--teal); }
+        .phase-card.p-heavy   { border-top: 3px solid var(--violet); }
+        .phase-card.p-final   { border-top: 3px solid var(--red); }
+
+        .phase-card .phase-num  { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 0.2rem; }
+        .phase-card .phase-name { font-family: monospace; font-size: 0.9rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .phase-card.p-infra  .phase-name { color: var(--amber); }
+        .phase-card.p-bash   .phase-name { color: var(--green); }
+        .phase-card.p-hybrid .phase-name { color: var(--teal); }
+        .phase-card.p-heavy  .phase-name { color: var(--violet); }
+        .phase-card.p-final  .phase-name { color: var(--red); }
+        .phase-card .phase-meta { font-size: 0.8rem; color: var(--text-muted); line-height: 1.9; }
+        .phase-card .phase-meta span { color: var(--text); font-weight: 500; }
+
+        /* Architectural decisions */
+        .decisions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .decision-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+        }
+        .decision-card .label  { font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .decision-card .value  { font-size: 1rem; font-weight: 600; color: var(--teal); margin-top: 0.2rem; }
+        .decision-card .detail { font-size: 0.82rem; color: var(--text-muted); margin-top: 0.2rem; }
+
+        /* Pipeline steps */
+        .pipeline-steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+        }
+        .pipeline-step {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            position: relative;
+        }
+        .pipeline-step.hybrid-only { border-color: var(--orange); background: rgba(251,146,60,0.05); }
+        .hybrid-tag {
+            position: absolute; top: 0.5rem; right: 0.5rem;
+            font-size: 0.62rem; font-weight: 700;
+            background: var(--orange-dim); color: var(--orange);
+            padding: 0.1rem 0.4rem; border-radius: 3px; text-transform: uppercase;
+        }
+        .pipeline-step .step-num  { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem; }
+        .pipeline-step .step-name { font-weight: 600; font-size: 0.92rem; margin-bottom: 0.25rem; }
+        .pipeline-step .step-desc { font-size: 0.78rem; color: var(--text-muted); }
+
+        /* Worktree diagram */
+        .worktree-diagram {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 10px; padding: 1.5rem; margin: 1.5rem 0; overflow-x: auto;
+        }
+        .wt-lanes { display: flex; gap: 1.5rem; min-width: 900px; }
+        .wt-lane { flex: 1; min-width: 0; }
+        .wt-lane-header {
+            font-weight: 700; font-size: 0.9rem;
+            padding: 0.6rem 1rem; border-radius: 6px;
+            margin-bottom: 0.75rem; text-align: center;
+        }
+        .wt-lane-header.main-lane        { background: var(--violet-dim); color: #a78bfa; }
+        .wt-lane-header.primary-lane     { background: var(--teal-dim);   color: var(--teal); }
+        .wt-lane-header.independent-lane { background: var(--green-dim);  color: var(--green); }
+
+        .wt-step {
+            background: var(--surface2); border: 1px solid var(--border);
+            border-radius: 6px; padding: 0.6rem 0.9rem;
+            margin-bottom: 0.4rem; font-size: 0.82rem;
+        }
+        .wt-step.hybrid-step { border-color: var(--orange); background: rgba(251,146,60,0.06); }
+        .wt-step.final-step  { border-color: var(--red);    background: rgba(248,113,113,0.06); }
+        .wt-step .step-label  { font-weight: 600; color: var(--text); }
+        .wt-step .step-detail { color: var(--text-muted); font-size: 0.76rem; margin-top: 0.15rem; }
+        .wt-arrow { text-align: center; color: var(--text-muted); font-size: 1.1rem; margin: 0.15rem 0; }
+
+        /* Dependency graph */
+        .dep-graph {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; padding: 1.5rem; font-family: monospace;
+            font-size: 0.82rem; line-height: 2; overflow-x: auto; white-space: nowrap;
+        }
+        .dep-graph .node    { color: var(--teal); font-weight: 700; }
+        .dep-graph .arrow   { color: var(--text-muted); }
+        .dep-graph .comment { color: var(--text-muted); font-style: italic; }
+        .dep-graph .phase-sep { color: var(--violet); font-weight: 700; display: block; margin: 0.6rem 0 0.2rem; font-style: normal; }
+
+        /* Gantt */
+        .gantt { margin: 1.5rem 0; overflow-x: auto; }
+        .gantt-header { display: grid; grid-template-columns: 200px 1fr; gap: 1rem; margin-bottom: 0.5rem; }
+        .gantt-hours  { display: flex; min-width: 760px; font-size: 0.68rem; color: var(--text-muted); }
+        .gantt-hour-mark { flex: 1; text-align: left; padding-left: 2px; }
+        .gantt-row {
+            display: grid; grid-template-columns: 200px 1fr;
+            gap: 1rem; margin-bottom: 0.35rem; align-items: center;
+        }
+        .gantt-label { font-size: 0.79rem; color: var(--text-muted); text-align: right; padding-right: 0.5rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .gantt-label .story-id { font-family: monospace; color: var(--teal); font-size: 0.73rem; }
+        .gantt-track { background: var(--surface); border-radius: 4px; height: 26px; position: relative; min-width: 760px; }
+        .gantt-bar {
+            position: absolute; height: 20px; top: 3px;
+            border-radius: 4px; display: flex; align-items: center;
+            padding: 0 5px; font-size: 0.67rem; font-weight: 600;
+            overflow: hidden; white-space: nowrap;
+        }
+        .gantt-bar.main-bar        { background: rgba(124,58,237,0.3); color: #a78bfa; border: 1px solid rgba(124,58,237,0.5); }
+        .gantt-bar.primary-bar     { background: rgba(6,182,212,0.2);  color: var(--teal);  border: 1px solid rgba(6,182,212,0.4); }
+        .gantt-bar.independent-bar { background: rgba(74,222,128,0.2); color: var(--green); border: 1px solid rgba(74,222,128,0.4); }
+        .gantt-bar.plan-bar        { background: rgba(251,146,60,0.25); color: var(--orange); border: 1px solid rgba(251,146,60,0.4); }
+        .gantt-bar.integration-bar { background: rgba(248,113,113,0.2); color: var(--red);   border: 1px solid rgba(248,113,113,0.4); }
+        .gantt-bar.art-bar         { background: rgba(251,191,36,0.2); color: var(--amber); border: 1px solid rgba(251,191,36,0.4); }
+        .gantt-phase-label {
+            font-size: 0.78rem; font-weight: 700; letter-spacing: 0.3px;
+            margin: 1.1rem 0 0.4rem; padding-left: 212px;
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+        .gantt-section-label {
+            font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.5px; color: var(--text-muted); margin: 0.75rem 0 0.4rem;
+            padding-left: 0;
+        }
+
+        /* Story table */
+        .story-table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+        .story-table th {
+            text-align: left; padding: 0.55rem 0.75rem;
+            background: var(--surface2); color: var(--text-muted);
+            font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px;
+            border-bottom: 2px solid var(--border);
+        }
+        .story-table td { padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        .story-table tr:hover td { background: rgba(6,182,212,0.03); }
+        .story-table td:first-child { font-family: monospace; color: var(--teal); font-weight: 600; font-size: 0.78rem; }
+        .story-table .phase-row td { background: var(--surface2); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); padding: 0.35rem 0.75rem; }
+        .story-table .cost-cell { font-family: monospace; color: var(--green); font-weight: 600; }
+        .story-table .tok-cell  { font-family: monospace; color: var(--text-muted); font-size: 0.75rem; }
+
+        /* Agent matrix */
+        .matrix-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        .matrix-table th { text-align: left; padding: 0.6rem 0.75rem; background: var(--surface2); color: var(--text-muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid var(--border); }
+        .matrix-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
+        .matrix-table .cost-cell  { font-family: monospace; color: var(--green); font-weight: 600; }
+        .matrix-table .count-cell { color: var(--teal); font-weight: 600; text-align: center; }
+        .matrix-table .lane-cell  { font-family: monospace; font-size: 0.78rem; color: var(--text-muted); }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <div class="nav-links">
+        <a href="shadow-play-monitor.html">SP Monitor</a>
+        <a href="shadow-play-prd-viewer.html">SP PRD Viewer</a>
+        <a href="shadow-play-phase-cost-monitor.html">SP Costs</a>
+        <a href="shadow-play-agent-profiles.html">SP Profiles</a>
+        <span style="opacity:0.2;margin:0 4px">·</span>
+        <a href="monitor.html">Monitor</a>
+        <a href="prd-viewer.html">Fitness PRD</a>
+        <a href="phase-cost-monitor.html">Cost Monitor</a>
+    </div>
+
+    <h1>Shadow Play — Hybrid Orchestration Plan</h1>
+    <p class="subtitle">
+        8 phases · <strong>82 stories</strong> · UE5 + Go dual-engine stack · 3-lane parallel execution (hybrid phases)
+        &nbsp;·&nbsp; Glitch-Brutalism AI extraction game
+        &nbsp;·&nbsp; <span style="color:var(--amber)">Phase 0: infra_test gate</span>
+    </p>
+
+    <div class="alert alert-teal">
+        <strong>LLM-Calibrated Estimates:</strong> All estimates are based on actual Claude agent run data from the Pac-Man game demo (19 stories, 1.19h actual vs 77h human estimate). Wall-clock hours reflect LLM output speed, not human developer hours.
+    </div>
+
+    <!-- Summary -->
+    <div class="summary-cards">
+        <div class="summary-card">
+            <div class="sc-value sc-teal">82</div>
+            <div class="sc-label">Total Stories</div>
+        </div>
+        <div class="summary-card">
+            <div class="sc-value sc-violet">8</div>
+            <div class="sc-label">Phases</div>
+        </div>
+        <div class="summary-card">
+            <div class="sc-value sc-green">~48h</div>
+            <div class="sc-label">Wall Clock Total</div>
+        </div>
+        <div class="summary-card">
+            <div class="sc-value sc-amber">$504</div>
+            <div class="sc-label">Est. Total Cost</div>
+        </div>
+        <div class="summary-card">
+            <div class="sc-value sc-teal">36.7M</div>
+            <div class="sc-label">Est. Tokens</div>
+        </div>
+        <div class="summary-card">
+            <div class="sc-value sc-violet">26</div>
+            <div class="sc-label">Claude Opus</div>
+        </div>
+        <div class="summary-card">
+            <div class="sc-value sc-green">41</div>
+            <div class="sc-label">OpenCode Stories</div>
+        </div>
+        <div class="summary-card">
+            <div class="sc-value sc-orange">4</div>
+            <div class="sc-label">Hybrid Phases</div>
+        </div>
+    </div>
+
+    <div class="alert alert-violet">
+        <strong>Skill Assessment + KB.md:</strong> Both mechanisms are active for all 4 hybrid phases (core_gameplay, swarm_and_economy, llm_and_marketplace, integration_and_qa). Step 0.5 runs pre-phase skill gap analysis against <code>automation/agents/profiles.json</code>. KB.md learnings accumulate in <code>automation/agents/KB.md</code> and are injected per agent role on each story run.
+        Shadow Play agent profiles must be loaded into <code>automation/agents/profiles.json</code> before running phases (see Run Commands below).
+    </div>
+
+    <!-- Phase Structure -->
+    <h2>Phase Structure</h2>
+    <div class="phase-cards">
+        <div class="phase-card p-infra">
+            <div class="phase-num">Phase 0 — Gate</div>
+            <div class="phase-name">infra_test</div>
+            <div class="phase-meta">
+                Mode: <span>bash</span><br>
+                Stories: <span>SP-T01 · SP-T02 · SP-T03</span><br>
+                Lane: <span>all 3 lanes</span><br>
+                Wall clock: <span>~0.3h</span><br>
+                Cost: <span>$0.20</span><br>
+                <span style="color:var(--amber);font-size:0.75rem">⚠ Blocks Phase 1 until all pass</span>
+            </div>
+        </div>
+        <div class="phase-card p-bash">
+            <div class="phase-num">Phase 1</div>
+            <div class="phase-name">foundation</div>
+            <div class="phase-meta">
+                Mode: <span>bash</span><br>
+                Stories: <span>SP-001 – SP-002</span><br>
+                Lane: <span>main (sequential)</span><br>
+                Wall clock: <span>~1h</span><br>
+                Cost: <span>$2.40</span>
+            </div>
+        </div>
+        <div class="phase-card p-bash">
+            <div class="phase-num">Phase 2</div>
+            <div class="phase-name">art_direction</div>
+            <div class="phase-meta">
+                Mode: <span>bash</span><br>
+                Stories: <span>SP-003</span><br>
+                Lane: <span>main (sequential)</span><br>
+                Wall clock: <span>~0.5h</span><br>
+                Cost: <span>$1.50</span>
+            </div>
+        </div>
+        <div class="phase-card p-bash">
+            <div class="phase-num">Phase 3</div>
+            <div class="phase-name">art_specs</div>
+            <div class="phase-meta">
+                Mode: <span>bash</span><br>
+                Stories: <span>SP-004 – SP-008</span><br>
+                Lane: <span>main (sequential)</span><br>
+                Wall clock: <span>~3h</span><br>
+                Cost: <span>$20.50</span>
+            </div>
+        </div>
+        <div class="phase-card p-hybrid">
+            <div class="phase-num">Phase 4</div>
+            <div class="phase-name">core_gameplay</div>
+            <div class="phase-meta">
+                Mode: <span>hybrid</span><br>
+                Stories: <span>SP-009 – SP-018 + SP-068 + SP-070 + SP-073–079 (19)</span><br>
+                Lanes: <span>WT1 UE5 + WT2 Go</span><br>
+                Wall clock: <span>~7h</span><br>
+                Cost: <span>$68.00</span>
+            </div>
+        </div>
+        <div class="phase-card p-hybrid">
+            <div class="phase-num">Phase 5</div>
+            <div class="phase-name">swarm_and_economy</div>
+            <div class="phase-meta">
+                Mode: <span>hybrid</span><br>
+                Stories: <span>SP-019 – SP-030 + SP-061 + SP-063–067 + SP-072 (19)</span><br>
+                Lanes: <span>WT1 UE5 + WT2 Go</span><br>
+                Wall clock: <span>~6h</span><br>
+                Cost: <span>$104.50</span>
+            </div>
+        </div>
+        <div class="phase-card p-heavy">
+            <div class="phase-num">Phase 6</div>
+            <div class="phase-name">llm_and_marketplace</div>
+            <div class="phase-meta">
+                Mode: <span>hybrid</span><br>
+                Stories: <span>SP-031–043 + SP-054–060 + SP-062 + SP-069 + SP-071 (23)</span><br>
+                Lanes: <span>WT1 UE5 + WT2 Go LLM</span><br>
+                Wall clock: <span>~22h</span><br>
+                Cost: <span>$247.40</span>
+            </div>
+        </div>
+        <div class="phase-card p-final">
+            <div class="phase-num">Phase 7</div>
+            <div class="phase-name">integration_and_qa</div>
+            <div class="phase-meta">
+                Mode: <span>hybrid</span><br>
+                Stories: <span>SP-044 – SP-053 (10)</span><br>
+                Lane: <span>main (sequential)</span><br>
+                Wall clock: <span>~7h</span><br>
+                Cost: <span>$60.10</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="alert alert-info">
+        <strong>Run each phase:</strong><br>
+        <span style="color:var(--amber);font-size:0.8rem;font-weight:700">① Run infra_test first — gate blocks all subsequent phases until SP-T01/T02/T03 complete:</span><br>
+        <code style="font-size:0.82rem">PRD_FILE=$(pwd)/shadow-play/prd.json bash automation/scripts/run-agent-orchestration.sh --phase infra_test</code><br>
+        <br>
+        <span style="color:var(--green);font-size:0.8rem;font-weight:700">② Then run remaining phases in order:</span><br>
+        <code style="font-size:0.82rem">PRD_FILE=$(pwd)/shadow-play/prd.json bash automation/scripts/run-agent-orchestration.sh --phase foundation</code><br>
+        <code style="font-size:0.82rem">PRD_FILE=$(pwd)/shadow-play/prd.json bash automation/scripts/run-agent-orchestration.sh --phase art_direction</code><br>
+        <code style="font-size:0.82rem">PRD_FILE=$(pwd)/shadow-play/prd.json bash automation/scripts/run-agent-orchestration.sh --phase art_specs</code><br>
+        <code style="font-size:0.82rem">ORCH_MODE=hybrid PRD_FILE=$(pwd)/shadow-play/prd.json bash automation/scripts/run-agent-orchestration.sh --phase core_gameplay</code>
+        → <code style="font-size:0.82rem">--phase swarm_and_economy</code>
+        → <code style="font-size:0.82rem">--phase llm_and_marketplace</code>
+        → <code style="font-size:0.82rem">--phase integration_and_qa</code>
+    </div>
+
+    <div class="alert alert-warning">
+        <strong>Profiles Setup:</strong> Before running phases, merge Shadow Play agent profiles into <code>automation/agents/profiles.json</code>:
+        <code style="font-size:0.82rem">jq -s '.[0] * .[1]' automation/agents/profiles.json shadow-play/profiles.json &gt; /tmp/merged-profiles.json &amp;&amp; mv /tmp/merged-profiles.json automation/agents/profiles.json</code>
+    </div>
+
+    <!-- Architectural Decisions -->
+    <h2>Architectural Decisions</h2>
+    <div class="decisions">
+        <div class="decision-card">
+            <div class="label">Phases 1–3 Mode</div>
+            <div class="value">bash</div>
+            <div class="detail">Foundation, visual bible, and art specs are spec/planning output — deterministic, no coordination needed</div>
+        </div>
+        <div class="decision-card">
+            <div class="label">Phases 4–7 Mode</div>
+            <div class="value">hybrid</div>
+            <div class="detail">Complex engineering stories benefit from plan mode (Step 0.5), skill assessment, KB.md feedback, and coordination bus</div>
+        </div>
+        <div class="decision-card">
+            <div class="label">Game Engine</div>
+            <div class="value">Unreal Engine 5</div>
+            <div class="detail">Nanite, Lumen, Niagara, MetaHuman — primary workstream runs UE5 C++ agents in WT1</div>
+        </div>
+        <div class="decision-card">
+            <div class="label">Backend</div>
+            <div class="value">Go microservices</div>
+            <div class="detail">goroutines + gRPC for swarm agent management, marketplace API, LLM context store — runs in WT2 independent lane</div>
+        </div>
+        <div class="decision-card">
+            <div class="label">UE5↔Go Bridge</div>
+            <div class="value">gRPC proto contract</div>
+            <div class="detail">5 service definitions (Zone, Agent, Prime, Extraction, Marketplace) established in Phase 1 before any engineering</div>
+        </div>
+        <div class="decision-card">
+            <div class="label">LLM Integration</div>
+            <div class="value">Claude API (Prime)</div>
+            <div class="detail">Real-time Prime chatbot with persistent memory, TTS pipeline, Super Prime group war rooms — Phase 6 critical path</div>
+        </div>
+        <div class="decision-card">
+            <div class="label">Visual Theme</div>
+            <div class="value">Glitch-Brutalism</div>
+            <div class="detail">Neon-teal #06b6d4 + glitch-violet #7c3aed on deep-black. Physical world: brutalist concrete. Digital overlay: shimmering data projections</div>
+        </div>
+        <div class="decision-card">
+            <div class="label">Skill Assessment</div>
+            <div class="value">Step 0.5 enabled</div>
+            <div class="detail">Pre-phase agent profile gap analysis for all hybrid phases. Required skills in technicalNotes.requiredSkills per story</div>
+        </div>
+        <div class="decision-card">
+            <div class="label">Knowledge Base</div>
+            <div class="value">KB.md enabled</div>
+            <div class="detail">Learnings written on first-success and retries; injected per agent role. Shared across all phases via automation/agents/KB.md</div>
+        </div>
+    </div>
+
+    <!-- Hybrid Pipeline Steps -->
+    <h2>Hybrid Pipeline Steps (Phases 4–7)</h2>
+    <div class="alert alert-warning" style="margin-bottom:1rem">
+        Phases 1–3 (foundation, art_direction, art_specs) use bash mode — hybrid-only steps (0.5 Skill Assessment, 0.6 Coordination, Plan Mode) are skipped. Phases 4–7 run the full hybrid pipeline.
+    </div>
+    <div class="pipeline-steps">
+        <div class="pipeline-step">
+            <div class="step-num" style="color:var(--violet)">Step 0</div>
+            <div class="step-name">Pre-flight</div>
+            <div class="step-desc">Prerequisites check, worktree setup, prd.json validation, agent-status.json init</div>
+        </div>
+        <div class="pipeline-step hybrid-only">
+            <div class="hybrid-tag">Hybrid</div>
+            <div class="step-num" style="color:var(--orange)">Step 0.5</div>
+            <div class="step-name">Skill Assessment</div>
+            <div class="step-desc">Reads prd.json + profiles.json, detects role skill gaps, augments profiles, writes pre-phase assessment MD</div>
+        </div>
+        <div class="pipeline-step hybrid-only">
+            <div class="hybrid-tag">Hybrid</div>
+            <div class="step-num" style="color:var(--orange)">Step 0.6</div>
+            <div class="step-name">Coordination</div>
+            <div class="step-desc">Coordination agent posts plan_summary to agent-messages.jsonl MCP bus for WT awareness</div>
+        </div>
+        <div class="pipeline-step">
+            <div class="step-num" style="color:var(--teal)">Step 1–2</div>
+            <div class="step-name">Parallel Execution</div>
+            <div class="step-desc">WT1 (UE5 primary chain) + WT2 (Go independent) run concurrently. Phase 7 runs sequential (all main lane)</div>
+        </div>
+        <div class="pipeline-step hybrid-only">
+            <div class="hybrid-tag">Hybrid</div>
+            <div class="step-num" style="color:var(--orange)">Plan Mode</div>
+            <div class="step-name">Plan Mode</div>
+            <div class="step-desc">All Opus stories (1h+) trigger plan mode: planning pass before implementation. ~27 stories flagged across phases 4–7</div>
+        </div>
+        <div class="pipeline-step">
+            <div class="step-num" style="color:var(--teal)">Step 3</div>
+            <div class="step-name">Team Lead Review</div>
+            <div class="step-desc">Domain engineer (ue5-gameplay, ue5-rendering, go-api, go-llm, go-marketplace) validates output against acceptance criteria post-implementation</div>
+        </div>
+        <div class="pipeline-step">
+            <div class="step-num" style="color:var(--violet)">Step 4</div>
+            <div class="step-name">Phase Gate</div>
+            <div class="step-desc">Cost variance check: warn at +30%, block at +150%. Results written to phase-gates.jsonl. Unblocks next phase.</div>
+        </div>
+    </div>
+
+    <!-- Phase 4 Worktree Architecture -->
+    <h2>Phase 4 — core_gameplay Worktree Architecture</h2>
+    <div class="worktree-diagram">
+        <div class="wt-lanes">
+            <div class="wt-lane">
+                <div class="wt-lane-header main-lane">Main Lane (Orchestrator)</div>
+                <div class="wt-step hybrid-step"><div class="step-label">Step 0.5 — Skill Assessment</div><div class="step-detail">UE5 + Go roles profiled · KB read</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step hybrid-step"><div class="step-label">Step 0.6 — Coordination</div><div class="step-detail">Posts plan_summary to bus</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step"><div class="step-label">Launches WT1 + WT2</div><div class="step-detail">UE5 + Go worktrees in parallel</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step hybrid-step"><div class="step-label">Step 4 — Phase Gate</div><div class="step-detail">Cost gate. Unblocks Phase 5.</div></div>
+            </div>
+            <div class="wt-lane">
+                <div class="wt-lane-header primary-lane">WT1 — UE5 Core Systems</div>
+                <div class="wt-step"><div class="step-label">SP-009 ★ Plan Mode</div><div class="step-detail">Frame Locomotion System · Opus · 1h · $12</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step"><div class="step-label">SP-010</div><div class="step-detail">Zone Generation Interface · Sonnet · $2</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step"><div class="step-label">SP-011</div><div class="step-detail">Lumen + Nanite Setup · Sonnet · $2</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step"><div class="step-label">SP-012</div><div class="step-detail">Digital Overlay HUD · Sonnet · $2</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step"><div class="step-label">SP-013</div><div class="step-detail">Extraction Timer System · Sonnet · $2</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step"><div class="step-label">SP-014</div><div class="step-detail">Frame Input + Jetpack · Sonnet · $2</div></div>
+            </div>
+            <div class="wt-lane">
+                <div class="wt-lane-header independent-lane">WT2 — Go Backend Core</div>
+                <div class="wt-step"><div class="step-label">SP-015</div><div class="step-detail">Zone Service gRPC Impl · Sonnet · $2</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step"><div class="step-label">SP-016</div><div class="step-detail">Agent State gRPC Impl · Sonnet · $2</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step"><div class="step-label">SP-017</div><div class="step-detail">PostgreSQL + Redis Schema · Sonnet · $2</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step"><div class="step-label">SP-018</div><div class="step-detail">Docker Compose Full Stack · Sonnet · $2</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Phase 6 highlight (most complex) -->
+    <h2>Phase 6 — llm_and_marketplace (Critical Path: ~18h)</h2>
+    <p style="color:var(--text-muted); font-size:0.87rem; margin-bottom:1rem">
+        The largest and most complex phase. 23 stories — 15 Opus (1.5h each) + 8 Sonnet (0.5h each). New: Hybrid-Prime Neural Merge (SP-062), Morning Briefing (SP-069), Prime Sale/Legacy (SP-071).
+        The independent Go LLM/marketplace lane is the critical path at ~17.5h sequential.
+    </p>
+    <div class="worktree-diagram">
+        <div class="wt-lanes">
+            <div class="wt-lane">
+                <div class="wt-lane-header main-lane">Main Lane</div>
+                <div class="wt-step hybrid-step"><div class="step-label">Step 0.5 + 0.6</div><div class="step-detail">Skill assessment + coordination</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step"><div class="step-label">Launch WT1 + WT2</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step"><div class="step-label">SP-060</div><div class="step-detail">Prompt Library + Template System · Sonnet · $2.80</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step hybrid-step"><div class="step-label">Phase Gate (after WTs)</div></div>
+            </div>
+            <div class="wt-lane">
+                <div class="wt-lane-header primary-lane">WT1 — UE5 LLM Interface</div>
+                <div class="wt-step"><div class="step-label">SP-031 ★ Plan Mode</div><div class="step-detail">Prime Chatbot UE5 Widget · Opus 1.5h · $15</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step"><div class="step-label">SP-032</div><div class="step-detail">Real-time TTS Integration · Sonnet · $2.80</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step"><div class="step-label">SP-033</div><div class="step-detail">VFX Glitch Overlay (Prime) · Sonnet · $2.80</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step"><div class="step-label">SP-034 ★ Plan Mode</div><div class="step-detail">Super Prime War Room Audio · Opus 1.5h · $15</div></div>
+            </div>
+            <div class="wt-lane">
+                <div class="wt-lane-header independent-lane">WT2 — Go LLM + Marketplace (Critical Path)</div>
+                <div class="wt-step"><div class="step-label">SP-035 ★ Plan Mode</div><div class="step-detail">Prime LLM Context Engine · Opus 1.5h · $15</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step"><div class="step-label">SP-036 ★</div><div class="step-detail">Prime Memory Persistence · Opus 1.5h · $15</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step"><div class="step-label">SP-037</div><div class="step-detail">Prime REST API · Sonnet · $2.80</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step"><div class="step-label">SP-038 ★</div><div class="step-detail">Super Prime Group Chat Engine · Opus 1.5h · $15</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step"><div class="step-label">SP-039 → SP-043</div><div class="step-detail">Marketplace + Intelligence tiers (6 stories, Opus/Sonnet mix)</div></div>
+                <div class="wt-arrow">↓</div>
+                <div class="wt-step"><div class="step-label">SP-054 → SP-059</div><div class="step-detail">AI Learning Engine stories (6 stories, mostly Opus 1.5h)</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dependency Graph (simplified) -->
+    <h2>Dependency Chain (Key Paths)</h2>
+    <div class="dep-graph">
+<span class="phase-sep">▸ PHASE 0: infra_test (bash — gate, all 3 lanes)</span>
+<span class="node">SP-T01</span>  <span class="comment">// Main lane: Claude Sonnet CLI + cost capture + git clean check</span>
+<span class="node">SP-T02</span>  <span class="comment">// Primary lane (WT1): OpenCode CLI + worktree health (LANE=primary)</span>
+<span class="node">SP-T03</span>  <span class="comment">// Independent lane (WT2): Codex CLI + worktree health (LANE=independent)</span>
+<span class="node">SP-T01</span> + <span class="node">SP-T02</span> + <span class="node">SP-T03</span> <span class="arrow">→</span> <span class="comment" style="color:var(--amber)">// Gate: ALL must complete before Phase 1 runs</span>
+
+<span class="phase-sep">▸ PHASE 1: foundation (bash)</span>
+<span class="node">SP-001</span> <span class="arrow">→</span> <span class="node">SP-002</span>  <span class="comment">// Scaffolding → gRPC Proto Definitions</span>
+
+<span class="phase-sep">▸ PHASE 2: art_direction (bash)</span>
+<span class="node">SP-001</span> <span class="arrow">→</span> <span class="node">SP-003</span>  <span class="comment">// Scaffolding → Glitch-Brutalism Visual Bible</span>
+
+<span class="phase-sep">▸ PHASE 3: art_specs (bash — all depend on SP-003 Visual Bible)</span>
+<span class="node">SP-003</span> <span class="arrow">→</span> <span class="node">SP-004</span>  <span class="comment">// Visual Bible → Physical World Asset Specs</span>
+<span class="node">SP-003</span> <span class="arrow">→</span> <span class="node">SP-005</span>  <span class="comment">// Visual Bible → Digital Overlay Specs</span>
+<span class="node">SP-003</span> <span class="arrow">→</span> <span class="node">SP-006</span>  <span class="comment">// Visual Bible → Character + Frame Specs [★ Opus]</span>
+<span class="node">SP-003</span> <span class="arrow">→</span> <span class="node">SP-007</span>  <span class="comment">// Visual Bible → VFX Specs</span>
+<span class="node">SP-003</span> <span class="arrow">→</span> <span class="node">SP-008</span>  <span class="comment">// Visual Bible → Audio + TTS Specs [★ Opus]</span>
+
+<span class="phase-sep">▸ PHASE 4: core_gameplay (hybrid) — WT1 (primary UE5)</span>
+<span class="node">SP-001</span> + <span class="node">SP-002</span> <span class="arrow">→</span> <span class="node">SP-009</span>  <span class="comment">// Frame Locomotion System [★ plan mode, Opus]</span>
+<span class="node">SP-009</span> <span class="arrow">→</span> <span class="node">SP-010</span>  <span class="comment">// Zone Generation Interface</span>
+<span class="node">SP-009</span> <span class="arrow">→</span> <span class="node">SP-011</span>  <span class="comment">// Lumen + Nanite Scene Setup</span>
+<span class="node">SP-010</span> <span class="arrow">→</span> <span class="node">SP-012</span>  <span class="comment">// Digital Overlay HUD</span>
+<span class="node">SP-009</span> <span class="arrow">→</span> <span class="node">SP-013</span>  <span class="comment">// Extraction Timer</span>
+<span class="node">SP-009</span> <span class="arrow">→</span> <span class="node">SP-014</span>  <span class="comment">// Frame Input + Jetpack</span>
+
+<span class="comment">// WT2 (independent — runs in parallel with WT1)</span>
+<span class="node">SP-002</span> <span class="arrow">→</span> <span class="node">SP-015</span>  <span class="comment">// Zone Service gRPC</span>
+<span class="node">SP-002</span> <span class="arrow">→</span> <span class="node">SP-016</span>  <span class="comment">// Agent State gRPC</span>
+<span class="node">SP-015</span> + <span class="node">SP-016</span> <span class="arrow">→</span> <span class="node">SP-017</span>  <span class="comment">// DB Schema</span>
+<span class="node">SP-017</span> <span class="arrow">→</span> <span class="node">SP-018</span>  <span class="comment">// Docker Compose Stack</span>
+
+<span class="phase-sep">▸ PHASE 5: swarm_and_economy (hybrid) — WT1/WT2 parallel</span>
+<span class="node">SP-009–018</span> <span class="arrow">→</span> <span class="node">SP-019</span>  <span class="comment">// Agent Swarm Visualization [★ Opus]</span>
+<span class="node">SP-019</span> <span class="arrow">→</span> <span class="node">SP-020–024</span>  <span class="comment">// UE5 swarm/economy stories (WT1)</span>
+<span class="node">SP-017</span> <span class="arrow">→</span> <span class="node">SP-025</span>  <span class="comment">// Swarm State Machine Go [★ Opus]</span>
+<span class="node">SP-025</span> <span class="arrow">→</span> <span class="node">SP-026–030</span>  <span class="comment">// Go swarm/economy stories (WT2)</span>
+
+<span class="phase-sep">▸ PHASE 6: llm_and_marketplace (hybrid) — WT1/WT2 parallel</span>
+<span class="node">SP-025–030</span> <span class="arrow">→</span> <span class="node">SP-031</span>  <span class="comment">// Prime Chatbot Widget (UE5) [★ Opus]</span>
+<span class="node">SP-031</span> <span class="arrow">→</span> <span class="node">SP-032–034</span>  <span class="comment">// TTS, VFX, Audio (WT1)</span>
+<span class="node">SP-008</span> + <span class="node">SP-025</span> <span class="arrow">→</span> <span class="node">SP-035</span>  <span class="comment">// Prime LLM Context Engine [★ Opus] (WT2)</span>
+<span class="node">SP-035</span> <span class="arrow">→</span> <span class="node">SP-036–043</span>  <span class="comment">// Memory, API, Super Prime, Marketplace chain (WT2)</span>
+<span class="node">SP-036</span> <span class="arrow">→</span> <span class="node">SP-054–059</span>  <span class="comment">// AI Learning Engine stories (WT2)</span>
+
+<span class="phase-sep">▸ PHASE 7: integration_and_qa (hybrid — all main lane, sequential)</span>
+<span class="node">All phases</span> <span class="arrow">→</span> <span class="node">SP-044</span>  <span class="comment">// UE5 System Integration Review</span>
+<span class="node">SP-044</span> <span class="arrow">→</span> <span class="node">SP-045–053</span>  <span class="comment">// Go, Prime chatbot, performance, final validation</span>
+    </div>
+
+    <!-- Gantt Chart — 40h scale -->
+    <h2>Estimated Timeline (~38h Wall Clock)</h2>
+    <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1rem">
+        Scale: 40h total. Parallel phases (4–6) show WT1 + WT2 tracks simultaneously. Phase 6 is the critical path at ~18h.
+    </p>
+    <div class="gantt">
+        <div class="gantt-header">
+            <div></div>
+            <div class="gantt-hours">
+                <div class="gantt-hour-mark">0h</div>
+                <div class="gantt-hour-mark">4h</div>
+                <div class="gantt-hour-mark">8h</div>
+                <div class="gantt-hour-mark">12h</div>
+                <div class="gantt-hour-mark">16h</div>
+                <div class="gantt-hour-mark">20h</div>
+                <div class="gantt-hour-mark">24h</div>
+                <div class="gantt-hour-mark">28h</div>
+                <div class="gantt-hour-mark">32h</div>
+                <div class="gantt-hour-mark">36h</div>
+                <div class="gantt-hour-mark">40h</div>
+            </div>
+        </div>
+
+        <div class="gantt-phase-label"><span style="color:var(--amber);font-family:monospace">Phase 0</span> <span style="color:var(--text-muted);font-weight:400">infra_test (bash gate) — ~0.3h</span></div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-T01</span> Claude Sonnet · main</div>
+            <div class="gantt-track"><div class="gantt-bar" style="left:0%;width:0.5%;background:rgba(251,191,36,0.3);color:var(--amber);border:1px solid rgba(251,191,36,0.5)">T01</div></div>
+        </div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-T02</span> OpenCode · WT1</div>
+            <div class="gantt-track"><div class="gantt-bar" style="left:0%;width:0.5%;background:rgba(74,222,128,0.2);color:var(--green);border:1px solid rgba(74,222,128,0.4)">T02</div></div>
+        </div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-T03</span> Codex · WT2</div>
+            <div class="gantt-track"><div class="gantt-bar" style="left:0%;width:0.5%;background:rgba(244,114,182,0.2);color:var(--pink);border:1px solid rgba(244,114,182,0.4)">T03</div></div>
+        </div>
+
+        <div class="gantt-phase-label"><span style="color:var(--green);font-family:monospace">Phase 1</span> <span style="color:var(--text-muted);font-weight:400">foundation (bash) — ~1h</span></div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-001/002</span> Scaffolding · gRPC</div>
+            <div class="gantt-track"><div class="gantt-bar main-bar" style="left:0%;width:2.5%">001 002</div></div>
+        </div>
+
+        <div class="gantt-phase-label"><span style="color:var(--green);font-family:monospace">Phase 2</span> <span style="color:var(--text-muted);font-weight:400">art_direction (bash) — ~0.5h</span></div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-003</span> Visual Bible</div>
+            <div class="gantt-track"><div class="gantt-bar art-bar" style="left:2.5%;width:1.25%">003</div></div>
+        </div>
+
+        <div class="gantt-phase-label"><span style="color:var(--green);font-family:monospace">Phase 3</span> <span style="color:var(--text-muted);font-weight:400">art_specs (bash) — ~3h</span></div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-004/005/007</span> Physical·Digital·VFX Specs</div>
+            <div class="gantt-track"><div class="gantt-bar art-bar" style="left:3.75%;width:3.75%">004 005 007</div></div>
+        </div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-006/008</span> Frame · Audio Specs ★Opus</div>
+            <div class="gantt-track">
+                <div class="gantt-bar plan-bar" style="left:5%;width:1%">plan</div>
+                <div class="gantt-bar art-bar" style="left:6%;width:1.5%">006 008</div>
+            </div>
+        </div>
+
+        <div class="gantt-phase-label"><span style="color:var(--teal);font-family:monospace">Phase 4</span> <span style="color:var(--text-muted);font-weight:400">core_gameplay (hybrid) — ~4h</span></div>
+        <div class="gantt-section-label" style="padding-left:212px">▸ WT1 — UE5 Core Systems (primary)</div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-009</span> Frame Locomotion ★Opus</div>
+            <div class="gantt-track">
+                <div class="gantt-bar plan-bar"    style="left:11.25%;width:1.25%">plan</div>
+                <div class="gantt-bar primary-bar"  style="left:12.5%;width:2.5%">009</div>
+            </div>
+        </div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-010–014</span> Zone·HUD·Timer·Input</div>
+            <div class="gantt-track"><div class="gantt-bar primary-bar" style="left:15%;width:6.25%">010–014</div></div>
+        </div>
+
+        <div class="gantt-section-label" style="padding-left:212px">▸ WT2 — Go Backend Core (independent, parallel)</div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-015–018</span> Zone·Agent·Schema·Docker</div>
+            <div class="gantt-track"><div class="gantt-bar independent-bar" style="left:11.25%;width:5%">015–018</div></div>
+        </div>
+
+        <div class="gantt-phase-label"><span style="color:var(--teal);font-family:monospace">Phase 5</span> <span style="color:var(--text-muted);font-weight:400">swarm_and_economy (hybrid) — ~5h</span></div>
+        <div class="gantt-section-label" style="padding-left:212px">▸ WT1 — UE5 Swarm Visual (primary)</div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-019</span> Swarm Visualization ★Opus</div>
+            <div class="gantt-track">
+                <div class="gantt-bar plan-bar"    style="left:21.25%;width:1%">plan</div>
+                <div class="gantt-bar primary-bar"  style="left:22.25%;width:2.5%">019</div>
+            </div>
+        </div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-020–024</span> Agent UI · Offline · Economy</div>
+            <div class="gantt-track"><div class="gantt-bar primary-bar" style="left:24.75%;width:5%">020–024</div></div>
+        </div>
+
+        <div class="gantt-section-label" style="padding-left:212px">▸ WT2 — Go Swarm Engine (independent, parallel)</div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-025</span> Swarm State Machine ★Opus</div>
+            <div class="gantt-track">
+                <div class="gantt-bar plan-bar"       style="left:21.25%;width:1%">plan</div>
+                <div class="gantt-bar independent-bar" style="left:22.25%;width:2.5%">025</div>
+            </div>
+        </div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-026–030</span> Economy · Burn · Loyalty</div>
+            <div class="gantt-track"><div class="gantt-bar independent-bar" style="left:24.75%;width:8.75%">026–030 (2×Opus)</div></div>
+        </div>
+
+        <div class="gantt-phase-label"><span style="color:#a78bfa;font-family:monospace">Phase 6</span> <span style="color:var(--text-muted);font-weight:400">llm_and_marketplace (hybrid) — ~18h — CRITICAL PATH</span></div>
+        <div class="gantt-section-label" style="padding-left:212px">▸ WT1 — UE5 LLM Interface (primary, 4 stories)</div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-031</span> Prime Widget ★Opus</div>
+            <div class="gantt-track">
+                <div class="gantt-bar plan-bar"    style="left:33.75%;width:1%">plan</div>
+                <div class="gantt-bar primary-bar"  style="left:34.75%;width:3.75%">031</div>
+            </div>
+        </div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-032–034</span> TTS · VFX · Audio ★</div>
+            <div class="gantt-track">
+                <div class="gantt-bar primary-bar" style="left:38.5%;width:5%">032 033</div>
+                <div class="gantt-bar plan-bar"    style="left:43.5%;width:1%">plan</div>
+                <div class="gantt-bar primary-bar" style="left:44.5%;width:3.75%">034★</div>
+            </div>
+        </div>
+
+        <div class="gantt-section-label" style="padding-left:212px">▸ WT2 — Go LLM + Marketplace (independent, 15 stories — bottleneck)</div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-035–038</span> Prime Engine · Memory · API · Super ★</div>
+            <div class="gantt-track"><div class="gantt-bar independent-bar" style="left:33.75%;width:12.5%">035★ 036★ 037 038★</div></div>
+        </div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-039–043</span> Marketplace · Intel tiers ★</div>
+            <div class="gantt-track"><div class="gantt-bar independent-bar" style="left:46.25%;width:13.75%">039–043 (2×Opus)</div></div>
+        </div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-054–059</span> AI Learning Engine ★ Opus</div>
+            <div class="gantt-track"><div class="gantt-bar independent-bar" style="left:60%;width:17.5%">054★ 055★ 056★ 057★ 058 059★</div></div>
+        </div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-060</span> Prompt Library (main)</div>
+            <div class="gantt-track"><div class="gantt-bar main-bar" style="left:33.75%;width:1.25%">060</div></div>
+        </div>
+
+        <div class="gantt-phase-label"><span style="color:var(--red);font-family:monospace">Phase 7</span> <span style="color:var(--text-muted);font-weight:400">integration_and_qa (hybrid, main lane) — ~7h</span></div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-044–048</span> UE5 · Go · Prime Review</div>
+            <div class="gantt-track"><div class="gantt-bar integration-bar" style="left:78.75%;width:6.25%">044–048</div></div>
+        </div>
+        <div class="gantt-row">
+            <div class="gantt-label"><span class="story-id">SP-049–053</span> Perf · LLM · Platform QA ★</div>
+            <div class="gantt-track"><div class="gantt-bar integration-bar" style="left:85%;width:11.25%">049★ 050 051★ 052 053</div></div>
+        </div>
+    </div>
+
+    <!-- Agent Matrix -->
+    <h2>Agent Role Matrix</h2>
+    <table class="matrix-table">
+        <thead>
+            <tr>
+                <th>Agent Role</th>
+                <th>Lane</th>
+                <th>Type</th>
+                <th>Stories</th>
+                <th>Provider / LLM</th>
+                <th>Est. Cost</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>infra-test-agent</code></td>
+                <td class="lane-cell">all lanes</td>
+                <td><span class="badge badge-bash">bash</span></td>
+                <td class="count-cell">3</td>
+                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-sonnet">Sonnet 4.6</span> <span class="badge badge-opencode">OpenCode</span> <span class="badge badge-opencode">GPT-4o</span> <span class="badge badge-codex">Codex</span> <span class="badge badge-codex">o3</span></td>
+                <td class="cost-cell" style="color:var(--amber)">$0.20</td>
+            </tr>
+            <tr>
+                <td><code>foundation-agent</code></td>
+                <td class="lane-cell">main</td>
+                <td><span class="badge badge-bash">bash</span></td>
+                <td class="count-cell">2</td>
+                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-sonnet">Sonnet 4.6</span></td>
+                <td class="cost-cell">$2.40</td>
+            </tr>
+            <tr>
+                <td><code>art-direction-agent</code></td>
+                <td class="lane-cell">main</td>
+                <td><span class="badge badge-bash">bash</span></td>
+                <td class="count-cell">1</td>
+                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-sonnet">Sonnet 4.6</span></td>
+                <td class="cost-cell">$1.50</td>
+            </tr>
+            <tr>
+                <td><code>physical-world-spec-agent</code></td>
+                <td class="lane-cell">main</td>
+                <td><span class="badge badge-bash">bash</span></td>
+                <td class="count-cell">1</td>
+                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-sonnet">Sonnet 4.6</span></td>
+                <td class="cost-cell">$1.50</td>
+            </tr>
+            <tr>
+                <td><code>digital-overlay-spec-agent</code></td>
+                <td class="lane-cell">main</td>
+                <td><span class="badge badge-bash">bash</span></td>
+                <td class="count-cell">1</td>
+                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-sonnet">Sonnet 4.6</span></td>
+                <td class="cost-cell">$1.50</td>
+            </tr>
+            <tr>
+                <td><code>character-frame-spec-agent</code></td>
+                <td class="lane-cell">main</td>
+                <td><span class="badge badge-bash">bash</span></td>
+                <td class="count-cell">1</td>
+                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-opus">Opus 4.6</span></td>
+                <td class="cost-cell">$8.00</td>
+            </tr>
+            <tr>
+                <td><code>vfx-spec-agent</code></td>
+                <td class="lane-cell">main</td>
+                <td><span class="badge badge-bash">bash</span></td>
+                <td class="count-cell">1</td>
+                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-sonnet">Sonnet 4.6</span></td>
+                <td class="cost-cell">$1.50</td>
+            </tr>
+            <tr>
+                <td><code>audio-spec-agent</code></td>
+                <td class="lane-cell">main</td>
+                <td><span class="badge badge-bash">bash</span></td>
+                <td class="count-cell">1</td>
+                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-opus">Opus 4.6</span></td>
+                <td class="cost-cell">$8.00</td>
+            </tr>
+            <tr>
+                <td><code>ue5-gameplay-engineer</code></td>
+                <td class="lane-cell">primary (WT1)</td>
+                <td><span class="badge badge-hybrid">hybrid</span></td>
+                <td class="count-cell">15</td>
+                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-opus">Opus 4.6</span> <span class="badge badge-opencode">OpenCode</span> <span class="badge badge-opencode">GPT-4o</span></td>
+                <td class="cost-cell">$64.30</td>
+            </tr>
+            <tr>
+                <td><code>ue5-rendering-engineer</code></td>
+                <td class="lane-cell">primary (WT1)</td>
+                <td><span class="badge badge-hybrid">hybrid</span></td>
+                <td class="count-cell">10</td>
+                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-opus">Opus 4.6</span> <span class="badge badge-opencode">OpenCode</span> <span class="badge badge-opencode">GPT-4o</span></td>
+                <td class="cost-cell">$45.60</td>
+            </tr>
+            <tr>
+                <td><code>ue5-vfx-engineer</code></td>
+                <td class="lane-cell">primary (WT1)</td>
+                <td><span class="badge badge-hybrid">hybrid</span></td>
+                <td class="count-cell">1</td>
+                <td style="white-space:nowrap"><span class="badge badge-opencode">OpenCode</span> <span class="badge badge-opencode">GPT-4o</span></td>
+                <td class="cost-cell">$2.80</td>
+            </tr>
+            <tr>
+                <td><code>ue5-audio-engineer</code></td>
+                <td class="lane-cell">primary (WT1)</td>
+                <td><span class="badge badge-hybrid">hybrid</span></td>
+                <td class="count-cell">1</td>
+                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-opus">Opus 4.6</span></td>
+                <td class="cost-cell">$15.00</td>
+            </tr>
+            <tr>
+                <td><code>go-api-engineer</code></td>
+                <td class="lane-cell">independent (WT2)</td>
+                <td><span class="badge badge-hybrid">hybrid</span></td>
+                <td class="count-cell">11</td>
+                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-opus">Opus 4.6</span> <span class="badge badge-opencode">OpenCode</span> <span class="badge badge-opencode">GPT-4o</span> <span class="badge badge-codex">Codex</span> <span class="badge badge-codex">o3</span></td>
+                <td class="cost-cell">$33.60</td>
+            </tr>
+            <tr>
+                <td><code>go-swarm-engineer</code></td>
+                <td class="lane-cell">independent (WT2)</td>
+                <td><span class="badge badge-hybrid">hybrid</span></td>
+                <td class="count-cell">7</td>
+                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-opus">Opus 4.6</span> <span class="badge badge-opencode">OpenCode</span> <span class="badge badge-opencode">GPT-4o</span> <span class="badge badge-codex">Codex</span> <span class="badge badge-codex">o3</span></td>
+                <td class="cost-cell">$46.00</td>
+            </tr>
+            <tr>
+                <td><code>go-marketplace-engineer</code></td>
+                <td class="lane-cell">independent (WT2)</td>
+                <td><span class="badge badge-hybrid">hybrid</span></td>
+                <td class="count-cell">5</td>
+                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-opus">Opus 4.6</span> <span class="badge badge-opencode">OpenCode</span> <span class="badge badge-opencode">GPT-4o</span></td>
+                <td class="cost-cell">$26.20</td>
+            </tr>
+            <tr>
+                <td><code>go-llm-engineer</code></td>
+                <td class="lane-cell">independent (WT2)</td>
+                <td><span class="badge badge-hybrid">hybrid</span></td>
+                <td class="count-cell">21</td>
+                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-opus">Opus 4.6</span> <span class="badge badge-claude">Claude</span> <span class="badge badge-sonnet">Sonnet 4.6</span> <span class="badge badge-opencode">OpenCode</span> <span class="badge badge-opencode">GPT-4o</span></td>
+                <td class="cost-cell">$246.50</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- Story Details Table -->
+    <h2>Story Details</h2>
+    <div style="overflow-x:auto">
+    <table class="story-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Phase</th>
+                <th>Lane</th>
+                <th>Agent Role</th>
+                <th>Model</th>
+                <th>Provider</th>
+                <th>Hours</th>
+                <th>Cost</th>
+                <th>Tokens</th>
+            </tr>
+        </thead>
+        <tbody id="story-tbody">
+            <!-- Infra Test -->
+            <tr class="phase-row"><td colspan="10" style="color:var(--amber)">Phase 0 — infra_test (bash gate · all 3 lanes · blocks Phase 1 until all pass)</td></tr>
+            <tr><td>SP-T01</td><td>Infra Test — Claude Sonnet (Main Lane): CLI + Cost Capture Validation</td><td>infra_test</td><td>main</td><td><code>infra-test-agent</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>0.1h</td><td class="cost-cell" style="color:var(--amber)">$0.10</td><td class="tok-cell">20K</td></tr>
+            <tr><td>SP-T02</td><td>Infra Test — OpenCode (Primary Lane / WT1): CLI + Worktree Health Validation</td><td>infra_test</td><td>primary (WT1)</td><td><code>infra-test-agent</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.1h</td><td class="cost-cell" style="color:var(--amber)">$0.05</td><td class="tok-cell">10K</td></tr>
+            <tr><td>SP-T03</td><td>Infra Test — Codex (Independent Lane / WT2): CLI + Worktree Health Validation</td><td>infra_test</td><td>independent (WT2)</td><td><code>infra-test-agent</code></td><td><span class="badge badge-codex">o3</span></td><td><span class="badge badge-codex">Codex</span></td><td>0.1h</td><td class="cost-cell" style="color:var(--amber)">$0.05</td><td class="tok-cell">10K</td></tr>
+            <!-- Foundation -->
+            <tr class="phase-row"><td colspan="10">Phase 1 — foundation (bash)</td></tr>
+            <tr><td>SP-001</td><td>UE5 + Go Project Scaffolding and Docker Compose Stack</td><td>foundation</td><td>main</td><td><code>foundation-agent</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>0.5h</td><td class="cost-cell">$1.20</td><td class="tok-cell">230K</td></tr>
+            <tr><td>SP-002</td><td>gRPC Proto Definitions — UE5 to Go Bridge Contract</td><td>foundation</td><td>main</td><td><code>foundation-agent</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>0.5h</td><td class="cost-cell">$1.20</td><td class="tok-cell">230K</td></tr>
+            <!-- Art Direction -->
+            <tr class="phase-row"><td colspan="10">Phase 2 — art_direction (bash)</td></tr>
+            <tr><td>SP-003</td><td>Glitch-Brutalism Visual Bible</td><td>art_direction</td><td>main</td><td><code>art-direction-agent</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>0.5h</td><td class="cost-cell">$1.50</td><td class="tok-cell">270K</td></tr>
+            <!-- Art Specs -->
+            <tr class="phase-row"><td colspan="10">Phase 3 — art_specs (bash)</td></tr>
+            <tr><td>SP-004</td><td>Physical World Asset Specifications</td><td>art_specs</td><td>main</td><td><code>physical-world-spec-agent</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>0.5h</td><td class="cost-cell">$1.50</td><td class="tok-cell">280K</td></tr>
+            <tr><td>SP-005</td><td>Digital Overlay Asset Specifications</td><td>art_specs</td><td>main</td><td><code>digital-overlay-spec-agent</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>0.5h</td><td class="cost-cell">$1.50</td><td class="tok-cell">280K</td></tr>
+            <tr><td>SP-006</td><td>Character and Frame Asset Specifications</td><td>art_specs</td><td>main</td><td><code>character-frame-spec-agent</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>0.75h</td><td class="cost-cell">$8.00</td><td class="tok-cell">350K</td></tr>
+            <tr><td>SP-007</td><td>VFX and Particle System Specifications</td><td>art_specs</td><td>main</td><td><code>vfx-spec-agent</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>0.5h</td><td class="cost-cell">$1.50</td><td class="tok-cell">280K</td></tr>
+            <tr><td>SP-008</td><td>Audio and TTS Pipeline Specifications</td><td>art_specs</td><td>main</td><td><code>audio-spec-agent</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>0.75h</td><td class="cost-cell">$8.00</td><td class="tok-cell">350K</td></tr>
+            <!-- Core Gameplay -->
+            <tr class="phase-row"><td colspan="10">Phase 4 — core_gameplay (hybrid) · WT1 primary + WT2 independent</td></tr>
+            <tr><td>SP-009</td><td>Frame Locomotion System (Ground + Jetpack)</td><td>core_gameplay</td><td>primary</td><td><code>ue5-gameplay-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.0h</td><td class="cost-cell">$12.00</td><td class="tok-cell">480K</td></tr>
+            <tr><td>SP-010</td><td>Zone Generation Interface (Pre-Knowledge)</td><td>core_gameplay</td><td>primary</td><td><code>ue5-gameplay-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.00</td><td class="tok-cell">380K</td></tr>
+            <tr><td>SP-011</td><td>Lumen + Nanite Scene and Lighting Setup</td><td>core_gameplay</td><td>primary</td><td><code>ue5-rendering-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.00</td><td class="tok-cell">380K</td></tr>
+            <tr><td>SP-012</td><td>Digital Overlay HUD — Diegetic AR Display</td><td>core_gameplay</td><td>primary</td><td><code>ue5-gameplay-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.00</td><td class="tok-cell">380K</td></tr>
+            <tr><td>SP-013</td><td>Extraction Timer and Abort System</td><td>core_gameplay</td><td>primary</td><td><code>ue5-gameplay-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.00</td><td class="tok-cell">380K</td></tr>
+            <tr><td>SP-014</td><td>Frame Input Controller + Jetpack Fuel System</td><td>core_gameplay</td><td>primary</td><td><code>ue5-gameplay-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.00</td><td class="tok-cell">380K</td></tr>
+            <tr><td>SP-015</td><td>Zone Service gRPC Implementation (Go)</td><td>core_gameplay</td><td>independent</td><td><code>go-api-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.00</td><td class="tok-cell">380K</td></tr>
+            <tr><td>SP-016</td><td>Agent State gRPC Implementation (Go)</td><td>core_gameplay</td><td>independent</td><td><code>go-api-engineer</code></td><td><span class="badge badge-codex">o3</span></td><td><span class="badge badge-codex">Codex</span></td><td>0.5h</td><td class="cost-cell">$2.00</td><td class="tok-cell">380K</td></tr>
+            <tr><td>SP-017</td><td>PostgreSQL + Redis Schema and Migrations</td><td>core_gameplay</td><td>independent</td><td><code>go-api-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.00</td><td class="tok-cell">380K</td></tr>
+            <tr><td>SP-018</td><td>Docker Compose Full Stack Integration</td><td>core_gameplay</td><td>independent</td><td><code>go-api-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.00</td><td class="tok-cell">380K</td></tr>
+            <tr><td>SP-068</td><td>Frame Interference Mechanic — Critical Burn Combat Obstruction</td><td>core_gameplay</td><td>primary</td><td><code>ue5-rendering-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.00</td><td class="tok-cell">380K</td></tr>
+            <tr><td>SP-070</td><td>Post-Run Summary Panel System — Persona-Differentiated UX</td><td>core_gameplay</td><td>primary</td><td><code>ue5-rendering-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.00</td><td class="tok-cell">380K</td></tr>
+            <tr><td>SP-073</td><td>Image Generation Service — Provider-Abstracted Go Microservice + DALL-E 3</td><td>core_gameplay</td><td>independent</td><td><code>go-api-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.00</td><td class="tok-cell">380K</td></tr>
+            <tr><td>SP-074</td><td>Visual Bible Prompt Builder — Style-Enforced Prompt Manifest Generator</td><td>core_gameplay</td><td>independent</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.0h</td><td class="cost-cell">$12.00</td><td class="tok-cell">480K</td></tr>
+            <tr><td>SP-075</td><td>SDXL LoRA Provider — Replicate Integration + Style-Trained Image Generation</td><td>core_gameplay</td><td>independent</td><td><code>go-api-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.00</td><td class="tok-cell">380K</td></tr>
+            <tr><td>SP-076</td><td>UE5 Asset Ingestion Pipeline — Auto-Import from Generated Asset Store</td><td>core_gameplay</td><td>primary</td><td><code>ue5-rendering-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.00</td><td class="tok-cell">380K</td></tr>
+            <tr><td>SP-077</td><td>Midjourney Provider — Official API Integration <em>(blocked)</em></td><td>core_gameplay</td><td>independent</td><td><code>go-api-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.00</td><td class="tok-cell">380K</td></tr>
+            <tr><td>SP-078</td><td>Game Database Schema and Migrations — shadow-play-game-db</td><td>core_gameplay</td><td>independent</td><td><code>go-api-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.0h</td><td class="cost-cell">$12.00</td><td class="tok-cell">480K</td></tr>
+            <tr><td>SP-079</td><td>Redis Real-Time State Layer — Key Schema, Go Client, Hot-Path Bindings</td><td>core_gameplay</td><td>independent</td><td><code>go-api-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.00</td><td class="tok-cell">380K</td></tr>
+            <!-- Swarm and Economy -->
+            <tr class="phase-row"><td colspan="10">Phase 5 — swarm_and_economy (hybrid) · WT1 + WT2 parallel</td></tr>
+            <tr><td>SP-019</td><td>Agent Swarm Visualization (UE5 Niagara)</td><td>swarm_and_economy</td><td>primary</td><td><code>ue5-rendering-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.0h</td><td class="cost-cell">$12.00</td><td class="tok-cell">480K</td></tr>
+            <tr><td>SP-020</td><td>Offline Swarm Loop — UE5 Status Screen</td><td>swarm_and_economy</td><td>primary</td><td><code>ue5-rendering-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.50</td><td class="tok-cell">460K</td></tr>
+            <tr><td>SP-021</td><td>Agent Evolution and Promotion UI</td><td>swarm_and_economy</td><td>primary</td><td><code>ue5-gameplay-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.0h</td><td class="cost-cell">$12.00</td><td class="tok-cell">480K</td></tr>
+            <tr><td>SP-022</td><td>Loyalty Pool Visualisation</td><td>swarm_and_economy</td><td>primary</td><td><code>ue5-gameplay-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.50</td><td class="tok-cell">460K</td></tr>
+            <tr><td>SP-023</td><td>HAA Threat Visualisation (Hive Autonomous Agent)</td><td>swarm_and_economy</td><td>primary</td><td><code>ue5-gameplay-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.50</td><td class="tok-cell">460K</td></tr>
+            <tr><td>SP-024</td><td>Agent Economy — Burn Rate + Upgrade System</td><td>swarm_and_economy</td><td>primary</td><td><code>ue5-gameplay-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.50</td><td class="tok-cell">460K</td></tr>
+            <tr><td>SP-025</td><td>Swarm State Machine (Go — all agent lifecycle)</td><td>swarm_and_economy</td><td>independent</td><td><code>go-swarm-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.0h</td><td class="cost-cell">$12.00</td><td class="tok-cell">480K</td></tr>
+            <tr><td>SP-026</td><td>Agent Economy Service (Go — burn + upgrade)</td><td>swarm_and_economy</td><td>independent</td><td><code>go-swarm-engineer</code></td><td><span class="badge badge-codex">o3</span></td><td><span class="badge badge-codex">Codex</span></td><td>0.5h</td><td class="cost-cell">$2.50</td><td class="tok-cell">460K</td></tr>
+            <tr><td>SP-027</td><td>Loyalty Pool Service (Go)</td><td>swarm_and_economy</td><td>independent</td><td><code>go-swarm-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.50</td><td class="tok-cell">460K</td></tr>
+            <tr><td>SP-028</td><td>Hive-Mind Global Evolution Engine (Go)</td><td>swarm_and_economy</td><td>independent</td><td><code>go-swarm-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.0h</td><td class="cost-cell">$12.00</td><td class="tok-cell">480K</td></tr>
+            <tr><td>SP-029</td><td>HAA Threat System — Sentinel + Anti-Prime (Go)</td><td>swarm_and_economy</td><td>independent</td><td><code>go-swarm-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.0h</td><td class="cost-cell">$12.00</td><td class="tok-cell">480K</td></tr>
+            <tr><td>SP-030</td><td>Offline Agent Task Scheduler (Go)</td><td>swarm_and_economy</td><td>independent</td><td><code>go-swarm-engineer</code></td><td><span class="badge badge-codex">o3</span></td><td><span class="badge badge-codex">Codex</span></td><td>0.5h</td><td class="cost-cell">$2.50</td><td class="tok-cell">460K</td></tr>
+            <tr><td>SP-061</td><td>Swarm Capacity Progression System</td><td>swarm_and_economy</td><td>primary</td><td><code>ue5-gameplay-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.0h</td><td class="cost-cell">$12.00</td><td class="tok-cell">480K</td></tr>
+            <tr><td>SP-063</td><td>Signal Jammer Impediment — Hive Deployable Overlay Corruption</td><td>swarm_and_economy</td><td>primary</td><td><code>ue5-gameplay-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.50</td><td class="tok-cell">460K</td></tr>
+            <tr><td>SP-064</td><td>Industrial Saboteur Impediment — Offline Work Order Corruption</td><td>swarm_and_economy</td><td>primary</td><td><code>ue5-gameplay-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.50</td><td class="tok-cell">460K</td></tr>
+            <tr><td>SP-065</td><td>Pursuit Mode Escalation — Sentinels and Drone Chase</td><td>swarm_and_economy</td><td>primary</td><td><code>ue5-gameplay-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.50</td><td class="tok-cell">460K</td></tr>
+            <tr><td>SP-066</td><td>Momentum Bleed Impediment — Industrial Momentum Erosion</td><td>swarm_and_economy</td><td>primary</td><td><code>ue5-gameplay-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.50</td><td class="tok-cell">460K</td></tr>
+            <tr><td>SP-067</td><td>Signal Decay Impediment — Progressive Prime Overlay Degradation</td><td>swarm_and_economy</td><td>primary</td><td><code>ue5-rendering-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.50</td><td class="tok-cell">460K</td></tr>
+            <tr><td>SP-072</td><td>Covert Entry Routes — Endgame Hidden Access Points</td><td>swarm_and_economy</td><td>independent</td><td><code>go-swarm-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.50</td><td class="tok-cell">460K</td></tr>
+            <!-- LLM and Marketplace -->
+            <tr class="phase-row"><td colspan="10">Phase 6 — llm_and_marketplace (hybrid) · WT1 + WT2 + main</td></tr>
+            <tr><td>SP-031</td><td>Prime Chatbot UE5 Widget</td><td>llm_and_marketplace</td><td>primary</td><td><code>ue5-rendering-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.5h</td><td class="cost-cell">$15.00</td><td class="tok-cell">580K</td></tr>
+            <tr><td>SP-032</td><td>Real-time TTS Voice Integration (UE5)</td><td>llm_and_marketplace</td><td>primary</td><td><code>ue5-rendering-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.80</td><td class="tok-cell">520K</td></tr>
+            <tr><td>SP-033</td><td>VFX — Prime Glitch Overlay Effects</td><td>llm_and_marketplace</td><td>primary</td><td><code>ue5-vfx-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.80</td><td class="tok-cell">520K</td></tr>
+            <tr><td>SP-034</td><td>Super Prime War Room Audio + FMOD Integration</td><td>llm_and_marketplace</td><td>primary</td><td><code>ue5-audio-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.5h</td><td class="cost-cell">$15.00</td><td class="tok-cell">580K</td></tr>
+            <tr><td>SP-035</td><td>Prime LLM Context Engine (Go — Claude API)</td><td>llm_and_marketplace</td><td>independent</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.5h</td><td class="cost-cell">$15.00</td><td class="tok-cell">580K</td></tr>
+            <tr><td>SP-036</td><td>Prime Memory Persistence (Go — context store)</td><td>llm_and_marketplace</td><td>independent</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.5h</td><td class="cost-cell">$15.00</td><td class="tok-cell">580K</td></tr>
+            <tr><td>SP-037</td><td>Prime REST API Gateway (Go)</td><td>llm_and_marketplace</td><td>independent</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>0.5h</td><td class="cost-cell">$2.80</td><td class="tok-cell">520K</td></tr>
+            <tr><td>SP-038</td><td>Super Prime Group Chat Engine (Go)</td><td>llm_and_marketplace</td><td>independent</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.5h</td><td class="cost-cell">$15.00</td><td class="tok-cell">580K</td></tr>
+            <tr><td>SP-039</td><td>Intelligence Marketplace — Listing API (Go)</td><td>llm_and_marketplace</td><td>independent</td><td><code>go-marketplace-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.80</td><td class="tok-cell">520K</td></tr>
+            <tr><td>SP-040</td><td>Intelligence Package Tier System (Go)</td><td>llm_and_marketplace</td><td>independent</td><td><code>go-marketplace-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.5h</td><td class="cost-cell">$15.00</td><td class="tok-cell">580K</td></tr>
+            <tr><td>SP-041</td><td>Marketplace Purchase Flow + P2P Settlement</td><td>llm_and_marketplace</td><td>independent</td><td><code>go-marketplace-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.80</td><td class="tok-cell">520K</td></tr>
+            <tr><td>SP-042</td><td>Curated vs Full-Transcript Intelligence Tiers</td><td>llm_and_marketplace</td><td>independent</td><td><code>go-marketplace-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.80</td><td class="tok-cell">520K</td></tr>
+            <tr><td>SP-043</td><td>Anti-Prime Worm Marketplace + Counter-Flip Economy</td><td>llm_and_marketplace</td><td>independent</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.5h</td><td class="cost-cell">$15.00</td><td class="tok-cell">580K</td></tr>
+            <tr><td>SP-054</td><td>Gameplay Event Prompt Formatter</td><td>llm_and_marketplace</td><td>independent</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.5h</td><td class="cost-cell">$15.00</td><td class="tok-cell">580K</td></tr>
+            <tr><td>SP-055</td><td>Prime Tactical DNA Learning Engine</td><td>llm_and_marketplace</td><td>independent</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.5h</td><td class="cost-cell">$15.00</td><td class="tok-cell">580K</td></tr>
+            <tr><td>SP-056</td><td>Anti-Prime Learning System (Truth Packets)</td><td>llm_and_marketplace</td><td>independent</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.5h</td><td class="cost-cell">$15.00</td><td class="tok-cell">580K</td></tr>
+            <tr><td>SP-057</td><td>Hive Global Evolution Engine (AI Collective Memory)</td><td>llm_and_marketplace</td><td>independent</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.5h</td><td class="cost-cell">$15.00</td><td class="tok-cell">580K</td></tr>
+            <tr><td>SP-058</td><td>Non-Prime Agent Learning Pipeline</td><td>llm_and_marketplace</td><td>independent</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>0.5h</td><td class="cost-cell">$2.80</td><td class="tok-cell">520K</td></tr>
+            <tr><td>SP-059</td><td>LLM Response Injection Architecture</td><td>llm_and_marketplace</td><td>independent</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.5h</td><td class="cost-cell">$15.00</td><td class="tok-cell">580K</td></tr>
+            <tr><td>SP-060</td><td>Prompt Library and Template System</td><td>llm_and_marketplace</td><td>main</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>0.5h</td><td class="cost-cell">$2.80</td><td class="tok-cell">520K</td></tr>
+            <tr><td>SP-062</td><td>Hybrid-Prime Neural Merge System</td><td>llm_and_marketplace</td><td>independent</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.5h</td><td class="cost-cell">$15.00</td><td class="tok-cell">580K</td></tr>
+            <tr><td>SP-069</td><td>Morning Briefing Narrative System</td><td>llm_and_marketplace</td><td>independent</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.5h</td><td class="cost-cell">$15.00</td><td class="tok-cell">580K</td></tr>
+            <tr><td>SP-071</td><td>Prime Sale Conversation and Legacy Bonus System</td><td>llm_and_marketplace</td><td>independent</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1.5h</td><td class="cost-cell">$15.00</td><td class="tok-cell">580K</td></tr>
+            <!-- Integration and QA -->
+            <tr class="phase-row"><td colspan="10">Phase 7 — integration_and_qa (hybrid, main lane sequential)</td></tr>
+            <tr><td>SP-044</td><td>UE5-Go gRPC Integration Validation</td><td>integration_and_qa</td><td>main</td><td><code>ue5-gameplay-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.80</td><td class="tok-cell">520K</td></tr>
+            <tr><td>SP-045</td><td>Go Backend Integration Testing</td><td>integration_and_qa</td><td>main</td><td><code>go-api-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.80</td><td class="tok-cell">520K</td></tr>
+            <tr><td>SP-046</td><td>Prime Chatbot End-to-End Validation</td><td>integration_and_qa</td><td>main</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>1.0h</td><td class="cost-cell">$13.50</td><td class="tok-cell">520K</td></tr>
+            <tr><td>SP-047</td><td>Persona 1 — Rookie Run End-to-End Validation</td><td>integration_and_qa</td><td>main</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.80</td><td class="tok-cell">520K</td></tr>
+            <tr><td>SP-048</td><td>Persona 2 — Swarm Manager Run End-to-End Validation</td><td>integration_and_qa</td><td>main</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.80</td><td class="tok-cell">520K</td></tr>
+            <tr><td>SP-049</td><td>Persona 3 — Prime Architect Run End-to-End Validation</td><td>integration_and_qa</td><td>main</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>1.0h</td><td class="cost-cell">$13.50</td><td class="tok-cell">520K</td></tr>
+            <tr><td>SP-050</td><td>Intelligence Marketplace Integration Test</td><td>integration_and_qa</td><td>main</td><td><code>go-marketplace-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.80</td><td class="tok-cell">520K</td></tr>
+            <tr><td>SP-051</td><td>LLM Integration Full Review</td><td>integration_and_qa</td><td>main</td><td><code>go-llm-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>1.0h</td><td class="cost-cell">$13.50</td><td class="tok-cell">520K</td></tr>
+            <tr><td>SP-052</td><td>Performance Validation — iOS and macOS Targets</td><td>integration_and_qa</td><td>main</td><td><code>ue5-rendering-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.80</td><td class="tok-cell">520K</td></tr>
+            <tr><td>SP-053</td><td>Security Audit — API, Marketplace, and LLM Endpoints</td><td>integration_and_qa</td><td>main</td><td><code>go-api-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>0.5h</td><td class="cost-cell">$2.80</td><td class="tok-cell">520K</td></tr>
+        </tbody>
+    </table>
+    </div>
+
+    <!-- ── Cost Breakdown Section ──────────────────────────────────────────── -->
+    <div style="margin-top:3rem">
+      <div style="font-size:0.7rem;font-weight:800;letter-spacing:1.5px;color:var(--teal);text-transform:uppercase;margin-bottom:1rem;opacity:.7">
+        Cost Breakdown — 82 Stories · $504.60 est. · 61.3h &nbsp;·&nbsp; <span style="color:var(--amber)">incl. Phase 0 infra_test ($0.20)</span>
+      </div>
+
+      <!-- Two-column: By Provider + By LLM -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
+
+        <!-- By Provider -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem;border-left:3px solid var(--violet)">
+          <div style="font-size:0.65rem;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--violet);margin-bottom:1rem">By Provider Platform</div>
+
+          <!-- CLAUDE -->
+          <div style="margin-bottom:1.1rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
+              <div style="display:flex;align-items:center;gap:0.5rem">
+                <span style="background:rgba(124,58,237,0.18);color:#c084fc;border:1px solid #7c3aed;border-radius:4px;font-size:0.65rem;font-weight:800;padding:2px 7px;letter-spacing:0.5px;box-shadow:0 0 5px rgba(124,58,237,0.2)">CLAUDE</span>
+                <span style="font-size:0.78rem;color:var(--text)">Opus + Sonnet</span>
+              </div>
+              <div style="text-align:right">
+                <span style="font-size:0.95rem;font-weight:800;color:#c084fc">$365.90</span>
+                <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">36 stories · 72.5%</span>
+              </div>
+            </div>
+            <div style="background:var(--bg);border-radius:4px;height:7px;overflow:hidden">
+              <div style="width:72.5%;height:100%;background:linear-gradient(90deg,#7c3aed,#c084fc);border-radius:4px"></div>
+            </div>
+          </div>
+
+          <!-- OPENCODE -->
+          <div style="margin-bottom:1.1rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
+              <div style="display:flex;align-items:center;gap:0.5rem">
+                <span style="background:rgba(74,222,128,0.12);color:#4ade80;border:1px solid #16a34a;border-radius:4px;font-size:0.65rem;font-weight:800;padding:2px 7px;letter-spacing:0.5px">OPENCODE</span>
+                <span style="font-size:0.78rem;color:var(--text)">Go + UE5 Sonnet</span>
+              </div>
+              <div style="text-align:right">
+                <span style="font-size:0.95rem;font-weight:800;color:#4ade80">$131.65</span>
+                <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">42 stories · 26.1%</span>
+              </div>
+            </div>
+            <div style="background:var(--bg);border-radius:4px;height:7px;overflow:hidden">
+              <div style="width:26.1%;height:100%;background:linear-gradient(90deg,#16a34a,#4ade80);border-radius:4px"></div>
+            </div>
+          </div>
+
+          <!-- CODEX -->
+          <div style="margin-bottom:0.5rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
+              <div style="display:flex;align-items:center;gap:0.5rem">
+                <span style="background:rgba(244,114,182,0.15);color:#f472b6;border:1px solid #be185d;border-radius:4px;font-size:0.65rem;font-weight:800;padding:2px 7px;letter-spacing:0.5px">CODEX</span>
+                <span style="font-size:0.78rem;color:var(--text)">Algorithmic Go</span>
+              </div>
+              <div style="text-align:right">
+                <span style="font-size:0.95rem;font-weight:800;color:#f472b6">$7.05</span>
+                <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">4 stories · 1.4%</span>
+              </div>
+            </div>
+            <div style="background:var(--bg);border-radius:4px;height:7px;overflow:hidden">
+              <div style="width:1.4%;height:100%;background:linear-gradient(90deg,#be185d,#f472b6);border-radius:4px;min-width:6px"></div>
+            </div>
+          </div>
+
+          <!-- Total -->
+          <div style="border-top:1px solid var(--border);margin-top:1rem;padding-top:0.8rem;display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px">Total</span>
+            <div>
+              <span style="font-size:1.05rem;font-weight:800;color:var(--teal)">$504.60</span>
+              <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">82 stories · 61.3h</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- By LLM / Model -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem;border-left:3px solid var(--teal)">
+          <div style="font-size:0.65rem;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--teal);margin-bottom:1rem">By LLM · Model-Level Breakdown</div>
+
+          <!-- Claude Opus 4.6 -->
+          <div style="margin-bottom:1.1rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
+              <div>
+                <span style="font-size:0.8rem;font-weight:700;color:#c084fc">Claude Opus 4.6</span>
+                <span style="font-size:0.7rem;color:var(--text-muted);margin-left:5px">Complex UE5, LLM-meta</span>
+              </div>
+              <div style="text-align:right">
+                <span style="font-size:0.95rem;font-weight:800;color:#c084fc">$349.00</span>
+                <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">26 stories · 69.2%</span>
+              </div>
+            </div>
+            <div style="background:var(--bg);border-radius:4px;height:6px;overflow:hidden">
+              <div style="width:69.2%;height:100%;background:linear-gradient(90deg,#5b21b6,#c084fc);border-radius:4px"></div>
+            </div>
+          </div>
+
+          <!-- OpenCode -->
+          <div style="margin-bottom:1.1rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
+              <div>
+                <span style="font-size:0.8rem;font-weight:700;color:#4ade80">OpenCode</span>
+                <span style="font-size:0.7rem;color:var(--text-muted);margin-left:5px">Go impl, UE5 Sonnet, QA</span>
+              </div>
+              <div style="text-align:right">
+                <span style="font-size:0.95rem;font-weight:800;color:#4ade80">$131.65</span>
+                <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">42 stories · 26.1%</span>
+              </div>
+            </div>
+            <div style="background:var(--bg);border-radius:4px;height:6px;overflow:hidden">
+              <div style="width:26.1%;height:100%;background:linear-gradient(90deg,#16a34a,#4ade80);border-radius:4px"></div>
+            </div>
+          </div>
+
+          <!-- Claude Sonnet 4.6 -->
+          <div style="margin-bottom:1.1rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
+              <div>
+                <span style="font-size:0.8rem;font-weight:700;color:#a78bfa">Claude Sonnet 4.6</span>
+                <span style="font-size:0.7rem;color:var(--text-muted);margin-left:5px">Planning, LLM-meta Sonnet</span>
+              </div>
+              <div style="text-align:right">
+                <span style="font-size:0.95rem;font-weight:800;color:#a78bfa">$16.90</span>
+                <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">10 stories · 3.4%</span>
+              </div>
+            </div>
+            <div style="background:var(--bg);border-radius:4px;height:6px;overflow:hidden">
+              <div style="width:3.3%;height:100%;background:linear-gradient(90deg,#5b21b6,#a78bfa);border-radius:4px;min-width:8px"></div>
+            </div>
+          </div>
+
+          <!-- Codex -->
+          <div style="margin-bottom:0.5rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
+              <div>
+                <span style="font-size:0.8rem;font-weight:700;color:#f472b6">Codex</span>
+                <span style="font-size:0.7rem;color:var(--text-muted);margin-left:5px">Pure algo: auth, burn, momentum</span>
+              </div>
+              <div style="text-align:right">
+                <span style="font-size:0.95rem;font-weight:800;color:#f472b6">$7.05</span>
+                <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">4 stories · 1.4%</span>
+              </div>
+            </div>
+            <div style="background:var(--bg);border-radius:4px;height:6px;overflow:hidden">
+              <div style="width:1.4%;height:100%;background:linear-gradient(90deg,#be185d,#f472b6);border-radius:4px;min-width:6px"></div>
+            </div>
+          </div>
+
+          <!-- Non-Claude callout -->
+          <div style="border-top:1px solid var(--border);margin-top:1rem;padding-top:0.8rem">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:0.7rem;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.8px">Non-Claude (OpenCode + Codex)</span>
+              <div>
+                <span style="font-size:1.05rem;font-weight:800;color:var(--green)">$138.70</span>
+                <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">46 stories · 27.5%</span>
+              </div>
+            </div>
+            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px">
+              Orchestration + coordination remains exclusively on Claude Code
+            </div>
+          </div>
+        </div>
+
+      </div><!-- end grid -->
+    </div><!-- end cost breakdown -->
+
+    <div style="margin-top:3rem; padding:1.5rem; background:var(--surface); border:1px solid var(--border); border-radius:8px; font-size:0.82rem; color:var(--text-muted)">
+        <div style="color:var(--teal); font-weight:700; margin-bottom:0.5rem">Shadow Play PRD Viewer</div>
+        Live story status, cost actuals, and phase progress available at
+        <a href="shadow-play-prd-viewer.html" style="color:var(--teal)">shadow-play-prd-viewer.html</a>
+        (requires <code>shadow-play-api</code> + <code>shadow-play-db</code> running via Docker Compose).
+        <br><br>
+        <code style="font-size:0.78rem">docker compose up -d shadow-play-db shadow-play-api &amp;&amp; bash shadow-play/db/scripts/load-prd.sh --reset</code>
+    </div>
+
+</div>
+</body>
+</html>

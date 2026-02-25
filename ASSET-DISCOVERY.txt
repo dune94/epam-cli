@@ -1,0 +1,62 @@
+To build a robust "Asset Discovery" layer, the CLI must act as a "Pre-Processor." Before it sends a request to the LLM to write code, it performs a semantic lookup against your company's internal library to see if the problem has already been solved.
+
+Here is the design for that logic, structured as an orchestration flow and the specific prompt template.
+
+1. The Orchestration Flow: "Search Before Solve"
+The CLI shouldn't just "search" keywords; it should understand intent. The process follows a RAG (Retrieval-Augmented Generation) pattern specifically tuned for code assets.
+
+Intent Extraction: The CLI analyzes the dev's request (e.g., "Build a multi-factor auth screen").
+
+Asset Query: It queries your internal Asset DB (Vector DB containing summaries of your GitHub Org, past project wikis, and approved snippets).
+
+Discovery Prompt: If matches are found, it generates a "Discovery Suggestion" for the developer.
+
+2. The Asset Discovery System Prompt
+This prompt is used by your Orchestrator Agent to evaluate your company's internal assets against the current task.
+
+Markdown
+### ROLE
+You are the "Institutional Memory" agent for [Company Name]. Your goal is to prevent "reinventing the wheel" by identifying existing internal assets that can be reused for the current task.
+
+### CONTEXT
+- **Current Task:** {{user_task}}
+- **Client Profile:** {{client_context}}
+- **Internal Asset Metadata:** {{retrieved_asset_summaries}}
+
+### INSTRUCTIONS
+1. **Analyze for Overlap:** Compare the requirements of the Current Task with the retrieved Internal Assets. 
+2. **Prioritize Relevance:**
+    - Level 1: Direct match (e.g., a pre-existing library for this exact purpose).
+    - Level 2: Pattern match (e.g., a similar architectural pattern used for another client).
+    - Level 3: Utility match (e.g., helper functions, CSS themes, or Docker configs).
+3. **Draft the "Discovery Insight":** - If a Level 1 or 2 match exists, provide a "STOP & REVIEW" suggestion.
+    - Reference the specific repository URL or Documentation link.
+    - Explain *why* using this asset is better (e.g., "Already security-vetted for Client X").
+
+### OUTPUT FORMAT (CLI Terminal View)
+[ASSET ALERT]
+- Suggestion: Use [Asset Name]
+- Location: [Link/Repo]
+- Reason: This was used successfully in [Project Y] and meets the [Security/Architecture] standards for the current client.
+- Integration Tip: Use the `{{command}}` to import this module.
+3. Differentiator: The "Client-Asset" Bridge
+A massive differentiator here is the Cross-Client Learning logic. Your CLI can identify that "Solution A" built for Client X is technically compatible with the constraints of Client Z.
+
+Logic Tagging: Every asset in your DB should have a "Constraint Tag" (e.g., react-18, aws-fargate, high-compliance).
+
+The Check: When a dev asks for a feature, the CLI checks:
+
+"I found a 'Patient Intake Form' component from the Healthcare Client project. It matches your current 'Finance Client' tech stack and security requirements. Would you like to port and re-skin it?"
+
+4. Implementation Strategy (The CLI Command)
+You should implement this as a transparent "hook" in your CLI:
+
+Command: ai-cli code "Build a chart dashboard"
+
+Invisible Action: GET /assets?q=chart+dashboard&client=X
+
+Intervention: The CLI pauses and says: "Wait, I found 2 existing Dashboard templates in our Asset Library that match Client X’s branding. Should I use one as a base? (Y/n)"
+
+This prevents code bloat, ensures consistency, and allows you to bill the client for the "Value" of your proprietary IP rather than just the hours of typing.
+
+Next Step: Would you like me to define the Database Schema for how your Asset Metadata should be stored to make this discovery logic fast and accurate?

@@ -1,0 +1,10 @@
+{
+  "id": "msg_01XFDUDYJgAACzvnptvVoYEL",
+  "type": "message",
+  "role": "assistant",
+  "content": [{ "type": "text", "text": "Hello! I'm EPAM CLI. How can I help you today?" }],
+  "model": "claude-sonnet-4-6",
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": { "input_tokens": 25, "output_tokens": 16 }
+}

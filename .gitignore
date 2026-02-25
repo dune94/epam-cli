@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+/logs/
+
+# Orchestration logs (dynamic — keep only init files)
+orchestrations/logs/*.jsonl
+orchestrations/logs/phase-improvements/
+orchestrations/logs/claude_outputs/
+!orchestrations/logs/agent-status.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# epam credentials (never commit)
+.epam/.credentials
+.epam/sessions/
+
+# TypeScript cache
+*.tsbuildinfo

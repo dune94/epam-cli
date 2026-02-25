@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Agent Orchestration — Fitnessie</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg:     #080f1c;
+  --bg1:    #0e1c30;
+  --bg2:    #132338;
+  --bg3:    #182b44;
+  --border: #243a58;
+  --text:   #e2e8f0;
+  --text2:  #94a3b8;
+  --text3:  #64748b;
+  --accent: #6366f1;
+  /* Lane colours */
+  --main-bg: #1c1200;     --main-fg:  #fbbf24; --main-border: #b45309;
+  --pri-bg:  #0c1a40;     --pri-fg:   #60a5fa; --pri-border:  #1e3a8a;
+  --ind-bg:  #0a2016;     --ind-fg:   #34d399; --ind-border:  #059669;
+  /* Model colours */
+  --haiku-bg: #042f2e;    --haiku-fg: #2dd4bf; --haiku-b: #0f766e;
+  --sonnet-bg:#1e1b4b;    --sonnet-fg:#a5b4fc; --sonnet-b:#3730a3;
+  --opus-bg:  #422006;    --opus-fg:  #fbbf24; --opus-b:  #b45309;
+}
+
+body {
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg); color: var(--text);
+  min-height: 100vh; line-height: 1.5;
+}
+
+/* ── Header ── */
+.header {
+  background: linear-gradient(135deg, #0d1b35 0%, #1a1040 100%);
+  border-bottom: 1px solid #2d3a6b;
+  padding: 14px 28px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.header-icon {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center; font-size: 16px;
+}
+.header-title {
+  font-size: 17px; font-weight: 700;
+  background: linear-gradient(90deg, #818cf8 0%, #06b6d4 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+.header-sub { color: var(--text3); font-size: 11px; margin-top: 1px; }
+.header-nav { display: flex; gap: 4px; flex-wrap: wrap; }
+.nav-link {
+  font-size: 11px; font-weight: 600; padding: 4px 10px;
+  border-radius: 5px; border: 1px solid var(--border);
+  color: var(--text2); text-decoration: none;
+  transition: all 0.14s;
+}
+.nav-link:hover { color: var(--text); border-color: var(--accent); }
+.nav-link.active { background: var(--bg2); color: #818cf8; border-color: var(--accent); }
+
+/* ── Layout ── */
+.container { padding: 24px 28px 60px; max-width: 1200px; margin: 0 auto; }
+.section-title {
+  font-size: 9px; font-weight: 800; letter-spacing: 1.2px;
+  color: var(--text3); text-transform: uppercase;
+  margin: 32px 0 14px; display: flex; align-items: center; gap: 10px;
+}
+.section-title::before {
+  content: ''; width: 3px; height: 16px;
+  background: var(--accent); border-radius: 2px; flex-shrink: 0;
+}
+
+/* ── Shared badge ── */
+.badge {
+  font-size: 9px; font-weight: 800; padding: 2px 7px;
+  border-radius: 3px; letter-spacing: 0.5px; white-space: nowrap;
+}
+.b-main    { background: var(--main-bg);   color: var(--main-fg);   border: 1px solid var(--main-border); }
+.b-primary { background: var(--pri-bg);    color: var(--pri-fg);    border: 1px solid var(--pri-border);  }
+.b-ind     { background: var(--ind-bg);    color: var(--ind-fg);    border: 1px solid var(--ind-border);  }
+.b-haiku   { background: var(--haiku-bg);  color: var(--haiku-fg);  border: 1px solid var(--haiku-b);    }
+.b-sonnet  { background: var(--sonnet-bg); color: var(--sonnet-fg); border: 1px solid var(--sonnet-b);   }
+.b-opus    { background: var(--opus-bg);   color: var(--opus-fg);   border: 1px solid var(--opus-b);     }
+.b-cli     { background: #1c0f30; color: #d2a8ff; border: 1px solid #6e40c9; }
+.b-tools   { background: #0a2e1e; color: #34d399; border: 1px solid #059669; }
+.b-bash    { background: #0c1a40; color: #60a5fa; border: 1px solid #1e3a8a; }
+.b-hybrid  { background: #3d1500; color: #f59e0b; border: 1px solid #92400e; }
+.b-gate    { background: #2e1065; color: #c084fc; border: 1px solid #7c3aed; }
+
+code {
+  font-family: 'Courier New', monospace; font-size: 10px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 3px; padding: 1px 4px; color: #a5b4fc;
+}
+
+/* ── Taxonomy legend ── */
+.legend-row {
+  background: var(--bg1); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px 20px;
+  display: flex; flex-wrap: wrap; gap: 24px; align-items: center;
+}
+.legend-group { display: flex; flex-direction: column; gap: 5px; }
+.legend-label { font-size: 9px; font-weight: 800; letter-spacing: 0.8px; color: var(--text3); text-transform: uppercase; margin-bottom: 2px; }
+.legend-badges { display: flex; gap: 5px; flex-wrap: wrap; }
+.legend-sep { width: 1px; background: var(--border); align-self: stretch; }
+
+/* ── LLM Mapping ── */
+.llm-map-card {
+  background: var(--bg1); border: 1px solid #3730a3;
+  border-radius: 10px; padding: 20px;
+  border-left: 4px solid #818cf8;
+}
+.llm-map-intro {
+  font-size: 12px; color: var(--text2); line-height: 1.6; margin-bottom: 14px;
+}
+.llm-table {
+  width: 100%; border-collapse: collapse; font-size: 11px;
+}
+.llm-table th {
+  background: var(--bg2); color: var(--text3); font-size: 9px; font-weight: 800;
+  letter-spacing: 0.5px; text-transform: uppercase;
+  padding: 7px 12px; text-align: left; border: 1px solid var(--border);
+}
+.llm-table td {
+  padding: 9px 12px; border: 1px solid var(--border); color: var(--text2); vertical-align: middle;
+}
+.llm-table tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+.llm-turns {
+  font-family: 'Courier New', monospace; font-size: 12px; font-weight: 700; color: var(--text);
+}
+.llm-note {
+  font-size: 10px; color: var(--text3); margin-top: 12px; line-height: 1.6;
+}
+
+/* ── Vertical Pipeline ── */
+.vflow { display: flex; flex-direction: column; }
+
+.vflow-connector {
+  width: 2px; background: linear-gradient(180deg, var(--border) 0%, var(--accent) 100%);
+  height: 28px; margin: 0 auto;
+  flex-shrink: 0;
+}
+.vflow-connector.gate-con {
+  background: linear-gradient(180deg, #7c3aed 0%, #4c1d95 100%);
+}
+
+.vflow-step {
+  background: var(--bg1); border: 1px solid var(--border);
+  border-radius: 10px; padding: 18px 20px;
+  position: relative;
+}
+.vflow-step.master-step {
+  border-color: #4f46e5;
+  background: linear-gradient(135deg, #0c0e2c 0%, #111540 100%);
+  border-width: 2px;
+  box-shadow: 0 0 24px rgba(99,102,241,0.15);
+}
+.vflow-step.assess-step {
+  border-color: var(--sonnet-b);
+  background: #0c0c2a;
+}
+.vflow-step.gate-step {
+  border-color: #7c3aed;
+  background: #100628;
+}
+.vflow-step.para-step {
+  border-color: var(--border);
+  background: var(--bg2);
+}
+
+/* Step header */
+.vs-header {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 10px; flex-wrap: wrap;
+}
+.vs-num {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.6px; color: var(--text3);
+  min-width: 54px; flex-shrink: 0;
+}
+.vs-title { font-size: 14px; font-weight: 700; color: var(--text); flex: 1; }
+.vs-badges { display: flex; gap: 4px; flex-wrap: wrap; }
+
+/* Script pills */
+.vs-scripts { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 8px; }
+.vs-script {
+  background: var(--bg); border: 1px solid #2a3a5c;
+  border-radius: 5px; padding: 5px 10px;
+  font-family: 'Courier New', monospace; font-size: 10px; color: #a5b4fc;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.vs-script-label {
+  font-size: 8px; font-weight: 800; letter-spacing: 0.5px;
+  color: var(--text3); text-transform: uppercase; margin-right: 2px;
+}
+
+.vs-desc { font-size: 11px; color: var(--text2); line-height: 1.6; }
+
+/* Parallel lanes inside step 3 */
+.vs-parallel { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+@media (max-width: 640px) { .vs-parallel { grid-template-columns: 1fr; } }
+.vs-lane-block {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px;
+}
+.vs-lane-block.pri { border-color: var(--pri-border); background: #080f22; }
+.vs-lane-block.ind { border-color: var(--ind-border); background: #060f0c; }
+.vs-lane-hd {
+  font-size: 10px; font-weight: 800; margin-bottom: 4px;
+  display: flex; align-items: center; gap: 6px;
+}
+.vs-lane-block.pri .vs-lane-hd { color: var(--pri-fg); }
+.vs-lane-block.ind .vs-lane-hd { color: var(--ind-fg); }
+.vs-lane-sub { font-size: 9px; color: var(--text3); margin-bottom: 10px; font-family: 'Courier New', monospace; }
+.vs-agent-list { display: flex; flex-direction: column; gap: 5px; }
+.vs-agent-row {
+  background: var(--bg1); border: 1px solid var(--border);
+  border-radius: 5px; padding: 6px 9px;
+  font-size: 11px; color: var(--text); display: flex; align-items: center; gap: 6px;
+}
+.vs-agent-row::before { content: '→'; color: var(--text3); font-size: 10px; flex-shrink: 0; }
+.vs-agent-row span { flex: 1; }
+.vs-agent-script { font-family: 'Courier New', monospace; font-size: 9px; color: var(--text3); }
+
+/* Gate decision box */
+.gate-decision {
+  display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;
+}
+.gate-go  { background: #052e1c; border: 1px solid #059669; color: #34d399; border-radius: 5px; padding: 4px 10px; font-size: 10px; font-weight: 700; }
+.gate-nogo { background: #2d0a0a; border: 1px solid #b91c1c; color: #f87171; border-radius: 5px; padding: 4px 10px; font-size: 10px; font-weight: 700; }
+
+/* Master script top banner */
+.master-banner {
+  display: flex; align-items: flex-start; gap: 16px;
+}
+.master-icon {
+  width: 48px; height: 48px; flex-shrink: 0;
+  background: linear-gradient(135deg, #4f46e5, #06b6d4);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center; font-size: 24px;
+}
+.master-info { flex: 1; }
+.master-title { font-size: 18px; font-weight: 800; color: #818cf8; margin-bottom: 3px; font-family: 'Courier New', monospace; }
+.master-subtitle { font-size: 11px; color: var(--text2); margin-bottom: 8px; }
+
+/* ── Lane cards ── */
+.lane-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+}
+@media (max-width: 860px) { .lane-grid { grid-template-columns: 1fr; } }
+.lane-card {
+  background: var(--bg1); border: 1px solid var(--border);
+  border-radius: 10px; padding: 20px;
+  border-top: 3px solid;
+}
+.lane-card.main        { border-top-color: var(--main-border);  }
+.lane-card.primary     { border-top-color: var(--pri-border);   }
+.lane-card.independent { border-top-color: var(--ind-border);   }
+.lane-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.lane-icon   { font-size: 22px; }
+.lane-name   { font-size: 16px; font-weight: 700; }
+.lane-card.main        .lane-name { color: var(--main-fg);  }
+.lane-card.primary     .lane-name { color: var(--pri-fg);   }
+.lane-card.independent .lane-name { color: var(--ind-fg);   }
+.lane-meta { font-size: 11px; color: var(--text3); margin-bottom: 14px; line-height: 1.5; }
+.agent-list { display: flex; flex-direction: column; gap: 7px; }
+.agent-row {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 11px;
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+}
+.agent-name { font-size: 12px; font-weight: 600; color: var(--text); flex: 1; min-width: 120px; }
+.agent-badges { display: flex; gap: 4px; flex-wrap: wrap; }
+
+/* ── Orchestration modes ── */
+.modes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 700px) { .modes-grid { grid-template-columns: 1fr; } }
+.mode-card {
+  background: var(--bg1); border: 1px solid var(--border); border-radius: 10px; padding: 20px;
+}
+.mode-card.bash   { border-left: 3px solid #60a5fa; }
+.mode-card.hybrid { border-left: 3px solid #f59e0b; }
+.mode-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+.mode-desc  { font-size: 12px; color: var(--text2); line-height: 1.65; margin-bottom: 12px; }
+.mode-props { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.mode-props li { font-size: 11px; color: var(--text2); padding-left: 14px; position: relative; }
+.mode-props li::before { content: '·'; position: absolute; left: 4px; color: var(--text3); }
+
+/* ── Feature grid ── */
+.features-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px;
+}
+.feature-card {
+  background: var(--bg1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px;
+  border-left: 3px solid var(--accent);
+}
+.feature-icon  { font-size: 24px; margin-bottom: 8px; }
+.feature-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 5px; }
+.feature-desc  { font-size: 12px; color: var(--text2); line-height: 1.6; }
+
+/* ── Tech stack ── */
+.tech-row {
+  background: var(--bg1); border: 1px solid var(--border);
+  border-radius: 10px; padding: 20px;
+  display: flex; flex-wrap: wrap; gap: 20px; justify-content: space-around;
+}
+.tech-item { text-align: center; }
+.tech-icon  { font-size: 30px; margin-bottom: 6px; }
+.tech-label { font-size: 11px; color: var(--text2); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="header-icon">🤖</div>
+    <div>
+      <div class="header-title">Multi-Agent Orchestration</div>
+      <div class="header-sub">Fitnessie · Architecture Overview</div>
+    </div>
+  </div>
+  <nav class="header-nav">
+    <a href="monitor.html"            class="nav-link">Monitor</a>
+    <a href="prd-viewer.html"         class="nav-link">PRD Viewer</a>
+    <a href="agents-profiles.html"    class="nav-link">Profiles</a>
+    <a href="agents-orchestration.html" class="nav-link active">Orchestration</a>
+    <a href="test-plan.html"          class="nav-link">Test Plan</a>
+    <a href="agent-messages.html"     class="nav-link">Messages</a>
+    <a href="phase-cost-monitor.html" class="nav-link">Cost</a>
+    <a href="phase-process.html"      class="nav-link">Graph</a>
+    <a href="orchestration-flow.html" class="nav-link">Flow (Legacy)</a>
+  </nav>
+</div>
+
+<div class="container">
+
+  <!-- TAXONOMY LEGEND -->
+  <div class="section-title">Shared Badge Taxonomy</div>
+  <div class="legend-row">
+    <div class="legend-group">
+      <div class="legend-label">Phase Mode</div>
+      <div class="legend-badges">
+        <span class="badge b-bash">BASH</span>
+        <span class="badge b-hybrid">HYBRID</span>
+      </div>
+    </div>
+    <div class="legend-sep"></div>
+    <div class="legend-group">
+      <div class="legend-label">Agent Lane</div>
+      <div class="legend-badges">
+        <span class="badge b-main">MAIN</span>
+        <span class="badge b-primary">PRIMARY</span>
+        <span class="badge b-ind">INDEPENDENT</span>
+      </div>
+    </div>
+    <div class="legend-sep"></div>
+    <div class="legend-group">
+      <div class="legend-label">Default Model</div>
+      <div class="legend-badges">
+        <span class="badge b-haiku">HAIKU</span>
+        <span class="badge b-sonnet">SONNET</span>
+        <span class="badge b-opus">OPUS</span>
+      </div>
+    </div>
+    <div class="legend-sep"></div>
+    <div class="legend-group">
+      <div class="legend-label">Invocation</div>
+      <div class="legend-badges">
+        <span class="badge b-cli">CLI</span>
+        <span class="badge b-tools">FULL TOOLS</span>
+      </div>
+    </div>
+    <div class="legend-sep"></div>
+    <div class="legend-group">
+      <div class="legend-label">Gate</div>
+      <div class="legend-badges">
+        <span class="badge b-gate">GATE</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- LLM MAPPING -->
+  <div class="section-title">LLM Mapping — Effort → Model Resolution</div>
+  <div class="llm-map-card">
+    <div class="llm-map-intro">
+      Each story in <code>prd.json</code> declares an <code>effort</code> field (<code>low</code> / <code>medium</code> / <code>high</code>).
+      At runtime, <code>claude.sh</code> reads the story's effort and resolves the appropriate Claude model and
+      <code>--max-turns</code> budget — ensuring cost efficiency without sacrificing quality for complex tasks.
+    </div>
+    <table class="llm-table">
+      <thead>
+        <tr>
+          <th>Story Effort</th>
+          <th>Claude Model</th>
+          <th>Max Turns</th>
+          <th>Typical Use Cases</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>low</code></td>
+          <td><span class="badge b-haiku">HAIKU</span></td>
+          <td><span class="llm-turns">10</span></td>
+          <td>Docs, seed data, simple configs, unit test runner, CI tweaks</td>
+        </tr>
+        <tr>
+          <td><code>medium</code></td>
+          <td><span class="badge b-sonnet">SONNET</span></td>
+          <td><span class="llm-turns">30</span></td>
+          <td>Most feature stories — API endpoints, UI screens, reviews, migrations</td>
+        </tr>
+        <tr>
+          <td><code>high</code></td>
+          <td><span class="badge b-opus">OPUS</span></td>
+          <td><span class="llm-turns">∞</span></td>
+          <td>Complex architecture, cross-cutting concerns, skill assessments</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="llm-note">
+      Resolved inside <code>claude.sh</code>: &nbsp;
+      <code>claude --model $(effortToModel "$effort") --max-turns $(effortToTurns "$effort") --output-format json --print</code>
+      &nbsp;· Cost captured from JSON response → written to <code>logs/phase-cost.jsonl</code>
+    </div>
+  </div>
+
+  <!-- EXECUTION PIPELINE (CENTREPIECE) -->
+  <div class="section-title">Execution Pipeline</div>
+
+  <div class="vflow">
+
+    <!-- MASTER SCRIPT -->
+    <div class="vflow-step master-step">
+      <div class="master-banner">
+        <div class="master-icon">🚀</div>
+        <div class="master-info">
+          <div class="master-title">run-agent-orchestration.sh</div>
+          <div class="master-subtitle">Master Orchestration Script — coordinates all steps below</div>
+          <div class="vs-scripts">
+            <span class="vs-script"><span class="vs-script-label">Usage</span>bash automation/scripts/run-agent-orchestration.sh --phase &lt;PHASE&gt; [--mode bash|hybrid]</span>
+          </div>
+          <div class="vs-desc">
+            Reads <code>prd.json</code> to discover stories for the given phase. Calls <code>claude.sh</code> per story
+            (resolving effort → model → turns), manages git worktrees in HYBRID mode, and invokes
+            <code>check-phase-gate.sh</code> at gates. All 8 steps below are orchestrated by this script.
+          </div>
+          <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
+            <span class="badge b-bash">BASH MODE</span>
+            <span class="badge b-hybrid">HYBRID MODE</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="vflow-connector"></div>
+
+    <!-- STEP 0.5 -->
+    <div class="vflow-step assess-step">
+      <div class="vs-header">
+        <div class="vs-num">STEP 0.5</div>
+        <div class="vs-title">Pre-Phase Assessment</div>
+        <div class="vs-badges">
+          <span class="badge b-tools">FULL TOOLS</span>
+          <span class="badge b-main">MAIN</span>
+          <span class="badge b-sonnet">SONNET</span>
+        </div>
+      </div>
+      <div class="vs-scripts">
+        <span class="vs-script"><span class="vs-script-label">Script</span>claude.sh --assessment pre --phase &lt;PHASE&gt;</span>
+      </div>
+      <div class="vs-desc">
+        Runs the <strong>agent-skill-assessment-agent</strong> before any stories execute.
+        Inspects pending stories, detects skill gaps, and augments agent profiles in <code>agents/profiles.json</code>.
+        Uses <strong>FULL TOOLS</strong> invocation (no <code>--print</code>) so the agent can read and write files directly.
+        Runs on main branch.
+      </div>
+    </div>
+
+    <div class="vflow-connector"></div>
+
+    <!-- STEP 1 -->
+    <div class="vflow-step">
+      <div class="vs-header">
+        <div class="vs-num">STEP 1</div>
+        <div class="vs-title">Main Lane Setup</div>
+        <div class="vs-badges">
+          <span class="badge b-main">MAIN</span>
+          <span class="badge b-cli">CLI</span>
+        </div>
+      </div>
+      <div class="vs-scripts">
+        <span class="vs-script"><span class="vs-script-label">Per Story</span>claude.sh --story &lt;STORY_ID&gt; --phase &lt;PHASE&gt;</span>
+      </div>
+      <div class="vs-desc">
+        Runs main-lane setup stories sequentially on the main branch — schema migrations (<strong>db-architect</strong>),
+        seed data (<strong>mock-data-generator</strong>), and documentation (<strong>docs-engineer</strong>).
+        Each invocation resolves the story's <code>effort</code> field to select the correct model and turn budget.
+        Results are committed to the main branch before parallel work begins.
+      </div>
+    </div>
+
+    <div class="vflow-connector"></div>
+
+    <!-- STEP 2 -->
+    <div class="vflow-step">
+      <div class="vs-header">
+        <div class="vs-num">STEP 2</div>
+        <div class="vs-title">Create Worktrees</div>
+        <div class="vs-badges">
+          <span class="badge b-hybrid">HYBRID ONLY</span>
+        </div>
+      </div>
+      <div class="vs-scripts">
+        <span class="vs-script"><span class="vs-script-label">Command</span>git worktree add wt-primary &amp;&amp; git worktree add wt-independent</span>
+      </div>
+      <div class="vs-desc">
+        In HYBRID mode only — creates two isolated git worktrees from the current main branch HEAD.
+        <code>wt-primary</code> hosts the PRIMARY lane; <code>wt-independent</code> hosts the INDEPENDENT lane.
+        Both worktrees start with the latest schema and docs committed in Step 1.
+        Skipped entirely in BASH mode.
+      </div>
+    </div>
+
+    <div class="vflow-connector"></div>
+
+    <!-- STEP 3 — PARALLEL -->
+    <div class="vflow-step para-step">
+      <div class="vs-header">
+        <div class="vs-num">STEP 3</div>
+        <div class="vs-title">Parallel Execution — Primary &amp; Independent Lanes</div>
+        <div class="vs-badges">
+          <span class="badge b-primary">PRIMARY</span>
+          <span class="badge b-ind">INDEPENDENT</span>
+          <span class="badge b-cli">CLI</span>
+        </div>
+      </div>
+      <div class="vs-scripts">
+        <span class="vs-script"><span class="vs-script-label">Primary</span>claude.sh --story &lt;ID&gt; --worktree wt-primary --phase &lt;PHASE&gt; &amp;</span>
+        <span class="vs-script"><span class="vs-script-label">Independent</span>claude.sh --story &lt;ID&gt; --worktree wt-independent --phase &lt;PHASE&gt; &amp;</span>
+      </div>
+      <div class="vs-desc" style="margin-bottom:12px;">
+        Both lanes run simultaneously (HYBRID) or sequentially (BASH). Each story invocation is a separate
+        <code>claude.sh</code> call that resolves the story's effort → model → turns before launching <code>claude --print</code>.
+        In HYBRID mode, the coordination bus (<code>agent-messages.jsonl</code>) is active for cross-lane signalling.
+      </div>
+      <div class="vs-parallel">
+        <div class="vs-lane-block pri">
+          <div class="vs-lane-hd"><span class="badge b-primary">PRIMARY</span> Lane</div>
+          <div class="vs-lane-sub">git worktree: wt-primary</div>
+          <div class="vs-agent-list">
+            <div class="vs-agent-row">
+              <span>backend-engineer</span>
+              <span class="vs-agent-script">— API endpoints, business logic</span>
+              <span class="badge b-sonnet">SONNET</span>
+            </div>
+            <div class="vs-agent-row">
+              <span>pipeline-engineer</span>
+              <span class="vs-agent-script">— CI/CD, build automation</span>
+              <span class="badge b-sonnet">SONNET</span>
+            </div>
+          </div>
+        </div>
+        <div class="vs-lane-block ind">
+          <div class="vs-lane-hd"><span class="badge b-ind">INDEPENDENT</span> Lane</div>
+          <div class="vs-lane-sub">git worktree: wt-independent</div>
+          <div class="vs-agent-list">
+            <div class="vs-agent-row">
+              <span>frontend-engineer</span>
+              <span class="vs-agent-script">— Flutter UI screens</span>
+              <span class="badge b-sonnet">SONNET</span>
+            </div>
+            <div class="vs-agent-row">
+              <span>devops-engineer</span>
+              <span class="vs-agent-script">— Infra, Docker, env config</span>
+              <span class="badge b-sonnet">SONNET</span>
+            </div>
+            <div class="vs-agent-row">
+              <span>qa-engineer</span>
+              <span class="vs-agent-script">— Test specs, fixtures</span>
+              <span class="badge b-sonnet">SONNET</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="vflow-connector"></div>
+
+    <!-- STEP 4 -->
+    <div class="vflow-step">
+      <div class="vs-header">
+        <div class="vs-num">STEP 4</div>
+        <div class="vs-title">Review &amp; Merge Worktrees</div>
+        <div class="vs-badges">
+          <span class="badge b-main">MAIN</span>
+          <span class="badge b-cli">CLI</span>
+          <span class="badge b-sonnet">SONNET</span>
+        </div>
+      </div>
+      <div class="vs-scripts">
+        <span class="vs-script"><span class="vs-script-label">Review</span>claude.sh --story &lt;REVIEW_ID&gt; --phase &lt;PHASE&gt;</span>
+        <span class="vs-script"><span class="vs-script-label">Merge</span>git merge wt-primary &amp;&amp; git merge wt-independent</span>
+      </div>
+      <div class="vs-desc">
+        The <strong>review-agent</strong> runs on main, reads outputs from both worktrees, and validates code quality.
+        After review, the orchestration script merges both worktrees back into main. Conflict resolution is handled
+        by the review-agent if needed. Worktrees are removed after successful merge.
+      </div>
+    </div>
+
+    <div class="vflow-connector gate-con"></div>
+
+    <!-- STEP 4.5 — GATE -->
+    <div class="vflow-step gate-step">
+      <div class="vs-header">
+        <div class="vs-num">STEP 4.5</div>
+        <div class="vs-title">Unit Test Gate</div>
+        <div class="vs-badges">
+          <span class="badge b-gate">GATE</span>
+          <span class="badge b-haiku">HAIKU</span>
+          <span class="badge b-main">MAIN</span>
+        </div>
+      </div>
+      <div class="vs-scripts">
+        <span class="vs-script"><span class="vs-script-label">Script</span>claude.sh --story &lt;UNIT_TEST_ID&gt; --phase &lt;PHASE&gt;_unit</span>
+        <span class="vs-script"><span class="vs-script-label">Runner</span>dotnet test &amp;&amp; flutter test</span>
+      </div>
+      <div class="vs-desc" style="margin-bottom:8px;">
+        The <strong>unit-test-runner</strong> agent (HAIKU, low turns) executes all unit tests on the merged main branch.
+        Both .NET backend tests and Flutter frontend tests must pass. This is a blocking gate — pipeline stops on failure.
+      </div>
+      <div class="gate-decision">
+        <span class="gate-go">✓ GO — all tests pass → continue to Step 5</span>
+        <span class="gate-nogo">✗ NO-GO — test failure → pipeline halts, awaits fix</span>
+      </div>
+    </div>
+
+    <div class="vflow-connector gate-con"></div>
+
+    <!-- STEP 5 — GATE -->
+    <div class="vflow-step gate-step">
+      <div class="vs-header">
+        <div class="vs-num">STEP 5</div>
+        <div class="vs-title">Phase Gate — Cost &amp; Completion Check</div>
+        <div class="vs-badges">
+          <span class="badge b-gate">GATE</span>
+        </div>
+      </div>
+      <div class="vs-scripts">
+        <span class="vs-script"><span class="vs-script-label">Script</span>check-phase-gate.sh --phase &lt;PHASE&gt;</span>
+      </div>
+      <div class="vs-desc" style="margin-bottom:8px;">
+        Reads <code>logs/phase-cost.jsonl</code> and <code>prd.json</code> to verify two criteria:
+        (1) all stories in the phase are marked <code>completed: true</code>, and
+        (2) actual cost variance vs <code>estimatedCost</code> is within threshold.
+        Decision written to <code>logs/phase-gates.jsonl</code>.
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+        <span style="font-size:10px;color:#34d399;background:#052e1c;border:1px solid #059669;padding:3px 8px;border-radius:4px;">ok: variance &lt; 30%</span>
+        <span style="font-size:10px;color:#f59e0b;background:#291a00;border:1px solid #92400e;padding:3px 8px;border-radius:4px;">warn: 30%–150%</span>
+        <span style="font-size:10px;color:#f87171;background:#2d0a0a;border:1px solid #b91c1c;padding:3px 8px;border-radius:4px;">escalate: &gt; 150%</span>
+      </div>
+      <div class="gate-decision">
+        <span class="gate-go">✓ GO — all complete + cost ok → continue to Step 5.5</span>
+        <span class="gate-nogo">✗ NO-GO — incomplete stories or cost escalation → halt</span>
+      </div>
+    </div>
+
+    <div class="vflow-connector gate-con"></div>
+
+    <!-- STEP 5.5 — GATE -->
+    <div class="vflow-step gate-step">
+      <div class="vs-header">
+        <div class="vs-num">STEP 5.5</div>
+        <div class="vs-title">E2E Interstitial</div>
+        <div class="vs-badges">
+          <span class="badge b-gate">GATE</span>
+          <span class="badge b-ind">INDEPENDENT</span>
+        </div>
+      </div>
+      <div class="vs-scripts">
+        <span class="vs-script"><span class="vs-script-label">Auto-detect</span>if prd.json has phase &lt;PHASE&gt;_e2e → run-agent-orchestration.sh --phase &lt;PHASE&gt;_e2e</span>
+      </div>
+      <div class="vs-desc" style="margin-bottom:8px;">
+        Automatically checks whether a corresponding E2E phase exists in <code>prd.json</code>
+        (e.g. <code>wearables_e2e</code> after <code>wearables</code>). If found, the orchestration script
+        recursively runs the E2E phase — using the <strong>qa-engineer</strong> to drive <strong>Playwright</strong>
+        tests against the running stack. If no E2E phase exists, this step is silently skipped.
+      </div>
+      <div class="gate-decision">
+        <span class="gate-go">✓ E2E phase absent — step skipped, continue to Step 6</span>
+        <span class="gate-go">✓ E2E phase present + all tests pass → continue</span>
+        <span class="gate-nogo">✗ E2E failures → pipeline halts</span>
+      </div>
+    </div>
+
+    <div class="vflow-connector"></div>
+
+    <!-- STEP 6 -->
+    <div class="vflow-step assess-step">
+      <div class="vs-header">
+        <div class="vs-num">STEP 6</div>
+        <div class="vs-title">Post-Phase Assessment</div>
+        <div class="vs-badges">
+          <span class="badge b-tools">FULL TOOLS</span>
+          <span class="badge b-main">MAIN</span>
+          <span class="badge b-sonnet">SONNET</span>
+        </div>
+      </div>
+      <div class="vs-scripts">
+        <span class="vs-script"><span class="vs-script-label">Script</span>claude.sh --assessment post --phase &lt;PHASE&gt;</span>
+      </div>
+      <div class="vs-desc">
+        Runs the <strong>agent-skill-assessment-agent</strong> post-phase with FULL TOOLS access.
+        Analyses actual cost vs forecast from <code>phase-cost.jsonl</code>, identifies overruns,
+        and corrects <code>agentRole</code> mismatches in pending stories within <code>prd.json</code>.
+        Augments profiles for the next phase based on observed performance.
+        Results visible in the PRD Viewer's Implementation Activity section.
+      </div>
+    </div>
+
+  </div><!-- /vflow -->
+
+  <!-- AGENT LANES -->
+  <div class="section-title">Agent Lanes</div>
+  <div class="lane-grid">
+
+    <div class="lane-card main">
+      <div class="lane-header">
+        <span class="lane-icon">📋</span>
+        <div>
+          <div class="lane-name">Main Lane</div>
+          <span class="badge b-main">MAIN</span>
+        </div>
+      </div>
+      <div class="lane-meta">Runs on main branch — sequential setup, reviews, assessments, and test runners. Executes before and after the parallel worktrees.</div>
+      <div class="agent-list">
+        <div class="agent-row">
+          <span class="agent-name">db-architect</span>
+          <div class="agent-badges"><span class="badge b-sonnet">SONNET</span><span class="badge b-cli">CLI</span></div>
+        </div>
+        <div class="agent-row">
+          <span class="agent-name">review-agent</span>
+          <div class="agent-badges"><span class="badge b-sonnet">SONNET</span><span class="badge b-cli">CLI</span></div>
+        </div>
+        <div class="agent-row">
+          <span class="agent-name">docs-engineer</span>
+          <div class="agent-badges"><span class="badge b-haiku">HAIKU</span><span class="badge b-cli">CLI</span></div>
+        </div>
+        <div class="agent-row">
+          <span class="agent-name">mock-data-generator</span>
+          <div class="agent-badges"><span class="badge b-sonnet">SONNET</span><span class="badge b-cli">CLI</span></div>
+        </div>
+        <div class="agent-row">
+          <span class="agent-name">unit-test-runner</span>
+          <div class="agent-badges"><span class="badge b-haiku">HAIKU</span><span class="badge b-cli">CLI</span></div>
+        </div>
+        <div class="agent-row">
+          <span class="agent-name">agent-skill-assessment-agent</span>
+          <div class="agent-badges"><span class="badge b-sonnet">SONNET</span><span class="badge b-tools">FULL TOOLS</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lane-card primary">
+      <div class="lane-header">
+        <span class="lane-icon">🚀</span>
+        <div>
+          <div class="lane-name">Primary Lane</div>
+          <span class="badge b-primary">PRIMARY</span>
+        </div>
+      </div>
+      <div class="lane-meta">Isolated git worktree (<code>wt-primary</code>). Core feature chain executed sequentially within the worktree. Runs in parallel with the independent lane.</div>
+      <div class="agent-list">
+        <div class="agent-row">
+          <span class="agent-name">backend-engineer</span>
+          <div class="agent-badges"><span class="badge b-sonnet">SONNET</span><span class="badge b-cli">CLI</span></div>
+        </div>
+        <div class="agent-row">
+          <span class="agent-name">pipeline-engineer</span>
+          <div class="agent-badges"><span class="badge b-sonnet">SONNET</span><span class="badge b-cli">CLI</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lane-card independent">
+      <div class="lane-header">
+        <span class="lane-icon">⚡</span>
+        <div>
+          <div class="lane-name">Independent Lane</div>
+          <span class="badge b-ind">INDEPENDENT</span>
+        </div>
+      </div>
+      <div class="lane-meta">Isolated git worktree (<code>wt-independent</code>). Tasks that can run concurrently with the primary lane — UI, infra, and test work.</div>
+      <div class="agent-list">
+        <div class="agent-row">
+          <span class="agent-name">frontend-engineer</span>
+          <div class="agent-badges"><span class="badge b-sonnet">SONNET</span><span class="badge b-cli">CLI</span></div>
+        </div>
+        <div class="agent-row">
+          <span class="agent-name">devops-engineer</span>
+          <div class="agent-badges"><span class="badge b-sonnet">SONNET</span><span class="badge b-cli">CLI</span></div>
+        </div>
+        <div class="agent-row">
+          <span class="agent-name">qa-engineer</span>
+          <div class="agent-badges"><span class="badge b-sonnet">SONNET</span><span class="badge b-cli">CLI</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ORCHESTRATION MODES -->
+  <div class="section-title">Orchestration Modes</div>
+  <div class="modes-grid">
+    <div class="mode-card bash">
+      <div class="mode-title"><span class="badge b-bash">BASH</span> Sequential Mode</div>
+      <div class="mode-desc">All agents run sequentially in the main shell. No parallel worktrees — simpler, fully deterministic. Ideal for smaller phases or environments where git worktree isolation isn't needed.</div>
+      <ul class="mode-props">
+        <li>Single shell process, single git branch</li>
+        <li>No worktree creation or teardown overhead</li>
+        <li>Coordination bus disabled (no inter-agent messages)</li>
+        <li>All agents run in main lane regardless of agentGroup</li>
+        <li>Cost captured per-story via <code>--output-format json</code></li>
+      </ul>
+    </div>
+    <div class="mode-card hybrid">
+      <div class="mode-title"><span class="badge b-hybrid">HYBRID</span> Parallel Mode</div>
+      <div class="mode-desc">Primary and Independent agents run concurrently in isolated git worktrees, coordinated by the Main lane. Maximum throughput for multi-agent phases.</div>
+      <ul class="mode-props">
+        <li>Two worktrees: <code>wt-primary</code> + <code>wt-independent</code></li>
+        <li>Coordination bus active (<code>agent-messages.jsonl</code>)</li>
+        <li>Cross-worktree dependency checking via prd.json</li>
+        <li>Main lane gates progress between phases</li>
+        <li>Worktrees merged after phase gate passes</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- KEY FEATURES -->
+  <div class="section-title">Key Features</div>
+  <div class="features-grid">
+
+    <div class="feature-card">
+      <div class="feature-icon">🔄</div>
+      <div class="feature-title">Parallel Execution</div>
+      <div class="feature-desc">Primary and Independent agents run simultaneously in isolated git worktrees. Hybrid mode maximises throughput; Bash mode provides deterministic sequential execution.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">🎭</div>
+      <div class="feature-title">Role-Based Profiles</div>
+      <div class="feature-desc">11 agent roles, each with a profile injected at invocation. Skills are tracked, augmented pre-phase, and assessed post-phase. Profiles stored in <code>agents/profiles.json</code>.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">💰</div>
+      <div class="feature-title">Effort → LLM Mapping</div>
+      <div class="feature-desc">Each story declares <code>effort: low|medium|high</code>. The pipeline maps this to model (Haiku / Sonnet / Opus) and max-turns (10 / 30 / unlimited) automatically via <code>claude.sh</code>.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">🔗</div>
+      <div class="feature-title">Dependency Management</div>
+      <div class="feature-desc">Cross-worktree dependency checking via <code>prd.json</code> ensures correct execution order. Stories declare <code>dependencies</code> and <code>testFor</code> links.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">✅</div>
+      <div class="feature-title">Test Gate Pipeline</div>
+      <div class="feature-desc">Step 4.5 runs unit tests before phase gate. Step 5.5 auto-detects <code>&lt;phase&gt;_e2e</code> phases and runs Playwright. Both gates block on failure.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">📡</div>
+      <div class="feature-title">Coordination Bus</div>
+      <div class="feature-desc">Hybrid mode only. Agents communicate via <code>agent-messages.jsonl</code> — approval messages, review feedback, alerts. Visible in the Agent Messages dashboard.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">📊</div>
+      <div class="feature-title">Cost &amp; Variance Tracking</div>
+      <div class="feature-desc">Per-story cost captured via <code>--output-format json</code>. Phase gate checks variance against <code>estimatedCost</code>: ok &lt;30% · warn 30–150% · escalate &gt;150%.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">🧠</div>
+      <div class="feature-title">Skill Assessment Loop</div>
+      <div class="feature-desc">Pre-phase: detects skill gaps, augments profiles. Post-phase: analyses overruns, corrects <code>agentRole</code> mismatches in pending stories. Uses Full Tools invocation.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">📋</div>
+      <div class="feature-title">Live Dashboards</div>
+      <div class="feature-desc">Seven dashboards served at port 8090: Monitor · PRD Viewer · Agent Profiles · Orchestration · Test Plan · Agent Messages · Cost.</div>
+    </div>
+
+  </div>
+
+  <!-- TECH STACK -->
+  <div class="section-title">Tech Stack</div>
+  <div class="tech-row">
+    <div class="tech-item"><div class="tech-icon">🤖</div><div class="tech-label">Claude Code CLI</div></div>
+    <div class="tech-item"><div class="tech-icon">📦</div><div class="tech-label">Git Worktrees</div></div>
+    <div class="tech-item"><div class="tech-icon">🐚</div><div class="tech-label">Bash Orchestration</div></div>
+    <div class="tech-item"><div class="tech-icon">📋</div><div class="tech-label">JSON PRD</div></div>
+    <div class="tech-item"><div class="tech-icon">🐳</div><div class="tech-label">Docker Services</div></div>
+    <div class="tech-item"><div class="tech-icon">🎭</div><div class="tech-label">Playwright E2E</div></div>
+    <div class="tech-item"><div class="tech-icon">💲</div><div class="tech-label">Cost Tracking</div></div>
+    <div class="tech-item"><div class="tech-icon">📡</div><div class="tech-label">Agent Message Bus</div></div>
+  </div>
+
+</div>
+</body>
+</html>

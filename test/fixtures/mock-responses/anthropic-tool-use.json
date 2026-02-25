@@ -1,0 +1,17 @@
+{
+  "id": "msg_02XFDUDYJgAACzvnptvVoYEL",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "toolu_01A09q90qw90lq917835lq9",
+      "name": "read_file",
+      "input": { "path": "package.json" }
+    }
+  ],
+  "model": "claude-sonnet-4-6",
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": { "input_tokens": 150, "output_tokens": 45 }
+}

@@ -2,7 +2,9 @@
 
 Multi-agent orchestration system for building epam-cli features autonomously using Claude Code (and other AI CLIs) with parallel execution, phase gates, cost tracking, and live dashboards.
 
-Based on the fitnessapp/shadow-play orchestration pattern. Supports: **claude**, **codex**, **opencode**, and (future) **epam** itself.
+Based on the fitnessapp/shadow-play orchestration pattern. Supports: **claude**, **codex**, **opencode**, **codemie-claude**, and (future) **epam** itself.
+
+> For full context-loading instructions, see [INSTRUCTIONS.md](./INSTRUCTIONS.md).
 
 ---
 
@@ -18,7 +20,8 @@ orchestrations/
 │   └── KB.md                   # Shared knowledge base
 ├── scripts/
 │   ├── run-agent-orchestration.sh   # Master orchestrator (entry point)
-│   ├── claude.sh                    # Claude/Codex/OpenCode/EPAM CLI wrapper
+│   ├── claude.sh                    # Claude/Codex/OpenCode/EPAM/Codemie-Claude CLI wrapper
+│   ├── codemie-claude.sh                 # Dedicated Codemie-Claude CLI wrapper
 │   ├── update-monitor.sh            # Dashboard status updates
 │   ├── check-phase-gate.sh          # Phase gate enforcement
 │   ├── team-lead-review.sh          # Team Lead code review cycle
@@ -71,7 +74,7 @@ orchestrations/
 
 # View dashboards (requires agent-monitor Docker service)
 docker compose -f docker-compose.epam-cli.yml up agent-monitor -d
-# Then open: http://localhost:8090/monitor.html
+# Then open: http://localhost:8092/monitor.html
 ```
 
 ---
@@ -80,6 +83,7 @@ docker compose -f docker-compose.epam-cli.yml up agent-monitor -d
 
 | Phase | Mode | Stories | Priority | Description |
 |-------|------|---------|----------|-------------|
+| `health_check` | bash | EPAM-HC-001 to HC-004 | P0 | Pre-flight CLI validation |
 | `finops` | bash | EPAM-001 to EPAM-003 | P1 | Budget guardrails + burn-up reports |
 | `agent_intelligence` | bash | EPAM-004 to EPAM-008 | P1 | Gold profiles, /plan mode, decision records, MCP |
 | `team_features` | bash | EPAM-009 to EPAM-011 | P2 | /replay, shared team memory |
@@ -137,6 +141,9 @@ CLAUDE_CMD=opencode ./orchestrations/scripts/run-agent-orchestration.sh --phase 
 
 # Codex
 CLAUDE_CMD=codex ./orchestrations/scripts/run-agent-orchestration.sh --phase finops
+
+# Codemie-Claude
+CLAUDE_CMD=codemie-claude ./orchestrations/scripts/run-agent-orchestration.sh --phase health_check
 
 # EPAM CLI (once built — dogfooding)
 CLAUDE_CMD="node dist/epam.js run" ./orchestrations/scripts/run-agent-orchestration.sh --phase finops

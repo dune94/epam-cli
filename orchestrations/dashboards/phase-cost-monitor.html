@@ -3,31 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shadow Play — Phase Cost Monitor</title>
+<title>EPAM CLI — Phase Cost Monitor</title>
 <style>
 :root {
-  --bg:          #050a0f;
-  --surface:     #0a1420;
-  --surface2:    #0f1e30;
-  --surface3:    #142540;
-  --border:      #1a3050;
-  --text:        #e2f0f8;
-  --text2:       #8ab4cc;
-  --text3:       #4a7090;
-  --teal:        #06b6d4;
-  --teal-dim:    rgba(6,182,212,0.12);
-  --teal-glow:   rgba(6,182,212,0.35);
-  --violet:      #7c3aed;
-  --violet2:     #a78bfa;
-  --violet-dim:  rgba(124,58,237,0.15);
-  --green:       #4ade80;
-  --green-dim:   rgba(74,222,128,0.12);
-  --amber:       #fbbf24;
-  --amber-dim:   rgba(251,191,36,0.15);
-  --red:         #f87171;
-  --red-dim:     rgba(248,113,113,0.15);
-  --pink:        #f472b6;
-  --pink-dim:    rgba(244,114,182,0.15);
+  --bg: #fbfafa;  --bg1: #ffffff;  --bg2: #f4f4f4;  --bg3: #eaeaea;
+  --surface: #ffffff;  --surface2: #f4f4f4;  --surface3: #eaeaea;
+  --border: #e0e0e0;  --border2: #cccccc;
+  --text: #060606;  --text2: #4a4a4a;  --text3: #717171;  --text-muted: #717171;
+  --teal: #0047ff;  --teal2: #0047ff;  --teal-dim: rgba(0,71,255,0.08);
+  --accent: #0047ff;  --teal-glow: rgba(0,71,255,0.20);
+  --violet: #8453d2;  --violet2: #8453d2;  --violet-dim: rgba(132,83,210,0.10);
+  --green: #1a8f3f;  --green-dim: rgba(26,143,63,0.10);
+  --amber: #c87a00;  --amber-dim: rgba(200,122,0,0.10);
+  --red: #d93025;  --red-dim: rgba(217,48,37,0.08);
+  --pink: #c4186e;  --pink-dim: rgba(196,24,110,0.08);
+  --blue: #1a73e8;  --blue-dim: rgba(26,115,232,0.08);
+  --orange: #d35400;  --orange-dim: rgba(211,84,0,0.08);
+  --epam-gradient: linear-gradient(118.82deg, #0078c2 .5%, #0047ff 47.33%, #8453d2 76.12%);
+  --epam-cyan: #00f6ff;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -41,47 +34,35 @@ body {
   min-height: 100vh;
 }
 
-body::after {
-  content: '';
-  position: fixed; inset: 0;
-  background: repeating-linear-gradient(
-    0deg, transparent, transparent 2px,
-    rgba(6,182,212,0.018) 2px, rgba(6,182,212,0.018) 4px
-  );
-  pointer-events: none; z-index: 9999;
-}
-
 /* ── Header ── */
 .header {
-  background: linear-gradient(135deg, #050f1a 0%, #08091a 100%);
+  background: var(--epam-gradient);
   border-bottom: 1px solid var(--border);
   padding: 14px 28px;
   display: flex; align-items: center; justify-content: space-between;
   position: sticky; top: 0; z-index: 100;
-  box-shadow: 0 4px 24px rgba(6,182,212,0.08);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   flex-wrap: wrap; gap: 8px;
 }
 .header-left { display: flex; align-items: center; gap: 13px; }
 .header-icon {
   width: 36px; height: 36px;
-  background: linear-gradient(135deg, var(--teal), var(--violet));
+  background: rgba(255,255,255,0.2);
   border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
   font-size: 18px; flex-shrink: 0;
-  box-shadow: 0 0 14px var(--teal-glow);
 }
 .header-title {
   font-size: 18px; font-weight: 800;
-  background: linear-gradient(90deg, var(--teal) 0%, var(--violet2) 100%);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  background-clip: text; letter-spacing: -0.3px;
+  color: #fff; -webkit-text-fill-color: #fff; background: none;
+  letter-spacing: -0.3px;
 }
-.header-sub { color: var(--text3); font-size: 11px; margin-top: 2px; letter-spacing: 0.3px; }
+.header-sub { color: rgba(255,255,255,0.7); font-size: 11px; margin-top: 2px; letter-spacing: 0.3px; }
 .header-right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-.refresh-meta { text-align: right; color: var(--text3); font-size: 11px; line-height: 1.8; }
+.refresh-meta { text-align: right; color: rgba(255,255,255,0.7); font-size: 11px; line-height: 1.8; }
 .live-dot {
   display: inline-flex; align-items: center; gap: 6px;
-  font-size: 11px; color: var(--green);
+  font-size: 11px; color: #fff;
 }
 .live-dot::before {
   content: ''; width: 7px; height: 7px; border-radius: 50%;
@@ -95,11 +76,11 @@ body::after {
 }
 .nav-links { font-size: 11px; display: flex; gap: 10px; flex-wrap: wrap; }
 .nav-links a {
-  color: var(--teal); text-decoration: none; opacity: 0.6;
-  transition: opacity .15s, text-shadow .15s;
+  color: #fff; text-decoration: none; opacity: 0.7;
+  transition: opacity .15s;
 }
-.nav-links a:hover { opacity: 1; text-shadow: 0 0 8px var(--teal-glow); }
-.nav-links a.active { opacity: 1; font-weight: 700; }
+.nav-links a:hover { opacity: 1; }
+.nav-links a.active { opacity: 1; font-weight: 700; border-bottom: 2px solid #fff; padding-bottom: 2px; }
 
 /* ── Container ── */
 .container { max-width: 1480px; margin: 0 auto; padding: 24px 28px; }
@@ -112,7 +93,7 @@ body::after {
 
 /* ── Budget Gauge ── */
 .budget-gauge {
-  background: linear-gradient(135deg, var(--surface) 0%, #0a1830 100%);
+  background: linear-gradient(135deg, var(--surface) 0%, var(--bg2) 100%);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 22px 28px;
@@ -124,7 +105,7 @@ body::after {
 .budget-main { display: flex; flex-direction: column; gap: 2px; }
 .budget-spent {
   font-size: 38px; font-weight: 900; letter-spacing: -1.5px;
-  background: linear-gradient(90deg, var(--teal), var(--violet2));
+  background: linear-gradient(90deg, var(--teal), var(--violet));
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   background-clip: text; line-height: 1;
 }
@@ -166,8 +147,8 @@ td {
   padding: 8px 12px; border-bottom: 1px solid rgba(26,48,80,0.5);
   color: var(--text); vertical-align: middle;
 }
-tbody tr:hover td { background: rgba(6,182,212,0.04); }
-tbody tr.highlighted td { background: rgba(124,58,237,0.08); }
+tbody tr:hover td { background: rgba(0,71,255,0.04); }
+tbody tr.highlighted td { background: rgba(132,83,210,0.08); }
 tbody tr.totals-row td {
   background: var(--surface2); font-weight: 700; border-top: 1px solid var(--border);
 }
@@ -300,7 +281,7 @@ td.story-highlight { outline: 1px solid var(--violet); outline-offset: -1px; }
   <div class="header-left">
     <div class="header-icon">&#x1F3B4;</div>
     <div>
-      <div class="header-title">Shadow Play — Phase Cost Monitor</div>
+      <div class="header-title">EPAM CLI — Phase Cost Monitor</div>
       <div class="header-sub">Estimated vs Actual &middot; Provider breakdown &middot; Story-level costs</div>
     </div>
   </div>
@@ -310,11 +291,13 @@ td.story-highlight { outline: 1px solid var(--violet); outline-offset: -1px; }
       <div id="last-refresh">Initialising...</div>
     </div>
     <nav class="nav-links">
-      <a href="shadow-play-monitor.html">Monitor</a>
-      <a href="shadow-play-prd-viewer.html">PRD</a>
-      <a href="shadow-play-agent-profiles.html">Profiles</a>
-      <a href="shadow-play-game-plan.html">Game Plan</a>
-      <a href="shadow-play-phase-cost-monitor.html" class="active">Cost Monitor</a>
+      <a href="monitor.html">Monitor</a>
+      <a href="prd-viewer.html">PRD</a>
+      <a href="orchestration-plan.html">Plan</a>
+      <a href="agents-orchestration.html">Orchestration</a>
+      <a href="agent-profiles.html">Profiles</a>
+      <a href="agent-messages.html">Messages</a>
+      <a href="phase-cost-monitor.html" class="active">Costs</a>
     </nav>
   </div>
 </header>
@@ -436,13 +419,13 @@ td.story-highlight { outline: 1px solid var(--violet); outline-offset: -1px; }
     </table>
   </div>
 
-  <div class="refresh-footer">Auto-refreshing every 5 seconds &middot; All times local &middot; Shadow Play Phase Cost Monitor</div>
+  <div class="refresh-footer">Auto-refreshing every 5 seconds &middot; All times local &middot; EPAM CLI Phase Cost Monitor</div>
 </div>
 
 <script>
 'use strict';
 
-const API         = '/shadow-play-api';
+/* Data loaded from static prd.json + logs/ files */
 const BUDGET_MAX  = 504.60;
 const REFRESH_MS  = 5000;
 
@@ -554,14 +537,52 @@ function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// ── Fetch ─────────────────────────────────────────────────────────────────────
+// ── Fetch (static files) ──────────────────────────────────────────────────────
 
-async function apiFetch(path) {
+let _prdCache = null;
+async function loadPrd() {
   try {
-    const r = await fetch(API + path + '?_t=' + Date.now());
+    const r = await fetch('prd.json?_t=' + Date.now());
     if (!r.ok) return null;
-    return await r.json();
+    _prdCache = await r.json();
+    return _prdCache;
   } catch { return null; }
+}
+
+function derivePhasesFromPrd(prd) {
+  if (!prd || !prd.implementationOrder) return [];
+  const storyMap = {};
+  (prd.stories || []).forEach(s => { storyMap[s.id] = s; });
+  return Object.entries(prd.implementationOrder).map(([name, storyIds]) => {
+    const stories = storyIds.map(id => storyMap[id]).filter(Boolean);
+    const completed = stories.filter(s => s.completed);
+    const totalCost = stories.reduce((sum, s) => sum + (s.actualCost || 0), 0);
+    const estCost = stories.reduce((sum, s) => sum + (s.estimatedCost || 0), 0);
+    const cfg = (prd.phasesConfig || {})[name] || {};
+    return {
+      name: name,
+      phaseName: name,
+      status: completed.length === stories.length && stories.length > 0 ? 'completed' :
+              stories.some(s => s.status === 'in_progress') ? 'in_progress' : 'pending',
+      storyCount: stories.length,
+      completedCount: completed.length,
+      actualCost: totalCost,
+      estimatedCost: estCost,
+      orchestrationMode: cfg.orchestrationMode || 'bash'
+    };
+  });
+}
+
+async function fetchCostEvents() {
+  try {
+    const r = await fetch('logs/phase-cost.jsonl?_t=' + Date.now());
+    if (!r.ok) return [];
+    const text = await r.text();
+    if (!text.trim()) return [];
+    return text.trim().split('\n').filter(l => l.trim()).map(l => {
+      try { return JSON.parse(l); } catch { return null; }
+    }).filter(Boolean);
+  } catch { return []; }
 }
 
 // ── Budget Gauge ──────────────────────────────────────────────────────────────
@@ -968,10 +989,11 @@ document.getElementById('phase-filter').addEventListener('change', () => {
 // ── Main refresh loop ─────────────────────────────────────────────────────────
 
 async function refresh() {
+  const prd = await loadPrd();
   const [phases, stories, events] = await Promise.all([
-    apiFetch('/phases'),
-    apiFetch('/stories'),
-    apiFetch('/cost-events'),
+    Promise.resolve(prd ? derivePhasesFromPrd(prd) : []),
+    Promise.resolve(prd ? (prd.stories || []) : []),
+    fetchCostEvents(),
   ]);
 
   const phaseList  = Array.isArray(phases)  ? phases  : (phases  && phases.phases)  ? phases.phases  : [];

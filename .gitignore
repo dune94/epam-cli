@@ -39,3 +39,6 @@ coverage/
 
 # TypeScript cache
 *.tsbuildinfo
+
+# Estimate backup files
+orchestrations/prd.json.before-*

@@ -3,35 +3,27 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shadow Play — Execution Monitor</title>
+<title>EPAM CLI — Execution Monitor</title>
 <style>
 /* ─────────────────────────────────────────────────────────────────────────────
-   CSS Custom Properties — Shadow Play palette
+   CSS Custom Properties — EPAM CLI palette
 ───────────────────────────────────────────────────────────────────────────── */
 :root {
-  --bg:          #050a0f;
-  --bg1:         #0a1420;
-  --bg2:         #0f1e30;
-  --bg3:         #142540;
-  --border:      #1a3050;
-  --border2:     #1e3860;
-  --text:        #e2f0f8;
-  --text2:       #8ab4cc;
-  --text3:       #4a7090;
-  --teal:        #06b6d4;
-  --teal2:       #22d3ee;
-  --teal-dim:    rgba(6,182,212,0.12);
-  --violet:      #7c3aed;
-  --violet2:     #a78bfa;
-  --violet-dim:  rgba(124,58,237,0.15);
-  --green:       #4ade80;
-  --green-dim:   rgba(74,222,128,0.12);
-  --amber:       #fbbf24;
-  --amber-dim:   rgba(251,191,36,0.15);
-  --red:         #f87171;
-  --red-dim:     rgba(248,113,113,0.15);
-  --pink:        #f472b6;
-  --pink-dim:    rgba(244,114,182,0.15);
+  --bg: #fbfafa;  --bg1: #ffffff;  --bg2: #f4f4f4;  --bg3: #eaeaea;
+  --surface: #ffffff;  --surface2: #f4f4f4;  --surface3: #eaeaea;
+  --border: #e0e0e0;  --border2: #cccccc;
+  --text: #060606;  --text2: #4a4a4a;  --text3: #717171;  --text-muted: #717171;
+  --teal: #0047ff;  --teal2: #0047ff;  --teal-dim: rgba(0,71,255,0.08);
+  --accent: #0047ff;  --teal-glow: rgba(0,71,255,0.20);
+  --violet: #8453d2;  --violet2: #8453d2;  --violet-dim: rgba(132,83,210,0.10);
+  --green: #1a8f3f;  --green-dim: rgba(26,143,63,0.10);
+  --amber: #c87a00;  --amber-dim: rgba(200,122,0,0.10);
+  --red: #d93025;  --red-dim: rgba(217,48,37,0.08);
+  --pink: #c4186e;  --pink-dim: rgba(196,24,110,0.08);
+  --blue: #1a73e8;  --blue-dim: rgba(26,115,232,0.08);
+  --orange: #d35400;  --orange-dim: rgba(211,84,0,0.08);
+  --epam-gradient: linear-gradient(118.82deg, #0078c2 .5%, #0047ff 47.33%, #8453d2 76.12%);
+  --epam-cyan: #00f6ff;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -45,26 +37,17 @@ body {
   min-height: 100vh;
 }
 
-/* ── Glitch-Brutalism scanline overlay ── */
-body::after {
-  content: '';
-  position: fixed; inset: 0; pointer-events: none; z-index: 9999;
-  background: repeating-linear-gradient(
-    0deg, transparent, transparent 2px,
-    rgba(6,182,212,0.018) 2px, rgba(6,182,212,0.018) 4px
-  );
-}
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Header
 ───────────────────────────────────────────────────────────────────────────── */
 .header {
-  background: linear-gradient(135deg, #05101e 0%, #0a0820 100%);
+  background: var(--epam-gradient);
   border-bottom: 1px solid var(--border);
   padding: 14px 28px;
   display: flex; align-items: center; justify-content: space-between;
   position: sticky; top: 0; z-index: 200;
-  box-shadow: 0 4px 24px rgba(6,182,212,0.08);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   gap: 16px; flex-wrap: wrap;
 }
 
@@ -72,20 +55,18 @@ body::after {
 
 .header-icon {
   width: 34px; height: 34px;
-  background: linear-gradient(135deg, #06b6d4, #7c3aed);
+  background: rgba(255,255,255,0.2);
   border-radius: 7px;
   display: flex; align-items: center; justify-content: center;
   font-size: 17px; flex-shrink: 0;
-  box-shadow: 0 0 12px rgba(6,182,212,0.4);
 }
 
 .header-title {
   font-size: 18px; font-weight: 800;
-  background: linear-gradient(90deg, #06b6d4 0%, #a78bfa 100%);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  background-clip: text; letter-spacing: -0.3px;
+  color: #ffffff; -webkit-text-fill-color: #ffffff;
+  background: none; letter-spacing: -0.3px;
 }
-.header-sub { color: var(--text3); font-size: 11px; margin-top: 1px; letter-spacing: 0.3px; }
+.header-sub { color: rgba(255,255,255,0.7); font-size: 11px; margin-top: 1px; letter-spacing: 0.3px; }
 
 .header-right { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
 
@@ -105,11 +86,11 @@ body::after {
 /* Nav links */
 .nav-links { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; }
 .nav-links a {
-  color: var(--teal); text-decoration: none; opacity: 0.6;
-  transition: opacity .15s, text-shadow .15s;
+  color: #ffffff; text-decoration: none; opacity: 0.7;
+  transition: opacity .15s;
 }
-.nav-links a:hover { opacity: 1; text-shadow: 0 0 8px rgba(6,182,212,0.6); }
-.nav-links a.active { opacity: 1; text-shadow: 0 0 8px rgba(6,182,212,0.5); }
+.nav-links a:hover { opacity: 1; }
+.nav-links a.active { opacity: 1; border-bottom: 2px solid #fff; padding-bottom: 2px; }
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Main layout
@@ -175,7 +156,7 @@ body::after {
   transition: border-color .2s, opacity .2s;
 }
 .phase-row.dim    { opacity: 0.4; }
-.phase-row.active { border-color: var(--teal); box-shadow: 0 0 12px rgba(6,182,212,0.1); }
+.phase-row.active { border-color: var(--teal); box-shadow: 0 0 12px rgba(0,71,255,0.1); }
 .phase-row.done   { border-color: rgba(74,222,128,0.35); }
 .phase-row.infra  { }
 
@@ -185,7 +166,7 @@ body::after {
   background: var(--teal-dim); color: var(--teal2);
 }
 .phase-name-badge.infra  { background: var(--amber-dim); color: var(--amber); }
-.phase-name-badge.active { background: rgba(6,182,212,0.22); color: var(--teal2); }
+.phase-name-badge.active { background: rgba(0,71,255,0.22); color: var(--teal2); }
 .phase-name-badge.done   { background: var(--green-dim); color: var(--green); }
 
 .phase-bar-wrap { position: relative; }
@@ -199,8 +180,8 @@ body::after {
   transition: width 0.5s ease;
 }
 .phase-bar-fill.infra  { background: linear-gradient(90deg, #d97706, var(--amber)); }
-.phase-bar-fill.done   { background: linear-gradient(90deg, #16a34a, var(--green)); }
-.phase-bar-fill.full   { background: linear-gradient(90deg, #16a34a, var(--green)); }
+.phase-bar-fill.done   { background: linear-gradient(90deg, var(--green), var(--green)); }
+.phase-bar-fill.full   { background: linear-gradient(90deg, var(--green), var(--green)); }
 
 .phase-counts { font-size: 12px; color: var(--text2); text-align: right; white-space: nowrap; }
 .phase-counts .done-n { color: var(--green); font-weight: 700; }
@@ -362,7 +343,7 @@ body::after {
   background: var(--bg1); border: 1px solid var(--border);
   border-radius: 8px; padding: 16px 20px;
 }
-.live-panel.active-exec { border-color: var(--teal); box-shadow: 0 0 16px rgba(6,182,212,0.1); }
+.live-panel.active-exec { border-color: var(--teal); box-shadow: 0 0 16px rgba(0,71,255,0.1); }
 .live-panel .lp-header {
   display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
 }
@@ -409,7 +390,7 @@ body::after {
   <div class="header-left">
     <div class="header-icon">&#9671;</div>
     <div>
-      <div class="header-title">Shadow Play — Execution Monitor</div>
+      <div class="header-title">EPAM CLI — Execution Monitor</div>
       <div class="header-sub">Live orchestration dashboard · auto-refreshes every 3s</div>
     </div>
   </div>
@@ -424,10 +405,13 @@ body::after {
 
     <!-- Nav links -->
     <nav class="nav-links">
-      <a href="shadow-play-prd-viewer.html">PRD Viewer</a>
-      <a href="shadow-play-game-plan.html">Game Plan</a>
-      <a href="shadow-play-phase-cost-monitor.html">Cost Monitor</a>
-      <a href="shadow-play-agent-profiles.html">Agent Profiles</a>
+      <a href="monitor.html" class="active">Monitor</a>
+      <a href="prd-viewer.html">PRD Viewer</a>
+      <a href="orchestration-plan.html">Plan</a>
+      <a href="agents-orchestration.html">Orchestration</a>
+      <a href="agent-profiles.html">Profiles</a>
+      <a href="agent-messages.html">Messages</a>
+      <a href="phase-cost-monitor.html">Costs</a>
     </nav>
   </div>
 </header>
@@ -440,7 +424,7 @@ body::after {
   <!-- Offline banner (hidden by default) -->
   <div class="offline-banner" id="offlineBanner">
     <span>&#9888;</span>
-    <span>API OFFLINE — cannot reach <code>/shadow-play-api</code>. Retrying every 3 s…</span>
+    <span>DATA OFFLINE — cannot load <code>prd.json</code>. Retrying every 3 s…</span>
   </div>
 
   <!-- ── 1. Summary stats ───────────────────────────────────────────────── -->
@@ -549,7 +533,7 @@ body::after {
 ═══════════════════════════════════════════════════════════════════════════ -->
 <script>
 /* ─── Constants ──────────────────────────────────────────────────────────── */
-const API           = '/shadow-play-api';
+/* Data loaded from static prd.json + logs/ files */
 const BUDGET_TOTAL  = 504.60;
 const REFRESH_MS    = 3000;
 
@@ -632,13 +616,63 @@ function trunc(s, n) {
 }
 
 /* ─── Fetch helpers ──────────────────────────────────────────────────────── */
-async function apiGet(path) {
+let _prdCache = null;
+async function loadPrd() {
   try {
-    const r = await fetch(`${API}${path}?t=${Date.now()}`);
+    const r = await fetch(`prd.json?t=${Date.now()}`);
     if (!r.ok) return null;
-    return await r.json();
+    _prdCache = await r.json();
+    return _prdCache;
   } catch {
     return null;
+  }
+}
+
+function derivePhasesFromPrd(prd) {
+  if (!prd || !prd.implementationOrder) return [];
+  const storyMap = {};
+  (prd.stories || []).forEach(s => { storyMap[s.id] = s; });
+  return Object.entries(prd.implementationOrder).map(([name, storyIds]) => {
+    const stories = storyIds.map(id => storyMap[id]).filter(Boolean);
+    const completed = stories.filter(s => s.completed);
+    const totalCost = stories.reduce((sum, s) => sum + (s.actualCost || 0), 0);
+    const estCost = stories.reduce((sum, s) => sum + (s.estimatedCost || 0), 0);
+    const cfg = (prd.phasesConfig || {})[name] || {};
+    return {
+      name: name,
+      phaseName: name,
+      status: completed.length === stories.length && stories.length > 0 ? 'completed' :
+              stories.some(s => s.status === 'in_progress') ? 'in_progress' : 'pending',
+      storyCount: stories.length,
+      completedCount: completed.length,
+      actualCost: totalCost,
+      estimatedCost: estCost,
+      orchestrationMode: cfg.orchestrationMode || 'bash'
+    };
+  });
+}
+
+async function fetchStoriesFromPrd() {
+  const prd = _prdCache || await loadPrd();
+  return prd ? (prd.stories || []) : null;
+}
+
+async function fetchPhasesFromPrd() {
+  const prd = _prdCache || await loadPrd();
+  return prd ? derivePhasesFromPrd(prd) : null;
+}
+
+async function fetchCostEvents() {
+  try {
+    const r = await fetch(`logs/phase-cost.jsonl?t=${Date.now()}`);
+    if (!r.ok) return [];
+    const text = await r.text();
+    if (!text.trim()) return [];
+    return text.trim().split('\n').filter(l => l.trim()).map(l => {
+      try { return JSON.parse(l); } catch { return null; }
+    }).filter(Boolean);
+  } catch {
+    return [];
   }
 }
 
@@ -994,10 +1028,11 @@ function detectActivePhase(phases) {
 /* ─── Main refresh loop ──────────────────────────────────────────────────── */
 async function refresh() {
   // Fetch all data sources in parallel
+  await loadPrd();
   const [phases, stories, events, liveStatus] = await Promise.all([
-    apiGet('/phases'),
-    apiGet('/stories'),
-    apiGet('/cost-events'),
+    fetchPhasesFromPrd(),
+    fetchStoriesFromPrd(),
+    fetchCostEvents(),
     fetchAgentStatus()
   ]);
 

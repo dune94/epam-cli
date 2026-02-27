@@ -3,36 +3,26 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shadow Play — Agent Profiles</title>
+<title>EPAM CLI — Agent Profiles</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:          #050a0f;
-  --bg1:         #0a1420;
-  --bg2:         #0f1e30;
-  --bg3:         #142540;
-  --border:      #1a3050;
-  --border2:     #1a2d40;
-  --text:        #e2f0f8;
-  --text2:       #8ab4cc;
-  --text3:       #4a7090;
-  --teal:        #06b6d4;
-  --teal2:       #22d3ee;
-  --teal-dim:    rgba(6,182,212,0.12);
-  --violet:      #7c3aed;
-  --violet2:     #a78bfa;
-  --violet-dim:  rgba(124,58,237,0.15);
-  --green:       #4ade80;
-  --green-dim:   rgba(74,222,128,0.12);
-  --amber:       #fbbf24;
-  --amber-dim:   rgba(251,191,36,0.15);
-  --pink:        #f472b6;
-  --pink-dim:    rgba(244,114,182,0.15);
-  --blue:        #60a5fa;
-  --blue-dim:    rgba(96,165,250,0.15);
-  --red:         #f87171;
-  --red-dim:     rgba(248,113,113,0.15);
+  --bg: #fbfafa;  --bg1: #ffffff;  --bg2: #f4f4f4;  --bg3: #eaeaea;
+  --surface: #ffffff;  --surface2: #f4f4f4;  --surface3: #eaeaea;
+  --border: #e0e0e0;  --border2: #cccccc;
+  --text: #060606;  --text2: #4a4a4a;  --text3: #717171;  --text-muted: #717171;
+  --teal: #0047ff;  --teal2: #0047ff;  --teal-dim: rgba(0,71,255,0.08);
+  --accent: #0047ff;  --teal-glow: rgba(0,71,255,0.20);
+  --violet: #8453d2;  --violet2: #8453d2;  --violet-dim: rgba(132,83,210,0.10);
+  --green: #1a8f3f;  --green-dim: rgba(26,143,63,0.10);
+  --amber: #c87a00;  --amber-dim: rgba(200,122,0,0.10);
+  --red: #d93025;  --red-dim: rgba(217,48,37,0.08);
+  --pink: #c4186e;  --pink-dim: rgba(196,24,110,0.08);
+  --blue: #1a73e8;  --blue-dim: rgba(26,115,232,0.08);
+  --orange: #d35400;  --orange-dim: rgba(211,84,0,0.08);
+  --epam-gradient: linear-gradient(118.82deg, #0078c2 .5%, #0047ff 47.33%, #8453d2 76.12%);
+  --epam-cyan: #00f6ff;
 }
 
 body {
@@ -44,45 +34,33 @@ body {
   min-height: 100vh;
 }
 
-/* Scanline overlay */
-body::after {
-  content: '';
-  position: fixed; inset: 0; pointer-events: none; z-index: 9999;
-  background: repeating-linear-gradient(
-    0deg, transparent, transparent 2px,
-    rgba(6,182,212,0.015) 2px, rgba(6,182,212,0.015) 4px
-  );
-}
-
 /* ── Header ── */
 .header {
-  background: linear-gradient(135deg, #05101e 0%, #0a0820 100%);
+  background: var(--epam-gradient);
   border-bottom: 1px solid var(--border);
   padding: 14px 28px;
   display: flex; align-items: center; justify-content: space-between;
   position: sticky; top: 0; z-index: 200;
-  box-shadow: 0 4px 24px rgba(6,182,212,0.08);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 .header-left { display: flex; align-items: center; gap: 12px; }
 .header-icon {
   width: 34px; height: 34px;
-  background: linear-gradient(135deg, #06b6d4, #7c3aed);
+  background: rgba(255,255,255,0.2);
   border-radius: 7px;
   display: flex; align-items: center; justify-content: center;
   font-size: 16px; flex-shrink: 0;
-  box-shadow: 0 0 12px rgba(6,182,212,0.35);
 }
 .header-title {
   font-size: 18px; font-weight: 800;
-  background: linear-gradient(90deg, #06b6d4 0%, #a78bfa 100%);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  background-clip: text; letter-spacing: -0.3px;
+  color: #ffffff;
+  letter-spacing: -0.3px;
 }
-.header-sub { color: var(--text3); font-size: 10px; margin-top: 1px; letter-spacing: 0.3px; }
+.header-sub { color: rgba(255,255,255,0.7); font-size: 10px; margin-top: 1px; letter-spacing: 0.3px; }
 .header-right { text-align: right; }
 .header-meta {
   display: flex; align-items: center; gap: 8px;
-  color: var(--text3); font-size: 11px; margin-bottom: 5px;
+  color: rgba(255,255,255,0.7); font-size: 11px; margin-bottom: 5px;
 }
 .live-dot {
   width: 7px; height: 7px; border-radius: 50%;
@@ -97,10 +75,11 @@ body::after {
 }
 .nav-links { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 .nav-links a {
-  color: var(--teal); text-decoration: none; font-size: 10px;
-  opacity: 0.6; transition: opacity .15s, text-shadow .15s;
+  color: #fff; text-decoration: none; font-size: 10px;
+  opacity: 0.7; transition: opacity .15s;
 }
-.nav-links a:hover { opacity: 1; text-shadow: 0 0 8px rgba(6,182,212,0.6); }
+.nav-links a:hover { opacity: 1; }
+.nav-links a.active { opacity: 1; border-bottom: 2px solid #fff; padding-bottom: 2px; }
 
 /* ── Layout ── */
 .container { padding: 20px 28px; max-width: 1500px; margin: 0 auto; }
@@ -179,8 +158,8 @@ body::after {
   font-size: 9px; font-weight: 800; letter-spacing: 0.5px;
   padding: 2px 7px; border-radius: 3px; white-space: nowrap;
 }
-.badge-teal   { background: rgba(6,182,212,0.15); color: var(--teal);   border: 1px solid rgba(6,182,212,0.3); }
-.badge-violet { background: rgba(124,58,237,0.15); color: var(--violet2); border: 1px solid rgba(124,58,237,0.3); }
+.badge-teal   { background: rgba(0,71,255,0.15); color: var(--teal);   border: 1px solid rgba(0,71,255,0.3); }
+.badge-violet { background: rgba(132,83,210,0.15); color: var(--violet2); border: 1px solid rgba(132,83,210,0.3); }
 .badge-green  { background: rgba(74,222,128,0.12); color: var(--green);  border: 1px solid rgba(74,222,128,0.25); }
 .badge-amber  { background: rgba(251,191,36,0.15); color: var(--amber);  border: 1px solid rgba(251,191,36,0.3); }
 .badge-pink   { background: rgba(244,114,182,0.15); color: var(--pink);  border: 1px solid rgba(244,114,182,0.3); }
@@ -211,9 +190,9 @@ body::after {
   transition: border-color .2s, box-shadow .2s;
   position: relative;
 }
-.profile-card:hover { border-color: var(--border); box-shadow: 0 0 18px rgba(6,182,212,0.06); }
-.profile-card.lane-main        { border-left: 2px solid rgba(124,58,237,0.5); }
-.profile-card.lane-primary     { border-left: 2px solid rgba(6,182,212,0.5); }
+.profile-card:hover { border-color: var(--border); box-shadow: 0 0 18px rgba(0,71,255,0.06); }
+.profile-card.lane-main        { border-left: 2px solid rgba(132,83,210,0.5); }
+.profile-card.lane-primary     { border-left: 2px solid rgba(0,71,255,0.5); }
 .profile-card.lane-independent { border-left: 2px solid rgba(74,222,128,0.5); }
 
 .card-role {
@@ -243,11 +222,11 @@ body::after {
   white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;
 }
 /* By category */
-.skill-chip.cat-go-backend  { background: rgba(6,182,212,0.1);   color: var(--teal);   border: 1px solid rgba(6,182,212,0.2); }
-.skill-chip.cat-ue5-gfx     { background: rgba(124,58,237,0.1);  color: var(--violet2); border: 1px solid rgba(124,58,237,0.2); }
-.skill-chip.cat-ai-llm      { background: rgba(251,191,36,0.1);  color: var(--amber);  border: 1px solid rgba(251,191,36,0.2); }
-.skill-chip.cat-infra       { background: rgba(74,222,128,0.08); color: var(--green);  border: 1px solid rgba(74,222,128,0.2); }
-.skill-chip.cat-db          { background: rgba(96,165,250,0.1);  color: var(--blue);   border: 1px solid rgba(96,165,250,0.2); }
+.skill-chip.cat-ts-node     { background: var(--teal-dim);       color: var(--teal);    border: 1px solid rgba(0,71,255,0.2); }
+.skill-chip.cat-agent       { background: var(--violet-dim);     color: var(--violet2); border: 1px solid rgba(132,83,210,0.2); }
+.skill-chip.cat-ai-llm      { background: var(--amber-dim);      color: var(--amber);   border: 1px solid rgba(200,122,0,0.2); }
+.skill-chip.cat-testing     { background: var(--green-dim);      color: var(--green);   border: 1px solid rgba(26,143,63,0.2); }
+.skill-chip.cat-cli-ux      { background: var(--blue-dim);       color: var(--blue);    border: 1px solid rgba(26,115,232,0.2); }
 /* Augmented skill: amber glow + dim styling */
 .skill-chip.augmented {
   background: rgba(251,191,36,0.15);
@@ -336,8 +315,8 @@ tbody tr:hover td { background: var(--bg2); }
   border-radius: 3px; letter-spacing: 0.5px;
 }
 .src-kb         { background: rgba(251,191,36,0.15); color: var(--amber);   border: 1px solid rgba(251,191,36,0.3); }
-.src-assessment { background: rgba(124,58,237,0.15); color: var(--violet2); border: 1px solid rgba(124,58,237,0.3); }
-.src-manual     { background: rgba(6,182,212,0.12);  color: var(--teal);    border: 1px solid rgba(6,182,212,0.25); }
+.src-assessment { background: rgba(132,83,210,0.15); color: var(--violet2); border: 1px solid rgba(132,83,210,0.3); }
+.src-manual     { background: rgba(0,71,255,0.12);  color: var(--teal);    border: 1px solid rgba(0,71,255,0.25); }
 
 /* Empty / offline states */
 .empty-state {
@@ -363,7 +342,7 @@ tbody tr:hover td { background: var(--bg2); }
   <div class="header-left">
     <div class="header-icon">&#127918;</div>
     <div>
-      <div class="header-title">Shadow Play — Agent Profiles</div>
+      <div class="header-title">EPAM CLI — Agent Profiles</div>
       <div class="header-sub">Role capabilities, skill augmentation, story assignments</div>
     </div>
   </div>
@@ -373,10 +352,13 @@ tbody tr:hover td { background: var(--bg2); }
       <span id="hdr-refresh">–</span>
     </div>
     <div class="nav-links">
-      <a href="shadow-play-monitor.html">Monitor</a>
-      <a href="shadow-play-prd-viewer.html">PRD Viewer</a>
-      <a href="shadow-play-phase-cost-monitor.html">Cost</a>
-      <a href="shadow-play-game-plan.html">Game Plan</a>
+      <a href="monitor.html">Monitor</a>
+      <a href="prd-viewer.html">PRD Viewer</a>
+      <a href="orchestration-plan.html">Plan</a>
+      <a href="agents-orchestration.html">Orchestration</a>
+      <a href="agent-profiles.html" class="active">Profiles</a>
+      <a href="agent-messages.html">Messages</a>
+      <a href="phase-cost-monitor.html">Costs</a>
     </div>
   </div>
 </header>
@@ -384,7 +366,7 @@ tbody tr:hover td { background: var(--bg2); }
 <div class="container">
 
   <!-- Offline banner -->
-  <div class="offline-banner" id="offline-banner">API Offline — cannot reach /shadow-play-api/profiles. Retrying every 5 seconds.</div>
+  <div class="offline-banner" id="offline-banner">Data Offline — cannot load profiles.json. Retrying every 5 seconds.</div>
 
   <!-- ── Summary cards ── -->
   <div class="section-heading">Overview</div>
@@ -459,69 +441,63 @@ tbody tr:hover td { background: var(--bg2); }
 
 <script>
 // ── Config ─────────────────────────────────────────────────────────────────
-const API = '/shadow-play-api';
-const AUDIT_LOG_PATH = 'logs/shadow-play-profiles-audit.jsonl';
+/* Data loaded from static profiles.json + prd.json */
+const AUDIT_LOG_PATH = 'logs/profiles-audit.jsonl';
 const REFRESH_MS = 5000;
 
-// Orchestration scripts update profiles via:
-// curl -X PATCH http://localhost:8093/api/profiles/{role_id} \
-//   -H 'Content-Type: application/json' \
-//   -d '{"profileText": "..."}'
-// And append to automation/logs/shadow-play-profiles-audit.jsonl for the audit trail
+// Orchestration scripts update profiles.json directly and append to
+// orchestrations/logs/profiles-audit.jsonl for the audit trail
 
 // ── Skill keyword list with category mapping ───────────────────────────────
 const SKILL_CATEGORIES = {
-  // Go/backend (teal)
-  'grpc':              'cat-go-backend',
-  'protobuf':          'cat-go-backend',
-  'goroutines':        'cat-go-backend',
-  'rest-api':          'cat-go-backend',
-  'jwt':               'cat-go-backend',
-  'websocket':         'cat-go-backend',
-  'go':                'cat-go-backend',
-  'grpc-gateway':      'cat-go-backend',
-  'gorm':              'cat-go-backend',
-  'sqlc':              'cat-go-backend',
-  'testify':           'cat-go-backend',
-  // UE5/graphics (violet)
-  'unreal-engine':     'cat-ue5-gfx',
-  'nanite':            'cat-ue5-gfx',
-  'lumen':             'cat-ue5-gfx',
-  'niagara':           'cat-ue5-gfx',
-  'metahuman':         'cat-ue5-gfx',
-  'c++':               'cat-ue5-gfx',
-  'hlsl':              'cat-ue5-gfx',
-  'fmod':              'cat-ue5-gfx',
-  'blueprint':         'cat-ue5-gfx',
-  'sequencer':         'cat-ue5-gfx',
-  'chaos-physics':     'cat-ue5-gfx',
-  'procedural-generation': 'cat-ue5-gfx',
-  'ue5-gameplay-framework': 'cat-ue5-gfx',
+  // TypeScript/Node.js (teal)
+  'TypeScript':        'cat-ts-node',
+  'tsup':              'cat-ts-node',
+  'commander':         'cat-ts-node',
+  'readline':          'cat-ts-node',
+  'file-system':       'cat-ts-node',
+  'YAML':              'cat-ts-node',
+  'JSONL':             'cat-ts-node',
+  'JSONL-processing':  'cat-ts-node',
+  'zod-validation':    'cat-ts-node',
+  // Agent/Orchestration (violet)
+  'agent-orchestration': 'cat-agent',
+  'agent-context':     'cat-agent',
+  'multi-agent':       'cat-agent',
+  'delegation':        'cat-agent',
+  'peer-review':       'cat-agent',
+  'parallel-async':    'cat-agent',
+  'quality-scoring':   'cat-agent',
+  'system-prompt-injection': 'cat-agent',
+  'MCP-protocol':      'cat-agent',
+  'JSON-RPC':          'cat-agent',
+  'SSE-streaming':     'cat-agent',
   // AI/LLM (amber)
-  'claude-api':        'cat-ai-llm',
-  'llm':               'cat-ai-llm',
-  'tts':               'cat-ai-llm',
-  'openai':            'cat-ai-llm',
-  'replicate':         'cat-ai-llm',
-  'sdxl':              'cat-ai-llm',
-  'lora':              'cat-ai-llm',
-  // Infra/DevOps (green)
-  'docker':            'cat-infra',
-  'docker-compose':    'cat-infra',
-  'github-actions':    'cat-infra',
-  'migration':         'cat-infra',
-  'kafka':             'cat-infra',
-  'redis-pubsub':      'cat-infra',
-  // Database (blue)
-  'postgresql':        'cat-db',
-  'redis':             'cat-db',
+  'cost-tracking':     'cat-ai-llm',
+  'provider-chain-integration': 'cat-ai-llm',
+  'fuzzy-search':      'cat-ai-llm',
+  'POC':               'cat-ai-llm',
+  // Testing (green)
+  'vitest':            'cat-testing',
+  'unit-testing':      'cat-testing',
+  'cli-validation':    'cat-testing',
+  'code-review':       'cat-testing',
+  'async-safety':      'cat-testing',
+  'security-review':   'cat-testing',
+  'performance-review':'cat-testing',
+  // CLI/UX (blue)
+  'chalk-rendering':   'cat-cli-ux',
+  'session-replay':    'cat-cli-ux',
+  'HTTP-client':       'cat-cli-ux',
+  'auth-token':        'cat-cli-ux',
+  'conflict-resolution':'cat-cli-ux',
 };
 const SKILL_KEYS = Object.keys(SKILL_CATEGORIES);
 
 // ── State ──────────────────────────────────────────────────────────────────
-let apiProfiles = [];   // from GET /shadow-play-api/profiles
-let apiStories  = [];   // from GET /shadow-play-api/stories
-let auditLog    = [];   // from logs/shadow-play-profiles-audit.jsonl
+let apiProfiles = [];   // from profiles.json
+let apiStories  = [];   // from prd.json stories
+let auditLog    = [];   // from logs/profiles-audit.jsonl
 let filterRole  = '';
 let filterPhase = '';
 
@@ -789,7 +765,7 @@ function renderProfileCard(profile) {
   // Build skills chips
   let skillsHtml = '';
   for (const skill of originalSkills) {
-    const cat = SKILL_CATEGORIES[skill] || 'cat-go-backend';
+    const cat = SKILL_CATEGORIES[skill] || 'cat-ts-node';
     skillsHtml += '<span class="skill-chip ' + cat + '">' + esc(skill) + '</span>';
   }
   for (const [skill, phase] of Object.entries(augSkills)) {
@@ -885,11 +861,12 @@ function updateFilterDropdowns() {
 // ── Main refresh loop ──────────────────────────────────────────────────────
 async function refresh() {
   try {
-    const [profiles, stories] = await Promise.all([
-      fetchJSON(API + '/profiles'),
-      fetchJSON(API + '/stories'),
+    const [profiles, prd] = await Promise.all([
+      fetchJSON('profiles.json'),
+      fetchJSON('prd.json'),
     ]);
-    apiProfiles = Array.isArray(profiles) ? profiles : (profiles ? Object.values(profiles) : []);
+    const stories = prd ? (prd.stories || []) : [];
+    apiProfiles = Array.isArray(profiles) ? profiles : (profiles.agents || (profiles ? Object.values(profiles) : []));
     apiStories  = Array.isArray(stories)  ? stories  : [];
     document.getElementById('offline-banner').style.display = 'none';
   } catch (err) {

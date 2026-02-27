@@ -139,6 +139,8 @@ MESSAGE=$(jq -n \
     --arg subject "$SUBJECT" \
     --argjson body "$BODY" \
     --arg reply_to "$REPLY_TO" \
+    --arg story "$STORY_ID" \
+    --arg phase "$PHASE_ID" \
     '{
         message_id: $id,
         timestamp: $ts,
@@ -147,6 +149,8 @@ MESSAGE=$(jq -n \
         type: $type,
         priority: $priority,
         subject: $subject,
+        story_id: (if $story != "" then $story else null end),
+        phase_id: (if $phase != "" then $phase else null end),
         body: $body,
         in_reply_to: (if $reply_to != "" then $reply_to else null end),
         requires_response: false,

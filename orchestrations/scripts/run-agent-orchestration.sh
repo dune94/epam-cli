@@ -17,7 +17,11 @@ PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
 # Compute PRD path relative to PROJECT_ROOT for injecting into agent prompts
 PRD_REL="$(realpath --relative-to="$PROJECT_ROOT" "$(realpath "$PRD_FILE")" 2>/dev/null || echo "orchestrations/prd.json")"
-CLAUDE_SH="$SCRIPT_DIR/claude.sh"
+# Select wrapper script based on CLAUDE_CMD
+case "${CLAUDE_CMD}" in
+    codemie-claude) CLAUDE_SH="$SCRIPT_DIR/codemie-claude.sh" ;;
+    *)              CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
+esac
 LOG_DIR="$AUTOMATION_DIR/logs"
 MONITOR_STATUS_FILE="$LOG_DIR/agent-status.json"
 MESSAGES_JSONL="$LOG_DIR/agent-messages.jsonl"

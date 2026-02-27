@@ -16,6 +16,127 @@
   },
   "stories": [
     {
+      "id": "EPAM-HC-001",
+      "title": "Health Check: Claude CLI",
+      "description": "Verify that the Claude CLI binary exists, can process a trivial prompt, and produces parseable JSON output. This is a pre-flight check that runs before any implementation phase to ensure the orchestration environment is functional.",
+      "priority": "critical",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "test-engineer",
+      "acceptanceCriteria": [
+        "Claude CLI binary is found on PATH or at the configured CLAUDE_CMD location",
+        "A trivial prompt ('echo hello') is sent and a response is received within 30 seconds",
+        "The response output parses as valid JSON with expected fields (result, usage)"
+      ],
+      "dependencies": [],
+      "estimatedHours": 1,
+      "technicalNotes": {
+        "files": [],
+        "requiredSkills": [
+          "bash",
+          "cli-validation"
+        ]
+      },
+      "storyType": "health_check",
+      "aiProvider": "claude",
+      "estimatedAiMinutes": 0.94,
+      "estimatedCost": 0.01,
+      "estimatedTokens": 7488,
+      "estimatedTurns": 2
+    },
+    {
+      "id": "EPAM-HC-002",
+      "title": "Health Check: OpenCode CLI",
+      "description": "Verify that the OpenCode CLI binary exists, can process a trivial prompt, and produces parseable JSONL output. Pre-flight check for the opencode provider variant.",
+      "priority": "critical",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "test-engineer",
+      "acceptanceCriteria": [
+        "OpenCode CLI binary is found on PATH",
+        "A trivial prompt ('echo hello') is sent and a response is received within 30 seconds",
+        "The response output parses as valid JSONL with expected fields"
+      ],
+      "dependencies": [],
+      "estimatedHours": 1,
+      "technicalNotes": {
+        "files": [],
+        "requiredSkills": [
+          "bash",
+          "cli-validation"
+        ]
+      },
+      "storyType": "health_check",
+      "aiProvider": "opencode",
+      "estimatedAiMinutes": 0.94,
+      "estimatedCost": 0,
+      "estimatedTokens": 7488,
+      "estimatedTurns": 2
+    },
+    {
+      "id": "EPAM-HC-003",
+      "title": "Health Check: Codex CLI",
+      "description": "Verify that the Codex CLI binary exists, can process a trivial prompt, and produces parseable JSONL output. Pre-flight check for the codex provider variant.",
+      "priority": "critical",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "test-engineer",
+      "acceptanceCriteria": [
+        "Codex CLI binary is found on PATH",
+        "A trivial prompt ('echo hello') is sent and a response is received within 30 seconds",
+        "The response output parses as valid JSONL with expected fields"
+      ],
+      "dependencies": [],
+      "estimatedHours": 1,
+      "technicalNotes": {
+        "files": [],
+        "requiredSkills": [
+          "bash",
+          "cli-validation"
+        ]
+      },
+      "storyType": "health_check",
+      "aiProvider": "codex",
+      "estimatedAiMinutes": 0.94,
+      "estimatedCost": 0,
+      "estimatedTokens": 7488,
+      "estimatedTurns": 2
+    },
+    {
+      "id": "EPAM-HC-004",
+      "title": "Health Check: Claude CLI (Proxy Mode)",
+      "description": "Verify that the Claude CLI binary works correctly when routed through the EPAM proxy backend. Confirms that authenticated proxy calls succeed and that the response format is identical to the direct path tested in EPAM-HC-001.",
+      "priority": "critical",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "test-engineer",
+      "acceptanceCriteria": [
+        "Claude CLI is invoked with EPAM_BACKEND_URL set to the proxy endpoint",
+        "A trivial prompt ('echo hello') is sent and a response is received within 30 seconds",
+        "The response output parses as valid JSON with expected fields (result, usage)",
+        "Response is identical in structure to the direct-path response from EPAM-HC-001"
+      ],
+      "dependencies": [],
+      "estimatedHours": 1,
+      "technicalNotes": {
+        "files": [],
+        "requiredSkills": [
+          "bash",
+          "cli-validation"
+        ]
+      },
+      "storyType": "health_check",
+      "aiProvider": "claude",
+      "estimatedAiMinutes": 0.94,
+      "estimatedCost": 0,
+      "estimatedTokens": 7488,
+      "estimatedTurns": 2
+    },
+    {
       "id": "EPAM-001",
       "title": "Budget Guardrails",
       "description": "When session cost approaches a user-defined threshold (default $5), automatically switch from expensive to cheaper model in the ProviderChain (e.g. claude-opus to claude-haiku), show a warning at 80% threshold, and pause for user approval at 100% threshold. Config key: budgetGuardrails: { warningAt: 4.00, hardLimit: 5.00, autoDowngrade: true } in .epam/settings.json.",
@@ -51,7 +172,11 @@
           "provider-chain-integration"
         ]
       },
-      "storyType": "implementation"
+      "storyType": "implementation",
+      "estimatedAiMinutes": 46.22,
+      "estimatedCost": 4.19,
+      "estimatedTokens": 776514,
+      "estimatedTurns": 47
     },
     {
       "id": "EPAM-002",
@@ -85,7 +210,11 @@
           "commander"
         ]
       },
-      "storyType": "implementation"
+      "storyType": "implementation",
+      "estimatedAiMinutes": 25.96,
+      "estimatedCost": 1.69,
+      "estimatedTokens": 373766,
+      "estimatedTurns": 26
     },
     {
       "id": "EPAM-003",
@@ -120,7 +249,11 @@
           "unit-testing"
         ]
       },
-      "storyType": "review"
+      "storyType": "review",
+      "estimatedAiMinutes": 3.11,
+      "estimatedCost": 0.03,
+      "estimatedTokens": 27404,
+      "estimatedTurns": 7
     },
     {
       "id": "EPAM-004",
@@ -159,7 +292,11 @@
           "agent-context"
         ]
       },
-      "storyType": "implementation"
+      "storyType": "implementation",
+      "estimatedAiMinutes": 61.67,
+      "estimatedCost": 41.95,
+      "estimatedTokens": 1554094,
+      "estimatedTurns": 42
     },
     {
       "id": "EPAM-005",
@@ -195,7 +332,11 @@
           "agent-orchestration"
         ]
       },
-      "storyType": "implementation"
+      "storyType": "implementation",
+      "estimatedAiMinutes": 54.76,
+      "estimatedCost": 26.82,
+      "estimatedTokens": 1182841,
+      "estimatedTurns": 37
     },
     {
       "id": "EPAM-006",
@@ -232,7 +373,11 @@
           "system-prompt-injection"
         ]
       },
-      "storyType": "implementation"
+      "storyType": "implementation",
+      "estimatedAiMinutes": 37.52,
+      "estimatedCost": 2.46,
+      "estimatedTokens": 585366,
+      "estimatedTurns": 38
     },
     {
       "id": "EPAM-007",
@@ -271,7 +416,11 @@
           "SSE-streaming"
         ]
       },
-      "storyType": "implementation"
+      "storyType": "implementation",
+      "estimatedAiMinutes": 92.68,
+      "estimatedCost": 49.99,
+      "estimatedTokens": 2502316,
+      "estimatedTurns": 62
     },
     {
       "id": "EPAM-008",
@@ -308,7 +457,11 @@
           "vitest"
         ]
       },
-      "storyType": "review"
+      "storyType": "review",
+      "estimatedAiMinutes": 5.12,
+      "estimatedCost": 0.24,
+      "estimatedTokens": 61395,
+      "estimatedTurns": 6
     },
     {
       "id": "EPAM-009",
@@ -343,7 +496,11 @@
           "chalk-rendering"
         ]
       },
-      "storyType": "implementation"
+      "storyType": "implementation",
+      "estimatedAiMinutes": 27.72,
+      "estimatedCost": 2.15,
+      "estimatedTokens": 399168,
+      "estimatedTurns": 28
     },
     {
       "id": "EPAM-010",
@@ -379,7 +536,11 @@
           "conflict-resolution"
         ]
       },
-      "storyType": "implementation"
+      "storyType": "implementation",
+      "estimatedAiMinutes": 51.29,
+      "estimatedCost": 25.11,
+      "estimatedTokens": 1107799,
+      "estimatedTurns": 35
     },
     {
       "id": "EPAM-011",
@@ -412,7 +573,11 @@
           "vitest"
         ]
       },
-      "storyType": "review"
+      "storyType": "review",
+      "estimatedAiMinutes": 3.11,
+      "estimatedCost": 0.02,
+      "estimatedTokens": 24913,
+      "estimatedTurns": 7
     },
     {
       "id": "EPAM-012",
@@ -449,7 +614,11 @@
           "quality-scoring"
         ]
       },
-      "storyType": "implementation"
+      "storyType": "implementation",
+      "estimatedAiMinutes": 73.45,
+      "estimatedCost": 42.83,
+      "estimatedTokens": 1586615,
+      "estimatedTurns": 49
     },
     {
       "id": "EPAM-013",
@@ -487,7 +656,11 @@
           "peer-review"
         ]
       },
-      "storyType": "implementation"
+      "storyType": "implementation",
+      "estimatedAiMinutes": 106.2,
+      "estimatedCost": 53.67,
+      "estimatedTokens": 2485012,
+      "estimatedTurns": 71
     },
     {
       "id": "EPAM-014",
@@ -521,7 +694,11 @@
           "async-safety"
         ]
       },
-      "storyType": "review"
+      "storyType": "review",
+      "estimatedAiMinutes": 4.67,
+      "estimatedCost": 0.23,
+      "estimatedTokens": 56055,
+      "estimatedTurns": 5
     },
     {
       "id": "EPAM-015",
@@ -558,7 +735,11 @@
           "system-prompt-injection"
         ]
       },
-      "storyType": "implementation"
+      "storyType": "implementation",
+      "estimatedAiMinutes": 46.34,
+      "estimatedCost": 3.9,
+      "estimatedTokens": 722891,
+      "estimatedTurns": 47
     },
     {
       "id": "EPAM-016",
@@ -596,7 +777,11 @@
           "chalk-rendering"
         ]
       },
-      "storyType": "implementation"
+      "storyType": "implementation",
+      "estimatedAiMinutes": 89.79,
+      "estimatedCost": 51.31,
+      "estimatedTokens": 2262677,
+      "estimatedTurns": 60
     },
     {
       "id": "EPAM-017",
@@ -632,7 +817,11 @@
           "agent-context"
         ]
       },
-      "storyType": "implementation"
+      "storyType": "implementation",
+      "estimatedAiMinutes": 25.96,
+      "estimatedCost": 1.57,
+      "estimatedTokens": 373766,
+      "estimatedTurns": 26
     },
     {
       "id": "EPAM-018",
@@ -666,7 +855,11 @@
           "security-review"
         ]
       },
-      "storyType": "review"
+      "storyType": "review",
+      "estimatedAiMinutes": 4.89,
+      "estimatedCost": 0.23,
+      "estimatedTokens": 58734,
+      "estimatedTurns": 5
     },
     {
       "id": "EPAM-019",
@@ -701,7 +894,11 @@
           "POC"
         ]
       },
-      "storyType": "implementation"
+      "storyType": "implementation",
+      "estimatedAiMinutes": 31.15,
+      "estimatedCost": 2.42,
+      "estimatedTokens": 448519,
+      "estimatedTurns": 32
     },
     {
       "id": "EPAM-020",
@@ -732,7 +929,105 @@
           "performance-review"
         ]
       },
-      "storyType": "review"
+      "storyType": "review",
+      "estimatedAiMinutes": 2.97,
+      "estimatedCost": 0.02,
+      "estimatedTokens": 23731,
+      "estimatedTurns": 6
+    },
+    {
+      "id": "EPAM-IT-001",
+      "title": "Infra Test: Claude",
+      "description": "Minimal end-to-end orchestration smoke test using Claude. Runs a trivial single-turn task through the complete claude.sh + orchestration pipeline to verify that script execution, environment variables, phase-cost.jsonl recording, and exit-code handling are all functional before any implementation phase begins.",
+      "priority": "critical",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "test-engineer",
+      "acceptanceCriteria": [
+        "claude.sh executes a trivial task ('print the word hello') with aiProvider=claude",
+        "A phase-cost.jsonl entry is written with correct phase_id, story_id, elapsed_minutes, and status=completed fields",
+        "Exit code is 0 and no error output is produced",
+        "Log output confirms the orchestration wrapper (run-agent-orchestration.sh) started and completed successfully"
+      ],
+      "dependencies": [],
+      "estimatedHours": 0.5,
+      "technicalNotes": {
+        "files": [],
+        "requiredSkills": [
+          "bash",
+          "orchestration-validation"
+        ]
+      },
+      "storyType": "health_check",
+      "aiProvider": "claude",
+      "estimatedAiMinutes": 0.47,
+      "estimatedCost": 0,
+      "estimatedTokens": 3744,
+      "estimatedTurns": 1
+    },
+    {
+      "id": "EPAM-IT-002",
+      "title": "Infra Test: OpenCode",
+      "description": "Minimal end-to-end orchestration smoke test using OpenCode. Runs a trivial single-turn task through the complete orchestration pipeline with CLAUDE_CMD=opencode to verify that the OpenCode CLI integration, JSONL output parsing, and cost-log recording work correctly before any implementation phase begins.",
+      "priority": "critical",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "test-engineer",
+      "acceptanceCriteria": [
+        "claude.sh executes a trivial task ('print the word hello') with aiProvider=opencode (CLAUDE_CMD=opencode)",
+        "A phase-cost.jsonl entry is written with correct phase_id, story_id, elapsed_minutes, and status=completed fields",
+        "Exit code is 0 and no error output is produced",
+        "Log output confirms the orchestration wrapper started and completed successfully"
+      ],
+      "dependencies": [],
+      "estimatedHours": 0.5,
+      "technicalNotes": {
+        "files": [],
+        "requiredSkills": [
+          "bash",
+          "orchestration-validation"
+        ]
+      },
+      "storyType": "health_check",
+      "aiProvider": "opencode",
+      "estimatedAiMinutes": 0.47,
+      "estimatedCost": 0,
+      "estimatedTokens": 3744,
+      "estimatedTurns": 1
+    },
+    {
+      "id": "EPAM-IT-003",
+      "title": "Infra Test: Codex",
+      "description": "Minimal end-to-end orchestration smoke test using Codex. Runs a trivial single-turn task through the complete orchestration pipeline with CLAUDE_CMD=codex to verify that the Codex CLI integration, output parsing, and cost-log recording (which tracks $0 cost for Codex) work correctly before any implementation phase begins.",
+      "priority": "critical",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "test-engineer",
+      "acceptanceCriteria": [
+        "claude.sh executes a trivial task ('print the word hello') with aiProvider=codex (CLAUDE_CMD=codex)",
+        "A phase-cost.jsonl entry is written with correct phase_id, story_id, elapsed_minutes, and status=completed fields",
+        "task_cost_usd is recorded as 0 (Codex does not report cost)",
+        "Exit code is 0 and no error output is produced",
+        "Log output confirms the orchestration wrapper started and completed successfully"
+      ],
+      "dependencies": [],
+      "estimatedHours": 0.5,
+      "technicalNotes": {
+        "files": [],
+        "requiredSkills": [
+          "bash",
+          "orchestration-validation"
+        ]
+      },
+      "storyType": "health_check",
+      "aiProvider": "codex",
+      "estimatedAiMinutes": 0.47,
+      "estimatedCost": 0,
+      "estimatedTokens": 3744,
+      "estimatedTurns": 1
     }
   ],
   "configuration": {
@@ -741,6 +1036,17 @@
     "requireTests": true
   },
   "implementationOrder": {
+    "infra_test": [
+      "EPAM-IT-001",
+      "EPAM-IT-002",
+      "EPAM-IT-003"
+    ],
+    "health_check": [
+      "EPAM-HC-001",
+      "EPAM-HC-002",
+      "EPAM-HC-003",
+      "EPAM-HC-004"
+    ],
     "finops": [
       "EPAM-001",
       "EPAM-002",
@@ -774,8 +1080,14 @@
       "EPAM-020"
     ]
   },
-  "totalEstimatedHours": 119,
+  "totalEstimatedHours": 120.5,
   "phasesConfig": {
+    "infra_test": {
+      "orchestrationMode": "bash"
+    },
+    "health_check": {
+      "orchestrationMode": "bash"
+    },
     "finops": {
       "orchestrationMode": "bash"
     },

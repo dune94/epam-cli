@@ -148,17 +148,17 @@ services:
         condition: service_healthy
 
   # ── Agent Orchestration Monitor Dashboard ────────────────────────
-  # Serves the orchestrations/dashboards/ HTML files at http://localhost:8090
+  # Serves the orchestrations/dashboards/ HTML files at http://localhost:8092
   # Open monitor.html, prd-viewer.html, agent-profiles.html, etc.
   agent-monitor:
     image: nginx:alpine
     ports:
-      - "8090:80"
+      - "8092:80"
     volumes:
-      - ./orchestrations/dashboards:/usr/share/nginx/html:ro
-      - ./orchestrations/logs:/usr/share/nginx/html/logs:ro
-      - ./orchestrations/prd.json:/usr/share/nginx/html/prd.json:ro
-      - ./orchestrations/agents/profiles.json:/usr/share/nginx/html/profiles.json:ro
+      - ./orchestrations/dashboards:/usr/share/nginx/html
+      - ./orchestrations/logs:/usr/share/nginx/html/logs
+      - ./orchestrations/prd.json:/usr/share/nginx/html/prd.json
+      - ./orchestrations/agents/profiles.json:/usr/share/nginx/html/profiles.json
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
       interval: 10s

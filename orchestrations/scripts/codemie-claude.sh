@@ -35,7 +35,7 @@ REVIEW_PHASE=""         # Phase name for --review-phase mode
 CURRENT_PHASE=""        # Current phase being executed (for cost tracking)
 
 # Configuration
-CLAUDE_CMD="${CLAUDE_CMD:-claude}"  # Allow override via environment
+CLAUDE_CMD="${CLAUDE_CMD:-codemie-claude}"  # Allow override via environment
 MAX_RETRIES=2
 RETRY_DELAY=5
 # Orchestration mode — inherited from run-agent-orchestration.sh or set directly

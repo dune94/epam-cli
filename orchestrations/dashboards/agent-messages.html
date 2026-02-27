@@ -5,6 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agent Messages Dashboard</title>
     <style>
+        :root {
+          --bg: #fbfafa;  --bg1: #ffffff;  --bg2: #f4f4f4;  --bg3: #eaeaea;
+          --surface: #ffffff;  --surface2: #f4f4f4;  --surface3: #eaeaea;
+          --border: #e0e0e0;  --border2: #cccccc;
+          --text: #060606;  --text2: #4a4a4a;  --text3: #717171;  --text-muted: #717171;
+          --teal: #0047ff;  --teal2: #0047ff;  --teal-dim: rgba(0,71,255,0.08);
+          --accent: #0047ff;  --teal-glow: rgba(0,71,255,0.20);
+          --violet: #8453d2;  --violet2: #8453d2;  --violet-dim: rgba(132,83,210,0.10);
+          --green: #1a8f3f;  --green-dim: rgba(26,143,63,0.10);
+          --amber: #c87a00;  --amber-dim: rgba(200,122,0,0.10);
+          --red: #d93025;  --red-dim: rgba(217,48,37,0.08);
+          --pink: #c4186e;  --pink-dim: rgba(196,24,110,0.08);
+          --blue: #1a73e8;  --blue-dim: rgba(26,115,232,0.08);
+          --orange: #d35400;  --orange-dim: rgba(211,84,0,0.08);
+          --epam-gradient: linear-gradient(118.82deg, #0078c2 .5%, #0047ff 47.33%, #8453d2 76.12%);
+          --epam-cyan: #00f6ff;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -13,30 +31,41 @@
 
         body {
             font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: #0d1117;
-            color: #c9d1d9;
+            background: var(--bg);
+            color: var(--text);
             min-height: 100vh;
         }
 
         header {
-            background: #161b22;
-            border-bottom: 1px solid #30363d;
-            padding: 18px 24px;
+            background: var(--epam-gradient);
+            border-bottom: 1px solid transparent;
+            padding: 14px 24px;
             display: flex;
             align-items: center;
             justify-content: space-between;
         }
 
         h1 {
-            font-size: 22px;
-            color: #d29922;
-            font-weight: 600;
+            font-size: 18px;
+            color: #fff;
+            font-weight: 800;
         }
 
         .subtitle {
-            font-size: 15px;
-            color: #8b949e;
+            font-size: 12px;
+            color: rgba(255,255,255,0.7);
             margin-left: 16px;
+        }
+
+        .subtitle a {
+            color: rgba(255,255,255,0.7);
+            text-decoration: none;
+            transition: opacity .15s;
+        }
+
+        .subtitle a:hover {
+            opacity: 1;
+            color: #fff;
         }
 
         .container {
@@ -46,8 +75,8 @@
         }
 
         .filters {
-            background: #161b22;
-            border: 1px solid #30363d;
+            background: var(--bg1);
+            border: 1px solid var(--border);
             border-radius: 8px;
             padding: 16px;
             margin-bottom: 20px;
@@ -62,21 +91,21 @@
 
         .filter-group label {
             font-size: 15px;
-            color: #8b949e;
+            color: var(--text3);
             font-weight: 600;
         }
 
         .filter-group select {
             padding: 6px 12px;
             border-radius: 6px;
-            border: 1px solid #30363d;
-            background: #0d1117;
-            color: #c9d1d9;
+            border: 1px solid var(--border);
+            background: var(--bg2);
+            color: var(--text);
             font-size: 15px;
         }
 
         .filter-group select:hover {
-            border-color: #58a6ff;
+            border-color: var(--teal);
         }
 
         .messages-grid {
@@ -87,43 +116,43 @@
         }
 
         .message-card {
-            background: #161b22;
-            border: 1px solid #30363d;
+            background: var(--bg1);
+            border: 1px solid var(--border);
             border-radius: 8px;
             padding: 16px;
             transition: border-color 0.2s;
         }
 
         .message-card:hover {
-            border-color: #58a6ff;
+            border-color: var(--teal);
         }
 
         .message-card.priority-urgent {
-            border-left: 3px solid #f85149;
+            border-left: 3px solid var(--red);
         }
 
         .message-card.priority-high {
-            border-left: 3px solid #d29922;
+            border-left: 3px solid var(--amber);
         }
 
         .message-card.priority-normal {
-            border-left: 3px solid #1f6feb;
+            border-left: 3px solid var(--blue);
         }
 
         .message-card.priority-low {
-            border-left: 3px solid #3fb950;
+            border-left: 3px solid var(--green);
         }
 
         .message-card.type-approval {
-            background: #0f2d16;
+            background: var(--green-dim);
         }
 
         .message-card.type-review_feedback {
-            background: #3d2b00;
+            background: var(--amber-dim);
         }
 
         .message-card.type-rejection {
-            background: #3d1014;
+            background: var(--red-dim);
         }
 
         .message-header {
@@ -131,7 +160,7 @@
             justify-content: space-between;
             align-items: start;
             margin-bottom: 12px;
-            border-bottom: 1px solid #30363d;
+            border-bottom: 1px solid var(--border);
             padding-bottom: 10px;
         }
 
@@ -142,23 +171,23 @@
         .message-subject {
             font-size: 17px;
             font-weight: 600;
-            color: #f0f6fc;
+            color: var(--text);
             margin-bottom: 6px;
         }
 
         .message-from-to {
             font-size: 14px;
-            color: #8b949e;
+            color: var(--text3);
             margin-bottom: 3px;
         }
 
         .message-from-to strong {
-            color: #58a6ff;
+            color: var(--teal);
         }
 
         .message-timestamp {
             font-size: 13px;
-            color: #6e7681;
+            color: var(--text3);
             font-family: monospace;
         }
 
@@ -178,48 +207,48 @@
         }
 
         .badge.type {
-            background: #0d419d;
-            color: #58a6ff;
+            background: rgba(0,71,255,0.08);
+            color: #0047ff;
         }
 
         .badge.type-approval {
-            background: #0f2d16;
-            color: #3fb950;
+            background: var(--green-dim);
+            color: var(--green);
         }
 
         .badge.type-review_feedback {
-            background: #3d2b00;
-            color: #d29922;
+            background: var(--amber-dim);
+            color: var(--amber);
         }
 
         .badge.type-rejection {
-            background: #3d1014;
-            color: #f85149;
+            background: var(--red-dim);
+            color: var(--red);
         }
 
         .badge.type-response {
-            background: #0d2745;
-            color: #58a6ff;
+            background: rgba(0,71,255,0.08);
+            color: #0047ff;
         }
 
         .badge.priority-urgent {
-            background: #3d1014;
-            color: #f85149;
+            background: var(--red-dim);
+            color: var(--red);
         }
 
         .badge.priority-high {
-            background: #3d2b00;
-            color: #d29922;
+            background: var(--amber-dim);
+            color: var(--amber);
         }
 
         .badge.status {
-            background: #21262d;
-            color: #8b949e;
+            background: var(--bg3);
+            color: var(--text3);
         }
 
         .badge.status-read {
-            background: #0f2d16;
-            color: #3fb950;
+            background: var(--green-dim);
+            color: var(--green);
         }
 
         .message-body {
@@ -229,13 +258,13 @@
         .message-text {
             line-height: 1.6;
             margin-bottom: 10px;
-            color: #c9d1d9;
+            color: var(--text2);
             font-size: 15px;
         }
 
         .message-data {
-            background: #0d1117;
-            border: 1px solid #30363d;
+            background: var(--bg2);
+            border: 1px solid var(--border);
             padding: 12px;
             border-radius: 6px;
             font-size: 14px;
@@ -243,7 +272,7 @@
 
         .message-data h4 {
             margin-bottom: 8px;
-            color: #8b949e;
+            color: var(--text3);
             font-size: 14px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -251,7 +280,7 @@
 
         .issue-item {
             padding: 6px 0;
-            border-bottom: 1px solid #21262d;
+            border-bottom: 1px solid var(--border);
             font-size: 14px;
         }
 
@@ -260,23 +289,23 @@
         }
 
         .severity-error {
-            color: #f85149;
+            color: var(--red);
             font-weight: 600;
         }
 
         .severity-warning {
-            color: #d29922;
+            color: var(--amber);
             font-weight: 600;
         }
 
         .severity-info {
-            color: #58a6ff;
+            color: var(--blue);
             font-weight: 600;
         }
 
         .stats {
-            background: #161b22;
-            border: 1px solid #30363d;
+            background: var(--bg1);
+            border: 1px solid var(--border);
             border-radius: 8px;
             padding: 16px;
             margin-bottom: 20px;
@@ -289,8 +318,8 @@
         }
 
         .stat-card {
-            background: #0d1117;
-            border: 1px solid #30363d;
+            background: var(--bg2);
+            border: 1px solid var(--border);
             padding: 12px;
             border-radius: 6px;
             text-align: center;
@@ -300,12 +329,12 @@
             font-size: 28px;
             font-weight: 700;
             margin-bottom: 4px;
-            color: #58a6ff;
+            color: var(--teal);
         }
 
         .stat-label {
             font-size: 14px;
-            color: #8b949e;
+            color: var(--text3);
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
@@ -313,32 +342,32 @@
         .empty-state {
             text-align: center;
             padding: 60px 20px;
-            background: #161b22;
-            border: 1px solid #30363d;
+            background: var(--bg1);
+            border: 1px solid var(--border);
             border-radius: 8px;
         }
 
         .empty-state h2 {
             margin-bottom: 10px;
-            color: #8b949e;
+            color: var(--text3);
             font-size: 20px;
         }
 
         .empty-state p {
-            color: #6e7681;
+            color: var(--text3);
             font-size: 15px;
         }
 
         .auto-refresh {
             text-align: center;
             margin-top: 20px;
-            color: #6e7681;
+            color: var(--text3);
             font-size: 14px;
         }
 
         .section-title {
             font-size: 16px;
-            color: #8b949e;
+            color: var(--text3);
             text-transform: uppercase;
             letter-spacing: 1px;
             margin-bottom: 12px;
@@ -349,39 +378,43 @@
             padding: 1px 5px; border-radius: 3px;
             letter-spacing: 0.4px; text-transform: uppercase;
         }
-        .source-bus    { background:#1c0f30; color:#d2a8ff; border:1px solid #6e40c9; }
-        .source-inbox  { background:#0d2745; color:#58a6ff; border:1px solid #1f6feb; }
-        .source-outbox { background:#1c2206; color:#7ee787; border:1px solid #3fb950; }
+        .source-bus    { background:rgba(132,83,210,0.10); color:#8453d2; border:1px solid rgba(132,83,210,0.25); }
+        .source-inbox  { background:rgba(0,71,255,0.08); color:#0047ff; border:1px solid rgba(0,71,255,0.2); }
+        .source-outbox { background:rgba(26,143,63,0.10); color:#1a8f3f; border:1px solid rgba(26,143,63,0.25); }
 
         .story-link {
             font-family: monospace; font-size: 11px;
-            background: #4a3800; color: #fef08a;
-            border: 1px solid #facc15;
+            background: rgba(0,71,255,0.08); color: #0047ff;
+            border: 1px solid rgba(0,71,255,0.2);
             padding: 1px 6px; border-radius: 3px;
         }
 
         .no-bus-note {
             text-align: center; padding: 16px;
-            color: #6e7681; font-size: 13px;
-            background: #161b22; border: 1px solid #30363d;
+            color: var(--text3); font-size: 13px;
+            background: var(--bg1); border: 1px solid var(--border);
             border-radius: 8px; margin-bottom: 16px;
         }
     </style>
 </head>
 <body>
-    <header>
-        <h1>📬 Agent Messages Dashboard</h1>
-        <span class="subtitle">Team Lead Code Review &amp; Agent Communication
-          &nbsp;·&nbsp;
-          <a href="monitor.html">Monitor</a>
-          &nbsp;<a href="prd-viewer.html">PRD</a>
-          &nbsp;<a href="agents-profiles.html">Profiles</a>
-          &nbsp;<a href="agents-orchestration.html">Agents</a>
-          &nbsp;<a href="orchestration-technical.html">Technical</a>
-          &nbsp;<a href="test-plan.html">Test Plan</a>
-          &nbsp;<a href="phase-cost-monitor.html">Costs</a>
-          &nbsp;<a href="phase-process.html">Graph</a>
-        </span>
+    <header style="background:var(--epam-gradient);border-bottom:1px solid transparent;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
+        <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:34px;height:34px;background:rgba(255,255,255,0.2);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:17px">&#9993;</div>
+            <div>
+                <div style="font-size:18px;font-weight:800;color:#fff">EPAM CLI — Agent Messages</div>
+                <div style="font-size:11px;color:rgba(255,255,255,0.7)">Team Lead Code Review &amp; Agent Communication</div>
+            </div>
+        </div>
+        <nav style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px">
+            <a href="monitor.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Monitor</a>
+            <a href="prd-viewer.html" style="color:rgba(255,255,255,0.7);text-decoration:none">PRD Viewer</a>
+            <a href="orchestration-plan.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Plan</a>
+            <a href="agents-orchestration.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Orchestration</a>
+            <a href="agent-profiles.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Profiles</a>
+            <a href="agent-messages.html" style="color:#fff;text-decoration:none;border-bottom:2px solid #fff;padding-bottom:2px">Messages</a>
+            <a href="phase-cost-monitor.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Costs</a>
+        </nav>
     </header>
     <div class="container">
 
@@ -449,7 +482,7 @@
 
                 <label>Story:</label>
                 <input id="filter-story" type="text" placeholder="Story ID…"
-                    style="padding:6px 10px;border-radius:6px;border:1px solid #30363d;background:#0d1117;color:#c9d1d9;font-size:14px;width:130px"
+                    style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;width:130px"
                     oninput="applyFilters()"/>
             </div>
         </div>
@@ -467,9 +500,9 @@
 
     <script>
         const AGENTS = [
-            'game-engineer', 'flutter-ui-engineer', 'ghost-ai-engineer',
-            'game-qa-engineer', 'review-agent', 'coordination-agent',
-            'agent-skill-assessment-agent'
+            'typescript-engineer', 'agent-systems-engineer', 'billing-engineer',
+            'cli-ux-engineer', 'test-engineer', 'team-lead-agent',
+            'review-agent'
         ];
         let allMessages = [];
 

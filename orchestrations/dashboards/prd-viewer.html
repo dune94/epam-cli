@@ -3,24 +3,26 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PRD Viewer — Shadow Play</title>
+<title>PRD Viewer — EPAM CLI</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:     #050a0f;
-  --bg1:    #0a1420;
-  --bg2:    #0f1e30;
-  --bg3:    #142540;
-  --border: #1a3050;
-  --text:   #e2f0f8;
-  --text2:  #8ab4cc;
-  --text3:  #4a7090;
-  --teal:   #06b6d4;
-  --violet: #7c3aed;
-  --teal2:  #22d3ee;
-  --violet2:#a78bfa;
-  --accent: #06b6d4;
+  --bg: #fbfafa;  --bg1: #ffffff;  --bg2: #f4f4f4;  --bg3: #eaeaea;
+  --surface: #ffffff;  --surface2: #f4f4f4;  --surface3: #eaeaea;
+  --border: #e0e0e0;  --border2: #cccccc;
+  --text: #060606;  --text2: #4a4a4a;  --text3: #717171;  --text-muted: #717171;
+  --teal: #0047ff;  --teal2: #0047ff;  --teal-dim: rgba(0,71,255,0.08);
+  --accent: #0047ff;  --teal-glow: rgba(0,71,255,0.20);
+  --violet: #8453d2;  --violet2: #8453d2;  --violet-dim: rgba(132,83,210,0.10);
+  --green: #1a8f3f;  --green-dim: rgba(26,143,63,0.10);
+  --amber: #c87a00;  --amber-dim: rgba(200,122,0,0.10);
+  --red: #d93025;  --red-dim: rgba(217,48,37,0.08);
+  --pink: #c4186e;  --pink-dim: rgba(196,24,110,0.08);
+  --blue: #1a73e8;  --blue-dim: rgba(26,115,232,0.08);
+  --orange: #d35400;  --orange-dim: rgba(211,84,0,0.08);
+  --epam-gradient: linear-gradient(118.82deg, #0078c2 .5%, #0047ff 47.33%, #8453d2 76.12%);
+  --epam-cyan: #00f6ff;
 }
 
 body {
@@ -32,51 +34,39 @@ body {
   min-height: 100vh;
 }
 
-/* ── Glitch scanline overlay ── */
-body::after {
-  content: '';
-  position: fixed; inset: 0;
-  background: repeating-linear-gradient(
-    0deg, transparent, transparent 2px,
-    rgba(6,182,212,0.02) 2px, rgba(6,182,212,0.02) 4px
-  );
-  pointer-events: none; z-index: 9999;
-}
-
 /* ── Header ── */
 .header {
-  background: linear-gradient(135deg, #05101e 0%, #0a0820 100%);
-  border-bottom: 1px solid #1a3050;
+  background: var(--epam-gradient);
+  border-bottom: none;
   padding: 16px 28px;
   display: flex; align-items: center; justify-content: space-between;
   position: sticky; top: 0; z-index: 100;
-  box-shadow: 0 4px 24px rgba(6,182,212,0.08);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 .header-left { display: flex; align-items: center; gap: 13px; }
 .header-icon {
   width: 36px; height: 36px;
-  background: linear-gradient(135deg, #06b6d4, #7c3aed);
+  background: rgba(255,255,255,0.2);
   border-radius: 7px;
   display: flex; align-items: center; justify-content: center;
   font-size: 18px; flex-shrink: 0;
-  box-shadow: 0 0 12px rgba(6,182,212,0.4);
 }
 .header-title {
   font-size: 19px; font-weight: 800;
-  background: linear-gradient(90deg, #06b6d4 0%, #a78bfa 100%);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  background-clip: text; letter-spacing: -0.3px;
+  color: #fff; -webkit-text-fill-color: #fff;
+  background: none; letter-spacing: -0.3px;
 }
-.header-sub { color: var(--text3); font-size: 11px; margin-top: 1px; letter-spacing: 0.3px; }
-.header-meta { text-align: right; color: var(--text3); font-size: 11px; line-height: 1.8; }
+.header-sub { color: rgba(255,255,255,0.7); font-size: 11px; margin-top: 1px; letter-spacing: 0.3px; }
+.header-meta { text-align: right; color: rgba(255,255,255,0.7); font-size: 11px; line-height: 1.8; }
 
 /* ── Nav links ── */
 .nav-links { font-size: 11px; display: flex; gap: 10px; flex-wrap: wrap; }
 .nav-links a {
-  color: var(--teal); text-decoration: none; opacity: .6;
-  transition: opacity .15s, text-shadow .15s;
+  color: #fff; text-decoration: none; opacity: .7;
+  transition: opacity .15s;
 }
-.nav-links a:hover { opacity: 1; text-shadow: 0 0 8px rgba(6,182,212,0.6); }
+.nav-links a:hover { opacity: 1; }
+.nav-links a.active { border-bottom: 2px solid #fff; padding-bottom: 2px; }
 
 /* ── Stats bar ── */
 .stats-bar {
@@ -95,7 +85,7 @@ body::after {
   background: var(--bg2); border: 1px solid var(--border);
   border-radius: 4px; width: 140px; height: 7px; overflow: hidden;
 }
-.progress-fill { background: linear-gradient(90deg,#06b6d4,#7c3aed); height: 100%; border-radius: 4px; transition: width 0.4s; }
+.progress-fill { background: linear-gradient(90deg,var(--teal),var(--violet)); height: 100%; border-radius: 4px; transition: width 0.4s; }
 .progress-lbl  { color: var(--text3); font-size: 11px; white-space: nowrap; }
 
 /* ── Controls ── */
@@ -113,7 +103,7 @@ body::after {
   padding: 6px 12px 6px 28px; font-size: 12px; width: 240px; outline: none;
   transition: border-color 0.15s;
 }
-.search-input:focus { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(6,182,212,0.12); }
+.search-input:focus { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(0,71,255,0.12); }
 .search-input::placeholder { color: var(--text3); }
 
 .filter-group { display: flex; gap: 3px; }
@@ -124,9 +114,9 @@ body::after {
   cursor: pointer; transition: all 0.14s; letter-spacing: 0.4px;
 }
 .filter-btn:hover { border-color: var(--teal); color: var(--text); }
-.filter-btn.active.fp { background:#0a2030; border-color:#0e7490; color:#22d3ee; }
-.filter-btn.active.fa { background:#120a28; border-color:#5b21b6; color:#a78bfa; }
-.filter-btn.active.fc { background:#022c22; border-color:#065f46; color:#34d399; }
+.filter-btn.active.fp { background:rgba(0,71,255,0.08); border-color:#0047ff; color:#0047ff; }
+.filter-btn.active.fa { background:rgba(132,83,210,0.10); border-color:#8453d2; color:#8453d2; }
+.filter-btn.active.fc { background:rgba(26,143,63,0.10); border-color:#1a8f3f; color:#1a8f3f; }
 
 .ctrl-btn {
   background: var(--bg2); border: 1px solid var(--border); border-radius: 5px;
@@ -135,9 +125,9 @@ body::after {
 }
 .ctrl-btn:hover { color: var(--text); border-color: var(--teal); }
 .api-status { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; letter-spacing: 0.3px; }
-.api-ok   { background:#022c22; color:#10b981; border:1px solid #065f46; }
-.api-err  { background:#3b0a0a; color:#ef4444; border:1px solid #7f1d1d; }
-.api-wait { background:#1a1a1a; color:#94a3b8; border:1px solid #334155; }
+.api-ok   { background:rgba(26,143,63,0.10); color:#1a8f3f; border:1px solid rgba(26,143,63,0.25); }
+.api-err  { background:rgba(217,48,37,0.08); color:#d93025; border:1px solid rgba(217,48,37,0.25); }
+.api-wait { background:var(--bg2); color:var(--text3); border:1px solid var(--border); }
 .ctrl-gap { margin-left: auto; }
 
 /* ── Content ── */
@@ -151,66 +141,65 @@ body::after {
   background: var(--bg1); border: 1px solid var(--border);
   border-radius: 8px; cursor: pointer; user-select: none;
   transition: background 0.12s, box-shadow 0.12s;
-  border-left: 4px solid var(--ph-col, #06b6d4);
+  border-left: 4px solid var(--ph-col, var(--teal));
 }
-.phase-header:hover { background: var(--bg2); box-shadow: 0 0 8px rgba(6,182,212,0.06); }
+.phase-header:hover { background: var(--bg2); box-shadow: 0 0 8px rgba(0,71,255,0.06); }
 .phase-header.open  { border-radius: 8px 8px 0 0; }
 .ph-chevron { font-size: 10px; color: var(--text3); transition: transform 0.2s; flex-shrink: 0; }
 .ph-chevron.open { transform: rotate(90deg); }
 .ph-name { font-weight: 700; font-size: 12px; color: var(--text); flex: 1; letter-spacing: 0.3px; }
 .ph-mode { font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 3px; letter-spacing: 0.5px; }
-.ph-mode.hybrid { background:#1a0a30; color:#a78bfa; border:1px solid #5b21b6; }
-.ph-mode.bash   { background:#051828; color:#22d3ee; border:1px solid #0e7490; }
+.ph-mode.hybrid { background:rgba(132,83,210,0.10); color:#8453d2; border:1px solid rgba(132,83,210,0.25); }
+.ph-mode.bash   { background:rgba(0,71,255,0.08); color:#0047ff; border:1px solid rgba(0,71,255,0.2); }
 .ph-counts { font-size: 11px; color: var(--text3); white-space: nowrap; }
-.ph-p { color:#22d3ee; font-weight:600; }
-.ph-d { color:#10b981; font-weight:600; }
+.ph-p { color:#0047ff; font-weight:600; }
+.ph-d { color:#1a8f3f; font-weight:600; }
 
 /* ── Stories list ── */
 .stories-list { border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; overflow: hidden; }
 
 /* ── Story card ── */
-.story-card { border-top: 1px solid rgba(6,182,212,0.06); }
+.story-card { border-top: 1px solid rgba(0,71,255,0.06); }
 .story-card:first-child { border-top: none; }
 .story-row { display: flex; align-items: center; gap: 10px; padding: 9px 14px; cursor: pointer; transition: background 0.1s; }
-.story-row:hover { background: rgba(6,182,212,0.04); }
+.story-row:hover { background: rgba(0,71,255,0.04); }
 .story-id {
   font-size: 11px; font-weight: 700; font-family: 'Courier New', monospace;
-  background: #051828; color: #22d3ee; border: 1px solid #0e7490;
+  background: rgba(0,71,255,0.08); color: #0047ff; border: 1px solid rgba(0,71,255,0.2);
   border-radius: 5px; padding: 3px 9px;
   min-width: 78px; flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
   letter-spacing: 0.3px;
-  box-shadow: 0 0 6px rgba(6,182,212,0.1);
 }
 .story-title { flex: 1; font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .badges { display: flex; gap: 5px; align-items: center; flex-shrink: 0; }
 
 /* Badges */
 .badge { font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 3px; letter-spacing: 0.4px; white-space: nowrap; }
-.bs-pending     { background:#051828; color:#22d3ee; border:1px solid #0e7490; }
-.bs-completed   { background:#022c22; color:#10b981; border:1px solid #065f46; }
-.bs-failed      { background:#3b0a0a; color:#ef4444; border:1px solid #7f1d1d; }
-.bs-in_progress { background:#1a0a30; color:#a78bfa; border:1px solid #5b21b6; }
-.be-low    { background:#042f2e; color:#2dd4bf; border:1px solid #0f766e; }
-.be-medium { background:#120a28; color:#a78bfa; border:1px solid #5b21b6; }
-.be-high   { background:#1c0a00; color:#fb923c; border:1px solid #9a3412; }
-.bl-haiku    { background:#042f2e; color:#2dd4bf; border:1px solid #0f766e; }
-.bl-sonnet   { background:#120a28; color:#a78bfa; border:1px solid #5b21b6; }
-.bl-opus     { background:#1a0530; color:#c084fc; border:1px solid #7c3aed; box-shadow:0 0 5px rgba(124,58,237,0.2); }
-.bl-opencode { background:#032b1a; color:#34d399; border:1px solid #059669; }
-.bl-codex    { background:#2e0a1e; color:#f472b6; border:1px solid #be185d; }
-.bt-unit   { background:#0a2e1e; color:#34d399; border:1px solid #059669; }
-.bt-e2e    { background:#2e1065; color:#c084fc; border:1px solid #7c3aed; }
-.bp-claude   { background:#1a0530; color:#c084fc; border:1px solid #7c3aed; box-shadow:0 0 5px rgba(124,58,237,0.2); }
-.bp-opencode { background:#032b1a; color:#34d399; border:1px solid #059669; }
-.bp-codex    { background:#2e0a1e; color:#f472b6; border:1px solid #be185d; }
+.bs-pending     { background:rgba(0,71,255,0.08); color:#0047ff; border:1px solid rgba(0,71,255,0.2); }
+.bs-completed   { background:rgba(26,143,63,0.10); color:#1a8f3f; border:1px solid rgba(26,143,63,0.25); }
+.bs-failed      { background:rgba(217,48,37,0.08); color:#d93025; border:1px solid rgba(217,48,37,0.25); }
+.bs-in_progress { background:rgba(132,83,210,0.10); color:#8453d2; border:1px solid rgba(132,83,210,0.25); }
+.be-low    { background:rgba(0,71,255,0.08); color:#0047ff; border:1px solid rgba(0,71,255,0.2); }
+.be-medium { background:rgba(132,83,210,0.10); color:#8453d2; border:1px solid rgba(132,83,210,0.25); }
+.be-high   { background:rgba(200,122,0,0.10); color:#c87a00; border:1px solid rgba(200,122,0,0.25); }
+.bl-haiku    { background:rgba(0,71,255,0.08); color:#0047ff; border:1px solid rgba(0,71,255,0.2); }
+.bl-sonnet   { background:rgba(132,83,210,0.10); color:#8453d2; border:1px solid rgba(132,83,210,0.25); }
+.bl-opus     { background:rgba(132,83,210,0.15); color:#6a3cb5; border:1px solid rgba(132,83,210,0.35); }
+.bl-opencode { background:rgba(26,143,63,0.10); color:#1a8f3f; border:1px solid rgba(26,143,63,0.25); }
+.bl-codex    { background:rgba(196,24,110,0.08); color:#c4186e; border:1px solid rgba(196,24,110,0.25); }
+.bt-unit   { background:rgba(26,143,63,0.10); color:#1a8f3f; border:1px solid rgba(26,143,63,0.25); }
+.bt-e2e    { background:rgba(132,83,210,0.10); color:#8453d2; border:1px solid rgba(132,83,210,0.25); }
+.bp-claude   { background:rgba(132,83,210,0.15); color:#6a3cb5; border:1px solid rgba(132,83,210,0.35); }
+.bp-opencode { background:rgba(26,143,63,0.10); color:#1a8f3f; border:1px solid rgba(26,143,63,0.25); }
+.bp-codex    { background:rgba(196,24,110,0.08); color:#c4186e; border:1px solid rgba(196,24,110,0.25); }
 
 .expand-icon { color: var(--text3); font-size: 10px; transition: transform 0.2s; flex-shrink: 0; }
 .expand-icon.open { transform: rotate(90deg); color: var(--teal); }
 
 /* ── Detail panel ── */
 .story-detail {
-  border-top: 1px solid rgba(6,182,212,0.08);
+  border-top: 1px solid rgba(0,71,255,0.08);
   padding: 15px 18px 18px;
   animation: sd 0.13s ease-out;
 }
@@ -279,7 +268,7 @@ body::after {
 .api-error-state { background: #1a0a0a; border: 1px solid #3b0a0a; border-radius: 8px; padding: 28px 24px; text-align: center; }
 .api-error-state h3 { color: #ef4444; margin-bottom: 10px; font-size: 15px; }
 .api-error-state p  { color: #94a3b8; font-size: 12px; line-height: 1.6; }
-.api-error-state code { background: #0f1e30; border-radius: 4px; padding: 2px 6px; font-family: monospace; font-size: 11px; color: #22d3ee; }
+.api-error-state code { background: var(--surface2); border-radius: 4px; padding: 2px 6px; font-family: monospace; font-size: 11px; color: var(--teal); }
 .loading-blk { text-align: center; padding: 80px; color: var(--text3); font-size: 14px; }
 .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--teal); border-radius: 50%; animation: spin 0.7s linear infinite; margin-right: 9px; vertical-align: middle; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -296,22 +285,20 @@ body::after {
   <div class="header-left">
     <div class="header-icon">👁</div>
     <div>
-      <div class="header-title">Shadow Play PRD</div>
-      <div class="header-sub">Intelligence Economy Extraction Sim · Agent Orchestration Dashboard</div>
+      <div class="header-title">EPAM CLI PRD</div>
+      <div class="header-sub">AI Coding Assistant · Agent Orchestration Dashboard</div>
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
     <div class="header-meta" id="header-meta"></div>
     <div class="nav-links">
-      <a href="shadow-play-monitor.html">SP Monitor</a>
-      <a href="shadow-play-phase-cost-monitor.html">SP Costs</a>
-      <a href="shadow-play-agent-profiles.html">SP Profiles</a>
-      <a href="shadow-play-game-plan.html">SP Plan</a>
-      <span style="opacity:0.2;margin:0 2px">·</span>
       <a href="monitor.html">Monitor</a>
-      <a href="prd-viewer.html">Fitnessie PRD</a>
+      <a href="prd-viewer.html" class="active">PRD Viewer</a>
+      <a href="orchestration-plan.html">Plan</a>
+      <a href="agents-orchestration.html">Orchestration</a>
+      <a href="agent-profiles.html">Profiles</a>
+      <a href="agent-messages.html">Messages</a>
       <a href="phase-cost-monitor.html">Costs</a>
-      <a href="phase-process.html">Graph</a>
     </div>
   </div>
 </div>
@@ -338,27 +325,24 @@ body::after {
 </div>
 
 <div class="content" id="content">
-  <div class="loading-blk"><span class="spinner"></span>Connecting to shadow-play-api…</div>
+  <div class="loading-blk"><span class="spinner"></span>Loading PRD data…</div>
 </div>
 
 <script>
-// API base — try localhost:8093 by default; override via ?api= query param
-const API_BASE = (() => {
-  const p = new URLSearchParams(location.search).get('api');
-  return p || 'http://localhost:8093';
-})();
+// Data loaded from static prd.json served by nginx
+const PRD_URL = 'prd.json';
 
-// Phase colour palette — Glitch-Brutalism: teal/cyan/violet/indigo/blue/amber
+// Phase colour palette — EPAM Brand: blue/violet/blue2/green/amber/pink
 const PHASE_COLORS = [
-  { border:'#06b6d4', listBg:'#030f18', detailBg:'#04141f' }, // teal
-  { border:'#7c3aed', listBg:'#0a0520', detailBg:'#0d0828' }, // violet
-  { border:'#2563eb', listBg:'#050e20', detailBg:'#071228' }, // blue
-  { border:'#059669', listBg:'#031410', detailBg:'#041a14' }, // green
-  { border:'#d97706', listBg:'#180e02', detailBg:'#1e1202' }, // amber
-  { border:'#db2777', listBg:'#180412', detailBg:'#1e0618' }, // pink
+  { border:'#0047ff', listBg:'#f0f5ff', detailBg:'#e8efff' }, // blue
+  { border:'#8453d2', listBg:'#f5f0ff', detailBg:'#efe8ff' }, // violet
+  { border:'#1a73e8', listBg:'#eef4ff', detailBg:'#e5edff' }, // blue2
+  { border:'#1a8f3f', listBg:'#eef8f0', detailBg:'#e5f5e8' }, // green
+  { border:'#c87a00', listBg:'#fff8ee', detailBg:'#fff0dd' }, // amber
+  { border:'#c4186e', listBg:'#fff0f5', detailBg:'#ffe8ef' }, // pink
 ];
 
-// Model lookup by model field (shadow-play uses exact model IDs)
+// Model lookup by model field (uses exact model IDs)
 const MODEL_INFO = {
   'claude-haiku-4-5':    { label:'HAIKU',  cls:'haiku',  turns:'10'        },
   'claude-haiku-4-5-20251001': { label:'HAIKU', cls:'haiku', turns:'10'   },
@@ -390,11 +374,11 @@ let expandedStories = new Set(), collapsedPhases = new Set();
 
 async function loadPrd() {
   document.getElementById('content').innerHTML =
-    '<div class="loading-blk"><span class="spinner"></span>Fetching from shadow-play-api…</div>';
+    '<div class="loading-blk"><span class="spinner"></span>Loading prd.json…</div>';
 
   try {
-    const res = await fetch(API_BASE + '/api/prd?_=' + Date.now());
-    if (!res.ok) throw new Error('HTTP ' + res.status + ' from ' + API_BASE + '/api/prd');
+    const res = await fetch(PRD_URL + '?_=' + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' from ' + PRD_URL);
     prd = await res.json();
     setApiStatus('ok');
   } catch(e) {
@@ -402,13 +386,12 @@ async function loadPrd() {
     document.getElementById('stats-bar').innerHTML = '';
     document.getElementById('content').innerHTML = `
       <div class="api-error-state">
-        <h3>Cannot reach shadow-play-api</h3>
-        <p>Expected at <code>${API_BASE}/api/prd</code></p>
-        <p style="margin-top:10px">Start it with:</p>
-        <p><code>docker compose up shadow-play-api</code></p>
+        <h3>Cannot load prd.json</h3>
+        <p>Expected at <code>${PRD_URL}</code></p>
+        <p style="margin-top:10px">Start the dashboard service:</p>
+        <p><code>docker compose -f docker-compose.epam-cli.yml up agent-monitor -d</code></p>
         <p style="margin-top:10px;font-size:11px;color:#64748b">
-          Or load-prd.sh first:<br>
-          <code>bash shadow-play/db/scripts/load-prd.sh</code>
+          Ensure orchestrations/prd.json exists in the project root.
         </p>
         <p style="margin-top:14px;font-size:11px;color:#64748b">
           Error: ${esc(e.message)}
@@ -459,9 +442,9 @@ function renderStats() {
   const totalHours = prd.totalEstimatedHours || 0;
   document.getElementById('stats-bar').innerHTML = `
     <div class="stat-chip">
-      <div class="stat-dot" style="background:#06b6d4"></div>
+      <div class="stat-dot" style="background:var(--teal)"></div>
       <span class="stat-lbl">Phases</span>
-      <span class="stat-num" style="color:#22d3ee">${phaseOrder.length}</span>
+      <span class="stat-num" style="color:var(--teal)">${phaseOrder.length}</span>
     </div>
     <div class="stat-chip">
       <div class="stat-dot" style="background:#475569"></div>
@@ -469,9 +452,9 @@ function renderStats() {
       <span class="stat-num">${all.length}</span>
     </div>
     <div class="stat-chip">
-      <div class="stat-dot" style="background:#22d3ee"></div>
+      <div class="stat-dot" style="background:var(--amber)"></div>
       <span class="stat-lbl">Pending</span>
-      <span class="stat-num" style="color:#22d3ee">${all.length - done}</span>
+      <span class="stat-num" style="color:var(--amber)">${all.length - done}</span>
     </div>
     <div class="stat-chip">
       <div class="stat-dot" style="background:#10b981"></div>
@@ -479,9 +462,9 @@ function renderStats() {
       <span class="stat-num" style="color:#10b981">${done}</span>
     </div>
     <div class="stat-chip">
-      <div class="stat-dot" style="background:#7c3aed"></div>
+      <div class="stat-dot" style="background:var(--violet)"></div>
       <span class="stat-lbl">Est. Hours</span>
-      <span class="stat-num" style="color:#a78bfa">${totalHours}h</span>
+      <span class="stat-num" style="color:var(--violet)">${totalHours}h</span>
     </div>
     <div class="stat-chip">
       <div class="stat-dot" style="background:#d97706"></div>
@@ -632,14 +615,14 @@ function renderStoryDetail(s, color) {
     <div>
       <div class="dl-t">Metadata</div>
       <table class="meta-tbl">
-        <tr><td class="mk">Agent Role</td>  <td class="mv" style="color:#22d3ee">${esc(s.agentRole||'—')}</td></tr>
+        <tr><td class="mk">Agent Role</td>  <td class="mv" style="color:var(--teal)">${esc(s.agentRole||'—')}</td></tr>
         <tr><td class="mk">Agent Group</td> <td class="mv">${esc(s.agentGroup||'—')}</td></tr>
         <tr><td class="mk">Priority</td>    <td class="mv" style="color:${prioCol}">${esc(s.priority||'—')}</td></tr>
         <tr><td class="mk">Est. Hours</td>  <td class="mv">${s.estimatedHours!=null?s.estimatedHours+'h':'—'}</td></tr>
         <tr><td class="mk">Est. Cost</td>   <td class="mv">${s.estimatedCost!=null?'$'+Number(s.estimatedCost).toFixed(2):'—'}</td></tr>
         <tr><td class="mk">Est. Tokens</td> <td class="mv">${s.estimatedTokens!=null?Number(s.estimatedTokens).toLocaleString():'—'}</td></tr>
         <tr><td class="mk">AI Provider</td> <td class="mv">${providerBadge(s)}</td></tr>
-        <tr><td class="mk">Model</td>       <td class="mv" style="color:#a78bfa">${mi.turns === '—' ? mi.label : esc(s.model||mi.label)}</td></tr>
+        <tr><td class="mk">Model</td>       <td class="mv" style="color:var(--violet)">${mi.turns === '—' ? mi.label : esc(s.model||mi.label)}</td></tr>
         ${mi.turns !== '—' ? `<tr><td class="mk">Max Turns</td><td class="mv">${mi.turns==='unlimited'?'∞ Unlimited':mi.turns}</td></tr>` : ''}
         <tr><td class="mk">Story Type</td>  <td class="mv">${esc(s.storyType||'implementation')}</td></tr>
         <tr><td class="mk">Unit Tests</td>  <td class="mv" style="color:${utCol}">${utLbl}</td></tr>
@@ -672,7 +655,7 @@ function renderTechNotes(tn) {
         ? `<ul class="tn-list">${v.map(i=>`<li>${esc(String(i))}</li>`).join('')}</ul>`
         : `<em style="color:var(--text3)">empty</em>`;
     } else if (typeof v === 'boolean') {
-      val = v ? `<span style="color:#06b6d4">✓ Yes</span>`
+      val = v ? `<span style="color:var(--teal)">✓ Yes</span>`
               : `<span style="color:#ef4444">✗ No</span>`;
     } else if (v === null || v === undefined) {
       val = `<span style="color:var(--text3)">—</span>`;
@@ -735,7 +718,7 @@ document.getElementById('search-input').addEventListener('input', e => {
 // Auto-refresh every 15s
 setInterval(() => {
   if (!prd) return;
-  fetch(API_BASE + '/api/prd?_=' + Date.now())
+  fetch(PRD_URL + '?_=' + Date.now())
     .then(r => r.ok ? r.json() : null)
     .then(data => {
       if (!data) return;

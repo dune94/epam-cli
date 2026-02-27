@@ -63,8 +63,8 @@ fi
 
 # Build jq select chain from active filters
 JQ_FILTER="."
-[ -n "$PHASE_FILTER"  ] && JQ_FILTER+=" | select(.phase_id == \"${PHASE_FILTER}\")"
-[ -n "$STORY_FILTER"  ] && JQ_FILTER+=" | select(.story_id == \"${STORY_FILTER}\")"
+[ -n "$PHASE_FILTER"  ] && JQ_FILTER+=" | select((.phase_id // .body.phase_id) == \"${PHASE_FILTER}\")"
+[ -n "$STORY_FILTER"  ] && JQ_FILTER+=" | select((.story_id // .body.story_id) == \"${STORY_FILTER}\")"
 [ -n "$TO_FILTER"     ] && JQ_FILTER+=" | select(.to_agent == \"${TO_FILTER}\")"
 [ -n "$FROM_FILTER"   ] && JQ_FILTER+=" | select(.from_agent == \"${FROM_FILTER}\")"
 [ -n "$TYPE_FILTER"   ] && JQ_FILTER+=" | select((.message_type // .type) == \"${TYPE_FILTER}\")"

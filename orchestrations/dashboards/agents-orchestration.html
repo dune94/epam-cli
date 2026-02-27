@@ -3,28 +3,34 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Multi-Agent Orchestration — Fitnessie</title>
+<title>Multi-Agent Orchestration — EPAM CLI</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-  --bg:     #080f1c;
-  --bg1:    #0e1c30;
-  --bg2:    #132338;
-  --bg3:    #182b44;
-  --border: #243a58;
-  --text:   #e2e8f0;
-  --text2:  #94a3b8;
-  --text3:  #64748b;
-  --accent: #6366f1;
+  --bg: #fbfafa;  --bg1: #ffffff;  --bg2: #f4f4f4;  --bg3: #eaeaea;
+  --surface: #ffffff;  --surface2: #f4f4f4;  --surface3: #eaeaea;
+  --border: #e0e0e0;  --border2: #cccccc;
+  --text: #060606;  --text2: #4a4a4a;  --text3: #717171;  --text-muted: #717171;
+  --teal: #0047ff;  --teal2: #0047ff;  --teal-dim: rgba(0,71,255,0.08);
+  --accent: #0047ff;  --teal-glow: rgba(0,71,255,0.20);
+  --violet: #8453d2;  --violet2: #8453d2;  --violet-dim: rgba(132,83,210,0.10);
+  --green: #1a8f3f;  --green-dim: rgba(26,143,63,0.10);
+  --amber: #c87a00;  --amber-dim: rgba(200,122,0,0.10);
+  --red: #d93025;  --red-dim: rgba(217,48,37,0.08);
+  --pink: #c4186e;  --pink-dim: rgba(196,24,110,0.08);
+  --blue: #1a73e8;  --blue-dim: rgba(26,115,232,0.08);
+  --orange: #d35400;  --orange-dim: rgba(211,84,0,0.08);
+  --epam-gradient: linear-gradient(118.82deg, #0078c2 .5%, #0047ff 47.33%, #8453d2 76.12%);
+  --epam-cyan: #00f6ff;
   /* Lane colours */
-  --main-bg: #1c1200;     --main-fg:  #fbbf24; --main-border: #b45309;
-  --pri-bg:  #0c1a40;     --pri-fg:   #60a5fa; --pri-border:  #1e3a8a;
-  --ind-bg:  #0a2016;     --ind-fg:   #34d399; --ind-border:  #059669;
+  --main-bg: #fff8ee;     --main-fg:  #c87a00; --main-border: #c87a00;
+  --pri-bg:  #eef4ff;     --pri-fg:   #1a73e8; --pri-border:  #1a73e8;
+  --ind-bg:  #eef8f0;     --ind-fg:   #1a8f3f; --ind-border:  #1a8f3f;
   /* Model colours */
-  --haiku-bg: #042f2e;    --haiku-fg: #2dd4bf; --haiku-b: #0f766e;
-  --sonnet-bg:#1e1b4b;    --sonnet-fg:#a5b4fc; --sonnet-b:#3730a3;
-  --opus-bg:  #422006;    --opus-fg:  #fbbf24; --opus-b:  #b45309;
+  --haiku-bg: rgba(0,71,255,0.08);    --haiku-fg: #0047ff; --haiku-b: rgba(0,71,255,0.25);
+  --sonnet-bg: rgba(132,83,210,0.10); --sonnet-fg: #8453d2; --sonnet-b: rgba(132,83,210,0.25);
+  --opus-bg: rgba(200,122,0,0.10);    --opus-fg: #c87a00; --opus-b: rgba(200,122,0,0.25);
 }
 
 body {
@@ -35,35 +41,34 @@ body {
 
 /* ── Header ── */
 .header {
-  background: linear-gradient(135deg, #0d1b35 0%, #1a1040 100%);
-  border-bottom: 1px solid #2d3a6b;
+  background: var(--epam-gradient);
+  border-bottom: 1px solid transparent;
   padding: 14px 28px;
   display: flex; align-items: center; justify-content: space-between;
   position: sticky; top: 0; z-index: 100;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 .header-left { display: flex; align-items: center; gap: 12px; }
 .header-icon {
   width: 32px; height: 32px;
-  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  background: rgba(255,255,255,0.2);
   border-radius: 7px;
   display: flex; align-items: center; justify-content: center; font-size: 16px;
 }
 .header-title {
   font-size: 17px; font-weight: 700;
-  background: linear-gradient(90deg, #818cf8 0%, #06b6d4 100%);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  color: #fff;
 }
-.header-sub { color: var(--text3); font-size: 11px; margin-top: 1px; }
+.header-sub { color: rgba(255,255,255,0.7); font-size: 11px; margin-top: 1px; }
 .header-nav { display: flex; gap: 4px; flex-wrap: wrap; }
 .nav-link {
   font-size: 11px; font-weight: 600; padding: 4px 10px;
-  border-radius: 5px; border: 1px solid var(--border);
-  color: var(--text2); text-decoration: none;
+  border-radius: 5px; border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.7); text-decoration: none;
   transition: all 0.14s;
 }
-.nav-link:hover { color: var(--text); border-color: var(--accent); }
-.nav-link.active { background: var(--bg2); color: #818cf8; border-color: var(--accent); }
+.nav-link:hover { color: #fff; border-color: rgba(255,255,255,0.5); }
+.nav-link.active { background: rgba(255,255,255,0.15); color: #fff; border-color: rgba(255,255,255,0.4); }
 
 /* ── Layout ── */
 .container { padding: 24px 28px 60px; max-width: 1200px; margin: 0 auto; }
@@ -88,16 +93,16 @@ body {
 .b-haiku   { background: var(--haiku-bg);  color: var(--haiku-fg);  border: 1px solid var(--haiku-b);    }
 .b-sonnet  { background: var(--sonnet-bg); color: var(--sonnet-fg); border: 1px solid var(--sonnet-b);   }
 .b-opus    { background: var(--opus-bg);   color: var(--opus-fg);   border: 1px solid var(--opus-b);     }
-.b-cli     { background: #1c0f30; color: #d2a8ff; border: 1px solid #6e40c9; }
-.b-tools   { background: #0a2e1e; color: #34d399; border: 1px solid #059669; }
-.b-bash    { background: #0c1a40; color: #60a5fa; border: 1px solid #1e3a8a; }
-.b-hybrid  { background: #3d1500; color: #f59e0b; border: 1px solid #92400e; }
-.b-gate    { background: #2e1065; color: #c084fc; border: 1px solid #7c3aed; }
+.b-cli     { background: rgba(132,83,210,0.10); color: #8453d2; border: 1px solid rgba(132,83,210,0.25); }
+.b-tools   { background: rgba(26,143,63,0.10); color: #1a8f3f; border: 1px solid rgba(26,143,63,0.25); }
+.b-bash    { background: rgba(0,71,255,0.08); color: #0047ff; border: 1px solid rgba(0,71,255,0.2); }
+.b-hybrid  { background: rgba(200,122,0,0.10); color: #c87a00; border: 1px solid rgba(200,122,0,0.25); }
+.b-gate    { background: rgba(132,83,210,0.10); color: #8453d2; border: 1px solid rgba(132,83,210,0.25); }
 
 code {
   font-family: 'Courier New', monospace; font-size: 10px;
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: 3px; padding: 1px 4px; color: #a5b4fc;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 3px; padding: 1px 4px; color: #0047ff;
 }
 
 /* ── Taxonomy legend ── */
@@ -148,7 +153,7 @@ code {
   flex-shrink: 0;
 }
 .vflow-connector.gate-con {
-  background: linear-gradient(180deg, #7c3aed 0%, #4c1d95 100%);
+  background: linear-gradient(180deg, var(--violet) 0%, var(--violet2) 100%);
 }
 
 .vflow-step {
@@ -157,18 +162,18 @@ code {
   position: relative;
 }
 .vflow-step.master-step {
-  border-color: #4f46e5;
-  background: linear-gradient(135deg, #0c0e2c 0%, #111540 100%);
+  border-color: #0047ff;
+  background: rgba(0,71,255,0.04);
   border-width: 2px;
-  box-shadow: 0 0 24px rgba(99,102,241,0.15);
+  box-shadow: 0 0 24px rgba(0,71,255,0.08);
 }
 .vflow-step.assess-step {
   border-color: var(--sonnet-b);
-  background: #0c0c2a;
+  background: rgba(132,83,210,0.04);
 }
 .vflow-step.gate-step {
-  border-color: #7c3aed;
-  background: #100628;
+  border-color: #8453d2;
+  background: rgba(132,83,210,0.04);
 }
 .vflow-step.para-step {
   border-color: var(--border);
@@ -209,8 +214,8 @@ code {
   background: var(--bg); border: 1px solid var(--border);
   border-radius: 8px; padding: 12px;
 }
-.vs-lane-block.pri { border-color: var(--pri-border); background: #080f22; }
-.vs-lane-block.ind { border-color: var(--ind-border); background: #060f0c; }
+.vs-lane-block.pri { border-color: var(--pri-border); background: var(--pri-bg); }
+.vs-lane-block.ind { border-color: var(--ind-border); background: var(--ind-bg); }
 .vs-lane-hd {
   font-size: 10px; font-weight: 800; margin-bottom: 4px;
   display: flex; align-items: center; gap: 6px;
@@ -232,8 +237,8 @@ code {
 .gate-decision {
   display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;
 }
-.gate-go  { background: #052e1c; border: 1px solid #059669; color: #34d399; border-radius: 5px; padding: 4px 10px; font-size: 10px; font-weight: 700; }
-.gate-nogo { background: #2d0a0a; border: 1px solid #b91c1c; color: #f87171; border-radius: 5px; padding: 4px 10px; font-size: 10px; font-weight: 700; }
+.gate-go  { background: rgba(26,143,63,0.08); border: 1px solid rgba(26,143,63,0.25); color: #1a8f3f; border-radius: 5px; padding: 4px 10px; font-size: 10px; font-weight: 700; }
+.gate-nogo { background: rgba(217,48,37,0.08); border: 1px solid rgba(217,48,37,0.25); color: #d93025; border-radius: 5px; padding: 4px 10px; font-size: 10px; font-weight: 700; }
 
 /* Master script top banner */
 .master-banner {
@@ -241,7 +246,7 @@ code {
 }
 .master-icon {
   width: 48px; height: 48px; flex-shrink: 0;
-  background: linear-gradient(135deg, #4f46e5, #06b6d4);
+  background: linear-gradient(135deg, var(--violet), var(--teal));
   border-radius: 10px;
   display: flex; align-items: center; justify-content: center; font-size: 24px;
 }
@@ -323,19 +328,17 @@ code {
     <div class="header-icon">🤖</div>
     <div>
       <div class="header-title">Multi-Agent Orchestration</div>
-      <div class="header-sub">Fitnessie · Architecture Overview</div>
+      <div class="header-sub">EPAM CLI · Architecture Overview</div>
     </div>
   </div>
   <nav class="header-nav">
-    <a href="monitor.html"            class="nav-link">Monitor</a>
-    <a href="prd-viewer.html"         class="nav-link">PRD Viewer</a>
-    <a href="agents-profiles.html"    class="nav-link">Profiles</a>
+    <a href="monitor.html"              class="nav-link">Monitor</a>
+    <a href="prd-viewer.html"           class="nav-link">PRD Viewer</a>
+    <a href="orchestration-plan.html"   class="nav-link">Plan</a>
     <a href="agents-orchestration.html" class="nav-link active">Orchestration</a>
-    <a href="test-plan.html"          class="nav-link">Test Plan</a>
-    <a href="agent-messages.html"     class="nav-link">Messages</a>
-    <a href="phase-cost-monitor.html" class="nav-link">Cost</a>
-    <a href="phase-process.html"      class="nav-link">Graph</a>
-    <a href="orchestration-flow.html" class="nav-link">Flow (Legacy)</a>
+    <a href="agent-profiles.html"       class="nav-link">Profiles</a>
+    <a href="agent-messages.html"       class="nav-link">Messages</a>
+    <a href="phase-cost-monitor.html"   class="nav-link">Costs</a>
   </nav>
 </div>
 
@@ -857,7 +860,7 @@ code {
     <div class="feature-card">
       <div class="feature-icon">🎭</div>
       <div class="feature-title">Role-Based Profiles</div>
-      <div class="feature-desc">11 agent roles, each with a profile injected at invocation. Skills are tracked, augmented pre-phase, and assessed post-phase. Profiles stored in <code>agents/profiles.json</code>.</div>
+      <div class="feature-desc">7 agent roles, each with a profile injected at invocation. Skills are tracked, augmented pre-phase, and assessed post-phase. Profiles stored in <code>agents/profiles.json</code>.</div>
     </div>
 
     <div class="feature-card">

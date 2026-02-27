@@ -58,7 +58,7 @@ TMP_FILE="${MESSAGES_JSONL}.tmp.$$"
         # Match on either 'id' or 'message_id' field
         line_id=$(echo "$line" | jq -r '.message_id // .id // empty' 2>/dev/null || true)
         if [ "$line_id" = "$MESSAGE_ID" ]; then
-            echo "$line" | jq --arg s "$NEW_STATUS" '.status = $s' >> "$TMP_FILE"
+            echo "$line" | jq -c --arg s "$NEW_STATUS" '.status = $s' >> "$TMP_FILE"
             FOUND=true
         else
             echo "$line" >> "$TMP_FILE"

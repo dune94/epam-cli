@@ -432,7 +432,7 @@ while IFS= read -r sid; do
     # Extract story metadata via single jq call
     story_data=$(jq -r --arg id "$sid" '
         .stories[] | select(.id == $id) |
-        "\(.id)|\(.title)|\(.estimatedHours // 0)|\(.priority // "medium")|\(.storyType // "implementation")|\(.agentRole // "none")|\(.dependencies | length)|\(.technicalNotes.requiredSkills | length)|\(.technicalNotes.files | length)|\(.technicalNotes.requiredSkills | join(","))"
+        "\(.id)|\(.title)|\(.humanHours // .estimatedHours // 0)|\(.priority // "medium")|\(.storyType // "implementation")|\(.agentRole // "none")|\(.dependencies | length)|\(.technicalNotes.requiredSkills | length)|\(.technicalNotes.files | length)|\(.technicalNotes.requiredSkills | join(","))"
     ' "$PRD_FILE")
 
     IFS='|' read -r s_id s_title s_hours s_priority s_type s_role s_deps s_skills s_files s_skill_csv <<< "$story_data"
@@ -533,8 +533,8 @@ while IFS= read -r sid; do
     # Print formatted output
     if [ "$JSON_MODE" != true ]; then
         echo -e "${BOLD}${s_id}${NC}  ${s_title}"
-        echo "  Human hours:    ${s_hours}h"
-        echo "  AI minutes:     ${ai_minutes_fmt} min  (C=${C}, ratio=${HUMAN_TO_AI_RATIO})"
+        echo "  Human effort:   ${s_hours}h  (developer estimate)"
+        echo "  Machine time:   ${ai_minutes_fmt} min  (C=${C}, ratio=${HUMAN_TO_AI_RATIO})"
         echo "  Tokens:         ${tokens_fmt}   (in: ${input_fmt} / out: ${output_fmt})"
         echo "  Cache:          ${cache_pct}% hit   (position: ${position} in ${phase})"
         echo "  Turns:          ${turns}        (${local_mpt} min/turn, ${effort} effort)"
@@ -561,7 +561,7 @@ while IFS= read -r sid; do
             title: $title,
             phase: $phase,
             effort: $effort,
-            estimatedHours: $hours,
+            humanHours: $hours,
             estimatedAiMinutes: ($ai_min * 100 | round / 100),
             estimatedTokens: $tokens,
             estimatedTurns: $turns,
@@ -639,14 +639,24 @@ if [ "$APPLY_MODE" = true ]; then
         tok=$(echo "$story_est" | jq '.estimatedTokens')
         trn=$(echo "$story_est" | jq '.estimatedTurns')
         cst=$(echo "$story_est" | jq '.estimatedCost')
+        efr=$(echo "$story_est" | jq -r '.effort')
+        hh=$(echo "$story_est" | jq '.humanHours')
+
+        # Machine hours = AI minutes / 60
+        mhrs=$(echo "scale=4; $aim / 60" | bc)
+        [[ "$mhrs" =~ ^\. ]] && mhrs="0${mhrs}"
 
         jq --arg id "$sid" \
            --argjson aim "$aim" \
            --argjson cost "$cst" \
            --argjson tok "$tok" \
            --argjson turns "$trn" \
+           --argjson hh "$hh" \
+           --argjson mhrs "$mhrs" \
+           --arg efr "$efr" \
            '(.stories[] | select(.id == $id)) |=
-             . + {estimatedAiMinutes: $aim, estimatedCost: $cost,
+             . + {humanHours: $hh, estimatedHours: $mhrs, effort: $efr,
+                  estimatedAiMinutes: $aim, estimatedCost: $cost,
                   estimatedTokens: $tok, estimatedTurns: $turns}' \
            "$PRD_FILE" > "${PRD_FILE}.tmp" && mv "${PRD_FILE}.tmp" "$PRD_FILE"
     done <<< "$story_ids"

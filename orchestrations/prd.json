@@ -1,6 +1,6 @@
 {
   "id": "epam-cli-v1",
-  "title": "EPAM CLI — AI Coding Assistant",
+  "title": "EPAM CLI \u2014 AI Coding Assistant",
   "version": "1.0.0",
   "lastUpdated": "2026-02-25",
   "project": {
@@ -30,7 +30,7 @@
         "The response output parses as valid JSON with expected fields (result, usage)"
       ],
       "dependencies": [],
-      "estimatedHours": 1,
+      "estimatedHours": 0.0156,
       "technicalNotes": {
         "files": [],
         "requiredSkills": [
@@ -43,7 +43,9 @@
       "estimatedAiMinutes": 0.94,
       "estimatedCost": 0.01,
       "estimatedTokens": 7488,
-      "estimatedTurns": 2
+      "estimatedTurns": 2,
+      "humanHours": 1,
+      "effort": "low"
     },
     {
       "id": "EPAM-HC-002",
@@ -60,7 +62,7 @@
         "The response output parses as valid JSONL with expected fields"
       ],
       "dependencies": [],
-      "estimatedHours": 1,
+      "estimatedHours": 0.0156,
       "technicalNotes": {
         "files": [],
         "requiredSkills": [
@@ -73,7 +75,9 @@
       "estimatedAiMinutes": 0.94,
       "estimatedCost": 0,
       "estimatedTokens": 7488,
-      "estimatedTurns": 2
+      "estimatedTurns": 2,
+      "humanHours": 1,
+      "effort": "low"
     },
     {
       "id": "EPAM-HC-003",
@@ -90,7 +94,7 @@
         "The response output parses as valid JSONL with expected fields"
       ],
       "dependencies": [],
-      "estimatedHours": 1,
+      "estimatedHours": 0.0156,
       "technicalNotes": {
         "files": [],
         "requiredSkills": [
@@ -103,7 +107,9 @@
       "estimatedAiMinutes": 0.94,
       "estimatedCost": 0,
       "estimatedTokens": 7488,
-      "estimatedTurns": 2
+      "estimatedTurns": 2,
+      "humanHours": 1,
+      "effort": "low"
     },
     {
       "id": "EPAM-HC-004",
@@ -121,7 +127,7 @@
         "Response is identical in structure to the direct-path response from EPAM-HC-001"
       ],
       "dependencies": [],
-      "estimatedHours": 1,
+      "estimatedHours": 0.0156,
       "technicalNotes": {
         "files": [],
         "requiredSkills": [
@@ -134,7 +140,9 @@
       "estimatedAiMinutes": 0.94,
       "estimatedCost": 0,
       "estimatedTokens": 7488,
-      "estimatedTurns": 2
+      "estimatedTurns": 2,
+      "humanHours": 1,
+      "effort": "low"
     },
     {
       "id": "EPAM-001",
@@ -157,7 +165,7 @@
         "Config type for budgetGuardrails added to ProjectConfig and ResolvedConfig in types.ts"
       ],
       "dependencies": [],
-      "estimatedHours": 6,
+      "estimatedHours": 0.7703,
       "technicalNotes": {
         "files": [
           "src/billing/BudgetGuard.ts",
@@ -176,7 +184,9 @@
       "estimatedAiMinutes": 46.22,
       "estimatedCost": 4.19,
       "estimatedTokens": 776514,
-      "estimatedTurns": 47
+      "estimatedTurns": 47,
+      "humanHours": 6,
+      "effort": "medium"
     },
     {
       "id": "EPAM-002",
@@ -197,7 +207,7 @@
         "Unit tests cover: markdown output format, JSON output format, filtering by client, empty session directory"
       ],
       "dependencies": [],
-      "estimatedHours": 5,
+      "estimatedHours": 0.4326,
       "technicalNotes": {
         "files": [
           "src/cli/commands/report.ts",
@@ -214,11 +224,13 @@
       "estimatedAiMinutes": 25.96,
       "estimatedCost": 1.69,
       "estimatedTokens": 373766,
-      "estimatedTurns": 26
+      "estimatedTurns": 26,
+      "humanHours": 5,
+      "effort": "medium"
     },
     {
       "id": "EPAM-003",
-      "title": "Infra Test — FinOps Phase",
+      "title": "Infra Test \u2014 FinOps Phase",
       "description": "Verify that the budget guardrail configuration loads correctly and that the report command exists and is registered. Write unit tests for BudgetGuard and the report command to confirm the finops phase implementation is complete and correct.",
       "priority": "medium",
       "status": "pending",
@@ -237,7 +249,7 @@
         "EPAM-001",
         "EPAM-002"
       ],
-      "estimatedHours": 2,
+      "estimatedHours": 0.0518,
       "technicalNotes": {
         "files": [
           "test/unit/billing/BudgetGuard.test.ts",
@@ -253,7 +265,9 @@
       "estimatedAiMinutes": 3.11,
       "estimatedCost": 0.03,
       "estimatedTokens": 27404,
-      "estimatedTurns": 7
+      "estimatedTurns": 7,
+      "humanHours": 2,
+      "effort": "low"
     },
     {
       "id": "EPAM-004",
@@ -276,7 +290,7 @@
         "Unit tests cover: list combining global+local, load/merge precedence, save serialization, delete confirmation"
       ],
       "dependencies": [],
-      "estimatedHours": 8,
+      "estimatedHours": 1.0278,
       "technicalNotes": {
         "files": [
           "src/agent/profiles/types.ts",
@@ -296,7 +310,9 @@
       "estimatedAiMinutes": 61.67,
       "estimatedCost": 41.95,
       "estimatedTokens": 1554094,
-      "estimatedTurns": 42
+      "estimatedTurns": 42,
+      "humanHours": 8,
+      "effort": "high"
     },
     {
       "id": "EPAM-005",
@@ -319,7 +335,7 @@
         "Unit tests cover: plan generation prompt structure, approval flow (Y/n/edit), step execution loop, failure pause"
       ],
       "dependencies": [],
-      "estimatedHours": 7,
+      "estimatedHours": 0.9126,
       "technicalNotes": {
         "files": [
           "src/cli/repl/SlashCommands.ts",
@@ -336,7 +352,9 @@
       "estimatedAiMinutes": 54.76,
       "estimatedCost": 26.82,
       "estimatedTokens": 1182841,
-      "estimatedTurns": 37
+      "estimatedTurns": 37,
+      "humanHours": 7,
+      "effort": "high"
     },
     {
       "id": "EPAM-006",
@@ -359,7 +377,7 @@
         "Unit tests cover: add/list/search, injection into system prompt, empty decisions file gracefully handled"
       ],
       "dependencies": [],
-      "estimatedHours": 6,
+      "estimatedHours": 0.6253,
       "technicalNotes": {
         "files": [
           "src/decisions/types.ts",
@@ -377,7 +395,9 @@
       "estimatedAiMinutes": 37.52,
       "estimatedCost": 2.46,
       "estimatedTokens": 585366,
-      "estimatedTurns": 38
+      "estimatedTurns": 38,
+      "humanHours": 6,
+      "effort": "medium"
     },
     {
       "id": "EPAM-007",
@@ -399,7 +419,7 @@
         "Unit tests cover: tool list endpoint, tool call dispatch, .mcp.json parsing, remote tool registration"
       ],
       "dependencies": [],
-      "estimatedHours": 10,
+      "estimatedHours": 1.5446,
       "technicalNotes": {
         "files": [
           "src/mcp/types.ts",
@@ -420,11 +440,13 @@
       "estimatedAiMinutes": 92.68,
       "estimatedCost": 49.99,
       "estimatedTokens": 2502316,
-      "estimatedTurns": 62
+      "estimatedTurns": 62,
+      "humanHours": 10,
+      "effort": "high"
     },
     {
       "id": "EPAM-008",
-      "title": "Review — Agent Intelligence Phase",
+      "title": "Review \u2014 Agent Intelligence Phase",
       "description": "Review all stories in the agent_intelligence phase (EPAM-004 through EPAM-007). Verify TypeScript strict compliance, test coverage, slash command patterns, profile loading behaviour, plan mode approval flow, decision injection correctness, and MCP protocol implementation quality.",
       "priority": "medium",
       "status": "pending",
@@ -448,7 +470,7 @@
         "EPAM-006",
         "EPAM-007"
       ],
-      "estimatedHours": 3,
+      "estimatedHours": 0.0853,
       "technicalNotes": {
         "files": [],
         "requiredSkills": [
@@ -461,7 +483,9 @@
       "estimatedAiMinutes": 5.12,
       "estimatedCost": 0.24,
       "estimatedTokens": 61395,
-      "estimatedTurns": 6
+      "estimatedTurns": 6,
+      "humanHours": 3,
+      "effort": "medium"
     },
     {
       "id": "EPAM-009",
@@ -483,7 +507,7 @@
         "Unit tests cover: speed flag parsing, turn rendering format, session picker logic, malformed line handling"
       ],
       "dependencies": [],
-      "estimatedHours": 5,
+      "estimatedHours": 0.462,
       "technicalNotes": {
         "files": [
           "src/cli/commands/replay.ts",
@@ -500,7 +524,9 @@
       "estimatedAiMinutes": 27.72,
       "estimatedCost": 2.15,
       "estimatedTokens": 399168,
-      "estimatedTurns": 28
+      "estimatedTurns": 28,
+      "humanHours": 5,
+      "effort": "medium"
     },
     {
       "id": "EPAM-010",
@@ -522,7 +548,7 @@
         "Unit tests cover: push payload structure, pull timestamp comparison (remote newer wins, local newer skips), status output, missing token error"
       ],
       "dependencies": [],
-      "estimatedHours": 8,
+      "estimatedHours": 0.8548,
       "technicalNotes": {
         "files": [
           "src/cli/commands/sync.ts",
@@ -540,11 +566,13 @@
       "estimatedAiMinutes": 51.29,
       "estimatedCost": 25.11,
       "estimatedTokens": 1107799,
-      "estimatedTurns": 35
+      "estimatedTurns": 35,
+      "humanHours": 8,
+      "effort": "high"
     },
     {
       "id": "EPAM-011",
-      "title": "Review — Team Features Phase",
+      "title": "Review \u2014 Team Features Phase",
       "description": "Review all stories in the team_features phase (EPAM-009 and EPAM-010). Verify session replay rendering, speed flag behaviour, sync push/pull correctness, conflict resolution logic, auth token handling, and test coverage.",
       "priority": "medium",
       "status": "pending",
@@ -556,7 +584,7 @@
         "Replay command renders all three turn element types (user, assistant, tool call) with correct chalk colours",
         "Sync pull does not overwrite local context when local is newer than remote",
         "Sync push includes correct Authorization header format",
-        "No hardcoded endpoint strings — sync endpoint URL comes from config",
+        "No hardcoded endpoint strings \u2014 sync endpoint URL comes from config",
         "All new features have corresponding vitest unit tests",
         "`tsc --noEmit` passes with zero errors after both stories are merged"
       ],
@@ -564,7 +592,7 @@
         "EPAM-009",
         "EPAM-010"
       ],
-      "estimatedHours": 2,
+      "estimatedHours": 0.0518,
       "technicalNotes": {
         "files": [],
         "requiredSkills": [
@@ -577,7 +605,9 @@
       "estimatedAiMinutes": 3.11,
       "estimatedCost": 0.02,
       "estimatedTokens": 24913,
-      "estimatedTurns": 7
+      "estimatedTurns": 7,
+      "humanHours": 2,
+      "effort": "low"
     },
     {
       "id": "EPAM-012",
@@ -600,7 +630,7 @@
         "Unit tests cover: parallel spawn, first-success cancellation, quality scoring, non-recoverable error passthrough"
       ],
       "dependencies": [],
-      "estimatedHours": 10,
+      "estimatedHours": 1.2241,
       "technicalNotes": {
         "files": [
           "src/agent/RalphWiggumLoop.ts",
@@ -618,7 +648,9 @@
       "estimatedAiMinutes": 73.45,
       "estimatedCost": 42.83,
       "estimatedTokens": 1586615,
-      "estimatedTurns": 49
+      "estimatedTurns": 49,
+      "humanHours": 10,
+      "effort": "high"
     },
     {
       "id": "EPAM-013",
@@ -630,7 +662,7 @@
       "agentGroup": "main",
       "agentRole": "agent-systems-engineer",
       "acceptanceCriteria": [
-        "SquadRunner.ts orchestrates the full lifecycle: Leader → decompose → parallel Coder+Tester+SecurityAuditor → peer-review → present",
+        "SquadRunner.ts orchestrates the full lifecycle: Leader \u2192 decompose \u2192 parallel Coder+Tester+SecurityAuditor \u2192 peer-review \u2192 present",
         "Leader agent produces a SquadPlan JSON: { subtasks: [{ id, role, description, dependsOn }] }",
         "Coder, Tester, SecurityAuditor roles defined in roles.ts with distinct system prompts and tool access",
         "Coder and Tester run in parallel (Promise.all); SecurityAuditor runs after Coder completes",
@@ -641,7 +673,7 @@
         "Unit tests cover: decomposition parsing, parallel execution, Auditor block/approve cycle, max re-review limit"
       ],
       "dependencies": [],
-      "estimatedHours": 12,
+      "estimatedHours": 1.77,
       "technicalNotes": {
         "files": [
           "src/agent/squad/SquadRunner.ts",
@@ -660,11 +692,13 @@
       "estimatedAiMinutes": 106.2,
       "estimatedCost": 53.67,
       "estimatedTokens": 2485012,
-      "estimatedTurns": 71
+      "estimatedTurns": 71,
+      "humanHours": 12,
+      "effort": "high"
     },
     {
       "id": "EPAM-014",
-      "title": "Review — Multi-Agent Phase",
+      "title": "Review \u2014 Multi-Agent Phase",
       "description": "Review all stories in the multi_agent phase (EPAM-012 and EPAM-013). Verify Ralph Wiggum Loop parallel execution safety, cancellation correctness, quality scoring logic, and squad execution delegation chain. Confirm no goroutine-equivalent leaks (unresolved Promises), proper AbortController usage, and peer-review loop bounds.",
       "priority": "medium",
       "status": "pending",
@@ -685,7 +719,7 @@
         "EPAM-012",
         "EPAM-013"
       ],
-      "estimatedHours": 3,
+      "estimatedHours": 0.0778,
       "technicalNotes": {
         "files": [],
         "requiredSkills": [
@@ -698,7 +732,9 @@
       "estimatedAiMinutes": 4.67,
       "estimatedCost": 0.23,
       "estimatedTokens": 56055,
-      "estimatedTurns": 5
+      "estimatedTurns": 5,
+      "humanHours": 3,
+      "effort": "medium"
     },
     {
       "id": "EPAM-015",
@@ -713,14 +749,14 @@
         "ConstraintLoader fetches GET /v1/projects/{id}/constraints with auth token on AgentRunner session start",
         "Constraint schema (id, rule, severity, createdBy, expiresAt) is defined and validated with zod",
         "Expired constraints (expiresAt < now) are filtered out before injection",
-        "Block-severity constraints are injected at the top of the system prompt under a [CONSTRAINTS — MUST FOLLOW] header",
+        "Block-severity constraints are injected at the top of the system prompt under a [CONSTRAINTS \u2014 MUST FOLLOW] header",
         "Warn-severity constraints are injected at the bottom of the system prompt under a [ADVISORY CONSTRAINTS] header",
         "If the endpoint is unreachable, a warning is logged but the session proceeds without constraints",
         "Constraint fetch result is cached for the session duration (no re-fetch per turn)",
         "Unit tests cover: constraint fetch, expiry filtering, severity separation in prompt, unreachable endpoint fallback"
       ],
       "dependencies": [],
-      "estimatedHours": 6,
+      "estimatedHours": 0.7723,
       "technicalNotes": {
         "files": [
           "src/constraints/types.ts",
@@ -739,12 +775,14 @@
       "estimatedAiMinutes": 46.34,
       "estimatedCost": 3.9,
       "estimatedTokens": 722891,
-      "estimatedTurns": 47
+      "estimatedTurns": 47,
+      "humanHours": 6,
+      "effort": "medium"
     },
     {
       "id": "EPAM-016",
       "title": "Signature Auditor Agents",
-      "description": "Define named auditor personas (e.g. 'security-sarah', 'performance-paul') in .epam/auditors.json. After each agent response, the selected auditors run in parallel and produce critique transcripts. The user sees the debate — each auditor's findings — before the final answer is confirmed.",
+      "description": "Define named auditor personas (e.g. 'security-sarah', 'performance-paul') in .epam/auditors.json. After each agent response, the selected auditors run in parallel and produce critique transcripts. The user sees the debate \u2014 each auditor's findings \u2014 before the final answer is confirmed.",
       "priority": "medium",
       "status": "pending",
       "completed": false,
@@ -761,7 +799,7 @@
         "Unit tests cover: parallel auditor execution, severity threshold gate, toggle on/off, persona injection"
       ],
       "dependencies": [],
-      "estimatedHours": 10,
+      "estimatedHours": 1.4965,
       "technicalNotes": {
         "files": [
           "src/auditors/types.ts",
@@ -781,7 +819,9 @@
       "estimatedAiMinutes": 89.79,
       "estimatedCost": 51.31,
       "estimatedTokens": 2262677,
-      "estimatedTurns": 60
+      "estimatedTurns": 60,
+      "humanHours": 10,
+      "effort": "high"
     },
     {
       "id": "EPAM-017",
@@ -804,7 +844,7 @@
       "dependencies": [
         "EPAM-004"
       ],
-      "estimatedHours": 5,
+      "estimatedHours": 0.4326,
       "technicalNotes": {
         "files": [
           "src/cli/commands/consult.ts",
@@ -821,11 +861,13 @@
       "estimatedAiMinutes": 25.96,
       "estimatedCost": 1.57,
       "estimatedTokens": 373766,
-      "estimatedTurns": 26
+      "estimatedTurns": 26,
+      "humanHours": 5,
+      "effort": "medium"
     },
     {
       "id": "EPAM-018",
-      "title": "Review — Enterprise Phase",
+      "title": "Review \u2014 Enterprise Phase",
       "description": "Review all stories in the enterprise phase (EPAM-015, EPAM-016, EPAM-017). Verify constraint injection security (no constraint bypass), auditor parallel safety, severity gate correctness, consultation single-turn scoping, and full TypeScript strict compliance.",
       "priority": "medium",
       "status": "pending",
@@ -846,7 +888,7 @@
         "EPAM-016",
         "EPAM-017"
       ],
-      "estimatedHours": 3,
+      "estimatedHours": 0.0815,
       "technicalNotes": {
         "files": [],
         "requiredSkills": [
@@ -859,12 +901,14 @@
       "estimatedAiMinutes": 4.89,
       "estimatedCost": 0.23,
       "estimatedTokens": 58734,
-      "estimatedTurns": 5
+      "estimatedTurns": 5,
+      "humanHours": 3,
+      "effort": "medium"
     },
     {
       "id": "EPAM-019",
       "title": "RAG Asset Discovery POC",
-      "description": "Mock implementation of enterprise asset discovery. .epam/assets.json contains mock asset records (id, title, description, tags, repoUrl). Before each agent LLM call, perform fuzzy keyword matching against the user message and inject the top 3 matching assets as an '[ASSET ALERT]' block in the system prompt. No vector database — pure keyword matching for POC.",
+      "description": "Mock implementation of enterprise asset discovery. .epam/assets.json contains mock asset records (id, title, description, tags, repoUrl). Before each agent LLM call, perform fuzzy keyword matching against the user message and inject the top 3 matching assets as an '[ASSET ALERT]' block in the system prompt. No vector database \u2014 pure keyword matching for POC.",
       "priority": "low",
       "status": "pending",
       "completed": false,
@@ -881,7 +925,7 @@
         "Unit tests cover: keyword scoring, threshold filtering, ContextBuilder injection, missing assets.json no-op"
       ],
       "dependencies": [],
-      "estimatedHours": 6,
+      "estimatedHours": 0.5191,
       "technicalNotes": {
         "files": [
           "src/assets/types.ts",
@@ -898,11 +942,13 @@
       "estimatedAiMinutes": 31.15,
       "estimatedCost": 2.42,
       "estimatedTokens": 448519,
-      "estimatedTurns": 32
+      "estimatedTurns": 32,
+      "humanHours": 6,
+      "effort": "medium"
     },
     {
       "id": "EPAM-020",
-      "title": "Review — RAG POC Phase",
+      "title": "Review \u2014 RAG POC Phase",
       "description": "Review EPAM-019 (RAG Asset Discovery POC). Verify keyword matching correctness, score threshold behaviour, injection format in system prompt, absence handling, and that the POC implementation does not introduce performance regressions on the ContextBuilder hot path.",
       "priority": "low",
       "status": "pending",
@@ -911,7 +957,7 @@
       "agentRole": "review-agent",
       "acceptanceCriteria": [
         "EPAM-019 acceptance criteria are met and verified",
-        "AssetStore.search() is synchronous or uses pre-loaded in-memory index — no blocking I/O on the ContextBuilder hot path",
+        "AssetStore.search() is synchronous or uses pre-loaded in-memory index \u2014 no blocking I/O on the ContextBuilder hot path",
         "Score threshold (0.1) is configurable via config rather than a magic number constant",
         "Asset injection does not exceed 500 tokens in the worst case (3 assets with long descriptions)",
         "Unit tests exist and pass for all AssetStore.search() edge cases",
@@ -920,7 +966,7 @@
       "dependencies": [
         "EPAM-019"
       ],
-      "estimatedHours": 2,
+      "estimatedHours": 0.0495,
       "technicalNotes": {
         "files": [],
         "requiredSkills": [
@@ -933,7 +979,9 @@
       "estimatedAiMinutes": 2.97,
       "estimatedCost": 0.02,
       "estimatedTokens": 23731,
-      "estimatedTurns": 6
+      "estimatedTurns": 6,
+      "humanHours": 2,
+      "effort": "low"
     },
     {
       "id": "EPAM-IT-001",
@@ -951,7 +999,7 @@
         "Log output confirms the orchestration wrapper (run-agent-orchestration.sh) started and completed successfully"
       ],
       "dependencies": [],
-      "estimatedHours": 0.5,
+      "estimatedHours": 0.0078,
       "technicalNotes": {
         "files": [],
         "requiredSkills": [
@@ -964,7 +1012,9 @@
       "estimatedAiMinutes": 0.47,
       "estimatedCost": 0,
       "estimatedTokens": 3744,
-      "estimatedTurns": 1
+      "estimatedTurns": 1,
+      "humanHours": 0.5,
+      "effort": "low"
     },
     {
       "id": "EPAM-IT-002",
@@ -982,7 +1032,7 @@
         "Log output confirms the orchestration wrapper started and completed successfully"
       ],
       "dependencies": [],
-      "estimatedHours": 0.5,
+      "estimatedHours": 0.0078,
       "technicalNotes": {
         "files": [],
         "requiredSkills": [
@@ -995,7 +1045,9 @@
       "estimatedAiMinutes": 0.47,
       "estimatedCost": 0,
       "estimatedTokens": 3744,
-      "estimatedTurns": 1
+      "estimatedTurns": 1,
+      "humanHours": 0.5,
+      "effort": "low"
     },
     {
       "id": "EPAM-IT-003",
@@ -1014,7 +1066,7 @@
         "Log output confirms the orchestration wrapper started and completed successfully"
       ],
       "dependencies": [],
-      "estimatedHours": 0.5,
+      "estimatedHours": 0.0078,
       "technicalNotes": {
         "files": [],
         "requiredSkills": [
@@ -1027,7 +1079,49 @@
       "estimatedAiMinutes": 0.47,
       "estimatedCost": 0,
       "estimatedTokens": 3744,
-      "estimatedTurns": 1
+      "estimatedTurns": 1,
+      "humanHours": 0.5,
+      "effort": "low"
+    },
+    {
+      "id": "EPAM-CR-001",
+      "title": "Contextual Purveyor Review",
+      "description": "Run the Contextual Purveyor Agent (CPA) pre-pass over all upcoming stories. Retrieves relevant KB chunks via TF-IDF, invokes Claude Haiku for per-story estimate review, blends CPA output with formula estimates using confidence-weighted interpolation, and gates on risk thresholds before any implementation agent executes.",
+      "priority": "critical",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "context-purveyor",
+      "storyType": "review",
+      "effort": "low",
+      "humanHours": 0.25,
+      "estimatedHours": 0.0021,
+      "estimatedAiMinutes": 0.13,
+      "estimatedCost": 0.0,
+      "estimatedTokens": 1056,
+      "estimatedTurns": 1,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "All stories in scope have a cpa-review.jsonl entry for this run",
+        "No stories in block gate state",
+        "Blended estimates written to prd.json",
+        "citationCoverage >= 0.30 for at least 80% of stories"
+      ],
+      "technicalNotes": {
+        "files": [
+          "orchestrations/scripts/contextualize-stories.sh",
+          "orchestrations/scripts/lib/tfidf.js",
+          "orchestrations/scripts/lib/cpa-inference.js",
+          "orchestrations/prompts/cpa-system.md"
+        ],
+        "requiredSkills": [
+          "bash",
+          "tfidf",
+          "llm-inference",
+          "json-schema"
+        ]
+      },
+      "aiProvider": "claude"
     }
   ],
   "configuration": {
@@ -1036,6 +1130,9 @@
     "requireTests": true
   },
   "implementationOrder": {
+    "context_review": [
+      "EPAM-CR-001"
+    ],
     "infra_test": [
       "EPAM-IT-001",
       "EPAM-IT-002",
@@ -1082,6 +1179,10 @@
   },
   "totalEstimatedHours": 120.5,
   "phasesConfig": {
+    "context_review": {
+      "orchestrationMode": "bash",
+      "description": "CPA pre-pass \u2014 contextualizes all stories, adjusts estimates, gates on confidence before implementation phases run"
+    },
     "infra_test": {
       "orchestrationMode": "bash"
     },

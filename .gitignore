@@ -42,3 +42,7 @@ coverage/
 
 # Estimate backup files
 orchestrations/prd.json.before-*
+orchestrations/prd.json.before-cpa
+
+# CPA review logs (dynamic — generated per run)
+orchestrations/logs/cpa-review.jsonl

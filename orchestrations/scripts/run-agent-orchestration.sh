@@ -217,6 +217,56 @@ fi
 # Create log directory
 mkdir -p "$LOG_DIR"
 
+# ── Step 0.1: Contextual Purveyor Agent (CPA) pre-pass ───────────────────────
+# Reviews upcoming phase stories, adjusts estimates, and gates on confidence.
+# Skip with: SKIP_CPA=1 ./run-agent-orchestration.sh --phase <phase>
+# For strict mode (halt on 'review' gate): STRICT_CPA=1
+# ─────────────────────────────────────────────────────────────────────────────
+CPA_SCRIPT="$SCRIPT_DIR/contextualize-stories.sh"
+
+if [ "${SKIP_CPA:-0}" != "1" ] && [ -f "$CPA_SCRIPT" ]; then
+    log "Step 0.1: Running CPA pre-pass for phase '$PHASE'..."
+
+    cpa_flags="--phase $PHASE --apply"
+    [ "${STRICT_CPA:-0}" = "1" ] && cpa_flags="$cpa_flags --strict"
+
+    cpa_exit=0
+    # shellcheck disable=SC2086
+    bash "$CPA_SCRIPT" $cpa_flags 2>&1 | tee "$LOG_DIR/cpa-${PHASE}.log" || cpa_exit=$?
+
+    case $cpa_exit in
+        0)
+            success "Step 0.1: CPA gate PASSED for phase '$PHASE'"
+            "$SCRIPT_DIR/update-monitor.sh" event "cpa_pass" \
+                "CPA gate passed — all stories cleared" "" "main" "context-purveyor" 2>/dev/null || true
+            ;;
+        2)
+            warning "Step 0.1: CPA gate REVIEW — some stories have elevated risk"
+            warning "  Check: $LOG_DIR/cpa-${PHASE}.log"
+            warning "  Continuing (use STRICT_CPA=1 to halt on review gates)"
+            "$SCRIPT_DIR/update-monitor.sh" event "cpa_review" \
+                "CPA gate REVIEW — proceeding with warnings" "" "main" "context-purveyor" 2>/dev/null || true
+            ;;
+        3)
+            error "Step 0.1: CPA gate BLOCKED — one or more stories cannot proceed"
+            error "  Check: $LOG_DIR/cpa-${PHASE}.log"
+            error "  Resolve flagged issues, then re-run. Override: SKIP_CPA=1"
+            "$SCRIPT_DIR/update-monitor.sh" event "cpa_block" \
+                "CPA gate BLOCKED — pipeline halted" "" "main" "context-purveyor" 2>/dev/null || true
+            exit 3
+            ;;
+        *)
+            warning "Step 0.1: CPA script exited with code $cpa_exit (non-critical — continuing)"
+            ;;
+    esac
+else
+    if [ "${SKIP_CPA:-0}" = "1" ]; then
+        info "Step 0.1: CPA pre-pass skipped (SKIP_CPA=1)"
+    else
+        info "Step 0.1: CPA script not found — skipping pre-pass"
+    fi
+fi
+
 # Resolve orchestration mode for this phase (phase config > ORCH_MODE env > bash default)
 RESOLVED_ORCH_MODE=$(resolve_orch_mode "$PHASE")
 

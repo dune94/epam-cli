@@ -1,6 +1,6 @@
 {
   "id": "epam-cli-v1",
-  "title": "EPAM CLI \u2014 AI Coding Assistant",
+  "title": "EPAM CLI — AI Coding Assistant",
   "version": "1.0.0",
   "lastUpdated": "2026-02-25",
   "project": {
@@ -230,7 +230,7 @@
     },
     {
       "id": "EPAM-003",
-      "title": "Infra Test \u2014 FinOps Phase",
+      "title": "Infra Test — FinOps Phase",
       "description": "Verify that the budget guardrail configuration loads correctly and that the report command exists and is registered. Write unit tests for BudgetGuard and the report command to confirm the finops phase implementation is complete and correct.",
       "priority": "medium",
       "status": "pending",
@@ -446,7 +446,7 @@
     },
     {
       "id": "EPAM-008",
-      "title": "Review \u2014 Agent Intelligence Phase",
+      "title": "Review — Agent Intelligence Phase",
       "description": "Review all stories in the agent_intelligence phase (EPAM-004 through EPAM-007). Verify TypeScript strict compliance, test coverage, slash command patterns, profile loading behaviour, plan mode approval flow, decision injection correctness, and MCP protocol implementation quality.",
       "priority": "medium",
       "status": "pending",
@@ -572,7 +572,7 @@
     },
     {
       "id": "EPAM-011",
-      "title": "Review \u2014 Team Features Phase",
+      "title": "Review — Team Features Phase",
       "description": "Review all stories in the team_features phase (EPAM-009 and EPAM-010). Verify session replay rendering, speed flag behaviour, sync push/pull correctness, conflict resolution logic, auth token handling, and test coverage.",
       "priority": "medium",
       "status": "pending",
@@ -584,7 +584,7 @@
         "Replay command renders all three turn element types (user, assistant, tool call) with correct chalk colours",
         "Sync pull does not overwrite local context when local is newer than remote",
         "Sync push includes correct Authorization header format",
-        "No hardcoded endpoint strings \u2014 sync endpoint URL comes from config",
+        "No hardcoded endpoint strings — sync endpoint URL comes from config",
         "All new features have corresponding vitest unit tests",
         "`tsc --noEmit` passes with zero errors after both stories are merged"
       ],
@@ -662,7 +662,7 @@
       "agentGroup": "main",
       "agentRole": "agent-systems-engineer",
       "acceptanceCriteria": [
-        "SquadRunner.ts orchestrates the full lifecycle: Leader \u2192 decompose \u2192 parallel Coder+Tester+SecurityAuditor \u2192 peer-review \u2192 present",
+        "SquadRunner.ts orchestrates the full lifecycle: Leader → decompose → parallel Coder+Tester+SecurityAuditor → peer-review → present",
         "Leader agent produces a SquadPlan JSON: { subtasks: [{ id, role, description, dependsOn }] }",
         "Coder, Tester, SecurityAuditor roles defined in roles.ts with distinct system prompts and tool access",
         "Coder and Tester run in parallel (Promise.all); SecurityAuditor runs after Coder completes",
@@ -698,7 +698,7 @@
     },
     {
       "id": "EPAM-014",
-      "title": "Review \u2014 Multi-Agent Phase",
+      "title": "Review — Multi-Agent Phase",
       "description": "Review all stories in the multi_agent phase (EPAM-012 and EPAM-013). Verify Ralph Wiggum Loop parallel execution safety, cancellation correctness, quality scoring logic, and squad execution delegation chain. Confirm no goroutine-equivalent leaks (unresolved Promises), proper AbortController usage, and peer-review loop bounds.",
       "priority": "medium",
       "status": "pending",
@@ -749,7 +749,7 @@
         "ConstraintLoader fetches GET /v1/projects/{id}/constraints with auth token on AgentRunner session start",
         "Constraint schema (id, rule, severity, createdBy, expiresAt) is defined and validated with zod",
         "Expired constraints (expiresAt < now) are filtered out before injection",
-        "Block-severity constraints are injected at the top of the system prompt under a [CONSTRAINTS \u2014 MUST FOLLOW] header",
+        "Block-severity constraints are injected at the top of the system prompt under a [CONSTRAINTS — MUST FOLLOW] header",
         "Warn-severity constraints are injected at the bottom of the system prompt under a [ADVISORY CONSTRAINTS] header",
         "If the endpoint is unreachable, a warning is logged but the session proceeds without constraints",
         "Constraint fetch result is cached for the session duration (no re-fetch per turn)",
@@ -782,7 +782,7 @@
     {
       "id": "EPAM-016",
       "title": "Signature Auditor Agents",
-      "description": "Define named auditor personas (e.g. 'security-sarah', 'performance-paul') in .epam/auditors.json. After each agent response, the selected auditors run in parallel and produce critique transcripts. The user sees the debate \u2014 each auditor's findings \u2014 before the final answer is confirmed.",
+      "description": "Define named auditor personas (e.g. 'security-sarah', 'performance-paul') in .epam/auditors.json. After each agent response, the selected auditors run in parallel and produce critique transcripts. The user sees the debate — each auditor's findings — before the final answer is confirmed.",
       "priority": "medium",
       "status": "pending",
       "completed": false,
@@ -867,7 +867,7 @@
     },
     {
       "id": "EPAM-018",
-      "title": "Review \u2014 Enterprise Phase",
+      "title": "Review — Enterprise Phase",
       "description": "Review all stories in the enterprise phase (EPAM-015, EPAM-016, EPAM-017). Verify constraint injection security (no constraint bypass), auditor parallel safety, severity gate correctness, consultation single-turn scoping, and full TypeScript strict compliance.",
       "priority": "medium",
       "status": "pending",
@@ -908,7 +908,7 @@
     {
       "id": "EPAM-019",
       "title": "RAG Asset Discovery POC",
-      "description": "Mock implementation of enterprise asset discovery. .epam/assets.json contains mock asset records (id, title, description, tags, repoUrl). Before each agent LLM call, perform fuzzy keyword matching against the user message and inject the top 3 matching assets as an '[ASSET ALERT]' block in the system prompt. No vector database \u2014 pure keyword matching for POC.",
+      "description": "Mock implementation of enterprise asset discovery. .epam/assets.json contains mock asset records (id, title, description, tags, repoUrl). Before each agent LLM call, perform fuzzy keyword matching against the user message and inject the top 3 matching assets as an '[ASSET ALERT]' block in the system prompt. No vector database — pure keyword matching for POC.",
       "priority": "low",
       "status": "pending",
       "completed": false,
@@ -948,7 +948,7 @@
     },
     {
       "id": "EPAM-020",
-      "title": "Review \u2014 RAG POC Phase",
+      "title": "Review — RAG POC Phase",
       "description": "Review EPAM-019 (RAG Asset Discovery POC). Verify keyword matching correctness, score threshold behaviour, injection format in system prompt, absence handling, and that the POC implementation does not introduce performance regressions on the ContextBuilder hot path.",
       "priority": "low",
       "status": "pending",
@@ -957,7 +957,7 @@
       "agentRole": "review-agent",
       "acceptanceCriteria": [
         "EPAM-019 acceptance criteria are met and verified",
-        "AssetStore.search() is synchronous or uses pre-loaded in-memory index \u2014 no blocking I/O on the ContextBuilder hot path",
+        "AssetStore.search() is synchronous or uses pre-loaded in-memory index — no blocking I/O on the ContextBuilder hot path",
         "Score threshold (0.1) is configurable via config rather than a magic number constant",
         "Asset injection does not exceed 500 tokens in the worst case (3 assets with long descriptions)",
         "Unit tests exist and pass for all AssetStore.search() edge cases",
@@ -1097,7 +1097,7 @@
       "humanHours": 0.25,
       "estimatedHours": 0.0021,
       "estimatedAiMinutes": 0.13,
-      "estimatedCost": 0.0,
+      "estimatedCost": 0,
       "estimatedTokens": 1056,
       "estimatedTurns": 1,
       "dependencies": [],
@@ -1122,6 +1122,57 @@
         ]
       },
       "aiProvider": "claude"
+    },
+    {
+      "id": "EPAM-TEST-001",
+      "title": "PRD Schema Validator",
+      "description": "Build orchestrations/scripts/lib/prd_validator.py — a standalone Python script that validates prd.json against a structural schema. Checks required fields on every story, referential integrity of dependency IDs and implementationOrder entries, enum constraints on priority/storyType/effort, no duplicate story IDs, and no orphaned stories. Uses Python stdlib only (json, sys, argparse). Exits 0 when valid, 1 when errors found. Produces a structured report listing each violation with story ID and field name.",
+      "priority": "high",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "backend-engineer",
+      "storyType": "implementation",
+      "effort": "medium",
+      "humanHours": 3,
+      "estimatedHours": 0.2798,
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "File orchestrations/scripts/lib/prd_validator.py exists and is runnable with python3",
+        "python3 orchestrations/scripts/lib/prd_validator.py orchestrations/prd.json exits 0 and prints a summary line: 'N stories validated, 0 errors, K warnings'",
+        "Validates required fields on every story: id, title, description, priority, status, completed, agentGroup, agentRole, storyType, estimatedHours, dependencies, acceptanceCriteria — reports STORY_ID: missing field 'X' for each violation",
+        "All IDs in story.dependencies[] reference a story.id that exists in the stories array — reports 'STORY_ID: dependency DEP_ID not found'",
+        "All story IDs in implementationOrder phase arrays exist in the stories array — reports 'phase X: story ID Y not found in stories'",
+        "Every story.id in the stories array appears in exactly one implementationOrder phase — reports orphaned or duplicate-phase stories",
+        "No duplicate story IDs in the stories array — reports 'duplicate id: X'",
+        "priority validated against enum {low, medium, high, critical}",
+        "storyType validated against enum {implementation, review, health_check}",
+        "effort validated against enum {low, medium, high} when field is present",
+        "Flag --strict causes warnings (missing optional fields: humanHours, effort, cpaGate) to be treated as errors, exit 1",
+        "Flag --phase <id> scopes validation to stories in that phase only",
+        "Flag --json outputs violations as a JSON array instead of human-readable text",
+        "When intentionally given a prd.json with a missing required field on one story, script exits 1 and the error message identifies the story ID and field name",
+        "Pure Python stdlib — no third-party packages, no pip install required",
+        "Runs in under 2 seconds on a 30-story prd.json"
+      ],
+      "technicalNotes": {
+        "files": [
+          "orchestrations/scripts/lib/prd_validator.py"
+        ],
+        "requiredSkills": [
+          "python",
+          "json-schema",
+          "cli-validation",
+          "data-validation"
+        ]
+      },
+      "aiProvider": "claude",
+      "estimatedAiMinutes": 16.79,
+      "estimatedCost": 1.08,
+      "estimatedTokens": 201484,
+      "estimatedTurns": 17,
+      "cpaConfidence": 0.7,
+      "cpaGate": "pass"
     }
   ],
   "configuration": {
@@ -1175,13 +1226,16 @@
     "rag_poc": [
       "EPAM-019",
       "EPAM-020"
+    ],
+    "test_validation": [
+      "EPAM-TEST-001"
     ]
   },
   "totalEstimatedHours": 120.5,
   "phasesConfig": {
     "context_review": {
       "orchestrationMode": "bash",
-      "description": "CPA pre-pass \u2014 contextualizes all stories, adjusts estimates, gates on confidence before implementation phases run"
+      "description": "CPA pre-pass — contextualizes all stories, adjusts estimates, gates on confidence before implementation phases run"
     },
     "infra_test": {
       "orchestrationMode": "bash"
@@ -1206,6 +1260,10 @@
     },
     "rag_poc": {
       "orchestrationMode": "bash"
+    },
+    "test_validation": {
+      "orchestrationMode": "bash",
+      "description": "Validation test phase — real story execution for CPA estimate vs actual comparison"
     }
   }
 }

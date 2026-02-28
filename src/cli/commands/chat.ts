@@ -1,6 +1,5 @@
 import { Command } from 'commander';
 import { resolveConfig } from '../../config/ConfigResolver.js';
-import { selectProvider } from '../../billing/ProviderSelector.js';
 import { AuthManager } from '../../auth/AuthManager.js';
 import { ReadFileTool } from '../../tools/builtin/ReadFile.js';
 import { WriteFileTool } from '../../tools/builtin/WriteFile.js';
@@ -81,6 +80,9 @@ export function createChatCommand(): Command {
           model: config.model,
           tools,
           maxIterations: config.maxIterations,
+          autoCompressAt: config.autoCompressAt,
+          maxOutputTokens: config.maxOutputTokens,
+          dangerousSkipApproval: config.tools.dangerousSkipApproval,
           onTextDelta: delta => writer.write(delta),
         });
 

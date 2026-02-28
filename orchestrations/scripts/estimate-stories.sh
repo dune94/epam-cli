@@ -134,8 +134,12 @@ fi
 # Constants (defaults from estimation.md)
 # ────────────────────────────────────────────
 
-# Human-to-AI ratio (1 human hour = X AI hours; default 0.08 = ~5 min/hr)
-HUMAN_TO_AI_RATIO=0.08
+# Human-to-AI ratio per effort tier (1 human hour = X AI hours)
+# Low-effort stories convert faster; high-effort stories take proportionally longer
+# due to deeper reasoning, multi-file coordination, and error-retry overhead.
+HUMAN_TO_AI_RATIO_LOW=0.05
+HUMAN_TO_AI_RATIO_MED=0.08
+HUMAN_TO_AI_RATIO_HIGH=0.12
 
 # Tokens per minute by effort tier
 TOKENS_PER_MIN_LOW=8000
@@ -147,9 +151,10 @@ MIN_PER_TURN_LOW=0.5
 MIN_PER_TURN_MED=1.0
 MIN_PER_TURN_HIGH=1.5
 
-# Input/output token split
-INPUT_RATIO=0.80
-OUTPUT_RATIO=0.20
+# Input/output token split by storyType
+# Implementation generates more output (code); reviews mostly read.
+declare -A INPUT_RATIO=( [implementation]=0.75 [review]=0.92 [health_check]=0.90 )
+declare -A OUTPUT_RATIO=( [implementation]=0.25 [review]=0.08 [health_check]=0.10 )
 
 # Cache hit ratios by position in phase
 CACHE_POS_1=0.00
@@ -175,16 +180,28 @@ if [ "$REFINE_MODE" = true ]; then
         warning "No completed records in $COST_LOG -- using formula defaults"
         REFINE_MODE=false
     else
-        # Calibrate HUMAN_TO_AI_RATIO
-        sum_elapsed=$(echo "$completed_data" | jq -s 'map(.elapsed_minutes // 0) | add // 0')
-        sum_forecast_min=$(echo "$completed_data" | jq -s 'map((.forecast_hours // 0) * 60) | add // 0')
+        # Calibrate HUMAN_TO_AI_RATIO per effort tier
+        for tier in low med high; do
+            case $tier in
+                low)  filter='select((.forecast_hours // 0) <= 2)' ;;
+                med)  filter='select((.forecast_hours // 0) > 2 and (.forecast_hours // 0) <= 6)' ;;
+                high) filter='select((.forecast_hours // 0) > 6)' ;;
+            esac
 
-        if (( $(echo "$sum_forecast_min > 0" | bc -l) )); then
-            HUMAN_TO_AI_RATIO=$(echo "scale=4; $sum_elapsed / $sum_forecast_min" | bc)
-        fi
+            tier_elapsed=$(echo "$completed_data" | jq -s "[.[] | $filter | (.elapsed_minutes // 0)] | add // 0")
+            tier_forecast=$(echo "$completed_data" | jq -s "[.[] | $filter | ((.forecast_hours // 0) * 60)] | add // 0")
+
+            if (( $(echo "$tier_forecast > 0" | bc -l) )); then
+                calibrated_ratio=$(echo "scale=4; $tier_elapsed / $tier_forecast" | bc)
+                case $tier in
+                    low)  HUMAN_TO_AI_RATIO_LOW=$calibrated_ratio ;;
+                    med)  HUMAN_TO_AI_RATIO_MED=$calibrated_ratio ;;
+                    high) HUMAN_TO_AI_RATIO_HIGH=$calibrated_ratio ;;
+                esac
+            fi
+        done
 
         # Calibrate tokens per minute by effort tier
-        # Group by inferred effort: estimatedHours <= 2 → low, <= 6 → med, > 6 → high
         for tier in low med high; do
             case $tier in
                 low)  filter='select((.forecast_hours // 0) <= 2)' ;;
@@ -205,13 +222,17 @@ if [ "$REFINE_MODE" = true ]; then
             fi
         done
 
-        # Compute per-role averages for summary
+        sum_elapsed=$(echo "$completed_data" | jq -s 'map(.elapsed_minutes // 0) | add // 0')
+        sum_forecast_min=$(echo "$completed_data" | jq -s 'map((.forecast_hours // 0) * 60) | add // 0')
+
         echo ""
         echo -e "${CYAN}=== Calibration Summary ===${NC}"
         echo ""
         printf "%-30s %15s\n" "Parameter" "Calibrated Value"
         echo "----------------------------------------------"
-        printf "%-30s %15.4f\n" "HUMAN_TO_AI_RATIO" "$HUMAN_TO_AI_RATIO"
+        printf "%-30s %15.4f\n" "H2A_RATIO (low/Haiku)" "$HUMAN_TO_AI_RATIO_LOW"
+        printf "%-30s %15.4f\n" "H2A_RATIO (med/Sonnet)" "$HUMAN_TO_AI_RATIO_MED"
+        printf "%-30s %15.4f\n" "H2A_RATIO (high/Opus)" "$HUMAN_TO_AI_RATIO_HIGH"
         printf "%-30s %15d\n" "TOKENS_PER_MIN (low/Haiku)" "$TOKENS_PER_MIN_LOW"
         printf "%-30s %15d\n" "TOKENS_PER_MIN (med/Sonnet)" "$TOKENS_PER_MIN_MED"
         printf "%-30s %15d\n" "TOKENS_PER_MIN (high/Opus)" "$TOKENS_PER_MIN_HIGH"
@@ -425,8 +446,9 @@ GRAND_COST=0
 # JSON accumulator
 JSON_RESULTS="[]"
 
-# Track previous agent role per phase for same-role bonus
+# Track previous agent role and files per phase for cache bonuses
 declare -A PREV_ROLE_IN_PHASE
+declare -A PREV_FILES_IN_PHASE
 
 while IFS= read -r sid; do
     # Extract story metadata via single jq call
@@ -451,9 +473,16 @@ while IFS= read -r sid; do
     # Complexity index
     C=$(compute_complexity "$s_priority" "$s_type" "$s_deps" "$s_skills" "$s_files" "$total_loc" "$s_skill_csv")
 
+    # Per-tier human-to-AI ratio
+    local_h2a=0
+    case "$effort" in
+        low)    local_h2a=$HUMAN_TO_AI_RATIO_LOW ;;
+        medium) local_h2a=$HUMAN_TO_AI_RATIO_MED ;;
+        high)   local_h2a=$HUMAN_TO_AI_RATIO_HIGH ;;
+    esac
+
     # AI execution minutes
-    ai_minutes=$(echo "scale=2; $s_hours * $HUMAN_TO_AI_RATIO * 60 * $C" | bc)
-    # Ensure leading zero (bc may output ".93" instead of "0.93")
+    ai_minutes=$(echo "scale=2; $s_hours * $local_h2a * 60 * $C" | bc)
     [[ "$ai_minutes" =~ ^\. ]] && ai_minutes="0${ai_minutes}"
 
     # Tokens
@@ -465,11 +494,7 @@ while IFS= read -r sid; do
         high)   local_tpm=$TOKENS_PER_MIN_HIGH; local_mpt=$MIN_PER_TURN_HIGH ;;
     esac
 
-    file_token_factor=$(echo "scale=4; 1 + 0.1 * $(max_zero $((s_files - 1)))" | bc)
-    # Use / 1 to force bc to apply scale=0 (bc scale only affects division, not multiplication)
-    tokens=$(echo "scale=0; ($ai_minutes * $local_tpm * $file_token_factor) / 1" | bc)
-
-    # Turns
+    # Turns (computed before tokens so we can apply context growth factor)
     if (( $(echo "$local_mpt > 0" | bc -l) )); then
         turns_raw=$(echo "scale=4; $ai_minutes / $local_mpt" | bc)
     else
@@ -480,22 +505,60 @@ while IFS= read -r sid; do
         turns=1
     fi
 
-    # Cache ratio
+    file_token_factor=$(echo "scale=4; 1 + 0.1 * $(max_zero $((s_files - 1)))" | bc)
+
+    # Context accumulation: each turn replays growing history, so token use is
+    # super-linear in turns. ln(turns) captures this without runaway growth.
+    # 1 turn → 1.00x, 10 turns → 1.28x, 30 turns → 1.41x, 60 turns → 1.49x.
+    if [ "$turns" -gt 1 ]; then
+        ctx_growth=$(echo "scale=4; 1 + 0.12 * l($turns)" | bc -l)
+    else
+        ctx_growth="1.0000"
+    fi
+
+    tokens=$(echo "scale=0; ($ai_minutes * $local_tpm * $file_token_factor * $ctx_growth) / 1" | bc)
+
+    # Cache ratio: position-based + same-role bonus + file-overlap bonus
     cache_ratio=$(get_cache_ratio "$position")
+
     # Same-role bonus
     prev_role="${PREV_ROLE_IN_PHASE[$phase]:-}"
     if [ -n "$prev_role" ] && [ "$prev_role" = "$s_role" ]; then
         cache_ratio=$(echo "scale=2; $cache_ratio + $CACHE_SAME_ROLE_BONUS" | bc)
-        # Cap at 0.85
-        if (( $(echo "$cache_ratio > 0.85" | bc -l) )); then
-            cache_ratio=0.85
+    fi
+
+    # File-overlap bonus: shared files with previous story increase cache hits
+    current_files=$(jq -r --arg id "$sid" \
+        '.stories[] | select(.id==$id) | .technicalNotes.files // [] | .[]' "$PRD_FILE" 2>/dev/null | sort)
+    prev_files_str="${PREV_FILES_IN_PHASE[$phase]:-}"
+    if [ -n "$prev_files_str" ] && [ -n "$current_files" ]; then
+        prev_files_sorted=$(echo "$prev_files_str" | tr ',' '\n' | sort)
+        overlap_count=$(comm -12 <(echo "$current_files") <(echo "$prev_files_sorted") | wc -l)
+        current_count=$(echo "$current_files" | wc -l)
+        if [ "$current_count" -gt 0 ] && [ "$overlap_count" -gt 0 ]; then
+            overlap_pct=$(echo "scale=2; $overlap_count / $current_count" | bc)
+            if (( $(echo "$overlap_pct > 0.50" | bc -l) )); then
+                cache_ratio=$(echo "scale=2; $cache_ratio + 0.15" | bc)
+            elif (( $(echo "$overlap_pct > 0" | bc -l) )); then
+                cache_ratio=$(echo "scale=2; $cache_ratio + 0.08" | bc)
+            fi
         fi
     fi
-    PREV_ROLE_IN_PHASE["$phase"]="$s_role"
 
-    # Cost computation
-    input_tokens=$(echo "scale=0; ($tokens * $INPUT_RATIO) / 1" | bc)
-    output_tokens=$(echo "scale=0; ($tokens * $OUTPUT_RATIO) / 1" | bc)
+    # Cap at 0.85
+    if (( $(echo "$cache_ratio > 0.85" | bc -l) )); then
+        cache_ratio=0.85
+    fi
+
+    PREV_ROLE_IN_PHASE["$phase"]="$s_role"
+    PREV_FILES_IN_PHASE["$phase"]="$(echo "$current_files" | tr '\n' ',')"
+
+    # Per-storyType IO split (default to implementation if unknown)
+    local_input_ratio="${INPUT_RATIO[$s_type]:-0.75}"
+    local_output_ratio="${OUTPUT_RATIO[$s_type]:-0.25}"
+
+    input_tokens=$(echo "scale=0; ($tokens * $local_input_ratio) / 1" | bc)
+    output_tokens=$(echo "scale=0; ($tokens * $local_output_ratio) / 1" | bc)
     cache_tokens=$(echo "scale=0; ($input_tokens * $cache_ratio) / 1" | bc)
     uncached_input=$(echo "scale=0; ($input_tokens - $cache_tokens) / 1" | bc)
 
@@ -511,6 +574,21 @@ while IFS= read -r sid; do
     if echo "$cost" | grep -q '^\.' ; then
         cost="0$cost"
     fi
+
+    # Uncertainty ranges: wider for higher complexity and more turns
+    # range_factor scales from 0.15 (simple) to 0.45 (complex)
+    range_factor=$(echo "scale=4; 0.15 + 0.03 * l($C * $turns + 1)" | bc -l)
+    if (( $(echo "$range_factor > 0.50" | bc -l) )); then range_factor="0.50"; fi
+    est_min_low=$(echo "scale=2; $ai_minutes * (1 - $range_factor)" | bc)
+    est_min_high=$(echo "scale=2; $ai_minutes * (1 + $range_factor * 1.5)" | bc)
+    est_cost_low=$(echo "scale=2; $cost * (1 - $range_factor)" | bc)
+    est_cost_high=$(echo "scale=2; $cost * (1 + $range_factor * 1.5)" | bc)
+    [[ "$est_min_low" =~ ^\. ]] && est_min_low="0${est_min_low}"
+    [[ "$est_min_high" =~ ^\. ]] && est_min_high="0${est_min_high}"
+    [[ "$est_cost_low" =~ ^\. ]] && est_cost_low="0${est_cost_low}"
+    [[ "$est_cost_high" =~ ^\. ]] && est_cost_high="0${est_cost_high}"
+    [[ "$est_min_low" =~ ^- ]] && est_min_low="0.00"
+    [[ "$est_cost_low" =~ ^- ]] && est_cost_low="0.00"
 
     # Format ai_minutes to 1 decimal
     ai_minutes_fmt=$(printf "%.1f" "$ai_minutes")
@@ -534,11 +612,12 @@ while IFS= read -r sid; do
     if [ "$JSON_MODE" != true ]; then
         echo -e "${BOLD}${s_id}${NC}  ${s_title}"
         echo "  Human effort:   ${s_hours}h  (developer estimate)"
-        echo "  Machine time:   ${ai_minutes_fmt} min  (C=${C}, ratio=${HUMAN_TO_AI_RATIO})"
-        echo "  Tokens:         ${tokens_fmt}   (in: ${input_fmt} / out: ${output_fmt})"
+        echo "  Machine time:   ${ai_minutes_fmt} min  (C=${C}, ratio=${local_h2a}, ${effort})"
+        echo "  Range:          $(printf "%.1f" "$est_min_low")–$(printf "%.1f" "$est_min_high") min  |  \$${est_cost_low}–\$${est_cost_high}"
+        echo "  Tokens:         ${tokens_fmt}   (in: ${input_fmt} / out: ${output_fmt}, ctx_growth: $(printf "%.2f" "$ctx_growth")x)"
         echo "  Cache:          ${cache_pct}% hit   (position: ${position} in ${phase})"
         echo "  Turns:          ${turns}        (${local_mpt} min/turn, ${effort} effort)"
-        echo "  Cost:           \$${cost}     (${model_name}, cached input: \$${price_cached}/1M)"
+        echo "  Cost:           \$${cost}     (${model_name}, IO split: ${local_input_ratio}/${local_output_ratio})"
         echo ""
     fi
 
@@ -548,6 +627,7 @@ while IFS= read -r sid; do
         --arg title "$s_title" \
         --arg phase "$phase" \
         --arg effort "$effort" \
+        --arg stype "$s_type" \
         --argjson hours "$s_hours" \
         --argjson ai_min "$ai_minutes" \
         --argjson tokens "$tokens" \
@@ -556,11 +636,17 @@ while IFS= read -r sid; do
         --argjson complexity "$C" \
         --argjson cache_pct "$cache_pct" \
         --argjson position "$position" \
+        --argjson ctx_g "$ctx_growth" \
+        --argjson rng_min_lo "$est_min_low" \
+        --argjson rng_min_hi "$est_min_high" \
+        --argjson rng_cost_lo "$est_cost_low" \
+        --argjson rng_cost_hi "$est_cost_high" \
         '. + [{
             id: $id,
             title: $title,
             phase: $phase,
             effort: $effort,
+            storyType: $stype,
             humanHours: $hours,
             estimatedAiMinutes: ($ai_min * 100 | round / 100),
             estimatedTokens: $tokens,
@@ -568,7 +654,14 @@ while IFS= read -r sid; do
             estimatedCost: ($cost * 100 | round / 100),
             complexityIndex: ($complexity * 10000 | round / 10000),
             cacheHitPct: $cache_pct,
-            positionInPhase: $position
+            positionInPhase: $position,
+            contextGrowthFactor: ($ctx_g * 100 | round / 100),
+            range: {
+                minutesLow: ($rng_min_lo * 100 | round / 100),
+                minutesHigh: ($rng_min_hi * 100 | round / 100),
+                costLow: ($rng_cost_lo * 100 | round / 100),
+                costHigh: ($rng_cost_hi * 100 | round / 100)
+            }
         }]')
 
     # Accumulate phase totals

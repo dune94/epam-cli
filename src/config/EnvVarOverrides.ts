@@ -10,6 +10,9 @@ export interface EnvOverrides {
   apiKeyGemini?: string;
   dangerousSkipApproval?: boolean;
   maxIterations?: number;
+  budgetWarningAt?: number;
+  budgetHardLimitAt?: number;
+  maxOutputTokens?: number;
 }
 
 export function readEnvOverrides(): EnvOverrides {
@@ -42,6 +45,18 @@ export function readEnvOverrides(): EnvOverrides {
   if (process.env.EPAM_MAX_ITERATIONS) {
     const n = parseInt(process.env.EPAM_MAX_ITERATIONS, 10);
     if (!isNaN(n)) overrides.maxIterations = n;
+  }
+  if (process.env.EPAM_BUDGET_WARNING_AT) {
+    const n = parseFloat(process.env.EPAM_BUDGET_WARNING_AT);
+    if (!isNaN(n)) overrides.budgetWarningAt = n;
+  }
+  if (process.env.EPAM_BUDGET_HARD_LIMIT_AT) {
+    const n = parseFloat(process.env.EPAM_BUDGET_HARD_LIMIT_AT);
+    if (!isNaN(n)) overrides.budgetHardLimitAt = n;
+  }
+  if (process.env.EPAM_MAX_OUTPUT_TOKENS) {
+    const n = parseInt(process.env.EPAM_MAX_OUTPUT_TOKENS, 10);
+    if (!isNaN(n)) overrides.maxOutputTokens = n;
   }
 
   return overrides;

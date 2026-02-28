@@ -8,6 +8,8 @@ import { buildSystemPrompt } from '../../context/ContextBuilder.js';
 import { createSession, createTurn, appendTurn, loadSession } from '../../context/SessionStore.js';
 import { compressHistory } from '../../context/MemoryCompressor.js';
 import { formatCost, calculateCost } from '../../billing/pricing.js';
+import { BudgetGuard } from '../../billing/BudgetGuard.js';
+import type { BudgetCheckResult } from '../../billing/BudgetGuard.js';
 import { StreamWriter } from '../output/StreamWriter.js';
 import { Renderer } from './Renderer.js';
 import { parseInput, handleSlashCommand } from './InputHandler.js';
@@ -30,13 +32,11 @@ export class Repl {
   private writer = new StreamWriter();
   private renderer = new Renderer();
   private running = false;
-
-  // Cumulative cost tracking across all turns
-  private totalInputTokens = 0;
-  private totalOutputTokens = 0;
+  private budgetGuard: BudgetGuard;
 
   constructor(private options: ReplOptions) {
     this.currentModel = options.config.llmChain[0]?.model ?? options.config.model;
+    this.budgetGuard = new BudgetGuard(options.config.budgetGuardrails, this.currentModel);
   }
 
   async start(): Promise<void> {
@@ -53,6 +53,7 @@ export class Repl {
           chalk.green(` → switching to ${e.toSlot.provider}/${e.toSlot.model}\n`)
         );
         this.currentModel = e.toSlot.model;
+        this.budgetGuard.setModel(e.toSlot.model);
       };
     }
 
@@ -101,7 +102,6 @@ export class Repl {
 
           // Regular message — run agent
           const userMessage = parsed.message!;
-          this.messages.push({ role: 'user', content: userMessage });
 
           try {
             process.stdout.write('\n');
@@ -113,31 +113,29 @@ export class Repl {
               model: this.currentModel,
               tools: this.options.tools,
               maxIterations: config.maxIterations,
+              history: this.messages,
+              autoCompressAt: config.autoCompressAt,
+              maxOutputTokens: config.maxOutputTokens,
+              dangerousSkipApproval: config.tools.dangerousSkipApproval,
+              budgetGuard: this.budgetGuard,
               onTextDelta: delta => this.writer.write(delta),
               onToolCall: (name, inp) => this.writer.writeToolCall(name, inp),
               onToolResult: (name, result, isError) =>
                 this.writer.writeToolResult(name, result, isError),
+              onBudgetCheck: (check) => this.handleBudgetCheck(check),
             });
 
             const result = await runner.run();
             this.writer.newline();
 
-            this.messages.push({ role: 'assistant', content: result.finalResponse });
-
-            // Accumulate across all turns
-            this.totalInputTokens += result.usage.inputTokens;
-            this.totalOutputTokens += result.usage.outputTokens;
+            // Store full message array (includes history + this turn's exchanges)
+            this.messages = result.messages;
 
             // Show per-turn usage + running session cost
-            const sessionCost = calculateCost(
-              this.currentModel,
-              this.totalInputTokens,
-              this.totalOutputTokens
-            );
             this.renderer.renderUsage(
               result.usage.inputTokens,
               result.usage.outputTokens,
-              sessionCost
+              this.budgetGuard.sessionCost,
             );
 
             const turn = createTurn(userMessage, result.finalResponse, result.toolCallCount, {
@@ -147,8 +145,6 @@ export class Repl {
             await appendTurn(this.session, turn);
           } catch (err) {
             this.renderer.renderError((err as Error).message);
-            // Remove the user message we optimistically added so rewind is clean
-            this.messages.pop();
           }
 
           this.writer.reset();
@@ -178,6 +174,50 @@ export class Repl {
     });
   }
 
+  private handleBudgetCheck(check: BudgetCheckResult): void {
+    if (check.action === 'warning') {
+      process.stderr.write(
+        chalk.yellow.bold('\n  ⚠  Budget Warning: ') +
+        chalk.yellow(check.message) + '\n'
+      );
+    } else if (check.action === 'downgrade') {
+      // Trigger failover to next cheaper slot in the chain
+      const chain = this.options.providerChain;
+      if (chain) {
+        const slots = chain.getSlots();
+        const activeIdx = slots.indexOf(chain.activeSlot);
+        if (activeIdx < slots.length - 1) {
+          const nextSlot = slots[activeIdx + 1];
+          chain.getHealth().markUnavailable(chain.activeSlot, 'budget limit');
+          this.currentModel = nextSlot.model;
+          this.budgetGuard.setModel(nextSlot.model);
+          process.stderr.write(
+            chalk.red.bold('\n  ⛔ Budget Hard Limit: ') +
+            chalk.red(check.message) + '\n' +
+            chalk.green(`     Downgraded to ${nextSlot.provider}/${nextSlot.model}\n`)
+          );
+        } else {
+          process.stderr.write(
+            chalk.red.bold('\n  ⛔ Budget Hard Limit: ') +
+            chalk.red(check.message) +
+            chalk.dim(' (no cheaper model available in chain)\n')
+          );
+        }
+      } else {
+        process.stderr.write(
+          chalk.red.bold('\n  ⛔ Budget Hard Limit: ') +
+          chalk.red(check.message) +
+          chalk.dim(' (no failover chain — cannot downgrade)\n')
+        );
+      }
+    } else if (check.action === 'pause') {
+      process.stderr.write(
+        chalk.red.bold('\n  ⛔ Budget Hard Limit: ') +
+        chalk.red(check.message) + '\n'
+      );
+    }
+  }
+
   private buildSlashContext(config: ResolvedConfig, _systemPrompt: string): SlashCommandContext {
     return {
       config,
@@ -190,11 +230,13 @@ export class Repl {
         return sum + Math.ceil(text.length / 4);
       }, 0),
       contextFilePath: config.contextFile,
-      totalInputTokens: this.totalInputTokens,
-      totalOutputTokens: this.totalOutputTokens,
+      totalInputTokens: this.budgetGuard.inputTokens,
+      totalOutputTokens: this.budgetGuard.outputTokens,
+      budgetGuard: this.budgetGuard,
 
       onModelChange: model => {
         this.currentModel = model;
+        this.budgetGuard.setModel(model);
       },
 
       onClear: () => {
@@ -245,11 +287,10 @@ export class Repl {
 
         this.messages = reconstructed;
 
-        // Carry forward token counts from resumed session
+        // Carry forward token counts from resumed session into budget guard
         const resumedInput = loaded.turns.reduce((s, t) => s + t.usage.inputTokens, 0);
         const resumedOutput = loaded.turns.reduce((s, t) => s + t.usage.outputTokens, 0);
-        this.totalInputTokens = resumedInput;
-        this.totalOutputTokens = resumedOutput;
+        this.budgetGuard.loadTokens(resumedInput, resumedOutput);
 
         return { success: true, turnCount: loaded.turns.length };
       },

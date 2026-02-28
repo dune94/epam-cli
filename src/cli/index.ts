@@ -10,6 +10,8 @@ import { createKeysCommand } from './commands/keys.js';
 import { createHistoryCommand } from './commands/history.js';
 import { createModelsCommand } from './commands/models.js';
 import { createDoctorCommand } from './commands/doctor.js';
+import { createEstimateCommand } from './commands/estimate.js';
+import { createOrchestrateCommand } from './commands/orchestrate.js';
 
 export function createCLI(version: string): Command {
   const program = new Command();
@@ -31,6 +33,8 @@ export function createCLI(version: string): Command {
   program.addCommand(createHistoryCommand());
   program.addCommand(createModelsCommand());
   program.addCommand(createDoctorCommand());
+  program.addCommand(createEstimateCommand());
+  program.addCommand(createOrchestrateCommand());
 
   // Default: start chat if interactive, else show help
   program.action(() => {

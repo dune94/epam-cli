@@ -67,6 +67,9 @@ describe('AgentRunner', () => {
     expect(result.iterations).toBe(1);
     expect(result.toolCallCount).toBe(0);
     expect(deltas).toContain('The answer is 42.');
+    expect(result.messages).toHaveLength(2);
+    expect(result.messages[0]).toEqual({ role: 'user', content: 'What is the answer?' });
+    expect(result.messages[1].role).toBe('assistant');
   });
 
   it('stops at maxIterations when stuck in tool loop', async () => {

@@ -23,6 +23,7 @@ export class OpenAIProvider implements LLMProvider {
     try {
       const response = await this.client.chat.completions.create({
         model: request.model,
+        max_tokens: request.maxTokens ?? 16384,
         messages: this.convertMessages(request),
         tools: request.tools?.map(t => ({
           type: 'function' as const,
@@ -45,6 +46,7 @@ export class OpenAIProvider implements LLMProvider {
     try {
       const stream = await this.client.chat.completions.create({
         model: request.model,
+        max_tokens: request.maxTokens ?? 16384,
         messages: this.convertMessages(request),
         tools: request.tools?.map(t => ({
           type: 'function' as const,

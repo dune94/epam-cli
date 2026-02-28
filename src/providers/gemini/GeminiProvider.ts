@@ -84,6 +84,9 @@ export class GeminiProvider implements LLMProvider {
     return this.genAI.getGenerativeModel({
       model: request.model,
       systemInstruction,
+      generationConfig: {
+        maxOutputTokens: request.maxTokens ?? 16384,
+      },
     });
   }
 

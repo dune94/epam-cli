@@ -8,6 +8,7 @@ interface HandoffOptions {
   systemPrompt: string;
   tools: Tool[];
   dangerousSkipApproval: boolean;
+  maxOutputTokens?: number;
   onTextDelta?: (delta: string) => void;
 }
 
@@ -52,6 +53,8 @@ export class AgentHandoffTool implements Tool {
         model: this.options.model,
         tools: this.options.tools.filter(t => t.name !== 'delegate_to_agent'),
         maxIterations: 10,
+        dangerousSkipApproval: this.options.dangerousSkipApproval,
+        maxOutputTokens: this.options.maxOutputTokens,
         onTextDelta: this.options.onTextDelta,
       });
 

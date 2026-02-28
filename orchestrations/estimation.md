@@ -95,29 +95,58 @@ Where:
 ### AI Execution Time
 
 ```
-base_minutes = estimatedHours * HUMAN_TO_AI_RATIO * 60
+base_minutes = estimatedHours * HUMAN_TO_AI_RATIO[effort] * 60
 estimated_ai_minutes = base_minutes * C
 ```
 
-`HUMAN_TO_AI_RATIO` converts human effort hours to AI wall-clock hours:
-- **Cold start** (no historical data): `0.08` (1 human hour ≈ 5 AI minutes)
-- **Calibrated** (after phase 1): computed from actuals as
-  `avg(elapsed_minutes) / avg(forecast_hours * 60)`
+`HUMAN_TO_AI_RATIO` is per effort tier — low-effort stories convert faster, high-effort
+stories take proportionally longer due to deeper reasoning and error-retry overhead:
+
+| Effort | Cold start | Rationale |
+|--------|-----------|-----------|
+| Low    | 0.05      | Simple tasks, few tool calls |
+| Medium | 0.08      | Standard implementation cycle |
+| High   | 0.12      | Multi-file coordination, complex reasoning |
+
+- **Calibrated** (after phase 1): computed per tier from actuals as
+  `avg(elapsed_minutes) / avg(forecast_hours * 60)` for stories in the same effort band.
 
 ### Tokens
 
 ```
-base_tokens = estimated_ai_minutes * TOKENS_PER_MINUTE
-estimated_tokens = base_tokens * (1 + 0.1 * max(0, file_count - 1))
+file_factor     = 1 + 0.1 * max(0, file_count - 1)
+context_growth  = 1 + 0.12 * ln(turns)
+estimated_tokens = estimated_ai_minutes * TOKENS_PER_MINUTE * file_factor * context_growth
 ```
+
+The `context_growth` factor accounts for super-linear token consumption in multi-turn
+conversations. Each turn replays growing conversation history, so total tokens grow
+logarithmically with turn count:
+
+| Turns | context_growth | Effect |
+|-------|---------------|--------|
+| 1     | 1.00x         | Single-shot, no accumulation |
+| 10    | 1.28x         | Moderate history replay |
+| 30    | 1.41x         | Significant context load |
+| 60    | 1.49x         | Near steady-state |
 
 `TOKENS_PER_MINUTE` by model tier:
 - Haiku (low effort): 8,000 tok/min (fast, short context)
 - Sonnet (medium): 12,000 tok/min (moderate context)
 - Opus (high): 18,000 tok/min (deep reasoning, large context windows)
 
-Token estimate splits into input/output using an 80/20 ratio (typical for code generation
-tasks where the prompt + context dominates).
+### Input/Output Token Split
+
+The split between input and output tokens varies by story type because different
+task types have fundamentally different I/O profiles:
+
+| Story Type     | Input | Output | Rationale |
+|---------------|-------|--------|-----------|
+| implementation | 75%   | 25%    | Code generation produces substantial output |
+| review         | 92%   | 8%     | Mostly reading/analysis, minimal generation |
+| health_check   | 90%   | 10%    | Validation with brief status reports |
+
+This matters for cost: output tokens are 5x more expensive than input tokens.
 
 ### Turns
 
@@ -133,19 +162,33 @@ estimated_turns = ceil(estimated_ai_minutes / AVG_MINUTES_PER_TURN)
 ### Cost
 
 ```
-input_tokens  = estimated_tokens * 0.80
-output_tokens = estimated_tokens * 0.20
+input_tokens  = estimated_tokens * INPUT_RATIO[storyType]
+output_tokens = estimated_tokens * OUTPUT_RATIO[storyType]
 cache_tokens  = input_tokens * cache_hit_ratio
 
 uncached_input = input_tokens - cache_tokens
 cached_input   = cache_tokens
 
 cost = (uncached_input / 1M) * model_input_rate
-     + (cached_input / 1M)   * model_input_rate * 0.10
+     + (cached_input / 1M)   * model_cached_rate
      + (output_tokens / 1M)  * model_output_rate
 ```
 
 Multiply by `error_retry_multiplier` to account for potential retries.
+
+### Uncertainty Ranges
+
+Every point estimate is accompanied by a range (low–high):
+
+```
+range_factor = 0.15 + 0.03 * ln(C * turns + 1)    # capped at 0.50
+estimate_low  = estimate * (1 - range_factor)
+estimate_high = estimate * (1 + range_factor * 1.5)
+```
+
+The range widens for stories with higher complexity or more turns.
+JSON output includes `range.minutesLow`, `range.minutesHigh`,
+`range.costLow`, `range.costHigh` per story.
 
 ---
 
@@ -161,9 +204,14 @@ story position within a phase:
 | 3rd story | 0.55 | Accumulating shared context |
 | 4th+ story | 0.65 | Steady state — system prompt, KB, phase context all cached |
 | Same-role consecutive | +0.10 bonus | Profile and role-specific context reused |
+| File overlap >50% | +0.15 bonus | Stories sharing most target files reuse file-level cache |
+| File overlap >0%  | +0.08 bonus | Partial file overlap still provides some cache benefit |
+
+All bonuses are cumulative but capped at 0.85 (prompt changes prevent 100% cache hits).
 
 The estimation script computes `cache_hit_ratio` per story based on its ordinal position
-within the phase's story list in `implementationOrder`.
+within the phase's story list in `implementationOrder`, plus file-overlap analysis
+between adjacent stories using `technicalNotes.files`.
 
 After phase 1 completes, the ratio is recalibrated using actual
 `cache_read_input_tokens / task_tokens_in` from `phase-cost.jsonl`.
@@ -241,12 +289,18 @@ EPAM-001  Budget Guardrails
 
 ---
 
-## Tracking Gaps to Address
+## Tracking Gaps — Status
 
-| Gap | Current state | Needed |
-|-----|--------------|--------|
-| Turn count | Capped by `--max-turns` but never recorded | Parse from CLI output or count tool-use blocks in JSON |
-| Cache tokens | Merged into `tokens_in` | Store `cache_read_tokens` and `cache_create_tokens` as separate fields in phase-cost.jsonl |
-| `forecast_cost_usd` | Hardcoded to 0 | Populate from estimation script output |
-| Codex cost | Hardcoded to 0 | Use o3 pricing when available, or track tokens only |
-| Codebase LOC | Not computed | `estimate-stories.sh` should compute at runtime from `technicalNotes.files` |
+| Gap | Status | Notes |
+|-----|--------|-------|
+| Turn count | **Fixed** | `task_turns` field added to phase-cost.jsonl; parsed from Claude CLI JSON output |
+| Cache tokens | **Fixed** | `cache_read_tokens` and `cache_create_tokens` stored as separate fields |
+| `forecast_cost_usd` | Open | Populate from estimation script output |
+| Codex cost | Open | Use o3 pricing when available, or track tokens only |
+| Codebase LOC | **Fixed** | `estimate-stories.sh` computes at runtime from `technicalNotes.files` |
+| Per-tier H2A ratio | **Fixed** | `HUMAN_TO_AI_RATIO` now per effort tier (low/med/high), calibrated separately |
+| Super-linear tokens | **Fixed** | Context accumulation factor `1 + 0.12 * ln(turns)` applied |
+| Per-storyType IO split | **Fixed** | Implementation 75/25, review 92/8, health_check 90/10 |
+| File-overlap cache | **Fixed** | Adjacent stories sharing >50% files get +0.15 cache bonus |
+| CPA codebase grounding | **Fixed** | File snippets (first 30 lines, up to 3 files) included in CPA inference |
+| Uncertainty ranges | **Fixed** | Range (low–high) computed for minutes and cost per story |

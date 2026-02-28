@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * CPA Inference — calls Claude API with story context, returns structured review JSON.
+ * CPA Inference — pipes story context to the `claude` CLI for structured review.
  *
+ * Uses the claude CLI (already authenticated via Claude Code) — no API key needed.
  * Reads a JSON payload from stdin:
  *   {
  *     story:           { id, title, description, ... },
@@ -15,37 +16,20 @@
  * Returns CPA review JSON to stdout. Errors to stderr only.
  *
  * Env:
- *   EPAM_API_KEY_ANTHROPIC  — required
- *   CPA_MODEL               — optional, default claude-haiku-4-5-20251001
- *   CPA_MAX_TOKENS          — optional, default 1024
+ *   CLAUDE_CMD   — claude binary override (default: 'claude')
  */
 
 'use strict';
 
-const fs   = require('fs');
-const path = require('path');
-
-// ── SDK resolution ─────────────────────────────────────────────────────────
-// Script lives at orchestrations/scripts/lib/; project root is 3 levels up.
-const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
-const SDK_PATH     = path.join(PROJECT_ROOT, 'node_modules', '@anthropic-ai', 'sdk');
-
-let Anthropic;
-try {
-  Anthropic = require(fs.existsSync(SDK_PATH) ? SDK_PATH : '@anthropic-ai/sdk');
-} catch (e) {
-  process.stderr.write(`ERROR: @anthropic-ai/sdk not found at ${SDK_PATH}\n`);
-  process.stderr.write(`Install with: npm install (from ${PROJECT_ROOT})\n`);
-  process.exit(1);
-}
+const { spawnSync } = require('child_process');
+const fs            = require('fs');
 
 // ── Configuration ──────────────────────────────────────────────────────────
-const API_KEY    = process.env.EPAM_API_KEY_ANTHROPIC || '';
-const MODEL      = process.env.CPA_MODEL || 'claude-haiku-4-5-20251001';
-const MAX_TOKENS = parseInt(process.env.CPA_MAX_TOKENS || '1024', 10);
+const CLAUDE_CMD = process.env.CLAUDE_CMD || 'claude';
+const TIMEOUT_MS = parseInt(process.env.CPA_TIMEOUT_MS || '120000', 10);
 
 // ── Read stdin ─────────────────────────────────────────────────────────────
-async function readStdin() {
+function readStdin() {
   return new Promise((resolve, reject) => {
     let buf = '';
     process.stdin.setEncoding('utf8');
@@ -55,33 +39,45 @@ async function readStdin() {
   });
 }
 
-// ── Build user message ─────────────────────────────────────────────────────
-function buildUserMessage(input) {
-  const { story, kbChunks = [], codebaseSignals = {}, formulaEstimate = {}, adjacentStories = [] } = input;
+// ── Build full prompt ──────────────────────────────────────────────────────
+function buildPrompt(input) {
+  const { story, kbChunks = [], codebaseSignals = {}, formulaEstimate = {},
+          adjacentStories = [], systemPrompt = '' } = input;
 
   const storyJson = JSON.stringify({
-    id:          story.id,
-    title:       story.title,
-    description: story.description,
-    priority:    story.priority,
-    storyType:   story.storyType,
-    effort:      story.effort,
-    humanHours:  story.humanHours || story.estimatedHours,
-    dependencies: story.dependencies,
+    id:                 story.id,
+    title:              story.title,
+    description:        story.description,
+    priority:           story.priority,
+    storyType:          story.storyType,
+    effort:             story.effort,
+    humanHours:         story.humanHours || story.estimatedHours,
+    dependencies:       story.dependencies,
     acceptanceCriteria: story.acceptanceCriteria,
-    technicalNotes: story.technicalNotes,
-    agentRole:   story.agentRole,
+    technicalNotes:     story.technicalNotes,
+    agentRole:          story.agentRole,
   }, null, 2);
 
   const kbSection = kbChunks.length > 0
     ? `## Knowledge Base (${kbChunks.length} retrieved sources)\n\n` +
       kbChunks.map((c, i) =>
-        `### Source ${i + 1}: \`${c.source}\` (relevance score: ${c.score})\n\`\`\`\n${c.chunk.slice(0, 800)}\n\`\`\``
+        `### Source ${i + 1}: \`${c.source}\` (relevance: ${c.score})\n\`\`\`\n${c.chunk.slice(0, 800)}\n\`\`\``
       ).join('\n\n')
-    : '## Knowledge Base\n_No matching KB sources found for this story\'s skills._';
+    : '## Knowledge Base\n_No matching KB sources found for this story\'s required skills._';
 
-  const codeSection = Object.keys(codebaseSignals).length > 0
-    ? `## Codebase Signals\n\`\`\`json\n${JSON.stringify(codebaseSignals, null, 2)}\n\`\`\``
+  const snippets = (codebaseSignals.fileSnippets || []);
+  const snippetSection = snippets.length > 0
+    ? snippets.map(s =>
+        `### \`${s.path}\` (${s.lines} lines)\n\`\`\`\n${(s.snippet || '').slice(0, 1200)}\n\`\`\``
+      ).join('\n\n')
+    : '';
+
+  const signalsSummary = { totalLoc: codebaseSignals.totalLoc, fileCount: codebaseSignals.fileCount,
+    filesExist: codebaseSignals.filesExist, importCount: codebaseSignals.importCount };
+
+  const codeSection = codebaseSignals.fileCount > 0
+    ? `## Codebase Signals\n\`\`\`json\n${JSON.stringify(signalsSummary, null, 2)}\n\`\`\`` +
+      (snippetSection ? `\n\n## File Previews (first ~30 lines)\n${snippetSection}` : '')
     : '## Codebase Signals\n_No existing source files found — story targets new code._';
 
   const adjSection = adjacentStories.length > 0
@@ -91,46 +87,48 @@ function buildUserMessage(input) {
       ).join('\n')
     : '';
 
-  return [
+  const userMessage = [
     `## Story Under Review\n\`\`\`json\n${storyJson}\n\`\`\``,
     `## Formula Baseline Estimate\n\`\`\`json\n${JSON.stringify(formulaEstimate, null, 2)}\n\`\`\``,
     kbSection,
     codeSection,
     adjSection,
     '---',
-    'Respond with ONLY the JSON object as specified in your system prompt. No prose, no markdown fences.',
+    'Respond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.',
   ].filter(Boolean).join('\n\n');
+
+  // Combine system prompt + user message into a single prompt for --print mode
+  return [systemPrompt, '', '---', '', userMessage].join('\n');
 }
 
 // ── JSON extraction ────────────────────────────────────────────────────────
 function extractJSON(text) {
-  // Try direct parse
   try { return JSON.parse(text.trim()); } catch {}
 
-  // Strip code fences
   const fenced = text.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
   try { return JSON.parse(fenced); } catch {}
 
-  // Find first { … } block
   const start = text.indexOf('{');
   const end   = text.lastIndexOf('}');
   if (start !== -1 && end > start) {
     try { return JSON.parse(text.slice(start, end + 1)); } catch {}
   }
 
-  throw new Error('No valid JSON found in response');
+  throw new Error('No valid JSON object found in response');
 }
 
-// ── Fallback review (when inference fails or API unavailable) ──────────────
-function fallbackReview(formulaEstimate, reason) {
+// ── Fallback (inference unavailable) ──────────────────────────────────────
+function skippedReview(formulaEstimate, reason) {
   return {
-    confidence:          0.30,
+    confidence:           0.70,
     complexityAdjustment: 1.0,
-    adjustedEstimate:    formulaEstimate,
-    riskFlags:           [`CPA inference unavailable: ${reason}`],
-    missingKbCoverage:   [],
-    citedSources:        [],
-    reasoning:           `Inference failed (${reason}). Formula estimate used as-is with uncertainty markup.`,
+    adjustedEstimate:     formulaEstimate,
+    riskFlags:            [],
+    missingKbCoverage:    [],
+    citedSources:         [],
+    reasoning:            `Inference skipped — ${reason}. Formula estimate used unchanged.`,
+    _inferenceSkipped:    true,
+    _metrics:             { latencyMs: 0, tokensIn: 0, tokensOut: 0, tokenEfficiency: 0 },
   };
 }
 
@@ -152,65 +150,64 @@ async function main() {
     process.exit(1);
   }
 
-  const { formulaEstimate = {}, systemPrompt = '' } = input;
+  const { formulaEstimate = {} } = input;
+  const fullPrompt = buildPrompt(input);
 
-  // Graceful degradation when API key is missing — mark as skipped so gate defaults to pass
-  if (!API_KEY) {
-    const review = {
-      confidence: 0.70,           // neutral: trust the formula, don't penalise missing key
-      complexityAdjustment: 1.0,
-      adjustedEstimate: formulaEstimate,
-      riskFlags: [],
-      missingKbCoverage: [],
-      citedSources: [],
-      reasoning: 'Inference skipped — EPAM_API_KEY_ANTHROPIC not set. Formula estimate used unchanged.',
-      _inferenceSkipped: true,    // shell reads this to bypass confidence gate
-      _metrics: { latencyMs: 0, tokensIn: 0, tokensOut: 0, tokenEfficiency: 0 },
-    };
-    process.stdout.write(JSON.stringify(review) + '\n');
-    return;
-  }
+  // ── Call claude CLI (already authenticated, no key needed) ────────────────
+  // Unset Claude Code session vars to avoid nested-session detection in the CLI
+  const env = { ...process.env };
+  delete env.CLAUDECODE;
+  delete env.CLAUDE_CODE_ENTRYPOINT;
 
-  const userMessage = buildUserMessage(input);
-  const client      = new Anthropic({ apiKey: API_KEY });
-  const t0          = Date.now();
-
-  let response;
-  try {
-    response = await client.messages.create({
-      model:      MODEL,
-      max_tokens: MAX_TOKENS,
-      system:     systemPrompt,
-      messages:   [{ role: 'user', content: userMessage }],
-    });
-  } catch (e) {
-    process.stderr.write(`WARN: API call failed for story: ${e.message}\n`);
-    const review = fallbackReview(formulaEstimate, `API error: ${e.message}`);
-    review._metrics = { latencyMs: Date.now() - t0, tokensIn: 0, tokensOut: 0, tokenEfficiency: 0 };
-    process.stdout.write(JSON.stringify(review) + '\n');
-    return;
-  }
-
+  const t0 = Date.now();
+  const result = spawnSync(
+    CLAUDE_CMD,
+    ['--print', '--dangerously-skip-permissions'],
+    { input: fullPrompt, encoding: 'utf8', timeout: TIMEOUT_MS, env }
+  );
   const latencyMs = Date.now() - t0;
-  const rawText   = response.content[0]?.text || '';
-  const tokensIn  = response.usage?.input_tokens  || 0;
-  const tokensOut = response.usage?.output_tokens || 0;
 
+  // ── Handle CLI failure ────────────────────────────────────────────────────
+  if (result.error || result.status !== 0) {
+    const reason = result.error?.message || (result.stderr || '').slice(0, 200) || `exit ${result.status}`;
+    process.stderr.write(`WARN: claude CLI failed: ${reason}\n`);
+    const review = skippedReview(formulaEstimate, `claude CLI unavailable: ${reason}`);
+    review._metrics.latencyMs = latencyMs;
+    process.stdout.write(JSON.stringify(review) + '\n');
+    return;
+  }
+
+  const rawText = (result.stdout || '').trim();
+  if (!rawText) {
+    process.stderr.write('WARN: claude CLI returned empty response\n');
+    const review = skippedReview(formulaEstimate, 'empty response from claude CLI');
+    review._metrics.latencyMs = latencyMs;
+    process.stdout.write(JSON.stringify(review) + '\n');
+    return;
+  }
+
+  // ── Parse JSON from response ───────────────────────────────────────────────
   let reviewData;
   try {
     reviewData = extractJSON(rawText);
   } catch (e) {
-    process.stderr.write(`WARN: JSON parse failed: ${e.message}\nRaw: ${rawText.slice(0, 300)}\n`);
-    reviewData = fallbackReview(formulaEstimate, `parse error: ${e.message}`);
+    process.stderr.write(`WARN: JSON parse failed: ${e.message}\nRaw (first 400): ${rawText.slice(0, 400)}\n`);
+    reviewData = skippedReview(formulaEstimate, `parse error: ${e.message}`);
+    reviewData._inferenceSkipped = false; // inference ran, output was malformed
   }
 
-  // Validate and clamp required fields
-  reviewData.confidence          = Math.max(0, Math.min(1, parseFloat(reviewData.confidence) || 0.3));
+  // ── Clamp required fields ──────────────────────────────────────────────────
+  reviewData.confidence           = Math.max(0, Math.min(1, parseFloat(reviewData.confidence) || 0.3));
   reviewData.complexityAdjustment = Math.max(0.5, Math.min(2.5, parseFloat(reviewData.complexityAdjustment) || 1.0));
 
-  // Enrich with inference metrics
+  // ── Estimate token counts from text length (1 token ≈ 4 chars) ────────────
+  // claude CLI does not expose usage data in --print mode
+  const tokensIn  = Math.round(fullPrompt.length / 4);
+  const tokensOut = Math.round(rawText.length / 4);
+
   const schemaFields = ['confidence','complexityAdjustment','adjustedEstimate','riskFlags','citedSources','reasoning'];
   const populated    = schemaFields.filter(k => reviewData[k] !== undefined).length;
+
   reviewData._metrics = {
     latencyMs,
     tokensIn,

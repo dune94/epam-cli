@@ -71,4 +71,25 @@ describe('ConfigResolver', () => {
     const config2 = await resolveConfig();
     expect(config1).not.toBe(config2);
   });
+
+  it('budgetGuardrails defaults to Infinity (no limits)', async () => {
+    const config = await resolveConfig();
+    expect(config.budgetGuardrails.warningAt).toBe(Infinity);
+    expect(config.budgetGuardrails.hardLimitAt).toBe(Infinity);
+    expect(config.budgetGuardrails.onHardLimit).toBe('downgrade');
+  });
+
+  it('EPAM_BUDGET_WARNING_AT and EPAM_BUDGET_HARD_LIMIT_AT env vars set budget limits', async () => {
+    process.env.EPAM_BUDGET_WARNING_AT = '5.00';
+    process.env.EPAM_BUDGET_HARD_LIMIT_AT = '10.00';
+    try {
+      const config = await resolveConfig();
+      expect(config.budgetGuardrails.warningAt).toBe(5.00);
+      expect(config.budgetGuardrails.hardLimitAt).toBe(10.00);
+    } finally {
+      delete process.env.EPAM_BUDGET_WARNING_AT;
+      delete process.env.EPAM_BUDGET_HARD_LIMIT_AT;
+      resetResolvedConfig();
+    }
+  });
 });

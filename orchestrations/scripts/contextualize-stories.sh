@@ -100,10 +100,9 @@ Options:
   --help
 
 Environment:
-  EPAM_API_KEY_ANTHROPIC   Claude API key (required for inference; graceful degradation if absent)
-  CPA_MODEL                Model override (default: claude-haiku-4-5-20251001)
-  NODE_CMD                 Node.js binary path (default: ~/.nvm/versions/node/v20.20.0/bin/node)
-  SKIP_CPA=1               Skip CPA entirely (set in run-agent-orchestration.sh)
+  CLAUDE_CMD   claude binary override (default: 'claude'; already authenticated via Claude Code)
+  NODE_CMD     Node.js binary path (default: ~/.nvm/versions/node/v20.20.0/bin/node)
+  SKIP_CPA=1   Skip CPA entirely (set in run-agent-orchestration.sh)
 
 Exit codes:
   0  All pass
@@ -268,9 +267,15 @@ ensure_leading_zero() {
 bc_eval() { echo "scale=4; $1" | bc | xargs printf "%.4f"; }
 
 # ── Codebase signals ──────────────────────────────────────────────────────────
+# Max lines per file snippet and max files to include snippets for
+SNIPPET_LINES=30
+SNIPPET_MAX_FILES=3
+
 compute_signals() {
   local sid="$1"
   local total_loc=0 import_count=0 files_exist=0 file_count=0
+  local snippets="[]"
+  local snippet_count=0
 
   local files
   files=$(jq -r --arg id "$sid" \
@@ -287,11 +292,25 @@ compute_signals() {
         total_loc=$((total_loc + loc))
         local imp; imp=$(grep -cE "^import |require\(" "$fp" 2>/dev/null; true); imp="${imp:-0}"
         import_count=$((import_count + imp))
+        # Include code snippets for CPA grounding (first N lines, up to M files)
+        if [ "$snippet_count" -lt "$SNIPPET_MAX_FILES" ]; then
+          local snippet
+          snippet=$(head -n "$SNIPPET_LINES" "$fp" 2>/dev/null | jq -Rs '.' 2>/dev/null || echo '""')
+          snippets=$(echo "$snippets" | jq --arg path "$f" --argjson lines "$loc" --argjson code "$snippet" \
+            '. + [{path: $path, lines: $lines, snippet: $code}]')
+          snippet_count=$((snippet_count + 1))
+        fi
       fi
     done <<< "$files"
   fi
 
-  echo "{\"totalLoc\":${total_loc},\"fileCount\":${file_count},\"filesExist\":${files_exist},\"importCount\":${import_count}}"
+  jq -n \
+    --argjson loc "$total_loc" \
+    --argjson fc "$file_count" \
+    --argjson fe "$files_exist" \
+    --argjson ic "$import_count" \
+    --argjson snip "$snippets" \
+    '{totalLoc:$loc, fileCount:$fc, filesExist:$fe, importCount:$ic, fileSnippets:$snip}'
 }
 
 # ── Confidence-weighted blending ──────────────────────────────────────────────
@@ -453,7 +472,7 @@ while IFS= read -r sid; do
 
   t_start=$(date +%s%3N)
   cpa_raw=$(echo "$inference_input" | \
-    EPAM_API_KEY_ANTHROPIC="${EPAM_API_KEY_ANTHROPIC:-}" \
+    CLAUDE_CMD="${CLAUDE_CMD:-claude}" \
     "$NODE_CMD" "$LIB_DIR/cpa-inference.js" 2>/dev/null || echo "")
   t_end=$(date +%s%3N)
   infer_ms=$(( t_end - t_start ))

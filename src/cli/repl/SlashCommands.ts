@@ -6,6 +6,7 @@ import { listSessions } from '../../context/SessionStore.js';
 import type { Message } from '../../providers/types.js';
 import type { ProviderChain } from '../../providers/ProviderChain.js';
 import type { HealthStatus } from '../../providers/health/types.js';
+import type { BudgetGuard } from '../../billing/BudgetGuard.js';
 
 export interface SlashCommandContext {
   config: ResolvedConfig;
@@ -18,6 +19,8 @@ export interface SlashCommandContext {
   totalOutputTokens: number;
   // Message history (for rewind)
   messages: Message[];
+  // Budget guard (session cost tracking + enforcement)
+  budgetGuard?: BudgetGuard;
   // Provider chain (optional — present when failover is active)
   providerChain?: ProviderChain;
   // Callbacks
@@ -70,7 +73,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   // ── /cost ──────────────────────────────────────────────────────────────────
   {
     name: 'cost',
-    description: 'Show token usage and estimated USD cost for this session',
+    description: 'Show token usage, estimated USD cost, and budget status',
     async execute(_args, ctx) {
       const { totalInputTokens, totalOutputTokens, currentModel } = ctx;
       const cost = calculateCost(currentModel, totalInputTokens, totalOutputTokens);
@@ -101,6 +104,26 @@ export const SLASH_COMMANDS: SlashCommand[] = [
         );
         console.log(`  ${chalk.bold('Total cost:')}    ${chalk.green.bold(formatCost(cost))}`);
       }
+
+      // Budget guardrails status
+      const guard = ctx.budgetGuard;
+      if (guard && guard.hasLimits) {
+        const limits = guard.limits;
+        console.log();
+        console.log(chalk.bold('  Budget:'));
+        if (isFinite(limits.warningAt)) {
+          const warningPct = Math.min(100, (cost / limits.warningAt) * 100);
+          const warningColor = warningPct >= 100 ? chalk.yellow : chalk.dim;
+          console.log(`    Warning at:  ${warningColor(formatCost(limits.warningAt))}  (${warningPct.toFixed(0)}% used)`);
+        }
+        if (isFinite(limits.hardLimitAt)) {
+          const limitPct = Math.min(100, (cost / limits.hardLimitAt) * 100);
+          const remaining = Math.max(0, limits.hardLimitAt - cost);
+          const limitColor = limitPct >= 100 ? chalk.red : limitPct >= 80 ? chalk.yellow : chalk.dim;
+          console.log(`    Hard limit:  ${limitColor(formatCost(limits.hardLimitAt))}  (${limitPct.toFixed(0)}% used, ${formatCost(remaining)} remaining)`);
+        }
+      }
+
       console.log();
       return true;
     },
@@ -220,6 +243,16 @@ export const SLASH_COMMANDS: SlashCommand[] = [
       console.log(`  Messages:      ${ctx.messages.length}`);
       console.log(`  Est tokens:    ${ctx.tokenCount.toLocaleString()}`);
       console.log(`  Session cost:  ${chalk.green(formatCost(cost))}`);
+      if (ctx.budgetGuard?.hasLimits) {
+        const limits = ctx.budgetGuard.limits;
+        const limitStr = isFinite(limits.hardLimitAt)
+          ? formatCost(limits.hardLimitAt)
+          : 'none';
+        const remaining = isFinite(limits.hardLimitAt)
+          ? formatCost(Math.max(0, limits.hardLimitAt - cost))
+          : 'unlimited';
+        console.log(`  Budget limit:  ${chalk.dim(limitStr)}  (${remaining} remaining)`);
+      }
       console.log(`  Context file:  ${chalk.dim(ctx.contextFilePath)}`);
       console.log(`  Project root:  ${chalk.dim(ctx.config.projectRoot ?? '(none)')}`);
       console.log();

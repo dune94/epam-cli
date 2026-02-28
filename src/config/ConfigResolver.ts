@@ -1,4 +1,4 @@
-import type { GlobalConfig, ProjectConfig, ResolvedConfig } from './types.js';
+import type { GlobalConfig, ProjectConfig, ResolvedConfig, BudgetGuardrails } from './types.js';
 import { readGlobalConfig, getGlobalConfigDefaults } from './GlobalConfig.js';
 import { findProjectRoot, readProjectConfig } from './ProjectConfig.js';
 import { readEnvOverrides } from './EnvVarOverrides.js';
@@ -81,7 +81,18 @@ export async function resolveConfig(flags: CLIFlagOverrides = {}): Promise<Resol
 
     autoCompressAt: projectConfig.autoCompressAt ?? 80000,
 
+    maxOutputTokens:
+      envOverrides.maxOutputTokens ??
+      projectConfig.maxOutputTokens ??
+      16384,
+
     projectRoot,
+
+    budgetGuardrails: {
+      warningAt:   envOverrides.budgetWarningAt   ?? projectConfig.budgetGuardrails?.warningAt   ?? Infinity,
+      hardLimitAt: envOverrides.budgetHardLimitAt ?? projectConfig.budgetGuardrails?.hardLimitAt ?? Infinity,
+      onHardLimit: projectConfig.budgetGuardrails?.onHardLimit ?? 'downgrade',
+    },
 
     // llmChain: use project config if defined, else build a single-slot chain from provider+model
     llmChain: projectConfig.llmChain ?? [

@@ -912,12 +912,14 @@ append_cost_record() {
         elapsed_minutes=$(echo "scale=2; ($end_epoch - $start_epoch) / 60" | bc 2>/dev/null || echo "0")
     fi
 
-    # Parse cost/token usage from Claude CLI JSON result (--output-format json)
-    local tokens_in=0 tokens_out=0 cost_usd=0
+    # Parse cost/token/turn usage from Claude CLI JSON result (--output-format json)
+    local tokens_in=0 tokens_out=0 cost_usd=0 task_turns=0
     if [ -n "$json_result_file" ] && [ -f "$json_result_file" ]; then
         cost_usd=$(jq -r '.total_cost_usd // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
         tokens_in=$(jq -r '.usage.input_tokens // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
         tokens_out=$(jq -r '.usage.output_tokens // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
+        # Turn count: Claude CLI may report num_turns or turns
+        task_turns=$(jq -r '.num_turns // .turns // .usage.turns // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
         # Also capture cache tokens if present
         local cache_create=$(jq -r '.usage.cache_creation_input_tokens // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
         local cache_read=$(jq -r '.usage.cache_read_input_tokens // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
@@ -927,6 +929,7 @@ append_cost_record() {
     [ -z "$tokens_in" ] && tokens_in=0
     [ -z "$tokens_out" ] && tokens_out=0
     [ -z "$cost_usd" ] && cost_usd=0
+    [ -z "$task_turns" ] && task_turns=0
 
     # Atomic JSONL append with flock
     (
@@ -939,11 +942,14 @@ append_cost_record() {
             --arg sa "$started_at" --arg ea "$ended_at" \
             --argjson em "${elapsed_minutes:-0}" --argjson cu "$cost_usd" \
             --argjson ti "${tokens_in:-0}" --argjson to "${tokens_out:-0}" \
+            --argjson tt "${task_turns:-0}" \
+            --argjson cr "${cache_read:-0}" --argjson cc "${cache_create:-0}" \
             --arg s "$status" --arg n "" \
             '{phase_id:$pid, phase_name:$pn, story_id:$sid, story_title:$st,
               agent_id:$aid, agent_name:$an, forecast_hours:$fh, forecast_cost_usd:$fc,
               started_at:$sa, ended_at:$ea, elapsed_minutes:$em,
               task_cost_usd:$cu, task_tokens_in:$ti, task_tokens_out:$to,
+              task_turns:$tt, cache_read_tokens:$cr, cache_create_tokens:$cc,
               status:$s, notes:$n}' >> "$cost_file"
     ) 200>"$lock_file"
 }

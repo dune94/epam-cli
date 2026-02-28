@@ -1135,7 +1135,7 @@
       "storyType": "implementation",
       "effort": "medium",
       "humanHours": 3,
-      "estimatedHours": 0.2798,
+      "estimatedHours": 0.2643,
       "dependencies": [],
       "acceptanceCriteria": [
         "File orchestrations/scripts/lib/prd_validator.py exists and is runnable with python3",
@@ -1167,12 +1167,12 @@
         ]
       },
       "aiProvider": "claude",
-      "estimatedAiMinutes": 16.79,
-      "estimatedCost": 1.08,
-      "estimatedTokens": 201484,
-      "estimatedTurns": 17,
-      "cpaConfidence": 0.7,
-      "cpaGate": "pass"
+      "estimatedAiMinutes": 15.8586,
+      "estimatedCost": 1.0212,
+      "estimatedTokens": 190303,
+      "estimatedTurns": 16,
+      "cpaConfidence": 0.72,
+      "cpaGate": "review"
     }
   ],
   "configuration": {

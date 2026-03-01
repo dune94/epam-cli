@@ -169,10 +169,10 @@ export class ProviderChain implements LLMProvider {
       );
     }
 
-    // BYOK — resolve API key
+    // BYOK/Brokered/Bridge — resolve API key
     const apiKey = await this.options.resolveApiKey(slot.provider);
     if (!apiKey) {
-      throw new ProviderError(`No API key configured for provider '${slot.provider}'`);
+      throw new ProviderError(`No credential configured or resolved for provider '${slot.provider}'`);
     }
 
     switch (slot.provider) {

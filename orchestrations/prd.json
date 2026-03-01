@@ -1173,6 +1173,115 @@
       "estimatedTurns": 16,
       "cpaConfidence": 0.72,
       "cpaGate": "review"
+    },
+    {
+      "id": "EPAM-052",
+      "title": "Codex Test Issues: Agent Intelligence Source Drift and EPAM-044 Collision Recovery",
+      "description": "Backlog bug for a follow-up implementation agent. During Codex-led POC testing, the repo exposed a single-worktree source drift problem while EPAM-044 was under active orchestration. New agent-intelligence modules and tests exist in the worktree, but tracked CLI entrypoints remain on an older baseline, leaving validated functionality disconnected from the live REPL/CLI. Reconcile the tracked entrypoints with the in-repo feature modules after EPAM-044 stabilizes, then close the remaining partial agent-intelligence stories without introducing further merge conflicts.",
+      "priority": "low",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "integration-engineer",
+      "storyType": "implementation",
+      "effort": "medium",
+      "humanHours": 4,
+      "estimatedHours": 0.3333,
+      "dependencies": [
+        "EPAM-044",
+        "EPAM-004",
+        "EPAM-005",
+        "EPAM-007"
+      ],
+      "acceptanceCriteria": [
+        "Confirm EPAM-044 orchestration output is stable and no overlapping implementation is still running before edits begin",
+        "Reconcile tracked entrypoints src/cli/repl/SlashCommands.ts, src/cli/repl/Repl.ts, src/cli/commands/chat.ts, and src/cli/index.ts with the existing in-worktree feature modules and tests",
+        "Ensure the live CLI/REPL exposes the validated agent-intelligence surface: /profile, /plan, /mcp, /permissions, /diff, /debug, /init, and epam mcp serve",
+        "Finish and verify the remaining partial stories EPAM-005 and EPAM-032 on top of the reconciled baseline instead of layering fixes onto stale entrypoints",
+        "Run targeted validation: npm run typecheck, npm run build, vitest for REPL/MCP/plan-mode coverage, and refresh any failing evidence paths if behavior changed",
+        "Update orchestrations/prd.json coverage metadata and any dependent dashboard/report rollups only after the reconciled code passes validation",
+        "Do not overwrite unrelated user or orchestration changes; if new drift is detected mid-fix, stop and re-evaluate before applying further edits"
+      ],
+      "technicalNotes": {
+        "files": [
+          "src/cli/repl/SlashCommands.ts",
+          "src/cli/repl/Repl.ts",
+          "src/cli/commands/chat.ts",
+          "src/cli/index.ts",
+          "src/agent/PlanMode.ts",
+          "src/cli/commands/mcp.ts",
+          "src/cli/commands/profile.ts",
+          "src/cli/commands/decision.ts",
+          "test/unit/repl/SlashCommands.test.ts",
+          "test/unit/mcp/McpClient.test.ts",
+          "test/unit/mcp/McpServer.test.ts"
+        ],
+        "requiredSkills": [
+          "TypeScript",
+          "REPL-integration",
+          "command-routing",
+          "git-reconciliation",
+          "test-debugging"
+        ]
+      },
+      "aiProvider": "codex",
+      "cpaGate": "review"
+    },
+    {
+      "id": "EPAM-053",
+      "title": "Enterprise Integration Gaps: Consult, Constraints, and Auditor Runtime Wiring",
+      "description": "Backlog bug for a follow-up implementation agent. Review shows enterprise-phase features are partially implemented but not fully wired into the live runtime. `epam consult @profile-name` exists and persists pending consultation context, but the next live `chat` or `run` call does not consume that context. Constraint loading and prompt-ordering helpers exist, but live session startup still bypasses `buildSessionSystemPrompt()` and therefore does not enforce remote constraints end to end. Auditor registry/runner logic and unit tests exist, but auditors are not integrated into the main agent loop or exposed through REPL controls, so the enterprise review story cannot honestly pass.",
+      "priority": "low",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "integration-engineer",
+      "storyType": "implementation",
+      "effort": "medium",
+      "humanHours": 5,
+      "estimatedHours": 0.4167,
+      "dependencies": [
+        "EPAM-015",
+        "EPAM-016",
+        "EPAM-017",
+        "EPAM-018"
+      ],
+      "acceptanceCriteria": [
+        "Wire queued consultation context into the next real `chat` and `run` execution path so the `[CONSULTING: @profile-name]` block is actually injected once at runtime",
+        "Ensure pending consultation state is consumed exactly once in live execution and does not bleed into subsequent turns",
+        "Replace direct `buildSystemPrompt()` session startup usage in live entrypoints with the session-aware constraint path so remote constraints are enforced end to end",
+        "Verify block constraints remain prepended ahead of base prompt and advisory constraints remain appended even after runtime integration",
+        "Integrate auditor execution into the live agent response flow and expose the intended operator controls in the REPL if required by EPAM-016",
+        "Prove auditor parallel execution does not leak state between instances and that severity threshold gating works in the integrated runtime, not only in isolated unit tests",
+        "Only close EPAM-018 after EPAM-015, EPAM-016, and EPAM-017 are runtime-complete and validated with tests"
+      ],
+      "technicalNotes": {
+        "files": [
+          "src/cli/commands/consult.ts",
+          "src/context/ContextBuilder.ts",
+          "src/constraints/sessionPrompt.ts",
+          "src/constraints/ConstraintLoader.ts",
+          "src/cli/commands/chat.ts",
+          "src/cli/commands/run.ts",
+          "src/agent/AgentRunner.ts",
+          "src/auditors/AuditorRegistry.ts",
+          "src/auditors/AuditorRunner.ts",
+          "test/unit/context/ConsultationContext.test.ts",
+          "test/unit/context/ContextBuilder.test.ts",
+          "test/unit/constraints/ConstraintLoader.test.ts",
+          "test/unit/auditors/AuditorRegistry.test.ts",
+          "test/unit/auditors/AuditorRunner.test.ts"
+        ],
+        "requiredSkills": [
+          "TypeScript",
+          "runtime-integration",
+          "system-prompt-injection",
+          "agent-orchestration",
+          "test-debugging"
+        ]
+      },
+      "aiProvider": "codex",
+      "cpaGate": "review"
     }
   ],
   "configuration": {

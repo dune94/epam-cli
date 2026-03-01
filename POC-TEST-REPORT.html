@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EPAM CLI POC Test Report</title>
+    <style>
+      :root {
+        --bg: #ffffff;
+        --ink: #111827;
+        --muted: #4b5563;
+        --line: #dbe3ee;
+        --brand: #0b5fff;
+        --brand-soft: #eef4ff;
+        --good: #166534;
+        --good-bg: #ecfdf3;
+        --warn: #9a3412;
+        --warn-bg: #fff7ed;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "Segoe UI", "Avenir Next", Arial, sans-serif;
+        line-height: 1.45;
+      }
+
+      .page {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 28px 28px 48px;
+      }
+
+      .hero {
+        border: 1px solid var(--line);
+        border-left: 6px solid var(--brand);
+        background: linear-gradient(90deg, #f8fbff 0%, #ffffff 100%);
+        padding: 22px 22px 18px;
+        border-radius: 12px;
+      }
+
+      .eyebrow {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--brand);
+        margin-bottom: 8px;
+      }
+
+      h1, h2, h3 { margin: 0; line-height: 1.15; }
+
+      h1 { font-size: 34px; }
+      h2 { font-size: 20px; margin-bottom: 10px; }
+      h3 { font-size: 16px; margin-bottom: 8px; }
+
+      p { margin: 0; }
+
+      .sub {
+        color: var(--muted);
+        margin-top: 10px;
+        max-width: 900px;
+      }
+
+      .hero-grid,
+      .two-col,
+      .metric-grid,
+      .cap-grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .hero-grid {
+        margin-top: 18px;
+        grid-template-columns: 1.1fr 0.9fr;
+      }
+
+      .metric-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
+
+      .cap-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .two-col {
+        margin-top: 18px;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px;
+        background: #fff;
+      }
+
+      .metric {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 14px;
+        background: #fff;
+      }
+
+      .metric .label {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+
+      .metric .value {
+        display: block;
+        margin-top: 8px;
+        font-size: 28px;
+        font-weight: 700;
+      }
+
+      .metric .detail {
+        color: var(--muted);
+        font-size: 13px;
+        margin-top: 6px;
+      }
+
+      .status {
+        display: inline-block;
+        padding: 3px 9px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .status.good {
+        background: var(--good-bg);
+        color: var(--good);
+      }
+
+      .status.warn {
+        background: var(--warn-bg);
+        color: var(--warn);
+      }
+
+      ul {
+        margin: 10px 0 0;
+        padding-left: 18px;
+      }
+
+      li { margin: 6px 0; }
+
+      .section {
+        margin-top: 18px;
+      }
+
+      .cap {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 14px;
+        background: #fff;
+      }
+
+      .cap p {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      th, td {
+        text-align: left;
+        padding: 11px 10px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+
+      th {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+
+      .small {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      a {
+        color: var(--brand);
+        text-decoration: none;
+      }
+
+      a:hover { text-decoration: underline; }
+
+      .foot {
+        margin-top: 20px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      @media (max-width: 900px) {
+        .hero-grid,
+        .two-col,
+        .metric-grid,
+        .cap-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <div class="eyebrow">EPAM CLI POC</div>
+        <h1>Governed AI Delivery CLI Proven Through End-to-End Operator Testing</h1>
+        <p class="sub">
+          This proof of concept validated EPAM CLI as a working control-plane product: authenticated execution, proxy-backed AI runs,
+          approval-gated delivery phases, cost reporting, delivery memory, and Linux-safe credential fallback were all exercised with
+          captured evidence.
+        </p>
+        <div class="hero-grid">
+          <div class="card">
+            <h2>Outcome</h2>
+            <ul>
+              <li>Core CLI path is operational against a mock EPAM backend.</li>
+              <li>Governed delivery flow is working, including explicit phase approval and audit logging.</li>
+              <li>Key operator defects discovered during testing were fixed in the product, not just documented.</li>
+              <li>Remaining issues are narrowed to low-priority runtime UX warnings now tracked in backlog.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h2>Environment</h2>
+            <ul>
+              <li>Workspace build from `/home/bjerome/projects/ai/epam-cli`</li>
+              <li>Mock EPAM backend at `http://127.0.0.1:8080`</li>
+              <li>No real EPAM SSO integration yet</li>
+              <li>No live Anthropic/OpenAI browser-login integration yet</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section metric-grid">
+        <div class="metric">
+          <div class="label">Features Validated</div>
+          <span class="value">24</span>
+          <div class="detail">Across auth, planning, execution, reporting, memory, profiles, keys, and REPL usage.</div>
+        </div>
+        <div class="metric">
+          <div class="label">Governance State</div>
+          <span class="value">Working</span>
+          <div class="detail">Phase approval, summary output, and audit log path were all verified.</div>
+        </div>
+        <div class="metric">
+          <div class="label">Fixes Closed In POC</div>
+          <span class="value">6</span>
+          <div class="detail">Routing, reporting math, key storage fallback, pricing, doctor diagnostics, and phase clarity.</div>
+        </div>
+        <div class="metric">
+          <div class="label">Open Low-Priority Bugs</div>
+          <span class="value">2</span>
+          <div class="detail">Both converted into backlog stories in the PRD.</div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Validated Product Capabilities</h2>
+        <div class="cap-grid">
+          <div class="cap">
+            <h3>EPAM Auth and Control Plane</h3>
+            <p>`doctor`, `login`, `whoami`, backend health, and provider readiness checks all functioned against the mock backend.</p>
+          </div>
+          <div class="cap">
+            <h3>Proxy-Based AI Execution</h3>
+            <p>`run` and `chat` worked through the EPAM provider path after proxy routing was corrected to resolve real upstream targets.</p>
+          </div>
+          <div class="cap">
+            <h3>Governed Delivery Phases</h3>
+            <p>`phase approve` and `phase run --require-approval` validated contract-style control over execution with an audit trail.</p>
+          </div>
+          <div class="cap">
+            <h3>Delivery Planning</h3>
+            <p>`estimate` and `orchestrate --dry-run` showed both planning-only and AI-assisted forecasting behavior.</p>
+          </div>
+          <div class="cap">
+            <h3>Delivery Memory</h3>
+            <p>`decision` and `profile` flows confirmed that reusable architectural guidance and operator profiles can be persisted and loaded.</p>
+          </div>
+          <div class="cap">
+            <h3>FinOps and Reporting</h3>
+            <p>`history`, `report`, and `/cost` validated session visibility, cost telemetry, and the current budget UX.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section two-col">
+        <div class="card">
+          <h2>Issues Found and Closed During POC</h2>
+          <ul>
+            <li><strong>`doctor` misdiagnosis</strong>: now identifies placeholder backend URLs as the real issue.</li>
+            <li><strong>EPAM provider proxy route</strong>: now resolves to valid upstream provider routes.</li>
+            <li><strong>Report math</strong>: `Avg Tokens/Turn` no longer returns `NaN`.</li>
+            <li><strong>Linux key storage</strong>: `keys` now falls back when DBus secret-service is unavailable.</li>
+            <li><strong>Pricing gap</strong>: `/cost` now supports `claude-sonnet-4-5-20250929`.</li>
+            <li><strong>Completed phase UX</strong>: `phase run` now fails clearly when no runnable stories exist.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h2>Remaining Backlog Bugs</h2>
+          <ul>
+            <li><strong>EPAM-049</strong>: disable dead default MCP example server warning.</li>
+            <li><strong>EPAM-050</strong>: remove misleading provider-slot warning during successful EPAM REPL startup.</li>
+          </ul>
+          <p class="small" style="margin-top: 12px;">
+            Both are intentionally tracked as low-priority because they do not block governed execution, planning, or reporting.
+          </p>
+        </div>
+      </section>
+
+      <section class="section two-col">
+        <div class="card">
+          <h2>Coverage Rollup</h2>
+          <ul>
+            <li>Total stories: <strong>60</strong></li>
+            <li>POC passed: <strong>12</strong></li>
+            <li>POC partial: <strong>3</strong></li>
+            <li>POC failed: <strong>2</strong></li>
+            <li>Not tested: <strong>43</strong></li>
+          </ul>
+        </div>
+        <div class="card">
+          <h2>Dashboard Source</h2>
+          <p class="small">Normalized quality data generated from the PRD:</p>
+          <p style="margin-top: 10px;">
+            <a href="/home/bjerome/projects/ai/epam-cli/orchestrations/logs/quality-summary.json">quality-summary.json</a>
+          </p>
+        </div>
+      </section>
+
+      <section class="section card">
+        <h2>Feature Test Matrix</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th>Status</th>
+              <th>Evidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>`doctor`, `login`, `whoami`, `models`</td>
+              <td><span class="status good">Pass</span></td>
+              <td><a href="/home/bjerome/projects/ai/epam-cli/test-evidence/poc/doctor-mock-backend-output.txt">doctor</a>, <a href="/home/bjerome/projects/ai/epam-cli/test-evidence/poc/login-output.txt">login</a>, <a href="/home/bjerome/projects/ai/epam-cli/test-evidence/poc/whoami-output.txt">whoami</a>, <a href="/home/bjerome/projects/ai/epam-cli/test-evidence/poc/models-output.txt">models</a></td>
+            </tr>
+            <tr>
+              <td>`init`, `context init`, `context show`</td>
+              <td><span class="status good">Pass</span></td>
+              <td><a href="/home/bjerome/projects/ai/epam-cli/test-evidence/poc/init-output.txt">init</a>, <a href="/home/bjerome/projects/ai/epam-cli/test-evidence/poc/context-init-show-output.txt">context</a></td>
+            </tr>
+            <tr>
+              <td>`estimate`, `orchestrate --dry-run`</td>
+              <td><span class="status good">Pass</span></td>
+              <td><a href="/home/bjerome/projects/ai/epam-cli/test-evidence/poc/estimate-mvp-cli-control-output.txt">estimate</a>, <a href="/home/bjerome/projects/ai/epam-cli/test-evidence/poc/orchestrate-dry-run-skip-cpa-output.txt">dry-run</a></td>
+            </tr>
+            <tr>
+              <td>`history`, `report`</td>
+              <td><span class="status good">Pass</span></td>
+              <td><a href="/home/bjerome/projects/ai/epam-cli/test-evidence/poc/history-output.txt">history</a>, <a href="/home/bjerome/projects/ai/epam-cli/test-evidence/poc/report-output-fixed.txt">report</a></td>
+            </tr>
+            <tr>
+              <td>`run` and `chat` through EPAM provider path</td>
+              <td><span class="status good">Pass</span></td>
+              <td><a href="/home/bjerome/projects/ai/epam-cli/test-evidence/poc/run-epam-provider-success-output.txt">run</a>, <a href="/home/bjerome/projects/ai/epam-cli/test-evidence/poc/chat-repl-smoke-output.txt">chat</a></td>
+            </tr>
+            <tr>
+              <td>`decision`, `profile`</td>
+              <td><span class="status good">Pass</span></td>
+              <td><a href="/home/bjerome/projects/ai/epam-cli/test-evidence/poc/decision-search-output.txt">decision</a>, <a href="/home/bjerome/projects/ai/epam-cli/test-evidence/poc/profile-save-load-output.txt">profile</a></td>
+            </tr>
+            <tr>
+              <td>`phase approve`, `phase run --require-approval`</td>
+              <td><span class="status good">Pass</span></td>
+              <td><a href="/home/bjerome/projects/ai/epam-cli/test-evidence/poc/phase-approve-provider-auth-output.txt">approve</a>, <a href="/home/bjerome/projects/ai/epam-cli/test-evidence/poc/phase-run-provider-auth-require-approval-pass.txt">approved run</a></td>
+            </tr>
+            <tr>
+              <td>`keys` lifecycle</td>
+              <td><span class="status good">Pass</span></td>
+              <td><a href="/home/bjerome/projects/ai/epam-cli/test-evidence/poc/keys-set-fixed.txt">set</a>, <a href="/home/bjerome/projects/ai/epam-cli/test-evidence/poc/keys-get-fixed.txt">get</a>, <a href="/home/bjerome/projects/ai/epam-cli/test-evidence/poc/keys-remove-fixed.txt">remove</a></td>
+            </tr>
+            <tr>
+              <td>`/cost` for default EPAM model</td>
+              <td><span class="status good">Pass</span></td>
+              <td><a href="/home/bjerome/projects/ai/epam-cli/test-evidence/poc/chat-cost-fixed.txt">cost output</a></td>
+            </tr>
+            <tr>
+              <td>Low-priority runtime warnings</td>
+              <td><span class="status warn">Backlog</span></td>
+              <td><a href="/home/bjerome/projects/ai/epam-cli/orchestrations/prd.json">EPAM-049 / EPAM-050</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section two-col">
+        <div class="card">
+          <h2>Primary Report</h2>
+          <p class="small">
+            Detailed markdown report with full feature matrix and evidence links:
+          </p>
+          <p style="margin-top: 10px;">
+            <a href="/home/bjerome/projects/ai/epam-cli/POC-TEST-REPORT.md">POC-TEST-REPORT.md</a>
+          </p>
+        </div>
+        <div class="card">
+          <h2>PRD Reference</h2>
+          <p class="small">
+            Backlog and execution planning source of truth:
+          </p>
+          <p style="margin-top: 10px;">
+            <a href="/home/bjerome/projects/ai/epam-cli/orchestrations/prd.json">orchestrations/prd.json</a>
+          </p>
+        </div>
+        <div class="card">
+          <h2>Quality Dashboard</h2>
+          <p class="small">Standalone dashboard page built on the normalized coverage rollup:</p>
+          <p style="margin-top: 10px;">
+            <a href="/home/bjerome/projects/ai/epam-cli/orchestrations/dashboards/quality-dashboard.html">quality-dashboard.html</a>
+          </p>
+        </div>
+      </section>
+
+      <p class="foot">
+        EPAM CLI POC summary for stakeholder review. White-background format optimized for decision-makers and technical leadership.
+      </p>
+    </main>
+  </body>
+</html>

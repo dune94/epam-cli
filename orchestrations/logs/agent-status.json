@@ -1,7 +1,27 @@
 {
   "lastUpdated": null,
   "currentPhase": null,
-  "lanes": {},
-  "stories": {},
-  "agents": {}
+  "lanes": {
+    "main": {
+      "currentStory": null,
+      "storiesCompleted": 1
+    }
+  },
+  "stories": {
+    "EPAM-044": {
+      "status": "complete",
+      "updatedAt": "2026-03-01T12:10:38-05:00"
+    }
+  },
+  "agents": {},
+  "events": [
+    {
+      "type": "story_complete",
+      "story": "EPAM-044",
+      "lane": "main",
+      "role": "",
+      "message": "Completed ",
+      "timestamp": "2026-03-01T12:10:38-05:00"
+    }
+  ]
 }

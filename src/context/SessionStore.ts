@@ -137,16 +137,32 @@ async function loadSessionFile(
   };
 }
 
+export interface SessionSummary {
+  id: string;
+  model: string;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCost: number;
+  turnCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+  path: string;
+  client?: string;
+  isFork: boolean;
+  label?: string;
+  originSessionId?: string;
+}
+
 export async function listSessions(
   projectRoot: string | null,
   limit = 20
-): Promise<Array<{ id: string; updatedAt: Date; turnCount: number; path: string; isFork: boolean; label?: string; originSessionId?: string }>> {
+): Promise<SessionSummary[]> {
   const dirs = [getSessionsDir(projectRoot)];
   // Also include global sessions if project-local differs
   const globalDir = path.join(getEpamGlobalDir(), 'sessions');
   if (!dirs.includes(globalDir)) dirs.push(globalDir);
 
-  const results: Array<{ id: string; updatedAt: Date; turnCount: number; path: string; isFork: boolean; label?: string; originSessionId?: string }> = [];
+  const results: SessionSummary[] = [];
 
   for (const dir of dirs) {
     if (!(await pathExists(dir))) continue;
@@ -173,10 +189,17 @@ export async function listSessions(
         }
       }
 
+      const turnLines = isFork ? lines.slice(1) : lines;
+
       results.push({
         id: file.replace('.jsonl', ''),
+        model: '',
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalCost: 0,
+        turnCount: turnLines.length,
+        createdAt: new Date(stat.birthtimeMs),
         updatedAt: stat.mtime,
-        turnCount: isFork ? lines.length - 1 : lines.length,
         path: filePath,
         isFork,
         ...(label !== undefined ? { label } : {}),

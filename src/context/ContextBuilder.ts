@@ -13,7 +13,7 @@ interface ContextBuildOptions {
 
 export interface ConsultationContext {
   profileName: string;
-  systemPromptAppend: string;
+  systemPromptAppend?: string;
   decisions: Array<{
     id: string;
     title: string;
@@ -23,6 +23,7 @@ export interface ConsultationContext {
     approved_alternative: string;
     tags: string[];
     createdAt: string;
+    author?: string;
   }>;
 }
 
@@ -73,8 +74,11 @@ export async function buildSystemPrompt(opts: ContextBuildOptions): Promise<stri
 export function buildConsultationBlock(ctx: ConsultationContext): string {
   const lines: string[] = [
     `[CONSULTING: @${ctx.profileName}]`,
-    ctx.systemPromptAppend,
   ];
+
+  if (ctx.systemPromptAppend) {
+    lines.push(ctx.systemPromptAppend);
+  }
 
   if (ctx.decisions.length > 0) {
     lines.push('\n[RECENT MATCHING DECISIONS]');

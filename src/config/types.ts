@@ -28,6 +28,8 @@ export interface BudgetGuardrails {
 export interface ProjectConfig {
   provider?: string;
   model?: string;
+  defaultModel?: string;
+  allowedModels?: string[];
   systemPromptFile?: string;
   contextFile?: string;
   tools?: {
@@ -43,6 +45,14 @@ export interface ProjectConfig {
   /** Budget guardrails for session cost enforcement. */
   budgetGuardrails?: Partial<BudgetGuardrails>;
 }
+
+export type ModelSelectionSource =
+  | 'flag'
+  | 'env'
+  | 'project-default'
+  | 'project-model'
+  | 'allowed-models-first'
+  | 'standard';
 
 export interface ResolvedConfig {
   backendUrl: string;
@@ -68,4 +78,10 @@ export interface ResolvedConfig {
   llmChain: LLMChainSlot[];
   /** Budget guardrails for session cost enforcement. */
   budgetGuardrails: BudgetGuardrails;
+  /** Project-configured default model (if set separately from the active model). */
+  defaultModel: string;
+  /** Project-allowed models list. */
+  allowedModels: string[];
+  /** Metadata on how the active model was selected. */
+  modelSelection: { source: ModelSelectionSource; usedDefault: boolean; reason?: string };
 }

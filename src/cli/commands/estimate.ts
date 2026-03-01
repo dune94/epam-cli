@@ -103,3 +103,59 @@ export function createEstimateCommand(): Command {
       process.exit(cpaCode);
     });
 }
+
+export interface EstimateOptions {
+  phase?: string;
+  dryRun?: boolean;
+  skipCpa?: boolean;
+  strict?: boolean;
+  logFile?: string;
+}
+
+export interface EstimateResult {
+  code: number;
+  cpa?: boolean;
+  message?: string;
+}
+
+export async function executeEstimate(opts: EstimateOptions): Promise<EstimateResult> {
+  const { createWriteStream } = await import('fs');
+  const ESTIMATE_SCRIPT = resolve(scriptsDir(), 'estimate-stories.sh');
+  const CPA_SCRIPT = resolve(scriptsDir(), 'contextualize-stories.sh');
+
+  if (!existsSync(ESTIMATE_SCRIPT)) {
+    return { code: 1, message: `estimate-stories.sh not found at ${ESTIMATE_SCRIPT}` };
+  }
+
+  const logStream = opts.logFile ? createWriteStream(opts.logFile, { flags: 'a' }) : null;
+
+  const runScriptToResult = (script: string, args: string[]): Promise<number> =>
+    new Promise((res, reject) => {
+      const child = logStream
+        ? spawn('bash', [script, ...args], { stdio: ['inherit', logStream, logStream], env: process.env })
+        : spawn('bash', [script, ...args], { stdio: 'inherit', env: process.env });
+      child.on('error', reject);
+      child.on('close', (code: number | null) => res(code ?? 1));
+    });
+
+  const estArgs: string[] = [];
+  if (opts.phase) estArgs.push('--phase', opts.phase);
+  if (opts.dryRun) estArgs.push('--dry-run');
+
+  const estCode = await runScriptToResult(ESTIMATE_SCRIPT, estArgs);
+  if (estCode !== 0) {
+    return { code: estCode, message: `Formula estimation failed (exit ${estCode})` };
+  }
+
+  if (opts.skipCpa || !existsSync(CPA_SCRIPT)) {
+    return { code: 0 };
+  }
+
+  const cpaArgs: string[] = [];
+  if (opts.phase) cpaArgs.push('--phase', opts.phase);
+  if (opts.strict) cpaArgs.push('--strict');
+  if (opts.dryRun) cpaArgs.push('--dry-run');
+
+  const cpaCode = await runScriptToResult(CPA_SCRIPT, cpaArgs);
+  return { code: cpaCode, cpa: true, message: cpaCode !== 0 ? `CPA gate exit ${cpaCode}` : undefined };
+}

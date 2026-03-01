@@ -1,20 +1,16 @@
-import type { Tool, ToolResult, ToolCallRequest } from '../tools/types.js';
+import type { ToolResult, ToolCallRequest } from '../tools/types.js';
 import { requestApproval } from '../tools/approval/ApprovalGate.js';
 import { pLimit } from '../utils/semaphore.js';
 import { logger } from '../utils/logger.js';
+import type { ToolRunner } from './tools/ToolRunner.js';
 
 interface ExecutorOptions {
-  tools: Tool[];
-  dangerousSkipApproval: boolean;
+  toolRunner: ToolRunner;
   maxConcurrency: number;
 }
 
 export class Executor {
-  private toolMap: Map<string, Tool>;
-
-  constructor(private options: ExecutorOptions) {
-    this.toolMap = new Map(options.tools.map(t => [t.name, t]));
-  }
+  constructor(private options: ExecutorOptions) {}
 
   async executeAll(requests: ToolCallRequest[]): Promise<ToolResult[]> {
     const tasks = requests.map(req => () => this.executeSingle(req));
@@ -22,9 +18,10 @@ export class Executor {
   }
 
   private async executeSingle(request: ToolCallRequest): Promise<ToolResult> {
-    const tool = this.toolMap.get(request.name);
+    const states = this.options.toolRunner.getAllToolStates();
+    const toolState = states.find(s => s.tool.name === request.name);
 
-    if (!tool) {
+    if (!toolState) {
       return {
         toolUseId: request.id,
         content: `Tool '${request.name}' not found`,
@@ -32,12 +29,27 @@ export class Executor {
       };
     }
 
-    const approved = await requestApproval(
-      tool.name,
-      request.input,
-      tool.permission,
-      this.options.dangerousSkipApproval
-    );
+    const { tool, safetyTier: permission, approvalMode } = toolState;
+
+    if (approvalMode === 'disabled') {
+      return {
+        toolUseId: request.id,
+        content: `Tool '${tool.name}' is disabled by user permission overrides`,
+        isError: true,
+      };
+    }
+
+    let approved = approvalMode === 'auto';
+    
+    if (!approved) {
+      // Prompt user
+      approved = await requestApproval(
+        tool.name,
+        request.input,
+        permission,
+        false // dangerousSkipApproval is superseded by ToolRunner's auto mode
+      );
+    }
 
     if (!approved) {
       return {

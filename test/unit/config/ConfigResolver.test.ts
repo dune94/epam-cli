@@ -1,5 +1,21 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { resolveConfig, resetResolvedConfig } from '../../../src/config/ConfigResolver.js';
+
+vi.mock('../../../src/config/ProjectConfig.js', () => ({
+  findProjectRoot: vi.fn().mockResolvedValue(null),
+  readProjectConfig: vi.fn().mockResolvedValue({}),
+}));
+
+vi.mock('../../../src/config/GlobalConfig.js', () => ({
+  readGlobalConfig: vi.fn().mockResolvedValue({}),
+  getGlobalConfigDefaults: vi.fn().mockReturnValue({
+    backendUrl: 'https://api.epam.example.com',
+    defaultProvider: 'anthropic',
+    defaultModel: 'claude-sonnet-4-6',
+  }),
+  writeGlobalConfig: vi.fn().mockResolvedValue(undefined),
+  getGlobalConfigPath: vi.fn().mockReturnValue('/mock/.epam/config.json'),
+}));
 
 describe('ConfigResolver', () => {
   beforeEach(() => resetResolvedConfig());

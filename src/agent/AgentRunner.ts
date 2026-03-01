@@ -2,6 +2,7 @@ import type { Message } from '../providers/types.js';
 import type { ToolCallRequest } from '../tools/types.js';
 import type { AgentRunOptions, AgentRunResult } from './types.js';
 import { Executor } from './Executor.js';
+import { ToolRunner } from './tools/ToolRunner.js';
 import { compressHistory } from '../context/MemoryCompressor.js';
 import { logger } from '../utils/logger.js';
 
@@ -37,9 +38,10 @@ export class AgentRunner {
   private maxToolOutputChars: number;
 
   constructor(private options: AgentRunOptions) {
+    const toolRunner = options.toolRunner ?? new ToolRunner(options.tools, options.dangerousSkipApproval ?? false);
+    
     this.executor = new Executor({
-      tools: options.tools,
-      dangerousSkipApproval: options.dangerousSkipApproval ?? false,
+      toolRunner,
       maxConcurrency: 3,
     });
     this.maxToolOutputChars = options.maxToolOutputChars ?? DEFAULT_MAX_TOOL_OUTPUT_CHARS;

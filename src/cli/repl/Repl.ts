@@ -15,6 +15,7 @@ import { Renderer } from './Renderer.js';
 import { parseInput, handleSlashCommand } from './InputHandler.js';
 import type { SlashCommandContext } from './SlashCommands.js';
 import type { ProviderChain } from '../../providers/ProviderChain.js';
+import { ToolRunner } from '../../agent/tools/ToolRunner.js';
 
 interface ReplOptions {
   provider: LLMProvider;
@@ -33,10 +34,12 @@ export class Repl {
   private renderer = new Renderer();
   private running = false;
   private budgetGuard: BudgetGuard;
+  private toolRunner: ToolRunner;
 
   constructor(private options: ReplOptions) {
     this.currentModel = options.config.llmChain[0]?.model ?? options.config.model;
     this.budgetGuard = new BudgetGuard(options.config.budgetGuardrails, this.currentModel);
+    this.toolRunner = new ToolRunner(options.tools, options.config.tools.dangerousSkipApproval);
   }
 
   async start(): Promise<void> {
@@ -112,6 +115,7 @@ export class Repl {
               provider,
               model: this.currentModel,
               tools: this.options.tools,
+              toolRunner: this.toolRunner,
               maxIterations: config.maxIterations,
               history: this.messages,
               autoCompressAt: config.autoCompressAt,
@@ -233,6 +237,8 @@ export class Repl {
       totalInputTokens: this.budgetGuard.inputTokens,
       totalOutputTokens: this.budgetGuard.outputTokens,
       budgetGuard: this.budgetGuard,
+      tools: this.options.tools,
+      toolRunner: this.toolRunner,
 
       onModelChange: model => {
         this.currentModel = model;

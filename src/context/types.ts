@@ -20,6 +20,14 @@ export interface SessionTurn {
     inputTokens: number;
     outputTokens: number;
   };
+  toolCalls?: Array<{ name: string; input: Record<string, unknown> }>;
+}
+
+export interface ForkMetadata {
+  type: 'fork_metadata';
+  timestamp: number;
+  originSessionId: string;
+  label?: string;
 }
 
 export interface ProjectContext {

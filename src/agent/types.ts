@@ -1,6 +1,7 @@
 import type { LLMProvider, TokenUsage, Message } from '../providers/types.js';
 import type { Tool } from '../tools/types.js';
 import type { BudgetGuard, BudgetCheckResult } from '../billing/BudgetGuard.js';
+import type { ToolRunner } from './tools/ToolRunner.js';
 
 export interface AgentRunOptions {
   userMessage: string;
@@ -21,6 +22,8 @@ export interface AgentRunOptions {
   dangerousSkipApproval?: boolean;
   /** Shared budget guard instance for cross-turn cost enforcement. */
   budgetGuard?: BudgetGuard;
+  /** Tool runner instance for permission and state management. */
+  toolRunner?: ToolRunner;
   onTextDelta?: (delta: string) => void;
   onToolCall?: (toolName: string, input: Record<string, unknown>) => void;
   onToolResult?: (toolName: string, result: string, isError: boolean) => void;

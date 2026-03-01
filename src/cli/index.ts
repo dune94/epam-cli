@@ -12,6 +12,16 @@ import { createModelsCommand } from './commands/models.js';
 import { createDoctorCommand } from './commands/doctor.js';
 import { createEstimateCommand } from './commands/estimate.js';
 import { createOrchestrateCommand } from './commands/orchestrate.js';
+import { createConsultCommand } from './commands/consult.js';
+import { createDecisionCommand } from './commands/decision.js';
+import { createInitCommand } from './commands/init.js';
+import { createMcpCommand } from './commands/mcp.js';
+import { createPhaseCommand } from './commands/phase.js';
+import { createProfileCommand } from './commands/profile.js';
+import { createReplayCommand } from './commands/replay.js';
+import { createReportCommand } from './commands/report.js';
+import { createSquadCommand } from './commands/squad.js';
+import { createSyncCommand } from './commands/sync.js';
 
 export function createCLI(version: string): Command {
   const program = new Command();
@@ -35,6 +45,16 @@ export function createCLI(version: string): Command {
   program.addCommand(createDoctorCommand());
   program.addCommand(createEstimateCommand());
   program.addCommand(createOrchestrateCommand());
+  program.addCommand(createConsultCommand());
+  program.addCommand(createDecisionCommand());
+  program.addCommand(createInitCommand());
+  program.addCommand(createMcpCommand());
+  program.addCommand(createPhaseCommand());
+  program.addCommand(createProfileCommand());
+  program.addCommand(createReplayCommand());
+  program.addCommand(createReportCommand());
+  program.addCommand(createSquadCommand());
+  program.addCommand(createSyncCommand());
 
   // Default: start chat if interactive, else show help
   program.action(() => {

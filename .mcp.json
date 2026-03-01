@@ -1,0 +1,9 @@
+{
+  "servers": [
+    {
+      "name": "example-server",
+      "url": "http://localhost:3000/mcp",
+      "transport": "http"
+    }
+  ]
+}

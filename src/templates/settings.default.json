@@ -1,0 +1,25 @@
+{
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-6",
+  "defaultModel": "claude-sonnet-4-6",
+  "maxIterations": 25,
+  "autoCompressAt": 100000,
+  "maxOutputTokens": 16384,
+  "tools": {
+    "enabled": ["ReadFile", "WriteFile", "Bash", "ListFiles", "Search", "FetchUrl"],
+    "disabled": [],
+    "dangerousSkipApproval": false
+  },
+  "llmChain": [
+    {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "label": "primary"
+    }
+  ],
+  "budgetGuardrails": {
+    "warningAt": 1.0,
+    "hardLimit": 5.0,
+    "autoDowngrade": false
+  }
+}

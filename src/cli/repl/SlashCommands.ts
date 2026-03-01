@@ -4,6 +4,8 @@ import type { ResolvedConfig, LLMChainSlot } from '../../config/types.js';
 import { calculateCost, formatCost, getPricing } from '../../billing/pricing.js';
 import { listSessions } from '../../context/SessionStore.js';
 import type { Message } from '../../providers/types.js';
+import type { Tool } from '../../tools/types.js';
+import type { ToolRunner } from '../../agent/tools/ToolRunner.js';
 import type { ProviderChain } from '../../providers/ProviderChain.js';
 import type { HealthStatus } from '../../providers/health/types.js';
 import type { BudgetGuard } from '../../billing/BudgetGuard.js';
@@ -19,6 +21,9 @@ export interface SlashCommandContext {
   totalOutputTokens: number;
   // Message history (for rewind)
   messages: Message[];
+  // Tools
+  tools?: Tool[];
+  toolRunner?: ToolRunner;
   // Budget guard (session cost tracking + enforcement)
   budgetGuard?: BudgetGuard;
   // Provider chain (optional — present when failover is active)
@@ -387,6 +392,56 @@ export const SLASH_COMMANDS: SlashCommand[] = [
       console.log();
       console.log(chalk.dim('  /chain reset           — clear all circuit breakers'));
       console.log(chalk.dim('  /chain set p/m [p/m]   — redefine priority list'));
+      console.log();
+      return true;
+    },
+  },
+
+  // ── /permissions ─────────────────────────────────────────────────────────────
+  {
+    name: 'permissions',
+    description: 'Show or change tool approval permissions',
+    usage: '[auto | reset | <tool> <auto|prompt|disabled>]',
+    async execute(args, ctx) {
+      if (!ctx.toolRunner || !ctx.tools) {
+        console.log(chalk.yellow('Tools are not available in this session.'));
+        return true;
+      }
+
+      const input = args.trim().toLowerCase();
+
+      if (input === 'auto') {
+        ctx.toolRunner.setAutoApproveAll();
+        console.log(chalk.green('Global auto-approve enabled for all tools.'));
+        return true;
+      }
+
+      if (input === 'reset') {
+        ctx.toolRunner.reset();
+        console.log(chalk.green('Tool permissions reset to default.'));
+        return true;
+      }
+
+      if (input) {
+        const parts = input.split(/\s+/);
+        if (parts.length === 2) {
+          const [toolName, mode] = parts;
+          if (['auto', 'prompt', 'disabled'].includes(mode)) {
+            ctx.toolRunner.setToolApprovalMode(toolName, mode as 'auto' | 'prompt' | 'disabled');
+            console.log(chalk.green(`Tool '${toolName}' approval mode set to ${mode}.`));
+            return true;
+          }
+        }
+        console.log(chalk.red('Usage: /permissions [auto | reset | <tool> <auto|prompt|disabled>]'));
+        return true;
+      }
+
+      console.log(chalk.bold('\nTool Permissions:\n'));
+      const states = ctx.toolRunner.getAllToolStates();
+      for (const state of states) {
+        const modeColor = state.approvalMode === 'auto' ? chalk.green : state.approvalMode === 'disabled' ? chalk.dim : chalk.yellow;
+        console.log(`  ${chalk.cyan(state.tool.name.padEnd(20))} ${chalk.dim(state.safetyTier.padEnd(10))} ${modeColor(state.approvalMode)}`);
+      }
       console.log();
       return true;
     },

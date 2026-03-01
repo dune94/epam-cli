@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quality Dashboard — EPAM CLI</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #fbfafa; --surface: #ffffff; --border: #e0e0e0;
+  --text: #060606; --text3: #717171;
+  --brand: #0047ff; --green: #1a8f3f; --amber: #c87a00; --red: #d93025;
+  --epam-gradient: linear-gradient(118.82deg, #0078c2 .5%, #0047ff 47.33%, #8453d2 76.12%);
+}
+body { background: var(--bg); color: var(--text); font-family: "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 14px; line-height: 1.45; }
+.header { background: var(--epam-gradient); color: #fff; padding: 16px 28px; }
+.header h1 { font-size: 20px; font-weight: 800; }
+.header p { color: rgba(255,255,255,0.76); margin-top: 4px; font-size: 12px; }
+.page { max-width: 1360px; margin: 0 auto; padding: 18px 28px 40px; }
+.nav-links { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 18px; }
+.nav-links a { color: var(--text3); text-decoration: none; font-size: 12px; font-weight: 700; padding: 8px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); }
+.nav-links a.active { color: #fff; background: var(--brand); border-color: var(--brand); }
+.topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.link { color: var(--brand); text-decoration: none; font-weight: 600; }
+.grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 18px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.metric-label { color: var(--text3); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.metric-value { margin-top: 8px; font-size: 28px; font-weight: 800; }
+.metric-note { margin-top: 4px; color: var(--text3); font-size: 12px; }
+.layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.section-title { font-size: 16px; font-weight: 800; margin-bottom: 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--text3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.passed { background: rgba(26,143,63,0.1); color: var(--green); }
+.partial { background: rgba(200,122,0,0.1); color: var(--amber); }
+.failed { background: rgba(217,48,37,0.08); color: var(--red); }
+.not_tested { background: rgba(0,71,255,0.08); color: var(--brand); }
+.footer-note { color: var(--text3); font-size: 12px; margin-top: 14px; }
+@media (max-width: 1100px) { .grid { grid-template-columns: 1fr 1fr; } .layout { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+  <header class="header">
+    <h1>EPAM CLI Quality Dashboard</h1>
+    <p>POC coverage, bug traceability, and dashboard-ready quality rollups sourced from `prd.json`.</p>
+  </header>
+  <main class="page">
+    <nav class="nav-links">
+      <a href="monitor.html">Monitor</a>
+      <a href="prd-viewer.html">PRD Viewer</a>
+      <a href="orchestration-plan.html">Plan</a>
+      <a href="agents-orchestration.html">Orchestration</a>
+      <a href="agent-profiles.html">Profiles</a>
+      <a href="agent-messages.html">Messages</a>
+      <a href="phase-cost-monitor.html">Costs</a>
+      <a href="quality-dashboard.html" class="active">Quality</a>
+      <a href="cpa-details.html">Estimation</a>
+      <a href="epam-cli-guide.html">CLI Guide</a>
+    </nav>
+    <div class="topbar">
+      <a class="link" href="../logs/quality-summary.json">Open quality-summary.json</a>
+      <a class="link" href="../../POC-TEST-REPORT.html">Open stakeholder POC summary</a>
+    </div>
+    <section class="grid" id="summaryGrid"></section>
+    <section class="layout">
+      <div class="card">
+        <div class="section-title">Phase Coverage</div>
+        <table>
+          <thead><tr><th>Phase</th><th>Passed</th><th>Partial</th><th>Failed</th><th>Not Tested</th></tr></thead>
+          <tbody id="phaseTable"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="section-title">Linked Backlog Bugs</div>
+        <table>
+          <thead><tr><th>Story</th><th>Status</th><th>Origin Links</th><th>Evidence</th></tr></thead>
+          <tbody id="bugTable"></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="card" style="margin-top: 16px;">
+      <div class="section-title">POC-Tested Stories</div>
+      <table>
+        <thead><tr><th>ID</th><th>Title</th><th>Phase</th><th>POC Status</th><th>Badge</th><th>Evidence Count</th></tr></thead>
+        <tbody id="storyTable"></tbody>
+      </table>
+      <div class="footer-note" id="generatedAt"></div>
+    </section>
+  </main>
+<script>
+const summaryGrid = document.getElementById('summaryGrid');
+const phaseTable = document.getElementById('phaseTable');
+const bugTable = document.getElementById('bugTable');
+const storyTable = document.getElementById('storyTable');
+const generatedAt = document.getElementById('generatedAt');
+function metricCard(label, value, note) {
+  return `<div class="card"><div class="metric-label">${label}</div><div class="metric-value">${value}</div><div class="metric-note">${note}</div></div>`;
+}
+function statusBadge(status) {
+  const css = ['passed', 'partial', 'failed'].includes(status) ? status : 'not_tested';
+  return `<span class="badge ${css}">${status}</span>`;
+}
+fetch('../logs/quality-summary.json')
+  .then(r => r.json())
+  .then(data => {
+    const s = data.summary;
+    summaryGrid.innerHTML = [
+      metricCard('Total Stories', s.totalStories, 'Stories currently tracked in the PRD'),
+      metricCard('POC Passed', s.pocPassed, 'Validated in this POC'),
+      metricCard('POC Partial', s.pocPartial, 'Partially exercised'),
+      metricCard('POC Failed', s.pocFailed, 'Bugs found during POC'),
+      metricCard('Not Tested', s.pocNotTested, 'No POC metadata yet')
+    ].join('');
+    phaseTable.innerHTML = data.byPhase.filter(phase => phase.pocPassed || phase.pocPartial || phase.pocFailed)
+      .map(phase => `<tr><td><strong>${phase.phaseId}</strong></td><td>${phase.pocPassed}</td><td>${phase.pocPartial}</td><td>${phase.pocFailed}</td><td>${phase.pocNotTested}</td></tr>`).join('');
+    const bugStories = data.stories.filter(story => story.originStoryCount > 0);
+    bugTable.innerHTML = bugStories
+      .map(story => `<tr><td><strong>${story.id}</strong><br>${story.title}</td><td>${statusBadge(story.pocStatus)}</td><td>${story.originStoryCount}</td><td>${story.evidenceCount}</td></tr>`).join('');
+    const pocStories = data.stories.filter(story => story.pocStatus !== 'not_tested');
+    storyTable.innerHTML = pocStories
+      .map(story => `<tr><td><strong>${story.id}</strong></td><td>${story.title}</td><td>${story.phaseId || '-'}</td><td>${statusBadge(story.pocStatus)}</td><td>${story.badge || '-'}</td><td>${story.evidenceCount}</td></tr>`).join('');
+    generatedAt.textContent = `Generated from ${data.source} at ${data.generatedAt}.`;
+  })
+  .catch(err => {
+    summaryGrid.innerHTML = `<div class="card"><div class="metric-label">Load Error</div><div class="metric-note">${String(err)}</div></div>`;
+  });
+</script>
+</body>
+</html>

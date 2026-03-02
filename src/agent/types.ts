@@ -2,6 +2,8 @@ import type { LLMProvider, TokenUsage, Message } from '../providers/types.js';
 import type { Tool } from '../tools/types.js';
 import type { BudgetGuard, BudgetCheckResult } from '../billing/BudgetGuard.js';
 import type { ToolRunner } from './tools/ToolRunner.js';
+import type { AuditorRunner } from '../auditors/AuditorRunner.js';
+import type { AuditorGateDecision } from '../auditors/types.js';
 
 export interface AgentRunOptions {
   userMessage: string;
@@ -30,6 +32,10 @@ export interface AgentRunOptions {
   onIterationStart?: (iteration: number) => void;
   /** Fired when a budget threshold is crossed (warning, downgrade, or pause). */
   onBudgetCheck?: (result: BudgetCheckResult) => void;
+  /** Auditor runners to evaluate each assistant response before delivery. */
+  auditors?: AuditorRunner[];
+  /** Fired after auditors evaluate a response. */
+  onAuditorGate?: (decision: AuditorGateDecision) => void;
 }
 
 export interface AgentRunResult {

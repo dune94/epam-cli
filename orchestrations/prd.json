@@ -741,8 +741,8 @@
       "title": "Remote Constraint Injection",
       "description": "Implement a backend polling mechanism that calls GET /v1/projects/{id}/constraints at session start. The response contains active constraint rules that are injected into the system prompt. Each constraint has: id, rule, severity (warn/block), createdBy, expiresAt. Block-severity constraints are prepended prominently; warn-severity constraints are appended as notes.",
       "priority": "medium",
-      "status": "pending",
-      "completed": false,
+      "status": "done",
+      "completed": true,
       "agentGroup": "main",
       "agentRole": "typescript-engineer",
       "acceptanceCriteria": [
@@ -784,8 +784,8 @@
       "title": "Signature Auditor Agents",
       "description": "Define named auditor personas (e.g. 'security-sarah', 'performance-paul') in .epam/auditors.json. After each agent response, the selected auditors run in parallel and produce critique transcripts. The user sees the debate \u2014 each auditor's findings \u2014 before the final answer is confirmed.",
       "priority": "medium",
-      "status": "pending",
-      "completed": false,
+      "status": "done",
+      "completed": true,
       "agentGroup": "main",
       "agentRole": "agent-systems-engineer",
       "acceptanceCriteria": [

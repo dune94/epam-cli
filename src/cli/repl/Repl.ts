@@ -4,7 +4,8 @@ import type { LLMProvider, Message } from '../../providers/types.js';
 import type { Tool } from '../../tools/types.js';
 import type { ResolvedConfig, LLMChainSlot } from '../../config/types.js';
 import { AgentRunner } from '../../agent/AgentRunner.js';
-import { buildSystemPrompt } from '../../context/ContextBuilder.js';
+import { buildSessionSystemPrompt } from '../../constraints/sessionPrompt.js';
+import { consumeConsultationContext } from '../../context/ContextBuilder.js';
 import { createSession, createTurn, appendTurn, loadSession } from '../../context/SessionStore.js';
 import { compressHistory } from '../../context/MemoryCompressor.js';
 import { formatCost, calculateCost } from '../../billing/pricing.js';
@@ -16,6 +17,7 @@ import { parseInput, handleSlashCommand } from './InputHandler.js';
 import type { SlashCommandContext } from './SlashCommands.js';
 import type { ProviderChain } from '../../providers/ProviderChain.js';
 import { ToolRunner } from '../../agent/tools/ToolRunner.js';
+import { AuthManager } from '../../auth/AuthManager.js';
 
 interface ReplOptions {
   provider: LLMProvider;
@@ -24,6 +26,8 @@ interface ReplOptions {
   version: string;
   /** Optional: chain instance, present when failover is configured. */
   providerChain?: ProviderChain;
+  /** Optional: auth manager for constraint loading; if omitted one is created from config.backendUrl. */
+  authManager?: AuthManager;
 }
 
 export class Repl {
@@ -62,11 +66,8 @@ export class Repl {
 
     this.session = createSession(config.projectRoot, this.currentModel, config.provider);
 
-    const systemPrompt = await buildSystemPrompt({
-      contextFilePath: config.contextFile,
-      systemPromptFile: config.systemPromptFile,
-      projectRoot: config.projectRoot,
-    });
+    const authManager = this.options.authManager ?? new AuthManager(config.backendUrl);
+    const systemPrompt = await buildSessionSystemPrompt(config, authManager);
 
     this.renderer.renderWelcome(version, config.provider, this.currentModel, config.projectRoot);
 
@@ -104,7 +105,10 @@ export class Repl {
           }
 
           // Regular message — run agent
-          const userMessage = parsed.message!;
+          const rawMessage = parsed.message!;
+          const userMessage = config.projectRoot
+            ? await consumeConsultationContext(rawMessage, config.projectRoot)
+            : rawMessage;
 
           try {
             process.stdout.write('\n');

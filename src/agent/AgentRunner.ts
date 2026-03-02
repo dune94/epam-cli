@@ -4,6 +4,7 @@ import type { AgentRunOptions, AgentRunResult } from './types.js';
 import { Executor } from './Executor.js';
 import { ToolRunner } from './tools/ToolRunner.js';
 import { compressHistory } from '../context/MemoryCompressor.js';
+import { AuditorRunner } from '../auditors/AuditorRunner.js';
 import { logger } from '../utils/logger.js';
 
 const DEFAULT_MAX_TOOL_OUTPUT_CHARS = 32_768;
@@ -129,6 +130,21 @@ export class AgentRunner {
       if (response.stopReason === 'end_turn' || toolUses.length === 0) {
         // Append the final assistant message so messages array is complete
         messages.push({ role: 'assistant', content: response.content });
+
+        // Run auditors in parallel after each assistant turn
+        if (this.options.auditors && this.options.auditors.length > 0) {
+          const auditorInput = {
+            userMessage: this.options.userMessage,
+            proposedResponse: finalResponse,
+            conversationHistory: messages.slice(0, -1),
+          };
+          const results = await Promise.all(
+            this.options.auditors.map(a => a.run(auditorInput))
+          );
+          const decision = AuditorRunner.evaluateGate(results, this.options.auditors);
+          this.options.onAuditorGate?.(decision);
+        }
+
         break;
       }
 

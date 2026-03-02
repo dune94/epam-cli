@@ -8,7 +8,8 @@ import { ListFilesTool } from '../../tools/builtin/ListFiles.js';
 import { SearchTool } from '../../tools/builtin/Search.js';
 import { FetchUrlTool } from '../../tools/builtin/FetchUrl.js';
 import { AgentRunner } from '../../agent/AgentRunner.js';
-import { buildSystemPrompt } from '../../context/ContextBuilder.js';
+import { buildSessionSystemPrompt } from '../../constraints/sessionPrompt.js';
+import { consumeConsultationContext } from '../../context/ContextBuilder.js';
 import { ProviderChain } from '../../providers/ProviderChain.js';
 import { getApiKey as getEnvApiKey } from '../../config/EnvVarOverrides.js';
 import { getApiKey as getStoredApiKey } from '../../billing/KeychainKeyStore.js';
@@ -79,14 +80,13 @@ export function createRunCommand(): Command {
           ]
         : [];
 
-      const systemPrompt = await buildSystemPrompt({
-        contextFilePath: config.contextFile,
-        systemPromptFile: config.systemPromptFile,
-        projectRoot: config.projectRoot,
-      });
+      const systemPrompt = await buildSessionSystemPrompt(config, authManager);
+      const userMessage = config.projectRoot
+        ? await consumeConsultationContext(prompt, config.projectRoot)
+        : prompt;
 
       const runner = new AgentRunner({
-        userMessage: prompt,
+        userMessage,
         systemPrompt,
         provider: chain,
         model: config.model,

@@ -22,6 +22,7 @@ import { createReplayCommand } from './commands/replay.js';
 import { createReportCommand } from './commands/report.js';
 import { createSquadCommand } from './commands/squad.js';
 import { createSyncCommand } from './commands/sync.js';
+import { createProviderCommand } from './commands/provider.js';
 
 export function createCLI(version: string): Command {
   const program = new Command();
@@ -55,6 +56,7 @@ export function createCLI(version: string): Command {
   program.addCommand(createReportCommand());
   program.addCommand(createSquadCommand());
   program.addCommand(createSyncCommand());
+  program.addCommand(createProviderCommand());
 
   // Default: start chat if interactive, else show help
   program.action(() => {

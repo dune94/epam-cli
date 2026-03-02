@@ -2,6 +2,8 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { resolveConfig } from '../../config/ConfigResolver.js';
 import { AuthManager } from '../../auth/AuthManager.js';
+import { resolveProviderCredential } from '../../auth/ProviderCredentialStore.js';
+import type { ProviderName } from '../../auth/types.js';
 
 async function check(
   name: string,
@@ -79,6 +81,47 @@ export function createDoctorCommand(): Command {
             message: res.ok ? `${config.backendUrl} (ok)` : `HTTP ${res.status}`,
           };
         })) && allOk;
+
+      // Provider Auth section (EPAM-047)
+      console.log();
+      console.log(chalk.bold('Provider Auth:'));
+      const providerNames: ProviderName[] = ['anthropic', 'openai', 'gemini'];
+      for (const name of providerNames) {
+        const envKeyMap: Record<ProviderName, string | undefined> = {
+          anthropic: process.env.EPAM_API_KEY_ANTHROPIC,
+          openai:    process.env.EPAM_API_KEY_OPENAI,
+          gemini:    process.env.EPAM_API_KEY_GEMINI,
+        };
+        const envKey = envKeyMap[name];
+
+        if (envKey) {
+          const masked = `${envKey.slice(0, 4)}...${envKey.slice(-4)}`;
+          console.log(`  ${chalk.green('✓')} ${name.padEnd(12)} ${chalk.dim('env_var')}  ${masked}`);
+        } else {
+          try {
+            const record = await resolveProviderCredential(name);
+            if (!record) {
+              console.log(`  ${chalk.dim('○')} ${name.padEnd(12)} ${chalk.dim('none')}`);
+            } else {
+              const now = new Date();
+              const expired = record.expiresAt && new Date(record.expiresAt) <= now;
+              const icon = expired ? chalk.red('✗') : chalk.green('✓');
+              const masked = record.secret.length > 8
+                ? `${record.secret.slice(0, 4)}...${record.secret.slice(-4)}`
+                : '****';
+              const expirySuffix = expired
+                ? chalk.red(` (expired ${new Date(record.expiresAt!).toLocaleDateString()})`)
+                : record.expiresAt
+                  ? chalk.dim(` expires ${new Date(record.expiresAt).toLocaleDateString()}`)
+                  : '';
+              const accountSuffix = record.accountLabel ? chalk.dim(`  [${record.accountLabel}]`) : '';
+              console.log(`  ${icon} ${name.padEnd(12)} ${chalk.dim(record.source)}  ${masked}${expirySuffix}${accountSuffix}`);
+            }
+          } catch {
+            console.log(`  ${chalk.red('✗')} ${name.padEnd(12)} ${chalk.red('error reading credentials')}`);
+          }
+        }
+      }
 
       console.log();
       console.log(

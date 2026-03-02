@@ -18,6 +18,8 @@ import type { SlashCommandContext } from './SlashCommands.js';
 import type { ProviderChain } from '../../providers/ProviderChain.js';
 import { ToolRunner } from '../../agent/tools/ToolRunner.js';
 import { AuthManager } from '../../auth/AuthManager.js';
+import { AuditorRegistry } from '../../auditors/AuditorRegistry.js';
+import type { AuditorGateDecision } from '../../auditors/types.js';
 
 interface ReplOptions {
   provider: LLMProvider;
@@ -39,6 +41,7 @@ export class Repl {
   private running = false;
   private budgetGuard: BudgetGuard;
   private toolRunner: ToolRunner;
+  private auditorRegistry?: AuditorRegistry;
 
   constructor(private options: ReplOptions) {
     this.currentModel = options.config.llmChain[0]?.model ?? options.config.model;
@@ -68,6 +71,11 @@ export class Repl {
 
     const authManager = this.options.authManager ?? new AuthManager(config.backendUrl);
     const systemPrompt = await buildSessionSystemPrompt(config, authManager);
+
+    // Load auditor personas (no-op if .epam/auditors.json absent)
+    const auditorRegistry = new AuditorRegistry(config.projectRoot ?? process.cwd());
+    await auditorRegistry.load();
+    this.auditorRegistry = auditorRegistry;
 
     this.renderer.renderWelcome(version, config.provider, this.currentModel, config.projectRoot);
 
@@ -113,6 +121,8 @@ export class Repl {
           try {
             process.stdout.write('\n');
 
+            let gateDecision: AuditorGateDecision | undefined;
+
             const runner = new AgentRunner({
               userMessage,
               systemPrompt,
@@ -126,6 +136,11 @@ export class Repl {
               maxOutputTokens: config.maxOutputTokens,
               dangerousSkipApproval: config.tools.dangerousSkipApproval,
               budgetGuard: this.budgetGuard,
+              auditors: auditorRegistry.getEnabledRunners(provider, this.options.tools ?? []),
+              onAuditorGate: (decision) => {
+                gateDecision = decision;
+                this.renderAuditorFindings(decision);
+              },
               onTextDelta: delta => this.writer.write(delta),
               onToolCall: (name, inp) => this.writer.writeToolCall(name, inp),
               onToolResult: (name, result, isError) =>
@@ -135,6 +150,16 @@ export class Repl {
 
             const result = await runner.run();
             this.writer.newline();
+
+            // If auditors blocked, prompt user before continuing
+            if (gateDecision?.blocked) {
+              const proceed = await this.promptAuditorGate();
+              if (!proceed) {
+                console.log(chalk.dim('Response rejected. Please rephrase your request.'));
+                prompt();
+                return;
+              }
+            }
 
             // Store full message array (includes history + this turn's exchanges)
             this.messages = result.messages;
@@ -306,6 +331,7 @@ export class Repl {
       },
 
       providerChain: this.options.providerChain,
+      auditorRegistry: this.auditorRegistry,
 
       onChainUpdate: async (slots: LLMChainSlot[]) => {
         const chain = this.options.providerChain;
@@ -320,5 +346,27 @@ export class Repl {
         this.currentModel = slots[0]?.model ?? this.currentModel;
       },
     };
+  }
+
+  private renderAuditorFindings(decision: AuditorGateDecision): void {
+    for (const result of decision.blockingAuditors) {
+      process.stdout.write(chalk.magenta(`\n[AUDITOR: ${result.auditorName}]`));
+      for (const finding of result.findings) {
+        process.stdout.write(chalk.magenta(` Finding: ${finding.finding}\n`));
+      }
+    }
+    if (decision.blocked) {
+      process.stdout.write(chalk.magenta.bold('\n⚠  Auditor gate triggered — review findings above.\n'));
+    }
+  }
+
+  private async promptAuditorGate(): Promise<boolean> {
+    return new Promise(resolve => {
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      rl.question(chalk.magenta('Proceed with this response? [y/N] '), answer => {
+        rl.close();
+        resolve(answer.trim().toLowerCase() === 'y');
+      });
+    });
   }
 }

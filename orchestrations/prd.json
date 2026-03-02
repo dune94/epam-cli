@@ -870,8 +870,8 @@
       "title": "Review \u2014 Enterprise Phase",
       "description": "Review all stories in the enterprise phase (EPAM-015, EPAM-016, EPAM-017). Verify constraint injection security (no constraint bypass), auditor parallel safety, severity gate correctness, consultation single-turn scoping, and full TypeScript strict compliance.",
       "priority": "medium",
-      "status": "pending",
-      "completed": false,
+      "status": "done",
+      "completed": true,
       "agentGroup": "main",
       "agentRole": "review-agent",
       "acceptanceCriteria": [

@@ -1,0 +1,20 @@
+{
+  "message_id": "msg-1772322541852",
+  "timestamp": "2026-02-28T18:49:01-05:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "frontend-engineer",
+  "type": "approval",
+  "priority": "normal",
+  "subject": "Code review approved: EPAM-027",
+  "story_id": "EPAM-027",
+  "phase_id": "mvp_cli_control",
+  "body": {
+    "text": "Code review passed for story EPAM-027. No issues found. Ready to proceed.",
+    "story_id": "EPAM-027",
+    "phase_id": "mvp_cli_control",
+    "data": {}
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

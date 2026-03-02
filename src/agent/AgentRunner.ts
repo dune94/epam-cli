@@ -5,6 +5,8 @@ import { Executor } from './Executor.js';
 import { ToolRunner } from './tools/ToolRunner.js';
 import { compressHistory } from '../context/MemoryCompressor.js';
 import { AuditorRunner } from '../auditors/AuditorRunner.js';
+import { RalphWiggumLoop } from './RalphWiggumLoop.js';
+import type { BashToolResult, BashErrorClassification } from '../tools/builtin/Bash.js';
 import { logger } from '../utils/logger.js';
 
 const DEFAULT_MAX_TOOL_OUTPUT_CHARS = 32_768;
@@ -169,7 +171,8 @@ export class AgentRunner {
         toolCallRequests[0]?.input ?? {}
       );
 
-      const toolResults = await this.executor.executeAll(toolCallRequests);
+      // Execute tools with Ralph Wiggum Loop error recovery for bash failures
+      const toolResults = await this.executeToolsWithRecovery(toolCallRequests);
 
       for (const result of toolResults) {
         result.content = truncateToolOutput(result.content, this.maxToolOutputChars);
@@ -201,6 +204,81 @@ export class AgentRunner {
     }
 
     return this.buildResult(finalResponse, messages);
+  }
+
+  /**
+   * Execute tools with Ralph Wiggum Loop error recovery for bash failures.
+   *
+   * When a bash tool returns a recoverable error (exit code 1/2 with stderr),
+   * spawns parallel agents to attempt different fix strategies.
+   */
+  private async executeToolsWithRecovery(
+    toolCallRequests: ToolCallRequest[]
+  ): Promise<ToolCallRequest['input'] extends Record<string, unknown> ? 
+    (ToolCallRequest & { toolUseId: string; content: string; isError: boolean })[] : never> {
+    
+    const toolResults = await this.executor.executeAll(toolCallRequests);
+
+    // Check for bash tool failures that may benefit from Ralph Wiggum Loop
+    const bashFailure = toolResults.find((result): result is BashToolResult => {
+      if (!result.isError) return false;
+      const maybeBashResult = result as BashToolResult;
+      return maybeBashResult.errorClassification?.recoverable === true;
+    });
+
+    if (!bashFailure) {
+      return toolResults as any;
+    }
+
+    const bashRequest = toolCallRequests.find(r => r.id === bashFailure.toolUseId);
+    if (!bashRequest || bashRequest.name !== 'bash') {
+      return toolResults as any;
+    }
+
+    logger.info({
+      command: bashRequest.input.command,
+      reason: bashFailure.errorClassification?.reason,
+    }, 'RalphWiggumLoop: Triggering parallel error recovery');
+
+    // Trigger Ralph Wiggum Loop
+    const ralphWiggum = new RalphWiggumLoop();
+    
+    const result = await ralphWiggum.run(
+      {
+        command: bashRequest.input.command as string,
+        stderr: bashFailure.stderr ?? '',
+        stdout: bashFailure.content,
+        exitCode: bashFailure.exitCode ?? 1,
+        contextMessages: [], // Could pass current messages if tracked
+        systemPrompt: this.options.systemPrompt,
+      },
+      this.options.provider,
+      this.options.model,
+      this.options.tools,
+      this.options.systemPrompt,
+      this.options.dangerousSkipApproval ?? false
+    );
+
+    if (result.success && result.winningAttempt) {
+      logger.info({
+        winningStrategy: result.winningAttempt.strategy,
+        elapsedMs: result.elapsedMs,
+        agentsCancelled: result.agentsCancelled,
+      }, 'RalphWiggumLoop: Found successful fix');
+
+      // Re-execute the bash command after the fix was applied
+      // The winning attempt's messages contain the fix, so we re-run the tool
+      const fixedResults = await this.executor.executeAll(toolCallRequests);
+      return fixedResults as any;
+    }
+
+    logger.warn({
+      success: result.success,
+      elapsedMs: result.elapsedMs,
+    }, 'RalphWiggumLoop: No successful fix found');
+
+    // Return original results if recovery failed
+    return toolResults as any;
   }
 
   private buildResult(finalResponse: string, messages: Message[]): AgentRunResult {

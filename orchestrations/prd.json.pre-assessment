@@ -2,7 +2,7 @@
   "id": "epam-cli-v1",
   "title": "EPAM CLI — AI Coding Assistant",
   "version": "1.0.0",
-  "lastUpdated": "2026-03-02",
+  "lastUpdated": "2026-03-01",
   "project": {
     "name": "epam-cli",
     "description": "Multi-LLM AI coding assistant CLI with agent orchestration, failover chain, OAuth auth, and enterprise features",
@@ -1064,8 +1064,8 @@
       "title": "RAG Asset Discovery POC",
       "description": "Mock implementation of enterprise asset discovery. .epam/assets.json contains mock asset records (id, title, description, tags, repoUrl). Before each agent LLM call, perform fuzzy keyword matching against the user message and inject the top 3 matching assets as an '[ASSET ALERT]' block in the system prompt. No vector database — pure keyword matching for POC.",
       "priority": "low",
-      "status": "done",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "agentGroup": "main",
       "agentRole": "backend-engineer",
       "acceptanceCriteria": [
@@ -1100,16 +1100,15 @@
       "estimatedTurns": 32,
       "humanHours": 6,
       "effort": "medium",
-      "originalAgentRole": "typescript-engineer",
-      "completedAt": "2026-03-02T00:00:00Z"
+      "originalAgentRole": "typescript-engineer"
     },
     {
       "id": "EPAM-020",
       "title": "Review — RAG POC Phase",
       "description": "Review EPAM-019 (RAG Asset Discovery POC). Verify keyword matching correctness, score threshold behaviour, injection format in system prompt, absence handling, and that the POC implementation does not introduce performance regressions on the ContextBuilder hot path.",
       "priority": "low",
-      "status": "done",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "agentGroup": "main",
       "agentRole": "review-agent",
       "acceptanceCriteria": [
@@ -1139,8 +1138,7 @@
       "estimatedTokens": 23731,
       "estimatedTurns": 6,
       "humanHours": 2,
-      "effort": "low",
-      "completedAt": "2026-03-02T00:00:00Z"
+      "effort": "low"
     },
     {
       "id": "EPAM-IT-001",
@@ -2756,307 +2754,6 @@
           "traceability"
         ]
       }
-    },
-    {
-      "id": "EPAM-058",
-      "title": "Slash Command: /plan",
-      "description": "Add `/plan` to the REPL so users can enter planning mode without leaving chat. This should reuse the existing PlanMode implementation and provide an in-session workflow for plan generation, approval, editing, and execution.",
-      "priority": "low",
-      "status": "pending",
-      "completed": false,
-      "agentGroup": "main",
-      "agentRole": "cli-ux-engineer",
-      "storyType": "implementation",
-      "effort": "medium",
-      "humanHours": 4,
-      "estimatedHours": 0.3333,
-      "dependencies": [
-        "EPAM-005"
-      ],
-      "acceptanceCriteria": [
-        "`/plan <task>` is registered in SlashCommands.ts",
-        "`/plan` invokes PlanMode.generatePlan() from within the REPL session",
-        "Approval, cancel, and edit flows are supported in-session",
-        "Approved plans execute in-session with step headers and status updates",
-        "Approved plan JSON is stored in `.epam/plans/`",
-        "Unit tests cover slash-command registration and REPL integration with PlanMode"
-      ],
-      "technicalNotes": {
-        "files": [
-          "src/cli/repl/SlashCommands.ts",
-          "src/cli/repl/Repl.ts",
-          "src/agent/PlanMode.ts"
-        ],
-        "requiredSkills": [
-          "TypeScript",
-          "repl-integration",
-          "plan-execution"
-        ]
-      },
-      "aiProvider": "codex",
-      "cpaGate": "review"
-    },
-    {
-      "id": "EPAM-059",
-      "title": "Slash Command: /init",
-      "description": "Add `/init` to the REPL so a user can bootstrap EPAM CLI project files without leaving the active session.",
-      "priority": "low",
-      "status": "pending",
-      "completed": false,
-      "agentGroup": "main",
-      "agentRole": "cli-ux-engineer",
-      "storyType": "implementation",
-      "effort": "low",
-      "humanHours": 2,
-      "estimatedHours": 0.1667,
-      "dependencies": [
-        "EPAM-023"
-      ],
-      "acceptanceCriteria": [
-        "`/init` is registered in SlashCommands.ts",
-        "`/init` invokes the existing project scaffold/init workflow",
-        "Output clearly distinguishes created files from skipped existing files",
-        "The command is idempotent and safe to rerun during a live REPL session",
-        "Unit tests cover registration and successful invocation"
-      ],
-      "technicalNotes": {
-        "files": [
-          "src/cli/repl/SlashCommands.ts",
-          "src/cli/commands/init.ts",
-          "src/scaffold/ScaffoldRunner.ts"
-        ],
-        "requiredSkills": [
-          "TypeScript",
-          "repl-integration",
-          "project-scaffolding"
-        ]
-      },
-      "aiProvider": "codex",
-      "cpaGate": "review"
-    },
-    {
-      "id": "EPAM-060",
-      "title": "Slash Command: /mcp",
-      "description": "Add `/mcp` to the REPL so users can inspect configured MCP servers, remote tool availability, and reload MCP configuration without leaving the current session.",
-      "priority": "low",
-      "status": "pending",
-      "completed": false,
-      "agentGroup": "main",
-      "agentRole": "agent-systems-engineer",
-      "storyType": "implementation",
-      "effort": "medium",
-      "humanHours": 4,
-      "estimatedHours": 0.3333,
-      "dependencies": [
-        "EPAM-007",
-        "EPAM-038"
-      ],
-      "acceptanceCriteria": [
-        "`/mcp` is registered in SlashCommands.ts",
-        "`/mcp` shows configured servers, connection status, and tool counts",
-        "`/mcp list-tools` lists remote MCP tools available to the session",
-        "`/mcp reload` refreshes `.mcp.json` and reconnects MCP clients for the session where supported",
-        "The command surface aligns with `epam mcp serve` and MCP client status",
-        "Unit tests cover registration, status rendering, and reload behavior"
-      ],
-      "technicalNotes": {
-        "files": [
-          "src/cli/repl/SlashCommands.ts",
-          "src/cli/repl/Repl.ts",
-          "src/mcp/McpClient.ts",
-          "src/cli/commands/mcp.ts"
-        ],
-        "requiredSkills": [
-          "TypeScript",
-          "MCP",
-          "repl-integration"
-        ]
-      },
-      "aiProvider": "codex",
-      "cpaGate": "review"
-    },
-    {
-      "id": "EPAM-061",
-      "title": "Slash Command: /status",
-      "description": "Add `/status` as a concise operational summary command in the REPL. It should provide a single-pane view of current auth, provider, model, chain health, budget state, MCP state, and auditor state.",
-      "priority": "low",
-      "status": "pending",
-      "completed": false,
-      "agentGroup": "main",
-      "agentRole": "cli-ux-engineer",
-      "storyType": "implementation",
-      "effort": "medium",
-      "humanHours": 3,
-      "estimatedHours": 0.25,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "`/status` is registered in SlashCommands.ts",
-        "The command renders auth state, provider, model, chain status, budget summary, context path, MCP status, and auditor status when available",
-        "Output is concise and operator-readable rather than a raw debug dump",
-        "The command does not require exiting the REPL or invoking separate CLI commands",
-        "Unit tests cover registration and rendering with partial and full session context"
-      ],
-      "technicalNotes": {
-        "files": [
-          "src/cli/repl/SlashCommands.ts",
-          "src/cli/repl/Repl.ts"
-        ],
-        "requiredSkills": [
-          "TypeScript",
-          "terminal-ux",
-          "status-reporting"
-        ]
-      },
-      "aiProvider": "codex",
-      "cpaGate": "review"
-    },
-    {
-      "id": "EPAM-062",
-      "title": "Slash Command: /config",
-      "description": "Add `/config` to the REPL so users can inspect effective configuration and, where safe, change a small subset of session-scoped settings without leaving chat.",
-      "priority": "low",
-      "status": "pending",
-      "completed": false,
-      "agentGroup": "main",
-      "agentRole": "cli-ux-engineer",
-      "storyType": "implementation",
-      "effort": "medium",
-      "humanHours": 4,
-      "estimatedHours": 0.3333,
-      "dependencies": [
-        "EPAM-024"
-      ],
-      "acceptanceCriteria": [
-        "`/config` is registered in SlashCommands.ts",
-        "`/config` shows the effective resolved session configuration summary",
-        "`/config set` supports a safe subset of live session updates such as model or max-iterations if supported by the runtime",
-        "Config precedence is respected and clearly explained in output",
-        "Unit tests cover view mode and any supported set operations"
-      ],
-      "technicalNotes": {
-        "files": [
-          "src/cli/repl/SlashCommands.ts",
-          "src/cli/repl/Repl.ts",
-          "src/config/ConfigResolver.ts"
-        ],
-        "requiredSkills": [
-          "TypeScript",
-          "config-management",
-          "repl-integration"
-        ]
-      },
-      "aiProvider": "codex",
-      "cpaGate": "review"
-    },
-    {
-      "id": "EPAM-063",
-      "title": "Slash Command: /review",
-      "description": "Add `/review` to the REPL so users can request a code review of recent changes or a specified path without leaving the session. The output should follow the existing review style: findings first, ordered by severity.",
-      "priority": "low",
-      "status": "pending",
-      "completed": false,
-      "agentGroup": "main",
-      "agentRole": "typescript-engineer",
-      "storyType": "implementation",
-      "effort": "medium",
-      "humanHours": 4,
-      "estimatedHours": 0.3333,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "`/review` is registered in SlashCommands.ts",
-        "`/review` without arguments defaults to reviewing changed files when supported",
-        "`/review <path>` scopes the review to a file or directory",
-        "Rendered output prioritizes findings, regressions, and missing tests over summaries",
-        "Unit tests cover registration and argument parsing"
-      ],
-      "technicalNotes": {
-        "files": [
-          "src/cli/repl/SlashCommands.ts",
-          "src/cli/repl/Repl.ts",
-          "src/agent/AgentRunner.ts"
-        ],
-        "requiredSkills": [
-          "TypeScript",
-          "code-review",
-          "repl-integration"
-        ]
-      },
-      "aiProvider": "codex",
-      "cpaGate": "review"
-    },
-    {
-      "id": "EPAM-064",
-      "title": "Slash Command: /new",
-      "description": "Add `/new` to the REPL to start a fresh session without exiting EPAM CLI. This should clear conversational state while preserving auth, project context, and session environment.",
-      "priority": "low",
-      "status": "pending",
-      "completed": false,
-      "agentGroup": "main",
-      "agentRole": "cli-ux-engineer",
-      "storyType": "implementation",
-      "effort": "low",
-      "humanHours": 2,
-      "estimatedHours": 0.1667,
-      "dependencies": [],
-      "acceptanceCriteria": [
-        "`/new` is registered in SlashCommands.ts",
-        "The command clears conversation history and starts a fresh session id",
-        "Project context, auth state, provider selection, and other non-conversation runtime state remain available unless explicitly reset",
-        "The command is safer and more explicit than overloading `/clear`",
-        "Unit tests cover state reset behavior"
-      ],
-      "technicalNotes": {
-        "files": [
-          "src/cli/repl/SlashCommands.ts",
-          "src/cli/repl/Repl.ts",
-          "src/context/SessionStore.ts"
-        ],
-        "requiredSkills": [
-          "TypeScript",
-          "session-management",
-          "repl-integration"
-        ]
-      },
-      "aiProvider": "codex",
-      "cpaGate": "review"
-    },
-    {
-      "id": "EPAM-065",
-      "title": "Slash Command: /export",
-      "description": "Add `/export` to the REPL so users can export a session transcript and summary as a durable artifact for audit, stakeholder handoff, or delivery reporting.",
-      "priority": "low",
-      "status": "pending",
-      "completed": false,
-      "agentGroup": "main",
-      "agentRole": "typescript-engineer",
-      "storyType": "implementation",
-      "effort": "medium",
-      "humanHours": 4,
-      "estimatedHours": 0.3333,
-      "dependencies": [
-        "EPAM-002"
-      ],
-      "acceptanceCriteria": [
-        "`/export` is registered in SlashCommands.ts",
-        "The command exports the current session transcript with provider/model and token/cost summary",
-        "At least one structured output format is supported such as Markdown or JSON",
-        "Secrets and sensitive credential material are not emitted in exported output",
-        "Unit tests cover registration and export payload generation"
-      ],
-      "technicalNotes": {
-        "files": [
-          "src/cli/repl/SlashCommands.ts",
-          "src/cli/repl/Repl.ts",
-          "src/context/SessionStore.ts"
-        ],
-        "requiredSkills": [
-          "TypeScript",
-          "reporting",
-          "redaction"
-        ]
-      },
-      "aiProvider": "codex",
-      "cpaGate": "review"
     }
   ],
   "configuration": {
@@ -3107,10 +2804,7 @@
       "EPAM-045",
       "EPAM-046",
       "EPAM-047",
-      "EPAM-048",
-      "EPAM-049",
-      "EPAM-050",
-      "EPAM-051"
+      "EPAM-048"
     ],
     "agent_intelligence": [
       "EPAM-004",
@@ -3123,42 +2817,24 @@
       "EPAM-031",
       "EPAM-032",
       "EPAM-037",
-      "EPAM-008",
-      "EPAM-039",
-      "EPAM-040",
-      "EPAM-041",
-      "EPAM-042",
-      "EPAM-058",
-      "EPAM-059",
-      "EPAM-060",
-      "EPAM-061",
-      "EPAM-062",
-      "EPAM-063",
-      "EPAM-064",
-      "EPAM-065"
+      "EPAM-008"
     ],
     "team_features": [
       "EPAM-009",
       "EPAM-010",
       "EPAM-033",
-      "EPAM-011",
-      "EPAM-035",
-      "EPAM-036"
+      "EPAM-011"
     ],
     "multi_agent": [
       "EPAM-013",
       "EPAM-034",
-      "EPAM-014",
-      "EPAM-012"
+      "EPAM-014"
     ],
     "enterprise": [
       "EPAM-015",
       "EPAM-016",
       "EPAM-017",
-      "EPAM-018",
-      "EPAM-021",
-      "EPAM-022",
-      "EPAM-027"
+      "EPAM-018"
     ],
     "rag_poc": [
       "EPAM-019",

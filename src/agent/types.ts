@@ -36,6 +36,8 @@ export interface AgentRunOptions {
   auditors?: AuditorRunner[];
   /** Fired after auditors evaluate a response. */
   onAuditorGate?: (decision: AuditorGateDecision) => void;
+  /** AbortSignal for cancelling the agent run (used by Ralph Wiggum Loop). */
+  abortSignal?: AbortSignal;
 }
 
 export interface AgentRunResult {

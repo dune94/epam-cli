@@ -6,7 +6,8 @@ import type {
 } from './types.js';
 import { readGlobalConfig, getGlobalConfigDefaults } from './GlobalConfig.js';
 import { findProjectRoot, readProjectConfig } from './ProjectConfig.js';
-import { readEnvOverrides } from './EnvVarOverrides.js';
+import { readEnvOverrides, getApiKey as getEnvApiKey } from './EnvVarOverrides.js';
+import { resolveProviderSecret } from '../auth/ProviderCredentialStore.js';
 
 export interface CLIFlagOverrides {
   provider?: string;
@@ -306,6 +307,14 @@ export async function resolveConfig(flags: CLIFlagOverrides = {}): Promise<Resol
 export function resetResolvedConfig(): void {
   _resolvedConfig = null;
   _resolvedConfigKey = null;
+}
+
+/**
+ * Resolves the API key for a provider, checking env vars first, then the
+ * ProviderCredentialStore (stored via `epam provider login`).
+ */
+export async function resolveApiKey(provider: string): Promise<string | null> {
+  return getEnvApiKey(provider) ?? await resolveProviderSecret(provider) ?? null;
 }
 
 export async function getConfig(): Promise<ResolvedConfig> {

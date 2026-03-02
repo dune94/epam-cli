@@ -1,0 +1,9 @@
+feat: EPAM-044 implement provider credential broker and storage abstraction
+
+- Added credential types for api_key, browser_session, and brokered_key
+- Updated ProviderCredentialStore to persist credential metadata (source, type, expiry) securely with keytar and memory/file fallback. Keys are namespaced by provider and source.
+- Defined credential resolution precedence: epam_brokered_local > provider_browser > manual_api_key, rejecting expired credentials.
+- Refactored KeychainKeyStore to leverage new manual_api_key source seamlessly.
+- Updated ProviderChain to error intelligently when no appropriate credential can be loaded for BYOK/bridge modes.
+- Fixed ConfigResolver to not overwrite explicitly set epam slots immediately with the concrete upstream provider, retaining flexibility for future login flows.
+- Added comprehensive unit test coverage in ProviderCredentialStore.test.ts

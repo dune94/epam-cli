@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { loadContextFile } from './ContextLoader.js';
 import type { Constraint } from '../constraints/types.js';
+import { getAssetStore, type AssetMatch } from '../assets/AssetStore.js';
 
 interface ContextBuildOptions {
   contextFilePath: string;
@@ -128,4 +129,60 @@ export async function consumeConsultationContext(
 
   const block = buildConsultationBlock(ctx);
   return `${block}\n\n${userMessage}`;
+}
+
+/**
+ * Build asset alert block for injection into system prompt.
+ *
+ * Format:
+ * [ASSET ALERT]
+ * - {title} ({repoUrl}): {description}
+ */
+export function buildAssetAlertBlock(matches: AssetMatch[]): string {
+  if (matches.length === 0) {
+    return '';
+  }
+
+  const lines = ['[ASSET ALERT]'];
+
+  for (const match of matches) {
+    lines.push(`- ${match.asset.title} (${match.asset.repoUrl}): ${match.asset.description}`);
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Inject asset alerts into user message based on keyword matching.
+ *
+ * Called before each LLM call to discover relevant enterprise assets.
+ * Only injects if matches exceed the configured threshold.
+ *
+ * @param userMessage - The user's message/query
+ * @param projectRoot - Project root for loading assets
+ * @returns User message with asset alert block prepended (if matches found)
+ */
+export async function injectAssetAlert(
+  userMessage: string,
+  projectRoot: string = process.cwd()
+): Promise<string> {
+  const assetStore = getAssetStore();
+
+  // Load assets if not already loaded
+  if (!assetStore.isLoaded()) {
+    await assetStore.load(projectRoot);
+  }
+
+  // Search for matching assets
+  const result = assetStore.search(userMessage);
+
+  // No matches above threshold - return original message
+  if (!result.hasMatches) {
+    return userMessage;
+  }
+
+  // Build asset alert block and prepend to user message
+  const assetBlock = buildAssetAlertBlock(result.matches);
+
+  return `${assetBlock}\n\n${userMessage}`;
 }

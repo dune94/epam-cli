@@ -3,6 +3,8 @@
  * 
  * Connects to MCP (Model Context Protocol) servers
  * Uses JSON-RPC 2.0 over streamable HTTP
+ * 
+ * IMPORTANT: All fetch calls are isolated and never interfere with provider calls
  */
 
 import { logger } from '../utils/logger.js';
@@ -45,9 +47,14 @@ export class MCPClient {
 
   /**
    * Query MCP server
+   * CRITICAL: This fetch is completely isolated from provider fetch calls
    * Never throws - always returns result (possibly with error field)
    */
   async query(query: MCPQuery): Promise<MCPResult> {
+    // Use a local AbortController that can't interfere with anything else
+    const localController = new AbortController();
+    const timeoutId = setTimeout(() => localController.abort(), this.config.timeout || 3000);
+
     try {
       const response = await fetch(`${this.config.baseUrl}/query`, {
         method: 'POST',
@@ -60,14 +67,16 @@ export class MCPClient {
           method: 'query',
           params: query,
         }),
-        signal: AbortSignal.timeout(this.config.timeout || 5000), // Reduced timeout
+        signal: localController.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         return {
           source: this.config.baseUrl,
           items: [],
-          error: `MCP server error: ${response.status}`,
+          error: undefined, // Silent fail
         };
       }
 
@@ -77,7 +86,7 @@ export class MCPClient {
         return {
           source: this.config.baseUrl,
           items: [],
-          error: data.error.message || 'Unknown MCP error',
+          error: undefined, // Silent fail
         };
       }
 
@@ -86,12 +95,14 @@ export class MCPClient {
         items: this.parseItems(data.result || []),
       };
 
-    } catch (err) {
-      // Never throw - return error result
+    } catch {
+      // CRITICAL: Clear timeout and return silent fail
+      // This catch block ensures MCP fetch NEVER throws to caller
+      clearTimeout(timeoutId);
       return {
         source: this.config.baseUrl,
         items: [],
-        error: undefined, // Silent fail for auto-query
+        error: undefined, // Silent fail - never disrupts chat
       };
     }
   }

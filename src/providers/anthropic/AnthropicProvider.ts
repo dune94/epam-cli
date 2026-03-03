@@ -163,16 +163,42 @@ export class AnthropicProvider implements LLMProvider {
 
   private wrapError(err: unknown): ProviderError {
     if (err instanceof Anthropic.APIError) {
-      return new ProviderError(
-        `Anthropic API error: ${err.message}`,
-        err.status,
-        err
-      );
+      // Extract detailed error message for better UX
+      let detailedMessage = `Anthropic API error: ${err.message}`;
+      
+      // Try to parse error body from message (SDK puts JSON in message)
+      try {
+        const jsonMatch = err.message.match(/\{.*\}/s);
+        if (jsonMatch) {
+          const errorBody = JSON.parse(jsonMatch[0]);
+          if (errorBody?.error?.message) {
+            const apiMessage = errorBody.error.message;
+            
+            // Show user-friendly error messages
+            if (apiMessage.includes('credit balance')) {
+              detailedMessage = 'Anthropic API: Credit balance too low. Please add credits at https://console.anthropic.com/settings/plans';
+            } else if (apiMessage.includes('rate limit')) {
+              detailedMessage = 'Anthropic API: Rate limit exceeded. Please wait and try again.';
+            } else if (errorBody.error.type === 'invalid_request_error') {
+              detailedMessage = `Anthropic API: ${apiMessage}`;
+            } else if (errorBody.error.type === 'authentication_error') {
+              detailedMessage = 'Anthropic API: Invalid API key. Please check your credentials.';
+            } else {
+              detailedMessage = `Anthropic API: ${apiMessage}`;
+            }
+          }
+        }
+      } catch {
+        // If parsing fails, use the original message
+      }
+      
+      return new ProviderError(detailedMessage, err.status, err);
     }
-    return new ProviderError(
-      `Anthropic error: ${err instanceof Error ? err.message : String(err)}`,
-      undefined,
-      err instanceof Error ? err : undefined
-    );
+    
+    if (err instanceof Error) {
+      return new ProviderError(`Anthropic: ${err.message}`);
+    }
+    
+    return new ProviderError('Anthropic: Unknown error');
   }
 }

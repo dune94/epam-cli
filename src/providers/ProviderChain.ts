@@ -43,6 +43,7 @@ export class ProviderChain implements LLMProvider {
   private health: ProviderHealth;
   private providerCache = new Map<string, LLMProvider>();
   private activeSlotIndex = 0;
+  public lastErrors: string[] = [];
 
   constructor(private options: ProviderChainOptions) {
     if (options.slots.length === 0) throw new ProviderError('ProviderChain requires at least one slot');
@@ -138,6 +139,9 @@ export class ProviderChain implements LLMProvider {
         logger.debug({ slot: `${slot.provider}/${slot.model}`, error: (err as Error).message }, 'ProviderChain slot failed');
         const analysis = analyzeError(err);
         const errMsg = err instanceof Error ? err.message : String(err);
+        
+        // Track error for final error message
+        this.lastErrors.push(`${slot.provider}/${slot.model}: ${errMsg}`);
 
         if (analysis.decision === 'fatal') {
           // Don't failover — rethrow immediately
@@ -234,7 +238,12 @@ export class ProviderChain implements LLMProvider {
       }
     }
 
-    throw new ProviderError('All providers exhausted without a successful response.');
+    // Build detailed error message with all attempted providers
+    const errorDetails = this.lastErrors && this.lastErrors.length > 0 
+      ? ` Attempted: ${this.lastErrors.join('; ')}.`
+      : '';
+    
+    throw new ProviderError(`All providers exhausted without a successful response.${errorDetails}`);
   }
 
   /** Returns the next available slot in priority order, optionally skipping one. */

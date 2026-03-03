@@ -107,9 +107,38 @@ Live monitoring at `http://localhost:8092`:
 
 ## Installation
 
+### Quick Install (Global Command)
+
+```bash
+# Clone and install
+git clone https://github.com/dune94/epam-cli.git
+cd epam-cli
+npm install
+npm run build
+npm link
+
+# Verify installation
+epam --version
+epam-cli --version
+```
+
+Now you can use either command:
+```bash
+epam chat
+epam-cli chat
+```
+
+### Manual Install (Without Global Link)
+
 ```bash
 npm install
 npm run build
+
+# Run with node
+node dist/epam.js chat
+
+# Or create your own alias
+alias epam='node dist/epam.js'
 ```
 
 ---
@@ -122,26 +151,31 @@ npm run build
 # Option A: Environment variables
 export EPAM_API_KEY_ANTHROPIC=sk-ant-...
 export EPAM_API_KEY_QWEN=sk-qwen-...
+export CURSOR_API_KEY=sk-cursor-...  # For Cursor provider
 
 # Option B: CLI commands
-node dist/epam.js keys set anthropic sk-ant-...
-node dist/epam.js keys set qwen sk-qwen-...
+epam keys set anthropic sk-ant-...
+epam keys set qwen sk-qwen-...
 
-# Option C: Provider login (SSO)
-node dist/epam.js provider login codemie
+# Option C: Provider login (SSO/Device Flow)
+epam provider login codemie    # Codemie SSO
+epam copilot login             # GitHub Copilot device flow
 ```
 
 ### 2. Start Chat
 
 ```bash
 # Interactive chat with default provider
-node dist/epam.js chat
+epam chat
 
 # Specific provider and model
-node dist/epam.js chat --provider qwen --model qwen-max
+epam chat --provider qwen --model qwen-max
 
 # With failover chain
-node dist/epam.js chat --chain codemie,qwen,codex
+epam chat --chain codemie,qwen,codex
+
+# Or use epam-cli alias
+epam-cli chat
 ```
 
 ### 3. Use Slash Commands
@@ -153,6 +187,8 @@ epam [qwen/qwen-max] › /orchestrate estimate finops
 epam [qwen/qwen-max] › /team
 epam [qwen/qwen-max] › /share current
 epam [qwen/qwen-max] › /export session-report.md
+epam [qwen/qwen-max] › /failover copilot
+epam [qwen/qwen-max] › /copilot status
 ```
 
 ### 4. Tab Autocomplete
@@ -408,28 +444,34 @@ MIT
 
 ```bash
 # Start chat
-node dist/epam.js chat
+epam chat
+epam-cli chat
 
 # Check status
-node dist/epam.js doctor
+epam doctor
 
 # List models
-node dist/epam.js models
+epam models
 
 # Set API key
-node dist/epam.js keys set qwen sk-xxx
+epam keys set qwen sk-xxx
 
 # Provider login
-node dist/epam.js provider login codemie
+epam provider login codemie
+epam copilot login
 
 # Run task
-echo "Build React app" | node dist/epam.js run
+echo "Build React app" | epam run
 
 # Estimate cost
-node dist/epam.js estimate --phase finops
+epam estimate --phase finops
 
 # Orchestrate phase
-node dist/epam.js orchestrate execution finops
+epam orchestrate execution finops
+
+# Failover demo
+epam /failover qwen
+epam /model qwen
 ```
 
 ### Slash Commands Quick Reference
@@ -453,4 +495,9 @@ node dist/epam.js orchestrate execution finops
 /review [file|all]                                # Code review
 /fork [name]                                      # Branch session
 /mcp [list|connect|disconnect]                    # MCP servers
+
+# New commands
+/failover <provider> [model]                      # Force provider failover (demo)
+/model [list|<provider>]                          # Switch provider/model
+/copilot [status|login|logout]                    # GitHub Copilot auth
 ```

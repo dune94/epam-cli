@@ -1,0 +1,17 @@
+$ node dist/epam.js mcp serve --port 3100 --dangerously-skip-approval
+MCP Server listening on 127.0.0.1:3100
+
+$ EPAM_BACKEND_URL=http://127.0.0.1:8080 node dist/epam.js chat -p epam
+/mcp
+
+MCP Servers:
+
+  ✓ local-mcp [http]  connected
+    http://127.0.0.1:3100/mcp
+    6 tools:
+      • local-mcp/read_file
+      • local-mcp/write_file
+      • local-mcp/bash
+      • local-mcp/list_files
+      • local-mcp/search
+      • local-mcp/fetch_url

@@ -1,0 +1,24 @@
+---
+description: Core project rules for epam-cli. Apply to all files unless overridden by a more specific rule.
+globs:
+alwaysApply: true
+---
+
+# epam-cli — Project Rules
+
+For full project standards, architecture notes, and guardrails see **CLAUDE.md** in the repository root.
+
+## Critical: Node.js Version
+Do NOT use the system `node` binary (v14). Always invoke via:
+`~/.nvm/versions/node/v20.20.0/bin/node`
+
+## Quick Reference
+- **Build**: `~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsup`
+- **Test**: `~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run`
+- **Type check**: `npx tsc --noEmit`
+
+## Guardrails (summary — see CLAUDE.md for full list)
+- Never force-push to main/master
+- Never commit secrets, .env files, or API keys
+- Run all 42 tests before any PR
+- Never log PII to any monitoring system

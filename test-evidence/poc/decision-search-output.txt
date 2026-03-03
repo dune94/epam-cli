@@ -1,0 +1,13 @@
+$ node dist/epam.js decision search broker
+
+Found 1 decision(s) matching "broker":
+
+Decision Records:
+
+DEC-003 — EPAM login is the canonical broker
+  Description: Provider bridge flows are temporary until EPAM login provisions provider credentials
+  Rationale: Separate long-term EPAM brokered auth from temporary provider-native auth workarounds
+  Pattern to avoid: Manual provider-only login as the permanent model
+  Approved alternative: Use epam login to provision and store provider credentials locally
+  Tags: auth, provider, architecture
+  Author: bjerome

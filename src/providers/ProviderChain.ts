@@ -9,6 +9,8 @@ import { GeminiProvider } from './gemini/GeminiProvider.js';
 import { ProxyProvider } from './proxy/ProxyProvider.js';
 import { CodexProvider } from './codex/CodexProvider.js';
 import { QwenProvider, createQwenProvider } from './qwen/QwenProvider.js';
+import { CursorProvider, createCursorProvider } from './cursor/CursorProvider.js';
+import { CopilotProvider, createCopilotProvider } from './copilot/CopilotProvider.js';
 import { createCodemieProvider } from './codemie/CodemieProvider.js';
 import { ProviderError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
@@ -313,6 +315,15 @@ export class ProviderChain implements LLMProvider {
       return new CodexProvider(slot.model);
     }
     
+    // GitHub Copilot CLI-based provider
+    if (slot.provider === 'copilot') {
+      const provider = createCopilotProvider(slot.model);
+      if (!provider) {
+        throw new ProviderError('Copilot CLI not available. Run: gh auth login');
+      }
+      return provider;
+    }
+
     // Proxy tier — other providers route through backend
     if (this.options.proxyConfig) {
       return new ProxyProvider(
@@ -342,6 +353,7 @@ export class ProviderChain implements LLMProvider {
       case 'openai':    return new OpenAIProvider(apiKey);
       case 'gemini':    return new GeminiProvider(apiKey);
       case 'qwen':      return new QwenProvider({ apiKey });
+      case 'cursor':    return new CursorProvider({ apiKey });
       default:
         throw new ProviderError(`Unknown provider: '${slot.provider}'`);
     }

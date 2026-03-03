@@ -1,0 +1,13 @@
+$ EPAM_BACKEND_URL=http://127.0.0.1:8080 node dist/epam.js run --json --no-tools 'Say hello from the mock EPAM provider and confirm proxy execution.'
+
+Observed result:
+Error: Proxy stream error: {"error":"Not Found"}
+
+Diagnosis:
+- Resolved configuration uses provider=epam.
+- The llmChain slot is provider=epam.
+- ProxyProvider builds the route /v1/proxy/epam/messages.
+- The backend supports /v1/proxy/anthropic/messages and /v1/proxy/openai/chat/completions, not /v1/proxy/epam/messages.
+
+Finding:
+Current epam-provider execution path is not wired to a valid backend proxy target in this environment.

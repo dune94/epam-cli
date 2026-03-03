@@ -1,0 +1,154 @@
+$ EPAM_BACKEND_URL=http://127.0.0.1:8080 node dist/epam.js chat -p epam
+
+EPAM CLI v0.1.0
+Provider: epam | Model: claude-sonnet-4-5-20250929
+Project: /home/bjerome/projects/ai/epam-cli
+Type /help for commands, Ctrl+C or /exit to quit
+
+/help
+
+Slash Commands:
+
+  /help
+    Show available slash commands
+  /clear (c)
+    Clear conversation history (keeps context.md)
+  /cost
+    Show token usage, estimated USD cost, and budget status
+  /resume (r) [session_id]
+    Resume a previous session
+  /sessions
+    List and switch to a previous session
+  /fork [label]
+    Clone current session into a new parallel session
+  /replay [session_id] [--speed <1|2|4>]
+    Replay a session with messages and tool calls
+  /rewind (undo)
+    Remove the last conversation turn (user message + assistant response)
+  /context
+    Show current session info and running cost
+  /model (m) [model-name]
+    Switch the active model
+  /compact
+    Summarize old conversation turns to free up token budget
+  /chain [set <p1/m1> [p2/m2] ...] | [reset]
+    Show or configure the LLM provider failover chain
+  /permissions [auto|reset|<tool> <auto|prompt|disabled>]
+    Show or update tool approval policy for this session
+  /profile [name]
+    Load an agent profile (shows what would be applied)
+  /plan [task description]
+    Enter plan mode: generate, approve, and execute a step-by-step plan
+  /mcp
+    Show MCP server status and available remote tools
+  /diff [--staged] [path]
+    Show git diff (staged + unstaged) and status
+  /init
+    Initialize EPAM CLI project (creates .epam/settings.json and INSTRUCTIONS.md)
+  /memory [--global]
+    Edit project context in $EDITOR (or INSTRUCTIONS.md if no project)
+  /debug [--json]
+    Show session diagnostics (config, context, tools, provider health, env overrides)
+  /tasks [cancel <id>] | [await <id>]
+    List and manage background async tasks
+  /auditors [on|off|list]
+    Manage signature auditor agents for this session
+  /exit (quit, q)
+    Exit EPAM CLI
+
+/permissions
+
+Tool Permissions:
+
+Tool                     Tier         Mode
+────────────────────────────────────────────────────
+read_file                safe         auto
+write_file               review       prompt
+bash                     dangerous    prompt
+list_files               safe         auto
+search                   safe         auto
+fetch_url                review       prompt
+
+Global auto-approve: disabled
+Usage: /permissions auto | /permissions reset | /permissions <tool> auto|prompt|disabled
+
+/permissions bash disabled
+Tool 'bash' set to disabled.
+
+/permissions auto
+All tools set to auto-approve for this session.
+
+/permissions reset
+Tool approval policy reset to configured defaults.
+
+/profile
+
+Available Profiles:
+
+  delivery-architect [local] · delivery, epam, control
+    Delivery-focused profile for controlled EPAM execution
+
+Use /profile <name> to load a profile
+
+/profile delivery-architect
+
+Loaded profile: delivery-architect
+
+  Delivery-focused profile for controlled EPAM execution
+
+  Model: claude-sonnet-4-5-20250929
+  Max iterations: 12
+
+⚠  Note: Only model changes apply immediately. Other settings require session restart.
+
+/plan
+
+Usage: /plan <task description>
+Example: /plan refactor the authentication module
+
+/debug --json
+{
+  "sessionConfig": {
+    "provider": "epam",
+    "model": "claude-sonnet-4-5-20250929",
+    "maxIterations": 20,
+    "approvalPolicy": "prompt-on-dangerous"
+  },
+  "contextWindow": {
+    "tokensUsed": 0,
+    "maxTokens": 200000,
+    "percentFull": 0,
+    "messageCount": 0
+  },
+  "toolRegistry": [
+    { "name": "read_file", "safetyTier": "safe", "approvalMode": "auto" },
+    { "name": "write_file", "safetyTier": "review", "approvalMode": "prompt" },
+    { "name": "bash", "safetyTier": "dangerous", "approvalMode": "prompt" },
+    { "name": "list_files", "safetyTier": "safe", "approvalMode": "auto" },
+    { "name": "search", "safetyTier": "safe", "approvalMode": "auto" },
+    { "name": "fetch_url", "safetyTier": "review", "approvalMode": "prompt" }
+  ],
+  "providerHealth": [
+    {
+      "slot": "anthropic/claude-sonnet-4-5-20250929",
+      "status": "degraded",
+      "failureCount": 1,
+      "lastError": "Token refresh failed: 400 {\"error\":\"invalid_grant\",\"error_description\":\"Unknown refresh token\"}",
+      "retryAfterSec": null
+    }
+  ],
+  "envOverrides": {
+    "backendUrl": "http://127.0.0.1:8080"
+  }
+}
+
+/diff --staged src/cli/repl/SlashCommands.ts
+
+No changes
+
+/init
+⚠ skipped .epam/settings.json (already exists)
+⚠ skipped INSTRUCTIONS.md (already exists)
+
+/exit
+Goodbye!

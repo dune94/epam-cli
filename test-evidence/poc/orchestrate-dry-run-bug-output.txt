@@ -1,0 +1,14 @@
+$ node dist/epam.js orchestrate --phase mvp_cli_control --dry-run
+
+Observed behavior:
+- Dry-run started baseline estimates as expected.
+- Dry-run then entered CPA pre-pass instead of remaining planning-only.
+- Process inspection showed real agent execution being launched.
+
+Observed spawned processes:
+10503 bash orchestrations/scripts/contextualize-stories.sh --phase mvp_cli_control --apply
+10720 bash orchestrations/scripts/contextualize-stories.sh --phase mvp_cli_control --apply
+10733 claude --print --dangerously-skip-permissions
+
+Finding:
+Default dry-run is not safe/planning-only. It can launch real Claude work during CPA.

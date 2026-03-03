@@ -1,0 +1,8 @@
+$ node dist/epam.js history -n 5
+
+
+Recent sessions (3):
+
+  01JKA0003 2/28/2026
+  01JKA0002 2/28/2026
+  01JKA0001 2/28/2026

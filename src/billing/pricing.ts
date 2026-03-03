@@ -21,6 +21,9 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   'qwen-plus':                 { inputPerMillion: 0.50,  outputPerMillion: 2.00  },
   'qwen-turbo':                { inputPerMillion: 0.10,  outputPerMillion: 0.40  },
   'qwen-2.5-72b':              { inputPerMillion: 0.40,  outputPerMillion: 1.60  },
+  // Cursor (Gemini API)
+  'gemini-2.5-pro':            { inputPerMillion: 1.25,  outputPerMillion: 5.00  },
+  // GitHub Copilot uses Claude API (pricing already defined above)
 };
 
 export function calculateCost(model: string, inputTokens: number, outputTokens: number): number {

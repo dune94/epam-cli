@@ -1,0 +1,49 @@
+$ EPAM_BACKEND_URL=http://127.0.0.1:8080 node dist/epam.js chat -p epam
+
+/profile repl-merge-check
+
+Loaded profile: repl-merge-check
+
+  Verify live REPL profile merge
+
+  Model: claude-sonnet-4-5-20250929
+  Max iterations: 7
+  System prompt append: Always mention that the repl-merge-check profile is active w…
+  Tools disabled: bash
+
+Profile settings applied to this session.
+
+/permissions
+
+Tool Permissions:
+
+Tool                     Tier         Mode
+────────────────────────────────────────────────────
+read_file                safe         auto
+write_file               review       prompt
+list_files               safe         auto
+search                   safe         auto
+fetch_url                review       prompt
+
+Global auto-approve: disabled
+Usage: /permissions auto | /permissions reset | /permissions <tool> auto|prompt|disabled
+
+/debug --json
+{
+  "sessionConfig": {
+    "provider": "epam",
+    "model": "claude-sonnet-4-5-20250929",
+    "maxIterations": 7,
+    "approvalPolicy": "prompt-on-dangerous"
+  },
+  "toolRegistry": [
+    { "name": "read_file", "safetyTier": "safe", "approvalMode": "auto" },
+    { "name": "write_file", "safetyTier": "review", "approvalMode": "prompt" },
+    { "name": "list_files", "safetyTier": "safe", "approvalMode": "auto" },
+    { "name": "search", "safetyTier": "safe", "approvalMode": "auto" },
+    { "name": "fetch_url", "safetyTier": "review", "approvalMode": "prompt" }
+  ]
+}
+
+/exit
+Goodbye!

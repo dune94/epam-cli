@@ -1,0 +1,22 @@
+EPAM CLI v0.1.0
+Provider: epam | Model: claude-sonnet-4-5-20250929
+
+/cost
+
+Session Cost:
+
+  Model:         claude-sonnet-4-5-20250929
+  Input tokens:  0
+  Output tokens: 0
+  Total tokens:  0
+
+  Input cost:    $0.0000  ($3/M)
+  Output cost:   $0.0000  ($15/M)
+  Total cost:    $0.0000
+
+  Budget:
+    Warning at:  $4.0000  (0% used)
+    Hard limit:  $5.0000  (0% used, $5.0000 remaining)
+
+/exit
+Goodbye!

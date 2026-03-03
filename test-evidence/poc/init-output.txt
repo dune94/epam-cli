@@ -1,0 +1,4 @@
+$ node dist/epam.js init
+
+⚠ skipped .epam/settings.json (already exists)
+⚠ skipped INSTRUCTIONS.md (already exists)

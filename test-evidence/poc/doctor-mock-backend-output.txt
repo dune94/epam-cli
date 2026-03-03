@@ -1,0 +1,14 @@
+$ EPAM_BACKEND_URL=http://127.0.0.1:8080 node dist/epam.js doctor
+
+
+Running health checks...
+
+✓ Node.js version: v25.7.0
+✓ keytar (native keychain): available
+✓ Configuration: provider=epam, model=claude-sonnet-4-5-20250929, backend=http://127.0.0.1:8080
+✓ EPAM backend URL: http://127.0.0.1:8080 (local backend)
+✓ EPAM authentication: logged in as bradley_jerome@epam.com
+✓ EPAM backend connectivity: http://127.0.0.1:8080 (ok)
+✓ Selected provider readiness: provider=epam uses EPAM backend auth and proxy routing
+
+All checks passed!

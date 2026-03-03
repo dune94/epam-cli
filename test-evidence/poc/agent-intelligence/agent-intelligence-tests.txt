@@ -1,0 +1,9 @@
+$ npm run typecheck
+exit: 0
+
+$ npx vitest run test/unit/repl/SlashCommands.test.ts test/unit/mcp/McpClient.test.ts test/unit/mcp/McpServer.test.ts test/unit/context/ContextBuilder.test.ts
+Test Files  4 passed (4)
+Tests  24 passed (24)
+
+$ npm run build
+CJS Build success

@@ -27,6 +27,7 @@ import { membersCommand } from './commands/MembersCommand.js';
 import { inviteCommand } from './commands/InviteCommand.js';
 import { shareCommand } from './commands/ShareCommand.js';
 import { handoffCommand } from './commands/HandoffCommand.js';
+import { modelCommand } from './commands/ModelCommand.js';
 
 export interface SlashCommandContext {
   config: ResolvedConfig;
@@ -545,6 +546,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   inviteCommand,
   shareCommand,
   handoffCommand,
+  modelCommand,
 ];
 
 function statusIcon_(status: HealthStatus): string {

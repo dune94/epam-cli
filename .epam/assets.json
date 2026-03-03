@@ -1,0 +1,52 @@
+[
+  {
+    "id": "asset-auth-001",
+    "title": "EPAM Auth Library",
+    "description": "Centralized authentication library with OAuth2, JWT token handling, and session management. Supports multiple identity providers including SAML and OIDC.",
+    "tags": ["auth", "authentication", "oauth", "jwt", "security", "login", "session"],
+    "repoUrl": "https://github.com/epam/epam-auth-library",
+    "category": "security",
+    "owner": "platform-security-team",
+    "maturity": "stable"
+  },
+  {
+    "id": "asset-payment-001",
+    "title": "Payment Processing SDK",
+    "description": "Unified payment processing SDK supporting Stripe, PayPal, and internal payment gateway. Includes PCI-compliant token handling and webhook verification.",
+    "tags": ["payments", "stripe", "paypal", "billing", "transactions", "pci"],
+    "repoUrl": "https://github.com/epam/payment-sdk",
+    "category": "finance",
+    "owner": "fintech-team",
+    "maturity": "stable"
+  },
+  {
+    "id": "asset-logging-001",
+    "title": "Structured Logging Framework",
+    "description": "Enterprise logging framework with structured JSON output, correlation IDs, and automatic integration with ELK stack. Supports log levels, sampling, and PII redaction.",
+    "tags": ["logging", "elk", "observability", "monitoring", "tracing", "debug"],
+    "repoUrl": "https://github.com/epam/structured-logger",
+    "category": "observability",
+    "owner": "platform-team",
+    "maturity": "stable"
+  },
+  {
+    "id": "asset-api-001",
+    "title": "REST API Starter Kit",
+    "description": "Opinionated REST API starter with Express.js, TypeScript, validation, error handling, rate limiting, and OpenAPI documentation generation.",
+    "tags": ["api", "rest", "express", "typescript", "openapi", "backend", "starter"],
+    "repoUrl": "https://github.com/epam/api-starter",
+    "category": "backend",
+    "owner": "backend-excellence-team",
+    "maturity": "stable"
+  },
+  {
+    "id": "asset-react-ui-001",
+    "title": "EPAM React UI Components",
+    "description": "Internal React component library built on Material-UI with EPAM branding, accessibility compliance, and common enterprise patterns (data grids, forms, navigation).",
+    "tags": ["react", "ui", "components", "material-ui", "frontend", "accessibility", "forms"],
+    "repoUrl": "https://github.com/epam/epam-react-ui",
+    "category": "frontend",
+    "owner": "frontend-excellence-team",
+    "maturity": "stable"
+  }
+]

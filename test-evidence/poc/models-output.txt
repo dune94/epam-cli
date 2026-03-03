@@ -1,0 +1,8 @@
+$ EPAM_BACKEND_URL=http://127.0.0.1:8080 node dist/epam.js models
+
+Configured EPAM Models:
+
+  claude-haiku-4-5-20251001
+  claude-sonnet-4-5-20250929 (default)
+  claude-opus-4-6
+

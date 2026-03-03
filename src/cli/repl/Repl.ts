@@ -102,9 +102,14 @@ export class Repl {
     const { setupAutocomplete } = await import('./Autocomplete.js');
     setupAutocomplete(rl);
 
+    // Display hint text (faded, below prompt)
+    console.log(chalk.dim('Type @ to mention files, / for commands, or ? for shortcuts'));
+    console.log();
+
     this.running = true;
 
     const prompt = () => {
+      // Render main prompt
       rl.question(
         this.renderer.renderPrompt(this.currentProvider, this.currentModel),
         async input => {

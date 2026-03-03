@@ -43,7 +43,7 @@ export function getCommand(name: string) {
 
 /**
  * Autocomplete handler for readline
- * 
+ *
  * Usage:
  * const rl = readline.createInterface({ input, output });
  * rl.completer = createCompleter();
@@ -51,39 +51,42 @@ export function getCommand(name: string) {
 export function createCompleter(): readline.Completer {
   const commands = getCommandNames();
   const aliases = getCommandAliases();
-  
+
   return (line: string): [string[], string] => {
     // Only autocomplete slash commands
     if (!line.startsWith('/')) {
+      // Return empty to prevent hang
       return [[], line];
     }
-    
+
     // Remove leading slash for matching
     const partial = line.slice(1);
     const lastSpaceIndex = partial.lastIndexOf(' ');
-    
+
     if (lastSpaceIndex === -1) {
       // Autocomplete command name
       const matches = commands.filter(cmd => cmd.startsWith(partial));
-      
+
       // Also check aliases
       for (const [alias, name] of Object.entries(aliases)) {
         if (alias.startsWith(partial) && !matches.includes(name)) {
           matches.push(name);
         }
       }
-      
+
+      // If no matches, return the original line to prevent hang
+      if (matches.length === 0) {
+        return [[], line];
+      }
+
       return [
-        matches.length > 0 ? matches.map(m => '/' + m) : ['/'],
+        matches.map(m => '/' + m),
         partial,
       ];
     }
-    
+
     // Autocomplete command arguments (future enhancement)
-    const cmd = partial.substring(0, lastSpaceIndex);
-    const argPartial = partial.substring(lastSpaceIndex + 1);
-    
-    // For now, just return the command as-is
+    // For now, return empty to prevent hang
     return [[], line];
   };
 }

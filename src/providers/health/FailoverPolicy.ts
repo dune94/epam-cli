@@ -36,10 +36,15 @@ export function analyzeError(err: unknown): FailoverAnalysis {
       }
     }
 
-    // Network errors
+    // Network errors - should failover to next provider
     const code = (err as Error & { code?: string }).code;
     if (code && NETWORK_ERROR_CODES.has(code)) {
-      return { decision: 'retry_same', reason: `Network error: ${code}` };
+      return { decision: 'failover', reason: `Network error: ${code}` };
+    }
+    
+    // "fetch failed" or "TypeError: fetch failed" - network issue, failover
+    if (err.message.includes('fetch failed')) {
+      return { decision: 'failover', reason: 'Network error: fetch failed' };
     }
 
     // Timeout by name convention

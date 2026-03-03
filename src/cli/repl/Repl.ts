@@ -1,5 +1,6 @@
 import * as readline from 'readline';
 import chalk from 'chalk';
+import prompts from 'prompts';
 import type { LLMProvider, Message } from '../../providers/types.js';
 import type { Tool } from '../../tools/types.js';
 import type { ResolvedConfig, LLMChainSlot } from '../../config/types.js';
@@ -34,6 +35,7 @@ interface ReplOptions {
 
 export class Repl {
   private messages: Message[] = [];
+  private currentProvider: string;
   private currentModel: string;
   private session = createSession(null, '', '');
   private writer = new StreamWriter();
@@ -44,6 +46,7 @@ export class Repl {
   private auditorRegistry?: AuditorRegistry;
 
   constructor(private options: ReplOptions) {
+    this.currentProvider = options.config.provider;
     this.currentModel = options.config.llmChain[0]?.model ?? options.config.model;
     this.budgetGuard = new BudgetGuard(options.config.budgetGuardrails, this.currentModel);
     this.toolRunner = new ToolRunner(options.tools, options.config.tools.dangerousSkipApproval);
@@ -54,7 +57,7 @@ export class Repl {
 
     // Register failover notification handler if chain is present
     if (this.options.providerChain) {
-      (this.options.providerChain as unknown as { options: { onFailover?: (e: unknown) => void } })
+      (this.options.providerChain as unknown as { options: { onFailover?: (e: unknown) => void, onAuthenticateProvider?: (p: string) => Promise<boolean> } })
         .options.onFailover = (event: unknown) => {
         const e = event as { fromSlot: { provider: string; model: string }; toSlot: { provider: string; model: string }; reason: string };
         process.stderr.write(
@@ -62,8 +65,18 @@ export class Repl {
           chalk.dim(` → ${e.reason}`) +
           chalk.green(` → switching to ${e.toSlot.provider}/${e.toSlot.model}\n`)
         );
+        this.currentProvider = e.toSlot.provider;
         this.currentModel = e.toSlot.model;
         this.budgetGuard.setModel(e.toSlot.model);
+        
+        // Show session handoff summary
+        this.renderSessionHandoff(e);
+      };
+
+      // Register inline authentication handler
+      (this.options.providerChain as unknown as { options: { onAuthenticateProvider?: (p: string) => Promise<boolean> } })
+        .options.onAuthenticateProvider = async (provider: string) => {
+        return await this.handleProviderAuth(provider);
       };
     }
 
@@ -85,11 +98,15 @@ export class Repl {
       terminal: true,
     });
 
+    // Setup slash command autocomplete
+    const { setupAutocomplete } = await import('./Autocomplete.js');
+    setupAutocomplete(rl);
+
     this.running = true;
 
     const prompt = () => {
       rl.question(
-        this.renderer.renderPrompt(config.provider, this.currentModel),
+        this.renderer.renderPrompt(this.currentProvider, this.currentModel),
         async input => {
           if (!this.running) return;
 
@@ -145,7 +162,7 @@ export class Repl {
               onToolCall: (name, inp) => this.writer.writeToolCall(name, inp),
               onToolResult: (name, result, isError) =>
                 this.writer.writeToolResult(name, result, isError),
-              onBudgetCheck: (check) => this.handleBudgetCheck(check),
+              onBudgetCheck: async (check) => await this.handleBudgetCheck(check),
             });
 
             const result = await runner.run();
@@ -207,15 +224,93 @@ export class Repl {
     });
   }
 
-  private handleBudgetCheck(check: BudgetCheckResult): void {
+  private async handleBudgetCheck(check: BudgetCheckResult): Promise<void> {
     if (check.action === 'warning') {
       process.stderr.write(
         chalk.yellow.bold('\n  ⚠  Budget Warning: ') +
         chalk.yellow(check.message) + '\n'
       );
     } else if (check.action === 'downgrade') {
-      // Trigger failover to next cheaper slot in the chain
+      // Interactive provider switch confirmation
       const chain = this.options.providerChain;
+      if (chain) {
+        const slots = chain.getSlots();
+        const activeIdx = slots.indexOf(chain.activeSlot);
+        
+        if (activeIdx < slots.length - 1) {
+          const currentSlot = slots[activeIdx];
+          const nextSlot = slots[activeIdx + 1];
+          
+          // Get pricing for comparison
+          const currentPricing = this.getModelPricing(currentSlot.model);
+          const nextPricing = this.getModelPricing(nextSlot.model);
+          
+          // Show interactive prompt
+          process.stderr.write(
+            chalk.red.bold('\n\n  ⛔ Budget Hard Limit Reached\n') +
+            chalk.red(`     ${check.message}\n\n`)
+          );
+          
+          process.stderr.write(chalk.bold('  Switch model to stay within budget?\n\n'));
+          
+          process.stderr.write(
+            chalk.dim('     Current:  ') +
+            chalk.white(`${currentSlot.provider}/${currentSlot.model}`) +
+            (currentPricing ? chalk.dim(` (${currentPricing})`) : '') + '\n'
+          );
+          
+          process.stderr.write(
+            chalk.dim('     Switch to: ') +
+            chalk.green(`${nextSlot.provider}/${nextSlot.model}`) +
+            (nextPricing ? chalk.dim(` (${nextPricing})`) : '') + '\n'
+          );
+          
+          // Show cost comparison
+          if (currentPricing && nextPricing) {
+            const currentRate = this.parsePricing(currentPricing);
+            const nextRate = this.parsePricing(nextPricing);
+            const savings = currentRate > 0 && nextRate > 0 
+              ? ((1 - nextRate / currentRate) * 100).toFixed(0) 
+              : '0';
+            process.stderr.write(
+              chalk.dim(`     Savings:  ${chalk.green(savings + '% cheaper')}\n\n`)
+            );
+          }
+          
+          process.stderr.write(chalk.dim('     Remaining budget: ') + chalk.white(check.message.split('session:')[1]?.split(')')[0]?.trim() || 'N/A') + '\n');
+          process.stderr.write(chalk.dim('     Context retained: ') + chalk.green(`${this.messages.length} messages`) + '\n\n');
+          
+          const { confirm } = await prompts(
+            {
+              type: 'confirm',
+              name: 'confirm',
+              message: 'Switch model?',
+              initial: true,
+            },
+            { onCancel: () => process.stderr.write(chalk.dim('\n  Switch cancelled\n')) }
+          );
+          
+          if (confirm) {
+            // Perform the switch
+            chain.getHealth().markUnavailable(currentSlot, 'budget limit');
+            this.currentModel = nextSlot.model;
+            this.budgetGuard.setModel(nextSlot.model);
+            
+            process.stderr.write(
+              chalk.green('\n  ✓ Switched to ') +
+              chalk.green(`${nextSlot.provider}/${nextSlot.model}`) +
+              chalk.green(` — context retained (${this.messages.length} messages)\n\n`)
+            );
+          } else {
+            process.stderr.write(
+              chalk.yellow('\n  ⚠  Continuing with current model. Future requests may fail budget check.\n\n')
+            );
+          }
+          return;
+        }
+      }
+      
+      // Fallback: automatic downgrade if no chain or no cheaper model
       if (chain) {
         const slots = chain.getSlots();
         const activeIdx = slots.indexOf(chain.activeSlot);
@@ -248,6 +343,109 @@ export class Repl {
         chalk.red.bold('\n  ⛔ Budget Hard Limit: ') +
         chalk.red(check.message) + '\n'
       );
+    }
+  }
+
+  /**
+   * Get pricing string for a model
+   */
+  private getModelPricing(model: string): string | null {
+    try {
+      const { getPricing } = require('../../billing/pricing.js');
+      const pricing = getPricing(model);
+      if (pricing) {
+        return `$${pricing.input.toFixed(4)}/1K in, $${pricing.output.toFixed(4)}/1K out`;
+      }
+    } catch {
+      // Pricing not available
+    }
+    return null;
+  }
+
+  /**
+   * Parse pricing string to get input rate
+   */
+  private parsePricing(pricingStr: string): number {
+    const match = pricingStr.match(/\$(\d+\.\d+)\/1K in/);
+    return match ? parseFloat(match[1]) : 0;
+  }
+
+  /**
+   * Handle inline provider authentication during failover
+   */
+  private async handleProviderAuth(provider: string): Promise<boolean> {
+    process.stderr.write(
+      chalk.bold('\n\n  🔐 Provider Authentication Required\n\n') +
+      chalk.dim(`     ${provider} is not authenticated.\n`) +
+      chalk.dim(`     This is required to continue the conversation.\n\n`)
+    );
+
+    const { confirm } = await prompts(
+      {
+        type: 'confirm',
+        name: 'confirm',
+        message: `Authenticate with ${provider} now?`,
+        initial: true,
+      },
+      { onCancel: () => {
+        process.stderr.write(chalk.dim('\n  Authentication cancelled\n'));
+        return false;
+      }}
+    );
+
+    if (!confirm) {
+      return false;
+    }
+
+    // Spawn provider authentication
+    process.stderr.write(
+      chalk.dim('\n  Starting authentication...\n\n')
+    );
+
+    try {
+      const { execa } = await import('execa');
+      
+      if (provider === 'codex') {
+        // Spawn codex CLI for auth
+        const { exitCode } = await execa('codex', [], {
+          stdio: 'inherit',
+          timeout: 300000,
+          reject: false,
+        });
+
+        if (exitCode === 0) {
+          process.stderr.write(
+            chalk.green('\n  ✓ Codex authentication successful\n\n')
+          );
+          return true;
+        } else {
+          process.stderr.write(
+            chalk.red('\n  ✗ Codex authentication failed\n\n')
+          );
+          return false;
+        }
+      } else if (provider === 'codemie') {
+        // Spawn epam provider login codemie
+        const { exitCode } = await execa('node', ['dist/epam.js', 'provider', 'login', 'codemie'], {
+          stdio: 'inherit',
+          cwd: process.cwd(),
+          timeout: 300000,
+          reject: false,
+        });
+
+        return exitCode === 0;
+      } else {
+        process.stderr.write(
+          chalk.red(`\n  Authentication not supported for: ${provider}\n\n`)
+        );
+        return false;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      process.stderr.write(
+        chalk.red(`\n  Authentication error: ${message}\n\n`)
+      );
+      return false;
     }
   }
 
@@ -346,6 +544,32 @@ export class Repl {
         this.currentModel = slots[0]?.model ?? this.currentModel;
       },
     };
+  }
+
+  private renderSessionHandoff(event: { fromSlot: { provider: string; model: string }; toSlot: { provider: string; model: string }; reason: string }): void {
+    // Count messages and estimate context
+    const messageCount = this.messages.length;
+    const userMessages = this.messages.filter(m => m.role === 'user').length;
+    const assistantMessages = this.messages.filter(m => m.role === 'assistant').length;
+    const toolMessages = this.messages.filter(m => m.role === 'tool').length;
+    
+    // Get last user message for context
+    const lastUserMsg = this.messages.filter(m => m.role === 'user').pop();
+    const lastContext = lastUserMsg 
+      ? (typeof lastUserMsg.content === 'string' ? lastUserMsg.content.substring(0, 50) : '[complex message]')
+      : 'N/A';
+
+    process.stderr.write(
+      chalk.cyan.bold('\n📦 Session transferred to ') +
+      chalk.green(`${event.toSlot.provider}/${event.toSlot.model}`) +
+      chalk.dim('\n')
+    );
+    process.stderr.write(chalk.dim(`   • ${messageCount} messages transferred\n`));
+    process.stderr.write(chalk.dim(`   • ${userMessages} user, ${assistantMessages} assistant, ${toolMessages} tool calls\n`));
+    process.stderr.write(chalk.dim(`   • Last message: "${lastContext}..."\n`));
+    process.stderr.write(chalk.green.dim('   • Full conversation history preserved\n'));
+    process.stderr.write(chalk.green.dim('   • File system state visible\n'));
+    process.stderr.write(chalk.dim('\n'));
   }
 
   private renderAuditorFindings(decision: AuditorGateDecision): void {

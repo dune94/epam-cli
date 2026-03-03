@@ -16,6 +16,11 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   'gemini-1.5-pro':            { inputPerMillion: 1.25,  outputPerMillion: 5.00  },
   'gemini-1.5-flash':          { inputPerMillion: 0.075, outputPerMillion: 0.30  },
   'gemini-2.0-flash':          { inputPerMillion: 0.10,  outputPerMillion: 0.40  },
+  // Qwen (Alibaba Cloud DashScope)
+  'qwen-max':                  { inputPerMillion: 2.00,  outputPerMillion: 8.00  },
+  'qwen-plus':                 { inputPerMillion: 0.50,  outputPerMillion: 2.00  },
+  'qwen-turbo':                { inputPerMillion: 0.10,  outputPerMillion: 0.40  },
+  'qwen-2.5-72b':              { inputPerMillion: 0.40,  outputPerMillion: 1.60  },
 };
 
 export function calculateCost(model: string, inputTokens: number, outputTokens: number): number {

@@ -10,6 +10,23 @@ import type { ProviderChain } from '../../providers/ProviderChain.js';
 import type { HealthStatus } from '../../providers/health/types.js';
 import type { BudgetGuard } from '../../billing/BudgetGuard.js';
 import type { AuditorRegistry } from '../../auditors/AuditorRegistry.js';
+import { providersCommand } from './commands/ProvidersCommand.js';
+import { orchestrateCommand } from './commands/OrchestrateCommand.js';
+import { statusCommand } from './commands/StatusCommand.js';
+import { diffCommand } from './commands/DiffCommand.js';
+import { exportCommand } from './commands/ExportCommand.js';
+import { dashboardCommand } from './commands/DashboardCommand.js';
+import { planCommand } from './commands/PlanCommand.js';
+import { reviewCommand } from './commands/ReviewCommand.js';
+import { forkCommand } from './commands/ForkCommand.js';
+import { mcpCommand } from './commands/MCPCommand.js';
+import { tasksCommand } from './commands/TasksCommand.js';
+import { debugCommand } from './commands/DebugCommand.js';
+import { teamCommand } from './commands/TeamCommand.js';
+import { membersCommand } from './commands/MembersCommand.js';
+import { inviteCommand } from './commands/InviteCommand.js';
+import { shareCommand } from './commands/ShareCommand.js';
+import { handoffCommand } from './commands/HandoffCommand.js';
 
 export interface SlashCommandContext {
   config: ResolvedConfig;
@@ -38,6 +55,8 @@ export interface SlashCommandContext {
   onRewind: () => void;
   onResume: (sessionId: string) => Promise<{ success: boolean; turnCount: number }>;
   onChainUpdate?: (slots: LLMChainSlot[]) => Promise<void>;
+  // Provider auth helper
+  onAuthenticateProvider?: (provider: string) => Promise<boolean>;
 }
 
 export interface SlashCommand {
@@ -507,6 +526,25 @@ export const SLASH_COMMANDS: SlashCommand[] = [
       return true;
     },
   },
+
+  // ── /providers ──────────────────────────────────────────────────────────────
+  providersCommand,
+  orchestrateCommand,
+  statusCommand,
+  diffCommand,
+  exportCommand,
+  dashboardCommand,
+  planCommand,
+  reviewCommand,
+  forkCommand,
+  mcpCommand,
+  tasksCommand,
+  debugCommand,
+  teamCommand,
+  membersCommand,
+  inviteCommand,
+  shareCommand,
+  handoffCommand,
 ];
 
 function statusIcon_(status: HealthStatus): string {

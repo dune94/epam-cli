@@ -358,7 +358,9 @@ export class ProviderChain implements LLMProvider {
     }
 
     switch (slot.provider) {
-      case 'anthropic': return new AnthropicProvider(apiKey);
+      case 'anthropic':
+      case 'claude':  // Alias for anthropic
+        return new AnthropicProvider(apiKey);
       case 'openai':    return new OpenAIProvider(apiKey);
       case 'gemini':    return new GeminiProvider(apiKey);
       case 'qwen':      return new QwenProvider({ apiKey });

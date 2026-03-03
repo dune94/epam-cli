@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { createCLI } from './cli/index.js';
 
 const VERSION = '0.1.0';

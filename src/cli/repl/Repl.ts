@@ -103,7 +103,8 @@ export class Repl {
     setupAutocomplete(rl);
 
     // Display hint text (faded, below prompt)
-    console.log(chalk.dim('Type @ to mention files, / for commands, or ? for shortcuts'));
+    console.log(chalk.dim('Type @ to query MCP sources, / for commands, or ? for shortcuts'));
+    console.log(chalk.dim('MCP: @jira @confluence @drawio @all'));
     console.log();
 
     this.running = true;
@@ -136,9 +137,22 @@ export class Repl {
 
           // Regular message — run agent
           const rawMessage = parsed.message!;
-          const userMessage = config.projectRoot
+          let userMessage = config.projectRoot
             ? await consumeConsultationContext(rawMessage, config.projectRoot)
             : rawMessage;
+
+          // Auto-query MCP sources based on keywords
+          const { autoQueryMCP, injectMCPContext } = await import('../../mcp/MCPAutoQuery.js');
+          const mcpResults = await autoQueryMCP(userMessage);
+          
+          if (mcpResults.length > 0) {
+            // Display MCP results
+            const { formatMCPResults } = await import('../../mcp/MCPAutoQuery.js');
+            process.stdout.write(formatMCPResults(mcpResults));
+            
+            // Inject into user message for context
+            userMessage = injectMCPContext(userMessage, mcpResults);
+          }
 
           try {
             process.stdout.write('\n');

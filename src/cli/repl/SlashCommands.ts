@@ -30,6 +30,7 @@ import { handoffCommand } from './commands/HandoffCommand.js';
 import { modelCommand } from './commands/ModelCommand.js';
 import { copilotCommand } from './commands/CopilotCommand.js';
 import { failoverCommand } from './commands/FailoverCommand.js';
+import { mcpCommand } from './commands/MCPQueryCommand.js';
 
 export interface SlashCommandContext {
   config: ResolvedConfig;
@@ -551,6 +552,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   modelCommand,
   copilotCommand,
   failoverCommand,
+  mcpCommand,
 ];
 
 function statusIcon_(status: HealthStatus): string {

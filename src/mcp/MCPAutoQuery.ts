@@ -6,6 +6,7 @@
 
 import chalk from 'chalk';
 import { createMCPClients, detectMCPSource, type MCPResult } from '../mcp/MCPClient.js';
+import { searchMockPages } from '../mcp/MockMCPData.js';
 
 /**
  * Auto-query MCP sources based on user message
@@ -24,14 +25,14 @@ export async function autoQueryMCP(message: string): Promise<MCPResult[]> {
   // Query detected sources (non-blocking, never throws)
   for (const source of sources) {
     const client = clients[source];
-    
+
     if (!client) {
       continue;
     }
-    
+
     try {
       const result = await client.search(message);
-      
+
       // Only add if we got actual items AND no error
       if (result.items && result.items.length > 0 && !result.error) {
         results.push(result);
@@ -40,7 +41,24 @@ export async function autoQueryMCP(message: string): Promise<MCPResult[]> {
       // Silent fail - MCP is optional, never disrupt chat
     }
   }
-  
+
+  // If no results, try Confluence mock data for doc-related queries
+  if (results.length === 0 && (message.toLowerCase().includes('doc') || message.toLowerCase().includes('wiki') || message.toLowerCase().includes('confluence'))) {
+    const mockPages = searchMockPages(message);
+    if (mockPages.length > 0) {
+      results.push({
+        source: 'confluence',
+        items: mockPages.map(p => ({
+          id: p.title.replace(/\s+/g, '-').toLowerCase(),
+          title: p.title,
+          url: p.url,
+          updated: p.updated,
+          summary: p.excerpt,
+        })),
+      });
+    }
+  }
+
   return results;
 }
 

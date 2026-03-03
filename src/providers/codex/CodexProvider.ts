@@ -39,13 +39,15 @@ export class CodexProvider implements LLMProvider {
     
 
     try {
-      
-      // Call codex exec for non-interactive mode
-      const { stdout, stderr, exitCode } = await execa('codex', ['exec', '--skip-git-repo-check'], {
-        input: prompt,
+      // Call codex exec for non-interactive mode with prompt as argument
+      const { stdout, stderr, exitCode } = await execa('codex', [
+        'exec',
+        '--skip-git-repo-check',
+        prompt  // Pass prompt as argument, not stdin
+      ], {
         timeout: request.maxTokens ? request.maxTokens * 10 : 120000,
         reject: false,
-        stdin: 'pipe',
+        stdin: 'inherit',  // Don't pipe stdin
         stdout: 'pipe',
         stderr: 'pipe',
         env: { ...process.env },

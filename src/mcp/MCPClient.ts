@@ -45,6 +45,7 @@ export class MCPClient {
 
   /**
    * Query MCP server
+   * Never throws - always returns result (possibly with error field)
    */
   async query(query: MCPQuery): Promise<MCPResult> {
     try {
@@ -59,17 +60,25 @@ export class MCPClient {
           method: 'query',
           params: query,
         }),
-        signal: AbortSignal.timeout(this.config.timeout || 10000),
+        signal: AbortSignal.timeout(this.config.timeout || 5000), // Reduced timeout
       });
 
       if (!response.ok) {
-        throw new Error(`MCP server error: ${response.status}`);
+        return {
+          source: this.config.baseUrl,
+          items: [],
+          error: `MCP server error: ${response.status}`,
+        };
       }
 
       const data = await response.json();
 
       if (data.error) {
-        throw new Error(data.error.message || 'Unknown MCP error');
+        return {
+          source: this.config.baseUrl,
+          items: [],
+          error: data.error.message || 'Unknown MCP error',
+        };
       }
 
       return {
@@ -78,11 +87,11 @@ export class MCPClient {
       };
 
     } catch (err) {
-      logger.error({ error: (err as Error).message }, 'MCPClient query failed');
+      // Never throw - return error result
       return {
         source: this.config.baseUrl,
         items: [],
-        error: (err as Error).message,
+        error: undefined, // Silent fail for auto-query
       };
     }
   }

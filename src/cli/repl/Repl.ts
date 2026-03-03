@@ -141,17 +141,21 @@ export class Repl {
             ? await consumeConsultationContext(rawMessage, config.projectRoot)
             : rawMessage;
 
-          // Auto-query MCP sources based on keywords
-          const { autoQueryMCP, injectMCPContext } = await import('../../mcp/MCPAutoQuery.js');
-          const mcpResults = await autoQueryMCP(userMessage);
-          
-          if (mcpResults.length > 0) {
-            // Display MCP results
-            const { formatMCPResults } = await import('../../mcp/MCPAutoQuery.js');
-            process.stdout.write(formatMCPResults(mcpResults));
-            
-            // Inject into user message for context
-            userMessage = injectMCPContext(userMessage, mcpResults);
+          // Auto-query MCP sources based on keywords (non-blocking, never fails chat)
+          try {
+            const { autoQueryMCP, injectMCPContext, formatMCPResults } = await import('../../mcp/MCPAutoQuery.js');
+            const mcpResults = await autoQueryMCP(userMessage);
+
+            if (mcpResults.length > 0) {
+              // Display MCP results
+              process.stdout.write(formatMCPResults(mcpResults));
+
+              // Inject into user message for context
+              userMessage = injectMCPContext(userMessage, mcpResults);
+            }
+          } catch (err) {
+            // MCP is optional - never let it disrupt chat
+            // Continue with original user message
           }
 
           try {

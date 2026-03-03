@@ -9,6 +9,7 @@ import { createMCPClients, detectMCPSource, type MCPResult } from '../mcp/MCPCli
 
 /**
  * Auto-query MCP sources based on user message
+ * Non-blocking: failures are silent, only successful queries returned
  */
 export async function autoQueryMCP(message: string): Promise<MCPResult[]> {
   const sources = detectMCPSource(message);
@@ -20,7 +21,7 @@ export async function autoQueryMCP(message: string): Promise<MCPResult[]> {
   const clients = createMCPClients();
   const results: MCPResult[] = [];
   
-  // Query detected sources
+  // Query detected sources (non-blocking, never throws)
   for (const source of sources) {
     const client = clients[source];
     
@@ -30,9 +31,13 @@ export async function autoQueryMCP(message: string): Promise<MCPResult[]> {
     
     try {
       const result = await client.search(message);
-      results.push(result);
-    } catch (err) {
-      // Ignore errors, continue with other sources
+      
+      // Only add if we got actual items AND no error
+      if (result.items && result.items.length > 0 && !result.error) {
+        results.push(result);
+      }
+    } catch {
+      // Silent fail - MCP is optional, never disrupt chat
     }
   }
   

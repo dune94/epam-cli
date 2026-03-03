@@ -1,8 +1,15 @@
 /**
  * GitHub Copilot Provider
  * 
- * Uses GitHub Copilot CLI with gh auth
+ * Uses GitHub Copilot CLI with OAuth device flow or fine-grained PAT
  * https://github.com/features/copilot
+ * 
+ * Authentication (in order of priority):
+ * 1. COPILOT_GITHUB_TOKEN env var (fine-grained PAT with github_pat_)
+ * 2. GH_TOKEN env var (OAuth token gho_)
+ * 3. GITHUB_TOKEN env var (any supported token)
+ * 4. GitHub CLI (gh) if authenticated
+ * 5. Device flow authentication (interactive)
  */
 
 import type { LLMProvider, ProviderRequest, ProviderResponse, StreamHandler, Message, ContentPart } from '../types.js';
@@ -11,6 +18,7 @@ import { execa } from 'execa';
 
 export interface CopilotConfig {
   model?: string;
+  token?: string;
 }
 
 export class CopilotProvider implements LLMProvider {
@@ -18,9 +26,11 @@ export class CopilotProvider implements LLMProvider {
   readonly defaultModel = 'claude-sonnet-4-6';
 
   private model: string;
+  private token?: string;
 
   constructor(config: CopilotConfig = {}) {
     this.model = config.model || this.defaultModel;
+    this.token = config.token;
   }
 
   async complete(request: ProviderRequest): Promise<ProviderResponse> {
@@ -30,13 +40,25 @@ export class CopilotProvider implements LLMProvider {
 
     try {
       // Use GitHub Copilot CLI
-      const { stdout, stderr, exitCode } = await execa('gh', ['copilot', 'chat', '-m', model], {
+      const env: Record<string, string> = { ...process.env };
+      
+      // Set token if provided
+      if (this.token) {
+        env.COPILOT_GITHUB_TOKEN = this.token;
+      }
+
+      const { stdout, stderr, exitCode } = await execa('copilot', ['chat', '-m', model], {
         input: messages.map(m => `${m.role}: ${m.content}`).join('\n'),
+        env,
         timeout: request.maxTokens ? request.maxTokens * 10 : 120000,
         reject: false,
       });
 
       if (exitCode !== 0) {
+        // Check for auth error
+        if (stderr.includes('authentication') || stderr.includes('login')) {
+          throw new Error('Copilot not authenticated. Run: copilot login or set COPILOT_GITHUB_TOKEN');
+        }
         throw new Error(`Copilot CLI error: ${stderr || 'Unknown error'}`);
       }
 
@@ -66,8 +88,15 @@ export class CopilotProvider implements LLMProvider {
 
     try {
       // Use GitHub Copilot CLI with streaming
-      const child = execa('gh', ['copilot', 'chat', '-m', model, '--json'], {
+      const env: Record<string, string> = { ...process.env };
+      
+      if (this.token) {
+        env.COPILOT_GITHUB_TOKEN = this.token;
+      }
+
+      const child = execa('copilot', ['chat', '-m', model, '--json'], {
         input: messages.map(m => `${m.role}: ${m.content}`).join('\n'),
+        env,
         timeout: request.maxTokens ? request.maxTokens * 10 : 120000,
         reject: false,
       });
@@ -129,11 +158,11 @@ export class CopilotProvider implements LLMProvider {
   }
 
   /**
-   * Check if Copilot CLI is authenticated
+   * Check if Copilot CLI is available
    */
-  static async isAuthenticated(): Promise<boolean> {
+  static async isAvailable(): Promise<boolean> {
     try {
-      const { exitCode } = await execa('gh', ['auth', 'status'], {
+      const { exitCode } = await execa('copilot', ['--version'], {
         reject: false,
       });
       return exitCode === 0;
@@ -143,11 +172,28 @@ export class CopilotProvider implements LLMProvider {
   }
 
   /**
-   * Check if Copilot CLI is available
+   * Check if authenticated (via env var or CLI)
    */
-  static async isAvailable(): Promise<boolean> {
+  static async isAuthenticated(): Promise<boolean> {
+    // Check for environment variables first
+    if (process.env.COPILOT_GITHUB_TOKEN || 
+        process.env.GH_TOKEN || 
+        process.env.GITHUB_TOKEN) {
+      const token = process.env.COPILOT_GITHUB_TOKEN || 
+                   process.env.GH_TOKEN || 
+                   process.env.GITHUB_TOKEN;
+      
+      // Validate token type (must be gho_, github_pat_, or ghu_)
+      if (token?.startsWith('gho_') || 
+          token?.startsWith('github_pat_') || 
+          token?.startsWith('ghu_')) {
+        return true;
+      }
+    }
+
+    // Try copilot CLI status
     try {
-      const { exitCode } = await execa('gh', ['--version'], {
+      const { exitCode } = await execa('copilot', ['status'], {
         reject: false,
       });
       return exitCode === 0;
@@ -155,23 +201,67 @@ export class CopilotProvider implements LLMProvider {
       return false;
     }
   }
+
+  /**
+   * Get authentication instructions
+   */
+  static getAuthInstructions(): string {
+    return `GitHub Copilot Authentication:
+
+1. **Fine-grained PAT (Recommended for CI/CD):**
+   - Create at: https://github.com/settings/tokens
+   - Select "Fine-grained token"
+   - Permissions: Copilot Requests (Read & Write)
+   - Set as: COPILOT_GITHUB_TOKEN=github_pat_xxx
+
+2. **OAuth Device Flow (Interactive):**
+   - Run: copilot login
+   - Follow browser instructions
+
+3. **GitHub CLI (Fallback):**
+   - Install: https://cli.github.com
+   - Run: gh auth login
+   - Ensure Copilot access is granted
+
+Note: Classic PAT tokens (ghp_) are NOT supported.
+Use fine-grained PAT (github_pat_) or OAuth (gho_) instead.`;
+  }
 }
 
 /**
  * Factory function to create Copilot provider
  */
-export function createCopilotProvider(model?: string): CopilotProvider | null {
-  // Check if gh CLI is available
+export function createCopilotProvider(model?: string, token?: string): CopilotProvider | null {
+  // Check if copilot CLI is available
   if (!CopilotProvider.isAvailable()) {
-    logger.warn('GitHub CLI (gh) not found. Install from https://cli.github.com');
+    logger.warn('GitHub Copilot CLI not found. Install: npm install -g @github/copilot');
     return null;
+  }
+
+  // Check for token in config or env
+  const envToken = process.env.COPILOT_GITHUB_TOKEN || 
+                  process.env.GH_TOKEN || 
+                  process.env.GITHUB_TOKEN;
+  
+  const effectiveToken = token || envToken;
+
+  // Validate token type if provided
+  if (effectiveToken) {
+    if (!effectiveToken.startsWith('gho_') && 
+        !effectiveToken.startsWith('github_pat_') && 
+        !effectiveToken.startsWith('ghu_')) {
+      logger.warn('Invalid token type. Must be gho_, github_pat_, or ghu_ (not ghp_)');
+      logger.info(CopilotProvider.getAuthInstructions());
+      return null;
+    }
   }
 
   // Check if authenticated
   if (!CopilotProvider.isAuthenticated()) {
-    logger.warn('GitHub CLI not authenticated. Run: gh auth login');
+    logger.warn('Copilot not authenticated');
+    logger.info(CopilotProvider.getAuthInstructions());
     return null;
   }
 
-  return new CopilotProvider({ model });
+  return new CopilotProvider({ model, token: effectiveToken });
 }

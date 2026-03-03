@@ -142,12 +142,16 @@ function listAvailableModels(ctx: SlashCommandContext): boolean {
       models: [
         { id: 'claude-sonnet-4-6', desc: 'Via gh auth', price: 'Included' },
       ],
+      auth: 'Requires: copilot login (device flow) or COPILOT_GITHUB_TOKEN',
     },
   ];
   
   for (const provider of models) {
     console.log(chalk.bold(provider.name));
     console.log(chalk.dim(`  Provider: ${provider.provider}`));
+    if (provider.auth) {
+      console.log(chalk.dim(`  Auth: ${provider.auth}`));
+    }
     console.log();
     
     for (const model of provider.models) {

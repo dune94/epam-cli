@@ -158,6 +158,9 @@ export class Repl {
             // Continue with original user message
           }
 
+          // Add user message to history BEFORE calling agent (preserves on failover)
+          this.messages.push({ role: 'user', content: userMessage });
+
           try {
             process.stdout.write('\n');
 
@@ -171,7 +174,7 @@ export class Repl {
               tools: this.options.tools,
               toolRunner: this.toolRunner,
               maxIterations: config.maxIterations,
-              history: this.messages,
+              history: this.messages.slice(0, -1), // Pass history without current message
               autoCompressAt: config.autoCompressAt,
               maxOutputTokens: config.maxOutputTokens,
               dangerousSkipApproval: config.tools.dangerousSkipApproval,

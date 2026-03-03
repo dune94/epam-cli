@@ -6,7 +6,7 @@
 
 import chalk from 'chalk';
 import type { SlashCommand, SlashCommandContext } from '../SlashCommands.js';
-import { CopilotProvider } from '../../providers/copilot/CopilotProvider.js';
+import { CopilotProvider } from '../../../providers/copilot/CopilotProvider.js';
 import { execa } from 'execa';
 
 export const copilotCommand: SlashCommand = {

@@ -4,7 +4,8 @@
   "description": "Interactive AI coding assistant CLI",
   "main": "dist/epam.js",
   "bin": {
-    "epam": "./dist/epam.js"
+    "epam": "./dist/epam.js",
+    "epam-cli": "./dist/epam.js"
   },
   "scripts": {
     "build": "tsup",

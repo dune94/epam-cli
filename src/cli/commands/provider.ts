@@ -8,8 +8,12 @@ import {
   resolveProviderCredential,
 } from '../../auth/ProviderCredentialStore.js';
 import type { ProviderName } from '../../auth/types.js';
+import { CodemieSSO } from '../../providers/codemie/CodemieSSO.js';
+import { CodexProvider } from '../../providers/codex/CodexProvider.js';
 
 const SUPPORTED_PROVIDERS: ProviderName[] = ['anthropic', 'openai', 'gemini'];
+const SSO_PROVIDERS = ['codemie'];
+const CLI_PROVIDERS = ['codex'];
 
 function maskSecret(secret: string): string {
   if (secret.length <= 8) return '****';
@@ -28,22 +32,151 @@ function formatSource(source: string): string {
   switch (source) {
     case 'epam_brokered_local': return chalk.cyan('epam-brokered');
     case 'provider_browser':    return chalk.yellow('bridge (API key)');
+    case 'sso_oauth':           return chalk.green('SSO OAuth');
     case 'manual_api_key':      return chalk.white('manual api-key');
     default:                    return source;
   }
 }
 
+async function handleSSOLogin(providerName: string, options: { url?: string }): Promise<void> {
+  if (providerName !== 'codemie') {
+    console.error(chalk.red(`SSO login not supported for: ${providerName}`));
+    process.exit(1);
+  }
+
+  const defaultUrl = 'https://codemie.lab.epam.com';
+  const codeMieUrl = options.url || defaultUrl;
+
+  console.log();
+  console.log(chalk.bold('Codemie SSO Authentication'));
+  console.log(chalk.dim(`  URL: ${codeMieUrl}`));
+  console.log();
+  console.log(chalk.dim('  Opening browser for OAuth login...'));
+  console.log(chalk.dim('  Complete authentication in the browser window.'));
+  console.log();
+
+  const sso = new CodemieSSO();
+  const result = await sso.authenticate({ codeMieUrl, timeout: 120000 });
+
+  if (result.success) {
+    console.log();
+    console.log(chalk.green('✓ SSO authentication successful'));
+    console.log(chalk.cyan(`  Connected to: ${codeMieUrl}`));
+    console.log(chalk.cyan(`  Credentials stored (expires in 24h)`));
+    console.log();
+    console.log(chalk.bold('  Next Steps:'));
+    console.log();
+    console.log('  ' + chalk.white('• Check status:') + '     ' + chalk.cyan(`epam provider status ${providerName}`));
+    console.log('  ' + chalk.white('• Refresh token:') + '    ' + chalk.cyan(`epam provider refresh ${providerName}`));
+    console.log('  ' + chalk.white('• Start chat:') + '       ' + chalk.cyan('epam chat --provider codemie'));
+    console.log('  ' + chalk.white('• Verify system:') + '    ' + chalk.cyan('epam doctor'));
+    console.log();
+  } else {
+    console.log();
+    console.log(chalk.red('✗ SSO authentication failed'));
+    console.log(chalk.red(`  Error: ${result.error}`));
+    console.log();
+    process.exit(1);
+  }
+}
+
+async function handleCLILogin(providerName: string): Promise<void> {
+  if (providerName !== 'codex') {
+    console.error(chalk.red(`CLI login not supported for: ${providerName}`));
+    return;
+  }
+
+  console.log();
+  console.log(chalk.bold('Codex CLI Authentication'));
+  console.log(chalk.dim('  This will open Codex CLI for browser sign-in.'));
+  console.log(chalk.dim('  Complete authentication in the Codex CLI window.'));
+  console.log();
+
+  const success = await CodexProvider.authenticate();
+
+  if (success) {
+    console.log();
+    console.log(chalk.green('✓ Codex authentication successful'));
+    console.log();
+    console.log(chalk.bold('  Next Steps:'));
+    console.log();
+    console.log('  ' + chalk.white('• Check status:') + '  ' + chalk.cyan('epam provider status codex'));
+    console.log('  ' + chalk.white('• Start chat:') + '    ' + chalk.cyan('epam chat --provider codex'));
+    console.log();
+  } else {
+    console.log();
+    console.log(chalk.red('✗ Codex authentication failed'));
+    console.log(chalk.dim('  Make sure Codex CLI is installed: npm install -g @openai/codex'));
+    console.log();
+    process.exit(1);
+  }
+}
+
+async function handleSSOStatus(providerName: string): Promise<void> {
+  if (providerName !== 'codemie') {
+    console.error(chalk.red(`SSO status not supported for: ${providerName}`));
+    return;
+  }
+
+  const sso = new CodemieSSO();
+  const credentials = await sso.getStoredCredentials();
+
+  console.log();
+  if (!credentials) {
+    console.log(`${chalk.yellow('✗')} codemie: ${chalk.dim('no SSO credentials stored')}`);
+    console.log(chalk.dim(`  Run \`epam provider login codemie\` to authenticate.`));
+  } else {
+    const isExpired = Date.now() > credentials.expiresAt;
+    const expiryColor = isExpired ? chalk.red : chalk.green;
+    
+    console.log(`${chalk.green('✓')} codemie`);
+    console.log(`  source:     ${formatSource('sso_oauth')}`);
+    console.log(`  API URL:    ${credentials.apiUrl}`);
+    console.log(`  expires:    ${expiryColor(new Date(credentials.expiresAt).toLocaleString())}`);
+    console.log(`  status:     ${isExpired ? chalk.red('EXPIRED - run: epam provider login codemie') : chalk.green('ACTIVE')}`);
+  }
+  console.log();
+}
+
+async function handleSSOLogout(providerName: string): Promise<void> {
+  if (providerName !== 'codemie') {
+    console.error(chalk.red(`SSO logout not supported for: ${providerName}`));
+    return;
+  }
+
+  const sso = new CodemieSSO();
+  await sso.clearStoredCredentials();
+  
+  console.log(chalk.green('✓ SSO credentials cleared for codemie.'));
+  console.log(chalk.dim('  EPAM backend authentication is unaffected.'));
+  console.log();
+}
+
 export function createProviderCommand(): Command {
   const provider = new Command('provider')
-    .description('Manage provider credentials (anthropic, openai, gemini)');
+    .description('Manage provider credentials (anthropic, openai, gemini, codemie)');
 
   // epam provider login <provider>
   provider
     .command('login <provider>')
-    .description('Store credentials for a provider (bridge: API key entry)')
-    .action(async (providerName: string) => {
+    .description('Store credentials for a provider (bridge: API key entry, codemie: OAuth, codex: CLI)')
+    .option('--url <url>', 'Codemie URL (for codemie provider)')
+    .action(async (providerName: string, options: { url?: string }) => {
+      // Handle CLI-based providers (Codex)
+      if (CLI_PROVIDERS.includes(providerName)) {
+        await handleCLILogin(providerName);
+        return;
+      }
+
+      // Handle SSO providers (Codemie)
+      if (SSO_PROVIDERS.includes(providerName)) {
+        await handleSSOLogin(providerName, options);
+        return;
+      }
+
+      // Handle API key providers (Anthropic, OpenAI, Gemini)
       if (!SUPPORTED_PROVIDERS.includes(providerName as ProviderName)) {
-        console.error(chalk.red(`Unsupported provider: ${providerName}. Supported: ${SUPPORTED_PROVIDERS.join(', ')}`));
+        console.error(chalk.red(`Unsupported provider: ${providerName}. Supported: ${[...SUPPORTED_PROVIDERS, ...SSO_PROVIDERS, ...CLI_PROVIDERS].join(', ')}`));
         process.exit(1);
       }
 
@@ -74,8 +207,6 @@ export function createProviderCommand(): Command {
       await saveProviderCredential({
         provider: providerName as ProviderName,
         type: 'api_key',
-        // This is an interim bridge — real browser OAuth requires a registered OAuth app per provider.
-        // Using source=provider_browser gives it higher precedence than manual_api_key.
         source: 'provider_browser',
         secret: apiKey.trim(),
         accountLabel: label?.trim() || undefined,
@@ -91,8 +222,15 @@ export function createProviderCommand(): Command {
     .command('status <provider>')
     .description('Show credential status for a provider')
     .action(async (providerName: string) => {
+      // Handle SSO providers
+      if (providerName === 'codemie') {
+        await handleSSOStatus(providerName);
+        return;
+      }
+
+      // Handle API key providers
       if (!SUPPORTED_PROVIDERS.includes(providerName as ProviderName)) {
-        console.error(chalk.red(`Unsupported provider: ${providerName}. Supported: ${SUPPORTED_PROVIDERS.join(', ')}`));
+        console.error(chalk.red(`Unsupported provider: ${providerName}. Supported: ${[...SUPPORTED_PROVIDERS, ...SSO_PROVIDERS].join(', ')}`));
         process.exit(1);
       }
 
@@ -119,8 +257,15 @@ export function createProviderCommand(): Command {
     .command('logout <provider>')
     .description('Remove stored credentials for a provider')
     .action(async (providerName: string) => {
+      // Handle SSO providers
+      if (providerName === 'codemie') {
+        await handleSSOLogout(providerName);
+        return;
+      }
+
+      // Handle API key providers
       if (!SUPPORTED_PROVIDERS.includes(providerName as ProviderName)) {
-        console.error(chalk.red(`Unsupported provider: ${providerName}. Supported: ${SUPPORTED_PROVIDERS.join(', ')}`));
+        console.error(chalk.red(`Unsupported provider: ${providerName}. Supported: ${[...SUPPORTED_PROVIDERS, ...SSO_PROVIDERS].join(', ')}`));
         process.exit(1);
       }
 
@@ -141,6 +286,7 @@ export function createProviderCommand(): Command {
       console.log(chalk.bold('Provider credential status:'));
       console.log();
 
+      // Show API key providers
       for (const name of SUPPORTED_PROVIDERS) {
         const creds = allCredentials.filter(c => c.provider === name);
         const valid = creds.filter(c => !c.expiresAt || new Date(c.expiresAt) > now);
@@ -151,7 +297,6 @@ export function createProviderCommand(): Command {
           const suffix = expired.length > 0 ? chalk.red(' (expired)') : chalk.dim(' (none)');
           console.log(`  ${icon} ${name.padEnd(12)}${suffix}`);
         } else {
-          // Pick highest-priority credential to display
           const best = valid[0];
           const expirySuffix = best.expiresAt
             ? chalk.dim(` expires ${new Date(best.expiresAt).toLocaleDateString()}`)
@@ -159,6 +304,21 @@ export function createProviderCommand(): Command {
           console.log(
             `  ${chalk.green('✓')} ${name.padEnd(12)} ${formatSource(best.source)}${expirySuffix}`
           );
+        }
+      }
+
+      // Show SSO providers
+      for (const name of SSO_PROVIDERS) {
+        const sso = new CodemieSSO();
+        const credentials = await sso.getStoredCredentials();
+        
+        if (!credentials) {
+          console.log(`  ${chalk.dim('○')} ${name.padEnd(12)}${chalk.dim(' (not authenticated)')}`);
+        } else {
+          const isExpired = Date.now() > credentials.expiresAt;
+          const icon = isExpired ? chalk.red('✗') : chalk.green('✓');
+          const status = isExpired ? chalk.red(' (expired)') : chalk.green(' (active)');
+          console.log(`  ${icon} ${name.padEnd(12)}${chalk.green('SSO OAuth')}${status}`);
         }
       }
 

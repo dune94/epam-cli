@@ -41,8 +41,8 @@ export class ConstraintLoader {
       this.cache.set(projectId, activeConstraints);
       return activeConstraints;
     } catch (error) {
-      // Gracefully handle unreachable endpoint
-      logger.warn({ error }, 'Failed to fetch project constraints, proceeding without constraints');
+      // Gracefully handle unreachable endpoint - don't show scary error to user
+      // This is expected when running without EPAM backend
       this.cache.set(projectId, []);
       return [];
     }

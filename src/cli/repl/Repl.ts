@@ -143,21 +143,23 @@ export class Repl {
 
           // Auto-query MCP sources based on keywords (non-blocking, never fails chat)
           try {
-            const { autoQueryMCP, injectMCPContext, formatMCPResults } = await import('../../mcp/MCPAutoQuery.js');
+            const { autoQueryMCP, formatMCPResults } = await import('../../mcp/MCPAutoQuery.js');
             const mcpResults = await autoQueryMCP(userMessage);
 
             if (mcpResults.length > 0) {
               // Display MCP results with proper newline handling
               const formattedResults = formatMCPResults(mcpResults);
               if (formattedResults.trim()) {
-                process.stdout.write(formattedResults + '\n');
+                process.stdout.write(formattedResults);
               }
-
-              // Inject into user message for context
-              userMessage = injectMCPContext(userMessage, mcpResults);
+              // Don't inject into userMessage - let agent handle original query
             }
           } catch (err) {
             // MCP is optional - never let it disrupt chat
+            // Log error in debug mode only
+            if (process.env.EPAM_DEBUG === '1') {
+              console.error('MCP auto-query error:', (err as Error).message);
+            }
             // Continue with original user message
           }
 
@@ -223,7 +225,11 @@ export class Repl {
             });
             await appendTurn(this.session, turn);
           } catch (err) {
-            this.renderer.renderError((err as Error).message);
+            // Log agent error and continue
+            console.error(chalk.red(`\nAgent error: ${(err as Error).message}`));
+            if (process.env.EPAM_DEBUG === '1') {
+              console.error((err as Error).stack);
+            }
           }
 
           this.writer.reset();

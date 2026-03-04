@@ -1,0 +1,52 @@
+{
+  "name": "AMSD Delivery Team",
+  "id": "team-amsd-001",
+  "createdAt": "2026-01-15T09:00:00.000Z",
+  "members": [
+    {
+      "id": "user-001",
+      "name": "Bradley Jerome",
+      "email": "v-bradley.jerome@metrolinx.com",
+      "role": "owner",
+      "status": "online",
+      "lastActive": "2026-03-04T12:00:00.000Z"
+    },
+    {
+      "id": "user-002",
+      "name": "Ivan Mikhailov",
+      "email": "v-epam-ivan.mikhailov@metrolinx.com",
+      "role": "admin",
+      "status": "online",
+      "lastActive": "2026-03-04T11:45:00.000Z"
+    },
+    {
+      "id": "user-003",
+      "name": "Oleksandr Kostyniuk",
+      "email": "v-oleksandr.kostyniuk@metrolinx.com",
+      "role": "member",
+      "status": "busy",
+      "lastActive": "2026-03-04T10:30:00.000Z"
+    },
+    {
+      "id": "user-004",
+      "name": "Mykyta Hryn",
+      "email": "v-mykyta.hryn@metrolinx.com",
+      "role": "member",
+      "status": "offline",
+      "lastActive": "2026-03-03T17:00:00.000Z"
+    },
+    {
+      "id": "user-005",
+      "name": "Chenowa George",
+      "email": "chenowa.george@metrolinx.com",
+      "role": "viewer",
+      "status": "offline",
+      "lastActive": "2026-03-03T15:20:00.000Z"
+    }
+  ],
+  "sharedSessions": [
+    "session-amsd-sprint-42-planning",
+    "session-service-guarantee-review",
+    "session-webform-architecture"
+  ]
+}

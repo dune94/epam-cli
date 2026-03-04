@@ -55,6 +55,15 @@ export class CodexProvider implements LLMProvider {
 
   private async runCodex(prompt: string, maxTokens?: number): Promise<string> {
     const outFile = join(mkdtempSync(join(tmpdir(), 'epam-codex-')), 'response.txt');
+
+    // Show elapsed timer so the user knows Codex is working
+    const start = Date.now();
+    const timer = setInterval(() => {
+      const s = ((Date.now() - start) / 1000).toFixed(0);
+      process.stderr.write(`\r\x1b[2m⟳ Codex thinking... ${s}s\x1b[0m`);
+    }, 1000);
+    process.stderr.write('\x1b[2m⟳ Codex thinking...\x1b[0m');
+
     try {
       const { exitCode, stderr } = await execa('codex', [
         'exec',
@@ -82,6 +91,8 @@ export class CodexProvider implements LLMProvider {
       logger.error({ error: message }, 'CodexProvider runCodex failed');
       throw err;
     } finally {
+      clearInterval(timer);
+      process.stderr.write('\r\x1b[2K');  // clear the thinking line
       try { unlinkSync(outFile); } catch { /* best-effort cleanup */ }
     }
   }

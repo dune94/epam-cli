@@ -21,6 +21,7 @@ import { ToolRunner } from '../../agent/tools/ToolRunner.js';
 import { AuthManager } from '../../auth/AuthManager.js';
 import { AuditorRegistry } from '../../auditors/AuditorRegistry.js';
 import type { AuditorGateDecision } from '../../auditors/types.js';
+import { isRedisAvailable, listHandoffs, getSessionMeta } from '../../context/RedisSessionStore.js';
 
 interface ReplOptions {
   provider: LLMProvider;
@@ -100,6 +101,9 @@ export class Repl {
     this.auditorRegistry = auditorRegistry;
 
     this.renderer.renderWelcome(version, config.provider, this.currentModel, config.projectRoot);
+
+    // Check for pending handoffs in Redis and show banner
+    await this.showPendingHandoffsBanner();
 
     const rl = readline.createInterface({
       input: process.stdin,
@@ -678,6 +682,59 @@ export class Repl {
     }
     if (decision.blocked) {
       process.stdout.write(chalk.magenta.bold('\n⚠  Auditor gate triggered — review findings above.\n'));
+    }
+  }
+
+  private async showPendingHandoffsBanner(): Promise<void> {
+    if (!isRedisAvailable() || !this.userEmail) return;
+
+    try {
+      const codes = await listHandoffs(this.userEmail);
+      if (codes.length === 0) return;
+
+      const width = 57;
+      const line = '─'.repeat(width);
+      console.log(chalk.cyan(`┌${line}┐`));
+      const header = `  📥  ${codes.length} session${codes.length > 1 ? 's' : ''} waiting for you`;
+      console.log(chalk.cyan('│') + chalk.bold.yellow(header.padEnd(width)) + chalk.cyan('│'));
+      console.log(chalk.cyan(`│${' '.repeat(width)}│`));
+
+      for (const code of codes.slice(0, 3)) {
+        const meta = await getSessionMeta(code);
+        if (!meta) continue;
+
+        const fromLine = `  From:  ${meta.exportedBy}`;
+        console.log(chalk.cyan('│') + chalk.white(fromLine.padEnd(width)) + chalk.cyan('│'));
+
+        if (meta.teamNote) {
+          const note = meta.teamNote.length > width - 10
+            ? meta.teamNote.slice(0, width - 13) + '…'
+            : meta.teamNote;
+          const noteLine = `  Note:  ${note}`;
+          console.log(chalk.cyan('│') + chalk.dim(noteLine.padEnd(width)) + chalk.cyan('│'));
+        }
+
+        const codeLine = `  Code:  ${code}`;
+        console.log(chalk.cyan('│') + chalk.cyan(codeLine.padEnd(width)) + chalk.cyan('│'));
+
+        const cmdLine = `  Run:   /import ${code}`;
+        console.log(chalk.cyan('│') + chalk.dim(cmdLine.padEnd(width)) + chalk.cyan('│'));
+
+        if (codes.indexOf(code) < Math.min(codes.length, 3) - 1) {
+          console.log(chalk.cyan(`│${'·'.repeat(width)}│`));
+        }
+      }
+
+      if (codes.length > 3) {
+        console.log(chalk.cyan(`│${' '.repeat(width)}│`));
+        const more = `  ... and ${codes.length - 3} more — run /team to see all`;
+        console.log(chalk.cyan('│') + chalk.dim(more.padEnd(width)) + chalk.cyan('│'));
+      }
+
+      console.log(chalk.cyan(`└${line}┘`));
+      console.log();
+    } catch {
+      // Redis unavailable at runtime — skip silently
     }
   }
 

@@ -3,15 +3,13 @@
  *
  * LLM Provider implementation for OpenAI Codex CLI.
  * Uses Codex CLI binary for authentication and API calls.
- * 
- * Authentication: codex (browser sign-in with ChatGPT)
- * Chat: codex exec "prompt"
+ *
+ * Key design: uses `codex exec --json` and returns after the FIRST
+ * agent message turn, rather than waiting for the full agentic loop.
+ * This matches the native `codex` CLI interactive UX (<5s response).
  */
 
 import { execa } from 'execa';
-import { mkdtempSync, readFileSync, unlinkSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
 import type { LLMProvider, ProviderRequest, ProviderResponse, StreamHandler, ContentPart } from '../types.js';
 import { logger } from '../../utils/logger.js';
 
@@ -25,14 +23,16 @@ export class CodexProvider implements LLMProvider {
 
   async complete(request: ProviderRequest): Promise<ProviderResponse> {
     const prompt = this.extractPrompt(request);
-    const responseText = await this.runCodex(prompt, request.maxTokens);
+    const isFollowUp = request.messages.filter(m => m.role === 'user').length > 1;
+    const responseText = await this.runCodex(prompt, isFollowUp);
     const content: ContentPart[] = [{ type: 'text', text: responseText }];
     return { content, stopReason: 'end_turn', usage: { inputTokens: 0, outputTokens: 0 } };
   }
 
   async stream(request: ProviderRequest, handler: StreamHandler): Promise<ProviderResponse> {
     const prompt = this.extractPrompt(request);
-    const responseText = await this.runCodex(prompt, request.maxTokens);
+    const isFollowUp = request.messages.filter(m => m.role === 'user').length > 1;
+    const responseText = await this.runCodex(prompt, isFollowUp);
 
     // Stream the captured response word by word for a natural feel
     const words = responseText.split(' ');
@@ -53,63 +53,97 @@ export class CodexProvider implements LLMProvider {
       : JSON.stringify(lastMessage.content);
   }
 
-  private async runCodex(prompt: string, maxTokens?: number): Promise<string> {
-    const outFile = join(mkdtempSync(join(tmpdir(), 'epam-codex-')), 'response.txt');
+  /**
+   * Run codex and return after the FIRST agent message turn.
+   *
+   * Uses `--json` to stream structured events. As soon as the first
+   * `turn.completed` event arrives (with a non-empty agent_message),
+   * we kill the process and return. This gives <5s responses even for
+   * complex prompts — matching the native codex interactive CLI UX.
+   *
+   * For follow-up messages (conversation history > 1 user turn),
+   * we use `codex exec resume --last` to continue the previous session.
+   */
+  private async runCodex(prompt: string, isFollowUp = false): Promise<string> {
+    const args: string[] = [
+      'exec',
+      '--skip-git-repo-check',
+      '--dangerously-bypass-approvals-and-sandbox',
+      '--json',
+    ];
 
-    // Use a generous fixed timeout — codex exec can be slow for complex tasks.
-    // maxTokens is a token count, not a time; don't use it for the timeout.
-    const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+    if (this.model) args.push('--model', this.model);
+
+    if (isFollowUp) {
+      // Continue the most recent codex session
+      args.push('resume', '--last', prompt);
+    } else {
+      args.push(prompt);
+    }
 
     // Show elapsed timer so the user knows Codex is working
     const start = Date.now();
+    process.stderr.write('\x1b[2m⟳ Codex thinking...\x1b[0m');
     const timer = setInterval(() => {
       const s = ((Date.now() - start) / 1000).toFixed(0);
       process.stderr.write(`\r\x1b[2m⟳ Codex thinking... ${s}s\x1b[0m`);
     }, 1000);
-    process.stderr.write('\x1b[2m⟳ Codex thinking...\x1b[0m');
 
-    const args: string[] = [
-      'exec',
-      '--skip-git-repo-check',
-      // Bypass approval prompts — otherwise codex hangs silently waiting for
-      // stdin input that never comes (stdio is piped, not a TTY).
-      '--dangerously-bypass-approvals-and-sandbox',
-      '-o', outFile,
-    ];
+    return new Promise((resolve, reject) => {
+      let firstMessage = '';
+      let buffer = '';
+      let resolved = false;
 
-    // Pass model if specified (e.g. gpt-5-codex, o3, o4-mini)
-    if (this.model) {
-      args.push('--model', this.model);
-    }
+      const finish = (text: string) => {
+        if (resolved) return;
+        resolved = true;
+        clearInterval(timer);
+        process.stderr.write('\r\x1b[2K');
+        try { proc.kill('SIGTERM'); } catch { /* already exited */ }
+        resolve(text.trim() || '(no response)');
+      };
 
-    args.push(prompt);
-
-    try {
-      const { exitCode, stderr } = await execa('codex', args, {
-        timeout: TIMEOUT_MS,
-        reject: false,
-        stdio: 'pipe',
+      const proc = execa('codex', args, {
+        stdio: ['ignore', 'pipe', 'pipe'],
         env: { ...process.env },
       });
 
-      if (exitCode !== 0) {
-        throw new Error(`Codex CLI error: ${stderr || 'Unknown error'}`);
-      }
+      proc.stdout?.on('data', (chunk: Buffer) => {
+        buffer += chunk.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
 
-      try {
-        return readFileSync(outFile, 'utf-8').trim() || '(no response)';
-      } catch {
-        return '(no response)';
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      logger.error({ error: message }, 'CodexProvider runCodex failed');
-      throw err;
-    } finally {
-      clearInterval(timer);
-      process.stderr.write('\r\x1b[2K');  // clear the thinking line
-      try { unlinkSync(outFile); } catch { /* best-effort cleanup */ }
-    }
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const event = JSON.parse(line);
+            // Accumulate agent message text within a turn
+            if (event.type === 'item.completed' && event.item?.type === 'agent_message') {
+              firstMessage = event.item.text ?? '';
+            }
+            // Return as soon as first turn completes with a message
+            if (event.type === 'turn.completed' && firstMessage) {
+              finish(firstMessage);
+            }
+          } catch { /* skip non-JSON lines (header output etc.) */ }
+        }
+      });
+
+      proc.on('exit', () => {
+        if (!resolved) finish(firstMessage);
+      });
+
+      proc.on('error', (err: Error) => {
+        if (!resolved) {
+          clearInterval(timer);
+          process.stderr.write('\r\x1b[2K');
+          reject(err);
+        }
+      });
+
+      // Safety net — 5 minutes absolute max
+      setTimeout(() => finish(firstMessage || '(timeout — try a simpler prompt)'), 5 * 60 * 1000);
+    });
   }
 
   /**
@@ -134,11 +168,10 @@ export class CodexProvider implements LLMProvider {
     try {
       logger.info('Starting Codex authentication...');
       logger.info('Please complete sign-in in the Codex CLI window.');
-      
-      // Codex CLI will prompt for browser sign-in
+
       const { exitCode } = await execa('codex', [], {
         stdio: 'inherit',
-        timeout: 300000, // 5 minutes for user to complete auth
+        timeout: 300000,
         reject: false,
       });
 
@@ -162,7 +195,7 @@ export class CodexProvider implements LLMProvider {
  */
 export async function createCodexProvider(model?: string): Promise<CodexProvider | null> {
   const available = await CodexProvider.isAvailable();
-  
+
   if (!available) {
     logger.warn('Codex CLI not found. Install with: npm install -g @openai/codex');
     return null;

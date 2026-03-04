@@ -13,15 +13,23 @@ import { searchMockPages } from '../mcp/MockMCPData.js';
  * Non-blocking: failures are silent, only successful queries returned
  */
 export async function autoQueryMCP(message: string): Promise<MCPResult[]> {
+  if (process.env.EPAM_DEBUG === '1') {
+    console.error('[MCP Debug] autoQueryMCP called with:', message);
+  }
+
   const sources = detectMCPSource(message);
-  
+
+  if (process.env.EPAM_DEBUG === '1') {
+    console.error('[MCP Debug] Detected sources:', sources);
+  }
+
   if (sources.length === 0) {
     return [];
   }
-  
+
   const clients = createMCPClients();
   const results: MCPResult[] = [];
-  
+
   // Query detected sources (non-blocking, never throws)
   for (const source of sources) {
     const client = clients[source];
@@ -31,14 +39,23 @@ export async function autoQueryMCP(message: string): Promise<MCPResult[]> {
     }
 
     try {
+      if (process.env.EPAM_DEBUG === '1') {
+        console.error('[MCP Debug] Querying source:', source);
+      }
       const result = await client.search(message);
+      if (process.env.EPAM_DEBUG === '1') {
+        console.error('[MCP Debug] Source result:', result.items?.length || 0, 'items');
+      }
 
       // Only add if we got actual items AND no error
       if (result.items && result.items.length > 0 && !result.error) {
         results.push(result);
       }
-    } catch {
+    } catch (err) {
       // Silent fail - MCP is optional, never disrupt chat
+      if (process.env.EPAM_DEBUG === '1') {
+        console.error('[MCP Debug] Source error:', (err as Error).message);
+      }
     }
   }
 
@@ -57,6 +74,10 @@ export async function autoQueryMCP(message: string): Promise<MCPResult[]> {
         })),
       });
     }
+  }
+
+  if (process.env.EPAM_DEBUG === '1') {
+    console.error('[MCP Debug] Returning', results.length, 'results');
   }
 
   return results;

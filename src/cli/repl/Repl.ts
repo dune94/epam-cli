@@ -150,9 +150,10 @@ export class Repl {
               // Display MCP results with proper newline handling
               const formattedResults = formatMCPResults(mcpResults);
               if (formattedResults.trim()) {
-                process.stdout.write(formattedResults);
+                console.log(formattedResults);
               }
-              // Don't inject into userMessage - let agent handle original query
+              // Convert @mention to natural language for agent
+              userMessage = userMessage.replace(/@jira\s+([A-Z]+-\d+)/gi, 'Show me JIRA ticket $1').replace(/@jira\s+/gi, 'Show me JIRA tickets for ').replace(/@confluence\s+/gi, 'Show me Confluence docs for ').replace(/@drawio\s+/gi, 'Show me Draw.io diagrams for ').trim();
             }
           } catch (err) {
             // MCP is optional - never let it disrupt chat

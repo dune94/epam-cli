@@ -9,6 +9,9 @@
  */
 
 import { execa } from 'execa';
+import { mkdtempSync, readFileSync, unlinkSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 import type { LLMProvider, ProviderRequest, ProviderResponse, StreamHandler, ContentPart } from '../types.js';
 import { logger } from '../../utils/logger.js';
 
@@ -21,91 +24,47 @@ export class CodexProvider implements LLMProvider {
   ) {}
 
   async complete(request: ProviderRequest): Promise<ProviderResponse> {
-    const model = request.model || this.model || this.defaultModel;
-
-    // Extract last user message
-    const lastMessage = request.messages
-      .filter(m => m.role === 'user')
-      .pop();
-    
-
-    if (!lastMessage) {
-      throw new Error('No user message found');
-    }
-
-    const prompt = typeof lastMessage.content === 'string'
-      ? lastMessage.content
-      : JSON.stringify(lastMessage.content);
-    
-
-    try {
-      // Call codex exec for non-interactive mode with prompt as argument
-      // Use stdio: 'inherit' because Codex CLI requires a TTY
-      const { stdout, stderr, exitCode } = await execa('codex', [
-        'exec',
-        '--skip-git-repo-check',
-        prompt  // Pass prompt as argument, not stdin
-      ], {
-        timeout: request.maxTokens ? request.maxTokens * 10 : 120000,
-        reject: false,
-        stdio: 'inherit',  // Full terminal inheritance (required for Codex TTY)
-        env: { ...process.env },
-      });
-
-
-      if (exitCode !== 0) {
-        throw new Error(`Codex CLI error: ${stderr || 'Unknown error'}`);
-      }
-
-      const content: ContentPart[] = [
-        { type: 'text', text: stdout || '(no response)' }
-      ];
-
-      return {
-        content,
-        stopReason: 'end_turn',
-        usage: {
-          inputTokens: 0, // Codex CLI doesn't expose token counts
-          outputTokens: 0,
-        },
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      logger.error({ error: message }, 'CodexProvider complete failed');
-      throw err;
-    }
+    const prompt = this.extractPrompt(request);
+    const responseText = await this.runCodex(prompt, request.maxTokens);
+    const content: ContentPart[] = [{ type: 'text', text: responseText }];
+    return { content, stopReason: 'end_turn', usage: { inputTokens: 0, outputTokens: 0 } };
   }
 
   async stream(request: ProviderRequest, handler: StreamHandler): Promise<ProviderResponse> {
-    const model = request.model || this.model || this.defaultModel;
+    const prompt = this.extractPrompt(request);
+    const responseText = await this.runCodex(prompt, request.maxTokens);
 
-    // Extract last user message
-    const lastMessage = request.messages
-      .filter(m => m.role === 'user')
-      .pop();
-
-    if (!lastMessage) {
-      throw new Error('No user message found');
+    // Stream the captured response word by word for a natural feel
+    const words = responseText.split(' ');
+    for (const word of words) {
+      handler({ type: 'text_delta', text: word + ' ' });
+      await new Promise(resolve => setTimeout(resolve, 20));
     }
 
-    const prompt = typeof lastMessage.content === 'string'
+    const content: ContentPart[] = [{ type: 'text', text: responseText }];
+    return { content, stopReason: 'end_turn', usage: { inputTokens: 0, outputTokens: 0 } };
+  }
+
+  private extractPrompt(request: ProviderRequest): string {
+    const lastMessage = request.messages.filter(m => m.role === 'user').pop();
+    if (!lastMessage) throw new Error('No user message found');
+    return typeof lastMessage.content === 'string'
       ? lastMessage.content
       : JSON.stringify(lastMessage.content);
+  }
 
+  private async runCodex(prompt: string, maxTokens?: number): Promise<string> {
+    const outFile = join(mkdtempSync(join(tmpdir(), 'epam-codex-')), 'response.txt');
     try {
-      // Codex CLI requires a TTY, so we use stdio: 'inherit'
-      // This means output goes directly to terminal, not captured
-      // We simulate streaming by calling handler after completion
-      const startTime = Date.now();
-      
       const { exitCode, stderr } = await execa('codex', [
         'exec',
         '--skip-git-repo-check',
-        prompt  // Pass prompt as argument
+        '-o', outFile,
+        prompt,
       ], {
-        timeout: request.maxTokens ? request.maxTokens * 10 : 120000,
+        timeout: maxTokens ? maxTokens * 10 : 120000,
         reject: false,
-        stdio: 'inherit',  // Full terminal inheritance (required for Codex TTY)
+        stdio: 'pipe',  // suppress raw Codex output — response captured via -o flag
         env: { ...process.env },
       });
 
@@ -113,34 +72,17 @@ export class CodexProvider implements LLMProvider {
         throw new Error(`Codex CLI error: ${stderr || 'Unknown error'}`);
       }
 
-      // Simulate streaming response (since we can't capture with stdio: 'inherit')
-      const responseText = '[Codex response displayed above]';
-      const elapsed = Date.now() - startTime;
-      
-      // Send response in chunks to simulate streaming
-      const chunkSize = 20;
-      for (let i = 0; i < responseText.length; i += chunkSize) {
-        const chunk = responseText.slice(i, i + chunkSize);
-        handler({ type: 'text_delta', text: chunk });
-        await new Promise(resolve => setTimeout(resolve, Math.min(elapsed / responseText.length * chunkSize, 50)));
+      try {
+        return readFileSync(outFile, 'utf-8').trim() || '(no response)';
+      } catch {
+        return '(no response)';
       }
-
-      const content: ContentPart[] = [
-        { type: 'text', text: responseText }
-      ];
-
-      return {
-        content,
-        stopReason: 'end_turn',
-        usage: {
-          inputTokens: 0,
-          outputTokens: 0,
-        },
-      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      logger.error({ error: message }, 'CodexProvider stream failed');
+      logger.error({ error: message }, 'CodexProvider runCodex failed');
       throw err;
+    } finally {
+      try { unlinkSync(outFile); } catch { /* best-effort cleanup */ }
     }
   }
 

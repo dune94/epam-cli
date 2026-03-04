@@ -147,8 +147,11 @@ export class Repl {
             const mcpResults = await autoQueryMCP(userMessage);
 
             if (mcpResults.length > 0) {
-              // Display MCP results
-              process.stdout.write(formatMCPResults(mcpResults));
+              // Display MCP results with proper newline handling
+              const formattedResults = formatMCPResults(mcpResults);
+              if (formattedResults.trim()) {
+                process.stdout.write(formattedResults + '\n');
+              }
 
               // Inject into user message for context
               userMessage = injectMCPContext(userMessage, mcpResults);

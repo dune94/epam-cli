@@ -95,7 +95,6 @@ export class CodexProvider implements LLMProvider {
     }, 1000);
 
     return new Promise((resolve, reject) => {
-      let firstMessage = '';
       let buffer = '';
       let resolved = false;
 
@@ -126,20 +125,21 @@ export class CodexProvider implements LLMProvider {
             if (event.type === 'thread.started' && event.thread_id) {
               this.threadId = event.thread_id;
             }
-            // Accumulate agent message text within a turn
+            // Return on the FIRST agent_message — before tool calls execute.
+            // turn.completed fires only after all shell commands in the turn
+            // finish (can be 10-30s). The agent_message fires within ~2-3s.
             if (event.type === 'item.completed' && event.item?.type === 'agent_message') {
-              firstMessage = event.item.text ?? '';
-            }
-            // Return as soon as first turn completes with a message
-            if (event.type === 'turn.completed' && firstMessage) {
-              finish(firstMessage);
+              const text = event.item.text ?? '';
+              if (text.trim()) {
+                finish(text);
+              }
             }
           } catch { /* skip non-JSON lines (header output etc.) */ }
         }
       });
 
       proc.on('exit', () => {
-        if (!resolved) finish(firstMessage);
+        if (!resolved) finish('');
       });
 
       proc.on('error', (err: Error) => {
@@ -151,7 +151,7 @@ export class CodexProvider implements LLMProvider {
       });
 
       // Safety net — 5 minutes absolute max
-      setTimeout(() => finish(firstMessage || '(timeout — try a simpler prompt)'), 5 * 60 * 1000);
+      setTimeout(() => finish('(timeout — try a simpler prompt)'), 5 * 60 * 1000);
     });
   }
 

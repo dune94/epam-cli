@@ -3,7 +3,7 @@
  *
  * The native `codex` CLI returns an initial response in <5s.
  * CodexProvider must match this by using --json streaming and returning
- * after the first turn.completed event, not the full agentic loop.
+ * after the first item.completed agent_message — before tool calls execute.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -51,7 +51,7 @@ describe('CodexProvider', () => {
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   });
 
-  it('returns first agent message after turn.completed — not full loop', async () => {
+  it('returns first agent message immediately — before tool calls execute', async () => {
     const provider = new CodexProvider();
 
     // Simulate: first turn returns quickly, then codex starts exec loop
@@ -143,7 +143,7 @@ describe('CodexProvider', () => {
     expect(args).toContain('o4-mini');
   });
 
-  it('kills the process after receiving first turn.completed', async () => {
+  it('kills the process after receiving first agent_message', async () => {
     const provider = new CodexProvider();
     const proc = makeJsonStream([
       { type: 'turn.started' },

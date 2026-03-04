@@ -3057,6 +3057,113 @@
       },
       "aiProvider": "codex",
       "cpaGate": "review"
+    },
+    {
+      "id": "EPAM-066",
+      "title": "Codemie-Claude OAuth Login",
+      "description": "Implement OAuth authentication for Codemie (Claude-based agent platform). Browser-based SSO flow: (1) Start local callback server, (2) Open browser to {codeMieUrl}/v1/auth/login/{port}, (3) User authenticates, (4) Callback with base64 token containing cookies, (5) Fetch config.js to resolve API URL, (6) Store cookies + API URL in CredentialStore with 24h expiry. Critical for demo as it provides immediate LLM access via existing Codemie subscription.",
+      "priority": "critical",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "identity-engineer",
+      "storyType": "implementation",
+      "effort": "high",
+      "humanHours": 8,
+      "estimatedHours": 0.6667,
+      "dependencies": [
+        "EPAM-044"
+      ],
+      "acceptanceCriteria": [
+        "`epam provider login codemie` starts local callback server and opens browser to {codeMieUrl}/v1/auth/login/{port}",
+        "OAuth callback handler extracts base64 token, decodes cookies from query parameter",
+        "Fetches {apiUrl}/config.js to resolve actual VITE_API_URL endpoint",
+        "Credentials (cookies, apiUrl, expiresAt) persisted in CredentialStore with 24-hour expiry",
+        "`epam provider status codemie` shows authenticated state, API URL, expiry without printing secrets",
+        "Codemie provider selected via `--provider codemie` or config uses stored cookies for authenticated requests",
+        "Credentials work with Codemie Claude API endpoints for chat/completions",
+        "`epam provider logout codemie` clears stored cookies for the configured URL",
+        "Graceful handling of: user cancellation (Ctrl+C), timeout (120s), callback errors",
+        "Unit tests cover: OAuth flow, callback parsing, base64 decoding, credential storage, logout"
+      ],
+      "technicalNotes": {
+        "files": [
+          "src/providers/codemie/CodemieProvider.ts",
+          "src/providers/codemie/CodemieSSO.ts",
+          "src/auth/CredentialStore.ts",
+          "src/cli/commands/provider.ts"
+        ],
+        "requiredSkills": [
+          "TypeScript",
+          "OAuth",
+          "HTTP-server",
+          "browser-auth"
+        ],
+        "implementationNotes": [
+          "Local callback server on random port (0) for OAuth redirect",
+          "Token extracted from query: ?token={base64-json}",
+          "Decode: JSON.parse(Buffer.from(token, \"base64\").toString(\"ascii\"))",
+          "Cookies stored as Record<string,string>, sent via Cookie header",
+          "API URL resolved from VITE_API_URL in config.js response",
+          "24-hour credential expiry with automatic refresh prompt",
+          "AbortController for graceful cancellation on SIGINT/SIGTERM"
+        ]
+      },
+      "aiProvider": "codemie-claude",
+      "cpaGate": "review"
+    },
+    {
+      "id": "EPAM-067",
+      "title": "Interactive Provider Switch Confirmation",
+      "description": "Add interactive confirmation dialog when budget threshold is reached. Instead of automatic downgrade, prompt user with: (1) Visual warning that threshold reached, (2) Suggested model switch within same provider (e.g., claude-opus-4-6 → claude-sonnet-4-5), (3) Show cost comparison and remaining budget, (4) User confirms or declines, (5) On confirm, switch model while preserving conversation context. Uses cached SSO credentials - no re-auth needed. Critical for demo to show controlled provider switching with context retention.",
+      "priority": "critical",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "cli-ux-engineer",
+      "storyType": "implementation",
+      "effort": "medium",
+      "humanHours": 4,
+      "estimatedHours": 0.3333,
+      "dependencies": [
+        "EPAM-001"
+      ],
+      "acceptanceCriteria": [
+        "When budget threshold reached, display visual warning with current session cost and configured limit",
+        "Prompt shows suggested model switch within same provider (e.g., claude-opus-4-6 → claude-sonnet-4-5)",
+        "Display cost comparison: current model cost per 1K tokens vs suggested model cost",
+        "User can confirm (Y) or decline (N) the switch via prompts library",
+        "On confirm, switch model while preserving full conversation context (messages, tokens, session state)",
+        "On decline, pause and offer alternatives: end session, continue with current model, or manual model select",
+        "Context retention verified: message history, token counts, and session state preserved after switch",
+        "Visual confirmation shown after switch: ✓ Switched to {provider}/{model}, context retained ({N} messages)",
+        "Uses cached SSO credentials for target model - no re-authentication required",
+        "Unit tests cover: prompt rendering, user input handling, context preservation, model switch execution"
+      ],
+      "technicalNotes": {
+        "files": [
+          "src/cli/repl/Repl.ts",
+          "src/cli/repl/SlashCommands.ts",
+          "src/billing/BudgetGuard.ts"
+        ],
+        "requiredSkills": [
+          "TypeScript",
+          "cli-ux",
+          "prompts"
+        ],
+        "implementationNotes": [
+          "Use prompts library for interactive confirmation",
+          "BudgetGuard.onHardLimit config option: \"confirm\" | \"downgrade\" | \"pause\"",
+          "Store conversation context before switch, restore after",
+          "Display: \"Session: $X.XX of $Y.YY limit | Claude: $0.003/1K tokens → Codex: $0.0001/1K tokens\"",
+          "Model switch within same provider (Codemie SSO)",
+          "Example: claude-opus-4-6 ($0.015/1K) → claude-sonnet-4-5 ($0.003/1K)",
+          "Same SSO token works for all models in account",
+          "No credential refresh needed - just update model parameter in ProviderChain"
+        ]
+      },
+      "aiProvider": "codex",
+      "cpaGate": "review"
     }
   ],
   "configuration": {
@@ -3099,7 +3206,8 @@
       "EPAM-025",
       "EPAM-026",
       "EPAM-028",
-      "EPAM-029"
+      "EPAM-029",
+      "EPAM-067"
     ],
     "provider_auth": [
       "EPAM-043",
@@ -3110,7 +3218,8 @@
       "EPAM-048",
       "EPAM-049",
       "EPAM-050",
-      "EPAM-051"
+      "EPAM-051",
+      "EPAM-066"
     ],
     "agent_intelligence": [
       "EPAM-004",

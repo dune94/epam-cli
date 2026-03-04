@@ -65,11 +65,16 @@ export function readEnvOverrides(): EnvOverrides {
 export function getApiKey(provider: string): string | undefined {
   switch (provider) {
     case 'anthropic':
+    case 'claude':
       return process.env.EPAM_API_KEY_ANTHROPIC;
     case 'openai':
       return process.env.EPAM_API_KEY_OPENAI;
     case 'gemini':
       return process.env.EPAM_API_KEY_GEMINI;
+    case 'cursor':
+      return process.env.CURSOR_API_KEY ?? process.env.EPAM_API_KEY_CURSOR;
+    case 'qwen':
+      return process.env.OPENROUTER_API_KEY ?? process.env.EPAM_API_KEY_OPENROUTER ?? process.env.DASHSCOPE_API_KEY ?? process.env.QWEN_API_KEY ?? process.env.EPAM_API_KEY_QWEN;
     default:
       return undefined;
   }

@@ -4,7 +4,8 @@
   "description": "Interactive AI coding assistant CLI",
   "main": "dist/epam.js",
   "bin": {
-    "epam": "./dist/epam.js"
+    "epam": "./dist/epam.js",
+    "epam-cli": "./dist/epam.js"
   },
   "scripts": {
     "build": "tsup",
@@ -35,8 +36,10 @@
     "@google/generative-ai": "^0.21.0",
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
+    "dotenv": "^17.3.1",
     "execa": "^9.5.1",
     "glob": "^11.0.0",
+    "ioredis": "^5.10.0",
     "jose": "^5.9.6",
     "keytar": "^7.9.0",
     "marked": "^15.0.4",
@@ -59,8 +62,8 @@
     "eslint": "^9.17.0",
     "msw": "^2.7.0",
     "prettier": "^3.4.2",
-    "tsx": "^4.19.2",
     "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8"
   }

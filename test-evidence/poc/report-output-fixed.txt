@@ -1,0 +1,15 @@
+$ node dist/epam.js report --format md
+
+Burn-up Report
+
+Summary
+  Total Cost:        $0.0151
+  Sessions:          3
+  Total Turns:       6
+  Avg Tokens/Turn:   375
+  Date Range:        2/28/2026 → 2/28/2026
+
+Cost by Model
+  gpt-4o                         $0.0076      (50.4%)
+  claude-sonnet-4-6              $0.0075      (49.6%)
+  unknown                        $0.0000      (0.0%)

@@ -11,23 +11,149 @@ import { logger } from '../../utils/logger.js';
 export interface QwenConfig {
   apiKey: string;
   baseURL?: string;
+  /** When true, use OpenAI-compatible OpenRouter endpoint instead of DashScope */
+  openRouterMode?: boolean;
 }
+
+export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+export const DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/api/v1';
 
 export class QwenProvider implements LLMProvider {
   readonly name = 'qwen';
-  readonly defaultModel = 'qwen-max';
+  readonly defaultModel = 'qwen/qwen-2.5-72b-instruct';
 
   private apiKey: string;
   private baseURL: string;
+  private openRouterMode: boolean;
 
   constructor(config: QwenConfig) {
     this.apiKey = config.apiKey;
-    this.baseURL = config.baseURL || 'https://dashscope.aliyuncs.com/api/v1';
+    this.openRouterMode = config.openRouterMode ?? false;
+    this.baseURL = config.baseURL || (this.openRouterMode ? OPENROUTER_BASE_URL : DASHSCOPE_BASE_URL);
   }
 
   async complete(request: ProviderRequest): Promise<ProviderResponse> {
+    return this.openRouterMode
+      ? this.completeOpenRouter(request)
+      : this.completeDashScope(request);
+  }
+
+  async stream(request: ProviderRequest, handler: StreamHandler): Promise<ProviderResponse> {
+    return this.openRouterMode
+      ? this.streamOpenRouter(request, handler)
+      : this.streamDashScope(request, handler);
+  }
+
+  // ─── OpenRouter (OpenAI-compatible) ────────────────────────────────────────
+
+  private async completeOpenRouter(request: ProviderRequest): Promise<ProviderResponse> {
     const model = request.model || this.defaultModel;
-    
+    const messages = this.formatMessages(request.messages, request.systemPrompt);
+
+    const response = await fetch(`${this.baseURL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.apiKey}`,
+        'HTTP-Referer': 'https://epam.com',
+        'X-Title': 'EPAM CLI',
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        max_tokens: request.maxTokens || 4096,
+        temperature: request.temperature || 0.7,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`OpenRouter/Qwen API error: ${response.status} ${error}`);
+    }
+
+    const data = await response.json();
+    const choice = data.choices?.[0];
+    if (!choice) throw new Error('OpenRouter returned no choices');
+
+    return {
+      content: [{ type: 'text', text: choice.message?.content || '' }],
+      stopReason: this.mapStopReason(choice.finish_reason),
+      usage: {
+        inputTokens: data.usage?.prompt_tokens || 0,
+        outputTokens: data.usage?.completion_tokens || 0,
+      },
+    };
+  }
+
+  private async streamOpenRouter(request: ProviderRequest, handler: StreamHandler): Promise<ProviderResponse> {
+    const model = request.model || this.defaultModel;
+    const messages = this.formatMessages(request.messages, request.systemPrompt);
+
+    const response = await fetch(`${this.baseURL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.apiKey}`,
+        'HTTP-Referer': 'https://epam.com',
+        'X-Title': 'EPAM CLI',
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        max_tokens: request.maxTokens || 4096,
+        temperature: request.temperature || 0.7,
+        stream: true,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`OpenRouter/Qwen API error: ${response.status} ${error}`);
+    }
+
+    if (!response.body) throw new Error('No response body');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let accumulatedText = '';
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let stopReason: ProviderResponse['stopReason'] = 'end_turn';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value);
+      for (const line of chunk.split('\n').filter(l => l.startsWith('data:'))) {
+        const data = line.substring(5).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(data);
+          const choice = parsed.choices?.[0];
+          if (choice?.delta?.content) {
+            accumulatedText += choice.delta.content;
+            handler({ type: 'text_delta', text: choice.delta.content });
+          }
+          if (choice?.finish_reason) stopReason = this.mapStopReason(choice.finish_reason);
+          if (parsed.usage) {
+            inputTokens = parsed.usage.prompt_tokens || 0;
+            outputTokens = parsed.usage.completion_tokens || 0;
+          }
+        } catch { /* skip malformed */ }
+      }
+    }
+
+    return {
+      content: [{ type: 'text', text: accumulatedText }],
+      stopReason,
+      usage: { inputTokens, outputTokens },
+    };
+  }
+
+  // ─── DashScope (Alibaba native) ────────────────────────────────────────────
+
+  private async completeDashScope(request: ProviderRequest): Promise<ProviderResponse> {
+    const model = request.model || 'qwen-max';
     const messages = this.formatMessages(request.messages, request.systemPrompt);
 
     try {
@@ -79,9 +205,8 @@ export class QwenProvider implements LLMProvider {
     }
   }
 
-  async stream(request: ProviderRequest, handler: StreamHandler): Promise<ProviderResponse> {
-    const model = request.model || this.defaultModel;
-    
+  private async streamDashScope(request: ProviderRequest, handler: StreamHandler): Promise<ProviderResponse> {
+    const model = request.model || 'qwen-max';
     const messages = this.formatMessages(request.messages, request.systemPrompt);
 
     try {
@@ -234,12 +359,18 @@ export class QwenProvider implements LLMProvider {
  * Factory function to create Qwen provider
  */
 export function createQwenProvider(apiKey?: string, model?: string): QwenProvider | null {
-  const key = apiKey || process.env.QWEN_API_KEY;
-  
-  if (!key) {
-    logger.warn('Qwen API key not found. Set QWEN_API_KEY or use /keys set qwen');
+  // Prefer OpenRouter key (English UI, no Alibaba account needed)
+  const openRouterKey = process.env.OPENROUTER_API_KEY ?? process.env.EPAM_API_KEY_OPENROUTER;
+  const dashScopeKey = apiKey ?? process.env.DASHSCOPE_API_KEY ?? process.env.QWEN_API_KEY;
+
+  if (openRouterKey) {
+    return new QwenProvider({ apiKey: openRouterKey, openRouterMode: true });
+  }
+
+  if (!dashScopeKey) {
+    logger.warn('Qwen API key not found. Set OPENROUTER_API_KEY or use /provider auth qwen');
     return null;
   }
 
-  return new QwenProvider({ apiKey: key });
+  return new QwenProvider({ apiKey: dashScopeKey });
 }

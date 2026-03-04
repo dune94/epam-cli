@@ -1,0 +1,12 @@
+$ node dist/epam.js doctor
+
+
+Running health checks...
+
+✓ Node.js version: v25.7.0
+✓ keytar (native keychain): available
+✓ Configuration: provider=epam, model=claude-sonnet-4-5-20250929
+✗ Authentication: not authenticated (run `epam login`)
+✗ Backend connectivity: fetch failed
+
+Some checks failed. See above for details.

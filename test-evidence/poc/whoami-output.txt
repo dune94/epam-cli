@@ -1,0 +1,4 @@
+$ EPAM_BACKEND_URL=http://127.0.0.1:8080 node dist/epam.js whoami
+
+bradley_jerome@epam.com (enterprise tier)
+Bradley Jerome

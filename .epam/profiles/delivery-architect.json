@@ -1,0 +1,11 @@
+{
+  "name": "delivery-architect",
+  "description": "Delivery-focused profile for controlled EPAM execution",
+  "model": "claude-sonnet-4-5-20250929",
+  "maxIterations": 12,
+  "tags": [
+    "delivery",
+    "epam",
+    "control"
+  ]
+}

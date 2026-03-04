@@ -1,0 +1,16 @@
+$ node dist/epam.js orchestrate --phase mvp_cli_control --dry-run --skip-cpa
+
+Step 0.0: Refreshing baseline estimates (dry-run) for phase 'mvp_cli_control'...
+[SUCCESS] Step 0.0: Baseline estimates refreshed for phase 'mvp_cli_control'
+[INFO] Step 0.1: CPA pre-pass skipped (SKIP_CPA=1)
+
+============================================
+  EPAM CLI Agent Orchestration
+  Phase:  mvp_cli_control
+  Mode:   DRY RUN
+  Orch:   bash (bash-only)
+============================================
+
+Execution Plan:
+[INFO] Dry run complete. No actions taken.
+[SUCCESS] Worktrees cleaned up

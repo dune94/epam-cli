@@ -21,6 +21,7 @@ import { ToolRunner } from '../../agent/tools/ToolRunner.js';
 import { AuthManager } from '../../auth/AuthManager.js';
 import { AuditorRegistry } from '../../auditors/AuditorRegistry.js';
 import type { AuditorGateDecision } from '../../auditors/types.js';
+import { isRedisAvailable, listHandoffs, getSessionMeta } from '../../context/RedisSessionStore.js';
 
 interface ReplOptions {
   provider: LLMProvider;
@@ -44,6 +45,7 @@ export class Repl {
   private budgetGuard: BudgetGuard;
   private toolRunner: ToolRunner;
   private auditorRegistry?: AuditorRegistry;
+  private userEmail?: string;
 
   constructor(private options: ReplOptions) {
     this.currentProvider = options.config.provider;
@@ -85,12 +87,23 @@ export class Repl {
     const authManager = this.options.authManager ?? new AuthManager(config.backendUrl);
     const systemPrompt = await buildSessionSystemPrompt(config, authManager);
 
+    // Resolve user identity: JWT email → env var → OS user
+    const authUser = await authManager.getUser().catch(() => null);
+    this.userEmail =
+      authUser?.email ||
+      process.env.EPAM_USER_EMAIL ||
+      process.env.USER ||
+      undefined;
+
     // Load auditor personas (no-op if .epam/auditors.json absent)
     const auditorRegistry = new AuditorRegistry(config.projectRoot ?? process.cwd());
     await auditorRegistry.load();
     this.auditorRegistry = auditorRegistry;
 
     this.renderer.renderWelcome(version, config.provider, this.currentModel, config.projectRoot);
+
+    // Check for pending handoffs in Redis and show banner
+    await this.showPendingHandoffsBanner();
 
     const rl = readline.createInterface({
       input: process.stdin,
@@ -102,9 +115,15 @@ export class Repl {
     const { setupAutocomplete } = await import('./Autocomplete.js');
     setupAutocomplete(rl);
 
+    // Display hint text (faded, below prompt)
+    console.log(chalk.dim('Type @ to query MCP sources, / for commands, or ? for shortcuts'));
+    console.log(chalk.dim('MCP: @jira @confluence @drawio @all'));
+    console.log();
+
     this.running = true;
 
     const prompt = () => {
+      // Render main prompt
       rl.question(
         this.renderer.renderPrompt(this.currentProvider, this.currentModel),
         async input => {
@@ -131,9 +150,71 @@ export class Repl {
 
           // Regular message — run agent
           const rawMessage = parsed.message!;
-          const userMessage = config.projectRoot
+          let userMessage = config.projectRoot
             ? await consumeConsultationContext(rawMessage, config.projectRoot)
             : rawMessage;
+
+          // Auto-query MCP sources based on keywords (non-blocking, never fails chat)
+          try {
+            if (process.env.EPAM_DEBUG === '1') {
+              console.error('[MCP] Starting autoQueryMCP for:', userMessage.substring(0, 50));
+            }
+            
+            const { autoQueryMCP, formatMCPResults } = await import('../../mcp/MCPAutoQuery.js');
+            const mcpResults = await autoQueryMCP(userMessage);
+
+            if (process.env.EPAM_DEBUG === '1') {
+              console.error('[MCP] autoQueryMCP returned', mcpResults.length, 'results');
+              if (mcpResults.length > 0) {
+                console.error('[MCP] First result source:', mcpResults[0].source);
+                console.error('[MCP] First result items:', mcpResults[0].items?.length || 0);
+              }
+            }
+
+            if (mcpResults.length > 0) {
+              // Display MCP results with proper newline handling
+              const formattedResults = formatMCPResults(mcpResults);
+              if (formattedResults.trim()) {
+                process.stderr.write('\n' + formattedResults);
+              }
+
+              // Build a data-carrying prompt so the agent presents results
+              // without triggering its own tool/fetch loop
+              const dataLines: string[] = [];
+              for (const r of mcpResults) {
+                for (const item of r.items) {
+                  dataLines.push(`ID: ${item.id}`);
+                  if (item.title) dataLines.push(`Title: ${item.title}`);
+                  if (item.status) dataLines.push(`Status: ${item.status}`);
+                  if (item.url) dataLines.push(`URL: ${item.url}`);
+                  if (item.updated) dataLines.push(`Updated: ${item.updated}`);
+                  if (item.summary && item.summary !== item.title) dataLines.push(`Summary: ${item.summary}`);
+                }
+              }
+
+              // Strip @mentions from the original message to get any extra instruction
+              const extraInstruction = userMessage
+                .replace(/@(jira|confluence|drawio|all)\s*([A-Z]+-\d+)?/gi, '')
+                .trim();
+
+              userMessage = [
+                'The following data was already fetched from the MCP server. Present it clearly to the user. Do not attempt to fetch or search for additional data.',
+                '',
+                dataLines.join('\n'),
+                ...(extraInstruction ? ['', `User instruction: ${extraInstruction}`] : []),
+              ].join('\n');
+            }
+          } catch (err) {
+            // MCP is optional - never let it disrupt chat
+            // Log error in debug mode only
+            if (process.env.EPAM_DEBUG === '1') {
+              console.error('MCP auto-query error:', (err as Error).message);
+            }
+            // Continue with original user message
+          }
+
+          // Add user message to history BEFORE calling agent (preserves on failover)
+          this.messages.push({ role: 'user', content: userMessage });
 
           try {
             process.stdout.write('\n');
@@ -148,7 +229,7 @@ export class Repl {
               tools: this.options.tools,
               toolRunner: this.toolRunner,
               maxIterations: config.maxIterations,
-              history: this.messages,
+              history: this.messages.slice(0, -1), // Pass history without current message
               autoCompressAt: config.autoCompressAt,
               maxOutputTokens: config.maxOutputTokens,
               dangerousSkipApproval: config.tools.dangerousSkipApproval,
@@ -194,11 +275,16 @@ export class Repl {
             });
             await appendTurn(this.session, turn);
           } catch (err) {
-            this.renderer.renderError((err as Error).message);
+            // Log agent error and continue
+            console.error(chalk.red(`\nAgent error: ${(err as Error).message}`));
+            if (process.env.EPAM_DEBUG === '1') {
+              console.error((err as Error).stack);
+            }
+          } finally {
+            // Ensure we always reset and prompt
+            this.writer.reset();
+            prompt();
           }
-
-          this.writer.reset();
-          prompt();
         }
       );
     };
@@ -211,6 +297,20 @@ export class Repl {
     rl.on('close', () => {
       this.running = false;
     });
+
+    // Auto-resume a session if one was pre-installed by `epam-cli import`
+    const autoResumeId = process.env.EPAM_AUTO_RESUME;
+    if (autoResumeId) {
+      delete process.env.EPAM_AUTO_RESUME;
+      const ctx = this.buildSlashContext(config, systemPrompt);
+      const result = await ctx.onResume(autoResumeId);
+      if (result.success) {
+        process.stdout.write(
+          chalk.green(`✓ Resumed imported session`) +
+          chalk.dim(` — ${result.turnCount} turns loaded\n\n`)
+        );
+      }
+    }
 
     prompt();
 
@@ -461,6 +561,7 @@ export class Repl {
         return sum + Math.ceil(text.length / 4);
       }, 0),
       contextFilePath: config.contextFile,
+      userEmail: this.userEmail,
       totalInputTokens: this.budgetGuard.inputTokens,
       totalOutputTokens: this.budgetGuard.outputTokens,
       budgetGuard: this.budgetGuard,
@@ -581,6 +682,59 @@ export class Repl {
     }
     if (decision.blocked) {
       process.stdout.write(chalk.magenta.bold('\n⚠  Auditor gate triggered — review findings above.\n'));
+    }
+  }
+
+  private async showPendingHandoffsBanner(): Promise<void> {
+    if (!isRedisAvailable() || !this.userEmail) return;
+
+    try {
+      const codes = await listHandoffs(this.userEmail);
+      if (codes.length === 0) return;
+
+      const width = 57;
+      const line = '─'.repeat(width);
+      console.log(chalk.cyan(`┌${line}┐`));
+      const header = `  📥  ${codes.length} session${codes.length > 1 ? 's' : ''} waiting for you`;
+      console.log(chalk.cyan('│') + chalk.bold.yellow(header.padEnd(width)) + chalk.cyan('│'));
+      console.log(chalk.cyan(`│${' '.repeat(width)}│`));
+
+      for (const code of codes.slice(0, 3)) {
+        const meta = await getSessionMeta(code);
+        if (!meta) continue;
+
+        const fromLine = `  From:  ${meta.exportedBy}`;
+        console.log(chalk.cyan('│') + chalk.white(fromLine.padEnd(width)) + chalk.cyan('│'));
+
+        if (meta.teamNote) {
+          const note = meta.teamNote.length > width - 10
+            ? meta.teamNote.slice(0, width - 13) + '…'
+            : meta.teamNote;
+          const noteLine = `  Note:  ${note}`;
+          console.log(chalk.cyan('│') + chalk.dim(noteLine.padEnd(width)) + chalk.cyan('│'));
+        }
+
+        const codeLine = `  Code:  ${code}`;
+        console.log(chalk.cyan('│') + chalk.cyan(codeLine.padEnd(width)) + chalk.cyan('│'));
+
+        const cmdLine = `  Run:   /import ${code}`;
+        console.log(chalk.cyan('│') + chalk.dim(cmdLine.padEnd(width)) + chalk.cyan('│'));
+
+        if (codes.indexOf(code) < Math.min(codes.length, 3) - 1) {
+          console.log(chalk.cyan(`│${'·'.repeat(width)}│`));
+        }
+      }
+
+      if (codes.length > 3) {
+        console.log(chalk.cyan(`│${' '.repeat(width)}│`));
+        const more = `  ... and ${codes.length - 3} more — run /team to see all`;
+        console.log(chalk.cyan('│') + chalk.dim(more.padEnd(width)) + chalk.cyan('│'));
+      }
+
+      console.log(chalk.cyan(`└${line}┘`));
+      console.log();
+    } catch {
+      // Redis unavailable at runtime — skip silently
     }
   }
 

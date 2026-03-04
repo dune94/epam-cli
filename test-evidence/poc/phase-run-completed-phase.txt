@@ -1,0 +1,13 @@
+Model selection: resolved default "claude-sonnet-4-5-20250929" via project-default (using configured default model "claude-sonnet-4-5-20250929").
+{"event":"phase_fail","timestamp":"2026-03-01T14:23:59.102Z","source":"epam-cli","phase":"mvp_cli_control","stage":"estimate","code":1,"estimateLog":"/home/bjerome/projects/ai/epam-cli/orchestrations/logs/cli-phase-runner/mvp_cli_control-2026-03-01T14-23-59-094Z/estimate.log","orchestrateLog":"/home/bjerome/projects/ai/epam-cli/orchestrations/logs/cli-phase-runner/mvp_cli_control-2026-03-01T14-23-59-094Z/orchestrate.log","storyCount":6,"runnableStoryCount":0,"provider":"epam","model":"claude-sonnet-4-5-20250929","defaultModel":"claude-sonnet-4-5-20250929","modelSelectionSource":"project-default","modelSelectionUsedDefault":true,"message":"Phase \"mvp_cli_control\" has no runnable stories. All scoped stories are backlog or completed.","approvalStatus":"approved","approvalApprovedAt":"2026-03-01T14:15:17.298Z","approvalApproverId":"bjerome","approvalApproverName":"bjerome","approvalApproverSource":"env:USER"}
+
+Phase execution summary
+Phase: mvp_cli_control
+Story count: 6
+Status: failed
+Approval status: approved
+Approved by: bjerome
+Approved at: 2026-03-01T14:15:17.298Z
+Estimate log: /home/bjerome/projects/ai/epam-cli/orchestrations/logs/cli-phase-runner/mvp_cli_control-2026-03-01T14-23-59-094Z/estimate.log
+Orchestration log: /home/bjerome/projects/ai/epam-cli/orchestrations/logs/cli-phase-runner/mvp_cli_control-2026-03-01T14-23-59-094Z/orchestrate.log
+Error: Phase "mvp_cli_control" has no runnable stories. All scoped stories are backlog or completed.

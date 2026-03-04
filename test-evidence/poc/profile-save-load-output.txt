@@ -1,0 +1,14 @@
+$ node dist/epam.js profile save delivery-architect ...
+Profile 'delivery-architect' saved to local
+/home/bjerome/projects/ai/epam-cli/.epam/profiles/delivery-architect.json
+
+$ node dist/epam.js profile list
+  delivery-architect [local] · delivery, epam, control
+  model: claude-sonnet-4-5-20250929 · maxIterations: 12
+
+$ node dist/epam.js profile load delivery-architect
+Description: Delivery-focused profile for controlled EPAM execution
+Source: local
+Model: claude-sonnet-4-5-20250929
+Max Iter: 12
+Tags: delivery, epam, control

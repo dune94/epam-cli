@@ -9,6 +9,8 @@ import { GeminiProvider } from './gemini/GeminiProvider.js';
 import { ProxyProvider } from './proxy/ProxyProvider.js';
 import { CodexProvider } from './codex/CodexProvider.js';
 import { QwenProvider, createQwenProvider } from './qwen/QwenProvider.js';
+import { CursorProvider, createCursorProvider } from './cursor/CursorProvider.js';
+import { CopilotProvider, createCopilotProvider } from './copilot/CopilotProvider.js';
 import { createCodemieProvider } from './codemie/CodemieProvider.js';
 import { ProviderError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
@@ -41,6 +43,7 @@ export class ProviderChain implements LLMProvider {
   private health: ProviderHealth;
   private providerCache = new Map<string, LLMProvider>();
   private activeSlotIndex = 0;
+  public lastErrors: string[] = [];
 
   constructor(private options: ProviderChainOptions) {
     if (options.slots.length === 0) throw new ProviderError('ProviderChain requires at least one slot');
@@ -136,6 +139,9 @@ export class ProviderChain implements LLMProvider {
         logger.debug({ slot: `${slot.provider}/${slot.model}`, error: (err as Error).message }, 'ProviderChain slot failed');
         const analysis = analyzeError(err);
         const errMsg = err instanceof Error ? err.message : String(err);
+        
+        // Track error for final error message
+        this.lastErrors.push(`${slot.provider}/${slot.model}: ${errMsg}`);
 
         if (analysis.decision === 'fatal') {
           // Don't failover — rethrow immediately
@@ -232,7 +238,12 @@ export class ProviderChain implements LLMProvider {
       }
     }
 
-    throw new ProviderError('All providers exhausted without a successful response.');
+    // Build detailed error message with all attempted providers
+    const errorDetails = this.lastErrors && this.lastErrors.length > 0 
+      ? ` Attempted: ${this.lastErrors.join('; ')}.`
+      : '';
+    
+    throw new ProviderError(`All providers exhausted without a successful response.${errorDetails}`);
   }
 
   /** Returns the next available slot in priority order, optionally skipping one. */
@@ -313,6 +324,15 @@ export class ProviderChain implements LLMProvider {
       return new CodexProvider(slot.model);
     }
     
+    // GitHub Copilot CLI-based provider
+    if (slot.provider === 'copilot') {
+      const provider = createCopilotProvider(slot.model);
+      if (!provider) {
+        throw new ProviderError('Copilot CLI not available. Run: gh auth login');
+      }
+      return provider;
+    }
+
     // Proxy tier — other providers route through backend
     if (this.options.proxyConfig) {
       return new ProxyProvider(
@@ -338,10 +358,17 @@ export class ProviderChain implements LLMProvider {
     }
 
     switch (slot.provider) {
-      case 'anthropic': return new AnthropicProvider(apiKey);
+      case 'anthropic':
+      case 'claude':  // Alias for anthropic
+        return new AnthropicProvider(apiKey);
       case 'openai':    return new OpenAIProvider(apiKey);
       case 'gemini':    return new GeminiProvider(apiKey);
-      case 'qwen':      return new QwenProvider({ apiKey });
+      case 'qwen': {
+        const openRouterKey = process.env.OPENROUTER_API_KEY ?? process.env.EPAM_API_KEY_OPENROUTER;
+        if (openRouterKey) return new QwenProvider({ apiKey: openRouterKey, openRouterMode: true });
+        return new QwenProvider({ apiKey });
+      }
+      case 'cursor':    return new CursorProvider({ apiKey });
       default:
         throw new ProviderError(`Unknown provider: '${slot.provider}'`);
     }

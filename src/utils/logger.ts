@@ -2,7 +2,7 @@ import pino from 'pino';
 import type { LogLevel } from '../config/types.js';
 
 let logger = pino({
-  level: 'info',
+  level: process.stdout.isTTY ? 'warn' : 'info',  // suppress INFO in interactive terminal
   transport: process.stdout.isTTY
     ? {
         target: 'pino-pretty',

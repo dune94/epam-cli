@@ -6,6 +6,8 @@
 
 import chalk from 'chalk';
 import type { SlashCommand, SlashCommandContext } from '../SlashCommands.js';
+import { ulid } from 'ulid';
+import { readTeamConfig, writeTeamConfig } from './TeamCommand.js';
 
 export const inviteCommand: SlashCommand = {
   name: 'invite',
@@ -37,18 +39,18 @@ export const inviteCommand: SlashCommand = {
     const parts = trimmedArgs.split(/\s+/);
     const email = parts[0];
     const role = parts[1] || 'member';
-    
+
     console.log();
-    console.log(chalk.bold.cyan('📧 Sending Invitation'));
+    console.log(chalk.bold.cyan('📧 Inviting Team Member'));
     console.log();
-    
+
     // Validate email
     if (!isValidEmail(email)) {
       console.log(chalk.red(`Invalid email: ${email}`));
       console.log();
       return true;
     }
-    
+
     // Validate role
     const validRoles = ['member', 'viewer', 'admin'];
     if (!validRoles.includes(role)) {
@@ -57,45 +59,42 @@ export const inviteCommand: SlashCommand = {
       console.log();
       return true;
     }
-    
-    console.log(chalk.bold('Invitation Details:'));
-    console.log(`  Email: ${chalk.white(email)}`);
+
+    const projectRoot = ctx.config.projectRoot || process.cwd();
+    const team = readTeamConfig(projectRoot);
+
+    if (!team) {
+      console.log(chalk.red('No team configured. Run /team init <name> first.'));
+      console.log();
+      return true;
+    }
+
+    // Check for duplicate
+    if (team.members.some(m => m.email === email)) {
+      console.log(chalk.yellow(`⚠  ${email} is already a team member`));
+      console.log();
+      return true;
+    }
+
+    const newMember = {
+      id: ulid(),
+      name: email.split('@')[0],
+      email,
+      role: role as 'member' | 'viewer' | 'admin',
+      status: 'pending' as const,
+      lastActive: new Date().toISOString(),
+    };
+
+    team.members.push(newMember);
+    writeTeamConfig(projectRoot, team);
+
+    console.log(chalk.green(`✓ ${email} added to team "${team.name}"`));
     console.log(`  Role: ${chalk.cyan(role)}`);
-    console.log(`  Team: ${chalk.white('Current Team')}`);
+    console.log(`  Status: ${chalk.dim('pending')}`);
     console.log();
-    
-    // In real implementation, call EPAM backend API
-    console.log(chalk.yellow('⚠  Backend API Call Required'));
+    console.log(chalk.dim('Use /members to view all team members'));
     console.log();
-    console.log(chalk.bold('API Request:'));
-    console.log(chalk.dim('  POST /api/teams/{teamId}/invitations'));
-    console.log(chalk.dim('  Authorization: Bearer {token}'));
-    console.log(chalk.dim('  Content-Type: application/json'));
-    console.log();
-    console.log(chalk.dim('  Payload:'));
-    console.log(chalk.dim('  {'));
-    console.log(chalk.dim(`    "email": "${email}",`));
-    console.log(chalk.dim(`    "role": "${role}",`));
-    console.log(chalk.dim('    "message": "You\'ve been invited to join our team"'));
-    console.log(chalk.dim('  }'));
-    console.log();
-    
-    console.log(chalk.bold('Expected Response:'));
-    console.log(chalk.dim('  {'));
-    console.log(chalk.dim('    "invitationId": "inv_123456",'));
-    console.log(chalk.dim('    "status": "pending",'));
-    console.log(chalk.dim('    "expiresAt": "2024-01-15T00:00:00Z"'));
-    console.log(chalk.dim('  }'));
-    console.log();
-    
-    console.log(chalk.green('✓ Invitation would be sent'));
-    console.log(chalk.dim('  Email notification sent to ' + email));
-    console.log(chalk.dim('  Invitation expires in 7 days'));
-    console.log();
-    
-    console.log(chalk.dim('Tip: Use /members to see pending invitations'));
-    console.log();
-    
+
     return true;
   },
 };

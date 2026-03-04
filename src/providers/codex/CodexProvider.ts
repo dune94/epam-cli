@@ -9,6 +9,9 @@
  */
 
 import { execa } from 'execa';
+import { mkdtempSync, readFileSync, unlinkSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 import type { LLMProvider, ProviderRequest, ProviderResponse, StreamHandler, ContentPart } from '../types.js';
 import { logger } from '../../utils/logger.js';
 
@@ -21,119 +24,76 @@ export class CodexProvider implements LLMProvider {
   ) {}
 
   async complete(request: ProviderRequest): Promise<ProviderResponse> {
-    const model = request.model || this.model || this.defaultModel;
-
-    // Extract last user message
-    const lastMessage = request.messages
-      .filter(m => m.role === 'user')
-      .pop();
-    
-
-    if (!lastMessage) {
-      throw new Error('No user message found');
-    }
-
-    const prompt = typeof lastMessage.content === 'string'
-      ? lastMessage.content
-      : JSON.stringify(lastMessage.content);
-    
-
-    try {
-      
-      // Call codex exec for non-interactive mode
-      const { stdout, stderr, exitCode } = await execa('codex', ['exec', '--skip-git-repo-check'], {
-        input: prompt,
-        timeout: request.maxTokens ? request.maxTokens * 10 : 120000,
-        reject: false,
-        stdin: 'pipe',
-        stdout: 'pipe',
-        stderr: 'pipe',
-        env: { ...process.env },
-      });
-      
-
-      if (exitCode !== 0) {
-        throw new Error(`Codex CLI error: ${stderr || 'Unknown error'}`);
-      }
-
-      const content: ContentPart[] = [
-        { type: 'text', text: stdout || '(no response)' }
-      ];
-
-      return {
-        content,
-        stopReason: 'end_turn',
-        usage: {
-          inputTokens: 0, // Codex CLI doesn't expose token counts
-          outputTokens: 0,
-        },
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      logger.error({ error: message }, 'CodexProvider complete failed');
-      throw err;
-    }
+    const prompt = this.extractPrompt(request);
+    const responseText = await this.runCodex(prompt, request.maxTokens);
+    const content: ContentPart[] = [{ type: 'text', text: responseText }];
+    return { content, stopReason: 'end_turn', usage: { inputTokens: 0, outputTokens: 0 } };
   }
 
   async stream(request: ProviderRequest, handler: StreamHandler): Promise<ProviderResponse> {
-    const model = request.model || this.model || this.defaultModel;
-    
-    // Extract last user message
-    const lastMessage = request.messages
-      .filter(m => m.role === 'user')
-      .pop();
+    const prompt = this.extractPrompt(request);
+    const responseText = await this.runCodex(prompt, request.maxTokens);
 
-    if (!lastMessage) {
-      throw new Error('No user message found');
+    // Stream the captured response word by word for a natural feel
+    const words = responseText.split(' ');
+    for (const word of words) {
+      handler({ type: 'text_delta', text: word + ' ' });
+      await new Promise(resolve => setTimeout(resolve, 20));
     }
 
-    const prompt = typeof lastMessage.content === 'string' 
-      ? lastMessage.content 
+    const content: ContentPart[] = [{ type: 'text', text: responseText }];
+    return { content, stopReason: 'end_turn', usage: { inputTokens: 0, outputTokens: 0 } };
+  }
+
+  private extractPrompt(request: ProviderRequest): string {
+    const lastMessage = request.messages.filter(m => m.role === 'user').pop();
+    if (!lastMessage) throw new Error('No user message found');
+    return typeof lastMessage.content === 'string'
+      ? lastMessage.content
       : JSON.stringify(lastMessage.content);
+  }
+
+  private async runCodex(prompt: string, maxTokens?: number): Promise<string> {
+    const outFile = join(mkdtempSync(join(tmpdir(), 'epam-codex-')), 'response.txt');
+
+    // Show elapsed timer so the user knows Codex is working
+    const start = Date.now();
+    const timer = setInterval(() => {
+      const s = ((Date.now() - start) / 1000).toFixed(0);
+      process.stderr.write(`\r\x1b[2m⟳ Codex thinking... ${s}s\x1b[0m`);
+    }, 1000);
+    process.stderr.write('\x1b[2m⟳ Codex thinking...\x1b[0m');
 
     try {
-      // For streaming, we'll use codex with TUI mode
-      // Note: Codex CLI doesn't have a true streaming API, so we simulate it
-      const { stdout, stderr, exitCode } = await execa('codex', ['exec', '--skip-git-repo-check'], {
-        input: prompt,
-        timeout: request.maxTokens ? request.maxTokens * 10 : 120000,
+      const { exitCode, stderr } = await execa('codex', [
+        'exec',
+        '--skip-git-repo-check',
+        '-o', outFile,
+        prompt,
+      ], {
+        timeout: maxTokens ? maxTokens * 10 : 120000,
         reject: false,
-        stdin: 'pipe',
-        stdout: 'pipe',
-        stderr: 'pipe',
+        stdio: 'pipe',  // suppress raw Codex output — response captured via -o flag
+        env: { ...process.env },
       });
 
       if (exitCode !== 0) {
         throw new Error(`Codex CLI error: ${stderr || 'Unknown error'}`);
       }
 
-      // Simulate streaming by sending chunks
-      const text = stdout || '(no response)';
-      const chunkSize = 10;
-      
-      for (let i = 0; i < text.length; i += chunkSize) {
-        const chunk = text.slice(i, i + chunkSize);
-        handler({ type: 'text_delta', text: chunk });
-        // Small delay to simulate streaming
-        await new Promise(resolve => setTimeout(resolve, 10));
+      try {
+        return readFileSync(outFile, 'utf-8').trim() || '(no response)';
+      } catch {
+        return '(no response)';
       }
-
-      const content: ContentPart[] = [
-        { type: 'text', text }
-      ];
-
-      return {
-        content,
-        stopReason: 'end_turn',
-        usage: {
-          inputTokens: 0,
-          outputTokens: 0,
-        },
-      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      logger.error({ error: message }, 'CodexProvider stream failed');
+      logger.error({ error: message }, 'CodexProvider runCodex failed');
       throw err;
+    } finally {
+      clearInterval(timer);
+      process.stderr.write('\r\x1b[2K');  // clear the thinking line
+      try { unlinkSync(outFile); } catch { /* best-effort cleanup */ }
     }
   }
 

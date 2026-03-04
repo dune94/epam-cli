@@ -1,0 +1,2 @@
+Stored keys:
+  anthropic (manual_api_key)

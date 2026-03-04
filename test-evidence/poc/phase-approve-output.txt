@@ -1,0 +1,16 @@
+Phase approval review
+Phase: mvp_cli_control
+Description: MVP control plane phase — CLI-first execution, model selection visibility, and human approval gate
+Story count: 6
+Estimates: 66.01 min, $23.25, 1,370,742 tokens, 319 turns
+Existing approval: none
+Stories:
+- EPAM-023: MVP Control Plane — CLI-First Phase Runner [10.06 min, $0.89, 120,750 tokens, 11 turns]
+- EPAM-024: Human Phase Approval Gate in epam-cli [11.20 min, $1.12, 234,879 tokens, 109 turns]
+- EPAM-025: Model Registry and Selection (Provider: epam) [13.77 min, $0.79, 170,550 tokens, 30 turns]
+- EPAM-026: PRD Story Model Tagging and Runtime Resolution [25.63 min, $20.04, 754,707 tokens, 130 turns]
+- EPAM-028: Codex Cost Telemetry Fix — Capture /cost in Phase Logs [0.00 min, $0.00, 0 tokens, 0 turns]
+- EPAM-029: Provider Cutover Policy — OpenCode to epam [5.36 min, $0.41, 89,856 tokens, 39 turns]
+Approve this phase for execution? [y/N] y
+Approval recorded for mvp_cli_control at 2026-03-01T14:15:17.298Z by bjerome.
+Approval log: /home/bjerome/projects/ai/epam-cli/orchestrations/logs/phase-approvals.jsonl

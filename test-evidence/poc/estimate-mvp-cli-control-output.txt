@@ -1,0 +1,15 @@
+$ node dist/epam.js estimate --phase mvp_cli_control --skip-cpa
+
+Estimate Summary: mvp_cli_control
+
+EPAM-023  opencode / claude-sonnet-4-5-20250929   6.3 min   147134 tokens   $0.85
+EPAM-024  opencode / claude-sonnet-4-5-20250929   4.9 min   103511 tokens   $0.49
+EPAM-025  opencode / claude-sonnet-4-5-20250929  10.4 min   252656 tokens   $1.16
+EPAM-026  epam / claude-haiku-4-5-20251001       30.3 min  1160594 tokens   $1.41
+EPAM-028  opencode / claude-sonnet-4-5-20250929   9.4 min   244002 tokens   $1.04
+EPAM-029  opencode / claude-sonnet-4-5-20250929   5.3 min   122068 tokens   $0.52
+
+Phase total:
+Stories=6   AI Minutes=66.6   Tokens=2029965   Cost=$5.47
+
+CPA pass skipped (--skip-cpa)

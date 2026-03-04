@@ -1,0 +1,11 @@
+$ EPAM_BACKEND_URL=http://127.0.0.1:8080 node dist/epam.js login
+
+To authenticate, open this URL in your browser:
+  http://localhost:8080/activate?user_code=74C5-FB6D
+
+Or visit: http://localhost:8080/activate
+And enter code: 74C5-FB6D
+
+Waiting for authorization...
+
+Logged in as bradley_jerome@epam.com (enterprise tier)

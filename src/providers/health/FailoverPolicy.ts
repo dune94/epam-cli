@@ -43,7 +43,18 @@ export function analyzeError(err: unknown): FailoverAnalysis {
     }
     
     // "fetch failed" or "TypeError: fetch failed" - network issue, failover
+    // BUT first check if there's a detailed API error message
     if (err.message.includes('fetch failed')) {
+      // Check for embedded API error details
+      if (err.message.includes('credit balance')) {
+        return { decision: 'fatal', reason: 'API error: Credit balance too low' };
+      }
+      if (err.message.includes('rate limit')) {
+        return { decision: 'failover', reason: 'API error: Rate limit exceeded' };
+      }
+      if (err.message.includes('Invalid API key') || err.message.includes('authentication')) {
+        return { decision: 'fatal', reason: 'API error: Authentication failed' };
+      }
       return { decision: 'failover', reason: 'Network error: fetch failed' };
     }
 

@@ -1,0 +1,16 @@
+Phase approval review
+Phase: provider_auth
+Description: Provider-auth bridge phase — temporary browser-login and credential-brokerage capabilities for Anthropic and OpenAI/Codex until EPAM login can provision, store locally, and refresh provider credentials centrally.
+Story count: 6
+Estimates: 212.00 min, $16.25, 2,980,000 tokens, 205 turns
+Existing approval: none
+Stories:
+- EPAM-043: Provider Authentication Competitive Baseline [18.00 min, $0.95, 180,000 tokens, 16 turns]
+- EPAM-044: Bridge Credential Broker and Storage Abstraction [42.00 min, $3.40, 620,000 tokens, 40 turns]
+- EPAM-045: Anthropic Bridge Login for EPAM CLI [56.00 min, $4.80, 860,000 tokens, 52 turns]
+- EPAM-046: OpenAI / Codex Bridge Login for EPAM CLI [52.00 min, $4.30, 810,000 tokens, 49 turns]
+- EPAM-047: Provider Account Commands and Doctor Integration [28.00 min, $1.90, 360,000 tokens, 30 turns]
+- EPAM-048: Review — Provider Auth Phase [16.00 min, $0.90, 150,000 tokens, 18 turns]
+Approve this phase for execution? [y/N] y
+Approval recorded for provider_auth at 2026-03-01T14:24:13.967Z by bjerome.
+Approval log: /home/bjerome/projects/ai/epam-cli/orchestrations/logs/phase-approvals.jsonl

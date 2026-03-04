@@ -6,8 +6,15 @@
 
 import chalk from 'chalk';
 import type { SlashCommand, SlashCommandContext } from '../SlashCommands.js';
-import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs';
+import { join, dirname } from 'path';
+import { ulid } from 'ulid';
+import {
+  isRedisAvailable,
+  listHandoffs,
+  listTeamSessions,
+  getSessionMeta,
+} from '../../../context/RedisSessionStore.js';
 
 interface TeamConfig {
   name: string;
@@ -20,22 +27,54 @@ interface TeamMember {
   name: string;
   email: string;
   role: 'owner' | 'admin' | 'member' | 'viewer';
-  status: 'online' | 'offline' | 'busy';
+  status: 'online' | 'offline' | 'busy' | 'pending';
   lastActive?: string;
+}
+
+export function readTeamConfig(projectRoot: string): TeamConfig | null {
+  const teamConfigPath = join(projectRoot, '.epam', 'team.json');
+  if (!existsSync(teamConfigPath)) return null;
+  try {
+    return JSON.parse(readFileSync(teamConfigPath, 'utf-8')) as TeamConfig;
+  } catch {
+    return null;
+  }
+}
+
+export function writeTeamConfig(projectRoot: string, team: TeamConfig): void {
+  const teamConfigPath = join(projectRoot, '.epam', 'team.json');
+  mkdirSync(dirname(teamConfigPath), { recursive: true });
+  writeFileSync(teamConfigPath, JSON.stringify(team, null, 2), 'utf-8');
 }
 
 export const teamCommand: SlashCommand = {
   name: 'team',
   aliases: ['team-info'],
   description: 'Show team overview and status',
-  
-  async execute(_args, ctx): Promise<boolean> {
+  usage: '[init <name>]',
+
+  async execute(args, ctx): Promise<boolean> {
+    const trimmed = args.trim();
+
+    // /team init <name>
+    if (trimmed.startsWith('init')) {
+      const name = trimmed.replace(/^init\s*/, '').trim();
+      if (!name) {
+        console.log();
+        console.log(chalk.red('Team name required'));
+        console.log(chalk.dim('Usage: /team init <name>'));
+        console.log();
+        return true;
+      }
+      return initTeam(name, ctx);
+    }
+
+    const teamConfigPath = join(process.cwd(), '.epam', 'team.json');
+    
     console.log();
     console.log(chalk.bold.cyan('👥 Team Overview'));
     console.log();
-    
-    const teamConfigPath = join(process.cwd(), '.epam', 'team.json');
-    
+
     if (!existsSync(teamConfigPath)) {
       console.log(chalk.dim('No team configured'));
       console.log();
@@ -74,13 +113,67 @@ export const teamCommand: SlashCommand = {
         }
       }
       console.log();
-      
+
+      // Incoming handoffs — check Redis first, fall back to file-based
+      if (isRedisAvailable()) {
+        const userEmail =
+          ctx.userEmail || process.env.EPAM_USER_EMAIL || process.env.USER || '';
+        const redisHandoffs = userEmail ? await listHandoffs(userEmail) : [];
+
+        // Also list team sessions shared with this team
+        const teamSessions = team ? await listTeamSessions(team.name) : [];
+        const allCodes = [...new Set([...redisHandoffs, ...teamSessions])];
+
+        if (allCodes.length > 0) {
+          console.log(chalk.bold.yellow(`📥 Shared Sessions (${allCodes.length}):`));
+          for (const code of allCodes.slice(0, 5)) {
+            const meta = await getSessionMeta(code);
+            if (meta) {
+              console.log(`  • ${chalk.cyan.bold(code)}`);
+              console.log(`    ${chalk.dim('From:')} ${meta.exportedBy}  ${chalk.dim('Turns:')} ${meta.turnCount}  ${chalk.dim('Model:')} ${meta.model}`);
+              if (meta.teamNote) console.log(`    ${chalk.dim('Note:')} ${chalk.white(meta.teamNote)}`);
+              console.log(chalk.dim(`    Import: /import ${code}`));
+            } else {
+              console.log(`  • ${chalk.cyan.bold(code)} ${chalk.dim('(expired or unavailable)')}`);
+            }
+          }
+          if (allCodes.length > 5) {
+            console.log(chalk.dim(`  ... and ${allCodes.length - 5} more`));
+          }
+          console.log();
+        }
+      } else {
+        // File-based fallback
+        const handoffsDir = join(process.cwd(), '.epam', 'handoffs');
+        const incomingBundles: string[] = [];
+        if (existsSync(handoffsDir)) {
+          try {
+            incomingBundles.push(
+              ...readdirSync(handoffsDir).filter(f => f.endsWith('.epam-session.json'))
+            );
+          } catch { /* ignore */ }
+        }
+        if (incomingBundles.length > 0) {
+          console.log(chalk.bold.yellow(`📥 Incoming Handoffs (${incomingBundles.length}):`));
+          for (const f of incomingBundles.slice(0, 3)) {
+            const fullPath = join(handoffsDir, f);
+            console.log(`  • ${chalk.cyan(f)}`);
+            console.log(chalk.dim(`    Import: /import ${fullPath}`));
+          }
+          if (incomingBundles.length > 3) {
+            console.log(chalk.dim(`  ... and ${incomingBundles.length - 3} more in .epam/handoffs/`));
+          }
+          console.log();
+        }
+      }
+
       // Quick actions
       console.log(chalk.bold('Quick Actions:'));
       console.log(`  ${chalk.cyan('/members')}        - List all members`);
       console.log(`  ${chalk.cyan('/invite <email>')}  - Invite new member`);
-      console.log(`  ${chalk.cyan('/share <id>')}      - Share session`);
-      console.log(`  ${chalk.cyan('/handoff <user>')}  - Handoff session`);
+      console.log(`  ${chalk.cyan('/share [note]')}    - Share session ${isRedisAvailable() ? chalk.dim('(→ Redis)') : chalk.dim('(→ file)')}`);
+      console.log(`  ${chalk.cyan('/handoff <user>')}  - Handoff session to team member`);
+      console.log(`  ${chalk.cyan('/import <code>')}   - Import session by code or file`);
       console.log();
       
     } catch (err) {
@@ -92,3 +185,48 @@ export const teamCommand: SlashCommand = {
     return true;
   },
 };
+
+function initTeam(name: string, ctx: SlashCommandContext): boolean {
+  const projectRoot = ctx.config.projectRoot || process.cwd();
+  const existing = readTeamConfig(projectRoot);
+  if (existing) {
+    console.log();
+    console.log(chalk.yellow(`⚠  Team "${existing.name}" already exists`));
+    console.log(chalk.dim('Use /team to view it, or edit .epam/team.json directly.'));
+    console.log();
+    return true;
+  }
+
+  const ownerEmail = ctx.userEmail || process.env.EPAM_USER_EMAIL || process.env.USER || 'owner@local';
+  const ownerName = process.env.EPAM_USER_NAME || ownerEmail.split('@')[0];
+
+  const team: TeamConfig = {
+    name,
+    members: [
+      {
+        id: ulid(),
+        name: ownerName,
+        email: ownerEmail,
+        role: 'owner',
+        status: 'online',
+        lastActive: new Date().toISOString(),
+      },
+    ],
+    sharedSessions: [],
+  };
+
+  writeTeamConfig(projectRoot, team);
+
+  console.log();
+  console.log(chalk.bold.green(`✓ Team "${name}" created`));
+  console.log();
+  console.log(chalk.bold('Owner:'));
+  console.log(`  ${chalk.white(ownerName)} ${chalk.dim(`<${ownerEmail}>`)}`);
+  console.log();
+  console.log(chalk.bold('Next Steps:'));
+  console.log(`  ${chalk.cyan('/invite <email>')}  - Invite team members`);
+  console.log(`  ${chalk.cyan('/members')}         - View all members`);
+  console.log(`  ${chalk.cyan('/share')}            - Share your session`);
+  console.log();
+  return true;
+}

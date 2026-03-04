@@ -143,14 +143,30 @@ export class Repl {
 
           // Auto-query MCP sources based on keywords (non-blocking, never fails chat)
           try {
+            if (process.env.EPAM_DEBUG === '1') {
+              console.error('[MCP] Starting autoQueryMCP for:', userMessage.substring(0, 50));
+            }
+            
             const { autoQueryMCP, formatMCPResults } = await import('../../mcp/MCPAutoQuery.js');
             const mcpResults = await autoQueryMCP(userMessage);
+
+            if (process.env.EPAM_DEBUG === '1') {
+              console.error('[MCP] autoQueryMCP returned', mcpResults.length, 'results');
+              if (mcpResults.length > 0) {
+                console.error('[MCP] First result source:', mcpResults[0].source);
+                console.error('[MCP] First result items:', mcpResults[0].items?.length || 0);
+              }
+            }
 
             if (mcpResults.length > 0) {
               // Display MCP results with proper newline handling
               const formattedResults = formatMCPResults(mcpResults);
+              if (process.env.EPAM_DEBUG === '1') {
+                console.error('[MCP] Formatted results length:', formattedResults.length);
+              }
               if (formattedResults.trim()) {
-                console.log(formattedResults);
+                // Use stderr to ensure it's displayed before agent output
+                process.stderr.write('\n' + formattedResults);
               }
               // Convert @mention to natural language for agent
               userMessage = userMessage.replace(/@jira\s+([A-Z]+-\d+)/gi, 'Show me JIRA ticket $1').replace(/@jira\s+/gi, 'Show me JIRA tickets for ').replace(/@confluence\s+/gi, 'Show me Confluence docs for ').replace(/@drawio\s+/gi, 'Show me Draw.io diagrams for ').trim();

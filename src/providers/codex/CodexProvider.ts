@@ -56,6 +56,10 @@ export class CodexProvider implements LLMProvider {
   private async runCodex(prompt: string, maxTokens?: number): Promise<string> {
     const outFile = join(mkdtempSync(join(tmpdir(), 'epam-codex-')), 'response.txt');
 
+    // Use a generous fixed timeout — codex exec can be slow for complex tasks.
+    // maxTokens is a token count, not a time; don't use it for the timeout.
+    const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
     // Show elapsed timer so the user knows Codex is working
     const start = Date.now();
     const timer = setInterval(() => {
@@ -64,16 +68,27 @@ export class CodexProvider implements LLMProvider {
     }, 1000);
     process.stderr.write('\x1b[2m⟳ Codex thinking...\x1b[0m');
 
+    const args: string[] = [
+      'exec',
+      '--skip-git-repo-check',
+      // Bypass approval prompts — otherwise codex hangs silently waiting for
+      // stdin input that never comes (stdio is piped, not a TTY).
+      '--dangerously-bypass-approvals-and-sandbox',
+      '-o', outFile,
+    ];
+
+    // Pass model if specified (e.g. gpt-5-codex, o3, o4-mini)
+    if (this.model) {
+      args.push('--model', this.model);
+    }
+
+    args.push(prompt);
+
     try {
-      const { exitCode, stderr } = await execa('codex', [
-        'exec',
-        '--skip-git-repo-check',
-        '-o', outFile,
-        prompt,
-      ], {
-        timeout: maxTokens ? maxTokens * 10 : 120000,
+      const { exitCode, stderr } = await execa('codex', args, {
+        timeout: TIMEOUT_MS,
         reject: false,
-        stdio: 'pipe',  // suppress raw Codex output — response captured via -o flag
+        stdio: 'pipe',
         env: { ...process.env },
       });
 

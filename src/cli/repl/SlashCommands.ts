@@ -27,6 +27,7 @@ import { membersCommand } from './commands/MembersCommand.js';
 import { inviteCommand } from './commands/InviteCommand.js';
 import { shareCommand } from './commands/ShareCommand.js';
 import { handoffCommand } from './commands/HandoffCommand.js';
+import { importCommand } from './commands/ImportCommand.js';
 import { modelCommand } from './commands/ModelCommand.js';
 import { copilotCommand } from './commands/CopilotCommand.js';
 import { failoverCommand } from './commands/FailoverCommand.js';
@@ -549,6 +550,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   inviteCommand,
   shareCommand,
   handoffCommand,
+  importCommand,
   modelCommand,
   copilotCommand,
   failoverCommand,

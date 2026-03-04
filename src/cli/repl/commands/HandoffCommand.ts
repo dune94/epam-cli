@@ -1,7 +1,8 @@
 /**
  * /handoff Slash Command
- * 
- * Transfer session ownership to team member via EPAM backend API
+ *
+ * Transfer session ownership to team member.
+ * Writes a portable .epam-session.json bundle the recipient can import.
  */
 
 import chalk from 'chalk';
@@ -10,6 +11,7 @@ import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { ulid } from 'ulid';
 import { readTeamConfig } from './TeamCommand.js';
+import type { SessionBundle } from './ShareCommand.js';
 
 export const handoffCommand: SlashCommand = {
   name: 'handoff',
@@ -54,41 +56,47 @@ export const handoffCommand: SlashCommand = {
     }
 
     const handoffId = ulid();
-    const handoff = {
-      id: handoffId,
-      targetUser: resolvedTarget,
-      createdAt: new Date().toISOString(),
-      session: {
-        id: `session-${Date.now()}`,
-        messages: ctx.messages.length,
-        turns: ctx.sessionTurnCount,
-        model: ctx.currentModel,
-        provider: ctx.config.provider,
-        projectRoot: ctx.config.projectRoot || process.cwd(),
-      },
-      lastMessage:
-        ctx.messages.length > 0
-          ? String(
-              typeof ctx.messages[ctx.messages.length - 1].content === 'string'
-                ? ctx.messages[ctx.messages.length - 1].content
-                : JSON.stringify(ctx.messages[ctx.messages.length - 1].content)
-            ).slice(0, 200)
-          : '',
+
+    // Build portable bundle turns from messages
+    const turns: SessionBundle['turns'] = [];
+    for (let i = 0; i < ctx.messages.length - 1; i++) {
+      const cur = ctx.messages[i];
+      const next = ctx.messages[i + 1];
+      if (cur.role === 'user' && next.role === 'assistant') {
+        turns.push({
+          id: ulid(),
+          timestamp: Date.now(),
+          userMessage: typeof cur.content === 'string' ? cur.content : JSON.stringify(cur.content),
+          assistantResponse: typeof next.content === 'string' ? next.content : JSON.stringify(next.content),
+          toolCallCount: 0,
+          usage: { inputTokens: 0, outputTokens: 0 },
+        });
+        i++;
+      }
+    }
+
+    const bundle: SessionBundle = {
+      version: '1',
+      exportedAt: new Date().toISOString(),
+      exportedBy: process.env.EPAM_USER_EMAIL || process.env.USER || 'unknown',
+      teamNote: `Handoff to ${resolvedTarget}`,
+      model: ctx.currentModel,
+      provider: ctx.config.provider,
+      turns,
     };
 
     try {
       const handoffsDir = join(projectRoot, '.epam', 'handoffs');
       mkdirSync(handoffsDir, { recursive: true });
-      writeFileSync(
-        join(handoffsDir, `${handoffId}.json`),
-        JSON.stringify(handoff, null, 2),
-        'utf-8'
-      );
+      const bundlePath = join(handoffsDir, `${handoffId}.epam-session.json`);
+      writeFileSync(bundlePath, JSON.stringify(bundle, null, 2), 'utf-8');
 
       console.log(chalk.green(`✓ Session handed off to ${chalk.white(resolvedTarget)}`));
-      console.log(`  Handoff ID: ${chalk.dim(handoffId)}`);
-      console.log(`  Turns transferred: ${chalk.white(ctx.sessionTurnCount)}`);
-      console.log(`  File: ${chalk.dim(join('.epam', 'handoffs', `${handoffId}.json`))}`);
+      console.log(`  ${chalk.bold('Turns:')}  ${chalk.white(turns.length)}`);
+      console.log(`  ${chalk.bold('Bundle:')} ${chalk.white(bundlePath)}`);
+      console.log();
+      console.log(chalk.bold('Recipient runs:'));
+      console.log(chalk.dim(`  epam-cli import ${bundlePath}`));
       console.log();
     } catch (err) {
       console.log(chalk.red('Failed to write handoff'));

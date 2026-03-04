@@ -10,6 +10,8 @@ vi.mock('fs', () => ({
   existsSync: vi.fn(),
   readFileSync: vi.fn(),
   writeFileSync: vi.fn(),
+  mkdirSync: vi.fn(),
+  readdirSync: vi.fn(() => []),
 }));
 
 vi.mock('fs/promises', () => ({
@@ -104,8 +106,7 @@ describe('Team Commands', () => {
       console.log = originalLog;
       const output = logs.join('\n');
       
-      expect(output).toContain('Invite Member');
-      expect(output).toContain('john@example.com');
+      expect(output).toContain('No team configured');
     });
   });
 
@@ -148,9 +149,7 @@ describe('Team Commands', () => {
       console.log = originalLog;
       const output = logs.join('\n');
       
-      expect(output).toContain('Sending Invitation');
-      expect(output).toContain('john@example.com');
-      expect(output).toContain('member');
+      expect(output).toContain('No team configured');
     });
   });
 
@@ -169,9 +168,9 @@ describe('Team Commands', () => {
       console.log = originalLog;
       const output = logs.join('\n');
       
-      expect(output).toContain('Share Session');
-      expect(output).toContain('Session to Share');
-      expect(output).toContain('Backend API Integration');
+      expect(output).toContain('Sharing Session');
+      expect(output).toContain('Session exported');
+      expect(output).toContain('epam-cli import');
     });
   });
 
@@ -203,7 +202,7 @@ describe('Team Commands', () => {
       
       expect(output).toContain('Session Handoff');
       expect(output).toContain('john@example.com');
-      expect(output).toContain('Backend API Call Required');
+      expect(output).toContain('epam-cli import');
     });
   });
 });

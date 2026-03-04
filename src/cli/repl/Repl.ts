@@ -285,6 +285,20 @@ export class Repl {
       this.running = false;
     });
 
+    // Auto-resume a session if one was pre-installed by `epam-cli import`
+    const autoResumeId = process.env.EPAM_AUTO_RESUME;
+    if (autoResumeId) {
+      delete process.env.EPAM_AUTO_RESUME;
+      const ctx = this.buildSlashContext(config, systemPrompt);
+      const result = await ctx.onResume(autoResumeId);
+      if (result.success) {
+        process.stdout.write(
+          chalk.green(`✓ Resumed imported session`) +
+          chalk.dim(` — ${result.turnCount} turns loaded\n\n`)
+        );
+      }
+    }
+
     prompt();
 
     await new Promise<void>(resolve => {

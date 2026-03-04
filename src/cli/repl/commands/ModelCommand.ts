@@ -36,7 +36,7 @@ const PROVIDER_MODELS: Record<string, Array<{ id: string; desc: string; price: s
   ],
   codemie: [{ id: 'claude-sonnet-4-5-20250929', desc: 'Via SSO',     price: 'Included' }],
   codex:   [{ id: 'gpt-5-codex',               desc: 'Via CLI auth', price: 'Included' }],
-  cursor:  [{ id: 'gemini-2.5-pro',             desc: 'Gemini 2.5',  price: '$1.25/$5' }],
+  cursor:  [{ id: 'gemini-3.1-pro',             desc: 'Gemini 3.1',  price: '$1.25/$5' }],
   copilot: [{ id: 'claude-sonnet-4-6',          desc: 'Via gh auth', price: 'Included' }],
 };
 

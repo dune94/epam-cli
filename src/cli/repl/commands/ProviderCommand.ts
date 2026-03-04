@@ -23,7 +23,7 @@ const PROVIDER_DEFAULTS: Record<string, string> = {
   gemini:   'gemini-1.5-pro',
   codemie:  'claude-sonnet-4-5-20250929',
   codex:    'gpt-5-codex',
-  cursor:   'gemini-2.5-pro',
+  cursor:   'gemini-3.1-pro',
   copilot:  'claude-sonnet-4-6',
 };
 
@@ -200,7 +200,6 @@ async function authenticateProvider(providerName: string, ctx: SlashCommandConte
   console.log(chalk.bold.cyan(`🔐 Authenticate — ${providerName}`));
   console.log();
 
-  // Use context callback if wired
   if (ctx.onAuthenticateProvider) {
     const ok = await ctx.onAuthenticateProvider(providerName);
     console.log(ok
@@ -211,89 +210,137 @@ async function authenticateProvider(providerName: string, ctx: SlashCommandConte
   }
 
   try {
-    if (providerName === 'copilot') {
-      const envToken = process.env.COPILOT_GITHUB_TOKEN ?? process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
-      if (envToken) {
-        console.log(chalk.yellow('⚠  Token already set via environment variable.'));
-        console.log(chalk.dim(`COPILOT_GITHUB_TOKEN is set (${envToken.slice(0, 15)}…)`));
-        console.log(chalk.dim('Unset it if you want device-flow login: unset COPILOT_GITHUB_TOKEN'));
+    switch (providerName) {
+      case 'copilot': {
+        const envToken = process.env.COPILOT_GITHUB_TOKEN ?? process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
+        if (envToken) {
+          console.log(chalk.yellow('⚠  Token already set via environment variable.'));
+          console.log(chalk.dim(`COPILOT_GITHUB_TOKEN is set (${envToken.slice(0, 15)}…)`));
+          console.log(chalk.dim('Unset it first if you want device-flow: unset COPILOT_GITHUB_TOKEN'));
+          break;
+        }
+        const available = await CopilotProvider.isAvailable();
+        if (!available) {
+          console.log(chalk.red('✗ Copilot CLI not installed.'));
+          console.log(chalk.dim('Install: npm install -g @github/copilot'));
+          break;
+        }
+        console.log(chalk.dim('Starting device-flow — follow browser instructions…'));
         console.log();
-        return true;
-      }
-      const available = await CopilotProvider.isAvailable();
-      if (!available) {
-        console.log(chalk.red('✗ Copilot CLI not installed.'));
-        console.log(chalk.dim('Install: npm install -g @github/copilot'));
+        const { exitCode } = await execa('copilot', ['login'], { stdio: 'inherit', reject: false });
         console.log();
-        return true;
+        console.log(exitCode === 0 ? chalk.green('✓ Copilot authenticated') : chalk.red('✗ Authentication failed'));
+        break;
       }
-      console.log(chalk.dim('Starting device-flow — follow browser instructions…'));
-      console.log();
-      const { exitCode } = await execa('copilot', ['login'], { stdio: 'inherit', reject: false });
-      console.log();
-      console.log(exitCode === 0 ? chalk.green('✓ Copilot authenticated') : chalk.red('✗ Authentication failed'));
-      console.log();
 
-    } else if (providerName === 'codex') {
-      const { existsSync } = await import('fs');
-      const { homedir } = await import('os');
-      const { join } = await import('path');
-      if (existsSync(join(homedir(), '.codex', 'auth.json'))) {
-        console.log(chalk.green('✓ Codex already authenticated'));
-        console.log(chalk.dim('To re-authenticate: rm ~/.codex/auth.json  then /provider auth codex'));
+      case 'codex': {
+        const { existsSync } = await import('fs');
+        const { homedir } = await import('os');
+        const { join } = await import('path');
+        if (existsSync(join(homedir(), '.codex', 'auth.json'))) {
+          console.log(chalk.green('✓ Codex already authenticated'));
+          console.log(chalk.dim('To re-authenticate: rm ~/.codex/auth.json  then /provider auth codex'));
+          break;
+        }
+        console.log(chalk.dim('Starting Codex CLI — sign in with ChatGPT when prompted…'));
         console.log();
-        return true;
+        await new Promise(resolve => setTimeout(resolve, 100));
+        const { exitCode } = await execa('codex', [], { stdio: 'inherit', timeout: 300_000, reject: false });
+        process.stdout.write('\x1B[2J\x1B[0H\n');
+        console.log('─'.repeat(60));
+        console.log();
+        console.log(exitCode === 0 ? chalk.green('✓ Codex authenticated') : chalk.yellow('⚠  Codex session ended'));
+        break;
       }
-      console.log(chalk.dim('Starting Codex CLI — sign in with ChatGPT when prompted…'));
-      console.log();
-      await new Promise(resolve => setTimeout(resolve, 100));
-      const { exitCode } = await execa('codex', [], { stdio: 'inherit', timeout: 300_000, reject: false });
-      process.stdout.write('\x1B[2J\x1B[0H\n');
-      console.log('─'.repeat(60));
-      console.log();
-      console.log(exitCode === 0 ? chalk.green('✓ Codex authenticated') : chalk.yellow('⚠  Codex session ended'));
-      console.log();
 
-    } else if (providerName === 'codemie') {
-      console.log(chalk.dim('Opening browser for Codemie OAuth…'));
-      const { exitCode } = await execa('node', ['dist/epam.js', 'provider', 'login', 'codemie'], {
-        stdio: 'inherit', cwd: process.cwd(), timeout: 300_000, reject: false,
-      });
-      console.log();
-      console.log(exitCode === 0 ? chalk.green('✓ Codemie authenticated') : chalk.yellow('⚠  Codemie authentication failed'));
-      console.log();
-
-    } else if (['anthropic', 'openai', 'gemini', 'claude', 'qwen'].includes(providerName)) {
-      const { default: prompts } = await import('prompts');
-      const { apiKey } = await prompts([{
-        type: 'password',
-        name: 'apiKey',
-        message: `${providerName} API key`,
-        validate: (v: string) => v.trim().length > 0 ? true : 'API key cannot be empty',
-      }]);
-      if (apiKey) {
-        const { saveProviderCredential } = await import('../../auth/ProviderCredentialStore.js');
-        await saveProviderCredential({
-          provider: providerName as 'anthropic' | 'openai' | 'gemini',
-          type: 'api_key',
-          source: 'manual_api_key',
-          secret: apiKey.trim(),
-          createdAt: new Date().toISOString(),
+      case 'codemie': {
+        console.log(chalk.dim('Opening browser for Codemie OAuth…'));
+        const { exitCode } = await execa('node', ['dist/epam.js', 'provider', 'login', 'codemie'], {
+          stdio: 'inherit', cwd: process.cwd(), timeout: 300_000, reject: false,
         });
-        console.log(chalk.green(`✓ ${providerName} API key saved`));
         console.log();
+        console.log(exitCode === 0 ? chalk.green('✓ Codemie authenticated') : chalk.yellow('⚠  Codemie authentication failed'));
+        break;
       }
 
-    } else {
-      console.log(chalk.red(`Unknown provider: ${providerName}`));
-      console.log(chalk.dim('Supported: ' + Object.keys(PROVIDER_DEFAULTS).join(', ')));
-      console.log();
+      case 'cursor': {
+        console.log(chalk.dim('Cursor provider uses the Google Gemini API (Gemini 3.1 Pro).'));
+        console.log(chalk.dim('Get an API key at: https://aistudio.google.com/apikey'));
+        console.log();
+        const { default: promptsCursor } = await import('prompts');
+        const { apiKey: cursorKey } = await promptsCursor([{
+          type: 'password',
+          name: 'apiKey',
+          message: 'Google AI Studio API key (CURSOR_API_KEY)',
+          validate: (v: string) => v.trim().length > 0 ? true : 'API key cannot be empty',
+        }]);
+        if (cursorKey) {
+          const { storeApiKey } = await import('../../../billing/KeychainKeyStore.js');
+          await storeApiKey('cursor', cursorKey.trim());
+          console.log();
+          console.log(chalk.green('✓ Cursor API key saved'));
+          console.log(chalk.dim('  To use env var instead: export CURSOR_API_KEY=<key>'));
+        }
+        break;
+      }
+
+      case 'qwen': {
+        console.log(chalk.dim('Qwen uses the Alibaba DashScope API.'));
+        console.log(chalk.dim('Get an API key at: https://bailian.console.aliyun.com → API Key management'));
+        console.log();
+        const { default: promptsQwen } = await import('prompts');
+        const { apiKey: qwenKey } = await promptsQwen([{
+          type: 'password',
+          name: 'apiKey',
+          message: 'DashScope API key (DASHSCOPE_API_KEY)',
+          validate: (v: string) => v.trim().length > 0 ? true : 'API key cannot be empty',
+        }]);
+        if (qwenKey) {
+          const { storeApiKey } = await import('../../../billing/KeychainKeyStore.js');
+          await storeApiKey('qwen', qwenKey.trim());
+          console.log();
+          console.log(chalk.green('✓ Qwen API key saved'));
+          console.log(chalk.dim('  To use env var instead: export DASHSCOPE_API_KEY=<key>'));
+        }
+        break;
+      }
+
+      case 'anthropic':
+      case 'claude':
+      case 'openai':
+      case 'gemini': {
+        const envVarMap: Record<string, string> = {
+          anthropic: 'EPAM_API_KEY_ANTHROPIC',
+          claude:    'EPAM_API_KEY_ANTHROPIC',
+          openai:    'EPAM_API_KEY_OPENAI',
+          gemini:    'EPAM_API_KEY_GEMINI',
+        };
+        const { default: promptsKey } = await import('prompts');
+        const { apiKey } = await promptsKey([{
+          type: 'password',
+          name: 'apiKey',
+          message: `${providerName} API key (${envVarMap[providerName]})`,
+          validate: (v: string) => v.trim().length > 0 ? true : 'API key cannot be empty',
+        }]);
+        if (apiKey) {
+          const { storeApiKey } = await import('../../../billing/KeychainKeyStore.js');
+          await storeApiKey(providerName === 'claude' ? 'anthropic' : providerName, apiKey.trim());
+          console.log();
+          console.log(chalk.green(`✓ ${providerName} API key saved`));
+          console.log(chalk.dim(`  To use env var instead: export ${envVarMap[providerName]}=<key>`));
+        }
+        break;
+      }
+
+      default:
+        console.log(chalk.red(`Unknown provider: ${providerName}`));
+        console.log(chalk.dim('Supported: ' + Object.keys(PROVIDER_DEFAULTS).join(', ')));
     }
   } catch (err) {
     console.log(chalk.red(`Auth error: ${(err as Error).message}`));
-    console.log();
   }
 
+  console.log();
   return true;
 }
 
@@ -305,24 +352,77 @@ async function logoutProvider(providerName: string, _ctx: SlashCommandContext): 
   console.log();
 
   try {
-    if (providerName === 'copilot') {
-      const { exitCode } = await execa('copilot', ['logout'], { stdio: 'inherit', reject: false });
-      console.log();
-      console.log(exitCode === 0 ? chalk.green('✓ Copilot logged out') : chalk.yellow('⚠  Logout completed with warnings'));
+    switch (providerName) {
+      case 'copilot': {
+        // Actually revokes the OAuth token via the CLI
+        const { exitCode } = await execa('copilot', ['logout'], { stdio: 'inherit', reject: false });
+        console.log();
+        console.log(exitCode === 0 ? chalk.green('✓ Copilot logged out') : chalk.yellow('⚠  Logout completed with warnings'));
+        break;
+      }
 
-    } else if (['anthropic', 'openai', 'gemini', 'claude', 'qwen'].includes(providerName)) {
-      console.log(chalk.dim(`To remove your ${providerName} API key, unset the environment variable:`));
-      console.log(chalk.dim(`  unset EPAM_API_KEY_${providerName.toUpperCase()}`));
-      console.log(chalk.dim('Or remove it from ~/.epam/config.json'));
+      case 'codex': {
+        // Removes the CLI auth file — actual revocation
+        const { existsSync, rmSync } = await import('fs');
+        const { homedir } = await import('os');
+        const { join } = await import('path');
+        const authFile = join(homedir(), '.codex', 'auth.json');
+        if (existsSync(authFile)) {
+          rmSync(authFile);
+          console.log(chalk.green('✓ Codex auth file removed (~/.codex/auth.json)'));
+          console.log(chalk.dim('  Re-authenticate with: /provider auth codex'));
+        } else {
+          console.log(chalk.dim('No Codex auth file found — already logged out.'));
+        }
+        break;
+      }
 
-    } else {
-      console.log(chalk.dim(`No logout action defined for: ${providerName}`));
+      case 'cursor':
+      case 'qwen':
+      case 'anthropic':
+      case 'claude':
+      case 'openai':
+      case 'gemini': {
+        // Remove from credential store; cannot unset shell env vars
+        const storeKey = providerName === 'claude' ? 'anthropic' : providerName;
+        const { deleteApiKey, getApiKey } = await import('../../../billing/KeychainKeyStore.js');
+        const storedKey = await getApiKey(storeKey);
+        const revokeUrls: Record<string, string> = {
+          cursor:    'https://aistudio.google.com/apikey',
+          qwen:      'https://bailian.console.aliyun.com',
+          anthropic: 'https://console.anthropic.com/settings/keys',
+          claude:    'https://console.anthropic.com/settings/keys',
+          openai:    'https://platform.openai.com/api-keys',
+          gemini:    'https://aistudio.google.com/apikey',
+        };
+        const envVarMap: Record<string, string> = {
+          cursor:    'CURSOR_API_KEY',
+          qwen:      'DASHSCOPE_API_KEY',
+          anthropic: 'EPAM_API_KEY_ANTHROPIC',
+          claude:    'EPAM_API_KEY_ANTHROPIC',
+          openai:    'EPAM_API_KEY_OPENAI',
+          gemini:    'EPAM_API_KEY_GEMINI',
+        };
+        if (storedKey) {
+          await deleteApiKey(storeKey);
+          console.log(chalk.green(`✓ ${providerName} key removed from credential store`));
+        } else {
+          console.log(chalk.dim(`No stored credential found for ${providerName}.`));
+        }
+        console.log();
+        console.log(chalk.bold('To fully revoke access:'));
+        console.log(chalk.dim(`  1. Delete the key at:  ${revokeUrls[providerName]}`));
+        console.log(chalk.dim(`  2. Unset env var:      unset ${envVarMap[providerName]}`));
+        break;
+      }
+
+      default:
+        console.log(chalk.dim(`No logout action defined for: ${providerName}`));
     }
-    console.log();
   } catch (err) {
     console.log(chalk.red(`Error: ${(err as Error).message}`));
-    console.log();
   }
 
+  console.log();
   return true;
 }

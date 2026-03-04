@@ -161,15 +161,35 @@ export class Repl {
             if (mcpResults.length > 0) {
               // Display MCP results with proper newline handling
               const formattedResults = formatMCPResults(mcpResults);
-              if (process.env.EPAM_DEBUG === '1') {
-                console.error('[MCP] Formatted results length:', formattedResults.length);
-              }
               if (formattedResults.trim()) {
-                // Use stderr to ensure it's displayed before agent output
                 process.stderr.write('\n' + formattedResults);
               }
-              // Convert @mention to natural language for agent
-              userMessage = userMessage.replace(/@jira\s+([A-Z]+-\d+)/gi, 'Show me JIRA ticket $1').replace(/@jira\s+/gi, 'Show me JIRA tickets for ').replace(/@confluence\s+/gi, 'Show me Confluence docs for ').replace(/@drawio\s+/gi, 'Show me Draw.io diagrams for ').trim();
+
+              // Build a data-carrying prompt so the agent presents results
+              // without triggering its own tool/fetch loop
+              const dataLines: string[] = [];
+              for (const r of mcpResults) {
+                for (const item of r.items) {
+                  dataLines.push(`ID: ${item.id}`);
+                  if (item.title) dataLines.push(`Title: ${item.title}`);
+                  if (item.status) dataLines.push(`Status: ${item.status}`);
+                  if (item.url) dataLines.push(`URL: ${item.url}`);
+                  if (item.updated) dataLines.push(`Updated: ${item.updated}`);
+                  if (item.summary && item.summary !== item.title) dataLines.push(`Summary: ${item.summary}`);
+                }
+              }
+
+              // Strip @mentions from the original message to get any extra instruction
+              const extraInstruction = userMessage
+                .replace(/@(jira|confluence|drawio|all)\s*([A-Z]+-\d+)?/gi, '')
+                .trim();
+
+              userMessage = [
+                'The following data was already fetched from the MCP server. Present it clearly to the user. Do not attempt to fetch or search for additional data.',
+                '',
+                dataLines.join('\n'),
+                ...(extraInstruction ? ['', `User instruction: ${extraInstruction}`] : []),
+              ].join('\n');
             }
           } catch (err) {
             // MCP is optional - never let it disrupt chat

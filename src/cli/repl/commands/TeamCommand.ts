@@ -161,7 +161,7 @@ function initTeam(name: string, ctx: SlashCommandContext): boolean {
     return true;
   }
 
-  const ownerEmail = process.env.EPAM_USER_EMAIL || process.env.USER || 'owner@local';
+  const ownerEmail = ctx.userEmail || process.env.EPAM_USER_EMAIL || process.env.USER || 'owner@local';
   const ownerName = process.env.EPAM_USER_NAME || ownerEmail.split('@')[0];
 
   const team: TeamConfig = {

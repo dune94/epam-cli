@@ -51,6 +51,7 @@ export const shareCommand: SlashCommand = {
 
     const sessionId = ulid();
     const exportedBy =
+      ctx.userEmail ||
       process.env.EPAM_USER_EMAIL ||
       process.env.USER ||
       'unknown';

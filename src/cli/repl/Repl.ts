@@ -44,6 +44,7 @@ export class Repl {
   private budgetGuard: BudgetGuard;
   private toolRunner: ToolRunner;
   private auditorRegistry?: AuditorRegistry;
+  private userEmail?: string;
 
   constructor(private options: ReplOptions) {
     this.currentProvider = options.config.provider;
@@ -84,6 +85,14 @@ export class Repl {
 
     const authManager = this.options.authManager ?? new AuthManager(config.backendUrl);
     const systemPrompt = await buildSessionSystemPrompt(config, authManager);
+
+    // Resolve user identity: JWT email → env var → OS user
+    const authUser = await authManager.getUser().catch(() => null);
+    this.userEmail =
+      authUser?.email ||
+      process.env.EPAM_USER_EMAIL ||
+      process.env.USER ||
+      undefined;
 
     // Load auditor personas (no-op if .epam/auditors.json absent)
     const auditorRegistry = new AuditorRegistry(config.projectRoot ?? process.cwd());
@@ -548,6 +557,7 @@ export class Repl {
         return sum + Math.ceil(text.length / 4);
       }, 0),
       contextFilePath: config.contextFile,
+      userEmail: this.userEmail,
       totalInputTokens: this.budgetGuard.inputTokens,
       totalOutputTokens: this.budgetGuard.outputTokens,
       budgetGuard: this.budgetGuard,

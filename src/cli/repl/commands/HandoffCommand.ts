@@ -78,7 +78,7 @@ export const handoffCommand: SlashCommand = {
     const bundle: SessionBundle = {
       version: '1',
       exportedAt: new Date().toISOString(),
-      exportedBy: process.env.EPAM_USER_EMAIL || process.env.USER || 'unknown',
+      exportedBy: ctx.userEmail || process.env.EPAM_USER_EMAIL || process.env.USER || 'unknown',
       teamNote: `Handoff to ${resolvedTarget}`,
       model: ctx.currentModel,
       provider: ctx.config.provider,

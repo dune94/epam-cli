@@ -39,6 +39,8 @@ export interface SlashCommandContext {
   sessionTurnCount: number;
   tokenCount: number;
   contextFilePath: string;
+  // Authenticated user identity (email from JWT or EPAM_USER_EMAIL env)
+  userEmail?: string;
   // Cost tracking
   totalInputTokens: number;
   totalOutputTokens: number;

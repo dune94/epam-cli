@@ -285,22 +285,22 @@ async function authenticateProvider(providerName: string, ctx: SlashCommandConte
       }
 
       case 'qwen': {
-        console.log(chalk.dim('Qwen uses the Alibaba DashScope API.'));
-        console.log(chalk.dim('Get an API key at: https://bailian.console.aliyun.com → API Key management'));
+        console.log(chalk.dim('Qwen models are accessed via OpenRouter — an English-language gateway to 200+ AI models.'));
+        console.log(chalk.dim('Get a free API key at: https://openrouter.ai/keys  (no credit card required)'));
         console.log();
         const { default: promptsQwen } = await import('prompts');
         const { apiKey: qwenKey } = await promptsQwen([{
           type: 'password',
           name: 'apiKey',
-          message: 'DashScope API key (DASHSCOPE_API_KEY)',
+          message: 'OpenRouter API key (for Qwen access)',
           validate: (v: string) => v.trim().length > 0 ? true : 'API key cannot be empty',
         }]);
         if (qwenKey) {
           const { storeApiKey } = await import('../../../billing/KeychainKeyStore.js');
           await storeApiKey('qwen', qwenKey.trim());
           console.log();
-          console.log(chalk.green('✓ Qwen API key saved'));
-          console.log(chalk.dim('  To use env var instead: export DASHSCOPE_API_KEY=<key>'));
+          console.log(chalk.green('✓ Qwen (via OpenRouter) API key saved'));
+          console.log(chalk.dim('  To use env var instead: export OPENROUTER_API_KEY=<key>'));
         }
         break;
       }
@@ -389,7 +389,7 @@ async function logoutProvider(providerName: string, _ctx: SlashCommandContext): 
         const storedKey = await getApiKey(storeKey);
         const revokeUrls: Record<string, string> = {
           cursor:    'https://aistudio.google.com/apikey',
-          qwen:      'https://bailian.console.aliyun.com',
+          qwen:      'https://openrouter.ai/keys',
           anthropic: 'https://console.anthropic.com/settings/keys',
           claude:    'https://console.anthropic.com/settings/keys',
           openai:    'https://platform.openai.com/api-keys',
@@ -397,7 +397,7 @@ async function logoutProvider(providerName: string, _ctx: SlashCommandContext): 
         };
         const envVarMap: Record<string, string> = {
           cursor:    'CURSOR_API_KEY',
-          qwen:      'DASHSCOPE_API_KEY',
+          qwen:      'OPENROUTER_API_KEY',
           anthropic: 'EPAM_API_KEY_ANTHROPIC',
           claude:    'EPAM_API_KEY_ANTHROPIC',
           openai:    'EPAM_API_KEY_OPENAI',

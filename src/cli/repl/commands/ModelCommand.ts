@@ -20,10 +20,10 @@ const PROVIDER_MODELS: Record<string, Array<{ id: string; desc: string; price: s
     { id: 'claude-haiku-4-5-20251001',    desc: 'Fast & cheap',  price: '$0.80/$4'},
   ],
   qwen: [
-    { id: 'qwen-max',      desc: 'Most capable',    price: '$2/$8'       },
-    { id: 'qwen-plus',     desc: 'Balanced',         price: '$0.50/$2'   },
-    { id: 'qwen-turbo',    desc: 'Fast & cheap',     price: '$0.10/$0.40'},
-    { id: 'qwen-2.5-72b',  desc: 'Open source 72B',  price: '$0.40/$1.60'},
+    { id: 'qwen/qwen-2.5-72b-instruct',  desc: 'Qwen 2.5 72B (via OpenRouter)',  price: '$0.40/$1.20' },
+    { id: 'qwen/qwen-2.5-7b-instruct',   desc: 'Qwen 2.5 7B — fast & cheap',     price: '$0.04/$0.12' },
+    { id: 'qwen/qwen-2-72b-instruct',    desc: 'Qwen 2 72B',                      price: '$0.80/$1.60' },
+    { id: 'qwen/qwq-32b',                desc: 'QwQ 32B reasoning model',         price: '$0.20/$0.60' },
   ],
   openai: [
     { id: 'gpt-4o',        desc: 'Most capable', price: '$2.50/$10' },

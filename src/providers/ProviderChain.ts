@@ -363,7 +363,11 @@ export class ProviderChain implements LLMProvider {
         return new AnthropicProvider(apiKey);
       case 'openai':    return new OpenAIProvider(apiKey);
       case 'gemini':    return new GeminiProvider(apiKey);
-      case 'qwen':      return new QwenProvider({ apiKey });
+      case 'qwen': {
+        const openRouterKey = process.env.OPENROUTER_API_KEY ?? process.env.EPAM_API_KEY_OPENROUTER;
+        if (openRouterKey) return new QwenProvider({ apiKey: openRouterKey, openRouterMode: true });
+        return new QwenProvider({ apiKey });
+      }
       case 'cursor':    return new CursorProvider({ apiKey });
       default:
         throw new ProviderError(`Unknown provider: '${slot.provider}'`);

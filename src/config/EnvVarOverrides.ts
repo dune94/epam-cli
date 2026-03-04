@@ -74,7 +74,7 @@ export function getApiKey(provider: string): string | undefined {
     case 'cursor':
       return process.env.CURSOR_API_KEY ?? process.env.EPAM_API_KEY_CURSOR;
     case 'qwen':
-      return process.env.DASHSCOPE_API_KEY ?? process.env.QWEN_API_KEY ?? process.env.EPAM_API_KEY_QWEN;
+      return process.env.OPENROUTER_API_KEY ?? process.env.EPAM_API_KEY_OPENROUTER ?? process.env.DASHSCOPE_API_KEY ?? process.env.QWEN_API_KEY ?? process.env.EPAM_API_KEY_QWEN;
     default:
       return undefined;
   }

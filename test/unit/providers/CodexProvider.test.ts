@@ -27,6 +27,7 @@ function makeJsonStream(events: object[], delayMs = 10): EventEmitter & { kill: 
   const proc = new EventEmitter() as any;
   proc.stdout = stdout;
   proc.kill = vi.fn();
+  proc.catch = vi.fn().mockReturnValue(proc);
 
   // Emit events asynchronously, simulating real codex output
   (async () => {
@@ -154,7 +155,7 @@ describe('CodexProvider', () => {
     vi.mocked(execa).mockReturnValue(proc as any);
     await provider.complete(makeRequest([{ role: 'user', content: 'hi' }]));
 
-    expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(proc.kill).toHaveBeenCalledWith('SIGKILL');
   });
 
   it('returns (no response) if no agent message arrives before exit', async () => {

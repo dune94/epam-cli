@@ -89,6 +89,7 @@ export class CodexProvider implements LLMProvider {
       'exec',
       '--skip-git-repo-check',
       '--dangerously-bypass-approvals-and-sandbox',
+      '--ephemeral',  // no session files saved — avoids lock contention when killed mid-turn
       '--json',
     ];
 
@@ -102,6 +103,7 @@ export class CodexProvider implements LLMProvider {
       const s = ((Date.now() - start) / 1000).toFixed(0);
       process.stderr.write(`\r\x1b[2m⟳ Codex thinking... ${s}s\x1b[0m`);
     }, 1000);
+    timer.unref();
 
     return new Promise((resolve, reject) => {
       let buffer = '';
@@ -111,8 +113,9 @@ export class CodexProvider implements LLMProvider {
         if (resolved) return;
         resolved = true;
         clearInterval(timer);
+        clearTimeout(safetyTimer);
         process.stderr.write('\r\x1b[2K');
-        try { proc.kill('SIGTERM'); } catch { /* already exited */ }
+        try { proc.kill('SIGKILL'); } catch { /* already exited */ }
         resolve(text.trim() || '(no response)');
       };
 
@@ -120,6 +123,9 @@ export class CodexProvider implements LLMProvider {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: { ...process.env },
       });
+      // execa returns a Promise — suppress the rejection from SIGKILL so it
+      // doesn't become an unhandled rejection and crash the REPL process.
+      proc.catch(() => {});
 
       proc.stdout?.on('data', (chunk: Buffer) => {
         buffer += chunk.toString();
@@ -155,8 +161,10 @@ export class CodexProvider implements LLMProvider {
         }
       });
 
-      // Safety net — 5 minutes absolute max
-      setTimeout(() => finish('(timeout — try a simpler prompt)'), 5 * 60 * 1000);
+      // Safety net — 5 minutes absolute max.
+      // .unref() so this timer doesn't prevent Node.js from exiting normally.
+      const safetyTimer = setTimeout(() => finish('(timeout — try a simpler prompt)'), 5 * 60 * 1000);
+      safetyTimer.unref();
     });
   }
 

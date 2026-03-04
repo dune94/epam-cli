@@ -10,7 +10,7 @@ import type { ProviderChain } from '../../providers/ProviderChain.js';
 import type { HealthStatus } from '../../providers/health/types.js';
 import type { BudgetGuard } from '../../billing/BudgetGuard.js';
 import type { AuditorRegistry } from '../../auditors/AuditorRegistry.js';
-import { providersCommand } from './commands/ProvidersCommand.js';
+import { providerCommand } from './commands/ProviderCommand.js';
 import { orchestrateCommand } from './commands/OrchestrateCommand.js';
 import { statusCommand } from './commands/StatusCommand.js';
 import { diffCommand } from './commands/DiffCommand.js';
@@ -29,8 +29,6 @@ import { shareCommand } from './commands/ShareCommand.js';
 import { handoffCommand } from './commands/HandoffCommand.js';
 import { importCommand } from './commands/ImportCommand.js';
 import { modelCommand } from './commands/ModelCommand.js';
-import { copilotCommand } from './commands/CopilotCommand.js';
-import { failoverCommand } from './commands/FailoverCommand.js';
 import { mcpCommand } from './commands/MCPQueryCommand.js';
 
 export interface SlashCommandContext {
@@ -535,7 +533,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
 
   // ── /providers ──────────────────────────────────────────────────────────────
-  providersCommand,
+  providerCommand,
   orchestrateCommand,
   statusCommand,
   diffCommand,
@@ -554,8 +552,6 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   handoffCommand,
   importCommand,
   modelCommand,
-  copilotCommand,
-  failoverCommand,
   mcpCommand,
 ];
 

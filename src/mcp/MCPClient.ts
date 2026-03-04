@@ -53,7 +53,7 @@ export class MCPClient {
    */
   async query(query: MCPQuery): Promise<MCPResult> {
     const localController = new AbortController();
-    const timeoutId = setTimeout(() => localController.abort(), this.config.timeout || 3000);
+    const timeoutId = setTimeout(() => localController.abort(), this.config.timeout || 5000);
 
     try {
       // Extract ticket ID from query
@@ -77,16 +77,22 @@ export class MCPClient {
       } catch (mcpErr) {
         // MCP failed, fall through to direct API
         if (process.env.EPAM_DEBUG === '1') {
-          console.error('MCP failed, using direct API:', (mcpErr as Error).message);
+          console.error('[MCP] MCP failed, using direct API:', (mcpErr as Error).message);
         }
       }
 
       // Fall back to direct JIRA API
+      if (process.env.EPAM_DEBUG === '1') {
+        console.error('[MCP] Using direct JIRA API for:', ticketId);
+      }
       const jiraResult = await this.queryViaJiraAPI(ticketId, localController.signal);
       clearTimeout(timeoutId);
       return jiraResult;
 
     } catch (err) {
+      if (process.env.EPAM_DEBUG === '1') {
+        console.error('[MCP] Query error:', (err as Error).message);
+      }
       clearTimeout(timeoutId);
       return { source: this.config.baseUrl, items: [], error: undefined };
     }
@@ -95,7 +101,7 @@ export class MCPClient {
   /**
    * Initialize MCP session and get session ID
    */
-  private async initializeMCP(signal: AbortSignal): Promise<string> {
+  private async initializeMCP(signal: AbortSignal): Promise<void> {
     const initResponse = await fetch(`${this.config.baseUrl}/mcp`, {
       method: 'POST',
       headers: {
@@ -119,20 +125,14 @@ export class MCPClient {
       throw new Error(`MCP init failed: ${initResponse.status}`);
     }
 
-    // Parse SSE response
-    const text = await initResponse.text();
-    const dataMatch = text.match(/data:\s*({.*})/);
-    if (!dataMatch) {
-      throw new Error('Invalid MCP init response');
+    // Get session ID from response header
+    const sessionIdHeader = initResponse.headers.get('mcp-session-id');
+    if (sessionIdHeader) {
+      this.sessionId = sessionIdHeader;
+      if (process.env.EPAM_DEBUG === '1') {
+        console.error('[MCP] Session ID:', this.sessionId);
+      }
     }
-
-    const data = JSON.parse(dataMatch[1]);
-    if (data.result) {
-      // Store session ID from response headers or body
-      this.sessionId = initResponse.headers.get('mcp-session-id') || undefined;
-    }
-
-    return this.sessionId || '';
   }
 
   /**
@@ -154,7 +154,7 @@ export class MCPClient {
       headers['mcp-session-id'] = this.sessionId;
     }
 
-    // Step 2: Call JIRA tool
+    // Call JIRA tool
     const toolResponse = await fetch(`${this.config.baseUrl}/mcp`, {
       method: 'POST',
       headers,
@@ -164,7 +164,7 @@ export class MCPClient {
         method: 'tools/call',
         params: {
           name: 'jira_get_issue',
-          arguments: { issueIdOrKey: ticketId },
+          arguments: { issue_key: ticketId },  // Fixed: use issue_key not issueIdOrKey
         },
       }),
       signal,
@@ -174,19 +174,33 @@ export class MCPClient {
       throw new Error(`MCP tool call failed: ${toolResponse.status}`);
     }
 
-    const text = await toolResponse.text();
-    
     // Parse SSE response
-    const dataMatch = text.match(/data:\s*({.*})/);
+    const text = await toolResponse.text();
+    if (process.env.EPAM_DEBUG === '1') {
+      console.error('[MCP] Raw response:', text.substring(0, 500));
+    }
+
+    // Extract JSON from SSE format: "data: {...}"
+    const dataMatch = text.match(/data:\s*({[^}]+})/);
     if (!dataMatch) {
+      if (process.env.EPAM_DEBUG === '1') {
+        console.error('[MCP] No data match in response');
+      }
       return { source: this.config.baseUrl, items: [], error: undefined };
     }
 
     const data = JSON.parse(dataMatch[1]);
     
+    if (data.error) {
+      throw new Error(`MCP error: ${data.error.message}`);
+    }
+    
     if (data.result?.content?.[0]?.text) {
       try {
         const ticket = JSON.parse(data.result.content[0].text);
+        if (process.env.EPAM_DEBUG === '1') {
+          console.error('[MCP] Ticket found:', ticket.key, ticket.fields?.summary);
+        }
         return {
           source: this.config.baseUrl,
           items: [{
@@ -198,7 +212,10 @@ export class MCPClient {
             summary: `${ticket.key || ticketId}: ${ticket.fields?.summary || 'No summary'} (${ticket.fields?.status?.name || 'Unknown'})`,
           }],
         };
-      } catch {
+      } catch (parseErr) {
+        if (process.env.EPAM_DEBUG === '1') {
+          console.error('[MCP] Parse error:', (parseErr as Error).message);
+        }
         return {
           source: this.config.baseUrl,
           items: [{
@@ -220,6 +237,10 @@ export class MCPClient {
   private async queryViaJiraAPI(ticketId: string, signal: AbortSignal): Promise<MCPResult> {
     const jiraUrl = this.config.baseUrl.replace(':9010', '') + '/rest/api/3/issue/' + ticketId;
     
+    if (process.env.EPAM_DEBUG === '1') {
+      console.error('[JIRA] Direct API URL:', jiraUrl);
+    }
+    
     const response = await fetch(jiraUrl, {
       method: 'GET',
       headers: {
@@ -228,6 +249,10 @@ export class MCPClient {
       },
       signal,
     });
+
+    if (process.env.EPAM_DEBUG === '1') {
+      console.error('[JIRA] Response status:', response.status);
+    }
 
     // 404 - Ticket doesn't exist, return empty (NO MOCK DATA)
     if (response.status === 404) {
@@ -239,6 +264,10 @@ export class MCPClient {
     }
 
     const ticket = await response.json();
+    
+    if (process.env.EPAM_DEBUG === '1') {
+      console.error('[JIRA] Ticket found:', ticket.key, ticket.fields?.summary);
+    }
     
     return {
       source: this.config.baseUrl,
@@ -270,27 +299,27 @@ export class MCPClient {
 export function createMCPClients(): Record<string, MCPClient> {
   const clients: Record<string, MCPClient> = {};
 
-  // JIRA - 3 second timeout for fast fail
+  // JIRA - 5 second timeout for fast fail
   if (process.env.MCP_JIRA_URL) {
     clients.jira = new MCPClient({
       baseUrl: process.env.MCP_JIRA_URL,
-      timeout: 3000,
+      timeout: 5000,
     });
   }
 
-  // Confluence - 3 second timeout for fast fail
+  // Confluence - 5 second timeout for fast fail
   if (process.env.MCP_CONFLUENCE_URL) {
     clients.confluence = new MCPClient({
       baseUrl: process.env.MCP_CONFLUENCE_URL,
-      timeout: 3000,
+      timeout: 5000,
     });
   }
 
-  // Draw.io - 3 second timeout for fast fail
+  // Draw.io - 5 second timeout for fast fail
   if (process.env.MCP_DRAWIO_URL) {
     clients.drawio = new MCPClient({
       baseUrl: process.env.MCP_DRAWIO_URL,
-      timeout: 3000,
+      timeout: 5000,
     });
   }
 

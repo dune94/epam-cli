@@ -230,10 +230,11 @@ export class Repl {
             if (process.env.EPAM_DEBUG === '1') {
               console.error((err as Error).stack);
             }
+          } finally {
+            // Ensure we always reset and prompt
+            this.writer.reset();
+            prompt();
           }
-
-          this.writer.reset();
-          prompt();
         }
       );
     };

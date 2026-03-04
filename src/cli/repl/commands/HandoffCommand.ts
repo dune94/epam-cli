@@ -12,6 +12,11 @@ import { join } from 'path';
 import { ulid } from 'ulid';
 import { readTeamConfig } from './TeamCommand.js';
 import type { SessionBundle } from './ShareCommand.js';
+import {
+  isRedisAvailable,
+  storeSession,
+  enqueueHandoff,
+} from '../../../context/RedisSessionStore.js';
 
 export const handoffCommand: SlashCommand = {
   name: 'handoff',
@@ -86,18 +91,36 @@ export const handoffCommand: SlashCommand = {
     };
 
     try {
-      const handoffsDir = join(projectRoot, '.epam', 'handoffs');
-      mkdirSync(handoffsDir, { recursive: true });
-      const bundlePath = join(handoffsDir, `${handoffId}.epam-session.json`);
-      writeFileSync(bundlePath, JSON.stringify(bundle, null, 2), 'utf-8');
+      const useRedis = isRedisAvailable();
 
-      console.log(chalk.green(`✓ Session handed off to ${chalk.white(resolvedTarget)}`));
-      console.log(`  ${chalk.bold('Turns:')}  ${chalk.white(turns.length)}`);
-      console.log(`  ${chalk.bold('Bundle:')} ${chalk.white(bundlePath)}`);
-      console.log();
-      console.log(chalk.bold('Recipient runs:'));
-      console.log(chalk.dim(`  epam-cli import ${bundlePath}`));
-      console.log();
+      if (useRedis) {
+        await storeSession(bundle, handoffId);
+        await enqueueHandoff(resolvedTarget, handoffId);
+
+        console.log(chalk.green(`✓ Session handed off to ${chalk.white(resolvedTarget)}`));
+        console.log(`  ${chalk.bold('Turns:')}  ${chalk.white(turns.length)}`);
+        console.log(`  ${chalk.bold('Code:')}   ${chalk.cyan.bold(handoffId)}`);
+        console.log();
+        console.log(chalk.bold('Recipient runs:'));
+        console.log(chalk.dim(`  epam-cli import ${handoffId}`));
+        console.log(chalk.dim(`  Or in REPL: /import ${handoffId}`));
+        console.log(chalk.dim(`  Or: /team  (shows pending handoffs)`));
+        console.log();
+      } else {
+        const handoffsDir = join(projectRoot, '.epam', 'handoffs');
+        mkdirSync(handoffsDir, { recursive: true });
+        const bundlePath = join(handoffsDir, `${handoffId}.epam-session.json`);
+        writeFileSync(bundlePath, JSON.stringify(bundle, null, 2), 'utf-8');
+
+        console.log(chalk.green(`✓ Session handed off to ${chalk.white(resolvedTarget)}`));
+        console.log(`  ${chalk.bold('Turns:')}  ${chalk.white(turns.length)}`);
+        console.log(`  ${chalk.bold('Bundle:')} ${chalk.white(bundlePath)}`);
+        console.log();
+        console.log(chalk.bold('Recipient runs:'));
+        console.log(chalk.dim(`  epam-cli import ${bundlePath}`));
+        console.log(chalk.dim.yellow('  Tip: Set EPAM_REDIS_URL for zero-transfer handoff'));
+        console.log();
+      }
     } catch (err) {
       console.log(chalk.red('Failed to write handoff'));
       console.log(chalk.dim((err as Error).message));

@@ -9,6 +9,12 @@ import type { SlashCommand, SlashCommandContext } from '../SlashCommands.js';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { ulid } from 'ulid';
+import {
+  isRedisAvailable,
+  listHandoffs,
+  listTeamSessions,
+  getSessionMeta,
+} from '../../../context/RedisSessionStore.js';
 
 interface TeamConfig {
   name: string;
@@ -108,36 +114,66 @@ export const teamCommand: SlashCommand = {
       }
       console.log();
 
-      // Incoming handoffs (importable bundles)
-      const handoffsDir = join(process.cwd(), '.epam', 'handoffs');
-      const incomingBundles: string[] = [];
-      if (existsSync(handoffsDir)) {
-        try {
-          incomingBundles.push(
-            ...readdirSync(handoffsDir).filter(f => f.endsWith('.epam-session.json'))
-          );
-        } catch { /* ignore */ }
-      }
-      if (incomingBundles.length > 0) {
-        console.log(chalk.bold.yellow(`📥 Incoming Handoffs (${incomingBundles.length}):`));
-        for (const f of incomingBundles.slice(0, 3)) {
-          const fullPath = join(handoffsDir, f);
-          console.log(`  • ${chalk.cyan(f)}`);
-          console.log(chalk.dim(`    Import: /import ${fullPath}`));
+      // Incoming handoffs — check Redis first, fall back to file-based
+      if (isRedisAvailable()) {
+        const userEmail =
+          ctx.userEmail || process.env.EPAM_USER_EMAIL || process.env.USER || '';
+        const redisHandoffs = userEmail ? await listHandoffs(userEmail) : [];
+
+        // Also list team sessions shared with this team
+        const teamSessions = team ? await listTeamSessions(team.name) : [];
+        const allCodes = [...new Set([...redisHandoffs, ...teamSessions])];
+
+        if (allCodes.length > 0) {
+          console.log(chalk.bold.yellow(`📥 Shared Sessions (${allCodes.length}):`));
+          for (const code of allCodes.slice(0, 5)) {
+            const meta = await getSessionMeta(code);
+            if (meta) {
+              console.log(`  • ${chalk.cyan.bold(code)}`);
+              console.log(`    ${chalk.dim('From:')} ${meta.exportedBy}  ${chalk.dim('Turns:')} ${meta.turnCount}  ${chalk.dim('Model:')} ${meta.model}`);
+              if (meta.teamNote) console.log(`    ${chalk.dim('Note:')} ${chalk.white(meta.teamNote)}`);
+              console.log(chalk.dim(`    Import: /import ${code}`));
+            } else {
+              console.log(`  • ${chalk.cyan.bold(code)} ${chalk.dim('(expired or unavailable)')}`);
+            }
+          }
+          if (allCodes.length > 5) {
+            console.log(chalk.dim(`  ... and ${allCodes.length - 5} more`));
+          }
+          console.log();
         }
-        if (incomingBundles.length > 3) {
-          console.log(chalk.dim(`  ... and ${incomingBundles.length - 3} more in .epam/handoffs/`));
+      } else {
+        // File-based fallback
+        const handoffsDir = join(process.cwd(), '.epam', 'handoffs');
+        const incomingBundles: string[] = [];
+        if (existsSync(handoffsDir)) {
+          try {
+            incomingBundles.push(
+              ...readdirSync(handoffsDir).filter(f => f.endsWith('.epam-session.json'))
+            );
+          } catch { /* ignore */ }
         }
-        console.log();
+        if (incomingBundles.length > 0) {
+          console.log(chalk.bold.yellow(`📥 Incoming Handoffs (${incomingBundles.length}):`));
+          for (const f of incomingBundles.slice(0, 3)) {
+            const fullPath = join(handoffsDir, f);
+            console.log(`  • ${chalk.cyan(f)}`);
+            console.log(chalk.dim(`    Import: /import ${fullPath}`));
+          }
+          if (incomingBundles.length > 3) {
+            console.log(chalk.dim(`  ... and ${incomingBundles.length - 3} more in .epam/handoffs/`));
+          }
+          console.log();
+        }
       }
 
       // Quick actions
       console.log(chalk.bold('Quick Actions:'));
       console.log(`  ${chalk.cyan('/members')}        - List all members`);
       console.log(`  ${chalk.cyan('/invite <email>')}  - Invite new member`);
-      console.log(`  ${chalk.cyan('/share [note]')}    - Export session bundle`);
-      console.log(`  ${chalk.cyan('/handoff <user>')}  - Handoff session`);
-      console.log(`  ${chalk.cyan('/import <path>')}   - Import shared bundle`);
+      console.log(`  ${chalk.cyan('/share [note]')}    - Share session ${isRedisAvailable() ? chalk.dim('(→ Redis)') : chalk.dim('(→ file)')}`);
+      console.log(`  ${chalk.cyan('/handoff <user>')}  - Handoff session to team member`);
+      console.log(`  ${chalk.cyan('/import <code>')}   - Import session by code or file`);
       console.log();
       
     } catch (err) {

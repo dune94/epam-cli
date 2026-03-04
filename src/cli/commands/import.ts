@@ -13,26 +13,39 @@ import { resolveConfig } from '../../config/ConfigResolver.js';
 import { saveSession } from '../../context/SessionStore.js';
 import { ulid } from 'ulid';
 import type { SessionBundle } from '../repl/commands/ShareCommand.js';
+import { fetchSession, isSessionCode } from '../../context/RedisSessionStore.js';
 
 export function createImportCommand(): Command {
   return new Command('import')
     .description('Import a shared session bundle from a team member')
-    .argument('<file>', 'Path to .epam-session.json bundle')
+    .argument('<code-or-file>', 'Redis share code (ULID) or path to .epam-session.json bundle')
     .option('--no-start', 'Install session but do not start the REPL')
-    .action(async (file: string, opts: { start: boolean }) => {
-      const absPath = resolve(file);
-
-      if (!existsSync(absPath)) {
-        console.error(chalk.red(`✗ File not found: ${absPath}`));
-        process.exit(1);
-      }
-
+    .action(async (fileOrCode: string, opts: { start: boolean }) => {
       let bundle: SessionBundle;
-      try {
-        bundle = JSON.parse(readFileSync(absPath, 'utf-8')) as SessionBundle;
-      } catch {
-        console.error(chalk.red('✗ Invalid bundle — must be a valid .epam-session.json'));
-        process.exit(1);
+
+      if (isSessionCode(fileOrCode)) {
+        // Pull from Redis
+        console.log();
+        console.log(chalk.dim(`Fetching session ${fileOrCode} from Redis…`));
+        const fetched = await fetchSession(fileOrCode.toUpperCase());
+        if (!fetched) {
+          console.error(chalk.red(`✗ Session code not found: ${fileOrCode}`));
+          console.error(chalk.dim('  Code may have expired (7-day TTL) or EPAM_REDIS_URL is not set'));
+          process.exit(1);
+        }
+        bundle = fetched;
+      } else {
+        const absPath = resolve(fileOrCode);
+        if (!existsSync(absPath)) {
+          console.error(chalk.red(`✗ File not found: ${absPath}`));
+          process.exit(1);
+        }
+        try {
+          bundle = JSON.parse(readFileSync(absPath, 'utf-8')) as SessionBundle;
+        } catch {
+          console.error(chalk.red('✗ Invalid bundle — must be a valid .epam-session.json'));
+          process.exit(1);
+        }
       }
 
       if (bundle.version !== '1' || !Array.isArray(bundle.turns)) {

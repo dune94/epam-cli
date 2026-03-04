@@ -12,6 +12,7 @@ import { resolve } from 'path';
 import { ulid } from 'ulid';
 import { saveSession } from '../../../context/SessionStore.js';
 import type { SessionBundle } from './ShareCommand.js';
+import { fetchSession, isSessionCode } from '../../../context/RedisSessionStore.js';
 
 export const importCommand: SlashCommand = {
   name: 'import',
@@ -26,20 +27,12 @@ export const importCommand: SlashCommand = {
       console.log();
       console.log(chalk.bold.cyan('📥 Import Session'));
       console.log();
-      console.log(chalk.dim('Usage: /import <path-to-bundle.epam-session.json>'));
+      console.log(chalk.dim('Usage: /import <code>        (Redis share code)'));
+      console.log(chalk.dim('       /import <file.json>  (local bundle file)'));
       console.log();
-      console.log(chalk.bold('Example:'));
+      console.log(chalk.bold('Examples:'));
+      console.log(chalk.dim('  /import 01JNPQ2VKFGXR5Y3BZ8WEMA4TK'));
       console.log(chalk.dim('  /import ~/Downloads/session.epam-session.json'));
-      console.log(chalk.dim('  /import .epam/shared/01J9X.epam-session.json'));
-      console.log();
-      return true;
-    }
-
-    const absPath = resolve(bundlePath);
-
-    if (!existsSync(absPath)) {
-      console.log();
-      console.log(chalk.red(`✗ File not found: ${absPath}`));
       console.log();
       return true;
     }
@@ -49,12 +42,33 @@ export const importCommand: SlashCommand = {
     console.log();
 
     let bundle: SessionBundle;
-    try {
-      bundle = JSON.parse(readFileSync(absPath, 'utf-8')) as SessionBundle;
-    } catch {
-      console.log(chalk.red('✗ Invalid bundle file — must be a valid .epam-session.json'));
-      console.log();
-      return true;
+
+    // Detect Redis session code (ULID) vs local file path
+    if (isSessionCode(bundlePath)) {
+      // Pull from Redis
+      const fetched = await fetchSession(bundlePath.toUpperCase());
+      if (!fetched) {
+        console.log(chalk.red(`✗ Session code not found: ${bundlePath}`));
+        console.log(chalk.dim('  Code may have expired (7-day TTL) or Redis is unavailable'));
+        console.log();
+        return true;
+      }
+      bundle = fetched;
+    } else {
+      // Local file path
+      const absPath = resolve(bundlePath);
+      if (!existsSync(absPath)) {
+        console.log(chalk.red(`✗ File not found: ${absPath}`));
+        console.log();
+        return true;
+      }
+      try {
+        bundle = JSON.parse(readFileSync(absPath, 'utf-8')) as SessionBundle;
+      } catch {
+        console.log(chalk.red('✗ Invalid bundle file — must be a valid .epam-session.json'));
+        console.log();
+        return true;
+      }
     }
 
     if (bundle.version !== '1' || !Array.isArray(bundle.turns)) {

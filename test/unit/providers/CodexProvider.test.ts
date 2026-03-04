@@ -4,6 +4,11 @@
  * The native `codex` CLI returns an initial response in <5s.
  * CodexProvider must match this by using --json streaming and returning
  * after the first item.completed agent_message — before tool calls execute.
+ *
+ * Session design: stateless. Each invocation is a fresh `codex exec`.
+ * Multi-turn conversations inject prior history into the prompt as a
+ * "Conversation history:" prefix. No `resume`, no thread_id — avoids
+ * the hang caused by resuming an incomplete (mid-SIGTERM) session.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -73,26 +78,14 @@ describe('CodexProvider', () => {
     const elapsed = Date.now() - start;
 
     expect(response.content[0]).toMatchObject({ type: 'text', text: 'I will build the game!' });
-    // Should return after first turn, not wait for exec loop
+    // Should return after first agent_message, not wait for exec loop
     expect(elapsed).toBeLessThan(500); // mock is fast; real codex is <5s
   });
 
-  it('uses resume <thread_id> for follow-up messages (not --last)', async () => {
+  it('injects conversation history into fresh prompt for follow-ups (no resume)', async () => {
     const provider = new CodexProvider();
 
-    // First turn — sets threadId
-    vi.mocked(execa).mockReturnValueOnce(makeJsonStream([
-      { type: 'thread.started', thread_id: 'abc-123' },
-      { type: 'turn.started' },
-      { type: 'item.completed', item: { id: 'i0', type: 'agent_message', text: 'First response.' } },
-      { type: 'turn.completed', usage: {} },
-    ]) as any);
-
-    await provider.complete(makeRequest([{ role: 'user', content: 'First message' }]));
-
-    // Second turn — should resume with exact thread_id
-    vi.mocked(execa).mockReturnValueOnce(makeJsonStream([
-      { type: 'thread.started', thread_id: 'abc-123' },
+    vi.mocked(execa).mockReturnValue(makeJsonStream([
       { type: 'turn.started' },
       { type: 'item.completed', item: { id: 'i0', type: 'agent_message', text: 'Follow-up response.' } },
       { type: 'turn.completed', usage: {} },
@@ -104,13 +97,18 @@ describe('CodexProvider', () => {
       { role: 'user', content: 'Follow up question' },
     ]));
 
-    const [, args] = vi.mocked(execa).mock.calls[1] as [string, string[]];
-    expect(args).toContain('resume');
-    expect(args).toContain('abc-123');
-    expect(args).not.toContain('--last');
+    const [, args] = vi.mocked(execa).mock.calls[0] as [string, string[]];
+    // Must NOT use resume — that causes hangs on incomplete sessions
+    expect(args).not.toContain('resume');
+    // The prompt arg should contain history as a prefix
+    const promptArg = args[args.length - 1];
+    expect(promptArg).toContain('Conversation history');
+    expect(promptArg).toContain('First message');
+    expect(promptArg).toContain('First response.');
+    expect(promptArg).toContain('Follow up question');
   });
 
-  it('does not use resume for first message', async () => {
+  it('sends raw prompt for single-turn (no history prefix)', async () => {
     const provider = new CodexProvider();
 
     vi.mocked(execa).mockReturnValue(makeJsonStream([
@@ -124,7 +122,9 @@ describe('CodexProvider', () => {
     ]));
 
     const [, args] = vi.mocked(execa).mock.calls[0] as [string, string[]];
-    expect(args).not.toContain('resume');
+    const promptArg = args[args.length - 1];
+    expect(promptArg).toBe('Hello');
+    expect(promptArg).not.toContain('Conversation history');
   });
 
   it('passes --model flag when model is set', async () => {

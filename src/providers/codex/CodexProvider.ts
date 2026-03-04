@@ -4,9 +4,15 @@
  * LLM Provider implementation for OpenAI Codex CLI.
  * Uses Codex CLI binary for authentication and API calls.
  *
- * Key design: uses `codex exec --json` and returns after the FIRST
- * agent message turn, rather than waiting for the full agentic loop.
- * This matches the native `codex` CLI interactive UX (<5s response).
+ * Key design: stateless fresh invocations with history injected into the
+ * prompt. We never use `resume` — killing the process mid-turn (after the
+ * first agent_message) leaves the session in an incomplete state, and
+ * resuming it causes codex to finish the queued tool calls before reading
+ * the new message, causing a hang.
+ *
+ * Instead: build a "Conversation history:\n..." prefix and run a fresh
+ * `codex exec --json` each time. Returns on the first `agent_message`
+ * event (<5s), then SIGTERMs. No state to manage, no resume edge cases.
  */
 
 import { execa } from 'execa';
@@ -17,25 +23,20 @@ export class CodexProvider implements LLMProvider {
   readonly name = 'codex';
   readonly defaultModel = 'gpt-5-codex';
 
-  /** Thread ID from the most recent session — used for exact resume on follow-ups */
-  private threadId: string | null = null;
-
   constructor(
     private model?: string
   ) {}
 
   async complete(request: ProviderRequest): Promise<ProviderResponse> {
-    const prompt = this.extractPrompt(request);
-    const isFollowUp = request.messages.filter(m => m.role === 'user').length > 1;
-    const responseText = await this.runCodex(prompt, isFollowUp);
+    const prompt = this.buildPrompt(request);
+    const responseText = await this.runCodex(prompt);
     const content: ContentPart[] = [{ type: 'text', text: responseText }];
     return { content, stopReason: 'end_turn', usage: { inputTokens: 0, outputTokens: 0 } };
   }
 
   async stream(request: ProviderRequest, handler: StreamHandler): Promise<ProviderResponse> {
-    const prompt = this.extractPrompt(request);
-    const isFollowUp = request.messages.filter(m => m.role === 'user').length > 1;
-    const responseText = await this.runCodex(prompt, isFollowUp);
+    const prompt = this.buildPrompt(request);
+    const responseText = await this.runCodex(prompt);
 
     // Stream the captured response word by word for a natural feel
     const words = responseText.split(' ');
@@ -48,28 +49,42 @@ export class CodexProvider implements LLMProvider {
     return { content, stopReason: 'end_turn', usage: { inputTokens: 0, outputTokens: 0 } };
   }
 
-  private extractPrompt(request: ProviderRequest): string {
-    const lastMessage = request.messages.filter(m => m.role === 'user').pop();
-    if (!lastMessage) throw new Error('No user message found');
-    return typeof lastMessage.content === 'string'
-      ? lastMessage.content
-      : JSON.stringify(lastMessage.content);
+  /**
+   * Build a single prompt string from the full message history.
+   *
+   * For single-turn conversations this is just the user message.
+   * For multi-turn, we inject prior turns as a "Conversation history:"
+   * prefix so codex has context without needing session resume.
+   */
+  private buildPrompt(request: ProviderRequest): string {
+    const messages = request.messages;
+    if (messages.length <= 1) {
+      const msg = messages[0];
+      return typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+    }
+
+    const lines: string[] = ['Conversation history (for context):'];
+    for (const msg of messages.slice(0, -1)) {
+      const role = msg.role === 'user' ? 'User' : 'Assistant';
+      const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+      lines.push(`${role}: ${content}`);
+    }
+    lines.push('');
+    lines.push('Current request:');
+    const last = messages[messages.length - 1];
+    lines.push(typeof last.content === 'string' ? last.content : JSON.stringify(last.content));
+    return lines.join('\n');
   }
 
   /**
-   * Run codex and return after the FIRST agent message turn.
+   * Run codex and return after the FIRST agent_message event.
    *
-   * Uses `--json` to stream structured events. As soon as the first
-   * `turn.completed` event arrives (with a non-empty agent_message),
-   * we kill the process and return. This gives <5s responses even for
-   * complex prompts — matching the native codex interactive CLI UX.
-   *
-   * Session continuity: captures `thread_id` from `thread.started` and
-   * stores it on the provider instance. Follow-up turns use
-   * `codex exec resume <thread_id>` for exact session targeting — much
-   * more reliable than `--last` which can pick up unrelated sessions.
+   * Uses `--json` to stream structured events. The first agent_message
+   * fires within ~2-3s — before codex starts executing any shell tools.
+   * We return immediately and SIGTERM the process. Next message starts
+   * a completely fresh invocation with history in the prompt.
    */
-  private async runCodex(prompt: string, isFollowUp = false): Promise<string> {
+  private async runCodex(prompt: string): Promise<string> {
     const args: string[] = [
       'exec',
       '--skip-git-repo-check',
@@ -78,13 +93,7 @@ export class CodexProvider implements LLMProvider {
     ];
 
     if (this.model) args.push('--model', this.model);
-
-    if (isFollowUp && this.threadId) {
-      // Resume the exact previous session by thread ID
-      args.push('resume', this.threadId, prompt);
-    } else {
-      args.push(prompt);
-    }
+    args.push(prompt);
 
     // Show elapsed timer so the user knows Codex is working
     const start = Date.now();
@@ -121,10 +130,6 @@ export class CodexProvider implements LLMProvider {
           if (!line.trim()) continue;
           try {
             const event = JSON.parse(line);
-            // Capture session thread ID for reliable resume on follow-ups
-            if (event.type === 'thread.started' && event.thread_id) {
-              this.threadId = event.thread_id;
-            }
             // Return on the FIRST agent_message — before tool calls execute.
             // turn.completed fires only after all shell commands in the turn
             // finish (can be 10-30s). The agent_message fires within ~2-3s.

@@ -64,15 +64,33 @@ export function createImportCommand(): Command {
       console.log(`  ${chalk.bold('Session:')} ${chalk.dim(newSessionId)}`);
       console.log();
 
+      // Show last 3 turns as context recap before starting REPL
+      const recentTurns = bundle.turns.slice(-3);
+      if (recentTurns.length > 0) {
+        console.log(chalk.bold('─── Last ' + recentTurns.length + ' turn' + (recentTurns.length > 1 ? 's' : '') + ' ───────────────────────────────'));
+        console.log();
+        for (const turn of recentTurns) {
+          const userPreview = turn.userMessage.length > 120
+            ? turn.userMessage.slice(0, 120) + '…'
+            : turn.userMessage;
+          console.log(chalk.bold.blue('You: ') + chalk.white(userPreview));
+          const assistantPreview = turn.assistantResponse.length > 200
+            ? turn.assistantResponse.slice(0, 200) + '…'
+            : turn.assistantResponse;
+          console.log(chalk.bold.green('AI:  ') + chalk.dim(assistantPreview));
+          console.log();
+        }
+        console.log(chalk.bold('─'.repeat(50)));
+        console.log();
+      }
+
       if (opts.start === false) {
         console.log(chalk.dim(`Resume with: epam-cli chat  then  /resume ${newSessionId}`));
         console.log();
         return;
       }
 
-      // Auto-start REPL with the session pre-loaded
-      console.log(chalk.dim('Starting REPL — use /resume to load the session…'));
-      console.log(chalk.dim(`Session ID: ${newSessionId}`));
+      console.log(chalk.dim('Starting session — continue the conversation below ↓'));
       console.log();
 
       // Dynamically start chat with auto-resume

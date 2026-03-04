@@ -95,7 +95,31 @@ export const importCommand: SlashCommand = {
     }
     console.log(`  ${chalk.bold('Exported:')} ${chalk.white(bundle.exportedAt)}`);
     console.log();
-    console.log(chalk.dim('You are now continuing this session. Type your next message.'));
+
+    // Show last 3 turns as context recap
+    const recentTurns = bundle.turns.slice(-3);
+    if (recentTurns.length > 0) {
+      console.log(chalk.bold('─── Last ' + recentTurns.length + ' turn' + (recentTurns.length > 1 ? 's' : '') + ' ───────────────────────────────'));
+      console.log();
+      for (const turn of recentTurns) {
+        // User message
+        const userPreview = turn.userMessage.length > 120
+          ? turn.userMessage.slice(0, 120) + '…'
+          : turn.userMessage;
+        console.log(chalk.bold.blue('You: ') + chalk.white(userPreview));
+
+        // Assistant response
+        const assistantPreview = turn.assistantResponse.length > 200
+          ? turn.assistantResponse.slice(0, 200) + '…'
+          : turn.assistantResponse;
+        console.log(chalk.bold.green('AI:  ') + chalk.dim(assistantPreview));
+        console.log();
+      }
+      console.log(chalk.bold('─'.repeat(50)));
+      console.log();
+    }
+
+    console.log(chalk.dim('Continue the conversation below ↓'));
     console.log();
 
     return true;

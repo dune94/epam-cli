@@ -6,6 +6,10 @@
 
 import chalk from 'chalk';
 import type { SlashCommand, SlashCommandContext } from '../SlashCommands.js';
+import { writeFileSync, mkdirSync } from 'fs';
+import { join } from 'path';
+import { ulid } from 'ulid';
+import { readTeamConfig } from './TeamCommand.js';
 
 export const handoffCommand: SlashCommand = {
   name: 'handoff',
@@ -36,64 +40,62 @@ export const handoffCommand: SlashCommand = {
     console.log();
     console.log(chalk.bold.cyan('🔄 Session Handoff'));
     console.log();
-    
-    // Session info
-    const sessionInfo = {
-      id: `session-${Date.now()}`,
-      messages: ctx.messages.length,
-      turns: ctx.sessionTurnCount,
-      context: ctx.config.projectRoot || 'N/A',
+
+    const projectRoot = ctx.config.projectRoot || process.cwd();
+    const team = readTeamConfig(projectRoot);
+
+    // Resolve target: match by email or name from team.json
+    let resolvedTarget = targetUser;
+    if (team) {
+      const match = team.members.find(
+        m => m.email === targetUser || m.name === targetUser
+      );
+      if (match) resolvedTarget = match.email;
+    }
+
+    const handoffId = ulid();
+    const handoff = {
+      id: handoffId,
+      targetUser: resolvedTarget,
+      createdAt: new Date().toISOString(),
+      session: {
+        id: `session-${Date.now()}`,
+        messages: ctx.messages.length,
+        turns: ctx.sessionTurnCount,
+        model: ctx.currentModel,
+        provider: ctx.config.provider,
+        projectRoot: ctx.config.projectRoot || process.cwd(),
+      },
+      lastMessage:
+        ctx.messages.length > 0
+          ? String(
+              typeof ctx.messages[ctx.messages.length - 1].content === 'string'
+                ? ctx.messages[ctx.messages.length - 1].content
+                : JSON.stringify(ctx.messages[ctx.messages.length - 1].content)
+            ).slice(0, 200)
+          : '',
     };
-    
-    console.log(chalk.bold('Current Session:'));
-    console.log(`  ID: ${chalk.white(sessionInfo.id)}`);
-    console.log(`  Messages: ${chalk.white(sessionInfo.messages)}`);
-    console.log(`  Turns: ${chalk.white(sessionInfo.turns)}`);
-    console.log(`  Context: ${chalk.white(sessionInfo.context)}`);
-    console.log();
-    
-    console.log(chalk.bold('Transferring To:'));
-    console.log(`  User: ${chalk.white(targetUser)}`);
-    console.log();
-    
-    // In real implementation, call EPAM backend API
-    console.log(chalk.yellow('⚠  Backend API Call Required'));
-    console.log();
-    
-    console.log(chalk.bold('API Request:'));
-    console.log(chalk.dim('  POST /api/sessions/{sessionId}/handoff'));
-    console.log(chalk.dim('  Authorization: Bearer {token}'));
-    console.log(chalk.dim('  Content-Type: application/json'));
-    console.log();
-    console.log(chalk.dim('  Payload:'));
-    console.log(chalk.dim('  {'));
-    console.log(chalk.dim(`    "targetUser": "${targetUser}",`));
-    console.log(chalk.dim('    "transferContext": true,'));
-    console.log(chalk.dim('    "transferFiles": true,'));
-    console.log(chalk.dim('    "message": "Handing off this session for continuation"'));
-    console.log(chalk.dim('  }'));
-    console.log();
-    
-    console.log(chalk.bold('Expected Response:'));
-    console.log(chalk.dim('  {'));
-    console.log(chalk.dim('    "handoffId": "handoff_456",'));
-    console.log(chalk.dim('    "status": "transferred",'));
-    console.log(chalk.dim('    "notifiedAt": "2024-01-15T10:30:00Z"'));
-    console.log(chalk.dim('  }'));
-    console.log();
-    
-    console.log(chalk.green('✓ Session handoff initiated'));
-    console.log();
-    console.log(chalk.bold('What Happens Next:'));
-    console.log(chalk.dim('  1. Target user receives notification'));
-    console.log(chalk.dim('  2. Session appears in their queue'));
-    console.log(chalk.dim('  3. They can continue from last message'));
-    console.log(chalk.dim('  4. Full context and file state transferred'));
-    console.log();
-    
-    console.log(chalk.dim('Tip: Use /sessions to see handoffs'));
-    console.log();
-    
+
+    try {
+      const handoffsDir = join(projectRoot, '.epam', 'handoffs');
+      mkdirSync(handoffsDir, { recursive: true });
+      writeFileSync(
+        join(handoffsDir, `${handoffId}.json`),
+        JSON.stringify(handoff, null, 2),
+        'utf-8'
+      );
+
+      console.log(chalk.green(`✓ Session handed off to ${chalk.white(resolvedTarget)}`));
+      console.log(`  Handoff ID: ${chalk.dim(handoffId)}`);
+      console.log(`  Turns transferred: ${chalk.white(ctx.sessionTurnCount)}`);
+      console.log(`  File: ${chalk.dim(join('.epam', 'handoffs', `${handoffId}.json`))}`);
+      console.log();
+    } catch (err) {
+      console.log(chalk.red('Failed to write handoff'));
+      console.log(chalk.dim((err as Error).message));
+      console.log();
+    }
+
     return true;
   },
 };

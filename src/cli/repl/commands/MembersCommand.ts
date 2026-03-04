@@ -8,6 +8,7 @@ import chalk from 'chalk';
 import type { SlashCommand, SlashCommandContext } from '../SlashCommands.js';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { inviteCommand } from './InviteCommand.js';
 
 interface TeamMember {
   id: string;
@@ -39,7 +40,8 @@ export const membersCommand: SlashCommand = {
         console.log();
         return true;
       }
-      return inviteMember(email, ctx);
+      // Delegate to invite command with email [role]
+      return inviteCommand.execute(email, ctx);
     }
     
     console.log(chalk.red(`Unknown members command: ${trimmedArgs}`));
@@ -124,32 +126,6 @@ function listMembers(ctx: SlashCommandContext): boolean {
     console.log(chalk.dim((err as Error).message));
     console.log();
   }
-  
-  return true;
-}
-
-/**
- * Invite a new member
- */
-function inviteMember(email: string, ctx: SlashCommandContext): boolean {
-  console.log();
-  console.log(chalk.bold.cyan('📧 Invite Member'));
-  console.log();
-  
-  console.log(chalk.bold(`Inviting: ${chalk.white(email)}`));
-  console.log();
-  
-  // In real implementation, this would call EPAM backend API
-  console.log(chalk.yellow('⚠  Backend integration required'));
-  console.log();
-  console.log(chalk.dim('This command would:'));
-  console.log(chalk.dim('  1. Call EPAM backend API to send invitation'));
-  console.log(chalk.dim('  2. Create pending member record'));
-  console.log(chalk.dim('  3. Send email notification'));
-  console.log();
-  console.log(chalk.dim('API Endpoint: POST /api/teams/{teamId}/members/invite'));
-  console.log(chalk.dim('Payload: { email, role: "member" }'));
-  console.log();
   
   return true;
 }

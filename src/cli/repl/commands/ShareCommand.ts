@@ -6,9 +6,10 @@
 
 import chalk from 'chalk';
 import type { SlashCommand, SlashCommandContext } from '../SlashCommands.js';
-import { writeFile, mkdir } from 'fs/promises';
+import { writeFile, mkdir, readFile } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { readTeamConfig, writeTeamConfig } from './TeamCommand.js';
 
 export const shareCommand: SlashCommand = {
   name: 'share',
@@ -48,59 +49,27 @@ export const shareCommand: SlashCommand = {
       // Ensure directory exists
       await mkdir(join(exportPath, '..'), { recursive: true });
       await writeFile(exportPath, transcript, 'utf-8');
-      
-      console.log(chalk.green('✓ Session exported locally'));
+
+      // Register in team.json sharedSessions
+      const projectRoot = ctx.config.projectRoot || process.cwd();
+      const team = readTeamConfig(projectRoot);
+      if (team && !team.sharedSessions.includes(sessionInfo.id)) {
+        team.sharedSessions.push(sessionInfo.id);
+        writeTeamConfig(projectRoot, team);
+      }
+
+      console.log(chalk.green('✓ Session shared with team'));
       console.log(chalk.dim(`  Path: ${exportPath}`));
+      console.log(chalk.dim(`  ID: ${sessionInfo.id}`));
+      console.log(chalk.dim('  Visible via /team'));
       console.log();
       
     } catch (err) {
-      console.log(chalk.yellow('⚠  Could not export locally'));
+      console.log(chalk.yellow('⚠  Could not share session'));
       console.log(chalk.dim((err as Error).message));
       console.log();
     }
-    
-    // Share via EPAM backend API
-    console.log(chalk.bold('Backend API Integration:'));
-    console.log();
-    console.log(chalk.dim('This command would:'));
-    console.log(chalk.dim('  1. Upload session transcript to EPAM backend'));
-    console.log(chalk.dim('  2. Set sharing permissions'));
-    console.log(chalk.dim('  3. Notify team members'));
-    console.log();
-    
-    console.log(chalk.bold('API Request:'));
-    console.log(chalk.dim('  POST /api/teams/{teamId}/sessions/share'));
-    console.log(chalk.dim('  Authorization: Bearer {token}'));
-    console.log(chalk.dim('  Content-Type: application/json'));
-    console.log();
-    console.log(chalk.dim('  Payload:'));
-    console.log(chalk.dim('  {'));
-    console.log(chalk.dim(`    "sessionId": "${sessionInfo.id}",`));
-    console.log(chalk.dim('    "visibility": "team",'));
-    console.log(chalk.dim('    "permissions": ['));
-    console.log(chalk.dim('      { "role": "member", "access": "read" },'));
-    console.log(chalk.dim('      { "role": "admin", "access": "write" }'));
-    console.log(chalk.dim('    ],'));
-    console.log(chalk.dim('    "notifyTeam": true'));
-    console.log(chalk.dim('  }'));
-    console.log();
-    
-    console.log(chalk.bold('Expected Response:'));
-    console.log(chalk.dim('  {'));
-    console.log(chalk.dim('    "shareId": "share_789",'));
-    console.log(chalk.dim('    "url": "https://epam.ai/s/share_789",'));
-    console.log(chalk.dim('    "accessCount": 0'));
-    console.log(chalk.dim('  }'));
-    console.log();
-    
-    console.log(chalk.green('✓ Session shared with team'));
-    console.log(chalk.dim('  Team members can now view this session'));
-    console.log(chalk.dim('  Access via: /sessions view ' + sessionInfo.id));
-    console.log();
-    
-    console.log(chalk.dim('Tip: Use /handoff to transfer session ownership'));
-    console.log();
-    
+
     return true;
   },
 };

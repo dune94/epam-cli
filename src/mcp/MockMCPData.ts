@@ -2,6 +2,7 @@
  * Mock MCP Data for Demo
  * 
  * Provides realistic JIRA/Confluence data when real API is unavailable
+ * Used ONLY as fallback when real MCP/JIRA API returns 404
  */
 
 export interface MockTicket {
@@ -21,7 +22,7 @@ export interface MockPage {
 }
 
 /**
- * Mock JIRA tickets for demo
+ * Mock JIRA tickets for demo (used when real JIRA unavailable)
  */
 export const MOCK_JIRA_TICKETS: Record<string, MockTicket> = {
   'AMSD-1013': {

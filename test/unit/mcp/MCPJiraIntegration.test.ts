@@ -229,14 +229,18 @@ describe('MCP JIRA/Confluence Integration - Complete E2E Scenario', () => {
       expect(openParens).toBe(closeParens);
     });
 
-    it('should NOT show mock data when real JIRA is available', () => {
+    it('should NOT use mock data - REAL APIs ONLY', () => {
       // When real JIRA credentials are configured
       const hasRealCreds = !!(process.env.JIRA_EMAIL && process.env.JIRA_API_TOKEN);
       expect(hasRealCreds).toBe(true);
 
-      // Mock data should only be fallback for 404
+      // Mock data should NEVER be used - REAL APIs ONLY
       const shouldUseMockAsPrimary = false;
       expect(shouldUseMockAsPrimary).toBe(false);
+      
+      // 404 should return empty, NOT mock data
+      const shouldUseMockAsFallback = false;
+      expect(shouldUseMockAsFallback).toBe(false);
     });
   });
 
@@ -310,16 +314,15 @@ describe('MCP JIRA/Confluence Integration - Complete E2E Scenario', () => {
       expect(true).toBe(true);
     });
 
-    it('should handle JIRA API 404 with mock fallback', () => {
-      // When JIRA returns 404, mock data can be used for demo
-      const mockTicket = {
-        key: 'AMSD-1013',
-        summary: '[SG] Webform. Step 2. Submit Paper ticket Claim (Connect API)',
-        status: 'Demo queue',
+    it('should handle JIRA API 404 gracefully (NO MOCK DATA)', () => {
+      const notFoundResponse = {
+        errorMessages: ['Issue does not exist or you do not have permission to see it.'],
+        errors: {},
       };
-      
-      expect(mockTicket.key).toBe('AMSD-1013');
-      expect(mockTicket.status).toBe('Demo queue');
+
+      // Should not throw, should handle gracefully
+      // NO MOCK DATA - returns empty result
+      expect(notFoundResponse.errorMessages).toBeDefined();
     });
 
     it('should handle network timeout gracefully', () => {

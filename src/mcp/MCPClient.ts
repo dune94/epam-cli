@@ -4,11 +4,10 @@
  * Connects to MCP (Model Context Protocol) servers
  * Uses JSON-RPC 2.0 over streamable HTTP
  * Falls back to direct JIRA API when MCP unavailable
- * Falls back to mock data when real JIRA returns 404
+ * NO MOCK DATA - uses REAL APIs only
  */
 
 import { logger } from '../utils/logger.js';
-import { searchMockTickets } from './MockMCPData.js';
 
 export interface MCPConfig {
   baseUrl: string;
@@ -216,7 +215,7 @@ export class MCPClient {
 
   /**
    * Query via direct JIRA API (fallback)
-   * Falls back to mock data when real JIRA returns 404
+   * NO MOCK DATA - returns empty if JIRA returns 404
    */
   private async queryViaJiraAPI(ticketId: string, signal: AbortSignal): Promise<MCPResult> {
     const jiraUrl = this.config.baseUrl.replace(':9010', '') + '/rest/api/3/issue/' + ticketId;
@@ -230,23 +229,9 @@ export class MCPClient {
       signal,
     });
 
-    // 404 - Ticket doesn't exist, use mock data for demo
+    // 404 - Ticket doesn't exist, return empty (NO MOCK DATA)
     if (response.status === 404) {
-      const mockTickets = searchMockTickets(ticketId);
-      if (mockTickets.length > 0) {
-        const ticket = mockTickets[0];
-        return {
-          source: this.config.baseUrl,
-          items: [{
-            id: ticket.key,
-            title: ticket.summary,
-            status: ticket.status,
-            url: `${this.config.baseUrl.replace(':9010', '')}/browse/${ticket.key}`,
-            updated: ticket.updated,
-            summary: `${ticket.key}: ${ticket.summary} (${ticket.status})`,
-          }],
-        };
-      }
+      return { source: this.config.baseUrl, items: [], error: undefined };
     }
 
     if (!response.ok) {

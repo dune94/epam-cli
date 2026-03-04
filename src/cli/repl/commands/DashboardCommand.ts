@@ -53,23 +53,7 @@ export const dashboardCommand: SlashCommand = {
       }
     }
     
-    // Detect WSL2 — use cmd.exe interop to open Windows browser
-    const isWSL = process.env.WSL_DISTRO_NAME != null
-      || process.env.WSLENV != null
-      || (await import('fs')).existsSync('/proc/sys/fs/binfmt_misc/WSLInterop');
-
-    async function openUrl(url: string): Promise<boolean> {
-      const attempts = isWSL
-        ? [['cmd.exe', ['/c', 'start', url.replace(/&/g, '^&')]]]
-        : [['xdg-open', [url]], ['open', [url]]];
-
-      for (const [bin, args] of attempts) {
-        const result = await execa(bin as string, args as string[], { reject: false, timeout: 5000 });
-        if (result.exitCode === 0) return true;
-      }
-      return false;
-    }
-
+    // Open specific dashboard(s)
     const toOpen = dashboardName === 'all' 
       ? Object.entries(DASHBOARDS)
       : [[dashboardName, DASHBOARDS[dashboardName as keyof typeof DASHBOARDS]]];
@@ -86,17 +70,26 @@ export const dashboardCommand: SlashCommand = {
       }
       
       try {
-        const ok = await openUrl(url as string);
-        if (ok) {
+        // Try to open in browser
+        await execa('xdg-open', [url], { 
+          reject: false,
+          timeout: 5000,
+        });
+        console.log(`  ${chalk.green('✓')} ${name}: ${chalk.dim(url)}`);
+        opened++;
+      } catch {
+        // Fallback for macOS
+        try {
+          await execa('open', [url], { 
+            reject: false,
+            timeout: 5000,
+          });
           console.log(`  ${chalk.green('✓')} ${name}: ${chalk.dim(url)}`);
           opened++;
-        } else {
+        } catch {
           console.log(`  ${chalk.yellow('!')} ${name}: ${chalk.dim(url)} ${chalk.dim('(auto-open failed, copy URL)')}`);
           failed++;
         }
-      } catch {
-        console.log(`  ${chalk.yellow('!')} ${name}: ${chalk.dim(url)} ${chalk.dim('(auto-open failed, copy URL)')}`);
-        failed++;
       }
     }
     

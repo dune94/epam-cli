@@ -17,6 +17,9 @@ export class CodexProvider implements LLMProvider {
   readonly name = 'codex';
   readonly defaultModel = 'gpt-5-codex';
 
+  /** Thread ID from the most recent session — used for exact resume on follow-ups */
+  private threadId: string | null = null;
+
   constructor(
     private model?: string
   ) {}
@@ -61,8 +64,10 @@ export class CodexProvider implements LLMProvider {
    * we kill the process and return. This gives <5s responses even for
    * complex prompts — matching the native codex interactive CLI UX.
    *
-   * For follow-up messages (conversation history > 1 user turn),
-   * we use `codex exec resume --last` to continue the previous session.
+   * Session continuity: captures `thread_id` from `thread.started` and
+   * stores it on the provider instance. Follow-up turns use
+   * `codex exec resume <thread_id>` for exact session targeting — much
+   * more reliable than `--last` which can pick up unrelated sessions.
    */
   private async runCodex(prompt: string, isFollowUp = false): Promise<string> {
     const args: string[] = [
@@ -74,9 +79,9 @@ export class CodexProvider implements LLMProvider {
 
     if (this.model) args.push('--model', this.model);
 
-    if (isFollowUp) {
-      // Continue the most recent codex session
-      args.push('resume', '--last', prompt);
+    if (isFollowUp && this.threadId) {
+      // Resume the exact previous session by thread ID
+      args.push('resume', this.threadId, prompt);
     } else {
       args.push(prompt);
     }
@@ -117,6 +122,10 @@ export class CodexProvider implements LLMProvider {
           if (!line.trim()) continue;
           try {
             const event = JSON.parse(line);
+            // Capture session thread ID for reliable resume on follow-ups
+            if (event.type === 'thread.started' && event.thread_id) {
+              this.threadId = event.thread_id;
+            }
             // Accumulate agent message text within a turn
             if (event.type === 'item.completed' && event.item?.type === 'agent_message') {
               firstMessage = event.item.text ?? '';

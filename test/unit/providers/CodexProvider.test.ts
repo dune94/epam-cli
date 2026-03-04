@@ -77,24 +77,37 @@ describe('CodexProvider', () => {
     expect(elapsed).toBeLessThan(500); // mock is fast; real codex is <5s
   });
 
-  it('uses resume --last for follow-up messages', async () => {
+  it('uses resume <thread_id> for follow-up messages (not --last)', async () => {
     const provider = new CodexProvider();
 
-    vi.mocked(execa).mockReturnValue(makeJsonStream([
+    // First turn — sets threadId
+    vi.mocked(execa).mockReturnValueOnce(makeJsonStream([
+      { type: 'thread.started', thread_id: 'abc-123' },
       { type: 'turn.started' },
-      { type: 'item.completed', item: { id: 'i0', type: 'agent_message', text: 'Sure, here is the follow-up.' } },
+      { type: 'item.completed', item: { id: 'i0', type: 'agent_message', text: 'First response.' } },
+      { type: 'turn.completed', usage: {} },
+    ]) as any);
+
+    await provider.complete(makeRequest([{ role: 'user', content: 'First message' }]));
+
+    // Second turn — should resume with exact thread_id
+    vi.mocked(execa).mockReturnValueOnce(makeJsonStream([
+      { type: 'thread.started', thread_id: 'abc-123' },
+      { type: 'turn.started' },
+      { type: 'item.completed', item: { id: 'i0', type: 'agent_message', text: 'Follow-up response.' } },
       { type: 'turn.completed', usage: {} },
     ]) as any);
 
     await provider.complete(makeRequest([
       { role: 'user', content: 'First message' },
-      { role: 'assistant', content: 'First response' },
+      { role: 'assistant', content: 'First response.' },
       { role: 'user', content: 'Follow up question' },
     ]));
 
-    const [, args] = vi.mocked(execa).mock.calls[0] as [string, string[]];
+    const [, args] = vi.mocked(execa).mock.calls[1] as [string, string[]];
     expect(args).toContain('resume');
-    expect(args).toContain('--last');
+    expect(args).toContain('abc-123');
+    expect(args).not.toContain('--last');
   });
 
   it('does not use resume for first message', async () => {

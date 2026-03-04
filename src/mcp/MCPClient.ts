@@ -180,8 +180,8 @@ export class MCPClient {
       console.error('[MCP] Raw response:', text.substring(0, 500));
     }
 
-    // Extract JSON from SSE format: "data: {...}"
-    const dataMatch = text.match(/data:\s*({[^}]+})/);
+    // Extract JSON from SSE format: "data: <json>"
+    const dataMatch = text.match(/^data:\s*(.+)$/m);
     if (!dataMatch) {
       if (process.env.EPAM_DEBUG === '1') {
         console.error('[MCP] No data match in response');
@@ -201,15 +201,18 @@ export class MCPClient {
         if (process.env.EPAM_DEBUG === '1') {
           console.error('[MCP] Ticket found:', ticket.key, ticket.fields?.summary);
         }
+        // MCP server returns flat structure: { key, summary, status: { name }, ... }
+        const statusName = ticket.status?.name || ticket.fields?.status?.name || 'Unknown';
+        const summary = ticket.summary || ticket.fields?.summary || 'Unknown';
         return {
           source: this.config.baseUrl,
           items: [{
             id: ticket.key || ticketId,
-            title: ticket.fields?.summary || 'Unknown',
-            status: ticket.fields?.status?.name || 'Unknown',
-            url: `${this.config.baseUrl.replace(':9010', '')}/browse/${ticket.key || ticketId}`,
-            updated: ticket.fields?.updated || new Date().toISOString(),
-            summary: `${ticket.key || ticketId}: ${ticket.fields?.summary || 'No summary'} (${ticket.fields?.status?.name || 'Unknown'})`,
+            title: summary,
+            status: statusName,
+            url: `${process.env.ATLASSIAN_BASE_URL || process.env.JIRA_URL || ''}/browse/${ticket.key || ticketId}`,
+            updated: ticket.updated || ticket.fields?.updated || new Date().toISOString(),
+            summary: `${ticket.key || ticketId}: ${summary} (${statusName})`,
           }],
         };
       } catch (parseErr) {
@@ -235,7 +238,8 @@ export class MCPClient {
    * NO MOCK DATA - returns empty if JIRA returns 404
    */
   private async queryViaJiraAPI(ticketId: string, signal: AbortSignal): Promise<MCPResult> {
-    const jiraUrl = this.config.baseUrl.replace(':9010', '') + '/rest/api/3/issue/' + ticketId;
+    const jiraBaseUrl = process.env.ATLASSIAN_BASE_URL || process.env.JIRA_URL || '';
+    const jiraUrl = jiraBaseUrl + '/rest/api/3/issue/' + ticketId;
     
     if (process.env.EPAM_DEBUG === '1') {
       console.error('[JIRA] Direct API URL:', jiraUrl);
@@ -275,7 +279,7 @@ export class MCPClient {
         id: ticket.key || ticketId,
         title: ticket.fields?.summary || 'Unknown',
         status: ticket.fields?.status?.name || 'Unknown',
-        url: `${this.config.baseUrl.replace(':9010', '')}/browse/${ticket.key || ticketId}`,
+        url: `${process.env.ATLASSIAN_BASE_URL || process.env.JIRA_URL || ''}/browse/${ticket.key || ticketId}`,
         updated: ticket.fields?.updated || new Date().toISOString(),
         summary: `${ticket.key || ticketId}: ${ticket.fields?.summary || 'No summary'} (${ticket.fields?.status?.name || 'Unknown'})`,
       }],

@@ -40,6 +40,7 @@ export class CodexProvider implements LLMProvider {
 
     try {
       // Call codex exec for non-interactive mode with prompt as argument
+      // Use stdio: 'inherit' because Codex CLI requires a TTY
       const { stdout, stderr, exitCode } = await execa('codex', [
         'exec',
         '--skip-git-repo-check',
@@ -47,12 +48,10 @@ export class CodexProvider implements LLMProvider {
       ], {
         timeout: request.maxTokens ? request.maxTokens * 10 : 120000,
         reject: false,
-        stdin: 'inherit',  // Don't pipe stdin
-        stdout: 'pipe',
-        stderr: 'pipe',
+        stdio: 'inherit',  // Full terminal inheritance (required for Codex TTY)
         env: { ...process.env },
       });
-      
+
 
       if (exitCode !== 0) {
         throw new Error(`Codex CLI error: ${stderr || 'Unknown error'}`);
@@ -79,7 +78,7 @@ export class CodexProvider implements LLMProvider {
 
   async stream(request: ProviderRequest, handler: StreamHandler): Promise<ProviderResponse> {
     const model = request.model || this.model || this.defaultModel;
-    
+
     // Extract last user message
     const lastMessage = request.messages
       .filter(m => m.role === 'user')
@@ -89,39 +88,45 @@ export class CodexProvider implements LLMProvider {
       throw new Error('No user message found');
     }
 
-    const prompt = typeof lastMessage.content === 'string' 
-      ? lastMessage.content 
+    const prompt = typeof lastMessage.content === 'string'
+      ? lastMessage.content
       : JSON.stringify(lastMessage.content);
 
     try {
-      // For streaming, we'll use codex with TUI mode
-      // Note: Codex CLI doesn't have a true streaming API, so we simulate it
-      const { stdout, stderr, exitCode } = await execa('codex', ['exec', '--skip-git-repo-check'], {
-        input: prompt,
+      // Codex CLI requires a TTY, so we use stdio: 'inherit'
+      // This means output goes directly to terminal, not captured
+      // We simulate streaming by calling handler after completion
+      const startTime = Date.now();
+      
+      const { exitCode, stderr } = await execa('codex', [
+        'exec',
+        '--skip-git-repo-check',
+        prompt  // Pass prompt as argument
+      ], {
         timeout: request.maxTokens ? request.maxTokens * 10 : 120000,
         reject: false,
-        stdin: 'pipe',
-        stdout: 'pipe',
-        stderr: 'pipe',
+        stdio: 'inherit',  // Full terminal inheritance (required for Codex TTY)
+        env: { ...process.env },
       });
 
       if (exitCode !== 0) {
         throw new Error(`Codex CLI error: ${stderr || 'Unknown error'}`);
       }
 
-      // Simulate streaming by sending chunks
-      const text = stdout || '(no response)';
-      const chunkSize = 10;
+      // Simulate streaming response (since we can't capture with stdio: 'inherit')
+      const responseText = '[Codex response displayed above]';
+      const elapsed = Date.now() - startTime;
       
-      for (let i = 0; i < text.length; i += chunkSize) {
-        const chunk = text.slice(i, i + chunkSize);
+      // Send response in chunks to simulate streaming
+      const chunkSize = 20;
+      for (let i = 0; i < responseText.length; i += chunkSize) {
+        const chunk = responseText.slice(i, i + chunkSize);
         handler({ type: 'text_delta', text: chunk });
-        // Small delay to simulate streaming
-        await new Promise(resolve => setTimeout(resolve, 10));
+        await new Promise(resolve => setTimeout(resolve, Math.min(elapsed / responseText.length * chunkSize, 50)));
       }
 
       const content: ContentPart[] = [
-        { type: 'text', text }
+        { type: 'text', text: responseText }
       ];
 
       return {

@@ -303,33 +303,38 @@ export const userCommand: SlashCommand = {
     console.log(chalk.bold('\nCurrent user identity\n'));
 
     if (ctx.userEmail) {
-      console.log(chalk.cyan('  Session:  ') + ctx.userEmail);
+      console.log(chalk.cyan('  Enterprise SSO:  ') + ctx.userEmail + chalk.dim('  (EPAM session)'));
     }
     const git = getGitUser();
     if (git) {
-      console.log(chalk.cyan('  Git:      ') + `${git.name} <${git.email}>`);
+      console.log(chalk.cyan('  Git config:      ') + `${git.name} <${git.email}>`);
     }
 
     console.log();
     console.log(chalk.bold('Provider credentials\n'));
 
     for (const p of KNOWN_PROVIDERS) {
-      const cred        = await currentCredential(p);
-      const secret      = cred?.key ?? cred?.token ?? null;
-      const activeAcct  = active[p];
-      const accounts    = listAccounts(p);
+      const cred       = await currentCredential(p);
+      const secret     = cred?.key ?? cred?.token ?? null;
+      const activeAcct = active[p];
+      const accounts   = listAccounts(p);
 
       const credStatus = secret
         ? chalk.green('✓') + chalk.dim(` ${maskSecret(secret)}`)
         : chalk.dim('○ not configured');
 
-      const acctInfo = activeAcct
-        ? chalk.dim(` [account: ${activeAcct}]`)
-        : accounts.length > 0
-          ? chalk.dim(` [${accounts.length} stored, none active]`)
-          : '';
+      console.log(`  ${chalk.cyan(p.padEnd(12))} ${credStatus}`);
 
-      console.log(`  ${chalk.cyan(p.padEnd(12))} ${credStatus}${acctInfo}`);
+      if (accounts.length > 0) {
+        for (const a of accounts.sort((x, y) => x.name.localeCompare(y.name))) {
+          const isActive = activeAcct === a.name;
+          const marker   = isActive ? chalk.green('  ● ') : chalk.dim('  ○ ');
+          const label    = isActive ? chalk.green(a.name) + chalk.green('  ← active') : chalk.dim(a.name);
+          console.log(`${marker}${label}`);
+        }
+      } else if (activeAcct) {
+        console.log(chalk.dim(`       active: ${activeAcct}`));
+      }
     }
 
     console.log();

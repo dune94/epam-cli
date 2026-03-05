@@ -61,11 +61,20 @@ export class CopilotProvider implements LLMProvider {
     return this.defaultModel;
   }
 
-  /** Resolve GitHub token from environment. */
+  /** Resolve GitHub token from environment or gh CLI. */
   static resolveToken(): string {
-    return process.env.COPILOT_GITHUB_TOKEN ||
-           process.env.GH_TOKEN ||
-           process.env.GITHUB_TOKEN || '';
+    const envToken = process.env.COPILOT_GITHUB_TOKEN ||
+                     process.env.GH_TOKEN ||
+                     process.env.GITHUB_TOKEN;
+    if (envToken) return envToken;
+    // Fall back to gh CLI stored token (for OAuth-authed accounts)
+    try {
+      const { execSync } = require('child_process');
+      const token = execSync('gh auth token 2>/dev/null', { stdio: ['ignore','pipe','ignore'], timeout: 2000 })
+        .toString().trim();
+      if (token) return token;
+    } catch { /* gh not available or not logged in */ }
+    return '';
   }
 
   private formatMessages(messages: Message[], systemPrompt?: string): Array<{ role: string; content: string }> {

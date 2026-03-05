@@ -109,7 +109,17 @@ const KNOWN_PROVIDERS = ['anthropic', 'openai', 'gemini', 'codex', 'copilot', 'c
 async function currentCredential(provider: string): Promise<{ key?: string; token?: string } | null> {
   if (TOKEN_ENV_VAR[provider]) {
     const token = process.env[TOKEN_ENV_VAR[provider]] ?? process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
-    return token ? { token } : null;
+    if (token) return { token };
+    // For copilot: try gh CLI OAuth token as fallback (works for OAuth-authed accounts)
+    if (provider === 'copilot') {
+      try {
+        const { execSync } = await import('child_process');
+        const ghToken = execSync('gh auth token 2>/dev/null', { stdio: ['ignore','pipe','ignore'], timeout: 2000 })
+          .toString().trim();
+        if (ghToken) return { token: ghToken };
+      } catch { /* gh not available */ }
+    }
+    return null;
   }
   if (ENV_VAR[provider]) {
     const key = process.env[ENV_VAR[provider]];
@@ -193,7 +203,16 @@ export const userCommand: SlashCommand = {
       const cred = await currentCredential(provider);
       if (!cred) {
         console.log(chalk.red(`No active credential found for "${provider}".`));
-        console.log(chalk.dim(`Authenticate first: /provider auth ${provider}`));
+        if (provider === 'copilot') {
+          console.log(chalk.dim('\nTo get your GitHub token:'));
+          console.log(chalk.dim('  1. Run: gh auth login  (OAuth flow)'));
+          console.log(chalk.dim('     Then retry: /user add copilot ' + (name ?? '<name>')));
+          console.log(chalk.dim('  2. Or create a PAT at: https://github.com/settings/tokens'));
+          console.log(chalk.dim('     Then: export COPILOT_GITHUB_TOKEN=<token>'));
+          console.log(chalk.dim('     And retry: /user add copilot ' + (name ?? '<name>')));
+        } else {
+          console.log(chalk.dim(`Authenticate first: /provider auth ${provider}`));
+        }
         return true;
       }
       const entry: AccountEntry = { name, provider, addedAt: new Date().toISOString(), ...cred };

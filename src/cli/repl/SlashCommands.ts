@@ -500,45 +500,6 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     },
   },
 
-  // ── /auditors ──────────────────────────────────────────────────────────────
-  {
-    name: 'auditors',
-    description: 'Toggle or list auditor personas for this session',
-    usage: '[on|off|list]',
-    async execute(args, ctx) {
-      const registry = ctx.auditorRegistry;
-      const sub = args.trim().toLowerCase();
-
-      if (!registry) {
-        console.log(chalk.dim('Auditors not available (no .epam/auditors.json found).'));
-        return true;
-      }
-
-      if (sub === 'on') {
-        registry.toggle(true);
-        console.log(chalk.magenta(`Auditors enabled (${registry.getEnabled().length} persona(s) active).`));
-      } else if (sub === 'off') {
-        registry.toggle(false);
-        console.log(chalk.dim('Auditors disabled for this session.'));
-      } else {
-        // list (default)
-        const all = registry.getAll();
-        if (all.length === 0) {
-          console.log(chalk.dim('No auditor personas configured.'));
-          return true;
-        }
-        const status = registry.isEnabled() ? chalk.magenta('enabled') : chalk.dim('disabled');
-        console.log(chalk.bold(`\nAuditors (${status}):\n`));
-        for (const a of all) {
-          const active = a.enabled !== false ? chalk.magenta('●') : chalk.dim('○');
-          console.log(`  ${active} ${chalk.white(a.name)} — ${chalk.dim(a.focus)} [threshold: ${a.severity_threshold}]`);
-        }
-        console.log();
-      }
-      return true;
-    },
-  },
-
   // ── /providers ──────────────────────────────────────────────────────────────
   providerCommand,
   orchestrateCommand,

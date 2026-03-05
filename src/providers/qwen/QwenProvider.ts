@@ -32,6 +32,12 @@ export class QwenProvider implements LLMProvider {
     this.baseURL = config.baseURL || (this.openRouterMode ? OPENROUTER_BASE_URL : DASHSCOPE_BASE_URL);
   }
 
+  /** Only use request.model if it looks like a qwen/openrouter model. Falls back to default. */
+  private resolveModel(requested?: string): string {
+    if (requested && /^(qwen|mistral|llama|deepseek|meta-llama)/.test(requested)) return requested;
+    return this.defaultModel;
+  }
+
   async complete(request: ProviderRequest): Promise<ProviderResponse> {
     return this.openRouterMode
       ? this.completeOpenRouter(request)
@@ -47,7 +53,7 @@ export class QwenProvider implements LLMProvider {
   // ─── OpenRouter (OpenAI-compatible) ────────────────────────────────────────
 
   private async completeOpenRouter(request: ProviderRequest): Promise<ProviderResponse> {
-    const model = request.model || this.defaultModel;
+    const model = this.resolveModel(request.model);
     const messages = this.formatMessages(request.messages, request.systemPrompt);
 
     const response = await fetch(`${this.baseURL}/chat/completions`, {
@@ -86,7 +92,7 @@ export class QwenProvider implements LLMProvider {
   }
 
   private async streamOpenRouter(request: ProviderRequest, handler: StreamHandler): Promise<ProviderResponse> {
-    const model = request.model || this.defaultModel;
+    const model = this.resolveModel(request.model);
     const messages = this.formatMessages(request.messages, request.systemPrompt);
 
     const response = await fetch(`${this.baseURL}/chat/completions`, {
@@ -153,7 +159,7 @@ export class QwenProvider implements LLMProvider {
   // ─── DashScope (Alibaba native) ────────────────────────────────────────────
 
   private async completeDashScope(request: ProviderRequest): Promise<ProviderResponse> {
-    const model = request.model || 'qwen-max';
+    const model = this.resolveModel(request.model);
     const messages = this.formatMessages(request.messages, request.systemPrompt);
 
     try {
@@ -206,7 +212,7 @@ export class QwenProvider implements LLMProvider {
   }
 
   private async streamDashScope(request: ProviderRequest, handler: StreamHandler): Promise<ProviderResponse> {
-    const model = request.model || 'qwen-max';
+    const model = this.resolveModel(request.model);
     const messages = this.formatMessages(request.messages, request.systemPrompt);
 
     try {

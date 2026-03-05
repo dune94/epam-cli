@@ -30,6 +30,17 @@ export class CodexProvider implements LLMProvider {
   }
 
   private interruptBus?: EventEmitter;
+  // Track the active codex process so we can kill it before starting a new turn.
+  private activeProc?: ReturnType<typeof execa>;
+
+  /** Kill any still-running codex process from a previous turn. */
+  private killActiveProc(): void {
+    if (!this.activeProc) return;
+    const p = this.activeProc;
+    this.activeProc = undefined;
+    try { process.kill(-(p.pid!), 'SIGKILL'); } catch { /* already gone */ }
+    try { p.kill('SIGKILL'); } catch { /* already gone */ }
+  }
 
   /** Called by Repl to wire up Ctrl+C → abort running codex turn. */
   setInterruptBus(bus: EventEmitter): void {
@@ -99,6 +110,9 @@ export class CodexProvider implements LLMProvider {
    * - SIGINT: Ctrl+C kills codex and unblocks the REPL immediately
    */
   private async runCodex(prompt: string): Promise<string> {
+    // Kill any codex process left over from a previous turn before starting a new one.
+    this.killActiveProc();
+
     const args: string[] = [
       'exec',
       '--skip-git-repo-check',
@@ -139,6 +153,7 @@ export class CodexProvider implements LLMProvider {
         process.removeListener('SIGINT', sigintHandler);
         this.interruptBus?.removeListener('interrupt', sigintHandler);
         process.stderr.write('\r\x1b[2K');
+        this.activeProc = undefined;
         killGroup();
         resolve(text.trim() || '(no response)');
       };
@@ -154,6 +169,7 @@ export class CodexProvider implements LLMProvider {
         env: { ...process.env },
         detached: true,
       });
+      this.activeProc = proc;
       proc.catch(() => {});
 
       let stdoutBuf = '';
@@ -212,11 +228,17 @@ export class CodexProvider implements LLMProvider {
         }
       });
 
-      // Hard cap: return after 45s even if codex is still working.
-      // Do NOT .unref() — if we unref, readline resuming on Ctrl+C lets Node exit
-      // before the timer fires, leaving the codex process as an orphan.
+      // Hard cap: warn at 45s, give up at 5 minutes.
+      // Do NOT .unref() — needed to keep Node alive and prevent orphaned codex processes.
       safetyTimer = setTimeout(() => {
-        finish(firstAgentMessage || '⚠ Codex is taking too long. Press Ctrl+C to cancel or wait.');
+        process.stderr.write('\r\x1b[2K\x1b[33m⚠ Codex still working (complex task)... Ctrl+C to cancel\x1b[0m\n');
+        // Reset spinner so it stays visible
+        const s = ((Date.now() - start) / 1000).toFixed(0);
+        process.stderr.write(`\x1b[2m⟳ Codex thinking... ${s}s\x1b[0m`);
+        // Hard cap at 5 minutes total
+        safetyTimer = setTimeout(() => {
+          finish(firstAgentMessage || '⚠ Codex task timed out after 5 minutes.');
+        }, (5 * 60 - 45) * 1000);
       }, 45 * 1000);
     });
   }

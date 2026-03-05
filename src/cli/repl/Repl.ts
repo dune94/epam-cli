@@ -202,6 +202,10 @@ export class Repl {
 
           // Regular message — run agent
           const rawMessage = parsed.message!;
+
+          // Separator below prompt fires immediately on Enter, before any async work
+          process.stdout.write(chalk.gray('─'.repeat(process.stdout.columns || 80)) + '\n\n');
+
           let userMessage = config.projectRoot
             ? await consumeConsultationContext(rawMessage, config.projectRoot)
             : rawMessage;
@@ -269,9 +273,6 @@ export class Repl {
           this.messages.push({ role: 'user', content: userMessage });
 
           try {
-            // Separator below prompt, above response — mirrors the top rule
-            process.stdout.write(chalk.gray('─'.repeat(process.stdout.columns || 80)) + '\n\n');
-
             // Wire Ctrl+C to abort the active codex turn.
             // Call on both the direct provider AND the chain (chain forwards to cached providers).
             for (const p of [provider, this.options.providerChain]) {

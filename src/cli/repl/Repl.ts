@@ -351,9 +351,19 @@ export class Repl {
       );
     };
 
+    let lastSigint = 0;
     rl.on('SIGINT', () => {
       this.sigintBus.emit('interrupt');
-      console.log(chalk.dim('\n(interrupted)'));
+      const now = Date.now();
+      if (now - lastSigint < 1500) {
+        // Two Ctrl+C within 1.5s — exit
+        console.log(chalk.dim('\n(exiting)'));
+        this.running = false;
+        rl.close();
+        process.exit(0);
+      }
+      lastSigint = now;
+      console.log(chalk.dim('\n(interrupted — press Ctrl+C again to exit)'));
       prompt();
     });
 

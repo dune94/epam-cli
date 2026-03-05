@@ -6,14 +6,13 @@ export class Renderer {
     return chalk.cyan.bold('epam') + chalk.cyan(' › ');
   }
 
-  renderWelcome(version: string, provider: string, model: string, projectRoot: string | null): void {
+  renderWelcome(version: string, _provider: string, _model: string, projectRoot: string | null): void {
     console.log();
     console.log(chalk.bold.cyan('EPAM CLI') + chalk.dim(` v${version}`));
-    console.log(chalk.dim(`Provider: ${provider} | Model: ${model}`));
     if (projectRoot) {
       console.log(chalk.dim(`Project: ${projectRoot}`));
     }
-    console.log(chalk.dim('Type /help for commands, Ctrl+C or /exit to quit'));
+    console.log(chalk.dim('Type /help for commands, Ctrl+C twice to quit'));
     console.log();
   }
 

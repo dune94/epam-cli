@@ -1,4 +1,6 @@
 import * as readline from 'readline';
+import * as path from 'path';
+import { execSync } from 'child_process';
 import { EventEmitter } from 'events';
 import chalk from 'chalk';
 import prompts from 'prompts';
@@ -129,12 +131,48 @@ export class Repl {
 
     let firstPrompt = true;
     const prompt = () => {
-      // Print separator before every prompt except the very first (startup)
       const cols = process.stdout.columns || 80;
-      if (!firstPrompt) {
-        process.stdout.write('\n' + chalk.dim('─'.repeat(cols)) + '\n');
-      }
+
+      // Add breathing room before header on subsequent prompts
+      if (!firstPrompt) process.stdout.write('\n');
       firstPrompt = false;
+
+      // ── Header bar ────────────────────────────────────────────────────────
+      // Left: folder [branch]  Right: provider/model · budget% or turns
+      const cwd = process.cwd();
+      const folder = path.basename(cwd);
+      let branch = '';
+      try {
+        branch = execSync('git rev-parse --abbrev-ref HEAD', {
+          cwd,
+          stdio: ['ignore', 'pipe', 'ignore'],
+          timeout: 500,
+        }).toString().trim();
+      } catch { /* not a git repo */ }
+
+      const leftLabel = branch
+        ? chalk.bold(folder) + chalk.dim(` [${branch}]`)
+        : chalk.bold(folder);
+
+      const hardLimitAt = this.budgetGuard.limits.hardLimitAt;
+      const cost = this.budgetGuard.sessionCost;
+      let rightLabel: string;
+      if (isFinite(hardLimitAt) && hardLimitAt > 0) {
+        const pct = Math.max(0, ((hardLimitAt - cost) / hardLimitAt) * 100).toFixed(1);
+        rightLabel = chalk.dim(`${this.currentProvider}/${this.currentModel} · `) + chalk.cyan(`${pct}% remaining`);
+      } else {
+        const turns = this.session.turns.length;
+        rightLabel = chalk.dim(`${this.currentProvider}/${this.currentModel} · `) + chalk.dim(`${turns} turn${turns !== 1 ? 's' : ''}`);
+      }
+
+      const stripAnsi = (s: string) => s.replace(/\x1B\[[0-9;]*m/g, '');
+      const leftLen = stripAnsi(leftLabel).length;
+      const rightLen = stripAnsi(rightLabel).length;
+      const gap = Math.max(1, cols - leftLen - rightLen);
+      process.stdout.write(leftLabel + ' '.repeat(gap) + rightLabel + '\n');
+
+      // ── Separator ─────────────────────────────────────────────────────────
+      process.stdout.write(chalk.dim('─'.repeat(cols)) + '\n');
 
       // Render main prompt
       rl.question(

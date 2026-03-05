@@ -127,7 +127,15 @@ export class Repl {
 
     this.running = true;
 
+    let firstPrompt = true;
     const prompt = () => {
+      // Print separator before every prompt except the very first (startup)
+      const cols = process.stdout.columns || 80;
+      if (!firstPrompt) {
+        process.stdout.write('\n' + chalk.dim('─'.repeat(cols)) + '\n');
+      }
+      firstPrompt = false;
+
       // Render main prompt
       rl.question(
         this.renderer.renderPrompt(this.currentProvider, this.currentModel),

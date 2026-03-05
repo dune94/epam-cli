@@ -88,6 +88,12 @@ export class ProviderChain implements LLMProvider {
     return this.options.slots;
   }
 
+  /** Clear the provider cache so the next request rebuilds with fresh credentials. */
+  clearProviderCache(): void {
+    this.providerCache.clear();
+    this.activeSlotIndex = 0;
+  }
+
   async complete(request: ProviderRequest): Promise<ProviderResponse> {
     return this.callWithFailover(async (slot) => {
       const provider = await this.getOrBuildProvider(slot);

@@ -222,9 +222,12 @@ export class Repl {
           try {
             process.stdout.write('\n');
 
-            // Wire Ctrl+C to abort the active codex turn
-            if (typeof (provider as unknown as { setInterruptBus?: (b: EventEmitter) => void }).setInterruptBus === 'function') {
-              (provider as unknown as { setInterruptBus: (b: EventEmitter) => void }).setInterruptBus(this.sigintBus);
+            // Wire Ctrl+C to abort the active codex turn.
+            // Call on both the direct provider AND the chain (chain forwards to cached providers).
+            for (const p of [provider, this.options.providerChain]) {
+              if (p && typeof (p as unknown as { setInterruptBus?: (b: EventEmitter) => void }).setInterruptBus === 'function') {
+                (p as unknown as { setInterruptBus: (b: EventEmitter) => void }).setInterruptBus(this.sigintBus);
+              }
             }
 
             let gateDecision: AuditorGateDecision | undefined;

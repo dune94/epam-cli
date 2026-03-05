@@ -25,8 +25,14 @@ export class CursorProvider implements LLMProvider {
     this.baseURL = config.baseURL || 'https://generativelanguage.googleapis.com/v1beta';
   }
 
+  /** Use the requested model only if it's a Gemini model; fall back to default. */
+  private resolveModel(requested?: string): string {
+    if (requested && /^gemini-/.test(requested)) return requested;
+    return this.defaultModel;
+  }
+
   async complete(request: ProviderRequest): Promise<ProviderResponse> {
-    const model = request.model || this.defaultModel;
+    const model = this.resolveModel(request.model);
     
     const messages = this.formatMessages(request.messages, request.systemPrompt);
 
@@ -77,7 +83,7 @@ export class CursorProvider implements LLMProvider {
   }
 
   async stream(request: ProviderRequest, handler: StreamHandler): Promise<ProviderResponse> {
-    const model = request.model || this.defaultModel;
+    const model = this.resolveModel(request.model);
     
     const messages = this.formatMessages(request.messages, request.systemPrompt);
 

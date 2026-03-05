@@ -112,17 +112,18 @@ export class CodexProvider implements LLMProvider {
 
     const start = Date.now();
     process.stderr.write('\x1b[2m⟳ Codex thinking...\x1b[0m');
-    const timer = setInterval(() => {
+    const spinTimer = setInterval(() => {
       const s = ((Date.now() - start) / 1000).toFixed(0);
       process.stderr.write(`\r\x1b[2m⟳ Codex thinking... ${s}s\x1b[0m`);
     }, 1000);
-    timer.unref();
+    spinTimer.unref();
 
     return new Promise((resolve, reject) => {
       let buffer = '';
       let resolved = false;
       let firstAgentMessage = '';
       let agentMessageTimer: ReturnType<typeof setTimeout> | null = null;
+      let safetyTimer: ReturnType<typeof setTimeout> | null = null;
 
       const killGroup = () => {
         try { process.kill(-(proc.pid!), 'SIGKILL'); } catch { /* already gone */ }
@@ -132,8 +133,8 @@ export class CodexProvider implements LLMProvider {
       const finish = (text: string) => {
         if (resolved) return;
         resolved = true;
-        clearInterval(timer);
-        clearTimeout(safetyTimer);
+        clearInterval(spinTimer);
+        if (safetyTimer) clearTimeout(safetyTimer);
         if (agentMessageTimer) clearTimeout(agentMessageTimer);
         process.removeListener('SIGINT', sigintHandler);
         this.interruptBus?.removeListener('interrupt', sigintHandler);
@@ -202,19 +203,21 @@ export class CodexProvider implements LLMProvider {
 
       proc.on('error', (err: Error) => {
         if (!resolved) {
-          clearInterval(timer);
+          clearInterval(spinTimer);
+          if (safetyTimer) clearTimeout(safetyTimer);
           process.removeListener('SIGINT', sigintHandler);
+          this.interruptBus?.removeListener('interrupt', sigintHandler);
           process.stderr.write('\r\x1b[2K');
           reject(err);
         }
       });
 
-      // 60-second hard cap — if codex hasn't responded by then, return what we have.
-      const safetyTimer = setTimeout(
-        () => finish(firstAgentMessage || '(codex is still working — this task may take longer than expected)'),
-        60 * 1000,
-      );
-      safetyTimer.unref();
+      // Hard cap: return after 45s even if codex is still working.
+      // Do NOT .unref() — if we unref, readline resuming on Ctrl+C lets Node exit
+      // before the timer fires, leaving the codex process as an orphan.
+      safetyTimer = setTimeout(() => {
+        finish(firstAgentMessage || '⚠ Codex is taking too long. Press Ctrl+C to cancel or wait.');
+      }, 45 * 1000);
     });
   }
 

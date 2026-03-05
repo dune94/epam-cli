@@ -51,6 +51,18 @@ export class ProviderChain implements LLMProvider {
     this.health = new ProviderHealth(options.slots);
   }
 
+  /** Forward interrupt bus to any provider in the cache that supports it (e.g. CodexProvider). */
+  setInterruptBus(bus: import('events').EventEmitter): void {
+    for (const provider of this.providerCache.values()) {
+      if (typeof (provider as unknown as { setInterruptBus?: (b: import('events').EventEmitter) => void }).setInterruptBus === 'function') {
+        (provider as unknown as { setInterruptBus: (b: import('events').EventEmitter) => void }).setInterruptBus(bus);
+      }
+    }
+    // Store so newly-built providers also get the bus
+    this._interruptBus = bus;
+  }
+  private _interruptBus?: import('events').EventEmitter;
+
   /** Pre-builds providers for all slots. Marks slots unavailable if key is missing. */
   async initialize(): Promise<void> {
     for (const slot of this.options.slots) {
@@ -277,6 +289,10 @@ export class ProviderChain implements LLMProvider {
     try {
       logger.debug({ slot: key }, 'ProviderChain building provider');
       const provider = await this.buildProvider(slot);
+      // Wire interrupt bus if available (e.g. CodexProvider supports Ctrl+C abort)
+      if (this._interruptBus && typeof (provider as unknown as { setInterruptBus?: (b: import('events').EventEmitter) => void }).setInterruptBus === 'function') {
+        (provider as unknown as { setInterruptBus: (b: import('events').EventEmitter) => void }).setInterruptBus(this._interruptBus);
+      }
       this.providerCache.set(key, provider);
       return provider;
     } catch (err) {

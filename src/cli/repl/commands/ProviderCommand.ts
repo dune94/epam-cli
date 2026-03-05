@@ -178,15 +178,16 @@ function switchProvider(spec: string, ctx: SlashCommandContext): boolean {
     }).catch((err: Error) => {
       console.log(chalk.yellow('⚠  Chain update failed: ' + err.message));
       console.log(chalk.dim('Falling back to model-only switch…'));
+      ctx.onProviderChange?.(providerName);
       ctx.onModelChange(modelName);
-      console.log(chalk.green('✓ Model updated'));
+      console.log(chalk.green('✓ Switched'));
       console.log();
     });
   } else {
-    // Fall back to model-only switch
+    // Fall back: update both provider and model directly
+    ctx.onProviderChange?.(providerName);
     ctx.onModelChange(modelName);
-    console.log(chalk.green('✓ Model updated'));
-    console.log(chalk.dim('  Note: Full provider switch requires a provider chain. Model name updated only.'));
+    console.log(chalk.green('✓ Provider switched'));
     console.log();
   }
 

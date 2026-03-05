@@ -706,6 +706,10 @@ export class Repl {
         this.budgetGuard.setModel(model);
       },
 
+      onProviderChange: provider => {
+        this.currentProvider = provider;
+      },
+
       onClear: () => {
         this.messages = [];
       },
@@ -768,14 +772,11 @@ export class Repl {
       onChainUpdate: async (slots: LLMChainSlot[]) => {
         const chain = this.options.providerChain;
         if (!chain) return;
-        // Re-initialize the chain with new slots is not trivially mutable —
-        // update the config so /chain status reflects new priority, and note it will take
-        // effect on next session (ProviderChain is immutable after construction).
-        // For live switching: update activeSlotIndex by resetting health of new slots.
         chain.getHealth().resetAll();
-        // Update the config reference so /chain shows the right order
         config.llmChain = slots;
+        this.currentProvider = slots[0]?.provider ?? this.currentProvider;
         this.currentModel = slots[0]?.model ?? this.currentModel;
+        this.budgetGuard.setModel(this.currentModel);
       },
     };
   }

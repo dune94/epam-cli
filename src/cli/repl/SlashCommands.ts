@@ -56,6 +56,7 @@ export interface SlashCommandContext {
   rl?: import('readline').Interface;
   // Callbacks
   onModelChange: (model: string) => void;
+  onProviderChange?: (provider: string) => void;
   onClear: () => void;
   onCompact: () => Promise<void>;
   onRewind: () => void;

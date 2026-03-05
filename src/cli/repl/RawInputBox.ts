@@ -11,8 +11,10 @@
 
 import { EventEmitter } from 'events';
 
-// Faint yellow background (ANSI 256-color 229 = light goldenrod)
-const BG    = '\x1b[48;5;229m';
+// Very faint yellow background (ANSI 256-color 230 = #ffffd7, ~60% lighter than 229)
+// Black foreground (ANSI 30) for maximum readability on the light background
+const BG    = '\x1b[48;5;230m';
+const FG    = '\x1b[30m';
 const RESET = '\x1b[0m';
 const EL    = '\x1b[K'; // erase to end of line (fills bg without moving cursor)
 
@@ -185,7 +187,7 @@ export class RawInputBox {
    * Uses BG + content + EL (erase-to-EOL fills background without moving cursor).
    */
   private writeLine(content: string): void {
-    process.stdout.write(BG + content + EL + RESET);
+    process.stdout.write(BG + FG + content + EL + RESET);
   }
 
   /**

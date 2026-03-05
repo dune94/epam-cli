@@ -270,7 +270,7 @@ export class Repl {
 
           try {
             // Separator below the prompt, above the response
-            process.stdout.write(chalk.dim('─'.repeat(process.stdout.columns || 80)) + '\n');
+            process.stdout.write(chalk.gray('─'.repeat(process.stdout.columns || 80)) + '\n\n');
 
             // Wire Ctrl+C to abort the active codex turn.
             // Call on both the direct provider AND the chain (chain forwards to cached providers).

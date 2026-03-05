@@ -188,6 +188,9 @@ export class Repl {
             return;
           }
 
+          // Bottom separator — fires immediately for every non-empty input
+          process.stdout.write(chalk.gray('─'.repeat(process.stdout.columns || 80)) + '\n\n');
+
           if (parsed.type === 'slash_command') {
             const ctx = this.buildSlashContext(config, systemPrompt);
             const keepRunning = await handleSlashCommand(parsed, ctx);
@@ -202,9 +205,6 @@ export class Repl {
 
           // Regular message — run agent
           const rawMessage = parsed.message!;
-
-          // Separator below prompt fires immediately on Enter, before any async work
-          process.stdout.write(chalk.gray('─'.repeat(process.stdout.columns || 80)) + '\n\n');
 
           let userMessage = config.projectRoot
             ? await consumeConsultationContext(rawMessage, config.projectRoot)

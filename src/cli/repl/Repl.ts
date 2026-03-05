@@ -157,12 +157,13 @@ export class Repl {
       const hardLimitAt = this.budgetGuard.limits.hardLimitAt;
       const cost = this.budgetGuard.sessionCost;
       let rightLabel: string;
+      const modelTag = chalk.greenBright(`${this.currentProvider}/${this.currentModel}`);
       if (isFinite(hardLimitAt) && hardLimitAt > 0) {
         const pct = Math.max(0, ((hardLimitAt - cost) / hardLimitAt) * 100).toFixed(1);
-        rightLabel = chalk.dim(`${this.currentProvider}/${this.currentModel} · `) + chalk.cyan(`${pct}% remaining`);
+        rightLabel = modelTag + chalk.dim(` · `) + chalk.cyan(`${pct}% remaining`);
       } else {
         const turns = this.session.turns.length;
-        rightLabel = chalk.dim(`${this.currentProvider}/${this.currentModel} · `) + chalk.dim(`${turns} turn${turns !== 1 ? 's' : ''}`);
+        rightLabel = modelTag + chalk.dim(` · ${turns} turn${turns !== 1 ? 's' : ''}`);
       }
 
       const stripAnsi = (s: string) => s.replace(/\x1B\[[0-9;]*m/g, '');

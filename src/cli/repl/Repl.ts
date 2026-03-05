@@ -129,22 +129,25 @@ export class Repl {
 
     this.running = true;
 
-    let firstPrompt = true;
-    const prompt = () => {
+    // ── Sticky prompt zone (ANSI scroll region) ───────────────────────────────
+    // Only active when stdout is a real TTY; falls back to linear mode otherwise.
+    const isTTY = process.stdout.isTTY === true;
+    // Prompt zone occupies the bottom 4 rows:
+    //   row (rows-3): header bar
+    //   row (rows-2): top separator
+    //   row (rows-1): input  (epam › _)
+    //   row (rows  ): bottom separator
+    const ZONE = 4;
+
+    const stripAnsi = (s: string) => s.replace(/\x1B\[[0-9;]*m/g, '');
+
+    const buildLabels = () => {
       const cols = process.stdout.columns || 80;
-
-      // Add breathing room before header on subsequent prompts
-      if (!firstPrompt) process.stdout.write('\n\n\n\n');
-      firstPrompt = false;
-
-      // ── Header bar ────────────────────────────────────────────────────────
-      // Left: folder [branch]  Right: provider/model · budget% or turns
-      const cwd = process.cwd();
-      const folder = path.basename(cwd);
+      const folder = path.basename(process.cwd());
       let branch = '';
       try {
         branch = execSync('git rev-parse --abbrev-ref HEAD', {
-          cwd,
+          cwd: process.cwd(),
           stdio: ['ignore', 'pipe', 'ignore'],
           timeout: 500,
         }).toString().trim();
@@ -156,8 +159,8 @@ export class Repl {
 
       const hardLimitAt = this.budgetGuard.limits.hardLimitAt;
       const cost = this.budgetGuard.sessionCost;
-      let rightLabel: string;
       const modelTag = chalk.greenBright(`${this.currentProvider}/${this.currentModel}`);
+      let rightLabel: string;
       if (isFinite(hardLimitAt) && hardLimitAt > 0) {
         const pct = Math.max(0, ((hardLimitAt - cost) / hardLimitAt) * 100).toFixed(1);
         rightLabel = modelTag + chalk.dim(` · `) + chalk.cyan(`${pct}% remaining`);
@@ -165,17 +168,68 @@ export class Repl {
         const turns = this.session.turns.length;
         rightLabel = modelTag + chalk.dim(` · ${turns} turn${turns !== 1 ? 's' : ''}`);
       }
+      const gap = Math.max(1, cols - stripAnsi(leftLabel).length - stripAnsi(rightLabel).length);
+      return { leftLabel, rightLabel, gap, cols };
+    };
 
-      const stripAnsi = (s: string) => s.replace(/\x1B\[[0-9;]*m/g, '');
-      const leftLen = stripAnsi(leftLabel).length;
-      const rightLen = stripAnsi(rightLabel).length;
-      const gap = Math.max(1, cols - leftLen - rightLen);
-      process.stdout.write(leftLabel + ' '.repeat(gap) + rightLabel + '\n');
+    const drawPromptZone = () => {
+      if (!isTTY) return;
+      const rows = process.stdout.rows || 24;
+      const { leftLabel, rightLabel, gap, cols } = buildLabels();
+      const headerRow = rows - ZONE + 1;
+      const topSepRow = rows - ZONE + 2;
+      const inputRow  = rows - ZONE + 3;
+      const botSepRow = rows;
 
-      // ── Separator ─────────────────────────────────────────────────────────
-      process.stdout.write(chalk.dim('─'.repeat(cols)) + '\n');
+      // Set scroll region: everything above the prompt zone
+      process.stdout.write(`\x1b[1;${rows - ZONE}r`);
 
-      // Render main prompt
+      // Draw header row
+      process.stdout.write(`\x1b[${headerRow};1H\x1b[2K`);
+      process.stdout.write(leftLabel + ' '.repeat(gap) + rightLabel);
+
+      // Draw top separator
+      process.stdout.write(`\x1b[${topSepRow};1H\x1b[2K`);
+      process.stdout.write(chalk.dim('─'.repeat(cols)));
+
+      // Clear input row (readline will write the prompt here)
+      process.stdout.write(`\x1b[${inputRow};1H\x1b[2K`);
+
+      // Draw bottom separator
+      process.stdout.write(`\x1b[${botSepRow};1H\x1b[2K`);
+      process.stdout.write(chalk.gray('─'.repeat(cols)));
+
+      // Park cursor at input row for readline
+      process.stdout.write(`\x1b[${inputRow};1H`);
+    };
+
+    // Redraw on terminal resize
+    process.stdout.on('resize', drawPromptZone);
+
+    const focusContentArea = () => {
+      if (!isTTY) return;
+      const rows = process.stdout.rows || 24;
+      // Move cursor into scroll region so agent output stays above prompt zone
+      process.stdout.write(`\x1b[${rows - ZONE};1H`);
+    };
+
+    const resetTerminal = () => {
+      if (!isTTY) return;
+      const rows = process.stdout.rows || 24;
+      process.stdout.write(`\x1b[1;${rows}r`);  // full scroll region
+      process.stdout.write(`\x1b[${rows};1H\n`); // cursor to bottom
+    };
+
+    const prompt = () => {
+      if (isTTY) {
+        drawPromptZone();
+      } else {
+        // Linear fallback for non-TTY (pipes, CI)
+        const { leftLabel, rightLabel, gap, cols } = buildLabels();
+        process.stdout.write('\n' + leftLabel + ' '.repeat(gap) + rightLabel + '\n');
+        process.stdout.write(chalk.dim('─'.repeat(cols)) + '\n');
+      }
+
       rl.question(
         this.renderer.renderPrompt(this.currentProvider, this.currentModel),
         async input => {
@@ -189,7 +243,7 @@ export class Repl {
           }
 
           // Bottom separator — fires immediately for every non-empty input
-          process.stdout.write(chalk.gray('─'.repeat(process.stdout.columns || 80)) + '\n\n');
+          if (!isTTY) process.stdout.write(chalk.gray('─'.repeat(process.stdout.columns || 80)) + '\n\n');
 
           if (parsed.type === 'slash_command') {
             const ctx = this.buildSlashContext(config, systemPrompt);
@@ -273,6 +327,9 @@ export class Repl {
           this.messages.push({ role: 'user', content: userMessage });
 
           try {
+            // Move cursor into scroll region so agent output stays above prompt zone
+            focusContentArea();
+
             // Wire Ctrl+C to abort the active codex turn.
             // Call on both the direct provider AND the chain (chain forwards to cached providers).
             for (const p of [provider, this.options.providerChain]) {
@@ -356,18 +413,20 @@ export class Repl {
       this.sigintBus.emit('interrupt');
       const now = Date.now();
       if (now - lastSigint < 1500) {
-        // Two Ctrl+C within 1.5s — exit
+        resetTerminal();
         console.log(chalk.dim('\n(exiting)'));
         this.running = false;
         rl.close();
         process.exit(0);
       }
       lastSigint = now;
-      console.log(chalk.dim('\n(interrupted — press Ctrl+C again to exit)'));
+      focusContentArea();
+      process.stdout.write(chalk.dim('\n(interrupted — press Ctrl+C again to exit)\n'));
       prompt();
     });
 
     rl.on('close', () => {
+      resetTerminal();
       this.running = false;
     });
 

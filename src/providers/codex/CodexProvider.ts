@@ -260,17 +260,17 @@ export class CodexProvider implements LLMProvider {
         }
       });
 
-      // Hard cap: warn at 45s, give up at 5 minutes.
+      // Hard cap: warn at 45s, give up at 20 minutes.
       // Do NOT .unref() — needed to keep Node alive and prevent orphaned codex processes.
       safetyTimer = setTimeout(() => {
         process.stderr.write('\r\x1b[2K\x1b[33m⚠ Codex still working (complex task)... Ctrl+C to cancel\x1b[0m\n');
         // Reset spinner so it stays visible
         const s = ((Date.now() - start) / 1000).toFixed(0);
         process.stderr.write(`\x1b[2m⟳ Codex thinking... ${s}s\x1b[0m`);
-        // Hard cap at 5 minutes total
+        // Hard cap at 20 minutes total
         safetyTimer = setTimeout(() => {
-          finish(firstAgentMessage || '⚠ Codex task timed out after 5 minutes.');
-        }, (5 * 60 - 45) * 1000);
+          finish(firstAgentMessage || '⚠ Codex task timed out after 20 minutes.');
+        }, (20 * 60 - 45) * 1000);
       }, 45 * 1000);
     });
   }

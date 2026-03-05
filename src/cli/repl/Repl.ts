@@ -19,6 +19,7 @@ import { parseInput, handleSlashCommand } from './InputHandler.js';
 import { PromptZone } from './PromptZone.js';
 import { RawInputBox } from './RawInputBox.js';
 import type { SlashCommandContext } from './SlashCommands.js';
+import { SLASH_COMMANDS } from './SlashCommands.js';
 import type { ProviderChain } from '../../providers/ProviderChain.js';
 import { ToolRunner } from '../../agent/tools/ToolRunner.js';
 import { AuthManager } from '../../auth/AuthManager.js';
@@ -182,11 +183,12 @@ export class Repl {
     // ── Main REPL loop ──────────────────────────────────────────────────────
     let lastSigint = 0;
     const replPrefix = this.renderer.renderPrompt(this.currentProvider, this.currentModel);
+    const slashCompletions = SLASH_COMMANDS.flatMap(cmd => [cmd.name, ...(cmd.aliases ?? [])]);
 
     while (this.running) {
       renderZone();
 
-      const result = await rawInputBox.readLine(replPrefix);
+      const result = await rawInputBox.readLine(replPrefix, { completions: slashCompletions });
 
       if (result.interrupted) {
         const now = Date.now();

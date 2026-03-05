@@ -18,6 +18,11 @@ const FG    = '\x1b[93m';
 const RESET = '\x1b[0m';
 const EL    = '\x1b[K'; // erase to end of line (fills bg without moving cursor)
 
+export interface RawInputOptions {
+  /** Slash command names (and aliases) to use for Tab completion. */
+  completions?: string[];
+}
+
 export interface RawInputResult {
   line: string;
   interrupted: boolean;
@@ -31,6 +36,9 @@ export class RawInputBox {
   private historySaved = '';
   private lastCursorLineInInput = 0;
   private boxInputLines = 1; // number of input content lines currently drawn
+  // Tab completion state
+  private tabCycleList: string[] = [];
+  private tabCycleIdx = 0;
   readonly interruptBus: EventEmitter;
 
   constructor(interruptBus?: EventEmitter) {
@@ -44,11 +52,13 @@ export class RawInputBox {
     }
   }
 
-  async readLine(prefix: string): Promise<RawInputResult> {
+  async readLine(prefix: string, options: RawInputOptions = {}): Promise<RawInputResult> {
     this.buffer = '';
     this.cursorPos = 0;
     this.historyIdx = -1;
     this.historySaved = '';
+    this.tabCycleList = [];
+    this.tabCycleIdx = 0;
 
     if (!process.stdout.isTTY) {
       return this.readLineSimple(prefix);
@@ -72,6 +82,12 @@ export class RawInputBox {
       };
 
       const onData = (str: string) => {
+        // Any key other than Tab resets the tab cycle
+        if (str !== '\t' && str !== '\x1b[Z') {
+          this.tabCycleList = [];
+          this.tabCycleIdx = 0;
+        }
+
         if (str === '\r' || str === '\n') {
           if (!resolved) this.clearBoxAndEcho(prefix);
           finish({ line: this.buffer, interrupted: false });
@@ -81,6 +97,11 @@ export class RawInputBox {
           if (!resolved) this.clearBoxAndEcho(prefix);
           this.interruptBus.emit('interrupt');
           finish({ line: '', interrupted: true });
+
+        } else if (str === '\t' || str === '\x1b[Z') {
+          // Tab (forward) / Shift+Tab (backward)
+          const forward = str === '\t';
+          this.handleTab(prefix, options.completions ?? [], forward);
 
         } else if (str === '\x7f' || str === '\x08') {
           // Backspace
@@ -140,6 +161,7 @@ export class RawInputBox {
           process.stdout.write('\x1b[2J\x1b[H');
           this.lastCursorLineInInput = 0;
           this.boxInputLines = 1;
+          this.tabCycleList = [];
           this.drawBox(prefix);
 
         } else if (str >= ' ') {
@@ -184,38 +206,93 @@ export class RawInputBox {
 
   /**
    * Render one highlighted input line to stdout.
-   * Uses BG + content + EL (erase-to-EOL fills background without moving cursor).
+   * Uses BG + FG + content + EL (erase-to-EOL fills background).
    */
   private writeLine(content: string): void {
     process.stdout.write(BG + FG + content + EL + RESET);
   }
 
+  /** Render one highlighted blank padding line (same colour, no text). */
+  private writePadLine(): void {
+    process.stdout.write(BG + EL + RESET);
+  }
+
+  // ── Tab completion ─────────────────────────────────────────────────────────
+
   /**
-   * Draw the highlighted input zone from scratch at the current cursor position.
-   * Layout: one highlighted line per wrap; cursor left in the right position.
+   * Tab cycles through slash-command completions when the buffer starts with '/'.
+   * Shift-Tab cycles backwards. On non-slash input, Tab inserts two spaces.
+   */
+  private handleTab(prefix: string, completions: string[], forward: boolean): void {
+    if (this.buffer.startsWith('/')) {
+      const partial = this.buffer.slice(1).toLowerCase();
+      if (this.tabCycleList.length === 0) {
+        this.tabCycleList = completions
+          .filter(c => c.startsWith(partial))
+          .map(c => '/' + c);
+        this.tabCycleIdx = forward ? 0 : this.tabCycleList.length - 1;
+      } else {
+        this.tabCycleIdx = forward
+          ? (this.tabCycleIdx + 1) % this.tabCycleList.length
+          : (this.tabCycleIdx - 1 + this.tabCycleList.length) % this.tabCycleList.length;
+      }
+      if (this.tabCycleList.length > 0) {
+        this.buffer = this.tabCycleList[this.tabCycleIdx];
+        this.cursorPos = this.buffer.length;
+        this.redrawBox(prefix);
+      }
+    } else if (forward) {
+      const spaces = '  ';
+      this.buffer = this.buffer.slice(0, this.cursorPos) + spaces + this.buffer.slice(this.cursorPos);
+      this.cursorPos += spaces.length;
+      this.redrawBox(prefix);
+    }
+  }
+
+  // ── Layout: [top-pad] [input lines...] [bottom-pad]
+  //
+  // After drawBox/redrawBox the cursor is left INSIDE the input area.
+  // lastCursorLineInInput tracks which input line (0-indexed) the cursor is on.
+  //
+  // Helpers use these invariants:
+  //   • positionCursor  — called when cursor is at END of bottom-pad; moves up into input
+  //   • redrawBox       — cursor is at lastCursorLineInInput; go up to top-pad, redraw
+  //   • clearBoxAndEcho — cursor is at lastCursorLineInInput; go up to top-pad, clear, echo
+
+  /**
+   * Draw the entire box (top-pad + input lines + bottom-pad) from the current
+   * terminal cursor position. Leaves cursor inside the input area.
    */
   private drawBox(prefix: string): void {
     const cols   = this.cols();
     const vpLen  = this.visibleLen(prefix);
     const vpText = this.stripAnsi(prefix);
-    // Wrap the visible content to determine line structure
     const inputLines = this.wrap(vpText + this.buffer, cols);
 
+    // Top pad
+    this.writePadLine();
+    process.stdout.write('\n');
+
+    // Input lines
     for (let i = 0; i < inputLines.length; i++) {
       if (i > 0) process.stdout.write('\n');
-      // Line 0 uses the actual styled prefix; subsequent lines are pure buffer
       const content = i === 0
         ? prefix + inputLines[0].slice(vpLen)
         : inputLines[i];
       this.writeLine(content);
     }
 
+    // Bottom pad — cursor ends up here after write
+    process.stdout.write('\n');
+    this.writePadLine();
+
     this.boxInputLines = inputLines.length;
     this.positionCursor(vpLen, cols, inputLines);
   }
 
   /**
-   * Erase the current highlighted zone and redraw it (after buffer/cursor change).
+   * Erase the entire box and redraw it. Called after every buffer change.
+   * Cursor starts at lastCursorLineInInput inside the input area.
    */
   private redrawBox(prefix: string): void {
     const cols   = this.cols();
@@ -223,14 +300,16 @@ export class RawInputBox {
     const vpText = this.stripAnsi(prefix);
     const inputLines = this.wrap(vpText + this.buffer, cols);
 
-    // Move to column 1 of the first input line
-    if (this.lastCursorLineInInput > 0) {
-      process.stdout.write(`\x1b[${this.lastCursorLineInInput}F`); // CPL n
-    } else {
-      process.stdout.write('\x1b[1G'); // CHA → col 1 of current line
-    }
+    // From input cursor → top-pad: lastCursorLineInInput rows up + 1 for the top-pad itself
+    // CPL moves up N lines and goes to column 1.
+    process.stdout.write(`\x1b[${this.lastCursorLineInInput + 1}F`);
     process.stdout.write('\x1b[0J'); // clear to end of display
 
+    // Top pad
+    this.writePadLine();
+    process.stdout.write('\n');
+
+    // Input lines
     for (let i = 0; i < inputLines.length; i++) {
       if (i > 0) process.stdout.write('\n');
       const content = i === 0
@@ -239,28 +318,35 @@ export class RawInputBox {
       this.writeLine(content);
     }
 
+    // Bottom pad
+    process.stdout.write('\n');
+    this.writePadLine();
+
     this.boxInputLines = inputLines.length;
     this.positionCursor(vpLen, cols, inputLines);
   }
 
   /**
-   * Move cursor to the correct position within the highlighted zone.
-   * Called after every draw/redraw. Cursor starts at end of last drawn line.
-   * vpLen = visible (ANSI-stripped) length of prefix.
+   * Move cursor from end of bottom-pad up into the correct input cell.
+   * Called at the end of drawBox / redrawBox.
    */
   private positionCursor(vpLen: number, cols: number, inputLines: string[]): void {
     const totalBefore = vpLen + this.cursorPos;
     const cursorLine  = Math.floor(totalBefore / cols);
     const cursorCol   = totalBefore % cols;
-    // From last drawn line, go up to cursorLine
-    const rowsUp = (inputLines.length - 1) - cursorLine;
+    // Cursor is at end of bottom-pad. Rows up to cursorLine:
+    //   1 row  → bottom-pad to last input line
+    //   (inputLines.length - 1 - cursorLine) → last input line to cursorLine
+    // total = inputLines.length - cursorLine
+    const rowsUp = inputLines.length - cursorLine;
     if (rowsUp > 0) process.stdout.write(`\x1b[${rowsUp}A`); // CUU
     process.stdout.write(`\x1b[${cursorCol + 1}G`);           // CHA (1-indexed)
     this.lastCursorLineInInput = cursorLine;
   }
 
   /**
-   * Move cursor to new position without redrawing (left/right/home/end).
+   * Move cursor left/right/home/end without redrawing.
+   * Cursor stays within the input area; no padding involved.
    */
   private updateCursor(prefix: string): void {
     const cols        = this.cols();
@@ -269,21 +355,19 @@ export class RawInputBox {
     const newLine     = Math.floor(totalBefore / cols);
     const newCol      = totalBefore % cols;
     const delta = newLine - this.lastCursorLineInInput;
-    if (delta > 0)      process.stdout.write(`\x1b[${delta}B`);    // CUD
-    else if (delta < 0) process.stdout.write(`\x1b[${-delta}A`);   // CUU
-    process.stdout.write(`\x1b[${newCol + 1}G`);                    // CHA
+    if (delta > 0)      process.stdout.write(`\x1b[${delta}B`);
+    else if (delta < 0) process.stdout.write(`\x1b[${-delta}A`);
+    process.stdout.write(`\x1b[${newCol + 1}G`);
     this.lastCursorLineInInput = newLine;
   }
 
   /**
-   * On Enter/Ctrl+C: erase the highlighted zone and echo the typed line cleanly.
+   * On Enter/Ctrl+C: erase entire box and echo the typed line cleanly.
+   * Cursor starts at lastCursorLineInInput inside the input area.
    */
   private clearBoxAndEcho(prefix: string): void {
-    if (this.lastCursorLineInInput > 0) {
-      process.stdout.write(`\x1b[${this.lastCursorLineInInput}F`);
-    } else {
-      process.stdout.write('\x1b[1G');
-    }
+    // Go to start of top-pad: up (lastCursorLineInInput + 1) lines, col 1
+    process.stdout.write(`\x1b[${this.lastCursorLineInInput + 1}F`);
     process.stdout.write('\x1b[0J');
     process.stdout.write(prefix + this.buffer + '\n');
   }

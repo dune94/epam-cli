@@ -22,7 +22,28 @@ export interface CopilotConfig {
 
 export class CopilotProvider implements LLMProvider {
   readonly name = 'copilot';
-  readonly defaultModel = 'gpt-4o';
+  readonly defaultModel = 'claude-sonnet-4-6';
+
+  // All models available via GitHub Copilot (as of 2026-03)
+  static readonly SUPPORTED_MODELS = [
+    'claude-sonnet-4-6',       // Claude Sonnet 4.6 (default)
+    'claude-sonnet-4-5',       // Claude Sonnet 4.5
+    'claude-haiku-4-5',        // Claude Haiku 4.5
+    'claude-opus-4-6',         // Claude Opus 4.6
+    'claude-opus-4-6-fast',    // Claude Opus 4.6 (fast mode)
+    'claude-opus-4-5',         // Claude Opus 4.5
+    'claude-sonnet-4',         // Claude Sonnet 4
+    'gemini-3-pro-preview',    // Gemini 3 Pro (Preview)
+    'gpt-5.3-codex',           // GPT-5.3-Codex
+    'gpt-5.2-codex',           // GPT-5.2-Codex
+    'gpt-5.2',                 // GPT-5.2
+    'gpt-5.1-codex-max',       // GPT-5.1-Codex-Max
+    'gpt-5.1-codex',           // GPT-5.1-Codex
+    'gpt-5.1',                 // GPT-5.1
+    'gpt-5.1-codex-mini',      // GPT-5.1-Codex-Mini (Preview)
+    'gpt-5-mini',              // GPT-5 mini
+    'gpt-4.1',                 // GPT-4.1
+  ] as const;
 
   private model: string;
   private token: string;
@@ -32,11 +53,11 @@ export class CopilotProvider implements LLMProvider {
     this.token = config.token || CopilotProvider.resolveToken();
   }
 
-  /** Only pass model names that GitHub Models actually accepts. */
+  /** Accept any known Copilot model; fall back to default. */
   private resolveModel(requested?: string): string {
-    const supported = /^gpt-|^o[0-9]|^mistral-|^llama-|^phi-/;
-    if (requested && supported.test(requested)) return requested;
-    if (this.model && supported.test(this.model)) return this.model;
+    const supported = CopilotProvider.SUPPORTED_MODELS as readonly string[];
+    if (requested && supported.includes(requested)) return requested;
+    if (this.model && supported.includes(this.model)) return this.model;
     return this.defaultModel;
   }
 

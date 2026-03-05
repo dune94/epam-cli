@@ -145,6 +145,7 @@ export class Repl {
     //   row (rows-1): input  (epam › _)
     //   row (rows  ): bottom separator
     const ZONE = 4;
+    const BOTTOM_OFFSET = 2; // clearance rows below the zone
 
     const stripAnsi = (s: string) => s.replace(/\x1B\[[0-9;]*m/g, '');
 
@@ -184,10 +185,11 @@ export class Repl {
       if (!isTTY) return;
       const rows = process.stdout.rows || 24;
       const { leftLabel, rightLabel, gap, cols } = buildLabels();
-      const headerRow = rows - ZONE + 1;
-      const topSepRow = rows - ZONE + 2;
-      const inputRow  = rows - ZONE + 3;
-      const botSepRow = rows;
+      const base = rows - BOTTOM_OFFSET; // raise zone above the last N rows
+      const headerRow = base - ZONE + 1;
+      const topSepRow = base - ZONE + 2;
+      const inputRow  = base - ZONE + 3;
+      const botSepRow = base;
 
       if (isFirstDraw) {
         // Clear screen and print welcome into top of scroll region
@@ -196,7 +198,7 @@ export class Repl {
       }
 
       // Set scroll region: everything above the prompt zone
-      process.stdout.write(`\x1b[1;${rows - ZONE}r`);
+      process.stdout.write(`\x1b[1;${base - ZONE}r`);
 
       // Draw header row
       process.stdout.write(`\x1b[${headerRow};1H\x1b[2K`);
@@ -223,8 +225,8 @@ export class Repl {
     const focusContentArea = () => {
       if (!isTTY) return;
       const rows = process.stdout.rows || 24;
-      // Move cursor into scroll region so agent output stays above prompt zone
-      process.stdout.write(`\x1b[${rows - ZONE};1H`);
+      const base = rows - BOTTOM_OFFSET;
+      process.stdout.write(`\x1b[${base - ZONE};1H`);
     };
 
     const resetTerminal = () => {

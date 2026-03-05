@@ -2,8 +2,8 @@ import chalk from 'chalk';
 import { formatUsage } from '../output/Formatter.js';
 
 export class Renderer {
-  renderPrompt(provider: string, model: string): string {
-    return chalk.cyan.bold('epam') + chalk.dim(` [${provider}/${model}]`) + chalk.cyan(' › ');
+  renderPrompt(_provider: string, _model: string): string {
+    return chalk.cyan.bold('epam') + chalk.cyan(' › ');
   }
 
   renderWelcome(version: string, provider: string, model: string, projectRoot: string | null): void {

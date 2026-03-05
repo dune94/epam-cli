@@ -268,7 +268,8 @@ export class Repl {
           this.messages.push({ role: 'user', content: userMessage });
 
           try {
-            process.stdout.write('\n');
+            // Separator below the prompt, above the response
+            process.stdout.write(chalk.dim('─'.repeat(process.stdout.columns || 80)) + '\n');
 
             // Wire Ctrl+C to abort the active codex turn.
             // Call on both the direct provider AND the chain (chain forwards to cached providers).

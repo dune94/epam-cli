@@ -186,23 +186,23 @@ export class Repl {
       const rows = process.stdout.rows || 24;
       const { leftLabel, rightLabel, gap, cols } = buildLabels();
       const base = rows - BOTTOM_OFFSET;
-      // Zone layout (readline owns the LAST row, everything else is ours):
+      // Correct zone layout:
       //   headerRow:  folder [branch]   model · turns
-      //   topSepRow:  ──────────────────────────────
-      //   botSepRow:  ──────────────────────────────  ← we own, readline never touches
-      //   inputRow:   epam › _                        ← readline owns only this row
+      //   topSepRow:  ──────────────────────────────  (dim)
+      //   inputRow:   epam › _                        ← readline parks here
+      //   botSepRow:  ──────────────────────────────  (gray, BELOW input)
       const headerRow = base - ZONE + 1;
       const topSepRow = base - ZONE + 2;
-      const botSepRow = base - ZONE + 3;
-      const inputRow  = base;
+      const inputRow  = base - ZONE + 3;
+      const botSepRow = base;                          // base = rows - BOTTOM_OFFSET
 
       if (isFirstDraw) {
         process.stdout.write('\x1b[2J\x1b[H');
         isFirstDraw = false;
       }
 
-      // Scroll region: everything above the prompt zone
-      process.stdout.write(`\x1b[1;${base - ZONE}r`);
+      // Scroll region: only rows above the prompt zone scroll
+      process.stdout.write(`\x1b[1;${headerRow - 1}r`);
 
       // Header
       process.stdout.write(`\x1b[${headerRow};1H\x1b[2K`);
@@ -212,12 +212,15 @@ export class Repl {
       process.stdout.write(`\x1b[${topSepRow};1H\x1b[2K`);
       process.stdout.write(chalk.dim('─'.repeat(cols)));
 
-      // Bottom separator — above readline's row so it's never overwritten
+      // Clear input row — readline will write "epam › " here
+      process.stdout.write(`\x1b[${inputRow};1H\x1b[2K`);
+
+      // Bottom separator — drawn BELOW input row, readline never touches this row
       process.stdout.write(`\x1b[${botSepRow};1H\x1b[2K`);
       process.stdout.write(chalk.gray('─'.repeat(cols)));
 
       // Park cursor at input row for readline
-      process.stdout.write(`\x1b[${inputRow};1H\x1b[2K`);
+      process.stdout.write(`\x1b[${inputRow};1H`);
     };
 
     // Redraw on terminal resize
@@ -227,7 +230,8 @@ export class Repl {
       if (!isTTY) return;
       const rows = process.stdout.rows || 24;
       const base = rows - BOTTOM_OFFSET;
-      process.stdout.write(`\x1b[${base - ZONE};1H`);
+      const headerRow = base - ZONE + 1;
+      process.stdout.write(`\x1b[${headerRow - 1};1H`);
     };
 
     const resetTerminal = () => {

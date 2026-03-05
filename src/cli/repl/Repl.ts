@@ -185,53 +185,39 @@ export class Repl {
       if (!isTTY) return;
       const rows = process.stdout.rows || 24;
       const { leftLabel, rightLabel, gap, cols } = buildLabels();
-      const base = rows - BOTTOM_OFFSET; // raise zone above the last N rows
+      const base = rows - BOTTOM_OFFSET;
+      // Zone layout (readline owns the LAST row, everything else is ours):
+      //   headerRow:  folder [branch]   model · turns
+      //   topSepRow:  ──────────────────────────────
+      //   botSepRow:  ──────────────────────────────  ← we own, readline never touches
+      //   inputRow:   epam › _                        ← readline owns only this row
       const headerRow = base - ZONE + 1;
       const topSepRow = base - ZONE + 2;
-      const inputRow  = base - ZONE + 3;
-      const botSepRow = base;
+      const botSepRow = base - ZONE + 3;
+      const inputRow  = base;
 
       if (isFirstDraw) {
-        // Clear screen and print welcome into top of scroll region
-        process.stdout.write('\x1b[2J\x1b[H'); // clear entire screen, cursor to top
+        process.stdout.write('\x1b[2J\x1b[H');
         isFirstDraw = false;
       }
 
-      // Set scroll region: everything above the prompt zone
+      // Scroll region: everything above the prompt zone
       process.stdout.write(`\x1b[1;${base - ZONE}r`);
 
-      // Draw header row
+      // Header
       process.stdout.write(`\x1b[${headerRow};1H\x1b[2K`);
       process.stdout.write(leftLabel + ' '.repeat(gap) + rightLabel);
 
-      // Draw top separator
+      // Top separator
       process.stdout.write(`\x1b[${topSepRow};1H\x1b[2K`);
       process.stdout.write(chalk.dim('─'.repeat(cols)));
 
-      // Clear input row — readline will write the prompt here
-      process.stdout.write(`\x1b[${inputRow};1H\x1b[2K`);
-
-      // Clear bottom separator row (will be redrawn after readline writes prompt)
+      // Bottom separator — above readline's row so it's never overwritten
       process.stdout.write(`\x1b[${botSepRow};1H\x1b[2K`);
+      process.stdout.write(chalk.gray('─'.repeat(cols)));
 
       // Park cursor at input row for readline
-      process.stdout.write(`\x1b[${inputRow};1H`);
-    };
-
-    // Draw bottom separator after readline has written the prompt (cursor save/restore)
-    const drawBottomSep = () => {
-      if (!isTTY) return;
-      const rows = process.stdout.rows || 24;
-      const base = rows - BOTTOM_OFFSET;
-      const botSepRow = base;
-      const inputRow  = base - ZONE + 3;
-      const cols = process.stdout.columns || 80;
-      process.stdout.write(`\x1b[s`);                              // save cursor
-      process.stdout.write(`\x1b[${botSepRow};1H\x1b[2K`);        // go to sep row, clear
-      process.stdout.write(chalk.gray('─'.repeat(cols)));           // draw separator
-      process.stdout.write(`\x1b[u`);                              // restore cursor to input row
-      // ensure we're at the right column after restore
-      process.stdout.write(`\x1b[${inputRow};1H`);
+      process.stdout.write(`\x1b[${inputRow};1H\x1b[2K`);
     };
 
     // Redraw on terminal resize
@@ -247,15 +233,13 @@ export class Repl {
     const resetTerminal = () => {
       if (!isTTY) return;
       const rows = process.stdout.rows || 24;
-      process.stdout.write(`\x1b[1;${rows}r`);  // full scroll region
-      process.stdout.write(`\x1b[${rows};1H\n`); // cursor to bottom
+      process.stdout.write(`\x1b[1;${rows}r`);
+      process.stdout.write(`\x1b[${rows};1H\n`);
     };
 
     const prompt = () => {
       if (isTTY) {
         drawPromptZone();
-        // Draw bottom separator after readline writes the prompt text
-        setImmediate(drawBottomSep);
       } else {
         // Linear fallback for non-TTY (pipes, CI)
         const { leftLabel, rightLabel, gap, cols } = buildLabels();

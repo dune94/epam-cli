@@ -122,10 +122,17 @@ export class Repl {
     const { setupAutocomplete } = await import('./Autocomplete.js');
     setupAutocomplete(rl);
 
-    // Display hint text (faded, below prompt)
-    console.log(chalk.dim('Type @ to query MCP sources, / for commands, or ? for shortcuts'));
-    console.log(chalk.dim('MCP: @jira @confluence @drawio @all'));
-    console.log();
+    // Capture welcome content to replay inside scroll region on TTY
+    const hintLines = [
+      chalk.dim('Type @ to query MCP sources, / for commands, or ? for shortcuts'),
+      chalk.dim('MCP: @jira @confluence @drawio @all'),
+    ];
+
+    if (!process.stdout.isTTY) {
+      // Non-TTY: print hints immediately as before
+      hintLines.forEach(l => console.log(l));
+      console.log();
+    }
 
     this.running = true;
 
@@ -172,6 +179,7 @@ export class Repl {
       return { leftLabel, rightLabel, gap, cols };
     };
 
+    let isFirstDraw = true;
     const drawPromptZone = () => {
       if (!isTTY) return;
       const rows = process.stdout.rows || 24;
@@ -180,6 +188,12 @@ export class Repl {
       const topSepRow = rows - ZONE + 2;
       const inputRow  = rows - ZONE + 3;
       const botSepRow = rows;
+
+      if (isFirstDraw) {
+        // Clear screen and print welcome into top of scroll region
+        process.stdout.write('\x1b[2J\x1b[H'); // clear entire screen, cursor to top
+        isFirstDraw = false;
+      }
 
       // Set scroll region: everything above the prompt zone
       process.stdout.write(`\x1b[1;${rows - ZONE}r`);

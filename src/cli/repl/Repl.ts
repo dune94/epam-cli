@@ -269,8 +269,8 @@ export class Repl {
           this.messages.push({ role: 'user', content: userMessage });
 
           try {
-            // Blank line before response content
-            process.stdout.write('\n');
+            // Separator below prompt, above response — mirrors the top rule
+            process.stdout.write(chalk.gray('─'.repeat(process.stdout.columns || 80)) + '\n\n');
 
             // Wire Ctrl+C to abort the active codex turn.
             // Call on both the direct provider AND the chain (chain forwards to cached providers).

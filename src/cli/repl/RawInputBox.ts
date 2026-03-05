@@ -73,12 +73,12 @@ export class RawInputBox {
 
       const onData = (str: string) => {
         if (str === '\r' || str === '\n') {
-          this.clearBoxAndEcho(prefix);
+          if (!resolved) this.clearBoxAndEcho(prefix);
           finish({ line: this.buffer, interrupted: false });
 
         } else if (str === '\x03') {
           // Ctrl+C
-          this.clearBoxAndEcho(prefix);
+          if (!resolved) this.clearBoxAndEcho(prefix);
           this.interruptBus.emit('interrupt');
           finish({ line: '', interrupted: true });
 

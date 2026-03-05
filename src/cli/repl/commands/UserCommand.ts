@@ -326,10 +326,18 @@ export const userCommand: SlashCommand = {
       console.log(`  ${chalk.cyan(p.padEnd(12))} ${credStatus}`);
 
       if (accounts.length > 0) {
+        // Detect which stored account's credential matches the live session credential
+        const liveSecret = secret ?? '';
         for (const a of accounts.sort((x, y) => x.name.localeCompare(y.name))) {
-          const isActive = activeAcct === a.name;
-          const marker   = isActive ? chalk.green('  ● ') : chalk.dim('  ○ ');
-          const label    = isActive ? chalk.green(a.name) + chalk.green('  ← active') : chalk.dim(a.name);
+          const storedSecret = a.key ?? a.token ?? '';
+          const isLive       = liveSecret.length > 4 && storedSecret === liveSecret;
+          const isSwitched   = !isLive && activeAcct === a.name;
+          const marker = isLive     ? chalk.green('  ✓ ')
+                       : isSwitched ? chalk.yellow('  ● ')
+                       : chalk.dim('  ○ ');
+          const label  = isLive     ? chalk.green.bold(a.name) + chalk.green('  ← logged in now')
+                       : isSwitched ? chalk.yellow(a.name)     + chalk.dim(' (last switched)')
+                       : chalk.dim(a.name);
           console.log(`${marker}${label}`);
         }
       } else if (activeAcct) {

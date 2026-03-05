@@ -31,6 +31,8 @@ import { importCommand } from './commands/ImportCommand.js';
 import { modelCommand } from './commands/ModelCommand.js';
 import { stashCommand } from './commands/StashCommand.js';
 import { userCommand } from './commands/UserCommand.js';
+import { agentCommand } from './commands/AgentCommand.js';
+import { skillsCommand } from './commands/SkillsCommand.js';
 
 export interface SlashCommandContext {
   config: ResolvedConfig;
@@ -50,10 +52,14 @@ export interface SlashCommandContext {
   toolRunner?: ToolRunner;
   // Budget guard (session cost tracking + enforcement)
   budgetGuard?: BudgetGuard;
-  // Provider chain (optional — present when failover is active)
+  // Agent persona and tool capability switching
   providerChain?: ProviderChain;
   // Auditor registry (optional — present when .epam/auditors.json exists)
   auditorRegistry?: AuditorRegistry;
+  // System prompt switching (for /agent switch)
+  currentSystemPrompt?: string;
+  defaultSystemPrompt?: string;
+  onSystemPromptChange?: (prompt: string) => void;
   // The REPL's readline instance — use this for interactive input instead of prompts()
   rl?: import('readline').Interface;
   // Callbacks
@@ -523,6 +529,8 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   mcpQueryCommand,
   stashCommand,
   userCommand,
+  agentCommand,
+  skillsCommand,
 ];
 
 function statusIcon_(status: HealthStatus): string {

@@ -91,7 +91,8 @@ export class Repl {
     this.session = createSession(config.projectRoot, this.currentModel, config.provider);
 
     const authManager = this.options.authManager ?? new AuthManager(config.backendUrl);
-    const systemPrompt = await buildSessionSystemPrompt(config, authManager);
+    let systemPrompt = await buildSessionSystemPrompt(config, authManager);
+    const defaultSystemPrompt = systemPrompt;
 
     // Resolve user identity: JWT email → env var → OS user
     const authUser = await authManager.getUser().catch(() => null);
@@ -153,11 +154,18 @@ export class Repl {
       hardLimitAt: this.budgetGuard.limits.hardLimitAt,
     });
 
+    // Shared system prompt ref — allows /agent switch to update live
+    const systemPromptRef = {
+      get value() { return systemPrompt; },
+      get default() { return defaultSystemPrompt; },
+      onChange: (s: string) => { systemPrompt = s; },
+    };
+
     // Auto-resume a session if one was pre-installed by `epam-cli import`
     const autoResumeId = process.env.EPAM_AUTO_RESUME;
     if (autoResumeId) {
       delete process.env.EPAM_AUTO_RESUME;
-      const ctx = this.buildSlashContext(config, systemPrompt);
+      const ctx = this.buildSlashContext(config, systemPrompt, systemPromptRef);
       const result = await ctx.onResume(autoResumeId);
       if (result.success) {
         process.stdout.write(
@@ -196,7 +204,7 @@ export class Repl {
       if (parsed.type === 'empty') continue;
 
       if (parsed.type === 'slash_command') {
-        const ctx = this.buildSlashContext(config, systemPrompt);
+        const ctx = this.buildSlashContext(config, systemPrompt, systemPromptRef);
         const keepRunning = await handleSlashCommand(parsed, ctx);
         if (!keepRunning) {
           this.running = false;
@@ -564,7 +572,11 @@ export class Repl {
     }
   }
 
-  private buildSlashContext(config: ResolvedConfig, _systemPrompt: string): SlashCommandContext {
+  private buildSlashContext(
+    config: ResolvedConfig,
+    _systemPrompt: string,
+    systemPromptRef?: { value: string; default: string; onChange: (s: string) => void }
+  ): SlashCommandContext {
     return {
       config,
       currentModel: this.currentModel,
@@ -583,6 +595,9 @@ export class Repl {
       tools: this.options.tools,
       toolRunner: this.toolRunner,
       rl: this.rl,
+      currentSystemPrompt: systemPromptRef?.value,
+      defaultSystemPrompt: systemPromptRef?.default,
+      onSystemPromptChange: systemPromptRef?.onChange,
 
       onModelChange: model => {
         this.currentModel = model;

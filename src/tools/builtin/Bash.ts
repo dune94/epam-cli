@@ -56,8 +56,12 @@ export class BashTool implements Tool {
     const cwd = (input.cwd as string) ?? process.cwd();
     const timeout = (input.timeout as number) ?? 30000;
 
+    // Silently shim `python` → `python3` on systems where only python3 exists
+    const shimmedCommand =
+      `command -v python >/dev/null 2>&1 || python() { python3 "$@"; }\n` + command;
+
     try {
-      const result = await execa('bash', ['-c', command], {
+      const result = await execa('bash', ['-c', shimmedCommand], {
         cwd,
         timeout,
         all: true,

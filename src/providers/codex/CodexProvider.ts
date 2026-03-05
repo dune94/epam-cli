@@ -101,6 +101,35 @@ export class CodexProvider implements LLMProvider {
   }
 
   /**
+   * Pretty-print a codex JSON event to stderr.
+   * Shows tool calls (command start/finish) as they happen so long tasks feel alive.
+   * Clears the spinner line first; the spinner timer will redraw on next tick.
+   */
+  private renderCodexEvent(event: { type: string; item?: Record<string, unknown> }): void {
+    const item = event.item;
+    if (!item) return;
+
+    if (event.type === 'item.started' && item['type'] === 'command_execution') {
+      // Strip the /bin/bash -lc "..." wrapper to show the actual command.
+      const raw = String(item['command'] ?? '');
+      const inner = raw.replace(/^\/bin\/bash\s+-lc\s+"([\s\S]*)"$/, '$1')
+                       .replace(/^\/bin\/bash\s+-lc\s+'([\s\S]*)'$/, '$1')
+                       .replace(/\\n/g, ' ').replace(/\s+/g, ' ').trim();
+      const display = inner.length > 100 ? inner.slice(0, 97) + '…' : inner;
+      process.stderr.write(`\r\x1b[2K\x1b[36m⚙\x1b[0m  \x1b[2m${display}\x1b[0m\n`);
+    }
+
+    if (event.type === 'item.completed' && item['type'] === 'command_execution') {
+      const code = item['exit_code'];
+      const ok = code === 0;
+      const mark = ok ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m';
+      const out = String(item['aggregated_output'] ?? '').split('\n')[0].trim();
+      const preview = out.length > 80 ? out.slice(0, 77) + '…' : out;
+      process.stderr.write(`\r\x1b[2K   ${mark} \x1b[2m${preview || `exit ${code}`}\x1b[0m\n`);
+    }
+  }
+
+  /**
    * Run codex and return after the FIRST agent_message event, or when
    * turn.completed fires (whichever comes first).
    *
@@ -183,6 +212,9 @@ export class CodexProvider implements LLMProvider {
           if (!line.trim()) continue;
           try {
             const event = JSON.parse(line);
+
+            // Pretty-print tool activity so long tasks feel alive.
+            this.renderCodexEvent(event);
 
             if (event.type === 'item.completed' && event.item?.type === 'agent_message') {
               const text = event.item.text ?? '';

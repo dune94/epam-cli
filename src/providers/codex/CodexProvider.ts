@@ -16,12 +16,25 @@
  */
 
 import { execa } from 'execa';
+import { EventEmitter } from 'events';
 import type { LLMProvider, ProviderRequest, ProviderResponse, StreamHandler, ContentPart } from '../types.js';
 import { logger } from '../../utils/logger.js';
 
 export class CodexProvider implements LLMProvider {
   readonly name = 'codex';
   readonly defaultModel = 'gpt-5-codex';
+
+  /** Returns true if the model name is a codex-native model (gpt/o-series). */
+  static isCodexModel(model: string): boolean {
+    return /^(gpt-|o[0-9]|codex-)/.test(model);
+  }
+
+  private interruptBus?: EventEmitter;
+
+  /** Called by Repl to wire up Ctrl+C → abort running codex turn. */
+  setInterruptBus(bus: EventEmitter): void {
+    this.interruptBus = bus;
+  }
 
   constructor(
     private model?: string
@@ -77,26 +90,26 @@ export class CodexProvider implements LLMProvider {
   }
 
   /**
-   * Run codex and return after the FIRST agent_message event.
+   * Run codex and return after the FIRST agent_message event, or when
+   * turn.completed fires (whichever comes first).
    *
-   * Uses `--json` to stream structured events. The first agent_message
-   * fires within ~2-3s — before codex starts executing any shell tools.
-   * We return immediately and SIGTERM the process. Next message starts
-   * a completely fresh invocation with history in the prompt.
+   * - Fast path: agent_message fires in 2-3s → return after 3s silence
+   * - Slow path: codex goes straight to tool execution → wait for turn.completed
+   * - Hard cap: 60s timeout returns a descriptive message
+   * - SIGINT: Ctrl+C kills codex and unblocks the REPL immediately
    */
   private async runCodex(prompt: string): Promise<string> {
     const args: string[] = [
       'exec',
       '--skip-git-repo-check',
       '--dangerously-bypass-approvals-and-sandbox',
-      '--ephemeral',  // no session files saved — avoids lock contention when killed mid-turn
+      '--ephemeral',
       '--json',
     ];
 
-    if (this.model) args.push('--model', this.model);
+    if (this.model && CodexProvider.isCodexModel(this.model)) args.push('--model', this.model);
     args.push(prompt);
 
-    // Show elapsed timer so the user knows Codex is working
     const start = Date.now();
     process.stderr.write('\x1b[2m⟳ Codex thinking...\x1b[0m');
     const timer = setInterval(() => {
@@ -108,26 +121,43 @@ export class CodexProvider implements LLMProvider {
     return new Promise((resolve, reject) => {
       let buffer = '';
       let resolved = false;
+      let firstAgentMessage = '';
+      let agentMessageTimer: ReturnType<typeof setTimeout> | null = null;
+
+      const killGroup = () => {
+        try { process.kill(-(proc.pid!), 'SIGKILL'); } catch { /* already gone */ }
+        try { proc.kill('SIGKILL'); } catch { /* already gone */ }
+      };
 
       const finish = (text: string) => {
         if (resolved) return;
         resolved = true;
         clearInterval(timer);
         clearTimeout(safetyTimer);
+        if (agentMessageTimer) clearTimeout(agentMessageTimer);
+        process.removeListener('SIGINT', sigintHandler);
+        this.interruptBus?.removeListener('interrupt', sigintHandler);
         process.stderr.write('\r\x1b[2K');
-        try { proc.kill('SIGKILL'); } catch { /* already exited */ }
+        killGroup();
         resolve(text.trim() || '(no response)');
       };
+
+      // Ctrl+C: listen on both process SIGINT (raw terminal) and the REPL's sigintBus
+      // (readline intercepts SIGINT in interactive mode, so process.once may not fire)
+      const sigintHandler = () => finish('(cancelled)');
+      process.once('SIGINT', sigintHandler);
+      this.interruptBus?.once('interrupt', sigintHandler);
 
       const proc = execa('codex', args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: { ...process.env },
+        detached: true,
       });
-      // execa returns a Promise — suppress the rejection from SIGKILL so it
-      // doesn't become an unhandled rejection and crash the REPL process.
       proc.catch(() => {});
 
+      let stdoutBuf = '';
       proc.stdout?.on('data', (chunk: Buffer) => {
+        stdoutBuf += chunk.toString();
         buffer += chunk.toString();
         const lines = buffer.split('\n');
         buffer = lines.pop() ?? '';
@@ -136,34 +166,54 @@ export class CodexProvider implements LLMProvider {
           if (!line.trim()) continue;
           try {
             const event = JSON.parse(line);
-            // Return on the FIRST agent_message — before tool calls execute.
-            // turn.completed fires only after all shell commands in the turn
-            // finish (can be 10-30s). The agent_message fires within ~2-3s.
+
             if (event.type === 'item.completed' && event.item?.type === 'agent_message') {
               const text = event.item.text ?? '';
               if (text.trim()) {
-                finish(text);
+                firstAgentMessage = text;
+                // Return 3s after last agent_message if codex goes quiet
+                // (about to start tool execution — we have the conversational reply)
+                if (agentMessageTimer) clearTimeout(agentMessageTimer);
+                agentMessageTimer = setTimeout(() => finish(firstAgentMessage), 3000);
+                agentMessageTimer.unref();
               }
             }
-          } catch { /* skip non-JSON lines (header output etc.) */ }
+
+            // Return on turn.completed — covers cases where codex goes straight
+            // to tool execution with no agent_message before working.
+            if (event.type === 'turn.completed') {
+              finish(firstAgentMessage || '(task complete — check the files)');
+            }
+          } catch { /* skip non-JSON lines */ }
         }
       });
 
-      proc.on('exit', () => {
-        if (!resolved) finish('');
+      proc.on('exit', (code) => {
+        if (!resolved) {
+          if (code !== 0) {
+            // Parse any error events from stdout
+            const errEvent = stdoutBuf.match(/"type":"error","message":"([^"]+)"/);
+            const errMsg = errEvent ? errEvent[1] : `codex exited with code ${code}`;
+            process.stderr.write(`\r\x1b[2K\x1b[33m⚠ ${errMsg}\x1b[0m\n`);
+          }
+          finish(firstAgentMessage);
+        }
       });
 
       proc.on('error', (err: Error) => {
         if (!resolved) {
           clearInterval(timer);
+          process.removeListener('SIGINT', sigintHandler);
           process.stderr.write('\r\x1b[2K');
           reject(err);
         }
       });
 
-      // Safety net — 5 minutes absolute max.
-      // .unref() so this timer doesn't prevent Node.js from exiting normally.
-      const safetyTimer = setTimeout(() => finish('(timeout — try a simpler prompt)'), 5 * 60 * 1000);
+      // 60-second hard cap — if codex hasn't responded by then, return what we have.
+      const safetyTimer = setTimeout(
+        () => finish(firstAgentMessage || '(codex is still working — this task may take longer than expected)'),
+        60 * 1000,
+      );
       safetyTimer.unref();
     });
   }

@@ -115,7 +115,11 @@ export class Repl {
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
-      terminal: true,
+      // terminal: false prevents readline from echoing keystrokes to stdout.
+      // RawInputBox owns all TTY input in raw mode; readline echoing causes
+      // a duplicate prompt line on Enter (\r triggers readline's _normalWrite
+      // which writes \n, shifting the cursor before clearBoxAndEcho runs).
+      terminal: false,
     });
     this.rl = rl;
 

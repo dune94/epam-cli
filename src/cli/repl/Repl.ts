@@ -134,7 +134,7 @@ export class Repl {
       const cols = process.stdout.columns || 80;
 
       // Add breathing room before header on subsequent prompts
-      if (!firstPrompt) process.stdout.write('\n');
+      if (!firstPrompt) process.stdout.write('\n\n\n\n');
       firstPrompt = false;
 
       // ── Header bar ────────────────────────────────────────────────────────
@@ -269,8 +269,8 @@ export class Repl {
           this.messages.push({ role: 'user', content: userMessage });
 
           try {
-            // Separator below the prompt, above the response
-            process.stdout.write(chalk.gray('─'.repeat(process.stdout.columns || 80)) + '\n\n');
+            // Blank line before response content
+            process.stdout.write('\n');
 
             // Wire Ctrl+C to abort the active codex turn.
             // Call on both the direct provider AND the chain (chain forwards to cached providers).

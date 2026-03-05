@@ -11,10 +11,10 @@
 
 import { EventEmitter } from 'events';
 
-// Very faint yellow background (ANSI 256-color 230 = #ffffd7, ~60% lighter than 229)
-// Black foreground (ANSI 30) for maximum readability on the light background
-const BG    = '\x1b[48;5;230m';
-const FG    = '\x1b[30m';
+// Dark gray / "light black" background (ANSI 256-color 238 = #444444)
+// Bright yellow foreground (ANSI 93) for high contrast
+const BG    = '\x1b[48;5;238m';
+const FG    = '\x1b[93m';
 const RESET = '\x1b[0m';
 const EL    = '\x1b[K'; // erase to end of line (fills bg without moving cursor)
 

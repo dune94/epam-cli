@@ -355,10 +355,26 @@ async function logoutProvider(providerName: string, _ctx: SlashCommandContext): 
   try {
     switch (providerName) {
       case 'copilot': {
-        // Actually revokes the OAuth token via the CLI
-        const { exitCode } = await execa('copilot', ['logout'], { stdio: 'inherit', reject: false });
+        // Remove GitHub Copilot token files from known config locations
+        const { existsSync, rmSync, readdirSync } = await import('fs');
+        const { homedir } = await import('os');
+        const { join } = await import('path');
+        const home = homedir();
+        const copilotPaths = [
+          join(home, '.config', 'github-copilot'),
+          join(home, '.github-copilot.json'),
+        ];
+        let removed = 0;
+        for (const p of copilotPaths) {
+          if (existsSync(p)) {
+            try { rmSync(p, { recursive: true, force: true }); removed++; } catch { /* ignore */ }
+          }
+        }
         console.log();
-        console.log(exitCode === 0 ? chalk.green('✓ Copilot logged out') : chalk.yellow('⚠  Logout completed with warnings'));
+        console.log(removed > 0
+          ? chalk.green('✓ Copilot auth files removed')
+          : chalk.dim('No Copilot auth files found — may already be logged out.'));
+        console.log(chalk.dim('  Re-authenticate with: /provider auth copilot'));
         break;
       }
 

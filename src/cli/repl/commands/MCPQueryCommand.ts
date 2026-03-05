@@ -1,5 +1,5 @@
 /**
- * /mcp Slash Command
+ * /mcp-query Slash Command
  * 
  * Query MCP sources manually
  */
@@ -8,10 +8,10 @@ import chalk from 'chalk';
 import type { SlashCommand, SlashCommandContext } from '../SlashCommands.js';
 import { createMCPClients, detectMCPSource } from '../../../mcp/MCPClient.js';
 
-export const mcpCommand: SlashCommand = {
-  name: 'mcp',
+export const mcpQueryCommand: SlashCommand = {
+  name: 'mcp-query',
   aliases: ['sources'],
-  description: 'Query MCP sources manually',
+  description: 'Query MCP sources manually (@jira, @confluence, etc.)',
   usage: '<jira|confluence|drawio|all> <query>',
   
   async execute(args, ctx): Promise<boolean> {

@@ -19,6 +19,7 @@ import { planCommand } from './commands/PlanCommand.js';
 import { reviewCommand } from './commands/ReviewCommand.js';
 import { forkCommand } from './commands/ForkCommand.js';
 import { mcpCommand } from './commands/MCPCommand.js';
+import { mcpQueryCommand } from './commands/MCPQueryCommand.js';
 import { tasksCommand } from './commands/TasksCommand.js';
 import { debugCommand } from './commands/DebugCommand.js';
 import { teamCommand } from './commands/TeamCommand.js';
@@ -28,7 +29,8 @@ import { shareCommand } from './commands/ShareCommand.js';
 import { handoffCommand } from './commands/HandoffCommand.js';
 import { importCommand } from './commands/ImportCommand.js';
 import { modelCommand } from './commands/ModelCommand.js';
-import { mcpCommand } from './commands/MCPQueryCommand.js';
+import { stashCommand } from './commands/StashCommand.js';
+import { userCommand } from './commands/UserCommand.js';
 
 export interface SlashCommandContext {
   config: ResolvedConfig;
@@ -493,6 +495,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
         console.log(chalk.dim(`Session cost: ${formatCost(cost)}`));
       }
       console.log(chalk.dim('Goodbye!'));
+      process.stdout.write('\x1b[2J\x1b[H'); // clear terminal
       return false;
     },
   },
@@ -556,7 +559,9 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   handoffCommand,
   importCommand,
   modelCommand,
-  mcpCommand,
+  mcpQueryCommand,
+  stashCommand,
+  userCommand,
 ];
 
 function statusIcon_(status: HealthStatus): string {

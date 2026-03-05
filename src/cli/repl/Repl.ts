@@ -1,6 +1,4 @@
 import * as readline from 'readline';
-import * as path from 'path';
-import { execSync } from 'child_process';
 import { EventEmitter } from 'events';
 import chalk from 'chalk';
 import prompts from 'prompts';
@@ -18,6 +16,8 @@ import type { BudgetCheckResult } from '../../billing/BudgetGuard.js';
 import { StreamWriter } from '../output/StreamWriter.js';
 import { Renderer } from './Renderer.js';
 import { parseInput, handleSlashCommand } from './InputHandler.js';
+import { PromptZone } from './PromptZone.js';
+import { RawInputBox } from './RawInputBox.js';
 import type { SlashCommandContext } from './SlashCommands.js';
 import type { ProviderChain } from '../../providers/ProviderChain.js';
 import { ToolRunner } from '../../agent/tools/ToolRunner.js';
@@ -136,322 +136,21 @@ export class Repl {
 
     this.running = true;
 
-    // ── Sticky prompt zone (ANSI scroll region) ───────────────────────────────
-    // Only active when stdout is a real TTY; falls back to linear mode otherwise.
-    const isTTY = process.stdout.isTTY === true;
-    // Prompt zone occupies the bottom 4 rows:
-    //   row (rows-3): header bar
-    //   row (rows-2): top separator
-    //   row (rows-1): input  (epam › _)
-    //   row (rows  ): bottom separator
-    const ZONE = 4;
-    const BOTTOM_OFFSET = 2; // clearance rows below the zone
+    const promptZone = new PromptZone(process.stdout);
+    const rawInputBox = new RawInputBox(this.sigintBus);
 
-    const stripAnsi = (s: string) => s.replace(/\x1B\[[0-9;]*m/g, '');
+    // Ctrl+C during agent response (non-raw mode) → abort agent
+    const sigintDuringAgent = () => { this.sigintBus.emit('interrupt'); };
+    process.on('SIGINT', sigintDuringAgent);
 
-    const buildLabels = () => {
-      const cols = process.stdout.columns || 80;
-      const folder = path.basename(process.cwd());
-      let branch = '';
-      try {
-        branch = execSync('git rev-parse --abbrev-ref HEAD', {
-          cwd: process.cwd(),
-          stdio: ['ignore', 'pipe', 'ignore'],
-          timeout: 500,
-        }).toString().trim();
-      } catch { /* not a git repo */ }
+    rl.on('close', () => { this.running = false; });
 
-      const leftLabel = branch
-        ? chalk.bold(folder) + chalk.dim(` [${branch}]`)
-        : chalk.bold(folder);
-
-      const hardLimitAt = this.budgetGuard.limits.hardLimitAt;
-      const cost = this.budgetGuard.sessionCost;
-      const modelTag = chalk.greenBright(`${this.currentProvider}/${this.currentModel}`);
-      let rightLabel: string;
-      if (isFinite(hardLimitAt) && hardLimitAt > 0) {
-        const pct = Math.max(0, ((hardLimitAt - cost) / hardLimitAt) * 100).toFixed(1);
-        rightLabel = modelTag + chalk.dim(` · `) + chalk.cyan(`${pct}% remaining`);
-      } else {
-        const turns = this.session.turns.length;
-        rightLabel = modelTag + chalk.dim(` · ${turns} turn${turns !== 1 ? 's' : ''}`);
-      }
-      const gap = Math.max(1, cols - stripAnsi(leftLabel).length - stripAnsi(rightLabel).length);
-      return { leftLabel, rightLabel, gap, cols };
-    };
-
-    let isFirstDraw = true;
-    const drawPromptZone = () => {
-      if (!isTTY) return;
-      const rows = process.stdout.rows || 24;
-      const { leftLabel, rightLabel, gap, cols } = buildLabels();
-      const base = rows - BOTTOM_OFFSET;
-      // Correct zone layout:
-      //   headerRow:  folder [branch]   model · turns
-      //   topSepRow:  ──────────────────────────────  (dim)
-      //   inputRow:   epam › _                        ← readline parks here
-      //   botSepRow:  ──────────────────────────────  (gray, BELOW input)
-      const headerRow = base - ZONE + 1;
-      const topSepRow = base - ZONE + 2;
-      const inputRow  = base - ZONE + 3;
-      const botSepRow = base;                          // base = rows - BOTTOM_OFFSET
-
-      if (isFirstDraw) {
-        process.stdout.write('\x1b[2J\x1b[H');
-        isFirstDraw = false;
-      }
-
-      // Scroll region: only rows above the prompt zone scroll
-      process.stdout.write(`\x1b[1;${headerRow - 1}r`);
-
-      // Header
-      process.stdout.write(`\x1b[${headerRow};1H\x1b[2K`);
-      process.stdout.write(leftLabel + ' '.repeat(gap) + rightLabel);
-
-      // Top separator
-      process.stdout.write(`\x1b[${topSepRow};1H\x1b[2K`);
-      process.stdout.write(chalk.dim('─'.repeat(cols)));
-
-      // Clear input row — readline will write "epam › " here
-      process.stdout.write(`\x1b[${inputRow};1H\x1b[2K`);
-
-      // Bottom separator — drawn BELOW input row, readline never touches this row
-      process.stdout.write(`\x1b[${botSepRow};1H\x1b[2K`);
-      process.stdout.write(chalk.gray('─'.repeat(cols)));
-
-      // Park cursor at input row for readline
-      process.stdout.write(`\x1b[${inputRow};1H`);
-    };
-
-    // Redraw on terminal resize
-    process.stdout.on('resize', drawPromptZone);
-
-    const focusContentArea = () => {
-      if (!isTTY) return;
-      const rows = process.stdout.rows || 24;
-      const base = rows - BOTTOM_OFFSET;
-      const headerRow = base - ZONE + 1;
-      process.stdout.write(`\x1b[${headerRow - 1};1H`);
-    };
-
-    const resetTerminal = () => {
-      if (!isTTY) return;
-      const rows = process.stdout.rows || 24;
-      process.stdout.write(`\x1b[1;${rows}r`);
-      process.stdout.write(`\x1b[${rows};1H\n`);
-    };
-
-    const prompt = () => {
-      if (isTTY) {
-        drawPromptZone();
-      } else {
-        // Linear fallback for non-TTY (pipes, CI)
-        const { leftLabel, rightLabel, gap, cols } = buildLabels();
-        process.stdout.write('\n' + leftLabel + ' '.repeat(gap) + rightLabel + '\n');
-        process.stdout.write(chalk.dim('─'.repeat(cols)) + '\n');
-      }
-
-      rl.question(
-        this.renderer.renderPrompt(this.currentProvider, this.currentModel),
-        async input => {
-          if (!this.running) return;
-
-          const parsed = parseInput(input);
-
-          if (parsed.type === 'empty') {
-            prompt();
-            return;
-          }
-
-          // Move cursor into scroll region so ALL output (slash cmds + agent) stays above prompt zone
-          focusContentArea();
-
-          // Bottom separator for non-TTY only (TTY uses scroll region)
-          if (!isTTY) process.stdout.write(chalk.gray('─'.repeat(process.stdout.columns || 80)) + '\n\n');
-
-          if (parsed.type === 'slash_command') {
-            const ctx = this.buildSlashContext(config, systemPrompt);
-            const keepRunning = await handleSlashCommand(parsed, ctx);
-            if (keepRunning) {
-              prompt();
-            } else {
-              this.running = false;
-              rl.close();
-            }
-            return;
-          }
-
-          // Regular message — run agent
-          const rawMessage = parsed.message!;
-
-          let userMessage = config.projectRoot
-            ? await consumeConsultationContext(rawMessage, config.projectRoot)
-            : rawMessage;
-
-          // Auto-query MCP sources based on keywords (non-blocking, never fails chat)
-          try {
-            if (process.env.EPAM_DEBUG === '1') {
-              console.error('[MCP] Starting autoQueryMCP for:', userMessage.substring(0, 50));
-            }
-            
-            const { autoQueryMCP, formatMCPResults } = await import('../../mcp/MCPAutoQuery.js');
-            const mcpResults = await autoQueryMCP(userMessage);
-
-            if (process.env.EPAM_DEBUG === '1') {
-              console.error('[MCP] autoQueryMCP returned', mcpResults.length, 'results');
-              if (mcpResults.length > 0) {
-                console.error('[MCP] First result source:', mcpResults[0].source);
-                console.error('[MCP] First result items:', mcpResults[0].items?.length || 0);
-              }
-            }
-
-            if (mcpResults.length > 0) {
-              // Display MCP results with proper newline handling
-              const formattedResults = formatMCPResults(mcpResults);
-              if (formattedResults.trim()) {
-                process.stderr.write('\n' + formattedResults);
-              }
-
-              // Build a data-carrying prompt so the agent presents results
-              // without triggering its own tool/fetch loop
-              const dataLines: string[] = [];
-              for (const r of mcpResults) {
-                for (const item of r.items) {
-                  dataLines.push(`ID: ${item.id}`);
-                  if (item.title) dataLines.push(`Title: ${item.title}`);
-                  if (item.status) dataLines.push(`Status: ${item.status}`);
-                  if (item.url) dataLines.push(`URL: ${item.url}`);
-                  if (item.updated) dataLines.push(`Updated: ${item.updated}`);
-                  if (item.summary && item.summary !== item.title) dataLines.push(`Summary: ${item.summary}`);
-                }
-              }
-
-              // Strip @mentions from the original message to get any extra instruction
-              const extraInstruction = userMessage
-                .replace(/@(jira|confluence|drawio|all)\s*([A-Z]+-\d+)?/gi, '')
-                .trim();
-
-              userMessage = [
-                'The following data was already fetched from the MCP server. Present it clearly to the user. Do not attempt to fetch or search for additional data.',
-                '',
-                dataLines.join('\n'),
-                ...(extraInstruction ? ['', `User instruction: ${extraInstruction}`] : []),
-              ].join('\n');
-            }
-          } catch (err) {
-            // MCP is optional - never let it disrupt chat
-            // Log error in debug mode only
-            if (process.env.EPAM_DEBUG === '1') {
-              console.error('MCP auto-query error:', (err as Error).message);
-            }
-            // Continue with original user message
-          }
-
-          // Add user message to history BEFORE calling agent (preserves on failover)
-          this.messages.push({ role: 'user', content: userMessage });
-
-          try {
-            // Move cursor into scroll region so agent output stays above prompt zone
-            focusContentArea();
-
-            // Wire Ctrl+C to abort the active codex turn.
-            // Call on both the direct provider AND the chain (chain forwards to cached providers).
-            for (const p of [provider, this.options.providerChain]) {
-              if (p && typeof (p as unknown as { setInterruptBus?: (b: EventEmitter) => void }).setInterruptBus === 'function') {
-                (p as unknown as { setInterruptBus: (b: EventEmitter) => void }).setInterruptBus(this.sigintBus);
-              }
-            }
-
-            let gateDecision: AuditorGateDecision | undefined;
-
-            const runner = new AgentRunner({
-              userMessage,
-              systemPrompt,
-              provider,
-              model: this.currentModel,
-              tools: this.options.tools,
-              toolRunner: this.toolRunner,
-              maxIterations: config.maxIterations,
-              history: this.messages.slice(0, -1), // Pass history without current message
-              autoCompressAt: config.autoCompressAt,
-              maxOutputTokens: config.maxOutputTokens,
-              dangerousSkipApproval: config.tools.dangerousSkipApproval,
-              budgetGuard: this.budgetGuard,
-              auditors: auditorRegistry.getEnabledRunners(provider, this.options.tools ?? []),
-              onAuditorGate: (decision) => {
-                gateDecision = decision;
-                this.renderAuditorFindings(decision);
-              },
-              onTextDelta: delta => this.writer.write(delta),
-              onToolCall: (name, inp) => this.writer.writeToolCall(name, inp),
-              onToolResult: (name, result, isError) =>
-                this.writer.writeToolResult(name, result, isError),
-              onBudgetCheck: async (check) => await this.handleBudgetCheck(check),
-            });
-
-            const result = await runner.run();
-            this.writer.newline();
-
-            // If auditors blocked, prompt user before continuing
-            if (gateDecision?.blocked) {
-              const proceed = await this.promptAuditorGate();
-              if (!proceed) {
-                console.log(chalk.dim('Response rejected. Please rephrase your request.'));
-                prompt();
-                return;
-              }
-            }
-
-            // Store full message array (includes history + this turn's exchanges)
-            this.messages = result.messages;
-
-            // Show per-turn usage + running session cost
-            this.renderer.renderUsage(
-              result.usage.inputTokens,
-              result.usage.outputTokens,
-              this.budgetGuard.sessionCost,
-            );
-
-            const turn = createTurn(userMessage, result.finalResponse, result.toolCallCount, {
-              inputTokens: result.usage.inputTokens,
-              outputTokens: result.usage.outputTokens,
-            });
-            await appendTurn(this.session, turn);
-          } catch (err) {
-            // Log agent error and continue
-            console.error(chalk.red(`\nAgent error: ${(err as Error).message}`));
-            if (process.env.EPAM_DEBUG === '1') {
-              console.error((err as Error).stack);
-            }
-          } finally {
-            // Ensure we always reset and prompt
-            this.writer.reset();
-            prompt();
-          }
-        }
-      );
-    };
-
-    let lastSigint = 0;
-    rl.on('SIGINT', () => {
-      this.sigintBus.emit('interrupt');
-      const now = Date.now();
-      if (now - lastSigint < 1500) {
-        resetTerminal();
-        console.log(chalk.dim('\n(exiting)'));
-        this.running = false;
-        rl.close();
-        process.exit(0);
-      }
-      lastSigint = now;
-      focusContentArea();
-      process.stdout.write(chalk.dim('\n(interrupted — press Ctrl+C again to exit)\n'));
-      prompt();
-    });
-
-    rl.on('close', () => {
-      resetTerminal();
-      this.running = false;
+    const renderZone = () => promptZone.render({
+      provider: this.currentProvider,
+      model: this.currentModel,
+      turns: this.session.turns.length,
+      sessionCost: this.budgetGuard.sessionCost,
+      hardLimitAt: this.budgetGuard.limits.hardLimitAt,
     });
 
     // Auto-resume a session if one was pre-installed by `epam-cli import`
@@ -468,16 +167,176 @@ export class Repl {
       }
     }
 
-    prompt();
+    // ── Main REPL loop ──────────────────────────────────────────────────────
+    let lastSigint = 0;
+    const replPrefix = this.renderer.renderPrompt(this.currentProvider, this.currentModel);
 
-    await new Promise<void>(resolve => {
-      const checkRunning = setInterval(() => {
-        if (!this.running) {
-          clearInterval(checkRunning);
-          resolve();
+    while (this.running) {
+      renderZone();
+
+      const result = await rawInputBox.readLine(replPrefix);
+
+      if (result.interrupted) {
+        const now = Date.now();
+        if (now - lastSigint < 1500) {
+          process.removeListener('SIGINT', sigintDuringAgent);
+          console.log(chalk.dim('\n(exiting)'));
+          this.running = false;
+          rl.close();
+          process.stdout.write('\x1b[2J\x1b[H'); // clear terminal
+          process.exit(0);
         }
-      }, 100);
-    });
+        lastSigint = now;
+        process.stdout.write(chalk.dim('(interrupted — press Ctrl+C again to exit)\n'));
+        continue;
+      }
+
+      const parsed = parseInput(result.line);
+
+      if (parsed.type === 'empty') continue;
+
+      if (parsed.type === 'slash_command') {
+        const ctx = this.buildSlashContext(config, systemPrompt);
+        const keepRunning = await handleSlashCommand(parsed, ctx);
+        if (!keepRunning) {
+          this.running = false;
+          rl.close();
+        }
+        continue;
+      }
+
+      // ── Agent turn ────────────────────────────────────────────────────────
+      const rawMessage = parsed.message!;
+      rawInputBox.addHistory(rawMessage);
+
+      let userMessage = config.projectRoot
+        ? await consumeConsultationContext(rawMessage, config.projectRoot)
+        : rawMessage;
+
+      // Auto-query MCP sources based on keywords (non-blocking, never fails chat)
+      try {
+        if (process.env.EPAM_DEBUG === '1') {
+          console.error('[MCP] Starting autoQueryMCP for:', userMessage.substring(0, 50));
+        }
+
+        const { autoQueryMCP, formatMCPResults } = await import('../../mcp/MCPAutoQuery.js');
+        const mcpResults = await autoQueryMCP(userMessage);
+
+        if (process.env.EPAM_DEBUG === '1') {
+          console.error('[MCP] autoQueryMCP returned', mcpResults.length, 'results');
+          if (mcpResults.length > 0) {
+            console.error('[MCP] First result source:', mcpResults[0].source);
+            console.error('[MCP] First result items:', mcpResults[0].items?.length || 0);
+          }
+        }
+
+        if (mcpResults.length > 0) {
+          const formattedResults = formatMCPResults(mcpResults);
+          if (formattedResults.trim()) {
+            process.stderr.write('\n' + formattedResults);
+          }
+
+          const dataLines: string[] = [];
+          for (const r of mcpResults) {
+            for (const item of r.items) {
+              dataLines.push(`ID: ${item.id}`);
+              if (item.title) dataLines.push(`Title: ${item.title}`);
+              if (item.status) dataLines.push(`Status: ${item.status}`);
+              if (item.url) dataLines.push(`URL: ${item.url}`);
+              if (item.updated) dataLines.push(`Updated: ${item.updated}`);
+              if (item.summary && item.summary !== item.title) dataLines.push(`Summary: ${item.summary}`);
+            }
+          }
+
+          const extraInstruction = userMessage
+            .replace(/@(jira|confluence|drawio|all)\s*([A-Z]+-\d+)?/gi, '')
+            .trim();
+
+          userMessage = [
+            'The following data was already fetched from the MCP server. Present it clearly to the user. Do not attempt to fetch or search for additional data.',
+            '',
+            dataLines.join('\n'),
+            ...(extraInstruction ? ['', `User instruction: ${extraInstruction}`] : []),
+          ].join('\n');
+        }
+      } catch (err) {
+        if (process.env.EPAM_DEBUG === '1') {
+          console.error('MCP auto-query error:', (err as Error).message);
+        }
+      }
+
+      this.messages.push({ role: 'user', content: userMessage });
+
+      try {
+        for (const p of [provider, this.options.providerChain]) {
+          if (p && typeof (p as unknown as { setInterruptBus?: (b: EventEmitter) => void }).setInterruptBus === 'function') {
+            (p as unknown as { setInterruptBus: (b: EventEmitter) => void }).setInterruptBus(this.sigintBus);
+          }
+        }
+
+        let gateDecision: AuditorGateDecision | undefined;
+
+        const runner = new AgentRunner({
+          userMessage,
+          systemPrompt,
+          provider,
+          model: this.currentModel,
+          tools: this.options.tools,
+          toolRunner: this.toolRunner,
+          maxIterations: config.maxIterations,
+          history: this.messages.slice(0, -1),
+          autoCompressAt: config.autoCompressAt,
+          maxOutputTokens: config.maxOutputTokens,
+          dangerousSkipApproval: config.tools.dangerousSkipApproval,
+          budgetGuard: this.budgetGuard,
+          auditors: auditorRegistry.getEnabledRunners(provider, this.options.tools ?? []),
+          onAuditorGate: (decision) => {
+            gateDecision = decision;
+            this.renderAuditorFindings(decision);
+          },
+          onTextDelta: delta => this.writer.write(delta),
+          onToolCall: (name, inp) => this.writer.writeToolCall(name, inp),
+          onToolResult: (name, result, isError) =>
+            this.writer.writeToolResult(name, result, isError),
+          onBudgetCheck: async (check) => await this.handleBudgetCheck(check),
+        });
+
+        const agentResult = await runner.run();
+        this.writer.newline();
+
+        if (gateDecision?.blocked) {
+          const proceed = await this.promptAuditorGate();
+          if (!proceed) {
+            console.log(chalk.dim('Response rejected. Please rephrase your request.'));
+            continue;
+          }
+        }
+
+        this.messages = agentResult.messages;
+
+        this.renderer.renderUsage(
+          agentResult.usage.inputTokens,
+          agentResult.usage.outputTokens,
+          this.budgetGuard.sessionCost,
+        );
+
+        const turn = createTurn(userMessage, agentResult.finalResponse, agentResult.toolCallCount, {
+          inputTokens: agentResult.usage.inputTokens,
+          outputTokens: agentResult.usage.outputTokens,
+        });
+        await appendTurn(this.session, turn);
+      } catch (err) {
+        console.error(chalk.red(`\nAgent error: ${(err as Error).message}`));
+        if (process.env.EPAM_DEBUG === '1') {
+          console.error((err as Error).stack);
+        }
+      } finally {
+        this.writer.reset();
+      }
+    }
+
+    process.removeListener('SIGINT', sigintDuringAgent);
+    rl.close();
   }
 
   private async handleBudgetCheck(check: BudgetCheckResult): Promise<void> {

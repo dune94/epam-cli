@@ -208,14 +208,29 @@ export class Repl {
       process.stdout.write(`\x1b[${topSepRow};1H\x1b[2K`);
       process.stdout.write(chalk.dim('─'.repeat(cols)));
 
-      // Clear input row (readline will write the prompt here)
+      // Clear input row — readline will write the prompt here
       process.stdout.write(`\x1b[${inputRow};1H\x1b[2K`);
 
-      // Draw bottom separator
+      // Clear bottom separator row (will be redrawn after readline writes prompt)
       process.stdout.write(`\x1b[${botSepRow};1H\x1b[2K`);
-      process.stdout.write(chalk.gray('─'.repeat(cols)));
 
       // Park cursor at input row for readline
+      process.stdout.write(`\x1b[${inputRow};1H`);
+    };
+
+    // Draw bottom separator after readline has written the prompt (cursor save/restore)
+    const drawBottomSep = () => {
+      if (!isTTY) return;
+      const rows = process.stdout.rows || 24;
+      const base = rows - BOTTOM_OFFSET;
+      const botSepRow = base;
+      const inputRow  = base - ZONE + 3;
+      const cols = process.stdout.columns || 80;
+      process.stdout.write(`\x1b[s`);                              // save cursor
+      process.stdout.write(`\x1b[${botSepRow};1H\x1b[2K`);        // go to sep row, clear
+      process.stdout.write(chalk.gray('─'.repeat(cols)));           // draw separator
+      process.stdout.write(`\x1b[u`);                              // restore cursor to input row
+      // ensure we're at the right column after restore
       process.stdout.write(`\x1b[${inputRow};1H`);
     };
 
@@ -258,7 +273,10 @@ export class Repl {
             return;
           }
 
-          // Bottom separator — fires immediately for every non-empty input
+          // Move cursor into scroll region so ALL output (slash cmds + agent) stays above prompt zone
+          focusContentArea();
+
+          // Bottom separator for non-TTY only (TTY uses scroll region)
           if (!isTTY) process.stdout.write(chalk.gray('─'.repeat(process.stdout.columns || 80)) + '\n\n');
 
           if (parsed.type === 'slash_command') {

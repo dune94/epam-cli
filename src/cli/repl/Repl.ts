@@ -47,6 +47,7 @@ export class Repl {
   private toolRunner: ToolRunner;
   private auditorRegistry?: AuditorRegistry;
   private userEmail?: string;
+  private rl?: import('readline').Interface;
   /** Fires when the user presses Ctrl+C while an agent turn is running. */
   readonly sigintBus = new EventEmitter();
 
@@ -113,6 +114,7 @@ export class Repl {
       output: process.stdout,
       terminal: true,
     });
+    this.rl = rl;
 
     // Setup slash command autocomplete
     const { setupAutocomplete } = await import('./Autocomplete.js');
@@ -579,6 +581,7 @@ export class Repl {
       budgetGuard: this.budgetGuard,
       tools: this.options.tools,
       toolRunner: this.toolRunner,
+      rl: this.rl,
 
       onModelChange: model => {
         this.currentModel = model;

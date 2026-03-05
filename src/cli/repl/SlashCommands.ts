@@ -1,5 +1,4 @@
 import chalk from 'chalk';
-import prompts from 'prompts';
 import type { ResolvedConfig, LLMChainSlot } from '../../config/types.js';
 import { calculateCost, formatCost, getPricing } from '../../billing/pricing.js';
 import { listSessions } from '../../context/SessionStore.js';
@@ -53,6 +52,8 @@ export interface SlashCommandContext {
   providerChain?: ProviderChain;
   // Auditor registry (optional — present when .epam/auditors.json exists)
   auditorRegistry?: AuditorRegistry;
+  // The REPL's readline instance — use this for interactive input instead of prompts()
+  rl?: import('readline').Interface;
   // Callbacks
   onModelChange: (model: string) => void;
   onClear: () => void;
@@ -191,26 +192,27 @@ export const SLASH_COMMANDS: SlashCommand[] = [
         return true;
       }
 
-      const choices = sessions.map(s => ({
-        title:
+      // Show numbered list and prompt for selection using the REPL's readline
+      sessions.forEach((s, i) => {
+        const label =
           `${chalk.cyan(s.id.slice(-8))}  ` +
           `${chalk.dim(s.updatedAt.toLocaleString())}  ` +
-          chalk.dim(`${s.turnCount} turn${s.turnCount !== 1 ? 's' : ''}`),
-        value: s.id,
-        description: s.id,
-      }));
-
-      const response = await prompts({
-        type: 'select',
-        name: 'id',
-        message: 'Select a session to resume:',
-        choices,
-        initial: 0,
+          chalk.dim(`${s.turnCount} turn${s.turnCount !== 1 ? 's' : ''}`);
+        console.log(`  ${chalk.bold(String(i + 1))}.  ${label}`);
       });
 
-      if (!response.id) return true; // user cancelled
+      const selectedId = await new Promise<string | null>(resolve => {
+        const rl = ctx.rl;
+        if (!rl) { resolve(null); return; }
+        rl.question(chalk.cyan('\nEnter number (or Enter to cancel): '), answer => {
+          const n = parseInt(answer.trim(), 10);
+          resolve(n >= 1 && n <= sessions.length ? sessions[n - 1].id : null);
+        });
+      });
 
-      const result = await ctx.onResume(response.id as string);
+      if (!selectedId) return true; // cancelled
+
+      const result = await ctx.onResume(selectedId);
       if (result.success) {
         console.log(chalk.green(`Resumed — ${result.turnCount} turns loaded`));
       } else {
@@ -243,14 +245,15 @@ export const SLASH_COMMANDS: SlashCommand[] = [
 
       console.log(chalk.dim(`\nLast turn: "${preview}"`));
 
-      const response = await prompts({
-        type: 'confirm',
-        name: 'confirm',
-        message: 'Remove this turn?',
-        initial: true,
+      const confirmed = await new Promise<boolean>(resolve => {
+        const rl = ctx.rl;
+        if (!rl) { resolve(false); return; }
+        rl.question(chalk.cyan('Remove this turn? [y/N] '), answer => {
+          resolve(answer.trim().toLowerCase() === 'y');
+        });
       });
 
-      if (response.confirm) {
+      if (confirmed) {
         ctx.onRewind();
         console.log(chalk.dim('Last turn removed.'));
       }

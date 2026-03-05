@@ -17,9 +17,13 @@ PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
 # Compute PRD path relative to PROJECT_ROOT for injecting into agent prompts
 PRD_REL="$(realpath --relative-to="$PROJECT_ROOT" "$(realpath "$PRD_FILE")" 2>/dev/null || echo "orchestrations/prd.json")"
-# Select wrapper script based on CLAUDE_CMD
-case "${CLAUDE_CMD}" in
+# Select wrapper script based on PROVIDER override or CLAUDE_CMD
+case "${EPAM_ORCHESTRATION_PROVIDER:-${CLAUDE_CMD}}" in
     codemie-claude) CLAUDE_SH="$SCRIPT_DIR/codemie-claude.sh" ;;
+    copilot)        CLAUDE_SH="$SCRIPT_DIR/copilot.sh" ;;
+    openai)         CLAUDE_SH="$SCRIPT_DIR/openai.sh" ;;
+    qwen)           CLAUDE_SH="$SCRIPT_DIR/qwen.sh" ;;
+    cursor)         CLAUDE_SH="$SCRIPT_DIR/cursor.sh" ;;
     *)              CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
 esac
 LOG_DIR="$AUTOMATION_DIR/logs"

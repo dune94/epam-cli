@@ -36,6 +36,7 @@ CURRENT_PHASE=""        # Current phase being executed (for cost tracking)
 
 # Configuration
 CLAUDE_CMD="${CLAUDE_CMD:-claude}"  # Allow override via environment
+EPAM_CLI="${EPAM_CLI:-epam}"        # epam-cli binary; override with mock for testing
 MAX_RETRIES=2
 RETRY_DELAY=5
 # Orchestration mode — inherited from run-agent-orchestration.sh or set directly
@@ -75,6 +76,22 @@ resolve_effort_settings() {
     log "  Effort[$effort] -> model=$(basename $STORY_MODEL) turns=${STORY_MAX_TURNS:-unlimited}"
 }
 
+# resolve_model_from_story <story_id>
+# For epam-run providers (copilot/openai/qwen/cursor), the prd.json story carries
+# a .model field directly.  If set, it overrides the effort-based STORY_MODEL.
+resolve_model_from_story() {
+    local story_id="$1"
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    local story_model
+    story_model=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .model // ""' \
+        "$prd_target" 2>/dev/null || echo "")
+    if [ -n "$story_model" ]; then
+        STORY_MODEL="$story_model"
+        log "  Model[prd.json] -> $STORY_MODEL (overrides effort default)"
+    fi
+}
+
 # resolve_provider_settings <story_id>
 # Reads aiProvider from the story and sets STORY_PROVIDER global.
 # Values: claude-sonnet | claude-opus | opencode | codex | epam (default: claude-sonnet)
@@ -91,11 +108,12 @@ resolve_provider_settings() {
 # Returns the CLI binary name for a given aiProvider value.
 provider_to_cli() {
     case "$1" in
-        opencode)       echo "opencode" ;;
-        codex)          echo "codex" ;;
-        codemie-claude) echo "codemie-claude" ;;
-        epam)           echo "$CLAUDE_CMD" ;;  # epam: treat same as claude for now
-        *)              echo "$CLAUDE_CMD" ;;  # claude-sonnet, claude-opus, etc.
+        opencode)                    echo "opencode" ;;
+        codex)                       echo "codex" ;;
+        codemie-claude)              echo "codemie-claude" ;;
+        copilot|openai|qwen|cursor)  echo "$EPAM_CLI" ;;
+        epam)                        echo "$CLAUDE_CMD" ;;  # epam: treat same as claude for now
+        *)                           echo "$CLAUDE_CMD" ;;  # claude-sonnet, claude-opus, etc.
     esac
 }
 
@@ -152,6 +170,18 @@ normalize_provider_json() {
             ;;
         epam)
             # epam: same output format as Claude — nothing to normalize
+            ;;
+        epam-run)
+            # epam run --json output: {result, cost_usd, usage:{inputTokens,outputTokens}}
+            # Normalize to the standard orchestration schema used by append_cost_record.
+            jq '{
+                result:          (.result // ""),
+                total_cost_usd:  (.cost_usd // 0),
+                usage: {
+                    input_tokens:  (.usage.inputTokens  // 0),
+                    output_tokens: (.usage.outputTokens // 0)
+                }
+            }' "$raw_file" > "$out_file" 2>/dev/null || true
             ;;
         *)
             # Claude: already emits normalized JSON; nothing to do
@@ -721,13 +751,16 @@ implement_story() {
 
     # Resolve effort -> model + max-turns for this story (stable across retries)
     resolve_effort_settings "$story_id"
+    # Resolve aiProvider -> which CLI binary to use
+    resolve_provider_settings "$story_id"
+    # For epam-run providers, prd.json .model field overrides effort-based model
+    case "${STORY_PROVIDER:-claude-sonnet}" in
+        copilot|openai|qwen|cursor) resolve_model_from_story "$story_id" ;;
+    esac
     local model_flag=()
     local turns_flag=()
     [ -n "${STORY_MODEL:-}" ]     && model_flag=(--model "$STORY_MODEL")
     [ -n "${STORY_MAX_TURNS:-}" ] && turns_flag=(--max-turns "$STORY_MAX_TURNS")
-
-    # Resolve aiProvider -> which CLI binary to use
-    resolve_provider_settings "$story_id"
     local story_cli
     story_cli=$(provider_to_cli "${STORY_PROVIDER:-claude-sonnet}")
 
@@ -790,6 +823,22 @@ $(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
                 if echo "$prompt" | env -u CLAUDECODE codemie-claude --print --output-format json \
                         "${model_flag[@]}" "${turns_flag[@]}" "${CLAUDE_PERMISSIONS[@]}" \
                         2>/dev/null > "$json_result_file"; then
+                    invoke_success=true
+                fi
+                ;;
+            copilot|openai|qwen|cursor)
+                # epam-run providers: invoke via `epam run --provider X --model M --json`
+                # EPAM_CLI can be overridden with a mock for zero-token testing.
+                local raw_file="${json_result_file%.json}_raw.json"
+                local epam_model_flag=()
+                [ -n "${STORY_MODEL:-}" ] && epam_model_flag=(--model "$STORY_MODEL")
+                if echo "$prompt" | "$EPAM_CLI" run \
+                        --provider "$STORY_PROVIDER" \
+                        "${epam_model_flag[@]}" \
+                        --json - \
+                        > "$raw_file" 2>/dev/null; then
+                    normalize_provider_json "epam-run" "$raw_file" "$json_result_file"
+                    jq -r '.result // empty' "$json_result_file" 2>/dev/null >> "$output_file" || true
                     invoke_success=true
                 fi
                 ;;

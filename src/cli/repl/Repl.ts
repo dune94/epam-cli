@@ -254,6 +254,8 @@ export class Repl {
     const prompt = () => {
       if (isTTY) {
         drawPromptZone();
+        // Draw bottom separator after readline writes the prompt text
+        setImmediate(drawBottomSep);
       } else {
         // Linear fallback for non-TTY (pipes, CI)
         const { leftLabel, rightLabel, gap, cols } = buildLabels();

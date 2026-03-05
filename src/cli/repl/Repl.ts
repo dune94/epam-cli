@@ -1,4 +1,5 @@
 import * as readline from 'readline';
+import { EventEmitter } from 'events';
 import chalk from 'chalk';
 import prompts from 'prompts';
 import type { LLMProvider, Message } from '../../providers/types.js';
@@ -46,6 +47,8 @@ export class Repl {
   private toolRunner: ToolRunner;
   private auditorRegistry?: AuditorRegistry;
   private userEmail?: string;
+  /** Fires when the user presses Ctrl+C while an agent turn is running. */
+  readonly sigintBus = new EventEmitter();
 
   constructor(private options: ReplOptions) {
     this.currentProvider = options.config.provider;
@@ -219,6 +222,11 @@ export class Repl {
           try {
             process.stdout.write('\n');
 
+            // Wire Ctrl+C to abort the active codex turn
+            if (typeof (provider as unknown as { setInterruptBus?: (b: EventEmitter) => void }).setInterruptBus === 'function') {
+              (provider as unknown as { setInterruptBus: (b: EventEmitter) => void }).setInterruptBus(this.sigintBus);
+            }
+
             let gateDecision: AuditorGateDecision | undefined;
 
             const runner = new AgentRunner({
@@ -290,7 +298,8 @@ export class Repl {
     };
 
     rl.on('SIGINT', () => {
-      console.log(chalk.dim('\nInterrupted. Type /exit to quit.'));
+      this.sigintBus.emit('interrupt');
+      console.log(chalk.dim('\n(interrupted)'));
       prompt();
     });
 

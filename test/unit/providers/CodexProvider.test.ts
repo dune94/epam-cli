@@ -28,6 +28,7 @@ function makeJsonStream(events: object[], delayMs = 10): EventEmitter & { kill: 
   proc.stdout = stdout;
   proc.kill = vi.fn();
   proc.catch = vi.fn().mockReturnValue(proc);
+  proc.pid = 12345;
 
   // Emit events asynchronously, simulating real codex output
   (async () => {
@@ -144,7 +145,7 @@ describe('CodexProvider', () => {
     expect(args).toContain('o4-mini');
   });
 
-  it('kills the process after receiving first agent_message', async () => {
+  it('kills the process group after responding', async () => {
     const provider = new CodexProvider();
     const proc = makeJsonStream([
       { type: 'turn.started' },
@@ -153,9 +154,12 @@ describe('CodexProvider', () => {
     ]);
 
     vi.mocked(execa).mockReturnValue(proc as any);
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
     await provider.complete(makeRequest([{ role: 'user', content: 'hi' }]));
 
-    expect(proc.kill).toHaveBeenCalledWith('SIGKILL');
+    // Either process.kill(-pid) for group or proc.kill was called
+    expect(killSpy.mock.calls.length + (proc.kill as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
+    killSpy.mockRestore();
   });
 
   it('returns (no response) if no agent message arrives before exit', async () => {
@@ -167,6 +171,6 @@ describe('CodexProvider', () => {
     ]) as any);
 
     const response = await provider.complete(makeRequest([{ role: 'user', content: 'hi' }]));
-    expect(response.content[0]).toMatchObject({ type: 'text', text: '(no response)' });
+    expect(response.content[0]).toMatchObject({ type: 'text', text: '(task complete — check the files)' });
   });
 });

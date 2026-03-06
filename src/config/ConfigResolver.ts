@@ -41,14 +41,14 @@ function resolveEpamUpstreamProvider(model: string): string {
 function normalizeLlMChain(
   provider: string,
   model: string,
-  projectConfig: Partial<ProjectConfig>
+  projectConfig: Partial<ProjectConfig>,
+  overrideFirstSlot: boolean,
 ): ResolvedConfig['llmChain'] {
-  const baseChain = projectConfig.llmChain ?? [
-    {
-      provider,
-      model,
-    },
-  ];
+  // When --provider is explicitly given, replace the first slot with the
+  // requested provider+model. Keep remaining slots for failover.
+  const baseChain = overrideFirstSlot
+    ? [{ provider, model }, ...(projectConfig.llmChain ?? []).slice(1)]
+    : (projectConfig.llmChain ?? [{ provider, model }]);
 
   return baseChain.map(slot => {
     // If the slot explicitly specifies "epam", normalize it to its concrete upstream provider.
@@ -296,7 +296,7 @@ export async function resolveConfig(flags: CLIFlagOverrides = {}): Promise<Resol
     },
 
     // llmChain: normalize EPAM registry slots to the concrete upstream provider understood by the proxy.
-    llmChain: normalizeLlMChain(provider, modelResolution.model, projectConfig),
+    llmChain: normalizeLlMChain(provider, modelResolution.model, projectConfig, flags.provider != null),
   };
 
   _resolvedConfig = merged;

@@ -29,19 +29,23 @@ export function createChatCommand(): Command {
     .action(async (opts) => {
       // Validate provider against the runtime provider registry
       let requestedProvider: string | undefined = opts.provider;
+      let requestedModel: string | undefined = opts.model;
       if (requestedProvider) {
-        const knownProviders = Object.keys(readProviders());
-        if (!knownProviders.includes(requestedProvider)) {
+        const providers = readProviders();
+        if (!Object.keys(providers).includes(requestedProvider)) {
           process.stderr.write(
-            chalk.red(`✗ Unknown provider "${requestedProvider}". Valid: ${knownProviders.join(', ')}\n`) +
+            chalk.red(`✗ Unknown provider "${requestedProvider}". Valid: ${Object.keys(providers).join(', ')}\n`) +
             chalk.yellow(`  Reverting to default provider.\n`)
           );
           requestedProvider = undefined;
+        } else if (!requestedModel) {
+          // Use the provider's own default model, not whatever is in settings.json
+          requestedModel = providers[requestedProvider]?.defaultModel;
         }
       }
 
       const config = await resolveConfig({
-        model: opts.model,
+        model: requestedModel,
         provider: requestedProvider,
       });
 

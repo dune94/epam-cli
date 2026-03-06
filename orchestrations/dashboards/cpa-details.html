@@ -308,9 +308,11 @@ epam estimate --refine      # calibrate constants from phase-cost.jsonl actuals<
     <tr><td><strong>high</strong></td><td>&gt; 6h</td><td>claude-opus-*</td><td>0.12</td></tr>
   </table>
   <div class="box box-info">
-    <p><strong>Note:</strong> If a story or phase has an explicit <code>model</code> or <code>defaultModel</code>
-    field in prd.json, that overrides the tier-based default. The script validates against
-    <code>configuration.aiRuntime.allowedModels</code> when provider is <code>epam</code>.</p>
+    <p><strong>Note:</strong> If a story has an <code>aiProvider</code> or <code>model</code> field in prd.json,
+    the estimator automatically resolves vendor-accurate pricing from <code>src/billing/pricing.ts</code>
+    (the same registry used at runtime). The effort tier remains in use for human-to-AI ratios, turn rates,
+    and token throughput — only the USD cost formula changes. Use <code>--force-effort-tier</code> to force
+    the legacy Haiku/Sonnet/Opus proxy for all stories (useful for what-if comparisons).</p>
   </div>
 
   <h3 id="complexity">2.2 Complexity Index C</h3>
@@ -415,16 +417,37 @@ output_tokens = tokens × output_ratio
 cache_tokens  = input_tokens × cache_ratio
 uncached_in   = input_tokens − cache_tokens
 
-cost = (uncached_in  / 1M) × price_input[tier]
-     + (cache_tokens / 1M) × price_cached[tier]
-     + (output_tokens / 1M) × price_output[tier]
+cost = (uncached_in  / 1M) × price_input
+     + (cache_tokens / 1M) × price_cached
+     + (output_tokens / 1M) × price_output
      + (cache_priming_cost if position == 1)</div>
 
+  <p>Pricing is resolved per story using the following priority chain:</p>
   <table>
-    <tr><th>Tier (Model)</th><th>Input ($/M)</th><th>Cached ($/M)</th><th>Output ($/M)</th></tr>
-    <tr><td>low (Haiku)</td><td>$0.80</td><td>$0.08</td><td>$4.00</td></tr>
-    <tr><td>medium (Sonnet)</td><td>$3.00</td><td>$0.30</td><td>$15.00</td></tr>
-    <tr><td>high (Opus)</td><td>$15.00</td><td>$1.50</td><td>$75.00</td></tr>
+    <tr><th>Priority</th><th>Condition</th><th>Price source</th></tr>
+    <tr><td>1</td><td>Story has <code>.model</code> set in prd.json</td><td><code>src/billing/pricing.ts</code> — exact model rate (e.g. <code>gpt-4.1</code> → $2.00/$8.00 per M)</td></tr>
+    <tr><td>2</td><td>Story has <code>.aiProvider</code> set (no model)</td><td>Provider default model → <code>pricing.ts</code> lookup (e.g. <code>qwen</code> → <code>qwen/qwen3-235b-a22b</code>)</td></tr>
+    <tr><td>3</td><td>Neither set, or model not in registry</td><td>Effort-tier proxy below (Haiku / Sonnet / Opus rates)</td></tr>
+  </table>
+  <p>Subscription-billed providers (<code>copilot</code>, <code>cursor</code>) are emitted as <code>$0.00 (subscription)</code> — no per-token cost is fabricated. Pass <code>--force-effort-tier</code> to bypass the vendor lookup and use the effort-tier proxy for all stories.</p>
+
+  <table>
+    <tr><th>Tier / Model proxy</th><th>Input ($/M)</th><th>Cached ($/M)</th><th>Output ($/M)</th></tr>
+    <tr><td>low (Haiku 4.5)</td><td>$0.80</td><td>$0.08</td><td>$4.00</td></tr>
+    <tr><td>medium (Sonnet 4.6)</td><td>$3.00</td><td>$0.30</td><td>$15.00</td></tr>
+    <tr><td>high (Opus 4.6)</td><td>$15.00</td><td>$1.50</td><td>$75.00</td></tr>
+  </table>
+  <p>Selected vendor model rates (from <code>pricing.ts</code>):</p>
+  <table>
+    <tr><th>Model</th><th>Input ($/M)</th><th>Output ($/M)</th></tr>
+    <tr><td>gpt-4.1</td><td>$2.00</td><td>$8.00</td></tr>
+    <tr><td>gpt-4.1-mini</td><td>$0.40</td><td>$1.60</td></tr>
+    <tr><td>gpt-4o</td><td>$2.50</td><td>$10.00</td></tr>
+    <tr><td>gemini-2.5-pro</td><td>$1.25</td><td>$5.00</td></tr>
+    <tr><td>gemini-2.5-flash</td><td>$0.15</td><td>$0.60</td></tr>
+    <tr><td>qwen/qwen3-235b-a22b</td><td>$0.60</td><td>$2.40</td></tr>
+    <tr><td>deepseek/deepseek-r1</td><td>$0.55</td><td>$2.19</td></tr>
+    <tr><td>copilot / cursor</td><td colspan="2">subscription — $0.00 per token</td></tr>
   </table>
 
   <h3 id="uncertainty">2.7 Uncertainty Ranges</h3>
@@ -572,7 +595,7 @@ cost_high    = cost × (1 + range_factor × 1.5)</div>
     <tr>
       <td><code>epam estimate</code></td>
       <td>estimate-stories.sh → contextualize-stories.sh</td>
-      <td><code>--phase</code>, <code>--apply</code>, <code>--refine</code>, <code>--skip-cpa</code>, <code>--strict</code>, <code>--json</code>, <code>--reconcile</code></td>
+      <td><code>--phase</code>, <code>--apply</code>, <code>--refine</code>, <code>--skip-cpa</code>, <code>--strict</code>, <code>--json</code>, <code>--reconcile</code>, <code>--force-effort-tier</code></td>
     </tr>
     <tr>
       <td><code>epam phase run</code></td>
@@ -587,7 +610,7 @@ cost_high    = cost × (1 + range_factor × 1.5)</div>
     <tr>
       <td><code>epam orchestrate</code></td>
       <td>run-agent-orchestration.sh (skips estimate)</td>
-      <td><code>--phase</code>, <code>--mode bash|hybrid</code>, <code>--skip-cpa</code>, <code>--strict-cpa</code></td>
+      <td><code>--phase</code>, <code>--mode bash|hybrid</code>, <code>--skip-cpa</code>, <code>--strict-cpa</code>, <code>--provider copilot|openai|qwen|cursor</code></td>
     </tr>
   </table>
 
@@ -598,11 +621,17 @@ epam estimate --phase finops
 # 2. Run full estimate + CPA, write results to prd.json
 epam estimate --phase finops --apply
 
-# 3. Approve and run the phase
+# 3. What-if comparison: force effort-tier pricing regardless of aiProvider/model
+epam estimate --phase finops --force-effort-tier
+
+# 4. Approve and run the phase
 epam phase approve --phase finops
 epam phase run --phase finops --require-approval
 
-# 4. After phase completes, refine constants for next run
+# 5. Run via a specific provider (copilot/openai/qwen/cursor)
+EPAM_ORCHESTRATION_PROVIDER=openai epam orchestrate --phase finops
+
+# 6. After phase completes, refine constants for next run
 epam estimate --refine    # reads actuals from phase-cost.jsonl</pre>
 
   <!-- ── Constants Reference ────────────────────────────────────────────── -->

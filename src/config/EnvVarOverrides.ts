@@ -66,7 +66,7 @@ export function getApiKey(provider: string): string | undefined {
   switch (provider) {
     case 'anthropic':
     case 'claude':
-      return process.env.EPAM_API_KEY_ANTHROPIC;
+      return process.env.EPAM_API_KEY_ANTHROPIC ?? process.env.EPAM_API_KEY_CLAUDE;
     case 'openai':
       return process.env.EPAM_API_KEY_OPENAI;
     case 'gemini':

@@ -32,7 +32,9 @@ export function createCLI(version: string): Command {
     .name('epam')
     .description('EPAM CLI — AI coding assistant')
     .version(version, '-v, --version', 'Output the current version')
-    .helpOption('-h, --help', 'Display help');
+    .helpOption('-h, --help', 'Display help')
+    .option('-p, --provider <provider>', 'Provider to start the session with')
+    .option('-m, --model <model>', 'Model to start the session with');
 
   program.addCommand(createChatCommand());
   program.addCommand(createRunCommand());
@@ -61,9 +63,12 @@ export function createCLI(version: string): Command {
   program.addCommand(createImportCommand());
 
   // Default: start chat if interactive, else show help
-  program.action(() => {
+  program.action((opts) => {
     if (process.stdin.isTTY) {
-      program.parse(['', '', 'chat']);
+      const args = ['', '', 'chat'];
+      if (opts.provider) { args.push('--provider', opts.provider as string); }
+      if (opts.model)    { args.push('--model',    opts.model    as string); }
+      program.parse(args);
     } else {
       program.help();
     }

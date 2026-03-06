@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import chalk from 'chalk';
 import { resolveConfig } from '../../config/ConfigResolver.js';
 import { AuthManager } from '../../auth/AuthManager.js';
 import { ReadFileTool } from '../../tools/builtin/ReadFile.js';
@@ -16,6 +17,7 @@ import { ProviderChain } from '../../providers/ProviderChain.js';
 import { getApiKey as getEnvApiKey } from '../../config/EnvVarOverrides.js';
 import { getApiKey as getStoredApiKey } from '../../billing/KeychainKeyStore.js';
 import { detectTier } from '../../billing/TierDetector.js';
+import { readProviders } from '../repl/DataConfig.js';
 
 const VERSION = '0.1.0';
 
@@ -25,9 +27,22 @@ export function createChatCommand(): Command {
     .option('-m, --model <model>', 'Model to use')
     .option('-p, --provider <provider>', 'Provider to use')
     .action(async (opts) => {
+      // Validate provider against the runtime provider registry
+      let requestedProvider: string | undefined = opts.provider;
+      if (requestedProvider) {
+        const knownProviders = Object.keys(readProviders());
+        if (!knownProviders.includes(requestedProvider)) {
+          process.stderr.write(
+            chalk.red(`✗ Unknown provider "${requestedProvider}". Valid: ${knownProviders.join(', ')}\n`) +
+            chalk.yellow(`  Reverting to default provider.\n`)
+          );
+          requestedProvider = undefined;
+        }
+      }
+
       const config = await resolveConfig({
         model: opts.model,
-        provider: opts.provider,
+        provider: requestedProvider,
       });
 
       const authManager = new AuthManager(config.backendUrl);

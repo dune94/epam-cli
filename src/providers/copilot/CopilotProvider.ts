@@ -53,19 +53,18 @@ export class CopilotProvider implements LLMProvider {
     this.token = config.token || CopilotProvider.resolveToken();
   }
 
-  /** Accept any known Copilot model; fall back to default. */
+  /** Use requested model directly; fall back to instance default. */
   private resolveModel(requested?: string): string {
-    const supported = CopilotProvider.SUPPORTED_MODELS as readonly string[];
-    if (requested && supported.includes(requested)) return requested;
-    if (this.model && supported.includes(this.model)) return this.model;
-    return this.defaultModel;
+    if (requested) return requested;
+    return this.model || this.defaultModel;
   }
 
   /** Resolve GitHub token from environment or gh CLI. */
   static resolveToken(): string {
     const envToken = process.env.COPILOT_GITHUB_TOKEN ||
                      process.env.GH_TOKEN ||
-                     process.env.GITHUB_TOKEN;
+                     process.env.GITHUB_TOKEN ||
+                     process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
     if (envToken) return envToken;
     // Fall back to gh CLI stored token (for OAuth-authed accounts)
     try {

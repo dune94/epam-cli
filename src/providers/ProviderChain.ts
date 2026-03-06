@@ -346,15 +346,12 @@ export class ProviderChain implements LLMProvider {
       return new CodexProvider(slot.model);
     }
     
-    // GitHub Copilot — try direct GH token first, then codemie as enterprise fallback.
+    // GitHub Copilot — requires GH_TOKEN, COPILOT_GITHUB_TOKEN, or GITHUB_TOKEN.
     if (slot.provider === 'copilot') {
       const provider = createCopilotProvider(slot.model);
       if (provider) return provider;
-      // No direct GH token — try codemie (EPAM enterprise AI backend serves the same models).
-      const codemie = await createCodemieProvider();
-      if (codemie) return codemie;
       throw new ProviderError(
-        'Copilot not available. Set GH_TOKEN or COPILOT_GITHUB_TOKEN, or authenticate via codemie (epam login).'
+        'Copilot not available. Set GH_TOKEN or COPILOT_GITHUB_TOKEN env var.'
       );
     }
 

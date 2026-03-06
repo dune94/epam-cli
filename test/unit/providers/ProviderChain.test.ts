@@ -149,45 +149,11 @@ describe('ProviderChain - Failover', () => {
   });
 });
 
-describe('ProviderChain - copilot → codemie fallback', () => {
-  it('falls back to codemie when no GH token is available for copilot', async () => {
+describe('ProviderChain - copilot auth', () => {
+  it('throws with clear message when no GH token is available', async () => {
     const { createCopilotProvider } = await import('../../../src/providers/copilot/CopilotProvider.js');
-    const { createCodemieProvider } = await import('../../../src/providers/codemie/CodemieProvider.js');
-
-    const mockCodemieProvider = {
-      name: 'codemie',
-      defaultModel: 'claude-sonnet-4-6',
-      complete: vi.fn().mockResolvedValue({
-        content: [{ type: 'text', text: 'Hello from Codemie' }],
-        stopReason: 'end_turn',
-      }),
-      stream: vi.fn(),
-    };
-
-    vi.mocked(createCopilotProvider).mockReturnValue(null); // no GH token
-    vi.mocked(createCodemieProvider).mockResolvedValue(mockCodemieProvider as any);
-
-    const chain = new ProviderChain({
-      slots: [{ provider: 'copilot', model: 'claude-sonnet-4-6' }],
-      resolveApiKey: vi.fn().mockResolvedValue(null),
-    });
-
-    const result = await chain.complete({
-      messages: [{ role: 'user' as const, content: 'hello' }],
-      model: 'claude-sonnet-4-6',
-      stream: false,
-    });
-
-    expect(result.content[0].text).toBe('Hello from Codemie');
-    expect(mockCodemieProvider.complete).toHaveBeenCalled();
-  });
-
-  it('throws if no GH token and no codemie available', async () => {
-    const { createCopilotProvider } = await import('../../../src/providers/copilot/CopilotProvider.js');
-    const { createCodemieProvider } = await import('../../../src/providers/codemie/CodemieProvider.js');
 
     vi.mocked(createCopilotProvider).mockReturnValue(null);
-    vi.mocked(createCodemieProvider).mockResolvedValue(null);
 
     const chain = new ProviderChain({
       slots: [{ provider: 'copilot', model: 'claude-sonnet-4-6' }],

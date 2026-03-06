@@ -346,13 +346,11 @@ export class ProviderChain implements LLMProvider {
       return new CodexProvider(slot.model);
     }
     
-    // GitHub Copilot CLI-based provider
+    // GitHub Copilot — try direct GH token first, then fall through to proxy.
     if (slot.provider === 'copilot') {
       const provider = createCopilotProvider(slot.model);
-      if (!provider) {
-        throw new ProviderError('Copilot CLI not available. Run: gh auth login');
-      }
-      return provider;
+      if (provider) return provider;
+      // No direct GH token — fall through to proxy tier below (enterprise/pro).
     }
 
     // Proxy tier — other providers route through backend

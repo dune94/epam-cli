@@ -219,7 +219,7 @@ Token must be a GitHub OAuth (gho_) or fine-grained PAT with GitHub Models acces
 export function createCopilotProvider(model?: string, token?: string): CopilotProvider | null {
   const effectiveToken = token || CopilotProvider.resolveToken();
   if (!effectiveToken) {
-    logger.warn('No GitHub token found. Set GH_TOKEN or COPILOT_GITHUB_TOKEN.');
+    logger.debug('No GitHub token found for direct Copilot access — will try proxy if available.');
     return null;
   }
   return new CopilotProvider({ model, token: effectiveToken });

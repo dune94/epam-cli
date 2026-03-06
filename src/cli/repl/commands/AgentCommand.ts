@@ -223,29 +223,31 @@ export const agentCommand: SlashCommand = {
     const label = (name: string) =>
       name === activeAgent ? chalk.green.bold(name) + chalk.green(' ← active') : name;
 
-    console.log(chalk.bold('\nSession agents') + chalk.dim('  (user-managed)\n'));
+    console.log(chalk.bold('\nCLI agents') + chalk.dim('  (user-managed · add / remove / switch)\n'));
     const allSession = { ...builtinAgents(), ...sessionCustom };
     for (const [name, prompt] of Object.entries(allSession)) {
-      const tag = builtinAgents()[name] ? chalk.dim(' [built-in]') : chalk.dim(' [custom]');
+      const tag = builtinAgents()[name] ? chalk.dim(' [built-in]') : chalk.cyan(' [custom]');
       console.log(`  ${marker(name)}${label(name)}${tag}`);
       console.log(chalk.dim(`    ${prompt.slice(0, 72)}…`));
     }
 
     if (Object.keys(orchAgents).length > 0) {
-      console.log(chalk.bold('\nOrchestration agents') + chalk.dim('  (switchable, file managed externally)\n'));
+      console.log(chalk.bold('\nOrchestration agents') + chalk.dim('  (read-only · defined in orchestrations/agents/profiles.json)\n'));
       for (const [name, prompt] of Object.entries(orchAgents)) {
-        console.log(`  ${marker(name)}${label(name)}`);
+        console.log(`  ${marker(name)}${label(name)}` + chalk.dim(' [read-only]'));
         console.log(chalk.dim(`    ${prompt.slice(0, 72)}…`));
       }
     }
 
     console.log();
-    console.log(chalk.dim('Commands:'));
-    console.log(chalk.dim('  /agent switch <name>           — activate agent (next message)'));
+    console.log(chalk.dim('CLI agent commands (CRUD):'));
+    console.log(chalk.dim('  /agent switch <name>           — activate agent (applies to next message)'));
     console.log(chalk.dim('  /agent show <name>             — show full system prompt'));
-    console.log(chalk.dim('  /agent add <name> <prompt>     — save a new session agent'));
-    console.log(chalk.dim('  /agent remove <name>           — remove a session agent'));
-    console.log(chalk.dim('  /agent reset                   — restore default system prompt\n'));
+    console.log(chalk.dim('  /agent add <name> <prompt>     — save a new custom CLI agent'));
+    console.log(chalk.dim('  /agent remove <name>           — remove a custom CLI agent'));
+    console.log(chalk.dim('  /agent reset                   — restore default system prompt'));
+    console.log();
+    console.log(chalk.dim('Orchestration agents are read-only. Edit orchestrations/agents/profiles.json to change them.\n'));
     return true;
   },
 };

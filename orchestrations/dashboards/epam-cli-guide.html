@@ -606,6 +606,11 @@ epam phase run --phase finops --dry-run</pre>
         <td>Remove the last conversation turn (shows preview, confirms before removing)</td>
       </tr>
       <tr>
+        <td class="slash-name">/permissions</td>
+        <td></td>
+        <td>Show or change tool approval permissions for this session</td>
+      </tr>
+      <tr>
         <td class="slash-name">/cost</td>
         <td></td>
         <td>Show token usage breakdown and live USD cost for this session ★</td>
@@ -616,9 +621,39 @@ epam phase run --phase finops --dry-run</pre>
         <td>Show or configure the LLM provider failover chain ★</td>
       </tr>
       <tr>
+        <td class="slash-name">/plan [show|create|branch]</td>
+        <td class="slash-alias">/planning</td>
+        <td>Enter structured plan mode with branching strategy ★</td>
+      </tr>
+      <tr>
+        <td class="slash-name">/agent [switch|show|add|remove|reset]</td>
+        <td class="slash-alias">/agents</td>
+        <td>List or switch named agent personas; add/remove session agents ★</td>
+      </tr>
+      <tr>
+        <td class="slash-name">/skills [enable|disable|show]</td>
+        <td class="slash-alias">/tools</td>
+        <td>List and toggle agent tool capabilities for this session ★</td>
+      </tr>
+      <tr>
+        <td class="slash-name">/provider [name | auth | logout]</td>
+        <td class="slash-alias">/providers, /prov</td>
+        <td>List providers, switch active provider/model, authenticate or logout ★</td>
+      </tr>
+      <tr>
+        <td class="slash-name">/user [list|add|switch|remove]</td>
+        <td class="slash-alias">/whoami, /users</td>
+        <td>Show identity, manage and switch multi-account credentials per provider ★</td>
+      </tr>
+      <tr>
+        <td class="slash-name">/stash [save|list|pop|merge|drop]</td>
+        <td></td>
+        <td>Save and restore private context sessions to/from named stash ★</td>
+      </tr>
+      <tr>
         <td class="slash-name">/exit</td>
         <td class="slash-alias">/quit, /q</td>
-        <td>Exit EPAM CLI (prints session cost before exiting)</td>
+        <td>Exit EPAM CLI (prints session cost summary, clears terminal)</td>
       </tr>
     </table>
 
@@ -672,6 +707,67 @@ LLM Provider Chain:
 Last turn: "Write a function that sorts by date..."
 Remove this turn? (Y/n)  y
 Last turn removed.</pre>
+
+    <div class="box box-novel">
+      <p><strong>/plan [show|create|branch]</strong> — Structured plan mode. <code>/plan show</code> displays the current strategy and branch count. <code>/plan create</code> starts a new step-by-step plan. <code>/plan branch</code> shows available branching options. Alias: <code>/planning</code>.</p>
+    </div>
+
+    <div class="box box-novel">
+      <p><strong>/agent [switch|show|add|remove|reset]</strong> — Named agent persona management. <code>/agent</code> lists all available agents (built-in, session, and orchestration personas). <code>/agent switch &lt;name&gt;</code> activates an agent for the next message. <code>/agent add &lt;name&gt; &lt;prompt&gt;</code> saves a custom session agent. <code>/agent reset</code> restores the default system prompt. Orchestration agents from <code>orchestrations/agents/profiles.json</code> are visible but cannot be removed. Alias: <code>/agents</code>.</p>
+    </div>
+    <pre>/agent
+Available agents:
+  ● default          (active)
+  ○ code-reviewer    Built-in
+  ○ team-lead        Orchestration
+  ○ my-security      Session
+
+/agent switch code-reviewer
+/agent add my-security "You are a security expert focused on OWASP top 10..."</pre>
+
+    <div class="box box-novel">
+      <p><strong>/skills [enable|disable|show]</strong> — Live tool capability control. <code>/skills</code> lists all registered tools with their safety tier (safe / review / dangerous) and current mode (auto / prompt / disabled). <code>/skills enable &lt;tool&gt;</code> sets a tool to auto-approve for this session. <code>/skills disable &lt;tool&gt;</code> prevents the tool from running. Alias: <code>/tools</code>.</p>
+    </div>
+    <pre>/skills
+Tools (8 registered):
+  ReadFile    safe      auto      Reads file contents
+  WriteFile   review    prompt    Writes/creates files
+  Bash        dangerous prompt    Executes shell commands
+  ...
+
+/skills disable Bash
+/skills enable WriteFile</pre>
+
+    <div class="box box-novel">
+      <p><strong>/provider [name | auth | logout]</strong> — Unified provider management inside the REPL. <code>/provider</code> lists all configured providers with auth and model status. <code>/provider openai</code> switches to openai with its default model. <code>/provider openai/gpt-4.1-mini</code> switches to a specific model. <code>/provider auth copilot</code> triggers device-flow authentication. <code>/provider logout anthropic</code> clears stored credentials. Aliases: <code>/providers</code>, <code>/prov</code>.</p>
+    </div>
+    <pre>/provider openai/gpt-4.1-mini
+Switched to openai / gpt-4.1-mini
+
+/provider auth copilot
+Open: https://github.com/login/device — code: ABCD-1234</pre>
+
+    <div class="box box-novel">
+      <p><strong>/user [list|add|switch|remove]</strong> — Multi-account identity management. <code>/user</code> shows the current identity (from git config, API key, or token). <code>/user list</code> shows all stored accounts across providers. <code>/user add copilot work</code> saves the current credential as a named account. <code>/user switch copilot personal</code> swaps live credentials without restarting. Aliases: <code>/whoami</code>, <code>/users</code>.</p>
+    </div>
+    <pre>/user
+Current identity:
+  Provider:  anthropic
+  Username:  dune94  (from API key)
+
+/user add copilot work
+/user switch copilot personal</pre>
+
+    <div class="box box-novel">
+      <p><strong>/stash [save|list|pop|merge|drop]</strong> — Private context session stash. <code>/stash save [name]</code> snapshots the current conversation to <code>~/.epam/stash/</code>. <code>/stash list</code> shows all your stashes with message counts and timestamps. <code>/stash pop &lt;name|id&gt;</code> restores a stash, replacing the current context. <code>/stash merge &lt;name|id&gt;</code> appends stash messages into the current context. <code>/stash drop &lt;name|id&gt;</code> deletes a stash permanently. Stashes are private (keyed by username) and survive session restarts.</p>
+    </div>
+    <pre>/stash save security-review
+✓ Stash saved — "security-review" (42 messages)
+  id: 20260306_a3f2  →  restore with: /stash pop security-review
+
+/stash list
+  security-review   42 msgs   2026-03-06 01:00
+  auth-spike        18 msgs   2026-03-05 14:30</pre>
 
     <!-- ── Config Files ──────────────────────────────────────────────────── -->
     <h2 id="config-files">Configuration Files</h2>
@@ -763,6 +859,14 @@ Last turn removed.</pre>
       <div class="env-card">
         <div class="env-name">EXECUTION_MODE</div>
         <div class="env-desc"><code>autonomous</code> (default) or <code>interactive</code> — affects min/turn constants</div>
+      </div>
+      <div class="env-card">
+        <div class="env-name">EPAM_ORCHESTRATION_PROVIDER</div>
+        <div class="env-desc">Orchestration entry script: <code>copilot|openai|qwen|cursor|codemie-claude</code> — routes to matching wrapper script</div>
+      </div>
+      <div class="env-card">
+        <div class="env-name">EPAM_CLI</div>
+        <div class="env-desc">Binary used by orchestration for epam-run providers (default: <code>epam</code>). Override with mock script for zero-token testing.</div>
       </div>
     </div>
 

@@ -239,6 +239,15 @@ pre code { background: none; color: inherit; padding: 0; }
         </ol>
       </li>
       <li><a href="#integration">Integration with CLI Commands</a></li>
+      <li><a href="#providers">Provider Layer</a>
+        <ol>
+          <li><a href="#provider-routing">Provider Routing</a></li>
+          <li><a href="#provider-story-field">Per-Story aiProvider &amp; model Fields</a></li>
+          <li><a href="#provider-cost">Cost Normalization</a></li>
+          <li><a href="#provider-story-filter">Story Selection Rules</a></li>
+          <li><a href="#provider-testing">Zero-Token Testing</a></li>
+        </ol>
+      </li>
       <li><a href="#constants">Reference: Default Constants</a></li>
     </ol>
   </div>
@@ -588,8 +597,123 @@ cost_high    = cost × (1 + range_factor × 1.5)</div>
     No story is ever left without an estimate.
   </p>
 
+  <!-- ── Provider Layer ───────────────────────────────────────────────────── -->
+  <h2 id="providers">5. Provider Layer</h2>
+  <p>
+    The orchestration system supports multiple AI providers per phase or per story. Four providers —
+    <strong>copilot</strong>, <strong>openai</strong>, <strong>qwen</strong>, and <strong>cursor</strong> — run
+    via the <code>epam run --json</code> interface. Existing providers (<code>claude</code>, <code>codex</code>,
+    <code>codemie-claude</code>) retain their direct CLI invocation paths.
+  </p>
+
+  <h3 id="provider-routing">5.1 Provider Routing</h3>
+  <p>
+    <code>run-agent-orchestration.sh</code> selects the entry-point script using the
+    <code>EPAM_ORCHESTRATION_PROVIDER</code> environment variable. Each script is a thin wrapper that
+    sets <code>EPAM_CLI</code> and execs the master <code>claude.sh</code> agent loop — no logic is
+    duplicated.
+  </p>
+  <table>
+    <tr><th>EPAM_ORCHESTRATION_PROVIDER</th><th>Entry script</th><th>Invocation method</th></tr>
+    <tr><td><em>(default)</em></td><td>claude.sh</td><td>claude CLI direct</td></tr>
+    <tr><td>codemie-claude</td><td>codemie-claude.sh</td><td>codemie-claude CLI direct</td></tr>
+    <tr><td>copilot</td><td>copilot.sh → claude.sh</td><td><code>epam run --provider copilot --json</code></td></tr>
+    <tr><td>openai</td><td>openai.sh → claude.sh</td><td><code>epam run --provider openai --json</code></td></tr>
+    <tr><td>qwen</td><td>qwen.sh → claude.sh</td><td><code>epam run --provider qwen --json</code></td></tr>
+    <tr><td>cursor</td><td>cursor.sh → claude.sh</td><td><code>epam run --provider cursor --json</code></td></tr>
+  </table>
+  <p>
+    Inside <code>claude.sh</code>, per-story routing is handled by <code>provider_to_cli()</code> which
+    reads the story's <code>aiProvider</code> field and returns the correct binary. The
+    <code>EPAM_CLI</code> variable (default: <code>epam</code>) is the binary used for all epam-run providers
+    and can be overridden for testing.
+  </p>
+  <div class="formula">provider_to_cli("copilot")  → $EPAM_CLI   (epam run --provider copilot ...)
+provider_to_cli("openai")   → $EPAM_CLI   (epam run --provider openai ...)
+provider_to_cli("qwen")     → $EPAM_CLI   (epam run --provider qwen ...)
+provider_to_cli("cursor")   → $EPAM_CLI   (epam run --provider cursor ...)
+provider_to_cli("codex")    → codex
+provider_to_cli("*")        → $CLAUDE_CMD (claude)</div>
+
+  <h3 id="provider-story-field">5.2 Per-Story aiProvider &amp; model Fields</h3>
+  <p>
+    Each story in <code>prd.json</code> can carry an <code>aiProvider</code> field and an optional
+    <code>model</code> field. These drive both execution routing and cost estimation:
+  </p>
+  <table>
+    <tr><th>Field</th><th>Effect on execution</th><th>Effect on cost estimate</th></tr>
+    <tr><td><code>aiProvider</code></td><td>Routes story to the matching CLI via <code>provider_to_cli()</code></td><td>Triggers provider-default model lookup in pricing.ts</td></tr>
+    <tr><td><code>model</code></td><td>Passed as <code>--model</code> to the CLI invocation; overrides effort-tier default</td><td>Direct lookup in pricing.ts — most precise rate</td></tr>
+  </table>
+  <p>
+    For epam-run providers, <code>resolve_model_from_story()</code> reads the story's <code>.model</code>
+    field directly from prd.json and overrides the effort-tier default before invocation. This means
+    a story with <code>"aiProvider": "openai", "model": "gpt-4.1-mini"</code> will both run on
+    gpt-4.1-mini and be costed at gpt-4.1-mini rates ($0.40/$1.60 per M).
+  </p>
+
+  <h3 id="provider-cost">5.3 Cost Normalization</h3>
+  <p>
+    <code>epam run --json</code> outputs camelCase fields. <code>claude.sh</code>'s
+    <code>normalize_provider_json()</code> maps these to the snake_case schema expected by
+    <code>append_cost_record</code> and <code>phase-cost.jsonl</code>:
+  </p>
+  <div class="formula">epam run --json output:         Normalized (orchestration schema):
+─────────────────────────────────────────────────────────
+cost_usd                    →   total_cost_usd
+usage.inputTokens           →   usage.input_tokens
+usage.outputTokens          →   usage.output_tokens
+result                      →   result  (preserved)</div>
+  <p>
+    This normalization ensures all providers feed the same cost tracking pipeline regardless of
+    their output format. The raw file is preserved alongside the normalized file for debugging.
+  </p>
+
+  <h3 id="provider-story-filter">5.4 Story Selection Rules</h3>
+  <p>
+    Story selection differs between execution and estimation modes:
+  </p>
+  <table>
+    <tr><th>Mode</th><th>Filter applied</th><th>Rationale</th></tr>
+    <tr>
+      <td><strong>Execution</strong><br><small>run-agent-orchestration.sh</small></td>
+      <td><code>completed == false</code></td>
+      <td>Only unfinished stories are run. The <code>completed</code> boolean is the sole gate — there is no <code>status</code> string field check. Stories already marked <code>completed: true</code> are silently skipped.</td>
+    </tr>
+    <tr>
+      <td><strong>Estimate</strong><br><small>estimate-stories.sh</small></td>
+      <td>No status filter</td>
+      <td>All stories in scope are estimated regardless of completion. This is required so <code>--refine</code> can calibrate constants from completed story actuals, and so forecast totals include future stories.</td>
+    </tr>
+    <tr>
+      <td><strong>Dry-run</strong><br><small>--dry-run flag</small></td>
+      <td><code>completed == false</code> (same as execution)</td>
+      <td>Story selection and plan display run fully; execution is skipped after plan output.</td>
+    </tr>
+  </table>
+  <div class="box box-info">
+    <p><strong>Infra test gate:</strong> For any phase other than <code>infra_test</code>, all
+    <code>SP-T0x</code> stories in the <code>infra_test</code> phase must be <code>completed: true</code>
+    before execution proceeds. This gate runs before story selection and cannot be bypassed by
+    <code>--dry-run</code>.</p>
+  </div>
+
+  <h3 id="provider-testing">5.5 Zero-Token Testing</h3>
+  <p>
+    The <code>EPAM_CLI</code> variable is the injection point for testing epam-run provider flows
+    without spending tokens. Set it to the mock script to intercept all epam-run invocations:
+  </p>
+  <pre>EPAM_CLI=orchestrations/scripts/test/mock-epam-run.sh \
+  bash orchestrations/scripts/test/test-epam-providers.sh
+# → 19/19 tests pass; zero tokens consumed</pre>
+  <p>
+    The mock returns a canned <code>epam run --json</code> response and logs
+    <code>--provider</code> / <code>--model</code> flags to <code>$MOCK_LOG</code> for assertion.
+    Tests cover: provider routing, normalize transform, cost extraction, and model resolution.
+  </p>
+
   <!-- ── Integration ────────────────────────────────────────────────────── -->
-  <h2 id="integration">4. Integration with CLI Commands</h2>
+  <h2 id="integration">6. Integration with CLI Commands</h2>
   <table>
     <tr><th>Command</th><th>What it runs</th><th>Key flags</th></tr>
     <tr>
@@ -635,7 +759,7 @@ EPAM_ORCHESTRATION_PROVIDER=openai epam orchestrate --phase finops
 epam estimate --refine    # reads actuals from phase-cost.jsonl</pre>
 
   <!-- ── Constants Reference ────────────────────────────────────────────── -->
-  <h2 id="constants">5. Reference: Default Constants</h2>
+  <h2 id="constants">7. Reference: Default Constants</h2>
   <div class="const-grid">
     <div class="const-card">
       <div class="const-name">H2A_RATIO (low)</div>

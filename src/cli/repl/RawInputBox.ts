@@ -83,7 +83,7 @@ export class RawInputBox {
 
       const onData = (str: string) => {
         // Any key other than Tab resets the tab cycle
-        if (str !== '\t' && str !== '\x1b[Z') {
+        if (str !== '\t' && str !== '\x1b[Z' && str !== '\x1b[[Z') {
           this.tabCycleList = [];
           this.tabCycleIdx = 0;
         }
@@ -98,8 +98,9 @@ export class RawInputBox {
           this.interruptBus.emit('interrupt');
           finish({ line: '', interrupted: true });
 
-        } else if (str === '\t' || str === '\x1b[Z') {
+        } else if (str === '\t' || str === '\x1b[Z' || str === '\x1b[[Z') {
           // Tab (forward) / Shift+Tab (backward)
+          // Both sequences cycle slash completions from any buffer state.
           const forward = str === '\t';
           this.handleTab(prefix, options.completions ?? [], forward);
 
@@ -220,33 +221,33 @@ export class RawInputBox {
   // ── Tab completion ─────────────────────────────────────────────────────────
 
   /**
-   * Tab cycles through slash-command completions when the buffer starts with '/'.
-   * Shift-Tab cycles backwards. On non-slash input, Tab inserts two spaces.
+   * Tab/Shift+Tab cycles through slash-command completions.
+   * Works from any buffer state:
+   *   - empty buffer → cycles all commands starting from '/'
+   *   - buffer starts with '/' → cycles matching completions
+   *   - other buffer content → cycles all commands (non-destructive: saves/restores)
+   * Shift+Tab always cycles backward.
    */
   private handleTab(prefix: string, completions: string[], forward: boolean): void {
-    if (this.buffer.startsWith('/')) {
-      const partial = this.buffer.slice(1).toLowerCase();
-      if (this.tabCycleList.length === 0) {
-        this.tabCycleList = completions
-          .filter(c => c.startsWith(partial))
-          .map(c => '/' + c);
-        this.tabCycleIdx = forward ? 0 : this.tabCycleList.length - 1;
-      } else {
-        this.tabCycleIdx = forward
-          ? (this.tabCycleIdx + 1) % this.tabCycleList.length
-          : (this.tabCycleIdx - 1 + this.tabCycleList.length) % this.tabCycleList.length;
-      }
-      if (this.tabCycleList.length > 0) {
-        this.buffer = this.tabCycleList[this.tabCycleIdx];
-        this.cursorPos = this.buffer.length;
-        this.redrawBox(prefix);
-      }
-    } else if (forward) {
-      const spaces = '  ';
-      this.buffer = this.buffer.slice(0, this.cursorPos) + spaces + this.buffer.slice(this.cursorPos);
-      this.cursorPos += spaces.length;
-      this.redrawBox(prefix);
+    // Build or advance the cycle list
+    if (this.tabCycleList.length === 0) {
+      // Determine the partial to filter on
+      const partial = this.buffer.startsWith('/')
+        ? this.buffer.slice(1).toLowerCase()
+        : '';
+      this.tabCycleList = completions
+        .filter(c => c.startsWith(partial))
+        .map(c => '/' + c);
+      if (this.tabCycleList.length === 0) return;
+      this.tabCycleIdx = forward ? 0 : this.tabCycleList.length - 1;
+    } else {
+      this.tabCycleIdx = forward
+        ? (this.tabCycleIdx + 1) % this.tabCycleList.length
+        : (this.tabCycleIdx - 1 + this.tabCycleList.length) % this.tabCycleList.length;
     }
+    this.buffer   = this.tabCycleList[this.tabCycleIdx];
+    this.cursorPos = this.buffer.length;
+    this.redrawBox(prefix);
   }
 
   // ── Layout: [top-pad] [input lines...] [bottom-pad]

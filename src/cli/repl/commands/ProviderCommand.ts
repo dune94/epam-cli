@@ -113,14 +113,14 @@ function listProviders(ctx: SlashCommandContext): boolean {
     console.log();
   } else {
     console.log(chalk.dim('  No provider chain configured.'));
-    console.log(`  Active: ${chalk.white(ctx.config.provider)}/${chalk.dim(ctx.currentModel)}`);
+    console.log(`  Active: ${chalk.white(ctx.currentProvider)}/${chalk.dim(ctx.currentModel)}`);
     console.log();
   }
 
   console.log(chalk.bold('All providers:'));
   for (const [key, label] of Object.entries(PROVIDER_LABELS)) {
     const defaultModel = PROVIDER_DEFAULTS[key];
-    const isCurrent = ctx.config.provider === key;
+    const isCurrent = ctx.currentProvider === key;
     const marker = isCurrent ? chalk.green(' ✓') : '';
     console.log(`  ${chalk.cyan(key.padEnd(10))} ${chalk.dim(label.padEnd(22))} ${chalk.dim(defaultModel)}${marker}`);
   }
@@ -166,7 +166,7 @@ function switchProvider(spec: string, ctx: SlashCommandContext): boolean {
     return true;
   }
 
-  console.log(`  From: ${chalk.dim(ctx.config.provider + '/' + ctx.currentModel)}`);
+  console.log(`  From: ${chalk.dim(ctx.currentProvider + '/' + ctx.currentModel)}`);
   console.log(`  To:   ${chalk.white(providerName + '/' + modelName)}`);
   console.log();
 

@@ -36,6 +36,7 @@ import { skillsCommand } from './commands/SkillsCommand.js';
 
 export interface SlashCommandContext {
   config: ResolvedConfig;
+  currentProvider: string;
   currentModel: string;
   sessionTurnCount: number;
   tokenCount: number;

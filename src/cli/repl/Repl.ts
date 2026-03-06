@@ -587,6 +587,7 @@ export class Repl {
   ): SlashCommandContext {
     return {
       config,
+      currentProvider: this.currentProvider,
       currentModel: this.currentModel,
       sessionTurnCount: this.session.turns.length,
       messages: this.messages,

@@ -141,11 +141,11 @@ function showModels(ctx: SlashCommandContext): boolean {
   console.log();
   console.log(chalk.bold.cyan('🎯 Model'));
   console.log();
-  console.log(`  Active: ${chalk.white(ctx.config.provider)}/${chalk.cyan(ctx.currentModel)}`);
+  console.log(`  Active: ${chalk.white(ctx.currentProvider)}/${chalk.cyan(ctx.currentModel)}`);
   console.log();
 
   // 'anthropic' and 'claude' are aliases for the same provider
-  const providerKey = ctx.config.provider === 'anthropic' ? 'claude' : ctx.config.provider;
+  const providerKey = ctx.currentProvider === 'anthropic' ? 'claude' : ctx.currentProvider;
   const models = PROVIDER_MODELS[providerKey];
 
   if (models) {
@@ -176,7 +176,7 @@ function switchModel(modelName: string, ctx: SlashCommandContext): boolean {
   ctx.onModelChange(modelName);
 
   console.log(chalk.green('✓ Model switched'));
-  console.log(chalk.dim('  Provider unchanged: ' + ctx.config.provider));
+  console.log(chalk.dim('  Provider unchanged: ' + ctx.currentProvider));
   console.log();
   return true;
 }

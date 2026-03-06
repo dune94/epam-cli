@@ -44,11 +44,14 @@ function normalizeLlMChain(
   projectConfig: Partial<ProjectConfig>,
   overrideFirstSlot: boolean,
 ): ResolvedConfig['llmChain'] {
-  // When --provider is explicitly given, replace the first slot with the
-  // requested provider+model. Keep remaining slots for failover.
-  const baseChain = overrideFirstSlot
-    ? [{ provider, model }, ...(projectConfig.llmChain ?? []).slice(1)]
-    : (projectConfig.llmChain ?? [{ provider, model }]);
+  // When --provider is explicitly given, use ONLY that slot — no fallback.
+  // Silently switching to a different provider when the requested one fails
+  // is confusing; the user gets a clear auth error instead.
+  if (overrideFirstSlot) {
+    return [{ provider, model }];
+  }
+
+  const baseChain = projectConfig.llmChain ?? [{ provider, model }];
 
   return baseChain.map(slot => {
     // If the slot explicitly specifies "epam", normalize it to its concrete upstream provider.

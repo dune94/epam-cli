@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { resolveConfig, resetResolvedConfig } from '../../../src/config/ConfigResolver.js';
+import { readProjectConfig } from '../../../src/config/ProjectConfig.js';
 
 vi.mock('../../../src/config/ProjectConfig.js', () => ({
-  findProjectRoot: vi.fn().mockResolvedValue(null),
+  findProjectRoot: vi.fn().mockResolvedValue('/mock/project'),
   readProjectConfig: vi.fn().mockResolvedValue({}),
 }));
 
@@ -107,5 +108,44 @@ describe('ConfigResolver', () => {
       delete process.env.EPAM_BUDGET_HARD_LIMIT_AT;
       resetResolvedConfig();
     }
+  });
+
+  describe('--provider flag llmChain isolation', () => {
+    it('uses only the flagged provider slot — no fallback from settings.json', async () => {
+      vi.mocked(readProjectConfig).mockResolvedValueOnce({
+        provider: 'codemie',
+        model: 'claude-sonnet-4-5-20250929',
+        llmChain: [
+          { provider: 'codemie', model: 'claude-sonnet-4-5-20250929' },
+          { provider: 'codex',   model: 'gpt-5-codex' },
+        ],
+      });
+      const config = await resolveConfig({ provider: 'openai', model: 'gpt-4o' });
+      expect(config.provider).toBe('openai');
+      expect(config.llmChain).toHaveLength(1);
+      expect(config.llmChain[0].provider).toBe('openai');
+      expect(config.llmChain[0].model).toBe('gpt-4o');
+    });
+
+    it('preserves settings.json llmChain when no --provider flag', async () => {
+      vi.mocked(readProjectConfig).mockResolvedValueOnce({
+        provider: 'codemie',
+        llmChain: [
+          { provider: 'codemie', model: 'claude-sonnet-4-5-20250929' },
+          { provider: 'codex',   model: 'gpt-5-codex' },
+        ],
+      });
+      const config = await resolveConfig();
+      expect(config.llmChain).toHaveLength(2);
+      expect(config.llmChain[0].provider).toBe('codemie');
+      expect(config.llmChain[1].provider).toBe('codex');
+    });
+
+    it('single slot when --provider given with no settings.json llmChain', async () => {
+      vi.mocked(readProjectConfig).mockResolvedValueOnce({ provider: 'openai' });
+      const config = await resolveConfig({ provider: 'anthropic', model: 'claude-sonnet-4-6' });
+      expect(config.llmChain).toHaveLength(1);
+      expect(config.llmChain[0].provider).toBe('anthropic');
+    });
   });
 });

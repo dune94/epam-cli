@@ -21,8 +21,13 @@ export function createOrchestrateCommand(): Command {
     .option('--mode <mode>', 'Orchestration mode: bash or hybrid', 'bash')
     .option('--dry-run', 'Preview execution plan without running agents')
     .option('--skip-cleanup', 'Keep git worktrees after execution (for debugging)')
+    .option('--worktree', 'Enable git worktree parallel execution')
     .option('--skip-cpa', 'Skip the CPA pre-pass estimate gate')
     .option('--strict-cpa', 'Halt orchestration on CPA review gates')
+    .option('--provider <name>', 'Orchestration provider: claude, copilot, openai, qwen, cursor, codemie-claude')
+    .option('--prd <path>', 'Path to PRD JSON file (default: orchestrations/prd.json)')
+    .option('--output-dir <path>', 'Directory for all generated logs and outputs')
+    .option('--epam-cli <path>', 'Path to epam CLI binary (default: epam; use mock for testing)')
     .action(async (opts) => {
       const ORCHESTRATION_SCRIPT = resolve(
         process.cwd(), 'orchestrations/scripts/run-agent-orchestration.sh',
@@ -44,10 +49,15 @@ export function createOrchestrateCommand(): Command {
       if (opts.mode) args.push('--mode', opts.mode);
       if (opts.dryRun) args.push('--dry-run');
       if (opts.skipCleanup) args.push('--skip-cleanup');
+      if (opts.worktree) args.push('--worktree');
 
       const env: Record<string, string> = {};
       if (opts.skipCpa) env.SKIP_CPA = '1';
       if (opts.strictCpa) env.STRICT_CPA = '1';
+      if (opts.provider) env.EPAM_ORCHESTRATION_PROVIDER = opts.provider;
+      if (opts.prd) env.PRD_FILE = resolve(process.cwd(), opts.prd);
+      if (opts.outputDir) env.OUTPUT_DIR = resolve(process.cwd(), opts.outputDir);
+      if (opts.epamCli) env.EPAM_CLI = opts.epamCli;
 
       const code = await runScript(ORCHESTRATION_SCRIPT, args, env);
 

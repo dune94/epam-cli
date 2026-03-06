@@ -26,7 +26,7 @@ case "${EPAM_ORCHESTRATION_PROVIDER:-${CLAUDE_CMD}}" in
     cursor)         CLAUDE_SH="$SCRIPT_DIR/cursor.sh" ;;
     *)              CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
 esac
-LOG_DIR="$AUTOMATION_DIR/logs"
+LOG_DIR="${OUTPUT_DIR:-$AUTOMATION_DIR/logs}"
 MONITOR_STATUS_FILE="$LOG_DIR/agent-status.json"
 MESSAGES_JSONL="$LOG_DIR/agent-messages.jsonl"
 CLAUDE_CMD="${CLAUDE_CMD:-claude}"

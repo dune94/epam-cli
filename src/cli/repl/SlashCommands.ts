@@ -62,6 +62,7 @@ export interface SlashCommandContext {
   onSystemPromptChange?: (prompt: string) => void;
   // The REPL's readline instance — use this for interactive input instead of prompts()
   rl?: import('readline').Interface;
+  resetZone?: () => void;
   // Callbacks
   onModelChange: (model: string) => void;
   onProviderChange?: (provider: string) => void;
@@ -108,6 +109,17 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     async execute(_args, ctx) {
       ctx.onClear();
       console.log(chalk.dim('Conversation cleared.'));
+      return true;
+    },
+  },
+
+  // ── /top ───────────────────────────────────────────────────────────────────
+  {
+    name: 'top',
+    description: 'Clear the terminal and redraw the prompt at the top of the screen',
+    async execute(_args, ctx) {
+      process.stdout.write('\x1b[2J\x1b[H'); // clear screen, cursor to (0,0)
+      ctx.resetZone?.();                      // skip gray separator on next render
       return true;
     },
   },

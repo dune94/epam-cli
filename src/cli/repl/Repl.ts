@@ -51,6 +51,7 @@ export class Repl {
   private auditorRegistry?: AuditorRegistry;
   private userEmail?: string;
   private rl?: import('readline').Interface;
+  private promptZone?: PromptZone;
   /** Fires when the user presses Ctrl+C while an agent turn is running. */
   readonly sigintBus = new EventEmitter();
 
@@ -143,6 +144,7 @@ export class Repl {
     this.running = true;
 
     const promptZone = new PromptZone(process.stdout);
+    this.promptZone = promptZone;
     const rawInputBox = new RawInputBox(this.sigintBus);
 
     // Ctrl+C during agent response (non-raw mode) → abort agent
@@ -601,6 +603,7 @@ export class Repl {
       tools: this.options.tools,
       toolRunner: this.toolRunner,
       rl: this.rl,
+      resetZone: () => this.promptZone?.reset(),
       currentSystemPrompt: systemPromptRef?.value,
       defaultSystemPrompt: systemPromptRef?.default,
       onSystemPromptChange: systemPromptRef?.onChange,

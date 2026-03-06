@@ -19,14 +19,11 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, unlink
 import { homedir } from 'os';
 import { join, resolve } from 'path';
 import type { SlashCommand, SlashCommandContext } from '../SlashCommands.js';
+import { readBuiltinAgents } from '../DataConfig.js';
 
 // ── Built-in session agent defaults ──────────────────────────────────────────
 
-const BUILTIN_AGENTS: Record<string, string> = {
-  coder: 'You are an expert software engineer. Focus on writing clean, well-typed code with tests. Prefer using file tools to read context before editing. Always explain your changes concisely.',
-  reviewer: 'You are a senior code reviewer. Analyse code for bugs, security issues, and style problems. Be direct and specific. Categorise findings as blocker / major / minor. Do not rewrite code unless asked.',
-  architect: 'You are a software architect. Focus on high-level design, system structure, and trade-offs. Think in components, interfaces, and data flows. Avoid making direct code edits unless necessary to demonstrate a concept.',
-};
+function builtinAgents(): Record<string, string> { return readBuiltinAgents(); }
 
 // ── Agent store helpers ───────────────────────────────────────────────────────
 
@@ -91,7 +88,7 @@ function loadOrchestrationAgents(): Record<string, string> {
 // ── Resolve a named agent's prompt ───────────────────────────────────────────
 
 function resolveAgent(name: string): string | null {
-  const sessionAgents = { ...BUILTIN_AGENTS, ...loadSessionAgents() };
+  const sessionAgents = { ...builtinAgents(), ...loadSessionAgents() };
   if (sessionAgents[name]) return sessionAgents[name];
   const orchAgents = loadOrchestrationAgents();
   if (orchAgents[name]) return orchAgents[name];
@@ -181,7 +178,7 @@ export const agentCommand: SlashCommand = {
         console.log(chalk.dim('Example: /agent add security "You are a security expert..."'));
         return true;
       }
-      if (BUILTIN_AGENTS[name]) {
+      if (builtinAgents()[name]) {
         console.log(chalk.red(`"${name}" is a built-in agent and cannot be overwritten.`));
         return true;
       }
@@ -198,7 +195,7 @@ export const agentCommand: SlashCommand = {
         console.log(chalk.red('Usage: /agent remove <name>'));
         return true;
       }
-      if (BUILTIN_AGENTS[name]) {
+      if (builtinAgents()[name]) {
         console.log(chalk.red(`"${name}" is a built-in agent and cannot be removed.`));
         return true;
       }
@@ -227,9 +224,9 @@ export const agentCommand: SlashCommand = {
       name === activeAgent ? chalk.green.bold(name) + chalk.green(' ← active') : name;
 
     console.log(chalk.bold('\nSession agents') + chalk.dim('  (user-managed)\n'));
-    const allSession = { ...BUILTIN_AGENTS, ...sessionCustom };
+    const allSession = { ...builtinAgents(), ...sessionCustom };
     for (const [name, prompt] of Object.entries(allSession)) {
-      const tag = BUILTIN_AGENTS[name] ? chalk.dim(' [built-in]') : chalk.dim(' [custom]');
+      const tag = builtinAgents()[name] ? chalk.dim(' [built-in]') : chalk.dim(' [custom]');
       console.log(`  ${marker(name)}${label(name)}${tag}`);
       console.log(chalk.dim(`    ${prompt.slice(0, 72)}…`));
     }

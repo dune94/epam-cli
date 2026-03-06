@@ -14,29 +14,8 @@
 import chalk from 'chalk';
 import { execa } from 'execa';
 import type { SlashCommand, SlashCommandContext } from '../SlashCommands.js';
+import { readProviders } from '../DataConfig.js';
 import { CopilotProvider } from '../../../providers/copilot/CopilotProvider.js';
-
-const PROVIDER_DEFAULTS: Record<string, string> = {
-  claude:   'claude-sonnet-4-6',
-  qwen:     'qwen-max',
-  openai:   'gpt-4o',
-  gemini:   'gemini-1.5-pro',
-  codemie:  'claude-sonnet-4-5-20250929',
-  codex:    'gpt-5-codex',
-  cursor:   'gemini-3.1-pro',
-  copilot:  'claude-sonnet-4-6',
-};
-
-const PROVIDER_LABELS: Record<string, string> = {
-  claude:   'Anthropic Claude',
-  qwen:     'Alibaba Qwen',
-  openai:   'OpenAI GPT',
-  gemini:   'Google Gemini',
-  codemie:  'Codemie (SSO)',
-  codex:    'OpenAI Codex (CLI)',
-  cursor:   'Cursor Agent',
-  copilot:  'GitHub Copilot (CLI)',
-};
 
 export const providerCommand: SlashCommand = {
   name: 'provider',
@@ -60,7 +39,7 @@ export const providerCommand: SlashCommand = {
         console.log();
         console.log(chalk.red('Provider name required.'));
         console.log(chalk.dim('Usage: /provider auth <name>'));
-        console.log(chalk.dim('Names: ' + Object.keys(PROVIDER_DEFAULTS).join(', ')));
+        console.log(chalk.dim('Names: ' + Object.keys(readProviders()).join(', ')));
         console.log();
         return true;
       }
@@ -117,12 +96,12 @@ function listProviders(ctx: SlashCommandContext): boolean {
     console.log();
   }
 
+  const allProviders = readProviders();
   console.log(chalk.bold('All providers:'));
-  for (const [key, label] of Object.entries(PROVIDER_LABELS)) {
-    const defaultModel = PROVIDER_DEFAULTS[key];
+  for (const [key, entry] of Object.entries(allProviders)) {
     const isCurrent = ctx.currentProvider === key;
     const marker = isCurrent ? chalk.green(' ✓') : '';
-    console.log(`  ${chalk.cyan(key.padEnd(10))} ${chalk.dim(label.padEnd(22))} ${chalk.dim(defaultModel)}${marker}`);
+    console.log(`  ${chalk.cyan(key.padEnd(10))} ${chalk.dim(entry.label.padEnd(22))} ${chalk.dim(entry.defaultModel)}${marker}`);
   }
   console.log();
   console.log(chalk.dim('Switch:        /provider <name>          e.g. /provider copilot'));
@@ -146,13 +125,13 @@ function switchProvider(spec: string, ctx: SlashCommandContext): boolean {
 
   if (slashIdx === -1) {
     providerName = spec;
-    modelName = PROVIDER_DEFAULTS[providerName] ?? '';
+    modelName = readProviders()[providerName]?.defaultModel ?? '';
   } else {
     providerName = spec.slice(0, slashIdx);
     modelName = spec.slice(slashIdx + 1);
   }
 
-  if (!PROVIDER_DEFAULTS[providerName] && !modelName) {
+  if (!readProviders()[providerName] && !modelName) {
     console.log(chalk.red(`Unknown provider: ${providerName}`));
     console.log(chalk.dim('Run /provider to list available providers.'));
     console.log();
@@ -335,7 +314,7 @@ async function authenticateProvider(providerName: string, ctx: SlashCommandConte
 
       default:
         console.log(chalk.red(`Unknown provider: ${providerName}`));
-        console.log(chalk.dim('Supported: ' + Object.keys(PROVIDER_DEFAULTS).join(', ')));
+        console.log(chalk.dim('Supported: ' + Object.keys(readProviders()).join(', ')));
     }
   } catch (err) {
     console.log(chalk.red(`Auth error: ${(err as Error).message}`));

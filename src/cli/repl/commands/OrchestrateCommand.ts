@@ -15,6 +15,7 @@ import { spawn } from 'child_process';
 import type { SlashCommand, SlashCommandContext } from '../SlashCommands.js';
 import { join, resolve } from 'path';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { readProviders } from '../DataConfig.js';
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
@@ -98,8 +99,6 @@ function runScript(script: string, args: string[], env?: Record<string, string>)
 
 // ── setup wizard ────────────────────────────────────────────────────────────
 
-const PROVIDERS = ['claude', 'openai', 'codex', 'copilot', 'cursor', 'qwen', 'codemie-claude'];
-
 async function runSetupWizard(ctx: SlashCommandContext): Promise<boolean> {
   const rl = ctx.rl;
   if (!rl) {
@@ -116,9 +115,10 @@ async function runSetupWizard(ctx: SlashCommandContext): Promise<boolean> {
   console.log();
 
   // Provider
-  const providerDefault = PROVIDERS.indexOf(existing.provider ?? 'claude');
+  const providerList = Object.keys(readProviders());
+  const providerDefault = providerList.indexOf(existing.provider ?? 'claude');
   console.log(chalk.bold('Provider:') + chalk.dim(` (current: ${existing.provider ?? 'claude'})`));
-  const provider = await pickFromList(rl, 'Select provider', PROVIDERS, providerDefault < 0 ? 0 : providerDefault);
+  const provider = await pickFromList(rl, 'Select provider', providerList, providerDefault < 0 ? 0 : providerDefault);
   if (!provider) { console.log(chalk.yellow('Setup cancelled.')); return true; }
 
   // Mode

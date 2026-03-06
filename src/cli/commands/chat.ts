@@ -63,7 +63,12 @@ export function createChatCommand(): Command {
           getAccessToken: () => authManager.getValidToken(),
         } : undefined,
       });
-      await chain.initialize();
+      // When --provider is explicitly specified, skip the eager pre-flight check.
+      // Providers are built on-demand at first request (same path as /provider runtime switch).
+      // This avoids false-positive warnings for providers that authenticate via gh CLI or SSO.
+      if (!requestedProvider) {
+        await chain.initialize();
+      }
 
       // Fallback single provider (used for pipe mode and MemoryCompressor)
       const provider = chain;

@@ -2,7 +2,7 @@
  * GitHub Copilot Provider
  *
  * Uses the GitHub Models REST API (OpenAI-compatible).
- * Endpoint: https://models.github.ai/inference
+ * Endpoint: https://models.inference.ai.azure.com
  *
  * Authentication (in order of priority):
  * 1. COPILOT_GITHUB_TOKEN env var
@@ -13,7 +13,7 @@
 import type { LLMProvider, ProviderRequest, ProviderResponse, StreamHandler, Message, ContentPart } from '../types.js';
 import { logger } from '../../utils/logger.js';
 
-const GITHUB_MODELS_URL = 'https://models.github.ai/inference';
+const GITHUB_MODELS_URL = 'https://models.inference.ai.azure.com';
 
 export interface CopilotConfig {
   model?: string;
@@ -22,29 +22,20 @@ export interface CopilotConfig {
 
 export class CopilotProvider implements LLMProvider {
   readonly name = 'copilot';
-  readonly defaultModel = 'anthropic/claude-4-sonnet';
+  readonly defaultModel = 'gpt-4o';
 
-  // Models available via GitHub Models API (vendor/model format)
+  // Models available via GitHub Models API (verified from catalog)
   static readonly SUPPORTED_MODELS = [
-    'anthropic/claude-4-sonnet',    // Claude 4 Sonnet (default)
-    'anthropic/claude-4-opus',      // Claude 4 Opus
-    'anthropic/claude-3.7-sonnet',  // Claude 3.7 Sonnet
-    'anthropic/claude-3.5-sonnet',  // Claude 3.5 Sonnet
-    'anthropic/claude-3.5-haiku',   // Claude 3.5 Haiku
-    'openai/gpt-5',                 // GPT-5
-    'openai/gpt-5-mini',            // GPT-5 mini
-    'openai/gpt-4.1',               // GPT-4.1
-    'openai/gpt-4o',                // GPT-4o
-    'openai/o3-mini',               // o3-mini reasoning
-    'google/gemini-2.5-pro',        // Gemini 2.5 Pro
-    'google/gemini-2.5-flash',      // Gemini 2.5 Flash
-    'google/gemini-2.0-flash',      // Gemini 2.0 Flash
-    'xai/grok-4',                   // Grok 4
-    'xai/grok-3',                   // Grok 3
-    'deepseek/deepseek-r1',         // DeepSeek R1
-    'deepseek/deepseek-v3',         // DeepSeek V3
-    'meta/llama-4-scout',           // Llama 4 Scout
-    'meta/llama-4-maverick',        // Llama 4 Maverick
+    'gpt-4o',                            // OpenAI GPT-4o (default)
+    'gpt-4o-mini',                       // OpenAI GPT-4o mini
+    'Meta-Llama-3.1-405B-Instruct',      // Meta Llama 3.1 405B
+    'Meta-Llama-3.1-70B-Instruct',       // Meta Llama 3.1 70B
+    'Meta-Llama-3.1-8B-Instruct',        // Meta Llama 3.1 8B
+    'Meta-Llama-3-70B-Instruct',         // Meta Llama 3 70B
+    'Meta-Llama-3-8B-Instruct',          // Meta Llama 3 8B
+    'Mistral-large-2407',                // Mistral Large
+    'Mistral-Nemo',                      // Mistral Nemo
+    'AI21-Jamba-Instruct',               // AI21 Jamba
   ] as const;
 
   private model: string;
@@ -99,7 +90,6 @@ export class CopilotProvider implements LLMProvider {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.token}`,
-        'X-GitHub-Api-Version': '2022-11-28',
       },
       body: JSON.stringify({
         model,
@@ -137,7 +127,6 @@ export class CopilotProvider implements LLMProvider {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.token}`,
-        'X-GitHub-Api-Version': '2022-11-28',
       },
       body: JSON.stringify({
         model,
@@ -204,7 +193,7 @@ export class CopilotProvider implements LLMProvider {
     if (!token) return false;
     try {
       const res = await fetch(`${GITHUB_MODELS_URL}/models`, {
-        headers: { 'Authorization': `Bearer ${token}`, 'X-GitHub-Api-Version': '2022-11-28' },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
       return res.ok;
     } catch {

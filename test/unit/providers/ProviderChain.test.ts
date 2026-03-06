@@ -156,14 +156,14 @@ describe('ProviderChain - copilot auth', () => {
     vi.mocked(createCopilotProvider).mockReturnValue(null);
 
     const chain = new ProviderChain({
-      slots: [{ provider: 'copilot', model: 'anthropic/claude-4-sonnet' }],
+      slots: [{ provider: 'copilot', model: 'gpt-4o' }],
       resolveApiKey: vi.fn().mockResolvedValue(null),
     });
 
     await expect(
       chain.complete({
         messages: [{ role: 'user' as const, content: 'hello' }],
-        model: 'anthropic/claude-4-sonnet',
+        model: 'gpt-4o',
         stream: false,
       })
     ).rejects.toThrow('Copilot not available');

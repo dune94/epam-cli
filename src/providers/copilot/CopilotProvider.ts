@@ -2,18 +2,24 @@
  * GitHub Copilot Provider
  *
  * Uses the GitHub Models REST API (OpenAI-compatible).
- * Endpoint: https://models.inference.ai.azure.com
+ * Endpoint: https://models.github.ai/inference
  *
  * Authentication (in order of priority):
  * 1. COPILOT_GITHUB_TOKEN env var
  * 2. GH_TOKEN env var
  * 3. GITHUB_TOKEN env var
+ * 4. GITHUB_PERSONAL_ACCESS_TOKEN env var
+ *
+ * Requires a fine-grained PAT with 'models:read' permission.
  */
 
 import type { LLMProvider, ProviderRequest, ProviderResponse, StreamHandler, Message, ContentPart } from '../types.js';
 import { logger } from '../../utils/logger.js';
 
-const GITHUB_MODELS_URL = 'https://models.inference.ai.azure.com';
+const GITHUB_MODELS_URL = 'https://models.github.ai/inference';
+
+// Reasoning models use max_completion_tokens instead of max_tokens
+const REASONING_MODELS = new Set(['openai/o3-mini', 'openai/o4-mini', 'openai/gpt-5', 'openai/gpt-5-mini']);
 
 export interface CopilotConfig {
   model?: string;
@@ -22,20 +28,25 @@ export interface CopilotConfig {
 
 export class CopilotProvider implements LLMProvider {
   readonly name = 'copilot';
-  readonly defaultModel = 'gpt-4o';
+  readonly defaultModel = 'openai/gpt-4o';
 
-  // Models available via GitHub Models API (verified from catalog)
+  // Models verified against GitHub Models API (models.github.ai)
   static readonly SUPPORTED_MODELS = [
-    'gpt-4o',                            // OpenAI GPT-4o (default)
-    'gpt-4o-mini',                       // OpenAI GPT-4o mini
-    'Meta-Llama-3.1-405B-Instruct',      // Meta Llama 3.1 405B
-    'Meta-Llama-3.1-70B-Instruct',       // Meta Llama 3.1 70B
-    'Meta-Llama-3.1-8B-Instruct',        // Meta Llama 3.1 8B
-    'Meta-Llama-3-70B-Instruct',         // Meta Llama 3 70B
-    'Meta-Llama-3-8B-Instruct',          // Meta Llama 3 8B
-    'Mistral-large-2407',                // Mistral Large
-    'Mistral-Nemo',                      // Mistral Nemo
-    'AI21-Jamba-Instruct',               // AI21 Jamba
+    'openai/gpt-4o',                         // GPT-4o (default)
+    'openai/gpt-4o-mini',                    // GPT-4o mini
+    'openai/gpt-4.1',                        // GPT-4.1
+    'openai/gpt-4.1-mini',                   // GPT-4.1 mini
+    'openai/gpt-4.1-nano',                   // GPT-4.1 nano
+    'openai/gpt-5',                          // GPT-5 (reasoning)
+    'openai/gpt-5-mini',                     // GPT-5 mini (reasoning)
+    'openai/o3-mini',                        // o3-mini (reasoning)
+    'openai/o4-mini',                        // o4-mini (reasoning)
+    'meta/llama-4-scout-17b-16e-instruct',   // Llama 4 Scout
+    'meta/llama-3.3-70b-instruct',           // Llama 3.3 70B
+    'deepseek/DeepSeek-V3-0324',             // DeepSeek V3
+    'deepseek/deepseek-r1',                  // DeepSeek R1
+    'xai/grok-3',                            // Grok 3
+    'xai/grok-3-mini',                       // Grok 3 mini
   ] as const;
 
   private model: string;
@@ -81,6 +92,15 @@ export class CopilotProvider implements LLMProvider {
     return out;
   }
 
+  /** Build the token limit field — reasoning models use max_completion_tokens. */
+  private buildTokenLimit(model: string, maxTokens?: number): Record<string, number> {
+    const limit = maxTokens || 4096;
+    if (REASONING_MODELS.has(model)) {
+      return { max_completion_tokens: limit };
+    }
+    return { max_tokens: limit };
+  }
+
   async complete(request: ProviderRequest): Promise<ProviderResponse> {
     const model = this.resolveModel(request.model);
     const messages = this.formatMessages(request.messages, request.systemPrompt);
@@ -90,11 +110,12 @@ export class CopilotProvider implements LLMProvider {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.token}`,
+        'X-GitHub-Api-Version': '2022-11-28',
       },
       body: JSON.stringify({
         model,
         messages,
-        max_tokens: request.maxTokens || 4096,
+        ...this.buildTokenLimit(model, request.maxTokens),
         temperature: request.temperature || 0.7,
       }),
     });
@@ -127,11 +148,12 @@ export class CopilotProvider implements LLMProvider {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.token}`,
+        'X-GitHub-Api-Version': '2022-11-28',
       },
       body: JSON.stringify({
         model,
         messages,
-        max_tokens: request.maxTokens || 4096,
+        ...this.buildTokenLimit(model, request.maxTokens),
         temperature: request.temperature || 0.7,
         stream: true,
       }),
@@ -192,8 +214,18 @@ export class CopilotProvider implements LLMProvider {
     const token = CopilotProvider.resolveToken();
     if (!token) return false;
     try {
-      const res = await fetch(`${GITHUB_MODELS_URL}/models`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+      const res = await fetch(`${GITHUB_MODELS_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+        body: JSON.stringify({
+          model: 'openai/gpt-4o-mini',
+          messages: [{ role: 'user', content: 'hi' }],
+          max_tokens: 1,
+        }),
       });
       return res.ok;
     } catch {
@@ -204,7 +236,8 @@ export class CopilotProvider implements LLMProvider {
   static getAuthInstructions(): string {
     return `GitHub Copilot Authentication:
 Set one of: COPILOT_GITHUB_TOKEN, GH_TOKEN, or GITHUB_TOKEN
-Token must be a GitHub PAT with 'models:read' permission, or use 'gh auth login' with the GitHub CLI.`;
+Token must be a fine-grained GitHub PAT with 'models:read' permission.
+Generate at: https://github.com/settings/tokens?type=beta`;
   }
 }
 
@@ -216,4 +249,3 @@ export function createCopilotProvider(model?: string, token?: string): CopilotPr
   }
   return new CopilotProvider({ model, token: effectiveToken });
 }
-

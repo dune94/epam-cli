@@ -36,7 +36,7 @@ describe('ProviderChain - Failover', () => {
   const mockSlots: ProviderSlot[] = [
     { provider: 'codemie', model: 'claude-opus-4-6' },
     { provider: 'codex', model: 'gpt-5-codex' },
-    { provider: 'openai', model: 'openai/gpt-4o' },
+    { provider: 'openai', model: 'claude-sonnet-4.6' },
   ];
 
   const mockResolveApiKey = vi.fn().mockResolvedValue(null);
@@ -156,14 +156,14 @@ describe('ProviderChain - copilot auth', () => {
     vi.mocked(createCopilotProvider).mockReturnValue(null);
 
     const chain = new ProviderChain({
-      slots: [{ provider: 'copilot', model: 'openai/gpt-4o' }],
+      slots: [{ provider: 'copilot', model: 'claude-sonnet-4.6' }],
       resolveApiKey: vi.fn().mockResolvedValue(null),
     });
 
     await expect(
       chain.complete({
         messages: [{ role: 'user' as const, content: 'hello' }],
-        model: 'openai/gpt-4o',
+        model: 'claude-sonnet-4.6',
         stream: false,
       })
     ).rejects.toThrow('Copilot not available');

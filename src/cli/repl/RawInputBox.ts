@@ -229,6 +229,11 @@ export class RawInputBox {
    * Shift+Tab always cycles backward.
    */
   private handleTab(prefix: string, completions: string[], forward: boolean): void {
+    // Only activate slash-command completion when buffer is empty or starts with '/'
+    if (this.tabCycleList.length === 0 && this.buffer.length > 0 && !this.buffer.startsWith('/')) {
+      return;
+    }
+
     // Build or advance the cycle list
     if (this.tabCycleList.length === 0) {
       // Determine the partial to filter on

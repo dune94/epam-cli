@@ -680,7 +680,7 @@ export class Repl {
       onChainUpdate: async (slots: LLMChainSlot[]) => {
         const chain = this.options.providerChain;
         if (!chain) return;
-        chain.getHealth().resetAll();
+        chain.updateSlots(slots);
         config.llmChain = slots;
         this.currentProvider = slots[0]?.provider ?? this.currentProvider;
         this.currentModel = slots[0]?.model ?? this.currentModel;

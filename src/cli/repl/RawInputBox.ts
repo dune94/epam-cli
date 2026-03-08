@@ -17,6 +17,10 @@ const BG    = '\x1b[48;5;238m';
 const FG    = '\x1b[93m';
 const RESET = '\x1b[0m';
 const EL    = '\x1b[K'; // erase to end of line (fills bg without moving cursor)
+const BRACKETED_PASTE_START = '\x1b[200~';
+const BRACKETED_PASTE_END   = '\x1b[201~';
+const BRACKETED_ENABLE      = '\x1b[?2004h';
+const BRACKETED_DISABLE     = '\x1b[?2004l';
 
 export interface RawInputOptions {
   /** Slash command names (and aliases) to use for Tab completion. */
@@ -68,27 +72,50 @@ export class RawInputBox {
       process.stdin.setRawMode(true);
       process.stdin.resume();
       process.stdin.setEncoding('utf8');
+      const bracketedSupported = !!process.stdout.isTTY;
+      if (bracketedSupported) process.stdout.write(BRACKETED_ENABLE);
 
       this.drawBox(prefix);
 
       let resolved = false;
+      let inBracketedPaste = false;
       const finish = (result: RawInputResult) => {
         if (resolved) return;
         resolved = true;
         process.stdin.removeListener('data', onData);
         process.stdin.setRawMode(false);
         process.stdin.pause();
+        if (bracketedSupported) process.stdout.write(BRACKETED_DISABLE);
+        inBracketedPaste = false;
         resolve(result);
       };
 
-      const onData = (str: string) => {
-        // Any key other than Tab resets the tab cycle
-        if (str !== '\t' && str !== '\x1b[Z' && str !== '\x1b[[Z') {
-          this.tabCycleList = [];
-          this.tabCycleIdx = 0;
+      const insertText = (text: string) => {
+        if (!text) return;
+        let changed = false;
+        for (let i = 0; i < text.length; i++) {
+          const ch = text[i];
+          if (ch === '\r') {
+            if (text[i + 1] === '\n') continue;
+            this.buffer = this.buffer.slice(0, this.cursorPos) + '\n' + this.buffer.slice(this.cursorPos);
+            this.cursorPos++;
+            changed = true;
+            continue;
+          }
+          if (ch === '\n' || ch === '\t' || ch >= ' ') {
+            this.buffer = this.buffer.slice(0, this.cursorPos) + ch + this.buffer.slice(this.cursorPos);
+            this.cursorPos++;
+            changed = true;
+          }
         }
+        if (changed) this.redrawBox(prefix);
+      };
+
+      const handleKeySequence = (str: string) => {
+        if (!str) return;
 
         if (str === '\r' || str === '\n') {
+          if (!this.buffer.trim()) return; // ignore blank Enter
           if (!resolved) this.clearBoxAndEcho(prefix);
           finish({ line: this.buffer, interrupted: false });
 
@@ -167,14 +194,51 @@ export class RawInputBox {
 
         } else if (str >= ' ') {
           // Printable (handles pasted multi-char sequences too)
-          for (const ch of str) {
-            if (ch >= ' ') {
-              this.buffer = this.buffer.slice(0, this.cursorPos) + ch + this.buffer.slice(this.cursorPos);
-              this.cursorPos++;
-            }
-          }
-          this.redrawBox(prefix);
+          insertText(str);
         }
+      };
+
+      const processChunk = (chunk: string): void => {
+        if (!chunk) return;
+        if (inBracketedPaste) {
+          const endIdx = chunk.indexOf(BRACKETED_PASTE_END);
+          if (endIdx === -1) {
+            insertText(chunk);
+            return;
+          }
+          insertText(chunk.slice(0, endIdx));
+          inBracketedPaste = false;
+          processChunk(chunk.slice(endIdx + BRACKETED_PASTE_END.length));
+          return;
+        }
+        const startIdx = chunk.indexOf(BRACKETED_PASTE_START);
+        if (startIdx !== -1) {
+          if (startIdx > 0) processChunk(chunk.slice(0, startIdx));
+          inBracketedPaste = true;
+          processChunk(chunk.slice(startIdx + BRACKETED_PASTE_START.length));
+          return;
+        }
+        let remaining = chunk;
+        while (remaining.length) {
+          const newlineIdx = remaining.search(/[\r\n]/);
+          if (newlineIdx === -1) {
+            handleKeySequence(remaining);
+            break;
+          }
+          const before = remaining.slice(0, newlineIdx);
+          if (before) handleKeySequence(before);
+          handleKeySequence(remaining[newlineIdx]);
+          remaining = remaining.slice(newlineIdx + 1);
+        }
+      };
+
+      const onData = (str: string) => {
+        // Any key other than Tab resets the tab cycle
+        if (str !== '\t' && str !== '\x1b[Z' && str !== '\x1b[[Z') {
+          this.tabCycleList = [];
+          this.tabCycleIdx = 0;
+        }
+        processChunk(str);
       };
 
       process.stdin.on('data', onData);
@@ -195,14 +259,52 @@ export class RawInputBox {
   }
 
   /**
-   * Wrap plain-text content into terminal-width chunks.
+   * Wrap plain-text content (respecting newline characters) into terminal-width chunks.
    * Input must already be ANSI-free (visible chars only).
    */
   private wrap(text: string, cols: number): string[] {
     if (text.length === 0) return [''];
+    const width = Math.max(1, cols);
     const lines: string[] = [];
-    for (let i = 0; i < text.length; i += cols) lines.push(text.slice(i, i + cols));
+    let current = '';
+    for (const ch of text) {
+      if (ch === '\n') {
+        lines.push(current);
+        current = '';
+        continue;
+      }
+      current += ch;
+      if (current.length === width) {
+        lines.push(current);
+        current = '';
+      }
+    }
+    lines.push(current);
     return lines;
+  }
+
+  /**
+   * Compute the cursor line/column offset within the input region, accounting for wrapping/newlines.
+   */
+  private measureCursor(prefix: string, cols: number): { line: number; col: number } {
+    const width = Math.max(1, cols);
+    const vpText = this.stripAnsi(prefix);
+    const upto = vpText + this.buffer.slice(0, this.cursorPos);
+    let line = 0;
+    let col = 0;
+    for (const ch of upto) {
+      if (ch === '\n') {
+        line++;
+        col = 0;
+        continue;
+      }
+      col++;
+      if (col === width) {
+        line++;
+        col = 0;
+      }
+    }
+    return { line, col };
   }
 
   /**
@@ -288,7 +390,7 @@ export class RawInputBox {
     this.writePadLine();
 
     this.boxInputLines = inputLines.length;
-    this.positionCursor(vpLen, cols, inputLines);
+    this.positionCursor(prefix, cols, inputLines);
   }
 
   /**
@@ -324,17 +426,15 @@ export class RawInputBox {
     this.writePadLine();
 
     this.boxInputLines = inputLines.length;
-    this.positionCursor(vpLen, cols, inputLines);
+    this.positionCursor(prefix, cols, inputLines);
   }
 
   /**
    * Move cursor from end of bottom-pad up into the correct input cell.
    * Called at the end of drawBox / redrawBox.
    */
-  private positionCursor(vpLen: number, cols: number, inputLines: string[]): void {
-    const totalBefore = vpLen + this.cursorPos;
-    const cursorLine  = Math.floor(totalBefore / cols);
-    const cursorCol   = totalBefore % cols;
+  private positionCursor(prefix: string, cols: number, inputLines: string[]): void {
+    const { line: cursorLine, col: cursorCol } = this.measureCursor(prefix, cols);
     // Cursor is at end of bottom-pad. Rows up to cursorLine:
     //   1 row  → bottom-pad to last input line
     //   (inputLines.length - 1 - cursorLine) → last input line to cursorLine
@@ -350,11 +450,8 @@ export class RawInputBox {
    * Cursor stays within the input area; no padding involved.
    */
   private updateCursor(prefix: string): void {
-    const cols        = this.cols();
-    const vpLen       = this.visibleLen(prefix);
-    const totalBefore = vpLen + this.cursorPos;
-    const newLine     = Math.floor(totalBefore / cols);
-    const newCol      = totalBefore % cols;
+    const cols = this.cols();
+    const { line: newLine, col: newCol } = this.measureCursor(prefix, cols);
     const delta = newLine - this.lastCursorLineInInput;
     if (delta > 0)      process.stdout.write(`\x1b[${delta}B`);
     else if (delta < 0) process.stdout.write(`\x1b[${-delta}A`);

@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Specification Dashboard — EPAM CLI</title>
+<style>
+* { box-sizing: border-box; }
+:root {
+  --bg: #f5f6fb;
+  --surface: #ffffff;
+  --border: #e2e8f0;
+  --border2: #cbd5f5;
+  --text: #0f172a;
+  --text2: #475569;
+  --text3: #94a3b8;
+  --teal: #3b82f6;
+  --violet: #7c3aed;
+  --green: #10b981;
+  --pink: #ec4899;
+  --amber: #f59e0b;
+}
+body {
+  margin: 0;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+.header {
+  background: linear-gradient(118.82deg,#0078c2 .5%,#0047ff 47.33%,#8453d2 76.12%);
+  color: #fff;
+  padding: 18px 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.header-left { display:flex; gap:14px; align-items:center; }
+.header-icon {
+  width:42px; height:42px; border-radius:10px;
+  background: rgba(255,255,255,0.18);
+  display:flex; align-items:center; justify-content:center;
+  font-size:22px;
+}
+.header-title { font-size:20px; font-weight:800; letter-spacing:-0.3px; }
+.header-sub { font-size:12px; color:rgba(255,255,255,0.75); }
+.nav-links { display:flex; gap:10px; font-size:11px; flex-wrap:wrap; }
+.nav-links a { color:rgba(255,255,255,0.8); text-decoration:none; text-transform:uppercase; letter-spacing:0.4px; }
+.nav-links a.active { border-bottom:2px solid #fff; padding-bottom:2px; color:#fff; }
+.nav-links a:hover { opacity:1; }
+
+.stats-grid {
+  display:grid;
+  grid-template-columns: repeat(auto-fit,minmax(180px,1fr));
+  gap:12px;
+  padding:24px 28px 10px;
+}
+.stat-card {
+  background: var(--surface);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:14px 16px;
+}
+.stat-label { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:0.4px; }
+.stat-value { font-size:26px; font-weight:700; margin-top:4px; }
+.stat-meta { font-size:11px; color:var(--text2); margin-top:4px; }
+
+.layout { display:flex; gap:18px; padding:10px 28px 28px; flex-wrap:wrap; }
+.table-panel, .diff-panel { background:var(--surface); border:1px solid var(--border); border-radius:12px; }
+.table-panel { flex:1 1 55%; overflow:hidden; }
+.diff-panel { flex:1 1 40%; padding:20px; min-height:320px; }
+
+.table-panel h2, .diff-panel h2 { font-size:15px; margin:0; padding:18px 20px 10px; border-bottom:1px solid var(--border); color:var(--text2); }
+.spec-table { width:100%; border-collapse:collapse; font-size:12px; }
+.spec-table thead { background:#f1f5f9; }
+.spec-table th { text-align:left; padding:10px; color:var(--text3); font-weight:600; }
+.spec-table td { padding:10px; border-top:1px solid var(--border); }
+.spec-table tr:hover { background:#f8fafc; cursor:pointer; }
+.spec-table tr.active { background:rgba(59,130,246,0.08); }
+.status-pill {
+  display:inline-flex; align-items:center; gap:5px;
+  font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px;
+  padding:2px 8px; border-radius:999px;
+}
+.status-pill.done { background:rgba(16,185,129,0.12); color:#0f9d58; border:1px solid rgba(15,157,88,0.35); }
+.status-pill.assigned { background:rgba(236,72,153,0.12); color:#be185d; border:1px solid rgba(190,24,93,0.35); }
+.badge-ghost { font-size:11px; text-transform:uppercase; letter-spacing:0.4px; color:var(--text3); }
+
+.diff-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:12px; }
+.diff-col { border:1px solid var(--border); border-radius:10px; padding:12px; background:var(--bg); }
+.diff-col h3 { margin:0 0 8px; font-size:12px; color:var(--text3); text-transform:uppercase; letter-spacing:0.4px; }
+.diff-list { list-style:none; padding-left:0; margin:0; }
+.diff-list li { font-size:12px; padding:4px 0; display:flex; gap:6px; }
+.diff-list span { flex:1; color:var(--text2); }
+.diff-tag.add { color:#15803d; }
+.diff-tag.remove { color:#dc2626; }
+.diff-empty { font-size:12px; color:var(--text3); }
+
+.ledger-panel { margin:0 28px 28px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 20px; }
+.ledger-panel h2 { margin:0 0 12px; font-size:15px; color:var(--text2); }
+.ledger-list { list-style:none; padding:0; margin:0; max-height:260px; overflow:auto; }
+.ledger-item { border-top:1px solid var(--border); padding:10px 0; font-size:12px; display:flex; flex-direction:column; gap:4px; }
+.ledger-item:first-child { border-top:none; }
+.ledger-meta { color:var(--text3); font-size:11px; }
+.ledger-story { font-weight:600; color:var(--text); }
+.ledger-agent { color:var(--violet); font-weight:600; font-size:11px; }
+
+@media (max-width: 900px) { .layout { flex-direction:column; } }
+.spinner { width:14px; height:14px; border:2px solid rgba(255,255,255,0.4); border-top-color:#fff; border-radius:50%; display:inline-block; animation:spin 0.9s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-left">
+      <div class="header-icon">📋</div>
+      <div>
+        <div class="header-title">Specification Coverage</div>
+        <div class="header-sub">OpenSpec · Speckit · Coordinator Ledger</div>
+      </div>
+    </div>
+    <div class="nav-links">
+      <a href="monitor.html">Monitor</a>
+      <a href="prd-viewer.html">PRD Viewer</a>
+      <a href="specification.html" class="active">Specification</a>
+      <a href="orchestration-plan.html">Plan</a>
+      <a href="phase-cost-monitor.html">Costs</a>
+    </div>
+  </div>
+
+  <div class="stats-grid" id="spec-stats">
+    <div class="stat-card">
+      <div class="stat-label">Stories with Spec</div>
+      <div class="stat-value">—</div>
+      <div class="stat-meta">Awaiting data…</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Completed</div>
+      <div class="stat-value">—</div>
+      <div class="stat-meta">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Pending</div>
+      <div class="stat-value">—</div>
+      <div class="stat-meta">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Latest Run</div>
+      <div class="stat-value" id="spec-run">—</div>
+      <div class="stat-meta" id="spec-run-meta">—</div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="table-panel">
+      <h2>Stories</h2>
+      <div style="max-height:480px; overflow:auto">
+        <table class="spec-table" id="spec-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Title</th>
+              <th>Status</th>
+              <th>Agents</th>
+              <th>Acceptance Δ</th>
+              <th>Splits</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text3)">Loading specification data…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="diff-panel" id="diff-panel">
+      <h2>Story Diff</h2>
+      <p style="font-size:13px; color:var(--text3); margin-top:12px">Select a story from the table to compare current acceptance criteria against the saved baseline from the latest specification run.</p>
+    </div>
+  </div>
+
+  <div class="ledger-panel">
+    <h2>Agent Ledger</h2>
+    <ul class="ledger-list" id="ledger-list">
+      <li class="ledger-item">Waiting for spec-phase.jsonl…</li>
+    </ul>
+  </div>
+
+<script>
+const ENDPOINTS = {
+  prd: 'prd.json',
+  baseline: 'logs/spec-baseline.json',
+  summary: 'logs/spec-summary.json',
+  ledger: 'logs/spec-phase.jsonl'
+};
+const state = { prd: null, baseline: null, summary: null, ledger: [], rows: [], selectedId: null };
+
+async function fetchJson(url) {
+  try {
+    const res = await fetch(url + '?t=' + Date.now());
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+async function fetchLedger(url) {
+  try {
+    const res = await fetch(url + '?t=' + Date.now());
+    if (!res.ok) return [];
+    const text = await res.text();
+    return text.trim().split(/\r?\n/).filter(Boolean).map(line => {
+      try { return JSON.parse(line); } catch { return { raw: line }; }
+    });
+  } catch { return []; }
+}
+
+function mapStories(list) {
+  const map = new Map();
+  (list || []).forEach((story) => {
+    if (story && story.id) map.set(story.id, story);
+  });
+  return map;
+}
+
+function computeRows() {
+  if (!state.prd) return [];
+  const baselineMap = mapStories(state.baseline?.stories || []);
+  const summaryMap = new Map((state.summary?.stories || []).map((s) => [s.storyId, s]));
+  const ledgerByStory = state.ledger.reduce((acc, entry) => {
+    if (!entry?.story_id) return acc;
+    if (!acc[entry.story_id]) acc[entry.story_id] = [];
+    acc[entry.story_id].push(entry);
+    return acc;
+  }, {});
+
+  const specStoryMap = mapStories((state.prd.stories || []).filter((s) => s.specification));
+  const rows = [];
+  const phaseOrder = Object.keys(state.prd.implementationOrder || {});
+  phaseOrder.forEach((phaseId) => {
+    const ids = state.prd.implementationOrder[phaseId] || [];
+    ids.forEach((id) => {
+      if (!specStoryMap.has(id)) return;
+      const story = specStoryMap.get(id);
+      const baseline = baselineMap.get(id) || null;
+      const summary = summaryMap.get(id) || null;
+      const ledgerEntries = ledgerByStory[id] || [];
+      rows.push({ phaseId, story, baseline, summary, ledgerEntries });
+    });
+  });
+  return rows;
+}
+
+function renderStats(rows) {
+  const total = rows.length;
+  const completed = rows.filter(r => (r.story.specification?.status || '').toLowerCase() === 'completed').length;
+  const pending = total - completed;
+  const cards = document.querySelectorAll('#spec-stats .stat-card');
+  if (!cards.length) return;
+  cards[0].querySelector('.stat-value').textContent = total;
+  cards[0].querySelector('.stat-meta').textContent = 'Stories with assigned spec agents';
+  cards[1].querySelector('.stat-value').textContent = completed;
+  cards[1].querySelector('.stat-meta').textContent = total ? `${Math.round((completed / total) * 100)}% covered` : '—';
+  cards[2].querySelector('.stat-value').textContent = pending < 0 ? 0 : pending;
+  cards[2].querySelector('.stat-meta').textContent = total ? `${pending} awaiting spec` : '—';
+  if (state.summary) {
+    document.getElementById('spec-run').textContent = state.summary.runId || '—';
+    const meta = [state.summary.phase ? `phase ${state.summary.phase}` : null, state.summary.completedAt || state.summary.startedAt]
+      .filter(Boolean).join(' · ');
+    document.getElementById('spec-run-meta').textContent = meta || '—';
+  }
+}
+
+function renderTable(rows) {
+  const tbody = document.querySelector('#spec-table tbody');
+  if (!tbody) return;
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:28px; color:var(--text3)">No stories have specification metadata yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((row) => {
+    const spec = row.story.specification || {};
+    const status = (spec.status || 'assigned').toLowerCase();
+    const badgeClass = status === 'completed' ? 'done' : 'assigned';
+    const agents = (spec.assignedAgents || []).join(', ') || '—';
+    const before = row.baseline?.acceptanceCriteria || [];
+    const after = row.story.acceptanceCriteria || [];
+    const changed = JSON.stringify(before) !== JSON.stringify(after);
+    const ledgerSplits = row.ledgerEntries.reduce((sum, entry) => sum + (entry.splitStories?.length || 0), 0);
+    return `<tr data-id="${row.story.id}" class="${row.story.id === state.selectedId ? 'active' : ''}">
+      <td><strong>${row.story.id}</strong><div class="badge-ghost">${row.phaseId}</div></td>
+      <td>${escapeHtml(row.story.title || '—')}</td>
+      <td><span class="status-pill ${badgeClass}">${status === 'completed' ? 'Completed' : 'Assigned'}</span></td>
+      <td>${escapeHtml(agents)}</td>
+      <td>${changed ? '<span style="color:#dc2626">Δ</span> ' : ''}${before.length} → ${after.length}</td>
+      <td>${ledgerSplits || 0}</td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('tr').forEach((rowEl) => {
+    rowEl.addEventListener('click', () => {
+      state.selectedId = rowEl.getAttribute('data-id');
+      renderTable(rows);
+      renderDiff();
+    });
+  });
+}
+
+function renderDiff() {
+  const panel = document.getElementById('diff-panel');
+  if (!panel) return;
+  const row = state.rows.find((r) => r.story.id === state.selectedId);
+  if (!row) {
+    panel.innerHTML = '<h2>Story Diff</h2><p style="font-size:13px; color:var(--text3); margin-top:12px">Select a story from the table to compare acceptance criteria against the saved baseline.</p>';
+    return;
+  }
+  const spec = row.story.specification || {};
+  const before = row.baseline?.acceptanceCriteria || [];
+  const after = row.story.acceptanceCriteria || [];
+  const beforeOnly = before.filter((item) => !after.includes(item));
+  const afterOnly = after.filter((item) => !before.includes(item));
+  const shared = after.filter((item) => before.includes(item));
+  const ledgerSplits = row.ledgerEntries.flatMap((entry) => entry.splitStories || []);
+
+  panel.innerHTML = `
+    <h2>${escapeHtml(row.story.id)} — ${escapeHtml(row.story.title || '')}</h2>
+    <div style="margin-top:8px; font-size:12px; color:var(--text2)">
+      <span class="status-pill ${spec.status === 'completed' ? 'done' : 'assigned'}">${(spec.status || 'assigned').toUpperCase()}</span>
+      <span style="margin-left:10px">Agents: ${escapeHtml((spec.appliedAgents || spec.assignedAgents || []).join(', ') || '—')}</span>
+    </div>
+    <div class="diff-grid">
+      <div class="diff-col">
+        <h3>Baseline (${before.length})</h3>
+        ${before.length ? '<ul class="diff-list">' + before.map(val => `<li><span>${escapeHtml(val)}</span></li>`).join('') + '</ul>' : '<div class="diff-empty">No acceptance criteria recorded.</div>'}
+      </div>
+      <div class="diff-col">
+        <h3>Current (${after.length})</h3>
+        ${after.length ? '<ul class="diff-list">' + after.map(val => {
+          const tag = before.includes(val) ? '' : '<span class="diff-tag add">+ </span>';
+          return `<li>${tag}<span>${escapeHtml(val)}</span></li>`;
+        }).join('') + '</ul>' : '<div class="diff-empty">No acceptance criteria recorded.</div>'}
+      </div>
+    </div>
+    <div style="margin-top:14px; font-size:12px; color:var(--text2)">
+      Removed criteria: ${beforeOnly.length || 0} · Added: ${afterOnly.length || 0} · Unchanged: ${shared.length || 0}
+    </div>
+    ${ledgerSplits.length ? `<div style="margin-top:16px"><strong>Split Stories</strong><ul class="diff-list">${ledgerSplits.map(split => `<li><span>${escapeHtml(split.title || split.id || 'New Story')}</span></li>`).join('')}</ul></div>` : ''}
+  `;
+}
+
+function renderLedger() {
+  const list = document.getElementById('ledger-list');
+  if (!list) return;
+  if (!state.ledger.length) {
+    list.innerHTML = '<li class="ledger-item">No specification ledger events yet.</li>';
+    return;
+  }
+  const recent = state.ledger.slice(-30).reverse();
+  list.innerHTML = recent.map(entry => {
+    const status = entry.acceptanceChanged ? 'Acceptance updated' : 'Metadata update';
+    const splits = entry.splitStories?.length ? ` · splits: ${entry.splitStories.length}` : '';
+    return `<li class="ledger-item">
+      <div class="ledger-story">${entry.story_id} • <span class="ledger-agent">${entry.agent}</span></div>
+      <div>${escapeHtml(entry.notes || status)}</div>
+      <div class="ledger-meta">${entry.timestamp || '—'} · phase ${entry.phase_id}${splits}</div>
+    </li>`;
+  }).join('');
+}
+
+function escapeHtml(value) {
+  if (value == null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function loadData() {
+  const [prd, baseline, summary, ledger] = await Promise.all([
+    fetchJson(ENDPOINTS.prd),
+    fetchJson(ENDPOINTS.baseline),
+    fetchJson(ENDPOINTS.summary),
+    fetchLedger(ENDPOINTS.ledger)
+  ]);
+  state.prd = prd;
+  state.baseline = baseline;
+  state.summary = summary;
+  state.ledger = ledger;
+  state.rows = computeRows();
+  if (!state.selectedId && state.rows.length) {
+    state.selectedId = state.rows[0].story.id;
+  }
+  renderStats(state.rows);
+  renderTable(state.rows);
+  renderDiff();
+  renderLedger();
+}
+
+loadData();
+setInterval(loadData, 15000);
+</script>
+<script src="runtime/build-info.js" defer></script>
+</body>
+</html>

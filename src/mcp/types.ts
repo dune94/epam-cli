@@ -1,9 +1,16 @@
-export type McpTransport = 'http' | 'sse';
+export type McpTransport = 'http' | 'sse' | 'stdio';
 
 export interface McpServerConfig {
   name: string;
-  url: string;
   transport: McpTransport;
+  /** HTTP/SSE endpoint URL (required for http/sse transport) */
+  url?: string;
+  /** Command to spawn (required for stdio transport) */
+  command?: string;
+  /** Arguments for the spawned command */
+  args?: string[];
+  /** Extra environment variables for the spawned process */
+  env?: Record<string, string>;
 }
 
 export interface McpConfig {
@@ -40,8 +47,10 @@ export interface McpToolDefinition {
 
 export interface McpServerStatus {
   name: string;
-  url: string;
   transport: McpTransport;
+  url?: string;
+  command?: string;
+  args?: string[];
   connected: boolean;
   tools: McpToolDefinition[];
   error?: string;

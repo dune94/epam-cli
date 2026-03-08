@@ -428,6 +428,11 @@
         </div>
     </div>
 
+    <div class="alert alert-teal" id="spec-spotlight" style="margin-top:1rem">
+        <strong>Specification Mode</strong><br>
+        <span style="font-size:0.85rem;color:#0f172a">Waiting for latest specification run…</span>
+    </div>
+
     <div class="alert alert-info">
         <strong>Run each phase:</strong><br>
         <span style="color:var(--green);font-size:0.8rem;font-weight:700">Bash phases (1–4, 7) — run sequentially:</span><br>
@@ -1103,5 +1108,54 @@
     </div>
 
 </div>
+<script>
+(function(){
+  const el = document.getElementById('spec-spotlight');
+  if (!el) return;
+  async function hydrate() {
+    try {
+      const res = await fetch('logs/spec-summary.json?t=' + Date.now());
+      if (!res.ok) throw new Error('spec summary missing');
+      const summary = await res.json();
+      const stories = Array.isArray(summary.stories) ? summary.stories : [];
+      const total = summary.storyCount ?? stories.length;
+      const completed = stories.filter((s) => (s.status || '').toLowerCase() === 'completed').length;
+      const assignedAgents = Object.entries(
+        stories.reduce((acc, s) => {
+          (s.assignedAgents || []).forEach((agent) => {
+            const key = agent || 'unassigned';
+            acc[key] = (acc[key] || 0) + 1;
+          });
+          return acc;
+        }, {})
+      ).map(([agent, count]) => `${agent} (${count})`).join(' · ') || '—';
+      el.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div>
+            <span style="font-size:0.85rem;color:#0f172a;letter-spacing:0.3px">Latest Specification Run</span><br>
+            <span style="font-size:1.1rem;font-weight:700;color:#0047ff">${summary.runId || '—'}</span>
+            <span style="font-size:0.85rem;color:#475569;margin-left:10px">Phase ${summary.phase || '—'}</span>
+          </div>
+          <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:0.85rem">
+            <div><span style="color:#475569">Stories:</span> <strong>${total || 0}</strong></div>
+            <div><span style="color:#475569">Completed:</span> <strong style="color:#16a34a">${completed}</strong></div>
+            <div><span style="color:#475569">Pending:</span> <strong style="color:#db2777">${Math.max(0, (total || 0) - completed)}</strong></div>
+            <div><span style="color:#475569">Agents:</span> <strong>${assignedAgents}</strong></div>
+          </div>
+          <div style="font-size:0.78rem;color:#6b7280">
+            Started ${summary.startedAt || '—'} · Completed ${summary.completedAt || '—'}
+          </div>
+        </div>`;
+    } catch (err) {
+      el.innerHTML = `
+        <strong>Specification Mode</strong><br>
+        <span style="font-size:0.8rem;color:#475569">No specification run has been recorded yet. Once spec-mode executes, this panel will show assignments and coverage.</span>`;
+    }
+  }
+  hydrate();
+  setInterval(hydrate, 15000);
+})();
+</script>
+<script src="runtime/build-info.js" defer></script>
 </body>
 </html>

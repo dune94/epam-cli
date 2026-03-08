@@ -2,12 +2,17 @@
  * /orchestrate Slash Command
  *
  * Subcommands:
- *   /orchestrate              — interactive wizard (phase picker + action menu)
- *   /orchestrate setup        — configure defaults saved to .epam/orchestration.json
- *   /orchestrate estimate     — run estimate-stories.sh + CPA pass for a phase
- *   /orchestrate execution    — launch run-agent-orchestration.sh (detached)
+ *   /orchestrate              — show current config, phases, and help
+ *   /orchestrate setup [k=v]  — configure defaults saved to .epam/orchestration.json
+ *   /orchestrate spec <p>     — run specification agents before estimates
+ *   /orchestrate estimate <p> — run estimate-stories.sh + CPA pass for a phase
+ *   /orchestrate execution <p>— launch run-agent-orchestration.sh (detached)
  *   /orchestrate status       — show progress of last launched run
  *   /orchestrate help         — show help
+ *
+ * NOTE: All subcommands are arg-driven (no interactive readline prompts).
+ * The REPL uses RawInputBox for TTY input, and rl.question() conflicts
+ * with raw mode — causing session termination on EOF.
  */
 
 import chalk from 'chalk';
@@ -60,30 +65,6 @@ function readPrd(cfg: OrchestrationConfig): { phases: string[]; stories: any[] }
   } catch { return null; }
 }
 
-// ── readline helpers ────────────────────────────────────────────────────────
-
-function ask(rl: import('readline').Interface, question: string): Promise<string> {
-  return new Promise(resolve => rl.question(question, answer => resolve(answer.trim())));
-}
-
-async function pickFromList(
-  rl: import('readline').Interface,
-  prompt: string,
-  items: string[],
-  defaultIdx = 0,
-): Promise<string | null> {
-  console.log();
-  items.forEach((item, i) => {
-    const marker = i === defaultIdx ? chalk.green('❯') : ' ';
-    console.log(`  ${marker} ${chalk.bold(String(i + 1))}. ${chalk.cyan(item)}`);
-  });
-  console.log();
-  const answer = await ask(rl, chalk.cyan(`${prompt} [1-${items.length}] (Enter = ${defaultIdx + 1}): `));
-  if (!answer) return items[defaultIdx];
-  const n = parseInt(answer, 10);
-  return n >= 1 && n <= items.length ? items[n - 1] : null;
-}
-
 // ── Script runner ────────────────────────────────────────────────────────────
 
 function runScript(script: string, args: string[], env?: Record<string, string>): Promise<number> {
@@ -97,92 +78,102 @@ function runScript(script: string, args: string[], env?: Record<string, string>)
   });
 }
 
-// ── setup wizard ────────────────────────────────────────────────────────────
+// ── setup (arg-driven) ─────────────────────────────────────────────────────
 
-async function runSetupWizard(ctx: SlashCommandContext): Promise<boolean> {
-  const rl = ctx.rl;
-  if (!rl) {
-    console.log(chalk.red('Interactive setup requires a TTY session.'));
+function runSetup(argsStr: string): boolean {
+  const existing = readConfig();
+  const providers = Object.keys(readProviders());
+
+  // No args → show current config + usage
+  if (!argsStr.trim()) {
+    console.log();
+    console.log(chalk.bold.cyan('Orchestration Setup'));
+    console.log();
+
+    const cfg = existing;
+    console.log(`  ${chalk.bold('provider')}:   ${chalk.white(cfg.provider ?? chalk.dim('(default: claude)'))}`);
+    console.log(`  ${chalk.bold('mode')}:       ${chalk.white(cfg.mode ?? chalk.dim('(default: bash)'))}`);
+    console.log(`  ${chalk.bold('prd')}:        ${chalk.white(cfg.prdFile ?? chalk.dim('(default: orchestrations/prd.json)'))}`);
+    console.log(`  ${chalk.bold('outputDir')}:  ${chalk.white(cfg.outputDir ?? chalk.dim('(default: orchestrations/logs)'))}`);
+    console.log(`  ${chalk.bold('skipCpa')}:    ${chalk.white(String(cfg.skipCpa ?? false))}`);
+    console.log(`  ${chalk.bold('strictCpa')}:  ${chalk.white(String(cfg.strictCpa ?? false))}`);
+    console.log(`  ${chalk.bold('worktree')}:   ${chalk.white(String(cfg.worktree ?? false))}`);
+    console.log();
+    console.log(chalk.dim('Usage: /orchestrate setup <key>=<value> [key=value ...]'));
+    console.log(chalk.dim('  provider=copilot   mode=bash|hybrid   prd=path/to/prd.json'));
+    console.log(chalk.dim('  outputDir=logs/    skipCpa=true       strictCpa=true   worktree=true'));
+    console.log(chalk.dim(`  Providers: ${providers.join(', ')}`));
+    console.log();
     return true;
   }
 
-  const existing = readConfig();
+  // Parse key=value pairs
+  const pairs = argsStr.trim().split(/\s+/);
+  const updates: Partial<OrchestrationConfig> = {};
 
-  console.log();
-  console.log(chalk.bold.cyan('⚙️  Orchestration Setup'));
-  console.log(chalk.dim('  Saves defaults to .epam/orchestration.json'));
-  console.log(chalk.dim('  Press Enter to keep current value.'));
-  console.log();
+  for (const pair of pairs) {
+    const eqIdx = pair.indexOf('=');
+    if (eqIdx < 1) {
+      console.log(chalk.red(`Invalid format: ${pair}. Use key=value.`));
+      return true;
+    }
+    const key = pair.slice(0, eqIdx).toLowerCase();
+    const val = pair.slice(eqIdx + 1);
 
-  // Provider
-  const providerList = Object.keys(readProviders());
-  const providerDefault = providerList.indexOf(existing.provider ?? 'claude');
-  console.log(chalk.bold('Provider:') + chalk.dim(` (current: ${existing.provider ?? 'claude'})`));
-  const provider = await pickFromList(rl, 'Select provider', providerList, providerDefault < 0 ? 0 : providerDefault);
-  if (!provider) { console.log(chalk.yellow('Setup cancelled.')); return true; }
+    switch (key) {
+      case 'provider':
+        if (!providers.includes(val)) {
+          console.log(chalk.red(`Unknown provider: ${val}. Available: ${providers.join(', ')}`));
+          return true;
+        }
+        updates.provider = val;
+        break;
+      case 'mode':
+        if (val !== 'bash' && val !== 'hybrid') {
+          console.log(chalk.red('Mode must be "bash" or "hybrid".'));
+          return true;
+        }
+        updates.mode = val;
+        break;
+      case 'prd':
+      case 'prdfile':
+        updates.prdFile = val;
+        break;
+      case 'outputdir':
+      case 'output':
+      case 'logs':
+        updates.outputDir = val;
+        break;
+      case 'skipcpa':
+        updates.skipCpa = val === 'true' || val === '1' || val === 'yes';
+        break;
+      case 'strictcpa':
+        updates.strictCpa = val === 'true' || val === '1' || val === 'yes';
+        break;
+      case 'worktree':
+        updates.worktree = val === 'true' || val === '1' || val === 'yes';
+        break;
+      default:
+        console.log(chalk.yellow(`Unknown key: ${key}. Ignored.`));
+    }
+  }
 
-  // Mode
-  const modes = ['bash', 'hybrid'];
-  const modeDefault = modes.indexOf(existing.mode ?? 'bash');
-  console.log(chalk.bold('Mode:') + chalk.dim(` (current: ${existing.mode ?? 'bash'})`));
-  const mode = await pickFromList(rl, 'Select mode', modes, modeDefault < 0 ? 0 : modeDefault) as 'bash' | 'hybrid';
-  if (!mode) { console.log(chalk.yellow('Setup cancelled.')); return true; }
-
-  // PRD path
-  const prdAnswer = await ask(
-    rl,
-    chalk.cyan(`PRD file path [${existing.prdFile ?? 'orchestrations/prd.json'}]: `),
-  );
-  const prdFile = prdAnswer || existing.prdFile || 'orchestrations/prd.json';
-
-  // Output dir
-  const outputAnswer = await ask(
-    rl,
-    chalk.cyan(`Output dir [${existing.outputDir ?? 'orchestrations/logs'}]: `),
-  );
-  const outputDir = outputAnswer || existing.outputDir || 'orchestrations/logs';
-
-  // Flags
-  const skipCpaAnswer = await ask(
-    rl,
-    chalk.cyan(`Skip CPA gate? [${existing.skipCpa ? 'Y/n' : 'y/N'}]: `),
-  );
-  const skipCpa = skipCpaAnswer ? /^y/i.test(skipCpaAnswer) : (existing.skipCpa ?? false);
-
-  const strictCpaAnswer = await ask(
-    rl,
-    chalk.cyan(`Strict CPA (halt on review)? [${existing.strictCpa ? 'Y/n' : 'y/N'}]: `),
-  );
-  const strictCpa = strictCpaAnswer ? /^y/i.test(strictCpaAnswer) : (existing.strictCpa ?? false);
-
-  const worktreeAnswer = await ask(
-    rl,
-    chalk.cyan(`Enable git worktrees for parallel execution? [${existing.worktree ? 'Y/n' : 'y/N'}]: `),
-  );
-  const worktree = worktreeAnswer ? /^y/i.test(worktreeAnswer) : (existing.worktree ?? false);
-
-  const cfg: OrchestrationConfig = { provider, mode, prdFile, outputDir, skipCpa, strictCpa, worktree };
+  const cfg: OrchestrationConfig = { ...existing, ...updates };
   writeConfig(cfg);
 
   console.log();
-  console.log(chalk.green('✓ Saved to .epam/orchestration.json'));
-  console.log();
-  console.log(chalk.dim(`  provider:   ${provider}`));
-  console.log(chalk.dim(`  mode:       ${mode}`));
-  console.log(chalk.dim(`  prd:        ${prdFile}`));
-  console.log(chalk.dim(`  output-dir: ${outputDir}`));
-  console.log(chalk.dim(`  skip-cpa:   ${skipCpa}`));
-  console.log(chalk.dim(`  strict-cpa: ${strictCpa}`));
-  console.log(chalk.dim(`  worktree:   ${worktree}`));
+  console.log(chalk.green('Saved to .epam/orchestration.json'));
+  for (const [k, v] of Object.entries(updates)) {
+    console.log(chalk.dim(`  ${k}: ${v}`));
+  }
   console.log();
   return true;
 }
 
 // ── estimate ────────────────────────────────────────────────────────────────
 
-async function runEstimate(phase: string, ctx: SlashCommandContext): Promise<boolean> {
+async function runEstimate(phase: string, flags: string[]): Promise<boolean> {
   const cfg = readConfig();
-  const rl = ctx.rl;
 
   const estimateScript = join(process.cwd(), 'orchestrations', 'scripts', 'estimate-stories.sh');
   const cpaScript      = join(process.cwd(), 'orchestrations', 'scripts', 'contextualize-stories.sh');
@@ -193,25 +184,14 @@ async function runEstimate(phase: string, ctx: SlashCommandContext): Promise<boo
     return true;
   }
 
-  // Ask --refine and --apply via wizard if TTY
-  let doRefine = false;
-  let doApply  = false;
-  let skipCpa  = cfg.skipCpa ?? false;
-
-  if (rl) {
-    console.log();
-    const refineAnswer = await ask(rl, chalk.cyan('Calibrate from historical actuals (--refine)? [y/N]: '));
-    doRefine = /^y/i.test(refineAnswer);
-
-    const applyAnswer = await ask(rl, chalk.cyan('Write estimates back to prd.json (--apply)? [y/N]: '));
-    doApply = /^y/i.test(applyAnswer);
-
-    const skipCpaAnswer = await ask(rl, chalk.cyan(`Skip CPA pass? [${skipCpa ? 'Y/n' : 'y/N'}]: `));
-    skipCpa = skipCpaAnswer ? /^y/i.test(skipCpaAnswer) : skipCpa;
-  }
+  const doRefine = flags.includes('--refine');
+  const doApply  = flags.includes('--apply');
+  const skipCpa  = flags.includes('--skip-cpa') || (cfg.skipCpa ?? false);
 
   console.log();
-  console.log(chalk.bold.cyan(`📊 Estimating phase: ${phase}`));
+  console.log(chalk.bold.cyan(`Estimating phase: ${phase}`));
+  if (doRefine) console.log(chalk.dim('  --refine enabled'));
+  if (doApply)  console.log(chalk.dim('  --apply enabled'));
   console.log();
 
   const estArgs = ['--phase', phase];
@@ -230,25 +210,72 @@ async function runEstimate(phase: string, ctx: SlashCommandContext): Promise<boo
 
   if (!skipCpa && existsSync(cpaScript)) {
     console.log();
-    console.log(chalk.bold.cyan('🔍 Running CPA contextualisation pass...'));
+    console.log(chalk.bold.cyan('Running CPA contextualisation pass...'));
     console.log();
     const cpaArgs = ['--phase', phase];
     if (doApply) cpaArgs.push('--apply');
     if (cfg.strictCpa) cpaArgs.push('--strict');
     const cpaCode = await runScript(cpaScript, cpaArgs, env);
     if (cpaCode === 3) {
-      console.log(chalk.red('\n⛔ CPA gate: BLOCKED — resolve flagged issues before executing.'));
+      console.log(chalk.red('\nCPA gate: BLOCKED — resolve flagged issues before executing.'));
     } else if (cpaCode === 2) {
-      console.log(chalk.yellow('\n⚠️  CPA gate: REVIEW — some stories have elevated risk.'));
+      console.log(chalk.yellow('\nCPA gate: REVIEW — some stories have elevated risk.'));
     }
   }
 
   return true;
 }
 
+// ── specification ───────────────────────────────────────────────────────────
+
+async function runSpecification(phase: string, flags: string[]): Promise<boolean> {
+  const cfg = readConfig();
+  const scriptPath = join(process.cwd(), 'orchestrations', 'scripts', 'spec-mode-runner.js');
+
+  if (!existsSync(scriptPath)) {
+    console.log(chalk.red('Error: orchestrations/scripts/spec-mode-runner.js not found.'));
+    console.log(chalk.dim('Run from the epam-cli project root.'));
+    return true;
+  }
+
+  const args = ['--phase', phase];
+  if (flags.includes('--dry-run')) args.push('--dry-run');
+
+  const env: Record<string, string> = {};
+  if (cfg.prdFile) env.PRD_FILE = resolve(process.cwd(), cfg.prdFile);
+  if (cfg.outputDir) env.OUTPUT_DIR = resolve(process.cwd(), cfg.outputDir);
+  if (cfg.provider) env.EPAM_ORCHESTRATION_PROVIDER = cfg.provider;
+
+  console.log();
+  console.log(chalk.bold.cyan(`Running specification pass for phase: ${phase}`));
+  console.log(chalk.dim('  Agents: coordinator + (OpenSpec/Speckit)'));
+  if (args.includes('--dry-run')) console.log(chalk.dim('  Dry-run only (no PRD changes)'));
+  console.log();
+
+  return new Promise((resolve) => {
+    const child = spawn('node', [scriptPath, ...args], {
+      stdio: 'inherit',
+      env: { ...process.env, ...env },
+    });
+    child.on('error', (err) => {
+      console.log(chalk.red('Failed to launch specification runner'));
+      console.log(chalk.dim((err as Error).message));
+      resolve(true);
+    });
+    child.on('close', (code) => {
+      if (code !== 0) {
+        console.log(chalk.red(`Specification pass exited with code ${code}`));
+      } else {
+        console.log(chalk.green('Specification pass complete'));
+      }
+      resolve(true);
+    });
+  });
+}
+
 // ── execution ────────────────────────────────────────────────────────────────
 
-async function launchExecution(phase: string, ctx: SlashCommandContext): Promise<boolean> {
+async function launchExecution(phase: string): Promise<boolean> {
   const cfg = readConfig();
   const scriptPath = join(process.cwd(), 'orchestrations', 'scripts', 'run-agent-orchestration.sh');
 
@@ -271,7 +298,7 @@ async function launchExecution(phase: string, ctx: SlashCommandContext): Promise
   if (cfg.strictCpa) env.STRICT_CPA = '1';
 
   console.log();
-  console.log(chalk.bold.green(`🚀 Launching orchestration`));
+  console.log(chalk.bold.green('Launching orchestration'));
   console.log();
   console.log(chalk.dim(`  Phase:    ${phase}`));
   console.log(chalk.dim(`  Provider: ${cfg.provider ?? 'claude (default)'}`));
@@ -294,7 +321,7 @@ async function launchExecution(phase: string, ctx: SlashCommandContext): Promise
       writeFileSync(join(process.cwd(), STATE_FILE), JSON.stringify(state, null, 2));
     } catch { /* ignore */ }
 
-    console.log(chalk.green(`✓ Started (PID ${pid})`));
+    console.log(chalk.green(`Started (PID ${pid})`));
     console.log(chalk.dim('  Use /orchestrate status to check progress'));
     const logsDir = cfg.outputDir
       ? resolve(process.cwd(), cfg.outputDir)
@@ -311,11 +338,11 @@ async function launchExecution(phase: string, ctx: SlashCommandContext): Promise
 
 // ── status ───────────────────────────────────────────────────────────────────
 
-async function showStatus(_ctx: SlashCommandContext): Promise<boolean> {
+async function showStatus(): Promise<boolean> {
   const stateFile = join(process.cwd(), STATE_FILE);
 
   console.log();
-  console.log(chalk.bold.cyan('📊 Orchestration Status'));
+  console.log(chalk.bold.cyan('Orchestration Status'));
   console.log();
 
   if (!existsSync(stateFile)) {
@@ -341,12 +368,12 @@ async function showStatus(_ctx: SlashCommandContext): Promise<boolean> {
   }
 
   if (!isRunning) {
-    console.log(`  Status:   ${chalk.green('✓ Completed')}`);
+    console.log(`  Status:   ${chalk.green('Completed')}`);
     console.log();
     return true;
   }
 
-  console.log(`  Status:   ${chalk.yellow('⟳ Running')} (PID ${state.pid})`);
+  console.log(`  Status:   ${chalk.yellow('Running')} (PID ${state.pid})`);
 
   // Progress from PRD
   const cfg: OrchestrationConfig = state.config ?? {};
@@ -371,64 +398,54 @@ async function showStatus(_ctx: SlashCommandContext): Promise<boolean> {
   return true;
 }
 
-// ── interactive wizard (no-args) ─────────────────────────────────────────────
+// ── overview (no-args) ──────────────────────────────────────────────────────
 
-async function runWizard(ctx: SlashCommandContext): Promise<boolean> {
-  const rl = ctx.rl;
-  if (!rl) {
-    showHelp();
-    return true;
-  }
-
-  const cfg  = readConfig();
-  const prd  = readPrd(cfg);
+function showOverview(): boolean {
+  const cfg = readConfig();
+  const prd = readPrd(cfg);
   const hasConfig = existsSync(join(process.cwd(), CONFIG_FILE));
 
   console.log();
-  console.log(chalk.bold.cyan('🤖 Orchestration'));
+  console.log(chalk.bold.cyan('Orchestration'));
+
   if (!hasConfig) {
-    console.log(chalk.yellow('  ⚠  No config found — run /orchestrate setup first'));
+    console.log(chalk.yellow('  No config found — run /orchestrate setup to configure'));
+  } else {
+    console.log(chalk.dim(`  Provider: ${cfg.provider ?? 'claude'}  |  Mode: ${cfg.mode ?? 'bash'}`));
   }
   console.log();
 
-  // Action menu
-  const actions = ['estimate', 'execution', 'status', 'setup'];
-  const action = await pickFromList(rl, 'What do you want to do', actions, 0);
-  if (!action) return true;
-
-  if (action === 'status') return showStatus(ctx);
-  if (action === 'setup')  return runSetupWizard(ctx);
-
-  // Phase picker
-  if (!prd || prd.phases.length === 0) {
-    console.log(chalk.red('\nNo phases found in prd.json.'));
-    console.log(chalk.dim('Check your PRD file path in /orchestrate setup.'));
-    return true;
+  // Show available phases
+  if (prd && prd.phases.length > 0) {
+    console.log(chalk.bold('Phases:'));
+    prd.phases.forEach((p, i) => {
+      console.log(`  ${chalk.bold(String(i + 1))}. ${chalk.cyan(p)}`);
+    });
+    console.log();
+  } else {
+    console.log(chalk.dim('No phases found in prd.json.'));
+    console.log();
   }
 
-  const phase = await pickFromList(rl, 'Select phase', prd.phases, 0);
-  if (!phase) return true;
-
-  if (action === 'estimate')  return runEstimate(phase, ctx);
-  if (action === 'execution') return launchExecution(phase, ctx);
-
+  showHelp();
   return true;
 }
 
 // ── help ─────────────────────────────────────────────────────────────────────
 
 function showHelp(): void {
-  console.log();
   console.log(chalk.bold('Orchestration Commands:'));
   console.log();
-  console.log(`  ${chalk.cyan('/orchestrate')}               ${chalk.dim('Interactive wizard (phase picker + action menu)')}`);
-  console.log(`  ${chalk.cyan('/orchestrate setup')}         ${chalk.dim('Configure provider, mode, paths, flags')}`);
-  console.log(`  ${chalk.cyan('/orchestrate estimate')} ${chalk.dim('<phase>')}  ${chalk.dim('Run estimation + CPA pass')}`);
-  console.log(`  ${chalk.cyan('/orchestrate execution')} ${chalk.dim('<phase>')} ${chalk.dim('Launch orchestration (detached)')}`);
-  console.log(`  ${chalk.cyan('/orchestrate status')}        ${chalk.dim('Show progress of last run')}`);
+  console.log(`  ${chalk.cyan('/orchestrate')}                          ${chalk.dim('Show config + phases')}`);
+  console.log(`  ${chalk.cyan('/orchestrate setup')}                    ${chalk.dim('Show current config')}`);
+  console.log(`  ${chalk.cyan('/orchestrate setup')} ${chalk.dim('provider=x mode=y')}  ${chalk.dim('Set config values')}`);
+  console.log(`  ${chalk.cyan('/orchestrate spec')} ${chalk.dim('<phase>')}             ${chalk.dim('Run specification agents')}`);
+  console.log(`  ${chalk.cyan('/orchestrate estimate')} ${chalk.dim('<phase>')}          ${chalk.dim('Run estimation + CPA')}`);
+  console.log(`  ${chalk.cyan('/orchestrate execution')} ${chalk.dim('<phase>')}         ${chalk.dim('Launch orchestration')}`);
+  console.log(`  ${chalk.cyan('/orchestrate status')}                   ${chalk.dim('Show run progress')}`);
   console.log();
-  console.log(chalk.dim('Config persisted in .epam/orchestration.json'));
-  console.log(chalk.dim('Override with /orchestrate setup'));
+  console.log(chalk.dim('Estimate flags: --refine --apply --skip-cpa'));
+  console.log(chalk.dim('Config: .epam/orchestration.json'));
   console.log();
 }
 
@@ -438,51 +455,73 @@ export const orchestrateCommand: SlashCommand = {
   name: 'orchestrate',
   aliases: ['orch'],
   description: 'Launch and monitor multi-agent orchestration',
-  usage: '[setup | estimate <phase> | execution <phase> | status | help]',
+  usage: '[setup [k=v] | spec <phase> | estimate <phase> | execution <phase> | status | help]',
 
-  async execute(args, ctx): Promise<boolean> {
+  async execute(args, _ctx): Promise<boolean> {
     const parts = args.trim().split(/\s+/).filter(Boolean);
     const sub   = parts[0]?.toLowerCase();
-    const phase = parts[1];
 
-    if (!sub)                                    return runWizard(ctx);
-    if (sub === 'setup')                         return runSetupWizard(ctx);
-    if (sub === 'status')                        return showStatus(ctx);
-    if (sub === 'help')                          { showHelp(); return true; }
+    if (!sub)            return showOverview();
+    if (sub === 'help')  { showHelp(); return true; }
+    if (sub === 'status') return showStatus();
 
-    if (sub === 'estimate') {
+    if (sub === 'setup') {
+      // Everything after "setup" is key=value pairs
+      const setupArgs = parts.slice(1).join(' ');
+      return runSetup(setupArgs);
+    }
+
+    if (sub === 'spec' || sub === 'specification') {
+      const phase = parts[1];
       if (!phase) {
-        // Phase picker via wizard
         const cfg = readConfig();
         const prd = readPrd(cfg);
-        if (!prd || prd.phases.length === 0) {
-          console.log(chalk.red('Phase required: /orchestrate estimate <phase>'));
-          return true;
+        if (prd && prd.phases.length > 0) {
+          console.log(chalk.red('Phase required. Available phases:'));
+          prd.phases.forEach((p, i) => console.log(`  ${i + 1}. ${chalk.cyan(p)}`));
+          console.log(chalk.dim('\nUsage: /orchestrate spec <phase> [--dry-run]'));
+        } else {
+          console.log(chalk.red('Phase required: /orchestrate spec <phase>'));
         }
-        const rl = ctx.rl;
-        if (!rl) { console.log(chalk.red('Phase required: /orchestrate estimate <phase>')); return true; }
-        const picked = await pickFromList(rl, 'Select phase', prd.phases, 0);
-        if (!picked) return true;
-        return runEstimate(picked, ctx);
+        return true;
       }
-      return runEstimate(phase, ctx);
+      const flags = parts.slice(2);
+      return runSpecification(phase, flags);
+    }
+
+    if (sub === 'estimate') {
+      const phase = parts[1];
+      if (!phase) {
+        const cfg = readConfig();
+        const prd = readPrd(cfg);
+        if (prd && prd.phases.length > 0) {
+          console.log(chalk.red('Phase required. Available phases:'));
+          prd.phases.forEach((p, i) => console.log(`  ${i + 1}. ${chalk.cyan(p)}`));
+          console.log(chalk.dim('\nUsage: /orchestrate estimate <phase>'));
+        } else {
+          console.log(chalk.red('Phase required: /orchestrate estimate <phase>'));
+        }
+        return true;
+      }
+      const flags = parts.slice(2); // e.g. --refine --apply --skip-cpa
+      return runEstimate(phase, flags);
     }
 
     if (sub === 'execution' || sub === 'exec') {
+      const phase = parts[1];
       if (!phase) {
         const cfg = readConfig();
         const prd = readPrd(cfg);
-        if (!prd || prd.phases.length === 0) {
+        if (prd && prd.phases.length > 0) {
+          console.log(chalk.red('Phase required. Available phases:'));
+          prd.phases.forEach((p, i) => console.log(`  ${i + 1}. ${chalk.cyan(p)}`));
+          console.log(chalk.dim('\nUsage: /orchestrate execution <phase>'));
+        } else {
           console.log(chalk.red('Phase required: /orchestrate execution <phase>'));
-          return true;
         }
-        const rl = ctx.rl;
-        if (!rl) { console.log(chalk.red('Phase required: /orchestrate execution <phase>')); return true; }
-        const picked = await pickFromList(rl, 'Select phase', prd.phases, 0);
-        if (!picked) return true;
-        return launchExecution(picked, ctx);
+        return true;
       }
-      return launchExecution(phase, ctx);
+      return launchExecution(phase);
     }
 
     console.log(chalk.red(`Unknown command: ${sub}`));

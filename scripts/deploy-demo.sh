@@ -31,20 +31,31 @@ $NODE ./node_modules/.bin/tsup 2>&1 | tail -2
 [ ! -f "$PROJECT_ROOT/dist/epam.js" ] && error "Build failed" && exit 1
 success "Build complete"
 
-# Step 2: Copy only the compiled binary to demo
+# Step 2: Build dashboards (Eleventy)
+log "Building orchestration dashboards..."
+$NODE ./node_modules/.bin/eleventy --config orchestrations/dashboards/.eleventy.js >/dev/null
+success "Dashboards built → orchestrations/dashboards/live"
+
+# Step 3: Copy only the compiled binary to demo
 log "Copying binary to demo..."
 mkdir -p "$DEMO_DIR/dist"
 cp "$PROJECT_ROOT/dist/epam.js" "$DEMO_DIR/dist/epam.js"
 cp "$PROJECT_ROOT/dist/epam.js.map" "$DEMO_DIR/dist/epam.js.map" 2>/dev/null || true
 success "Binary deployed"
 
-# Step 3: Copy orchestrations/dashboards/*.md to demo
+# Step 4: Sync dashboard outputs
+log "Syncing orchestrations/dashboards outputs..."
+mkdir -p "$DEMO_DIR/orchestrations/dashboards/live"
+rsync -a --delete "$PROJECT_ROOT/orchestrations/dashboards/live/" "$DEMO_DIR/orchestrations/dashboards/live/" >/dev/null
+success "Dashboard HTML/data synced"
+
+# Step 5: Copy orchestrations/dashboards/*.md to demo
 log "Syncing orchestrations/dashboards markdown files..."
 mkdir -p "$DEMO_DIR/orchestrations/dashboards"
 cp "$PROJECT_ROOT"/orchestrations/dashboards/*.md "$DEMO_DIR/orchestrations/dashboards/" 2>/dev/null && \
   success "Dashboard .md files synced" || echo "  (no .md files found in orchestrations/dashboards)"
 
-# Step 4: Verify
+# Step 6: Verify
 if node "$DEMO_DIR/dist/epam.js" --version >/dev/null 2>&1; then
     success "Binary verified: $(node "$DEMO_DIR/dist/epam.js" --version 2>/dev/null)"
 else

@@ -197,6 +197,46 @@ body {
 .bp-claude   { background:rgba(132,83,210,0.15); color:#6a3cb5; border:1px solid rgba(132,83,210,0.35); }
 .bp-opencode { background:rgba(26,143,63,0.10); color:#1a8f3f; border:1px solid rgba(26,143,63,0.25); }
 .bp-codex    { background:rgba(196,24,110,0.08); color:#c4186e; border:1px solid rgba(196,24,110,0.25); }
+.spec-chip {
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  font-size:10px;
+  font-weight:800;
+  padding:2px 8px;
+  border-radius:999px;
+  letter-spacing:0.4px;
+  text-transform:uppercase;
+}
+.spec-chip.done {
+  background:rgba(16,185,129,0.12);
+  color:#0f9d58;
+  border:1px solid rgba(15,157,88,0.35);
+}
+.spec-chip.assigned {
+  background:rgba(219,39,119,0.12);
+  color:#be185d;
+  border:1px solid rgba(190,24,93,0.35);
+}
+.spec-note {
+  margin-top:6px;
+  font-size:11px;
+  color:var(--text3);
+  border:1px dashed var(--border);
+  border-radius:6px;
+  padding:6px 10px;
+  background:var(--bg2);
+}
+.badge.spec-done {
+  background:rgba(16,185,129,0.12);
+  color:#0f9d58;
+  border:1px solid rgba(15,157,88,0.35);
+}
+.badge.spec-assigned {
+  background:rgba(219,39,119,0.12);
+  color:#be185d;
+  border:1px solid rgba(190,24,93,0.35);
+}
 
 .expand-icon { color: var(--text3); font-size: 10px; transition: transform 0.2s; flex-shrink: 0; }
 .expand-icon.open { transform: rotate(90deg); color: var(--teal); }
@@ -299,6 +339,7 @@ body {
       <a href="monitor.html">Monitor</a>
       <a href="prd-viewer.html" class="active">PRD Viewer</a>
       <a href="orchestration-plan.html">Plan</a>
+      <a href="specification.html">Specification</a>
       <a href="agents-orchestration.html">Orchestration</a>
       <a href="agent-profiles.html">Profiles</a>
       <a href="agent-messages.html">Messages</a>
@@ -332,6 +373,7 @@ body {
   <div class="loading-blk"><span class="spinner"></span>Loading PRD data…</div>
 </div>
 
+<script src="runtime/build-info.js" defer></script>
 <script>
 // Data loaded from static prd.json served by nginx
 const PRD_URL = 'prd.json';
@@ -444,6 +486,10 @@ function renderStats() {
   const totalCost  = all.reduce((s,x) => s + (x.estimatedCost||0), 0);
   const actualCost = all.reduce((s,x) => s + (x.actualCost||0), 0);
   const totalHours = prd.totalEstimatedHours || 0;
+  const specStories = all.filter((story) => story?.specification);
+  const specDone = specStories.filter((story) => (story.specification?.status || '').toLowerCase() === 'completed').length;
+  const specPending = specStories.length - specDone;
+  const specPct = specStories.length ? ((specDone / specStories.length) * 100).toFixed(0) : 0;
   document.getElementById('stats-bar').innerHTML = `
     <div class="stat-chip">
       <div class="stat-dot" style="background:var(--teal)"></div>
@@ -474,6 +520,16 @@ function renderStats() {
       <div class="stat-dot" style="background:#d97706"></div>
       <span class="stat-lbl">Est. Cost</span>
       <span class="stat-num" style="color:#fbbf24">$${totalCost.toFixed(0)}</span>
+    </div>
+    <div class="stat-chip">
+      <div class="stat-dot" style="background:#be185d"></div>
+      <span class="stat-lbl">Spec Coverage</span>
+      <span class="stat-num" style="color:#be185d">${specDone}/${specStories.length} (${specPct || 0}%)</span>
+    </div>
+    <div class="stat-chip">
+      <div class="stat-dot" style="background:#be185d"></div>
+      <span class="stat-lbl">Spec Pending</span>
+      <span class="stat-num" style="color:#be185d">${specPending < 0 ? 0 : specPending}</span>
     </div>
     ${actualCost > 0 ? `
     <div class="stat-chip">
@@ -557,6 +613,14 @@ function providerBadge(s) {
   return `<span class="badge ${cls}">${lbl}</span>`;
 }
 
+function specBadge(s) {
+  if (!s.specification) return '';
+  const status = (s.specification.status || 'assigned').toLowerCase();
+  const cls = status === 'completed' ? 'spec-done' : 'spec-assigned';
+  const agents = (s.specification.assignedAgents || []).join(', ') || 'unassigned';
+  return `<span class="badge ${cls}" title="Spec agents: ${esc(agents)}">SPEC ${status === 'completed' ? 'READY' : status.toUpperCase()}</span>`;
+}
+
 function renderStoryCard(s, color) {
   const done     = isDone(s);
   const statKey  = done ? 'completed' : (s.status||'pending');
@@ -573,6 +637,7 @@ function renderStoryCard(s, color) {
       <span class="badge be-${(s.effort||'medium').toLowerCase()}">${(s.effort||'medium').toUpperCase()}</span>
       <span class="badge bl-${mi.cls}">${mi.turns === '—' ? mi.label : mi.label + '·' + (mi.turns === 'unlimited' ? '∞' : mi.turns) + 'T'}</span>
       ${providerBadge(s)}
+      ${specBadge(s)}
     </div>
     <span class="expand-icon ${expanded?'open':''}">▶</span>
   </div>
@@ -598,6 +663,18 @@ function renderStoryDetail(s, color) {
 
   const doneRow = s.completedAt
     ? `<tr><td class="mk">Completed</td><td class="mv" style="color:var(--text3)">${esc(s.completedAt.slice?s.completedAt.slice(0,10):s.completedAt)}</td></tr>` : '';
+  const spec = s.specification || null;
+  const specHtml = spec ? `
+    <div class="dl-t" style="margin-top:11px">Specification</div>
+    <table class="meta-tbl">
+      <tr><td class="mk">Status</td><td class="mv">${formatSpecStatus(spec.status)}</td></tr>
+      <tr><td class="mk">Assigned</td><td class="mv">${esc((spec.assignedAgents||[]).join(', ') || '—')}</td></tr>
+      <tr><td class="mk">Applied</td><td class="mv">${esc((spec.appliedAgents||[]).join(', ') || '—')}</td></tr>
+      <tr><td class="mk">Run ID</td><td class="mv">${esc(spec.runId || '—')}</td></tr>
+      <tr><td class="mk">Updated</td><td class="mv">${esc(spec.updatedAt || '—')}</td></tr>
+    </table>
+    ${spec.coordinatorNotes ? `<div class="spec-note">${esc(spec.coordinatorNotes)}</div>` : ''}
+  ` : '';
 
   // Actuals panel (only if any actual data)
   const hasActuals = (s.actualCost||0) > 0 || (s.actualTokens||0) > 0 || (s.actualHours||0) > 0;
@@ -634,6 +711,7 @@ function renderStoryDetail(s, color) {
       </table>
       <div class="dl-t" style="margin-top:11px">Dependencies</div>
       <div>${depsHtml}</div>
+      ${specHtml}
     </div>
   </div>
   ${actualsHtml}
@@ -671,6 +749,13 @@ function renderTechNotes(tn) {
     return `<tr><td class="tnk">${esc(label)}</td><td class="tnv">${val}</td></tr>`;
   });
   return `<table class="tn-tbl">${rows.join('')}</table>`;
+}
+
+function formatSpecStatus(status) {
+  const st = (status || 'assigned').toLowerCase();
+  const cls = st === 'completed' ? 'spec-chip done' : 'spec-chip assigned';
+  const label = st === 'completed' ? 'Completed' : st.replace(/_/g, ' ');
+  return `<span class="${cls}">${label}</span>`;
 }
 
 // ── Interactions ──────────────────────────────────────────────────────────────

@@ -94,6 +94,15 @@ export class ProviderChain implements LLMProvider {
     this.activeSlotIndex = 0;
   }
 
+  /** Replace slots, rebuild health tracking, and clear cached providers. */
+  updateSlots(newSlots: ProviderSlot[]): void {
+    if (newSlots.length === 0) throw new ProviderError('ProviderChain requires at least one slot');
+    this.options.slots = newSlots;
+    this.health = new ProviderHealth(newSlots);
+    this.providerCache.clear();
+    this.activeSlotIndex = 0;
+  }
+
   async complete(request: ProviderRequest): Promise<ProviderResponse> {
     return this.callWithFailover(async (slot) => {
       const provider = await this.getOrBuildProvider(slot);

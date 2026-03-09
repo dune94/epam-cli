@@ -1,0 +1,8 @@
+{
+  "result": "hello",
+  "total_cost_usd": 0,
+  "usage": {
+    "input_tokens": 8870,
+    "output_tokens": 45
+  }
+}

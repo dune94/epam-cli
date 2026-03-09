@@ -1,0 +1,198 @@
+{
+  "generatedAt": "2026-03-09T18:05:58.268Z",
+  "sources": {
+    "prd": {
+      "path": "orchestrations/prd.json",
+      "hash": "3f94c5a7ab6f",
+      "storyCount": 70
+    },
+    "profiles": {
+      "path": "orchestrations/agents/profiles.json",
+      "hash": "0ccf1245a63e",
+      "profileCount": 7
+    },
+    "agentStatus": {
+      "path": "orchestrations/logs/agent-status.json",
+      "hash": "e6a4719af20b",
+      "lastUpdated": null,
+      "currentPhase": null
+    },
+    "phaseCost": {
+      "path": "orchestrations/logs/phase-cost.jsonl",
+      "hash": "2ccdc99b3a2d",
+      "sample": [
+        {
+          "phase_id": "enterprise",
+          "phase_name": "enterprise",
+          "phase_run_id": "run-20260301T093355-26103",
+          "story_id": "EPAM-016",
+          "story_title": "Signature Auditor Agents",
+          "agent_id": "agent-systems-engineer",
+          "agent_name": "agent-systems-engineer",
+          "forecast_hours": 0.4775,
+          "forecast_cost_usd": 5.86,
+          "started_at": "2026-03-01T09:34:49-05:00",
+          "ended_at": "2026-03-01T09:39:01-05:00",
+          "elapsed_minutes": 4.2,
+          "resolved_provider": "codex",
+          "resolved_model": "gpt-4o",
+          "task_cost_usd": 0,
+          "task_tokens_in": 831115,
+          "task_tokens_out": 12064,
+          "task_turns": 0,
+          "cache_read_tokens": 0,
+          "cache_create_tokens": 0,
+          "cost_source": "unavailable",
+          "status": "completed",
+          "notes": "cost_source=unavailable"
+        },
+        {
+          "phase_id": "enterprise",
+          "phase_name": "enterprise",
+          "phase_run_id": "run-20260301T102306-30845",
+          "story_id": "EPAM-017",
+          "story_title": "Expertise Marketplace",
+          "agent_id": "backend-engineer",
+          "agent_name": "backend-engineer",
+          "forecast_hours": 0.0766,
+          "forecast_cost_usd": 0.33,
+          "started_at": "2026-03-01T10:28:40-05:00",
+          "ended_at": "2026-03-01T10:32:41-05:00",
+          "elapsed_minutes": 4.01,
+          "resolved_provider": "codex",
+          "resolved_model": "gpt-4o",
+          "task_cost_usd": 0,
+          "task_tokens_in": 827897,
+          "task_tokens_out": 12452,
+          "task_turns": 0,
+          "cache_read_tokens": 0,
+          "cache_create_tokens": 0,
+          "cost_source": "unavailable",
+          "status": "completed",
+          "notes": "cost_source=unavailable"
+        },
+        {
+          "phase_id": "enterprise",
+          "phase_name": "enterprise",
+          "phase_run_id": "run-20260301T102306-30845",
+          "story_id": "EPAM-018",
+          "story_title": "Review — Enterprise Phase",
+          "agent_id": "review-agent",
+          "agent_name": "review-agent",
+          "forecast_hours": 0.0633,
+          "forecast_cost_usd": 0.14,
+          "started_at": "2026-03-01T10:35:19-05:00",
+          "ended_at": "2026-03-01T10:47:46-05:00",
+          "elapsed_minutes": 12.45,
+          "resolved_provider": "codex",
+          "resolved_model": "gpt-4o",
+          "task_cost_usd": 0,
+          "task_tokens_in": 3893871,
+          "task_tokens_out": 29649,
+          "task_turns": 0,
+          "cache_read_tokens": 0,
+          "cache_create_tokens": 0,
+          "cost_source": "unavailable",
+          "status": "completed",
+          "notes": "cost_source=unavailable"
+        },
+        {
+          "phase_id": "provider_auth",
+          "phase_name": "provider_auth",
+          "phase_run_id": "run-20260301T105551-9867",
+          "story_id": "EPAM-043",
+          "story_title": "Provider Authentication Competitive Baseline",
+          "agent_id": "product-architect",
+          "agent_name": "product-architect",
+          "forecast_hours": 0.0865,
+          "forecast_cost_usd": 0.596,
+          "started_at": "2026-03-01T11:06:35-05:00",
+          "ended_at": "2026-03-01T11:08:27-05:00",
+          "elapsed_minutes": 1.86,
+          "resolved_provider": "cursor",
+          "resolved_model": "gemini-3.1-pro",
+          "task_cost_usd": 0,
+          "task_tokens_in": 257119,
+          "task_tokens_out": 2090,
+          "task_turns": 0,
+          "cache_read_tokens": 106137,
+          "cache_create_tokens": 0,
+          "cost_source": "unavailable",
+          "status": "completed",
+          "notes": "cost_source=unavailable"
+        },
+        {
+          "phase_id": "unknown",
+          "phase_name": "unknown",
+          "phase_run_id": "run-20260301T105551-9867",
+          "story_id": "EPAM-044",
+          "story_title": "",
+          "agent_id": "",
+          "agent_name": "",
+          "forecast_hours": 0,
+          "forecast_cost_usd": 0,
+          "started_at": "2026-03-01T11:08:28-05:00",
+          "ended_at": "2026-03-01T12:10:38-05:00",
+          "elapsed_minutes": 62.16,
+          "resolved_provider": "cursor",
+          "resolved_model": "gemini-3.1-pro",
+          "task_cost_usd": 0,
+          "task_tokens_in": 34829883,
+          "task_tokens_out": 7416,
+          "task_turns": 0,
+          "cache_read_tokens": 16297918,
+          "cache_create_tokens": 0,
+          "cost_source": "unavailable",
+          "status": "completed",
+          "notes": "cost_source=unavailable"
+        }
+      ]
+    },
+    "specification": {
+      "baselineHash": null,
+      "ledgerHash": null,
+      "latestRun": null,
+      "phase": null,
+      "summaryHash": null
+    }
+  },
+  "metrics": {
+    "storyCount": 70,
+    "status": {
+      "failed": 1,
+      "completed": 38,
+      "backlog": 11,
+      "pending": 18,
+      "done": 2
+    },
+    "providers": {
+      "claude": 5,
+      "opencode": 8,
+      "codex": 13,
+      "epam": 36,
+      "unassigned": 7,
+      "codemie-claude": 1
+    },
+    "lanes": {
+      "main": 70
+    },
+    "activeLanes": [
+      "main"
+    ],
+    "recentEvents": [
+      {
+        "type": "story_complete",
+        "story": "EPAM-044",
+        "lane": "main",
+        "role": "",
+        "message": "Completed ",
+        "timestamp": "2026-03-01T12:10:38-05:00"
+      }
+    ],
+    "specification": {
+      "total": 0,
+      "completed": 0
+    },
+    "specRecent": []
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "message_id": "msg-1772379317412",
+  "timestamp": "2026-03-01T10:35:17-05:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "backend-engineer",
+  "type": "approval",
+  "priority": "normal",
+  "subject": "Code review approved: EPAM-017",
+  "story_id": "EPAM-017",
+  "phase_id": "enterprise",
+  "body": {
+    "text": "Code review passed for story EPAM-017. No issues found. Ready to proceed.",
+    "story_id": "EPAM-017",
+    "phase_id": "enterprise",
+    "data": {}
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

@@ -25,6 +25,7 @@
 - `EPAM_API_KEY_ANTHROPIC`, `EPAM_API_KEY_OPENAI`, `EPAM_API_KEY_GEMINI`
 - `EPAM_PROVIDER`, `EPAM_MODEL`, `EPAM_BACKEND_URL`
 - `EPAM_DANGEROUS_SKIP_APPROVAL=1` — skip tool approval prompts (CI/scripts only)
+- `SKIP_TESTING_GATES=true` — bypass QA testing gates (Steps 4.2–4.4) in orchestration pipeline
 
 ## Tool Safety Classification
 - ReadFile, ListFiles, Search, FetchUrl — safe, no approval needed

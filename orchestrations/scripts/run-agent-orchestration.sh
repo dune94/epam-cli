@@ -758,6 +758,441 @@ else
 fi
 
 # ──────────────────────────────────────────────
+# run_testing_gates <phase_id>
+# Steps 4.2–4.4: Testing coordinator gate (three phases).
+# Phase A (Step 4.2): sast-sentinel + spec-validator in parallel.
+# Phase B (Step 4.3): review-ranger + mutant-hunter in parallel (only if A passes).
+# Phase C (Step 4.4): fuzz-weaver + perf-sentinel in parallel (only if A+B pass).
+# Blocks phase gate if any agent returns a blocker-severity finding.
+# Skippable with SKIP_TESTING_GATES=true.
+# ──────────────────────────────────────────────
+run_testing_gates() {
+    local phase_id="$1"
+    local gate_log="$LOG_DIR/testing-gates-${phase_id}.log"
+    local gate_jsonl="$LOG_DIR/testing-gates.jsonl"
+    local failed=0
+    local start_ts
+    start_ts=$(date +%s%3N 2>/dev/null || date +%s)
+
+    if [ "${SKIP_TESTING_GATES:-false}" = "true" ]; then
+        info "Step 4.2: Testing gates skipped (SKIP_TESTING_GATES=true)"
+        return 0
+    fi
+
+    # Check if phase has code stories (skip for docs-only phases)
+    local phase_story_count
+    phase_story_count=$(jq -r --arg phase "$phase_id" \
+        '(.implementationOrder[$phase] // []) | length' \
+        "$PRD_FILE" 2>/dev/null || echo "0")
+    if [ "${phase_story_count:-0}" -eq 0 ]; then
+        info "Step 4.2: No stories in phase '$phase_id' — skipping testing gates"
+        return 0
+    fi
+
+    log "Step 4.2: Running testing gates for phase '$phase_id'..."
+    echo "=== Testing Gates: $phase_id @ $(date -Iseconds) ===" > "$gate_log"
+    "$SCRIPT_DIR/update-monitor.sh" event "testing_gate_start" \
+        "Starting testing gates for $phase_id" "" "main" "test-coordinator-agent" 2>/dev/null || true
+
+    # ── Phase A: SAST sentinel + spec validator (parallel) ──
+    local sast_log="$LOG_DIR/sast-sentinel-${phase_id}.log"
+    local spec_log="$LOG_DIR/spec-validator-${phase_id}.log"
+    local sast_exit=0
+    local spec_exit=0
+
+    # Load agent profiles
+    local profiles_file="$SCRIPT_DIR/../agents/profiles.json"
+    local sast_profile=""
+    local spec_profile=""
+    if [ -f "$profiles_file" ]; then
+        sast_profile=$(jq -r '.["sast-sentinel"] // ""' "$profiles_file")
+        spec_profile=$(jq -r '.["spec-validator"] // ""' "$profiles_file")
+    fi
+
+    # ── SAST Sentinel ──
+    log "  Step 4.2a: Running SAST sentinel..."
+    {
+        local sast_prompt="You are acting as the sast-sentinel agent.
+
+Phase: $phase_id
+Project root: $PROJECT_ROOT
+
+Run the following checks and produce a structured JSON report:
+
+1. TypeScript compiler diagnostics:
+   Run: ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit 2>&1
+   Parse output for errors. Each error is a finding with severity 'major'.
+
+2. Security pattern scan on changed/new files in this phase:
+   - Command injection: unsanitised input to child_process.exec/spawn
+   - Path traversal: user input in fs paths without validation
+   - Hardcoded secrets: API keys, tokens, passwords in source
+   - Unsafe eval/Function constructor usage
+
+Output format (strict JSON):
+{
+  \"agent\": \"sast-sentinel\",
+  \"phase\": \"$phase_id\",
+  \"summary\": { \"filesScanned\": N, \"findingsCount\": N, \"blockerCount\": N },
+  \"findings\": [{ \"severity\": \"blocker|major|minor\", \"rule\": \"...\", \"file\": \"...\", \"line\": N, \"description\": \"...\", \"suggestedFix\": \"...\" }],
+  \"verdict\": \"pass|fail\"
+}"
+
+        if [ -n "$sast_profile" ]; then
+            sast_prompt="$sast_profile
+
+$sast_prompt"
+        fi
+
+        echo "$sast_prompt" | "$CLAUDE_SH" - 2>&1 | tee "$sast_log"
+    } &
+    local sast_pid=$!
+
+    # ── Spec Validator ──
+    log "  Step 4.2b: Running spec validator..."
+    {
+        local spec_prompt="You are acting as the spec-validator agent.
+
+Phase: $phase_id
+PRD file: $PRD_FILE
+Project root: $PROJECT_ROOT
+
+Read the stories for phase '$phase_id' from the PRD file. For each story:
+1. Read its acceptanceCriteria array
+2. Examine the implementation files (check src/, test/, and recent git changes)
+3. Classify each criterion as: met, partial, unmet, or untestable
+
+Output format (strict JSON):
+{
+  \"agent\": \"spec-validator\",
+  \"phase\": \"$phase_id\",
+  \"stories\": [{
+    \"storyId\": \"...\",
+    \"title\": \"...\",
+    \"criteria\": [{ \"text\": \"...\", \"status\": \"met|partial|unmet|untestable\", \"evidence\": \"...\", \"gaps\": \"...\" }],
+    \"overallCompliance\": 85,
+    \"verdict\": \"pass|warn|fail\"
+  }],
+  \"overallVerdict\": \"pass|warn|fail\"
+}"
+
+        if [ -n "$spec_profile" ]; then
+            spec_prompt="$spec_profile
+
+$spec_prompt"
+        fi
+
+        echo "$spec_prompt" | "$CLAUDE_SH" - 2>&1 | tee "$spec_log"
+    } &
+    local spec_pid=$!
+
+    # Wait for both agents
+    wait $sast_pid || sast_exit=$?
+    wait $spec_pid || spec_exit=$?
+
+    local end_ts
+    end_ts=$(date +%s%3N 2>/dev/null || date +%s)
+    local duration_ms=$(( end_ts - start_ts ))
+
+    # Evaluate results
+    if [ $sast_exit -ne 0 ]; then
+        error "  SAST sentinel FAILED (exit $sast_exit)"
+        failed=1
+    else
+        # Check for blocker findings in SAST output
+        if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$sast_log" 2>/dev/null; then
+            error "  SAST sentinel: FAIL verdict — blocker findings detected"
+            failed=1
+        else
+            success "  SAST sentinel: PASS"
+        fi
+    fi
+
+    if [ $spec_exit -ne 0 ]; then
+        error "  Spec validator FAILED (exit $spec_exit)"
+        failed=1
+    else
+        if grep -q '"overallVerdict"[[:space:]]*:[[:space:]]*"fail"' "$spec_log" 2>/dev/null; then
+            error "  Spec validator: FAIL verdict — critical criteria unmet"
+            failed=1
+        elif grep -q '"overallVerdict"[[:space:]]*:[[:space:]]*"warn"' "$spec_log" 2>/dev/null; then
+            warning "  Spec validator: WARN — some criteria partially met (non-blocking)"
+        else
+            success "  Spec validator: PASS"
+        fi
+    fi
+
+    # ── Phase B: review-ranger + mutant-hunter (parallel, only if Phase A passed) ──
+    local review_exit=0
+    local mutant_exit=0
+    if [ $failed -eq 0 ]; then
+        local review_log="$LOG_DIR/review-ranger-${phase_id}.log"
+        local mutant_log="$LOG_DIR/mutant-hunter-${phase_id}.log"
+
+        local review_profile=""
+        local mutant_profile=""
+        if [ -f "$profiles_file" ]; then
+            review_profile=$(jq -r '.["review-ranger"] // ""' "$profiles_file")
+            mutant_profile=$(jq -r '.["mutant-hunter"] // ""' "$profiles_file")
+        fi
+
+        # ── Review Ranger ──
+        log "  Step 4.3a: Running review-ranger..."
+        {
+            local review_prompt="You are acting as the review-ranger agent.
+
+Phase: $phase_id
+Project root: $PROJECT_ROOT
+
+Perform a deep diff-level code review on files changed in this phase.
+Use git diff to identify changed files, then analyse:
+1. Complexity hotspots (cyclomatic complexity > 10, nesting > 4)
+2. Code duplication (near-identical blocks > 5 lines)
+3. API contract drift (exported signature changes without test updates)
+4. Error handling completeness (swallowed errors in critical paths)
+5. Test coverage gaps (new public functions without tests)
+6. Naming consistency (camelCase vars, PascalCase types, UPPER_SNAKE constants)
+
+Output format (strict JSON):
+{
+  \"agent\": \"review-ranger\",
+  \"phase\": \"$phase_id\",
+  \"summary\": { \"filesReviewed\": N, \"findingsCount\": N, \"blockerCount\": N, \"majorCount\": N, \"minorCount\": N },
+  \"findings\": [{ \"severity\": \"blocker|major|minor\", \"category\": \"...\", \"file\": \"...\", \"line\": N, \"description\": \"...\", \"suggestedFix\": \"...\" }],
+  \"verdict\": \"pass|fail\"
+}"
+
+            if [ -n "$review_profile" ]; then
+                review_prompt="$review_profile
+
+$review_prompt"
+            fi
+
+            echo "$review_prompt" | "$CLAUDE_SH" - 2>&1 | tee "$review_log"
+        } &
+        local review_pid=$!
+
+        # ── Mutant Hunter ──
+        log "  Step 4.3b: Running mutant-hunter..."
+        {
+            local mutant_prompt="You are acting as the mutant-hunter agent.
+
+Phase: $phase_id
+Project root: $PROJECT_ROOT
+
+Perform mutation testing analysis on files changed in this phase.
+Use git diff to identify changed source files, then for each:
+1. Propose mutations: operator swaps, comparison inversions, boolean negations,
+   early returns, boundary shifts, removed null checks, swapped arguments
+2. Focus on critical paths: provider failover, tool safety, auth, billing, agent state
+3. For each mutation, determine if existing tests in test/unit/ would catch it
+
+Output format (strict JSON):
+{
+  \"agent\": \"mutant-hunter\",
+  \"phase\": \"$phase_id\",
+  \"summary\": { \"mutationsProposed\": N, \"killed\": N, \"survived\": N, \"noCoverage\": N, \"mutationScore\": 75 },
+  \"mutations\": [{ \"file\": \"...\", \"line\": N, \"originalCode\": \"...\", \"mutatedCode\": \"...\", \"status\": \"killed|survived|no-coverage\", \"relatedTest\": \"...\", \"recommendation\": \"...\" }],
+  \"verdict\": \"pass|warn|fail\"
+}"
+
+            if [ -n "$mutant_profile" ]; then
+                mutant_prompt="$mutant_profile
+
+$mutant_prompt"
+            fi
+
+            echo "$mutant_prompt" | "$CLAUDE_SH" - 2>&1 | tee "$mutant_log"
+        } &
+        local mutant_pid=$!
+
+        # Wait for both Phase B agents
+        wait $review_pid || review_exit=$?
+        wait $mutant_pid || mutant_exit=$?
+
+        # Evaluate Phase B results
+        if [ $review_exit -ne 0 ]; then
+            error "  Review-ranger FAILED (exit $review_exit)"
+            failed=1
+        else
+            if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$review_log" 2>/dev/null; then
+                error "  Review-ranger: FAIL verdict — blocker findings detected"
+                failed=1
+            else
+                success "  Review-ranger: PASS"
+            fi
+        fi
+
+        if [ $mutant_exit -ne 0 ]; then
+            error "  Mutant-hunter FAILED (exit $mutant_exit)"
+            failed=1
+        else
+            if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$mutant_log" 2>/dev/null; then
+                error "  Mutant-hunter: FAIL verdict — mutation score below threshold"
+                failed=1
+            elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$mutant_log" 2>/dev/null; then
+                warning "  Mutant-hunter: WARN — mutation score 50-69% (non-blocking)"
+            else
+                success "  Mutant-hunter: PASS"
+            fi
+        fi
+    else
+        info "  Phase B (review-ranger + mutant-hunter) skipped — Phase A had failures"
+    fi
+
+    # ── Phase C: fuzz-weaver + perf-sentinel (parallel, only if A+B passed) ──
+    local fuzz_exit=0
+    local perf_exit=0
+    if [ $failed -eq 0 ]; then
+        local fuzz_log="$LOG_DIR/fuzz-weaver-${phase_id}.log"
+        local perf_log="$LOG_DIR/perf-sentinel-${phase_id}.log"
+
+        local fuzz_profile=""
+        local perf_profile=""
+        if [ -f "$profiles_file" ]; then
+            fuzz_profile=$(jq -r '.["fuzz-weaver"] // ""' "$profiles_file")
+            perf_profile=$(jq -r '.["perf-sentinel"] // ""' "$profiles_file")
+        fi
+
+        # ── Fuzz Weaver ──
+        log "  Step 4.4a: Running fuzz-weaver..."
+        {
+            local fuzz_prompt="You are acting as the fuzz-weaver agent.
+
+Phase: $phase_id
+Project root: $PROJECT_ROOT
+
+Perform property-based / fuzz testing analysis on changed files in this phase.
+Use git diff to identify changed source files, then for each public function:
+1. Derive input domains from TypeScript parameter types
+2. Propose fuzz test cases with fast-check style property definitions
+3. Assess whether existing tests cover each edge case
+
+Focus on: config parsing, provider request construction, billing calculations,
+tool input validation (path traversal, shell metacharacters), auth token parsing.
+
+Output format (strict JSON):
+{
+  \"agent\": \"fuzz-weaver\",
+  \"phase\": \"$phase_id\",
+  \"summary\": { \"functionsAnalysed\": N, \"fuzzCasesProposed\": N, \"covered\": N, \"gaps\": N, \"vulnerabilities\": N },
+  \"cases\": [{ \"function\": \"...\", \"file\": \"...\", \"line\": N, \"property\": \"...\", \"generator\": \"...\", \"invariant\": \"...\", \"status\": \"covered|gap|vulnerability\", \"recommendation\": \"...\" }],
+  \"verdict\": \"pass|warn|fail\"
+}"
+
+            if [ -n "$fuzz_profile" ]; then
+                fuzz_prompt="$fuzz_profile
+
+$fuzz_prompt"
+            fi
+
+            echo "$fuzz_prompt" | "$CLAUDE_SH" - 2>&1 | tee "$fuzz_log"
+        } &
+        local fuzz_pid=$!
+
+        # ── Perf Sentinel ──
+        log "  Step 4.4b: Running perf-sentinel..."
+        {
+            local perf_prompt="You are acting as the perf-sentinel agent.
+
+Phase: $phase_id
+Project root: $PROJECT_ROOT
+
+Perform performance analysis on files changed in this phase.
+Use git diff to identify changed source files, then analyse:
+1. Algorithmic complexity (flag O(n²)+ on unbounded inputs)
+2. Memory allocation hotspots (object creation in loops, unbounded caches)
+3. Async performance (sequential awaits → Promise.all, missing timeouts, stream backpressure)
+4. Startup time impact (heavy imports, sync I/O at module load)
+5. Provider-specific (unnecessary Message[] copies, redundant token counting)
+
+Output format (strict JSON):
+{
+  \"agent\": \"perf-sentinel\",
+  \"phase\": \"$phase_id\",
+  \"summary\": { \"filesAnalysed\": N, \"findingsCount\": N, \"blockerCount\": N, \"estimatedStartupImpactMs\": N },
+  \"findings\": [{ \"severity\": \"blocker|major|minor\", \"category\": \"complexity|memory|async|startup|provider\", \"file\": \"...\", \"line\": N, \"description\": \"...\", \"estimatedImpact\": \"high|medium|low\", \"suggestedFix\": \"...\" }],
+  \"verdict\": \"pass|warn|fail\"
+}"
+
+            if [ -n "$perf_profile" ]; then
+                perf_prompt="$perf_profile
+
+$perf_prompt"
+            fi
+
+            echo "$perf_prompt" | "$CLAUDE_SH" - 2>&1 | tee "$perf_log"
+        } &
+        local perf_pid=$!
+
+        # Wait for both Phase C agents
+        wait $fuzz_pid || fuzz_exit=$?
+        wait $perf_pid || perf_exit=$?
+
+        # Evaluate Phase C results
+        if [ $fuzz_exit -ne 0 ]; then
+            error "  Fuzz-weaver FAILED (exit $fuzz_exit)"
+            failed=1
+        else
+            if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$fuzz_log" 2>/dev/null; then
+                error "  Fuzz-weaver: FAIL verdict — vulnerabilities detected"
+                failed=1
+            elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$fuzz_log" 2>/dev/null; then
+                warning "  Fuzz-weaver: WARN — coverage gaps > 30% (non-blocking)"
+            else
+                success "  Fuzz-weaver: PASS"
+            fi
+        fi
+
+        if [ $perf_exit -ne 0 ]; then
+            error "  Perf-sentinel FAILED (exit $perf_exit)"
+            failed=1
+        else
+            if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$perf_log" 2>/dev/null; then
+                error "  Perf-sentinel: FAIL verdict — performance blocker detected"
+                failed=1
+            elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$perf_log" 2>/dev/null; then
+                warning "  Perf-sentinel: WARN — performance concerns (non-blocking)"
+            else
+                success "  Perf-sentinel: PASS"
+            fi
+        fi
+    else
+        info "  Phase C (fuzz-weaver + perf-sentinel) skipped — earlier phases had failures"
+    fi
+
+    # Recalculate duration to include all phases
+    end_ts=$(date +%s%3N 2>/dev/null || date +%s)
+    duration_ms=$(( end_ts - start_ts ))
+
+    # Log gate result to JSONL
+    local verdict="pass"
+    [ $failed -ne 0 ] && verdict="fail"
+    echo "{\"timestamp\":\"$(date -Iseconds)\",\"phase_id\":\"$phase_id\",\"event\":\"testing_gate\",\"sast_exit\":$sast_exit,\"spec_exit\":$spec_exit,\"review_exit\":$review_exit,\"mutant_exit\":$mutant_exit,\"fuzz_exit\":$fuzz_exit,\"perf_exit\":$perf_exit,\"verdict\":\"$verdict\",\"duration_ms\":$duration_ms}" >> "$gate_jsonl"
+
+    echo "=== Testing Gate Result: $([ $failed -eq 0 ] && echo PASS || echo FAIL) ===" >> "$gate_log"
+
+    "$SCRIPT_DIR/update-monitor.sh" event "testing_gate_${verdict}" \
+        "Testing gates $verdict for $phase_id (${duration_ms}ms)" "" "main" "test-coordinator-agent" 2>/dev/null || true
+
+    if [ $failed -ne 0 ]; then
+        error "Step 4.2: Testing gates FAILED — fix findings and re-run"
+        error "  SAST log: $sast_log"
+        error "  Spec log: $spec_log"
+        error "  Bypass: SKIP_TESTING_GATES=true $0 --phase $phase_id"
+        return 1
+    fi
+
+    success "Step 4.2: Testing gates PASSED"
+    return 0
+}
+
+# ──────────────────────────────────────────────
+# Step 4.2: Testing gates (SAST + spec validation)
+# ──────────────────────────────────────────────
+run_testing_gates "$PHASE"
+
+# ──────────────────────────────────────────────
 # run_unit_tests_gate <phase_id>
 # Step 4.5: Independent unit test verification.
 # Runs vitest (unit tests) and tsc --noEmit (type check) directly.

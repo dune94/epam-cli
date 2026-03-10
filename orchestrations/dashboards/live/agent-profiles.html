@@ -360,6 +360,9 @@ tbody tr:hover td { background: var(--bg2); }
       <a href="agent-profiles.html" class="active">Profiles</a>
       <a href="agent-messages.html">Messages</a>
       <a href="phase-cost-monitor.html">Costs</a>
+      <a href="quality-assurance.html">QA Gates</a>
+      <a href="cpa-details.html">Estimation</a>
+      <a href="epam-cli-guide.html">CLI Guide</a>
     </div>
   </div>
 </header>
@@ -486,6 +489,12 @@ const SKILL_CATEGORIES = {
   'async-safety':      'cat-testing',
   'security-review':   'cat-testing',
   'performance-review':'cat-testing',
+  'mutation-testing':  'cat-testing',
+  'SAST':              'cat-testing',
+  'fuzz-testing':      'cat-testing',
+  'spec-compliance':   'cat-testing',
+  'static-analysis':   'cat-testing',
+  'acceptance-criteria':'cat-testing',
   // CLI/UX (blue)
   'chalk-rendering':   'cat-cli-ux',
   'session-replay':    'cat-cli-ux',
@@ -901,5 +910,6 @@ document.getElementById('f-phase').addEventListener('change', function() {
 refresh();
 setInterval(refresh, REFRESH_MS);
 </script>
+<script src="runtime/build-info.js"></script>
 </body>
 </html>

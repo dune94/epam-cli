@@ -175,9 +175,9 @@ tr:nth-child(even) td { background: var(--surface2); }
     <a href="agent-profiles.html">Profiles</a>
     <a href="agent-messages.html">Messages</a>
     <a href="phase-cost-monitor.html">Costs</a>
-    <a href="quality-dashboard.html">Quality</a>
-    <a href="cpa-details.html">CPA / Estimation</a>
-    <a href="epam-cli-guide.html" class="active">User Guide</a>
+    <a href="quality-assurance.html">QA Gates</a>
+    <a href="cpa-details.html">Estimation</a>
+    <a href="epam-cli-guide.html" class="active">CLI Guide</a>
   </nav>
 </div>
 
@@ -869,6 +869,14 @@ Current identity:
         <div class="env-name">EPAM_CLI</div>
         <div class="env-desc">Binary used by orchestration for epam-run providers (default: <code>epam</code>). Override with mock script for zero-token testing.</div>
       </div>
+      <div class="env-card">
+        <div class="env-name">SKIP_TESTING_GATES</div>
+        <div class="env-desc">Set to <code>true</code> to bypass QA testing gates (Steps 4.2–4.4: SAST, spec compliance, code review, mutation, fuzz, perf)</div>
+      </div>
+      <div class="env-card">
+        <div class="env-name">EPAM_SPEC_MODE</div>
+        <div class="env-desc">Set to <code>0</code> to disable specification pre-pass (Step 0). Default: enabled.</div>
+      </div>
     </div>
 
     <!-- ── Tools & Approval ───────────────────────────────────────────────── -->
@@ -926,5 +934,6 @@ Current identity:
   </div>
 </div>
 
+<script src="runtime/build-info.js"></script>
 </body>
 </html>

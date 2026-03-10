@@ -9,5 +9,6 @@ Layout (Top down, left to right):
 6. Hybrid Worktree Architectures: Dedicated sections for multi_agent and enterprise worktree layouts.
 7. Dependency Chain: Key dependency paths grouped by phase.
 8. Estimated Timeline: Gantt-style timeline and wall-clock projections.
-9. Agent Role Matrix: Matrix of roles, lane ownership, provider/model, and costs.
-10. Story Details: Bottom comprehensive story table by phase.
+9. Agent Role Matrix: Matrix of 10 core roles with lane ownership, provider/model, and costs.
+10. QA Gate Agents Table: Dedicated table for 7 QA gate agents (Steps 4.2–4.4) showing agent, gate phase, trigger conditions, parallel partner, and verdict policy.
+11. Story Details: Bottom comprehensive story table by phase.

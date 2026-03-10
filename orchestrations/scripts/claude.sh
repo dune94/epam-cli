@@ -28,6 +28,10 @@ CLAUDE_OUTPUT_DIR="$LOG_DIR/claude_outputs"
 AGENT_PROFILES_FILE="$AUTOMATION_DIR/agents/profiles.json"
 MONITOR_STATUS_FILE="$LOG_DIR/agent-status.json"
 
+# Git work root — the directory containing .git (defaults to PROJECT_ROOT)
+# Override when the git repo lives in a subdirectory (e.g., PROJECT_ROOT/application)
+GIT_WORK_ROOT="${GIT_WORK_ROOT:-$PROJECT_ROOT}"
+
 # Worktree configuration (set by --worktree flag)
 WORKTREE_MODE=""        # "primary", "independent", or "" for main
 MAIN_PRD_FILE=""        # Points to main repo's prd.json when in worktree mode
@@ -1319,13 +1323,25 @@ run_implementation() {
 }
 
 # Setup git worktrees for parallel execution
+# Runs git commands from GIT_WORK_ROOT (the directory containing .git)
+# Worktrees are created as siblings of GIT_WORK_ROOT
 setup_worktrees() {
     local worktrees=("primary" "independent")
+    local git_root
+    git_root="$(cd "$GIT_WORK_ROOT" && pwd)"
+    local git_basename
+    git_basename="$(basename "$git_root")"
 
-    log "Setting up git worktrees..."
+    log "Setting up git worktrees (git root: $git_root)..."
+
+    # Validate GIT_WORK_ROOT is a git repo
+    if ! git -C "$git_root" rev-parse --is-inside-work-tree &>/dev/null; then
+        error "GIT_WORK_ROOT ($git_root) is not a git repository"
+        return 1
+    fi
 
     for wt in "${worktrees[@]}"; do
-        local wt_path="$PROJECT_ROOT/../epam-cli-wt-$wt"
+        local wt_path="$git_root/../${git_basename}-wt-$wt"
         local wt_branch="wt-$wt"
 
         # Check if worktree already exists
@@ -1335,14 +1351,14 @@ setup_worktrees() {
         fi
 
         # Delete branch if it exists from previous run
-        if git show-ref --verify --quiet "refs/heads/$wt_branch"; then
+        if git -C "$git_root" show-ref --verify --quiet "refs/heads/$wt_branch"; then
             info "Deleting existing branch: $wt_branch"
-            git branch -D "$wt_branch" 2>/dev/null || true
+            git -C "$git_root" branch -D "$wt_branch" 2>/dev/null || true
         fi
 
         # Create worktree with a new branch based on current HEAD
         info "Creating worktree: $wt ($wt_path) on branch $wt_branch"
-        git worktree add -b "$wt_branch" "$wt_path" HEAD || {
+        git -C "$git_root" worktree add -b "$wt_branch" "$wt_path" HEAD || {
             error "Failed to create worktree: $wt"
             return 1
         }
@@ -1355,11 +1371,15 @@ setup_worktrees() {
 # Cleanup git worktrees
 cleanup_worktrees() {
     local worktrees=("primary" "independent")
+    local git_root
+    git_root="$(cd "$GIT_WORK_ROOT" && pwd)"
+    local git_basename
+    git_basename="$(basename "$git_root")"
 
     log "Cleaning up git worktrees..."
 
     for wt in "${worktrees[@]}"; do
-        local wt_path="$PROJECT_ROOT/../epam-cli-wt-$wt"
+        local wt_path="$git_root/../${git_basename}-wt-$wt"
 
         # Check if worktree exists
         if [ ! -d "$wt_path" ]; then
@@ -1369,13 +1389,13 @@ cleanup_worktrees() {
 
         # Remove worktree
         info "Removing worktree: $wt ($wt_path)"
-        git worktree remove "$wt_path" --force || {
+        git -C "$git_root" worktree remove "$wt_path" --force || {
             warning "Failed to remove worktree: $wt (may need manual cleanup)"
         }
     done
 
     # Prune worktree references
-    git worktree prune
+    git -C "$git_root" worktree prune
 
     success "Worktrees cleaned up"
     return 0
@@ -1477,8 +1497,11 @@ main() {
                 WORKTREE_MODE="$2"
                 # Save main PRD location for reference
                 MAIN_PRD_FILE="$PRD_FILE"
-                # Update PROJECT_ROOT to worktree for file operations
-                PROJECT_ROOT="$PROJECT_ROOT/../epam-cli-wt-$WORKTREE_MODE"
+                # Update GIT_WORK_ROOT and PROJECT_ROOT to worktree for file operations
+                local _git_basename
+                _git_basename="$(basename "$(cd "$GIT_WORK_ROOT" && pwd)")"
+                GIT_WORK_ROOT="$(cd "$GIT_WORK_ROOT/.." && pwd)/${_git_basename}-wt-$WORKTREE_MODE"
+                PROJECT_ROOT="$GIT_WORK_ROOT"
                 # Keep PRD_FILE pointing to MAIN - single source of truth
                 # (Do NOT set PRD_FILE to worktree's prd.json - it will be stale)
                 shift 2

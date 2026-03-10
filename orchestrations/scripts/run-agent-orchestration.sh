@@ -176,6 +176,45 @@ if [ -z "$phase_stories" ] || [ "$phase_stories" = "null" ]; then
     exit 1
 fi
 
+# ── Step 0: Specification pre-pass (OpenSpec/Speckit) ─────────────────────────
+run_specification_pass() {
+    local phase_id="$1"
+    local spec_runner="$SCRIPT_DIR/spec-mode-runner.js"
+    if [ ! -f "$spec_runner" ]; then
+        info "Step 0: Specification runner not found (${spec_runner##*/}) — skipping"
+        return 0
+    fi
+    local node_cmd="${NODE_CMD:-${HOME}/.nvm/versions/node/v20.20.0/bin/node}"
+    if [ ! -x "$node_cmd" ]; then
+        node_cmd="$(command -v node 2>/dev/null || echo 'node')"
+    fi
+    if ! command -v "$node_cmd" >/dev/null 2>&1; then
+        warning "Step 0: Node.js is required for specification mode but was not found"
+        return 0
+    fi
+    log "Step 0: Running specification pass for phase '$phase_id'..."
+    set +e
+    PRD_FILE="$PRD_FILE" OUTPUT_DIR="$LOG_DIR" CLAUDE_CMD="${CLAUDE_CMD}" \
+        "$node_cmd" "$spec_runner" --phase "$phase_id" 2>&1 | tee "$LOG_DIR/spec-${phase_id}.log"
+    local spec_rc=${PIPESTATUS[0]}
+    set -e
+    if [ $spec_rc -eq 0 ]; then
+        success "Step 0: Specification pass completed for '$phase_id'"
+        "$SCRIPT_DIR/update-monitor.sh" event "specification_pass" \
+            "Specification agents completed (OpenSpec/Speckit)" "" "main" "spec-coordinator" 2>/dev/null || true
+    else
+        warning "Step 0: Specification pass encountered issues (see $LOG_DIR/spec-${phase_id}.log)"
+    fi
+}
+
+if [ "$DRY_RUN" = true ]; then
+    info "Step 0: Specification pass skipped during --dry-run"
+elif [ "${EPAM_SPEC_MODE:-1}" = "0" ]; then
+    info "Step 0: Specification pass disabled (EPAM_SPEC_MODE=0)"
+else
+    run_specification_pass "$PHASE"
+fi
+
 # ── Infra test gate ──────────────────────────────────────────────────────────
 # Block any phase that depends on infra_test (anything except infra_test itself)
 # unless all SP-T0x stories are completed.

@@ -293,6 +293,9 @@
     <a href="agent-profiles.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Profiles</a>
     <a href="agent-messages.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Messages</a>
     <a href="phase-cost-monitor.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Costs</a>
+    <a href="quality-assurance.html" style="color:rgba(255,255,255,0.7);text-decoration:none">QA Gates</a>
+    <a href="cpa-details.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Estimation</a>
+    <a href="epam-cli-guide.html" style="color:rgba(255,255,255,0.7);text-decoration:none">CLI Guide</a>
   </nav>
 </header>
 <div class="container">
@@ -540,7 +543,12 @@
             <div class="step-desc">Domain engineer (typescript-engineer, agent-systems-engineer, billing-engineer) validates output against acceptance criteria post-implementation</div>
         </div>
         <div class="pipeline-step">
-            <div class="step-num" style="color:var(--violet)">Step 4</div>
+            <div class="step-num" style="color:var(--red)">Steps 4.2–4.4</div>
+            <div class="step-name">QA Testing Gates</div>
+            <div class="step-desc">3 cascading phases: Phase A (sast-sentinel + spec-validator) → Phase B (review-ranger + mutant-hunter) → Phase C (fuzz-weaver + perf-sentinel). Each phase runs agents in parallel. Blocks on any blocker finding. Bypass: SKIP_TESTING_GATES=true</div>
+        </div>
+        <div class="pipeline-step">
+            <div class="step-num" style="color:var(--violet)">Step 5</div>
             <div class="step-name">Phase Gate</div>
             <div class="step-desc">Cost variance check: warn at +30%, block at +150%. Results written to phase-gates.jsonl. Unblocks next phase.</div>
         </div>
@@ -869,6 +877,72 @@
         </tbody>
     </table>
 
+    <!-- Gate Agents Table -->
+    <h2>QA Gate Agents (Steps 4.2–4.4)</h2>
+    <p style="color:var(--text3);font-size:12px;margin-bottom:10px;">These agents run automatically inside <code>run_testing_gates()</code> between code review (Step 4) and unit tests (Step 4.5). They are pipeline infrastructure — not assigned to stories. Bypass all with <code>SKIP_TESTING_GATES=true</code>.</p>
+    <table class="matrix-table">
+        <thead>
+            <tr>
+                <th>Agent</th>
+                <th>Gate Phase</th>
+                <th>Trigger</th>
+                <th>Runs With</th>
+                <th>Verdict Policy</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>test-coordinator-agent</code></td>
+                <td class="lane-cell">Coordinator</td>
+                <td>Governs all 3 phases</td>
+                <td>—</td>
+                <td>Aggregates agent verdicts, logs to <code>testing-gates.jsonl</code></td>
+            </tr>
+            <tr>
+                <td><code>sast-sentinel</code></td>
+                <td class="lane-cell">Phase A (4.2)</td>
+                <td>Always (code phases)</td>
+                <td>spec-validator</td>
+                <td>Any blocker → FAIL</td>
+            </tr>
+            <tr>
+                <td><code>spec-validator</code></td>
+                <td class="lane-cell">Phase A (4.2)</td>
+                <td>Always (code phases)</td>
+                <td>sast-sentinel</td>
+                <td>Compliance &lt; 60% → FAIL, 60–79% → WARN</td>
+            </tr>
+            <tr>
+                <td><code>review-ranger</code></td>
+                <td class="lane-cell">Phase B (4.3)</td>
+                <td>Only if Phase A passed</td>
+                <td>mutant-hunter</td>
+                <td>Any blocker → FAIL</td>
+            </tr>
+            <tr>
+                <td><code>mutant-hunter</code></td>
+                <td class="lane-cell">Phase B (4.3)</td>
+                <td>Only if Phase A passed</td>
+                <td>review-ranger</td>
+                <td>Score &lt; 50% → FAIL, 50–69% → WARN</td>
+            </tr>
+            <tr>
+                <td><code>fuzz-weaver</code></td>
+                <td class="lane-cell">Phase C (4.4)</td>
+                <td>Only if A+B passed</td>
+                <td>perf-sentinel</td>
+                <td>Any vulnerability → FAIL, gaps &gt; 30% → WARN</td>
+            </tr>
+            <tr>
+                <td><code>perf-sentinel</code></td>
+                <td class="lane-cell">Phase C (4.4)</td>
+                <td>Only if A+B passed</td>
+                <td>fuzz-weaver</td>
+                <td>Any blocker or high-impact major → FAIL</td>
+            </tr>
+        </tbody>
+    </table>
+
     <!-- Story Details Table -->
     <h2>Story Details</h2>
     <div style="overflow-x:auto">
@@ -1104,5 +1178,6 @@
     </div>
 
 </div>
+<script src="runtime/build-info.js"></script>
 </body>
 </html>

@@ -340,6 +340,9 @@ code {
     <a href="agent-profiles.html"       class="nav-link">Profiles</a>
     <a href="agent-messages.html"       class="nav-link">Messages</a>
     <a href="phase-cost-monitor.html"   class="nav-link">Costs</a>
+    <a href="quality-assurance.html"    class="nav-link">QA Gates</a>
+    <a href="cpa-details.html"          class="nav-link">Estimation</a>
+    <a href="epam-cli-guide.html"       class="nav-link">CLI Guide</a>
   </nav>
 </div>
 
@@ -621,6 +624,78 @@ code {
 
     <div class="vflow-connector gate-con"></div>
 
+    <!-- STEP 4.2 — TESTING GATE PHASE A -->
+    <div class="vflow-step gate-step">
+      <div class="vs-header">
+        <div class="vs-num">STEP 4.2</div>
+        <div class="vs-title">Testing Gate — Phase A (SAST + Spec Compliance)</div>
+        <div class="vs-badges">
+          <span class="badge b-gate">GATE</span>
+          <span class="badge b-main">MAIN</span>
+        </div>
+      </div>
+      <div class="vs-scripts">
+        <span class="vs-script"><span class="vs-script-label">Script</span>run_testing_gates() — Phase A</span>
+      </div>
+      <div class="vs-desc" style="margin-bottom:8px;">
+        Two agents run <strong>in parallel</strong>: <strong>sast-sentinel</strong> (TypeScript compiler diagnostics + security pattern scanning — command injection, path traversal, hardcoded secrets, unsafe eval) and <strong>spec-validator</strong> (acceptance criteria compliance — each criterion classified as met/partial/unmet/untestable). Governed by the <strong>test-coordinator-agent</strong>. Skippable with <code>SKIP_TESTING_GATES=true</code>.
+      </div>
+      <div class="gate-decision">
+        <span class="gate-go">✓ GO — no blockers, spec compliance ≥ 80% → continue to Step 4.3</span>
+        <span class="gate-nogo">✗ NO-GO — blocker finding or compliance &lt; 60% → pipeline halts</span>
+      </div>
+    </div>
+
+    <div class="vflow-connector gate-con"></div>
+
+    <!-- STEP 4.3 — TESTING GATE PHASE B -->
+    <div class="vflow-step gate-step">
+      <div class="vs-header">
+        <div class="vs-num">STEP 4.3</div>
+        <div class="vs-title">Testing Gate — Phase B (Code Review + Mutation)</div>
+        <div class="vs-badges">
+          <span class="badge b-gate">GATE</span>
+          <span class="badge b-main">MAIN</span>
+        </div>
+      </div>
+      <div class="vs-scripts">
+        <span class="vs-script"><span class="vs-script-label">Script</span>run_testing_gates() — Phase B (only if A passed)</span>
+      </div>
+      <div class="vs-desc" style="margin-bottom:8px;">
+        Two agents run <strong>in parallel</strong>: <strong>review-ranger</strong> (deep diff-level code review — complexity hotspots, duplication, API contract drift, test coverage gaps) and <strong>mutant-hunter</strong> (mutation testing analysis — proposes operator swaps/inversions on critical paths, scores test suite quality). Only runs if Phase A passed.
+      </div>
+      <div class="gate-decision">
+        <span class="gate-go">✓ GO — no blockers, mutation score ≥ 70% → continue to Step 4.4</span>
+        <span class="gate-nogo">✗ NO-GO — blocker or mutation score &lt; 50% → pipeline halts</span>
+      </div>
+    </div>
+
+    <div class="vflow-connector gate-con"></div>
+
+    <!-- STEP 4.4 — TESTING GATE PHASE C -->
+    <div class="vflow-step gate-step">
+      <div class="vs-header">
+        <div class="vs-num">STEP 4.4</div>
+        <div class="vs-title">Testing Gate — Phase C (Fuzz + Performance)</div>
+        <div class="vs-badges">
+          <span class="badge b-gate">GATE</span>
+          <span class="badge b-main">MAIN</span>
+        </div>
+      </div>
+      <div class="vs-scripts">
+        <span class="vs-script"><span class="vs-script-label">Script</span>run_testing_gates() — Phase C (only if A+B passed)</span>
+      </div>
+      <div class="vs-desc" style="margin-bottom:8px;">
+        Two agents run <strong>in parallel</strong>: <strong>fuzz-weaver</strong> (property-based fuzz testing analysis — edge case input domains, fast-check style property definitions, vulnerability detection) and <strong>perf-sentinel</strong> (performance analysis — algorithmic complexity, memory allocation hotspots, async performance, startup time impact). Only runs if Phases A and B passed.
+      </div>
+      <div class="gate-decision">
+        <span class="gate-go">✓ GO — no vulnerabilities, no perf blockers → continue to Step 4.5</span>
+        <span class="gate-nogo">✗ NO-GO — vulnerability or perf blocker → pipeline halts</span>
+      </div>
+    </div>
+
+    <div class="vflow-connector gate-con"></div>
+
     <!-- STEP 4.5 — GATE -->
     <div class="vflow-step gate-step">
       <div class="vs-header">
@@ -861,7 +936,7 @@ code {
     <div class="feature-card">
       <div class="feature-icon">🎭</div>
       <div class="feature-title">Role-Based Profiles</div>
-      <div class="feature-desc">7 agent roles, each with a profile injected at invocation. Skills are tracked, augmented pre-phase, and assessed post-phase. Profiles stored in <code>agents/profiles.json</code>.</div>
+      <div class="feature-desc">10 core + 7 QA gate agent roles, each with a profile injected at invocation. Skills are tracked, augmented pre-phase, and assessed post-phase. Profiles stored in <code>agents/profiles.json</code>.</div>
     </div>
 
     <div class="feature-card">
@@ -879,7 +954,7 @@ code {
     <div class="feature-card">
       <div class="feature-icon">✅</div>
       <div class="feature-title">Test Gate Pipeline</div>
-      <div class="feature-desc">Step 4.5 runs unit tests before phase gate. Step 5.5 auto-detects <code>&lt;phase&gt;_e2e</code> phases and runs Playwright. Both gates block on failure.</div>
+      <div class="feature-desc">Steps 4.2–4.4 run 6 QA gate agents in 3 cascading phases (SAST+spec → review+mutation → fuzz+perf). Step 4.5 runs unit tests. Step 5.5 auto-detects <code>&lt;phase&gt;_e2e</code> phases. All gates block on failure. Bypass with <code>SKIP_TESTING_GATES=true</code>.</div>
     </div>
 
     <div class="feature-card">
@@ -922,5 +997,6 @@ code {
   </div>
 
 </div>
+<script src="runtime/build-info.js"></script>
 </body>
 </html>

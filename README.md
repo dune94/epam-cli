@@ -80,6 +80,7 @@ Parallel multi-agent execution with phase gates and cost tracking:
 - **ReAct agent loop** — Iterative reasoning with tool calls
 - **Budget guardrails** — Cost thresholds, model downgrade, session tracking
 - **Session handoff** — Automatic context preservation on failover
+- **QA Testing Gates** — 7 QA gate agents in 3 cascading phases (SAST, spec compliance, code review, mutation testing, fuzz analysis, performance)
 
 ### Authentication
 
@@ -95,6 +96,9 @@ Live monitoring at `http://localhost:8092`:
 - **prd-viewer.html** — All stories with filters
 - **phase-cost-monitor.html** — Cost tracking and variance
 - **agent-profiles.html** — Agent profiles and skills
+- **quality-assurance.html** — QA testing gate verdicts per phase
+- **agents-orchestration.html** — Pipeline flow with gate steps
+- **specification.html** — Spec diff (openspec/speckit collaboration)
 
 ---
 

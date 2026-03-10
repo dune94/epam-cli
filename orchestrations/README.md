@@ -15,7 +15,7 @@ orchestrations/
 ├── prd.json                    # Master story definitions + phase assignments
 ├── README.md                   # This file
 ├── agents/
-│   ├── profiles.json           # 7 agent role definitions (rich system prompts)
+│   ├── profiles.json           # 10 core + 7 QA gate agent role definitions (rich system prompts)
 │   ├── AGENTS.md               # Auto-generated learned patterns log
 │   └── KB.md                   # Shared knowledge base
 ├── scripts/
@@ -52,7 +52,9 @@ orchestrations/
     ├── orchestration-plan.html      # Architecture overview
     ├── phase-cost-monitor.html      # Cost tracking + variance
     ├── agent-messages.html          # Message bus viewer
-    └── agents-orchestration.html   # Orchestration flow diagram
+    ├── agents-orchestration.html   # Orchestration flow diagram
+    ├── quality-assurance.html      # QA testing gates viewer
+    └── cpa-details.html            # CPA estimation details
 ```
 
 ---
@@ -104,6 +106,21 @@ docker compose -f docker-compose.epam-cli.yml up agent-monitor -d
 | `test-engineer` | vitest unit + integration tests |
 | `team-lead-agent` | Phase gates, dependency validation, code review authority |
 | `review-agent` | Code review per story (TypeScript quality, test coverage) |
+| `openspec-agent` | First-pass specification elaboration (acceptance criteria, story splits) |
+| `speckit-agent` | Second-pass specification review (testability, security, edge cases) |
+| `spec-coordinator-agent` | Assigns spec agents per story, final quality review |
+
+### QA Gate Agents (Steps 4.2–4.4)
+
+| Role | Gate Phase | Responsibilities |
+|------|-----------|-----------------|
+| `test-coordinator-agent` | Coordinator | Governs testing gates, sequences phases, aggregates verdicts |
+| `sast-sentinel` | Phase A (4.2) | Static analysis + security pattern scanning (tsc diagnostics, injection, traversal, secrets) |
+| `spec-validator` | Phase A (4.2) | Acceptance criteria compliance verification against prd.json |
+| `review-ranger` | Phase B (4.3) | Deep diff-level code review (complexity, duplication, API contracts, test gaps) |
+| `mutant-hunter` | Phase B (4.3) | Mutation testing analysis (test suite quality scoring) |
+| `fuzz-weaver` | Phase C (4.4) | Property-based fuzz testing analysis (edge cases, input domains, vulnerabilities) |
+| `perf-sentinel` | Phase C (4.4) | Performance analysis (complexity, memory, async, startup time) |
 
 ---
 
@@ -119,6 +136,9 @@ Step 3.1  Worktree health check + auto-commit
 Step 3.5  Post-parallel skill assessment
 Step 3.6  Team Lead code review
 Step 4    Review stories
+Step 4.2  Testing gate Phase A: sast-sentinel ‖ spec-validator (parallel, blocking)
+Step 4.3  Testing gate Phase B: review-ranger ‖ mutant-hunter (parallel, only if A passed)
+Step 4.4  Testing gate Phase C: fuzz-weaver ‖ perf-sentinel (parallel, only if A+B passed)
 Step 4.5  Unit test gate: vitest run + tsc --noEmit (blocking)
 Step 4.8  Pre-gate worktree verification
 Step 5    Phase gate: cost variance check (ok / warn / escalate)

@@ -55,6 +55,53 @@ export class BackendClient {
     return this.request(`/v1/projects/${encodeURIComponent(projectId)}/constraints`);
   }
 
+  async createRemoteSession(bundle: {
+    encryptedPayload: string;
+    nonce: string;
+    tag: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<{ claimToken: string; expiresAt: string; url: string }> {
+    return this.request('/v1/remote/sessions', {
+      method: 'POST',
+      body: JSON.stringify(bundle),
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  async claimRemoteSession(token: string): Promise<{
+    encryptedPayload: string;
+    nonce: string;
+    tag: string;
+    metadata?: Record<string, unknown>;
+  }> {
+    return this.request(`/v1/remote/sessions/${encodeURIComponent(token)}`);
+  }
+
+  async returnRemoteSession(
+    token: string,
+    bundle: {
+      encryptedPayload: string;
+      nonce: string;
+      tag: string;
+      metadata?: Record<string, unknown>;
+    }
+  ): Promise<{ status: string; expiresAt: string }> {
+    return this.request(`/v1/remote/sessions/${encodeURIComponent(token)}/return`, {
+      method: 'POST',
+      body: JSON.stringify(bundle),
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  async reclaimRemoteSession(token: string): Promise<{
+    encryptedPayload: string;
+    nonce: string;
+    tag: string;
+    metadata?: Record<string, unknown>;
+  }> {
+    return this.request(`/v1/remote/sessions/${encodeURIComponent(token)}/return`);
+  }
+
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.backendUrl}${path}`;
     const response = await this.fetch(url, options);

@@ -33,6 +33,7 @@ import { stashCommand } from './commands/StashCommand.js';
 import { userCommand } from './commands/UserCommand.js';
 import { agentCommand } from './commands/AgentCommand.js';
 import { skillsCommand } from './commands/SkillsCommand.js';
+import { remoteCommand } from './commands/RemoteCommand.js';
 
 export interface SlashCommandContext {
   config: ResolvedConfig;
@@ -544,6 +545,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   userCommand,
   agentCommand,
   skillsCommand,
+  remoteCommand,
 ];
 
 function statusIcon_(status: HealthStatus): string {

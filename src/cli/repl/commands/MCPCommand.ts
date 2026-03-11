@@ -99,7 +99,12 @@ function listServers(ctx: SlashCommandContext): boolean {
                         chalk.yellow('○');
       
       console.log(`  ${statusIcon} ${chalk.cyan(server.name)}`);
-      console.log(chalk.dim(`     URL: ${server.url}`));
+      if (server.url) {
+        console.log(chalk.dim(`     URL: ${server.url}`));
+      } else if (server.command) {
+        console.log(chalk.dim(`     Command: ${server.command} ${(server.args ?? []).join(' ')}`));
+      }
+      console.log(chalk.dim(`     Transport: ${server.transport}`));
       console.log(chalk.dim(`     Status: ${status}`));
       console.log();
     }

@@ -77,7 +77,26 @@ orchestrations/
 # View dashboards (requires agent-monitor Docker service)
 docker compose -f docker-compose.epam-cli.yml up agent-monitor -d
 # Then open: http://localhost:8092/monitor.html
+
+### Dashboard builds (Eleventy)
+
+```bash
+# One-off render (writes to orchestrations/dashboards/live)
+npm run dashboards:build
+
+# Real-time watch server with BrowserSync reloads on port 8093
+npm run dashboards:serve
 ```
+
+The watch server tracks `orchestrations/prd.json`, `orchestrations/logs/**/*`, and the CLI
+scripts that publish dashboard data. Every change triggers an automatic rebuild of the
+10 dashboard HTML files plus `build-info.json`, then reloads the browser so the latest
+JSON feeds are pulled without manual refreshes.
+
+`./scripts/run-agent-orchestration.sh` now auto-starts `npm run dashboards:serve`
+whenever a phase is executed so dashboards stay hot while agents run. Set
+`EPAM_DASH_AUTO_SERVE=0` to skip the watcher if you already have one running.
+Watcher output (and any failures) land in `orchestrations/logs/dashboards-watch.log`.
 
 ---
 

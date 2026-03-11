@@ -10,9 +10,10 @@
  * 2. GH_TOKEN env var
  * 3. GITHUB_TOKEN env var
  * 4. GITHUB_PERSONAL_ACCESS_TOKEN env var
+ * 5. `gh auth token` (OAuth token from GitHub CLI — required for Claude models)
  */
 
-import type { LLMProvider, ProviderRequest, ProviderResponse, StreamHandler, Message, ContentPart } from '../types.js';
+import type { LLMProvider, ProviderRequest, ProviderResponse, StreamHandler, Message } from '../types.js';
 import { logger } from '../../utils/logger.js';
 
 const GITHUB_MODELS_URL = 'https://models.github.ai/inference';
@@ -20,8 +21,10 @@ const COPILOT_API_URL = 'https://api.githubcopilot.com';
 const COPILOT_TOKEN_URL = 'https://api.github.com/copilot_internal/v2/token';
 
 // Copilot subscription models (routed through Copilot Internal API)
+// Accept both dot and hyphen variants (e.g. claude-sonnet-4.6 and claude-sonnet-4-6)
 const COPILOT_MODELS = new Set([
   'claude-opus-4.6', 'claude-sonnet-4.6', 'claude-haiku-4.5',
+  'claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5',
 ]);
 
 // Reasoning models use max_completion_tokens instead of max_tokens
@@ -34,7 +37,7 @@ export interface CopilotConfig {
 
 export class CopilotProvider implements LLMProvider {
   readonly name = 'copilot';
-  readonly defaultModel = 'claude-sonnet-4.6';
+  readonly defaultModel = 'openai/gpt-4o';
 
   // All supported models across both backends
   static readonly SUPPORTED_MODELS = [
@@ -61,13 +64,15 @@ export class CopilotProvider implements LLMProvider {
   ] as const;
 
   private model: string;
-  private token: string;
+  private token: string;       // primary token (env var or gh CLI)
+  private oauthToken: string;  // OAuth token from gh CLI (for Copilot API)
   private copilotToken: string | null = null;
   private copilotTokenExpiry = 0;
 
   constructor(config: CopilotConfig = {}) {
     this.model = config.model || this.defaultModel;
     this.token = config.token || CopilotProvider.resolveToken();
+    this.oauthToken = CopilotProvider.resolveOAuthToken() || this.token;
   }
 
   /** Use requested model directly; fall back to instance default. */
@@ -81,7 +86,7 @@ export class CopilotProvider implements LLMProvider {
     return COPILOT_MODELS.has(model);
   }
 
-  /** Exchange GitHub token for a short-lived Copilot API token (cached, 30 min TTL). */
+  /** Exchange GitHub OAuth token for a short-lived Copilot API token (cached, 30 min TTL). */
   private async getCopilotToken(): Promise<string> {
     if (this.copilotToken && Date.now() < this.copilotTokenExpiry) {
       return this.copilotToken;
@@ -89,7 +94,7 @@ export class CopilotProvider implements LLMProvider {
 
     const res = await fetch(COPILOT_TOKEN_URL, {
       headers: {
-        'Authorization': `token ${this.token}`,
+        'Authorization': `token ${this.oauthToken}`,
         'Accept': 'application/json',
       },
     });
@@ -103,7 +108,7 @@ export class CopilotProvider implements LLMProvider {
       );
     }
 
-    const data = await res.json();
+    const data = await res.json() as any;
     this.copilotToken = data.token;
     // Expire 2 minutes early to avoid edge cases
     this.copilotTokenExpiry = new Date(data.expires_at).getTime() - 120_000;
@@ -118,14 +123,35 @@ export class CopilotProvider implements LLMProvider {
                      process.env.GITHUB_TOKEN ||
                      process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
     if (envToken) return envToken;
-    // Fall back to gh CLI stored token (for OAuth-authed accounts)
+    return CopilotProvider.resolveOAuthToken() || '';
+  }
+
+  /** Resolve OAuth token for Copilot subscription models (Claude).
+   *  Priority: COPILOT_GITHUB_TOKEN > GH_TOKEN > gh config file > gh auth token.
+   *  Reads gh config directly to avoid GITHUB_TOKEN env var shadowing the stored OAuth token. */
+  static resolveOAuthToken(): string | null {
+    // Explicit env vars take priority
+    const envToken = process.env.COPILOT_GITHUB_TOKEN || process.env.GH_TOKEN;
+    if (envToken) return envToken;
+    // Read OAuth token from gh CLI config file (not affected by GITHUB_TOKEN env var)
+    try {
+      const { readFileSync } = require('fs');
+      const { join } = require('path');
+      const configDir = process.env.GH_CONFIG_DIR || join(process.env.HOME || '', '.config', 'gh');
+      const hostsFile = join(configDir, 'hosts.yml');
+      const content = readFileSync(hostsFile, 'utf-8');
+      // Simple YAML parse — extract oauth_token for github.com
+      const match = content.match(/oauth_token:\s+(\S+)/);
+      if (match?.[1]) return match[1];
+    } catch { /* gh config not available */ }
+    // Fall back to gh auth token command
     try {
       const { execSync } = require('child_process');
       const token = execSync('gh auth token 2>/dev/null', { stdio: ['ignore','pipe','ignore'], timeout: 2000 })
         .toString().trim();
       if (token) return token;
     } catch { /* gh not available or not logged in */ }
-    return '';
+    return null;
   }
 
   private formatMessages(messages: Message[], systemPrompt?: string): Array<{ role: string; content: string }> {
@@ -149,24 +175,23 @@ export class CopilotProvider implements LLMProvider {
     return { max_tokens: limit };
   }
 
-  /** Resolve the API URL and auth token for the given model. */
-  private async resolveEndpoint(model: string): Promise<{ url: string; authToken: string; headers: Record<string, string> }> {
+  /** Resolve the API URL and auth headers for the given model. */
+  private async resolveEndpoint(model: string): Promise<{ url: string; headers: Record<string, string> }> {
     if (this.isCopilotModel(model)) {
+      // Copilot subscription models — exchange OAuth token for Copilot JWT
       const copilotToken = await this.getCopilotToken();
       return {
         url: `${COPILOT_API_URL}/chat/completions`,
-        authToken: copilotToken,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${copilotToken}`,
-          'Editor-Version': 'epam-cli/0.1.0',
           'Copilot-Integration-Id': 'vscode-chat',
         },
       };
     }
+    // GitHub Models API models — PAT or OAuth token
     return {
       url: `${GITHUB_MODELS_URL}/chat/completions`,
-      authToken: this.token,
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.token}`,
@@ -193,12 +218,12 @@ export class CopilotProvider implements LLMProvider {
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`GitHub Models API error: ${response.status} ${error}`);
+      throw new Error(`Copilot API error: ${response.status} ${error}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     const choice = data.choices?.[0];
-    if (!choice) throw new Error('GitHub Models returned no choices');
+    if (!choice) throw new Error('Copilot API returned no choices');
 
     return {
       content: [{ type: 'text', text: choice.message?.content || '' }],
@@ -229,7 +254,7 @@ export class CopilotProvider implements LLMProvider {
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`GitHub Models API error: ${response.status} ${error}`);
+      throw new Error(`Copilot API error: ${response.status} ${error}`);
     }
 
     let fullText = '';
@@ -281,14 +306,7 @@ export class CopilotProvider implements LLMProvider {
   static async isAuthenticated(): Promise<boolean> {
     const token = CopilotProvider.resolveToken();
     if (!token) return false;
-    // Try Copilot token exchange first (supports Claude)
-    try {
-      const res = await fetch(COPILOT_TOKEN_URL, {
-        headers: { 'Authorization': `token ${token}`, 'Accept': 'application/json' },
-      });
-      if (res.ok) return true;
-    } catch { /* fall through */ }
-    // Fall back to GitHub Models API check
+    // Test against GitHub Models API (works with standard gh auth token)
     try {
       const res = await fetch(`${GITHUB_MODELS_URL}/chat/completions`, {
         method: 'POST',
@@ -311,8 +329,10 @@ export class CopilotProvider implements LLMProvider {
 
   static getAuthInstructions(): string {
     return `GitHub Copilot Authentication:
-For Claude models: Use 'gh auth login' (requires Copilot Pro/Business/Enterprise subscription).
-For other models: Set GITHUB_TOKEN to a fine-grained PAT with 'models:read' permission.`;
+1. Install GitHub CLI: https://cli.github.com
+2. Run: gh auth login
+3. For GPT/Llama/etc: Works with standard gh auth token.
+4. For Claude models: Run 'gh auth refresh -h github.com -s copilot' (requires Copilot Pro/Business/Enterprise).`;
   }
 }
 

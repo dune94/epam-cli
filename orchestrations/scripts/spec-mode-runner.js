@@ -634,6 +634,7 @@ function runClaude(cmd, prompt, logPath) {
   });
 }
 
+
 run().catch((err) => {
   console.error('spec-mode-runner failed:', err);
   process.exit(1);

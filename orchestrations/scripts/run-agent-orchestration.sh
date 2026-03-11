@@ -30,6 +30,11 @@ LOG_DIR="${OUTPUT_DIR:-$AUTOMATION_DIR/logs}"
 MONITOR_STATUS_FILE="$LOG_DIR/agent-status.json"
 MESSAGES_JSONL="$LOG_DIR/agent-messages.jsonl"
 CLAUDE_CMD="${CLAUDE_CMD:-claude}"
+mkdir -p "$LOG_DIR"
+DASHBOARD_WATCH_PID_FILE="$LOG_DIR/dashboards-watch.pid"
+DASHBOARD_WATCH_LOG="$LOG_DIR/dashboards-watch.log"
+DASHBOARD_WATCH_PID=""
+DASHBOARD_WATCH_OWNED=false
 
 # Colors
 RED='\033[0;31m'
@@ -47,6 +52,58 @@ success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 info()    { echo -e "${CYAN}[INFO]${NC} $1"; }
 warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 
+stop_dashboards_watch() {
+    if [ "$DASHBOARD_WATCH_OWNED" != "true" ] || [ -z "$DASHBOARD_WATCH_PID" ]; then
+        return
+    fi
+    if ps -p "$DASHBOARD_WATCH_PID" > /dev/null 2>&1; then
+        info "Stopping dashboards watcher (PID $DASHBOARD_WATCH_PID)..."
+        kill "$DASHBOARD_WATCH_PID" 2>/dev/null || true
+        wait "$DASHBOARD_WATCH_PID" 2>/dev/null || true
+    fi
+    rm -f "$DASHBOARD_WATCH_PID_FILE"
+    DASHBOARD_WATCH_PID=""
+    DASHBOARD_WATCH_OWNED=false
+}
+
+start_dashboards_watch() {
+    if [ "${EPAM_DASH_AUTO_SERVE:-1}" != "1" ]; then
+        info "Dashboard auto-serve disabled (EPAM_DASH_AUTO_SERVE=0)."
+        return
+    fi
+    if ! command -v npm >/dev/null 2>&1; then
+        warning "npm not found; cannot start dashboards watcher."
+        return
+    fi
+    if [ -n "$DASHBOARD_WATCH_PID" ]; then
+        return
+    fi
+    if [ -f "$DASHBOARD_WATCH_PID_FILE" ]; then
+        local existing_pid
+        existing_pid="$(cat "$DASHBOARD_WATCH_PID_FILE" 2>/dev/null || true)"
+        if [ -n "$existing_pid" ] && ps -p "$existing_pid" > /dev/null 2>&1; then
+            info "Eleventy dashboards watcher already running (PID $existing_pid)."
+            DASHBOARD_WATCH_PID="$existing_pid"
+            return
+        fi
+    fi
+    info "Starting Eleventy dashboards watcher (npm run dashboards:serve)..."
+    (
+        cd "$PROJECT_ROOT" || exit 1
+        npm run dashboards:serve >> "$DASHBOARD_WATCH_LOG" 2>&1
+    ) &
+    DASHBOARD_WATCH_PID=$!
+    DASHBOARD_WATCH_OWNED=true
+    echo "$DASHBOARD_WATCH_PID" > "$DASHBOARD_WATCH_PID_FILE"
+    sleep 1
+    if ! ps -p "$DASHBOARD_WATCH_PID" > /dev/null 2>&1; then
+        warning "Dashboards watcher exited immediately; see $DASHBOARD_WATCH_LOG"
+        rm -f "$DASHBOARD_WATCH_PID_FILE"
+        DASHBOARD_WATCH_PID=""
+        DASHBOARD_WATCH_OWNED=false
+    fi
+}
+
 # Default configuration
 PHASE="finops"
 DRY_RUN=false
@@ -58,6 +115,7 @@ ORCH_MODE="${ORCH_MODE:-bash}"
 # Cleanup on exit
 cleanup() {
     local exit_code=$?
+    stop_dashboards_watch
     if [ "$SKIP_CLEANUP" = "true" ]; then
         warning "Skipping worktree cleanup (--skip-cleanup)"
         return
@@ -175,6 +233,8 @@ if [ -z "$phase_stories" ] || [ "$phase_stories" = "null" ]; then
     jq -r '.implementationOrder | keys[]' "$PRD_FILE" | while read p; do echo "  - $p"; done
     exit 1
 fi
+
+start_dashboards_watch
 
 # ── Step 0: Specification pre-pass (OpenSpec/Speckit) ─────────────────────────
 run_specification_pass() {

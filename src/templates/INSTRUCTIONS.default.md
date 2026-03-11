@@ -1,46 +1,68 @@
-# Project Instructions
+# EPAM CLI Project Instructions
 
-This file provides context and guidelines for AI assistants working with this project.
+This file provides concrete working guidance for AI assistants contributing to `epam-cli`.
 
 ## Project Context
 
-<!-- Describe your project: what it does, key technologies, architecture overview -->
+`epam-cli` is a TypeScript Node.js CLI for AI-assisted engineering workflows, including:
 
-**Tech Stack:**
-- Language:
-- Framework:
-- Build tool:
-- Testing:
+- Interactive chat and non-interactive runs
+- Provider/auth flows (EPAM login + provider credential bridges)
+- Cost/reporting and session history
+- Phase orchestration and PRD-driven execution scripts
+- Team collaboration flows (share/import/handoff/sync)
 
-**Key Directories:**
-- `src/` —
-- `test/` —
-- `docs/` —
+## Tech Stack
+
+- Language: TypeScript
+- Runtime: Node.js 20+
+- CLI framework: Commander
+- Build tool: tsup
+- Testing: Vitest
+- Lint/format: ESLint + Prettier
+
+## Key Directories
+
+- `src/`: CLI commands, REPL, providers, auth, orchestration glue, context/session logic
+- `test/`: unit and integration tests
+- `orchestrations/`: orchestration scripts, dashboards, PRD workflow artifacts
+- `dist/`: built CLI output (`dist/epam.js`)
+- `.epam/`: local project runtime state (settings, context, sessions, profiles)
 
 ## Coding Standards
 
-<!-- Define your coding conventions and best practices -->
+### Style
 
-**Style:**
-- Use consistent indentation (tabs/spaces)
-- Follow naming conventions
-- Add comments for complex logic
+- Keep changes minimal and focused on the requested behavior
+- Follow existing TypeScript and Commander patterns used in neighboring files
+- Prefer clear function boundaries and explicit types over implicit `any`
+- Add comments only for non-obvious logic
 
-**Patterns:**
-- Prefer functional programming where appropriate
-- Use TypeScript/types for type safety
-- Write testable, modular code
+### Patterns
 
-**Testing:**
-- Write unit tests for new features
-- Ensure tests pass before committing
-- Aim for meaningful test coverage
+- For new CLI capabilities, wire commands through `src/cli/index.ts`
+- Reuse existing services (AuthManager, ConfigResolver, ProviderChain, SessionStore) instead of duplicating logic
+- Keep user-facing output actionable and deterministic
+- Preserve backward compatibility for existing command flags/options when possible
 
-## Out of Scope
+### Testing
 
-<!-- Define what the AI should NOT do -->
+- Add/update Vitest coverage for behavior changes
+- For CLI behavior changes, include at least one command-path test or integration-style assertion
+- Run these before handoff when feasible:
+  - `npm run typecheck`
+  - `npm run test`
 
-- Do not modify configuration files without approval
-- Do not install new dependencies without discussion
-- Do not remove existing tests
-- Do not make breaking changes without explicit permission
+## Operational Guardrails
+
+- Do not claim support for commands or providers that are not implemented in code
+- Do not hardcode secrets, tokens, or environment-specific credentials
+- Avoid breaking existing `.epam` project file formats unless explicitly requested
+- Keep documentation aligned with actual command implementations
+
+## Out of Scope (Unless Explicitly Requested)
+
+- Large-scale refactors unrelated to the requested change
+- Dependency/toolchain migrations
+- Removing existing tests without replacement
+- Modifying orchestration PRD content (`orchestrations/prd.json`) for unrelated work

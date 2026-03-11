@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>EPAM CLI Technical Guide</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+        line-height: 1.55;
+        font-size: 16px;
+      }
+      body {
+        margin: 0;
+        padding: 2.5rem 1.5rem 4rem;
+        background: #0b1120;
+        color: #e2e8f0;
+      }
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        background: rgba(15, 23, 42, 0.84);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 18px;
+        padding: 2.75rem 3rem;
+        box-shadow: 0 30px 80px rgba(2, 6, 23, 0.55);
+      }
+      h1, h2, h3, h4 {
+        color: #7dd3fc;
+        line-height: 1.2;
+      }
+      h1 { font-size: 2.4rem; margin-top: 0; }
+      h2 { font-size: 1.6rem; margin-top: 2.4rem; }
+      h3 { font-size: 1.25rem; margin-top: 1.8rem; color: #f9a8d4; }
+      p { margin: 0.8rem 0; }
+      ul { margin: 0.6rem 0 0.6rem 1.2rem; }
+      pre {
+        background: rgba(15, 23, 42, 0.9);
+        border-radius: 10px;
+        padding: 0.9rem 1.2rem;
+        overflow-x: auto;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+      }
+      code {
+        font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.92rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1rem 0;
+      }
+      th, td {
+        padding: 0.55rem 0.65rem;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+      }
+      th {
+        background: rgba(14, 165, 233, 0.12);
+        color: #e0f2fe;
+        text-align: left;
+      }
+      hr {
+        border: none;
+        border-top: 1px solid rgba(148, 163, 184, 0.35);
+        margin: 2.5rem 0 2rem;
+      }
+      .updated {
+        display: inline-block;
+        margin-bottom: 1rem;
+        padding: 0.35rem 0.75rem;
+        border-radius: 999px;
+        background: rgba(15, 118, 110, 0.25);
+        color: #5eead4;
+        font-size: 0.9rem;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+      }
+      .card {
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 12px;
+        padding: 1rem 1.2rem;
+        background: rgba(15, 23, 42, 0.75);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="updated">Updated March 8, 2026</p>
+      <h1>EPAM CLI Technical Guide</h1>
+      <p>
+        Comprehensive reference for the EPAM CLI runtime, agent architecture,
+        orchestration scripts, dashboards, and operational tooling.
+      </p>
+      <hr />
+
+      <h2>1. System Overview</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Layer</th>
+            <th>Responsibilities</th>
+            <th>Key Entry Points</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>CLI Runtime</td>
+            <td>Command routing, auth, chat/run commands</td>
+            <td><code>src/index.ts</code>, <code>src/cli/index.ts</code></td>
+          </tr>
+          <tr>
+            <td>Agent Core</td>
+            <td>Conversation loop, tools, failover</td>
+            <td><code>src/agent/AgentRunner.ts</code>, <code>src/providers/ProviderChain.ts</code></td>
+          </tr>
+          <tr>
+            <td>Context & Storage</td>
+            <td>Session JSONL, Redis export/import</td>
+            <td><code>src/context/*.ts</code></td>
+          </tr>
+          <tr>
+            <td>Orchestration</td>
+            <td>PRD-driven phases, multi-agent runs</td>
+            <td><code>orchestrations/scripts/run-agent-orchestration.sh</code></td>
+          </tr>
+          <tr>
+            <td>Dashboards</td>
+            <td>Eleventy builds, BrowserSync, deployment</td>
+            <td><code>orchestrations/dashboards/*</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>2. CLI Architecture</h2>
+      <h3>2.1 Entry & Commands</h3>
+      <p>
+        <code>src/index.ts</code> bootstraps Commander, injects <code>chat</code> when
+        users only pass global flags, and parses asynchronously with helpful
+        error output. <code>src/cli/index.ts</code> registers every command module so
+        interactive and scripted flows reuse the same plumbing (auth, config,
+        provider selection).
+      </p>
+      <h3>2.2 Config & Auth</h3>
+      <ul>
+        <li>
+          <strong>ConfigResolver</strong> merges flags, <code>EPAM_*</code> env vars,
+          project (<code>.epam/settings.json</code>), and global config
+          (<code>~/.epam/config.json</code>), recording the model selection source for
+          audit trails.
+        </li>
+        <li>
+          <strong>AuthManager</strong> runs device/browser login flows, persists
+          secrets in the OS keychain, and backs <code>epam provider *</code> commands.
+        </li>
+      </ul>
+      <h3>2.3 Session Lifecycle</h3>
+      <ul>
+        <li>
+          <strong>SessionStore</strong> writes turns to
+          <code>.epam/sessions/&lt;ulid&gt;.jsonl</code> for resume/fork/import flows.
+        </li>
+        <li>
+          <strong>RedisSessionStore</strong> (via <code>EPAM_REDIS_URL</code>) powers
+          <code>/share</code> and <code>/handoff</code> by storing serialized bundles with a
+          7-day TTL.
+        </li>
+      </ul>
+      <h3>2.4 REPL UX</h3>
+      <p>
+        <code>Repl</code> coordinates provider failover, slash commands, streaming
+        output, and history. <code>RawInputBox</code> draws the prompt, supports
+        bracketed paste, and keeps cursor math accurate for multi-line input.
+      </p>
+      <h3>2.5 Agent Execution</h3>
+      <ol>
+        <li><code>chat</code> builds the system prompt (constraints + consultation context).</li>
+        <li><code>AgentRunner</code> maintains conversation state and token ceilings.</li>
+        <li>Tool calls go through <code>ToolRunner</code> (Read/Write/List/Search/Fetch/Bash).</li>
+        <li><code>RalphWiggumLoop</code> retries fragile bash steps automatically.</li>
+        <li><code>AuditorRunner</code> feeds lint/test findings back into the chat.</li>
+      </ol>
+      <h3>2.6 Provider Chain</h3>
+      <p>
+        <code>ProviderChain</code> spins up slots for Anthropic, OpenAI, Gemini,
+        Copilot, Codex, Cursor, Qwen, Codemie, and Proxy providers. It tracks slot
+        health, classifies errors (retry vs. failover), and emits events consumed
+        by the REPL. Backups follow the policy documented in
+        <code>plans/orchestration-failover-plan.md</code> so CLI and orchestration share
+        the same strategy.
+      </p>
+      <h3>2.7 Batch Commands</h3>
+      <p>
+        <code>epam run</code> executes a single prompt non-interactively but still uses
+        the agent pipeline. <code>estimate</code>, <code>orchestrate</code>, <code>phase</code>,
+        <code>report</code>, etc. wrap orchestration scripts to keep tooling
+        consistent.
+      </p>
+
+      <h2>3. Orchestration Architecture</h2>
+      <h3>3.1 Story Data</h3>
+      <ul>
+        <li><code>orchestrations/prd.json</code> — backlog, phases, quotas.</li>
+        <li><code>orchestrations/agents/profiles.json</code> — persona prompts.</li>
+        <li><code>AGENTS.md</code>, <code>KB.md</code> — learned behaviors & knowledge base.</li>
+      </ul>
+      <h3>3.2 Script Flow</h3>
+      <ol>
+        <li>Bootstrap paths, pick provider wrapper, ensure logs.</li>
+        <li>Start Eleventy watcher (unless <code>EPAM_DASH_AUTO_SERVE=0</code>).</li>
+        <li>Run specification pre-pass (<code>spec-mode-runner.js</code>) — snapshot
+          <code>prd.json</code>, assign OpenSpec/Speckit per story, apply acceptance criteria
+          edits or splits, and log deltas to <code>logs/spec-phase.jsonl</code> (disable with
+          <code>EPAM_SPEC_MODE=0</code>).</li>
+        <li>Resolve phase + orchestration mode via <code>phasesConfig</code>.</li>
+        <li>Run CPA + execution-plan jq pipelines.</li>
+        <li>Forecast token ceilings, precompute provider/model backups.</li>
+        <li>Create git worktrees per lane and seed manifests.</li>
+        <li>Launch primary/independent agents via provider wrapper scripts.</li>
+        <li>Update dashboards + logs, trigger <code>provider-cutover.sh</code> as needed.</li>
+        <li>Run reviews, tear down worktrees, stop watcher.</li>
+      </ol>
+      <h3>3.3 Utilities</h3>
+      <p>
+        Wrapper scripts (<code>claude.sh</code>, <code>copilot.sh</code>, <code>openai.sh</code>,
+        etc.) normalize provider CLIs. Supporting helpers include
+        <code>contextualize-stories.sh</code>, <code>estimate-stories.sh</code>,
+        <code>team-lead-review.sh</code>, <code>update-monitor.sh</code>, and
+        <code>provider-cutover.sh</code>.
+      </p>
+      <h3>3.4 Logging</h3>
+      <ul>
+        <li><code>logs/agent-status.json</code> — live orchestration state.</li>
+        <li><code>logs/agent-messages.jsonl</code> — streaming transcripts.</li>
+        <li><code>logs/phase-cost.jsonl</code> — token/cost ledger per story/provider.</li>
+        <li><code>logs/provider-failover.json</code> — sentinel for backup switches.</li>
+      </ul>
+      <h3>3.5 Specification Mode (OpenSpec/Speckit)</h3>
+      <ul>
+        <li><code>spec-mode-runner.js</code> snapshots <code>prd.json</code>, invokes the coordinator
+          agent, runs OpenSpec/Speckit per story, merges acceptance criteria, and appends
+          JSONL records to <code>logs/spec-phase.jsonl</code>.</li>
+        <li>Artifacts: <code>logs/spec-baseline.json</code>, <code>logs/spec-summary.json</code>, and
+          archived runs under <code>logs/spec-runs/&lt;run&gt;</code> so dashboards can diff baselines
+          against current PRD.</li>
+        <li>CLI entrypoints: <code>epam orchestrate spec &lt;phase&gt;</code> (or REPL
+          <code>/orchestrate spec</code>) and <code>npm run specification:run -- --phase &lt;phase&gt;</code>.</li>
+        <li>Toggle with <code>EPAM_SPEC_MODE</code> when you need to replay phases without rerunning
+          spec agents.</li>
+      </ul>
+
+      <h2>4. Dashboards & Real-Time Updates</h2>
+      <h3>4.1 Eleventy Pipeline</h3>
+      <p>
+        <code>npm run dashboards:build|watch|serve</code> read
+        <code>orchestrations/dashboards/.eleventy.js</code>, copying 11 HTML dashboards
+        (monitor, PRD viewer, specification, etc.), runtime assets, PRD data, and
+        selective logs into <code>orchestrations/dashboards/live</code>. Only required
+        JSON/JSONL files are watched to limit rebuild noise.
+      </p>
+      <h3>4.2 Snapshot & Overlay</h3>
+      <p>
+        <code>build/snapshot.js</code> creates <code>build-info.json</code> (hashes, story
+        counts, phase summaries). <code>runtime/build-info.js</code> polls that file in
+        every dashboard, rendering a shared status pill and dispatching global
+        events for page-specific scripts.
+      </p>
+      <h3>4.3 Integration with Orchestration</h3>
+      <p>
+        The master script starts the Eleventy watcher automatically, logs to
+        <code>dashboards-watch.log</code>, and cleans up on exit. Generated assets are
+        ignored by git but deployed to the demo workspace for validation.
+      </p>
+      <h3>4.4 Specification Dashboard</h3>
+      <p>
+        <code>specification.html</code> compares the baseline (<code>logs/spec-baseline.json</code>)
+        with the current PRD, showing acceptance-criteria diffs, split stories, and
+        the OpenSpec/Speckit ledger emitted by <code>logs/spec-phase.jsonl</code>.
+        It pulls coverage metrics from <code>logs/spec-summary.json</code> and uses the
+        shared runtime overlay for freshness warnings.
+      </p>
+
+      <h2>5. Deployment & Environments</h2>
+      <h3>5.1 Build Targets</h3>
+      <ul>
+        <li><code>npm run build</code> — tsup compile to <code>dist/epam.js</code>.</li>
+        <li><code>npm run dev</code> — run entrypoint via <code>tsx</code>.</li>
+        <li>Quality: <code>npm run lint</code>, <code>typecheck</code>, <code>test</code>, <code>dashboards:build</code>.</li>
+      </ul>
+      <h3>5.2 Demo Deployment</h3>
+      <ol>
+        <li>Execute <code>scripts/deploy-demo.sh</code>.</li>
+        <li>Script rebuilds, copies <code>dist</code>, syncs dashboards to <code>epam-cli-demo</code>, and verifies via <code>node dist/epam.js --version</code>.</li>
+        <li>Demo workspace mirrors live dashboards for testing orchestration flows.</li>
+      </ol>
+      <h3>5.3 Environment Variables</h3>
+      <ul>
+        <li>CLI: <code>EPAM_BACKEND_URL</code>, <code>EPAM_PROVIDER</code>, <code>EPAM_MODEL</code>, <code>EPAM_MAX_ITERATIONS</code>, budget envs.</li>
+        <li>Secrets: <code>EPAM_API_KEY_ANTHROPIC</code>, <code>EPAM_API_KEY_OPENAI</code>, etc.</li>
+        <li>Orchestration: <code>CLAUDE_CMD</code>, <code>EPAM_ORCHESTRATION_PROVIDER</code>, <code>EPAM_DASH_AUTO_SERVE</code>, <code>EPAM_REDIS_URL</code>.</li>
+        <li>Specification: <code>EPAM_SPEC_MODE</code> (default 1) toggles the spec pre-pass.</li>
+      </ul>
+
+      <h2>6. Operations</h2>
+      <h3>6.1 Failover & Token Policy</h3>
+      <p>
+        Follow <code>plans/orchestration-failover-plan.md</code> for forecasting tokens,
+        precomputing provider/model tuples, wrapping agent executions with guards,
+        and persisting failovers to <code>logs/agent-status.json</code> +
+        <code>phase-cost.jsonl</code>.
+      </p>
+      <h3>6.2 Session Recovery</h3>
+      <p>
+        Use <code>/resume</code> for local JSONL sessions, <code>/share</code>/<code>/handoff</code>
+        for Redis export, and <code>/import</code>/<code>epam import</code> for rehydration.
+        Future cross-process failover should call <code>storeSession()</code> and pass the
+        ULID via <code>EPAM_AUTO_RESUME</code>.
+      </p>
+      <h3>6.3 Monitoring</h3>
+      <p>
+        Scripts like <code>dashboard-health-check.sh</code>, <code>check-phase-gate.sh</code>,
+        and <code>worktree-health-check.sh</code> validate readiness. Tail
+        <code>orchestrations/logs</code> for stuck lanes.
+      </p>
+      <h3>6.4 Automation Hooks</h3>
+      <p>
+        <code>update-monitor.sh</code> refreshes dashboards/alerts.
+        <code>provider-cutover.sh</code> bulk-switches providers when a quota trips.
+        <code>sync-monitor-stories.sh</code> keeps dashboards aligned with PRD changes.
+      </p>
+
+      <h2>7. Quick Reference</h2>
+      <h3>CLI</h3>
+      <ul>
+        <li><code>epam chat</code> — REPL with resilient provider chain.</li>
+        <li><code>epam run</code> — deterministic single-run agent.</li>
+        <li><code>epam estimate|orchestrate|phase ...</code> — script wrappers.</li>
+        <li><code>epam orchestrate spec &lt;phase&gt;</code> — coordinator → OpenSpec/Speckit pre-pass.</li>
+        <li><code>epam provider *</code> — provider auth lifecycle.</li>
+        <li><code>epam import &lt;code&gt;</code> — hydrate Redis/shared sessions.</li>
+      </ul>
+      <h3>Orchestration</h3>
+      <ul>
+        <li><code>orchestrations/scripts/run-agent-orchestration.sh</code></li>
+        <li><code>orchestrations/scripts/spec-mode-runner.js</code></li>
+        <li><code>.../provider-cutover.sh</code>, <code>.../update-monitor.sh</code></li>
+        <li><code>scripts/deploy-demo.sh</code> — keep demo env current.</li>
+      </ul>
+      <h3>Dashboards</h3>
+      <ul>
+        <li><code>npm run dashboards:build</code> — static build.</li>
+        <li><code>npm run dashboards:serve</code> — Eleventy + BrowserSync.</li>
+        <li>Watcher auto-started by orchestration runs (toggle with <code>EPAM_DASH_AUTO_SERVE</code>).</li>
+      </ul>
+
+      <h2>8. Extension Playbook</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Add Commands</h3>
+          <p>Create <code>src/cli/commands/&lt;name&gt;.ts</code>, register it in
+            <code>src/cli/index.ts</code>.</p>
+        </div>
+        <div class="card">
+          <h3>Add Providers</h3>
+          <p>Implement <code>LLMProvider</code>, register slots in
+            <code>ProviderChain</code>, add orchestration wrappers if needed.</p>
+        </div>
+        <div class="card">
+          <h3>Add Tools/Auditors</h3>
+          <p>Follow patterns under <code>src/tools/builtin</code> and
+            <code>src/auditors</code>, wire them into the tool resolver.</p>
+        </div>
+        <div class="card">
+          <h3>Grow Dashboards</h3>
+          <p>Add templates in <code>orchestrations/dashboards</code>, import the shared
+            runtime overlay, and expose data via Eleventy data files.</p>
+        </div>
+      </div>
+
+      <h2>9. Key Paths</h2>
+      <ul>
+        <li>CLI entry: <code>src/index.ts</code></li>
+        <li>Command registry: <code>src/cli/index.ts</code></li>
+        <li>REPL: <code>src/cli/repl/Repl.ts</code>, <code>RawInputBox.ts</code></li>
+        <li>Agent loop: <code>src/agent/AgentRunner.ts</code>, <code>Executor.ts</code></li>
+        <li>Providers: <code>src/providers/ProviderChain.ts</code>, <code>src/providers/*</code></li>
+        <li>Tools: <code>src/tools/builtin/*.ts</code></li>
+        <li>Session stores: <code>src/context/SessionStore.ts</code>, <code>RedisSessionStore.ts</code></li>
+        <li>Orchestration: <code>orchestrations/scripts/run-agent-orchestration.sh</code></li>
+        <li>Specification runner: <code>orchestrations/scripts/spec-mode-runner.js</code></li>
+        <li>Dashboards config: <code>orchestrations/dashboards/.eleventy.js</code></li>
+        <li>Snapshot builder: <code>orchestrations/dashboards/build/snapshot.js</code></li>
+        <li>Runtime overlay: <code>orchestrations/dashboards/runtime/build-info.js</code></li>
+        <li>Specification dashboard: <code>orchestrations/dashboards/specification.html</code></li>
+        <li>Deployment: <code>scripts/deploy-demo.sh</code></li>
+        <li>Operational plan: <code>plans/orchestration-failover-plan.md</code></li>
+      </ul>
+    </main>
+  </body>
+</html>

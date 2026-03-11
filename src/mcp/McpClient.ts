@@ -10,10 +10,12 @@ import type {
 } from './types.js';
 import type { Tool, ToolResult } from '../tools/types.js';
 import type { ToolDefinition } from '../providers/types.js';
+import { StdioTransport } from './StdioTransport.js';
 import { logger } from '../utils/logger.js';
 
 export class McpClient {
   private servers: McpServerStatus[] = [];
+  private stdioTransports = new Map<string, StdioTransport>();
   private nextRpcId = 1;
 
   constructor(private projectRoot?: string) {}
@@ -34,17 +36,11 @@ export class McpClient {
     await Promise.all(
       config.servers.map(async (serverConfig) => {
         try {
-          const tools = await this.fetchTools(serverConfig);
-          this.servers.push({
-            name: serverConfig.name,
-            url: serverConfig.url,
-            transport: serverConfig.transport,
-            connected: true,
-            tools,
-          });
-          logger.debug(
-            `MCP server '${serverConfig.name}' connected — ${tools.length} tool(s) available`
-          );
+          if (serverConfig.transport === 'stdio') {
+            await this.connectStdio(serverConfig);
+          } else {
+            await this.connectHttp(serverConfig);
+          }
         } catch (err) {
           const error = (err as Error).message;
           logger.warn(`MCP server '${serverConfig.name}' unreachable: ${error}`);
@@ -52,6 +48,8 @@ export class McpClient {
             name: serverConfig.name,
             url: serverConfig.url,
             transport: serverConfig.transport,
+            command: serverConfig.command,
+            args: serverConfig.args,
             connected: false,
             tools: [],
             error,
@@ -84,6 +82,51 @@ export class McpClient {
     }
 
     return tools;
+  }
+
+  /**
+   * Shut down all stdio transports (kill spawned processes).
+   */
+  shutdown(): void {
+    for (const [name, transport] of this.stdioTransports) {
+      logger.debug(`Shutting down stdio MCP server '${name}'`);
+      transport.shutdown();
+    }
+    this.stdioTransports.clear();
+  }
+
+  // ── connection helpers ─────────────────────────────────────────
+
+  private async connectHttp(serverConfig: McpServerConfig): Promise<void> {
+    const tools = await this.fetchTools(serverConfig);
+    this.servers.push({
+      name: serverConfig.name,
+      url: serverConfig.url,
+      transport: serverConfig.transport,
+      connected: true,
+      tools,
+    });
+    logger.debug(
+      `MCP server '${serverConfig.name}' connected — ${tools.length} tool(s) available`
+    );
+  }
+
+  private async connectStdio(serverConfig: McpServerConfig): Promise<void> {
+    const transport = new StdioTransport(serverConfig);
+    const tools = await transport.connect();
+
+    this.stdioTransports.set(serverConfig.name, transport);
+    this.servers.push({
+      name: serverConfig.name,
+      transport: 'stdio',
+      command: serverConfig.command,
+      args: serverConfig.args,
+      connected: true,
+      tools,
+    });
+    logger.debug(
+      `MCP stdio server '${serverConfig.name}' connected — ${tools.length} tool(s) available`
+    );
   }
 
   /**
@@ -156,16 +199,40 @@ export class McpClient {
     return {
       name: namespacedName,
       description: `[MCP:${server.name}] ${toolDef.description}`,
-      permission: 'review' as const, // Remote tools default to 'review' permission
+      permission: 'review' as const,
       definition: {
         name: namespacedName,
         description: toolDef.description,
         inputSchema: toolDef.inputSchema,
       } as ToolDefinition,
       execute: async (input: Record<string, unknown>): Promise<ToolResult> => {
+        if (server.transport === 'stdio') {
+          return this.executeStdioTool(server.name, toolDef.name, input);
+        }
         return this.executeRemoteTool(server, toolDef.name, input);
       },
     };
+  }
+
+  /**
+   * Execute a tool via the stdio transport.
+   */
+  private async executeStdioTool(
+    serverName: string,
+    toolName: string,
+    input: Record<string, unknown>
+  ): Promise<ToolResult> {
+    const transport = this.stdioTransports.get(serverName);
+    if (!transport) {
+      return {
+        toolUseId: '',
+        content: `Stdio transport not found for server '${serverName}'`,
+        isError: true,
+      };
+    }
+
+    const result = await transport.callTool(toolName, input);
+    return { toolUseId: '', ...result };
   }
 
   /**
@@ -251,6 +318,9 @@ export class McpClient {
     server: McpServerConfig,
     operation: 'tools/list' | 'tools/call'
   ): string {
+    if (!server.url) {
+      throw new Error(`HTTP/SSE server '${server.name}' requires a "url" field`);
+    }
     const baseUrl = server.url.replace(/\/+$/, '');
 
     if (baseUrl.endsWith('/tools/list')) {

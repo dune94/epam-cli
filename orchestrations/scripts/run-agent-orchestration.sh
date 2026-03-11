@@ -637,6 +637,62 @@ PHASE="$PHASE" AUTO_COMMIT=true "$SCRIPT_DIR/worktree-health-check.sh" \
 }
 
 # ──────────────────────────────────────────────
+# Step 3.2: Merge worktree branches back to main branch
+# After agents complete and health-check auto-commits, merge their
+# work into the main branch so the next phase (which recreates
+# worktree branches from HEAD) inherits all prior code.
+# ──────────────────────────────────────────────
+if [ "$need_worktrees" = true ]; then
+    log "Step 3.2: Merging worktree branches back to main branch..."
+
+    # Resolve the git root and current branch
+    _merge_git_root="${GIT_WORK_ROOT:-$PROJECT_ROOT}"
+    _merge_current_branch=$(git -C "$_merge_git_root" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "master")
+
+    MERGE_FAILED=false
+
+    for _wt_branch in wt-primary wt-independent; do
+        # Skip branches that don't exist (no stories for that lane)
+        if ! git -C "$_merge_git_root" show-ref --verify --quiet "refs/heads/$_wt_branch"; then
+            info "  Branch $_wt_branch does not exist — skipping"
+            continue
+        fi
+
+        # Check if the branch has commits ahead of the current branch
+        _ahead=$(git -C "$_merge_git_root" rev-list --count "$_merge_current_branch..$_wt_branch" 2>/dev/null || echo "0")
+        if [ "${_ahead:-0}" -eq 0 ]; then
+            info "  Branch $_wt_branch has no new commits — nothing to merge"
+            continue
+        fi
+
+        log "  Merging $_wt_branch ($_ahead commit(s) ahead) into $_merge_current_branch..."
+        if git -C "$_merge_git_root" merge --no-ff "$_wt_branch" \
+            -m "merge: phase $PHASE ${_wt_branch#wt-} lane ($_ahead commits)" 2>&1; then
+            success "  Merged $_wt_branch into $_merge_current_branch"
+            "$SCRIPT_DIR/update-monitor.sh" event "merge_back" \
+                "Merged $_wt_branch into $_merge_current_branch ($_ahead commits)" "" "main" "orchestrator" 2>/dev/null || true
+        else
+            error "  Failed to merge $_wt_branch into $_merge_current_branch"
+            error "  This may require manual conflict resolution"
+            "$SCRIPT_DIR/update-monitor.sh" event "merge_conflict" \
+                "CONFLICT merging $_wt_branch — manual resolution needed" "" "main" "orchestrator" 2>/dev/null || true
+            MERGE_FAILED=true
+            # Abort the failed merge so the repo is not left in a dirty state
+            git -C "$_merge_git_root" merge --abort 2>/dev/null || true
+        fi
+    done
+
+    if [ "$MERGE_FAILED" = true ]; then
+        error "Step 3.2: One or more worktree merges failed — review conflicts before next phase"
+        error "  Worktrees preserved for inspection. Re-run with --skip-cleanup to debug."
+    else
+        success "Step 3.2: All worktree branches merged back successfully"
+    fi
+else
+    info "Step 3.2: No worktrees — skipping merge-back"
+fi
+
+# ──────────────────────────────────────────────
 # Sync story data to monitor from cost log
 "$SCRIPT_DIR/sync-monitor-stories.sh" 2>/dev/null || true
 

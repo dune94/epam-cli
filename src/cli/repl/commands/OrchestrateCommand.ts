@@ -5,6 +5,7 @@
  *   /orchestrate              — interactive wizard (phase picker + action menu)
  *   /orchestrate setup        — configure defaults saved to .epam/orchestration.json
  *   /orchestrate estimate     — run estimate-stories.sh + CPA pass for a phase
+ *   /orchestrate spec         — run specification elaboration pipeline (openspec/speckit/coordinator)
  *   /orchestrate execution    — launch run-agent-orchestration.sh (detached)
  *   /orchestrate status       — show progress of last launched run
  *   /orchestrate help         — show help
@@ -87,8 +88,12 @@ async function pickFromList(
 // ── Script runner ────────────────────────────────────────────────────────────
 
 function runScript(script: string, args: string[], env?: Record<string, string>): Promise<number> {
+  return runCommand('bash', [script, ...args], env);
+}
+
+function runCommand(cmd: string, args: string[], env?: Record<string, string>): Promise<number> {
   return new Promise((res, reject) => {
-    const child = spawn('bash', [script, ...args], {
+    const child = spawn(cmd, args, {
       stdio: 'inherit',
       env: { ...process.env, ...env },
     });
@@ -246,6 +251,50 @@ async function runEstimate(phase: string, ctx: SlashCommandContext): Promise<boo
   return true;
 }
 
+// ── spec ─────────────────────────────────────────────────────────────────────
+
+async function runSpec(phase: string, ctx: SlashCommandContext): Promise<boolean> {
+  const cfg = readConfig();
+  const rl = ctx.rl;
+
+  const nodeCmd = process.env.NODE_CMD ?? join(process.env.HOME ?? '', '.nvm/versions/node/v20.20.0/bin/node');
+  const specRunner = join(process.cwd(), 'orchestrations', 'scripts', 'spec-mode-runner.js');
+
+  if (!existsSync(specRunner)) {
+    console.log(chalk.red('Error: spec-mode-runner.js not found.'));
+    console.log(chalk.dim(`Expected: ${specRunner}`));
+    return true;
+  }
+
+  let dryRun = false;
+  if (rl) {
+    console.log();
+    const dryRunAnswer = await ask(rl, chalk.cyan('Dry run (evaluate assignments without applying PRD changes)? [y/N]: '));
+    dryRun = /^y/i.test(dryRunAnswer);
+  }
+
+  console.log();
+  console.log(chalk.bold.cyan(`📝 Running specification pass: ${phase}`));
+  if (dryRun) console.log(chalk.dim('  (dry-run mode — no PRD changes will be applied)'));
+  console.log();
+
+  const env: Record<string, string> = {};
+  if (cfg.prdFile) env.PRD_FILE = resolve(process.cwd(), cfg.prdFile);
+  if (cfg.outputDir) env.OUTPUT_DIR = resolve(process.cwd(), cfg.outputDir);
+
+  const specArgs = [specRunner, '--phase', phase];
+  if (dryRun) specArgs.push('--dry-run');
+
+  const code = await runCommand(nodeCmd, specArgs, env);
+  if (code !== 0) {
+    console.log(chalk.red(`\nSpecification pass failed (exit ${code})`));
+  } else {
+    console.log(chalk.green('\n✓ Specification pass complete'));
+  }
+
+  return true;
+}
+
 // ── execution ────────────────────────────────────────────────────────────────
 
 async function launchExecution(phase: string, ctx: SlashCommandContext): Promise<boolean> {
@@ -392,7 +441,7 @@ async function runWizard(ctx: SlashCommandContext): Promise<boolean> {
   console.log();
 
   // Action menu
-  const actions = ['estimate', 'execution', 'status', 'setup'];
+  const actions = ['estimate', 'spec', 'execution', 'status', 'setup'];
   const action = await pickFromList(rl, 'What do you want to do', actions, 0);
   if (!action) return true;
 
@@ -410,6 +459,7 @@ async function runWizard(ctx: SlashCommandContext): Promise<boolean> {
   if (!phase) return true;
 
   if (action === 'estimate')  return runEstimate(phase, ctx);
+  if (action === 'spec')      return runSpec(phase, ctx);
   if (action === 'execution') return launchExecution(phase, ctx);
 
   return true;
@@ -424,6 +474,7 @@ function showHelp(): void {
   console.log(`  ${chalk.cyan('/orchestrate')}               ${chalk.dim('Interactive wizard (phase picker + action menu)')}`);
   console.log(`  ${chalk.cyan('/orchestrate setup')}         ${chalk.dim('Configure provider, mode, paths, flags')}`);
   console.log(`  ${chalk.cyan('/orchestrate estimate')} ${chalk.dim('<phase>')}  ${chalk.dim('Run estimation + CPA pass')}`);
+  console.log(`  ${chalk.cyan('/orchestrate spec')} ${chalk.dim('<phase>')}      ${chalk.dim('Run specification elaboration (openspec/speckit)')}`);
   console.log(`  ${chalk.cyan('/orchestrate execution')} ${chalk.dim('<phase>')} ${chalk.dim('Launch orchestration (detached)')}`);
   console.log(`  ${chalk.cyan('/orchestrate status')}        ${chalk.dim('Show progress of last run')}`);
   console.log();
@@ -438,7 +489,7 @@ export const orchestrateCommand: SlashCommand = {
   name: 'orchestrate',
   aliases: ['orch'],
   description: 'Launch and monitor multi-agent orchestration',
-  usage: '[setup | estimate <phase> | execution <phase> | status | help]',
+  usage: '[setup | estimate <phase> | spec <phase> | execution <phase> | status | help]',
 
   async execute(args, ctx): Promise<boolean> {
     const parts = args.trim().split(/\s+/).filter(Boolean);
@@ -466,6 +517,23 @@ export const orchestrateCommand: SlashCommand = {
         return runEstimate(picked, ctx);
       }
       return runEstimate(phase, ctx);
+    }
+
+    if (sub === 'spec') {
+      if (!phase) {
+        const cfg = readConfig();
+        const prd = readPrd(cfg);
+        if (!prd || prd.phases.length === 0) {
+          console.log(chalk.red('Phase required: /orchestrate spec <phase>'));
+          return true;
+        }
+        const rl = ctx.rl;
+        if (!rl) { console.log(chalk.red('Phase required: /orchestrate spec <phase>')); return true; }
+        const picked = await pickFromList(rl, 'Select phase', prd.phases, 0);
+        if (!picked) return true;
+        return runSpec(picked, ctx);
+      }
+      return runSpec(phase, ctx);
     }
 
     if (sub === 'execution' || sub === 'exec') {

@@ -57,12 +57,22 @@ export function createRunCommand(): Command {
       const authManager = new AuthManager(config.backendUrl);
       const tier = await detectTier();
 
+      // If BYOK key is available for the requested provider, skip proxy
+      const providerToCheck = opts.provider ?? config.provider;
+      const hasByokKey = !!(
+        getEnvApiKey(providerToCheck) ??
+        getEnvApiKey(config.provider) ??
+        await getStoredApiKey(providerToCheck) ??
+        await getStoredApiKey(config.provider)
+      );
+      const useProxy = !hasByokKey && (tier === 'pro' || tier === 'enterprise');
+
       const chain = new ProviderChain({
         slots: config.llmChain,
         resolveApiKey: async (providerName: string) => {
           return getEnvApiKey(providerName) ?? await getStoredApiKey(providerName);
         },
-        proxyConfig: (tier === 'pro' || tier === 'enterprise') ? {
+        proxyConfig: useProxy ? {
           backendUrl: config.backendUrl,
           getAccessToken: () => authManager.getValidToken(),
         } : undefined,

@@ -18,7 +18,8 @@ const DASHBOARD_FILES = [
   'phase-cost-monitor.html',
   'prd-viewer.html',
   'quality-dashboard.html',
-  'specification.html'
+  'specification.html',
+  'agent-activity.html'
 ];
 
 const WATCH_TARGETS = [

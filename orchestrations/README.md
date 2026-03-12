@@ -15,7 +15,7 @@ orchestrations/
 ├── prd.json                    # Master story definitions + phase assignments
 ├── README.md                   # This file
 ├── agents/
-│   ├── profiles.json           # 10 core + 7 QA gate agent role definitions (rich system prompts)
+│   ├── profiles.json           # 10 core + 10 QA/analysis agent role definitions (rich system prompts)
 │   ├── AGENTS.md               # Auto-generated learned patterns log
 │   └── KB.md                   # Shared knowledge base
 ├── scripts/
@@ -43,6 +43,7 @@ orchestrations/
 │   ├── phase-cost.jsonl             # Per-story cost/time records
 │   ├── phase-skill-assessments.jsonl
 │   ├── agent-messages.jsonl         # MCP message bus (hybrid mode)
+│   ├── agent-activity.jsonl         # Unified agent activity timeline (all event types)
 │   ├── profiles-audit.jsonl         # Pre-phase skill augmentation log
 │   └── phase-improvements/          # Per-phase improvement reports
 └── dashboards/
@@ -54,6 +55,7 @@ orchestrations/
     ├── agent-messages.html          # Message bus viewer
     ├── agents-orchestration.html   # Orchestration flow diagram
     ├── quality-assurance.html      # QA testing gates viewer
+    ├── agent-activity.html         # Unified agent activity timeline
     └── cpa-details.html            # CPA estimation details
 ```
 
@@ -140,6 +142,9 @@ Watcher output (and any failures) land in `orchestrations/logs/dashboards-watch.
 | `mutant-hunter` | Phase B (4.3) | Mutation testing analysis (test suite quality scoring) |
 | `fuzz-weaver` | Phase C (4.4) | Property-based fuzz testing analysis (edge cases, input domains, vulnerabilities) |
 | `perf-sentinel` | Phase C (4.4) | Performance analysis (complexity, memory, async, startup time) |
+| `hygiene-sentinel` | Phase C (4.4) | Dead code detection, unused exports (via Knip), code hygiene |
+| `design-sentinel` | Phase C (4.4) | Duplication detection (jscpd), SOLID principles analysis (Semgrep) |
+| `pattern-sentinel` | Phase C (4.4) | Pattern extraction (ast-grep), dependency analysis (Madge), generalization |
 
 ---
 
@@ -187,6 +192,59 @@ CLAUDE_CMD=codemie-claude ./orchestrations/scripts/run-agent-orchestration.sh --
 # EPAM CLI (once built — dogfooding)
 CLAUDE_CMD="node dist/epam.js run" ./orchestrations/scripts/run-agent-orchestration.sh --phase finops
 ```
+
+---
+
+## BYOK Provider Routing
+
+When a user has their own API key set (via `EPAM_API_KEY_ANTHROPIC` env var or the encrypted credential store), all LLM calls go **direct to the provider** — never through the proxy backend. This applies to `chat`, `run`, and `new` commands. The proxy is only used for `pro`/`enterprise` tier users without BYOK keys.
+
+---
+
+## Remote Session Handoff (`/remote`)
+
+The `/remote` slash command enables mobile continuation of a desktop CLI session:
+
+1. Desktop encrypts the session (AES-256-GCM) and POSTs to the backend-stub
+2. A QR code is displayed containing a claim URL with the encryption key in the URL fragment (never sent to server)
+3. Phone scans QR, claims the session, decrypts with Web Crypto API, and renders a chat UI
+4. Phone user can continue the conversation with AI (streaming via proxy)
+5. "Return to Desktop" re-encrypts and POSTs back; desktop auto-reclaims via polling
+
+Subcommands: `/remote`, `/remote reclaim`, `/remote status`, `/remote cancel`, `/remote help`
+
+Backend endpoints: `POST /v1/remote/sessions`, `GET /v1/remote/sessions/:token`, `POST /v1/remote/sessions/:token/return`, `GET /v1/remote/sessions/:token/reclaim`
+
+---
+
+## Project Scaffolding (`epam new`)
+
+Initialize new projects with full orchestration workspace:
+
+```bash
+epam new init                     # Analyze manifest + generate PRD interactively
+epam new generate                 # Generate project from existing PRD
+```
+
+Scaffolds: `orchestrations/` directory with prd.json, agent profiles, dashboards (Eleventy), scripts, KB.md, and `.epam/settings.json`.
+
+---
+
+## Unified Agent Activity Log
+
+All agents emit events to `orchestrations/logs/agent-activity.jsonl` via the `AgentActivityLogger` (`src/logging/AgentActivityLogger.ts`). Event types:
+
+| Type | Description |
+|------|-------------|
+| `story_start` / `story_complete` / `story_fail` | Story lifecycle |
+| `tool_run` / `tool_result` | External tool invocations (Knip, jscpd, Semgrep, etc.) |
+| `finding` | Issue/pattern discovered (with severity) |
+| `gate_decision` | QA gate pass/fail/review |
+| `cost_snapshot` | Token/cost data point |
+| `phase_start` / `phase_complete` | Phase lifecycle |
+| `error` / `info` | General events |
+
+View in the **Agent Activity** dashboard (`agent-activity.html`) — filterable by agent, type, phase, story, and severity.
 
 ---
 

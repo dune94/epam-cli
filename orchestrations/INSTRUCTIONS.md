@@ -48,6 +48,8 @@ npx tsc --noEmit
 | `orchestrations/logs/agent-status.json` | Live monitor data (read by HTML dashboards) |
 | `orchestrations/logs/phase-cost.jsonl` | Per-story cost/time tracking records |
 | `orchestrations/logs/agent-messages.jsonl` | Agent message bus (hybrid mode) |
+| `orchestrations/logs/agent-activity.jsonl` | Unified agent activity timeline (all event types) |
+| `src/logging/AgentActivityLogger.ts` | TypeScript JSONL emitter for unified activity events |
 
 ---
 
@@ -102,6 +104,24 @@ esac
 | `test-engineer` | vitest unit + integration tests, health checks |
 | `team-lead-agent` | Phase gates, dependency validation, review authority |
 | `review-agent` | Per-story code review (TypeScript quality, test coverage) |
+| `openspec-agent` | First-pass specification elaboration (acceptance criteria, story splits) |
+| `speckit-agent` | Second-pass specification review (testability, security, edge cases) |
+| `spec-coordinator-agent` | Assigns spec agents per story, final quality review |
+
+### QA Gate Agents
+
+| Role | Gate Phase | Responsibilities |
+|------|-----------|-----------------|
+| `test-coordinator-agent` | Coordinator | Governs testing gates, sequences phases, aggregates verdicts |
+| `sast-sentinel` | Phase A (4.2) | Static analysis + security pattern scanning |
+| `spec-validator` | Phase A (4.2) | Acceptance criteria compliance verification |
+| `review-ranger` | Phase B (4.3) | Deep diff-level code review |
+| `mutant-hunter` | Phase B (4.3) | Mutation testing analysis |
+| `fuzz-weaver` | Phase C (4.4) | Property-based fuzz testing |
+| `perf-sentinel` | Phase C (4.4) | Performance analysis |
+| `hygiene-sentinel` | Phase C (4.4) | Dead code detection, unused exports (Knip) |
+| `design-sentinel` | Phase C (4.4) | Duplication (jscpd), SOLID principles (Semgrep) |
+| `pattern-sentinel` | Phase C (4.4) | Pattern extraction (ast-grep), dependency analysis (Madge) |
 
 ---
 
@@ -209,7 +229,10 @@ Open in a browser (serve via the `agent-monitor` Docker service on port 8092):
 | `agent-profiles.html` | `/agent-profiles.html` | Agent profiles + skills |
 | `phase-cost-monitor.html` | `/phase-cost-monitor.html` | Cost tracking + variance |
 | `agent-messages.html` | `/agent-messages.html` | Message bus viewer |
+| `agent-activity.html` | `/agent-activity.html` | Unified agent activity timeline |
 | `orchestration-plan.html` | `/orchestration-plan.html` | Architecture overview |
+| `quality-assurance.html` | `/quality-assurance.html` | QA testing gates viewer |
+| `cpa-details.html` | `/cpa-details.html` | CPA estimation details |
 
 ---
 

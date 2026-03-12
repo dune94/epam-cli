@@ -162,11 +162,28 @@ body {
 .agent-card.openspec { border-left-color: var(--teal); }
 .agent-card.speckit { border-left-color: var(--violet); }
 .agent-card.coordinator { border-left-color: var(--amber); }
+.agent-card.grooming { border-left-color: #059669; }
 .ac-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .ac-agent-name { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
 .ac-agent-name.openspec { color: var(--teal); }
 .ac-agent-name.speckit { color: var(--violet); }
 .ac-agent-name.coordinator { color: var(--amber); }
+.ac-agent-name.grooming { color: #059669; }
+
+/* ── Grooming cards ── */
+.grooming-summary { background: var(--bg1); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; border-left: 3px solid #059669; }
+.grooming-score { font-size: 20px; font-weight: 800; }
+.grooming-score.ready { color: #1a8f3f; }
+.grooming-score.needs-work { color: #c87a00; }
+.grooming-score.blocked { color: #d93025; }
+.grooming-deficiency { font-size: 11px; color: var(--amber); padding: 2px 0; }
+.grooming-deficiency::before { content: '! '; font-weight: 800; }
+.dedup-cluster { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; margin: 4px 0; }
+.dedup-type { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; }
+.dedup-type.exact-duplicate { color: #d93025; }
+.dedup-type.substantial-overlap { color: #c87a00; }
+.dedup-type.partial-overlap { color: #1a73e8; }
+.dedup-type.conflicting { color: #d93025; }
 .ac-notes { font-size: 11px; color: var(--text2); line-height: 1.6; margin-bottom: 6px; padding: 6px 8px; background: var(--bg); border-radius: 4px; }
 .ac-stat { font-size: 10px; color: var(--text3); display: inline-flex; align-items: center; gap: 4px; margin-right: 12px; }
 .ac-stat strong { color: var(--text2); }
@@ -255,10 +272,16 @@ body {
 const BASELINE_URL = 'prd-baseline.json';
 const CURRENT_URL = 'prd.json';
 const SPEC_LOG_URL = 'logs/spec-phase.jsonl';
+const READINESS_URL = 'logs/readiness-scores.jsonl';
+const GROOMING_URL = 'logs/grooming-report.json';
+const DEDUP_URL = 'logs/dedup-report.json';
 
 let currentFilter = 'all';
 let diffResult = null;
 let specLog = [];
+let readinessScores = {};  // storyId -> score entry
+let groomingReport = null;
+let dedupReport = null;
 
 async function loadJSON(url) {
   const r = await fetch(url + '?t=' + Date.now());
@@ -349,9 +372,71 @@ function getSplitChildren(parentId, current) {
 }
 
 // Render agent contribution card
+function isGroomingAgent(name) {
+  return ['grooming-coordinator', 'readiness-checker', 'dedup-detector'].includes(name);
+}
+
+function renderGroomingSection(storyId) {
+  const score = readinessScores[storyId];
+  let h = '';
+
+  // Readiness score card
+  if (score) {
+    const cls = score.classification === 'ready' ? 'ready' : score.classification === 'needs-work' ? 'needs-work' : 'blocked';
+    h += '<div class="section-label">Grooming — Readiness Check</div>';
+    h += '<div class="grooming-summary">';
+    h += `<div class="ac-header"><span class="ac-agent-name grooming">readiness-checker</span>`;
+    h += `<span class="grooming-score ${cls}">${score.readinessScore}/100</span>`;
+    h += `<span class="badge" style="font-size:8px;${cls === 'ready' ? 'background:rgba(26,143,63,0.10);color:#1a8f3f;border:1px solid rgba(26,143,63,0.25)' : cls === 'needs-work' ? 'background:rgba(200,122,0,0.10);color:#c87a00;border:1px solid rgba(200,122,0,0.25)' : 'background:rgba(217,48,37,0.08);color:#d93025;border:1px solid rgba(217,48,37,0.25)'}">${(score.classification || '').toUpperCase()}</span>`;
+    h += '</div>';
+    // INVEST scores
+    if (score.investScores) {
+      h += '<div style="margin-top:6px;font-size:11px;color:var(--text2)">';
+      const dims = ['Independent', 'Negotiable', 'Valuable', 'Estimable', 'Small', 'Testable'];
+      dims.forEach(d => {
+        const key = d.toLowerCase();
+        if (score.investScores[key] !== undefined) {
+          const val = score.investScores[key];
+          const color = val >= 7 ? 'var(--green)' : val >= 5 ? 'var(--amber)' : 'var(--red)';
+          h += `<span class="ac-stat"><strong style="color:${color}">${val}/10</strong> ${d}</span>`;
+        }
+      });
+      h += '</div>';
+    }
+    // Deficiencies
+    if (score.deficiencies && score.deficiencies.length) {
+      h += '<div style="margin-top:6px">';
+      score.deficiencies.forEach(d => { h += `<div class="grooming-deficiency">${esc(d)}</div>`; });
+      h += '</div>';
+    }
+    h += '</div>';
+  }
+
+  // Dedup clusters containing this story
+  if (dedupReport && dedupReport.clusters) {
+    const clusters = dedupReport.clusters.filter(c => c.storyIds && c.storyIds.includes(storyId));
+    if (clusters.length > 0) {
+      h += '<div class="section-label">Grooming — Duplicate Detection</div>';
+      clusters.forEach(c => {
+        h += '<div class="dedup-cluster">';
+        h += `<div class="ac-header"><span class="ac-agent-name grooming">dedup-detector</span>`;
+        h += `<span class="dedup-type ${c.overlapType || ''}">${(c.overlapType || 'overlap').toUpperCase()}</span>`;
+        h += `<span class="ac-stat">Similarity: <strong>${((c.similarityScore || 0) * 100).toFixed(0)}%</strong></span>`;
+        h += '</div>';
+        h += '<div style="font-size:11px;color:var(--text2)">';
+        h += `<strong>Cluster:</strong> ${(c.storyIds || []).map(id => `<span class="story-id" style="font-size:9px">${esc(id)}</span>`).join(' ')}`;
+        if (c.recommendation) h += `<br><strong>Recommendation:</strong> ${esc(c.recommendation)}`;
+        h += '</div></div>';
+      });
+    }
+  }
+
+  return h;
+}
+
 function renderAgentCard(entry) {
   const agent = entry.agent || 'unknown';
-  const agentCls = agent.includes('openspec') ? 'openspec' : agent.includes('speckit') ? 'speckit' : '';
+  const agentCls = agent.includes('openspec') ? 'openspec' : agent.includes('speckit') ? 'speckit' : isGroomingAgent(agent) ? 'grooming' : '';
   let h = `<div class="agent-card ${agentCls}">`;
   h += `<div class="ac-header"><span class="ac-agent-name ${agentCls}">${esc(agent)}</span>`;
   if (entry.acceptanceChanged) h += `<span class="badge b-modified" style="font-size:8px">AC UPDATED</span>`;
@@ -419,6 +504,9 @@ function renderStoryDetail(story, baselineStory, type, current) {
   const entries = getSpecEntries(story.id);
   const children = getSplitChildren(story.id, current);
   let h = '';
+
+  // Grooming results (pre-spec)
+  h += renderGroomingSection(story.id);
 
   // Coordinator assignment
   if (spec) h += renderCoordinatorNotes(spec);
@@ -543,6 +631,7 @@ function render(diff) {
     <div class="stat-chip"><span class="stat-lbl">Hours</span><span class="stat-num">${bHours}h &rarr; ${cHours}h</span></div>
     <div class="stat-chip"><span class="stat-lbl">Spec Entries</span><span class="stat-num">${specLog.length}</span></div>
     <div class="stat-chip"><span class="stat-lbl">Reviewed</span><span class="stat-num">${approvedCount}/${reviewedCount}</span></div>
+    <div class="stat-chip"><div class="stat-dot" style="background:#059669"></div><span class="stat-lbl">Groomed</span><span class="stat-num">${Object.keys(readinessScores).length}</span></div>
   `;
 
   let html = '';
@@ -555,6 +644,10 @@ function render(diff) {
   html += summaryCard('Baseline', (baseline.stories||[]).length, '', `${bHours}h total`);
   html += summaryCard('Current', (current.stories||[]).length, '', `${cHours}h total`);
   html += summaryCard('Coord Reviewed', reviewedCount, approvedCount === reviewedCount ? 'sc-added' : 'sc-modified', `${approvedCount} approved`);
+  const groomedCount = Object.keys(readinessScores).length;
+  const readyCount = Object.values(readinessScores).filter(s => s.classification === 'ready').length;
+  const dedupClusters = dedupReport && dedupReport.clusters ? dedupReport.clusters.length : 0;
+  if (groomedCount > 0) html += summaryCard('Groomed', groomedCount, readyCount === groomedCount ? 'sc-added' : 'sc-modified', `${readyCount} ready, ${dedupClusters} dedup clusters`);
   html += '</div>';
 
   // Phase changes
@@ -599,9 +692,15 @@ function render(diff) {
       html += `<span class="story-id">${esc(item.id)}</span>`;
       html += `<span class="sdc-title">${esc(s.title)}</span>`;
       html += `<span class="badge b-${sec.type}">${sec.type.toUpperCase()}</span>`;
+      // Readiness score badge (grooming)
+      const rScore = readinessScores[item.id];
+      if (rScore) {
+        const rCls = rScore.classification === 'ready' ? 'background:rgba(26,143,63,0.10);color:#1a8f3f;border:1px solid rgba(26,143,63,0.25)' : rScore.classification === 'needs-work' ? 'background:rgba(200,122,0,0.10);color:#c87a00;border:1px solid rgba(200,122,0,0.25)' : 'background:rgba(217,48,37,0.08);color:#d93025;border:1px solid rgba(217,48,37,0.25)';
+        html += `<span class="badge" style="${rCls};font-size:8px">READY ${rScore.readinessScore}/100</span>`;
+      }
       // Agent badges
       agents.forEach(a => {
-        const cls = a === 'openspec' ? 'color:var(--teal);background:rgba(0,71,255,0.08);border:1px solid rgba(0,71,255,0.2)' : 'color:var(--violet);background:rgba(132,83,210,0.10);border:1px solid rgba(132,83,210,0.25)';
+        const cls = a === 'openspec' ? 'color:var(--teal);background:rgba(0,71,255,0.08);border:1px solid rgba(0,71,255,0.2)' : a === 'speckit' ? 'color:var(--violet);background:rgba(132,83,210,0.10);border:1px solid rgba(132,83,210,0.25)' : isGroomingAgent(a) ? 'color:#059669;background:rgba(5,150,105,0.10);border:1px solid rgba(5,150,105,0.25)' : 'color:var(--violet);background:rgba(132,83,210,0.10);border:1px solid rgba(132,83,210,0.25)';
         html += `<span class="badge" style="${cls};font-size:8px">${esc(a)}</span>`;
       });
       if (hasReview) {
@@ -626,11 +725,20 @@ function render(diff) {
 async function init() {
   const t0 = Date.now();
   try {
-    const [baseline, current, log] = await Promise.all([loadJSON(BASELINE_URL), loadJSON(CURRENT_URL), loadJSONL(SPEC_LOG_URL)]);
+    const [baseline, current, log, rScores, gReport, dReport] = await Promise.all([
+      loadJSON(BASELINE_URL), loadJSON(CURRENT_URL), loadJSONL(SPEC_LOG_URL),
+      loadJSONL(READINESS_URL).catch(() => []),
+      loadJSON(GROOMING_URL).catch(() => null),
+      loadJSON(DEDUP_URL).catch(() => null)
+    ]);
     specLog = log;
+    readinessScores = {};
+    rScores.forEach(s => { if (s && s.storyId) readinessScores[s.storyId] = s; });
+    groomingReport = gReport;
+    dedupReport = dReport;
     diffResult = diffStories(baseline, current);
     render(diffResult);
-    lastDataHash = JSON.stringify(current).length + ':' + current.stories?.length + ':' + log.length;
+    lastDataHash = JSON.stringify(current).length + ':' + current.stories?.length + ':' + log.length + ':' + rScores.length;
     document.getElementById('api-status').className = 'api-status api-ok';
     document.getElementById('api-status').textContent = 'LOADED';
     document.getElementById('load-time').textContent = `Loaded in ${Date.now() - t0}ms`;
@@ -651,8 +759,13 @@ let lastDataHash = '';
 
 setInterval(async () => {
   try {
-    const [baseline, current, log] = await Promise.all([loadJSON(BASELINE_URL), loadJSON(CURRENT_URL), loadJSONL(SPEC_LOG_URL)]);
-    const hash = JSON.stringify(current).length + ':' + current.stories?.length + ':' + log.length;
+    const [baseline, current, log, rScores, gReport, dReport] = await Promise.all([
+      loadJSON(BASELINE_URL), loadJSON(CURRENT_URL), loadJSONL(SPEC_LOG_URL),
+      loadJSONL(READINESS_URL).catch(() => []),
+      loadJSON(GROOMING_URL).catch(() => null),
+      loadJSON(DEDUP_URL).catch(() => null)
+    ]);
+    const hash = JSON.stringify(current).length + ':' + current.stories?.length + ':' + log.length + ':' + rScores.length;
     if (hash === lastDataHash) return; // Data unchanged — preserve UI state
     lastDataHash = hash;
 
@@ -661,6 +774,10 @@ setInterval(async () => {
     document.querySelectorAll('.detail-panel.open').forEach(el => openPanels.add(el.id));
 
     specLog = log;
+    readinessScores = {};
+    rScores.forEach(s => { if (s && s.storyId) readinessScores[s.storyId] = s; });
+    groomingReport = gReport;
+    dedupReport = dReport;
     diffResult = diffStories(baseline, current);
     render(diffResult);
 

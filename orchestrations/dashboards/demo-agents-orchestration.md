@@ -7,5 +7,5 @@ Layout (Top down, left to right):
 4. Execution Pipeline: Step-by-step orchestration flow (pre-assessment through post-assessment and gates). Includes Steps 4.2–4.4 QA Testing Gates (Phase A: SAST+spec, Phase B: review+mutation, Phase C: fuzz+perf).
 5. Agent Lanes: Lane diagram showing main/primary/independent execution responsibilities.
 6. Orchestration Modes: Comparison of bash sequential mode vs hybrid parallel worktree mode.
-7. Key Features: Feature cards summarizing governance, bus, skills, testing (10 core + 7 QA gate agents), and cost controls.
+7. Key Features: Feature cards summarizing governance, bus, skills, testing (10 core + 3 grooming + 10 documentation + 7 QA gate agents), and cost controls.
 8. Tech Stack: Bottom section listing core scripts, runtime components, and data/log artifacts.

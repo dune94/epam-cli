@@ -141,6 +141,7 @@ code {
 .stage-num.s3 { background: linear-gradient(135deg, #10b981, #059669); }
 .stage-num.s4 { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
 .stage-num.s5 { background: linear-gradient(135deg, #f43f5e, #e11d48); }
+.stage-num.s6 { background: linear-gradient(135deg, #06b6d4, #0891b2); }
 .stage-name { font-size: 16px; font-weight: 700; flex: 1; }
 .stage-badges { display: flex; gap: 5px; flex-wrap: wrap; }
 .stage-toggle {
@@ -274,6 +275,7 @@ code {
 .ar-tool.t-danger { border-color: rgba(217,48,37,0.3); color: #d93025; }
 .ar-tool.t-ext    { border-color: rgba(132,83,210,0.3); color: #8453d2; }
 .ar-tool.t-script { border-color: rgba(0,71,255,0.3); color: #0047ff; font-family: 'Courier New', monospace; }
+.ar-tool.t-skill  { border-color: rgba(196,24,110,0.3); color: #c4186e; background: rgba(196,24,110,0.04); }
 .ar-sep { border: none; border-top: 1px dashed var(--border); margin: 6px 0; }
 
 /* ── Agent Registry Table ── */
@@ -325,18 +327,18 @@ code {
   <div style="background: var(--bg1); border: 1px solid var(--border); border-radius: 10px; padding: 24px 28px; margin-bottom: 24px; border-left: 4px solid var(--accent);">
     <div style="font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 10px;">Overview</div>
     <p style="font-size: 12px; color: var(--text2); line-height: 1.7; margin: 0 0 10px;">
-      This document is the authoritative reference for the <strong>EPAM CLI multi-agent orchestration pipeline</strong> &mdash; the automated system that takes a PRD (product requirements document) from raw stories through specification, cost estimation, parallel implementation, quality assurance, and post-execution assessment. The pipeline is driven by <code>run-agent-orchestration.sh</code> and coordinates <strong>23 specialized AI agents</strong> across 5 sequential stages, each with distinct tooling, gating policies, and parallelization strategies. Agents are the focal point: every stage section below details which agents participate, what ReAct loop or inference mode they operate in, which built-in tools (ReadFile, WriteFile, Bash, Search, ListFiles, FetchUrl) and external tooling (tsc, vitest, Knip, jscpd, Semgrep, ast-grep, Madge) they leverage, and what data files they read from and write to.
+      This document is the authoritative reference for the <strong>EPAM CLI multi-agent orchestration pipeline</strong> &mdash; the automated system that takes a PRD (product requirements document) from raw stories through specification, cost estimation, parallel implementation, quality assurance, post-execution assessment, and documentation generation. The pipeline is driven by <code>run-agent-orchestration.sh</code> and <code>run-doc-orchestration.sh</code>, coordinating <strong>36+ specialized AI agents</strong> across <strong>6 sequential stages</strong>, each with distinct tooling, gating policies, and parallelization strategies. Agents are the focal point: every stage section below details which agents participate, what ReAct loop or inference mode they operate in, which built-in tools (ReadFile, WriteFile, Bash, Search, ListFiles, FetchUrl) and external tooling (tsc, vitest, Knip, jscpd, Semgrep, ast-grep, Madge, TypeDoc, Vale, Mermaid.js, git-cliff, Markprompt) they leverage, and what data files they read from and write to.
     </p>
     <p style="font-size: 12px; color: var(--text2); line-height: 1.7; margin: 0;">
-      The pipeline supports two orchestration modes &mdash; <strong>Bash</strong> (default, script-driven) and <strong>Hybrid</strong> (Bash + MCP message bus for inter-agent coordination) &mdash; and executes implementation stories across three parallel lanes (Main, Primary, Independent) using isolated git worktrees. Quality is enforced through 12 gate checkpoints: a CPA estimation gate, code review escalation gates, three cascading QA gate phases (each running two agents in parallel), a unit test hard gate, and a final phase gate with cost variance thresholds. Cost tracking spans the entire pipeline via <code>phase-cost.jsonl</code> actuals, Langfuse LLM tracing, and CPA confidence-weighted estimate blending. The <strong>Complete Agent Registry</strong> at the bottom of this page provides a single cross-reference of every agent, its source definition, stage participation, model assignment, tools, and outputs.
+      The pipeline supports two orchestration modes &mdash; <strong>Bash</strong> (default, script-driven) and <strong>Hybrid</strong> (Bash + MCP message bus for inter-agent coordination) &mdash; and executes implementation stories across three parallel lanes (Main, Primary, Independent) using isolated git worktrees. Quality is enforced through 15+ gate checkpoints: a CPA estimation gate, code review escalation gates, three cascading QA gate phases (each running two agents in parallel), a unit test hard gate, a final phase gate with cost variance thresholds, and documentation review gates with a 3-cycle feedback loop. Cost tracking spans the entire pipeline via <code>phase-cost.jsonl</code> actuals, Langfuse LLM tracing, and CPA confidence-weighted estimate blending. All agents emit structured events to <code>agent-activity.jsonl</code> for unified observability. The <strong>Complete Agent Registry</strong> at the bottom of this page provides a single cross-reference of every agent, its source definition, stage participation, model assignment, tools, and outputs.
     </p>
   </div>
 
   <!-- ── Overview Stats ── -->
   <div class="section-title">Pipeline at a Glance</div>
   <div class="stats-row">
-    <div class="stat-card"><div class="stat-num">5</div><div class="stat-label">Pipeline Stages</div></div>
-    <div class="stat-card"><div class="stat-num">20+</div><div class="stat-label">Agent Roles</div></div>
+    <div class="stat-card"><div class="stat-num">6</div><div class="stat-label">Pipeline Stages</div></div>
+    <div class="stat-card"><div class="stat-num">36+</div><div class="stat-label">Agent Roles</div></div>
     <div class="stat-card"><div class="stat-num">7</div><div class="stat-label">QA Gate Agents</div></div>
     <div class="stat-card"><div class="stat-num">3</div><div class="stat-label">Parallel Lanes</div></div>
     <div class="stat-card"><div class="stat-num">12</div><div class="stat-label">Gate Checkpoints</div></div>
@@ -365,12 +367,14 @@ code {
           <div class="dim-content">
             <ul>
               <li><strong>Entry:</strong> <code>spec-mode-runner.js</code> (Step 0)</li>
+              <li><strong>Pre-Spec Grooming:</strong> grooming-coordinator routes stories to readiness-checker (INVEST/DoR) and dedup-detector (Simili-Bot)</li>
+              <li>Stories with readinessScore &lt; 60 flagged as not-ready-for-spec (skip unless <code>FORCE_SPEC=1</code>)</li>
               <li>Snapshots current <code>prd.json</code> as baseline</li>
               <li>Coordinator reads all phase stories and decides which spec personas to launch</li>
               <li>OpenSpec agent elaborates acceptance criteria, proposes story splits, adds technical notes</li>
               <li>Speckit agent reviews OpenSpec output, adds testability and security criteria</li>
               <li>Edits applied back to <code>prd.json</code> (acceptance criteria, splits, notes)</li>
-              <li><strong>Skip:</strong> <code>EPAM_SPEC_MODE=0</code></li>
+              <li><strong>Skip grooming:</strong> <code>SKIP_GROOMING=1</code> &nbsp;|&nbsp; <strong>Skip spec:</strong> <code>EPAM_SPEC_MODE=0</code></li>
             </ul>
           </div>
         </div>
@@ -379,7 +383,10 @@ code {
           <div class="dim-label">ReAct Loops</div>
           <div class="dim-content">
             <ul>
-              <li><strong>Coordinator:</strong> Single-turn inference &mdash; reads stories, outputs agent assignment JSON</li>
+              <li><strong>Grooming coordinator:</strong> Single-turn inference &mdash; routes stories to grooming agents, aggregates results</li>
+              <li><strong>Readiness-checker:</strong> Single-turn inference &mdash; INVEST scoring + DoR checklist per story</li>
+              <li><strong>Dedup-detector:</strong> Single-turn inference &mdash; pairwise semantic similarity + Simili-Bot CLI</li>
+              <li><strong>Spec coordinator:</strong> Single-turn inference &mdash; reads stories, outputs agent assignment JSON</li>
               <li><strong>OpenSpec:</strong> Multi-turn ReAct &mdash; reads each story, reasons about gaps, outputs elaborated criteria</li>
               <li><strong>Speckit:</strong> Multi-turn ReAct &mdash; reads OpenSpec output, reasons about testability/security, outputs complement criteria</li>
               <li>Each agent invoked via <code>claude.sh</code> with full tool access (ReadFile, WriteFile, Bash, Search)</li>
@@ -455,6 +462,15 @@ code {
           </div>
           <div class="ar-desc">Reads prd.json stories, evaluates risk/dependencies/readiness, assigns OpenSpec/Speckit/both/none per story. Writes assignments into <code>specification.assignedAgents</code>. Understands provider policy ledger and token guardrails.</div>
           <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Provider policy ledger</span>
+            <span class="ar-tool t-skill">Token guardrails</span>
+            <span class="ar-tool t-skill">Risk assessment</span>
+            <span class="ar-tool t-skill">Dependency analysis</span>
+            <span class="ar-tool t-skill">spec-mode-runner.js JSON schema</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
             <span class="ar-tools-label">Tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
             <span class="ar-tool t-safe">Search</span>
@@ -477,6 +493,15 @@ code {
           </div>
           <div class="ar-desc">Elaborates acceptance criteria, proposes story splits, adds technical notes. Outputs strict JSON: acceptanceCriteria, description/title notes, splitStories, context notes (assumptions, blockers). Never changes status or cost metadata.</div>
           <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">OpenSpec methodology</span>
+            <span class="ar-tool t-skill">Acceptance criteria elaboration</span>
+            <span class="ar-tool t-skill">Story decomposition</span>
+            <span class="ar-tool t-skill">Dependency tracking</span>
+            <span class="ar-tool t-skill">Strict JSON output</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
             <span class="ar-tools-label">Tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
             <span class="ar-tool t-safe">Search</span>
@@ -491,7 +516,17 @@ code {
             <div class="ar-name">speckit-agent</div>
             <div class="ar-badges"><span class="badge b-sonnet">SONNET</span></div>
           </div>
-          <div class="ar-desc">Complements OpenSpec output with system-level coverage, interface contracts, verification steps. Flags security/regression risks. Focuses on testability and security criteria. Output complements (not conflicts with) OpenSpec.</div>
+          <div class="ar-desc">Operates like the hosted Speckit workflow: converts requirements into executable specs, highlights missing acceptance criteria, recommends story decompositions across domains. Complements OpenSpec (not conflicts). Flags security/regression risks.</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Speckit workflow</span>
+            <span class="ar-tool t-skill">Executable spec generation</span>
+            <span class="ar-tool t-skill">Interface contracts</span>
+            <span class="ar-tool t-skill">System-level coverage</span>
+            <span class="ar-tool t-skill">Security/regression risk flagging</span>
+            <span class="ar-tool t-skill">Verification step design</span>
+          </div>
+          <hr class="ar-sep">
           <div class="ar-tools-row">
             <span class="ar-tools-label">Tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
@@ -503,13 +538,146 @@ code {
         </div>
       </div>
 
+      <!-- Grooming Sub-Stage (Pre-Spec) -->
+      <div class="agent-roster" style="margin-top: 18px;">
+        <div class="agent-roster-title">Agent Roster &mdash; Grooming (Pre-Spec)</div>
+
+        <div style="font-size: 11px; color: var(--text2); line-height: 1.6; margin-bottom: 14px; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; border-left: 3px solid #818cf8;">
+          <strong>Pre-Spec Grooming Gate:</strong> Grooming agents run <em>before</em> spec-coordinator to ensure stories meet Definition of Ready. Stories with readinessScore &lt; 60 are flagged as not-ready-for-spec and skipped unless <code>FORCE_SPEC=1</code>. Duplicate clusters are flagged for human review or auto-merge. Skip grooming with <code>SKIP_GROOMING=1</code>.
+        </div>
+
+        <div class="ar-card ar-coord">
+          <div class="ar-head">
+            <div class="ar-name">grooming-coordinator</div>
+            <div class="ar-badges"><span class="badge b-sonnet">SONNET</span></div>
+          </div>
+          <div class="ar-desc">Orchestrates pre-spec grooming pipeline. Routes stories to readiness-checker (INVEST/DoR) and dedup-detector (semantic overlap). Aggregates results into grooming-report.json. Flags stories as ready/needs-work/blocked. Updates prd.json with groomingStatus and readinessScore. Uses carrot-ai-pm MCP for requirement drift detection.</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Backlog prioritization (WSJF, MoSCoW, RICE)</span>
+            <span class="ar-tool t-skill">Story type classification</span>
+            <span class="ar-tool t-skill">Blocker resolution</span>
+            <span class="ar-tool t-skill">Requirement drift detection</span>
+            <span class="ar-tool t-skill">Grooming pipeline orchestration</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Tools:</span>
+            <span class="ar-tool t-safe">ReadFile</span>
+            <span class="ar-tool t-safe">Search</span>
+            <span class="ar-tool t-safe">ListFiles</span>
+            <span class="ar-tool t-review">WriteFile</span>
+            <span class="ar-tool t-danger">Bash</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">External:</span>
+            <span class="ar-tool t-ext">carrot-ai-pm MCP</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Reads:</span>
+            <span class="ar-tool">prd.json</span>
+            <span class="ar-tool">readiness-scores.jsonl</span>
+            <span class="ar-tool">dedup-report.json</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Writes:</span>
+            <span class="ar-tool">grooming-report.json</span>
+            <span class="ar-tool">prd.json (groomingStatus, readinessScore)</span>
+            <span class="ar-tool">agent-activity.jsonl</span>
+          </div>
+        </div>
+
+        <div class="ar-card ar-qa">
+          <div class="ar-head">
+            <div class="ar-name">readiness-checker</div>
+            <div class="ar-badges"><span class="badge b-haiku">HAIKU</span></div>
+          </div>
+          <div class="ar-desc">Validates stories against INVEST criteria (Independent, Negotiable, Valuable, Estimable, Small, Testable) and Definition of Ready checklist. Computes readinessScore (0&ndash;100) as weighted average (INVEST 60%, DoR 40%). Classifies: ready (&ge;80), needs-work (60&ndash;79), blocked (&lt;60). Emits specific actionable deficiencies for non-ready stories.</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">INVEST criteria validation</span>
+            <span class="ar-tool t-skill">Definition of Ready enforcement</span>
+            <span class="ar-tool t-skill">Readiness scoring</span>
+            <span class="ar-tool t-skill">Story quality assessment</span>
+            <span class="ar-tool t-skill">Actionable deficiency reporting</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Tools:</span>
+            <span class="ar-tool t-safe">ReadFile</span>
+            <span class="ar-tool t-safe">Search</span>
+            <span class="ar-tool t-safe">ListFiles</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Reads:</span>
+            <span class="ar-tool">prd.json</span>
+            <span class="ar-tool">profiles.json</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Writes:</span>
+            <span class="ar-tool">readiness-scores.jsonl</span>
+            <span class="ar-tool">agent-activity.jsonl</span>
+          </div>
+        </div>
+
+        <div class="ar-card ar-qa">
+          <div class="ar-head">
+            <div class="ar-name">dedup-detector</div>
+            <div class="ar-badges"><span class="badge b-haiku">HAIKU</span></div>
+          </div>
+          <div class="ar-desc">Detects semantically overlapping, duplicate, or conflicting stories. Computes pairwise similarity across all stories. Clusters overlaps: exact-duplicate (&gt;0.95), substantial-overlap (0.85&ndash;0.95), partial-overlap (0.75&ndash;0.85), conflicting (contradictory AC). Also detects story-to-code drift by comparing descriptions against existing src/ implementations.</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Semantic similarity analysis</span>
+            <span class="ar-tool t-skill">Duplicate clustering</span>
+            <span class="ar-tool t-skill">Story-to-code drift detection</span>
+            <span class="ar-tool t-skill">Conflict identification</span>
+            <span class="ar-tool t-skill">Cross-phase dedup</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Tools:</span>
+            <span class="ar-tool t-safe">ReadFile</span>
+            <span class="ar-tool t-safe">Search</span>
+            <span class="ar-tool t-safe">ListFiles</span>
+            <span class="ar-tool t-danger">Bash</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">External:</span>
+            <span class="ar-tool t-ext">Simili-Bot</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Reads:</span>
+            <span class="ar-tool">prd.json</span>
+            <span class="ar-tool">src/**/*.ts</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Writes:</span>
+            <span class="ar-tool">dedup-report.json</span>
+            <span class="ar-tool">agent-activity.jsonl</span>
+          </div>
+        </div>
+      </div>
+
       <div style="margin-top: 14px; font-size: 11px; color: var(--text3);">
-        <strong>Outputs:</strong> spec-baseline.json, spec-summary.json, spec-phase.jsonl, updated prd.json
+        <strong>Outputs:</strong> grooming-report.json, readiness-scores.jsonl, dedup-report.json, spec-baseline.json, spec-summary.json, spec-phase.jsonl, updated prd.json
       </div>
 
       <table class="substep-table" style="margin-top:14px">
         <thead><tr><th>Sub-Step</th><th>Agent</th><th>Mode</th><th>Input</th><th>Output</th><th>Blocking</th></tr></thead>
         <tbody>
+          <tr><td>0.0a Grooming</td><td>grooming-coordinator</td><td>Single-turn</td><td>prd.json stories</td><td>Agent routing</td><td>No</td></tr>
+          <tr><td>0.0b Readiness</td><td>readiness-checker</td><td>Single-turn</td><td>Stories + profiles</td><td>readiness-scores.jsonl</td><td>No</td></tr>
+          <tr><td>0.0c Dedup</td><td>dedup-detector</td><td>Single-turn</td><td>All stories + src/</td><td>dedup-report.json</td><td>No</td></tr>
+          <tr><td>0.0d Aggregate</td><td>grooming-coordinator</td><td>Single-turn</td><td>Scores + dedup</td><td>grooming-report.json, prd.json updates</td><td>Soft (readinessScore &lt; 60 skips spec)</td></tr>
           <tr><td>0.0 Baseline</td><td>orchestrator</td><td>Script</td><td>prd.json</td><td>spec-baseline.json</td><td>No</td></tr>
           <tr><td>0.1 Coordinate</td><td>spec-coordinator</td><td>Single-turn</td><td>stories + profiles</td><td>Agent assignments</td><td>No</td></tr>
           <tr><td>0.2 Elaborate</td><td>openspec-agent</td><td>Multi-turn ReAct</td><td>Assigned stories</td><td>Elaborated AC, splits</td><td>No</td></tr>
@@ -646,6 +814,15 @@ code {
           </div>
           <div class="ar-desc">Contextual Purveyor Agent. Performs TF-IDF retrieval against KB.md + supporting docs, cross-references formula estimates with historical actuals from phase-cost.jsonl, outputs confidence-weighted blended estimates. 3-tier gate: pass/review/block.</div>
           <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">TF-IDF retrieval</span>
+            <span class="ar-tool t-skill">Confidence-weighted estimation</span>
+            <span class="ar-tool t-skill">Historical cost calibration</span>
+            <span class="ar-tool t-skill">3-tier gate policy</span>
+            <span class="ar-tool t-skill">Cost blending formulas</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
             <span class="ar-tools-label">Tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
             <span class="ar-tool t-safe">Search</span>
@@ -676,6 +853,14 @@ code {
           </div>
           <div class="ar-desc">Detects skill gaps in agent profiles before execution. Reads prd.json story <code>requiredSkills</code> from technicalNotes, compares against profile text in profiles.json, augments profiles with missing skills (append-only). Audit trail in profiles-audit.jsonl. <em>Note: inline prompt in run-agent-orchestration.sh, not in profiles.json.</em></div>
           <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Skill gap analysis</span>
+            <span class="ar-tool t-skill">Profile augmentation</span>
+            <span class="ar-tool t-skill">RequiredSkills extraction</span>
+            <span class="ar-tool t-skill">Domain-to-role mapping</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
             <span class="ar-tools-label">Tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
             <span class="ar-tool t-safe">Search</span>
@@ -704,6 +889,14 @@ code {
           </div>
           <div class="ar-desc">Hybrid mode pre-coordinator. Identifies cross-lane dependencies (main/primary/independent), flags stories with estimatedHours &ge; 6 or dependencies &ge; 2 for plan mode, seeds the agent message bus with handoff/plan_required/risk messages. <em>Note: inline prompt in run-agent-orchestration.sh.</em></div>
           <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Cross-lane dependency analysis</span>
+            <span class="ar-tool t-skill">Plan mode detection</span>
+            <span class="ar-tool t-skill">MCP message bus seeding</span>
+            <span class="ar-tool t-skill">Risk classification</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
             <span class="ar-tools-label">Tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
             <span class="ar-tool t-safe">Search</span>
@@ -726,6 +919,15 @@ code {
             <div class="ar-badges"><span class="badge b-opus">OPUS</span></div>
           </div>
           <div class="ar-desc">Validates all dependency story IDs are completed, checks agent profiles exist, logs phase-start to phase-gates.jsonl. Blocks execution if dependencies unresolved.</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Tri-modal operation (pre/post/lead)</span>
+            <span class="ar-tool t-skill">Dependency validation</span>
+            <span class="ar-tool t-skill">Phase gate governance</span>
+            <span class="ar-tool t-skill">Cost variance analysis</span>
+            <span class="ar-tool t-skill">Merge coordination</span>
+          </div>
+          <hr class="ar-sep">
           <div class="ar-tools-row">
             <span class="ar-tools-label">Tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
@@ -881,6 +1083,17 @@ code {
           </div>
           <div class="ar-desc">Expert TypeScript/Node.js engineer. Deep knowledge of tsup bundling, strict mode, ESM/CJS interop, zod validation. Knows entire src/ structure: providers/, agent/, tools/, auth/, billing/, config/, context/. Follows createXCommand() pattern, resolveConfig() conventions, EpamError hierarchy.</div>
           <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">TypeScript strict mode</span>
+            <span class="ar-tool t-skill">tsup bundling</span>
+            <span class="ar-tool t-skill">ESM/CJS interop</span>
+            <span class="ar-tool t-skill">Zod validation</span>
+            <span class="ar-tool t-skill">Commander.js patterns</span>
+            <span class="ar-tool t-skill">EpamError hierarchy</span>
+            <span class="ar-tool t-skill">Pino logging</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
             <span class="ar-tools-label">Tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
             <span class="ar-tool t-safe">Search</span>
@@ -905,6 +1118,17 @@ code {
           </div>
           <div class="ar-desc">Expert in agent orchestration, multi-agent coordination, AI system design. Deep knowledge of AgentRunner ReAct loop, ProviderChain failover, AgentHandoff delegation, MCP protocol (JSON-RPC 2.0 over HTTP/SSE), Tool interface + ApprovalGate safety policy, MemoryCompressor. Designs parallel agent patterns with Promise.all/race + AbortController cancellation.</div>
           <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">AgentRunner ReAct loop</span>
+            <span class="ar-tool t-skill">ProviderChain failover</span>
+            <span class="ar-tool t-skill">AgentHandoff delegation</span>
+            <span class="ar-tool t-skill">MCP protocol (JSON-RPC 2.0)</span>
+            <span class="ar-tool t-skill">ApprovalGate safety policy</span>
+            <span class="ar-tool t-skill">MemoryCompressor</span>
+            <span class="ar-tool t-skill">AbortController cancellation</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
             <span class="ar-tools-label">Tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
             <span class="ar-tool t-safe">Search</span>
@@ -922,6 +1146,16 @@ code {
           </div>
           <div class="ar-desc">FinOps specialist. Knows pricing.ts MODEL_PRICING table (Anthropic/OpenAI/Gemini), calculateCost(), formatCost(), getPricing(). Implements budget guardrails: warningAt/hardLimit thresholds, model downgrade, session cost tracking. Understands TierDetector JWT claims, KeychainKeyStore BYOK, ProviderSelector routing.</div>
           <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">MODEL_PRICING table</span>
+            <span class="ar-tool t-skill">Budget guardrails</span>
+            <span class="ar-tool t-skill">TierDetector JWT claims</span>
+            <span class="ar-tool t-skill">KeychainKeyStore BYOK</span>
+            <span class="ar-tool t-skill">ProviderSelector routing</span>
+            <span class="ar-tool t-skill">Sub-cent cost precision</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
             <span class="ar-tools-label">Tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
             <span class="ar-tool t-safe">Search</span>
@@ -938,6 +1172,16 @@ code {
           </div>
           <div class="ar-desc">Terminal UX specialist. Expert in Commander.js, Repl.ts readline loop, SlashCommands.ts (SlashCommandDef/SlashCommandContext pattern), Renderer.ts (chalk colour conventions, StreamWriter). Uses prompts library for interactive pickers. Designs for graceful degradation (pipe, narrow terminal, no colour).</div>
           <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Commander.js</span>
+            <span class="ar-tool t-skill">Repl.ts readline</span>
+            <span class="ar-tool t-skill">SlashCommandContext pattern</span>
+            <span class="ar-tool t-skill">Chalk colour conventions</span>
+            <span class="ar-tool t-skill">Prompts library</span>
+            <span class="ar-tool t-skill">Graceful degradation</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
             <span class="ar-tools-label">Tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
             <span class="ar-tool t-safe">Search</span>
@@ -953,6 +1197,16 @@ code {
             <div class="ar-badges"><span class="badge b-sonnet">MED</span></div>
           </div>
           <div class="ar-desc">Vitest testing specialist. Knows vitest.config.ts, test/ directory structure mirroring src/, fixtures/ for recorded provider responses. Uses vi.mock(), vi.spyOn(), vi.fn(), msw for HTTP mocking, vi.useFakeTimers(). Maintains 42-test baseline as hard constraint. Never writes tests depending on external network or wall-clock time.</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Vitest</span>
+            <span class="ar-tool t-skill">vi.mock / vi.spyOn / vi.fn</span>
+            <span class="ar-tool t-skill">MSW (mock service worker)</span>
+            <span class="ar-tool t-skill">vi.useFakeTimers</span>
+            <span class="ar-tool t-skill">Fixture-based mocking</span>
+            <span class="ar-tool t-skill">42-test baseline</span>
+          </div>
+          <hr class="ar-sep">
           <div class="ar-tools-row">
             <span class="ar-tools-label">Tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
@@ -978,6 +1232,15 @@ code {
           </div>
           <div class="ar-desc">Code review specialist. Structured reviews with blocker/major/minor severity. Checks: TypeScript strict compliance, vitest coverage, SlashCommandContext pattern, LLMProvider interface, ConfigResolver 3-layer update, named constants, AC verification, atomic JSONL operations.</div>
           <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">8-point review criteria</span>
+            <span class="ar-tool t-skill">Severity classification</span>
+            <span class="ar-tool t-skill">LLMProvider interface validation</span>
+            <span class="ar-tool t-skill">ConfigResolver 3-layer check</span>
+            <span class="ar-tool t-skill">Atomic JSONL verification</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
             <span class="ar-tools-label">Tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
             <span class="ar-tool t-safe">Search</span>
@@ -992,6 +1255,15 @@ code {
             <div class="ar-badges"><span class="badge b-opus">OPUS</span></div>
           </div>
           <div class="ar-desc">Phase-level code review authority. Reviews each story completion, classifies issues by severity, sends change-requests via message bus. Triggers code-review-cycle.sh (max 3 iterations). Escalates unresolved reviews (exit 2 blocks pipeline). Cost variance analysis (&gt;50% overrun flagging).</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Iterative review cycles (max 3)</span>
+            <span class="ar-tool t-skill">Severity classification</span>
+            <span class="ar-tool t-skill">Escalation policy</span>
+            <span class="ar-tool t-skill">Cost overrun detection (&gt;50%)</span>
+            <span class="ar-tool t-skill">Message bus coordination</span>
+          </div>
+          <hr class="ar-sep">
           <div class="ar-tools-row">
             <span class="ar-tools-label">Tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
@@ -1020,6 +1292,14 @@ code {
             <div class="ar-badges"><span class="badge b-sonnet">SONNET</span></div>
           </div>
           <div class="ar-desc">Post-parallel assessor. Compares actual vs forecast (minutes, cost), calculates variance %, detects skill mismatches (story domain vs agentRole), recommends role changes for FUTURE pending stories. Domains: TypeScript/CLI &rarr; typescript-engineer, React/UI &rarr; frontend-engineer, Docker &rarr; devops-engineer, Vitest &rarr; test-engineer. <em>Inline prompt in run-agent-orchestration.sh.</em></div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Cost variance analysis</span>
+            <span class="ar-tool t-skill">Skill mismatch detection</span>
+            <span class="ar-tool t-skill">Domain-to-role mapping</span>
+            <span class="ar-tool t-skill">Role change recommendations</span>
+          </div>
+          <hr class="ar-sep">
           <div class="ar-tools-row">
             <span class="ar-tools-label">Tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
@@ -1195,6 +1475,14 @@ code {
           </div>
           <div class="ar-desc">Governs all testing gate phases. Sequences specialist agents in 3 cascading phases, collects verdicts, applies quality-scoring to aggregate results into unified gate decisions. Respects <code>SKIP_TESTING_GATES=true</code>. Reads story metadata from prd.json to determine which agents apply (skips SAST for docs-only stories).</div>
           <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Cascade gate sequencing</span>
+            <span class="ar-tool t-skill">Quality-score aggregation</span>
+            <span class="ar-tool t-skill">Verdict classification</span>
+            <span class="ar-tool t-skill">Story-type filtering</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
             <span class="ar-tools-label">Tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
             <span class="ar-tool t-safe">Search</span>
@@ -1217,6 +1505,14 @@ code {
           </div>
           <div class="ar-desc">Static analysis + security scanning. Pass 1: tsc --noEmit diagnostics (type errors, implicit any, unchecked indexed access). Pass 2: Security pattern scanning (command injection, path traversal, prototype pollution, hardcoded secrets, unsafe eval/Function). Flags tools bypassing ApprovalGate. Verdict: pass (0 blockers) / fail (&ge;1 blocker).</div>
           <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">TypeScript strict diagnostics</span>
+            <span class="ar-tool t-skill">OWASP security patterns</span>
+            <span class="ar-tool t-skill">Command injection detection</span>
+            <span class="ar-tool t-skill">ApprovalGate bypass detection</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
             <span class="ar-tools-label">Agent tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
             <span class="ar-tool t-safe">Search</span>
@@ -1237,6 +1533,14 @@ code {
             <div class="ar-badges"><span class="badge b-sonnet">SONNET</span><span class="badge b-gate">PHASE A</span></div>
           </div>
           <div class="ar-desc">Spec compliance verification. Per story: reads acceptanceCriteria from prd.json, locates implementation files via technicalNotes + git diff, classifies each criterion as met/partial/unmet/untestable. Cross-references openspec/speckit elaborated criteria. Verdict: pass (&ge;80% met) / warn (60-79%) / fail (&lt;60%).</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">AC-to-implementation mapping</span>
+            <span class="ar-tool t-skill">Met/partial/unmet classification</span>
+            <span class="ar-tool t-skill">OpenSpec/Speckit cross-reference</span>
+            <span class="ar-tool t-skill">Coverage threshold scoring</span>
+          </div>
+          <hr class="ar-sep">
           <div class="ar-tools-row">
             <span class="ar-tools-label">Agent tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
@@ -1262,6 +1566,15 @@ code {
           </div>
           <div class="ar-desc">Deep diff-level code review. Examines only changed files via git diff. Dimensions: cyclomatic complexity (&gt;10 = major), duplication (&gt;5 lines), API contract drift (exported signature changes without tests = blocker), error handling completeness, test coverage gaps, naming consistency (camelCase/PascalCase/UPPER_SNAKE). Validates config priority chain and ProviderChain failover contract.</div>
           <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Cyclomatic complexity analysis</span>
+            <span class="ar-tool t-skill">API contract drift detection</span>
+            <span class="ar-tool t-skill">Duplication detection</span>
+            <span class="ar-tool t-skill">ProviderChain failover validation</span>
+            <span class="ar-tool t-skill">Naming convention enforcement</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
             <span class="ar-tools-label">Agent tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
             <span class="ar-tool t-safe">Search</span>
@@ -1281,6 +1594,14 @@ code {
             <div class="ar-badges"><span class="badge b-sonnet">SONNET</span><span class="badge b-gate">PHASE B</span></div>
           </div>
           <div class="ar-desc">Mutation testing analysis. Proposes mutations: operator swaps, comparison inversions, boolean negations, early returns, boundary shifts, null check removal, argument swaps. Classifies: killed (test catches) / survived (test misses) / no-coverage. Focus: provider failover, tool safety, auth, billing, agent state. Verdict: pass (&ge;70%) / warn (50-69%) / fail (&lt;50%). Never modifies source.</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Mutation operator design</span>
+            <span class="ar-tool t-skill">Killed/survived classification</span>
+            <span class="ar-tool t-skill">Test adequacy scoring</span>
+            <span class="ar-tool t-skill">Safety-critical path focus</span>
+          </div>
+          <hr class="ar-sep">
           <div class="ar-tools-row">
             <span class="ar-tools-label">Agent tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
@@ -1305,6 +1626,14 @@ code {
           </div>
           <div class="ar-desc">Property-based fuzz analysis. Derives input domains from TypeScript types: string (empty/unicode/long/special/null bytes), number (0/-1/NaN/Infinity/MAX_SAFE_INTEGER), arrays (empty/single/large/nested), objects (empty/missing keys/extra/circular). Proposes fast-check style properties. Focus: config parsing, provider requests, billing, tool input validation, auth parsing. Verdict: pass (0 vulns) / warn (gaps &gt;30%) / fail (vulnerability). Never executes fuzz tests.</div>
           <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">fast-check property design</span>
+            <span class="ar-tool t-skill">TypeScript type domain derivation</span>
+            <span class="ar-tool t-skill">Boundary value analysis</span>
+            <span class="ar-tool t-skill">Input validation auditing</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
             <span class="ar-tools-label">Agent tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
             <span class="ar-tool t-safe">Search</span>
@@ -1326,6 +1655,15 @@ code {
           </div>
           <div class="ar-desc">Performance analysis. Checks: algorithmic complexity (O(n&sup2;) on unbounded input = major), memory hotspots (string concat in loops, unbounded cache, large closures), async patterns (sequential awaits, missing AbortController, stream backpressure, listener leaks), startup impact (top-level imports, sync I/O at load), provider concerns (unnecessary message copies, redundant token counting). Verdict: pass (0 blockers + 0 high-impact) / warn (major) / fail (blocker).</div>
           <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Algorithmic complexity analysis</span>
+            <span class="ar-tool t-skill">Memory hotspot detection</span>
+            <span class="ar-tool t-skill">Async pattern auditing</span>
+            <span class="ar-tool t-skill">Startup impact profiling</span>
+            <span class="ar-tool t-skill">Stream backpressure analysis</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
             <span class="ar-tools-label">Agent tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
             <span class="ar-tool t-safe">Search</span>
@@ -1342,6 +1680,13 @@ code {
             <div class="ar-badges"><span class="badge b-haiku">HAIKU</span></div>
           </div>
           <div class="ar-desc">Dead code detection using Knip. Identifies unused exports, unreferenced files, orphan dependencies. Lightweight pass that runs alongside or after primary QA gates.</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Knip dead-code analysis</span>
+            <span class="ar-tool t-skill">Unused export detection</span>
+            <span class="ar-tool t-skill">Orphan dependency scanning</span>
+          </div>
+          <hr class="ar-sep">
           <div class="ar-tools-row">
             <span class="ar-tools-label">Agent tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
@@ -1362,6 +1707,13 @@ code {
           </div>
           <div class="ar-desc">Code duplication and SOLID violations. Uses jscpd for near-duplicate block detection, Semgrep for structural pattern analysis (SOLID principle violations, anti-patterns).</div>
           <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">jscpd duplicate detection</span>
+            <span class="ar-tool t-skill">Semgrep structural analysis</span>
+            <span class="ar-tool t-skill">SOLID principle enforcement</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
             <span class="ar-tools-label">Agent tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
             <span class="ar-tool t-safe">Search</span>
@@ -1381,6 +1733,14 @@ code {
             <div class="ar-badges"><span class="badge b-haiku">HAIKU</span></div>
           </div>
           <div class="ar-desc">Pattern extraction and dependency analysis. Uses ast-grep for AST-level pattern matching, Madge for circular dependency detection and module dependency graph analysis.</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">ast-grep AST pattern matching</span>
+            <span class="ar-tool t-skill">Madge dependency graphing</span>
+            <span class="ar-tool t-skill">Circular dependency detection</span>
+            <span class="ar-tool t-skill">Module coupling analysis</span>
+          </div>
+          <hr class="ar-sep">
           <div class="ar-tools-row">
             <span class="ar-tools-label">Agent tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
@@ -1560,6 +1920,15 @@ code {
           </div>
           <div class="ar-desc">Final metrics aggregation. Aggregates all phase metrics (cost, time, quality), performs comparative variance analysis (actual vs initial estimates), detects skill mismatches, recommends role changes for NEXT phases. Changes applied to prd.json (pending stories only). <em>Inline prompt in run-agent-orchestration.sh.</em></div>
           <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Aggregate metrics analysis</span>
+            <span class="ar-tool t-skill">Comparative variance analysis</span>
+            <span class="ar-tool t-skill">Skill mismatch detection</span>
+            <span class="ar-tool t-skill">Role change recommendations</span>
+            <span class="ar-tool t-skill">Pending story reallocation</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
             <span class="ar-tools-label">Tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
             <span class="ar-tool t-safe">Search</span>
@@ -1587,6 +1956,15 @@ code {
             <div class="ar-badges"><span class="badge b-opus">OPUS</span></div>
           </div>
           <div class="ar-desc">Phase gate governor. Runs gate sequence: (1) tsc --noEmit must exit 0, (2) vitest run must pass all tests, (3) all phase stories must have status=completed. Decision: approve (all pass) / retry or escalate (any fail). Logs to phase-gates.jsonl.</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">3-step gate sequence</span>
+            <span class="ar-tool t-skill">TypeScript/Vitest validation</span>
+            <span class="ar-tool t-skill">Story completion verification</span>
+            <span class="ar-tool t-skill">Approve/retry/escalate decisions</span>
+            <span class="ar-tool t-skill">Phase gate logging</span>
+          </div>
+          <hr class="ar-sep">
           <div class="ar-tools-row">
             <span class="ar-tools-label">Tools:</span>
             <span class="ar-tool t-safe">ReadFile</span>
@@ -1629,6 +2007,540 @@ code {
     </div>
   </div>
 
+  <div class="flow-arrow">&#9660;</div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!-- STAGE 6: DOCUMENTATION                                              -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="stage-card open" id="stage-docs">
+    <div class="stage-header" onclick="this.parentElement.classList.toggle('open')">
+      <div class="stage-num s6">6</div>
+      <div class="stage-name">Documentation</div>
+      <div class="stage-badges">
+        <span class="badge b-seq">SEQUENTIAL</span>
+        <span class="badge b-react">REACT LOOP</span>
+        <span class="badge b-gate">GATE</span>
+      </div>
+      <div class="stage-toggle">&#9660;</div>
+    </div>
+
+    <div class="stage-body">
+      <div class="dim-grid">
+
+        <div class="dim-card dim-flow">
+          <div class="dim-label">Flow</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Entry:</strong> <code>run-doc-orchestration.sh</code></li>
+              <li><strong>Step 1:</strong> Doc coordinator reconciles codebase against existing docs (coverage gap analysis)</li>
+              <li><strong>Step 1.5:</strong> Docstring agent batch-generates JSDoc/TSDoc comments across undocumented exports</li>
+              <li><strong>Step 2:</strong> API doc generator runs TypeDoc + ast-grep to extract TypeScript types, interfaces, and exports</li>
+              <li><strong>Step 3:</strong> Guide author + architecture-doc-agent run in parallel (readme-ai, Mermaid.js, D2, Madge)</li>
+              <li><strong>Step 4:</strong> Changelog agent runs git-cliff + prd.json enrichment for release notes</li>
+              <li><strong>Step 5:</strong> Doc reviewer validates all output using Vale/textlint/markdownlint + LLM review &mdash; feedback loop with coordinator (max 3 cycles)</li>
+              <li><strong>Step 6:</strong> Doc index builder assembles navigation, cross-references, search metadata, llms.txt</li>
+              <li><strong>Step 7:</strong> Doc search agent builds RAG index via Markprompt + Context7 MCP</li>
+              <li><strong>Step 8:</strong> Doc site builder compiles into Docusaurus/Fumadocs static site</li>
+              <li><strong>Skip:</strong> <code>SKIP_DOCS=true</code></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-react">
+          <div class="dim-label">ReAct Loops</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>doc-coordinator:</strong> Multi-turn &mdash; reconciliation analysis, task assignment, feedback integration</li>
+              <li><strong>docstring-agent:</strong> Multi-turn &mdash; iterates src/ tree, generates JSDoc/TSDoc via tree-sitter</li>
+              <li><strong>api-doc-generator:</strong> Multi-turn &mdash; runs TypeDoc + ast-grep, iterates over modules</li>
+              <li><strong>guide-author:</strong> Multi-turn &mdash; reads code + existing docs, generates structured pages</li>
+              <li><strong>architecture-doc-agent:</strong> Multi-turn &mdash; traverses module graph, generates Mermaid/D2 diagrams</li>
+              <li><strong>doc-reviewer:</strong> Multi-turn &mdash; runs Vale/textlint/markdownlint, then LLM review, sends change-requests</li>
+              <li><strong>doc-search-agent:</strong> Multi-turn &mdash; builds Markprompt index, integrates Context7 MCP</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-par">
+          <div class="dim-label">Parallelization</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Step 3:</strong> guide-author &#8214; architecture-doc-agent (parallel &mdash; independent domains)</li>
+              <li>All other steps are sequential (coordinator governs ordering)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-gate">
+          <div class="dim-label">Gates</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Doc review gate:</strong> doc-reviewer must approve all artifacts before index build (max 3 feedback cycles)</li>
+              <li><strong>Coverage gate:</strong> Reconciliation must show &ge;80% coverage of public API surface</li>
+              <li><strong>Completeness gate:</strong> All generated pages must have required sections populated (no empty stubs)</li>
+              <li>Unresolved review after 3 cycles &rarr; escalate to team-lead (exit 2)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-skill">
+          <div class="dim-label">Skills Injection</div>
+          <div class="dim-content">
+            <ul>
+              <li>Agent profiles loaded from <code>profiles.json</code> (10 agents: doc-coordinator, docstring-agent, api-doc-generator, guide-author, architecture-doc-agent, changelog-agent, doc-reviewer, doc-index-builder, doc-search-agent, doc-site-builder)</li>
+              <li>KB.md + INSTRUCTIONS.md injected for project domain context</li>
+              <li><strong>GitIngest:</strong> Full codebase context extraction for doc-generating agents</li>
+              <li>Existing docs directory scanned for reconciliation baseline</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-cost">
+          <div class="dim-label">Cost Tracking</div>
+          <div class="dim-content">
+            <ul>
+              <li>Each agent invocation captures tokens + cost from <code>claude.sh</code> JSON response</li>
+              <li>Written to <code>phase-cost.jsonl</code> with <code>story_id: doc-pass</code></li>
+              <li>Review feedback cycles tracked separately for cost-per-revision analysis</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-cpa">
+          <div class="dim-label">CPA</div>
+          <div class="dim-content">
+            <ul>
+              <li>Not active &mdash; documentation stage uses fixed cost budgets per agent</li>
+              <li>Cost actuals feed back to CPA calibration for future estimation phases</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Agent Roster -->
+      <div class="agent-roster">
+        <div class="agent-roster-title">Agent Roster &mdash; Documentation</div>
+
+        <div class="ar-card ar-coord">
+          <div class="ar-head">
+            <div class="ar-name">doc-coordinator</div>
+            <div class="ar-badges"><span class="badge b-opus">OPUS</span></div>
+          </div>
+          <div class="ar-desc">Orchestrates the documentation pipeline. Performs coverage gap analysis: reconciles exported public API surface (types, functions, classes, CLI commands) against existing docs directory. Assigns documentation tasks to specialist agents, collects their output, and integrates feedback from doc-reviewer in an iterative loop (max 3 cycles). Maintains a doc-status.json manifest tracking per-page completeness. Escalates unresolved review issues to team-lead.</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Coverage gap reconciliation</span>
+            <span class="ar-tool t-skill">Task assignment &amp; sequencing</span>
+            <span class="ar-tool t-skill">Feedback loop governance (max 3)</span>
+            <span class="ar-tool t-skill">Doc manifest management</span>
+            <span class="ar-tool t-skill">GitIngest codebase context</span>
+            <span class="ar-tool t-skill">Escalation policy</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Tools:</span>
+            <span class="ar-tool t-safe">ReadFile</span>
+            <span class="ar-tool t-safe">Search</span>
+            <span class="ar-tool t-safe">ListFiles</span>
+            <span class="ar-tool t-review">WriteFile</span>
+            <span class="ar-tool t-danger">Bash</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Reads:</span>
+            <span class="ar-tool t-ext">prd.json</span>
+            <span class="ar-tool t-ext">profiles.json</span>
+            <span class="ar-tool t-ext">src/**/*.ts (public exports)</span>
+            <span class="ar-tool t-ext">docs/ (existing)</span>
+          </div>
+          <div class="ar-tools-row" style="margin-top:4px">
+            <span class="ar-tools-label">Writes:</span>
+            <span class="ar-tool t-ext">doc-status.json</span>
+            <span class="ar-tool t-ext">doc-reviews.jsonl</span>
+            <span class="ar-tool t-ext">doc-reconciliation.json</span>
+          </div>
+        </div>
+
+        <div class="ar-card ar-impl">
+          <div class="ar-head">
+            <div class="ar-name">api-doc-generator</div>
+            <div class="ar-badges"><span class="badge b-sonnet">SONNET</span></div>
+          </div>
+          <div class="ar-desc">Extracts TypeScript public API surface: exported functions, classes, interfaces, type aliases, enums, and CLI command signatures. Runs TypeDoc for structured JSON/HTML output, uses ast-grep for tree-sitter AST pattern matching to find undocumented exports. Generates structured API reference pages with parameter types, return types, usage examples, and cross-references. Understands the epam-cli module structure (providers/, agent/, tools/, auth/, billing/, config/, cli/) and groups documentation by domain. Outputs HTML pages following a consistent section template.</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">TypeDoc API generation</span>
+            <span class="ar-tool t-skill">ast-grep structural search</span>
+            <span class="ar-tool t-skill">TypeScript AST extraction</span>
+            <span class="ar-tool t-skill">Interface/type documentation</span>
+            <span class="ar-tool t-skill">Usage example generation</span>
+            <span class="ar-tool t-skill">Cross-reference linking</span>
+            <span class="ar-tool t-skill">Module grouping by domain</span>
+            <span class="ar-tool t-skill">JSDoc/TSDoc parsing</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Tools:</span>
+            <span class="ar-tool t-safe">ReadFile</span>
+            <span class="ar-tool t-safe">Search</span>
+            <span class="ar-tool t-safe">ListFiles</span>
+            <span class="ar-tool t-review">WriteFile</span>
+            <span class="ar-tool t-danger">Bash</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">External tools:</span>
+            <span class="ar-tool t-ext">TypeDoc (Apache-2.0, 7.5k&#9733;)</span>
+            <span class="ar-tool t-ext">ast-grep (MIT, 8k&#9733;)</span>
+            <span class="ar-tool t-ext">tsc --declaration</span>
+            <span class="ar-tool t-ext">GitIngest</span>
+          </div>
+        </div>
+
+        <div class="ar-card ar-impl">
+          <div class="ar-head">
+            <div class="ar-name">guide-author</div>
+            <div class="ar-badges"><span class="badge b-sonnet">SONNET</span></div>
+          </div>
+          <div class="ar-desc">Writes user-facing documentation: getting-started guides, CLI command reference, configuration guide, provider setup walkthroughs, troubleshooting pages, and tutorial content. Uses readme-ai for initial README scaffolding. Reads existing code to ensure accuracy. Follows structured page template with required sections (Description, Prerequisites, Steps, Examples, Troubleshooting, Related). Adapts tone for developer audience. Generates runnable code examples validated against current API.</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Structured page authoring</span>
+            <span class="ar-tool t-skill">CLI command documentation</span>
+            <span class="ar-tool t-skill">Configuration guide writing</span>
+            <span class="ar-tool t-skill">Runnable example generation</span>
+            <span class="ar-tool t-skill">Developer-audience tone</span>
+            <span class="ar-tool t-skill">Troubleshooting flow design</span>
+            <span class="ar-tool t-skill">readme-ai scaffolding</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Tools:</span>
+            <span class="ar-tool t-safe">ReadFile</span>
+            <span class="ar-tool t-safe">Search</span>
+            <span class="ar-tool t-safe">ListFiles</span>
+            <span class="ar-tool t-safe">FetchUrl</span>
+            <span class="ar-tool t-review">WriteFile</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">External tools:</span>
+            <span class="ar-tool t-ext">readme-ai (MIT, 1.5k&#9733;)</span>
+          </div>
+        </div>
+
+        <div class="ar-card ar-impl">
+          <div class="ar-head">
+            <div class="ar-name">architecture-doc-agent</div>
+            <div class="ar-badges"><span class="badge b-sonnet">SONNET</span></div>
+          </div>
+          <div class="ar-desc">Generates architecture documentation: system design overviews, module dependency diagrams (Mermaid.js + D2), data flow diagrams, sequence diagrams for key flows (agent ReAct loop, provider failover, auth device flow, tool approval). Uses Madge for module graph extraction, Mermaid.js for inline rendering, D2 for complex layouts (ELK/dagre engines). Traverses the module graph to produce accurate dependency visualizations. Documents the config priority chain, provider selection logic, and orchestration pipeline topology. Can generate C4-model views via Structurizr DSL.</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Mermaid.js diagram syntax</span>
+            <span class="ar-tool t-skill">D2 declarative diagrams</span>
+            <span class="ar-tool t-skill">C4 model / Structurizr DSL</span>
+            <span class="ar-tool t-skill">Module dependency graphing</span>
+            <span class="ar-tool t-skill">Sequence diagram design</span>
+            <span class="ar-tool t-skill">Data flow visualization</span>
+            <span class="ar-tool t-skill">Config chain documentation</span>
+            <span class="ar-tool t-skill">System topology mapping</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Tools:</span>
+            <span class="ar-tool t-safe">ReadFile</span>
+            <span class="ar-tool t-safe">Search</span>
+            <span class="ar-tool t-safe">ListFiles</span>
+            <span class="ar-tool t-review">WriteFile</span>
+            <span class="ar-tool t-danger">Bash</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">External tools:</span>
+            <span class="ar-tool t-ext">Mermaid.js (MIT, 72k&#9733;)</span>
+            <span class="ar-tool t-ext">D2 (MPL-2.0, 22.5k&#9733;)</span>
+            <span class="ar-tool t-ext">Madge (dependency graph)</span>
+            <span class="ar-tool t-ext">Structurizr (C4 model)</span>
+            <span class="ar-tool t-ext">GitIngest</span>
+          </div>
+        </div>
+
+        <div class="ar-card ar-impl">
+          <div class="ar-head">
+            <div class="ar-name">changelog-agent</div>
+            <div class="ar-badges"><span class="badge b-haiku">HAIKU</span></div>
+          </div>
+          <div class="ar-desc">Auto-generates structured changelogs and release notes. Runs git-cliff for Conventional Commits parsing with custom templates, then enriches output with prd.json story metadata (titles, acceptance criteria, story IDs). Reads phase-gates.jsonl to produce per-phase and cumulative changelogs. Groups changes by category (Features, Fixes, Breaking Changes, Internal). Links entries to story IDs and commit SHAs. Follows Keep-a-Changelog format.</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">git-cliff template authoring</span>
+            <span class="ar-tool t-skill">Conventional Commits parsing</span>
+            <span class="ar-tool t-skill">Keep-a-Changelog format</span>
+            <span class="ar-tool t-skill">Story-to-commit linking</span>
+            <span class="ar-tool t-skill">Breaking change detection</span>
+            <span class="ar-tool t-skill">Semantic categorization</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Tools:</span>
+            <span class="ar-tool t-safe">ReadFile</span>
+            <span class="ar-tool t-safe">Search</span>
+            <span class="ar-tool t-safe">ListFiles</span>
+            <span class="ar-tool t-review">WriteFile</span>
+            <span class="ar-tool t-danger">Bash</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">External tools:</span>
+            <span class="ar-tool t-ext">git-cliff (Apache-2.0/MIT, 10k&#9733;)</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Reads:</span>
+            <span class="ar-tool t-ext">git log</span>
+            <span class="ar-tool t-ext">prd.json (completed stories)</span>
+            <span class="ar-tool t-ext">phase-gates.jsonl</span>
+          </div>
+          <div class="ar-tools-row" style="margin-top:4px">
+            <span class="ar-tools-label">Writes:</span>
+            <span class="ar-tool t-ext">CHANGELOG.md</span>
+            <span class="ar-tool t-ext">docs/release-notes/*.html</span>
+          </div>
+        </div>
+
+        <div class="ar-card ar-review">
+          <div class="ar-head">
+            <div class="ar-name">doc-reviewer</div>
+            <div class="ar-badges"><span class="badge b-sonnet">SONNET</span><span class="badge b-gate">FEEDBACK LOOP</span></div>
+          </div>
+          <div class="ar-desc">Reviews all documentation artifacts for accuracy, completeness, and consistency. Runs Vale (prose linter with Microsoft/Google style packs), textlint (pluggable language linting), and markdownlint (structural checks) as automated first pass. Then validates: (1) API docs match current TypeScript signatures (no stale references), (2) code examples are syntactically valid and use current APIs, (3) architecture diagrams reflect actual module structure, (4) required page sections are populated (no empty stubs), (5) cross-references resolve to existing pages, (6) style consistency (terminology, formatting, heading hierarchy). Sends structured change-requests back to doc-coordinator with severity (blocker/major/minor) and specific fix instructions. Coordinator re-dispatches to originating agent. Max 3 feedback cycles before escalation.</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Vale prose linting</span>
+            <span class="ar-tool t-skill">textlint rule enforcement</span>
+            <span class="ar-tool t-skill">markdownlint structural checks</span>
+            <span class="ar-tool t-skill">Accuracy validation (code &harr; docs)</span>
+            <span class="ar-tool t-skill">Example syntax verification</span>
+            <span class="ar-tool t-skill">Cross-reference resolution</span>
+            <span class="ar-tool t-skill">Section completeness auditing</span>
+            <span class="ar-tool t-skill">Severity classification</span>
+            <span class="ar-tool t-skill">Change-request authoring</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Tools:</span>
+            <span class="ar-tool t-safe">ReadFile</span>
+            <span class="ar-tool t-safe">Search</span>
+            <span class="ar-tool t-safe">ListFiles</span>
+            <span class="ar-tool t-danger">Bash</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">External tools:</span>
+            <span class="ar-tool t-ext">Vale (MIT, 5.2k&#9733;)</span>
+            <span class="ar-tool t-ext">textlint (MIT, 2.8k&#9733;)</span>
+            <span class="ar-tool t-ext">markdownlint (MIT, 5k&#9733;)</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Reads:</span>
+            <span class="ar-tool t-ext">src/**/*.ts (ground truth)</span>
+            <span class="ar-tool t-ext">docs/**/*.html (generated output)</span>
+          </div>
+          <div class="ar-tools-row" style="margin-top:4px">
+            <span class="ar-tools-label">Writes:</span>
+            <span class="ar-tool t-ext">doc-reviews.jsonl</span>
+          </div>
+        </div>
+
+        <div class="ar-card ar-impl">
+          <div class="ar-head">
+            <div class="ar-name">doc-index-builder</div>
+            <div class="ar-badges"><span class="badge b-haiku">HAIKU</span></div>
+          </div>
+          <div class="ar-desc">Assembles the final documentation artifacts: navigation index (docs-index.json), cross-reference map, search metadata, table of contents, and llms.txt (LLM-optimized Markdown at /llms.txt per the llms.txt standard). Walks the generated docs/ directory, parses HTML titles and section headings, builds a hierarchical navigation tree. Validates all internal links resolve. Produces a machine-readable manifest for SPA consumption.</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Navigation index generation</span>
+            <span class="ar-tool t-skill">Cross-reference mapping</span>
+            <span class="ar-tool t-skill">Search metadata extraction</span>
+            <span class="ar-tool t-skill">Link validation</span>
+            <span class="ar-tool t-skill">Hierarchical TOC assembly</span>
+            <span class="ar-tool t-skill">llms.txt standard generation</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Tools:</span>
+            <span class="ar-tool t-safe">ReadFile</span>
+            <span class="ar-tool t-safe">Search</span>
+            <span class="ar-tool t-safe">ListFiles</span>
+            <span class="ar-tool t-review">WriteFile</span>
+            <span class="ar-tool t-danger">Bash</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Writes:</span>
+            <span class="ar-tool t-ext">docs-index.json</span>
+            <span class="ar-tool t-ext">docs/toc.html</span>
+            <span class="ar-tool t-ext">llms.txt / llms-full.txt</span>
+          </div>
+        </div>
+
+        <div class="agent-roster-title" style="margin-top:18px">Agent Roster &mdash; Documentation (Extended)</div>
+
+        <div class="ar-card ar-impl">
+          <div class="ar-head">
+            <div class="ar-name">docstring-agent</div>
+            <div class="ar-badges"><span class="badge b-haiku">HAIKU</span></div>
+          </div>
+          <div class="ar-desc">Batch-generates JSDoc/TSDoc inline comments across the src/ directory. Uses tree-sitter AST parsing (via doc-comments-ai pattern) to identify undocumented exported functions, classes, interfaces, and type aliases. Generates contextually accurate docstrings: @param, @returns, @throws, @example tags. Validates generated comments parse correctly with tsc. Never modifies logic &mdash; only adds or updates doc comments. Runs before api-doc-generator to enrich TypeDoc output.</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Tree-sitter AST traversal</span>
+            <span class="ar-tool t-skill">JSDoc/TSDoc tag generation</span>
+            <span class="ar-tool t-skill">@param/@returns/@throws authoring</span>
+            <span class="ar-tool t-skill">@example code generation</span>
+            <span class="ar-tool t-skill">Undocumented export detection</span>
+            <span class="ar-tool t-skill">Comment-only modification guarantee</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Tools:</span>
+            <span class="ar-tool t-safe">ReadFile</span>
+            <span class="ar-tool t-safe">Search</span>
+            <span class="ar-tool t-safe">ListFiles</span>
+            <span class="ar-tool t-review">WriteFile</span>
+            <span class="ar-tool t-danger">Bash</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">External tools:</span>
+            <span class="ar-tool t-ext">doc-comments-ai (MIT)</span>
+            <span class="ar-tool t-ext">ast-grep (MIT, 8k&#9733;)</span>
+            <span class="ar-tool t-ext">tsc --noEmit (validation)</span>
+          </div>
+        </div>
+
+        <div class="ar-card ar-impl">
+          <div class="ar-head">
+            <div class="ar-name">doc-search-agent</div>
+            <div class="ar-badges"><span class="badge b-sonnet">SONNET</span></div>
+          </div>
+          <div class="ar-desc">Builds a RAG-powered search index over generated documentation using Markprompt. Scans docs/ directory, creates embeddings, and produces a search API endpoint + React search component configuration. Integrates Context7 MCP server for fetching upstream library docs (Anthropic SDK, Commander.js, Vitest, Zod) to enrich cross-references. Outputs search configuration and embedding artifacts for the documentation SPA.</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Markprompt index generation</span>
+            <span class="ar-tool t-skill">Context7 MCP integration</span>
+            <span class="ar-tool t-skill">Document embedding creation</span>
+            <span class="ar-tool t-skill">Search API configuration</span>
+            <span class="ar-tool t-skill">Upstream library doc retrieval</span>
+            <span class="ar-tool t-skill">Cross-project reference linking</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Tools:</span>
+            <span class="ar-tool t-safe">ReadFile</span>
+            <span class="ar-tool t-safe">Search</span>
+            <span class="ar-tool t-safe">ListFiles</span>
+            <span class="ar-tool t-safe">FetchUrl</span>
+            <span class="ar-tool t-review">WriteFile</span>
+            <span class="ar-tool t-danger">Bash</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">External tools:</span>
+            <span class="ar-tool t-ext">Markprompt (MIT, 2.5k&#9733;)</span>
+            <span class="ar-tool t-ext">Context7 MCP (48.7k&#9733;)</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Writes:</span>
+            <span class="ar-tool t-ext">docs/search-config.json</span>
+            <span class="ar-tool t-ext">docs/embeddings/</span>
+          </div>
+        </div>
+
+        <div class="ar-card ar-deploy">
+          <div class="ar-head">
+            <div class="ar-name">doc-site-builder</div>
+            <div class="ar-badges"><span class="badge b-haiku">HAIKU</span></div>
+          </div>
+          <div class="ar-desc">Compiles generated documentation artifacts into a deployable static site. Configures Docusaurus v3.9 (with native AI search via Algolia DocSearch) or Fumadocs (AI chat + MCP-ready). Generates docusaurus.config.js / fumadocs.config.ts, sidebars, theme customization, and build scripts. Runs the build to produce the final dist/ output. Validates build completes with zero warnings.</div>
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Skills:</span>
+            <span class="ar-tool t-skill">Docusaurus v3.9 configuration</span>
+            <span class="ar-tool t-skill">Fumadocs configuration</span>
+            <span class="ar-tool t-skill">Sidebar generation</span>
+            <span class="ar-tool t-skill">Theme customization</span>
+            <span class="ar-tool t-skill">Static site build validation</span>
+            <span class="ar-tool t-skill">AI search integration</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Tools:</span>
+            <span class="ar-tool t-safe">ReadFile</span>
+            <span class="ar-tool t-safe">Search</span>
+            <span class="ar-tool t-safe">ListFiles</span>
+            <span class="ar-tool t-review">WriteFile</span>
+            <span class="ar-tool t-danger">Bash</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">External tools:</span>
+            <span class="ar-tool t-ext">Docusaurus v3.9 (MIT, 57k&#9733;)</span>
+            <span class="ar-tool t-ext">Fumadocs (MIT)</span>
+          </div>
+          <hr class="ar-sep">
+          <div class="ar-tools-row">
+            <span class="ar-tools-label">Writes:</span>
+            <span class="ar-tool t-ext">docs-site/dist/</span>
+            <span class="ar-tool t-ext">docusaurus.config.js</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 14px; font-size: 11px; color: var(--text3);">
+        <strong>Key scripts:</strong>
+        <span class="script-pill">run-doc-orchestration.sh</span> &nbsp;|&nbsp;
+        <span class="script-pill">claude.sh</span>
+        &nbsp;|&nbsp; <strong>Outputs:</strong> docs/**/*.html, docs-index.json, doc-status.json, doc-reviews.jsonl, CHANGELOG.md, llms.txt, search-config.json, docs-site/dist/
+      </div>
+
+      <div style="margin-top: 10px; font-size: 11px; color: var(--text3); line-height: 1.6;">
+        <strong>Feedback loop:</strong> doc-reviewer sends structured change-requests (severity + fix instructions) to doc-coordinator.
+        Coordinator re-dispatches to the originating agent (docstring-agent, api-doc-generator, guide-author, or architecture-doc-agent).
+        Agent revises and resubmits. Cycle repeats up to 3 times. Unresolved blockers after 3 cycles escalate to team-lead (exit 2).
+        <br>
+        <strong>Open-source toolchain:</strong>
+        TypeDoc (API extraction) &rarr; ast-grep (undocumented export detection) &rarr; doc-comments-ai (docstring generation) &rarr;
+        Mermaid.js / D2 (diagrams) &rarr; git-cliff (changelog) &rarr; Vale + textlint + markdownlint (quality linting) &rarr;
+        Markprompt + Context7 MCP (search/RAG) &rarr; Docusaurus v3.9 / Fumadocs (site build) &rarr; llms.txt (LLM-optimized output).
+        <br>
+        <strong>Inspired by:</strong> Metrolinx docs pipeline patterns &mdash; reconciliation-driven coverage analysis, structured section templates,
+        docgen from TypeScript AST, page-status tracking manifest, two-agent reconciler/producer model.
+      </div>
+
+      <table class="substep-table" style="margin-top:14px">
+        <thead><tr><th>Sub-Step</th><th>Agent</th><th>Mode</th><th>Input</th><th>Output</th><th>Blocking</th></tr></thead>
+        <tbody>
+          <tr><td>6.1 Reconciliation</td><td>doc-coordinator</td><td>Multi-turn</td><td>src/**/*.ts, docs/</td><td>doc-reconciliation.json</td><td>No</td></tr>
+          <tr><td>6.1.5 Docstrings</td><td>docstring-agent</td><td>Multi-turn</td><td>src/**/*.ts</td><td>src/**/*.ts (comments only)</td><td>No</td></tr>
+          <tr><td>6.2 API Extraction</td><td>api-doc-generator</td><td>Multi-turn</td><td>src/**/*.ts, tsconfig</td><td>docs/api/**/*.html</td><td>No</td></tr>
+          <tr><td>6.3a Guides</td><td>guide-author</td><td>Multi-turn</td><td>src/, prd.json</td><td>docs/guides/**/*.html</td><td>No</td></tr>
+          <tr><td>6.3b Architecture</td><td>architecture-doc-agent</td><td>Multi-turn</td><td>src/, Madge graph</td><td>docs/architecture/**/*.html</td><td>No</td></tr>
+          <tr><td>6.4 Changelog</td><td>changelog-agent</td><td>Single-turn</td><td>git-cliff, prd.json</td><td>CHANGELOG.md, release notes</td><td>No</td></tr>
+          <tr><td>6.5 Review</td><td>doc-reviewer</td><td>Multi-turn</td><td>docs/**/*.html + Vale/textlint</td><td>doc-reviews.jsonl</td><td><span class="badge b-block">exit 2</span></td></tr>
+          <tr><td>6.5.R Revision cycle</td><td>originating agent</td><td>Multi-turn</td><td>change-requests</td><td>revised docs</td><td>Max 3 cycles</td></tr>
+          <tr><td>6.6 Index Build</td><td>doc-index-builder</td><td>Single-turn</td><td>docs/**/*.html</td><td>docs-index.json, toc.html, llms.txt</td><td>No</td></tr>
+          <tr><td>6.7 Search Index</td><td>doc-search-agent</td><td>Multi-turn</td><td>docs/, Context7 MCP</td><td>search-config.json, embeddings/</td><td>No</td></tr>
+          <tr><td>6.8 Site Build</td><td>doc-site-builder</td><td>Single-turn</td><td>docs/, config</td><td>docs-site/dist/</td><td>No</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <!-- CROSS-STAGE SUMMARY TABLE                                          -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
@@ -1643,24 +2555,27 @@ code {
           <th>3. Execution</th>
           <th>4. Quality Assurance</th>
           <th>5. Post-Execution</th>
+          <th>6. Documentation</th>
         </tr>
       </thead>
       <tbody>
         <tr>
           <td>Flow</td>
-          <td>Coord &rarr; OpenSpec &rarr; Speckit &rarr; Apply</td>
+          <td>Groom &rarr; Readiness &#8214; Dedup &rarr; Coord &rarr; OpenSpec &rarr; Speckit &rarr; Apply</td>
           <td>Formula &rarr; CPA &rarr; Skill &rarr; Hybrid</td>
           <td>Main (seq) &rarr; Worktrees (par) &rarr; Merge &rarr; Review</td>
           <td>Phase A &#8214; &rarr; Phase B &#8214; &rarr; Phase C &#8214; &rarr; Unit tests</td>
           <td>Pre-gate &rarr; Phase gate &rarr; E2E &rarr; Assessment &rarr; Graph</td>
+          <td>Reconcile &rarr; API extract &rarr; Guides &#8214; Arch &rarr; Changelog &rarr; Review loop &rarr; Index</td>
         </tr>
         <tr>
           <td>ReAct Loops</td>
-          <td>Multi-turn (OpenSpec, Speckit)</td>
+          <td>Single-turn (grooming); Multi-turn (OpenSpec, Speckit)</td>
           <td>Multi-turn (CPA); single-turn (skill, hybrid)</td>
           <td>Full ReAct per story; 3-cycle review</td>
           <td>Multi-turn per QA agent (6 agents)</td>
           <td>Single-turn (assessment); shell (gate)</td>
+          <td>Multi-turn (coordinator, generators, reviewer)</td>
         </tr>
         <tr>
           <td>Parallelization</td>
@@ -1669,14 +2584,16 @@ code {
           <td>3-lane: Main + Primary &#8214; Independent</td>
           <td>2 agents per phase (3 cascade phases)</td>
           <td>None (sequential)</td>
+          <td>guide-author &#8214; architecture-doc-agent</td>
         </tr>
         <tr>
           <td>Gates</td>
-          <td>None (optional stage)</td>
+          <td>Grooming readiness gate (score &lt; 60 blocks spec); optional stage</td>
           <td>CPA 3-tier (pass/review/block); Infra gate</td>
           <td>Merge gate; Code review (exit 2)</td>
           <td>3 cascade gates + unit test hard block</td>
           <td>Phase gate (variance 30%/150%)</td>
+          <td>Doc review gate (max 3 cycles); coverage &ge;80%</td>
         </tr>
         <tr>
           <td>Skills Injection</td>
@@ -1685,6 +2602,7 @@ code {
           <td>Per-story profile + technicalNotes</td>
           <td>Specialized QA system prompts</td>
           <td>Role change recommendations</td>
+          <td>profiles.json + GitIngest codebase context</td>
         </tr>
         <tr>
           <td>Cost Tracking</td>
@@ -1693,6 +2611,7 @@ code {
           <td>Per-story actuals + Langfuse traces</td>
           <td>Per-agent duration + tokens</td>
           <td>Variance analysis (actual vs estimated)</td>
+          <td>phase-cost.jsonl (doc-pass); per-revision tracking</td>
         </tr>
         <tr>
           <td>CPA</td>
@@ -1701,30 +2620,34 @@ code {
           <td>Forecasts used as baseline</td>
           <td>Not active</td>
           <td>Feedback loop (actuals &rarr; calibration)</td>
+          <td>Not active (fixed budgets)</td>
         </tr>
         <tr>
           <td>Agents</td>
-          <td>3 (coordinator, openspec, speckit)</td>
+          <td>6 (grooming-coordinator, readiness-checker, dedup-detector, spec-coordinator, openspec, speckit)</td>
           <td>3 (context-purveyor, team-lead, coordination)</td>
           <td>10+ (engineers, review, assessment, coordination)</td>
           <td>10 (7 QA sentinels + 3 extended + coordinator)</td>
           <td>2 (skill-assessment, orchestrator)</td>
+          <td>10 (coordinator, docstring, api-doc, guide, arch, changelog, reviewer, index, search, site-builder)</td>
         </tr>
         <tr>
           <td>Key Scripts</td>
-          <td>spec-mode-runner.js</td>
+          <td>spec-mode-runner.js, claude.sh</td>
           <td>estimate-stories.sh, contextualize-stories.sh</td>
           <td>run-agent-orchestration.sh, claude.sh, merge-worktree.sh</td>
           <td>run-agent-orchestration.sh (Steps 4.2-4.5)</td>
           <td>check-phase-gate.sh, load-phase-graph.sh</td>
+          <td>run-doc-orchestration.sh, claude.sh</td>
         </tr>
         <tr>
           <td>Skip Env Var</td>
-          <td><code>EPAM_SPEC_MODE=0</code></td>
+          <td><code>SKIP_GROOMING=1</code>, <code>EPAM_SPEC_MODE=0</code></td>
           <td><code>SKIP_CPA=1</code></td>
           <td><code>DRY_RUN=true</code></td>
           <td><code>SKIP_TESTING_GATES=true</code></td>
           <td><code>SKIP_TESTS=true</code>, <code>SKIP_CLEANUP=true</code></td>
+          <td><code>SKIP_DOCS=true</code></td>
         </tr>
       </tbody>
     </table>
@@ -1774,6 +2697,33 @@ code {
           <td>ReadFile, Search, ListFiles, WriteFile, Bash</td>
           <td>&mdash;</td>
           <td>Testability/security criteria</td>
+        </tr>
+        <tr>
+          <td>grooming-coordinator</td>
+          <td>profiles.json</td>
+          <td>1. Spec (Pre-Spec)</td>
+          <td><span class="badge b-sonnet">SONNET</span></td>
+          <td>ReadFile, Search, ListFiles, WriteFile, Bash</td>
+          <td>carrot-ai-pm MCP</td>
+          <td>grooming-report.json, prd.json (groomingStatus)</td>
+        </tr>
+        <tr>
+          <td>readiness-checker</td>
+          <td>profiles.json</td>
+          <td>1. Spec (Pre-Spec)</td>
+          <td><span class="badge b-haiku">HAIKU</span></td>
+          <td>ReadFile, Search, ListFiles</td>
+          <td>&mdash;</td>
+          <td>readiness-scores.jsonl</td>
+        </tr>
+        <tr>
+          <td>dedup-detector</td>
+          <td>profiles.json</td>
+          <td>1. Spec (Pre-Spec)</td>
+          <td><span class="badge b-haiku">HAIKU</span></td>
+          <td>ReadFile, Search, ListFiles, Bash</td>
+          <td>Simili-Bot</td>
+          <td>dedup-report.json</td>
         </tr>
         <tr>
           <td>context-purveyor (CPA)</td>
@@ -1955,6 +2905,96 @@ code {
           <td>ast-grep, Madge</td>
           <td>Pattern/dependency report</td>
         </tr>
+        <tr>
+          <td>doc-coordinator</td>
+          <td>profiles.json</td>
+          <td>6. Documentation</td>
+          <td><span class="badge b-opus">OPUS</span></td>
+          <td>ReadFile, Search, ListFiles, WriteFile, Bash</td>
+          <td>GitIngest</td>
+          <td>doc-status.json, doc-reconciliation.json, doc-reviews.jsonl</td>
+        </tr>
+        <tr>
+          <td>api-doc-generator</td>
+          <td>profiles.json</td>
+          <td>6. Documentation</td>
+          <td><span class="badge b-sonnet">SONNET</span></td>
+          <td>ReadFile, Search, ListFiles, WriteFile, Bash</td>
+          <td>TypeDoc, ast-grep, tsc --declaration, GitIngest</td>
+          <td>docs/api/**/*.html</td>
+        </tr>
+        <tr>
+          <td>guide-author</td>
+          <td>profiles.json</td>
+          <td>6. Documentation</td>
+          <td><span class="badge b-sonnet">SONNET</span></td>
+          <td>ReadFile, Search, ListFiles, FetchUrl, WriteFile</td>
+          <td>readme-ai</td>
+          <td>docs/guides/**/*.html</td>
+        </tr>
+        <tr>
+          <td>architecture-doc-agent</td>
+          <td>profiles.json</td>
+          <td>6. Documentation</td>
+          <td><span class="badge b-sonnet">SONNET</span></td>
+          <td>ReadFile, Search, ListFiles, WriteFile, Bash</td>
+          <td>Mermaid.js, D2, Madge, Structurizr, GitIngest</td>
+          <td>docs/architecture/**/*.html (Mermaid)</td>
+        </tr>
+        <tr>
+          <td>changelog-agent</td>
+          <td>profiles.json</td>
+          <td>6. Documentation</td>
+          <td><span class="badge b-haiku">HAIKU</span></td>
+          <td>ReadFile, Search, ListFiles, WriteFile, Bash</td>
+          <td>git-cliff</td>
+          <td>CHANGELOG.md, release notes</td>
+        </tr>
+        <tr>
+          <td>doc-reviewer</td>
+          <td>profiles.json</td>
+          <td>6. Documentation</td>
+          <td><span class="badge b-sonnet">SONNET</span></td>
+          <td>ReadFile, Search, ListFiles, Bash</td>
+          <td>Vale, textlint, markdownlint</td>
+          <td>doc-reviews.jsonl (feedback loop)</td>
+        </tr>
+        <tr>
+          <td>doc-index-builder</td>
+          <td>profiles.json</td>
+          <td>6. Documentation</td>
+          <td><span class="badge b-haiku">HAIKU</span></td>
+          <td>ReadFile, Search, ListFiles, WriteFile, Bash</td>
+          <td>&mdash;</td>
+          <td>docs-index.json, toc.html, llms.txt</td>
+        </tr>
+        <tr>
+          <td>docstring-agent</td>
+          <td>profiles.json</td>
+          <td>6. Documentation</td>
+          <td><span class="badge b-haiku">HAIKU</span></td>
+          <td>ReadFile, Search, ListFiles, WriteFile, Bash</td>
+          <td>doc-comments-ai, ast-grep</td>
+          <td>src/**/*.ts (JSDoc/TSDoc comments)</td>
+        </tr>
+        <tr>
+          <td>doc-search-agent</td>
+          <td>profiles.json</td>
+          <td>6. Documentation</td>
+          <td><span class="badge b-sonnet">SONNET</span></td>
+          <td>ReadFile, Search, ListFiles, FetchUrl, WriteFile, Bash</td>
+          <td>Markprompt, Context7 MCP</td>
+          <td>search-config.json, embeddings/</td>
+        </tr>
+        <tr>
+          <td>doc-site-builder</td>
+          <td>profiles.json</td>
+          <td>6. Documentation</td>
+          <td><span class="badge b-haiku">HAIKU</span></td>
+          <td>ReadFile, Search, ListFiles, WriteFile, Bash</td>
+          <td>Docusaurus v3.9, Fumadocs</td>
+          <td>docs-site/dist/</td>
+        </tr>
       </tbody>
     </table>
   </div>
@@ -1967,6 +3007,15 @@ code {
     <br>
     <strong>Note:</strong> 3 agents (context-purveyor, skill-assessment-agent, coordination-agent) use inline prompts in orchestration shell scripts rather than profiles.json entries.
     Project-specific agents (e.g. frontend-engineer, devops-engineer, postgres-data-engineer) are proposed during <code>epam new generate</code> and added to profiles.json dynamically.
+    <br>
+    <strong>Stage 1 grooming agents:</strong> 3 grooming agents (grooming-coordinator, readiness-checker, dedup-detector) run as a pre-spec sub-stage. Skip with <code>SKIP_GROOMING=1</code>.
+    <br>
+    <strong>Stage 1 grooming toolchain:</strong> carrot-ai-pm MCP (MIT &mdash; requirement drift detection), Simili-Bot (Apache 2.0 &mdash; semantic similarity CLI).
+    <br>
+    <strong>Stage 6 agents:</strong> 10 documentation agents (doc-coordinator, docstring-agent, api-doc-generator, guide-author, architecture-doc-agent, changelog-agent, doc-reviewer, doc-index-builder, doc-search-agent, doc-site-builder) use profiles.json entries.
+    doc-reviewer operates in a feedback loop with doc-coordinator (max 3 cycles, escalate on unresolved blockers).
+    <br>
+    <strong>Stage 6 open-source toolchain:</strong> TypeDoc, ast-grep, doc-comments-ai, readme-ai, Mermaid.js, D2, Structurizr, git-cliff, Vale, textlint, markdownlint, Markprompt, Context7 MCP, Docusaurus v3.9, Fumadocs, llms.txt standard.
   </div>
 
   <!-- ── Data Files Reference ── -->
@@ -1988,7 +3037,14 @@ code {
         <tr><td>profiles-audit.jsonl</td><td>JSONL</td><td>Skill Assessment</td><td>Dashboards</td><td>Skill augmentation audit trail</td></tr>
         <tr><td>agent-status.json</td><td>JSON</td><td>update-monitor.sh</td><td>Dashboards (live)</td><td>Real-time lane/story status</td></tr>
         <tr><td>merge-requests.jsonl</td><td>JSONL</td><td>merge-worktree.sh</td><td>Dashboards</td><td>Merge results (merged/conflict/test_failure)</td></tr>
+        <tr><td>grooming-report.json</td><td>JSON</td><td>grooming-coordinator</td><td>spec-coordinator, Dashboards</td><td>Story readiness tiers, duplicate clusters, recommended actions</td></tr>
+        <tr><td>readiness-scores.jsonl</td><td>JSONL</td><td>readiness-checker</td><td>grooming-coordinator</td><td>Per-story INVEST scores, DoR checks, readinessScore</td></tr>
+        <tr><td>dedup-report.json</td><td>JSON</td><td>dedup-detector</td><td>grooming-coordinator</td><td>Duplicate clusters, overlap types, conflict detection</td></tr>
         <tr><td>spec-baseline.json</td><td>JSON</td><td>spec-mode-runner.js</td><td>Spec Diff dashboard</td><td>PRD snapshot before spec pass</td></tr>
+        <tr><td>doc-status.json</td><td>JSON</td><td>doc-coordinator</td><td>doc-reviewer, Dashboards</td><td>Per-page documentation completeness manifest</td></tr>
+        <tr><td>doc-reconciliation.json</td><td>JSON</td><td>doc-coordinator</td><td>All doc agents</td><td>Coverage gap analysis (API surface vs existing docs)</td></tr>
+        <tr><td>doc-reviews.jsonl</td><td>JSONL</td><td>doc-reviewer</td><td>doc-coordinator</td><td>Review verdicts and change-requests (feedback loop)</td></tr>
+        <tr><td>docs-index.json</td><td>JSON</td><td>doc-index-builder</td><td>Doc SPA, Dashboards</td><td>Navigation tree + search metadata</td></tr>
       </tbody>
     </table>
   </div>

@@ -123,7 +123,11 @@ if [ -d "$MSGS_DIR" ]; then
     mkdir -p "$MSGS_DIR/outbox"
     for agent in backend-engineer devops-engineer frontend-engineer review-agent \
                  db-architect pipeline-engineer docs-engineer unit-test-runner \
-                 qa-engineer mock-data-generator agent-skill-assessment-agent; do
+                 qa-engineer mock-data-generator agent-skill-assessment-agent \
+                 grooming-coordinator readiness-checker dedup-detector \
+                 doc-coordinator docstring-agent api-doc-generator guide-author \
+                 architecture-doc-agent changelog-agent doc-reviewer \
+                 doc-index-builder doc-search-agent doc-site-builder; do
         mkdir -p "$MSGS_DIR/inbox/$agent"
     done
 fi

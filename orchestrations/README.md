@@ -15,7 +15,7 @@ orchestrations/
 ├── prd.json                    # Master story definitions + phase assignments
 ├── README.md                   # This file
 ├── agents/
-│   ├── profiles.json           # 10 core + 10 QA/analysis agent role definitions (rich system prompts)
+│   ├── profiles.json           # 10 core + 3 grooming + 10 documentation + 10 QA/analysis agent role definitions (rich system prompts)
 │   ├── AGENTS.md               # Auto-generated learned patterns log
 │   └── KB.md                   # Shared knowledge base
 ├── scripts/
@@ -56,7 +56,8 @@ orchestrations/
     ├── agents-orchestration.html   # Orchestration flow diagram
     ├── quality-assurance.html      # QA testing gates viewer
     ├── agent-activity.html         # Unified agent activity timeline
-    └── cpa-details.html            # CPA estimation details
+    ├── cpa-details.html            # CPA estimation details
+    └── pipeline-stages.html        # 6-stage pipeline reference (all agents, skills, tools, gates)
 ```
 
 ---
@@ -92,7 +93,7 @@ npm run dashboards:serve
 
 The watch server tracks `orchestrations/prd.json`, `orchestrations/logs/**/*`, and the CLI
 scripts that publish dashboard data. Every change triggers an automatic rebuild of the
-10 dashboard HTML files plus `build-info.json`, then reloads the browser so the latest
+11 dashboard HTML files plus `build-info.json`, then reloads the browser so the latest
 JSON feeds are pulled without manual refreshes.
 
 `./scripts/run-agent-orchestration.sh` now auto-starts `npm run dashboards:serve`
@@ -131,6 +132,14 @@ Watcher output (and any failures) land in `orchestrations/logs/dashboards-watch.
 | `speckit-agent` | Second-pass specification review (testability, security, edge cases) |
 | `spec-coordinator-agent` | Assigns spec agents per story, final quality review |
 
+### Grooming Agents (Pre-Spec, Stage 1)
+
+| Role | Model | Responsibilities |
+|------|-------|-----------------|
+| `grooming-coordinator` | SONNET | Orchestrates pre-spec grooming pipeline, aggregates readiness scores + dedup results, updates prd.json with groomingStatus |
+| `readiness-checker` | HAIKU | INVEST criteria validation, Definition of Ready checklist, readiness scoring (0-100) |
+| `dedup-detector` | HAIKU | Semantic duplicate detection via Simili-Bot, story-to-code drift detection, conflict identification |
+
 ### QA Gate Agents (Steps 4.2–4.4)
 
 | Role | Gate Phase | Responsibilities |
@@ -146,11 +155,28 @@ Watcher output (and any failures) land in `orchestrations/logs/dashboards-watch.
 | `design-sentinel` | Phase C (4.4) | Duplication detection (jscpd), SOLID principles analysis (Semgrep) |
 | `pattern-sentinel` | Phase C (4.4) | Pattern extraction (ast-grep), dependency analysis (Madge), generalization |
 
+### Documentation Agents (Stage 6)
+
+| Role | Model | Responsibilities |
+|------|-------|-----------------|
+| `doc-coordinator` | OPUS | Orchestrates doc pipeline, coverage gap reconciliation, feedback loop governance |
+| `docstring-agent` | HAIKU | Batch JSDoc/TSDoc comment generation via tree-sitter + doc-comments-ai |
+| `api-doc-generator` | SONNET | TypeScript API extraction via TypeDoc + ast-grep, reference page generation |
+| `guide-author` | SONNET | User guides, CLI reference, tutorials via readme-ai scaffolding |
+| `architecture-doc-agent` | SONNET | System diagrams via Mermaid.js, D2, Madge, Structurizr (C4 model) |
+| `changelog-agent` | HAIKU | Release notes via git-cliff + prd.json story enrichment |
+| `doc-reviewer` | SONNET | Quality linting (Vale, textlint, markdownlint) + LLM accuracy review, feedback loop |
+| `doc-index-builder` | HAIKU | Navigation index, TOC, search metadata, llms.txt generation |
+| `doc-search-agent` | SONNET | RAG search index via Markprompt + Context7 MCP |
+| `doc-site-builder` | HAIKU | Static site compilation via Docusaurus v3.9 / Fumadocs |
+
 ---
 
 ## Orchestration Pipeline
 
 ```
+Step 0.1  Pre-spec grooming: readiness-checker ‖ dedup-detector (parallel)
+Step 0.2  Grooming gate: stories with readinessScore < 60 flagged (skip with SKIP_GROOMING=1)
 Step 0.5  Pre-phase skill assessment (augments agent profiles)
 Step 0.6  [hybrid only] Pre-phase coordination + message bus seeding
 Step 1    Main-branch stories (sequential)
@@ -168,6 +194,16 @@ Step 4.8  Pre-gate worktree verification
 Step 5    Phase gate: cost variance check (ok / warn / escalate)
 Step 5.5  Interstitial E2E phase (if <phase>_e2e exists in prd.json)
 Step 6    Final post-phase assessment
+Step 7    Documentation stage (run-doc-orchestration.sh)
+Step 7.1  Coverage gap reconciliation (doc-coordinator)
+Step 7.1.5 Docstring injection (docstring-agent)
+Step 7.2  API extraction (api-doc-generator via TypeDoc + ast-grep)
+Step 7.3  Guides ‖ Architecture diagrams (parallel)
+Step 7.4  Changelog (changelog-agent via git-cliff)
+Step 7.5  Doc review gate (doc-reviewer via Vale/textlint — max 3 feedback cycles)
+Step 7.6  Index + llms.txt build (doc-index-builder)
+Step 7.7  Search index (doc-search-agent via Markprompt + Context7 MCP)
+Step 7.8  Site build (doc-site-builder via Docusaurus/Fumadocs)
 ```
 
 ---
@@ -243,8 +279,13 @@ All agents emit events to `orchestrations/logs/agent-activity.jsonl` via the `Ag
 | `cost_snapshot` | Token/cost data point |
 | `phase_start` / `phase_complete` | Phase lifecycle |
 | `error` / `info` | General events |
+| `grooming_start` / `grooming_complete` | Grooming lifecycle |
+| `grooming_flag` | Story flagged as not-ready-for-spec (with deficiencies) |
+| `doc_reconciliation` | Documentation coverage gap analysis result |
+| `doc_review` | Documentation review verdict (pass/fail/change-request) |
+| `doc_revision` | Documentation revision cycle (feedback loop iteration) |
 
-View in the **Agent Activity** dashboard (`agent-activity.html`) — filterable by agent, type, phase, story, and severity.
+View in the **Agent Activity** dashboard (`agent-activity.html`) — filterable by agent, type, phase, story, and severity. All Stage 6 documentation agents emit events to the same `agent-activity.jsonl` file for unified observability.
 
 ---
 

@@ -508,7 +508,7 @@ code {
       </div>
       <div class="vs-desc">
         Runs main-lane setup stories sequentially on the main branch — schema migrations (<strong>db-architect</strong>),
-        seed data (<strong>mock-data-generator</strong>), and documentation (<strong>docs-engineer</strong>).
+        seed data (<strong>mock-data-generator</strong>), and documentation (<strong>docs-engineer</strong>; see Stage 6 for expanded 10-agent doc pipeline).
         Each invocation resolves the story's <code>effort</code> field to select the correct model and turn budget.
         Results are committed to the main branch before parallel work begins.
       </div>
@@ -937,7 +937,7 @@ code {
     <div class="feature-card">
       <div class="feature-icon">🎭</div>
       <div class="feature-title">Role-Based Profiles</div>
-      <div class="feature-desc">10 core + 7 QA gate agent roles, each with a profile injected at invocation. Skills are tracked, augmented pre-phase, and assessed post-phase. Profiles stored in <code>agents/profiles.json</code>.</div>
+      <div class="feature-desc">10 core + 3 grooming + 10 documentation + 7 QA gate agent roles, each with a profile injected at invocation. Skills are tracked, augmented pre-phase, and assessed post-phase. Stage 6 adds a 10-agent documentation sub-pipeline with a coordinator/reviewer feedback loop. Profiles stored in <code>agents/profiles.json</code>.</div>
     </div>
 
     <div class="feature-card">

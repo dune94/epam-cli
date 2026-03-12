@@ -18,6 +18,8 @@ import { getApiKey as getEnvApiKey } from '../../config/EnvVarOverrides.js';
 import { getApiKey as getStoredApiKey } from '../../billing/KeychainKeyStore.js';
 import { detectTier } from '../../billing/TierDetector.js';
 import { readProviders } from '../repl/DataConfig.js';
+import { wrapWithTracing } from '../../observability/TracedProvider.js';
+import { flushLangfuse } from '../../observability/LangfuseTracer.js';
 
 const VERSION = '0.1.0';
 
@@ -82,7 +84,8 @@ export function createChatCommand(): Command {
       }
 
       // Fallback single provider (used for pipe mode and MemoryCompressor)
-      const provider = chain;
+      // Wrap with Langfuse tracing if configured (LANGFUSE_SECRET_KEY + LANGFUSE_PUBLIC_KEY)
+      const provider = wrapWithTracing(chain);
 
       const tools = [
         new ReadFileTool(),
@@ -123,6 +126,7 @@ export function createChatCommand(): Command {
 
         await runner.run();
         writer.finalize();
+        await flushLangfuse();
         return;
       }
 

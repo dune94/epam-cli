@@ -24,6 +24,8 @@ Shared context available to all agents during orchestrated execution.
 | `src/config/` | Config resolver (global → project → env → flags) |
 | `src/billing/` | Tier detection, BYOK key store, provider selection |
 | `src/logging/` | Unified JSONL activity logger (`AgentActivityLogger`) |
+| `src/observability/` | Langfuse tracing — `TracedProvider` decorator + `LangfuseTracer` singleton |
+| `src/tools/gitingest/` | GitIngest — codebase-to-LLM-context extraction (Python CLI wrapper) |
 | `src/remote/` | Remote session handoff (QR, encryption, serialization) |
 | `src/scaffold/` | Project scaffolding (`epam new`) |
 | `src/context/` | Session store, context loader, memory compressor |

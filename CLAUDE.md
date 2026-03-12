@@ -23,6 +23,8 @@
 - Remote sessions: `src/remote/` — QR-based session handoff to mobile via AES-256-GCM encryption
 - Project scaffolding: `src/scaffold/` — `epam new init` / `epam new generate` for orchestration workspace setup
 - Activity logging: `src/logging/AgentActivityLogger.ts` — unified JSONL emitter for all agent events
+- Observability: `src/observability/TracedProvider.ts` — Langfuse-instrumented LLMProvider decorator (tokens, cost, latency, tool calls)
+- GitIngest: `src/tools/gitingest/GitIngest.ts` — codebase-to-LLM-context extraction wrapper
 - Config priority: CLI flags > `EPAM_*` env vars > `.epam/settings.json` > `~/.epam/config.json` > defaults
 
 ## Key Env Vars
@@ -30,6 +32,8 @@
 - `EPAM_PROVIDER`, `EPAM_MODEL`, `EPAM_BACKEND_URL`
 - `EPAM_DANGEROUS_SKIP_APPROVAL=1` — skip tool approval prompts (CI/scripts only)
 - `SKIP_TESTING_GATES=true` — bypass QA testing gates (Steps 4.2–4.4) in orchestration pipeline
+- `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY` — enable Langfuse LLM tracing (both required)
+- `LANGFUSE_BASE_URL` — Langfuse server (default `http://localhost:3100`)
 
 ## Tool Safety Classification
 - ReadFile, ListFiles, Search, FetchUrl — safe, no approval needed

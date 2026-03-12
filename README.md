@@ -81,6 +81,8 @@ Parallel multi-agent execution with phase gates and cost tracking:
 - **Budget guardrails** — Cost thresholds, model downgrade, session tracking
 - **Session handoff** — Automatic context preservation on failover
 - **QA Testing Gates** — 7 QA gate agents in 3 cascading phases (SAST, spec compliance, code review, mutation testing, fuzz analysis, performance)
+- **LLM Observability (Langfuse)** — Every LLM call traced with tokens, cost, latency, and tool calls via self-hosted Langfuse at `http://localhost:3100`
+- **GitIngest** — Codebase-to-LLM-context extraction for documentation pipelines
 
 ### Authentication
 
@@ -99,6 +101,34 @@ Live monitoring at `http://localhost:8092`:
 - **quality-assurance.html** — QA testing gate verdicts per phase
 - **agents-orchestration.html** — Pipeline flow with gate steps
 - **specification.html** — Spec diff (openspec/speckit collaboration)
+
+### LLM Observability (Langfuse)
+
+Self-hosted Langfuse captures every LLM call with full tracing:
+
+```bash
+# Start infrastructure (includes Langfuse + ClickHouse)
+docker compose -f docker-compose.epam-cli.yml up -d
+
+# Enable tracing in your session
+export LANGFUSE_SECRET_KEY=sk-lf-epam-dev
+export LANGFUSE_PUBLIC_KEY=pk-lf-epam-dev
+
+# Open dashboard
+open http://localhost:3100   # dev@epam-cli.local / dev1234
+```
+
+Traces include: model, provider, token usage, cost (USD), latency, tool calls, stop reason.
+
+### GitIngest (Codebase Context)
+
+TypeScript wrapper around the `gitingest` Python CLI for extracting LLM-friendly text digests from repositories:
+
+```bash
+pip install gitingest   # prerequisite
+```
+
+Used programmatically via `src/tools/gitingest/GitIngest.ts` — supports full repo ingest, subdirectory scoping, and changed-file-only mode for documentation pipelines.
 
 ---
 
@@ -255,6 +285,13 @@ Common env overrides:
 - `EPAM_BUDGET_WARNING_AT`
 - `EPAM_BUDGET_HARD_LIMIT_AT`
 - `EPAM_MAX_OUTPUT_TOKENS`
+
+Langfuse observability (optional):
+
+- `LANGFUSE_SECRET_KEY` — Langfuse secret key (enables tracing when set)
+- `LANGFUSE_PUBLIC_KEY` — Langfuse public key
+- `LANGFUSE_BASE_URL` — Langfuse server URL (default: `http://localhost:3100`)
+- `LANGFUSE_ENABLED` — Set to `false` to explicitly disable even when keys are present
 
 ## Orchestration and PRD Workflows
 

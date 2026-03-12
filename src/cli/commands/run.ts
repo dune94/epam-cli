@@ -15,6 +15,8 @@ import { getApiKey as getEnvApiKey } from '../../config/EnvVarOverrides.js';
 import { getApiKey as getStoredApiKey } from '../../billing/KeychainKeyStore.js';
 import { detectTier } from '../../billing/TierDetector.js';
 import { calculateCost } from '../../billing/pricing.js';
+import { wrapWithTracing } from '../../observability/TracedProvider.js';
+import { flushLangfuse } from '../../observability/LangfuseTracer.js';
 
 async function readStdin(): Promise<string> {
   const chunks: string[] = [];
@@ -95,10 +97,12 @@ export function createRunCommand(): Command {
         ? await consumeConsultationContext(prompt, config.projectRoot)
         : prompt;
 
+      const provider = wrapWithTracing(chain);
+
       const runner = new AgentRunner({
         userMessage,
         systemPrompt,
-        provider: chain,
+        provider,
         model: config.model,
         tools,
         maxIterations: config.maxIterations,
@@ -133,5 +137,7 @@ export function createRunCommand(): Command {
       } else {
         if (process.stdout.isTTY) process.stdout.write('\n');
       }
+
+      await flushLangfuse();
     });
 }

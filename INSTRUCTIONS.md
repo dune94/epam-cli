@@ -23,7 +23,7 @@ This file provides concrete working guidance for AI assistants contributing to `
 
 ## Key Directories
 
-- `src/`: CLI commands, REPL, providers, auth, orchestration glue, context/session logic
+- `src/`: CLI commands, REPL, providers, auth, orchestration glue, observability, context/session logic
 - `test/`: unit and integration tests
 - `orchestrations/`: orchestration scripts, dashboards, PRD workflow artifacts
 - `dist/`: built CLI output (`dist/epam.js`)

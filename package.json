@@ -46,6 +46,7 @@
     "ioredis": "^5.10.0",
     "jose": "^5.9.6",
     "keytar": "^7.9.0",
+    "langfuse": "^3.38.6",
     "marked": "^15.0.4",
     "marked-terminal": "^7.2.0",
     "open": "^10.1.0",

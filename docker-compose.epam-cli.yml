@@ -166,6 +166,77 @@ services:
       interval: 10s
       retries: 3
 
+  # ── Langfuse — LLM Observability (self-hosted) ──────────────────
+  # Access UI at http://localhost:3100
+  # Traces every LLM call: tokens, cost, latency, prompts
+  langfuse-server:
+    image: langfuse/langfuse:2
+    ports:
+      - "3100:3000"
+    environment:
+      DATABASE_URL: postgres://epam:epam_dev@postgres:5432/epam
+      NEXTAUTH_URL: http://localhost:3100
+      NEXTAUTH_SECRET: langfuse-dev-secret-change-in-production
+      SALT: langfuse-dev-salt-change-in-production
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      LANGFUSE_S3_EVENT_UPLOAD_ENABLED: "false"
+      LANGFUSE_INIT_ORG_ID: epam-dev
+      LANGFUSE_INIT_ORG_NAME: "EPAM CLI Dev"
+      LANGFUSE_INIT_PROJECT_ID: epam-cli
+      LANGFUSE_INIT_PROJECT_NAME: "epam-cli"
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: pk-lf-epam-dev
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: sk-lf-epam-dev
+      LANGFUSE_INIT_USER_EMAIL: dev@epam-cli.local
+      LANGFUSE_INIT_USER_PASSWORD: dev1234
+      LANGFUSE_INIT_USER_NAME: "Developer"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/public/health"]
+      interval: 15s
+      retries: 10
+
+  langfuse-worker:
+    image: langfuse/langfuse:2
+    command: ["node", "packages/worker/dist/app.js"]
+    environment:
+      DATABASE_URL: postgres://epam:epam_dev@postgres:5432/epam
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      LANGFUSE_S3_EVENT_UPLOAD_ENABLED: "false"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    restart: on-failure
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8123/ping"]
+      interval: 5s
+      retries: 10
+
 volumes:
   postgres_data:
   redis_data:
+  clickhouse_data:

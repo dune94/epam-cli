@@ -10,6 +10,8 @@ import { getApiKey as getStoredApiKey } from '../../billing/KeychainKeyStore.js'
 import { detectTier } from '../../billing/TierDetector.js';
 import { AuthManager } from '../../auth/AuthManager.js';
 import { readProviders } from '../repl/DataConfig.js';
+import { wrapWithTracing } from '../../observability/TracedProvider.js';
+import { flushLangfuse } from '../../observability/LangfuseTracer.js';
 import { analyzeManifest, proposeAgents, generatePrd } from '../../scaffold/ManifestAnalyzer.js';
 import { ProjectScaffolder } from '../../scaffold/ProjectScaffolder.js';
 import { FIXED_AGENT_ROLES } from '../../scaffold/prdTypes.js';
@@ -183,7 +185,7 @@ async function runGenerate(
     await chain.initialize();
   }
 
-  const provider = chain;
+  const provider = wrapWithTracing(chain);
   const model = config.model;
 
   console.log(chalk.dim(`  Provider: ${config.provider} / ${model}`));
@@ -370,6 +372,8 @@ ${analysis.summary}
 `;
   await fs.writeFile(kbPath, kbContent, 'utf-8');
   console.log(chalk.green(`  written ${chalk.bold('orchestrations/agents/KB.md')}`));
+
+  await flushLangfuse();
 
   // ── Summary ────────────────────────────────────────────────────────────
   console.log();

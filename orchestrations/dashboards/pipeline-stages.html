@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pipeline Stages — EPAM CLI</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #fbfafa;  --bg1: #ffffff;  --bg2: #f4f4f4;  --bg3: #eaeaea;
+  --surface: #ffffff;  --surface2: #f4f4f4;  --surface3: #eaeaea;
+  --border: #e0e0e0;  --border2: #cccccc;
+  --text: #060606;  --text2: #4a4a4a;  --text3: #717171;  --text-muted: #717171;
+  --teal: #0047ff;  --teal2: #0047ff;  --teal-dim: rgba(0,71,255,0.08);
+  --accent: #0047ff;  --teal-glow: rgba(0,71,255,0.20);
+  --violet: #8453d2;  --violet2: #8453d2;  --violet-dim: rgba(132,83,210,0.10);
+  --green: #1a8f3f;  --green-dim: rgba(26,143,63,0.10);
+  --amber: #c87a00;  --amber-dim: rgba(200,122,0,0.10);
+  --red: #d93025;  --red-dim: rgba(217,48,37,0.08);
+  --pink: #c4186e;  --pink-dim: rgba(196,24,110,0.08);
+  --blue: #1a73e8;  --blue-dim: rgba(26,115,232,0.08);
+  --orange: #d35400;  --orange-dim: rgba(211,84,0,0.08);
+  --epam-gradient: linear-gradient(118.82deg, #0078c2 .5%, #0047ff 47.33%, #8453d2 76.12%);
+  --epam-cyan: #00f6ff;
+  --main-bg: #fff8ee;     --main-fg:  #c87a00; --main-border: #c87a00;
+  --pri-bg:  #eef4ff;     --pri-fg:   #1a73e8; --pri-border:  #1a73e8;
+  --ind-bg:  #eef8f0;     --ind-fg:   #1a8f3f; --ind-border:  #1a8f3f;
+  --haiku-bg: rgba(0,71,255,0.08);    --haiku-fg: #0047ff; --haiku-b: rgba(0,71,255,0.25);
+  --sonnet-bg: rgba(132,83,210,0.10); --sonnet-fg: #8453d2; --sonnet-b: rgba(132,83,210,0.25);
+  --opus-bg: rgba(200,122,0,0.10);    --opus-fg: #c87a00; --opus-b: rgba(200,122,0,0.25);
+}
+
+body {
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg); color: var(--text);
+  min-height: 100vh; line-height: 1.5;
+}
+
+/* ── Header ── */
+.header {
+  background: var(--epam-gradient);
+  border-bottom: 1px solid transparent;
+  padding: 14px 28px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.header-icon {
+  width: 32px; height: 32px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center; font-size: 16px;
+}
+.header-title { font-size: 17px; font-weight: 700; color: #fff; }
+.header-sub { color: rgba(255,255,255,0.7); font-size: 11px; margin-top: 1px; }
+.header-nav { display: flex; gap: 4px; flex-wrap: wrap; }
+.nav-link {
+  font-size: 11px; font-weight: 600; padding: 4px 10px;
+  border-radius: 5px; border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.7); text-decoration: none;
+  transition: all 0.14s;
+}
+.nav-link:hover { color: #fff; border-color: rgba(255,255,255,0.5); }
+.nav-link.active { background: rgba(255,255,255,0.15); color: #fff; border-color: rgba(255,255,255,0.4); }
+
+/* ── Layout ── */
+.container { padding: 24px 28px 60px; max-width: 1440px; margin: 0 auto; }
+.section-title {
+  font-size: 9px; font-weight: 800; letter-spacing: 1.2px;
+  color: var(--text3); text-transform: uppercase;
+  margin: 36px 0 14px; display: flex; align-items: center; gap: 10px;
+}
+.section-title::before {
+  content: ''; width: 3px; height: 16px;
+  background: var(--accent); border-radius: 2px; flex-shrink: 0;
+}
+
+code {
+  font-family: 'Courier New', monospace; font-size: 10px;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 3px; padding: 1px 4px; color: #0047ff;
+}
+
+/* ── Badges ── */
+.badge {
+  font-size: 9px; font-weight: 800; padding: 2px 7px;
+  border-radius: 3px; letter-spacing: 0.5px; white-space: nowrap;
+  display: inline-block;
+}
+.b-main    { background: var(--main-bg);   color: var(--main-fg);   border: 1px solid var(--main-border); }
+.b-primary { background: var(--pri-bg);    color: var(--pri-fg);    border: 1px solid var(--pri-border);  }
+.b-ind     { background: var(--ind-bg);    color: var(--ind-fg);    border: 1px solid var(--ind-border);  }
+.b-haiku   { background: var(--haiku-bg);  color: var(--haiku-fg);  border: 1px solid var(--haiku-b);    }
+.b-sonnet  { background: var(--sonnet-bg); color: var(--sonnet-fg); border: 1px solid var(--sonnet-b);   }
+.b-opus    { background: var(--opus-bg);   color: var(--opus-fg);   border: 1px solid var(--opus-b);     }
+.b-gate    { background: rgba(132,83,210,0.10); color: #8453d2; border: 1px solid rgba(132,83,210,0.25); }
+.b-bash    { background: rgba(0,71,255,0.08); color: #0047ff; border: 1px solid rgba(0,71,255,0.2); }
+.b-hybrid  { background: rgba(200,122,0,0.10); color: #c87a00; border: 1px solid rgba(200,122,0,0.25); }
+.b-pass    { background: rgba(26,143,63,0.08); color: #1a8f3f; border: 1px solid rgba(26,143,63,0.25); }
+.b-block   { background: rgba(217,48,37,0.08); color: #d93025; border: 1px solid rgba(217,48,37,0.25); }
+.b-warn    { background: rgba(200,122,0,0.08); color: #c87a00; border: 1px solid rgba(200,122,0,0.25); }
+.b-seq     { background: rgba(26,115,232,0.08); color: #1a73e8; border: 1px solid rgba(26,115,232,0.25); }
+.b-par     { background: rgba(26,143,63,0.08); color: #1a8f3f; border: 1px solid rgba(26,143,63,0.25); }
+.b-react   { background: rgba(211,84,0,0.08); color: #d35400; border: 1px solid rgba(211,84,0,0.25); }
+
+/* ── Intro Stats ── */
+.stats-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;
+  margin-bottom: 24px;
+}
+.stat-card {
+  background: var(--bg1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px; text-align: center;
+}
+.stat-num { font-size: 28px; font-weight: 800; color: var(--accent); }
+.stat-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; margin-top: 2px; }
+
+/* ── Stage Card ── */
+.stage-card {
+  background: var(--bg1); border: 1px solid var(--border);
+  border-radius: 10px; margin-bottom: 20px;
+  overflow: hidden;
+}
+.stage-header {
+  padding: 18px 24px;
+  display: flex; align-items: center; gap: 14px;
+  cursor: pointer; user-select: none;
+  transition: background 0.12s;
+}
+.stage-header:hover { background: var(--bg2); }
+.stage-num {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 800; color: #fff;
+  flex-shrink: 0;
+}
+.stage-num.s1 { background: linear-gradient(135deg, #818cf8, #6366f1); }
+.stage-num.s2 { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.stage-num.s3 { background: linear-gradient(135deg, #10b981, #059669); }
+.stage-num.s4 { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+.stage-num.s5 { background: linear-gradient(135deg, #f43f5e, #e11d48); }
+.stage-name { font-size: 16px; font-weight: 700; flex: 1; }
+.stage-badges { display: flex; gap: 5px; flex-wrap: wrap; }
+.stage-toggle {
+  font-size: 18px; color: var(--text3); transition: transform 0.2s;
+  flex-shrink: 0;
+}
+.stage-card.open .stage-toggle { transform: rotate(180deg); }
+.stage-body { display: none; padding: 0 24px 24px; }
+.stage-card.open .stage-body { display: block; }
+
+/* ── Dimension Grid ── */
+.dim-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px;
+  margin-bottom: 18px;
+}
+.dim-card {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 14px 16px;
+  border-left: 3px solid var(--accent);
+}
+.dim-card.dim-flow    { border-left-color: #0047ff; }
+.dim-card.dim-react   { border-left-color: #d35400; }
+.dim-card.dim-par     { border-left-color: #1a8f3f; }
+.dim-card.dim-gate    { border-left-color: #8453d2; }
+.dim-card.dim-skill   { border-left-color: #c4186e; }
+.dim-card.dim-cost    { border-left-color: #c87a00; }
+.dim-card.dim-cpa     { border-left-color: #1a73e8; }
+.dim-card.dim-agent   { border-left-color: #6366f1; }
+.dim-card.dim-tool    { border-left-color: #059669; }
+.dim-label {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.8px;
+  color: var(--text3); text-transform: uppercase; margin-bottom: 6px;
+}
+.dim-content { font-size: 12px; color: var(--text2); line-height: 1.65; }
+.dim-content ul { list-style: none; padding: 0; }
+.dim-content li { padding: 3px 0 3px 14px; position: relative; }
+.dim-content li::before { content: '·'; position: absolute; left: 4px; color: var(--text3); font-weight: 700; }
+.dim-content strong { color: var(--text); font-weight: 700; }
+
+/* ── Sub-step table ── */
+.substep-table {
+  width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 8px;
+}
+.substep-table th {
+  background: var(--bg2); color: var(--text3); font-size: 9px; font-weight: 800;
+  letter-spacing: 0.5px; text-transform: uppercase;
+  padding: 7px 10px; text-align: left; border: 1px solid var(--border);
+}
+.substep-table td {
+  padding: 8px 10px; border: 1px solid var(--border); color: var(--text2); vertical-align: top;
+}
+.substep-table tr:nth-child(even) td { background: var(--bg); }
+
+/* ── Script pills ── */
+.script-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--bg); border: 1px solid #2a3a5c;
+  border-radius: 4px; padding: 2px 8px;
+  font-family: 'Courier New', monospace; font-size: 10px; color: #0047ff;
+}
+
+/* ── Flow connector ── */
+.flow-arrow {
+  text-align: center; padding: 6px 0; color: var(--text3); font-size: 20px;
+  line-height: 1;
+}
+
+/* ── Summary table ── */
+.summary-table {
+  width: 100%; border-collapse: collapse; font-size: 11px;
+}
+.summary-table th {
+  background: var(--bg2); color: var(--text3); font-size: 9px; font-weight: 800;
+  letter-spacing: 0.5px; text-transform: uppercase;
+  padding: 8px 10px; text-align: left; border: 1px solid var(--border);
+  position: sticky; top: 72px; z-index: 10;
+}
+.summary-table td {
+  padding: 8px 10px; border: 1px solid var(--border); color: var(--text2); vertical-align: top;
+}
+.summary-table tr:nth-child(even) td { background: var(--bg); }
+.summary-table td:first-child { font-weight: 700; color: var(--text); white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="header-icon">&#9776;</div>
+    <div>
+      <div class="header-title">Pipeline Stages</div>
+      <div class="header-sub">EPAM CLI · Orchestration Stage Reference</div>
+    </div>
+  </div>
+  <nav class="header-nav">
+    <a href="monitor.html"              class="nav-link">Monitor</a>
+    <a href="prd-viewer.html"           class="nav-link">PRD Viewer</a>
+    <a href="specification.html"        class="nav-link">Spec Diff</a>
+    <a href="orchestration-plan.html"   class="nav-link">Plan</a>
+    <a href="agents-orchestration.html" class="nav-link">Orchestration</a>
+    <a href="pipeline-stages.html"      class="nav-link active">Stages</a>
+    <a href="agent-profiles.html"       class="nav-link">Profiles</a>
+    <a href="agent-messages.html"       class="nav-link">Messages</a>
+    <a href="phase-cost-monitor.html"   class="nav-link">Costs</a>
+    <a href="quality-assurance.html"    class="nav-link">QA Gates</a>
+    <a href="cpa-details.html"          class="nav-link">Estimation</a>
+    <a href="epam-cli-guide.html"       class="nav-link">CLI Guide</a>
+  </nav>
+</div>
+
+<div class="container">
+
+  <!-- ── Overview Stats ── -->
+  <div class="section-title">Pipeline at a Glance</div>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-num">5</div><div class="stat-label">Pipeline Stages</div></div>
+    <div class="stat-card"><div class="stat-num">20+</div><div class="stat-label">Agent Roles</div></div>
+    <div class="stat-card"><div class="stat-num">7</div><div class="stat-label">QA Gate Agents</div></div>
+    <div class="stat-card"><div class="stat-num">3</div><div class="stat-label">Parallel Lanes</div></div>
+    <div class="stat-card"><div class="stat-num">12</div><div class="stat-label">Gate Checkpoints</div></div>
+    <div class="stat-card"><div class="stat-num">6</div><div class="stat-label">Orchestration Scripts</div></div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!-- STAGE 1: SPECIFICATION                                             -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="stage-card open" id="stage-spec">
+    <div class="stage-header" onclick="this.parentElement.classList.toggle('open')">
+      <div class="stage-num s1">1</div>
+      <div class="stage-name">Specification</div>
+      <div class="stage-badges">
+        <span class="badge b-seq">SEQUENTIAL</span>
+        <span class="badge b-react">REACT LOOP</span>
+        <span class="badge b-gate">GATE</span>
+      </div>
+      <div class="stage-toggle">&#9660;</div>
+    </div>
+    <div class="stage-body">
+      <div class="dim-grid">
+
+        <div class="dim-card dim-flow">
+          <div class="dim-label">Flow</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Entry:</strong> <code>spec-mode-runner.js</code> (Step 0)</li>
+              <li>Snapshots current <code>prd.json</code> as baseline</li>
+              <li>Coordinator reads all phase stories and decides which spec personas to launch</li>
+              <li>OpenSpec agent elaborates acceptance criteria, proposes story splits, adds technical notes</li>
+              <li>Speckit agent reviews OpenSpec output, adds testability and security criteria</li>
+              <li>Edits applied back to <code>prd.json</code> (acceptance criteria, splits, notes)</li>
+              <li><strong>Skip:</strong> <code>EPAM_SPEC_MODE=0</code></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-react">
+          <div class="dim-label">ReAct Loops</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Coordinator:</strong> Single-turn inference &mdash; reads stories, outputs agent assignment JSON</li>
+              <li><strong>OpenSpec:</strong> Multi-turn ReAct &mdash; reads each story, reasons about gaps, outputs elaborated criteria</li>
+              <li><strong>Speckit:</strong> Multi-turn ReAct &mdash; reads OpenSpec output, reasons about testability/security, outputs complement criteria</li>
+              <li>Each agent invoked via <code>claude.sh</code> with full tool access (ReadFile, WriteFile, Bash, Search)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-par">
+          <div class="dim-label">Parallelization</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>None</strong> &mdash; strictly sequential</li>
+              <li>Coordinator &rarr; OpenSpec &rarr; Speckit (each reads prior output)</li>
+              <li>Each agent must complete before the next starts to avoid conflicting PRD edits</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-gate">
+          <div class="dim-label">Gates</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>No hard gate</strong> &mdash; spec is optional (skip with env var)</li>
+              <li>Implicit validation: coordinator may decide "none" if stories are already well-specified</li>
+              <li>Outputs archived to <code>orchestrations/logs/spec-runs/&lt;run&gt;/</code> for audit</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-skill">
+          <div class="dim-label">Skills Injection</div>
+          <div class="dim-content">
+            <ul>
+              <li>Agent profiles loaded from <code>profiles.json</code></li>
+              <li>Coordinator prompt includes full story list + agent roster</li>
+              <li>OpenSpec/Speckit prompts include their role definition + target story context</li>
+              <li>KB.md injected for domain context</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-cost">
+          <div class="dim-label">Cost Tracking</div>
+          <div class="dim-content">
+            <ul>
+              <li>Each agent invocation captures tokens + cost from <code>claude.sh</code> JSON response</li>
+              <li>Written to <code>phase-cost.jsonl</code> with <code>story_id: spec-pass</code></li>
+              <li>Spec pass cost visible in phase-cost-monitor dashboard</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-cpa">
+          <div class="dim-label">CPA</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Not applied</strong> at this stage</li>
+              <li>CPA runs after spec, using the elaborated stories as input</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-agent">
+          <div class="dim-label">Agents</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>spec-coordinator-agent</strong> &mdash; assigns OpenSpec/Speckit/both/none per story</li>
+              <li><strong>openspec-agent</strong> &mdash; elaborates AC, proposes splits, adds technical notes</li>
+              <li><strong>speckit-agent</strong> &mdash; reviews + complements with testability/security criteria</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-tool">
+          <div class="dim-label">Tools &amp; Scripts</div>
+          <div class="dim-content">
+            <ul>
+              <li><span class="script-pill">spec-mode-runner.js</span> &mdash; Node.js orchestrator (24 KB)</li>
+              <li><span class="script-pill">claude.sh</span> &mdash; CLI wrapper for agent invocation</li>
+              <li><strong>Agent tools:</strong> ReadFile, WriteFile, Bash, Search, ListFiles</li>
+              <li><strong>Outputs:</strong> spec-baseline.json, spec-summary.json, spec-phase.jsonl</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+
+      <table class="substep-table">
+        <thead><tr><th>Sub-Step</th><th>Agent</th><th>Mode</th><th>Input</th><th>Output</th><th>Blocking</th></tr></thead>
+        <tbody>
+          <tr><td>0.0 Baseline</td><td>orchestrator</td><td>Script</td><td>prd.json</td><td>spec-baseline.json</td><td>No</td></tr>
+          <tr><td>0.1 Coordinate</td><td>spec-coordinator</td><td>Single-turn</td><td>stories + profiles</td><td>Agent assignments</td><td>No</td></tr>
+          <tr><td>0.2 Elaborate</td><td>openspec-agent</td><td>Multi-turn ReAct</td><td>Assigned stories</td><td>Elaborated AC, splits</td><td>No</td></tr>
+          <tr><td>0.3 Complement</td><td>speckit-agent</td><td>Multi-turn ReAct</td><td>OpenSpec output</td><td>Security/test criteria</td><td>No</td></tr>
+          <tr><td>0.4 Apply</td><td>orchestrator</td><td>Script</td><td>Agent outputs</td><td>Updated prd.json</td><td>No</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="flow-arrow">&#9660;</div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!-- STAGE 2: ESTIMATION                                                -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="stage-card open" id="stage-estimation">
+    <div class="stage-header" onclick="this.parentElement.classList.toggle('open')">
+      <div class="stage-num s2">2</div>
+      <div class="stage-name">Estimation</div>
+      <div class="stage-badges">
+        <span class="badge b-seq">SEQUENTIAL</span>
+        <span class="badge b-react">REACT LOOP</span>
+        <span class="badge b-gate">CPA GATE</span>
+      </div>
+      <div class="stage-toggle">&#9660;</div>
+    </div>
+    <div class="stage-body">
+      <div class="dim-grid">
+
+        <div class="dim-card dim-flow">
+          <div class="dim-label">Flow</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Entry:</strong> <code>estimate-stories.sh</code> (30 KB) + <code>contextualize-stories.sh</code> (32 KB)</li>
+              <li><strong>Phase A:</strong> Formula-based estimation &mdash; complexity-weighted model computes tokens, cost, hours per story</li>
+              <li><strong>Phase B:</strong> CPA (Contextual Purveyor Agent) pre-pass &mdash; TF-IDF KB retrieval + LLM-based blended estimation</li>
+              <li><strong>Phase C:</strong> Pre-phase skill assessment &mdash; team-lead detects skill gaps in agent profiles</li>
+              <li><strong>Phase D:</strong> Hybrid coordination (hybrid mode only) &mdash; identifies cross-lane dependencies</li>
+              <li><strong>Skip CPA:</strong> <code>SKIP_CPA=1</code> &nbsp;|&nbsp; <strong>Strict CPA:</strong> <code>STRICT_CPA=1</code></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-react">
+          <div class="dim-label">ReAct Loops</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Formula estimation:</strong> No ReAct &mdash; pure shell computation (effort &rarr; tokens/cost/hours)</li>
+              <li><strong>CPA agent:</strong> Multi-turn ReAct &mdash; reads KB.md via TF-IDF, reasons about story context, outputs blended estimates</li>
+              <li><strong>Skill assessment:</strong> Single-turn inference &mdash; reads profiles + story requirements, outputs augmentation recommendations</li>
+              <li><strong>Hybrid coordinator:</strong> Single-turn inference &mdash; reads story graph, outputs dependency + plan recommendations</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-par">
+          <div class="dim-label">Parallelization</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>None</strong> &mdash; strictly sequential pipeline</li>
+              <li>Formula &rarr; CPA &rarr; Skill Assessment &rarr; Hybrid Coord</li>
+              <li>Each step depends on the prior step's output</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-gate">
+          <div class="dim-label">Gates</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>CPA 3-tier gate:</strong></li>
+              <li><span class="badge b-pass">PASS</span> (exit 0) &mdash; all stories cleared, proceed</li>
+              <li><span class="badge b-warn">REVIEW</span> (exit 2) &mdash; elevated risk, auto-approved with warning</li>
+              <li><span class="badge b-block">BLOCK</span> (exit 3) &mdash; cannot proceed, requires manual resolution</li>
+              <li><strong>Infra gate:</strong> Blocks non-infra phases if infra_test stories incomplete</li>
+              <li><strong>STRICT_CPA=1:</strong> Halts on REVIEW gates (default: continue)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-skill">
+          <div class="dim-label">Skills Injection</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Step 0.5:</strong> Team-lead reads <code>prd.json</code> story <code>requiredSkills</code></li>
+              <li>Compares against agent profile text in <code>profiles.json</code></li>
+              <li>Augments profiles with missing skills (append-only)</li>
+              <li>Audit trail: <code>profiles-audit.jsonl</code></li>
+              <li>Backup: <code>profiles.json.original</code> (created on first run)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-cost">
+          <div class="dim-label">Cost Tracking</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Formula estimates:</strong> Written to <code>prd.json</code> per story (estimatedCost, estimatedTokens, estimatedHours, estimatedTurns, estimatedAiMinutes)</li>
+              <li><strong>CPA blending:</strong> Confidence-weighted interpolation:
+                <ul>
+                  <li>&ge; 0.75 confidence: Trust CPA 100%</li>
+                  <li>0.50&ndash;0.75: Interpolate formula + CPA</li>
+                  <li>&lt; 0.50: Keep formula + 20% uncertainty markup</li>
+                </ul>
+              </li>
+              <li>Historical calibration: CPA reads <code>phase-cost.jsonl</code> actuals</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-cpa">
+          <div class="dim-label">CPA (Contextual Purveyor Agent)</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Core function:</strong> KB-grounded estimate refinement</li>
+              <li><strong>TF-IDF sources:</strong> KB.md, INSTRUCTIONS.md, estimation.md, README.md</li>
+              <li><strong>Reads:</strong> Formula estimates + historical actuals</li>
+              <li><strong>Outputs:</strong> cpa-review.jsonl (gate decisions), reconciliation reports</li>
+              <li><strong>Blending formula:</strong> confidence-weighted interpolation between formula and CPA estimates</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-agent">
+          <div class="dim-label">Agents</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>context-purveyor</strong> &mdash; TF-IDF KB retrieval + LLM blended estimation</li>
+              <li><strong>team-lead-agent</strong> &mdash; skill gap detection + profile augmentation</li>
+              <li><strong>coordination-agent</strong> &mdash; hybrid mode dependency analysis (if hybrid)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-tool">
+          <div class="dim-label">Tools &amp; Scripts</div>
+          <div class="dim-content">
+            <ul>
+              <li><span class="script-pill">estimate-stories.sh</span> &mdash; formula estimation (30 KB)</li>
+              <li><span class="script-pill">contextualize-stories.sh</span> &mdash; CPA pre-pass (32 KB)</li>
+              <li><span class="script-pill">claude.sh</span> &mdash; agent invocation wrapper</li>
+              <li><strong>Agent tools:</strong> ReadFile, Search (KB retrieval)</li>
+              <li><strong>Outputs:</strong> Updated prd.json estimates, cpa-review.jsonl, profiles-audit.jsonl, phase-improvements/pre-&lt;phase&gt;.md</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+
+      <table class="substep-table">
+        <thead><tr><th>Sub-Step</th><th>Agent</th><th>Mode</th><th>Input</th><th>Output</th><th>Blocking</th></tr></thead>
+        <tbody>
+          <tr><td>A. Formula</td><td>orchestrator</td><td>Shell computation</td><td>prd.json stories</td><td>estimatedCost/tokens/hours</td><td>No</td></tr>
+          <tr><td>B. CPA</td><td>context-purveyor</td><td>Multi-turn ReAct</td><td>KB.md, estimates, actuals</td><td>Blended estimates, gate decisions</td><td><span class="badge b-block">exit 3</span></td></tr>
+          <tr><td>C. Skill Assessment</td><td>team-lead-agent</td><td>Single-turn</td><td>profiles.json, stories</td><td>Augmented profiles</td><td>No</td></tr>
+          <tr><td>D. Hybrid Coord</td><td>coordination-agent</td><td>Single-turn</td><td>prd.json dependency graph</td><td>agent-messages.jsonl</td><td>No (hybrid only)</td></tr>
+          <tr><td>Infra Gate</td><td>orchestrator</td><td>Logic check</td><td>prd.json completion status</td><td>Pass / block</td><td><span class="badge b-block">BLOCK</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="flow-arrow">&#9660;</div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!-- STAGE 3: EXECUTION / IMPLEMENTATION                                -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="stage-card open" id="stage-execution">
+    <div class="stage-header" onclick="this.parentElement.classList.toggle('open')">
+      <div class="stage-num s3">3</div>
+      <div class="stage-name">Execution / Implementation</div>
+      <div class="stage-badges">
+        <span class="badge b-par">PARALLEL</span>
+        <span class="badge b-react">REACT LOOP</span>
+        <span class="badge b-bash">BASH</span>
+        <span class="badge b-hybrid">HYBRID</span>
+      </div>
+      <div class="stage-toggle">&#9660;</div>
+    </div>
+    <div class="stage-body">
+      <div class="dim-grid">
+
+        <div class="dim-card dim-flow">
+          <div class="dim-label">Flow</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Entry:</strong> <code>run-agent-orchestration.sh</code> (67 KB)</li>
+              <li><strong>Step 1:</strong> Main-lane stories (sequential) &mdash; <code>agentGroup=main</code></li>
+              <li><strong>Step 2:</strong> Create worktrees for primary + independent lanes</li>
+              <li><strong>Step 3a/3b:</strong> Primary + Independent lanes execute in parallel (background PIDs)</li>
+              <li><strong>Step 3.1:</strong> Worktree health check + auto-commit</li>
+              <li><strong>Step 3.2:</strong> Merge worktrees back to main (--no-ff, conflict detection, tsc check)</li>
+              <li><strong>Step 3.5:</strong> Post-parallel skill assessment (cost variance, role recommendations)</li>
+              <li><strong>Step 3.6:</strong> Team-lead code review (max 3 iterations per story, escalation on failure)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-react">
+          <div class="dim-label">ReAct Loops</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Story agents:</strong> Full ReAct loop per story via <code>claude.sh</code></li>
+              <li>Effort-based turn budgets: <span class="badge b-haiku">LOW 10</span> <span class="badge b-sonnet">MED 30</span> <span class="badge b-opus">HIGH &infin;</span></li>
+              <li>Each agent has ReadFile, WriteFile, Bash, Search, ListFiles tools</li>
+              <li><strong>Code review cycle:</strong> Up to 3 ReAct iterations per story (review &rarr; feedback &rarr; fix &rarr; re-review)</li>
+              <li><strong>Skill assessment:</strong> Single-turn inference (no ReAct loop)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-par">
+          <div class="dim-label">Parallelization</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>3-lane architecture:</strong></li>
+              <li><span class="badge b-main">MAIN</span> Sequential &mdash; runs first, completes before worktrees</li>
+              <li><span class="badge b-primary">PRIMARY</span> Parallel &mdash; background PID, isolated worktree branch <code>wt-primary</code></li>
+              <li><span class="badge b-ind">INDEPENDENT</span> Parallel &mdash; background PID, isolated worktree branch <code>wt-independent</code></li>
+              <li>Primary + Independent run concurrently via <code>wait $PID</code></li>
+              <li>Within each lane, stories execute sequentially</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-gate">
+          <div class="dim-label">Gates</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Worktree health check:</strong> Validates clean state before merge (exit 0/1/2)</li>
+              <li><strong>Merge gate:</strong> Conflict detection, tsc --noEmit post-merge (exit 0/1/2/3)</li>
+              <li><strong>Code review gate:</strong> Team-lead reviews each story &mdash; escalation (exit 2) blocks pipeline</li>
+              <li><strong>Auto-commit:</strong> <code>AUTO_COMMIT=true</code> stages src/lib/packages and commits</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-skill">
+          <div class="dim-label">Skills Injection</div>
+          <div class="dim-content">
+            <ul>
+              <li>Agent profiles from <code>profiles.json</code> injected as system prompt per story</li>
+              <li>Story-specific <code>technicalNotes</code> appended to prompt context</li>
+              <li>KB.md injected for shared domain knowledge</li>
+              <li><strong>Post-parallel assessment (Step 3.5):</strong> Detects skill mismatches and recommends role changes for future stories</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-cost">
+          <div class="dim-label">Cost Tracking</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Per-story:</strong> claude.sh captures JSON response &rarr; tokens_in, tokens_out, cost_usd, elapsed_minutes</li>
+              <li><strong>Atomic append:</strong> flock-protected writes to <code>phase-cost.jsonl</code></li>
+              <li><strong>Variance analysis:</strong> Step 3.5 compares actual vs forecast per story</li>
+              <li><strong>Lane tagging:</strong> Each record includes lane (main/primary/independent)</li>
+              <li><strong>Langfuse:</strong> TracedProvider captures detailed LLM traces (tokens, latency, tool calls)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-cpa">
+          <div class="dim-label">CPA</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Not active during execution</strong></li>
+              <li>CPA estimates from Stage 2 used as <code>forecast_hours</code> baseline for variance analysis</li>
+              <li>Actuals feed back into CPA calibration for future phases</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-agent">
+          <div class="dim-label">Agents</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Implementation:</strong> typescript-engineer, agent-systems-engineer, billing-engineer, cli-ux-engineer, test-engineer, devops-engineer, frontend-engineer</li>
+              <li><strong>Review:</strong> review-agent (per-story), team-lead-agent (phase-level)</li>
+              <li><strong>Assessment:</strong> skill-assessment-agent (post-parallel)</li>
+              <li><strong>Coordination:</strong> coordination-agent (hybrid mode message bus)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-tool">
+          <div class="dim-label">Tools &amp; Scripts</div>
+          <div class="dim-content">
+            <ul>
+              <li><span class="script-pill">run-agent-orchestration.sh</span> &mdash; master orchestrator (67 KB)</li>
+              <li><span class="script-pill">claude.sh</span> &mdash; CLI wrapper with effort-based model selection (69 KB)</li>
+              <li><span class="script-pill">worktree-health-check.sh</span> &mdash; git state validation</li>
+              <li><span class="script-pill">merge-worktree.sh</span> &mdash; merge + conflict detection + tsc</li>
+              <li><span class="script-pill">team-lead-review.sh</span> &mdash; code review coordination</li>
+              <li><span class="script-pill">code-review-cycle.sh</span> &mdash; iterative review (max 3 cycles)</li>
+              <li><span class="script-pill">send-message.sh</span> / <span class="script-pill">receive-messages.sh</span> &mdash; agent message bus (hybrid)</li>
+              <li><span class="script-pill">update-monitor.sh</span> &mdash; dashboard status events</li>
+              <li><strong>Agent tools:</strong> ReadFile, WriteFile, Bash, Search, ListFiles, FetchUrl</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+
+      <table class="substep-table">
+        <thead><tr><th>Sub-Step</th><th>Agent(s)</th><th>Mode</th><th>Lane</th><th>Output</th><th>Blocking</th></tr></thead>
+        <tbody>
+          <tr><td>1. Main Stories</td><td>Various (per agentRole)</td><td>Sequential ReAct</td><td><span class="badge b-main">MAIN</span></td><td>logs/main-*.log</td><td>No</td></tr>
+          <tr><td>2. Create Worktrees</td><td>orchestrator</td><td>Git setup</td><td>&mdash;</td><td>.worktrees/*</td><td>Conditional</td></tr>
+          <tr><td>3a. Primary Lane</td><td>Various (per agentRole)</td><td>Parallel ReAct</td><td><span class="badge b-primary">PRIMARY</span></td><td>logs/wt-primary.log</td><td>No</td></tr>
+          <tr><td>3b. Independent Lane</td><td>Various (per agentRole)</td><td>Parallel ReAct</td><td><span class="badge b-ind">INDEPENDENT</span></td><td>logs/wt-independent.log</td><td>No</td></tr>
+          <tr><td>3.1 Health Check</td><td>orchestrator</td><td>Git validation</td><td>Both</td><td>Auto-commits</td><td>Warn</td></tr>
+          <tr><td>3.2 Merge Back</td><td>orchestrator</td><td>Git merge + tsc</td><td>Both &rarr; Main</td><td>merge-requests.jsonl</td><td>Conflict &rarr; halt</td></tr>
+          <tr><td>3.5 Skill Assessment</td><td>skill-assessment</td><td>Single-turn</td><td>&mdash;</td><td>phase-improvements/*.md</td><td>No</td></tr>
+          <tr><td>3.6 Code Review</td><td>team-lead-agent</td><td>Multi-turn (max 3)</td><td>&mdash;</td><td>code-reviews.jsonl</td><td><span class="badge b-block">exit 2</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="flow-arrow">&#9660;</div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!-- STAGE 4: QUALITY ASSURANCE                                         -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="stage-card open" id="stage-qa">
+    <div class="stage-header" onclick="this.parentElement.classList.toggle('open')">
+      <div class="stage-num s4">4</div>
+      <div class="stage-name">Quality Assurance</div>
+      <div class="stage-badges">
+        <span class="badge b-par">PARALLEL</span>
+        <span class="badge b-react">REACT LOOP</span>
+        <span class="badge b-gate">3 CASCADE GATES</span>
+      </div>
+      <div class="stage-toggle">&#9660;</div>
+    </div>
+    <div class="stage-body">
+      <div class="dim-grid">
+
+        <div class="dim-card dim-flow">
+          <div class="dim-label">Flow</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>3 cascading gate phases</strong> &mdash; each must pass before the next runs</li>
+              <li><strong>Phase A:</strong> SAST + Spec Compliance (parallel)</li>
+              <li><strong>Phase B:</strong> Code Review + Mutation Testing (parallel, if A passed)</li>
+              <li><strong>Phase C:</strong> Fuzz Testing + Performance (parallel, if A+B passed)</li>
+              <li><strong>Step 4.5:</strong> Unit test gate (tsc --noEmit + vitest run) &mdash; non-negotiable</li>
+              <li><strong>Skip all QA:</strong> <code>SKIP_TESTING_GATES=true</code></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-react">
+          <div class="dim-label">ReAct Loops</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>All 6 QA agents:</strong> Multi-turn ReAct with tool access</li>
+              <li>Each agent reads source code, analyzes patterns, outputs structured JSON verdict</li>
+              <li><strong>sast-sentinel:</strong> Parses tsc output + scans security patterns</li>
+              <li><strong>spec-validator:</strong> Maps AC &rarr; implementation, classifies met/partial/unmet</li>
+              <li><strong>review-ranger:</strong> Deep diff analysis (complexity, duplication, API drift)</li>
+              <li><strong>mutant-hunter:</strong> Proposes mutations, classifies killed/survived/no-coverage</li>
+              <li><strong>fuzz-weaver:</strong> Derives input domains from types, proposes fast-check cases</li>
+              <li><strong>perf-sentinel:</strong> Algorithmic complexity, memory, async pattern analysis</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-par">
+          <div class="dim-label">Parallelization</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Intra-phase:</strong> 2 agents run in parallel within each gate phase</li>
+              <li><strong>Inter-phase:</strong> Phases cascade sequentially (A &rarr; B &rarr; C)</li>
+              <li>Phase A: sast-sentinel &#8214; spec-validator</li>
+              <li>Phase B: review-ranger &#8214; mutant-hunter</li>
+              <li>Phase C: fuzz-weaver &#8214; perf-sentinel</li>
+              <li>Both agents in each phase must complete; pipeline waits for both</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-gate">
+          <div class="dim-label">Gates</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Phase A gate:</strong> Both verdicts must be != "fail" to proceed to B</li>
+              <li><strong>Phase B gate:</strong> Both verdicts must be != "fail" to proceed to C</li>
+              <li><strong>Phase C gate:</strong> Both verdicts checked; failures logged</li>
+              <li><strong>Verdict tiers:</strong>
+                <span class="badge b-pass">PASS</span>
+                <span class="badge b-warn">WARN</span>
+                <span class="badge b-block">FAIL</span>
+              </li>
+              <li><strong>Unit test gate (4.5):</strong> tsc --noEmit + vitest run &mdash; hard block, non-negotiable</li>
+              <li><strong>Thresholds:</strong> spec-validator &ge;80% met, mutant-hunter &ge;70% score, fuzz 0 vulns, perf 0 blockers</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-skill">
+          <div class="dim-label">Skills Injection</div>
+          <div class="dim-content">
+            <ul>
+              <li>Each QA agent has a specialized system prompt from <code>profiles.json</code></li>
+              <li>Prompts include: focus areas, output JSON schema, verdict criteria, threshold definitions</li>
+              <li>Additional QA agents: hygiene-sentinel (Knip), design-sentinel (jscpd/Semgrep), pattern-sentinel (ast-grep/Madge)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-cost">
+          <div class="dim-label">Cost Tracking</div>
+          <div class="dim-content">
+            <ul>
+              <li>Each QA agent invocation logged to <code>phase-cost.jsonl</code></li>
+              <li>Duration tracked per agent: <code>duration_ms</code> in testing-gates.jsonl</li>
+              <li>QA cost visible as separate line items in phase-cost-monitor dashboard</li>
+              <li>Langfuse traces capture per-agent token usage and latency</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-cpa">
+          <div class="dim-label">CPA</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Not active</strong> during QA stage</li>
+              <li>QA gate costs feed back into CPA calibration for future estimation passes</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-agent">
+          <div class="dim-label">Agents (7 QA + 3 Extended)</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Phase A:</strong> sast-sentinel (SAST + security scanning), spec-validator (AC compliance)</li>
+              <li><strong>Phase B:</strong> review-ranger (deep code review), mutant-hunter (mutation testing)</li>
+              <li><strong>Phase C:</strong> fuzz-weaver (property-based fuzz), perf-sentinel (performance analysis)</li>
+              <li><strong>Coordinator:</strong> test-coordinator-agent (governs phases, aggregates verdicts)</li>
+              <li><strong>Extended:</strong> hygiene-sentinel (dead code/Knip), design-sentinel (duplication/SOLID), pattern-sentinel (ast-grep/Madge)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-tool">
+          <div class="dim-label">Tools &amp; Scripts</div>
+          <div class="dim-content">
+            <ul>
+              <li><span class="script-pill">run-agent-orchestration.sh</span> &mdash; Steps 4.2&ndash;4.5 gate runner</li>
+              <li><span class="script-pill">claude.sh</span> &mdash; agent invocation per QA agent</li>
+              <li><strong>Agent tools:</strong> ReadFile, Search, Bash (tsc, vitest), ListFiles</li>
+              <li><strong>Static analysis:</strong> tsc --noEmit, vitest run, Knip, jscpd, Semgrep, ast-grep, Madge</li>
+              <li><strong>Outputs:</strong> testing-gates.jsonl, logs/&lt;agent&gt;-&lt;phase&gt;.log</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+
+      <table class="substep-table">
+        <thead><tr><th>Sub-Step</th><th>Agents (parallel)</th><th>Focus</th><th>Verdict Threshold</th><th>Blocking</th></tr></thead>
+        <tbody>
+          <tr><td>4. Review Stories</td><td>review-agent</td><td>Per-story code review</td><td>&mdash;</td><td>No</td></tr>
+          <tr>
+            <td>4.2 Phase A</td>
+            <td>sast-sentinel &#8214; spec-validator</td>
+            <td>SAST + security patterns; AC compliance mapping</td>
+            <td>0 blockers; &ge;80% criteria met</td>
+            <td><span class="badge b-block">BLOCK</span> on fail</td>
+          </tr>
+          <tr>
+            <td>4.3 Phase B</td>
+            <td>review-ranger &#8214; mutant-hunter</td>
+            <td>Deep diff review; mutation score analysis</td>
+            <td>0 blockers; &ge;70% mutation score</td>
+            <td><span class="badge b-block">BLOCK</span> on fail</td>
+          </tr>
+          <tr>
+            <td>4.4 Phase C</td>
+            <td>fuzz-weaver &#8214; perf-sentinel</td>
+            <td>Fuzz case generation; O(n&sup2;), memory, async patterns</td>
+            <td>0 vulnerabilities; 0 perf blockers</td>
+            <td><span class="badge b-block">BLOCK</span> on fail</td>
+          </tr>
+          <tr>
+            <td>4.5 Unit Tests</td>
+            <td>tsc + vitest (scripts)</td>
+            <td>TypeScript compilation + all test suites</td>
+            <td>Exit 0 for both</td>
+            <td><span class="badge b-block">HARD BLOCK</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="flow-arrow">&#9660;</div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!-- STAGE 5: POST-EXECUTION                                            -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="stage-card open" id="stage-post">
+    <div class="stage-header" onclick="this.parentElement.classList.toggle('open')">
+      <div class="stage-num s5">5</div>
+      <div class="stage-name">Post-Execution</div>
+      <div class="stage-badges">
+        <span class="badge b-seq">SEQUENTIAL</span>
+        <span class="badge b-gate">PHASE GATE</span>
+      </div>
+      <div class="stage-toggle">&#9660;</div>
+    </div>
+    <div class="stage-body">
+      <div class="dim-grid">
+
+        <div class="dim-card dim-flow">
+          <div class="dim-label">Flow</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Step 4.8:</strong> Pre-gate worktree verification (re-invokes health check)</li>
+              <li><strong>Step 5:</strong> Phase gate &mdash; cost variance check via <code>check-phase-gate.sh</code></li>
+              <li><strong>Step 5.5:</strong> Interstitial E2E phase (if <code>&lt;phase&gt;_e2e</code> exists in prd.json)</li>
+              <li><strong>Step 6:</strong> Final skill assessment &mdash; aggregate metrics, comparative variance, role recommendations</li>
+              <li><strong>Step 7:</strong> Neo4j graph load (optional, if Neo4j running)</li>
+              <li><strong>Cleanup:</strong> Worktree removal (unless <code>SKIP_CLEANUP=true</code>)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-react">
+          <div class="dim-label">ReAct Loops</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Phase gate:</strong> No ReAct &mdash; pure shell logic (cost comparison, status checks)</li>
+              <li><strong>Final assessment:</strong> Single-turn inference (skill-assessment-agent)</li>
+              <li><strong>E2E phase (if triggered):</strong> Full ReAct orchestration cycle for E2E stories</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-par">
+          <div class="dim-label">Parallelization</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>None</strong> &mdash; all steps run sequentially</li>
+              <li>Phase gate must pass before final assessment</li>
+              <li>E2E phase (if present) runs as a full sub-orchestration</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-gate">
+          <div class="dim-label">Gates</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Phase gate (Step 5)</strong> checks in order:</li>
+              <li>1. Review status: no unresolved reviews (changes_requested/escalated)</li>
+              <li>2. Story completion: all phase stories <code>completed=true</code></li>
+              <li>3. Unit tests: vitest + tsc pass (<code>SKIP_TESTS=true</code> to skip)</li>
+              <li>4. Cost variance tiers:</li>
+              <li>&nbsp;&nbsp;<span class="badge b-pass">PASS</span> &lt; 30% variance</li>
+              <li>&nbsp;&nbsp;<span class="badge b-warn">WARN</span> 30%&ndash;150% (auto-approved, logged)</li>
+              <li>&nbsp;&nbsp;<span class="badge b-block">ESCALATE</span> &ge; 150% (hard block)</li>
+              <li><strong>Exit codes:</strong> 0 = pass, 1 = retry, 2 = escalate</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-skill">
+          <div class="dim-label">Skills Injection</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Final assessment (Step 6):</strong> Compares actual performance against agent capabilities</li>
+              <li>Recommends role changes for pending stories in NEXT phases</li>
+              <li>Skill domains: TypeScript/CLI &rarr; typescript-engineer, React/UI &rarr; frontend-engineer, Docker &rarr; devops-engineer</li>
+              <li>Changes written to <code>prd.json</code> (pending stories only)</li>
+              <li>Backup: <code>prd.json.pre-assessment</code></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-cost">
+          <div class="dim-label">Cost Tracking</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Variance analysis:</strong> Actual (phase-cost.jsonl) vs estimated (prd.json)</li>
+              <li><strong>Thresholds:</strong> GATE_WARN_THRESHOLD=30%, GATE_ESCALATE_THRESHOLD=150%</li>
+              <li><strong>Aggregation:</strong> Total phase cost, per-story breakdown, per-lane breakdown</li>
+              <li><strong>Output:</strong> phase-gates.jsonl (timestamp, phase_id, event, review_passed, tests_passed, stories_completed, blockers)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-cpa">
+          <div class="dim-label">CPA</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>Feedback loop:</strong> Actuals from this phase feed into CPA calibration for next phase</li>
+              <li>Phase-cost.jsonl records become historical data for confidence-weighted blending</li>
+              <li>CPA accuracy improves iteratively across phases</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-agent">
+          <div class="dim-label">Agents</div>
+          <div class="dim-content">
+            <ul>
+              <li><strong>skill-assessment-agent</strong> &mdash; final metrics aggregation, comparative variance, role recommendations</li>
+              <li><strong>orchestrator</strong> &mdash; phase gate logic (shell script)</li>
+              <li><strong>Various</strong> &mdash; E2E stories (if interstitial phase exists)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="dim-card dim-tool">
+          <div class="dim-label">Tools &amp; Scripts</div>
+          <div class="dim-content">
+            <ul>
+              <li><span class="script-pill">check-phase-gate.sh</span> &mdash; phase gate validation (14 KB)</li>
+              <li><span class="script-pill">worktree-health-check.sh</span> &mdash; pre-gate verification</li>
+              <li><span class="script-pill">load-phase-graph.sh</span> / <span class="script-pill">load-phase-graph.py</span> &mdash; Neo4j (optional)</li>
+              <li><strong>Agent tools:</strong> ReadFile, Search (for assessment agent)</li>
+              <li><strong>Outputs:</strong> phase-gates.jsonl, phase-improvements/&lt;phase&gt;.md, updated prd.json</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+
+      <table class="substep-table">
+        <thead><tr><th>Sub-Step</th><th>Agent</th><th>Mode</th><th>Input</th><th>Output</th><th>Blocking</th></tr></thead>
+        <tbody>
+          <tr><td>4.8 Pre-Gate Check</td><td>orchestrator</td><td>Git validation</td><td>.git state</td><td>Pass/warn</td><td>Warn</td></tr>
+          <tr><td>5. Phase Gate</td><td>orchestrator</td><td>Shell logic</td><td>cost.jsonl, prd.json, tests</td><td>phase-gates.jsonl</td><td><span class="badge b-block">exit 1/2</span></td></tr>
+          <tr><td>5.5 E2E Phase</td><td>Various</td><td>Full orchestration</td><td>E2E stories in prd.json</td><td>Phase logs</td><td>Optional</td></tr>
+          <tr><td>6. Final Assessment</td><td>skill-assessment</td><td>Single-turn</td><td>phase-cost.jsonl, metrics</td><td>phase-improvements/*.md</td><td>No</td></tr>
+          <tr><td>7. Neo4j Load</td><td>orchestrator</td><td>Python/shell</td><td>prd.json</td><td>Neo4j graph</td><td>No (optional)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!-- CROSS-STAGE SUMMARY TABLE                                          -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="section-title">Cross-Stage Comparison Matrix</div>
+  <div style="overflow-x: auto;">
+    <table class="summary-table">
+      <thead>
+        <tr>
+          <th>Dimension</th>
+          <th>1. Specification</th>
+          <th>2. Estimation</th>
+          <th>3. Execution</th>
+          <th>4. Quality Assurance</th>
+          <th>5. Post-Execution</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Flow</td>
+          <td>Coord &rarr; OpenSpec &rarr; Speckit &rarr; Apply</td>
+          <td>Formula &rarr; CPA &rarr; Skill &rarr; Hybrid</td>
+          <td>Main (seq) &rarr; Worktrees (par) &rarr; Merge &rarr; Review</td>
+          <td>Phase A &#8214; &rarr; Phase B &#8214; &rarr; Phase C &#8214; &rarr; Unit tests</td>
+          <td>Pre-gate &rarr; Phase gate &rarr; E2E &rarr; Assessment &rarr; Graph</td>
+        </tr>
+        <tr>
+          <td>ReAct Loops</td>
+          <td>Multi-turn (OpenSpec, Speckit)</td>
+          <td>Multi-turn (CPA); single-turn (skill, hybrid)</td>
+          <td>Full ReAct per story; 3-cycle review</td>
+          <td>Multi-turn per QA agent (6 agents)</td>
+          <td>Single-turn (assessment); shell (gate)</td>
+        </tr>
+        <tr>
+          <td>Parallelization</td>
+          <td>None (sequential)</td>
+          <td>None (sequential)</td>
+          <td>3-lane: Main + Primary &#8214; Independent</td>
+          <td>2 agents per phase (3 cascade phases)</td>
+          <td>None (sequential)</td>
+        </tr>
+        <tr>
+          <td>Gates</td>
+          <td>None (optional stage)</td>
+          <td>CPA 3-tier (pass/review/block); Infra gate</td>
+          <td>Merge gate; Code review (exit 2)</td>
+          <td>3 cascade gates + unit test hard block</td>
+          <td>Phase gate (variance 30%/150%)</td>
+        </tr>
+        <tr>
+          <td>Skills Injection</td>
+          <td>profiles.json + KB.md</td>
+          <td>Profile augmentation (append skills)</td>
+          <td>Per-story profile + technicalNotes</td>
+          <td>Specialized QA system prompts</td>
+          <td>Role change recommendations</td>
+        </tr>
+        <tr>
+          <td>Cost Tracking</td>
+          <td>phase-cost.jsonl (spec-pass)</td>
+          <td>Formula + CPA blended estimates</td>
+          <td>Per-story actuals + Langfuse traces</td>
+          <td>Per-agent duration + tokens</td>
+          <td>Variance analysis (actual vs estimated)</td>
+        </tr>
+        <tr>
+          <td>CPA</td>
+          <td>Not active</td>
+          <td>Core function (TF-IDF + LLM blending)</td>
+          <td>Forecasts used as baseline</td>
+          <td>Not active</td>
+          <td>Feedback loop (actuals &rarr; calibration)</td>
+        </tr>
+        <tr>
+          <td>Agents</td>
+          <td>3 (coordinator, openspec, speckit)</td>
+          <td>3 (context-purveyor, team-lead, coordination)</td>
+          <td>10+ (engineers, review, assessment, coordination)</td>
+          <td>10 (7 QA sentinels + 3 extended + coordinator)</td>
+          <td>2 (skill-assessment, orchestrator)</td>
+        </tr>
+        <tr>
+          <td>Key Scripts</td>
+          <td>spec-mode-runner.js</td>
+          <td>estimate-stories.sh, contextualize-stories.sh</td>
+          <td>run-agent-orchestration.sh, claude.sh, merge-worktree.sh</td>
+          <td>run-agent-orchestration.sh (Steps 4.2-4.5)</td>
+          <td>check-phase-gate.sh, load-phase-graph.sh</td>
+        </tr>
+        <tr>
+          <td>Skip Env Var</td>
+          <td><code>EPAM_SPEC_MODE=0</code></td>
+          <td><code>SKIP_CPA=1</code></td>
+          <td><code>DRY_RUN=true</code></td>
+          <td><code>SKIP_TESTING_GATES=true</code></td>
+          <td><code>SKIP_TESTS=true</code>, <code>SKIP_CLEANUP=true</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Data Files Reference ── -->
+  <div class="section-title">Key Data Files</div>
+  <div style="overflow-x: auto;">
+    <table class="summary-table">
+      <thead>
+        <tr><th>File</th><th>Format</th><th>Written By</th><th>Read By</th><th>Purpose</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>prd.json</td><td>JSON</td><td>Spec, Estimation, Assessment</td><td>All stages</td><td>Master story + phase definitions</td></tr>
+        <tr><td>phase-cost.jsonl</td><td>JSONL</td><td>Execution (claude.sh)</td><td>CPA, Assessment, Phase Gate</td><td>Per-story cost/token actuals</td></tr>
+        <tr><td>testing-gates.jsonl</td><td>JSONL</td><td>QA agents</td><td>Phase Gate, Dashboards</td><td>QA verdict records per agent</td></tr>
+        <tr><td>phase-gates.jsonl</td><td>JSONL</td><td>check-phase-gate.sh</td><td>Dashboards</td><td>Phase gate decisions</td></tr>
+        <tr><td>code-reviews.jsonl</td><td>JSONL</td><td>team-lead-review.sh</td><td>Phase Gate</td><td>Review status per story</td></tr>
+        <tr><td>cpa-review.jsonl</td><td>JSONL</td><td>contextualize-stories.sh</td><td>Dashboards</td><td>CPA gate decisions per story</td></tr>
+        <tr><td>agent-messages.jsonl</td><td>JSONL</td><td>send-message.sh</td><td>receive-messages.sh</td><td>Inter-agent communication (hybrid)</td></tr>
+        <tr><td>profiles.json</td><td>JSON</td><td>Skill Assessment</td><td>All agent invocations</td><td>Agent role definitions + skills</td></tr>
+        <tr><td>profiles-audit.jsonl</td><td>JSONL</td><td>Skill Assessment</td><td>Dashboards</td><td>Skill augmentation audit trail</td></tr>
+        <tr><td>agent-status.json</td><td>JSON</td><td>update-monitor.sh</td><td>Dashboards (live)</td><td>Real-time lane/story status</td></tr>
+        <tr><td>merge-requests.jsonl</td><td>JSONL</td><td>merge-worktree.sh</td><td>Dashboards</td><td>Merge results (merged/conflict/test_failure)</td></tr>
+        <tr><td>spec-baseline.json</td><td>JSON</td><td>spec-mode-runner.js</td><td>Spec Diff dashboard</td><td>PRD snapshot before spec pass</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+// Expand/collapse is handled inline via onclick toggle
+// Auto-collapse all except the first on small screens
+if (window.innerWidth < 768) {
+  document.querySelectorAll('.stage-card').forEach((card, i) => {
+    if (i > 0) card.classList.remove('open');
+  });
+}
+</script>
+
+</body>
+</html>

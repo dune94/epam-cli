@@ -321,6 +321,17 @@ code {
 
 <div class="container">
 
+  <!-- ── Overview ── -->
+  <div style="background: var(--bg1); border: 1px solid var(--border); border-radius: 10px; padding: 24px 28px; margin-bottom: 24px; border-left: 4px solid var(--accent);">
+    <div style="font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 10px;">Overview</div>
+    <p style="font-size: 12px; color: var(--text2); line-height: 1.7; margin: 0 0 10px;">
+      This document is the authoritative reference for the <strong>EPAM CLI multi-agent orchestration pipeline</strong> &mdash; the automated system that takes a PRD (product requirements document) from raw stories through specification, cost estimation, parallel implementation, quality assurance, and post-execution assessment. The pipeline is driven by <code>run-agent-orchestration.sh</code> and coordinates <strong>23 specialized AI agents</strong> across 5 sequential stages, each with distinct tooling, gating policies, and parallelization strategies. Agents are the focal point: every stage section below details which agents participate, what ReAct loop or inference mode they operate in, which built-in tools (ReadFile, WriteFile, Bash, Search, ListFiles, FetchUrl) and external tooling (tsc, vitest, Knip, jscpd, Semgrep, ast-grep, Madge) they leverage, and what data files they read from and write to.
+    </p>
+    <p style="font-size: 12px; color: var(--text2); line-height: 1.7; margin: 0;">
+      The pipeline supports two orchestration modes &mdash; <strong>Bash</strong> (default, script-driven) and <strong>Hybrid</strong> (Bash + MCP message bus for inter-agent coordination) &mdash; and executes implementation stories across three parallel lanes (Main, Primary, Independent) using isolated git worktrees. Quality is enforced through 12 gate checkpoints: a CPA estimation gate, code review escalation gates, three cascading QA gate phases (each running two agents in parallel), a unit test hard gate, and a final phase gate with cost variance thresholds. Cost tracking spans the entire pipeline via <code>phase-cost.jsonl</code> actuals, Langfuse LLM tracing, and CPA confidence-weighted estimate blending. The <strong>Complete Agent Registry</strong> at the bottom of this page provides a single cross-reference of every agent, its source definition, stage participation, model assignment, tools, and outputs.
+    </p>
+  </div>
+
   <!-- ── Overview Stats ── -->
   <div class="section-title">Pipeline at a Glance</div>
   <div class="stats-row">

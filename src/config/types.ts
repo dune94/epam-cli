@@ -30,6 +30,7 @@ export interface ProjectConfig {
   model?: string;
   defaultModel?: string;
   allowedModels?: string[];
+  backendUrl?: string;
   systemPromptFile?: string;
   contextFile?: string;
   tools?: {

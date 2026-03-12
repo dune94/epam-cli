@@ -288,6 +288,7 @@ This project uses epam-cli's multi-agent orchestration system.
       'phase-cost-monitor.html',
       'agent-messages.html',
       'agents-orchestration.html',
+      'agent-activity.html',
       'cpa-details.html',
       'epam-cli-guide.html',
       '.eleventy.js',
@@ -315,6 +316,22 @@ This project uses epam-cli's multi-agent orchestration system.
         }
       }
     } catch { /* ignore */ }
+
+    // Create package.json for Eleventy dependency
+    const pkgPath = join(targetDir, 'package.json');
+    try {
+      await fs.access(pkgPath);
+      // Already exists — skip
+    } catch {
+      const pkg = JSON.stringify({
+        name: 'epam-dashboards',
+        private: true,
+        scripts: { serve: 'eleventy --serve', build: 'eleventy' },
+        dependencies: { '@11ty/eleventy': '^2.0.1' },
+      }, null, 2);
+      await fs.writeFile(pkgPath, pkg, 'utf-8');
+      this.result.filesCreated.push(pkgPath);
+    }
   }
 
   // ── Dashboard symlinks ──────────────────────────────────────────────────
@@ -364,8 +381,11 @@ This directory contains the multi-agent orchestration workspace for **${this.opt
 # Elaborate specifications
 epam orchestrate --phase foundation
 
-# Serve dashboards
-cd dashboards && npx @11ty/eleventy --serve
+# Install dashboard dependencies (first time only)
+cd orchestrations/dashboards && npm install && cd ../..
+
+# Serve dashboards (run from project root)
+npx --prefix orchestrations/dashboards eleventy --config=orchestrations/dashboards/.eleventy.js --serve
 \`\`\`
 `;
     await this.writeFile(path, content);

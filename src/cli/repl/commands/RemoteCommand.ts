@@ -97,70 +97,116 @@ async function generateRemoteSession(ctx: SlashCommandContext): Promise<void> {
       return;
     }
 
+    // Build phone URL: /remote/:token#<hex-key> (fragment never sent to server)
+    const keyHex = currentEncryptionKey!.toString('hex');
+    const phoneUrl = result.url.replace('/v1/remote/sessions/', '/remote/') + '#' + keyHex;
+
     // Render QR code with fallback URL
     console.log();
-    console.log(renderQRWithFallback(result.url));
+    console.log(await renderQRWithFallback(phoneUrl));
     console.log();
 
-    // Start countdown spinner
-    let remainingSeconds = ttlSeconds;
-    let sigintHandler: (() => void) | null = null;
+    // Block until session is reclaimed, cancelled, or expired.
+    // This keeps the REPL's `await handleSlashCommand()` waiting,
+    // so the prompt re-renders naturally when we resolve.
+    await new Promise<void>((resolve) => {
+      let remainingSeconds = ttlSeconds;
+      let pollTick = 0;
+      let settled = false;
 
-    // Set up SIGINT handler for Ctrl+C
-    sigintHandler = () => {
-      cleanupCountdown();
-      SessionLock.forceRelease();
-
-      // Clean up backend session
-      client
-        .reclaimRemoteSession(result.claimToken)
-        .catch(() => {
-          // Session may already be claimed or expired, ignore error
-        });
-
-      console.log();
-      console.log(chalk.dim('Remote session cancelled'));
-      console.log();
-
-      // Remove SIGINT handler
-      if (sigintHandler) {
-        process.off('SIGINT', sigintHandler);
-      }
-    };
-
-    process.on('SIGINT', sigintHandler);
-
-    // Countdown loop
-    countdownInterval = setInterval(() => {
-      remainingSeconds--;
-
-      if (remainingSeconds <= 0) {
+      const finish = () => {
+        if (settled) return;
+        settled = true;
         cleanupCountdown();
-        SessionLock.release();
+        if (sigintHandler) process.off('SIGINT', sigintHandler);
+        resolve();
+      };
 
-        // Clean up backend session
-        client
-          .reclaimRemoteSession(result.claimToken)
-          .catch(() => {
-            // Session may already be claimed or expired, ignore error
-          });
-
+      // Ctrl+C → cancel
+      let sigintHandler: (() => void) | null = () => {
+        SessionLock.forceRelease();
+        client.reclaimRemoteSession(result.claimToken).catch(() => {});
         console.log();
-        console.log(formatCountdown(0)); // Shows "Remote session expired"
+        console.log(chalk.dim('Remote session cancelled'));
         console.log();
+        finish();
+      };
+      process.on('SIGINT', sigintHandler);
 
-        // Remove SIGINT handler
-        if (sigintHandler) {
-          process.off('SIGINT', sigintHandler);
+      // Countdown + polling loop
+      process.stdout.write(formatCountdown(remainingSeconds));
+
+      countdownInterval = setInterval(async () => {
+        if (settled) return;
+        remainingSeconds--;
+        pollTick++;
+
+        // Expired
+        if (remainingSeconds <= 0) {
+          SessionLock.release();
+          client.reclaimRemoteSession(result.claimToken).catch(() => {});
+          console.log();
+          console.log(formatCountdown(0));
+          console.log();
+          finish();
+          return;
         }
-      } else {
+
+        // Poll for return every 3 seconds
+        if (pollTick % 3 === 0 && currentClaimToken) {
+          try {
+            const bundle = await client.reclaimRemoteSession(currentClaimToken);
+            // Phone returned — auto-reclaim
+            const sessionData = importRemoteSession(bundle, currentEncryptionKey!);
+            ctx.messages.length = 0;
+            ctx.messages.push(...sessionData.messages);
+            SessionLock.forceRelease();
+            currentClaimToken = null;
+            currentEncryptionKey = null;
+
+            console.log();
+            console.log(chalk.green('✓ Remote session reclaimed'));
+            console.log(chalk.dim(`  Imported ${sessionData.messages.length} messages`));
+
+            // Show recap of recent messages
+            const recapMsgs = sessionData.messages
+              .filter((m: { role: string }) => m.role === 'user' || m.role === 'assistant')
+              .slice(-6);
+            if (recapMsgs.length > 0) {
+              console.log();
+              console.log(chalk.bold('  Recent conversation:'));
+              for (const m of recapMsgs) {
+                const label = m.role === 'user'
+                  ? chalk.cyan('  You: ')
+                  : chalk.dim('  AI:  ');
+                let text: string;
+                if (typeof m.content === 'string') {
+                  text = m.content;
+                } else if (Array.isArray(m.content)) {
+                  text = (m.content as Array<{ type: string; text?: string }>)
+                    .filter(p => p.type === 'text')
+                    .map(p => p.text ?? '')
+                    .join('');
+                } else {
+                  text = '';
+                }
+                const oneLine = text.replace(/\n+/g, ' ').trim();
+                const display = oneLine.length > 120 ? oneLine.slice(0, 117) + '…' : oneLine;
+                if (display) console.log(label + display);
+              }
+            }
+            console.log();
+            finish();
+            return;
+          } catch {
+            // Not returned yet — keep waiting
+          }
+        }
+
         // Update countdown display
         process.stdout.write('\r' + formatCountdown(remainingSeconds));
-      }
-    }, 1000);
-
-    // Initial countdown display
-    process.stdout.write(formatCountdown(remainingSeconds));
+      }, 1000);
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.log(chalk.red(`Remote command failed: ${message}`));

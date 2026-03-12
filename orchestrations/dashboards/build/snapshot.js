@@ -11,7 +11,8 @@ const PATHS = {
   phaseCost: path.join(DASHBOARD_ROOT, 'logs', 'phase-cost.jsonl'),
   specBaseline: path.join(DASHBOARD_ROOT, 'logs', 'spec-baseline.json'),
   specSummary: path.join(DASHBOARD_ROOT, 'logs', 'spec-summary.json'),
-  specLedger: path.join(DASHBOARD_ROOT, 'logs', 'spec-phase.jsonl')
+  specLedger: path.join(DASHBOARD_ROOT, 'logs', 'spec-phase.jsonl'),
+  agentActivity: path.join(DASHBOARD_ROOT, 'logs', 'agent-activity.jsonl')
 };
 
 function safeReadJson(filePath, fallback) {
@@ -129,8 +130,12 @@ function loadSnapshot() {
       activeLanes: Object.keys(agentStatus?.lanes || {}),
       recentEvents: (agentStatus?.events || []).slice(-5),
       specification: specCoverage,
-      specRecent: tailJsonl(PATHS.specLedger, 5)
-    }
+      specRecent: tailJsonl(PATHS.specLedger, 5),
+      agentActivity: {
+        hash: hashFile(PATHS.agentActivity),
+        total: tailJsonl(PATHS.agentActivity, 9999).length,
+        recent: tailJsonl(PATHS.agentActivity, 10)
+      }
   };
 }
 

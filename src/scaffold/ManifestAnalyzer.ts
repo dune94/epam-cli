@@ -106,5 +106,13 @@ export async function generatePrd(
     getPrdGenerationPrompt(prefix, allRoles),
     userMessage,
   );
-  return JSON.parse(stripFences(raw)) as PrdSchema;
+  const parsed = JSON.parse(stripFences(raw));
+
+  // Normalize: LLM may use "userStories" instead of "stories"
+  if (!parsed.stories && parsed.userStories) {
+    parsed.stories = parsed.userStories;
+    delete parsed.userStories;
+  }
+
+  return parsed as PrdSchema;
 }

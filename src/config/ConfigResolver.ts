@@ -242,6 +242,7 @@ export async function resolveConfig(flags: CLIFlagOverrides = {}): Promise<Resol
     backendUrl:
       flags.backendUrl ??
       envOverrides.backendUrl ??
+      projectConfig.backendUrl ??
       globalConfig.backendUrl ??
       defaults.backendUrl,
 

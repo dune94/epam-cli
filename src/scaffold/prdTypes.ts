@@ -91,4 +91,7 @@ export const FIXED_AGENT_ROLES = [
   'mutant-hunter',
   'fuzz-weaver',
   'perf-sentinel',
+  'hygiene-sentinel',
+  'design-sentinel',
+  'pattern-sentinel',
 ] as const;

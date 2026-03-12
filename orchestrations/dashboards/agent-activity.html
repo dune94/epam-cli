@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Activity Dashboard</title>
+    <style>
+        :root {
+          --bg: #fbfafa;  --bg1: #ffffff;  --bg2: #f4f4f4;  --bg3: #eaeaea;
+          --surface: #ffffff;  --surface2: #f4f4f4;  --surface3: #eaeaea;
+          --border: #e0e0e0;  --border2: #cccccc;
+          --text: #060606;  --text2: #4a4a4a;  --text3: #717171;  --text-muted: #717171;
+          --teal: #0047ff;  --teal2: #0047ff;  --teal-dim: rgba(0,71,255,0.08);
+          --accent: #0047ff;  --teal-glow: rgba(0,71,255,0.20);
+          --violet: #8453d2;  --violet2: #8453d2;  --violet-dim: rgba(132,83,210,0.10);
+          --green: #1a8f3f;  --green-dim: rgba(26,143,63,0.10);
+          --amber: #c87a00;  --amber-dim: rgba(200,122,0,0.10);
+          --red: #d93025;  --red-dim: rgba(217,48,37,0.08);
+          --pink: #c4186e;  --pink-dim: rgba(196,24,110,0.08);
+          --blue: #1a73e8;  --blue-dim: rgba(26,115,232,0.08);
+          --orange: #d35400;  --orange-dim: rgba(211,84,0,0.08);
+          --epam-gradient: linear-gradient(118.82deg, #0078c2 .5%, #0047ff 47.33%, #8453d2 76.12%);
+          --epam-cyan: #00f6ff;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+        header {
+            background: var(--epam-gradient); border-bottom: 1px solid transparent;
+            padding: 14px 24px; display: flex; align-items: center; justify-content: space-between;
+            position: sticky; top: 0; z-index: 200; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .container { padding: 24px; max-width: 1400px; margin: 0 auto; }
+
+        /* Stats bar */
+        .stats { background: var(--bg1); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+        .stat-card { background: var(--bg2); border: 1px solid var(--border); padding: 12px; border-radius: 6px; text-align: center; }
+        .stat-value { font-size: 28px; font-weight: 700; margin-bottom: 4px; color: var(--teal); }
+        .stat-label { font-size: 13px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
+
+        /* Filters */
+        .filters { background: var(--bg1); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+        .filter-group { display: flex; gap: 15px; flex-wrap: wrap; align-items: center; }
+        .filter-group label { font-size: 14px; color: var(--text3); font-weight: 600; }
+        .filter-group select, .filter-group input {
+            padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border);
+            background: var(--bg2); color: var(--text); font-size: 14px;
+        }
+        .filter-group select:hover { border-color: var(--teal); }
+
+        /* Timeline */
+        .timeline { position: relative; padding-left: 28px; }
+        .timeline::before {
+            content: ''; position: absolute; left: 10px; top: 0; bottom: 0;
+            width: 2px; background: var(--border);
+        }
+
+        .event-card {
+            position: relative; background: var(--bg1); border: 1px solid var(--border);
+            border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;
+            transition: border-color 0.2s;
+        }
+        .event-card:hover { border-color: var(--teal); }
+
+        .event-card::before {
+            content: ''; position: absolute; left: -22px; top: 18px;
+            width: 10px; height: 10px; border-radius: 50%;
+            background: var(--border2); border: 2px solid var(--bg);
+        }
+        .event-card.type-story_start::before   { background: var(--blue); }
+        .event-card.type-story_complete::before { background: var(--green); }
+        .event-card.type-story_fail::before     { background: var(--red); }
+        .event-card.type-finding::before        { background: var(--amber); }
+        .event-card.type-gate_decision::before  { background: var(--violet); }
+        .event-card.type-tool_run::before       { background: var(--teal); }
+        .event-card.type-tool_result::before    { background: var(--teal); }
+        .event-card.type-error::before          { background: var(--red); }
+        .event-card.type-phase_start::before    { background: var(--pink); }
+        .event-card.type-phase_complete::before { background: var(--green); }
+
+        .event-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px; }
+        .event-meta { flex: 1; }
+        .event-agent { font-weight: 700; color: var(--teal); font-size: 14px; }
+        .event-time { font-size: 12px; color: var(--text3); font-family: monospace; }
+        .event-badges { display: flex; gap: 5px; flex-wrap: wrap; align-items: start; }
+
+        .badge {
+            padding: 2px 8px; border-radius: 12px; font-size: 11px;
+            font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;
+        }
+        .badge-type { background: var(--teal-dim); color: var(--teal); }
+        .badge-phase { background: var(--violet-dim); color: var(--violet); }
+        .badge-story { background: var(--blue-dim); color: var(--blue); font-family: monospace; font-size: 10px; }
+
+        .badge-finding-blocker { background: var(--red-dim); color: var(--red); }
+        .badge-finding-error   { background: var(--red-dim); color: var(--red); }
+        .badge-finding-warning { background: var(--amber-dim); color: var(--amber); }
+        .badge-finding-info    { background: var(--blue-dim); color: var(--blue); }
+        .badge-finding-suggestion { background: var(--green-dim); color: var(--green); }
+
+        .badge-gate-pass   { background: var(--green-dim); color: var(--green); }
+        .badge-gate-fail   { background: var(--red-dim); color: var(--red); }
+        .badge-gate-review { background: var(--amber-dim); color: var(--amber); }
+
+        .event-detail { font-size: 14px; color: var(--text2); line-height: 1.6; }
+        .event-detail code {
+            background: var(--bg2); padding: 1px 5px; border-radius: 3px;
+            font-size: 13px; font-family: 'Cascadia Code', 'Fira Code', monospace;
+        }
+        .event-detail .file-ref { color: var(--violet); font-family: monospace; font-size: 12px; }
+
+        .empty-state {
+            text-align: center; padding: 60px 20px; background: var(--bg1);
+            border: 1px solid var(--border); border-radius: 8px;
+        }
+        .empty-state h2 { margin-bottom: 10px; color: var(--text3); font-size: 20px; }
+        .empty-state p { color: var(--text3); font-size: 15px; }
+
+        .auto-refresh { text-align: center; margin-top: 20px; color: var(--text3); font-size: 14px; }
+    </style>
+</head>
+<body>
+    <header>
+        <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:34px;height:34px;background:rgba(255,255,255,0.2);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:17px">&#9881;</div>
+            <div>
+                <div style="font-size:18px;font-weight:800;color:#fff">EPAM CLI — Agent Activity</div>
+                <div style="font-size:11px;color:rgba(255,255,255,0.7)">Unified Timeline &middot; All Agents &middot; All Phases</div>
+            </div>
+        </div>
+        <nav style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px">
+            <a href="monitor.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Monitor</a>
+            <a href="prd-viewer.html" style="color:rgba(255,255,255,0.7);text-decoration:none">PRD Viewer</a>
+            <a href="specification.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Spec Diff</a>
+            <a href="orchestration-plan.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Plan</a>
+            <a href="agents-orchestration.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Orchestration</a>
+            <a href="agent-profiles.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Profiles</a>
+            <a href="agent-messages.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Messages</a>
+            <a href="phase-cost-monitor.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Costs</a>
+            <a href="quality-assurance.html" style="color:rgba(255,255,255,0.7);text-decoration:none">QA Gates</a>
+            <a href="agent-activity.html" style="color:#fff;text-decoration:none;border-bottom:2px solid #fff;padding-bottom:2px">Activity</a>
+            <a href="cpa-details.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Estimation</a>
+            <a href="epam-cli-guide.html" style="color:rgba(255,255,255,0.7);text-decoration:none">CLI Guide</a>
+        </nav>
+    </header>
+
+    <div class="container">
+        <!-- Stats -->
+        <div class="stats" id="stats">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-total">0</div>
+                    <div class="stat-label">Total Events</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-agents">0</div>
+                    <div class="stat-label">Active Agents</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-findings">0</div>
+                    <div class="stat-label">Findings</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-stories">0</div>
+                    <div class="stat-label">Stories Touched</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-tools">0</div>
+                    <div class="stat-label">Tool Runs</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="stat-gates">0</div>
+                    <div class="stat-label">Gate Decisions</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters">
+            <div class="filter-group">
+                <label>Agent:</label>
+                <select id="filter-agent"><option value="">All Agents</option></select>
+
+                <label>Type:</label>
+                <select id="filter-type">
+                    <option value="">All Types</option>
+                    <option value="story_start">Story Start</option>
+                    <option value="story_complete">Story Complete</option>
+                    <option value="story_fail">Story Fail</option>
+                    <option value="tool_run">Tool Run</option>
+                    <option value="tool_result">Tool Result</option>
+                    <option value="finding">Finding</option>
+                    <option value="gate_decision">Gate Decision</option>
+                    <option value="cost_snapshot">Cost Snapshot</option>
+                    <option value="spec_update">Spec Update</option>
+                    <option value="phase_start">Phase Start</option>
+                    <option value="phase_complete">Phase Complete</option>
+                    <option value="error">Error</option>
+                    <option value="info">Info</option>
+                </select>
+
+                <label>Phase:</label>
+                <select id="filter-phase"><option value="">All Phases</option></select>
+
+                <label>Story:</label>
+                <input id="filter-story" type="text" placeholder="Story ID..."
+                    style="width:130px" oninput="applyFilters()" />
+
+                <label>Severity:</label>
+                <select id="filter-severity">
+                    <option value="">All</option>
+                    <option value="blocker">Blocker</option>
+                    <option value="error">Error</option>
+                    <option value="warning">Warning</option>
+                    <option value="info">Info</option>
+                    <option value="suggestion">Suggestion</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Timeline -->
+        <div id="timeline-container">
+            <div class="empty-state">
+                <h2>Loading activity...</h2>
+            </div>
+        </div>
+
+        <div class="auto-refresh">Auto-refreshing every 5 seconds</div>
+    </div>
+
+    <script src="runtime/build-info.js" defer></script>
+<script>
+    let allEvents = [];
+
+    function parseJsonl(text) {
+        return (text || '').trim().split('\n')
+            .filter(l => l.trim())
+            .map(l => { try { return JSON.parse(l); } catch { return null; } })
+            .filter(Boolean);
+    }
+
+    async function fetchEvents() {
+        try {
+            const res = await fetch('logs/agent-activity.jsonl?t=' + Date.now());
+            if (!res.ok) return [];
+            return parseJsonl(await res.text());
+        } catch { return []; }
+    }
+
+    function populateFilterOptions(events) {
+        const agents = [...new Set(events.map(e => e.agent).filter(Boolean))].sort();
+        const phases = [...new Set(events.map(e => e.phase).filter(Boolean))].sort();
+
+        const agentSelect = document.getElementById('filter-agent');
+        const phaseSelect = document.getElementById('filter-phase');
+
+        // Preserve current selections
+        const curAgent = agentSelect.value;
+        const curPhase = phaseSelect.value;
+
+        agentSelect.innerHTML = '<option value="">All Agents</option>' +
+            agents.map(a => `<option value="${a}">${a}</option>`).join('');
+        phaseSelect.innerHTML = '<option value="">All Phases</option>' +
+            phases.map(p => `<option value="${p}">${p}</option>`).join('');
+
+        agentSelect.value = curAgent;
+        phaseSelect.value = curPhase;
+    }
+
+    function updateStats(events) {
+        document.getElementById('stat-total').textContent = events.length;
+        document.getElementById('stat-agents').textContent = new Set(events.map(e => e.agent)).size;
+        document.getElementById('stat-findings').textContent = events.filter(e => e.type === 'finding').length;
+        document.getElementById('stat-stories').textContent = new Set(events.map(e => e.story_id).filter(Boolean)).size;
+        document.getElementById('stat-tools').textContent = events.filter(e => e.type === 'tool_run').length;
+        document.getElementById('stat-gates').textContent = events.filter(e => e.type === 'gate_decision').length;
+    }
+
+    function formatTime(ts) {
+        try { return new Date(ts).toLocaleString(); } catch { return ts; }
+    }
+
+    function formatDetail(evt) {
+        const d = evt.detail || {};
+        switch (evt.type) {
+            case 'story_start':
+                return d.title ? `Started: <strong>${d.title}</strong>` : 'Story started';
+            case 'story_complete':
+                return d.summary || 'Story completed';
+            case 'story_fail':
+                return `<span style="color:var(--red)">${d.error || 'Failed'}</span>`;
+            case 'tool_run':
+                return `Running <code>${d.tool}</code>${d.args?.length ? ' ' + d.args.join(' ') : ''}`;
+            case 'tool_result': {
+                const status = d.exitCode === 0
+                    ? '<span style="color:var(--green)">OK</span>'
+                    : `<span style="color:var(--red)">exit ${d.exitCode}</span>`;
+                return `<code>${d.tool}</code> ${status} — ${d.summary || ''}`;
+            }
+            case 'finding': {
+                let html = d.message || '';
+                if (d.file) html += ` <span class="file-ref">${d.file}${d.line ? ':' + d.line : ''}</span>`;
+                if (d.rule) html += ` <code>${d.rule}</code>`;
+                return html;
+            }
+            case 'gate_decision':
+                return `Decision: <strong>${d.decision}</strong> (${d.issueCount || 0} issues)`;
+            case 'cost_snapshot':
+                return `$${(d.costUsd || 0).toFixed(4)} — ${d.tokensIn || 0} in / ${d.tokensOut || 0} out`;
+            case 'spec_update':
+                return d.summary || 'Specification updated';
+            case 'phase_start':
+                return d.message || 'Phase started';
+            case 'phase_complete':
+                return d.message || 'Phase completed';
+            case 'error':
+                return `<span style="color:var(--red)">${d.message || 'Error'}</span>`;
+            case 'info':
+                return d.message || '';
+            default:
+                return JSON.stringify(d).slice(0, 200);
+        }
+    }
+
+    function extraBadges(evt) {
+        let html = '';
+        if (evt.type === 'finding' && evt.detail?.severity) {
+            html += `<span class="badge badge-finding-${evt.detail.severity}">${evt.detail.severity}</span>`;
+        }
+        if (evt.type === 'gate_decision' && evt.detail?.decision) {
+            html += `<span class="badge badge-gate-${evt.detail.decision}">${evt.detail.decision}</span>`;
+        }
+        return html;
+    }
+
+    function renderTimeline(events) {
+        const container = document.getElementById('timeline-container');
+
+        if (!events.length) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <h2>No activity events</h2>
+                    <p>Events will appear here as agents run. The log file is <code>orchestrations/logs/agent-activity.jsonl</code>.</p>
+                </div>`;
+            return;
+        }
+
+        // Sort newest first
+        const sorted = [...events].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+        let html = '<div class="timeline">';
+        for (const evt of sorted) {
+            const typeLabel = (evt.type || 'unknown').replace(/_/g, ' ');
+            html += `
+            <div class="event-card type-${evt.type}">
+                <div class="event-header">
+                    <div class="event-meta">
+                        <span class="event-agent">${evt.agent || '?'}</span>
+                        <span class="event-time">${formatTime(evt.timestamp)}</span>
+                    </div>
+                    <div class="event-badges">
+                        <span class="badge badge-type">${typeLabel}</span>
+                        ${evt.phase ? `<span class="badge badge-phase">${evt.phase}</span>` : ''}
+                        ${evt.story_id ? `<span class="badge badge-story">${evt.story_id}</span>` : ''}
+                        ${extraBadges(evt)}
+                    </div>
+                </div>
+                <div class="event-detail">${formatDetail(evt)}</div>
+            </div>`;
+        }
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    function applyFilters() {
+        const agentFilter    = document.getElementById('filter-agent').value;
+        const typeFilter     = document.getElementById('filter-type').value;
+        const phaseFilter    = document.getElementById('filter-phase').value;
+        const storyFilter    = (document.getElementById('filter-story').value || '').trim().toLowerCase();
+        const severityFilter = document.getElementById('filter-severity').value;
+
+        let filtered = allEvents;
+        if (agentFilter)    filtered = filtered.filter(e => e.agent === agentFilter);
+        if (typeFilter)     filtered = filtered.filter(e => e.type === typeFilter);
+        if (phaseFilter)    filtered = filtered.filter(e => e.phase === phaseFilter);
+        if (storyFilter)    filtered = filtered.filter(e => (e.story_id || '').toLowerCase().includes(storyFilter));
+        if (severityFilter) filtered = filtered.filter(e => e.detail?.severity === severityFilter);
+
+        updateStats(filtered);
+        renderTimeline(filtered);
+    }
+
+    async function refresh() {
+        try {
+            allEvents = await fetchEvents();
+            populateFilterOptions(allEvents);
+            applyFilters();
+        } catch (e) { console.error('Error refreshing activity:', e); }
+    }
+
+    // Event listeners for filter dropdowns
+    ['filter-agent', 'filter-type', 'filter-phase', 'filter-severity'].forEach(id =>
+        document.getElementById(id).addEventListener('change', applyFilters));
+
+    // Initial load and auto-refresh
+    refresh();
+    setInterval(refresh, 5000);
+</script>
+</body>
+</html>

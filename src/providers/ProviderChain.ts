@@ -364,15 +364,6 @@ export class ProviderChain implements LLMProvider {
       );
     }
 
-    // Proxy tier — other providers route through backend
-    if (this.options.proxyConfig) {
-      return new ProxyProvider(
-        this.options.proxyConfig.backendUrl,
-        this.options.proxyConfig.getAccessToken,
-        slot.provider
-      );
-    }
-
     // Codemie provider (SSO OAuth) - check CredentialStore
     if (slot.provider === 'codemie') {
       const provider = await createCodemieProvider();
@@ -382,8 +373,17 @@ export class ProviderChain implements LLMProvider {
       return provider;
     }
 
-    // API key providers - check for stored credentials
+    // API key providers - check for BYOK key BEFORE proxy fallback
     const apiKey = await this.options.resolveApiKey(slot.provider);
+
+    // If no BYOK key, fall back to proxy tier (if configured)
+    if (!apiKey && this.options.proxyConfig) {
+      return new ProxyProvider(
+        this.options.proxyConfig.backendUrl,
+        this.options.proxyConfig.getAccessToken,
+        slot.provider
+      );
+    }
     if (!apiKey) {
       throw new ProviderError(`No credential configured for provider '${slot.provider}'. Run: /providers auth ${slot.provider}`);
     }

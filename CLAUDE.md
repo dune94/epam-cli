@@ -19,6 +19,10 @@
 - Entry: `src/index.ts` → `src/cli/index.ts` (Commander) → `commands/`
 - Agent loop: ReAct style in `src/agent/AgentRunner.ts`
 - Provider selection: `src/billing/ProviderSelector.ts` — free tier uses BYOK direct; pro/enterprise uses ProxyProvider
+- BYOK routing: When API key is set (env var or credential store), all commands (chat, run, new) bypass proxy
+- Remote sessions: `src/remote/` — QR-based session handoff to mobile via AES-256-GCM encryption
+- Project scaffolding: `src/scaffold/` — `epam new init` / `epam new generate` for orchestration workspace setup
+- Activity logging: `src/logging/AgentActivityLogger.ts` — unified JSONL emitter for all agent events
 - Config priority: CLI flags > `EPAM_*` env vars > `.epam/settings.json` > `~/.epam/config.json` > defaults
 
 ## Key Env Vars

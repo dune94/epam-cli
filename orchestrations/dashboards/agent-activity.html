@@ -241,12 +241,66 @@
             .filter(Boolean);
     }
 
-    async function fetchEvents() {
+    async function fetchJsonl(path) {
         try {
-            const res = await fetch('logs/agent-activity.jsonl?t=' + Date.now());
+            const res = await fetch(path + '?t=' + Date.now());
             if (!res.ok) return [];
             return parseJsonl(await res.text());
-        } catch { return []; }
+        } catch {
+            return [];
+        }
+    }
+
+    function toActivityEvent(base) {
+        return {
+            timestamp: base.timestamp || new Date().toISOString(),
+            agent: base.agent || 'orchestration',
+            type: base.type || 'info',
+            phase: base.phase || base.phase_id || '',
+            story_id: base.story_id || '',
+            detail: base.detail || {},
+        };
+    }
+
+    async function fetchEvents() {
+        const directEvents = await fetchJsonl('logs/agent-activity.jsonl');
+        if (directEvents.length > 0) return directEvents;
+
+        const [phaseGates, specPhase] = await Promise.all([
+            fetchJsonl('logs/phase-gates.jsonl'),
+            fetchJsonl('logs/spec-phase.jsonl'),
+        ]);
+
+        const synthesized = [];
+
+        for (const row of phaseGates) {
+            synthesized.push(toActivityEvent({
+                timestamp: row.timestamp,
+                agent: row.agent || 'team-lead',
+                type: row.event || 'phase_start',
+                phase: row.phase || row.phase_id,
+                detail: {
+                    decision: row.event === 'phase_complete' ? 'pass' : (row.event === 'phase_failed' ? 'fail' : 'review'),
+                    message: row.notes || row.message || '',
+                    issueCount: Array.isArray(row.blockers) ? row.blockers.length : 0,
+                },
+            }));
+        }
+
+        for (const row of specPhase) {
+            synthesized.push(toActivityEvent({
+                timestamp: row.timestamp,
+                agent: row.agent || 'spec-coordinator',
+                type: 'spec_update',
+                phase: row.phase_id,
+                story_id: row.story_id,
+                detail: {
+                    summary: row.notes || `Specification updated for ${row.story_id || 'story'}`,
+                },
+            }));
+        }
+
+        return synthesized;
     }
 
     function populateFilterOptions(events) {
@@ -327,7 +381,8 @@
     function extraBadges(evt) {
         let html = '';
         if (evt.type === 'finding' && evt.detail?.severity) {
-            html += `<span class="badge badge-finding-${evt.detail.severity}">${evt.detail.severity}</span>`;
+            const sev = String(evt.detail.severity).toLowerCase().replace(/[^a-z]/g, '');
+            html += `<span class="badge badge-finding-${sev}">${sev}</span>`;
         }
         if (evt.type === 'gate_decision' && evt.detail?.decision) {
             html += `<span class="badge badge-gate-${evt.detail.decision}">${evt.detail.decision}</span>`;

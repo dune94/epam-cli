@@ -67,12 +67,16 @@ stop_dashboards_watch() {
 }
 
 start_dashboards_watch() {
+    local dashboards_dir="$AUTOMATION_DIR/dashboards"
+    local config_path="$dashboards_dir/.eleventy.js"
+    local local_eleventy_bin="$dashboards_dir/node_modules/.bin/eleventy"
+
     if [ "${EPAM_DASH_AUTO_SERVE:-1}" != "1" ]; then
         info "Dashboard auto-serve disabled (EPAM_DASH_AUTO_SERVE=0)."
         return
     fi
-    if ! command -v npm >/dev/null 2>&1; then
-        warning "npm not found; cannot start dashboards watcher."
+    if [ ! -f "$config_path" ]; then
+        warning "Dashboards config not found at $config_path; skipping auto-serve."
         return
     fi
     if [ -n "$DASHBOARD_WATCH_PID" ]; then
@@ -87,11 +91,32 @@ start_dashboards_watch() {
             return
         fi
     fi
-    info "Starting Eleventy dashboards watcher (npm run dashboards:serve)..."
-    (
-        cd "$PROJECT_ROOT" || exit 1
-        npm run dashboards:serve >> "$DASHBOARD_WATCH_LOG" 2>&1
-    ) &
+
+    if [ -x "$local_eleventy_bin" ]; then
+        info "Starting Eleventy dashboards watcher (local binary)..."
+        (
+            cd "$PROJECT_ROOT" || exit 1
+            "$local_eleventy_bin" \
+                "--config=$config_path" \
+                "--input=$dashboards_dir" \
+                "--output=$dashboards_dir/live" \
+                --serve >> "$DASHBOARD_WATCH_LOG" 2>&1
+        ) &
+    elif command -v npx >/dev/null 2>&1; then
+        info "Starting Eleventy dashboards watcher (npx --prefix)..."
+        (
+            cd "$PROJECT_ROOT" || exit 1
+            npx --prefix "$dashboards_dir" @11ty/eleventy \
+                "--config=$config_path" \
+                "--input=$dashboards_dir" \
+                "--output=$dashboards_dir/live" \
+                --serve >> "$DASHBOARD_WATCH_LOG" 2>&1
+        ) &
+    else
+        warning "Neither local Eleventy binary nor npx is available; skipping dashboard auto-serve."
+        return
+    fi
+
     DASHBOARD_WATCH_PID=$!
     DASHBOARD_WATCH_OWNED=true
     echo "$DASHBOARD_WATCH_PID" > "$DASHBOARD_WATCH_PID_FILE"
@@ -886,9 +911,25 @@ run_testing_gates() {
     local phase_id="$1"
     local gate_log="$LOG_DIR/testing-gates-${phase_id}.log"
     local gate_jsonl="$LOG_DIR/testing-gates.jsonl"
+    local profiles_file="$SCRIPT_DIR/../agents/profiles.json"
     local failed=0
+    local force_lightpanda="${FORCE_LIGHTPANDA:-0}"
+    local force_playwright="${FORCE_PLAYWRIGHT:-0}"
+    local routing_decision="auto"
+    local routing_reason="complexity_policy"
     local start_ts
     start_ts=$(date +%s%3N 2>/dev/null || date +%s)
+
+    if [ "$force_lightpanda" = "1" ] && [ "$force_playwright" = "1" ]; then
+        warning "Both FORCE_LIGHTPANDA=1 and FORCE_PLAYWRIGHT=1 set; FORCE_PLAYWRIGHT takes precedence"
+    fi
+    if [ "$force_playwright" = "1" ]; then
+        routing_decision="force_playwright"
+        routing_reason="env_override"
+    elif [ "$force_lightpanda" = "1" ]; then
+        routing_decision="force_lightpanda"
+        routing_reason="env_override"
+    fi
 
     if [ "${SKIP_TESTING_GATES:-false}" = "true" ]; then
         info "Step 4.2: Testing gates skipped (SKIP_TESTING_GATES=true)"
@@ -906,9 +947,183 @@ run_testing_gates() {
     fi
 
     log "Step 4.2: Running testing gates for phase '$phase_id'..."
+    info "  E2E routing overrides: FORCE_LIGHTPANDA=$force_lightpanda FORCE_PLAYWRIGHT=$force_playwright (decision=$routing_decision)"
     echo "=== Testing Gates: $phase_id @ $(date -Iseconds) ===" > "$gate_log"
+    echo "Routing override decision: $routing_decision ($routing_reason), FORCE_LIGHTPANDA=$force_lightpanda, FORCE_PLAYWRIGHT=$force_playwright" >> "$gate_log"
     "$SCRIPT_DIR/update-monitor.sh" event "testing_gate_start" \
         "Starting testing gates for $phase_id" "" "main" "test-coordinator-agent" 2>/dev/null || true
+
+    # Load browser E2E profiles for routing execution (Step 4.6).
+    local lightpanda_profile=""
+    local playwright_profile=""
+    if [ -f "$profiles_file" ]; then
+        lightpanda_profile=$(jq -r '.["lightpanda-agent"] // ""' "$profiles_file")
+        playwright_profile=$(jq -r '.["playwright-agent"] // ""' "$profiles_file")
+    fi
+    local e2e_route_runs=0
+    local e2e_route_lightpanda=0
+    local e2e_route_playwright=0
+    local e2e_route_failed=0
+    local e2e_route_log="$LOG_DIR/e2e-routing-${phase_id}.log"
+    local max_routing_stories="${MAX_BROWSER_ROUTING_STORIES:-3}"
+    echo "=== Browser E2E Routing: $phase_id @ $(date -Iseconds) ===" > "$e2e_route_log"
+
+    e2e_story_score() {
+        local story_id="$1"
+        local score=0
+        local hours
+        local priority
+        local haystack
+        hours=$(jq -r --arg id "$story_id" '.stories[] | select(.id==$id) | (.estimatedHours // 0)' "$PRD_FILE" 2>/dev/null || echo "0")
+        priority=$(jq -r --arg id "$story_id" '.stories[] | select(.id==$id) | (.priority // "")' "$PRD_FILE" 2>/dev/null || echo "")
+        haystack=$(jq -r --arg id "$story_id" '.stories[] | select(.id==$id) | ((.title // "") + " " + (.description // "")) | ascii_downcase' "$PRD_FILE" 2>/dev/null || echo "")
+
+        if [ "${hours%.*}" -ge 8 ] 2>/dev/null; then score=$((score + 3));
+        elif [ "${hours%.*}" -ge 5 ] 2>/dev/null; then score=$((score + 2));
+        elif [ "${hours%.*}" -ge 3 ] 2>/dev/null; then score=$((score + 1));
+        fi
+
+        case "$(echo "$priority" | tr '[:upper:]' '[:lower:]')" in
+            critical|high) score=$((score + 2)) ;;
+        esac
+        if echo "$haystack" | grep -Eq '(auth|payment|checkout|billing)'; then score=$((score + 2)); fi
+        if echo "$haystack" | grep -Eq '(ui|frontend|screen|page|form|browser|e2e)'; then score=$((score + 1)); fi
+        echo "$score"
+    }
+
+    should_route_browser_story() {
+        local story_id="$1"
+        local haystack
+        haystack=$(jq -r --arg id "$story_id" '.stories[] | select(.id==$id) | ((.title // "") + " " + (.description // "") + " " + (.storyType // "")) | ascii_downcase' "$PRD_FILE" 2>/dev/null || echo "")
+        if [ "$force_lightpanda" = "1" ] || [ "$force_playwright" = "1" ]; then
+            return 0
+        fi
+        echo "$haystack" | grep -Eq '(ui|frontend|screen|page|form|browser|e2e|auth|checkout|payment)' && return 0
+        return 1
+    }
+
+    run_browser_e2e_routing() {
+        local phase_ids
+        local routed=0
+        local story_id
+        local route
+        local route_reason
+        local route_score
+        local story_log
+        local agent_profile
+        local story_title
+        local prompt
+        local rc
+
+        if [ "${SKIP_BROWSER_E2E_ROUTING:-false}" = "true" ]; then
+            info "  Step 4.6: Browser E2E routing skipped (SKIP_BROWSER_E2E_ROUTING=true)"
+            return 0
+        fi
+
+        phase_ids=$(jq -r --arg phase "$phase_id" '(.implementationOrder[$phase] // [])[]' "$PRD_FILE" 2>/dev/null || true)
+        if [ -z "$phase_ids" ]; then
+            info "  Step 4.6: No phase stories for browser E2E routing"
+            return 0
+        fi
+
+        log "  Step 4.6: Browser E2E routing checks (Lightpanda/Playwright)..."
+        while IFS= read -r story_id; do
+            [ -z "$story_id" ] && continue
+            should_route_browser_story "$story_id" || continue
+            if [ "$routed" -ge "$max_routing_stories" ]; then
+                warning "  Step 4.6: Reached MAX_BROWSER_ROUTING_STORIES=$max_routing_stories (remaining stories skipped)"
+                break
+            fi
+
+            route_score=$(e2e_story_score "$story_id")
+            route="lightpanda-agent"
+            route_reason="complexity_low_or_medium"
+            if [ "$force_playwright" = "1" ]; then
+                route="playwright-agent"
+                route_reason="env_force_playwright"
+            elif [ "$force_lightpanda" = "1" ]; then
+                route="lightpanda-agent"
+                route_reason="env_force_lightpanda"
+            elif [ "${route_score:-0}" -ge 7 ]; then
+                route="playwright-agent"
+                route_reason="complexity_high"
+            elif [ "${route_score:-0}" -ge 4 ]; then
+                route="lightpanda-agent"
+                route_reason="complexity_medium"
+            fi
+
+            if [ "$route" = "playwright-agent" ] && [ -z "$playwright_profile" ]; then
+                route="lightpanda-agent"
+                route_reason="fallback_playwright_profile_missing"
+                warning "  Step 4.6: playwright-agent profile missing; falling back to lightpanda-agent for $story_id"
+            fi
+            if [ "$route" = "lightpanda-agent" ] && [ -z "$lightpanda_profile" ]; then
+                warning "  Step 4.6: lightpanda-agent profile missing; skipping $story_id"
+                continue
+            fi
+
+            story_title=$(jq -r --arg id "$story_id" '.stories[] | select(.id==$id) | (.title // $id)' "$PRD_FILE" 2>/dev/null || echo "$story_id")
+            "$SCRIPT_DIR/update-monitor.sh" event "e2e_route" \
+                "Routed $story_id to $route (score=$route_score, reason=$route_reason)" "$story_id" "main" "test-coordinator-agent" 2>/dev/null || true
+
+            routed=$((routed + 1))
+            e2e_route_runs=$((e2e_route_runs + 1))
+            if [ "$route" = "playwright-agent" ]; then
+                e2e_route_playwright=$((e2e_route_playwright + 1))
+                agent_profile="$playwright_profile"
+            else
+                e2e_route_lightpanda=$((e2e_route_lightpanda + 1))
+                agent_profile="$lightpanda_profile"
+            fi
+
+            story_log="$LOG_DIR/${route}-${phase_id}-${story_id}.log"
+            prompt="$agent_profile
+
+You are running as $route inside Step 4.6 Browser E2E routing checks.
+Phase: $phase_id
+Story: $story_id
+Story title: $story_title
+Route reason: $route_reason
+Complexity score: $route_score
+
+Return strict JSON only:
+{
+  \"agent\": \"$route\",
+  \"storyId\": \"$story_id\",
+  \"phase\": \"$phase_id\",
+  \"verdict\": \"pass|warn|fail\",
+  \"findings\": [{\"severity\": \"blocker|major|minor\", \"message\": \"...\", \"file\": \"...\", \"line\": 0}],
+  \"summary\": \"...\"
+}"
+
+            echo "[$(date -Iseconds)] story=$story_id route=$route score=$route_score reason=$route_reason" >> "$e2e_route_log"
+            set +e
+            echo "$prompt" | "$CLAUDE_SH" - 2>&1 | tee "$story_log"
+            rc=${PIPESTATUS[1]:-${PIPESTATUS[0]}}
+            set -e
+            if [ $rc -ne 0 ]; then
+                error "  Step 4.6: $route failed for $story_id (exit $rc)"
+                e2e_route_failed=$((e2e_route_failed + 1))
+                failed=1
+                continue
+            fi
+            if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$story_log" 2>/dev/null; then
+                error "  Step 4.6: $route reported FAIL for $story_id"
+                e2e_route_failed=$((e2e_route_failed + 1))
+                failed=1
+            elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$story_log" 2>/dev/null; then
+                warning "  Step 4.6: $route reported WARN for $story_id"
+            else
+                success "  Step 4.6: $route PASS for $story_id"
+            fi
+        done <<< "$phase_ids"
+
+        if [ $e2e_route_runs -eq 0 ]; then
+            info "  Step 4.6: No stories matched browser E2E routing criteria"
+        fi
+        echo "Summary: runs=$e2e_route_runs lightpanda=$e2e_route_lightpanda playwright=$e2e_route_playwright failed=$e2e_route_failed" >> "$e2e_route_log"
+        return 0
+    }
 
     # ── Phase A: SAST sentinel + spec validator (parallel) ──
     local sast_log="$LOG_DIR/sast-sentinel-${phase_id}.log"
@@ -916,8 +1131,7 @@ run_testing_gates() {
     local sast_exit=0
     local spec_exit=0
 
-    # Load agent profiles
-    local profiles_file="$SCRIPT_DIR/../agents/profiles.json"
+    # Load QA gate agent profiles
     local sast_profile=""
     local spec_profile=""
     if [ -f "$profiles_file" ]; then
@@ -932,6 +1146,10 @@ run_testing_gates() {
 
 Phase: $phase_id
 Project root: $PROJECT_ROOT
+E2E routing override context:
+- FORCE_LIGHTPANDA=$force_lightpanda
+- FORCE_PLAYWRIGHT=$force_playwright
+- routingDecision=$routing_decision
 
 Run the following checks and produce a structured JSON report:
 
@@ -972,6 +1190,10 @@ $sast_prompt"
 Phase: $phase_id
 PRD file: $PRD_FILE
 Project root: $PROJECT_ROOT
+E2E routing override context:
+- FORCE_LIGHTPANDA=$force_lightpanda
+- FORCE_PLAYWRIGHT=$force_playwright
+- routingDecision=$routing_decision
 
 Read the stories for phase '$phase_id' from the PRD file. For each story:
 1. Read its acceptanceCriteria array
@@ -1059,6 +1281,10 @@ $spec_prompt"
 
 Phase: $phase_id
 Project root: $PROJECT_ROOT
+E2E routing override context:
+- FORCE_LIGHTPANDA=$force_lightpanda
+- FORCE_PLAYWRIGHT=$force_playwright
+- routingDecision=$routing_decision
 
 Perform a deep diff-level code review on files changed in this phase.
 Use git diff to identify changed files, then analyse:
@@ -1095,6 +1321,10 @@ $review_prompt"
 
 Phase: $phase_id
 Project root: $PROJECT_ROOT
+E2E routing override context:
+- FORCE_LIGHTPANDA=$force_lightpanda
+- FORCE_PLAYWRIGHT=$force_playwright
+- routingDecision=$routing_decision
 
 Perform mutation testing analysis on files changed in this phase.
 Use git diff to identify changed source files, then for each:
@@ -1177,6 +1407,10 @@ $mutant_prompt"
 
 Phase: $phase_id
 Project root: $PROJECT_ROOT
+E2E routing override context:
+- FORCE_LIGHTPANDA=$force_lightpanda
+- FORCE_PLAYWRIGHT=$force_playwright
+- routingDecision=$routing_decision
 
 Perform property-based / fuzz testing analysis on changed files in this phase.
 Use git diff to identify changed source files, then for each public function:
@@ -1213,6 +1447,10 @@ $fuzz_prompt"
 
 Phase: $phase_id
 Project root: $PROJECT_ROOT
+E2E routing override context:
+- FORCE_LIGHTPANDA=$force_lightpanda
+- FORCE_PLAYWRIGHT=$force_playwright
+- routingDecision=$routing_decision
 
 Perform performance analysis on files changed in this phase.
 Use git diff to identify changed source files, then analyse:
@@ -1277,6 +1515,13 @@ $perf_prompt"
         info "  Phase C (fuzz-weaver + perf-sentinel) skipped — earlier phases had failures"
     fi
 
+    # ── Step 4.6: Browser E2E routing execution (Lightpanda / Playwright) ──
+    if [ $failed -eq 0 ]; then
+        run_browser_e2e_routing
+    else
+        info "  Step 4.6: Skipped — earlier testing phases failed"
+    fi
+
     # Recalculate duration to include all phases
     end_ts=$(date +%s%3N 2>/dev/null || date +%s)
     duration_ms=$(( end_ts - start_ts ))
@@ -1284,7 +1529,7 @@ $perf_prompt"
     # Log gate result to JSONL
     local verdict="pass"
     [ $failed -ne 0 ] && verdict="fail"
-    echo "{\"timestamp\":\"$(date -Iseconds)\",\"phase_id\":\"$phase_id\",\"event\":\"testing_gate\",\"sast_exit\":$sast_exit,\"spec_exit\":$spec_exit,\"review_exit\":$review_exit,\"mutant_exit\":$mutant_exit,\"fuzz_exit\":$fuzz_exit,\"perf_exit\":$perf_exit,\"verdict\":\"$verdict\",\"duration_ms\":$duration_ms}" >> "$gate_jsonl"
+    echo "{\"timestamp\":\"$(date -Iseconds)\",\"phase_id\":\"$phase_id\",\"event\":\"testing_gate\",\"sast_exit\":$sast_exit,\"spec_exit\":$spec_exit,\"review_exit\":$review_exit,\"mutant_exit\":$mutant_exit,\"fuzz_exit\":$fuzz_exit,\"perf_exit\":$perf_exit,\"verdict\":\"$verdict\",\"duration_ms\":$duration_ms,\"routingDecision\":\"$routing_decision\",\"routingReason\":\"$routing_reason\",\"forceLightpanda\":$force_lightpanda,\"forcePlaywright\":$force_playwright,\"e2eRouteRuns\":$e2e_route_runs,\"e2eRouteLightpanda\":$e2e_route_lightpanda,\"e2eRoutePlaywright\":$e2e_route_playwright,\"e2eRouteFailures\":$e2e_route_failed}" >> "$gate_jsonl"
 
     echo "=== Testing Gate Result: $([ $failed -eq 0 ] && echo PASS || echo FAIL) ===" >> "$gate_log"
 

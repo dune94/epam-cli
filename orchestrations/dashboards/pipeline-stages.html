@@ -316,6 +316,7 @@ code {
     <a href="agent-messages.html"       class="nav-link">Messages</a>
     <a href="phase-cost-monitor.html"   class="nav-link">Costs</a>
     <a href="quality-assurance.html"    class="nav-link">QA Gates</a>
+    <a href="agent-activity.html"       class="nav-link">Activity</a>
     <a href="cpa-details.html"          class="nav-link">Estimation</a>
     <a href="epam-cli-guide.html"       class="nav-link">CLI Guide</a>
   </nav>
@@ -330,7 +331,7 @@ code {
       This document is the authoritative reference for the <strong>EPAM CLI multi-agent orchestration pipeline</strong> &mdash; the automated system that takes a PRD (product requirements document) from raw stories through specification, cost estimation, parallel implementation, quality assurance, post-execution assessment, and documentation generation. The pipeline is driven by <code>run-agent-orchestration.sh</code> and <code>run-doc-orchestration.sh</code>, coordinating <strong>36+ specialized AI agents</strong> across <strong>6 sequential stages</strong>, each with distinct tooling, gating policies, and parallelization strategies. Agents are the focal point: every stage section below details which agents participate, what ReAct loop or inference mode they operate in, which built-in tools (ReadFile, WriteFile, Bash, Search, ListFiles, FetchUrl) and external tooling (tsc, vitest, Knip, jscpd, Semgrep, ast-grep, Madge, TypeDoc, Vale, Mermaid.js, git-cliff, Markprompt) they leverage, and what data files they read from and write to.
     </p>
     <p style="font-size: 12px; color: var(--text2); line-height: 1.7; margin: 0;">
-      The pipeline supports two orchestration modes &mdash; <strong>Bash</strong> (default, script-driven) and <strong>Hybrid</strong> (Bash + MCP message bus for inter-agent coordination) &mdash; and executes implementation stories across three parallel lanes (Main, Primary, Independent) using isolated git worktrees. Quality is enforced through 15+ gate checkpoints: a CPA estimation gate, code review escalation gates, three cascading QA gate phases (each running two agents in parallel), a unit test hard gate, a final phase gate with cost variance thresholds, and documentation review gates with a 3-cycle feedback loop. Cost tracking spans the entire pipeline via <code>phase-cost.jsonl</code> actuals, Langfuse LLM tracing, and CPA confidence-weighted estimate blending. All agents emit structured events to <code>agent-activity.jsonl</code> for unified observability. The <strong>Complete Agent Registry</strong> at the bottom of this page provides a single cross-reference of every agent, its source definition, stage participation, model assignment, tools, and outputs.
+      The pipeline supports two orchestration modes &mdash; <strong>Bash</strong> (default, script-driven) and <strong>Hybrid</strong> (Bash + MCP message bus for inter-agent coordination) &mdash; and executes implementation stories across three parallel lanes (Main, Primary, Independent) using isolated git worktrees. Quality is enforced through 15+ gate checkpoints: a CPA estimation gate, code review escalation gates, three cascading QA gate phases (each running two agents in parallel), a browser E2E routing gate (Step 4.6, Lightpanda/Playwright assignment), a unit test hard gate, a final phase gate with cost variance thresholds, and documentation review gates with a 3-cycle feedback loop. Cost tracking spans the entire pipeline via <code>phase-cost.jsonl</code> actuals, Langfuse LLM tracing, and CPA confidence-weighted estimate blending. All agents emit structured events to <code>agent-activity.jsonl</code> for unified observability. The <strong>Complete Agent Registry</strong> at the bottom of this page provides a single cross-reference of every agent, its source definition, stage participation, model assignment, tools, and outputs.
     </p>
   </div>
 
@@ -1423,6 +1424,7 @@ code {
                 <span class="badge b-warn">WARN</span>
                 <span class="badge b-block">FAIL</span>
               </li>
+              <li><strong>Step 4.6 browser E2E routing:</strong> Lightpanda default, Playwright for high-complexity stories or FORCE_PLAYWRIGHT override</li>
               <li><strong>Unit test gate (4.5):</strong> tsc --noEmit + vitest run &mdash; hard block, non-negotiable</li>
               <li><strong>Thresholds:</strong> spec-validator &ge;80% met, mutant-hunter &ge;70% score, fuzz 0 vulns, perf 0 blockers</li>
             </ul>
@@ -1473,7 +1475,7 @@ code {
             <div class="ar-name">test-coordinator-agent</div>
             <div class="ar-badges"><span class="badge b-gate">GATE GOVERNOR</span><span class="badge b-opus">OPUS</span></div>
           </div>
-          <div class="ar-desc">Governs all testing gate phases. Sequences specialist agents in 3 cascading phases, collects verdicts, applies quality-scoring to aggregate results into unified gate decisions. Respects <code>SKIP_TESTING_GATES=true</code>. Reads story metadata from prd.json to determine which agents apply (skips SAST for docs-only stories).</div>
+          <div class="ar-desc">Governs all testing gate phases. Sequences specialist agents in 3 cascading phases, then runs Step 4.6 browser E2E routing that assigns Lightpanda or Playwright by story complexity (with FORCE_LIGHTPANDA/FORCE_PLAYWRIGHT overrides). Collects verdicts, applies quality-scoring, and writes routing counters to testing-gates.jsonl. Respects <code>SKIP_TESTING_GATES=true</code>. Reads story metadata from prd.json to determine which agents apply (skips SAST for docs-only stories).</div>
           <div class="ar-tools-row">
             <span class="ar-tools-label">Skills:</span>
             <span class="ar-tool t-skill">Cascade gate sequencing</span>
@@ -1758,9 +1760,9 @@ code {
 
       <div style="margin-top: 14px; font-size: 11px; color: var(--text3);">
         <strong>Key scripts:</strong>
-        <span class="script-pill">run-agent-orchestration.sh</span> (Steps 4.2&ndash;4.5) &nbsp;|&nbsp;
+        <span class="script-pill">run-agent-orchestration.sh</span> (Steps 4.2&ndash;4.6) &nbsp;|&nbsp;
         <span class="script-pill">claude.sh</span>
-        &nbsp;|&nbsp; <strong>Outputs:</strong> testing-gates.jsonl, logs/&lt;agent&gt;-&lt;phase&gt;.log
+        &nbsp;|&nbsp; <strong>Outputs:</strong> testing-gates.jsonl, e2e-routing-&lt;phase&gt;.log, logs/&lt;agent&gt;-&lt;phase&gt;.log
       </div>
 
       <table class="substep-table" style="margin-top:14px">
@@ -1794,6 +1796,13 @@ code {
             <td>TypeScript compilation + all test suites</td>
             <td>Exit 0 for both</td>
             <td><span class="badge b-block">HARD BLOCK</span></td>
+          </tr>
+          <tr>
+            <td>4.6 Browser E2E Routing</td>
+            <td>lightpanda-agent &#8214; playwright-agent</td>
+            <td>Story-level browser validation selected by complexity policy + env overrides</td>
+            <td>No FAIL verdicts; routing execution must succeed</td>
+            <td><span class="badge b-block">BLOCK</span> on fail</td>
           </tr>
         </tbody>
       </table>
@@ -2564,7 +2573,7 @@ code {
           <td>Groom &rarr; Readiness &#8214; Dedup &rarr; Coord &rarr; OpenSpec &rarr; Speckit &rarr; Apply</td>
           <td>Formula &rarr; CPA &rarr; Skill &rarr; Hybrid</td>
           <td>Main (seq) &rarr; Worktrees (par) &rarr; Merge &rarr; Review</td>
-          <td>Phase A &#8214; &rarr; Phase B &#8214; &rarr; Phase C &#8214; &rarr; Unit tests</td>
+          <td>Phase A &#8214; &rarr; Phase B &#8214; &rarr; Phase C &#8214; &rarr; Unit tests &rarr; Browser E2E routing</td>
           <td>Pre-gate &rarr; Phase gate &rarr; E2E &rarr; Assessment &rarr; Graph</td>
           <td>Reconcile &rarr; API extract &rarr; Guides &#8214; Arch &rarr; Changelog &rarr; Review loop &rarr; Index</td>
         </tr>
@@ -2582,7 +2591,7 @@ code {
           <td>None (sequential)</td>
           <td>None (sequential)</td>
           <td>3-lane: Main + Primary &#8214; Independent</td>
-          <td>2 agents per phase (3 cascade phases)</td>
+          <td>2 agents per phase (3 cascade phases) + conditional Lightpanda/Playwright story routing</td>
           <td>None (sequential)</td>
           <td>guide-author &#8214; architecture-doc-agent</td>
         </tr>
@@ -2591,7 +2600,7 @@ code {
           <td>Grooming readiness gate (score &lt; 60 blocks spec); optional stage</td>
           <td>CPA 3-tier (pass/review/block); Infra gate</td>
           <td>Merge gate; Code review (exit 2)</td>
-          <td>3 cascade gates + unit test hard block</td>
+          <td>3 cascade gates + unit test hard block + Step 4.6 browser E2E routing gate</td>
           <td>Phase gate (variance 30%/150%)</td>
           <td>Doc review gate (max 3 cycles); coverage &ge;80%</td>
         </tr>
@@ -2636,7 +2645,7 @@ code {
           <td>spec-mode-runner.js, claude.sh</td>
           <td>estimate-stories.sh, contextualize-stories.sh</td>
           <td>run-agent-orchestration.sh, claude.sh, merge-worktree.sh</td>
-          <td>run-agent-orchestration.sh (Steps 4.2-4.5)</td>
+          <td>run-agent-orchestration.sh (Steps 4.2-4.6)</td>
           <td>check-phase-gate.sh, load-phase-graph.sh</td>
           <td>run-doc-orchestration.sh, claude.sh</td>
         </tr>
@@ -2645,7 +2654,7 @@ code {
           <td><code>SKIP_GROOMING=1</code>, <code>EPAM_SPEC_MODE=0</code></td>
           <td><code>SKIP_CPA=1</code></td>
           <td><code>DRY_RUN=true</code></td>
-          <td><code>SKIP_TESTING_GATES=true</code></td>
+          <td><code>SKIP_TESTING_GATES=true</code>, <code>SKIP_BROWSER_E2E_ROUTING=true</code>, <code>FORCE_LIGHTPANDA=1</code>, <code>FORCE_PLAYWRIGHT=1</code></td>
           <td><code>SKIP_TESTS=true</code>, <code>SKIP_CLEANUP=true</code></td>
           <td><code>SKIP_DOCS=true</code></td>
         </tr>

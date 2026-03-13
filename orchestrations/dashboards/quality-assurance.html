@@ -163,6 +163,7 @@ body {
 .b-phase-a { background:rgba(0,71,255,0.08); color:#0047ff; border:1px solid rgba(0,71,255,0.2); }
 .b-phase-b { background:rgba(132,83,210,0.10); color:#8453d2; border:1px solid rgba(132,83,210,0.25); }
 .b-phase-c { background:rgba(196,24,110,0.08); color:#c4186e; border:1px solid rgba(196,24,110,0.25); }
+.b-phase-r { background:rgba(200,122,0,0.10); color:#c87a00; border:1px solid rgba(200,122,0,0.25); }
 .b-duration { background:var(--bg2); color:var(--text3); border:1px solid var(--border); }
 
 .expand-icon { color: var(--text3); font-size: 10px; transition: transform 0.2s; flex-shrink: 0; }
@@ -232,6 +233,7 @@ body {
       <a href="agent-messages.html">Messages</a>
       <a href="phase-cost-monitor.html">Costs</a>
       <a href="quality-assurance.html" class="active">QA Gates</a>
+      <a href="agent-activity.html">Activity</a>
       <a href="cpa-details.html">Estimation</a>
       <a href="epam-cli-guide.html">CLI Guide</a>
     </div>
@@ -268,7 +270,9 @@ const AGENT_META = {
   'review-ranger':    { phase: 'B', step: '4.3a', label: 'Deep Diff Code Review' },
   'mutant-hunter':    { phase: 'B', step: '4.3b', label: 'Mutation Testing Analysis' },
   'fuzz-weaver':      { phase: 'C', step: '4.4a', label: 'Property-Based Fuzz Analysis' },
-  'perf-sentinel':    { phase: 'C', step: '4.4b', label: 'Performance Regression Analysis' }
+  'perf-sentinel':    { phase: 'C', step: '4.4b', label: 'Performance Regression Analysis' },
+  'lightpanda-agent': { phase: 'R', step: '4.6', label: 'Browser E2E Route — Lightpanda' },
+  'playwright-agent': { phase: 'R', step: '4.6', label: 'Browser E2E Route — Playwright' }
 };
 const PHASE_COLORS = [
   { border:'#0047ff', bg:'#f0f5ff' },
@@ -329,6 +333,9 @@ function renderStats() {
   const failed = gateEntries.filter(e => e.verdict === 'fail').length;
   const phases = [...new Set(gateEntries.map(e => e.phase_id))];
   const avgDuration = total ? Math.round(gateEntries.reduce((s,e) => s + (e.duration_ms || 0), 0) / total) : 0;
+  const routedLightpanda = gateEntries.reduce((s,e) => s + Number(e.e2eRouteLightpanda || 0), 0);
+  const routedPlaywright = gateEntries.reduce((s,e) => s + Number(e.e2eRoutePlaywright || 0), 0);
+  const routedFailures = gateEntries.reduce((s,e) => s + Number(e.e2eRouteFailures || 0), 0);
   const lastRun = total ? gateEntries[total - 1].timestamp : '—';
 
   document.getElementById('stats-bar').innerHTML = `
@@ -356,6 +363,21 @@ function renderStats() {
       <div class="stat-dot" style="background:var(--amber)"></div>
       <span class="stat-lbl">Avg Duration</span>
       <span class="stat-num" style="color:var(--amber)">${formatDuration(avgDuration)}</span>
+    </div>
+    <div class="stat-chip">
+      <div class="stat-dot" style="background:#1a8f3f"></div>
+      <span class="stat-lbl">Lightpanda Routes</span>
+      <span class="stat-num" style="color:#1a8f3f">${routedLightpanda}</span>
+    </div>
+    <div class="stat-chip">
+      <div class="stat-dot" style="background:#8453d2"></div>
+      <span class="stat-lbl">Playwright Routes</span>
+      <span class="stat-num" style="color:#8453d2">${routedPlaywright}</span>
+    </div>
+    <div class="stat-chip">
+      <div class="stat-dot" style="background:#d93025"></div>
+      <span class="stat-lbl">Route Failures</span>
+      <span class="stat-num" style="color:#d93025">${routedFailures}</span>
     </div>
     <div class="stat-chip">
       <div class="stat-dot" style="background:#475569"></div>
@@ -430,13 +452,53 @@ function buildAgentResults(entry) {
     }
   });
 
+  const routeFailed = Number(entry.e2eRouteFailures || 0) > 0;
+  const routeRuns = Number(entry.e2eRouteRuns || 0);
+  const lightpandaRuns = Number(entry.e2eRouteLightpanda || 0);
+  const playwrightRuns = Number(entry.e2eRoutePlaywright || 0);
+
+  if (routeRuns > 0 && lightpandaRuns > 0) {
+    agents.push({
+      name: 'lightpanda-agent',
+      exitCode: routeFailed ? 1 : 0,
+      verdict: routeFailed ? 'fail' : 'pass',
+      meta: AGENT_META['lightpanda-agent'],
+      phaseId: entry.phase_id,
+      routeInfo: {
+        runs: lightpandaRuns,
+        totalRuns: routeRuns,
+        failures: Number(entry.e2eRouteFailures || 0),
+        reason: entry.routingReason || 'complexity_policy',
+        decision: entry.routingDecision || 'auto'
+      }
+    });
+  }
+
+  if (routeRuns > 0 && playwrightRuns > 0) {
+    agents.push({
+      name: 'playwright-agent',
+      exitCode: routeFailed ? 1 : 0,
+      verdict: routeFailed ? 'fail' : 'pass',
+      meta: AGENT_META['playwright-agent'],
+      phaseId: entry.phase_id,
+      routeInfo: {
+        runs: playwrightRuns,
+        totalRuns: routeRuns,
+        failures: Number(entry.e2eRouteFailures || 0),
+        reason: entry.routingReason || 'complexity_policy',
+        decision: entry.routingDecision || 'auto'
+      }
+    });
+  }
+
   return agents;
 }
 
 function renderAgentCard(agent, phaseId) {
   const expanded = expandedAgents.has(phaseId + '/' + agent.name);
   const phaseBadge = agent.meta.phase === 'A' ? 'b-phase-a'
-    : agent.meta.phase === 'B' ? 'b-phase-b' : 'b-phase-c';
+    : agent.meta.phase === 'B' ? 'b-phase-b'
+    : agent.meta.phase === 'C' ? 'b-phase-c' : 'b-phase-r';
 
   return `
 <div class="agent-card">
@@ -455,7 +517,15 @@ function renderAgentCard(agent, phaseId) {
 }
 
 function renderAgentDetail(agent) {
-  const logFile = agent.name + '-' + agent.phaseId + '.log';
+  const logFile = agent.routeInfo
+    ? ('e2e-routing-' + agent.phaseId + '.log')
+    : (agent.name + '-' + agent.phaseId + '.log');
+  const routeRows = agent.routeInfo ? `
+    <tr><td>Route Runs</td><td>${agent.routeInfo.runs} of ${agent.routeInfo.totalRuns}</td></tr>
+    <tr><td>Route Failures</td><td>${agent.routeInfo.failures}</td></tr>
+    <tr><td>Routing Decision</td><td><code>${esc(agent.routeInfo.decision)}</code></td></tr>
+    <tr><td>Routing Reason</td><td><code>${esc(agent.routeInfo.reason)}</code></td></tr>
+  ` : '';
   return `
 <div class="agent-detail">
   <div class="dl-t">Agent Summary</div>
@@ -467,6 +537,7 @@ function renderAgentDetail(agent) {
       ? '<span style="color:var(--green)">0 (success)</span>'
       : '<span style="color:var(--red)">' + agent.exitCode + ' (failure)</span>'}</td></tr>
     <tr><td>Verdict</td><td><span class="badge b-${agent.verdict}">${agent.verdict.toUpperCase()}</span></td></tr>
+    ${routeRows}
     <tr><td>Log File</td><td><a class="log-link" href="../logs/${esc(logFile)}" target="_blank">${esc(logFile)}</a></td></tr>
   </table>
   <div class="dl-t" style="margin-top:12px">Agent Role</div>

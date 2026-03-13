@@ -82,7 +82,12 @@ async function verifySemanticPages(
   }
 
   const agentProfilesHtml = await fs.readFile(join(outputDir, 'agent-profiles.html'), 'utf-8');
-  if (!agentProfilesHtml.includes("fetchJSON('profiles.json')") || !agentProfilesHtml.includes("fetchJSON('prd.json')")) {
+  const hasProfilesWiring =
+    agentProfilesHtml.includes("fetchJSON('profiles.json')") ||
+    agentProfilesHtml.includes("fetchText('profiles.json')") ||
+    agentProfilesHtml.includes('parseLooseRoleMap');
+  const hasPrdWiring = agentProfilesHtml.includes("fetchJSON('prd.json')");
+  if (!hasProfilesWiring || !hasPrdWiring) {
     throw new Error(
       'Dashboard verification failed for agent-profiles.html: missing project data wiring to profiles.json/prd.json',
     );

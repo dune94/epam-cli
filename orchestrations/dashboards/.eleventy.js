@@ -101,6 +101,23 @@ function syncLogArtifacts() {
   pruneLogTree(ABS_LOG_SOURCE, ABS_LOG_DEST);
 }
 
+function sanitizeOutputDashboardPaths() {
+  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+  for (const file of DASHBOARD_FILES) {
+    const outputPath = path.join(OUTPUT_DIR, file);
+    try {
+      const stat = fs.statSync(outputPath);
+      if (stat.isDirectory()) {
+        // Recover from path conflicts where a dashboard output path
+        // was accidentally created as a directory.
+        fs.rmSync(outputPath, { recursive: true, force: true });
+      }
+    } catch {
+      // output path missing, nothing to sanitize
+    }
+  }
+}
+
 module.exports = function (eleventyConfig) {
   // Copy locked dashboard templates as-is.
   DASHBOARD_FILES.forEach((file) => {
@@ -121,8 +138,10 @@ module.exports = function (eleventyConfig) {
     eleventyConfig.addWatchTarget(path.resolve(__dirname, target));
   });
 
+  sanitizeOutputDashboardPaths();
   syncLogArtifacts();
   eleventyConfig.on('eleventy.before', () => {
+    sanitizeOutputDashboardPaths();
     syncLogArtifacts();
   });
   eleventyConfig.on('watchChange', (changedPath) => {

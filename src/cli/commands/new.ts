@@ -14,6 +14,7 @@ import { wrapWithTracing } from '../../observability/TracedProvider.js';
 import { flushLangfuse } from '../../observability/LangfuseTracer.js';
 import { analyzeManifest, proposeAgents, generatePrd } from '../../scaffold/ManifestAnalyzer.js';
 import { ProjectScaffolder } from '../../scaffold/ProjectScaffolder.js';
+import { hydrateDashboards } from '../../scaffold/DashboardHydrator.js';
 import { FIXED_AGENT_ROLES } from '../../scaffold/prdTypes.js';
 import type { AgentProposal } from '../../scaffold/prdTypes.js';
 
@@ -47,6 +48,7 @@ export function createNewCommand(): Command {
       .option('-p, --provider <provider>', 'Provider to use')
       .option('--prefix <prefix>', 'Story ID prefix (e.g. TODO)')
       .option('--dry-run', 'Generate and display PRD without writing files')
+      .option('--skip-dashboards', 'Skip dashboard build/verification after generation')
       .option('--no-interactive', 'Skip Q&A and agent confirmation')
       .action(async (projectPath: string, opts) => {
         try {
@@ -116,6 +118,7 @@ async function runGenerate(
     provider?: string;
     prefix?: string;
     dryRun?: boolean;
+    skipDashboards?: boolean;
     interactive?: boolean;
   },
 ): Promise<void> {
@@ -373,6 +376,19 @@ ${analysis.summary}
   await fs.writeFile(kbPath, kbContent, 'utf-8');
   console.log(chalk.green(`  written ${chalk.bold('orchestrations/agents/KB.md')}`));
 
+  if (!opts.skipDashboards) {
+    console.log();
+    console.log(chalk.bold('Hydrating dashboards...'));
+    const hydration = await hydrateDashboards({
+      targetPath,
+      requiredRoles: confirmedRoleNames,
+    });
+    console.log(chalk.green(`  built ${hydration.builtFiles.length} dashboard pages`));
+    console.log(chalk.green(`  output ${chalk.bold('orchestrations/dashboards/live')}`));
+  } else {
+    console.log(chalk.yellow('  skipped dashboard hydration (--skip-dashboards)'));
+  }
+
   await flushLangfuse();
 
   // ── Summary ────────────────────────────────────────────────────────────
@@ -381,7 +397,7 @@ ${analysis.summary}
   console.log();
   console.log(chalk.bold('Next steps:'));
   console.log(`  1. Review the PRD:   ${chalk.cyan('cat ' + projectPath + '/orchestrations/prd.json')}`);
-  console.log(`  2. Serve dashboards: ${chalk.cyan('cd ' + projectPath + '/orchestrations/dashboards && npx @11ty/eleventy --serve')}`);
+  console.log(`  2. Serve dashboards: ${chalk.cyan('cd ' + projectPath + ' && npx --prefix orchestrations/dashboards @11ty/eleventy --config=orchestrations/dashboards/.eleventy.js --serve')}`);
   console.log(`  3. Run spec pass:    ${chalk.cyan('epam orchestrate --phase <phase>')}`);
   console.log();
 }

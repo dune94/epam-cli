@@ -1,9 +1,8 @@
 /**
- * CodexProvider — first-response timing contract
+ * CodexProvider — completion vs streaming contract
  *
- * The native `codex` CLI returns an initial response in <5s.
- * CodexProvider must match this by using --json streaming and returning
- * after the first item.completed agent_message — before tool calls execute.
+ * `complete()` should wait for the final agent message at turn completion.
+ * `stream()` should preserve the fast first-response behavior for REPL UX.
  *
  * Session design: stateless. Each invocation is a fresh `codex exec`.
  * Multi-turn conversations inject prior history into the prompt as a
@@ -58,30 +57,51 @@ describe('CodexProvider', () => {
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   });
 
-  it('returns first agent message immediately — before tool calls execute', async () => {
+  it('complete() returns the final agent message at turn completion', async () => {
     const provider = new CodexProvider();
 
-    // Simulate: first turn returns quickly, then codex starts exec loop
+    vi.mocked(execa).mockReturnValue(makeJsonStream([
+      { type: 'thread.started', thread_id: 'test-123' },
+      { type: 'turn.started' },
+      { type: 'item.completed', item: { id: 'i0', type: 'agent_message', text: 'I will inspect the repo first.' } },
+      { type: 'item.started', item: { id: 'cmd1', type: 'command_execution', command: '/bin/bash -lc "ls"' } },
+      { type: 'item.completed', item: { id: 'cmd1', type: 'command_execution', exit_code: 0, aggregated_output: 'src' } },
+      { type: 'item.completed', item: { id: 'i1', type: 'agent_message', text: '{"summary":"Final JSON"}' } },
+      { type: 'turn.completed', usage: { input_tokens: 100, output_tokens: 20 } },
+    ]) as any);
+
+    const response = await provider.complete(makeRequest([
+      { role: 'user', content: 'Build a Game of Life app' },
+    ]));
+
+    expect(response.content[0]).toMatchObject({ type: 'text', text: '{"summary":"Final JSON"}' });
+  });
+
+  it('stream() returns first agent message quickly for interactive UX', async () => {
+    const provider = new CodexProvider();
+
     vi.mocked(execa).mockReturnValue(makeJsonStream([
       { type: 'thread.started', thread_id: 'test-123' },
       { type: 'turn.started' },
       { type: 'item.completed', item: { id: 'i0', type: 'agent_message', text: 'I will build the game!' } },
       { type: 'turn.completed', usage: { input_tokens: 100, output_tokens: 20 } },
-      // These exec events should NOT be waited for:
       { type: 'turn.started' },
       { type: 'item.completed', item: { id: 'i1', type: 'function_call', name: 'shell', args: 'ls' } },
       { type: 'turn.completed', usage: { input_tokens: 200, output_tokens: 5 } },
     ]) as any);
 
+    const deltas: string[] = [];
     const start = Date.now();
-    const response = await provider.complete(makeRequest([
+    const response = await provider.stream(makeRequest([
       { role: 'user', content: 'Build a Game of Life app' },
-    ]));
+    ]), (delta) => {
+      if (delta.type === 'text_delta') deltas.push(delta.text);
+    });
     const elapsed = Date.now() - start;
 
     expect(response.content[0]).toMatchObject({ type: 'text', text: 'I will build the game!' });
-    // Should return after first agent_message, not wait for exec loop
-    expect(elapsed).toBeLessThan(500); // mock is fast; real codex is <5s
+    expect(deltas.join('')).toContain('I will build the game!');
+    expect(elapsed).toBeLessThan(500);
   });
 
   it('injects conversation history into fresh prompt for follow-ups (no resume)', async () => {
@@ -110,6 +130,25 @@ describe('CodexProvider', () => {
     expect(promptArg).toContain('Follow up question');
   });
 
+  it('includes system instructions in the prompt', async () => {
+    const provider = new CodexProvider();
+
+    vi.mocked(execa).mockReturnValue(makeJsonStream([
+      { type: 'turn.started' },
+      { type: 'item.completed', item: { id: 'i0', type: 'agent_message', text: 'Hello!' } },
+      { type: 'turn.completed', usage: {} },
+    ]) as any);
+
+    await provider.complete(makeRequest([
+      { role: 'user', content: 'Hello' },
+    ]));
+
+    const [, args] = vi.mocked(execa).mock.calls[0] as [string, string[]];
+    const promptArg = args[args.length - 1];
+    expect(promptArg).toContain('System instructions:');
+    expect(promptArg).toContain('You are a helpful assistant.');
+  });
+
   it('sends raw prompt for single-turn (no history prefix)', async () => {
     const provider = new CodexProvider();
 
@@ -125,7 +164,7 @@ describe('CodexProvider', () => {
 
     const [, args] = vi.mocked(execa).mock.calls[0] as [string, string[]];
     const promptArg = args[args.length - 1];
-    expect(promptArg).toBe('Hello');
+    expect(promptArg).toContain('Hello');
     expect(promptArg).not.toContain('Conversation history');
   });
 

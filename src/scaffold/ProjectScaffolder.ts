@@ -5,6 +5,7 @@ import { join, resolve, dirname } from 'path';
 import chalk from 'chalk';
 import type { PrdSchema, AgentProposal } from './prdTypes.js';
 import { FIXED_AGENT_ROLES } from './prdTypes.js';
+import { MANAGED_DASHBOARD_FILES } from './DashboardHydrator.js';
 
 export interface ProjectScaffoldOptions {
   targetPath: string;
@@ -276,21 +277,9 @@ This project uses epam-cli's multi-agent orchestration system.
 
     const targetDir = join(this.target, 'orchestrations', 'dashboards');
 
-    // Priority dashboards + eleventy config
+    // Managed dashboards + eleventy config
     const priorityFiles = [
-      'prd-viewer.html',
-      'specification.html',
-      'quality-assurance.html',
-      'quality-dashboard.html',
-      'monitor.html',
-      'agent-profiles.html',
-      'orchestration-plan.html',
-      'phase-cost-monitor.html',
-      'agent-messages.html',
-      'agents-orchestration.html',
-      'agent-activity.html',
-      'cpa-details.html',
-      'epam-cli-guide.html',
+      ...MANAGED_DASHBOARD_FILES,
       '.eleventy.js',
     ];
 

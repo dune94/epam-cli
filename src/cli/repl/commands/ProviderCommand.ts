@@ -199,10 +199,12 @@ async function authenticateProvider(providerName: string, ctx: SlashCommandConte
           console.log(chalk.dim('Unset it first if you want device-flow: unset COPILOT_GITHUB_TOKEN'));
           break;
         }
-        const available = await CopilotProvider.isAvailable();
-        if (!available) {
+        const hasCopilotCli = await execa('copilot', ['--version'], { stdio: 'ignore', reject: false })
+          .then(({ exitCode }) => exitCode === 0)
+          .catch(() => false);
+        if (!hasCopilotCli) {
           console.log(chalk.red('✗ Copilot CLI not installed.'));
-          console.log(chalk.dim('Install: npm install -g @github/copilot'));
+          console.log(chalk.dim('Install GitHub Copilot CLI, or run: gh auth login'));
           break;
         }
         console.log(chalk.dim('Starting device-flow — follow browser instructions…'));
@@ -210,6 +212,7 @@ async function authenticateProvider(providerName: string, ctx: SlashCommandConte
         const { exitCode } = await execa('copilot', ['login'], { stdio: 'inherit', reject: false });
         console.log();
         console.log(exitCode === 0 ? chalk.green('✓ Copilot authenticated') : chalk.red('✗ Authentication failed'));
+        console.log(chalk.dim('epam-cli will also reuse ~/.copilot/config.json when Copilot CLI stores plaintext credentials.'));
         break;
       }
 

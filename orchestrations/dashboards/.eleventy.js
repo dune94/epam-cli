@@ -1,9 +1,10 @@
 const path = require('node:path');
 const fs = require('node:fs');
 
-const DASHBOARD_DIR = path.join('orchestrations', 'dashboards');
-const OUTPUT_DIR = path.join(DASHBOARD_DIR, 'live');
 const ABS_DASHBOARD_DIR = path.resolve(__dirname);
+const DASHBOARD_DIR = ABS_DASHBOARD_DIR;
+const OUTPUT_DIR = path.join(ABS_DASHBOARD_DIR, 'live');
+const ABS_PROJECT_ROOT = path.resolve(ABS_DASHBOARD_DIR, '..', '..');
 const ABS_LOG_SOURCE = path.resolve(ABS_DASHBOARD_DIR, '..', 'logs');
 const ABS_LOG_DEST = path.join(ABS_DASHBOARD_DIR, 'live', 'logs');
 
@@ -16,7 +17,9 @@ const DASHBOARD_FILES = [
   'monitor.html',
   'orchestration-plan.html',
   'phase-cost-monitor.html',
+  'pipeline-stages.html',
   'prd-viewer.html',
+  'quality-assurance.html',
   'quality-dashboard.html',
   'specification.html',
   'agent-activity.html'
@@ -101,17 +104,17 @@ function syncLogArtifacts() {
 module.exports = function (eleventyConfig) {
   // Copy locked dashboard templates as-is.
   DASHBOARD_FILES.forEach((file) => {
-    const src = path.join(DASHBOARD_DIR, file);
+    const src = path.join(ABS_DASHBOARD_DIR, file);
     eleventyConfig.addPassthroughCopy({ [src]: file });
   });
 
   // Passthrough supporting assets/data from orchestrations runtime.
-  eleventyConfig.addPassthroughCopy({ [path.join('orchestrations', 'prd.json')]: 'prd.json' });
+  eleventyConfig.addPassthroughCopy({ [path.join(ABS_PROJECT_ROOT, 'orchestrations', 'prd.json')]: 'prd.json' });
   eleventyConfig.addPassthroughCopy({
-    [path.join('orchestrations', 'agents', 'profiles.json')]: 'profiles.json'
+    [path.join(ABS_PROJECT_ROOT, 'orchestrations', 'agents', 'profiles.json')]: 'profiles.json'
   });
-  eleventyConfig.addPassthroughCopy({ [path.join(DASHBOARD_DIR, 'diagrams')]: 'diagrams' });
-  eleventyConfig.addPassthroughCopy({ [path.join(DASHBOARD_DIR, 'runtime')]: 'runtime' });
+  eleventyConfig.addPassthroughCopy({ [path.join(ABS_DASHBOARD_DIR, 'diagrams')]: 'diagrams' });
+  eleventyConfig.addPassthroughCopy({ [path.join(ABS_DASHBOARD_DIR, 'runtime')]: 'runtime' });
 
   // Watch orchestration inputs so BrowserSync reloads when runs update.
   WATCH_TARGETS.forEach((target) => {
@@ -137,7 +140,7 @@ module.exports = function (eleventyConfig) {
 
   return {
     dir: {
-      input: DASHBOARD_DIR,
+      input: ABS_DASHBOARD_DIR,
       includes: '_includes',
       data: '_data',
       output: OUTPUT_DIR

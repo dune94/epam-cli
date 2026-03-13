@@ -357,7 +357,7 @@ export class ProviderChain implements LLMProvider {
     
     // GitHub Copilot — requires GH_TOKEN, COPILOT_GITHUB_TOKEN, or GITHUB_TOKEN.
     if (slot.provider === 'copilot') {
-      const provider = createCopilotProvider(slot.model);
+      const provider = await createCopilotProvider(slot.model);
       if (provider) return provider;
       throw new ProviderError(
         'Copilot not available. Set GH_TOKEN or COPILOT_GITHUB_TOKEN env var.'

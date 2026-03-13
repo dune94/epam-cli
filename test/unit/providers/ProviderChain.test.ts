@@ -153,7 +153,7 @@ describe('ProviderChain - copilot auth', () => {
   it('throws with clear message when no GH token is available', async () => {
     const { createCopilotProvider } = await import('../../../src/providers/copilot/CopilotProvider.js');
 
-    vi.mocked(createCopilotProvider).mockReturnValue(null);
+    vi.mocked(createCopilotProvider).mockResolvedValue(null);
 
     const chain = new ProviderChain({
       slots: [{ provider: 'copilot', model: 'claude-sonnet-4.6' }],

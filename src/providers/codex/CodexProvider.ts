@@ -53,14 +53,14 @@ export class CodexProvider implements LLMProvider {
 
   async complete(request: ProviderRequest): Promise<ProviderResponse> {
     const prompt = this.buildPrompt(request);
-    const responseText = await this.runCodex(prompt);
+    const responseText = await this.runCodex(prompt, { returnFirstAgentMessage: false });
     const content: ContentPart[] = [{ type: 'text', text: responseText }];
     return { content, stopReason: 'end_turn', usage: { inputTokens: 0, outputTokens: 0 } };
   }
 
   async stream(request: ProviderRequest, handler: StreamHandler): Promise<ProviderResponse> {
     const prompt = this.buildPrompt(request);
-    const responseText = await this.runCodex(prompt);
+    const responseText = await this.runCodex(prompt, { returnFirstAgentMessage: true });
 
     // Stream the captured response word by word for a natural feel
     const words = responseText.split(' ');
@@ -81,10 +81,18 @@ export class CodexProvider implements LLMProvider {
    * prefix so codex has context without needing session resume.
    */
   private buildPrompt(request: ProviderRequest): string {
+    const sections: string[] = [];
+    if (request.systemPrompt?.trim()) {
+      sections.push(`System instructions:\n${request.systemPrompt.trim()}`);
+      sections.push('');
+    }
+
     const messages = request.messages;
     if (messages.length <= 1) {
       const msg = messages[0];
-      return typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+      const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+      sections.push(content);
+      return sections.join('\n');
     }
 
     const lines: string[] = ['Conversation history (for context):'];
@@ -97,7 +105,8 @@ export class CodexProvider implements LLMProvider {
     lines.push('Current request:');
     const last = messages[messages.length - 1];
     lines.push(typeof last.content === 'string' ? last.content : JSON.stringify(last.content));
-    return lines.join('\n');
+    sections.push(lines.join('\n'));
+    return sections.join('\n');
   }
 
   /**
@@ -138,7 +147,10 @@ export class CodexProvider implements LLMProvider {
    * - Hard cap: 60s timeout returns a descriptive message
    * - SIGINT: Ctrl+C kills codex and unblocks the REPL immediately
    */
-  private async runCodex(prompt: string): Promise<string> {
+  private async runCodex(
+    prompt: string,
+    options: { returnFirstAgentMessage: boolean },
+  ): Promise<string> {
     // Kill any codex process left over from a previous turn before starting a new one.
     this.killActiveProc();
 
@@ -165,6 +177,7 @@ export class CodexProvider implements LLMProvider {
       let buffer = '';
       let resolved = false;
       let firstAgentMessage = '';
+      let lastAgentMessage = '';
       let agentMessageTimer: ReturnType<typeof setTimeout> | null = null;
       let safetyTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -220,18 +233,21 @@ export class CodexProvider implements LLMProvider {
               const text = event.item.text ?? '';
               if (text.trim()) {
                 firstAgentMessage = text;
-                // Return 3s after last agent_message if codex goes quiet
-                // (about to start tool execution — we have the conversational reply)
-                if (agentMessageTimer) clearTimeout(agentMessageTimer);
-                agentMessageTimer = setTimeout(() => finish(firstAgentMessage), 3000);
-                agentMessageTimer.unref();
+                lastAgentMessage = text;
+                if (options.returnFirstAgentMessage) {
+                  // Return 3s after last agent_message if codex goes quiet
+                  // (about to start tool execution — we have the conversational reply)
+                  if (agentMessageTimer) clearTimeout(agentMessageTimer);
+                  agentMessageTimer = setTimeout(() => finish(firstAgentMessage), 3000);
+                  agentMessageTimer.unref();
+                }
               }
             }
 
             // Return on turn.completed — covers cases where codex goes straight
             // to tool execution with no agent_message before working.
             if (event.type === 'turn.completed') {
-              finish(firstAgentMessage || '(task complete — check the files)');
+              finish(lastAgentMessage || firstAgentMessage || '(task complete — check the files)');
             }
           } catch { /* skip non-JSON lines */ }
         }

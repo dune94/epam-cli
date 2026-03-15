@@ -24,12 +24,20 @@ case "${EPAM_ORCHESTRATION_PROVIDER:-${CLAUDE_CMD}}" in
     openai)         CLAUDE_SH="$SCRIPT_DIR/openai.sh" ;;
     qwen)           CLAUDE_SH="$SCRIPT_DIR/qwen.sh" ;;
     cursor)         CLAUDE_SH="$SCRIPT_DIR/cursor.sh" ;;
+    codex)          CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
     *)              CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
 esac
 LOG_DIR="${OUTPUT_DIR:-$AUTOMATION_DIR/logs}"
 MONITOR_STATUS_FILE="$LOG_DIR/agent-status.json"
 MESSAGES_JSONL="$LOG_DIR/agent-messages.jsonl"
-CLAUDE_CMD="${CLAUDE_CMD:-claude}"
+AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
+if [ -n "${CLAUDE_CMD:-}" ]; then
+    CLAUDE_CMD="$CLAUDE_CMD"
+elif [ "${EPAM_ORCHESTRATION_PROVIDER:-}" = "codex" ]; then
+    CLAUDE_CMD="codex"
+else
+    CLAUDE_CMD="claude"
+fi
 mkdir -p "$LOG_DIR"
 DASHBOARD_WATCH_PID_FILE="$LOG_DIR/dashboards-watch.pid"
 DASHBOARD_WATCH_LOG="$LOG_DIR/dashboards-watch.log"
@@ -52,12 +60,59 @@ success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 info()    { echo -e "${CYAN}[INFO]${NC} $1"; }
 warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 
+seed_runtime_logs() {
+    mkdir -p "$LOG_DIR" "$LOG_DIR/phase-improvements"
+    local files=(
+        "agent-activity.jsonl"
+        "agent-messages.jsonl"
+        "code-reviews.jsonl"
+        "cpa-review.jsonl"
+        "phase-cost.jsonl"
+        "phase-gates.jsonl"
+        "profiles-audit.jsonl"
+        "testing-gates.jsonl"
+    )
+    local f
+    for f in "${files[@]}"; do
+        [ -f "$LOG_DIR/$f" ] || : > "$LOG_DIR/$f"
+    done
+}
+
+resolve_prompt_provider() {
+    if [ -n "${EPAM_ORCHESTRATION_PROVIDER:-}" ]; then
+        echo "$EPAM_ORCHESTRATION_PROVIDER"
+        return
+    fi
+    case "$(basename "$CLAUDE_CMD")" in
+        codex|openai|qwen|cursor|copilot|codemie-claude) echo "$(basename "$CLAUDE_CMD")" ;;
+        *) echo "claude" ;;
+    esac
+}
+
+run_orch_prompt() {
+    local prompt_text="$1"
+    local provider_hint
+    provider_hint="$(resolve_prompt_provider)"
+
+    if [ ! -x "$AI_RUNNER_CMD" ]; then
+        error "ai runner not executable: $AI_RUNNER_CMD"
+        return 1
+    fi
+
+    echo "$prompt_text" | \
+        AI_PROVIDER="$provider_hint" \
+        CLAUDE_CMD="$CLAUDE_CMD" \
+        EPAM_CLI="${EPAM_CLI:-epam}" \
+        "$AI_RUNNER_CMD" --provider "$provider_hint"
+}
+
 stop_dashboards_watch() {
     if [ "$DASHBOARD_WATCH_OWNED" != "true" ] || [ -z "$DASHBOARD_WATCH_PID" ]; then
         return
     fi
     if ps -p "$DASHBOARD_WATCH_PID" > /dev/null 2>&1; then
         info "Stopping dashboards watcher (PID $DASHBOARD_WATCH_PID)..."
+        pkill -P "$DASHBOARD_WATCH_PID" 2>/dev/null || true
         kill "$DASHBOARD_WATCH_PID" 2>/dev/null || true
         wait "$DASHBOARD_WATCH_PID" 2>/dev/null || true
     fi
@@ -96,7 +151,7 @@ start_dashboards_watch() {
         info "Starting Eleventy dashboards watcher (local binary)..."
         (
             cd "$PROJECT_ROOT" || exit 1
-            "$local_eleventy_bin" \
+            exec "$local_eleventy_bin" \
                 "--config=$config_path" \
                 "--input=$dashboards_dir" \
                 "--output=$dashboards_dir/live" \
@@ -106,7 +161,7 @@ start_dashboards_watch() {
         info "Starting Eleventy dashboards watcher (npx --prefix)..."
         (
             cd "$PROJECT_ROOT" || exit 1
-            npx --prefix "$dashboards_dir" @11ty/eleventy \
+            exec npx --prefix "$dashboards_dir" @11ty/eleventy \
                 "--config=$config_path" \
                 "--input=$dashboards_dir" \
                 "--output=$dashboards_dir/live" \
@@ -249,6 +304,8 @@ if ! command -v jq &> /dev/null; then
     exit 1
 fi
 
+seed_runtime_logs
+
 # Verify phase exists
 phase_stories=$(jq -r --arg phase "$PHASE" '.implementationOrder[$phase] // empty' "$PRD_FILE")
 if [ -z "$phase_stories" ] || [ "$phase_stories" = "null" ]; then
@@ -280,6 +337,7 @@ run_specification_pass() {
     log "Step 0: Running specification pass for phase '$phase_id'..."
     set +e
     PRD_FILE="$PRD_FILE" OUTPUT_DIR="$LOG_DIR" CLAUDE_CMD="${CLAUDE_CMD}" \
+        AI_RUNNER_CMD="$AI_RUNNER_CMD" EPAM_ORCHESTRATION_PROVIDER="${EPAM_ORCHESTRATION_PROVIDER:-}" \
         "$node_cmd" "$spec_runner" --phase "$phase_id" 2>&1 | tee "$LOG_DIR/spec-${phase_id}.log"
     local spec_rc=${PIPESTATUS[0]}
     set -e
@@ -360,7 +418,8 @@ if [ "${SKIP_CPA:-0}" != "1" ] && [ -f "$CPA_SCRIPT" ]; then
 
     cpa_exit=0
     # shellcheck disable=SC2086
-    bash "$CPA_SCRIPT" $cpa_flags 2>&1 | tee "$LOG_DIR/cpa-${PHASE}.log" || cpa_exit=$?
+    CLAUDE_CMD="$CLAUDE_CMD" AI_RUNNER_CMD="$AI_RUNNER_CMD" EPAM_CLI="${EPAM_CLI:-epam}" \
+        bash "$CPA_SCRIPT" $cpa_flags 2>&1 | tee "$LOG_DIR/cpa-${PHASE}.log" || cpa_exit=$?
 
     case $cpa_exit in
         0)
@@ -411,7 +470,7 @@ echo ""
 main_stories=$(jq -r --arg phase "$PHASE" \
     '(.implementationOrder[$phase] // []) as $ids |
      .stories[] | select(.id as $id | $ids | index($id)) |
-     select(.agentGroup == "main" and .completed == false) | .id' "$PRD_FILE")
+     select((.agentGroup == "main" or .agentGroup == "preflight") and .completed == false) | .id' "$PRD_FILE")
 
 primary_stories=$(jq -r --arg phase "$PHASE" \
     '(.implementationOrder[$phase] // []) as $ids |
@@ -557,7 +616,7 @@ PROMPT_HEADER
 Read ${PRD_REL} implementationOrder[\"${phase_id}\"] for the story list, then proceed with the analysis above."
 
     cd "$PROJECT_ROOT"
-    if echo "$assessment_prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --dangerously-skip-permissions 2>&1 | tee "$assessment_log"; then
+    if run_orch_prompt "$assessment_prompt" 2>&1 | tee "$assessment_log"; then
         success "Pre-phase assessment completed for '$phase_id'"
         "$SCRIPT_DIR/update-monitor.sh" event "pre_phase_assessment" "Pre-phase assessment completed" "" "main" "team-lead-agent" 2>/dev/null || true
         # Validate profiles.json is still valid JSON
@@ -606,7 +665,7 @@ COORD_EOF
     )
 
     cd "$PROJECT_ROOT"
-    if echo "$coord_prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --dangerously-skip-permissions 2>&1 | tee "$coord_log"; then
+    if run_orch_prompt "$coord_prompt" 2>&1 | tee "$coord_log"; then
         success "Hybrid pre-phase coordination completed for '$phase_id'"
         "$SCRIPT_DIR/update-monitor.sh" event "hybrid_precoord" \
             "Hybrid pre-phase coordination completed" "" "main" "coordination-agent" 2>/dev/null || true
@@ -844,7 +903,7 @@ PROMPT_EOF
     log "Backed up prd.json to ${PRD_FILE}.pre-assessment"
 
     cd "$PROJECT_ROOT"
-    if echo "$assessment_prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --dangerously-skip-permissions 2>&1 | tee "$assessment_log"; then
+    if run_orch_prompt "$assessment_prompt" 2>&1 | tee "$assessment_log"; then
         success "Phase assessment completed for '$phase_id'"
     else
         warning "Phase assessment failed for '$phase_id' (non-critical)"
@@ -1098,8 +1157,8 @@ Return strict JSON only:
 
             echo "[$(date -Iseconds)] story=$story_id route=$route score=$route_score reason=$route_reason" >> "$e2e_route_log"
             set +e
-            echo "$prompt" | "$CLAUDE_SH" - 2>&1 | tee "$story_log"
-            rc=${PIPESTATUS[1]:-${PIPESTATUS[0]}}
+            run_orch_prompt "$prompt" 2>&1 | tee "$story_log"
+            rc=${PIPESTATUS[0]:-1}
             set -e
             if [ $rc -ne 0 ]; then
                 error "  Step 4.6: $route failed for $story_id (exit $rc)"
@@ -1178,7 +1237,7 @@ Output format (strict JSON):
 $sast_prompt"
         fi
 
-        echo "$sast_prompt" | "$CLAUDE_SH" - 2>&1 | tee "$sast_log"
+        run_orch_prompt "$sast_prompt" 2>&1 | tee "$sast_log"
     } &
     local sast_pid=$!
 
@@ -1220,7 +1279,7 @@ Output format (strict JSON):
 $spec_prompt"
         fi
 
-        echo "$spec_prompt" | "$CLAUDE_SH" - 2>&1 | tee "$spec_log"
+        run_orch_prompt "$spec_prompt" 2>&1 | tee "$spec_log"
     } &
     local spec_pid=$!
 
@@ -1310,7 +1369,7 @@ Output format (strict JSON):
 $review_prompt"
             fi
 
-            echo "$review_prompt" | "$CLAUDE_SH" - 2>&1 | tee "$review_log"
+            run_orch_prompt "$review_prompt" 2>&1 | tee "$review_log"
         } &
         local review_pid=$!
 
@@ -1348,7 +1407,7 @@ Output format (strict JSON):
 $mutant_prompt"
             fi
 
-            echo "$mutant_prompt" | "$CLAUDE_SH" - 2>&1 | tee "$mutant_log"
+            run_orch_prompt "$mutant_prompt" 2>&1 | tee "$mutant_log"
         } &
         local mutant_pid=$!
 
@@ -1436,7 +1495,7 @@ Output format (strict JSON):
 $fuzz_prompt"
             fi
 
-            echo "$fuzz_prompt" | "$CLAUDE_SH" - 2>&1 | tee "$fuzz_log"
+            run_orch_prompt "$fuzz_prompt" 2>&1 | tee "$fuzz_log"
         } &
         local fuzz_pid=$!
 
@@ -1475,7 +1534,7 @@ Output format (strict JSON):
 $perf_prompt"
             fi
 
-            echo "$perf_prompt" | "$CLAUDE_SH" - 2>&1 | tee "$perf_log"
+            run_orch_prompt "$perf_prompt" 2>&1 | tee "$perf_log"
         } &
         local perf_pid=$!
 

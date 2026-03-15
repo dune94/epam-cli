@@ -27,9 +27,13 @@ const REQUIRED_INPUT_FILES = [
 
 const SEEDED_JSONL_LOGS = [
   'agent-activity.jsonl',
+  'agent-messages.jsonl',
+  'code-reviews.jsonl',
   'cpa-review.jsonl',
   'phase-cost.jsonl',
   'phase-gates.jsonl',
+  'profiles-audit.jsonl',
+  'testing-gates.jsonl',
 ];
 
 const SEEDED_JSON_LOGS: Record<string, unknown> = {

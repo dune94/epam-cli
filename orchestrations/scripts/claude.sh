@@ -12,7 +12,7 @@
 #   ./claude.sh --status             # Show current PRD status
 #   ./claude.sh --interactive        # Run with permission prompts (safer)
 #
-# Note: By default, runs with --dangerously-skip-permissions for autonomous operation.
+# Note: By default, runs with --dangerously-bypass-approvals-and-sandbox for autonomous operation.
 #       Use --interactive flag if you want to approve each file operation.
 
 set -e
@@ -104,7 +104,8 @@ resolve_provider_settings() {
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
     STORY_PROVIDER=$(jq -r --arg id "$story_id" \
         '.stories[] | select(.id == $id) | .aiProvider // "claude-sonnet"' \
-        "$prd_target" 2>/dev/null || echo "claude-sonnet")
+        "$prd_target" 2>/dev/null | head -1)
+    STORY_PROVIDER="${STORY_PROVIDER:-claude-sonnet}"
     log "  Provider[$STORY_PROVIDER] -> CLI=$(provider_to_cli "$STORY_PROVIDER")"
 }
 
@@ -196,7 +197,7 @@ normalize_provider_json() {
 # Claude CLI permission flags
 # These allow Claude to read/write files and execute commands without prompting
 CLAUDE_PERMISSIONS=(
-    "--dangerously-skip-permissions"  # Skip all permission prompts for autonomous operation
+    "--dangerously-bypass-approvals-and-sandbox"  # Skip all permission prompts for autonomous operation
 )
 
 # Alternative: Use granular permissions (uncomment if preferred over skip-permissions)
@@ -1433,7 +1434,7 @@ Environment Variables:
   CLAUDE_CMD      Path to Claude CLI (default: claude)
 
 Permissions:
-  By default, the script runs with --dangerously-skip-permissions to allow
+  By default, the script runs with --dangerously-bypass-approvals-and-sandbox to allow
   autonomous file read/write operations. Use --interactive if you want to
   manually approve each operation.
 
@@ -1751,7 +1752,7 @@ PROMPT_HEADER
     )
 
     cd "$PROJECT_ROOT"
-    if echo "$assessment_prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --dangerously-skip-permissions 2>&1 | tee "$assessment_log"; then
+    if echo "$assessment_prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --dangerously-bypass-approvals-and-sandbox 2>&1 | tee "$assessment_log"; then
         success "Pre-phase assessment completed for '$phase_id'"
         if ! jq empty "$profiles_file" 2>/dev/null; then
             warning "Pre-phase assessment may have corrupted profiles.json! Restoring backup."

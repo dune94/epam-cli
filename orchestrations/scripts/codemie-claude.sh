@@ -12,7 +12,7 @@
 #   ./claude.sh --status             # Show current PRD status
 #   ./claude.sh --interactive        # Run with permission prompts (safer)
 #
-# Note: By default, runs with --dangerously-skip-permissions for autonomous operation.
+# Note: By default, runs with --dangerously-bypass-approvals-and-sandbox for autonomous operation.
 #       Use --interactive flag if you want to approve each file operation.
 
 set -e
@@ -162,7 +162,7 @@ normalize_provider_json() {
 # Claude CLI permission flags
 # These allow Claude to read/write files and execute commands without prompting
 CLAUDE_PERMISSIONS=(
-    "--dangerously-skip-permissions"  # Skip all permission prompts for autonomous operation
+    "--dangerously-bypass-approvals-and-sandbox"  # Skip all permission prompts for autonomous operation
 )
 
 # Alternative: Use granular permissions (uncomment if preferred over skip-permissions)
@@ -1270,7 +1270,7 @@ setup_worktrees() {
     log "Setting up git worktrees..."
 
     for wt in "${worktrees[@]}"; do
-        local wt_path="$PROJECT_ROOT/../epam-cli-wt-$wt"
+        local wt_path="$PROJECT_ROOT/../$(basename "$PROJECT_ROOT")-wt-$wt"
         local wt_branch="wt-$wt"
 
         # Check if worktree already exists
@@ -1304,7 +1304,7 @@ cleanup_worktrees() {
     log "Cleaning up git worktrees..."
 
     for wt in "${worktrees[@]}"; do
-        local wt_path="$PROJECT_ROOT/../epam-cli-wt-$wt"
+        local wt_path="$PROJECT_ROOT/../$(basename "$PROJECT_ROOT")-wt-$wt"
 
         # Check if worktree exists
         if [ ! -d "$wt_path" ]; then
@@ -1358,7 +1358,7 @@ Environment Variables:
   CLAUDE_CMD      Path to Claude CLI (default: claude)
 
 Permissions:
-  By default, the script runs with --dangerously-skip-permissions to allow
+  By default, the script runs with --dangerously-bypass-approvals-and-sandbox to allow
   autonomous file read/write operations. Use --interactive if you want to
   manually approve each operation.
 
@@ -1423,7 +1423,7 @@ main() {
                 # Save main PRD location for reference
                 MAIN_PRD_FILE="$PRD_FILE"
                 # Update PROJECT_ROOT to worktree for file operations
-                PROJECT_ROOT="$PROJECT_ROOT/../epam-cli-wt-$WORKTREE_MODE"
+                PROJECT_ROOT="$PROJECT_ROOT/../$(basename "$PROJECT_ROOT")-wt-$WORKTREE_MODE"
                 # Keep PRD_FILE pointing to MAIN - single source of truth
                 # (Do NOT set PRD_FILE to worktree's prd.json - it will be stale)
                 shift 2
@@ -1673,7 +1673,7 @@ PROMPT_HEADER
     )
 
     cd "$PROJECT_ROOT"
-    if echo "$assessment_prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --dangerously-skip-permissions 2>&1 | tee "$assessment_log"; then
+    if echo "$assessment_prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --dangerously-bypass-approvals-and-sandbox 2>&1 | tee "$assessment_log"; then
         success "Pre-phase assessment completed for '$phase_id'"
         if ! jq empty "$profiles_file" 2>/dev/null; then
             warning "Pre-phase assessment may have corrupted profiles.json! Restoring backup."

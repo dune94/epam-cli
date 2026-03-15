@@ -63,7 +63,12 @@ async function run() {
   const logDir = process.env.OUTPUT_DIR
     ? path.resolve(process.env.OUTPUT_DIR)
     : path.join(automationDir, 'logs');
-  const claudeCmd = process.env.CLAUDE_CMD || 'claude';
+  const aiRunnerCmd = process.env.AI_RUNNER_CMD || path.join(scriptDir, 'ai-run.sh');
+  const monitorScript = path.join(scriptDir, 'update-monitor.sh');
+  const promptProvider = process.env.AI_PROVIDER
+    || process.env.EPAM_ORCHESTRATION_PROVIDER
+    || (/codex$/.test(process.env.CLAUDE_CMD || '') ? 'codex' : 'claude');
+  const promptExec = { cmd: aiRunnerCmd, args: ['--provider', promptProvider] };
 
   if (!fs.existsSync(prdPath)) {
     console.error('spec-mode-runner: prd.json not found at', prdPath);
@@ -161,7 +166,7 @@ ${storiesPayload}
   let assignmentsOutput = '';
   try {
     assignmentsOutput = await runClaude(
-      claudeCmd,
+      promptExec,
       coordinatorPrompt,
       path.join(logDir, `spec-coordinator-${opts.phase}.log`)
     );
@@ -196,25 +201,41 @@ ${storiesPayload}
     const agentContributions = [];
     const appliedAgents = [];
     let openspecPayload = null;
+    const codeRefs = extractCodeRefs(story);
+    const codeHint = codeRefs.length ? ` files=${codeRefs.join(',')}` : '';
 
     // Run agents SEQUENTIALLY: openspec first, then speckit with openspec's output
     for (const agent of assigned.agents) {
       const beforeSnapshot = captureStorySnapshot(story);
+      await emitMonitorEvent({
+        monitorScript,
+        type: 'spec_update',
+        message: `[${opts.phase}] ${agent} started on ${story.id} (${story.title || 'story'})${codeHint}`,
+        storyId: story.id,
+        role: agent
+      });
 
       let agentResult;
       if (agent === 'speckit' && openspecPayload) {
         // Speckit receives openspec's output for collaborative review
         agentResult = await runSpeckitReview({
-          claudeCmd, story, openspecOutput: openspecPayload,
+          promptExec, story, openspecOutput: openspecPayload,
           phase: opts.phase, runId, logDir
         });
       } else {
         agentResult = await runSpecAgent({
-          claudeCmd, agent, story, phase: opts.phase, runId, logDir
+          promptExec, agent, story, phase: opts.phase, runId, logDir
         });
       }
 
       if (!agentResult || !agentResult.payload) {
+        await emitMonitorEvent({
+          monitorScript,
+          type: 'error',
+          message: `[${opts.phase}] ${agent} produced no parsable output for ${story.id}${codeHint}`,
+          storyId: story.id,
+          role: agent
+        });
         agentContributions.push({
           agent,
           applied: false,
@@ -250,6 +271,16 @@ ${storiesPayload}
         notes: payload.notes || '',
         splitStories: payload.splitStories || [],
         acceptanceChanged: changes.acceptanceChanged
+      });
+      await emitMonitorEvent({
+        monitorScript,
+        type: 'spec_update',
+        message:
+          `[${opts.phase}] ${agent} updated ${story.id}` +
+          ` acChanged=${changes.acceptanceChanged ? 'yes' : 'no'}` +
+          ` splitCount=${changes.splitCount}${codeHint}`,
+        storyId: story.id,
+        role: agent
       });
 
       appliedAgents.push(agent);
@@ -364,7 +395,7 @@ ${reviewPayload}
     let reviewOutput = '';
     try {
       reviewOutput = await runClaude(
-        claudeCmd,
+        promptExec,
         reviewPrompt,
         path.join(logDir, `spec-coordinator-review-${opts.phase}.log`)
       );
@@ -402,6 +433,12 @@ ${reviewPayload}
   summary.storyCount = summary.stories.length;
   fs.writeFileSync(path.join(specRunDir, 'summary.json'), JSON.stringify(summary, null, 2));
   fs.writeFileSync(path.join(logDir, 'spec-summary.json'), JSON.stringify(summary, null, 2));
+  await emitMonitorEvent({
+    monitorScript,
+    type: 'spec_update',
+    message: `[${opts.phase}] specification completed run=${runId} stories=${summary.storyCount}`,
+    role: 'spec-coordinator'
+  });
   console.log(`spec-mode: completed for phase ${opts.phase} (run ${runId})`);
 }
 
@@ -410,7 +447,7 @@ ${reviewPayload}
 // ─────────────────────────────────────────────────────────────────────────────
 
 // openspec: first-pass elaboration (unchanged from before)
-async function runSpecAgent({ claudeCmd, agent, story, phase, runId, logDir }) {
+async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir }) {
   const storyPayload = JSON.stringify({
     id: story.id,
     title: story.title,
@@ -439,7 +476,7 @@ ${storyPayload}
 
 <SPEC_AGENT>`;
   try {
-    const output = await runClaude(claudeCmd, prompt, path.join(logDir, `${story.id}-${agent}-spec.log`));
+    const output = await runClaude(promptExec, prompt, path.join(logDir, `${story.id}-${agent}-spec.log`));
     const payload = extractTaggedJson(output, 'SPEC_AGENT');
     return { agent, payload };
   } catch (error) {
@@ -449,7 +486,7 @@ ${storyPayload}
 }
 
 // speckit: second-pass review of openspec's output — the collaboration point
-async function runSpeckitReview({ claudeCmd, story, openspecOutput, phase, runId, logDir }) {
+async function runSpeckitReview({ promptExec, story, openspecOutput, phase, runId, logDir }) {
   const prompt = `You are the speckit specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.
 
 You are reviewing and building on the openspec agent's output for this story.
@@ -484,7 +521,7 @@ Produce your refined output between <SPEC_AGENT> tags. Include:
 <SPEC_AGENT>`;
   try {
     const output = await runClaude(
-      claudeCmd, prompt,
+      promptExec, prompt,
       path.join(logDir, `${story.id}-speckit-review.log`)
     );
     const payload = extractTaggedJson(output, 'SPEC_AGENT');
@@ -535,6 +572,20 @@ function captureStorySnapshot(story) {
   };
 }
 
+// Count split depth by walking the createdFrom chain back to the root story.
+function splitDepth(story, prd) {
+  let depth = 0;
+  let parentId = story.specification?.createdFrom;
+  const visited = new Set();
+  while (parentId && !visited.has(parentId)) {
+    visited.add(parentId);
+    depth += 1;
+    const parent = prd.stories.find((s) => s.id === parentId);
+    parentId = parent?.specification?.createdFrom;
+  }
+  return depth;
+}
+
 function applySpecChanges(story, payload, newStories, prd, phaseId, runId) {
   const result = { acceptanceChanged: false, splitCount: 0 };
   if (Array.isArray(payload.acceptanceCriteria) && payload.acceptanceCriteria.length) {
@@ -555,41 +606,76 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId) {
     story.technicalNotes = payload.technicalNotes;
   }
   if (Array.isArray(payload.splitStories) && payload.splitStories.length) {
-    payload.splitStories.forEach((split, idx) => {
-      if (!split || typeof split !== 'object') return;
-      const baseId = split.id && typeof split.id === 'string' ? split.id : `${story.id}-SPEC-${idx + 1}`;
-      let newId = baseId;
-      let suffix = 1;
-      while (prd.stories.some((s) => s.id === newId)) {
-        newId = `${baseId}-${suffix}`;
-        suffix += 1;
-      }
-      const newStory = JSON.parse(JSON.stringify(story));
-      newStory.id = newId;
-      newStory.title = split.title || `${story.title} (Spec Split ${idx + 1})`;
-      newStory.description = split.description || story.description;
-      newStory.acceptanceCriteria = Array.isArray(split.acceptanceCriteria) && split.acceptanceCriteria.length
-        ? [...split.acceptanceCriteria]
-        : Array.isArray(story.acceptanceCriteria)
-          ? [...story.acceptanceCriteria]
-          : [];
-      newStory.status = 'pending';
-      newStory.completed = false;
-      newStory.dependencies = Array.isArray(split.dependencies) ? split.dependencies : [];
-      newStory.specification = {
-        createdFrom: story.id,
-        createdAt: new Date().toISOString(),
-        runId
-      };
-      newStories.push({ parentId: story.id, story: newStory, phase: phaseId });
-      result.splitCount += 1;
-    });
+    // Enforce split-depth guard: count how many generations of createdFrom exist.
+    const maxSplitDepth = parseInt(process.env.SPEC_MAX_SPLIT_DEPTH || '2', 10);
+    const currentDepth = splitDepth(story, prd);
+    if (currentDepth >= maxSplitDepth) {
+      console.warn(
+        `spec-mode: skipping splits for ${story.id} — depth ${currentDepth} >= max ${maxSplitDepth}`
+      );
+    } else {
+      payload.splitStories.forEach((split, idx) => {
+        if (!split || typeof split !== 'object') return;
+        const baseId = split.id && typeof split.id === 'string' ? split.id : `${story.id}-SPEC-${idx + 1}`;
+        let newId = baseId;
+        let suffix = 1;
+        // Check both prd.stories AND the pending newStories accumulator for collisions
+        while (
+          prd.stories.some((s) => s.id === newId) ||
+          newStories.some((ns) => ns.story.id === newId)
+        ) {
+          newId = `${baseId}-${suffix}`;
+          suffix += 1;
+        }
+        const newStory = JSON.parse(JSON.stringify(story));
+        newStory.id = newId;
+        newStory.title = split.title || `${story.title} (Spec Split ${idx + 1})`;
+        newStory.description = split.description || story.description;
+        newStory.acceptanceCriteria = Array.isArray(split.acceptanceCriteria) && split.acceptanceCriteria.length
+          ? [...split.acceptanceCriteria]
+          : Array.isArray(story.acceptanceCriteria)
+            ? [...story.acceptanceCriteria]
+            : [];
+        newStory.status = 'pending';
+        newStory.completed = false;
+        newStory.dependencies = Array.isArray(split.dependencies) ? split.dependencies : [];
+        newStory.specification = {
+          createdFrom: story.id,
+          createdAt: new Date().toISOString(),
+          runId,
+          splitDepth: currentDepth + 1
+        };
+        newStories.push({ parentId: story.id, story: newStory, phase: phaseId });
+        result.splitCount += 1;
+      });
+    }
   }
   return result;
 }
 
 function appendJsonl(filePath, obj) {
   fs.appendFileSync(filePath, `${JSON.stringify(obj)}\n`);
+}
+
+function extractCodeRefs(story) {
+  const files = story?.technicalNotes?.files;
+  if (!Array.isArray(files)) return [];
+  return files
+    .map((f) => (typeof f === 'string' ? f.trim() : ''))
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
+function emitMonitorEvent({ monitorScript, type, message, storyId = '', lane = 'main', role = '' }) {
+  return new Promise((resolve) => {
+    const proc = spawn(
+      monitorScript,
+      ['event', type, message, storyId, lane, role],
+      { env: process.env }
+    );
+    proc.on('error', () => resolve());
+    proc.on('close', () => resolve());
+  });
 }
 
 function extractTaggedJson(text, tag) {
@@ -608,11 +694,13 @@ function extractTaggedJson(text, tag) {
   }
 }
 
-function runClaude(cmd, prompt, logPath) {
+function runClaude(execSpec, prompt, logPath) {
   return new Promise((resolve, reject) => {
     const env = { ...process.env };
     delete env.CLAUDECODE;
-    const proc = spawn(cmd, ['-p', '--dangerously-skip-permissions'], { env });
+    const cmd = execSpec?.cmd || process.env.CLAUDE_CMD || 'claude';
+    const args = Array.isArray(execSpec?.args) ? execSpec.args : [];
+    const proc = spawn(cmd, args, { env });
     let stdout = '';
     let stderr = '';
     proc.stdout.on('data', (chunk) => {
@@ -626,7 +714,7 @@ function runClaude(cmd, prompt, logPath) {
       const output = `${stdout}\n${stderr}`.trim();
       fs.writeFileSync(logPath, `# Prompt\n${prompt}\n\n# Output\n${output}\n`);
       if (code !== 0) {
-        return reject(new Error(`claude exited with code ${code}`));
+        return reject(new Error(`prompt runner exited with code ${code}`));
       }
       resolve(output);
     });

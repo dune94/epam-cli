@@ -22,10 +22,14 @@
 'use strict';
 
 const { spawnSync } = require('child_process');
-const fs            = require('fs');
+const path          = require('path');
 
 // ── Configuration ──────────────────────────────────────────────────────────
 const CLAUDE_CMD = process.env.CLAUDE_CMD || 'claude';
+const AI_RUNNER_CMD = process.env.AI_RUNNER_CMD || path.resolve(__dirname, '..', 'ai-run.sh');
+const AI_PROVIDER = process.env.AI_PROVIDER
+  || process.env.EPAM_ORCHESTRATION_PROVIDER
+  || (/codex$/.test(CLAUDE_CMD) ? 'codex' : 'claude');
 const TIMEOUT_MS = parseInt(process.env.CPA_TIMEOUT_MS || '120000', 10);
 
 // ── Read stdin ─────────────────────────────────────────────────────────────
@@ -153,16 +157,16 @@ async function main() {
   const { formulaEstimate = {} } = input;
   const fullPrompt = buildPrompt(input);
 
-  // ── Call claude CLI (already authenticated, no key needed) ────────────────
-  // Unset Claude Code session vars to avoid nested-session detection in the CLI
+  // ── Call provider-agnostic prompt runner ──────────────────────────────────
   const env = { ...process.env };
   delete env.CLAUDECODE;
   delete env.CLAUDE_CODE_ENTRYPOINT;
 
   const t0 = Date.now();
+  const cliArgs = ['--provider', AI_PROVIDER];
   const result = spawnSync(
-    CLAUDE_CMD,
-    ['--print', '--dangerously-skip-permissions'],
+    AI_RUNNER_CMD,
+    cliArgs,
     { input: fullPrompt, encoding: 'utf8', timeout: TIMEOUT_MS, env }
   );
   const latencyMs = Date.now() - t0;
@@ -170,8 +174,8 @@ async function main() {
   // ── Handle CLI failure ────────────────────────────────────────────────────
   if (result.error || result.status !== 0) {
     const reason = result.error?.message || (result.stderr || '').slice(0, 200) || `exit ${result.status}`;
-    process.stderr.write(`WARN: claude CLI failed: ${reason}\n`);
-    const review = skippedReview(formulaEstimate, `claude CLI unavailable: ${reason}`);
+    process.stderr.write(`WARN: prompt runner failed: ${reason}\n`);
+    const review = skippedReview(formulaEstimate, `prompt runner unavailable: ${reason}`);
     review._metrics.latencyMs = latencyMs;
     process.stdout.write(JSON.stringify(review) + '\n');
     return;
@@ -179,8 +183,8 @@ async function main() {
 
   const rawText = (result.stdout || '').trim();
   if (!rawText) {
-    process.stderr.write('WARN: claude CLI returned empty response\n');
-    const review = skippedReview(formulaEstimate, 'empty response from claude CLI');
+    process.stderr.write('WARN: prompt runner returned empty response\n');
+    const review = skippedReview(formulaEstimate, 'empty response from prompt runner');
     review._metrics.latencyMs = latencyMs;
     process.stdout.write(JSON.stringify(review) + '\n');
     return;

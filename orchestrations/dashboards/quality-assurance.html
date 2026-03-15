@@ -263,7 +263,7 @@ body {
 </div>
 
 <script>
-const GATES_URL = 'testing-gates.jsonl';
+const GATES_URL = 'logs/testing-gates.jsonl';
 const AGENT_META = {
   'sast-sentinel':    { phase: 'A', step: '4.2a', label: 'SAST — Static Analysis & Security' },
   'spec-validator':   { phase: 'A', step: '4.2b', label: 'Spec Compliance Validator' },
@@ -290,7 +290,7 @@ let collapsedPhases = new Set();
 
 async function loadData() {
   document.getElementById('content').innerHTML =
-    '<div class="loading-blk"><span class="spinner"></span>Loading testing-gates.jsonl…</div>';
+    '<div class="loading-blk"><span class="spinner"></span>Loading logs/testing-gates.jsonl…</div>';
   try {
     const res = await fetch(GATES_URL + '?_=' + Date.now());
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -538,7 +538,7 @@ function renderAgentDetail(agent) {
       : '<span style="color:var(--red)">' + agent.exitCode + ' (failure)</span>'}</td></tr>
     <tr><td>Verdict</td><td><span class="badge b-${agent.verdict}">${agent.verdict.toUpperCase()}</span></td></tr>
     ${routeRows}
-    <tr><td>Log File</td><td><a class="log-link" href="../logs/${esc(logFile)}" target="_blank">${esc(logFile)}</a></td></tr>
+    <tr><td>Log File</td><td><a class="log-link" href="logs/${esc(logFile)}" target="_blank">${esc(logFile)}</a></td></tr>
   </table>
   <div class="dl-t" style="margin-top:12px">Agent Role</div>
   <div style="font-size:12px;color:var(--text2);line-height:1.6">${esc(agent.meta.label)}</div>

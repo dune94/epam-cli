@@ -342,6 +342,7 @@ code {
     <a href="agent-messages.html"       class="nav-link">Messages</a>
     <a href="phase-cost-monitor.html"   class="nav-link">Costs</a>
     <a href="quality-assurance.html"    class="nav-link">QA Gates</a>
+    <a href="agent-activity.html"       class="nav-link">Activity</a>
     <a href="cpa-details.html"          class="nav-link">Estimation</a>
     <a href="epam-cli-guide.html"       class="nav-link">CLI Guide</a>
   </nav>
@@ -452,18 +453,60 @@ code {
           <div class="master-title">run-agent-orchestration.sh</div>
           <div class="master-subtitle">Master Orchestration Script — coordinates all steps below</div>
           <div class="vs-scripts">
-            <span class="vs-script"><span class="vs-script-label">Usage</span>bash automation/scripts/run-agent-orchestration.sh --phase &lt;PHASE&gt; [--mode bash|hybrid]</span>
+            <span class="vs-script"><span class="vs-script-label">Usage</span>bash orchestrations/scripts/run-agent-orchestration.sh --phase &lt;PHASE&gt; [--mode bash|hybrid]</span>
           </div>
           <div class="vs-desc">
             Reads <code>prd.json</code> to discover stories for the given phase. Calls <code>claude.sh</code> per story
             (resolving effort → model → turns), manages git worktrees in HYBRID mode, and invokes
-            <code>check-phase-gate.sh</code> at gates. All 8 steps below are orchestrated by this script.
+            <code>check-phase-gate.sh</code> at gates. Includes pre-spec/spec/CPA/assessment, worktree health+merge, QA gates, unit gate, phase gate, and optional interstitial E2E.
           </div>
           <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
             <span class="badge b-bash">BASH MODE</span>
             <span class="badge b-hybrid">HYBRID MODE</span>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div class="vflow-connector"></div>
+
+    <!-- STEP 0 -->
+    <div class="vflow-step assess-step">
+      <div class="vs-header">
+        <div class="vs-num">STEP 0</div>
+        <div class="vs-title">Specification Pass</div>
+        <div class="vs-badges">
+          <span class="badge b-main">MAIN</span>
+          <span class="badge b-cli">CLI</span>
+          <span class="badge b-sonnet">SONNET</span>
+        </div>
+      </div>
+      <div class="vs-scripts">
+        <span class="vs-script"><span class="vs-script-label">Script</span>spec-mode-runner.js --phase &lt;PHASE&gt;</span>
+      </div>
+      <div class="vs-desc">
+        Runs OpenSpec/Speckit elaboration before execution when <code>EPAM_SPEC_MODE=1</code>. Produces specification deltas used by downstream orchestration and dashboard diffing.
+      </div>
+    </div>
+
+    <div class="vflow-connector"></div>
+
+    <!-- STEP 0.1 -->
+    <div class="vflow-step assess-step">
+      <div class="vs-header">
+        <div class="vs-num">STEP 0.1</div>
+        <div class="vs-title">CPA Pre-Pass</div>
+        <div class="vs-badges">
+          <span class="badge b-main">MAIN</span>
+          <span class="badge b-gate">CPA GATE</span>
+          <span class="badge b-sonnet">SONNET</span>
+        </div>
+      </div>
+      <div class="vs-scripts">
+        <span class="vs-script"><span class="vs-script-label">Script</span>contextualize-stories.sh --phase &lt;PHASE&gt; --apply</span>
+      </div>
+      <div class="vs-desc">
+        Contextual Purveyor Agent computes blended estimates and gate decisions (pass/review/block). Controlled via <code>SKIP_CPA</code> and <code>STRICT_CPA</code>.
       </div>
     </div>
 
@@ -488,6 +531,26 @@ code {
         Inspects pending stories, detects skill gaps, and augments agent profiles in <code>agents/profiles.json</code>.
         Uses <strong>FULL TOOLS</strong> invocation (no <code>--print</code>) so the agent can read and write files directly.
         Runs on main branch.
+      </div>
+    </div>
+
+    <div class="vflow-connector"></div>
+
+    <!-- STEP 0.6 -->
+    <div class="vflow-step assess-step">
+      <div class="vs-header">
+        <div class="vs-num">STEP 0.6</div>
+        <div class="vs-title">Hybrid Pre-Coordination</div>
+        <div class="vs-badges">
+          <span class="badge b-hybrid">HYBRID ONLY</span>
+          <span class="badge b-main">MAIN</span>
+        </div>
+      </div>
+      <div class="vs-scripts">
+        <span class="vs-script"><span class="vs-script-label">Output</span>logs/agent-messages.jsonl (plan_required / handoff / risk)</span>
+      </div>
+      <div class="vs-desc">
+        Seeds cross-lane coordination bus before parallel execution and flags stories that require plan mode.
       </div>
     </div>
 
@@ -557,6 +620,12 @@ code {
         Both lanes run simultaneously (HYBRID) or sequentially (BASH). Each story invocation is a separate
         <code>claude.sh</code> call that resolves the story's effort → model → turns before launching <code>claude --print</code>.
         In HYBRID mode, the coordination bus (<code>agent-messages.jsonl</code>) is active for cross-lane signalling.
+      </div>
+      <div class="vs-scripts">
+        <span class="vs-script"><span class="vs-script-label">Step 3.1</span>worktree-health-check.sh (auto-commit)</span>
+        <span class="vs-script"><span class="vs-script-label">Step 3.2</span>merge wt-primary + wt-independent back to main</span>
+        <span class="vs-script"><span class="vs-script-label">Step 3.5</span>post-parallel skill assessment</span>
+        <span class="vs-script"><span class="vs-script-label">Step 3.6</span>team-lead code review (iterative)</span>
       </div>
       <div class="vs-parallel">
         <div class="vs-lane-block pri">
@@ -742,6 +811,9 @@ code {
         (2) actual cost variance vs <code>estimatedCost</code> is within threshold.
         Decision written to <code>logs/phase-gates.jsonl</code>.
       </div>
+      <div class="vs-scripts">
+        <span class="vs-script"><span class="vs-script-label">Step 4.8</span>pre-gate worktree verification</span>
+      </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
         <span style="font-size:10px;color:#34d399;background:#052e1c;border:1px solid #059669;padding:3px 8px;border-radius:4px;">ok: variance &lt; 30%</span>
         <span style="font-size:10px;color:#f59e0b;background:#291a00;border:1px solid #92400e;padding:3px 8px;border-radius:4px;">warn: 30%–150%</span>
@@ -807,6 +879,47 @@ code {
     </div>
 
   </div><!-- /vflow -->
+
+  <!-- COMPLETE STAGE MATRIX -->
+  <div class="section-title">Complete Stage Matrix</div>
+  <div class="llm-map-card">
+    <div class="llm-map-intro">
+      Full execution order implemented by <code>orchestrations/scripts/run-agent-orchestration.sh</code>, including optional and hybrid-only branches.
+    </div>
+    <table class="llm-table">
+      <thead>
+        <tr>
+          <th>Stage / Step</th>
+          <th>Purpose</th>
+          <th>Mode</th>
+          <th>Primary Script / Artifact</th>
+          <th>Gate Behavior</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>0</code></td><td>Specification pre-pass (OpenSpec/Speckit)</td><td>Main</td><td><code>spec-mode-runner.js</code></td><td>Non-blocking if unavailable/disabled</td></tr>
+        <tr><td><code>0.1</code></td><td>CPA contextual estimation pre-pass</td><td>Main</td><td><code>contextualize-stories.sh</code></td><td>Pass / review / block (strict mode optional)</td></tr>
+        <tr><td><code>0.5</code></td><td>Pre-phase skill assessment</td><td>Main</td><td><code>claude.sh --assessment pre</code></td><td>Advisory (continues on non-critical failure)</td></tr>
+        <tr><td><code>0.6</code></td><td>Hybrid pre-coordination + message seeding</td><td>Hybrid</td><td><code>logs/agent-messages.jsonl</code></td><td>Hybrid-only, fallback to bash flow</td></tr>
+        <tr><td><code>1</code></td><td>Main-lane setup stories</td><td>Bash + Hybrid</td><td><code>claude.sh --story ...</code></td><td>Sequential execution</td></tr>
+        <tr><td><code>2</code></td><td>Create primary/independent worktrees</td><td>Hybrid</td><td><code>claude.sh --setup-worktrees</code></td><td>Skipped in bash mode</td></tr>
+        <tr><td><code>3</code></td><td>Parallel lane execution</td><td>Hybrid</td><td><code>claude.sh --worktree ...</code></td><td>Both lanes must complete</td></tr>
+        <tr><td><code>3.1</code></td><td>Worktree health check + auto-commit</td><td>Hybrid</td><td><code>worktree-health-check.sh</code></td><td>Warn/continue on issues</td></tr>
+        <tr><td><code>3.2</code></td><td>Merge worktrees back to main</td><td>Hybrid</td><td><code>git merge wt-primary/wt-independent</code></td><td>Blocking on merge failure</td></tr>
+        <tr><td><code>3.5</code></td><td>Post-parallel assessment (cost/role fit)</td><td>Main</td><td><code>claude.sh --assessment post-parallel</code></td><td>Advisory</td></tr>
+        <tr><td><code>3.6</code></td><td>Team-lead code review loop</td><td>Main</td><td><code>team-lead review workflow</code></td><td>Can escalate after max iterations</td></tr>
+        <tr><td><code>4</code></td><td>Review stories</td><td>Main</td><td><code>claude.sh --story REVIEW_ID</code></td><td>Sequential</td></tr>
+        <tr><td><code>4.2</code></td><td>QA Gate A: SAST + spec validation</td><td>Main</td><td><code>run_testing_gates() phase A</code></td><td>Blocks on blocker findings</td></tr>
+        <tr><td><code>4.3</code></td><td>QA Gate B: review-ranger + mutation</td><td>Main</td><td><code>run_testing_gates() phase B</code></td><td>Runs only if 4.2 passed</td></tr>
+        <tr><td><code>4.4</code></td><td>QA Gate C: fuzz + performance</td><td>Main</td><td><code>run_testing_gates() phase C</code></td><td>Runs only if 4.2+4.3 passed</td></tr>
+        <tr><td><code>4.5</code></td><td>Unit test gate</td><td>Main</td><td><code>tsc --noEmit</code> + <code>vitest run</code></td><td>Hard blocking gate</td></tr>
+        <tr><td><code>4.8</code></td><td>Pre-gate worktree verification</td><td>Main</td><td><code>worktree-health-check.sh</code></td><td>Warn/continue visibility pass</td></tr>
+        <tr><td><code>5</code></td><td>Phase gate (completion + cost variance)</td><td>Main</td><td><code>check-phase-gate.sh</code></td><td>Pass / retry / escalate</td></tr>
+        <tr><td><code>5.5</code></td><td>Interstitial E2E phase auto-detect</td><td>Main</td><td><code>&lt;phase&gt;_e2e</code> recursion</td><td>Optional; blocks if present and failing</td></tr>
+        <tr><td><code>6</code></td><td>Post-phase assessment + profile updates</td><td>Main</td><td><code>claude.sh --assessment post</code></td><td>Advisory with feedback loop to next phase</td></tr>
+      </tbody>
+    </table>
+  </div>
 
   <!-- AGENT LANES -->
   <div class="section-title">Agent Lanes</div>

@@ -362,6 +362,7 @@ tbody tr:hover td { background: var(--bg2); }
       <a href="agent-messages.html">Messages</a>
       <a href="phase-cost-monitor.html">Costs</a>
       <a href="quality-assurance.html">QA Gates</a>
+      <a href="agent-activity.html">Activity</a>
       <a href="cpa-details.html">Estimation</a>
       <a href="epam-cli-guide.html">CLI Guide</a>
     </div>
@@ -510,6 +511,7 @@ const SKILL_KEYS = Object.keys(SKILL_CATEGORIES);
 let apiProfiles = [];   // from profiles.json
 let apiStories  = [];   // from prd.json stories
 let auditLog    = [];   // from logs/profiles-audit.jsonl
+let apiPhaseOrder = [];
 let filterRole  = '';
 let filterPhase = '';
 
@@ -594,6 +596,119 @@ async function fetchJSON(url) {
   return resp.json();
 }
 
+async function fetchText(url) {
+  const resp = await fetch(url + '?t=' + Date.now());
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  return resp.text();
+}
+
+function parseLooseRoleMap(raw) {
+  if (!raw || typeof raw !== 'string') return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // Tolerant parser for role->prompt objects with unescaped inner quotes.
+    const out = {};
+    const text = raw.trim();
+    if (!text.startsWith('{')) return out;
+    let i = 1;
+    const n = text.length;
+    while (i < n) {
+      while (i < n && /[\s,]/.test(text[i])) i += 1;
+      if (i >= n || text[i] === '}') break;
+      if (text[i] !== '"') break;
+      i += 1;
+      let key = '';
+      while (i < n) {
+        const ch = text[i];
+        if (ch === '\\' && i + 1 < n) {
+          key += ch + text[i + 1];
+          i += 2;
+          continue;
+        }
+        if (ch === '"') {
+          i += 1;
+          break;
+        }
+        key += ch;
+        i += 1;
+      }
+      while (i < n && /\s/.test(text[i])) i += 1;
+      if (text[i] !== ':') break;
+      i += 1;
+      while (i < n && /\s/.test(text[i])) i += 1;
+      if (text[i] !== '"') break;
+      i += 1;
+      let val = '';
+      while (i < n) {
+        const ch = text[i];
+        if (ch === '\\' && i + 1 < n) {
+          val += ch + text[i + 1];
+          i += 2;
+          continue;
+        }
+        if (ch === '"') {
+          let j = i + 1;
+          while (j < n && /\s/.test(text[j])) j += 1;
+          if (text[j] === ',' || text[j] === '}') {
+            i += 1;
+            break;
+          }
+        }
+        val += ch;
+        i += 1;
+      }
+      out[key] = val;
+      while (i < n && /\s/.test(text[i])) i += 1;
+      if (text[i] === ',') i += 1;
+    }
+    return out;
+  }
+}
+
+function normalizeStories(prd) {
+  if (Array.isArray(prd?.stories) && prd.stories.length) return prd.stories;
+  if (Array.isArray(prd?.userStories) && prd.userStories.length) return prd.userStories;
+  return [];
+}
+
+function storyPhase(story) {
+  return story?.phase || story?.storyType || 'unassigned';
+}
+
+function normalizeProfiles(profilesRaw, stories) {
+  let arr = [];
+  if (Array.isArray(profilesRaw)) {
+    arr = profilesRaw;
+  } else if (profilesRaw && typeof profilesRaw === 'object' && Array.isArray(profilesRaw.agents)) {
+    arr = profilesRaw.agents;
+  } else if (profilesRaw && typeof profilesRaw === 'object') {
+    arr = Object.entries(profilesRaw).map(([roleId, profileText]) => ({
+      roleId,
+      profileText: typeof profileText === 'string' ? profileText : JSON.stringify(profileText ?? ''),
+      lane: 'main',
+      agentType: 'claude-code',
+    }));
+  }
+
+  const byRole = new Map(arr.map((p) => [p.roleId, p]));
+  for (const story of stories || []) {
+    const roleId = story?.agentRole;
+    if (!roleId) continue;
+    if (!byRole.has(roleId)) {
+      byRole.set(roleId, {
+        roleId,
+        profileText: '',
+        lane: story.agentGroup === 'independent' ? 'independent' : (story.agentGroup === 'primary' ? 'primary' : 'main'),
+        agentType: 'claude-code',
+      });
+    } else if (!byRole.get(roleId).lane) {
+      byRole.get(roleId).lane = story.agentGroup === 'independent' ? 'independent' : (story.agentGroup === 'primary' ? 'primary' : 'main');
+    }
+  }
+  return Array.from(byRole.values());
+}
+
 async function fetchJSONL(url) {
   try {
     const resp = await fetch(url + '?t=' + Date.now());
@@ -646,21 +761,21 @@ function renderUpcoming() {
     return;
   }
 
-  // Determine the first upcoming phase (lowest phase name alphabetically/by order)
-  const phaseOrder = {};
-  apiStories.forEach(s => { if (s.phase) phaseOrder[s.phase] = true; });
-  const phases = Object.keys(phaseOrder).sort();
+  // Determine the first upcoming phase by PRD order first, fallback to observed stories.
+  const phases = apiPhaseOrder.length
+    ? apiPhaseOrder
+    : [...new Set(apiStories.map(s => storyPhase(s)).filter(Boolean))];
 
   let upcomingPhase = null;
   for (const ph of phases) {
-    if (pendingStories.some(s => s.phase === ph)) { upcomingPhase = ph; break; }
+    if (pendingStories.some(s => storyPhase(s) === ph)) { upcomingPhase = ph; break; }
   }
   if (!upcomingPhase) {
     container.innerHTML = '<div class="empty-state">No upcoming phase detected.</div>';
     return;
   }
 
-  const phaseStories = pendingStories.filter(s => s.phase === upcomingPhase);
+  const phaseStories = pendingStories.filter(s => storyPhase(s) === upcomingPhase);
 
   let html = '<div class="upcoming-phase-name">'
     + '<span class="label">Next Phase:</span>&nbsp;'
@@ -873,13 +988,18 @@ function updateFilterDropdowns() {
 // ── Main refresh loop ──────────────────────────────────────────────────────
 async function refresh() {
   try {
-    const [profiles, prd] = await Promise.all([
-      fetchJSON('profiles.json'),
+    const [profilesRawText, prd] = await Promise.all([
+      fetchText('profiles.json'),
       fetchJSON('prd.json'),
     ]);
-    const stories = prd ? (prd.stories || []) : [];
-    apiProfiles = Array.isArray(profiles) ? profiles : (profiles.agents || (profiles ? Object.values(profiles) : []));
-    apiStories  = Array.isArray(stories)  ? stories  : [];
+    const stories = normalizeStories(prd);
+    const parsedProfiles = parseLooseRoleMap(profilesRawText);
+    apiProfiles = normalizeProfiles(parsedProfiles, stories);
+    apiStories  = stories;
+    apiPhaseOrder = Object.keys(prd?.implementationOrder || {});
+    if (!apiPhaseOrder.length) {
+      apiPhaseOrder = [...new Set(stories.map((s) => storyPhase(s)).filter(Boolean))];
+    }
     document.getElementById('offline-banner').style.display = 'none';
   } catch (err) {
     document.getElementById('offline-banner').style.display = '';

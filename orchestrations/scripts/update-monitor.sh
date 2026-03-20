@@ -17,6 +17,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MONITOR_FILE="${MONITOR_FILE:-$SCRIPT_DIR/../logs/agent-status.json}"
+ACTIVITY_FILE="${ACTIVITY_FILE:-$SCRIPT_DIR/../logs/agent-activity.jsonl}"
 LOCK_FILE="$MONITOR_FILE.lock"
 
 # Acquire lock
@@ -28,6 +29,64 @@ shift || true
 
 timestamp() {
   date -Iseconds
+}
+
+resolve_phase() {
+  if [ -f "$MONITOR_FILE" ]; then
+    jq -r '.phase // empty' "$MONITOR_FILE" 2>/dev/null || true
+  fi
+}
+
+normalize_activity_type() {
+  case "${1:-}" in
+    story_start|story_complete|story_fail|tool_run|tool_result|finding|gate_decision|cost_snapshot|message_sent|message_received|spec_update|phase_start|phase_complete|error|info)
+      echo "$1"
+      ;;
+    *)
+      echo "info"
+      ;;
+  esac
+}
+
+append_activity_event() {
+  local raw_type="${1:-info}"
+  local story_id="${2:-}"
+  local phase_id="${3:-}"
+  local role="${4:-}"
+  local lane="${5:-main}"
+  local message="${6:-}"
+  local effective_type
+  effective_type="$(normalize_activity_type "$raw_type")"
+  local ts
+  ts="$(timestamp)"
+  local event_id
+  event_id="evt-$(date +%s%N)-$RANDOM"
+
+  mkdir -p "$(dirname "$ACTIVITY_FILE")"
+  jq -cn \
+    --arg ts "$ts" \
+    --arg agent "${role:-orchestrator}" \
+    --arg type "$effective_type" \
+    --arg story "$story_id" \
+    --arg phase "$phase_id" \
+    --arg lane "$lane" \
+    --arg message "$message" \
+    --arg rawType "$raw_type" \
+    --arg eventId "$event_id" \
+    '{
+      event_id: $eventId,
+      timestamp: $ts,
+      agent: $agent,
+      story_id: (if $story == "" then null else $story end),
+      phase: (if $phase == "" then null else $phase end),
+      type: $type,
+      detail: {
+        lane: $lane,
+        message: $message,
+        source: "update-monitor.sh",
+        rawType: $rawType
+      }
+    }' >> "$ACTIVITY_FILE" || true
 }
 
 # Load current monitor data
@@ -53,6 +112,7 @@ case "$EVENT_TYPE" in
   "stories": {}
 }
 EOF
+    append_activity_event "phase_start" "" "$PHASE_ID" "orchestrator" "main" "Monitor initialized for phase $PHASE_ID"
     ;;
 
   story_start)
@@ -87,6 +147,8 @@ EOF
       }]
       ')
     echo "$MONITOR_DATA" > "$MONITOR_FILE"
+    PHASE_ID="$(resolve_phase)"
+    append_activity_event "story_start" "$STORY_ID" "$PHASE_ID" "$ROLE" "$LANE" "Starting $TITLE"
     ;;
 
   story_complete)
@@ -114,6 +176,9 @@ EOF
       }]
       ')
     echo "$MONITOR_DATA" > "$MONITOR_FILE"
+    PHASE_ID="$(resolve_phase)"
+    ROLE="$(echo "$MONITOR_DATA" | jq -r --arg story "$STORY_ID" '.stories[$story].role // "orchestrator"')"
+    append_activity_event "story_complete" "$STORY_ID" "$PHASE_ID" "$ROLE" "$LANE" "Completed $TITLE"
     ;;
 
   story_fail)
@@ -141,6 +206,9 @@ EOF
       }]
       ')
     echo "$MONITOR_DATA" > "$MONITOR_FILE"
+    PHASE_ID="$(resolve_phase)"
+    ROLE="$(echo "$MONITOR_DATA" | jq -r --arg story "$STORY_ID" '.stories[$story].role // "orchestrator"')"
+    append_activity_event "story_fail" "$STORY_ID" "$PHASE_ID" "$ROLE" "$LANE" "$ERROR"
     ;;
 
   event)
@@ -168,6 +236,8 @@ EOF
       }]
       ')
     echo "$MONITOR_DATA" > "$MONITOR_FILE"
+    PHASE_ID="$(resolve_phase)"
+    append_activity_event "$TYPE" "$STORY" "$PHASE_ID" "$ROLE" "$LANE" "$MESSAGE"
     ;;
 
   finalize)
@@ -188,6 +258,8 @@ EOF
       }]
       ')
     echo "$MONITOR_DATA" > "$MONITOR_FILE"
+    PHASE_ID="$(resolve_phase)"
+    append_activity_event "phase_complete" "" "$PHASE_ID" "orchestrator" "main" "Orchestration finalized"
     ;;
 
   *)

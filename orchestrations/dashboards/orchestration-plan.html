@@ -295,6 +295,7 @@
     <a href="agent-messages.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Messages</a>
     <a href="phase-cost-monitor.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Costs</a>
     <a href="quality-assurance.html" style="color:rgba(255,255,255,0.7);text-decoration:none">QA Gates</a>
+    <a href="agent-activity.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Activity</a>
     <a href="cpa-details.html" style="color:rgba(255,255,255,0.7);text-decoration:none">Estimation</a>
     <a href="epam-cli-guide.html" style="color:rgba(255,255,255,0.7);text-decoration:none">CLI Guide</a>
   </nav>
@@ -311,7 +312,7 @@
     </div>
 
     <!-- Summary -->
-    <div class="summary-cards">
+    <div class="summary-cards" id="summary-cards">
         <div class="summary-card">
             <div class="sc-value sc-teal">24</div>
             <div class="sc-label">Total Stories</div>
@@ -353,7 +354,7 @@
 
     <!-- Phase Structure -->
     <h2>Phase Structure</h2>
-    <div class="phase-cards">
+    <div class="phase-cards" id="phase-cards">
         <div class="phase-card p-bash">
             <div class="phase-num">Phase 1</div>
             <div class="phase-name">health_check</div>
@@ -438,7 +439,7 @@
         <span style="font-size:0.85rem;color:#0f172a">Waiting for latest specification run…</span>
     </div>
 
-    <div class="alert alert-info">
+    <div class="alert alert-info" id="run-commands">
         <strong>Run each phase:</strong><br>
         <span style="color:var(--green);font-size:0.8rem;font-weight:700">Bash phases (1–4, 7) — run sequentially:</span><br>
         <code style="font-size:0.82rem">PRD_FILE=$(pwd)/orchestrations/prd.json bash orchestrations/scripts/run-agent-orchestration.sh --phase health_check</code><br>
@@ -967,46 +968,7 @@
                 <th>Tokens</th>
             </tr>
         </thead>
-        <tbody id="story-tbody">
-            <!-- Health Check -->
-            <tr class="phase-row"><td colspan="10">Phase 1 — health_check (bash)</td></tr>
-            <tr><td>EPAM-HC-001</td><td>Health Check: Claude CLI</td><td>health_check</td><td>main</td><td><code>test-engineer</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1h</td><td class="cost-cell">$3</td><td class="tok-cell">400K</td></tr>
-            <tr><td>EPAM-HC-002</td><td>Health Check: OpenCode CLI</td><td>health_check</td><td>main</td><td><code>test-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>1h</td><td class="cost-cell">$2</td><td class="tok-cell">400K</td></tr>
-            <tr><td>EPAM-HC-003</td><td>Health Check: Codex CLI</td><td>health_check</td><td>main</td><td><code>test-engineer</code></td><td><span class="badge badge-codex">o3</span></td><td><span class="badge badge-codex">Codex</span></td><td>1h</td><td class="cost-cell">$2</td><td class="tok-cell">400K</td></tr>
-            <tr><td>EPAM-HC-004</td><td>Health Check: Codemie-Claude CLI</td><td>health_check</td><td>main</td><td><code>test-engineer</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>1h</td><td class="cost-cell">$3</td><td class="tok-cell">400K</td></tr>
-            <!-- FinOps -->
-            <tr class="phase-row"><td colspan="10">Phase 2 — finops (bash)</td></tr>
-            <tr><td>EPAM-001</td><td>Budget Guardrails</td><td>finops</td><td>main</td><td><code>billing-engineer</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>6h</td><td class="cost-cell">$18</td><td class="tok-cell">400K</td></tr>
-            <tr><td>EPAM-002</td><td>Burn-up Reports</td><td>finops</td><td>main</td><td><code>cli-ux-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>5h</td><td class="cost-cell">$10</td><td class="tok-cell">400K</td></tr>
-            <tr><td>EPAM-003</td><td>Infra Test — FinOps Phase</td><td>finops</td><td>main</td><td><code>test-engineer</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>2h</td><td class="cost-cell">$6</td><td class="tok-cell">400K</td></tr>
-            <!-- Agent Intelligence -->
-            <tr class="phase-row"><td colspan="10">Phase 3 — agent_intelligence (bash)</td></tr>
-            <tr><td>EPAM-004</td><td>Agent Gold Profiles</td><td>agent_intelligence</td><td>main</td><td><code>agent-systems-engineer</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>8h</td><td class="cost-cell">$24</td><td class="tok-cell">400K</td></tr>
-            <tr><td>EPAM-005</td><td>/plan Mode</td><td>agent_intelligence</td><td>main</td><td><code>cli-ux-engineer</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>7h</td><td class="cost-cell">$21</td><td class="tok-cell">400K</td></tr>
-            <tr><td>EPAM-006</td><td>Decision Records / Architectural DNA</td><td>agent_intelligence</td><td>main</td><td><code>typescript-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>6h</td><td class="cost-cell">$12</td><td class="tok-cell">400K</td></tr>
-            <tr><td>EPAM-007</td><td>MCP Server Mode</td><td>agent_intelligence</td><td>main</td><td><code>agent-systems-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>10h</td><td class="cost-cell">$100</td><td class="tok-cell">400K</td></tr>
-            <tr><td>EPAM-008</td><td>Review — Agent Intelligence Phase</td><td>agent_intelligence</td><td>main</td><td><code>review-agent</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>3h</td><td class="cost-cell">$9</td><td class="tok-cell">400K</td></tr>
-            <!-- Team Features -->
-            <tr class="phase-row"><td colspan="10">Phase 4 — team_features (bash)</td></tr>
-            <tr><td>EPAM-009</td><td>/replay Command</td><td>team_features</td><td>main</td><td><code>cli-ux-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>5h</td><td class="cost-cell">$10</td><td class="tok-cell">400K</td></tr>
-            <tr><td>EPAM-010</td><td>Shared Team Memory</td><td>team_features</td><td>main</td><td><code>typescript-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>8h</td><td class="cost-cell">$16</td><td class="tok-cell">400K</td></tr>
-            <tr><td>EPAM-011</td><td>Review — Team Features Phase</td><td>team_features</td><td>main</td><td><code>review-agent</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>2h</td><td class="cost-cell">$6</td><td class="tok-cell">400K</td></tr>
-            <!-- Multi-Agent -->
-            <tr class="phase-row"><td colspan="10">Phase 5 — multi_agent (hybrid) · WT1 + WT2 parallel</td></tr>
-            <tr><td>EPAM-012</td><td>Ralph Wiggum Loop</td><td>multi_agent</td><td>WT1</td><td><code>agent-systems-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>10h</td><td class="cost-cell">$100</td><td class="tok-cell">400K</td></tr>
-            <tr><td>EPAM-013</td><td>Multi-Agent Squad Execution</td><td>multi_agent</td><td>WT2</td><td><code>agent-systems-engineer</code></td><td><span class="badge badge-opus">Opus 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>12h</td><td class="cost-cell">$120</td><td class="tok-cell">400K</td></tr>
-            <tr><td>EPAM-014</td><td>Review — Multi-Agent Phase</td><td>multi_agent</td><td>main</td><td><code>review-agent</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>3h</td><td class="cost-cell">$9</td><td class="tok-cell">400K</td></tr>
-            <!-- Enterprise -->
-            <tr class="phase-row"><td colspan="10">Phase 6 — enterprise (hybrid) · WT1 + WT2 parallel</td></tr>
-            <tr><td>EPAM-015</td><td>Remote Constraint Injection</td><td>enterprise</td><td>WT1</td><td><code>typescript-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>6h</td><td class="cost-cell">$12</td><td class="tok-cell">400K</td></tr>
-            <tr><td>EPAM-016</td><td>Signature Auditor Agents</td><td>enterprise</td><td>WT2</td><td><code>agent-systems-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>10h</td><td class="cost-cell">$20</td><td class="tok-cell">400K</td></tr>
-            <tr><td>EPAM-017</td><td>Expertise Marketplace</td><td>enterprise</td><td>WT1</td><td><code>typescript-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>5h</td><td class="cost-cell">$10</td><td class="tok-cell">400K</td></tr>
-            <tr><td>EPAM-018</td><td>Review — Enterprise Phase</td><td>enterprise</td><td>main</td><td><code>review-agent</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>3h</td><td class="cost-cell">$9</td><td class="tok-cell">400K</td></tr>
-            <!-- RAG POC -->
-            <tr class="phase-row"><td colspan="10">Phase 7 — rag_poc (bash)</td></tr>
-            <tr><td>EPAM-019</td><td>RAG Asset Discovery POC</td><td>rag_poc</td><td>main</td><td><code>typescript-engineer</code></td><td><span class="badge badge-opencode">GPT-4o</span></td><td><span class="badge badge-opencode">OpenCode</span></td><td>6h</td><td class="cost-cell">$12</td><td class="tok-cell">400K</td></tr>
-            <tr><td>EPAM-020</td><td>Review — RAG POC Phase</td><td>rag_poc</td><td>main</td><td><code>review-agent</code></td><td><span class="badge badge-sonnet">Sonnet 4.6</span></td><td><span class="badge badge-claude">Claude</span></td><td>2h</td><td class="cost-cell">$6</td><td class="tok-cell">400K</td></tr>
-        </tbody>
+        <tbody id="story-tbody"></tbody>
     </table>
     </div>
 
@@ -1184,6 +1146,298 @@
     </div>
 
 </div>
+<script>
+(function(){
+  function esc(v) {
+    return String(v ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function fmtHours(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return '—';
+    return `${n % 1 === 0 ? n.toFixed(0) : n.toFixed(1)}h`;
+  }
+
+  function fmtCost(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return '—';
+    return `$${n.toFixed(2)}`;
+  }
+
+  function fmtTokens(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return '—';
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${Math.round(n / 1000)}K`;
+    return `${Math.round(n)}`;
+  }
+
+  function laneLabel(agentGroup) {
+    if (agentGroup === 'primary') return 'WT1';
+    if (agentGroup === 'independent') return 'WT2';
+    return 'main';
+  }
+
+  async function loadJson(url) {
+    const res = await fetch(`${url}?_=${Date.now()}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.json();
+  }
+
+  async function loadText(url) {
+    const res = await fetch(`${url}?_=${Date.now()}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.text();
+  }
+
+  function parseLooseRoleMap(raw) {
+    if (!raw || typeof raw !== 'string') return {};
+    try {
+      return JSON.parse(raw);
+    } catch {
+      // Tolerant parser for role->prompt objects with unescaped inner quotes.
+      const out = {};
+      const text = raw.trim();
+      if (!text.startsWith('{')) return out;
+      let i = 1;
+      const n = text.length;
+      while (i < n) {
+        while (i < n && /[\s,]/.test(text[i])) i += 1;
+        if (i >= n || text[i] === '}') break;
+        if (text[i] !== '"') break;
+        i += 1;
+        let key = '';
+        while (i < n) {
+          const ch = text[i];
+          if (ch === '\\' && i + 1 < n) {
+            key += ch + text[i + 1];
+            i += 2;
+            continue;
+          }
+          if (ch === '"') {
+            i += 1;
+            break;
+          }
+          key += ch;
+          i += 1;
+        }
+        while (i < n && /\s/.test(text[i])) i += 1;
+        if (text[i] !== ':') break;
+        i += 1;
+        while (i < n && /\s/.test(text[i])) i += 1;
+        if (text[i] !== '"') break;
+        i += 1;
+        let val = '';
+        while (i < n) {
+          const ch = text[i];
+          if (ch === '\\' && i + 1 < n) {
+            val += ch + text[i + 1];
+            i += 2;
+            continue;
+          }
+          if (ch === '"') {
+            let j = i + 1;
+            while (j < n && /\s/.test(text[j])) j += 1;
+            if (text[j] === ',' || text[j] === '}') {
+              i += 1;
+              break;
+            }
+          }
+          val += ch;
+          i += 1;
+        }
+        out[key] = val;
+        while (i < n && /\s/.test(text[i])) i += 1;
+        if (text[i] === ',') i += 1;
+      }
+      return out;
+    }
+  }
+
+  function getStories(prd) {
+    if (Array.isArray(prd?.stories) && prd.stories.length) return prd.stories;
+    if (Array.isArray(prd?.userStories) && prd.userStories.length) return prd.userStories;
+    return [];
+  }
+
+  function getStoryPhase(story) {
+    return story?.phase || story?.storyType || 'unassigned';
+  }
+
+  function normalizeProfiles(profiles) {
+    if (Array.isArray(profiles)) return profiles;
+    if (!profiles || typeof profiles !== 'object') return [];
+    if (Array.isArray(profiles.agents)) return profiles.agents;
+    return Object.entries(profiles).map(([roleId, profileText]) => ({
+      roleId,
+      profileText: typeof profileText === 'string' ? profileText : JSON.stringify(profileText ?? ''),
+      lane: 'main',
+      agentType: 'claude-code',
+    }));
+  }
+
+  function buildImplementationOrder(prd, stories) {
+    if (prd?.implementationOrder && typeof prd.implementationOrder === 'object' && Object.keys(prd.implementationOrder).length > 0) {
+      return prd.implementationOrder;
+    }
+    const grouped = {};
+    for (const story of stories) {
+      const phase = getStoryPhase(story);
+      if (!grouped[phase]) grouped[phase] = [];
+      grouped[phase].push(story.id);
+    }
+    return grouped;
+  }
+
+  function buildPhasesConfig(prd, implementationOrder, stories) {
+    if (prd?.phasesConfig && typeof prd.phasesConfig === 'object') return prd.phasesConfig;
+    const byId = Object.fromEntries(stories.map((s) => [s.id, s]));
+    const cfg = {};
+    for (const phase of Object.keys(implementationOrder)) {
+      const ids = implementationOrder[phase] || [];
+      const phaseStories = ids.map((id) => byId[id]).filter(Boolean);
+      const hasParallel = phaseStories.some((s) => ['primary', 'independent'].includes(s?.agentGroup));
+      cfg[phase] = {
+        orchestrationMode: hasParallel ? 'hybrid' : 'bash',
+        defaultModel: '—',
+      };
+    }
+    return cfg;
+  }
+
+  function renderSummary(prd, profiles, implementationOrder, phasesConfig, stories) {
+    const cards = document.getElementById('summary-cards');
+    if (!cards) return;
+    const phases = Object.keys(implementationOrder || {});
+    const totalHours = stories.reduce((sum, s) => sum + (Number(s.estimatedHours) || 0), 0);
+    const totalCost = stories.reduce((sum, s) => sum + (Number(s.estimatedCost) || 0), 0);
+    const totalTokens = stories.reduce((sum, s) => sum + (Number(s.estimatedTokens) || 0), 0);
+    const allRoles = Array.from(new Set((profiles || []).map((p) => p?.roleId).filter(Boolean)));
+    const projectRoles = allRoles.filter(r => !/^spec-|^review-|^test-|^sast-|^mutant-|^fuzz-|^perf-|^hygiene-|^design-|^pattern-|^team-lead-agent$|^openspec-agent$|^speckit-agent$|^spec-coordinator-agent$/.test(r));
+    const hasHybrid = stories.some((s) => (phasesConfig?.[getStoryPhase(s)]?.orchestrationMode || '').toLowerCase() === 'hybrid');
+
+    cards.innerHTML = `
+      <div class="summary-card"><div class="sc-value sc-teal">${stories.length}</div><div class="sc-label">Total Stories</div></div>
+      <div class="summary-card"><div class="sc-value sc-violet">${phases.length}</div><div class="sc-label">Phases</div></div>
+      <div class="summary-card"><div class="sc-value sc-green">${fmtHours(totalHours)}</div><div class="sc-label">Est. Human Hours</div></div>
+      <div class="summary-card"><div class="sc-value sc-amber">${fmtCost(totalCost)}</div><div class="sc-label">Est. Total Cost</div></div>
+      <div class="summary-card"><div class="sc-value sc-teal">${fmtTokens(totalTokens)}</div><div class="sc-label">Est. Tokens</div></div>
+      <div class="summary-card"><div class="sc-value sc-violet">${allRoles.length}</div><div class="sc-label">Agent Roles</div></div>
+      <div class="summary-card"><div class="sc-value sc-green">${projectRoles.length}</div><div class="sc-label">Project Roles</div></div>
+      <div class="summary-card"><div class="sc-value sc-orange">${hasHybrid ? 'Mixed' : 'Bash'}</div><div class="sc-label">Orchestration Mix</div></div>
+    `;
+
+    const subtitle = document.querySelector('.subtitle');
+    if (subtitle) {
+      const title = prd?.projectMetadata?.project?.name || prd?.project?.name || prd?.title || 'Project';
+      subtitle.innerHTML = `${phases.length} phases · <strong>${stories.length} stories</strong> · ${esc(title)}`;
+    }
+  }
+
+  function renderPhaseCards(stories, implementationOrder, phasesConfig) {
+    const wrap = document.getElementById('phase-cards');
+    if (!wrap) return;
+    const order = Object.keys(implementationOrder || {});
+    const storyById = Object.fromEntries(stories.map(s => [s.id, s]));
+    wrap.innerHTML = order.map((phaseId, idx) => {
+      const ids = implementationOrder?.[phaseId] || [];
+      const phaseStories = ids.map(id => storyById[id]).filter(Boolean);
+      const mode = (phasesConfig?.[phaseId]?.orchestrationMode || 'bash').toLowerCase();
+      const totalHours = phaseStories.reduce((sum, s) => sum + (Number(s.estimatedHours) || 0), 0);
+      const totalCost = phaseStories.reduce((sum, s) => sum + (Number(s.estimatedCost) || 0), 0);
+      const lanes = [...new Set(phaseStories.map(s => laneLabel(s.agentGroup)))].join(' + ') || 'main';
+      return `
+        <div class="phase-card ${mode === 'hybrid' ? 'p-hybrid' : 'p-bash'}">
+          <div class="phase-num">Phase ${idx + 1}</div>
+          <div class="phase-name">${esc(phaseId)}</div>
+          <div class="phase-meta">
+            Mode: <span>${esc(mode)}</span><br>
+            Stories: <span>${phaseStories.length}</span><br>
+            Lanes: <span>${esc(lanes)}</span><br>
+            Est. hours: <span>${fmtHours(totalHours)}</span><br>
+            Est. cost: <span>${fmtCost(totalCost)}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderRunCommands(implementationOrder, phasesConfig) {
+    const el = document.getElementById('run-commands');
+    if (!el) return;
+    const phases = Object.keys(implementationOrder || {});
+    const commands = phases.map((phase) => {
+      const mode = (phasesConfig?.[phase]?.orchestrationMode || 'bash').toLowerCase();
+      const prefix = mode === 'hybrid' ? 'ORCH_MODE=hybrid ' : '';
+      return `<code style="font-size:0.82rem">${prefix}PRD_FILE=$(pwd)/orchestrations/prd.json bash orchestrations/scripts/run-agent-orchestration.sh --phase ${esc(phase)}</code>`;
+    });
+    el.innerHTML = `
+      <strong>Run each phase:</strong><br>
+      ${commands.join('<br>')}
+    `;
+  }
+
+  function renderStoryTable(stories, implementationOrder, phasesConfig) {
+    const tbody = document.getElementById('story-tbody');
+    if (!tbody) return;
+    const byId = Object.fromEntries(stories.map(s => [s.id, s]));
+    const phases = Object.keys(implementationOrder || {});
+    let html = '';
+    for (const [idx, phase] of phases.entries()) {
+      html += `<tr class="phase-row"><td colspan="10">Phase ${idx + 1} — ${esc(phase)}</td></tr>`;
+      const ids = implementationOrder?.[phase] || [];
+      for (const id of ids) {
+        const s = byId[id];
+        if (!s) continue;
+        html += `
+          <tr>
+            <td>${esc(s.id)}</td>
+            <td>${esc(s.title)}</td>
+            <td>${esc(phase)}</td>
+            <td>${esc(laneLabel(s.agentGroup))}</td>
+            <td><code>${esc(s.agentRole || '—')}</code></td>
+            <td>${esc(s.defaultModel || phasesConfig?.[phase]?.defaultModel || '—')}</td>
+            <td>${esc(s.aiProvider || 'epam')}</td>
+            <td>${fmtHours(s.estimatedHours)}</td>
+            <td class="cost-cell">${fmtCost(s.estimatedCost)}</td>
+            <td class="tok-cell">${fmtTokens(s.estimatedTokens)}</td>
+          </tr>
+        `;
+      }
+    }
+    tbody.innerHTML = html;
+  }
+
+  async function hydrateProjectPlan() {
+    try {
+      const prd = await loadJson('prd.json');
+      let profiles = {};
+      try {
+        const profilesText = await loadText('profiles.json');
+        profiles = parseLooseRoleMap(profilesText);
+      } catch {
+        profiles = {};
+      }
+      const stories = getStories(prd);
+      const implementationOrder = buildImplementationOrder(prd, stories);
+      const phasesConfig = buildPhasesConfig(prd, implementationOrder, stories);
+      const normalizedProfiles = normalizeProfiles(profiles);
+      renderSummary(prd, normalizedProfiles, implementationOrder, phasesConfig, stories);
+      renderPhaseCards(stories, implementationOrder, phasesConfig);
+      renderRunCommands(implementationOrder, phasesConfig);
+      renderStoryTable(stories, implementationOrder, phasesConfig);
+    } catch {
+      // Keep static fallback sections if data files are unavailable.
+    }
+  }
+
+  hydrateProjectPlan();
+})();
+</script>
 <script>
 (function(){
   const el = document.getElementById('spec-spotlight');

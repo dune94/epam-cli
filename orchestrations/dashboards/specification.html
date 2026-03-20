@@ -239,6 +239,7 @@ body {
         <a href="agent-messages.html">Messages</a>
         <a href="phase-cost-monitor.html">Costs</a>
         <a href="quality-assurance.html">QA Gates</a>
+        <a href="agent-activity.html">Activity</a>
         <a href="cpa-details.html">Estimation</a>
         <a href="epam-cli-guide.html">CLI Guide</a>
       </div>
@@ -269,7 +270,10 @@ body {
 </div>
 
 <script>
-const BASELINE_URL = 'prd-baseline.json';
+const BASELINE_CANDIDATES = [
+  'prd-baseline.json',
+  'logs/spec-baseline.json'
+];
 const CURRENT_URL = 'prd.json';
 const SPEC_LOG_URL = 'logs/spec-phase.jsonl';
 const READINESS_URL = 'logs/readiness-scores.jsonl';
@@ -287,6 +291,18 @@ async function loadJSON(url) {
   const r = await fetch(url + '?t=' + Date.now());
   if (!r.ok) throw new Error(`Failed to load ${url}: ${r.status}`);
   return r.json();
+}
+
+async function loadBaseline(current) {
+  for (const url of BASELINE_CANDIDATES) {
+    try {
+      return await loadJSON(url);
+    } catch (_) {
+      // Try next baseline source.
+    }
+  }
+  // Final fallback: render diff against current to avoid hard page failure.
+  return current;
 }
 
 async function loadJSONL(url) {
@@ -725,12 +741,13 @@ function render(diff) {
 async function init() {
   const t0 = Date.now();
   try {
-    const [baseline, current, log, rScores, gReport, dReport] = await Promise.all([
-      loadJSON(BASELINE_URL), loadJSON(CURRENT_URL), loadJSONL(SPEC_LOG_URL),
+    const [current, log, rScores, gReport, dReport] = await Promise.all([
+      loadJSON(CURRENT_URL), loadJSONL(SPEC_LOG_URL),
       loadJSONL(READINESS_URL).catch(() => []),
       loadJSON(GROOMING_URL).catch(() => null),
       loadJSON(DEDUP_URL).catch(() => null)
     ]);
+    const baseline = await loadBaseline(current);
     specLog = log;
     readinessScores = {};
     rScores.forEach(s => { if (s && s.storyId) readinessScores[s.storyId] = s; });
@@ -742,6 +759,9 @@ async function init() {
     document.getElementById('api-status').className = 'api-status api-ok';
     document.getElementById('api-status').textContent = 'LOADED';
     document.getElementById('load-time').textContent = `Loaded in ${Date.now() - t0}ms`;
+    if (baseline === current) {
+      document.getElementById('load-time').textContent += ' (baseline fallback)';
+    }
   } catch (e) {
     document.getElementById('content').innerHTML = `
       <div style="text-align:center;padding:60px;color:var(--red)">
@@ -759,12 +779,13 @@ let lastDataHash = '';
 
 setInterval(async () => {
   try {
-    const [baseline, current, log, rScores, gReport, dReport] = await Promise.all([
-      loadJSON(BASELINE_URL), loadJSON(CURRENT_URL), loadJSONL(SPEC_LOG_URL),
+    const [current, log, rScores, gReport, dReport] = await Promise.all([
+      loadJSON(CURRENT_URL), loadJSONL(SPEC_LOG_URL),
       loadJSONL(READINESS_URL).catch(() => []),
       loadJSON(GROOMING_URL).catch(() => null),
       loadJSON(DEDUP_URL).catch(() => null)
     ]);
+    const baseline = await loadBaseline(current);
     const hash = JSON.stringify(current).length + ':' + current.stories?.length + ':' + log.length + ':' + rScores.length;
     if (hash === lastDataHash) return; // Data unchanged — preserve UI state
     lastDataHash = hash;

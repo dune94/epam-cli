@@ -669,9 +669,9 @@ async function fetchPhasesFromPrd() {
   return prd ? derivePhasesFromPrd(prd) : null;
 }
 
-async function fetchCostEvents() {
+async function fetchJsonl(path) {
   try {
-    const r = await fetch(`logs/phase-cost.jsonl?t=${Date.now()}`);
+    const r = await fetch(`${path}?t=${Date.now()}`);
     if (!r.ok) return [];
     const text = await r.text();
     if (!text.trim()) return [];
@@ -681,6 +681,12 @@ async function fetchCostEvents() {
   } catch {
     return [];
   }
+}
+
+async function fetchActivityEvents() {
+  const activity = await fetchJsonl('logs/agent-activity.jsonl');
+  if (activity.length > 0) return activity;
+  return fetchJsonl('logs/phase-cost.jsonl');
 }
 
 async function fetchAgentStatus() {
@@ -1039,7 +1045,7 @@ async function refresh() {
   const [phases, stories, events, liveStatus] = await Promise.all([
     fetchPhasesFromPrd(),
     fetchStoriesFromPrd(),
-    fetchCostEvents(),
+    fetchActivityEvents(),
     fetchAgentStatus()
   ]);
 

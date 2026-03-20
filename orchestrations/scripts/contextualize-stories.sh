@@ -135,10 +135,38 @@ if [ ! -f "$LIB_DIR/cpa-inference.js" ]; then
 fi
 
 if [ ! -f "$SYSTEM_PROMPT_FILE" ]; then
-  error "CPA system prompt not found: $SYSTEM_PROMPT_FILE"; exit 1
-fi
+  warning "CPA system prompt not found: $SYSTEM_PROMPT_FILE"
+  warning "Using built-in fallback prompt (non-blocking)."
+  SYSTEM_PROMPT="$(cat <<'EOF'
+You are the Contextual Purveyor Agent (CPA).
+Goal: refine formula-based implementation estimates for a software story using provided context.
 
-SYSTEM_PROMPT="$(cat "$SYSTEM_PROMPT_FILE")"
+Rules:
+- Return strict JSON only.
+- Be conservative when confidence is low.
+- Surface concrete risk flags and missing knowledge areas.
+- Prefer practical effort realism over optimism.
+
+Output schema:
+{
+  "confidence": 0.0,
+  "complexityAdjustment": 1.0,
+  "adjustedEstimate": {
+    "aiMinutes": 0,
+    "cost": 0,
+    "tokens": 0,
+    "turns": 1
+  },
+  "riskFlags": [],
+  "missingKbCoverage": [],
+  "citedSources": [],
+  "reasoning": "short rationale"
+}
+EOF
+)"
+else
+  SYSTEM_PROMPT="$(cat "$SYSTEM_PROMPT_FILE")"
+fi
 
 # ── Reconcile mode ───────────────────────────────────────────────────────────
 if [ "$RECONCILE_MODE" = true ]; then
@@ -385,14 +413,19 @@ while IFS= read -r sid; do
   info "Processing $sid..."
 
   # ── Extract story metadata ──────────────────────────────────────────────────
-  story_json=$(jq --arg id "$sid" '.stories[] | select(.id==$id)' "$PRD_FILE")
+  story_json=$(jq --arg id "$sid" 'first(.stories[] | select(.id==$id))' "$PRD_FILE")
+  if [ -z "${story_json:-}" ] || [ "$story_json" = "null" ]; then
+    warning "  $sid: story not found in prd.json — skipping"
+    continue
+  fi
 
   s_title=$(echo "$story_json" | jq -r '.title')
   s_human_hours=$(echo "$story_json" | jq -r '.humanHours // .estimatedHours // 0')
   s_priority=$(echo "$story_json" | jq -r '.priority // "medium"')
   s_type=$(echo "$story_json" | jq -r '.storyType // "implementation"')
   s_skills=$(echo "$story_json" | jq -r '.technicalNotes.requiredSkills | join(" ")' 2>/dev/null || echo "")
-  s_deps=$(echo "$story_json" | jq -r '.dependencies | length' 2>/dev/null || echo "0")
+  deps_json=$(echo "$story_json" | jq -c '.dependencies // []' 2>/dev/null || echo "[]")
+  s_deps=$(echo "$deps_json" | jq -r 'if type=="array" then length else 0 end' 2>/dev/null || echo "0")
   s_description=$(echo "$story_json" | jq -r '.description // ""')
 
   # Existing formula estimates
@@ -413,11 +446,16 @@ while IFS= read -r sid; do
 
   # Count unresolved dependencies
   dep_unresolved=0
-  if [ "$s_deps" -gt 0 ]; then
-    dep_unresolved=$(jq --arg id "$sid" '
-      (.stories[] | select(.id==$id) | .dependencies) as $deps |
-      [.stories[] | select(.id as $did | $deps | index($did)) |
-       select(.completed != true)] | length
+  if [[ "$s_deps" =~ ^[0-9]+$ ]] && [ "$s_deps" -gt 0 ]; then
+    dep_unresolved=$(jq --argjson deps "$deps_json" '
+      if ($deps | type) != "array" then
+        0
+      else
+        [.stories[]
+          | select(.id as $did | $deps | index($did))
+          | select(.completed != true)
+        ] | length
+      end
     ' "$PRD_FILE" 2>/dev/null || echo "0")
   fi
 
@@ -703,7 +741,11 @@ if [ "$APPLY_MODE" = true ] && [ "$DRY_RUN" != true ]; then
 
   while IFS= read -r sid; do
     [ -z "$sid" ] && continue
-    story_result=$(echo "$JSON_RESULTS" | jq --arg id "$sid" '.[] | select(.storyId==$id)')
+    story_result=$(echo "$JSON_RESULTS" | jq --arg id "$sid" 'first(.[] | select(.storyId==$id))')
+    if [ -z "${story_result:-}" ] || [ "$story_result" = "null" ]; then
+      warning "  $sid: no CPA result found during apply — skipping"
+      continue
+    fi
 
     b_min=$(echo "$story_result"  | jq '.blendedEstimate.aiMinutes')
     b_cost=$(echo "$story_result" | jq '.blendedEstimate.cost')
@@ -736,7 +778,7 @@ if [ "$APPLY_MODE" = true ] && [ "$DRY_RUN" != true ]; then
          }' \
        "$PRD_FILE" > "${PRD_FILE}.tmp" && mv "${PRD_FILE}.tmp" "$PRD_FILE"
 
-  done <<< "$story_ids"
+  done < <(printf '%s\n' "$story_ids" | awk 'NF && !seen[$0]++')
 
   success "Applied CPA blended estimates to $story_count stories"
   echo "" >&2

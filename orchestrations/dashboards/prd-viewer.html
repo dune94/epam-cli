@@ -305,6 +305,30 @@ body {
 .act-lbl  { color: var(--text3); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
 .act-val  { color: var(--teal2); font-weight: 700; }
 
+/* ── Data quality banner ── */
+.dq-banner {
+  background: var(--red-dim); border: 1px solid var(--red); border-left: 4px solid var(--red);
+  border-radius: 6px; padding: 10px 16px; margin-bottom: 14px;
+  display: flex; align-items: flex-start; gap: 10px; font-size: 12px; color: var(--text);
+}
+.dq-banner-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+.dq-banner-title { font-weight: 700; margin-bottom: 2px; color: var(--red); }
+.dq-banner-body { color: var(--text2); line-height: 1.6; }
+.dq-dup-list { margin-top: 4px; font-family: 'Courier New', monospace; font-size: 11px; color: var(--red); }
+.story-id.dup-id {
+  background: rgba(217,48,37,0.12); color: #d93025; border-color: rgba(217,48,37,0.35);
+  animation: dup-pulse 2s ease-in-out infinite;
+}
+@keyframes dup-pulse { 0%,100%{box-shadow:none} 50%{box-shadow:0 0 6px rgba(217,48,37,0.3)} }
+.depth-chip {
+  display:inline-block; font-size:9px; font-weight:800; padding:1px 5px; border-radius:3px;
+  letter-spacing:0.3px; margin-left:4px;
+}
+.depth-0 { background:rgba(26,143,63,0.10); color:#1a8f3f; border:1px solid rgba(26,143,63,0.25); }
+.depth-1 { background:rgba(0,71,255,0.08); color:#0047ff; border:1px solid rgba(0,71,255,0.2); }
+.depth-2 { background:rgba(132,83,210,0.10); color:#8453d2; border:1px solid rgba(132,83,210,0.25); }
+.depth-deep { background:rgba(217,48,37,0.08); color:#d93025; border:1px solid rgba(217,48,37,0.25); }
+
 /* ── Empty / Loading ── */
 .empty-state { text-align: center; padding: 72px 32px; color: var(--text3); }
 .empty-icon  { font-size: 42px; margin-bottom: 12px; }
@@ -421,6 +445,7 @@ function modelInfo(story) {
 let prd = null, phaseOrder = [], storyMap = {}, storyPhaseMap = {};
 let filterMode = 'all', searchQuery = '';
 let expandedStories = new Set(), collapsedPhases = new Set();
+let duplicateIds = {};  // id → count
 
 // ── Load ──────────────────────────────────────────────────────────────────────
 
@@ -458,8 +483,15 @@ async function loadPrd() {
   phaseOrder = prd.phaseOrder && prd.phaseOrder.length
     ? prd.phaseOrder
     : Object.keys(prd.implementationOrder || {});
-  storyMap = {}; storyPhaseMap = {};
-  (prd.stories || []).forEach(s => { storyMap[s.id] = s; });
+  storyMap = {}; storyPhaseMap = {}; duplicateIds = {};
+  const idCounts = {};
+  (prd.stories || []).forEach(s => {
+    idCounts[s.id] = (idCounts[s.id] || 0) + 1;
+    storyMap[s.id] = s;
+  });
+  Object.entries(idCounts).forEach(([id, count]) => {
+    if (count > 1) duplicateIds[id] = count;
+  });
   phaseOrder.forEach(ph => {
     (prd.implementationOrder[ph] || []).forEach(id => { storyPhaseMap[id] = ph; });
   });
@@ -543,6 +575,12 @@ function renderStats() {
       <span class="stat-lbl">Actual Cost</span>
       <span class="stat-num" style="color:#10b981">$${actualCost.toFixed(2)}</span>
     </div>` : ''}
+    ${Object.keys(duplicateIds).length > 0 ? `
+    <div class="stat-chip">
+      <div class="stat-dot" style="background:var(--red)"></div>
+      <span class="stat-lbl">Dup IDs</span>
+      <span class="stat-num" style="color:var(--red)">${Object.keys(duplicateIds).length}</span>
+    </div>` : ''}
     <div class="progress-wrap">
       <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
       <span class="progress-lbl">${pct}% complete</span>
@@ -554,6 +592,30 @@ function renderStats() {
 function renderContent() {
   const q = searchQuery.toLowerCase();
   let html = '', total = 0;
+
+  // Data quality: duplicate ID warning banner
+  const dupCount = Object.keys(duplicateIds).length;
+  if (dupCount > 0) {
+    const dupTotal = Object.values(duplicateIds).reduce((a,b) => a+b, 0);
+    const dupEntries = Object.entries(duplicateIds)
+      .sort((a,b) => b[1] - a[1])
+      .slice(0, 15)
+      .map(([id, c]) => `${id} (${c}x)`)
+      .join(', ');
+    const more = dupCount > 15 ? ` … and ${dupCount - 15} more` : '';
+    html += `
+    <div class="dq-banner">
+      <div class="dq-banner-icon">⚠</div>
+      <div>
+        <div class="dq-banner-title">Data Quality: ${dupCount} Duplicate Story IDs (${dupTotal} total entries)</div>
+        <div class="dq-banner-body">
+          The PRD contains stories with non-unique IDs. Only the last entry per ID is shown below.
+          This is typically caused by spec-mode splits that collided. Fix the PRD or re-run spec-mode with dedup enabled.
+        </div>
+        <div class="dq-dup-list">${esc(dupEntries)}${more}</div>
+      </div>
+    </div>`;
+  }
 
   phaseOrder.forEach((phaseId, idx) => {
     const ids     = prd.implementationOrder[phaseId] || [];
@@ -627,18 +689,42 @@ function specBadge(s) {
   return `<span class="badge ${cls}" title="Spec agents: ${esc(agents)}">SPEC ${status === 'completed' ? 'READY' : status.toUpperCase()}</span>`;
 }
 
+function storyDepth(s) {
+  let depth = 0;
+  let parentId = s.specification?.createdFrom;
+  const visited = new Set();
+  while (parentId && !visited.has(parentId) && storyMap[parentId]) {
+    visited.add(parentId);
+    depth++;
+    parentId = storyMap[parentId]?.specification?.createdFrom;
+  }
+  // If createdFrom exists but parent not in map, still count it
+  if (parentId && !visited.has(parentId)) depth++;
+  return depth;
+}
+
+function depthChip(s) {
+  const d = storyDepth(s);
+  if (d === 0) return '';
+  const cls = d <= 1 ? 'depth-1' : d === 2 ? 'depth-2' : 'depth-deep';
+  return `<span class="depth-chip ${cls}" title="Split depth ${d}">D${d}</span>`;
+}
+
 function renderStoryCard(s, color) {
   const done     = isDone(s);
   const statKey  = done ? 'completed' : (s.status||'pending');
   const mi       = modelInfo(s);
   const expanded = expandedStories.has(s.id);
+  const isDup    = duplicateIds[s.id] ? ' dup-id' : '';
+  const dupTitle = duplicateIds[s.id] ? ` title="DUPLICATE: ${duplicateIds[s.id]} stories share this ID"` : '';
 
   return `
 <div class="story-card">
   <div class="story-row" onclick="toggleStory('${s.id}')">
-    <span class="story-id">${esc(s.id)}</span>
+    <span class="story-id${isDup}"${dupTitle}>${esc(s.id)}</span>
     <span class="story-title" title="${esc(s.title)}">${esc(s.title)}</span>
     <div class="badges">
+      ${depthChip(s)}
       <span class="badge bs-${statKey.replace('_','-')}">${statKey.replace('_',' ').toUpperCase()}</span>
       <span class="badge be-${(s.effort||'medium').toLowerCase()}">${(s.effort||'medium').toUpperCase()}</span>
       <span class="badge bl-${mi.cls}">${mi.turns === '—' ? mi.label : mi.label + '·' + (mi.turns === 'unlimited' ? '∞' : mi.turns) + 'T'}</span>
@@ -670,6 +756,26 @@ function renderStoryDetail(s, color) {
   const doneRow = s.completedAt
     ? `<tr><td class="mk">Completed</td><td class="mv" style="color:var(--text3)">${esc(s.completedAt.slice?s.completedAt.slice(0,10):s.completedAt)}</td></tr>` : '';
   const spec = s.specification || null;
+  const depth = storyDepth(s);
+  // Build lineage chain: current → parent → grandparent → root
+  let lineageHtml = '';
+  if (spec?.createdFrom) {
+    const chain = [];
+    let pid = spec.createdFrom;
+    const vis = new Set();
+    while (pid && !vis.has(pid)) {
+      vis.add(pid);
+      chain.push(pid);
+      pid = storyMap[pid]?.specification?.createdFrom;
+    }
+    if (pid && !vis.has(pid)) chain.push(pid);
+    lineageHtml = `<tr><td class="mk">Split From</td><td class="mv">${chain.map(id =>
+      `<span class="dep-chip">${esc(id)}</span>`).join(' → ')}</td></tr>
+      <tr><td class="mk">Split Depth</td><td class="mv">${depthChip(s)} ${depth}</td></tr>`;
+  }
+  const dupWarnHtml = duplicateIds[s.id]
+    ? `<tr><td class="mk">Duplicates</td><td class="mv" style="color:var(--red);font-weight:700">${duplicateIds[s.id]} stories share this ID</td></tr>`
+    : '';
   const specHtml = spec ? `
     <div class="dl-t" style="margin-top:11px">Specification</div>
     <table class="meta-tbl">
@@ -678,9 +784,13 @@ function renderStoryDetail(s, color) {
       <tr><td class="mk">Applied</td><td class="mv">${esc((spec.appliedAgents||[]).join(', ') || '—')}</td></tr>
       <tr><td class="mk">Run ID</td><td class="mv">${esc(spec.runId || '—')}</td></tr>
       <tr><td class="mk">Updated</td><td class="mv">${esc(spec.updatedAt || '—')}</td></tr>
+      ${lineageHtml}
+      ${dupWarnHtml}
     </table>
     ${spec.coordinatorNotes ? `<div class="spec-note">${esc(spec.coordinatorNotes)}</div>` : ''}
-  ` : '';
+  ` : (dupWarnHtml ? `
+    <div class="dl-t" style="margin-top:11px">Data Quality</div>
+    <table class="meta-tbl">${dupWarnHtml}</table>` : '');
 
   // Actuals panel (only if any actual data)
   const hasActuals = (s.actualCost||0) > 0 || (s.actualTokens||0) > 0 || (s.actualHours||0) > 0;
@@ -818,8 +928,10 @@ setInterval(() => {
     .then(data => {
       if (!data) return;
       prd = data;
-      storyMap = {};
-      (prd.stories||[]).forEach(s => { storyMap[s.id] = s; });
+      storyMap = {}; duplicateIds = {};
+      const rc = {};
+      (prd.stories||[]).forEach(s => { rc[s.id] = (rc[s.id]||0)+1; storyMap[s.id] = s; });
+      Object.entries(rc).forEach(([id,c]) => { if (c > 1) duplicateIds[id] = c; });
       setApiStatus('ok');
       renderStats();
       renderContent();

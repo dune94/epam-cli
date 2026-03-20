@@ -40,6 +40,7 @@ export class ProjectScaffolder {
   async scaffold(): Promise<ProjectScaffoldResult> {
     // Step 1: Create directory structure
     await this.createDirectories();
+    await this.seedRuntimeLogs();
 
     // Step 2: Write prd.json
     await this.writePrd();
@@ -65,13 +66,16 @@ export class ProjectScaffolder {
     // Step 8: Copy orchestration scripts
     await this.copyOrchestrationScripts();
 
-    // Step 9: Copy dashboards
+    // Step 9: Copy orchestration prompts
+    await this.copyOrchestrationPrompts();
+
+    // Step 10: Copy dashboards
     await this.copyDashboards();
 
-    // Step 10: Create dashboard symlinks
+    // Step 11: Create dashboard symlinks
     await this.createDashboardSymlinks();
 
-    // Step 11: Write orchestrations/README.md
+    // Step 12: Write orchestrations/README.md
     await this.writeOrchestrationReadme();
 
     return this.result;
@@ -85,8 +89,10 @@ export class ProjectScaffolder {
       'orchestrations/agents',
       'orchestrations/scripts',
       'orchestrations/scripts/lib',
+      'orchestrations/prompts',
       'orchestrations/dashboards',
       'orchestrations/logs',
+      'orchestrations/logs/phase-improvements',
       '.epam',
     ];
     for (const dir of dirs) {
@@ -266,6 +272,57 @@ This project uses epam-cli's multi-agent orchestration system.
     );
   }
 
+  // ── Copy orchestration prompts ───────────────────────────────────────────
+
+  private async copyOrchestrationPrompts(): Promise<void> {
+    const sourceDir = await this.findSourceDir('orchestrations/prompts');
+    if (!sourceDir) {
+      this.log(chalk.yellow('  Skipping prompts copy — source not found'));
+      return;
+    }
+
+    await this.copyDirRecursive(
+      sourceDir,
+      join(this.target, 'orchestrations', 'prompts'),
+    );
+  }
+
+  // ── Seed runtime logs ────────────────────────────────────────────────────
+
+  private async seedRuntimeLogs(): Promise<void> {
+    const logsDir = join(this.target, 'orchestrations', 'logs');
+    await this.ensureDir(logsDir);
+
+    const jsonlLogs = [
+      'agent-activity.jsonl',
+      'agent-messages.jsonl',
+      'code-reviews.jsonl',
+      'cpa-review.jsonl',
+      'phase-cost.jsonl',
+      'phase-gates.jsonl',
+      'profiles-audit.jsonl',
+      'testing-gates.jsonl',
+    ];
+    for (const name of jsonlLogs) {
+      await this.writeFileIfMissing(join(logsDir, name), '');
+    }
+
+    const statusPath = join(logsDir, 'agent-status.json');
+    await this.writeFileIfMissing(statusPath, JSON.stringify({
+      startedAt: null,
+      phase: null,
+      orchMode: null,
+      lanes: {
+        main: { status: 'idle', currentStory: null, storiesCompleted: 0, storiesFailed: 0 },
+        primary: { status: 'idle', currentStory: null, storiesCompleted: 0, storiesFailed: 0 },
+        independent: { status: 'idle', currentStory: null, storiesCompleted: 0, storiesFailed: 0 },
+      },
+      events: [],
+      stories: {},
+      completedAt: null,
+    }, null, 2));
+  }
+
   // ── Copy dashboards ─────────────────────────────────────────────────────
 
   private async copyDashboards(): Promise<void> {
@@ -438,6 +495,16 @@ npx --prefix orchestrations/dashboards eleventy --config=orchestrations/dashboar
     await fs.writeFile(path, content, 'utf-8');
     this.result.filesCreated.push(path);
     this.log(chalk.green(`  created ${this.rel(path)}`));
+  }
+
+  private async writeFileIfMissing(path: string, content: string): Promise<void> {
+    try {
+      await fs.access(path);
+    } catch {
+      await fs.writeFile(path, content, 'utf-8');
+      this.result.filesCreated.push(path);
+      this.log(chalk.green(`  created ${this.rel(path)}`));
+    }
   }
 
   private rel(path: string): string {

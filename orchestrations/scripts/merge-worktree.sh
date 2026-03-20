@@ -58,7 +58,7 @@ if [[ "$LANE" != "primary" && "$LANE" != "independent" ]]; then
 fi
 
 # Derive branch name from worktree
-WORKTREE_PATH="$PROJECT_ROOT/../epam-cli-wt-$LANE"
+WORKTREE_PATH="$PROJECT_ROOT/../$(basename "$PROJECT_ROOT")-wt-$LANE"
 BRANCH_NAME="wt-$LANE"
 
 # Validate prerequisites

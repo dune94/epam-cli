@@ -63,7 +63,9 @@ _is_excluded() {
 # ─────────────────────────────────────────────
 check_worktree() {
     local lane="$1"
-    local wt_path="$PROJECT_ROOT/../epam-cli-wt-$lane"
+    local git_basename
+    git_basename="$(basename "$PROJECT_ROOT")"
+    local wt_path="$PROJECT_ROOT/../${git_basename}-wt-$lane"
     local wt_branch="wt-$lane"
     local issues=0
 

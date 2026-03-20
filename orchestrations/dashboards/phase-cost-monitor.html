@@ -592,6 +592,37 @@ async function fetchCostEvents() {
   } catch { return []; }
 }
 
+async function fetchActivityEvents() {
+  try {
+    const r = await fetch('logs/agent-activity.jsonl?_t=' + Date.now());
+    if (!r.ok) return [];
+    const text = await r.text();
+    if (!text.trim()) return [];
+    return text.trim().split('\n').filter(l => l.trim()).map(l => {
+      try {
+        const e = JSON.parse(l);
+        return {
+          timestamp: e.timestamp || '',
+          phaseId: e.phase || '',
+          storyId: e.story_id || '',
+          role: e.agent || '',
+          outcome: e.type === 'story_complete' ? 'success' : (e.type === 'story_fail' ? 'failure' : ''),
+          notes: (e.detail && (e.detail.message || e.detail.rawType)) || e.type || '',
+          duration_ms: 0,
+          tokens_in: 0,
+          tokens_out: 0,
+          total_cost_usd: 0,
+          source: 'agent_activity'
+        };
+      } catch {
+        return null;
+      }
+    }).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 // ── Budget Gauge ──────────────────────────────────────────────────────────────
 
 function renderBudget(phases, eventCount) {
@@ -997,15 +1028,18 @@ document.getElementById('phase-filter').addEventListener('change', () => {
 
 async function refresh() {
   const prd = await loadPrd();
-  const [phases, stories, events] = await Promise.all([
+  const [phases, stories, costEvents, activityEvents] = await Promise.all([
     Promise.resolve(prd ? derivePhasesFromPrd(prd) : []),
     Promise.resolve(prd ? (prd.stories || []) : []),
     fetchCostEvents(),
+    fetchActivityEvents(),
   ]);
 
   const phaseList  = Array.isArray(phases)  ? phases  : (phases  && phases.phases)  ? phases.phases  : [];
   const storyList  = Array.isArray(stories) ? stories : (stories && stories.stories) ? stories.stories : [];
-  const eventList  = Array.isArray(events)  ? events  : (events  && events.events)  ? events.events  : [];
+  const costList = Array.isArray(costEvents) ? costEvents : [];
+  const activityList = Array.isArray(activityEvents) ? activityEvents : [];
+  const eventList  = costList.length > 0 ? costList : activityList;
 
   // Limit events to 500
   const eventsSlice = eventList.slice(0, 500);

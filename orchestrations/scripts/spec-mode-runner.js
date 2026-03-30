@@ -680,18 +680,31 @@ function emitMonitorEvent({ monitorScript, type, message, storyId = '', lane = '
 
 function extractTaggedJson(text, tag) {
   if (!text) return null;
-  const regex = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`);
-  const match = regex.exec(text);
-  if (!match) return null;
-  let jsonText = match[1].trim();
-  // Strip markdown code fences that LLMs often wrap around JSON
-  jsonText = jsonText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
-  try {
-    return JSON.parse(jsonText);
-  } catch (err) {
-    console.warn(`Failed to parse JSON for tag ${tag}:`, err.message);
-    return null;
+
+  function stripAndParse(jsonText) {
+    jsonText = jsonText.trim();
+    // Strip markdown code fences that LLMs often wrap around JSON
+    jsonText = jsonText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+    try {
+      return JSON.parse(jsonText);
+    } catch (err) {
+      console.warn(`Failed to parse JSON for tag ${tag}:`, err.message);
+      return null;
+    }
   }
+
+  // Full pair: <TAG>content</TAG> — CLI mode where conversation text is echoed
+  const fullRegex = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`);
+  const fullMatch = fullRegex.exec(text);
+  if (fullMatch) return stripAndParse(fullMatch[1]);
+
+  // Partial (SDK single-turn): prompt injected the opening tag, model response
+  // contains only content followed by </TAG>. Match everything up to the close tag.
+  const closeRegex = new RegExp(`^([\\s\\S]*?)<\\/${tag}>`, 'm');
+  const closeMatch = closeRegex.exec(text.trim());
+  if (closeMatch) return stripAndParse(closeMatch[1]);
+
+  return null;
 }
 
 function runClaude(execSpec, prompt, logPath) {

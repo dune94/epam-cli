@@ -67,6 +67,7 @@ STRICT_MODE=false
 DRY_RUN=false
 JSON_MODE=false
 RECONCILE_MODE=false
+CALIBRATE_MODE=false
 
 # ── Confidence thresholds ───────────────────────────────────────────────────
 BLEND_HIGH=0.75      # >= this: trust CPA fully
@@ -84,6 +85,7 @@ while [[ $# -gt 0 ]]; do
     --dry-run) DRY_RUN=true;      shift ;;
     --json)    JSON_MODE=true;    shift ;;
     --reconcile) RECONCILE_MODE=true; shift ;;
+    --calibrate) CALIBRATE_MODE=true; shift ;;
     --help|-h)
       cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
@@ -247,6 +249,17 @@ if [ "$RECONCILE_MODE" = true ]; then
   exit 0
 fi
 
+# ── Calibrate mode ────────────────────────────────────────────────────────────
+if [ "$CALIBRATE_MODE" = true ]; then
+  log "Updating calibration.json from phase-cost.jsonl actuals..."
+  CAL_PY="$SCRIPT_DIR/calibrate.py"
+  if [ ! -f "$CAL_PY" ]; then
+    error "calibrate.py not found: $CAL_PY"; exit 1
+  fi
+  python3 "$CAL_PY" --cost-log "$COST_LOG" --cal-file "$AUTOMATION_DIR/logs/calibration.json"
+  exit $?
+fi
+
 # ── Story extraction ─────────────────────────────────────────────────────────
 log "Loading stories from $(basename "$PRD_FILE")..."
 
@@ -291,6 +304,57 @@ ensure_leading_zero() {
   [[ "$v" =~ ^\. ]] && v="0${v}"
   echo "$v"
 }
+
+# ── Calibration loader ────────────────────────────────────────────────────────
+# Load calibration.json once; expose lookup function.
+CAL_FILE="${AUTOMATION_DIR}/logs/calibration.json"
+CAL_DATA=""
+CAL_MIN_N=3   # minimum samples before trusting calibration for a category
+# Current invoke mode — matches invokeMode field written to phase-cost.jsonl
+CAL_INVOKE_MODE="cli"
+[ "${EPAM_SDK_INVOKE:-0}" = "1" ] && CAL_INVOKE_MODE="sdk"
+
+load_calibration() {
+  if [ -f "$CAL_FILE" ]; then
+    CAL_DATA="$(cat "$CAL_FILE" 2>/dev/null || echo '{}')"
+  else
+    CAL_DATA="{}"
+  fi
+}
+
+# get_calibrated_baseline <effort> <storyType>
+# Looks up effort:storyType:invokeMode first; falls back to effort:storyType (legacy keys).
+# Prints: "minutes|cost|tokens|turns|n" or empty string if not enough data.
+get_calibrated_baseline() {
+  local effort="$1" stype="$2"
+  if [ -z "$CAL_DATA" ] || [ "$CAL_DATA" = "{}" ]; then
+    echo ""; return
+  fi
+
+  # Try mode-specific key first (three-part)
+  local key="${effort}:${stype}:${CAL_INVOKE_MODE}"
+  local n
+  n=$(echo "$CAL_DATA" | jq -r --arg k "$key" '.categories[$k].n // 0' 2>/dev/null || echo "0")
+
+  # Fall back to legacy two-part key if mode-specific has insufficient data
+  if (( n < CAL_MIN_N )); then
+    key="${effort}:${stype}"
+    n=$(echo "$CAL_DATA" | jq -r --arg k "$key" '.categories[$k].n // 0' 2>/dev/null || echo "0")
+  fi
+
+  if (( n >= CAL_MIN_N )); then
+    local cm cc ct cturns
+    cm=$(echo "$CAL_DATA"    | jq -r --arg k "$key" '.categories[$k].mean_minutes // 0' 2>/dev/null || echo "0")
+    cc=$(echo "$CAL_DATA"    | jq -r --arg k "$key" '.categories[$k].mean_cost    // 0' 2>/dev/null || echo "0")
+    ct=$(echo "$CAL_DATA"    | jq -r --arg k "$key" '.categories[$k].mean_tokens  // 0' 2>/dev/null || echo "0")
+    cturns=$(echo "$CAL_DATA"| jq -r --arg k "$key" '.categories[$k].mean_turns   // 0' 2>/dev/null || echo "0")
+    echo "${cm}|${cc}|${ct}|${cturns}|${n}|${key}"
+  else
+    echo ""
+  fi
+}
+
+load_calibration
 
 bc_eval() { echo "scale=4; $1" | bc | xargs printf "%.4f"; }
 
@@ -428,7 +492,7 @@ while IFS= read -r sid; do
   s_deps=$(echo "$deps_json" | jq -r 'if type=="array" then length else 0 end' 2>/dev/null || echo "0")
   s_description=$(echo "$story_json" | jq -r '.description // ""')
 
-  # Existing formula estimates
+  # Existing formula estimates (from prd.json)
   f_min=$(echo "$story_json" | jq -r '.estimatedAiMinutes // 0')
   f_cost=$(echo "$story_json" | jq -r '.estimatedCost // 0')
   f_tok=$(echo "$story_json" | jq -r '.estimatedTokens // 0')
@@ -439,6 +503,32 @@ while IFS= read -r sid; do
   if [ -z "$f_effort" ] || [ "$f_effort" = "null" ]; then
     f_effort=$(get_effort "$s_human_hours")
   fi
+
+  # ── Override formula baseline with calibration actuals (when available) ──────
+  # calibration.json holds EMA means from real completed-story data, grouped by
+  # effort:storyType. When enough samples exist (n >= CAL_MIN_N), these empirical
+  # means replace the hand-entered prd.json formula values as the CPA baseline,
+  # giving Claude a grounded starting point instead of a made-up number.
+  cal_baseline=$(get_calibrated_baseline "$f_effort" "$s_type")
+  f_baseline_source="prd.json"
+  if [ -n "$cal_baseline" ]; then
+    IFS='|' read -r cal_min cal_cost cal_tok cal_turns cal_n cal_key <<< "$cal_baseline"
+    # Mode-specific 3-part key: always preferred (same invoke mode, same model class)
+    # Legacy 2-part key: only use when prd.json is zero (different mode may have run)
+    is_mode_specific=false
+    [[ "$cal_key" == *":${CAL_INVOKE_MODE}" ]] && is_mode_specific=true
+    if [ "$is_mode_specific" = true ] || \
+       (( $(echo "$f_min == 0" | bc -l) )) || (( $(echo "$f_tok == 0" | bc -l) )); then
+      f_min="$cal_min"
+      f_cost="$cal_cost"
+      f_tok=$(printf "%.0f" "$cal_tok")
+      f_turns=$(printf "%.0f" "$cal_turns")
+      f_baseline_source="calibration[${cal_key}](n=${cal_n})"
+    fi
+  fi
+  f_min=$(ensure_leading_zero "$f_min")
+  f_cost=$(ensure_leading_zero "$f_cost")
+  info "  $sid: formula baseline from ${f_baseline_source}: ${f_min}min \$${f_cost}"
 
   # Phase and position
   phase="${STORY_PHASE[$sid]:-unknown}"
@@ -787,6 +877,20 @@ if [ "$APPLY_MODE" = true ] && [ "$DRY_RUN" != true ]; then
   echo "" >&2
 elif [ "$DRY_RUN" = true ]; then
   warning "DRY RUN — no writes to prd.json or cpa-review.jsonl"
+fi
+
+# ── Auto-calibrate from actuals (non-blocking) ───────────────────────────────
+# Runs silently after every CPA pass (dry-run excluded) to keep calibration.json
+# up-to-date. Failures are logged but never block the pipeline.
+if [ "$DRY_RUN" != true ]; then
+  CAL_PY="$SCRIPT_DIR/calibrate.py"
+  if [ -f "$CAL_PY" ] && [ -f "$COST_LOG" ] && [ -s "$COST_LOG" ]; then
+    python3 "$CAL_PY" \
+      --cost-log "$COST_LOG" \
+      --cal-file "$AUTOMATION_DIR/logs/calibration.json" \
+      2>/dev/null && log "Calibration updated from actuals" || \
+      warning "Auto-calibration failed (non-blocking)"
+  fi
 fi
 
 # ── Exit with gate result ──────────────────────────────────────────────────────

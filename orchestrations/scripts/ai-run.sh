@@ -8,6 +8,13 @@ CLAUDE_CMD="${CLAUDE_CMD:-claude}"
 AI_MODEL="${AI_MODEL:-}"
 PRIMARY_PROVIDER="${AI_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-}}"
 FALLBACKS_RAW="${AI_PROVIDER_FALLBACKS:-}"
+# SDK invocation toggle — when 1, routes Claude provider through invoke.py.
+# Inherited from environment; set by run-agent-orchestration.sh or caller.
+EPAM_SDK_INVOKE="${EPAM_SDK_INVOKE:-0}"
+_SCRIPT_DIR_AIRUN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INVOKE_PY="$_SCRIPT_DIR_AIRUN/invoke.py"
+INVOKE_PYTHON="${INVOKE_PYTHON:-$_SCRIPT_DIR_AIRUN/.venv/bin/python3}"
+[ -x "$INVOKE_PYTHON" ] || INVOKE_PYTHON="python3"
 
 usage() {
   cat <<'EOF'
@@ -62,7 +69,21 @@ run_provider_once() {
 
   case "$provider" in
     claude)
-      env -u CLAUDECODE "$CLAUDE_CMD" --dangerously-bypass-approvals-and-sandbox < "$PROMPT_FILE"
+      if [ "${EPAM_SDK_INVOKE:-0}" = "1" ] && [ -f "$INVOKE_PY" ]; then
+        local _sdk_out
+        _sdk_out="$(mktemp)"
+        if "$INVOKE_PYTHON" "$INVOKE_PY" \
+            ${AI_MODEL:+--model "$AI_MODEL"} \
+            --output "$_sdk_out" < "$PROMPT_FILE" 2>/dev/null; then
+          "$INVOKE_PYTHON" -c "import json,sys; d=json.load(open('$_sdk_out')); print(d.get('result',''),end='')" 2>/dev/null
+          rm -f "$_sdk_out"
+        else
+          rm -f "$_sdk_out"
+          return 1
+        fi
+      else
+        env -u CLAUDECODE "$CLAUDE_CMD" --dangerously-bypass-approvals-and-sandbox < "$PROMPT_FILE"
+      fi
       ;;
     codemie-claude)
       env -u CLAUDECODE codemie-claude --dangerously-bypass-approvals-and-sandbox < "$PROMPT_FILE"

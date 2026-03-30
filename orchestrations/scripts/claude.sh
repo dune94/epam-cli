@@ -45,6 +45,16 @@ MAX_RETRIES=2
 RETRY_DELAY=5
 # Orchestration mode — inherited from run-agent-orchestration.sh or set directly
 ORCH_MODE="${ORCH_MODE:-bash}"
+# SDK invocation mode — when 1, routes Claude provider calls through invoke.py
+# using the Anthropic Python SDK instead of the claude CLI.
+# All other providers (opencode, codex, copilot, openai, qwen, cursor) are unaffected.
+# Requires: pip install -r orchestrations/scripts/requirements.txt
+# and ANTHROPIC_API_KEY to be set in the environment.
+EPAM_SDK_INVOKE="${EPAM_SDK_INVOKE:-0}"
+INVOKE_PY="$SCRIPT_DIR/invoke.py"
+INVOKE_PYTHON="${INVOKE_PYTHON:-$SCRIPT_DIR/.venv/bin/python3}"
+# Fall back to system python3 if venv not present
+[ -x "$INVOKE_PYTHON" ] || INVOKE_PYTHON="python3"
 
 # Effort -> model + max-turns mapping
 # Stories carry an optional "effort" field: low | medium (default) | high
@@ -428,8 +438,24 @@ PLAN_PROMPT_EOF
     log "Plan mode: generating execution plan for $story_id..."
     touch "$messages_jsonl"
     cd "$PROJECT_ROOT"
-    if echo "$plan_prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --print --output-format json \
-            "${CLAUDE_PERMISSIONS[@]}" 2>/dev/null > "$plan_json"; then
+
+    local plan_ok=false
+    if [ "${EPAM_SDK_INVOKE:-0}" = "1" ] && [ -f "$INVOKE_PY" ]; then
+        # SDK path: extended thinking enabled for plan mode (high-complexity reasoning)
+        if echo "$plan_prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
+                --model "${STORY_MODEL:-claude-sonnet-4-6}" \
+                --thinking-budget 8000 \
+                --output "$plan_json" 2>/dev/null; then
+            plan_ok=true
+        fi
+    else
+        if echo "$plan_prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --print --output-format json \
+                "${CLAUDE_PERMISSIONS[@]}" 2>/dev/null > "$plan_json"; then
+            plan_ok=true
+        fi
+    fi
+
+    if [ "$plan_ok" = true ]; then
         jq -r '.result // empty' "$plan_json" 2>/dev/null >> "$plan_log" || true
         success "Plan mode completed for $story_id — see $plan_log"
     else
@@ -849,19 +875,57 @@ $(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
                 ;;
             epam)
                 # epam: treat same as claude — same CLI, same output format
-                if echo "$prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --print --output-format json \
-                        "${model_flag[@]}" "${turns_flag[@]}" "${CLAUDE_PERMISSIONS[@]}" \
-                        2>/dev/null > "$json_result_file"; then
-                    invoke_success=true
+                if [ "${EPAM_SDK_INVOKE:-0}" = "1" ] && [ -f "$INVOKE_PY" ]; then
+                    local sdk_model_arg=()
+                    local sdk_think_arg=()
+                    [ -n "${STORY_MODEL:-}" ] && sdk_model_arg=(--model "$STORY_MODEL")
+                    # Token pre-count (first attempt only — near-zero cost, no generation)
+                    if [ "$retry_count" -eq 0 ]; then
+                        local precount
+                        precount=$(echo "$prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
+                            "${sdk_model_arg[@]}" --count-tokens-only --output /dev/null 2>/dev/null || echo "")
+                        [ -n "$precount" ] && log "  Token pre-count: ${precount} input tokens"
+                        STORY_PRECOUNT_TOKENS="${precount:-0}"
+                    fi
+                    if echo "$prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
+                            "${sdk_model_arg[@]}" "${sdk_think_arg[@]}" \
+                            --output "$json_result_file" 2>/dev/null; then
+                        invoke_success=true
+                    fi
+                else
+                    if echo "$prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --print --output-format json \
+                            "${model_flag[@]}" "${turns_flag[@]}" "${CLAUDE_PERMISSIONS[@]}" \
+                            2>/dev/null > "$json_result_file"; then
+                        invoke_success=true
+                    fi
                 fi
                 ;;
             *)
                 # Claude (claude-sonnet, claude-opus, or any claude-* value)
-                # --print --output-format json captures cost+tokens in a single JSON object
-                if echo "$prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --print --output-format json \
-                        "${model_flag[@]}" "${turns_flag[@]}" "${CLAUDE_PERMISSIONS[@]}" \
-                        2>/dev/null > "$json_result_file"; then
-                    invoke_success=true
+                # SDK path: invoke.py via Anthropic Python SDK (EPAM_SDK_INVOKE=1)
+                # CLI path: claude --print --output-format json (default)
+                if [ "${EPAM_SDK_INVOKE:-0}" = "1" ] && [ -f "$INVOKE_PY" ]; then
+                    local sdk_model_arg=()
+                    [ -n "${STORY_MODEL:-}" ] && sdk_model_arg=(--model "$STORY_MODEL")
+                    # Token pre-count (first attempt only — near-zero cost, no generation)
+                    if [ "$retry_count" -eq 0 ]; then
+                        local precount
+                        precount=$(echo "$prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
+                            "${sdk_model_arg[@]}" --count-tokens-only --output /dev/null 2>/dev/null || echo "")
+                        [ -n "$precount" ] && log "  Token pre-count: ${precount} input tokens"
+                        STORY_PRECOUNT_TOKENS="${precount:-0}"
+                    fi
+                    if echo "$prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
+                            "${sdk_model_arg[@]}" \
+                            --output "$json_result_file" 2>/dev/null; then
+                        invoke_success=true
+                    fi
+                else
+                    if echo "$prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --print --output-format json \
+                            "${model_flag[@]}" "${turns_flag[@]}" "${CLAUDE_PERMISSIONS[@]}" \
+                            2>/dev/null > "$json_result_file"; then
+                        invoke_success=true
+                    fi
                 fi
                 ;;
         esac
@@ -949,6 +1013,12 @@ append_cost_record() {
     local title=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .title // "unknown"' "$prd_target")
     local agent_id=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .agentRole // "unknown"' "$prd_target")
     local forecast_hours=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .estimatedHours // 0' "$prd_target")
+    local story_effort=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .effort // "medium"' "$prd_target")
+    local story_type=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .storyType // "implementation"' "$prd_target")
+    local resolved_model="${STORY_MODEL:-}"
+    local prompt_tokens_measured="${STORY_PRECOUNT_TOKENS:-0}"
+    local invoke_mode="cli"
+    [ "${EPAM_SDK_INVOKE:-0}" = "1" ] && invoke_mode="sdk"
     local phase_id="${CURRENT_PHASE:-}"
     if [ -z "$phase_id" ]; then
         # Look up phase from implementationOrder when not set by --phase flag
@@ -999,12 +1069,18 @@ append_cost_record() {
             --argjson tt "${task_turns:-0}" \
             --argjson cr "${cache_read:-0}" --argjson cc "${cache_create:-0}" \
             --arg s "$status" --arg n "" \
+            --arg ef "${story_effort:-medium}" --arg stype "${story_type:-implementation}" \
+            --arg rm "${resolved_model:-}" \
+            --argjson ptm "${prompt_tokens_measured:-0}" \
+            --arg im "${invoke_mode}" \
             '{phase_id:$pid, phase_name:$pn, story_id:$sid, story_title:$st,
               agent_id:$aid, agent_name:$an, forecast_hours:$fh, forecast_cost_usd:$fc,
               started_at:$sa, ended_at:$ea, elapsed_minutes:$em,
               task_cost_usd:$cu, task_tokens_in:$ti, task_tokens_out:$to,
               task_turns:$tt, cache_read_tokens:$cr, cache_create_tokens:$cc,
-              status:$s, notes:$n}' >> "$cost_file"
+              status:$s, notes:$n,
+              effort:$ef, storyType:$stype, resolvedModel:$rm,
+              prompt_tokens_measured:$ptm, invokeMode:$im}' >> "$cost_file"
     ) 200>"$lock_file"
 }
 

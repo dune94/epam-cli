@@ -84,5 +84,5 @@ export interface ResolvedConfig {
   /** Project-allowed models list. */
   allowedModels: string[];
   /** Metadata on how the active model was selected. */
-  modelSelection: { source: ModelSelectionSource; usedDefault: boolean; reason?: string };
+  modelSelection: { source: ModelSelectionSource; usedDefault: boolean; reason?: string; requestedModel?: string | null };
 }

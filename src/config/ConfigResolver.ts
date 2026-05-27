@@ -294,9 +294,9 @@ export async function resolveConfig(flags: CLIFlagOverrides = {}): Promise<Resol
     projectRoot,
 
     budgetGuardrails: {
-      warningAt:    envOverrides.budgetWarningAt  ?? projectConfig.budgetGuardrails?.warningAt    ?? 4.00,
-      hardLimit:    envOverrides.budgetHardLimit  ?? projectConfig.budgetGuardrails?.hardLimit    ?? 5.00,
-      autoDowngrade: projectConfig.budgetGuardrails?.autoDowngrade ?? true,
+      warningAt:   envOverrides.budgetWarningAt   ?? projectConfig.budgetGuardrails?.warningAt   ?? Infinity,
+      hardLimitAt: envOverrides.budgetHardLimitAt ?? projectConfig.budgetGuardrails?.hardLimitAt ?? Infinity,
+      onHardLimit: projectConfig.budgetGuardrails?.onHardLimit ?? 'downgrade',
     },
 
     // llmChain: normalize EPAM registry slots to the concrete upstream provider understood by the proxy.

@@ -13,8 +13,18 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
-PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
+# When PRD_FILE is an external path (e.g. a test-app), derive PROJECT_ROOT from
+# the directory two levels above the PRD file (prd sits in <root>/orchestrations/ normally,
+# but for test apps it sits directly in the app root — detect via presence of package.json).
+_prd_dir="$(cd "$(dirname "$PRD_FILE")" && pwd)"
+if [ -f "$_prd_dir/package.json" ]; then
+  PROJECT_ROOT="$_prd_dir"
+else
+  PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
+fi
+export PROJECT_ROOT
+AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
 # Compute PRD path relative to PROJECT_ROOT for injecting into agent prompts
 PRD_REL="$(realpath --relative-to="$PROJECT_ROOT" "$(realpath "$PRD_FILE")" 2>/dev/null || echo "orchestrations/prd.json")"
 # Select wrapper script based on PROVIDER override or CLAUDE_CMD
@@ -30,6 +40,16 @@ esac
 LOG_DIR="${OUTPUT_DIR:-$AUTOMATION_DIR/logs}"
 MONITOR_STATUS_FILE="$LOG_DIR/agent-status.json"
 MESSAGES_JSONL="$LOG_DIR/agent-messages.jsonl"
+# Export so all subprocesses (claude.sh, update-monitor.sh, invoke.py) write to the same files
+export MONITOR_FILE="$MONITOR_STATUS_FILE"
+export ACTIVITY_FILE="$LOG_DIR/agent-activity.jsonl"
+export MESSAGES_JSONL="$LOG_DIR/agent-messages.jsonl"
+export PHASE_COST_FILE="$LOG_DIR/phase-cost.jsonl"
+export REVIEW_LOG="$LOG_DIR/code-reviews.jsonl"
+export GATE_LOG="$LOG_DIR/phase-gates.jsonl"
+export COST_LOG="$LOG_DIR/phase-cost.jsonl"
+export MESSAGES_DIR="$LOG_DIR/messages"
+export LOG_DIR
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 if [ -n "${CLAUDE_CMD:-}" ]; then
     CLAUDE_CMD="$CLAUDE_CMD"
@@ -99,11 +119,17 @@ run_orch_prompt() {
         return 1
     fi
 
+    # Default gate model to Haiku (low-effort, structured JSON output tasks)
+    local gate_model="${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}"
+    local model_args=()
+    [ -n "$gate_model" ] && model_args=(--model "$gate_model")
+
     echo "$prompt_text" | \
         AI_PROVIDER="$provider_hint" \
+        AI_MODEL="$gate_model" \
         CLAUDE_CMD="$CLAUDE_CMD" \
         EPAM_CLI="${EPAM_CLI:-epam}" \
-        "$AI_RUNNER_CMD" --provider "$provider_hint"
+        "$AI_RUNNER_CMD" --provider "$provider_hint" "${model_args[@]}"
 }
 
 stop_dashboards_watch() {
@@ -185,7 +211,7 @@ start_dashboards_watch() {
 }
 
 # Default configuration
-PHASE="finops"
+PHASE="${PHASE:-finops}"
 DRY_RUN=false
 SKIP_CLEANUP=false
 # Orchestration mode: bash (default, no change to existing flow) or hybrid
@@ -239,6 +265,10 @@ while [[ $# -gt 0 ]]; do
             PHASE="$2"
             shift 2
             ;;
+        --reset)
+            RESET_STORIES=true
+            shift
+            ;;
         --dry-run)
             DRY_RUN=true
             shift
@@ -270,6 +300,7 @@ in parallel, waits for completion, and runs review.
 Options:
   --phase NAME        Phase to execute (default: phase_wearables_test)
   --mode MODE         Orchestration mode: bash (default) or hybrid
+  --reset             Reset all story completed flags before running (clean re-run)
   --dry-run           Show execution plan without running
   --skip-cleanup      Don't cleanup worktrees on exit (for debugging)
   --help              Show this help message
@@ -289,6 +320,29 @@ EOF
             ;;
     esac
 done
+
+# Reset story completed flags if requested (idempotent re-runs)
+if [ "${RESET_STORIES:-false}" = "true" ]; then
+    log "Resetting story completed flags in $PRD_FILE..."
+    local_tmp=$(mktemp)
+    jq '(.stories[]? | select(.completed == true or .status == "failed")) |= (.completed = false | .status = "pending") |
+        (.phases[]?.stories[]? | select(.completed == true or .status == "failed")) |= (.completed = false | .status = "pending")' \
+        "$PRD_FILE" > "$local_tmp" && mv "$local_tmp" "$PRD_FILE"
+    success "Stories reset to pending"
+    # Clean up review artifacts for review stories being reset so AC pre-existing-file guard doesn't block re-runs
+    while IFS= read -r _review_id; do
+        [ -z "$_review_id" ] && continue
+        _review_artifact="$PROJECT_ROOT/review/${_review_id}-review.md"
+        if [ -f "$_review_artifact" ]; then
+            rm -f "$_review_artifact"
+            info "  Removed stale review artifact: review/${_review_id}-review.md"
+        fi
+    done < <(jq -r '.stories[]? | select(.agentRole == "review-agent") | .id' "$PRD_FILE" 2>/dev/null)
+    # Immediately push reset state to dashboard so viewer shows clean slate
+    if [ -n "${OUTPUT_DIR:-}" ]; then
+        cp "$PRD_FILE" "$OUTPUT_DIR/../prd.json" 2>/dev/null || true
+    fi
+fi
 
 # Verify prerequisites
 if [ ! -f "$CLAUDE_SH" ]; then
@@ -570,7 +624,7 @@ info "Open orchestrations/monitor.html in a browser to watch progress"
 # ──────────────────────────────────────────────
 run_pre_phase_assessment() {
     local phase_id=$1
-    local profiles_file="$AUTOMATION_DIR/agents/profiles.json"
+    local profiles_file="$AGENT_PROFILES_FILE"
     local profiles_backup="${profiles_file}.original"
     local profiles_audit="$LOG_DIR/profiles-audit.jsonl"
     local assessment_log="$LOG_DIR/pre-assessment-${phase_id}.log"
@@ -875,13 +929,18 @@ You are the skill assessment agent. Analyze the phase cost data and produce an a
 
 ## Task
 1. Read orchestrations/logs/phase-cost.jsonl and filter for phase_id="$phase_id"
-2. For each task, compare elapsed_minutes vs forecast_hours (converted to minutes)
-3. Calculate phase-level totals and variance
-4. Write a single-line JSON assessment to orchestrations/logs/phase-skill-assessments.jsonl with fields:
+   IMPORTANT: The log accumulates records across multiple runs. For each story_id, use ONLY the
+   most recent record (highest started_at timestamp). Discard all earlier records for the same story_id.
+2. Cross-reference each story's status against ${PRD_REL}: if the story has "completed": true in the
+   PRD, treat it as succeeded regardless of older cost-log entries. The PRD is the source of truth for
+   current completion state; the cost log is used only for timing/cost figures from the latest run.
+3. For each task (using latest record only), compare elapsed_minutes vs forecast_hours (converted to minutes)
+4. Calculate phase-level totals and variance
+5. Write a single-line JSON assessment to orchestrations/logs/phase-skill-assessments.jsonl with fields:
    phase_id, phase_name, actual_minutes, forecast_minutes, actual_cost_usd, forecast_cost_usd,
    variance_minutes, variance_cost_usd, over_threshold (bool), agent_recommendations (array), notes
-5. Write a human-readable improvement report to orchestrations/logs/phase-improvements/${phase_id}.md
-6. CORRECTIVE ACTION: If any task's description clearly requires a different skill domain than the assigned agentRole,
+6. Write a human-readable improvement report to orchestrations/logs/phase-improvements/${phase_id}.md
+7. CORRECTIVE ACTION: If any task's description clearly requires a different skill domain than the assigned agentRole,
    update ${PRD_REL} to change agentRole for FUTURE phase stories that have the same mismatch.
    - Only modify stories that are status "pending" and completed false
    - Only modify stories in phases AFTER the current phase (do NOT modify completed phase stories)
@@ -949,6 +1008,12 @@ if [ -n "$review_stories" ]; then
     while IFS= read -r story; do
         [ -z "$story" ] && continue
     "$SCRIPT_DIR/update-monitor.sh" event "code_review" "Team Lead code review completed" "" "main" "team-lead-agent" 2>/dev/null || true
+        # Remove stale review artifact before each run so the pre-existing-file AC never blocks a retry
+        _stale_review="$PROJECT_ROOT/review/${story}-review.md"
+        if [ -f "$_stale_review" ]; then
+            rm -f "$_stale_review"
+            info "  Removed stale review artifact before retry: review/${story}-review.md"
+        fi
         log "  Running review: $story"
         "$CLAUDE_SH" "$story" 2>&1 | tee "$LOG_DIR/review-${story}.log"
     done <<< "$review_stories"
@@ -970,7 +1035,7 @@ run_testing_gates() {
     local phase_id="$1"
     local gate_log="$LOG_DIR/testing-gates-${phase_id}.log"
     local gate_jsonl="$LOG_DIR/testing-gates.jsonl"
-    local profiles_file="$SCRIPT_DIR/../agents/profiles.json"
+    local profiles_file="$AGENT_PROFILES_FILE"
     local failed=0
     local force_lightpanda="${FORCE_LIGHTPANDA:-0}"
     local force_playwright="${FORCE_PLAYWRIGHT:-0}"
@@ -1005,6 +1070,7 @@ run_testing_gates() {
         return 0
     fi
 
+    cd "$PROJECT_ROOT"
     log "Step 4.2: Running testing gates for phase '$phase_id'..."
     info "  E2E routing overrides: FORCE_LIGHTPANDA=$force_lightpanda FORCE_PLAYWRIGHT=$force_playwright (decision=$routing_decision)"
     echo "=== Testing Gates: $phase_id @ $(date -Iseconds) ===" > "$gate_log"
@@ -1213,8 +1279,9 @@ E2E routing override context:
 Run the following checks and produce a structured JSON report:
 
 1. TypeScript compiler diagnostics:
-   Run: ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit 2>&1
-   Parse output for errors. Each error is a finding with severity 'major'.
+   Find the node binary: try 'node', then check ~/.nvm/versions/node/*/bin/node and ~/.local/share/fnm/node-versions/*/installation/bin/node (pick the highest version).
+   Run: <node> ./node_modules/.bin/tsc --noEmit 2>&1 (from project root: $PROJECT_ROOT)
+   Parse output for errors. Each error is a finding with severity 'major'. If no node_modules/.bin/tsc exists, skip this check and note it in the report.
 
 2. Security pattern scan on changed/new files in this phase:
    - Command injection: unsanitised input to child_process.exec/spawn
@@ -1812,6 +1879,11 @@ jq -r --arg phase "$PHASE" \
     "$PRD_FILE"
 
 echo ""
+
+# Sync live prd.json to dashboard directory so dashboards reflect completed status
+if [ -n "${OUTPUT_DIR:-}" ] && [ -f "$PRD_FILE" ]; then
+    cp "$PRD_FILE" "$OUTPUT_DIR/../prd.json" 2>/dev/null || true
+fi
 
 # Finalize monitor
 "$SCRIPT_DIR/update-monitor.sh" finalize 2>/dev/null || true

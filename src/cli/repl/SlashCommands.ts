@@ -34,6 +34,8 @@ import { userCommand } from './commands/UserCommand.js';
 import { agentCommand } from './commands/AgentCommand.js';
 import { skillsCommand } from './commands/SkillsCommand.js';
 import { remoteCommand } from './commands/RemoteCommand.js';
+import { memoryCommand } from './commands/MemoryCommand.js';
+import { addDirCommand } from './commands/AddDirCommand.js';
 
 export interface SlashCommandContext {
   config: ResolvedConfig;
@@ -89,6 +91,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   // ── /help ──────────────────────────────────────────────────────────────────
   {
     name: 'help',
+    aliases: ['commands', 'cmds'],
     description: 'Show available slash commands',
     async execute(_args, _ctx) {
       console.log(chalk.bold('\nSlash Commands:\n'));
@@ -546,6 +549,8 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   agentCommand,
   skillsCommand,
   remoteCommand,
+  memoryCommand,
+  addDirCommand,
 ];
 
 function statusIcon_(status: HealthStatus): string {

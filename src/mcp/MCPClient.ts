@@ -267,21 +267,21 @@ export class MCPClient {
       return { source: this.config.baseUrl, items: [], error: undefined };
     }
 
-    const ticket = await response.json();
-    
+    const ticket = await response.json() as Record<string, any>;
+
     if (process.env.EPAM_DEBUG === '1') {
-      console.error('[JIRA] Ticket found:', ticket.key, ticket.fields?.summary);
+      console.error('[JIRA] Ticket found:', ticket['key'], ticket['fields']?.summary);
     }
-    
+
     return {
       source: this.config.baseUrl,
       items: [{
-        id: ticket.key || ticketId,
-        title: ticket.fields?.summary || 'Unknown',
-        status: ticket.fields?.status?.name || 'Unknown',
-        url: `${process.env.ATLASSIAN_BASE_URL || process.env.JIRA_URL || ''}/browse/${ticket.key || ticketId}`,
-        updated: ticket.fields?.updated || new Date().toISOString(),
-        summary: `${ticket.key || ticketId}: ${ticket.fields?.summary || 'No summary'} (${ticket.fields?.status?.name || 'Unknown'})`,
+        id: ticket['key'] || ticketId,
+        title: ticket['fields']?.summary || 'Unknown',
+        status: ticket['fields']?.status?.name || 'Unknown',
+        url: `${process.env.ATLASSIAN_BASE_URL || process.env.JIRA_URL || ''}/browse/${ticket['key'] || ticketId}`,
+        updated: ticket['fields']?.updated || new Date().toISOString(),
+        summary: `${ticket['key'] || ticketId}: ${ticket['fields']?.summary || 'No summary'} (${ticket['fields']?.status?.name || 'Unknown'})`,
       }],
     };
   }

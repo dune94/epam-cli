@@ -60,9 +60,9 @@ async function showMCPStatus(ctx: SlashCommandContext): Promise<boolean> {
   console.log(chalk.bold('Connected Sources:'));
   console.log();
   
-  for (const [name, client] of Object.entries(clients)) {
+  for (const [name, client] of Object.entries(clients) as [string, any][]) {
     console.log(chalk.green(`✓ ${name}`));
-    console.log(chalk.dim(`  ${client['config'].baseUrl}`));
+    console.log(chalk.dim(`  ${client.config?.baseUrl}`));
     console.log();
   }
   
@@ -93,7 +93,7 @@ async function queryMCP(source: string, query: string, ctx: SlashCommandContext)
   if (source === 'all') {
     // Query all sources
     const results = await Promise.all(
-      Object.entries(clients).map(async ([name, client]) => {
+      (Object.entries(clients) as [string, any][]).map(async ([name, client]) => {
         const result = await client.search(query);
         return { name, ...result };
       })
@@ -138,19 +138,19 @@ function displayResults(results: Array<{ name: string; source: string; items: un
     console.log(chalk.bold(`[${result.name.toUpperCase()}] ${result.items.length} result(s):`));
     console.log();
     
-    for (const item of result.items.slice(0, 5)) {
-      console.log(chalk.cyan(`  • ${item.title}`));
-      
-      if (item.status) {
-        console.log(chalk.dim(`    Status: ${item.status}`));
+    for (const item of result.items.slice(0, 5) as Record<string, unknown>[]) {
+      console.log(chalk.cyan(`  • ${item['title']}`));
+
+      if (item['status']) {
+        console.log(chalk.dim(`    Status: ${item['status']}`));
       }
-      
-      if (item.updated) {
-        console.log(chalk.dim(`    Updated: ${item.updated}`));
+
+      if (item['updated']) {
+        console.log(chalk.dim(`    Updated: ${item['updated']}`));
       }
-      
-      if (item.url) {
-        console.log(chalk.dim(`    URL: ${item.url}`));
+
+      if (item['url']) {
+        console.log(chalk.dim(`    URL: ${item['url']}`));
       }
       
       console.log();

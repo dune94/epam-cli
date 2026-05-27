@@ -68,7 +68,7 @@ describe('MCP Isolation', () => {
       } as Response);
 
       const client = new MCPClient({ baseUrl: 'http://localhost:9010' });
-      const result = await client.query({ query: 'test' });
+      const result = await client.query({ query: 'PROJ-123' });
       
       expect(result.items.length).toBe(1);
       expect(result.items[0].id).toBe('PROJ-123');
@@ -109,8 +109,8 @@ describe('MCP Isolation', () => {
       // Set env var for JIRA
       process.env.MCP_JIRA_URL = 'http://localhost:9010';
 
-      const result = await autoQueryMCP('how many jira tickets?');
-      
+      const result = await autoQueryMCP('what is jira ticket PROJ-123?');
+
       expect(result.length).toBe(1);
       expect(result[0].items.length).toBe(1);
 

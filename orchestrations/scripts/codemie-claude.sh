@@ -162,7 +162,7 @@ normalize_provider_json() {
 # Claude CLI permission flags
 # These allow Claude to read/write files and execute commands without prompting
 CLAUDE_PERMISSIONS=(
-    "--dangerously-bypass-approvals-and-sandbox"  # Skip all permission prompts for autonomous operation
+    "--dangerously-skip-permissions"
 )
 
 # Alternative: Use granular permissions (uncomment if preferred over skip-permissions)
@@ -393,7 +393,7 @@ PLAN_PROMPT_EOF
     log "Plan mode: generating execution plan for $story_id..."
     touch "$messages_jsonl"
     cd "$PROJECT_ROOT"
-    if echo "$plan_prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --print --output-format json \
+    if echo "$plan_prompt" | "$CLAUDE_CMD" --print --output-format json \
             "${CLAUDE_PERMISSIONS[@]}" 2>/dev/null > "$plan_json"; then
         jq -r '.result // empty' "$plan_json" 2>/dev/null >> "$plan_log" || true
         success "Plan mode completed for $story_id — see $plan_log"
@@ -787,7 +787,7 @@ $(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
                 ;;
             codemie-claude)
                 # codemie-claude: same invocation pattern as claude — --print --output-format json
-                if echo "$prompt" | env -u CLAUDECODE codemie-claude --print --output-format json \
+                if echo "$prompt" | codemie-claude --print --output-format json \
                         "${model_flag[@]}" "${turns_flag[@]}" "${CLAUDE_PERMISSIONS[@]}" \
                         2>/dev/null > "$json_result_file"; then
                     invoke_success=true
@@ -795,7 +795,7 @@ $(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
                 ;;
             epam)
                 # epam: treat same as claude — same CLI, same output format
-                if echo "$prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --print --output-format json \
+                if echo "$prompt" | "$CLAUDE_CMD" --print --output-format json \
                         "${model_flag[@]}" "${turns_flag[@]}" "${CLAUDE_PERMISSIONS[@]}" \
                         2>/dev/null > "$json_result_file"; then
                     invoke_success=true
@@ -804,7 +804,7 @@ $(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
             *)
                 # Claude (claude-sonnet, claude-opus, or any claude-* value)
                 # --print --output-format json captures cost+tokens in a single JSON object
-                if echo "$prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --print --output-format json \
+                if echo "$prompt" | "$CLAUDE_CMD" --print --output-format json \
                         "${model_flag[@]}" "${turns_flag[@]}" "${CLAUDE_PERMISSIONS[@]}" \
                         2>/dev/null > "$json_result_file"; then
                     invoke_success=true
@@ -874,11 +874,9 @@ update_story_status() {
             warning "Story $story_id marked as failed"
             update_agents_file "$story_id" "failed"
         fi
-        # Sync PRD_FILE to orchestrations/game-prd.json if it's a non-default PRD (for dashboard viewers)
-        local default_prd="$AUTOMATION_DIR/prd.json"
-        if [ "$prd_target" != "$default_prd" ] && [ -f "$prd_target" ]; then
-            local sync_dest="$AUTOMATION_DIR/game-prd.json"
-            cp "$prd_target" "$sync_dest" 2>/dev/null || true
+        # Sync live PRD to dashboard prd.json so viewers update in real-time
+        if [ -n "${OUTPUT_DIR:-}" ] && [ -f "$prd_target" ]; then
+            cp "$prd_target" "$OUTPUT_DIR/../prd.json" 2>/dev/null || true
         fi
     ) 200>"$lock_file"
 }
@@ -1673,7 +1671,7 @@ PROMPT_HEADER
     )
 
     cd "$PROJECT_ROOT"
-    if echo "$assessment_prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --dangerously-bypass-approvals-and-sandbox 2>&1 | tee "$assessment_log"; then
+    if echo "$assessment_prompt" | "$CLAUDE_CMD" --print --output-format text --dangerously-skip-permissions 2>&1 | tee "$assessment_log"; then
         success "Pre-phase assessment completed for '$phase_id'"
         if ! jq empty "$profiles_file" 2>/dev/null; then
             warning "Pre-phase assessment may have corrupted profiles.json! Restoring backup."

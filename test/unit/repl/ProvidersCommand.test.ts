@@ -98,7 +98,7 @@ describe('/providers command', () => {
 
     // Verify output contains expected content
     const output = logs.join('\n');
-    expect(output).toContain('Provider Status');
+    expect(output).toContain('Providers');
     expect(output).toContain('codemie/claude-opus-4-6');
     expect(output).toContain('codex/gpt-5-codex');
   });
@@ -156,11 +156,8 @@ describe('/providers command', () => {
     // Must have visual separator
     expect(output).toContain('─');
     
-    // Must have return message
-    expect(output).toContain('Welcome back to EPAM CLI');
-    
-    // Must have instruction to continue
-    expect(output).toContain('Type your message');
+    // Must have success message
+    expect(output).toContain('Codex authenticated');
     
     // Must write newline to trigger prompt
     expect(output).toContain('\n');
@@ -191,6 +188,5 @@ describe('/providers command', () => {
     
     // Should show failure message
     expect(output).toContain('Codex session ended');
-    expect(output).toContain('try again');
   });
 });

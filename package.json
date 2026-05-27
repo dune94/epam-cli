@@ -61,6 +61,7 @@
   },
   "devDependencies": {
     "@11ty/eleventy": "^3.1.2",
+    "@types/express": "^5.0.6",
     "@types/node": "^22.10.7",
     "@types/prompts": "^2.4.9",
     "@types/qrcode": "^1.5.6",

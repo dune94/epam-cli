@@ -190,7 +190,7 @@ export class AgentRunner {
       });
 
       messages.push({
-        role: 'tool',
+        role: 'user',
         content: toolResults.map(r => ({
           type: 'tool_result' as const,
           tool_use_id: r.toolUseId,

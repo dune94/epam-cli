@@ -56,9 +56,9 @@ export class CursorProvider implements LLMProvider {
         throw new Error(`Cursor API error: ${response.status} ${error}`);
       }
 
-      const data = await response.json();
-      
-      const candidate = data.candidates?.[0];
+      const data = await response.json() as Record<string, any>;
+
+      const candidate = data['candidates']?.[0];
       if (!candidate) {
         throw new Error('Cursor API returned no candidates');
       }
@@ -71,8 +71,8 @@ export class CursorProvider implements LLMProvider {
         content,
         stopReason: this.mapStopReason(candidate.finishReason),
         usage: {
-          inputTokens: data.usageMetadata?.promptTokenCount || 0,
-          outputTokens: data.usageMetadata?.candidatesTokenCount || 0,
+          inputTokens: data['usageMetadata']?.promptTokenCount || 0,
+          outputTokens: data['usageMetadata']?.candidatesTokenCount || 0,
         },
       };
 

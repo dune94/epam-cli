@@ -2,17 +2,22 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 
 const MODELS: Record<string, { provider: string; description: string; default?: boolean }> = {
-  'claude-opus-4-6': { provider: 'anthropic', description: 'Most powerful Claude model' },
-  'claude-sonnet-4-6': {
-    provider: 'anthropic',
-    description: 'Balanced performance and speed',
-    default: true,
-  },
-  'claude-haiku-4-5-20251001': { provider: 'anthropic', description: 'Fastest Claude model' },
-  'gpt-4o': { provider: 'openai', description: 'OpenAI GPT-4o multimodal' },
-  'gpt-4o-mini': { provider: 'openai', description: 'Smaller, faster GPT-4o' },
-  'gemini-1.5-pro': { provider: 'gemini', description: 'Google Gemini 1.5 Pro' },
-  'gemini-1.5-flash': { provider: 'gemini', description: 'Google Gemini 1.5 Flash (fast)' },
+  // ─── Anthropic ─────────────────────────────────────────────────────────────
+  'claude-opus-4-7':            { provider: 'anthropic', description: 'Latest and most capable Claude model' },
+  'claude-opus-4-6':            { provider: 'anthropic', description: 'Highly capable Claude Opus' },
+  'claude-sonnet-4-6':          { provider: 'anthropic', description: 'Balanced performance and speed', default: true },
+  'claude-haiku-4-5-20251001':  { provider: 'anthropic', description: 'Fastest Claude model' },
+  // ─── OpenAI ────────────────────────────────────────────────────────────────
+  'gpt-4.1':                    { provider: 'openai', description: 'GPT-4.1 flagship' },
+  'gpt-4.1-mini':               { provider: 'openai', description: 'GPT-4.1 efficient' },
+  'gpt-4o':                     { provider: 'openai', description: 'GPT-4o multimodal' },
+  'gpt-4o-mini':                { provider: 'openai', description: 'GPT-4o compact' },
+  'o3':                         { provider: 'openai', description: 'Advanced reasoning' },
+  'o4-mini':                    { provider: 'openai', description: 'o4 compact reasoning' },
+  // ─── Gemini ────────────────────────────────────────────────────────────────
+  'gemini-2.5-pro':             { provider: 'gemini', description: 'Google Gemini 2.5 Pro (most capable)' },
+  'gemini-2.5-flash':           { provider: 'gemini', description: 'Google Gemini 2.5 Flash (fast)' },
+  'gemini-2.0-flash':           { provider: 'gemini', description: 'Google Gemini 2.0 Flash' },
 };
 
 export function createModelsCommand(): Command {

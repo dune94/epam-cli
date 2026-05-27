@@ -643,10 +643,12 @@ export class Repl {
             break;
           }
         }
-        // Also remove any trailing tool messages
+        // Also remove any trailing tool result messages (user role with tool_result content)
         while (
           this.messages.length > 0 &&
-          this.messages[this.messages.length - 1].role === 'tool'
+          this.messages[this.messages.length - 1].role === 'user' &&
+          Array.isArray(this.messages[this.messages.length - 1].content) &&
+          (this.messages[this.messages.length - 1].content as Array<{type: string}>).every(c => c.type === 'tool_result')
         ) {
           this.messages.pop();
         }
@@ -694,7 +696,7 @@ export class Repl {
     const messageCount = this.messages.length;
     const userMessages = this.messages.filter(m => m.role === 'user').length;
     const assistantMessages = this.messages.filter(m => m.role === 'assistant').length;
-    const toolMessages = this.messages.filter(m => m.role === 'tool').length;
+    const toolMessages = this.messages.filter(m => m.role === 'user' && Array.isArray(m.content) && (m.content as Array<{type:string}>).every(c => c.type === 'tool_result')).length;
     
     // Get last user message for context
     const lastUserMsg = this.messages.filter(m => m.role === 'user').pop();

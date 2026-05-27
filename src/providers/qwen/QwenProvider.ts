@@ -77,16 +77,16 @@ export class QwenProvider implements LLMProvider {
       throw new Error(`OpenRouter/Qwen API error: ${response.status} ${error}`);
     }
 
-    const data = await response.json();
-    const choice = data.choices?.[0];
+    const data = await response.json() as Record<string, any>;
+    const choice = data['choices']?.[0];
     if (!choice) throw new Error('OpenRouter returned no choices');
 
     return {
       content: [{ type: 'text', text: choice.message?.content || '' }],
       stopReason: this.mapStopReason(choice.finish_reason),
       usage: {
-        inputTokens: data.usage?.prompt_tokens || 0,
-        outputTokens: data.usage?.completion_tokens || 0,
+        inputTokens: data['usage']?.prompt_tokens || 0,
+        outputTokens: data['usage']?.completion_tokens || 0,
       },
     };
   }
@@ -185,9 +185,9 @@ export class QwenProvider implements LLMProvider {
         throw new Error(`Qwen API error: ${response.status} ${error}`);
       }
 
-      const data = await response.json();
-      
-      const choice = data.output?.choices?.[0];
+      const data = await response.json() as Record<string, any>;
+
+      const choice = data['output']?.choices?.[0];
       if (!choice) {
         throw new Error('Qwen API returned no choices');
       }
@@ -200,8 +200,8 @@ export class QwenProvider implements LLMProvider {
         content,
         stopReason: this.mapStopReason(choice.finish_reason),
         usage: {
-          inputTokens: data.usage?.input_tokens || 0,
-          outputTokens: data.usage?.output_tokens || 0,
+          inputTokens: data['usage']?.input_tokens || 0,
+          outputTokens: data['usage']?.output_tokens || 0,
         },
       };
 

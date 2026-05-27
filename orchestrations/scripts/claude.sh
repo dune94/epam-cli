@@ -19,14 +19,17 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
-PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
+# Respect PROJECT_ROOT from environment (set by run-agent-orchestration.sh when PRD_FILE is external)
+PROJECT_ROOT="${PROJECT_ROOT:-$(dirname "$AUTOMATION_DIR")}"
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
 LOG_DIR="${OUTPUT_DIR:-$AUTOMATION_DIR/logs}"
 PROGRESS_LOG="$LOG_DIR/progress.txt"
 AGENTS_FILE="$AUTOMATION_DIR/agents/AGENTS.md"
 CLAUDE_OUTPUT_DIR="$LOG_DIR/claude_outputs"
-AGENT_PROFILES_FILE="$AUTOMATION_DIR/agents/profiles.json"
-MONITOR_STATUS_FILE="$LOG_DIR/agent-status.json"
+AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
+MONITOR_STATUS_FILE="${MONITOR_FILE:-$LOG_DIR/agent-status.json}"
+export MONITOR_FILE="$MONITOR_STATUS_FILE"
+export ACTIVITY_FILE="${ACTIVITY_FILE:-$LOG_DIR/agent-activity.jsonl}"
 
 # Git work root — the directory containing .git (defaults to PROJECT_ROOT)
 # Override when the git repo lives in a subdirectory (e.g., PROJECT_ROOT/application)
@@ -76,7 +79,7 @@ resolve_effort_settings() {
     case "$effort" in
         low)
             STORY_MODEL="$EFFORT_MODEL_LOW"
-            STORY_MAX_TURNS=10
+            STORY_MAX_TURNS=""
             ;;
         high)
             STORY_MODEL="$EFFORT_MODEL_HIGH"
@@ -84,7 +87,7 @@ resolve_effort_settings() {
             ;;
         *)  # medium (default)
             STORY_MODEL="$EFFORT_MODEL_MEDIUM"
-            STORY_MAX_TURNS=30
+            STORY_MAX_TURNS=""
             ;;
     esac
     log "  Effort[$effort] -> model=$(basename $STORY_MODEL) turns=${STORY_MAX_TURNS:-unlimited}"
@@ -207,7 +210,7 @@ normalize_provider_json() {
 # Claude CLI permission flags
 # These allow Claude to read/write files and execute commands without prompting
 CLAUDE_PERMISSIONS=(
-    "--dangerously-bypass-approvals-and-sandbox"  # Skip all permission prompts for autonomous operation
+    "--dangerously-skip-permissions"
 )
 
 # Alternative: Use granular permissions (uncomment if preferred over skip-permissions)
@@ -395,7 +398,7 @@ run_plan_mode() {
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
     local plan_log="$CLAUDE_OUTPUT_DIR/${story_id}_plan_$(date +'%Y%m%d_%H%M%S').log"
     local plan_json="${plan_log%.log}_result.json"
-    local messages_jsonl="$AUTOMATION_DIR/logs/agent-messages.jsonl"
+    local messages_jsonl="${MESSAGES_JSONL:-$LOG_DIR/agent-messages.jsonl}"
 
     local agent_role
     agent_role=$(jq -r --arg id "$story_id" \
@@ -414,7 +417,7 @@ You are a planning agent. Produce an execution-ready plan for story ${story_id} 
 6. Cost/effort forecast (confirm or adjust estimatedHours)
 
 ## On Completion
-Append a single-line JSON record to orchestrations/logs/agent-messages.jsonl:
+Append a single-line JSON record to ${messages_jsonl}:
 {
   "id":"plan_${story_id}_\$(date +%s)",
   "timestamp":"\$(date -Iseconds)",
@@ -428,7 +431,7 @@ Append a single-line JSON record to orchestrations/logs/agent-messages.jsonl:
   "body":"<one-sentence summary of key risks/steps>",
   "status":"new"
 }
-Write it atomically: (flock -w 10 9 >> orchestrations/logs/agent-messages.jsonl; printf '%s\n' '<json>' >&9) 9>>orchestrations/logs/agent-messages.jsonl
+Write it atomically: (flock -w 10 9 >> ${messages_jsonl}; printf '%s\n' '<json>' >&9) 9>>${messages_jsonl}
 
 ## Story to Plan
 Read orchestrations/prd.json for story ${story_id} full details, then produce the plan above.
@@ -449,8 +452,8 @@ PLAN_PROMPT_EOF
             plan_ok=true
         fi
     else
-        if echo "$plan_prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --print --output-format json \
-                "${CLAUDE_PERMISSIONS[@]}" 2>/dev/null > "$plan_json"; then
+        if echo "$plan_prompt" | "$CLAUDE_CMD" --print --output-format json \
+                "${CLAUDE_PERMISSIONS[@]}" 2>>"$plan_log" > "$plan_json"; then
             plan_ok=true
         fi
     fi
@@ -471,13 +474,11 @@ PLAN_PROMPT_EOF
 post_completion_message() {
     local story_id="$1"
     local status="$2"   # "completed" | "failed"
-    local messages_jsonl="$AUTOMATION_DIR/logs/agent-messages.jsonl"
+    local messages_jsonl="${MESSAGES_JSONL:-$LOG_DIR/agent-messages.jsonl}"
     local lock_file="${messages_jsonl}.lock"
 
-    # Skip if bash-only mode and bus hasn't been seeded yet
-    if [ "${ORCH_MODE:-bash}" != "hybrid" ] && [ ! -f "$messages_jsonl" ]; then
-        return 0
-    fi
+    # Always write — file is created by orchestration init for both bash and hybrid modes
+    touch "$messages_jsonl"
 
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
     local agent_role
@@ -525,7 +526,7 @@ log_to_monitor() {
     local event_type=$1
     local story_id=$2
     local message=$3
-    local monitor_file="$AUTOMATION_DIR/logs/agent-status.json"
+    local monitor_file="${MONITOR_FILE:-$LOG_DIR/agent-status.json}"
 
     # Only log if monitor file exists (orchestration mode)
     if [ ! -f "$monitor_file" ]; then
@@ -851,9 +852,9 @@ $(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
                 ;;
             codemie-claude)
                 # codemie-claude: same invocation pattern as claude — --print --output-format json
-                if echo "$prompt" | env -u CLAUDECODE codemie-claude --print --output-format json \
+                if echo "$prompt" | codemie-claude --print --output-format json \
                         "${model_flag[@]}" "${turns_flag[@]}" "${CLAUDE_PERMISSIONS[@]}" \
-                        2>/dev/null > "$json_result_file"; then
+                        2>>"$output_file" > "$json_result_file"; then
                     invoke_success=true
                 fi
                 ;;
@@ -889,13 +890,13 @@ $(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
                     fi
                     if echo "$prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
                             "${sdk_model_arg[@]}" "${sdk_think_arg[@]}" \
-                            --output "$json_result_file" 2>/dev/null; then
+                            --output "$json_result_file" 2>>"$output_file"; then
                         invoke_success=true
                     fi
                 else
-                    if echo "$prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --print --output-format json \
+                    if echo "$prompt" | "$CLAUDE_CMD" --print --output-format json \
                             "${model_flag[@]}" "${turns_flag[@]}" "${CLAUDE_PERMISSIONS[@]}" \
-                            2>/dev/null > "$json_result_file"; then
+                            2>>"$output_file" > "$json_result_file"; then
                         invoke_success=true
                     fi
                 fi
@@ -917,13 +918,13 @@ $(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
                     fi
                     if echo "$prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
                             "${sdk_model_arg[@]}" \
-                            --output "$json_result_file" 2>/dev/null; then
+                            --output "$json_result_file" 2>>"$output_file"; then
                         invoke_success=true
                     fi
                 else
-                    if echo "$prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --print --output-format json \
+                    if echo "$prompt" | "$CLAUDE_CMD" --print --output-format json \
                             "${model_flag[@]}" "${turns_flag[@]}" "${CLAUDE_PERMISSIONS[@]}" \
-                            2>/dev/null > "$json_result_file"; then
+                            2>>"$output_file" > "$json_result_file"; then
                         invoke_success=true
                     fi
                 fi
@@ -992,11 +993,9 @@ update_story_status() {
             warning "Story $story_id marked as failed"
             update_agents_file "$story_id" "failed"
         fi
-        # Sync PRD_FILE to orchestrations/game-prd.json if it's a non-default PRD (for dashboard viewers)
-        local default_prd="$AUTOMATION_DIR/prd.json"
-        if [ "$prd_target" != "$default_prd" ] && [ -f "$prd_target" ]; then
-            local sync_dest="$AUTOMATION_DIR/game-prd.json"
-            cp "$prd_target" "$sync_dest" 2>/dev/null || true
+        # Sync live PRD to dashboard prd.json so viewers update in real-time
+        if [ -n "${OUTPUT_DIR:-}" ] && [ -f "$prd_target" ]; then
+            cp "$prd_target" "$OUTPUT_DIR/../prd.json" 2>/dev/null || true
         fi
     ) 200>"$lock_file"
 }
@@ -1005,7 +1004,7 @@ update_story_status() {
 # Called after each story completes (success or failure) for phase-aware tracking
 append_cost_record() {
     local story_id=$1 status=$2 started_at=$3 ended_at=$4 output_file=$5 json_result_file=${6:-}
-    local cost_file="$AUTOMATION_DIR/logs/phase-cost.jsonl"
+    local cost_file="${PHASE_COST_FILE:-$LOG_DIR/phase-cost.jsonl}"
     local lock_file="${cost_file}.lock"
 
     # Read story metadata from prd.json
@@ -1784,7 +1783,7 @@ main() {
 
 run_pre_phase_assessment() {
     local phase_id=$1
-    local profiles_file="$AUTOMATION_DIR/agents/profiles.json"
+    local profiles_file="$AGENT_PROFILES_FILE"
     local profiles_backup="${profiles_file}.original"
     local profiles_audit="$LOG_DIR/profiles-audit.jsonl"
     local assessment_log="$LOG_DIR/pre-assessment-${phase_id}.log"
@@ -1828,7 +1827,7 @@ PROMPT_HEADER
     )
 
     cd "$PROJECT_ROOT"
-    if echo "$assessment_prompt" | env -u CLAUDECODE "$CLAUDE_CMD" --dangerously-bypass-approvals-and-sandbox 2>&1 | tee "$assessment_log"; then
+    if echo "$assessment_prompt" | "$CLAUDE_CMD" --print --output-format text --dangerously-skip-permissions 2>&1 | tee "$assessment_log"; then
         success "Pre-phase assessment completed for '$phase_id'"
         if ! jq empty "$profiles_file" 2>/dev/null; then
             warning "Pre-phase assessment may have corrupted profiles.json! Restoring backup."

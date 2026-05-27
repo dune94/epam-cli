@@ -31,7 +31,7 @@ export interface OrchestrationConfig {
   outputDir?: string;
   skipCpa?: boolean;
   strictCpa?: boolean;
-  worktree?: boolean;
+  worktree?: boolean; // true = parallel (hybrid mode), false = single-threaded (bash mode)
 }
 
 const CONFIG_FILE = '.epam/orchestration.json';
@@ -97,7 +97,7 @@ function runSetup(argsStr: string): boolean {
     console.log(`  ${chalk.bold('outputDir')}:  ${chalk.white(cfg.outputDir ?? chalk.dim('(default: orchestrations/logs)'))}`);
     console.log(`  ${chalk.bold('skipCpa')}:    ${chalk.white(String(cfg.skipCpa ?? false))}`);
     console.log(`  ${chalk.bold('strictCpa')}:  ${chalk.white(String(cfg.strictCpa ?? false))}`);
-    console.log(`  ${chalk.bold('worktree')}:   ${chalk.white(String(cfg.worktree ?? false))}`);
+    console.log(`  ${chalk.bold('worktree')}:   ${chalk.white(String(cfg.worktree ?? false))} ${chalk.dim('(true = parallel/hybrid, false = single-threaded/bash)')}`);
     console.log();
     console.log(chalk.dim('Usage: /orchestrate setup <key>=<value> [key=value ...]'));
     console.log(chalk.dim('  provider=copilot   mode=bash|hybrid   prd=path/to/prd.json'));
@@ -286,9 +286,11 @@ async function launchExecution(phase: string): Promise<boolean> {
   }
 
   // Build args from saved config
+  // worktree=true → hybrid (parallel), worktree=false → bash (sequential)
+  // explicit mode= overrides worktree when both are set
+  const resolvedMode = cfg.mode ?? (cfg.worktree === true ? 'hybrid' : cfg.worktree === false ? 'bash' : undefined);
   const args: string[] = ['--phase', phase];
-  if (cfg.mode) args.push('--mode', cfg.mode);
-  if (cfg.worktree) args.push('--worktree');
+  if (resolvedMode) args.push('--mode', resolvedMode);
 
   const env: Record<string, string> = {};
   if (cfg.provider)  env.EPAM_ORCHESTRATION_PROVIDER = cfg.provider;

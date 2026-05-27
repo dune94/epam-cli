@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { McpClient } from '../../../src/mcp/McpClient.js';
+import { McpClient } from '../../../src/mcp/McpClientLegacy.js';
 import type { McpToolDefinition } from '../../../src/mcp/types.js';
 import fs from 'fs/promises';
 

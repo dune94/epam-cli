@@ -120,7 +120,7 @@ export function createRemoteSessionRoutes(store: RemoteSessionStore) {
    */
   const claimSession: RequestHandler = async (req, res) => {
     try {
-      const { token } = req.params;
+      const token = Array.isArray(req.params.token) ? req.params.token[0] : req.params.token;
 
       const bundle = await store.claimSession(token);
 
@@ -149,7 +149,7 @@ export function createRemoteSessionRoutes(store: RemoteSessionStore) {
    */
   const returnSession: RequestHandler = async (req, res) => {
     try {
-      const { token } = req.params;
+      const token = Array.isArray(req.params.token) ? req.params.token[0] : req.params.token;
       const bundle = req.body as SessionBundle;
 
       // Validate bundle schema
@@ -182,7 +182,7 @@ export function createRemoteSessionRoutes(store: RemoteSessionStore) {
    */
   const reclaimSession: RequestHandler = async (req, res) => {
     try {
-      const { token } = req.params;
+      const token = Array.isArray(req.params.token) ? req.params.token[0] : req.params.token;
 
       const bundle = await store.reclaimReturn(token);
 

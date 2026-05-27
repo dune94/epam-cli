@@ -95,7 +95,7 @@ export function createCompleter(): readline.Completer {
  * Setup autocomplete on a readline interface
  */
 export function setupAutocomplete(rl: readline.Interface): void {
-  rl.completer = createCompleter();
+  (rl as any).completer = createCompleter();
 }
 
 /**

@@ -50,7 +50,7 @@ export const statusCommand: SlashCommand = {
     
     console.log(`  Registered: ${chalk.white(tools.length)}`);
     for (const tool of tools.slice(0, 5)) {
-      const permission = toolRunner?.getPermission?.(tool.name) || 'unknown';
+      const permission = (toolRunner as any)?.getPermission?.(tool.name) || 'unknown';
       const permissionColor = permission === 'dangerous' ? chalk.red : 
                              permission === 'warning' ? chalk.yellow : chalk.green;
       console.log(`    • ${chalk.cyan(tool.name)} ${permissionColor(`(${permission})`)}`);

@@ -93,10 +93,7 @@ function listServers(ctx: SlashCommandContext): boolean {
     console.log();
     
     for (const server of servers) {
-      const status = 'disconnected'; // Would check actual status
-      const statusIcon = status === 'connected' ? chalk.green('✓') :
-                        status === 'error' ? chalk.red('✗') :
-                        chalk.yellow('○');
+      const statusIcon = chalk.yellow('○'); // disconnected — live status not yet implemented
       
       console.log(`  ${statusIcon} ${chalk.cyan(server.name)}`);
       if (server.url) {
@@ -105,7 +102,7 @@ function listServers(ctx: SlashCommandContext): boolean {
         console.log(chalk.dim(`     Command: ${server.command} ${(server.args ?? []).join(' ')}`));
       }
       console.log(chalk.dim(`     Transport: ${server.transport}`));
-      console.log(chalk.dim(`     Status: ${status}`));
+      console.log(chalk.dim(`     Status: disconnected`));
       console.log();
     }
     

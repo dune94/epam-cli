@@ -82,11 +82,11 @@ run_provider_once() {
           return 1
         fi
       else
-        env -u CLAUDECODE "$CLAUDE_CMD" --dangerously-bypass-approvals-and-sandbox < "$PROMPT_FILE"
+        "$CLAUDE_CMD" --print --output-format text --dangerously-skip-permissions "${model_args[@]}" < "$PROMPT_FILE"
       fi
       ;;
     codemie-claude)
-      env -u CLAUDECODE codemie-claude --dangerously-bypass-approvals-and-sandbox < "$PROMPT_FILE"
+      codemie-claude --print --output-format text --dangerously-skip-permissions "${model_args[@]}" < "$PROMPT_FILE"
       ;;
     codex)
       if ! command -v "$EPAM_CLI" >/dev/null 2>&1; then

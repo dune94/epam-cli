@@ -13,11 +13,16 @@ dist/
 *.log
 /logs/
 
-# Orchestration logs (dynamic — keep only init files)
+# Orchestration logs (dynamic — all runtime artifacts)
 orchestrations/logs/*.jsonl
+orchestrations/logs/*.lock
 orchestrations/logs/phase-improvements/
 orchestrations/logs/claude_outputs/
-!orchestrations/logs/agent-status.json
+orchestrations/logs/agent-status.json
+orchestrations/logs/calibration.json
+orchestrations/logs/quality-summary.json
+orchestrations/logs/progress.txt
+orchestrations/logs/messages/
 
 # OS files
 .DS_Store
@@ -64,4 +69,3 @@ orchestrations/logs/spec-baseline.json
 orchestrations/logs/spec-run-latest.json
 orchestrations/logs/spec-summary.json
 orchestrations/logs/spec-runs/
-orchestrations/logs/messages/

@@ -36,6 +36,22 @@ function isPaused() {
   return fs.existsSync(PAUSED_SENTINEL);
 }
 
+// Read and parse the PAUSED sentinel content.
+// Returns a reason object, or null if not paused.
+function pauseReason() {
+  if (!isPaused()) return null;
+  try {
+    const raw = fs.readFileSync(PAUSED_SENTINEL, 'utf8').trim();
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return { reason: 'operator_pause', pausedAt: raw };
+    }
+  } catch {
+    return { reason: 'operator_pause' };
+  }
+}
+
 function pendingRedirects() {
   try {
     return fs.readdirSync(LOG_DIR)
@@ -94,15 +110,15 @@ const server = http.createServer(async (req, res) => {
 
   // GET /status
   if (method === 'GET' && pathname === '/status') {
-    send(res, 200, { paused: isPaused(), pendingRedirects: pendingRedirects() });
+    send(res, 200, { paused: isPaused(), pauseReason: pauseReason(), pendingRedirects: pendingRedirects() });
     return;
   }
 
   // POST /pause
   if (method === 'POST' && pathname === '/pause') {
-    fs.writeFileSync(PAUSED_SENTINEL, new Date().toISOString());
+    fs.writeFileSync(PAUSED_SENTINEL, JSON.stringify({ reason: 'operator_pause', pausedAt: new Date().toISOString() }));
     process.stdout.write(`[control-plane] PAUSED\n`);
-    send(res, 200, { paused: true });
+    send(res, 200, { paused: true, pauseReason: pauseReason() });
     return;
   }
 

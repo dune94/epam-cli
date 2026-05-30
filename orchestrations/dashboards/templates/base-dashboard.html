@@ -76,6 +76,23 @@ body {
 .ctrl-btn.danger:hover { background: rgba(248,113,113,.3); }
 .ctrl-btn.paused  { border-color: var(--amber); background: var(--amber-dim); color: var(--amber); }
 
+/* ── Pause banner ────────────────────────────────────────────────────────── */
+#pause-banner {
+  display: none; position: sticky; top: 57px; z-index: 190;
+  background: var(--amber-dim); border-bottom: 1px solid var(--amber);
+  padding: 10px 24px; font-size: 13px; color: var(--amber);
+  display: flex; align-items: center; gap: 12px;
+}
+#pause-banner.hidden { display: none !important; }
+#pause-banner .pb-icon { font-size: 16px; }
+#pause-banner .pb-msg  { flex: 1; }
+#pause-banner .pb-resume {
+  padding: 4px 12px; border-radius: 5px; border: 1px solid var(--amber);
+  background: transparent; color: var(--amber); font-size: 12px; font-weight: 700;
+  cursor: pointer;
+}
+#pause-banner .pb-resume:hover { background: var(--amber-dim); }
+
 /* ── Layout ──────────────────────────────────────────────────────────────── */
 .page { max-width: 1440px; margin: 0 auto; padding: 20px 24px 48px; }
 
@@ -259,6 +276,13 @@ canvas#cost-chart { max-height: 260px; }
   <!-- Offline warning -->
   <div class="offline-banner" id="offlineBanner">
     &#9888; Cannot reach orchestration data &mdash; retrying&hellip;
+  </div>
+
+  <!-- Pause banner (shown when orchestration is paused) -->
+  <div id="pause-banner" class="hidden">
+    <span class="pb-icon">&#9646;&#9646;</span>
+    <span class="pb-msg" id="pauseBannerMsg">Orchestration paused.</span>
+    <button class="pb-resume" onclick="handlePauseResume()">&#9654; Resume</button>
   </div>
 
   <!-- Redirect panel (hidden until toggled) -->
@@ -645,19 +669,56 @@ async function submitRedirect() {
 /* ══════════════════════════════════════════════════════════════════════════
    REFRESH LOOP
 ══════════════════════════════════════════════════════════════════════════ */
+async function fetchCpStatus() {
+  try {
+    const r = await fetch(`${CP_BASE}/status`);
+    return r.ok ? r.json() : null;
+  } catch { return null; }
+}
+
+function renderPauseBanner(cpStatus) {
+  const banner  = document.getElementById('pause-banner');
+  const msgEl   = document.getElementById('pauseBannerMsg');
+  const btn     = document.getElementById('pause-btn');
+  const dot     = document.getElementById('statusDot');
+  const lbl     = document.getElementById('statusLabel');
+
+  const paused = cpStatus?.paused ?? false;
+  isPaused = paused;
+
+  banner.classList.toggle('hidden', !paused);
+  btn.textContent = paused ? '▶ Resume' : '⏸ Pause';
+  btn.classList.toggle('paused', paused);
+
+  if (paused) {
+    dot.className = 'status-dot dot-paused';
+    lbl.textContent = 'Paused';
+    const pr = cpStatus?.pauseReason;
+    if (pr?.reason === 'budget_exceeded') {
+      msgEl.textContent = `Budget exceeded: $${Number(pr.actualCost).toFixed(2)} spent of $${Number(pr.budget).toFixed(2)} budget (phase: ${pr.phase}). Review spend then resume.`;
+    } else {
+      msgEl.textContent = 'Orchestration paused by operator.';
+    }
+  }
+}
+
 async function refresh() {
-  const [prd, activity, msgs] = await Promise.all([
+  const [prd, activity, msgs, cpStatus] = await Promise.all([
     loadPrd(),
     fetchJsonl(`${CONFIG.logsBasePath}/phase-cost.jsonl`),
-    fetchJsonl(`${CONFIG.logsBasePath}/messages/inbox-dashboard-orchestrator-agent.jsonl`)
+    fetchJsonl(`${CONFIG.logsBasePath}/messages/inbox-dashboard-orchestrator-agent.jsonl`),
+    fetchCpStatus()
   ]);
 
   const online = prd !== null;
   document.getElementById('offlineBanner').classList.toggle('visible', !online);
-  document.getElementById('statusDot').className   = `status-dot ${online ? 'dot-live' : 'dot-error'}`;
-  document.getElementById('statusLabel').textContent = online ? 'Live' : 'Offline';
-  document.getElementById('refreshTs').textContent   = new Date().toLocaleTimeString();
+  if (!isPaused) {
+    document.getElementById('statusDot').className    = `status-dot ${online ? 'dot-live' : 'dot-error'}`;
+    document.getElementById('statusLabel').textContent = online ? 'Live' : 'Offline';
+  }
+  document.getElementById('refreshTs').textContent = new Date().toLocaleTimeString();
 
+  renderPauseBanner(cpStatus);
   renderKpis(_prdStories, _prdPhases);
   renderPhases(_prdPhases);
   renderStoryTable(_prdStories);

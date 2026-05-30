@@ -209,6 +209,49 @@ stop_control_plane() {
     CONTROL_PLANE_PID=""
 }
 
+# Check actual phase spend against prd.json budget.
+# If exceeded, writes a JSON PAUSED sentinel so wait_if_paused() blocks and
+# the dashboard can display the reason. Operator resumes via dashboard Resume button.
+# Bypass: SKIP_COST_GUARD=true
+check_cost_budget() {
+    [ "${SKIP_COST_GUARD:-false}" = "true" ] && return
+    local cost_file="$LOG_DIR/phase-cost.jsonl"
+    [ -f "$cost_file" ] || return
+    local budget
+    budget=$(jq -r '.budget // empty' "$PRD_FILE" 2>/dev/null || true)
+    [ -z "$budget" ] || [ "$budget" = "null" ] && return
+    local actual
+    local _cost_py='
+import sys, json
+cost_file, phase = sys.argv[1], sys.argv[2]
+total = 0.0
+with open(cost_file) as f:
+    for line in f:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+            if rec.get("phase_id") == phase or rec.get("phase") == phase:
+                total += float(rec.get("actual_cost_usd", rec.get("cost_usd", 0)) or 0)
+        except Exception:
+            pass
+print(f"{total:.4f}")
+'
+    actual=$(echo "$_cost_py" | python3 - "$cost_file" "$PHASE" 2>/dev/null || echo "0")
+    if python3 -c "import sys; sys.exit(0 if float('${actual}') >= float('${budget}') else 1)" 2>/dev/null; then
+        warning "Cost circuit breaker: actual=\$${actual} >= budget=\$${budget} for phase '$PHASE'"
+        warning "Orchestration paused — resume from dashboard after reviewing spend"
+        printf '%s' "$(jq -n \
+            --arg reason "budget_exceeded" \
+            --arg phase "$PHASE" \
+            --argjson actual "$actual" \
+            --argjson budget "$budget" \
+            '{reason:$reason, phase:$phase, actualCost:$actual, budget:$budget, pausedAt:(now|todate)}'
+        )" > "$LOG_DIR/PAUSED"
+    fi
+}
+
 # Block until the PAUSED sentinel is removed (operator resumes via dashboard).
 # Checks every 5 seconds; logs a reminder every 60 seconds.
 wait_if_paused() {
@@ -889,6 +932,7 @@ if [ -n "$main_stories" ]; then
         log "Step 1: Running main-branch stories..."
         while IFS= read -r story; do
             [ -z "$story" ] && continue
+            check_cost_budget
             wait_if_paused
             apply_redirect_if_any "$story"
             log "  Running: $story"

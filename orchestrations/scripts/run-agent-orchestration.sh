@@ -1645,6 +1645,59 @@ $semgrep_summary
 
 $sast_prompt"
 
+        # ── npm audit Oracle: inject dependency CVE evidence ──
+        local audit_json="$LOG_DIR/npm-audit-oracle-${phase_id}.json"
+        local audit_summary=""
+        local _npm_bin
+        _npm_bin=$(command -v npm 2>/dev/null || true)
+        if [ -n "$_npm_bin" ] && [ -f "$PROJECT_ROOT/package.json" ]; then
+            set +e
+            "$_npm_bin" audit --json --prefix "$PROJECT_ROOT" \
+                > "$audit_json" 2>/dev/null
+            local _audit_rc=$?
+            set -e
+            if [ -f "$audit_json" ] && [ -s "$audit_json" ]; then
+                local _audit_py='
+import sys, json
+try:
+    with open(sys.argv[1]) as f:
+        data = json.load(f)
+    vulns = data.get("vulnerabilities", {})
+    meta  = data.get("metadata", {}).get("vulnerabilities", {})
+    total      = sum(meta.values()) if meta else len(vulns)
+    critical   = meta.get("critical", 0)
+    high       = meta.get("high", 0)
+    moderate   = meta.get("moderate", 0)
+    low        = meta.get("low", 0)
+    lines = [f"total={total}  critical={critical}  high={high}  moderate={moderate}  low={low}"]
+    shown = 0
+    for name, v in vulns.items():
+        if shown >= 15:
+            lines.append(f"  ... and {len(vulns)-shown} more packages")
+            break
+        sev  = v.get("severity", "?")
+        via  = ", ".join(str(x.get("title", x) if isinstance(x, dict) else x)
+                         for x in (v.get("via") or [])[:2])
+        lines.append(f"  [{sev}] {name}: {via[:100]}")
+        shown += 1
+    print("\n".join(lines))
+except Exception as e:
+    print(f"(audit parse error: {e})")
+'
+                audit_summary=$(echo "$_audit_py" | python3 - "$audit_json" 2>/dev/null \
+                    || echo "(audit parse error)")
+            else
+                audit_summary="(npm audit produced no output — exit code $_audit_rc)"
+            fi
+        else
+            audit_summary="(npm audit skipped — npm not found or no package.json)"
+        fi
+
+        sast_prompt="## npm Audit Results (hard evidence — dependency CVEs)
+$audit_summary
+
+$sast_prompt"
+
         run_orch_prompt "$sast_prompt" 2>&1 | tee "$sast_log"
     } &
     local sast_pid=$!

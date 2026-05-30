@@ -1,0 +1,252 @@
+{
+  "id": "hello-world-test-v1",
+  "title": "Hello World — Repeatable Orchestration Test App",
+  "version": "1.0.0",
+  "lastUpdated": "2026-05-24",
+  "project": {
+    "name": "hello-world",
+    "description": "Minimal repeatable TypeScript app used to validate the full autonomous orchestration pipeline end-to-end",
+    "stack": {
+      "language": "TypeScript",
+      "runtime": "Node.js 24",
+      "testing": "vitest",
+      "devEnvironment": "Ubuntu WSL2"
+    }
+  },
+  "configuration": {
+    "profilesPath": "profiles.test.json",
+    "autoCommit": false,
+    "requireTests": true,
+    "budget": 5,
+    "aiRuntime": {
+      "provider": "claude",
+      "defaultModel": "claude-sonnet-4-6"
+    }
+  },
+  "implementationOrder": {
+    "hello_world_test": [
+      "HW-001",
+      "HW-002",
+      "HW-003"
+    ]
+  },
+  "phasesConfig": {
+    "hello_world_test": {
+      "orchestrationMode": "bash",
+      "aiProvider": "claude",
+      "description": "End-to-end orchestration test — implement greet.ts, verify tests, review code"
+    }
+  },
+  "stories": [
+    {
+      "id": "HW-001",
+      "title": "Implement greet() function",
+      "description": "Create the file greet.ts in the project root. It must export a single function greet(name: string): string that returns the string Hello, <name>! where <name> is the argument passed in. Do NOT modify greet.test.ts, package.json, tsconfig.json, or main.ts.",
+      "priority": "critical",
+      "status": "completed",
+      "completed": true,
+      "agentGroup": "main",
+      "agentRole": "typescript-engineer",
+      "acceptanceCriteria": [
+        "greet.ts exists in the project root",
+        "greet.ts exports a function with signature: export function greet(name: string): string",
+        "greet('World') returns 'Hello, World!'",
+        "greet('Alice') returns 'Hello, Alice!'",
+        "greet('Bob') returns 'Hello, Bob!'",
+        "greet('X').length is greater than 0",
+        "npm test passes with all 3 vitest tests in greet.test.ts green",
+        "greet.test.ts is not modified",
+        "package.json is not modified",
+        "tsconfig.json is not modified"
+      ],
+      "dependencies": [],
+      "technicalNotes": {
+        "files": [
+          "greet.ts"
+        ],
+        "requiredSkills": [
+          "TypeScript",
+          "vitest"
+        ]
+      },
+      "storyType": "implementation",
+      "aiProvider": "claude",
+      "effort": "low",
+      "specification": {
+        "runId": "20260525T162931Z",
+        "assignedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "coordinatorNotes": "",
+        "status": "assigned",
+        "updatedAt": "2026-05-25T16:29:31.708Z",
+        "appliedAgents": [],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": false,
+            "notes": "Agent output could not be parsed",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-05-25T16:29:31.653Z"
+          },
+          {
+            "agent": "speckit",
+            "applied": false,
+            "notes": "Agent output could not be parsed",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-05-25T16:29:31.708Z"
+          }
+        ]
+      },
+      "estimatedAiMinutes": 1.7200,
+      "estimatedCost": 0.4820,
+      "estimatedTokens": 370474,
+      "estimatedTurns": 11,
+      "estimatedHours": 0.0286,
+      "cpaConfidence": 0.7,
+      "cpaGate": "pass",
+      "completedAt": "2026-05-25T12:29:33-04:00"
+    },
+    {
+      "id": "HW-002",
+      "title": "Verify all tests pass",
+      "description": "Run npm test and confirm all 3 vitest tests in greet.test.ts pass. Do not modify any files. Report the full test output.",
+      "priority": "critical",
+      "status": "completed",
+      "completed": true,
+      "agentGroup": "main",
+      "agentRole": "test-engineer",
+      "acceptanceCriteria": [
+        "npm test exits with code 0",
+        "Test Files: 1 passed (1) is present in output",
+        "Tests: 3 passed (3) is present in output",
+        "No tests are skipped, marked todo, or only",
+        "No files are modified during this story"
+      ],
+      "dependencies": [
+        "HW-001"
+      ],
+      "technicalNotes": {
+        "files": [],
+        "requiredSkills": [
+          "TypeScript",
+          "vitest"
+        ]
+      },
+      "storyType": "verification",
+      "aiProvider": "claude",
+      "effort": "low",
+      "specification": {
+        "runId": "20260525T162931Z",
+        "assignedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "coordinatorNotes": "",
+        "status": "assigned",
+        "updatedAt": "2026-05-25T16:29:31.810Z",
+        "appliedAgents": [],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": false,
+            "notes": "Agent output could not be parsed",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-05-25T16:29:31.761Z"
+          },
+          {
+            "agent": "speckit",
+            "applied": false,
+            "notes": "Agent output could not be parsed",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-05-25T16:29:31.810Z"
+          }
+        ]
+      },
+      "estimatedAiMinutes": 0.0000,
+      "estimatedCost": 0.0000,
+      "estimatedTokens": 0,
+      "estimatedTurns": 1,
+      "estimatedHours": 0.0000,
+      "cpaConfidence": 0.7,
+      "cpaGate": "pass",
+      "completedAt": "2026-05-25T12:29:33-04:00"
+    },
+    {
+      "id": "HW-003",
+      "title": "Code review greet.ts",
+      "description": "Review greet.ts against the acceptance criteria in HW-001. Produce a structured review report with findings by severity: blocker, major, minor. Confirm all acceptance criteria are met and npm test passes.",
+      "priority": "high",
+      "status": "completed",
+      "completed": true,
+      "agentGroup": "main",
+      "agentRole": "review-agent",
+      "acceptanceCriteria": [
+        "Review report produced with Summary and Findings sections",
+        "Overall verdict is pass or fail — not omitted",
+        "Each finding includes: severity, file, description, and suggested fix",
+        "All 10 acceptance criteria from HW-001 are explicitly verified in the report",
+        "No blocker findings are present if verdict is pass",
+        "greet.ts is not modified during review"
+      ],
+      "dependencies": [
+        "HW-001",
+        "HW-002"
+      ],
+      "technicalNotes": {
+        "files": [],
+        "requiredSkills": [
+          "TypeScript",
+          "code-review",
+          "vitest"
+        ]
+      },
+      "storyType": "review",
+      "aiProvider": "claude",
+      "effort": "low",
+      "specification": {
+        "runId": "20260525T162931Z",
+        "assignedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "coordinatorNotes": "",
+        "status": "assigned",
+        "updatedAt": "2026-05-25T16:29:31.908Z",
+        "appliedAgents": [],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": false,
+            "notes": "Agent output could not be parsed",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-05-25T16:29:31.857Z"
+          },
+          {
+            "agent": "speckit",
+            "applied": false,
+            "notes": "Agent output could not be parsed",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-05-25T16:29:31.908Z"
+          }
+        ]
+      },
+      "estimatedAiMinutes": 6.3450,
+      "estimatedCost": 0.5605,
+      "estimatedTokens": 392490,
+      "estimatedTurns": 11,
+      "estimatedHours": 0.1057,
+      "cpaConfidence": 0.7,
+      "cpaGate": "pass",
+      "completedAt": "2026-05-25T12:29:34-04:00"
+    }
+  ],
+  "currentIteration": 14
+}

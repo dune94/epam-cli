@@ -63,6 +63,9 @@ DASHBOARD_WATCH_PID_FILE="$LOG_DIR/dashboards-watch.pid"
 DASHBOARD_WATCH_LOG="$LOG_DIR/dashboards-watch.log"
 DASHBOARD_WATCH_PID=""
 DASHBOARD_WATCH_OWNED=false
+CONTROL_PLANE_PORT="${CONTROL_PLANE_PORT:-8094}"
+CONTROL_PLANE_PID=""
+CONTROL_PLANE_LOG="$LOG_DIR/control-plane.log"
 
 # Colors
 RED='\033[0;31m'
@@ -164,6 +167,89 @@ stop_dashboards_watch() {
     DASHBOARD_WATCH_OWNED=false
 }
 
+start_control_plane() {
+    if [ "${EPAM_CONTROL_PLANE:-1}" != "1" ]; then
+        info "Control plane disabled (EPAM_CONTROL_PLANE=0)."
+        return
+    fi
+    local _node_bin
+    _node_bin=$(detect_node 2>/dev/null || true)
+    if [ -z "$_node_bin" ]; then
+        warning "Control plane: node binary not found — skipping."
+        return
+    fi
+    local cp_script="$SCRIPT_DIR/control-plane.js"
+    if [ ! -f "$cp_script" ]; then
+        warning "Control plane script not found at $cp_script — skipping."
+        return
+    fi
+    # Remove stale PAUSED sentinel from a previous run
+    rm -f "$LOG_DIR/PAUSED"
+    CONTROL_PLANE_PORT="${CONTROL_PLANE_PORT:-8094}" \
+    LOG_DIR="$LOG_DIR" \
+        "$_node_bin" "$cp_script" >> "$CONTROL_PLANE_LOG" 2>&1 &
+    CONTROL_PLANE_PID=$!
+    sleep 0.5
+    if ! ps -p "$CONTROL_PLANE_PID" > /dev/null 2>&1; then
+        warning "Control plane exited immediately; see $CONTROL_PLANE_LOG"
+        CONTROL_PLANE_PID=""
+        return
+    fi
+    info "Control plane started (PID $CONTROL_PLANE_PID, port $CONTROL_PLANE_PORT)"
+}
+
+stop_control_plane() {
+    if [ -z "$CONTROL_PLANE_PID" ]; then
+        return
+    fi
+    if ps -p "$CONTROL_PLANE_PID" > /dev/null 2>&1; then
+        kill "$CONTROL_PLANE_PID" 2>/dev/null || true
+        wait "$CONTROL_PLANE_PID" 2>/dev/null || true
+    fi
+    CONTROL_PLANE_PID=""
+}
+
+# Block until the PAUSED sentinel is removed (operator resumes via dashboard).
+# Checks every 5 seconds; logs a reminder every 60 seconds.
+wait_if_paused() {
+    if [ ! -f "$LOG_DIR/PAUSED" ]; then
+        return
+    fi
+    local _waited=0
+    warning "Orchestration PAUSED by operator — waiting for resume signal..."
+    while [ -f "$LOG_DIR/PAUSED" ]; do
+        sleep 5
+        _waited=$(( _waited + 5 ))
+        if (( _waited % 60 == 0 )); then
+            warning "Still paused (${_waited}s elapsed). POST http://localhost:${CONTROL_PLANE_PORT}/resume to continue."
+        fi
+    done
+    success "Orchestration RESUMED after ${_waited}s pause."
+}
+
+# Apply any pending redirect for a story.
+# Usage: apply_redirect_if_any <story_id>
+# Prints the (possibly redirected) agent role to stdout.
+apply_redirect_if_any() {
+    local story_id="$1"
+    local redirect_file="$LOG_DIR/redirect-${story_id}.json"
+    if [ -f "$redirect_file" ]; then
+        local target_agent
+        target_agent=$(jq -r '.targetAgent // empty' "$redirect_file" 2>/dev/null || true)
+        if [ -n "$target_agent" ]; then
+            warning "REDIRECT: story $story_id → $target_agent (operator override)"
+            rm -f "$redirect_file"
+            # Update prd.json agentRole for this story
+            local _tmp
+            _tmp="${PRD_FILE}.redirect.$$"
+            jq --arg id "$story_id" --arg role "$target_agent" \
+                '(.stories[] | select(.id == $id)).agentRole = $role' \
+                "$PRD_FILE" > "$_tmp" && mv "$_tmp" "$PRD_FILE"
+            info "prd.json updated: $story_id.agentRole = $target_agent"
+        fi
+    fi
+}
+
 start_dashboards_watch() {
     local dashboards_dir="$AUTOMATION_DIR/dashboards"
     local config_path="$dashboards_dir/.eleventy.js"
@@ -238,6 +324,7 @@ ORCH_MODE="${ORCH_MODE:-bash}"
 # Cleanup on exit
 cleanup() {
     local exit_code=$?
+    stop_control_plane
     stop_dashboards_watch
     if [ "$SKIP_CLEANUP" = "true" ]; then
         warning "Skipping worktree cleanup (--skip-cleanup)"
@@ -388,6 +475,7 @@ if [ -z "$phase_stories" ] || [ "$phase_stories" = "null" ]; then
 fi
 
 start_dashboards_watch
+start_control_plane
 
 # ── Step 0: Specification pre-pass (OpenSpec/Speckit) ─────────────────────────
 run_specification_pass() {
@@ -769,6 +857,8 @@ if [ -n "$main_stories" ]; then
         log "Step 1: Running main-branch stories..."
         while IFS= read -r story; do
             [ -z "$story" ] && continue
+            wait_if_paused
+            apply_redirect_if_any "$story"
             log "  Running: $story"
             "$CLAUDE_SH" "$story" 2>&1 | tee "$LOG_DIR/main-${story}.log"
         done <<< "$non_review_main"
@@ -1081,6 +1171,8 @@ if [ -n "$review_stories" ]; then
     log "Step 4: Running review stories..."
     while IFS= read -r story; do
         [ -z "$story" ] && continue
+        wait_if_paused
+        apply_redirect_if_any "$story"
     "$SCRIPT_DIR/update-monitor.sh" event "code_review" "Team Lead code review completed" "" "main" "team-lead-agent" 2>/dev/null || true
         # Remove stale review artifact before each run so the pre-existing-file AC never blocks a retry
         _stale_review="$PROJECT_ROOT/review/${story}-review.md"
@@ -1419,6 +1511,62 @@ Output format (strict JSON):
 
 $spec_prompt"
         fi
+
+        # ── Test Oracle: inject hard vitest evidence before LLM invocation ──
+        local oracle_json="$LOG_DIR/vitest-oracle-${phase_id}.json"
+        local oracle_summary=""
+        local _node_bin
+        _node_bin=$(detect_node 2>/dev/null || true)
+        if [ -n "$_node_bin" ] && [ -f "$PROJECT_ROOT/package.json" ] && \
+           [ -f "$PROJECT_ROOT/node_modules/.bin/vitest" ]; then
+            set +e
+            "$_node_bin" "$PROJECT_ROOT/node_modules/.bin/vitest" run \
+                --reporter=json \
+                --outputFile="$oracle_json" \
+                --root "$PROJECT_ROOT" \
+                > /dev/null 2>&1
+            local _oracle_rc=$?
+            set -e
+            if [ -f "$oracle_json" ]; then
+                oracle_summary=$(python3 - "$oracle_json" <<'PYEOF'
+import sys, json
+try:
+    with open(sys.argv[1]) as f:
+        data = json.load(f)
+    num_passed   = data.get("numPassedTests", 0)
+    num_failed   = data.get("numFailedTests", 0)
+    num_total    = data.get("numTotalTests", 0)
+    num_skipped  = data.get("numPendingTests", 0)
+    failed_names = []
+    for suite in data.get("testResults", []):
+        for t in suite.get("testResults", []):
+            if t.get("status") == "failed":
+                failed_names.append(t.get("fullName", t.get("title", "?")))
+    lines = [
+        f"numTotal={num_total}  numPassed={num_passed}  numFailed={num_failed}  numSkipped={num_skipped}"
+    ]
+    if failed_names:
+        lines.append("Failed tests:")
+        for n in failed_names[:20]:
+            lines.append(f"  - {n}")
+        if len(failed_names) > 20:
+            lines.append(f"  ... and {len(failed_names)-20} more")
+    print("\n".join(lines))
+except Exception as e:
+    print(f"(oracle parse error: {e})")
+PYEOF
+2>/dev/null || echo "(oracle unavailable)")
+            else
+                oracle_summary="(vitest ran but produced no JSON output — exit code $_oracle_rc)"
+            fi
+        else
+            oracle_summary="(vitest oracle skipped — node or vitest binary not found)"
+        fi
+
+        spec_prompt="## Actual Test Results (hard evidence — use this as ground truth)
+$oracle_summary
+
+$spec_prompt"
 
         run_orch_prompt "$spec_prompt" 2>&1 | tee "$spec_log"
     } &

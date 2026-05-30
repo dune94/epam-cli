@@ -321,7 +321,7 @@ gate_record=$(jq -n \
         )
     }')
 
-echo "$gate_record" >> "$GATE_LOG"
+echo "$gate_record" | jq -c '.' >> "$GATE_LOG"
 log "Decision logged to $GATE_LOG"
 
 exit $exit_code

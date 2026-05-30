@@ -30,7 +30,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
 PRD_FILE="$AUTOMATION_DIR/prd.json"
-COST_LOG="$AUTOMATION_DIR/logs/phase-cost.jsonl"
+COST_LOG="${PHASE_COST_FILE:-$AUTOMATION_DIR/logs/phase-cost.jsonl}"
 APPLY_MODE=false
 
 # Parse arguments

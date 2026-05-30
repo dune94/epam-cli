@@ -841,6 +841,38 @@ else
 fi
 
 # ──────────────────────────────────────────────
+# Step 0.7: Cross-phase regression guard
+# Run vitest before any story in this phase executes to catch regressions
+# introduced by the previous phase. Blocks on failure.
+# Skip with: SKIP_REGRESSION_GUARD=true
+# ──────────────────────────────────────────────
+if [ "${SKIP_REGRESSION_GUARD:-false}" != "true" ]; then
+    _rg_node=$(detect_node 2>/dev/null || true)
+    if [ -n "$_rg_node" ] && [ -f "$PROJECT_ROOT/package.json" ] && \
+       [ -f "$PROJECT_ROOT/node_modules/.bin/vitest" ]; then
+        log "Step 0.7: Cross-phase regression guard (vitest)..."
+        _rg_log="$LOG_DIR/regression-guard-${PHASE}.log"
+        set +e
+        "$_rg_node" "$PROJECT_ROOT/node_modules/.bin/vitest" run \
+            --root "$PROJECT_ROOT" > "$_rg_log" 2>&1
+        _rg_rc=$?
+        set -e
+        if [ $_rg_rc -ne 0 ]; then
+            error "Step 0.7: Regression guard FAILED — tests broken before phase '$PHASE' starts"
+            error "  Fix failing tests from the previous phase before continuing."
+            error "  See: $_rg_log"
+            error "  Bypass with: SKIP_REGRESSION_GUARD=true"
+            exit 1
+        fi
+        success "Step 0.7: Regression guard PASSED — baseline tests green"
+    else
+        info "Step 0.7: Regression guard skipped — node or vitest not found"
+    fi
+else
+    info "Step 0.7: Regression guard skipped (SKIP_REGRESSION_GUARD=true)"
+fi
+
+# ──────────────────────────────────────────────
 # Step 1: Run main-branch stories (no dependencies, sequential)
 # ──────────────────────────────────────────────
 if [ -n "$main_stories" ]; then

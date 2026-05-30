@@ -252,6 +252,46 @@ print(f"{total:.4f}")
     fi
 }
 
+  # Run a single story with timeout + one automatic retry on timeout.
+# On double timeout: writes a PAUSED sentinel so the operator can decide via
+# the dashboard whether to resume (skip the story) or kill the run.
+# Configurable: STORY_TIMEOUT_SECS (default 1800 = 30 min)
+run_story_with_watchdog() {
+    local story_id="$1"
+    local log_file="$2"
+    local timeout_secs="${STORY_TIMEOUT_SECS:-1800}"
+    local _rc=0
+
+    set +e
+    timeout "$timeout_secs" "$CLAUDE_SH" "$story_id" 2>&1 | tee "$log_file"
+    _rc=${PIPESTATUS[0]}
+    set -e
+
+    if [ $_rc -eq 124 ]; then
+        warning "Watchdog: $story_id timed out after ${timeout_secs}s — retrying once..."
+        set +e
+        timeout "$timeout_secs" "$CLAUDE_SH" "$story_id" 2>&1 | tee -a "$log_file"
+        _rc=${PIPESTATUS[0]}
+        set -e
+    fi
+
+    if [ $_rc -eq 124 ]; then
+        error "Watchdog: $story_id timed out twice (${timeout_secs}s × 2) — pausing orchestration"
+        printf '%s' "$(jq -n \
+            --arg reason  "story_timeout" \
+            --arg story   "$story_id" \
+            --arg phase   "$PHASE" \
+            --argjson tsecs "$timeout_secs" \
+            '{reason:$reason,storyId:$story,phase:$phase,timeoutSecs:$tsecs,pausedAt:(now|todate)}'
+        )" > "$LOG_DIR/PAUSED"
+        wait_if_paused
+        # Operator chose to resume — continue past the timed-out story
+        return 0
+    fi
+
+    return $_rc
+}
+
 # Block until the PAUSED sentinel is removed (operator resumes via dashboard).
 # Checks every 5 seconds; logs a reminder every 60 seconds.
 wait_if_paused() {
@@ -936,7 +976,7 @@ if [ -n "$main_stories" ]; then
             wait_if_paused
             apply_redirect_if_any "$story"
             log "  Running: $story"
-            "$CLAUDE_SH" "$story" 2>&1 | tee "$LOG_DIR/main-${story}.log"
+            run_story_with_watchdog "$story" "$LOG_DIR/main-${story}.log"
         done <<< "$non_review_main"
         success "Main-branch stories complete"
     fi
@@ -1247,9 +1287,10 @@ if [ -n "$review_stories" ]; then
     log "Step 4: Running review stories..."
     while IFS= read -r story; do
         [ -z "$story" ] && continue
+        check_cost_budget
         wait_if_paused
         apply_redirect_if_any "$story"
-    "$SCRIPT_DIR/update-monitor.sh" event "code_review" "Team Lead code review completed" "" "main" "team-lead-agent" 2>/dev/null || true
+        "$SCRIPT_DIR/update-monitor.sh" event "code_review" "Team Lead code review completed" "" "main" "team-lead-agent" 2>/dev/null || true
         # Remove stale review artifact before each run so the pre-existing-file AC never blocks a retry
         _stale_review="$PROJECT_ROOT/review/${story}-review.md"
         if [ -f "$_stale_review" ]; then
@@ -1257,7 +1298,7 @@ if [ -n "$review_stories" ]; then
             info "  Removed stale review artifact before retry: review/${story}-review.md"
         fi
         log "  Running review: $story"
-        "$CLAUDE_SH" "$story" 2>&1 | tee "$LOG_DIR/review-${story}.log"
+        run_story_with_watchdog "$story" "$LOG_DIR/review-${story}.log"
     done <<< "$review_stories"
     success "Review stories complete"
 else

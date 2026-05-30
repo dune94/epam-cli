@@ -113,11 +113,11 @@ export class ProjectScaffolder {
     const dashStories = this.buildDashboardInfraStories();
     const dashIds = dashStories.map(s => s.id);
 
-    // Idempotent: remove any existing DASH infra stories before prepending
+    // Idempotent: remove any existing infra stories (INIT-*, DASH-*) before prepending
     const filtered = prd.stories.filter(s => !dashIds.includes(s.id));
     const stories = [...dashStories, ...filtered];
 
-    // Prepend DASH IDs to the first phase in implementationOrder
+    // Prepend infra IDs to the first phase in implementationOrder
     const order = { ...prd.implementationOrder };
     const phases = Object.keys(order);
     if (phases.length === 0) {
@@ -134,6 +134,72 @@ export class ProjectScaffolder {
   private buildDashboardInfraStories(): PrdStory[] {
     return [
       {
+        id: 'INIT-001',
+        title: 'Initialize project agent profiles and verify infrastructure',
+        description: 'Generate rich, project-specific system prompts for all project-defined agent roles from manifest.md and prd.json context. Verify dashboard templates are present before DASH-001 can run.',
+        priority: 'critical',
+        status: 'pending',
+        completed: false,
+        agentGroup: 'main',
+        agentRole: 'project-initiator-agent',
+        storyType: 'infrastructure',
+        dependencies: [],
+        estimatedHours: 0.5,
+        effort: 'low',
+        technicalNotes: {
+          files: [
+            'manifest.md',
+            'orchestrations/prd.json',
+            'orchestrations/agents/profiles.json',
+            'orchestrations/agents/KB.md',
+            'orchestrations/dashboards/templates/base-dashboard.html',
+            'orchestrations/logs/init-manifest.json',
+          ],
+          requiredSkills: ['project-initiator-agent'],
+        },
+        acceptanceCriteria: [
+          'manifest.md read and project context fully extracted (name, tech stack, constraints, domain vocabulary)',
+          'All project-specific agent roles in profiles.json enriched with project-aware system prompts (≥400 words each)',
+          'Fixed infrastructure roles (spec-coordinator, team-lead, dashboard agents, etc.) left unchanged in profiles.json',
+          'orchestrations/dashboards/templates/base-dashboard.html confirmed present — blocker if missing',
+          'orchestrations/dashboards/templates/dashboard-config.schema.json confirmed present — blocker if missing',
+          'orchestrations/logs/init-manifest.json written with projectName, techStack, storyCount, agentProfilesEnriched, templatesVerified',
+          'KB.md updated with any critical project context not already captured',
+        ],
+      },
+      {
+        id: 'INIT-002',
+        title: 'Validate and repair prd.json structure',
+        description: 'Validate the full prd.json schema: story dependencies, agentRole references, AC quality, phase configuration, and estimation consistency. Fix any correctable issues before implementation begins.',
+        priority: 'critical',
+        status: 'pending',
+        completed: false,
+        agentGroup: 'main',
+        agentRole: 'prd-project-manager-agent',
+        storyType: 'infrastructure',
+        dependencies: ['INIT-001'],
+        estimatedHours: 0.25,
+        effort: 'low',
+        technicalNotes: {
+          files: [
+            'orchestrations/prd.json',
+            'orchestrations/agents/profiles.json',
+            'orchestrations/logs/prd-governance.jsonl',
+          ],
+          requiredSkills: ['prd-project-manager-agent'],
+        },
+        acceptanceCriteria: [
+          'Every story ID in implementationOrder exists in stories[] with no orphans or duplicates',
+          'Every story.agentRole references an existing entry in profiles.json',
+          'Every story.dependencies[] entry references a valid story ID in the same PRD',
+          'Phase ordering is acyclic — no circular dependencies between phases',
+          'All stories have ≥2 acceptanceCriteria entries (placeholder ACs added with TODO: prefix where missing)',
+          'All phasesConfig entries exist for every phase in implementationOrder',
+          'orchestrations/logs/prd-governance.jsonl written with findings and a governance-complete summary line',
+          'prd.json is valid JSON after all corrections are applied',
+        ],
+      },
+      {
         id: 'DASH-001',
         title: 'Initialize project dashboard infrastructure',
         description: 'Generate custom project dashboard from base Chart.js templates. Assess results from dashboard-test-agent and dashboard-update-agent before marking complete.',
@@ -143,7 +209,7 @@ export class ProjectScaffolder {
         agentGroup: 'main',
         agentRole: 'dashboard-orchestrator-agent',
         storyType: 'infrastructure',
-        dependencies: [],
+        dependencies: ['INIT-001'],
         estimatedHours: 0.5,
         effort: 'low',
         technicalNotes: {

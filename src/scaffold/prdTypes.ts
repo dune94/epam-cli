@@ -94,6 +94,8 @@ export const FIXED_AGENT_ROLES = [
   'hygiene-sentinel',
   'design-sentinel',
   'pattern-sentinel',
+  'project-initiator-agent',
+  'prd-project-manager-agent',
   'dashboard-orchestrator-agent',
   'dashboard-test-agent',
   'dashboard-update-agent',

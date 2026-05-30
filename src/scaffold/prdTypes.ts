@@ -96,6 +96,7 @@ export const FIXED_AGENT_ROLES = [
   'pattern-sentinel',
   'project-initiator-agent',
   'prd-project-manager-agent',
+  'agent-skills-agent',
   'dashboard-orchestrator-agent',
   'dashboard-test-agent',
   'dashboard-update-agent',

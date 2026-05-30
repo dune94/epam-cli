@@ -295,6 +295,38 @@ export class ProjectScaffolder {
           'All test JSONL entries written during validation cleaned up before completion',
         ],
       },
+      {
+        id: 'SKILLS-001',
+        title: 'Post-spec skills gap analysis and profile enrichment',
+        description: 'After openspec and speckit have elaborated all stories, scan elaborated ACs and requiredSkills for technical terms not covered by assigned agent profiles. Append targeted skill addendums to close closeable gaps; flag blocker-severity mismatches for human review.',
+        priority: 'high',
+        status: 'pending',
+        completed: false,
+        agentGroup: 'main',
+        agentRole: 'agent-skills-agent',
+        storyType: 'health_check',
+        dependencies: ['DASH-003'],
+        estimatedHours: 0.25,
+        effort: 'low',
+        technicalNotes: {
+          files: [
+            'orchestrations/prd.json',
+            'orchestrations/agents/profiles.json',
+            'orchestrations/logs/skills-gap-report.jsonl',
+          ],
+          requiredSkills: ['agent-skills-agent'],
+        },
+        acceptanceCriteria: [
+          'Spec elaboration precondition verified — halts with WARN if stories are not yet elaborated',
+          'All non-infrastructure stories grouped by agentRole and analysed in a single pass per role',
+          'Missing skills extracted from elaborated ACs and technicalNotes.requiredSkills (concrete terms only, no speculation)',
+          'Closeable gaps (major/minor) resolved by appending a Post-Spec Skill Addendum to the affected profile',
+          'Addendum is concise (≤200 words), grounded in specific story IDs and ACs, never rewrites the base prompt',
+          'Blocker-severity gaps (domain mismatch) logged as reassignment recommendations — not applied to profiles',
+          'Infrastructure agent profiles (INIT-*, DASH-*, team-lead, review, spec, test, gate agents) left unmodified',
+          'orchestrations/logs/skills-gap-report.jsonl written with per-gap findings and a skills-check-complete summary line',
+        ],
+      },
     ];
   }
 

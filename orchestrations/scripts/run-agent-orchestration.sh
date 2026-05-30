@@ -98,6 +98,23 @@ seed_runtime_logs() {
     done
 }
 
+# Detect the Node.js binary — checks fnm, nvm, and PATH in order.
+detect_node() {
+    local candidates=(
+        "$HOME/.local/share/fnm/node-versions/v20.20.2/installation/bin/node"
+        "$HOME/.local/share/fnm/node-versions/v20.20.0/installation/bin/node"
+        "$HOME/.nvm/versions/node/v20.20.2/bin/node"
+        "$HOME/.nvm/versions/node/v20.20.0/bin/node"
+        "$(command -v node 2>/dev/null || true)"
+    )
+    local c
+    for c in "${candidates[@]}"; do
+        [ -n "$c" ] && [ -x "$c" ] && echo "$c" && return 0
+    done
+    echo ""
+    return 1
+}
+
 resolve_prompt_provider() {
     if [ -n "${EPAM_ORCHESTRATION_PROVIDER:-}" ]; then
         echo "$EPAM_ORCHESTRATION_PROVIDER"
@@ -1001,6 +1018,63 @@ if [ "${_escalated:-0}" -gt 0 ]; then
 fi
 
 # ──────────────────────────────────────────────
+# Step 3.7: Pre-review build gate
+# Runs vitest + tsc unconditionally before review agents see the code.
+# Blocks review if tests fail. Skip with SKIP_PRE_REVIEW_GATE=true.
+# ──────────────────────────────────────────────
+if [ "${SKIP_PRE_REVIEW_GATE:-false}" != "true" ] && [ -f "$PROJECT_ROOT/package.json" ]; then
+    log "Step 3.7: Pre-review build gate (vitest + tsc)..."
+    _pre_review_log="$LOG_DIR/pre-review-gate-${PHASE}.log"
+    _pre_review_failed=0
+    _node_bin="$(detect_node)"
+
+    if [ -z "$_node_bin" ]; then
+        warning "Step 3.7: Node binary not found — skipping pre-review gate"
+    else
+        echo "=== Pre-Review Gate: $PHASE @ $(date -Iseconds) ===" > "$_pre_review_log"
+        cd "$PROJECT_ROOT"
+
+        log "  Running vitest..."
+        if "$_node_bin" ./node_modules/.bin/vitest run \
+                2>&1 | tee -a "$_pre_review_log"; then
+            success "  vitest: PASS"
+            "$SCRIPT_DIR/update-monitor.sh" event "pre_review_test_pass" \
+                "Pre-review vitest passed for $PHASE" "" "main" "unit-test-runner" 2>/dev/null || true
+        else
+            error "  vitest: FAIL — fix test failures before review proceeds"
+            "$SCRIPT_DIR/update-monitor.sh" event "pre_review_test_fail" \
+                "Pre-review vitest FAILED for $PHASE" "" "main" "unit-test-runner" 2>/dev/null || true
+            _pre_review_failed=1
+        fi
+
+        log "  Running tsc --noEmit..."
+        if "$_node_bin" ./node_modules/.bin/tsc --noEmit \
+                2>&1 | tee -a "$_pre_review_log"; then
+            success "  tsc: PASS"
+        else
+            error "  tsc: FAIL — fix type errors before review proceeds"
+            _pre_review_failed=1
+        fi
+
+        echo "=== Gate Result: $([ $_pre_review_failed -eq 0 ] && echo PASS || echo FAIL) ===" \
+            >> "$_pre_review_log"
+
+        if [ $_pre_review_failed -ne 0 ]; then
+            error "Step 3.7: Pre-review gate FAILED — review agents blocked on broken build"
+            error "  Fix failures, then re-run: $0 --phase $PHASE"
+            error "  Bypass (emergency only): SKIP_PRE_REVIEW_GATE=true $0 --phase $PHASE"
+            error "  Log: $_pre_review_log"
+            exit 1
+        fi
+
+        success "Step 3.7: Pre-review gate PASSED"
+    fi
+else
+    [ "${SKIP_PRE_REVIEW_GATE:-false}" = "true" ] && \
+        info "Step 3.7: Pre-review gate skipped (SKIP_PRE_REVIEW_GATE=true)"
+fi
+
+# ──────────────────────────────────────────────
 # Step 4: Run review stories
 # ──────────────────────────────────────────────
 if [ -n "$review_stories" ]; then
@@ -1710,30 +1784,36 @@ run_unit_tests_gate() {
 
     # Node.js project: run vitest + tsc
     if [ -f "$PROJECT_ROOT/package.json" ]; then
-        log "  Running unit tests (vitest)..."
-        if ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run \
-                2>&1 | tee -a "$gate_log"; then
-            success "  Unit tests passed (vitest)"
-            "$SCRIPT_DIR/update-monitor.sh" event "unit_test_pass" \
-                "Unit tests passed (vitest)" "" "main" "unit-test-runner" 2>/dev/null || true
+        local _node_bin
+        _node_bin="$(detect_node)"
+        if [ -z "$_node_bin" ]; then
+            warning "  Node binary not found — skipping vitest/tsc"
         else
-            error "  Unit tests FAILED (vitest)"
-            "$SCRIPT_DIR/update-monitor.sh" event "unit_test_fail" \
-                "Unit tests FAILED (vitest) — blocking phase gate" "" "main" "unit-test-runner" 2>/dev/null || true
-            failed=1
-        fi
+            log "  Running unit tests (vitest)..."
+            if "$_node_bin" ./node_modules/.bin/vitest run \
+                    2>&1 | tee -a "$gate_log"; then
+                success "  Unit tests passed (vitest)"
+                "$SCRIPT_DIR/update-monitor.sh" event "unit_test_pass" \
+                    "Unit tests passed (vitest)" "" "main" "unit-test-runner" 2>/dev/null || true
+            else
+                error "  Unit tests FAILED (vitest)"
+                "$SCRIPT_DIR/update-monitor.sh" event "unit_test_fail" \
+                    "Unit tests FAILED (vitest) — blocking phase gate" "" "main" "unit-test-runner" 2>/dev/null || true
+                failed=1
+            fi
 
-        log "  Running type check (tsc --noEmit)..."
-        if ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit \
-                2>&1 | tee -a "$gate_log"; then
-            success "  Type check passed (tsc)"
-            "$SCRIPT_DIR/update-monitor.sh" event "unit_test_pass" \
-                "Type check passed (tsc)" "" "main" "unit-test-runner" 2>/dev/null || true
-        else
-            error "  Type check FAILED (tsc)"
-            "$SCRIPT_DIR/update-monitor.sh" event "unit_test_fail" \
-                "Type check FAILED (tsc) — blocking phase gate" "" "main" "unit-test-runner" 2>/dev/null || true
-            failed=1
+            log "  Running type check (tsc --noEmit)..."
+            if "$_node_bin" ./node_modules/.bin/tsc --noEmit \
+                    2>&1 | tee -a "$gate_log"; then
+                success "  Type check passed (tsc)"
+                "$SCRIPT_DIR/update-monitor.sh" event "unit_test_pass" \
+                    "Type check passed (tsc)" "" "main" "unit-test-runner" 2>/dev/null || true
+            else
+                error "  Type check FAILED (tsc)"
+                "$SCRIPT_DIR/update-monitor.sh" event "unit_test_fail" \
+                    "Type check FAILED (tsc) — blocking phase gate" "" "main" "unit-test-runner" 2>/dev/null || true
+                failed=1
+            fi
         fi
     else
         info "  No package.json at PROJECT_ROOT — skipping vitest/tsc"

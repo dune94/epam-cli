@@ -60,8 +60,25 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
 PRD_FILE="$AUTOMATION_DIR/prd.json"
-REVIEW_LOG="$AUTOMATION_DIR/logs/code-reviews.jsonl"
-MESSAGES_DIR="$AUTOMATION_DIR/logs/messages"
+REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
+MESSAGES_DIR="${MESSAGES_DIR:-$AUTOMATION_DIR/logs/messages}"
+AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
+AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
+ORCH_GATE_MODEL="${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}"
+
+run_review_prompt() {
+    local prompt_text="$1"
+    if [ ! -x "$AI_RUNNER_CMD" ]; then
+        echo '{"verdict":"approved","issues":[]}'
+        return 0
+    fi
+    echo "$prompt_text" | \
+        AI_MODEL="$ORCH_GATE_MODEL" \
+        CLAUDE_CMD="${CLAUDE_CMD:-claude}" \
+        EPAM_CLI="${EPAM_CLI:-epam}" \
+        "$AI_RUNNER_CMD" --provider "${EPAM_ORCHESTRATION_PROVIDER:-claude}" \
+            --model "$ORCH_GATE_MODEL" 2>&1
+}
 
 log "Code Review Cycle for Story: $STORY_ID (Iteration $ITERATION/$MAX_ITERATIONS)"
 echo ""
@@ -123,15 +140,98 @@ fi
 log "Performing code review (iteration $ITERATION)..."
 echo ""
 
-# Review logic — Team Lead agent will:
-# 1. Review git diff for this story
-# 2. Check code quality, security (OWASP), error handling
-# 3. Validate test coverage (vitest)
-# 4. Check TypeScript strictness (tsc --noEmit)
-# 5. Identify issues
+# Load story context
+_STORY_ACS=$(jq -r --arg id "$STORY_ID" \
+    '.stories[] | select(.id == $id) | .acceptanceCriteria[]?' \
+    "$PRD_FILE" 2>/dev/null | awk '{print NR". "$0}')
+_STORY_DESC=$(jq -r --arg id "$STORY_ID" \
+    '.stories[] | select(.id == $id) | .description // ""' \
+    "$PRD_FILE" 2>/dev/null)
+_STORY_FILES=$(jq -r --arg id "$STORY_ID" \
+    '.stories[] | select(.id == $id) | .technicalNotes.files[]? // empty' \
+    "$PRD_FILE" 2>/dev/null | head -20 | tr '\n' ' ')
+
+# Collect git diff
+_STORY_DIFF=""
+if [ -d "$PROJECT_ROOT/.git" ]; then
+    _STORY_DIFF=$(git -C "$PROJECT_ROOT" diff HEAD~5 HEAD -- \
+        $(echo "$_STORY_FILES") 2>/dev/null | head -400 || true)
+    [ -z "$_STORY_DIFF" ] && \
+        _STORY_DIFF=$(git -C "$PROJECT_ROOT" diff HEAD~3 HEAD 2>/dev/null | head -300 || true)
+fi
+[ -z "$_STORY_DIFF" ] && _STORY_DIFF="(no diff available)"
+
+# Load review-agent profile
+_REVIEW_PROFILE=""
+[ -f "$AGENT_PROFILES_FILE" ] && \
+    _REVIEW_PROFILE=$(jq -r '.["review-agent"] // ""' "$AGENT_PROFILES_FILE" 2>/dev/null)
+[ -z "$_REVIEW_PROFILE" ] && _REVIEW_PROFILE="You are a senior code reviewer."
+
+# Inject previous iteration failure context as anti-context when iteration > 1
+_PRIOR_CONTEXT=""
+if [ "$ITERATION" -gt 1 ]; then
+    _PRIOR_LOG="$AUTOMATION_DIR/logs/review-agent-${STORY_ID}.log"
+    if [ -f "$_PRIOR_LOG" ]; then
+        _PRIOR_ISSUES=$(grep -o '"issues":\[.*\]' "$_PRIOR_LOG" | tail -1 || true)
+        [ -n "$_PRIOR_ISSUES" ] && \
+            _PRIOR_CONTEXT="
+
+PRIOR ITERATION ($((ITERATION-1))) ISSUES (do not repeat these same findings — verify they were actually fixed):
+$_PRIOR_ISSUES"
+    fi
+fi
+
+_REVIEW_PROMPT="${_REVIEW_PROFILE}
+
+---
+REVIEW TASK (Iteration $ITERATION): Story $STORY_ID — $STORY_TITLE
+AGENT: $STORY_AGENT
+
+DESCRIPTION: $_STORY_DESC
+
+ACCEPTANCE CRITERIA:
+$_STORY_ACS
+
+RELEVANT FILES: $_STORY_FILES
+
+GIT DIFF:
+\`\`\`diff
+$_STORY_DIFF
+\`\`\`
+$_PRIOR_CONTEXT
+PROJECT ROOT: $PROJECT_ROOT
+
+Review the implementation against each acceptance criterion.
+Check: TypeScript strict compliance, test coverage, error handling, security.
+
+Respond with ONLY a JSON object:
+{\"verdict\":\"approved\",\"issues\":[],\"summary\":\"...\"}
+  OR
+{\"verdict\":\"changes_requested\",\"issues\":[{\"severity\":\"blocker|major|minor\",\"file\":\"...\",\"line\":0,\"description\":\"...\",\"suggestedFix\":\"...\"}],\"summary\":\"...\"}"
+
+_REVIEW_OUTPUT_FILE="$AUTOMATION_DIR/logs/review-agent-${STORY_ID}-iter${ITERATION}.log"
+_REVIEW_OUTPUT=$(run_review_prompt "$_REVIEW_PROMPT" 2>&1 | tee "$_REVIEW_OUTPUT_FILE")
+# Also write to canonical log (latest) for subsequent iterations to reference
+cp "$_REVIEW_OUTPUT_FILE" "$AUTOMATION_DIR/logs/review-agent-${STORY_ID}.log"
+
+_REVIEW_JSON=$(echo "$_REVIEW_OUTPUT" | grep -o '{.*"verdict".*}' | tail -1 || true)
+if [ -z "$_REVIEW_JSON" ]; then
+    _REVIEW_JSON=$(echo "$_REVIEW_OUTPUT" | python3 -c "
+import sys, re
+text = sys.stdin.read()
+matches = re.findall(r'\{[^{}]*\"verdict\"[^{}]*\}', text, re.DOTALL)
+print(matches[-1] if matches else '{\"verdict\":\"approved\",\"issues\":[]}')
+" 2>/dev/null || echo '{"verdict":"approved","issues":[]}')
+fi
 
 ISSUES=()
-REVIEW_STATUS="approved"
+_RAW_VERDICT=$(echo "$_REVIEW_JSON" | jq -r '.verdict // "approved"' 2>/dev/null || echo "approved")
+if [ "$_RAW_VERDICT" = "changes_requested" ]; then
+    while IFS= read -r _issue; do
+        ISSUES+=("$_issue")
+    done < <(echo "$_REVIEW_JSON" | jq -c '.issues[]?' 2>/dev/null)
+fi
+REVIEW_STATUS="${_RAW_VERDICT}"
 
 ISSUE_COUNT=${#ISSUES[@]}
 

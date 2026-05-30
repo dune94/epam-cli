@@ -3,7 +3,7 @@
 import { promises as fs } from 'fs';
 import { join, resolve, dirname } from 'path';
 import chalk from 'chalk';
-import type { PrdSchema, AgentProposal } from './prdTypes.js';
+import type { PrdSchema, PrdStory, AgentProposal } from './prdTypes.js';
 import { FIXED_AGENT_ROLES } from './prdTypes.js';
 import { MANAGED_DASHBOARD_FILES } from './DashboardHydrator.js';
 
@@ -105,7 +105,131 @@ export class ProjectScaffolder {
 
   private async writePrd(): Promise<void> {
     const path = join(this.target, 'orchestrations', 'prd.json');
-    await this.writeFile(path, JSON.stringify(this.opts.prd, null, 2));
+    const prd = this.injectDashboardInfraStories(this.opts.prd);
+    await this.writeFile(path, JSON.stringify(prd, null, 2));
+  }
+
+  private injectDashboardInfraStories(prd: PrdSchema): PrdSchema {
+    const dashStories = this.buildDashboardInfraStories();
+    const dashIds = dashStories.map(s => s.id);
+
+    // Idempotent: remove any existing DASH infra stories before prepending
+    const filtered = prd.stories.filter(s => !dashIds.includes(s.id));
+    const stories = [...dashStories, ...filtered];
+
+    // Prepend DASH IDs to the first phase in implementationOrder
+    const order = { ...prd.implementationOrder };
+    const phases = Object.keys(order);
+    if (phases.length === 0) {
+      order['infrastructure'] = dashIds;
+    } else {
+      const firstPhase = phases[0];
+      const existing = (order[firstPhase] ?? []).filter(id => !dashIds.includes(id));
+      order[firstPhase] = [...dashIds, ...existing];
+    }
+
+    return { ...prd, stories, implementationOrder: order };
+  }
+
+  private buildDashboardInfraStories(): PrdStory[] {
+    return [
+      {
+        id: 'DASH-001',
+        title: 'Initialize project dashboard infrastructure',
+        description: 'Generate custom project dashboard from base Chart.js templates. Assess results from dashboard-test-agent and dashboard-update-agent before marking complete.',
+        priority: 'critical',
+        status: 'pending',
+        completed: false,
+        agentGroup: 'main',
+        agentRole: 'dashboard-orchestrator-agent',
+        storyType: 'infrastructure',
+        dependencies: [],
+        estimatedHours: 0.5,
+        effort: 'low',
+        technicalNotes: {
+          files: [
+            'dashboard/index.html',
+            'dashboard/config.json',
+            'orchestrations/dashboards/templates/base-dashboard.html',
+          ],
+          requiredSkills: ['dashboard-orchestrator-agent'],
+        },
+        acceptanceCriteria: [
+          'Base templates located and readable from orchestrations/dashboards/templates/',
+          'dashboard/index.html generated with project-specific Chart.js configuration',
+          'dashboard/config.json populated with project metadata, phase names, and story IDs',
+          'Control plane components present: pause button (id=pause-btn), redirect panel (id=redirect-panel), story status list (id=story-status)',
+          'dashboard/ directory added to .gitignore',
+          'dashboard-test-agent assessment verdict is PASS',
+          'dashboard-update-agent assessment verdict is PASS',
+          'Completion record appended to orchestrations/logs/dashboard-init.jsonl',
+        ],
+      },
+      {
+        id: 'DASH-002',
+        title: 'Validate dashboard infrastructure',
+        description: 'Test the generated dashboard from DASH-001. Verify HTML validity, Chart.js bindings, control plane components, and PRD cross-reference accuracy. Write test-report.json and pass to dashboard-orchestrator-agent.',
+        priority: 'critical',
+        status: 'pending',
+        completed: false,
+        agentGroup: 'main',
+        agentRole: 'dashboard-test-agent',
+        storyType: 'infrastructure',
+        dependencies: ['DASH-001'],
+        estimatedHours: 0.25,
+        effort: 'low',
+        technicalNotes: {
+          files: [
+            'dashboard/index.html',
+            'dashboard/config.json',
+            'dashboard/test-report.json',
+          ],
+          requiredSkills: ['dashboard-test-agent'],
+        },
+        acceptanceCriteria: [
+          'dashboard/index.html and dashboard/config.json exist and are non-empty',
+          'dashboard/index.html is valid HTML with no unclosed tags and no unresolved template variables',
+          'All Chart.js canvas elements have corresponding config entries with valid labels and datasets',
+          'Control plane components present: id=pause-btn, id=redirect-panel, id=story-status',
+          'All phase names and story IDs in dashboard/config.json match orchestrations/prd.json',
+          'dashboard/test-report.json written with verdict and structured check results',
+          'Test report sent to dashboard-orchestrator-agent via message bus',
+        ],
+      },
+      {
+        id: 'DASH-003',
+        title: 'Validate real-time dashboard update pipeline',
+        description: 'Verify the end-to-end JSONL update pipeline: update-monitor.sh, sync-monitor-stories.sh, live write/read cycle, stale lock detection, and agent-status.json schema validity. Write update-report.json and pass to dashboard-orchestrator-agent.',
+        priority: 'critical',
+        status: 'pending',
+        completed: false,
+        agentGroup: 'main',
+        agentRole: 'dashboard-update-agent',
+        storyType: 'infrastructure',
+        dependencies: ['DASH-001', 'DASH-002'],
+        estimatedHours: 0.25,
+        effort: 'low',
+        technicalNotes: {
+          files: [
+            'orchestrations/logs/agent-activity.jsonl',
+            'orchestrations/logs/agent-status.json',
+            'dashboard/update-report.json',
+          ],
+          requiredSkills: ['dashboard-update-agent'],
+        },
+        acceptanceCriteria: [
+          'update-monitor.sh is executable and exits 0 with valid agent-status.json output',
+          'sync-monitor-stories.sh is callable without errors',
+          'No stale JSONL lock files present (none with mtime older than 5 minutes)',
+          'Live write/read cycle completes: test entry written to agent-activity.jsonl and readable within 10 seconds',
+          'agent-status.json contains required fields: startedAt, phase, orchMode, lanes, events, stories, completedAt',
+          'Write latency P99 measured and recorded (warn if >100ms, not blocking)',
+          'Dashboard polling interval configured at <=5000ms',
+          'dashboard/update-report.json written and sent to dashboard-orchestrator-agent via message bus',
+          'All test JSONL entries written during validation cleaned up before completion',
+        ],
+      },
+    ];
   }
 
   // ── profiles.json (fixed + project-specific agents) ──────────────────────

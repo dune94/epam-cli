@@ -17,7 +17,7 @@ export interface PrdStory {
     files: string[];
     requiredSkills: string[];
   };
-  storyType: 'implementation' | 'review' | 'health_check';
+  storyType: 'implementation' | 'review' | 'health_check' | 'infrastructure';
   aiProvider?: string;
   estimatedCost?: number;
   estimatedTokens?: number;
@@ -94,4 +94,7 @@ export const FIXED_AGENT_ROLES = [
   'hygiene-sentinel',
   'design-sentinel',
   'pattern-sentinel',
+  'dashboard-orchestrator-agent',
+  'dashboard-test-agent',
+  'dashboard-update-agent',
 ] as const;

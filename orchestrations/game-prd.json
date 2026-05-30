@@ -41,23 +41,30 @@
     {
       "id": "HW-001",
       "title": "Implement greet() function",
-      "description": "Create the file greet.ts in the project root. It must export a single function greet(name: string): string that returns the string Hello, <name>! where <name> is the argument passed in. Do NOT modify greet.test.ts, package.json, tsconfig.json, or main.ts.",
+      "description": "Create greet.ts in the project root. It must export a single named function with the signature `export function greet(name: string): string` that returns the string `Hello, <name>!` where `<name>` is the argument passed in. The files greet.test.ts, package.json, tsconfig.json, and main.ts must not be modified.",
       "priority": "critical",
-      "status": "completed",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "agentGroup": "main",
       "agentRole": "typescript-engineer",
       "acceptanceCriteria": [
         "greet.ts exists in the project root",
-        "greet.ts exports a function with signature: export function greet(name: string): string",
-        "greet('World') returns 'Hello, World!'",
-        "greet('Alice') returns 'Hello, Alice!'",
-        "greet('Bob') returns 'Hello, Bob!'",
+        "greet.ts exports a named function with the exact signature: export function greet(name: string): string",
+        "The return type annotation is explicitly `string` (not inferred-only)",
+        "greet.ts does not contain a default export — only the named `greet` export is present",
+        "greet('World') returns exactly 'Hello, World!'",
+        "greet('Alice') returns exactly 'Hello, Alice!'",
+        "greet('Bob') returns exactly 'Hello, Bob!'",
         "greet('X').length is greater than 0",
+        "greet('') returns 'Hello, !' (empty name is valid input, no throw)",
+        "greet() does not throw for any string argument",
+        "Calling greet() produces no console output or other observable side effects",
+        "tsc --noEmit exits with code 0 (no TypeScript compilation errors) after greet.ts is added",
         "npm test passes with all 3 vitest tests in greet.test.ts green",
         "greet.test.ts is not modified",
         "package.json is not modified",
-        "tsconfig.json is not modified"
+        "tsconfig.json is not modified",
+        "main.ts is not modified"
       ],
       "dependencies": [],
       "technicalNotes": {
@@ -73,36 +80,131 @@
       "aiProvider": "claude",
       "effort": "low",
       "specification": {
-        "runId": "20260525T162931Z",
+        "runId": "20260530T214802Z",
         "assignedAgents": [
           "openspec",
           "speckit"
         ],
-        "coordinatorNotes": "",
-        "status": "assigned",
-        "updatedAt": "2026-05-25T16:29:31.708Z",
-        "appliedAgents": [],
+        "coordinatorNotes": "Core implementation story on the critical path. openspec should elaborate TypeScript edge cases (empty string, special chars, type safety) and clarify file placement constraints. speckit should harden AC with boundary inputs and confirm no side-effect requirements are missing.",
+        "status": "completed",
+        "updatedAt": "2026-05-30T21:49:12.159Z",
+        "appliedAgents": [
+          "openspec",
+          "speckit"
+        ],
         "agentContributions": [
           {
             "agent": "openspec",
-            "applied": false,
-            "notes": "Agent output could not be parsed",
-            "acceptanceChanged": false,
+            "applied": true,
+            "notes": "Criteria are largely complete. Added explicit return-type annotation requirement, empty-string edge case, and no-throw contract. Tightened description to call out the exact export shape and forbidden files list.",
+            "acceptanceChanged": true,
             "splitCount": 0,
-            "timestamp": "2026-05-25T16:29:31.653Z"
+            "timestamp": "2026-05-30T21:48:36.901Z",
+            "acBefore": [
+              "greet.ts exists in the project root",
+              "greet.ts exports a function with signature: export function greet(name: string): string",
+              "greet('World') returns 'Hello, World!'",
+              "greet('Alice') returns 'Hello, Alice!'",
+              "greet('Bob') returns 'Hello, Bob!'",
+              "greet('X').length is greater than 0",
+              "npm test passes with all 3 vitest tests in greet.test.ts green",
+              "greet.test.ts is not modified",
+              "package.json is not modified",
+              "tsconfig.json is not modified"
+            ],
+            "acAfter": [
+              "greet.ts exists in the project root",
+              "greet.ts exports a named function with the exact signature: export function greet(name: string): string",
+              "The return type annotation is explicitly `string` (not inferred-only)",
+              "greet('World') returns exactly 'Hello, World!'",
+              "greet('Alice') returns exactly 'Hello, Alice!'",
+              "greet('Bob') returns exactly 'Hello, Bob!'",
+              "greet('X').length is greater than 0",
+              "greet('') returns 'Hello, !' (empty name is valid input, no throw)",
+              "greet() does not throw for any string argument",
+              "npm test passes with all 3 vitest tests in greet.test.ts green",
+              "greet.test.ts is not modified",
+              "package.json is not modified",
+              "tsconfig.json is not modified",
+              "main.ts is not modified"
+            ],
+            "acAdded": [
+              "greet.ts exports a named function with the exact signature: export function greet(name: string): string",
+              "The return type annotation is explicitly `string` (not inferred-only)",
+              "greet('World') returns exactly 'Hello, World!'",
+              "greet('Alice') returns exactly 'Hello, Alice!'",
+              "greet('Bob') returns exactly 'Hello, Bob!'",
+              "greet('') returns 'Hello, !' (empty name is valid input, no throw)",
+              "greet() does not throw for any string argument",
+              "main.ts is not modified"
+            ],
+            "acRemoved": [
+              "greet.ts exports a function with signature: export function greet(name: string): string",
+              "greet('World') returns 'Hello, World!'",
+              "greet('Alice') returns 'Hello, Alice!'",
+              "greet('Bob') returns 'Hello, Bob!'"
+            ]
           },
           {
             "agent": "speckit",
-            "applied": false,
-            "notes": "Agent output could not be parsed",
-            "acceptanceChanged": false,
+            "applied": true,
+            "notes": "openspec's criteria are solid and complete for the happy path. I added three criteria that were genuinely missing: (1) TypeScript compilation must pass — the CLAUDE.md mandate for `tsc --noEmit` is project-wide and applies here; (2) no default export alongside the named export, since 'single named function' is ambiguous about whether a simultaneous default export is permitted; (3) no side effects, which is unspecified but testable and relevant for a pure utility function. I flagged one criterion as redundant. No rewrites were needed — openspec's wording is precise.",
+            "acceptanceChanged": true,
             "splitCount": 0,
-            "timestamp": "2026-05-25T16:29:31.708Z"
+            "timestamp": "2026-05-30T21:49:12.159Z",
+            "acBefore": [
+              "greet.ts exists in the project root",
+              "greet.ts exports a named function with the exact signature: export function greet(name: string): string",
+              "The return type annotation is explicitly `string` (not inferred-only)",
+              "greet('World') returns exactly 'Hello, World!'",
+              "greet('Alice') returns exactly 'Hello, Alice!'",
+              "greet('Bob') returns exactly 'Hello, Bob!'",
+              "greet('X').length is greater than 0",
+              "greet('') returns 'Hello, !' (empty name is valid input, no throw)",
+              "greet() does not throw for any string argument",
+              "npm test passes with all 3 vitest tests in greet.test.ts green",
+              "greet.test.ts is not modified",
+              "package.json is not modified",
+              "tsconfig.json is not modified",
+              "main.ts is not modified"
+            ],
+            "acAfter": [
+              "greet.ts exists in the project root",
+              "greet.ts exports a named function with the exact signature: export function greet(name: string): string",
+              "The return type annotation is explicitly `string` (not inferred-only)",
+              "greet.ts does not contain a default export — only the named `greet` export is present",
+              "greet('World') returns exactly 'Hello, World!'",
+              "greet('Alice') returns exactly 'Hello, Alice!'",
+              "greet('Bob') returns exactly 'Hello, Bob!'",
+              "greet('X').length is greater than 0",
+              "greet('') returns 'Hello, !' (empty name is valid input, no throw)",
+              "greet() does not throw for any string argument",
+              "Calling greet() produces no console output or other observable side effects",
+              "tsc --noEmit exits with code 0 (no TypeScript compilation errors) after greet.ts is added",
+              "npm test passes with all 3 vitest tests in greet.test.ts green",
+              "greet.test.ts is not modified",
+              "package.json is not modified",
+              "tsconfig.json is not modified",
+              "main.ts is not modified"
+            ],
+            "acAdded": [
+              "greet.ts does not contain a default export — only the named `greet` export is present",
+              "Calling greet() produces no console output or other observable side effects",
+              "tsc --noEmit exits with code 0 (no TypeScript compilation errors) after greet.ts is added"
+            ],
+            "acRemoved": []
           }
-        ]
+        ],
+        "coordinatorReview": {
+          "verdict": "approved",
+          "reviewNotes": "Both agents contributed meaningfully without overlap. openspec added precision (explicit return-type annotation, empty-string edge case, no-throw contract, exact wording for return values, forbidden-files list). speckit added structural and toolchain constraints that openspec left unaddressed: no-default-export guard, side-effects prohibition, and the tsc --noEmit compilation requirement mandated by CLAUDE.md. The 17 final criteria are complete, testable, and non-redundant with one minor note: AC 'greet(\"X\").length is greater than 0' is implied by the three concrete return-value examples, but it is harmless and preserves explicit boundary coverage. No story split was needed — the scope is appropriately atomic.",
+          "qualityScore": 0.93,
+          "flags": [],
+          "reviewedAt": "2026-05-30T21:51:33.913Z"
+        }
       },
-      "estimatedAiMinutes": 1.7200,
-      "estimatedCost": 0.4820,
+      "estimatedAiMinutes": 1.72,
+      "estimatedCost": 0.482,
       "estimatedTokens": 370474,
       "estimatedTurns": 11,
       "estimatedHours": 0.0286,
@@ -113,18 +215,20 @@
     {
       "id": "HW-002",
       "title": "Verify all tests pass",
-      "description": "Run npm test and confirm all 3 vitest tests in greet.test.ts pass. Do not modify any files. Report the full test output.",
+      "description": "Run the project test suite using the correct Node 20 vitest binary and confirm all 3 vitest tests in greet.test.ts pass. Do not modify any files. Report the full test output verbatim.",
       "priority": "critical",
-      "status": "completed",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "agentGroup": "main",
       "agentRole": "test-engineer",
       "acceptanceCriteria": [
-        "npm test exits with code 0",
-        "Test Files: 1 passed (1) is present in output",
-        "Tests: 3 passed (3) is present in output",
-        "No tests are skipped, marked todo, or only",
-        "No files are modified during this story"
+        "Tests are executed with: ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run",
+        "The command exits with code 0",
+        "Output contains the token 'Test Files: 1 passed (1)'",
+        "Output contains the token 'Tests: 3 passed (3)'",
+        "Output contains no 'failed', 'skipped', 'todo', or 'only' test tokens",
+        "No source or test files are modified during this story",
+        "Full vitest output is included in the story report"
       ],
       "dependencies": [
         "HW-001"
@@ -140,39 +244,71 @@
       "aiProvider": "claude",
       "effort": "low",
       "specification": {
-        "runId": "20260525T162931Z",
+        "runId": "20260530T214802Z",
         "assignedAgents": [
-          "openspec",
           "speckit"
         ],
-        "coordinatorNotes": "",
-        "status": "assigned",
-        "updatedAt": "2026-05-25T16:29:31.810Z",
-        "appliedAgents": [],
+        "coordinatorNotes": "Pure verification story with no code changes — AC is already concrete and output-driven. speckit only to tighten the pass/fail criteria (e.g. exit code assertion, no stray console warnings, timing expectations) without elaboration needed.",
+        "status": "completed",
+        "updatedAt": "2026-05-30T21:49:22.990Z",
+        "appliedAgents": [
+          "speckit"
+        ],
         "agentContributions": [
           {
-            "agent": "openspec",
-            "applied": false,
-            "notes": "Agent output could not be parsed",
-            "acceptanceChanged": false,
-            "splitCount": 0,
-            "timestamp": "2026-05-25T16:29:31.761Z"
-          },
-          {
             "agent": "speckit",
-            "applied": false,
-            "notes": "Agent output could not be parsed",
-            "acceptanceChanged": false,
+            "applied": true,
+            "notes": "CLAUDE.md mandates the Node 20 vitest binary path — 'npm test' is unreliable on this machine because system node is v14. Updated the command reference throughout. Also tightened the output-matching criteria to use the exact vitest summary tokens so the agent's pass/fail check is unambiguous.",
+            "acceptanceChanged": true,
             "splitCount": 0,
-            "timestamp": "2026-05-25T16:29:31.810Z"
+            "timestamp": "2026-05-30T21:49:22.990Z",
+            "acBefore": [
+              "npm test exits with code 0",
+              "Test Files: 1 passed (1) is present in output",
+              "Tests: 3 passed (3) is present in output",
+              "No tests are skipped, marked todo, or only",
+              "No files are modified during this story"
+            ],
+            "acAfter": [
+              "Tests are executed with: ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run",
+              "The command exits with code 0",
+              "Output contains the token 'Test Files: 1 passed (1)'",
+              "Output contains the token 'Tests: 3 passed (3)'",
+              "Output contains no 'failed', 'skipped', 'todo', or 'only' test tokens",
+              "No source or test files are modified during this story",
+              "Full vitest output is included in the story report"
+            ],
+            "acAdded": [
+              "Tests are executed with: ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run",
+              "The command exits with code 0",
+              "Output contains the token 'Test Files: 1 passed (1)'",
+              "Output contains the token 'Tests: 3 passed (3)'",
+              "Output contains no 'failed', 'skipped', 'todo', or 'only' test tokens",
+              "No source or test files are modified during this story",
+              "Full vitest output is included in the story report"
+            ],
+            "acRemoved": [
+              "npm test exits with code 0",
+              "Test Files: 1 passed (1) is present in output",
+              "Tests: 3 passed (3) is present in output",
+              "No tests are skipped, marked todo, or only",
+              "No files are modified during this story"
+            ]
           }
-        ]
+        ],
+        "coordinatorReview": {
+          "verdict": "approved",
+          "reviewNotes": "Single-agent story (speckit only, per coordinator intent). speckit's contribution was high-value: the npm-test → Node 20 binary-path fix is critical given CLAUDE.md's explicit warning that system node v14 breaks vitest. Output token matching is exact and unambiguous. Addition of 'full vitest output included in the story report' improves traceability. All 7 final criteria are concrete, independently testable, and non-overlapping. No openspec pass was needed and none was assigned — appropriate for a pure verification story with no elaboration required.",
+          "qualityScore": 0.91,
+          "flags": [],
+          "reviewedAt": "2026-05-30T21:51:33.913Z"
+        }
       },
-      "estimatedAiMinutes": 0.0000,
-      "estimatedCost": 0.0000,
+      "estimatedAiMinutes": 0,
+      "estimatedCost": 0,
       "estimatedTokens": 0,
       "estimatedTurns": 1,
-      "estimatedHours": 0.0000,
+      "estimatedHours": 0,
       "cpaConfidence": 0.7,
       "cpaGate": "pass",
       "completedAt": "2026-05-25T12:29:33-04:00"
@@ -180,19 +316,24 @@
     {
       "id": "HW-003",
       "title": "Code review greet.ts",
-      "description": "Review greet.ts against the acceptance criteria in HW-001. Produce a structured review report with findings by severity: blocker, major, minor. Confirm all acceptance criteria are met and npm test passes.",
+      "description": "Review greet.ts against all acceptance criteria defined in HW-001. Produce a structured markdown review report saved to review/HW-003-review.md with findings by severity (blocker, major, minor). Explicitly verify every HW-001 criterion and record test output. Do not modify greet.ts.",
       "priority": "high",
-      "status": "completed",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "agentGroup": "main",
       "agentRole": "review-agent",
       "acceptanceCriteria": [
-        "Review report produced with Summary and Findings sections",
-        "Overall verdict is pass or fail — not omitted",
-        "Each finding includes: severity, file, description, and suggested fix",
-        "All 10 acceptance criteria from HW-001 are explicitly verified in the report",
-        "No blocker findings are present if verdict is pass",
-        "greet.ts is not modified during review"
+        "Review report is saved to review/HW-003-review.md; the review/ directory is created if it does not already exist",
+        "If greet.ts does not exist at review time, the report records a single blocker finding ('greet.ts not found'), all HW-001 criteria are marked 'not met', and the verdict is 'fail'",
+        "Report is a valid markdown file containing at minimum a top-level Summary section (## Summary) and a top-level Findings section (## Findings)",
+        "Summary section records the result of running the project-mandated test command (~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run), and includes at minimum the final summary line (e.g. '3 passed | 0 failed') from its output",
+        "Overall verdict field is present in the Summary section and set to exactly 'pass' or 'fail' — never omitted or ambiguous",
+        "Each finding entry includes: severity (blocker | major | minor), file, line number (or 'N/A' if not applicable), description, and suggested fix (or 'N/A' if none applies)",
+        "The Findings section explicitly states 'No findings' when no issues are identified — it is never empty, absent, or omitted",
+        "All 10 acceptance criteria from HW-001 are listed individually using their verbatim text from the story definition (no paraphrasing), each marked as 'met' or 'not met' with a one-line rationale",
+        "Verdict is 'fail' if any HW-001 criterion is marked 'not met' OR if any blocker finding exists",
+        "No blocker findings are present when verdict is 'pass'",
+        "greet.ts is not modified at any point during the review"
       ],
       "dependencies": [
         "HW-001",
@@ -210,35 +351,128 @@
       "aiProvider": "claude",
       "effort": "low",
       "specification": {
-        "runId": "20260525T162931Z",
+        "runId": "20260530T214802Z",
         "assignedAgents": [
           "openspec",
           "speckit"
         ],
-        "coordinatorNotes": "",
-        "status": "assigned",
-        "updatedAt": "2026-05-25T16:29:31.908Z",
-        "appliedAgents": [],
+        "coordinatorNotes": "Review artifact story with structured output requirements. openspec should elaborate what each severity tier means in context (blocker vs major vs minor for a trivial function) and define the report schema more precisely. speckit should add completeness checks — all 10 HW-001 ACs must be traceable in the report, and flag that greet.ts immutability must be verified via git diff.",
+        "status": "completed",
+        "updatedAt": "2026-05-30T21:50:53.205Z",
+        "appliedAgents": [
+          "openspec",
+          "speckit"
+        ],
         "agentContributions": [
           {
             "agent": "openspec",
-            "applied": false,
-            "notes": "Agent output could not be parsed",
-            "acceptanceChanged": false,
+            "applied": true,
+            "notes": "Refined criteria to be fully testable and unambiguous. Added output path, npm test evidence requirement, and clarified fail conditions to cover both blocker findings and unmet HW-001 criteria. Removed ambiguity around 'suggested fix' being optional when no fix applies.",
+            "acceptanceChanged": true,
             "splitCount": 0,
-            "timestamp": "2026-05-25T16:29:31.857Z"
+            "timestamp": "2026-05-30T21:49:41.323Z",
+            "acBefore": [
+              "Review report produced with Summary and Findings sections",
+              "Overall verdict is pass or fail — not omitted",
+              "Each finding includes: severity, file, description, and suggested fix",
+              "All 10 acceptance criteria from HW-001 are explicitly verified in the report",
+              "No blocker findings are present if verdict is pass",
+              "greet.ts is not modified during review"
+            ],
+            "acAfter": [
+              "Review report is saved to review/HW-003-review.md",
+              "Report contains a Summary section and a Findings section",
+              "Summary section records the result of running npm test (pass or fail with output snippet)",
+              "Overall verdict field is present and set to exactly 'pass' or 'fail' — never omitted or ambiguous",
+              "Each finding entry includes: severity (blocker | major | minor), file, line number (if applicable), description, and suggested fix (or 'N/A' if none applies)",
+              "All 10 acceptance criteria from HW-001 are listed individually and each is marked as 'met' or 'not met' with a one-line rationale",
+              "Verdict is 'fail' if any HW-001 criterion is marked 'not met' OR if any blocker finding exists",
+              "No blocker findings are present when verdict is 'pass'",
+              "greet.ts is not modified at any point during the review"
+            ],
+            "acAdded": [
+              "Review report is saved to review/HW-003-review.md",
+              "Report contains a Summary section and a Findings section",
+              "Summary section records the result of running npm test (pass or fail with output snippet)",
+              "Overall verdict field is present and set to exactly 'pass' or 'fail' — never omitted or ambiguous",
+              "Each finding entry includes: severity (blocker | major | minor), file, line number (if applicable), description, and suggested fix (or 'N/A' if none applies)",
+              "All 10 acceptance criteria from HW-001 are listed individually and each is marked as 'met' or 'not met' with a one-line rationale",
+              "Verdict is 'fail' if any HW-001 criterion is marked 'not met' OR if any blocker finding exists",
+              "No blocker findings are present when verdict is 'pass'",
+              "greet.ts is not modified at any point during the review"
+            ],
+            "acRemoved": [
+              "Review report produced with Summary and Findings sections",
+              "Overall verdict is pass or fail — not omitted",
+              "Each finding includes: severity, file, description, and suggested fix",
+              "All 10 acceptance criteria from HW-001 are explicitly verified in the report",
+              "No blocker findings are present if verdict is pass",
+              "greet.ts is not modified during review"
+            ]
           },
           {
             "agent": "speckit",
-            "applied": false,
-            "notes": "Agent output could not be parsed",
-            "acceptanceChanged": false,
+            "applied": true,
+            "notes": "Openspec's 9 criteria are solid and well-scoped. Made 4 targeted additions and 2 modifications: (1) Added directory-creation guard — review/ does not exist yet and the agent must create it; (2) Added greet.ts absence handling — greet.ts is confirmed absent right now and this must be a fail-fast blocker, not silent behavior; (3) Tightened 'output snippet' to require the test result summary line specifically; (4) Added 'No findings' explicit statement requirement to prevent ambiguous empty sections; (5) Modified AC #3 to mandate the Node 20 test command from CLAUDE.md rather than bare 'npm test' (system node is v14, which breaks vitest); (6) Modified AC #6 to lock the 10 HW-001 criteria to exact verbatim reproduction from game-prd.json — preventing silent paraphrasing drift. Flagged AC #8 as logically redundant with AC #7 (it is the contrapositive) but harmless as a positive assertion.",
+            "acceptanceChanged": true,
             "splitCount": 0,
-            "timestamp": "2026-05-25T16:29:31.908Z"
+            "timestamp": "2026-05-30T21:50:53.205Z",
+            "acBefore": [
+              "Review report is saved to review/HW-003-review.md",
+              "Report contains a Summary section and a Findings section",
+              "Summary section records the result of running npm test (pass or fail with output snippet)",
+              "Overall verdict field is present and set to exactly 'pass' or 'fail' — never omitted or ambiguous",
+              "Each finding entry includes: severity (blocker | major | minor), file, line number (if applicable), description, and suggested fix (or 'N/A' if none applies)",
+              "All 10 acceptance criteria from HW-001 are listed individually and each is marked as 'met' or 'not met' with a one-line rationale",
+              "Verdict is 'fail' if any HW-001 criterion is marked 'not met' OR if any blocker finding exists",
+              "No blocker findings are present when verdict is 'pass'",
+              "greet.ts is not modified at any point during the review"
+            ],
+            "acAfter": [
+              "Review report is saved to review/HW-003-review.md; the review/ directory is created if it does not already exist",
+              "If greet.ts does not exist at review time, the report records a single blocker finding ('greet.ts not found'), all HW-001 criteria are marked 'not met', and the verdict is 'fail'",
+              "Report is a valid markdown file containing at minimum a top-level Summary section (## Summary) and a top-level Findings section (## Findings)",
+              "Summary section records the result of running the project-mandated test command (~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run), and includes at minimum the final summary line (e.g. '3 passed | 0 failed') from its output",
+              "Overall verdict field is present in the Summary section and set to exactly 'pass' or 'fail' — never omitted or ambiguous",
+              "Each finding entry includes: severity (blocker | major | minor), file, line number (or 'N/A' if not applicable), description, and suggested fix (or 'N/A' if none applies)",
+              "The Findings section explicitly states 'No findings' when no issues are identified — it is never empty, absent, or omitted",
+              "All 10 acceptance criteria from HW-001 are listed individually using their verbatim text from the story definition (no paraphrasing), each marked as 'met' or 'not met' with a one-line rationale",
+              "Verdict is 'fail' if any HW-001 criterion is marked 'not met' OR if any blocker finding exists",
+              "No blocker findings are present when verdict is 'pass'",
+              "greet.ts is not modified at any point during the review"
+            ],
+            "acAdded": [
+              "Review report is saved to review/HW-003-review.md; the review/ directory is created if it does not already exist",
+              "If greet.ts does not exist at review time, the report records a single blocker finding ('greet.ts not found'), all HW-001 criteria are marked 'not met', and the verdict is 'fail'",
+              "Report is a valid markdown file containing at minimum a top-level Summary section (## Summary) and a top-level Findings section (## Findings)",
+              "Summary section records the result of running the project-mandated test command (~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run), and includes at minimum the final summary line (e.g. '3 passed | 0 failed') from its output",
+              "Overall verdict field is present in the Summary section and set to exactly 'pass' or 'fail' — never omitted or ambiguous",
+              "Each finding entry includes: severity (blocker | major | minor), file, line number (or 'N/A' if not applicable), description, and suggested fix (or 'N/A' if none applies)",
+              "The Findings section explicitly states 'No findings' when no issues are identified — it is never empty, absent, or omitted",
+              "All 10 acceptance criteria from HW-001 are listed individually using their verbatim text from the story definition (no paraphrasing), each marked as 'met' or 'not met' with a one-line rationale"
+            ],
+            "acRemoved": [
+              "Review report is saved to review/HW-003-review.md",
+              "Report contains a Summary section and a Findings section",
+              "Summary section records the result of running npm test (pass or fail with output snippet)",
+              "Overall verdict field is present and set to exactly 'pass' or 'fail' — never omitted or ambiguous",
+              "Each finding entry includes: severity (blocker | major | minor), file, line number (if applicable), description, and suggested fix (or 'N/A' if none applies)",
+              "All 10 acceptance criteria from HW-001 are listed individually and each is marked as 'met' or 'not met' with a one-line rationale"
+            ]
           }
-        ]
+        ],
+        "coordinatorReview": {
+          "verdict": "needs_review",
+          "reviewNotes": "Both agents added strong, non-overlapping value. openspec defined the output schema (path, sections, severity tiers, fail conditions). speckit tightened the fail-fast behavior for missing greet.ts, fixed npm test → Node 20 binary (same critical fix as HW-002), locked HW-001 criteria to verbatim text, and added the 'No findings' explicit-statement requirement. However, there is a stale cross-story reference that requires human correction: AC #8 says 'All 10 acceptance criteria from HW-001' but HW-001 now has 17 criteria after both agents processed it. The count '10' reflects HW-001's pre-elaboration state. An implementing agent reading HW-003 verbatim will only verify 10 of 17 criteria, silently skipping 7. This must be updated to '17' (or 'all') before implementation. Separately, AC #10 is the contrapositive of AC #9 — speckit correctly flagged it as redundant but left it in place; it is harmless but worth removing for hygiene.",
+          "qualityScore": 0.78,
+          "flags": [
+            "STALE_CROSS_STORY_REF: AC #8 says '10 acceptance criteria from HW-001' but HW-001 now has 17 criteria after spec elaboration — implementing agent will silently skip 7",
+            "REDUNDANT_AC: AC #10 ('No blocker findings are present when verdict is pass') is the logical contrapositive of AC #9 and can be removed"
+          ],
+          "reviewedAt": "2026-05-30T21:51:33.913Z"
+        }
       },
-      "estimatedAiMinutes": 6.3450,
+      "estimatedAiMinutes": 6.345,
       "estimatedCost": 0.5605,
       "estimatedTokens": 392490,
       "estimatedTurns": 11,

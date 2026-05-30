@@ -17,11 +17,18 @@ PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
 # When PRD_FILE is an external path (e.g. a test-app), derive PROJECT_ROOT from
 # the directory two levels above the PRD file (prd sits in <root>/orchestrations/ normally,
 # but for test apps it sits directly in the app root — detect via presence of package.json).
+# PROJECT_ROOT can also be pre-set in the environment to force a specific directory.
 _prd_dir="$(cd "$(dirname "$PRD_FILE")" && pwd)"
-if [ -f "$_prd_dir/package.json" ]; then
-  PROJECT_ROOT="$_prd_dir"
-else
-  PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
+if [ -z "${PROJECT_ROOT:-}" ]; then
+  # Read project.outputDir from PRD if present, else derive from PRD location
+  _prd_output_dir=$(python3 -c "import sys,json; d=json.load(open('$PRD_FILE')); print(d.get('project',{}).get('outputDir',''))" 2>/dev/null || true)
+  if [ -n "$_prd_output_dir" ]; then
+    PROJECT_ROOT="$_prd_output_dir"
+  elif [ -f "$_prd_dir/package.json" ]; then
+    PROJECT_ROOT="$_prd_dir"
+  else
+    PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
+  fi
 fi
 export PROJECT_ROOT
 AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"

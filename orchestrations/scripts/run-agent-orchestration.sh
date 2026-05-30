@@ -310,6 +310,51 @@ wait_if_paused() {
     success "Orchestration RESUMED after ${_waited}s pause."
 }
 
+# Topologically sort a newline-separated list of story IDs by prd.json
+# dependencies, preserving declaration order within the same tier.
+# Cycles emit a warning and fall back to declaration order.
+topo_sort_stories() {
+    local story_list="$1"
+    [ -z "$story_list" ] && return
+    local _py='
+import sys, json
+from collections import deque
+story_ids = [s for s in sys.stdin.read().strip().split("\n") if s.strip()]
+if not story_ids:
+    sys.exit(0)
+prd_file = sys.argv[1]
+try:
+    with open(prd_file) as f:
+        prd = json.load(f)
+except Exception:
+    print("\n".join(story_ids)); sys.exit(0)
+story_map = {s["id"]: s for s in prd.get("stories", [])}
+id_set    = set(story_ids)
+in_degree = {s: 0 for s in story_ids}
+graph     = {s: [] for s in story_ids}
+for sid in story_ids:
+    deps = [d for d in (story_map.get(sid, {}).get("dependencies") or []) if d in id_set]
+    for dep in deps:
+        graph[dep].append(sid)
+        in_degree[sid] += 1
+queue  = deque(sorted([s for s in story_ids if in_degree[s] == 0], key=story_ids.index))
+result = []
+while queue:
+    node = queue.popleft()
+    result.append(node)
+    for succ in sorted(graph[node], key=story_ids.index):
+        in_degree[succ] -= 1
+        if in_degree[succ] == 0:
+            queue.append(succ)
+if len(result) != len(story_ids):
+    sys.stderr.write("WARNING: dependency cycle in story group — using declaration order\n")
+    print("\n".join(story_ids))
+else:
+    print("\n".join(result))
+'
+    echo "$story_list" | python3 -c "$_py" "$PRD_FILE" 2>/dev/null || echo "$story_list"
+}
+
 # Apply any pending redirect for a story.
 # Usage: apply_redirect_if_any <story_id>
 # Prints the (possibly redirected) agent role to stdout.
@@ -728,6 +773,12 @@ review_stories=$(jq -r --arg phase "$PHASE" \
     '(.implementationOrder[$phase] // []) as $ids |
      .stories[] | select(.id as $id | $ids | index($id)) |
      select(.agentRole == "review-agent" and .completed == false) | .id' "$PRD_FILE")
+
+# Apply dependency-graph ordering within each group
+main_stories=$(topo_sort_stories "$main_stories")
+primary_stories=$(topo_sort_stories "$primary_stories")
+independent_stories=$(topo_sort_stories "$independent_stories")
+review_stories=$(topo_sort_stories "$review_stories")
 
 # Display execution plan
 echo -e "${CYAN}Execution Plan:${NC}"

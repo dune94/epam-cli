@@ -56,6 +56,9 @@ orchestrations/logs/cpa-review.jsonl
 orchestrations/dashboards/live/
 orchestrations/dashboards/.cache/
 
+# Generated project dashboards (written by dashboard-orchestrator-agent)
+orchestrations/dashboards/live/dashboard/
+
 # Python virtual environment
 orchestrations/scripts/.venv/
 .venv/

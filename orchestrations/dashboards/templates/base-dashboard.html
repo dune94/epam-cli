@@ -696,6 +696,9 @@ function renderPauseBanner(cpStatus) {
     const pr = cpStatus?.pauseReason;
     if (pr?.reason === 'budget_exceeded') {
       msgEl.textContent = `Budget exceeded: $${Number(pr.actualCost).toFixed(2)} spent of $${Number(pr.budget).toFixed(2)} budget (phase: ${pr.phase}). Review spend then resume.`;
+    } else if (pr?.reason === 'story_timeout') {
+      const mins = pr.timeoutSecs ? Math.round(pr.timeoutSecs / 60) : '?';
+      msgEl.textContent = `Story timed out after ${mins}m: ${pr.storyId || 'unknown'} (phase: ${pr.phase || '?'}). Check logs then resume.`;
     } else {
       msgEl.textContent = 'Orchestration paused by operator.';
     }

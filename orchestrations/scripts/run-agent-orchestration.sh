@@ -703,9 +703,19 @@ if [ "${SKIP_CPA:-0}" != "1" ] && [ -f "$CPA_SCRIPT" ]; then
     cpa_flags="--phase $PHASE --apply"
     [ "${STRICT_CPA:-0}" = "1" ] && cpa_flags="$cpa_flags --strict"
 
+    # Inject most recent prior-phase handoff if available
+    _prev_handoff=""
+    _handoff_search_dir="$(dirname "$LOG_DIR")"
+    # Look for handoff files under any logs/ sub-directory, pick the most recent by mtime
+    _prev_handoff=$(find "$_handoff_search_dir" -maxdepth 3 -name "phase-handoff-*.md" \
+        ! -name "phase-handoff-${PHASE}.md" -printf '%T@ %p\n' 2>/dev/null \
+        | sort -rn | head -1 | awk '{print $2}' || true)
+    [ -f "${_prev_handoff:-}" ] && info "Step 0.1: Injecting prior-phase context from: ${_prev_handoff##*/}"
+
     cpa_exit=0
     # shellcheck disable=SC2086
     CLAUDE_CMD="$CLAUDE_CMD" AI_RUNNER_CMD="$AI_RUNNER_CMD" EPAM_CLI="${EPAM_CLI:-epam}" \
+        PREV_PHASE_HANDOFF_FILE="${_prev_handoff:-}" \
         bash "$CPA_SCRIPT" $cpa_flags 2>&1 | tee "$LOG_DIR/cpa-${PHASE}.log" || cpa_exit=$?
 
     case $cpa_exit in
@@ -779,6 +789,18 @@ main_stories=$(topo_sort_stories "$main_stories")
 primary_stories=$(topo_sort_stories "$primary_stories")
 independent_stories=$(topo_sort_stories "$independent_stories")
 review_stories=$(topo_sort_stories "$review_stories")
+
+# Surface resume-from-failure: show progress if some stories already completed
+_phase_total=$(jq -r --arg phase "$PHASE" \
+    '(.implementationOrder[$phase] // []) | length' "$PRD_FILE" 2>/dev/null || echo 0)
+_phase_done=$(jq -r --arg phase "$PHASE" \
+    '(.implementationOrder[$phase] // []) as $ids |
+     [.stories[] | select(.id as $id | $ids | index($id)) | select(.completed == true)] | length' \
+    "$PRD_FILE" 2>/dev/null || echo 0)
+if [ "${_phase_done:-0}" -gt 0 ] && [ "${_phase_total:-0}" -gt 0 ]; then
+    _phase_remaining=$(( _phase_total - _phase_done ))
+    info "Resuming phase '$PHASE': $_phase_done/$_phase_total stories already complete — $_phase_remaining remaining"
+fi
 
 # Display execution plan
 echo -e "${CYAN}Execution Plan:${NC}"
@@ -2329,6 +2351,40 @@ case $gate_result in
         "$SCRIPT_DIR/update-monitor.sh" event "phase_gate_pass" "Phase gate passed for $PHASE" "" "main" "team-lead-agent" 2>/dev/null || true
         # Step 5.5: Interstitial E2E phase (runs <PHASE>_e2e if it exists)
         run_interstitial_e2e_phase "$PHASE"
+
+        # Step 5.8: Auto-create PR if gh is available and there are commits ahead of origin
+        if [ "${SKIP_AUTO_PR:-false}" != "true" ] && command -v gh >/dev/null 2>&1; then
+            _current_branch=$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+            _default_branch=$(git -C "$PROJECT_ROOT" remote show origin 2>/dev/null | awk '/HEAD branch/ {print $NF}' || echo "main")
+            _commits_ahead=$(git -C "$PROJECT_ROOT" rev-list --count "origin/${_default_branch}...HEAD" 2>/dev/null || echo 0)
+            if [ "${_commits_ahead:-0}" -gt 0 ] && [ "${_current_branch}" != "${_default_branch}" ]; then
+                log "Step 5.8: Creating PR for phase '$PHASE' (${_commits_ahead} commits ahead of origin/${_default_branch})..."
+                _pr_title="feat: ${PHASE} phase complete"
+                _completed_titles=$(jq -r --arg phase "$PHASE" \
+                    '(.implementationOrder[$phase] // []) as $ids |
+                     .stories[] | select(.id as $id | $ids | index($id)) | select(.completed == true) |
+                     "- \(.title)"' "$PRD_FILE" 2>/dev/null | head -10 || true)
+                _pr_body="## Phase: ${PHASE}
+
+### Stories Completed
+${_completed_titles}
+
+### Gate
+Phase gate passed ✓
+
+🤖 Auto-created by epam-cli orchestration"
+                gh pr create \
+                    --title "$_pr_title" \
+                    --body "$_pr_body" \
+                    --base "$_default_branch" \
+                    --head "$_current_branch" \
+                    >> "$LOG_DIR/pr-create-${PHASE}.log" 2>&1 && \
+                    success "Step 5.8: PR created for phase '$PHASE'" || \
+                    warning "Step 5.8: PR creation failed (may already exist) — see $LOG_DIR/pr-create-${PHASE}.log"
+            else
+                info "Step 5.8: Skipping PR creation (no commits ahead of origin or already on default branch)"
+            fi
+        fi
         ;;
     1)
         warning "Phase gate: RETRY - Issues found but fixable"
@@ -2368,6 +2424,67 @@ if [ -f "$LOAD_GRAPH_SH" ]; then
         warning "Step 7: Neo4j graph load skipped (Neo4j may not be running)"
     fi
 fi
+
+# ──────────────────────────────────────────────
+# Step 7.5: Write cross-phase handoff document
+# ──────────────────────────────────────────────
+_handoff_file="$LOG_DIR/phase-handoff-${PHASE}.md"
+{
+    echo "# Phase Handoff: ${PHASE}"
+    echo "Generated: $(date -Iseconds)"
+    echo ""
+    echo "## Completed Stories"
+    jq -r --arg phase "$PHASE" \
+        '(.implementationOrder[$phase] // []) as $ids |
+         .stories[] | select(.id as $id | $ids | index($id)) | select(.completed == true) |
+         "- \(.id): \(.title)"' "$PRD_FILE" 2>/dev/null || true
+    echo ""
+    echo "## Key Artifacts"
+    jq -r --arg phase "$PHASE" \
+        '(.implementationOrder[$phase] // []) as $ids |
+         .stories[] | select(.id as $id | $ids | index($id)) | select(.completed == true) |
+         .technicalNotes.files[]? // empty' "$PRD_FILE" 2>/dev/null | sort -u | sed 's/^/- /' || true
+    echo ""
+    echo "## Cost Summary"
+    if [ -s "$LOG_DIR/phase-cost.jsonl" ]; then
+        python3 -c "
+import sys, json
+total = 0.0
+entries = []
+for line in open('$LOG_DIR/phase-cost.jsonl'):
+    try:
+        e = json.loads(line)
+        total += float(e.get('actual_cost_usd', 0) or 0)
+        entries.append(e)
+    except Exception:
+        pass
+print(f'Total cost: \${total:.4f}')
+print(f'Entries: {len(entries)}')
+" 2>/dev/null || echo "(cost data unavailable)"
+    else
+        echo "(no cost data)"
+    fi
+    echo ""
+    echo "## Review Results"
+    if [ -s "$AUTOMATION_DIR/logs/code-reviews.jsonl" ]; then
+        grep "\"phase_id\":\"${PHASE}\"" "$AUTOMATION_DIR/logs/code-reviews.jsonl" 2>/dev/null | \
+            python3 -c "
+import sys, json
+for line in sys.stdin:
+    try:
+        e = json.loads(line)
+        status = e.get('review_status','?')
+        issues = e.get('issues_found', 0)
+        ts = e.get('timestamp','?')
+        print(f'- {ts}: {status} ({issues} issues)')
+    except Exception:
+        pass
+" 2>/dev/null || echo "(review data unavailable)"
+    else
+        echo "(no review data)"
+    fi
+} > "$_handoff_file"
+info "Step 7.5: Phase handoff written: $_handoff_file"
 
 # ──────────────────────────────────────────────
 # Summary
@@ -2412,4 +2529,57 @@ fi
 # Exit with error if any agent failed
 if [ $PRIMARY_EXIT -ne 0 ] || [ $INDEPENDENT_EXIT -ne 0 ]; then
     exit 1
+fi
+
+# ──────────────────────────────────────────────
+# Step 8: Automated phase promotion (opt-in)
+# Set AUTO_PROMOTE_PHASE=true to chain into the next phase automatically.
+# Phases with description containing "excluded from normal execution paths"
+# (e.g. backlog_only) are skipped.
+# ──────────────────────────────────────────────
+if [ "${AUTO_PROMOTE_PHASE:-false}" = "true" ]; then
+    # Verify all stories in current phase are complete before promoting
+    _incomplete_count=$(jq -r --arg phase "$PHASE" \
+        '(.implementationOrder[$phase] // []) as $ids |
+         [.stories[] | select(.id as $id | $ids | index($id)) | select(.completed != true)] | length' \
+        "$PRD_FILE" 2>/dev/null || echo 1)
+
+    if [ "${_incomplete_count:-1}" -gt 0 ]; then
+        warning "Step 8: Phase promotion skipped — $_incomplete_count stories still incomplete in '$PHASE'"
+    else
+        # Find next phase in insertion order, skipping excluded phases
+        _next_phase=$(python3 -c "
+import sys, json
+prd = json.load(open('$PRD_FILE'))
+phases = list(prd.get('implementationOrder', {}).keys())
+phases_config = prd.get('phasesConfig', {})
+current = '$PHASE'
+try:
+    idx = phases.index(current)
+except ValueError:
+    sys.exit(1)
+for candidate in phases[idx+1:]:
+    cfg = phases_config.get(candidate, {})
+    desc = (cfg.get('description') or '').lower()
+    if 'excluded from normal execution paths' in desc:
+        continue
+    # Skip if all stories already complete
+    ids = prd['implementationOrder'].get(candidate, [])
+    pending = [s for s in prd.get('stories', []) if s['id'] in ids and not s.get('completed')]
+    if not ids or not pending:
+        continue
+    print(candidate)
+    sys.exit(0)
+sys.exit(1)
+" 2>/dev/null || true)
+
+        if [ -n "$_next_phase" ]; then
+            success "Step 8: Promoting to next phase: '$_next_phase'"
+            "$SCRIPT_DIR/update-monitor.sh" event "phase_promotion" \
+                "Auto-promoting to phase '$_next_phase'" "" "main" "team-lead-agent" 2>/dev/null || true
+            exec "$0" --phase "$_next_phase"
+        else
+            info "Step 8: No eligible next phase found — all phases complete or excluded"
+        fi
+    fi
 fi

@@ -6,9 +6,10 @@
   "project": {
     "name": "hello-world",
     "description": "Minimal repeatable TypeScript app used to validate the full autonomous orchestration pipeline end-to-end",
+    "outputDir": "/home/bradleyjerome/projects/ai/epam-test-apps/hello-world",
     "stack": {
       "language": "TypeScript",
-      "runtime": "Node.js 24",
+      "runtime": "Node.js 20",
       "testing": "vitest",
       "devEnvironment": "Ubuntu WSL2"
     }
@@ -222,7 +223,7 @@
       "agentGroup": "main",
       "agentRole": "test-engineer",
       "acceptanceCriteria": [
-        "Tests are executed with: ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run",
+        "Tests are executed with: ~/.local/share/fnm/node-versions/v20.20.2/installation/bin/node ./node_modules/.bin/vitest run",
         "The command exits with code 0",
         "Output contains the token 'Test Files: 1 passed (1)'",
         "Output contains the token 'Tests: 3 passed (3)'",
@@ -270,7 +271,7 @@
               "No files are modified during this story"
             ],
             "acAfter": [
-              "Tests are executed with: ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run",
+              "Tests are executed with: ~/.local/share/fnm/node-versions/v20.20.2/installation/bin/node ./node_modules/.bin/vitest run",
               "The command exits with code 0",
               "Output contains the token 'Test Files: 1 passed (1)'",
               "Output contains the token 'Tests: 3 passed (3)'",
@@ -279,7 +280,7 @@
               "Full vitest output is included in the story report"
             ],
             "acAdded": [
-              "Tests are executed with: ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run",
+              "Tests are executed with: ~/.local/share/fnm/node-versions/v20.20.2/installation/bin/node ./node_modules/.bin/vitest run",
               "The command exits with code 0",
               "Output contains the token 'Test Files: 1 passed (1)'",
               "Output contains the token 'Tests: 3 passed (3)'",
@@ -326,11 +327,11 @@
         "Review report is saved to review/HW-003-review.md; the review/ directory is created if it does not already exist",
         "If greet.ts does not exist at review time, the report records a single blocker finding ('greet.ts not found'), all HW-001 criteria are marked 'not met', and the verdict is 'fail'",
         "Report is a valid markdown file containing at minimum a top-level Summary section (## Summary) and a top-level Findings section (## Findings)",
-        "Summary section records the result of running the project-mandated test command (~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run), and includes at minimum the final summary line (e.g. '3 passed | 0 failed') from its output",
+        "Summary section records the result of running the project-mandated test command (~/.local/share/fnm/node-versions/v20.20.2/installation/bin/node ./node_modules/.bin/vitest run), and includes at minimum the final summary line (e.g. '3 passed | 0 failed') from its output",
         "Overall verdict field is present in the Summary section and set to exactly 'pass' or 'fail' — never omitted or ambiguous",
         "Each finding entry includes: severity (blocker | major | minor), file, line number (or 'N/A' if not applicable), description, and suggested fix (or 'N/A' if none applies)",
         "The Findings section explicitly states 'No findings' when no issues are identified — it is never empty, absent, or omitted",
-        "All 10 acceptance criteria from HW-001 are listed individually using their verbatim text from the story definition (no paraphrasing), each marked as 'met' or 'not met' with a one-line rationale",
+        "All 17 acceptance criteria from HW-001 are listed individually using their verbatim text from the story definition (no paraphrasing), each marked as 'met' or 'not met' with a one-line rationale",
         "Verdict is 'fail' if any HW-001 criterion is marked 'not met' OR if any blocker finding exists",
         "No blocker findings are present when verdict is 'pass'",
         "greet.ts is not modified at any point during the review"
@@ -432,11 +433,11 @@
               "Review report is saved to review/HW-003-review.md; the review/ directory is created if it does not already exist",
               "If greet.ts does not exist at review time, the report records a single blocker finding ('greet.ts not found'), all HW-001 criteria are marked 'not met', and the verdict is 'fail'",
               "Report is a valid markdown file containing at minimum a top-level Summary section (## Summary) and a top-level Findings section (## Findings)",
-              "Summary section records the result of running the project-mandated test command (~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run), and includes at minimum the final summary line (e.g. '3 passed | 0 failed') from its output",
+              "Summary section records the result of running the project-mandated test command (~/.local/share/fnm/node-versions/v20.20.2/installation/bin/node ./node_modules/.bin/vitest run), and includes at minimum the final summary line (e.g. '3 passed | 0 failed') from its output",
               "Overall verdict field is present in the Summary section and set to exactly 'pass' or 'fail' — never omitted or ambiguous",
               "Each finding entry includes: severity (blocker | major | minor), file, line number (or 'N/A' if not applicable), description, and suggested fix (or 'N/A' if none applies)",
               "The Findings section explicitly states 'No findings' when no issues are identified — it is never empty, absent, or omitted",
-              "All 10 acceptance criteria from HW-001 are listed individually using their verbatim text from the story definition (no paraphrasing), each marked as 'met' or 'not met' with a one-line rationale",
+              "All 17 acceptance criteria from HW-001 are listed individually using their verbatim text from the story definition (no paraphrasing), each marked as 'met' or 'not met' with a one-line rationale",
               "Verdict is 'fail' if any HW-001 criterion is marked 'not met' OR if any blocker finding exists",
               "No blocker findings are present when verdict is 'pass'",
               "greet.ts is not modified at any point during the review"
@@ -445,7 +446,7 @@
               "Review report is saved to review/HW-003-review.md; the review/ directory is created if it does not already exist",
               "If greet.ts does not exist at review time, the report records a single blocker finding ('greet.ts not found'), all HW-001 criteria are marked 'not met', and the verdict is 'fail'",
               "Report is a valid markdown file containing at minimum a top-level Summary section (## Summary) and a top-level Findings section (## Findings)",
-              "Summary section records the result of running the project-mandated test command (~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run), and includes at minimum the final summary line (e.g. '3 passed | 0 failed') from its output",
+              "Summary section records the result of running the project-mandated test command (~/.local/share/fnm/node-versions/v20.20.2/installation/bin/node ./node_modules/.bin/vitest run), and includes at minimum the final summary line (e.g. '3 passed | 0 failed') from its output",
               "Overall verdict field is present in the Summary section and set to exactly 'pass' or 'fail' — never omitted or ambiguous",
               "Each finding entry includes: severity (blocker | major | minor), file, line number (or 'N/A' if not applicable), description, and suggested fix (or 'N/A' if none applies)",
               "The Findings section explicitly states 'No findings' when no issues are identified — it is never empty, absent, or omitted",

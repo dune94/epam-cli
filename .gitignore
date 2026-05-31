@@ -45,9 +45,12 @@ coverage/
 # TypeScript cache
 *.tsbuildinfo
 
-# Estimate backup files
-orchestrations/prd.json.before-*
-orchestrations/prd.json.before-cpa
+# Orchestration runtime artifacts (generated per run — never commit)
+orchestrations/*.before-cpa
+orchestrations/*.before-*
+orchestrations/*.pre-assessment
+orchestrations/*.lock
+orchestrations/review/
 
 # CPA review logs (dynamic — generated per run)
 orchestrations/logs/cpa-review.jsonl

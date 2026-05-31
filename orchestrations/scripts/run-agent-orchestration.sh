@@ -31,6 +31,18 @@ if [ -z "${PROJECT_ROOT:-}" ]; then
   fi
 fi
 export PROJECT_ROOT
+
+# Safety guard: PROJECT_ROOT must never be the epam-cli repo itself.
+# Test apps must live in a separate directory (e.g. /home/.../epam-test-apps/<name>
+# or /tmp/<name>). This prevents test artifacts polluting the orchestration codebase.
+_repo_root="$(cd "$AUTOMATION_DIR/.." && pwd)"
+if [ "$PROJECT_ROOT" = "$_repo_root" ]; then
+  echo "ERROR: PROJECT_ROOT resolves to the epam-cli repo root ('$_repo_root')." >&2
+  echo "       Set project.outputDir in your PRD to an external test-app directory." >&2
+  echo "       Convention: /home/bradleyjerome/projects/ai/epam-test-apps/<app-name>" >&2
+  exit 1
+fi
+
 AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
 # Compute PRD path relative to PROJECT_ROOT for injecting into agent prompts
 PRD_REL="$(realpath --relative-to="$PROJECT_ROOT" "$(realpath "$PRD_FILE")" 2>/dev/null || echo "orchestrations/prd.json")"

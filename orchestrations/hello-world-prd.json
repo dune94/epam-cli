@@ -203,12 +203,12 @@
           "reviewedAt": "2026-05-30T21:51:33.913Z"
         }
       },
-      "estimatedAiMinutes": 1.72,
-      "estimatedCost": 0.482,
-      "estimatedTokens": 370474,
-      "estimatedTurns": 11,
-      "estimatedHours": 0.0286,
-      "cpaConfidence": 0.7,
+      "estimatedAiMinutes": 0.86,
+      "estimatedCost": 0.009,
+      "estimatedTokens": 6880,
+      "estimatedTurns": 2,
+      "estimatedHours": 0.0143,
+      "cpaConfidence": 0.9,
       "cpaGate": "pass",
       "completedAt": "2026-05-25T12:29:33-04:00"
     },
@@ -304,12 +304,12 @@
           "reviewedAt": "2026-05-30T21:51:33.913Z"
         }
       },
-      "estimatedAiMinutes": 0,
-      "estimatedCost": 0,
-      "estimatedTokens": 0,
+      "estimatedAiMinutes": 0.5,
+      "estimatedCost": 0.01,
+      "estimatedTokens": 4000,
       "estimatedTurns": 1,
-      "estimatedHours": 0,
-      "cpaConfidence": 0.7,
+      "estimatedHours": 0.0083,
+      "cpaConfidence": 0.92,
       "cpaGate": "pass",
       "completedAt": "2026-05-25T12:29:33-04:00"
     },
@@ -472,13 +472,13 @@
           "reviewedAt": "2026-05-30T21:51:33.913Z"
         }
       },
-      "estimatedAiMinutes": 6.345,
-      "estimatedCost": 0.5605,
-      "estimatedTokens": 392490,
-      "estimatedTurns": 11,
-      "estimatedHours": 0.1057,
-      "cpaConfidence": 0.7,
-      "cpaGate": "pass",
+      "estimatedAiMinutes": 3.8326,
+      "estimatedCost": 0.1024,
+      "estimatedTokens": 71668,
+      "estimatedTurns": 7,
+      "estimatedHours": 0.0638,
+      "cpaConfidence": 0.72,
+      "cpaGate": "review",
       "completedAt": "2026-05-25T12:29:34-04:00"
     }
   ],

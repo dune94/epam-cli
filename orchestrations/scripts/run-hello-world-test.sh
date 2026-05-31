@@ -14,7 +14,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
-PRD_FILE="$AUTOMATION_DIR/game-prd.json"
+PRD_FILE="$AUTOMATION_DIR/hello-world-prd.json"
 
 if [ ! -f "$PRD_FILE" ]; then
     echo "ERROR: $PRD_FILE not found" >&2
@@ -27,8 +27,8 @@ echo "  Hello-World Orchestration Test"
 echo "============================================"
 echo ""
 
-exec RESET_STORIES=true \
-     PRD_FILE="$PRD_FILE" \
-     "$SCRIPT_DIR/run-agent-orchestration.sh" \
+export RESET_STORIES=true
+export PRD_FILE="$PRD_FILE"
+exec "$SCRIPT_DIR/run-agent-orchestration.sh" \
      --phase hello_world_test \
      "$@"

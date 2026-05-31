@@ -22,7 +22,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
-PRD_FILE="$AUTOMATION_DIR/skyscanner-prd.json"
+PRD_FILE="$AUTOMATION_DIR/travel-app-prd.json"
 OUTPUT_DIR="/tmp/skyscanner-app"
 
 if [ ! -f "$PRD_FILE" ]; then
@@ -51,9 +51,9 @@ echo "  Output: $OUTPUT_DIR"
 echo "============================================"
 echo ""
 
-exec RESET_STORIES=true \
-     PRD_FILE="$PRD_FILE" \
-     OUTPUT_LOGS="$AUTOMATION_DIR/logs/skyscanner" \
-     "$SCRIPT_DIR/run-agent-orchestration.sh" \
+export RESET_STORIES=true
+export PRD_FILE="$PRD_FILE"
+export OUTPUT_LOGS="$AUTOMATION_DIR/logs/skyscanner"
+exec "$SCRIPT_DIR/run-agent-orchestration.sh" \
      --phase "$PHASE" \
      "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}"

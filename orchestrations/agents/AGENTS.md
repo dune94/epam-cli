@@ -296,3 +296,57 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-003_*.log
 
+## SKY-001: Scaffold TypeScript project with Vitest and Express
+- **Date**: 2026-05-30 18:30:32
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001_*.log
+
+## SKY-002: Implement typed Skyscanner API client
+- **Date**: 2026-05-31 07:26:29
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-002_*.log
+
+## SKY-003: Implement flight search CLI entry point with formatted table output
+- **Date**: 2026-05-31 07:29:46
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003_*.log
+
+## SKY-004: Build Express REST API with /health, /search, /cheapest, and static dashboard endpoints
+- **Date**: 2026-05-31 07:30:50
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-004_*.log
+
+## SKY-005: Build HTML dashboard at src/public/index.html
+- **Date**: 2026-05-31 07:45:06
+- **Phase**: ui_and_review
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-005_*.log
+
+## SKY-006: Code review: Skyscanner mini-app
+- **Date**: 2026-05-31 07:51:32
+- **Phase**: ui_and_review
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-006_*.log
+
+## HW-001: Implement greet() function
+- **Date**: 2026-05-31 16:36:54
+- **Phase**: hello_world_test
+- **Status**: completed
+- **Log**: logs/claude_outputs/HW-001_*.log
+
+## HW-002: Verify all tests pass
+- **Date**: 2026-05-31 16:37:45
+- **Phase**: hello_world_test
+- **Status**: completed
+- **Log**: logs/claude_outputs/HW-002_*.log
+
+## HW-003: Code review greet.ts
+- **Date**: 2026-05-31 16:43:13
+- **Phase**: hello_world_test
+- **Status**: completed
+- **Log**: logs/claude_outputs/HW-003_*.log
+

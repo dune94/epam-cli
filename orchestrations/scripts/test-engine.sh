@@ -1,14 +1,21 @@
 #!/bin/bash
-# Full dual-mode validation for hello-world: runs CLI mode then SDK mode in sequence.
+# Regression test for the epam-cli orchestration engine.
 #
-# Both runs must pass for the script to exit 0.  Produces a combined summary
-# so a single command proves both invoke paths work.
+# epam-cli is a seeding engine — it reads configuration (PRD, profiles) and
+# builds apps in external directories.  This script proves the engine still
+# seeds correctly by running the hello-world fixture (the simplest possible
+# PRD) through both invoke paths and asserting the output app was produced.
+#
+# Run this manually after changing any engine script:
+#   claude.sh, ai-run.sh, run-agent-orchestration.sh,
+#   contextualize-stories.sh, invoke.py, check-phase-gate.sh
 #
 # Usage:
-#   ./run-hello-world-full-test.sh
+#   ./test-engine.sh
 #
-# Env:
-#   DRY_RUN=true   — pass through to both runs (preview only)
+# Exit codes:
+#   0 — engine seeded correctly in both CLI and SDK modes
+#   1 — one or both modes failed
 
 set -euo pipefail
 
@@ -21,11 +28,11 @@ _results=()
 run_mode() {
     local label="$1"
     local script="$2"
-    local log="/tmp/hw-full-test-${label}.log"
+    local log="/tmp/test-engine-${label}.log"
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  Running: $label"
+    echo "  $label"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 
@@ -38,12 +45,12 @@ run_mode() {
     fi
 }
 
-run_mode "CLI mode (EPAM_SDK_INVOKE=0)" "run-hello-world-test.sh"
-run_mode "SDK mode (EPAM_SDK_INVOKE=1)" "run-hello-world-sdk-test.sh"
+run_mode "CLI invoke path  (EPAM_SDK_INVOKE=0)" "run-hello-world-test.sh"
+run_mode "SDK invoke path  (EPAM_SDK_INVOKE=1)" "run-hello-world-sdk-test.sh"
 
 echo ""
 echo "╔══════════════════════════════════════════════╗"
-echo "  Hello-World Full Test — Results"
+echo "  epam-cli Engine Regression — Results"
 echo "╠══════════════════════════════════════════════╣"
 for r in "${_results[@]}"; do
     echo "  $r"

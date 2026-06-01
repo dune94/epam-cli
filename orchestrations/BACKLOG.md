@@ -22,8 +22,10 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | 5 | GAP-P8 | Constitution injection at agent invocation | done | swarm-forge |
 | 6 | GAP-P9 | Brownfield support — existing system context ingestion | done | codemie, smolagents |
 | 7 | GAP-P2 | External event triggers (webhook/Jira/Slack) | done | OpenHands, Cline |
-| 8 | GAP-P1 | Docker sandbox execution | deferred | OpenHands, SWE-agent |
-| 9 | GAP-P3 | SWE-bench benchmark harness | deferred | SWE-agent (needs P1 first) |
+| 8 | GAP-P10 | Dynamic constitution augmentation | pending | Constitutional AI |
+| 9 | GAP-P11 | LLM-based topology routing | pending | kyegomez/swarms |
+| 10 | GAP-P1 | Docker sandbox execution | deferred | OpenHands, SWE-agent |
+| 11 | GAP-P3 | SWE-bench benchmark harness | deferred | SWE-agent (needs P1 first) |
 
 ---
 
@@ -223,6 +225,75 @@ Writeback closes the loop: at each pipeline milestone, the Jira client transitio
 - Persistent queue survives `control-plane.js` restart — no events lost
 - Writeback posts correct comment at each milestone; transition matches story workflow state
 - Testable with synthetic webhook payloads (no live Jira required for unit tests)
+
+---
+
+## GAP-P10 — Dynamic constitution augmentation
+
+**Status:** pending  
+**Priority:** 8  
+**Effort:** low (1 story)
+
+### Problem
+P8 injects a static `AGENT_CONSTITUTION` — the same four rules for every agent on every story. High-risk story types have additional non-negotiable constraints that the static constitution doesn't cover: auth stories should never store credentials in plaintext; migration stories should never drop columns; API boundary stories must validate all inputs. A generic constitution can't express these without becoming so long it dilutes attention on all stories.
+
+### Approach
+Add a `.epam/constitution-rules.json` file (per-project, optional) containing match/rules pairs. At story invocation time, `claude.sh` checks each rule's `match` criteria against the story's `agentRole`, `tags`, and `technicalNotes.requiredSkills`. Matched rules are appended to the base `AGENT_CONSTITUTION` before injection. No match → base constitution only, identical to P8 behaviour.
+
+```json
+[
+  {
+    "match": { "skills": ["auth", "jwt", "oauth", "session"] },
+    "rules": ["Never store credentials or tokens in plaintext. Always hash passwords with bcrypt."]
+  },
+  {
+    "match": { "skills": ["database", "migration", "sql"] },
+    "rules": ["Never DROP COLUMN or DROP TABLE. Only ADD COLUMN with a default. Never run destructive DDL."]
+  },
+  {
+    "match": { "agentRole": "qa-engineer" },
+    "rules": ["Never modify production source files. Write tests only. Do not fix the code under test."]
+  }
+]
+```
+
+### Files to change
+- `orchestrations/scripts/claude.sh` — new `resolve_dynamic_constitution()` function; appends matched rules to `AGENT_CONSTITUTION` before injection
+- `.epam/constitution-rules.json` — per-project rule config (optional; absent means no change)
+
+### Acceptance criteria
+- When `.epam/constitution-rules.json` is absent, behaviour is identical to P8
+- When present, rules whose match criteria overlap the story's skills/role are appended to the base constitution
+- Multiple rules can match a single story; all are appended
+- Matched rules appear in the injected system prompt for that story only — not carried to subsequent stories
+- Testable with a synthetic PRD story that has `requiredSkills: ["auth"]` + a rule file targeting "auth"
+
+---
+
+## GAP-P11 — LLM-based topology routing
+
+**Status:** pending  
+**Priority:** 9  
+**Effort:** medium (1-2 stories)
+
+### Problem
+P7's topology router uses story count as the sole signal: ≤1 story collapses to main branch, ≥2 uses worktrees. This misclassifies a single high-effort story (e.g., effort=high, 5-point, touching 12 files) the same as a single trivial story. Conversely, two low-effort stories that are tightly coupled may be better run sequentially on main than in parallel worktrees. A count heuristic cannot distinguish these cases.
+
+### Approach
+Replace the count check in `run-agent-orchestration.sh` with a call to `lib/topology-router.js`. The router takes the phase's story set (ids, effort scores, dependency edges, file overlap from CPA signals) and returns a topology decision: `single`, `parallel`, or `hierarchical`. The decision is made by a cheap model call (Haiku) with a structured prompt — not a reasoning model. Falls back to the count heuristic if the LLM call fails.
+
+Cost: one Haiku call per phase (~$0.001). Acceptable overhead relative to phase execution cost.
+
+### Files to change
+- `orchestrations/scripts/lib/topology-router.js` — new: takes story metadata array, calls Haiku, returns `{topology, reason}`
+- `orchestrations/scripts/run-agent-orchestration.sh` — replace `_wt_count` block with `topology-router.js` call; retain count heuristic as fallback
+
+### Acceptance criteria
+- When `EPAM_API_KEY_ANTHROPIC` is unset, falls back to count heuristic (no regression)
+- Single high-effort story (effort=high) routes to `single` topology despite count=1 matching current behaviour — verifiable by checking the reason field
+- Two tightly-coupled stories (shared files in CPA signals) route to `sequential` rather than `parallel`
+- Router decision and reason logged to phase-cost.jsonl alongside cost records
+- Adds ≤1 Haiku call per phase to total run cost
 
 ---
 

@@ -86,10 +86,22 @@ Parallel multi-agent execution with phase gates and cost tracking:
 
 ### Authentication
 
-- **Device Flow** (RFC 8628) — For EPAM backend
-- **Browser PKCE** — For SSO providers (Codemie)
-- **API Keys** — For direct provider access
-- **CLI Auth** — For Codex (uses codex CLI credentials)
+EPAM CLI v1 uses a **bridge model** for provider authentication (see [DEC-005](./.epam/decisions.jsonl) and [research note](./.epam/provider-auth-research.md)):
+
+- **Device Flow** (RFC 8628) — For EPAM backend (`epam login`)
+- **Browser PKCE** — For SSO providers (Codemie: `epam provider login codemie --browser`)
+- **API Keys** — For direct provider access (Anthropic, OpenAI, Gemini, Qwen: `epam provider login <provider>`)
+- **CLI Auth** — For Codex (uses codex CLI credentials: `epam provider login codex`)
+
+**v1 Bridge Model:**
+- User-managed API keys stored in OS credential manager (keychain/Credential Manager/libsecret)
+- Manual entry via `epam provider login <provider>` or env vars (`EPAM_API_KEY_*`)
+- No auto-provisioned brokered keys (deferred to v2+)
+
+**Long-term Direction (v2+):**
+- `epam login` provisions provider credentials centrally
+- EPAM backend stores and refreshes provider tokens per user
+- Workspace admins manage provider keys for entire team
 
 ### Dashboards
 
@@ -129,6 +141,38 @@ pip install gitingest   # prerequisite
 ```
 
 Used programmatically via `src/tools/gitingest/GitIngest.ts` — supports full repo ingest, subdirectory scoping, and changed-file-only mode for documentation pipelines.
+
+### Model Context Protocol (MCP)
+
+Connect external tool servers to EPAM CLI via `.mcp.json`:
+
+```json
+{
+  "servers": [
+    {
+      "name": "jira",
+      "url": "http://localhost:8000/mcp",
+      "transport": "http",
+      "enabled": true
+    },
+    {
+      "name": "confluence",
+      "transport": "stdio",
+      "command": "node",
+      "args": ["server.js"],
+      "enabled": true
+    }
+  ]
+}
+```
+
+**Configuration:**
+- `enabled` (optional, default `true`) — Set to `false` to disable a server without removing it from config
+- `transport` — `http`, `sse`, or `stdio`
+- `url` (required for http/sse) — Server endpoint
+- `command` + `args` (required for stdio) — Spawned process
+
+By default, `.mcp.json` ships with example servers disabled to avoid startup noise. Enable them by setting `enabled: true` after configuring a local server.
 
 ---
 

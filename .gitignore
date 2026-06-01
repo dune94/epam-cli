@@ -69,6 +69,9 @@ orchestrations/scripts/.venv/
 # Local Claude settings
 .claude/settings.local.json
 
+# Local machine-specific memory (never sync)
+.epam/MEMORY.local.md
+
 # Generated lifecycle/spec reports and message queues
 orchestrations/logs/sdk-lifecycle-report.*
 orchestrations/logs/spec-baseline.json

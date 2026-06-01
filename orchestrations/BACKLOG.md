@@ -21,7 +21,7 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | 4 | GAP-P7 | SwarmRouter-style topology selection | done | kyegomez/swarms |
 | 5 | GAP-P8 | Constitution injection at agent invocation | done | swarm-forge |
 | 6 | GAP-P9 | Brownfield support — existing system context ingestion | pending | codemie, smolagents |
-| 7 | GAP-P2 | External event triggers (webhook/Jira/Slack) | deferred | OpenHands, Cline |
+| 7 | GAP-P2 | External event triggers (webhook/Jira/Slack) | pending | OpenHands, Cline |
 | 8 | GAP-P1 | Docker sandbox execution | deferred | OpenHands, SWE-agent |
 | 9 | GAP-P3 | SWE-bench benchmark harness | deferred | SWE-agent (needs P1 first) |
 
@@ -185,10 +185,48 @@ No external services required at any stage.
 
 ---
 
-## Deferred
+## GAP-P2 — External event triggers (webhook/Jira/Slack)
 
-### GAP-P2 — External event triggers
-Webhook/Jira/Slack inbound to `control-plane.js`. Core engine improvements (P5, P4, P6, P7, P8) are now stable. Deferred pending prioritization decision — see gap discussion in session history for debounced batch aggregator architecture.
+**Status:** pending  
+**Priority:** 7  
+**Effort:** medium (2-3 stories)  
+**Enables:** GAP-P9 Stage 2 (live Jira context ingestion)
+
+### Problem
+Orchestration runs are currently triggered manually (`run-agent-orchestration.sh`). There is no inbound path from the systems where work is actually managed — Jira, Slack, GitHub. This means the orchestration is disconnected from the team's workflow: someone has to manually translate a Jira Epic into a PRD and fire the run. For enterprise adoption, the system needs to receive work items and trigger itself.
+
+### Approach
+Add an inbound webhook route to `control-plane.js`. Jira webhook payloads (Epic created/updated, Sprint started) are normalised into PRD shape by a Jira adapter and queued. A debounced batch aggregator holds events for a 45-second window before firing the orchestration — batching rapid Jira updates (field edits, AC refinements) into a single run rather than spawning one per event. Urgent-label events bypass the window and fire immediately.
+
+Writeback closes the loop: at each pipeline milestone, the Jira client transitions the ticket and posts a comment with the relevant output (elaborated ACs at spec pass, cost estimate at CPA, PR link at story complete, review result at review done).
+
+### Files to change
+- `control-plane.js` — add `POST /webhook/jira` and `POST /webhook/slack` routes
+- `lib/webhook-queue.js` — new: debounced batch aggregator; 45s window; urgent-label bypass; persistent queue file at `.epam/webhook-queue.json`
+- `lib/jira-adapter.js` — new: normalise Jira webhook payload → PRD `phases[].stories[]` shape
+- `lib/jira-client.js` — new: Jira REST API client for writeback (transition, comment)
+- `orchestrations/scripts/jira-writeback.sh` — new: called at spec pass, CPA complete, story complete, review done
+
+### Writeback events
+| Milestone | Jira action |
+|---|---|
+| Spec pass (AC elaboration) | Update story description with elaborated ACs |
+| CPA complete | Post comment with cost estimate and effort breakdown |
+| Story complete | Transition to In Review; post PR link |
+| Review done | Transition to Done or Reopened based on review result |
+
+### Acceptance criteria
+- When `JIRA_WEBHOOK_SECRET` is unset, `control-plane.js` starts normally with no webhook routes registered
+- Jira webhook payload normalises to valid PRD shape; invalid payloads are rejected with 400
+- Rapid Jira updates within the 45s window are collapsed into a single orchestration run
+- Events with an `urgent` label bypass the debounce window and trigger immediately
+- Persistent queue survives `control-plane.js` restart — no events lost
+- Writeback posts correct comment at each milestone; transition matches story workflow state
+- Testable with synthetic webhook payloads (no live Jira required for unit tests)
+
+---
+
+## Deferred
 
 ### GAP-P1 — Docker sandbox execution
 Container isolation for agent Bash execution. High effort, low urgency for current single-operator usage. Re-evaluate at enterprise adoption stage.

@@ -13,13 +13,22 @@
 
 'use strict';
 
-const http  = require('http');
-const fs    = require('fs');
-const path  = require('path');
-const url   = require('url');
+const http   = require('http');
+const fs     = require('fs');
+const path   = require('path');
+const url    = require('url');
+const crypto = require('crypto');
 
-const PORT     = parseInt(process.env.CONTROL_PLANE_PORT || '8094', 10);
-const LOG_DIR  = process.env.LOG_DIR;
+const LIB_DIR = path.join(__dirname, 'lib');
+const webhookQueue = require(path.join(LIB_DIR, 'webhook-queue'));
+const jiraAdapter  = require(path.join(LIB_DIR, 'jira-adapter'));
+
+const PORT               = parseInt(process.env.CONTROL_PLANE_PORT || '8094', 10);
+const LOG_DIR            = process.env.LOG_DIR;
+const JIRA_WEBHOOK_SECRET = process.env.JIRA_WEBHOOK_SECRET || '';
+// PRD output dir for webhook-generated PRDs (defaults to orchestrations/ dir)
+const WEBHOOK_PRD_DIR    = process.env.WEBHOOK_PRD_DIR ||
+                           path.resolve(__dirname, '..', '');
 
 if (!LOG_DIR) {
   process.stderr.write('[control-plane] ERROR: LOG_DIR env var is required\n');
@@ -28,7 +37,32 @@ if (!LOG_DIR) {
 
 fs.mkdirSync(LOG_DIR, { recursive: true });
 
+// Init webhook queue with persistent store in LOG_DIR
+webhookQueue.init({
+  queueFile:  path.join(LOG_DIR, 'webhook-queue.json'),
+  prdOutDir:  WEBHOOK_PRD_DIR,
+  onFlush: (projectKey, prdPath) => {
+    process.stdout.write(`[control-plane] webhook PRD ready: ${prdPath}\n`);
+  },
+});
+
 const PAUSED_SENTINEL = path.join(LOG_DIR, 'PAUSED');
+
+// ── HMAC verification ─────────────────────────────────────────────────────────
+
+function verifyJiraSignature(rawBody, signatureHeader) {
+  if (!JIRA_WEBHOOK_SECRET) return true; // dev mode — accept all
+  if (!signatureHeader) return false;
+  const expected = 'sha256=' + crypto
+    .createHmac('sha256', JIRA_WEBHOOK_SECRET)
+    .update(rawBody)
+    .digest('hex');
+  try {
+    return crypto.timingSafeEqual(Buffer.from(signatureHeader), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -68,14 +102,18 @@ function pendingRedirects() {
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    let data = '';
-    req.on('data', chunk => { data += chunk; });
+    const chunks = [];
+    req.on('data', chunk => { chunks.push(chunk); });
     req.on('end', () => {
-      try { resolve(data ? JSON.parse(data) : {}); }
-      catch { resolve({}); }
+      const raw = Buffer.concat(chunks);
+      resolve({ raw, text: raw.toString('utf8') });
     });
     req.on('error', reject);
   });
+}
+
+function parseJson(text) {
+  try { return JSON.parse(text); } catch { return null; }
 }
 
 function send(res, status, body) {
@@ -130,12 +168,39 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // POST /webhook/jira
+  if (method === 'POST' && pathname === '/webhook/jira') {
+    let raw, text;
+    try { ({ raw, text } = await readBody(req)); } catch { send(res, 400, { error: 'read error' }); return; }
+
+    const sig = req.headers['x-hub-signature-256'] || req.headers['x-jira-signature'] || '';
+    if (!verifyJiraSignature(raw, sig)) {
+      process.stdout.write('[control-plane] webhook/jira: invalid signature\n');
+      send(res, 401, { error: 'invalid signature' });
+      return;
+    }
+
+    const payload = parseJson(text);
+    if (!payload) { send(res, 400, { error: 'invalid JSON' }); return; }
+
+    const event = jiraAdapter.adapt(payload);
+    if (!event) {
+      send(res, 202, { status: 'ignored', reason: 'unrecognised event type' });
+      return;
+    }
+
+    webhookQueue.enqueue(event);
+    send(res, 202, { status: 'queued', jiraKey: event.jiraKey, urgent: event.urgent });
+    return;
+  }
+
   // POST /redirect/:storyId
   const redirectMatch = pathname.match(/^\/redirect\/([^/]+)$/);
   if (method === 'POST' && redirectMatch) {
     const storyId = decodeURIComponent(redirectMatch[1]);
-    let body = {};
-    try { body = await readBody(req); } catch { /* ignore */ }
+    let text = '{}';
+    try { ({ text } = await readBody(req)); } catch { /* ignore */ }
+    const body = parseJson(text) || {};
     const targetAgent = (body.targetAgent || body.target || '').trim();
     if (!targetAgent) {
       send(res, 400, { error: 'targetAgent is required' });

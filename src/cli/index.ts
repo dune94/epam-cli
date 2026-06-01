@@ -25,6 +25,8 @@ import { createSyncCommand } from './commands/sync.js';
 import { createProviderCommand } from './commands/provider.js';
 import { createImportCommand } from './commands/import.js';
 import { createNewCommand } from './commands/new.js';
+import { createHealthCheckClaudeCommand } from './commands/health-check-claude.js';
+import { createHealthCheckProxyCommand } from './commands/health-check-proxy.js';
 
 export function createCLI(version: string): Command {
   const program = new Command();
@@ -61,6 +63,8 @@ export function createCLI(version: string): Command {
   program.addCommand(createProviderCommand());
   program.addCommand(createImportCommand());
   program.addCommand(createNewCommand());
+  program.addCommand(createHealthCheckClaudeCommand());
+  program.addCommand(createHealthCheckProxyCommand());
 
   // Default: start chat if interactive, else show help
   program.action(() => {

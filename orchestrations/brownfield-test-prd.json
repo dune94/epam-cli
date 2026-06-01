@@ -1,0 +1,69 @@
+{
+  "id": "brownfield-test-v1",
+  "title": "Brownfield Test — hello-world enhancement",
+  "version": "1.0.0",
+  "lastUpdated": "2026-06-01",
+  "project": {
+    "name": "hello-world-brownfield",
+    "description": "Test PRD for GAP-P9 Stage 1: verifies brownfield context ingestion against an existing TypeScript repo.",
+    "stack": {
+      "language": "TypeScript",
+      "runtime": "Node.js 20",
+      "testing": "vitest"
+    }
+  },
+  "brownfield": {
+    "repoRoot": "/home/bradleyjerome/projects/ai/epam-test-apps/hello-world"
+  },
+  "implementationOrder": {
+    "enhance": ["BF-001", "BF-002"]
+  },
+  "stories": [
+    {
+      "id": "BF-001",
+      "title": "Add farewell function to greet module",
+      "description": "Extend the existing greet.ts module with a farewell(name) function that returns 'Goodbye, <name>!'. Add a corresponding test in greet.test.ts. The existing greet() function must remain unchanged.",
+      "priority": "medium",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "engineer",
+      "acceptanceCriteria": [
+        "farewell(name) exported from greet.ts returns 'Goodbye, <name>!'",
+        "greet.test.ts includes a test for farewell()",
+        "Existing greet() tests still pass"
+      ],
+      "dependencies": [],
+      "estimatedHours": 0.5,
+      "technicalNotes": {
+        "files": ["greet.ts", "greet.test.ts"],
+        "requiredSkills": ["typescript", "vitest"]
+      },
+      "effort": "low",
+      "aiProvider": "claude"
+    },
+    {
+      "id": "BF-002",
+      "title": "Add name list to config file",
+      "description": "Extract the hardcoded names array from main.ts into a names.config.json file. main.ts should read the config at runtime. Keeps main.ts clean and makes the name list configurable without code changes.",
+      "priority": "medium",
+      "status": "pending",
+      "completed": false,
+      "agentGroup": "main",
+      "agentRole": "engineer",
+      "acceptanceCriteria": [
+        "names.config.json created with the names array",
+        "main.ts reads names from names.config.json",
+        "Running main.ts produces identical output to current"
+      ],
+      "dependencies": ["BF-001"],
+      "estimatedHours": 0.5,
+      "technicalNotes": {
+        "files": ["main.ts", "names.config.json"],
+        "requiredSkills": ["typescript", "json"]
+      },
+      "effort": "low",
+      "aiProvider": "claude"
+    }
+  ]
+}

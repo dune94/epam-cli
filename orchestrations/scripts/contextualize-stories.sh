@@ -145,6 +145,17 @@ else
   info "Retrieval: TF-IDF (set EPAM_API_KEY_OPENAI for semantic search)"
 fi
 
+# Brownfield context: optional existing-repo ingestion.
+# Set via PRD .brownfield.repoRoot — absent means greenfield (no change).
+BROWNFIELD_CONTEXT_JS="$LIB_DIR/brownfield-context.js"
+BROWNFIELD_REPO_ROOT=$(jq -r '.brownfield.repoRoot // empty' "$PRD_FILE" 2>/dev/null || true)
+if [ -n "$BROWNFIELD_REPO_ROOT" ] && [ -f "$BROWNFIELD_CONTEXT_JS" ]; then
+  USE_BROWNFIELD=true
+  info "Retrieval: +brownfield (git:${BROWNFIELD_REPO_ROOT})"
+else
+  USE_BROWNFIELD=false
+fi
+
 if [ ! -f "$LIB_DIR/cpa-inference.js" ]; then
   error "cpa-inference.js not found: $LIB_DIR/cpa-inference.js"; exit 1
 fi
@@ -606,6 +617,20 @@ while IFS= read -r sid; do
         --chunk-size 25 \
         --extra-docs "$EXTRA_DOCS" \
         2>/dev/null || echo "[]")
+    fi
+  fi
+
+  # ── Brownfield context merge ─────────────────────────────────────────────────
+  if [ "$USE_BROWNFIELD" = true ]; then
+    brownfield_chunks=$("$NODE_CMD" "$BROWNFIELD_CONTEXT_JS" \
+      --repo-root "$BROWNFIELD_REPO_ROOT" \
+      --query "$retrieval_query" \
+      --top 3 \
+      --chunk-size 25 \
+      2>/dev/null || echo "[]")
+    if [ -n "$brownfield_chunks" ] && [ "$brownfield_chunks" != "[]" ] && \
+       echo "$brownfield_chunks" | jq -e 'type == "array"' >/dev/null 2>&1; then
+      kb_chunks=$(echo "$kb_chunks $brownfield_chunks" | jq -s '.[0] + .[1]')
     fi
   fi
 

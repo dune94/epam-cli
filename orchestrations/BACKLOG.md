@@ -20,7 +20,7 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | 3 | GAP-P6 | OpenTelemetry emission alongside Langfuse | done | MAF, OAI Agents SDK |
 | 4 | GAP-P7 | SwarmRouter-style topology selection | done | kyegomez/swarms |
 | 5 | GAP-P8 | Constitution injection at agent invocation | done | swarm-forge |
-| 6 | GAP-P9 | Live RAG via MCP (Jira/Confluence/GitHub) | pending | codemie, smolagents |
+| 6 | GAP-P9 | Brownfield support — existing system context ingestion | pending | codemie, smolagents |
 | 7 | GAP-P2 | External event triggers (webhook/Jira/Slack) | deferred | OpenHands, Cline |
 | 8 | GAP-P1 | Docker sandbox execution | deferred | OpenHands, SWE-agent |
 | 9 | GAP-P3 | SWE-bench benchmark harness | deferred | SWE-agent (needs P1 first) |
@@ -81,7 +81,7 @@ Spike first: evaluate sqlite-vec, LanceDB, and Chroma for WSL2 compatibility, ze
 
 ## GAP-P6 — OpenTelemetry emission alongside Langfuse
 
-**Status:** pending  
+**Status:** done  
 **Priority:** 3  
 **Effort:** low (1 story)
 
@@ -122,7 +122,7 @@ Add a routing step before phase execution in `run-agent-orchestration.sh` that c
 
 ## GAP-P8 — Constitution injection at agent invocation
 
-**Status:** pending  
+**Status:** done  
 **Priority:** 5  
 **Effort:** low (1 line)
 
@@ -138,39 +138,57 @@ Prepend a short behavioral contract (never write outside PROJECT_ROOT, never ski
 
 ---
 
-## GAP-P9 — Live RAG via MCP (Jira/Confluence/GitHub)
+## GAP-P9 — Brownfield support — existing system context ingestion
 
 **Status:** pending  
 **Priority:** 6  
-**Effort:** medium (2-3 stories)
+**Effort:** medium (2-3 stories)  
+**Depends on:** GAP-P2 (for live Jira/Confluence path)
 
 ### Problem
-The current semantic RAG (P4) builds a snapshot of KB files and assets at first run. For multi-phase PRDs spanning days, this snapshot goes stale — the codebase changes, Jira stories get refined, Confluence pages are updated, but CPA and story invocations keep seeing the old context. Vector DB staleness directly degrades CPA accuracy and story quality.
+epam-cli is currently greenfield-only: it seeds new applications from scratch and builds the KB as phases run. Most enterprise work is brownfield — the codebase exists, architecture decisions are documented in Confluence, the backlog lives in Jira, and team patterns are embedded in git history. Without brownfield context ingestion, the orchestration re-implements existing things, contradicts established decisions, and produces CPA estimates that ignore existing tech debt.
 
 ### Approach
-Replace the snapshot-based retrieval with MCP server calls at query time. At CPA pre-pass and at each story invocation, epam-cli calls live MCP servers for Jira (sprint state, AC text, linked stories), Confluence (architecture docs, runbooks), and GitHub (open PRs, recent commits touching relevant paths). The codemie project (`/home/bjerome/projects/ai/codemie`) is the reference implementation — it demonstrates this architecture in production.
+Two-stage implementation:
 
-The semantic-search.js fallback chain remains unchanged for KB files (.md corpus). MCP augments it for live system data that cannot be pre-embedded.
+**Stage 1 — Local git context (testable without external services)**  
+Use the existing `GitIngest.ts` (`src/tools/gitingest/GitIngest.ts`) to ingest the target repo at CPA time and story invocation time. For brownfield runs, the PRD points at an existing repo root. GitIngest extracts relevant file context for each story's scope. No external services required — testable against any local git repo.
+
+**Stage 2 — External system context (requires live Jira/Confluence/GitHub)**  
+Add a file-based stub adapter so development and testing can proceed without live services. Stubs are `.epam/brownfield/jira.json`, `.epam/brownfield/confluence.md`, etc. — same shape as what the real MCP adapters would return. Live MCP integration is wired when env vars are present; stubs are the fallback for local development.
+
+Context from all sources feeds the same `{source, score, chunk}` retrieval interface used by P4 — no change to CPA or story invocation call sites.
 
 ### Files to change
-- `orchestrations/scripts/lib/mcp-context.js` — new: MCP client wrappers for Jira, Confluence, GitHub; outputs same `{source, score, chunk}` format as semantic-search.js
-- `orchestrations/scripts/contextualize-stories.sh` — extend retrieval chain: semantic → MCP live → tfidf fallback
-- `orchestrations/scripts/claude.sh` — pass `--mcp-config` to claude CLI when MCP servers are configured
-- `.epam/mcp-config.json` — per-project MCP server config (server URLs, auth token env var names)
+- `orchestrations/scripts/lib/brownfield-context.js` — new: orchestrates GitIngest + stub/live adapter; same output shape as semantic-search.js
+- `orchestrations/scripts/contextualize-stories.sh` — add brownfield context pass when `brownfield: true` in PRD
+- `orchestrations/prd.json` schema — add optional `brownfield.repoRoot` and `brownfield.sources[]` fields
+- `.epam/brownfield/` — stub files for local development/testing
+
+### Test vehicle
+Travel app (`orchestrations/game-prd.json` or equivalent travel PRD) is used as the brownfield test target:
+1. Run greenfield travel app PRD → produces a populated repo in the test apps dir
+2. Author a follow-on brownfield PRD pointing `brownfield.repoRoot` at that repo
+3. Seed `.epam/brownfield/jira.json` with ~5 fake Jira tickets shaped around the travel domain (flight search, booking flow, etc.)
+4. Run CPA — verify brownfield chunks appear alongside KB chunks in output
+
+No external services required at any stage.
 
 ### Acceptance criteria
-- When `.epam/mcp-config.json` is absent or MCP env vars are unset, behaviour is identical to P4 (semantic RAG with tfidf fallback)
-- When configured, CPA pre-pass fetches live Jira story text and Confluence doc sections alongside KB files
-- Retrieved MCP chunks appear in CPA citation output with `source: jira:<issue-key>` or `source: confluence:<page-id>` labels
-- No embedding pre-build step required for MCP sources — data is fetched live per query
-- Synergy with P2: MCP Jira client is reusable as the writeback client when P2 is implemented
+- When `brownfield` is absent from PRD, behaviour is identical to current (greenfield)
+- When `brownfield.repoRoot` is set, GitIngest runs at CPA time and injects repo context per story
+- Stub adapter reads from `.epam/brownfield/*.json|.md` when live service env vars are absent
+- Retrieved brownfield chunks labelled `source: git:<path>`, `source: stub:jira`, etc. in CPA output
+- Stage 1 (GitIngest) verified by running follow-on PRD against the travel app output repo
+- Stage 2 (live MCP) wired but gated behind env vars — absent vars fall through to stubs silently
+- CPA estimate for a brownfield story demonstrably differs from the same story run greenfield — confirms context is being consumed
 
 ---
 
 ## Deferred
 
 ### GAP-P2 — External event triggers
-Webhook/Jira/Slack inbound to `control-plane.js`. Deferred until core engine improvements (P5, P4) are stable.
+Webhook/Jira/Slack inbound to `control-plane.js`. Core engine improvements (P5, P4, P6, P7, P8) are now stable. Deferred pending prioritization decision — see gap discussion in session history for debounced batch aggregator architecture.
 
 ### GAP-P1 — Docker sandbox execution
 Container isolation for agent Bash execution. High effort, low urgency for current single-operator usage. Re-evaluate at enterprise adoption stage.

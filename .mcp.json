@@ -3,13 +3,15 @@
     {
       "name": "example-server",
       "url": "http://localhost:3000/mcp",
-      "transport": "http"
+      "transport": "http",
+      "enabled": false
     },
     {
       "name": "chrome-devtools",
       "transport": "stdio",
       "command": "npx",
-      "args": ["-y", "@anthropic/mcp-server-puppeteer"]
+      "args": ["-y", "@anthropic/mcp-server-puppeteer"],
+      "enabled": false
     }
   ]
 }

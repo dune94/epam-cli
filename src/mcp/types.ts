@@ -11,6 +11,8 @@ export interface McpServerConfig {
   args?: string[];
   /** Extra environment variables for the spawned process */
   env?: Record<string, string>;
+  /** Whether this server is enabled (default: true). Disabled servers are skipped during initialization. */
+  enabled?: boolean;
 }
 
 export interface McpConfig {

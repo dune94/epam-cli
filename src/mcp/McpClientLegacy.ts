@@ -30,11 +30,18 @@ export class McpClient {
       return;
     }
 
-    logger.debug(`Initializing ${config.servers.length} MCP server(s)`);
+    // Filter to only enabled servers (default to enabled if not specified)
+    const enabledServers = config.servers.filter(s => s.enabled !== false);
+    if (enabledServers.length === 0) {
+      logger.debug('No enabled MCP servers configured');
+      return;
+    }
 
-    // Connect to each server in parallel
+    logger.debug(`Initializing ${enabledServers.length} MCP server(s)`);
+
+    // Connect to each enabled server in parallel
     await Promise.all(
-      config.servers.map(async (serverConfig) => {
+      enabledServers.map(async (serverConfig) => {
         try {
           if (serverConfig.transport === 'stdio') {
             await this.connectStdio(serverConfig);

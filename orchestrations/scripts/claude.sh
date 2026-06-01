@@ -65,6 +65,8 @@ INVOKE_PYTHON="${INVOKE_PYTHON:-$SCRIPT_DIR/.venv/bin/python3}"
 EFFORT_MODEL_LOW="claude-haiku-4-5-20251001"
 EFFORT_MODEL_MEDIUM="claude-sonnet-4-5-20250929"
 EFFORT_MODEL_HIGH="claude-opus-4-6"
+# Set by resolve_planner_settings; empty means single-invocation mode (no split)
+STORY_PLANNER_MODEL=""
 
 # resolve_effort_settings <story_id>
 # Sets STORY_MODEL and STORY_MAX_TURNS globals based on story's effort field.
@@ -106,6 +108,22 @@ resolve_model_from_story() {
     if [ -n "$story_model" ]; then
         STORY_MODEL="$story_model"
         log "  Model[prd.json] -> $STORY_MODEL (overrides effort default)"
+    fi
+}
+
+# resolve_planner_settings <story_id>
+# Reads optional plannerModel from story spec and sets STORY_PLANNER_MODEL global.
+# When set, the first invocation uses STORY_PLANNER_MODEL to produce a structured
+# execution plan; subsequent (execution) invocations use STORY_MODEL.
+# When absent, STORY_PLANNER_MODEL is cleared and behaviour is unchanged.
+resolve_planner_settings() {
+    local story_id="$1"
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    STORY_PLANNER_MODEL=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .plannerModel // ""' \
+        "$prd_target" 2>/dev/null || echo "")
+    if [ -n "$STORY_PLANNER_MODEL" ]; then
+        log "  PlannerModel[$STORY_PLANNER_MODEL] -> planning turn, then execution on $STORY_MODEL"
     fi
 }
 
@@ -207,10 +225,22 @@ normalize_provider_json() {
     esac
 }
 
+# Agent behavioral contract — injected into every claude invocation as a system
+# prompt prefix. Rules are non-negotiable; they cannot be overridden by story
+# prompts or KB content. Kept minimal: only invariants that prevent data loss or
+# security incidents if violated.
+AGENT_CONSTITUTION="AGENT BEHAVIORAL CONTRACT — NON-NEGOTIABLE:
+1. Filesystem boundary: Never write, edit, or delete files outside PROJECT_ROOT (${PROJECT_ROOT}). All output must land inside the project directory.
+2. Acceptance criteria: Never mark a story or task complete without verifying every acceptance criterion passes. Run the specified tests if the story requires it.
+3. Protected paths: Never modify, rename, or delete files under .epam/, orchestrations/, or any path listed in .epam/protected-files.
+4. Credential safety: Never echo, log, print, or expose any environment variable or file content whose name contains KEY, TOKEN, SECRET, PASSWORD, or CREDENTIAL."
+
 # Claude CLI permission flags
 # These allow Claude to read/write files and execute commands without prompting
 CLAUDE_PERMISSIONS=(
     "--dangerously-skip-permissions"
+    "--append-system-prompt"
+    "$AGENT_CONSTITUTION"
 )
 
 # Alternative: Use granular permissions (uncomment if preferred over skip-permissions)
@@ -757,6 +787,51 @@ update_monitor_status() {
     esac
 }
 
+# run_planning_phase <story_id> <planner_model>
+# Invokes the planner model with a focused planning prompt.
+# Outputs a structured step-by-step execution plan as plain text on stdout.
+# Uses the same SDK/CLI path as execution invocations.
+run_planning_phase() {
+    local story_id="$1"
+    local planner_model="$2"
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    local title
+    title=$(get_story_title "$story_id")
+    local ac
+    ac=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .acceptanceCriteria // [] | .[]' \
+        "$prd_target" 2>/dev/null | sed 's/^/- /' || echo "")
+
+    local planning_prompt="You are a planning agent. Produce a concise, numbered execution plan for the coding agent that will implement the following story. Output ONLY a numbered step list — no prose, no code.
+
+Story: ${story_id} — ${title}
+
+Acceptance criteria:
+${ac}
+
+Produce 5-10 numbered implementation steps that a coding agent will follow exactly. Be specific about file names, function signatures, and test requirements."
+
+    local plan_result_file
+    plan_result_file=$(mktemp /tmp/plan-${story_id}-XXXXXX.json)
+    local plan_text=""
+
+    if [ "${EPAM_SDK_INVOKE:-0}" = "1" ] && [ -f "$INVOKE_PY" ]; then
+        echo "$planning_prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
+            --model "$planner_model" \
+            --system-prompt "$AGENT_CONSTITUTION" \
+            --output "$plan_result_file" 2>/dev/null || true
+        plan_text=$(jq -r '.result // empty' "$plan_result_file" 2>/dev/null || cat "$plan_result_file" 2>/dev/null || echo "")
+    else
+        echo "$planning_prompt" | "$CLAUDE_CMD" --print --output-format json \
+            --model "$planner_model" "${CLAUDE_PERMISSIONS[@]}" \
+            2>/dev/null > "$plan_result_file" || true
+        plan_text=$(jq -r '.result // empty' "$plan_result_file" 2>/dev/null || echo "")
+    fi
+
+    rm -f "$plan_result_file"
+    echo "$plan_text"
+}
+
 # Invoke Claude CLI to implement a story
 implement_story() {
     local story_id=$1
@@ -789,12 +864,25 @@ implement_story() {
     case "${STORY_PROVIDER:-claude-sonnet}" in
         copilot|openai|qwen|cursor) resolve_model_from_story "$story_id" ;;
     esac
+    # Resolve optional plannerModel — runs a planning pass before execution
+    resolve_planner_settings "$story_id"
     local model_flag=()
     local turns_flag=()
     [ -n "${STORY_MODEL:-}" ]     && model_flag=(--model "$STORY_MODEL")
     [ -n "${STORY_MAX_TURNS:-}" ] && turns_flag=(--max-turns "$STORY_MAX_TURNS")
     local story_cli
     story_cli=$(provider_to_cli "${STORY_PROVIDER:-claude-sonnet}")
+
+    # Planning phase: when plannerModel is set, run one planning invocation first.
+    # The returned plan is injected into every execution attempt as fixed context.
+    local story_plan=""
+    if [ -n "${STORY_PLANNER_MODEL:-}" ]; then
+        log "  Running planning phase with $STORY_PLANNER_MODEL..."
+        story_plan=$(run_planning_phase "$story_id" "$STORY_PLANNER_MODEL")
+        local plan_words
+        plan_words=$(echo "$story_plan" | wc -w)
+        log "  Planning phase complete ($plan_words words)"
+    fi
 
     while [ $retry_count -le $MAX_RETRIES ]; do
         # Rebuild prompt each attempt: retry_count and KB ID must reflect current state
@@ -803,6 +891,14 @@ implement_story() {
         local prompt
         prompt="$(build_implementation_prompt "$story_id")
 $(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
+        # Inject execution plan when planner/executor split is active
+        if [ -n "${story_plan:-}" ]; then
+            prompt="$prompt
+
+## Execution Plan
+Follow this plan step by step:
+$story_plan"
+        fi
 
         # Log the prompt
         echo "=== Prompt for $story_id (attempt $((retry_count + 1))) ===" >> "$output_file"
@@ -890,6 +986,7 @@ $(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
                     fi
                     if echo "$prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
                             "${sdk_model_arg[@]}" "${sdk_think_arg[@]}" \
+                            --system-prompt "$AGENT_CONSTITUTION" \
                             --output "$json_result_file" 2>>"$output_file"; then
                         invoke_success=true
                     fi
@@ -918,6 +1015,7 @@ $(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
                     fi
                     if echo "$prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
                             "${sdk_model_arg[@]}" \
+                            --system-prompt "$AGENT_CONSTITUTION" \
                             --output "$json_result_file" 2>>"$output_file"; then
                         invoke_success=true
                     fi
@@ -1015,6 +1113,7 @@ append_cost_record() {
     local story_effort=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .effort // "medium"' "$prd_target")
     local story_type=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .storyType // "implementation"' "$prd_target")
     local resolved_model="${STORY_MODEL:-}"
+    local planner_model="${STORY_PLANNER_MODEL:-}"
     local prompt_tokens_measured="${STORY_PRECOUNT_TOKENS:-0}"
     local invoke_mode="cli"
     [ "${EPAM_SDK_INVOKE:-0}" = "1" ] && invoke_mode="sdk"
@@ -1070,6 +1169,7 @@ append_cost_record() {
             --arg s "$status" --arg n "" \
             --arg ef "${story_effort:-medium}" --arg stype "${story_type:-implementation}" \
             --arg rm "${resolved_model:-}" \
+            --arg pm "${planner_model:-}" \
             --argjson ptm "${prompt_tokens_measured:-0}" \
             --arg im "${invoke_mode}" \
             '{phase_id:$pid, phase_name:$pn, story_id:$sid, story_title:$st,
@@ -1079,6 +1179,7 @@ append_cost_record() {
               task_turns:$tt, cache_read_tokens:$cr, cache_create_tokens:$cc,
               status:$s, notes:$n,
               effort:$ef, storyType:$stype, resolvedModel:$rm,
+              plannerModel:$pm,
               prompt_tokens_measured:$ptm, invokeMode:$im}' >> "$cost_file"
     ) 200>"$lock_file"
 }

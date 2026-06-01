@@ -15,20 +15,21 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 
 | # | ID | Title | Status | Source |
 |---|---|---|---|---|
-| 1 | GAP-P5 | Intra-story planner/executor model split | pending | Aider, CrewAI |
-| 2 | GAP-P4 | Semantic RAG — replace TF-IDF in CPA | pending | CrewAI, OpenHands |
-| 3 | GAP-P6 | OpenTelemetry emission alongside Langfuse | pending | MAF, OAI Agents SDK |
-| 4 | GAP-P7 | SwarmRouter-style topology selection | pending | kyegomez/swarms |
-| 5 | GAP-P8 | Constitution injection at agent invocation | pending | swarm-forge |
-| 6 | GAP-P2 | External event triggers (webhook/Jira/Slack) | deferred | OpenHands, Cline |
-| 7 | GAP-P1 | Docker sandbox execution | deferred | OpenHands, SWE-agent |
-| 8 | GAP-P3 | SWE-bench benchmark harness | deferred | SWE-agent (needs P1 first) |
+| 1 | GAP-P5 | Intra-story planner/executor model split | done | Aider, CrewAI |
+| 2 | GAP-P4 | Semantic RAG — replace TF-IDF in CPA | done | CrewAI, OpenHands |
+| 3 | GAP-P6 | OpenTelemetry emission alongside Langfuse | done | MAF, OAI Agents SDK |
+| 4 | GAP-P7 | SwarmRouter-style topology selection | done | kyegomez/swarms |
+| 5 | GAP-P8 | Constitution injection at agent invocation | done | swarm-forge |
+| 6 | GAP-P9 | Live RAG via MCP (Jira/Confluence/GitHub) | pending | codemie, smolagents |
+| 7 | GAP-P2 | External event triggers (webhook/Jira/Slack) | deferred | OpenHands, Cline |
+| 8 | GAP-P1 | Docker sandbox execution | deferred | OpenHands, SWE-agent |
+| 9 | GAP-P3 | SWE-bench benchmark harness | deferred | SWE-agent (needs P1 first) |
 
 ---
 
 ## GAP-P5 — Intra-story planner/executor model split
 
-**Status:** pending  
+**Status:** done  
 **Priority:** 1  
 **Effort:** low (1-2 stories equivalent)
 
@@ -54,7 +55,7 @@ Add a `plannerModel` field to story specs in any PRD. When set, `claude.sh` uses
 
 ## GAP-P4 — Semantic RAG — replace TF-IDF in CPA
 
-**Status:** pending  
+**Status:** done  
 **Priority:** 2  
 **Effort:** medium (spike first, then 2-3 stories)
 
@@ -104,7 +105,7 @@ Add `@opentelemetry/sdk-node` alongside the existing Langfuse decorator. Emit sp
 
 ## GAP-P7 — SwarmRouter-style topology selection
 
-**Status:** pending  
+**Status:** done  
 **Priority:** 4  
 **Effort:** medium
 
@@ -131,8 +132,38 @@ Add a routing step before phase execution in `run-agent-orchestration.sh` that c
 ### Approach
 Prepend a short behavioral contract (never write outside PROJECT_ROOT, never skip AC verification, never modify protected files) to every agent system prompt in `claude.sh` at invocation time. Not all of KB.md — just the non-negotiable rules.
 
+### Files changed
+- `orchestrations/scripts/claude.sh` — `AGENT_CONSTITUTION` constant; injected via `--append-system-prompt` (CLI) and `--system-prompt` (SDK)
+- `orchestrations/scripts/invoke.py` — added `--system-prompt` flag; passed as API `system` block
+
+---
+
+## GAP-P9 — Live RAG via MCP (Jira/Confluence/GitHub)
+
+**Status:** pending  
+**Priority:** 6  
+**Effort:** medium (2-3 stories)
+
+### Problem
+The current semantic RAG (P4) builds a snapshot of KB files and assets at first run. For multi-phase PRDs spanning days, this snapshot goes stale — the codebase changes, Jira stories get refined, Confluence pages are updated, but CPA and story invocations keep seeing the old context. Vector DB staleness directly degrades CPA accuracy and story quality.
+
+### Approach
+Replace the snapshot-based retrieval with MCP server calls at query time. At CPA pre-pass and at each story invocation, epam-cli calls live MCP servers for Jira (sprint state, AC text, linked stories), Confluence (architecture docs, runbooks), and GitHub (open PRs, recent commits touching relevant paths). The codemie project (`/home/bjerome/projects/ai/codemie`) is the reference implementation — it demonstrates this architecture in production.
+
+The semantic-search.js fallback chain remains unchanged for KB files (.md corpus). MCP augments it for live system data that cannot be pre-embedded.
+
 ### Files to change
-- `orchestrations/scripts/claude.sh` — prepend contract to system prompt
+- `orchestrations/scripts/lib/mcp-context.js` — new: MCP client wrappers for Jira, Confluence, GitHub; outputs same `{source, score, chunk}` format as semantic-search.js
+- `orchestrations/scripts/contextualize-stories.sh` — extend retrieval chain: semantic → MCP live → tfidf fallback
+- `orchestrations/scripts/claude.sh` — pass `--mcp-config` to claude CLI when MCP servers are configured
+- `.epam/mcp-config.json` — per-project MCP server config (server URLs, auth token env var names)
+
+### Acceptance criteria
+- When `.epam/mcp-config.json` is absent or MCP env vars are unset, behaviour is identical to P4 (semantic RAG with tfidf fallback)
+- When configured, CPA pre-pass fetches live Jira story text and Confluence doc sections alongside KB files
+- Retrieved MCP chunks appear in CPA citation output with `source: jira:<issue-key>` or `source: confluence:<page-id>` labels
+- No embedding pre-build step required for MCP sources — data is fetched live per query
+- Synergy with P2: MCP Jira client is reusable as the writeback client when P2 is implemented
 
 ---
 

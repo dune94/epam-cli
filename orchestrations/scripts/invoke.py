@@ -67,6 +67,8 @@ def parse_args():
                    help="Stream response text to stderr for live visibility")
     p.add_argument("--cache-system", action="store_true", dest="cache_system",
                    help="Apply prompt caching to system prompt block")
+    p.add_argument("--system-prompt", default="", dest="system_prompt",
+                   help="System prompt prepended to every invocation (behavioral contract)")
     return p.parse_args()
 
 
@@ -92,16 +94,15 @@ def import_sdk():
 # Build messages array from stdin prompt
 # ---------------------------------------------------------------------------
 
-def build_messages(prompt_text, cache_system):
+def build_messages(prompt_text, cache_system, system_prompt=""):
     """
     Returns (system_block_or_None, messages_list).
-    System block is used for static context that benefits from caching.
-    For now all content goes into the user message.
-    cache_system flag is reserved for future use when callers pass a
-    separate system prompt via env var or stdin prefix convention.
+    system_prompt: when non-empty, passed as the API system field so it
+    is prepended to Claude's default system prompt (behavioral contract).
     """
     messages = [{"role": "user", "content": prompt_text}]
-    return None, messages
+    system = system_prompt.strip() if system_prompt else None
+    return system, messages
 
 
 # ---------------------------------------------------------------------------
@@ -242,7 +243,7 @@ def main():
     anthropic = import_sdk()
     client = anthropic.Anthropic(api_key=api_key)
 
-    system, messages = build_messages(prompt_text, args.cache_system)
+    system, messages = build_messages(prompt_text, args.cache_system, args.system_prompt)
 
     # ── Token count pre-check (no generation) ──────────────────────────────
     if args.count_tokens_only:

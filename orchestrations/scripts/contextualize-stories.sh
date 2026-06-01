@@ -132,6 +132,19 @@ if [ ! -f "$LIB_DIR/tfidf.js" ]; then
   error "tfidf.js not found: $LIB_DIR/tfidf.js"; exit 1
 fi
 
+# Semantic search availability: requires semantic-search.js + EPAM_API_KEY_OPENAI.
+# When available, semantic-search.js is used instead of tfidf.js.
+# Falls back to tfidf.js silently when the key is absent or the script fails.
+SEMANTIC_SEARCH_JS="$LIB_DIR/semantic-search.js"
+OPENAI_KEY_FOR_RAG="${EPAM_API_KEY_OPENAI:-${OPENAI_API_KEY:-}}"
+USE_SEMANTIC_RAG=false
+if [ -f "$SEMANTIC_SEARCH_JS" ] && [ -n "$OPENAI_KEY_FOR_RAG" ]; then
+  USE_SEMANTIC_RAG=true
+  info "Retrieval: semantic-search (text-embedding-3-small)"
+else
+  info "Retrieval: TF-IDF (set EPAM_API_KEY_OPENAI for semantic search)"
+fi
+
 if [ ! -f "$LIB_DIR/cpa-inference.js" ]; then
   error "cpa-inference.js not found: $LIB_DIR/cpa-inference.js"; exit 1
 fi
@@ -498,6 +511,15 @@ while IFS= read -r sid; do
   f_tok=$(echo "$story_json" | jq -r '.estimatedTokens // 0')
   f_turns=$(echo "$story_json" | jq -r '.estimatedTurns // 1')
   f_effort=$(echo "$story_json" | jq -r '.effort // ""')
+  # plannerModel: when set, a planning invocation runs before execution.
+  # Add 15% overhead to formula estimates to account for the planning turn cost.
+  f_planner_model=$(echo "$story_json" | jq -r '.plannerModel // ""')
+  if [ -n "$f_planner_model" ] && [ "$f_planner_model" != "null" ]; then
+    f_min=$(echo "scale=2; $f_min * 1.15" | bc 2>/dev/null || echo "$f_min")
+    f_cost=$(echo "scale=4; $f_cost * 1.15" | bc 2>/dev/null || echo "$f_cost")
+    f_tok=$(echo "scale=0; $f_tok * 1.15 / 1" | bc 2>/dev/null || echo "$f_tok")
+    info "  $sid: plannerModel=$f_planner_model — formula estimates +15% for planning turn"
+  fi
 
   # Infer effort from humanHours if not set
   if [ -z "$f_effort" ] || [ "$f_effort" = "null" ]; then
@@ -550,17 +572,41 @@ while IFS= read -r sid; do
   fi
 
   # ── TF-IDF retrieval ────────────────────────────────────────────────────────
-  tfidf_query="${s_title} ${s_description:0:200} ${s_skills}"
+  retrieval_query="${s_title} ${s_description:0:200} ${s_skills}"
   kb_chunks="[]"
 
-  if [ -n "$tfidf_query" ]; then
-    kb_chunks=$("$NODE_CMD" "$LIB_DIR/tfidf.js" \
-      --kb-dir "$KB_DIR" \
-      --query "$tfidf_query" \
-      --top 5 \
-      --chunk-size 25 \
-      --extra-docs "$EXTRA_DOCS" \
-      2>/dev/null || echo "[]")
+  if [ -n "$retrieval_query" ]; then
+    if [ "$USE_SEMANTIC_RAG" = true ]; then
+      # Semantic path: cosine similarity over OpenAI embeddings.
+      # semantic-search.js exits 1 on API error; we fall back to TF-IDF in that case.
+      kb_chunks=$(EPAM_API_KEY_OPENAI="$OPENAI_KEY_FOR_RAG" \
+        "$NODE_CMD" "$SEMANTIC_SEARCH_JS" \
+        --kb-dir "$KB_DIR" \
+        --query "$retrieval_query" \
+        --top 5 \
+        --chunk-size 25 \
+        --extra-docs "$EXTRA_DOCS" \
+        2>/dev/null)
+      # Empty or error — fall back to TF-IDF
+      if [ -z "$kb_chunks" ] || [ "$kb_chunks" = "[]" ] || ! echo "$kb_chunks" | jq -e 'type == "array"' >/dev/null 2>&1; then
+        warning "  $sid: semantic retrieval empty — falling back to TF-IDF"
+        kb_chunks=$("$NODE_CMD" "$LIB_DIR/tfidf.js" \
+          --kb-dir "$KB_DIR" \
+          --query "$retrieval_query" \
+          --top 5 \
+          --chunk-size 25 \
+          --extra-docs "$EXTRA_DOCS" \
+          2>/dev/null || echo "[]")
+      fi
+    else
+      kb_chunks=$("$NODE_CMD" "$LIB_DIR/tfidf.js" \
+        --kb-dir "$KB_DIR" \
+        --query "$retrieval_query" \
+        --top 5 \
+        --chunk-size 25 \
+        --extra-docs "$EXTRA_DOCS" \
+        2>/dev/null || echo "[]")
+    fi
   fi
 
   chunk_count=$(echo "$kb_chunks" | jq 'length' 2>/dev/null || echo "0")

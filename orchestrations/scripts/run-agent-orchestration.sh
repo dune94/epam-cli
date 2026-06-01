@@ -809,6 +809,35 @@ primary_stories=$(topo_sort_stories "$primary_stories")
 independent_stories=$(topo_sort_stories "$independent_stories")
 review_stories=$(topo_sort_stories "$review_stories")
 
+# ── Topology routing ──────────────────────────────────────────────────────────
+# Count pending worktree stories (primary + independent).
+# When the total is 0 or 1, worktree overhead (git branch, merge, conflict
+# resolution) exceeds the parallelism benefit.  Route those stories onto the
+# main sequential lane instead — no worktrees created, no merge step.
+# This is the dominant case for test phases (hello_world_test, infra_test)
+# and any utility phase with a single story.
+_wt_count=0
+[ -n "$primary_stories" ]     && _wt_count=$(( _wt_count + $(echo "$primary_stories"     | grep -c '[^[:space:]]' || echo 0) ))
+[ -n "$independent_stories" ] && _wt_count=$(( _wt_count + $(echo "$independent_stories" | grep -c '[^[:space:]]' || echo 0) ))
+
+if [ "$_wt_count" -le 1 ]; then
+    if [ "$_wt_count" -eq 1 ]; then
+        _collapsed="${primary_stories}${independent_stories}"
+        _collapsed=$(echo "$_collapsed" | tr -s '\n' | grep '[^[:space:]]' || true)
+        info "Topology: single-story worktree set — routing to main branch (no worktree overhead)"
+        # Append the lone worktree story to main; run it sequentially after existing main stories
+        if [ -n "$main_stories" ]; then
+            main_stories="${main_stories}
+${_collapsed}"
+        else
+            main_stories="$_collapsed"
+        fi
+        main_stories=$(topo_sort_stories "$main_stories")
+    fi
+    primary_stories=""
+    independent_stories=""
+fi
+
 # Surface resume-from-failure: show progress if some stories already completed
 _phase_total=$(jq -r --arg phase "$PHASE" \
     '(.implementationOrder[$phase] // []) | length' "$PRD_FILE" 2>/dev/null || echo 0)

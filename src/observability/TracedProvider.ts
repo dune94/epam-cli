@@ -12,6 +12,7 @@ import type {
   StreamHandler,
 } from '../providers/types.js';
 import { getLangfuse, isLangfuseEnabled } from './LangfuseTracer.js';
+import { emitLlmSpan, isOtelEnabled } from './OtelTracer.js';
 import { calculateCost } from '../billing/pricing.js';
 import { logger } from '../utils/logger.js';
 
@@ -29,19 +30,17 @@ export class TracedProvider implements LLMProvider {
   }
 
   async complete(request: ProviderRequest): Promise<ProviderResponse> {
-    if (!isLangfuseEnabled()) return this.inner.complete(request);
+    const langfuseEnabled = isLangfuseEnabled();
+    const langfuse = langfuseEnabled ? getLangfuse() : null;
 
-    const langfuse = getLangfuse();
-    if (!langfuse) return this.inner.complete(request);
-
-    const trace = langfuse.trace({
+    const trace = langfuse?.trace({
       name: 'llm-complete',
       sessionId: this.sessionId,
       userId: this.userId,
       metadata: { provider: this.name, model: request.model },
     });
 
-    const generation = trace.generation({
+    const generation = trace?.generation({
       name: `${this.name}:complete`,
       model: request.model,
       input: this.summarizeInput(request),
@@ -54,47 +53,47 @@ export class TracedProvider implements LLMProvider {
     const start = Date.now();
     try {
       const response = await this.inner.complete(request);
+      const latencyMs = Date.now() - start;
       const cost = calculateCost(request.model, response.usage.inputTokens, response.usage.outputTokens);
+      const toolCalls = response.content.filter(p => p.type === 'tool_use').length;
 
-      generation.end({
+      generation?.end({
         output: this.summarizeOutput(response),
-        usage: {
-          input: response.usage.inputTokens,
-          output: response.usage.outputTokens,
-          totalCost: cost,
-        },
-        metadata: {
-          stopReason: response.stopReason,
-          toolCalls: response.content.filter(p => p.type === 'tool_use').length,
-          latencyMs: Date.now() - start,
-        },
+        usage: { input: response.usage.inputTokens, output: response.usage.outputTokens, totalCost: cost },
+        metadata: { stopReason: response.stopReason, toolCalls, latencyMs },
+      });
+
+      emitLlmSpan({
+        provider: this.name, model: request.model, operation: 'complete',
+        inputTokens: response.usage.inputTokens, outputTokens: response.usage.outputTokens,
+        costUsd: cost, latencyMs, toolCalls, stopReason: response.stopReason,
       });
 
       return response;
     } catch (error) {
-      generation.end({
-        level: 'ERROR',
-        statusMessage: error instanceof Error ? error.message : 'Unknown error',
-        metadata: { latencyMs: Date.now() - start },
+      const latencyMs = Date.now() - start;
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      generation?.end({ level: 'ERROR', statusMessage: msg, metadata: { latencyMs } });
+      emitLlmSpan({
+        provider: this.name, model: request.model, operation: 'complete',
+        inputTokens: 0, outputTokens: 0, costUsd: 0, latencyMs, error: msg,
       });
       throw error;
     }
   }
 
   async stream(request: ProviderRequest, handler: StreamHandler): Promise<ProviderResponse> {
-    if (!isLangfuseEnabled()) return this.inner.stream(request, handler);
+    const langfuseEnabled = isLangfuseEnabled();
+    const langfuse = langfuseEnabled ? getLangfuse() : null;
 
-    const langfuse = getLangfuse();
-    if (!langfuse) return this.inner.stream(request, handler);
-
-    const trace = langfuse.trace({
+    const trace = langfuse?.trace({
       name: 'llm-stream',
       sessionId: this.sessionId,
       userId: this.userId,
       metadata: { provider: this.name, model: request.model },
     });
 
-    const generation = trace.generation({
+    const generation = trace?.generation({
       name: `${this.name}:stream`,
       model: request.model,
       input: this.summarizeInput(request),
@@ -104,41 +103,39 @@ export class TracedProvider implements LLMProvider {
       },
     });
 
-    // Track tool calls from the stream
     let toolCallCount = 0;
     const wrappedHandler: StreamHandler = (delta) => {
-      if (delta.type === 'tool_delta') {
-        toolCallCount++;
-      }
+      if (delta.type === 'tool_delta') toolCallCount++;
       handler(delta);
     };
 
     const start = Date.now();
     try {
       const response = await this.inner.stream(request, wrappedHandler);
+      const latencyMs = Date.now() - start;
       const cost = calculateCost(request.model, response.usage.inputTokens, response.usage.outputTokens);
+      const toolCalls = response.content.filter(p => p.type === 'tool_use').length;
 
-      generation.end({
+      generation?.end({
         output: this.summarizeOutput(response),
-        usage: {
-          input: response.usage.inputTokens,
-          output: response.usage.outputTokens,
-          totalCost: cost,
-        },
-        metadata: {
-          stopReason: response.stopReason,
-          toolCalls: response.content.filter(p => p.type === 'tool_use').length,
-          latencyMs: Date.now() - start,
-          streaming: true,
-        },
+        usage: { input: response.usage.inputTokens, output: response.usage.outputTokens, totalCost: cost },
+        metadata: { stopReason: response.stopReason, toolCalls, latencyMs, streaming: true },
+      });
+
+      emitLlmSpan({
+        provider: this.name, model: request.model, operation: 'stream',
+        inputTokens: response.usage.inputTokens, outputTokens: response.usage.outputTokens,
+        costUsd: cost, latencyMs, toolCalls, stopReason: response.stopReason,
       });
 
       return response;
     } catch (error) {
-      generation.end({
-        level: 'ERROR',
-        statusMessage: error instanceof Error ? error.message : 'Unknown error',
-        metadata: { latencyMs: Date.now() - start },
+      const latencyMs = Date.now() - start;
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      generation?.end({ level: 'ERROR', statusMessage: msg, metadata: { latencyMs } });
+      emitLlmSpan({
+        provider: this.name, model: request.model, operation: 'stream',
+        inputTokens: 0, outputTokens: 0, costUsd: 0, latencyMs, error: msg,
       });
       throw error;
     }
@@ -189,10 +186,11 @@ export function wrapWithTracing(
   provider: LLMProvider,
   opts?: { sessionId?: string; userId?: string },
 ): LLMProvider {
-  if (!isLangfuseEnabled()) {
-    logger.debug('Langfuse not configured — provider tracing disabled');
+  if (!isLangfuseEnabled() && !isOtelEnabled()) {
+    logger.debug('No tracing backend configured — provider tracing disabled');
     return provider;
   }
-  logger.debug({ provider: provider.name }, 'Wrapping provider with Langfuse tracing');
+  const backends = [isLangfuseEnabled() && 'langfuse', isOtelEnabled() && 'otel'].filter(Boolean).join('+');
+  logger.debug({ provider: provider.name, backends }, 'Wrapping provider with tracing');
   return new TracedProvider(provider, opts?.sessionId, opts?.userId);
 }

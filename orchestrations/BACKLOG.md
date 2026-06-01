@@ -20,8 +20,8 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | 3 | GAP-P6 | OpenTelemetry emission alongside Langfuse | done | MAF, OAI Agents SDK |
 | 4 | GAP-P7 | SwarmRouter-style topology selection | done | kyegomez/swarms |
 | 5 | GAP-P8 | Constitution injection at agent invocation | done | swarm-forge |
-| 6 | GAP-P9 | Brownfield support — existing system context ingestion | pending | codemie, smolagents |
-| 7 | GAP-P2 | External event triggers (webhook/Jira/Slack) | pending | OpenHands, Cline |
+| 6 | GAP-P9 | Brownfield support — existing system context ingestion | in-progress (Stage 1 done) | codemie, smolagents |
+| 7 | GAP-P2 | External event triggers (webhook/Jira/Slack) | done | OpenHands, Cline |
 | 8 | GAP-P1 | Docker sandbox execution | deferred | OpenHands, SWE-agent |
 | 9 | GAP-P3 | SWE-bench benchmark harness | deferred | SWE-agent (needs P1 first) |
 

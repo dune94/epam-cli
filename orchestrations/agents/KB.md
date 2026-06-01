@@ -101,3 +101,22 @@ For one-turn consultation or override prompts, consuming a pending flag is not e
 **StoryRef:** EPAM-044
 
 When implementing credential abstraction over legacy API keys (BYOK) vs. brokered keys or browser tokens, legacy keys will often exist with missing schema elements. To prevent data loss or silent failures, explicitly inject default fallback `type` ('api_key') and `source` ('manual_api_key') when parsing raw entries from fallback storage (like `keytar`), instead of relying purely on TypeScript's `Partial<T>` assertions during runtime decoding. Additionally, storing composite keys in secure storage (e.g. `provider:source`) prevents different credential types for the same provider from overwriting one another while allowing runtime sorting by precedence.
+
+## KB-006 -- 2026-06-01
+
+**Category:** backend
+**AgentRole:** backend-engineer
+**Tags:** typescript, memory-system, agent-runner, system-prompt-injection
+**Trigger:** first-success
+**StoryRef:** EPAM-039
+
+When implementing memory file loaders that inject content into agent system prompts, inject the memory block lazily on first AgentRunner.run() rather than in the constructor. The MemoryLoader.load() operation is async (file I/O), but AgentRunner is instantiated synchronously in the REPL for every turn. Pre-loading memory in the REPL and passing the loader instance allows memory to be loaded once at startup, cached, and injected into each AgentRunner on first use. Additionally, when reloading memory on /compact, call both memoryLoader.reloadAll() (to refresh files from disk) and agentRunner.reloadMemory() (to regenerate the prompt block), since the loader's cache and the runner's cached prompt block are separate.
+## KB-007 -- 2026-06-01
+
+**Category:** backend  
+**AgentRole:** product-architect  
+**Tags:** authentication, provider, competitive-analysis, architecture  
+**Trigger:** first-success  
+**StoryRef:** EPAM-043
+
+Provider authentication architecture for AI coding CLIs falls into four patterns: (1) browser login with auto-provisioned keys (Anthropic Claude Code with Claude.ai, OpenAI Codex with ChatGPT SSO), (2) pure BYOK manual entry (OpenCode), (3) hybrid browser + custom keys with team management (Cursor), (4) workspace-scoped API keys (Anthropic Console). Of these, ONLY manual API key entry and generic OAuth PKCE are directly implementable without provider-specific backend cooperation. Claude.ai subscription login and ChatGPT SSO auto-keys are not available to third-party CLIs. Therefore, EPAM CLI v1 adopts the BYOK bridge model (manual entry + PKCE where available) while preserving DEC-003 long-term direction toward EPAM-brokered central provisioning. Key architectural insight: provider-native browser logins require provider cooperation that is typically CLI-specific (Claude Code, Codex) and not exposed to third parties.

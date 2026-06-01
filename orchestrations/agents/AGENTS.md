@@ -350,3 +350,105 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/HW-003_*.log
 
+## EPAM-039: MEMORY.md Auto-Loading System
+- **Date**: 2026-06-01 14:45:16
+- **Phase**: agent_intelligence
+- **Status**: completed
+- **Log**: logs/claude_outputs/EPAM-039_*.log
+
+## EPAM-058: Slash Command: /plan
+- **Date**: 2026-06-01 14:45:26
+- **Phase**: agent_intelligence
+- **Status**: failed
+- **Log**: logs/claude_outputs/EPAM-058_*.log
+
+## EPAM-059: Slash Command: /init
+- **Date**: 2026-06-01 14:45:37
+- **Phase**: agent_intelligence
+- **Status**: failed
+- **Log**: logs/claude_outputs/EPAM-059_*.log
+
+## EPAM-060: Slash Command: /mcp
+- **Date**: 2026-06-01 14:49:12
+- **Phase**: agent_intelligence
+- **Status**: failed
+- **Log**: logs/claude_outputs/EPAM-060_*.log
+
+## EPAM-061: Slash Command: /status
+- **Date**: 2026-06-01 14:49:23
+- **Phase**: agent_intelligence
+- **Status**: failed
+- **Log**: logs/claude_outputs/EPAM-061_*.log
+
+## EPAM-062: Slash Command: /config
+- **Date**: 2026-06-01 14:49:33
+- **Phase**: agent_intelligence
+- **Status**: failed
+- **Log**: logs/claude_outputs/EPAM-062_*.log
+
+## EPAM-063: Slash Command: /review
+- **Date**: 2026-06-01 14:49:44
+- **Phase**: agent_intelligence
+- **Status**: failed
+- **Log**: logs/claude_outputs/EPAM-063_*.log
+
+## EPAM-064: Slash Command: /new
+- **Date**: 2026-06-01 14:49:54
+- **Phase**: agent_intelligence
+- **Status**: failed
+- **Log**: logs/claude_outputs/EPAM-064_*.log
+
+## EPAM-065: Slash Command: /export
+- **Date**: 2026-06-01 14:50:04
+- **Phase**: agent_intelligence
+- **Status**: failed
+- **Log**: logs/claude_outputs/EPAM-065_*.log
+
+## EPAM-CR-001: Contextual Purveyor Review
+- **Date**: 2026-06-01 14:58:22
+- **Phase**: context_review
+- **Status**: completed
+- **Log**: logs/claude_outputs/EPAM-CR-001_*.log
+
+## EPAM-027: Board Visualization — Provider/Model by Story
+- **Date**: 2026-06-01 15:04:47
+- **Phase**: enterprise
+- **Status**: completed
+- **Log**: logs/claude_outputs/EPAM-027_*.log
+
+## EPAM-HC-001: Health Check: Claude CLI
+- **Date**: 2026-06-01 15:07:24
+- **Phase**: health_check
+- **Status**: completed
+- **Log**: logs/claude_outputs/EPAM-HC-001_*.log
+
+## EPAM-HC-004: Health Check: Claude CLI (Proxy Mode)
+- **Date**: 2026-06-01 15:17:39
+- **Phase**: health_check
+- **Status**: completed
+- **Log**: logs/claude_outputs/EPAM-HC-004_*.log
+
+## EPAM-HC-003: Health Check: Codex CLI
+- **Date**: 2026-06-01 15:17:50
+- **Phase**: health_check
+- **Status**: failed
+- **Log**: logs/claude_outputs/EPAM-HC-003_*.log
+
+## EPAM-067: Interactive Provider Switch Confirmation
+- **Date**: 2026-06-01 15:18:00
+- **Phase**: mvp_cli_control
+- **Status**: failed
+- **Log**: logs/claude_outputs/EPAM-067_*.log
+
+## EPAM-043: Provider Authentication Competitive Baseline
+- **Date**: 2026-06-01 15:21:53
+- **Phase**: provider_auth
+- **Status**: completed
+- **Log**: logs/claude_outputs/EPAM-043_*.log
+
+## EPAM-049: Backlog Bug — Disable Dead Default MCP Example Server
+- **Date**: 2026-06-01 15:24:12
+- **Phase**: provider_auth
+- **Status**: failed
+- **Log**: logs/claude_outputs/EPAM-049_*.log
+

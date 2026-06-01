@@ -20,8 +20,8 @@
       "title": "Health Check: Claude CLI",
       "description": "Verify that the Claude CLI binary exists, can process a trivial prompt, and produces parseable JSON output. This is a pre-flight check that runs before any implementation phase to ensure the orchestration environment is functional.",
       "priority": "critical",
-      "status": "failed",
-      "completed": false,
+      "status": "completed",
+      "completed": true,
       "agentGroup": "main",
       "agentRole": "test-engineer",
       "acceptanceCriteria": [
@@ -48,7 +48,8 @@
       "effort": "low",
       "cpaConfidence": 0.7,
       "cpaGate": "pass",
-      "lastAttempt": "2026-02-28T11:28:39-05:00"
+      "lastAttempt": "2026-02-28T11:28:39-05:00",
+      "completedAt": "2026-06-01T15:07:24-04:00"
     },
     {
       "id": "EPAM-HC-002",
@@ -90,7 +91,7 @@
       "title": "Health Check: Codex CLI",
       "description": "Verify that the Codex CLI binary exists, can process a trivial prompt, and produces parseable JSONL output. Pre-flight check for the codex provider variant.",
       "priority": "critical",
-      "status": "backlog",
+      "status": "failed",
       "completed": false,
       "agentGroup": "main",
       "agentRole": "test-engineer",
@@ -118,15 +119,16 @@
       "humanHours": 1,
       "effort": "low",
       "cpaConfidence": 0.68,
-      "cpaGate": "review"
+      "cpaGate": "review",
+      "lastAttempt": "2026-06-01T15:17:50-04:00"
     },
     {
       "id": "EPAM-HC-004",
       "title": "Health Check: Claude CLI (Proxy Mode)",
       "description": "Verify that the Claude CLI binary works correctly when routed through the EPAM proxy backend. Confirms that authenticated proxy calls succeed and that the response format is identical to the direct path tested in EPAM-HC-001.",
       "priority": "critical",
-      "status": "pending",
-      "completed": false,
+      "status": "completed",
+      "completed": true,
       "agentGroup": "main",
       "agentRole": "test-engineer",
       "acceptanceCriteria": [
@@ -153,7 +155,8 @@
       "humanHours": 1,
       "effort": "low",
       "cpaConfidence": 0.82,
-      "cpaGate": "pass"
+      "cpaGate": "pass",
+      "completedAt": "2026-06-01T15:17:39-04:00"
     },
     {
       "id": "EPAM-001",
@@ -1255,8 +1258,8 @@
       "title": "Contextual Purveyor Review",
       "description": "Run the Contextual Purveyor Agent (CPA) pre-pass over all upcoming stories. Retrieves relevant KB chunks via TF-IDF, invokes Claude Haiku for per-story estimate review, blends CPA output with formula estimates using confidence-weighted interpolation, and gates on risk thresholds before any implementation agent executes.",
       "priority": "critical",
-      "status": "pending",
-      "completed": false,
+      "status": "completed",
+      "completed": true,
       "agentGroup": "main",
       "agentRole": "context-purveyor",
       "storyType": "review",
@@ -1288,7 +1291,8 @@
           "json-schema"
         ]
       },
-      "aiProvider": "claude"
+      "aiProvider": "claude",
+      "completedAt": "2026-06-01T14:58:22-04:00"
     },
     {
       "id": "EPAM-TEST-001",
@@ -1624,8 +1628,8 @@
       "title": "Board Visualization — Provider/Model by Story",
       "description": "Make provider and model selection visible on the orchestration board per story and event. Add provider/model badges, filtering, and lane-level summaries so operators can audit which model executed each story.",
       "priority": "high",
-      "status": "backlog",
-      "completed": false,
+      "status": "completed",
+      "completed": true,
       "agentGroup": "main",
       "agentRole": "frontend-engineer",
       "storyType": "implementation",
@@ -1670,7 +1674,8 @@
       "estimatedTokens": 346105,
       "estimatedTurns": 120,
       "cpaConfidence": 0.48,
-      "cpaGate": "block"
+      "cpaGate": "block",
+      "completedAt": "2026-06-01T15:04:47-04:00"
     },
     {
       "id": "EPAM-028",
@@ -2173,8 +2178,8 @@
       "title": "MEMORY.md Auto-Loading System",
       "description": "Implement the core memory file loader that discovers and injects MEMORY.md files into every agent session at startup. Loads a four-level hierarchy: (1) global `~/.epam/MEMORY.md`, (2) project `.epam/MEMORY.md`, (3) machine-local `.epam/MEMORY.local.md` (gitignored, never synced), (4) `INSTRUCTIONS.md` in project root (backward-compat alias). Each file is injected as a labelled context block in the system prompt. Supports `@path/to/file` import syntax (max 3 levels deep). Enforces a 200-line soft limit per file — files exceeding this print a startup warning but still load. Re-reads and re-injects all files when `/compact` runs.",
       "priority": "high",
-      "status": "backlog",
-      "completed": false,
+      "status": "completed",
+      "completed": true,
       "agentGroup": "main",
       "agentRole": "agent-systems-engineer",
       "storyType": "implementation",
@@ -2205,7 +2210,8 @@
           "system-prompt-injection",
           "agent-context"
         ]
-      }
+      },
+      "completedAt": "2026-06-01T14:45:16-04:00"
     },
     {
       "id": "EPAM-040",
@@ -2334,8 +2340,8 @@
       "title": "Provider Authentication Competitive Baseline",
       "description": "Document the current provider-authentication requirements and UX patterns for Anthropic Claude Code, OpenCode, Cursor CLI, and OpenAI Codex, then convert the findings into an EPAM CLI auth architecture decision. The goal is to define the temporary bridge model for v1 while preserving the long-term direction that `epam login` provisions and refreshes provider credentials centrally.",
       "priority": "high",
-      "status": "pending",
-      "completed": false,
+      "status": "completed",
+      "completed": true,
       "agentGroup": "main",
       "agentRole": "product-architect",
       "storyType": "implementation",
@@ -2374,7 +2380,8 @@
       "estimatedTokens": 180000,
       "estimatedTurns": 16,
       "cpaConfidence": 0.74,
-      "cpaGate": "review"
+      "cpaGate": "review",
+      "completedAt": "2026-06-01T15:21:53-04:00"
     },
     {
       "id": "EPAM-044",
@@ -2645,7 +2652,7 @@
       "title": "Backlog Bug — Disable Dead Default MCP Example Server",
       "description": "Remove or disable the default `example-server` MCP configuration that ships with the project when it is not backed by a reachable endpoint. The current REPL startup path emits a warning for an unreachable sample server, which creates noise during normal onboarding and POC demos even though the core CLI is functioning correctly.",
       "priority": "low",
-      "status": "backlog",
+      "status": "failed",
       "completed": false,
       "agentGroup": "main",
       "agentRole": "cli-ux-engineer",
@@ -2675,7 +2682,8 @@
           "mcp-protocol",
           "cli-ux"
         ]
-      }
+      },
+      "lastAttempt": "2026-06-01T15:24:12-04:00"
     },
     {
       "id": "EPAM-050",
@@ -2762,7 +2770,7 @@
       "title": "Slash Command: /plan",
       "description": "Add `/plan` to the REPL so users can enter planning mode without leaving chat. This should reuse the existing PlanMode implementation and provide an in-session workflow for plan generation, approval, editing, and execution.",
       "priority": "low",
-      "status": "pending",
+      "status": "failed",
       "completed": false,
       "agentGroup": "main",
       "agentRole": "cli-ux-engineer",
@@ -2794,14 +2802,15 @@
         ]
       },
       "aiProvider": "codex",
-      "cpaGate": "review"
+      "cpaGate": "review",
+      "lastAttempt": "2026-06-01T14:45:26-04:00"
     },
     {
       "id": "EPAM-059",
       "title": "Slash Command: /init",
       "description": "Add `/init` to the REPL so a user can bootstrap EPAM CLI project files without leaving the active session.",
       "priority": "low",
-      "status": "pending",
+      "status": "failed",
       "completed": false,
       "agentGroup": "main",
       "agentRole": "cli-ux-engineer",
@@ -2832,14 +2841,15 @@
         ]
       },
       "aiProvider": "codex",
-      "cpaGate": "review"
+      "cpaGate": "review",
+      "lastAttempt": "2026-06-01T14:45:37-04:00"
     },
     {
       "id": "EPAM-060",
       "title": "Slash Command: /mcp",
       "description": "Add `/mcp` to the REPL so users can inspect configured MCP servers, remote tool availability, and reload MCP configuration without leaving the current session.",
       "priority": "low",
-      "status": "pending",
+      "status": "failed",
       "completed": false,
       "agentGroup": "main",
       "agentRole": "agent-systems-engineer",
@@ -2873,14 +2883,15 @@
         ]
       },
       "aiProvider": "codex",
-      "cpaGate": "review"
+      "cpaGate": "review",
+      "lastAttempt": "2026-06-01T14:49:12-04:00"
     },
     {
       "id": "EPAM-061",
       "title": "Slash Command: /status",
       "description": "Add `/status` as a concise operational summary command in the REPL. It should provide a single-pane view of current auth, provider, model, chain health, budget state, MCP state, and auditor state.",
       "priority": "low",
-      "status": "pending",
+      "status": "failed",
       "completed": false,
       "agentGroup": "main",
       "agentRole": "cli-ux-engineer",
@@ -2908,14 +2919,15 @@
         ]
       },
       "aiProvider": "codex",
-      "cpaGate": "review"
+      "cpaGate": "review",
+      "lastAttempt": "2026-06-01T14:49:23-04:00"
     },
     {
       "id": "EPAM-062",
       "title": "Slash Command: /config",
       "description": "Add `/config` to the REPL so users can inspect effective configuration and, where safe, change a small subset of session-scoped settings without leaving chat.",
       "priority": "low",
-      "status": "pending",
+      "status": "failed",
       "completed": false,
       "agentGroup": "main",
       "agentRole": "cli-ux-engineer",
@@ -2946,14 +2958,15 @@
         ]
       },
       "aiProvider": "codex",
-      "cpaGate": "review"
+      "cpaGate": "review",
+      "lastAttempt": "2026-06-01T14:49:33-04:00"
     },
     {
       "id": "EPAM-063",
       "title": "Slash Command: /review",
       "description": "Add `/review` to the REPL so users can request a code review of recent changes or a specified path without leaving the session. The output should follow the existing review style: findings first, ordered by severity.",
       "priority": "low",
-      "status": "pending",
+      "status": "failed",
       "completed": false,
       "agentGroup": "main",
       "agentRole": "typescript-engineer",
@@ -2982,14 +2995,15 @@
         ]
       },
       "aiProvider": "codex",
-      "cpaGate": "review"
+      "cpaGate": "review",
+      "lastAttempt": "2026-06-01T14:49:44-04:00"
     },
     {
       "id": "EPAM-064",
       "title": "Slash Command: /new",
       "description": "Add `/new` to the REPL to start a fresh session without exiting EPAM CLI. This should clear conversational state while preserving auth, project context, and session environment.",
       "priority": "low",
-      "status": "pending",
+      "status": "failed",
       "completed": false,
       "agentGroup": "main",
       "agentRole": "cli-ux-engineer",
@@ -3018,14 +3032,15 @@
         ]
       },
       "aiProvider": "codex",
-      "cpaGate": "review"
+      "cpaGate": "review",
+      "lastAttempt": "2026-06-01T14:49:54-04:00"
     },
     {
       "id": "EPAM-065",
       "title": "Slash Command: /export",
       "description": "Add `/export` to the REPL so users can export a session transcript and summary as a durable artifact for audit, stakeholder handoff, or delivery reporting.",
       "priority": "low",
-      "status": "pending",
+      "status": "failed",
       "completed": false,
       "agentGroup": "main",
       "agentRole": "typescript-engineer",
@@ -3056,7 +3071,8 @@
         ]
       },
       "aiProvider": "codex",
-      "cpaGate": "review"
+      "cpaGate": "review",
+      "lastAttempt": "2026-06-01T14:50:04-04:00"
     },
     {
       "id": "EPAM-066",
@@ -3117,7 +3133,7 @@
       "title": "Interactive Provider Switch Confirmation",
       "description": "Add interactive confirmation dialog when budget threshold is reached. Instead of automatic downgrade, prompt user with: (1) Visual warning that threshold reached, (2) Suggested model switch within same provider (e.g., claude-opus-4-6 → claude-sonnet-4-5), (3) Show cost comparison and remaining budget, (4) User confirms or declines, (5) On confirm, switch model while preserving conversation context. Uses cached SSO credentials - no re-auth needed. Critical for demo to show controlled provider switching with context retention.",
       "priority": "critical",
-      "status": "pending",
+      "status": "failed",
       "completed": false,
       "agentGroup": "main",
       "agentRole": "cli-ux-engineer",
@@ -3163,7 +3179,8 @@
         ]
       },
       "aiProvider": "codex",
-      "cpaGate": "review"
+      "cpaGate": "review",
+      "lastAttempt": "2026-06-01T15:18:00-04:00"
     },
     {
       "id": "SDK-TEST-001",
@@ -3603,5 +3620,5 @@
       "description": "Provider-auth bridge phase — temporary browser-login and credential-brokerage capabilities for Anthropic and OpenAI/Codex until EPAM login can provision, store locally, and refresh provider credentials centrally."
     }
   },
-  "currentIteration": 45
+  "currentIteration": 62
 }

@@ -206,6 +206,12 @@ body {
 }
 .phase-select:focus { border-color: var(--teal); }
 
+.provider-filter {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--text3);
+}
+.model-filter { display: flex; align-items: center; gap: 6px;font-size: 11px; color: var(--text3); }
+
 .story-lanes {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -490,6 +496,24 @@ body {
         <option value="">Loading…</option>
       </select>
     </div>
+    <div class="provider-filter">
+      <label for="providerFilter">Provider:</label>
+      <select class="phase-select" id="providerFilter" onchange="onProviderFilterChange()" style="width:120px">
+        <option value="">All</option>
+        <option value="claude">Claude</option>
+        <option value="opencode">OpenCode</option>
+        <option value="codex">Codex</option>
+      </select>
+    </div>
+    <div class="model-filter">
+      <label for="modelFilter">Model:</label>
+      <select class="phase-select" id="modelFilter" onchange="onModelFilterChange()" style="width:140px">
+        <option value="">All</option>
+        <option value="haiku">Haiku</option>
+        <option value="sonnet">Sonnet</option>
+        <option value="opus">Opus</option>
+      </select>
+    </div>
   </div>
   <div class="story-lanes">
     <div class="lane-col">
@@ -548,6 +572,8 @@ const REFRESH_MS    = 3000;
 let allPhases     = [];
 let allStories    = [];
 let selectedPhase = null;   // phase name string; null = auto-detect active
+let providerFilter = '';
+let modelFilter = '';
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 function fmt$(n) {
@@ -857,6 +883,16 @@ function onPhaseSelectChange() {
   renderStoryGrid(allStories, selectedPhase);
 }
 
+function onProviderFilterChange() {
+  providerFilter = document.getElementById('providerFilter').value;
+  renderStoryGrid(allStories, selectedPhase);
+}
+
+function onModelFilterChange() {
+  modelFilter = document.getElementById('modelFilter').value;
+  renderStoryGrid(allStories, selectedPhase);
+}
+
 /* ─── Render: story grid ─────────────────────────────────────────────────── */
 function storyCard(s) {
   const st   = (s.status || 'pending').toLowerCase();
@@ -877,6 +913,7 @@ function storyCard(s) {
       <div class="story-meta">
         ${statusBadgeHtml(s.status)}
         <span class="badge ${pb.cls}">${pb.label}</span>
+        ${s.model ? `<span class="badge badge-pending" style="font-size:9px">${trunc(s.model, 20)}</span>` : ''}
         ${cost > 0 ? `<span class="story-cost">${fmt$(cost)}</span>` : ''}
       </div>
     </div>`;
@@ -891,9 +928,25 @@ function renderStoryGrid(stories, phaseName) {
   }
 
   // Filter to selected phase
-  const phStories = phaseName
+  let phStories = phaseName
     ? stories.filter(s => (s.phaseId || s.phase || '') === phaseName)
     : stories;
+
+  // Apply provider filter
+  if (providerFilter) {
+    phStories = phStories.filter(s => {
+      const provider = (s.aiProvider || s.provider || s.model || '').toLowerCase();
+      return provider.includes(providerFilter.toLowerCase());
+    });
+  }
+
+  // Apply model filter
+  if (modelFilter) {
+    phStories = phStories.filter(s => {
+      const model = (s.model || '').toLowerCase();
+      return model.includes(modelFilter.toLowerCase());
+    });
+  }
 
   // Group by agentGroup / lane
   const main = phStories.filter(s => {

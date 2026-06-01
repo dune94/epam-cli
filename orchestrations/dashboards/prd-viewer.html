@@ -392,6 +392,24 @@ body {
     <button class="filter-btn fa active" data-f="all"       onclick="setFilter('all')">ALL</button>
     <button class="filter-btn fc"        data-f="completed" onclick="setFilter('completed')">COMPLETED</button>
   </div>
+  <div class="filter-group" style="margin-left:8px">
+    <select class="search-input" id="provider-filter" onchange="applyProviderFilter()" style="width:140px;padding:5px 10px">
+      <option value="">All Providers</option>
+      <option value="claude">Claude</option>
+      <option value="opencode">OpenCode</option>
+      <option value="codex">Codex</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <select class="search-input" id="model-filter" onchange="applyModelFilter()" style="width:180px;padding:5px 10px">
+      <option value="">All Models</option>
+      <option value="haiku">Haiku</option>
+      <option value="sonnet">Sonnet</option>
+      <option value="opus">Opus</option>
+      <option value="gpt">GPT-4o</option>
+      <option value="o3">o3</option>
+    </select>
+  </div>
   <div id="api-status-chip" class="api-status api-wait">API …</div>
   <div class="ctrl-gap"></div>
   <button class="ctrl-btn" onclick="expandAll()">⊞ Expand All</button>
@@ -444,6 +462,7 @@ function modelInfo(story) {
 
 let prd = null, phaseOrder = [], storyMap = {}, storyPhaseMap = {};
 let filterMode = 'all', searchQuery = '';
+let providerFilter = '', modelFilter = '';
 let expandedStories = new Set(), collapsedPhases = new Set();
 let duplicateIds = {};  // id → count
 
@@ -627,6 +646,24 @@ function renderContent() {
       if (filterMode === 'pending'   &&  done) return false;
       if (filterMode === 'completed' && !done) return false;
       if (q && !(s.id + ' ' + s.title + ' ' + (s.agentRole||'')).toLowerCase().includes(q)) return false;
+
+      // Provider filter
+      if (providerFilter) {
+        const provider = (s.aiProvider || s.provider || '').toLowerCase();
+        const model = (s.model || '').toLowerCase();
+        if (!provider.includes(providerFilter.toLowerCase()) && !model.includes(providerFilter.toLowerCase())) {
+          return false;
+        }
+      }
+
+      // Model filter
+      if (modelFilter) {
+        const model = (s.model || '').toLowerCase();
+        if (!model.includes(modelFilter.toLowerCase())) {
+          return false;
+        }
+      }
+
       return true;
     });
     if (!filtered.length) return;
@@ -645,6 +682,18 @@ function renderContent() {
     if (pendCt) ctParts.push(`<span class="ph-p">${pendCt} pending</span>`);
     if (doneCt) ctParts.push(`<span class="ph-d">${doneCt} done</span>`);
 
+    // Model distribution counts
+    const modelCounts = {};
+    filtered.forEach(s => {
+      const mi = modelInfo(s);
+      const key = mi.label;
+      modelCounts[key] = (modelCounts[key] || 0) + 1;
+    });
+    const modelCountStr = Object.entries(modelCounts)
+      .sort(([,a],[,b]) => b-a)
+      .map(([m,c]) => `${c}×${m}`)
+      .join(' · ');
+
     const cardsHtml = isCol ? '' :
       `<div class="stories-list" style="background:${color.listBg}">
          ${filtered.map(s => renderStoryCard(s, color)).join('')}
@@ -657,7 +706,7 @@ function renderContent() {
     <span class="ph-chevron ${isCol?'':'open'}">▶</span>
     <span class="ph-name">${esc(label)}</span>
     ${modeBdg}
-    <span class="ph-counts">${ctParts.join(' · ')}</span>
+    <span class="ph-counts">${ctParts.join(' · ')}${modelCountStr ? ' · ' + modelCountStr : ''}</span>
   </div>
   ${cardsHtml}
 </div>`;
@@ -904,6 +953,16 @@ function expandAll() {
   renderContent();
 }
 function collapseAll() { expandedStories.clear(); renderContent(); }
+
+function applyProviderFilter() {
+  providerFilter = document.getElementById('provider-filter').value;
+  renderContent();
+}
+
+function applyModelFilter() {
+  modelFilter = document.getElementById('model-filter').value;
+  renderContent();
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

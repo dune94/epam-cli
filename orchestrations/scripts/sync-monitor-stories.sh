@@ -27,12 +27,25 @@ while IFS= read -r line; do
   AGENT_ROLE=$(echo "$line" | jq -r '.agent_name')
   STARTED_AT=$(echo "$line" | jq -r '.started_at')
   ENDED_AT=$(echo "$line" | jq -r '.ended_at')
+  RESOLVED_MODEL=$(echo "$line" | jq -r '.resolvedModel // ""')
 
   # Determine lane from prd.json
   LANE=$(jq -r --arg id "$STORY_ID" '.stories[] | select(.id == $id) | .agentGroup // "main"' "$PRD_FILE")
 
-  # Create story entry with full metadata (lane, role, title)
-  "$SCRIPT_DIR/update-monitor.sh" story_start "$STORY_ID" "$LANE" "$AGENT_ROLE" "$STORY_TITLE" 2>/dev/null || true
+  # Determine provider from prd.json or infer from model
+  PROVIDER=$(jq -r --arg id "$STORY_ID" '.stories[] | select(.id == $id) | .aiProvider // ""' "$PRD_FILE")
+  if [ -z "$PROVIDER" ] || [ "$PROVIDER" = "null" ]; then
+    # Infer provider from model name
+    case "$RESOLVED_MODEL" in
+      *claude*|*sonnet*|*opus*|*haiku*) PROVIDER="claude" ;;
+      *gpt*|*openai*) PROVIDER="openai" ;;
+      *o1*|*o3*) PROVIDER="codex" ;;
+      *) PROVIDER="claude" ;;
+    esac
+  fi
+
+  # Create story entry with full metadata (lane, role, title, provider, model)
+  "$SCRIPT_DIR/update-monitor.sh" story_start "$STORY_ID" "$LANE" "$AGENT_ROLE" "$STORY_TITLE" "$PROVIDER" "$RESOLVED_MODEL" 2>/dev/null || true
 
   # Update story status to complete
   "$SCRIPT_DIR/update-monitor.sh" story_complete "$STORY_ID" "$LANE" "$STORY_TITLE" 2>/dev/null || true

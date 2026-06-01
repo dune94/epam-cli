@@ -6,12 +6,12 @@
 #   update-monitor.sh <event_type> [args...]
 #
 # Event types:
-#   init <phase_id>                           - Initialize monitor file
-#   story_start <story_id> <lane> <role>      - Mark story as started
-#   story_complete <story_id> <lane>          - Mark story as completed
-#   story_fail <story_id> <lane> <error>      - Mark story as failed
-#   event <type> <message> [story] [lane] [role] - Add generic event
-#   finalize                                   - Mark orchestration complete
+#   init <phase_id>                                                  - Initialize monitor file
+#   story_start <story_id> <lane> <role> [title] [provider] [model] - Mark story as started
+#   story_complete <story_id> <lane>                                 - Mark story as completed
+#   story_fail <story_id> <lane> <error>                             - Mark story as failed
+#   event <type> <message> [story] [lane] [role]                     - Add generic event
+#   finalize                                                          - Mark orchestration complete
 
 set -euo pipefail
 
@@ -120,12 +120,16 @@ EOF
     LANE="$2"
     ROLE="$3"
     TITLE="${4:-}"
+    PROVIDER="${5:-claude}"
+    MODEL="${6:-}"
 
     MONITOR_DATA=$(echo "$MONITOR_DATA" | jq \
       --arg story "$STORY_ID" \
       --arg lane "$LANE" \
       --arg role "$ROLE" \
       --arg title "$TITLE" \
+      --arg provider "$PROVIDER" \
+      --arg model "$MODEL" \
       --arg ts "$(timestamp)" \
       '
       .lanes[$lane].status = "running" |
@@ -135,6 +139,8 @@ EOF
         "lane": $lane,
         "role": $role,
         "title": $title,
+        "provider": $provider,
+        "model": $model,
         "updatedAt": $ts
       } |
       .events += [{
@@ -142,6 +148,8 @@ EOF
         "story": $story,
         "lane": $lane,
         "role": $role,
+        "provider": $provider,
+        "model": $model,
         "message": "Starting \($title)",
         "timestamp": $ts
       }]

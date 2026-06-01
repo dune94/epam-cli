@@ -4,6 +4,7 @@ import type { BudgetGuard, BudgetCheckResult } from '../billing/BudgetGuard.js';
 import type { ToolRunner } from './tools/ToolRunner.js';
 import type { AuditorRunner } from '../auditors/AuditorRunner.js';
 import type { AuditorGateDecision } from '../auditors/types.js';
+import type { MemoryLoader } from '../memory/MemoryLoader.js';
 
 export interface AgentRunOptions {
   userMessage: string;
@@ -26,6 +27,8 @@ export interface AgentRunOptions {
   budgetGuard?: BudgetGuard;
   /** Tool runner instance for permission and state management. */
   toolRunner?: ToolRunner;
+  /** Memory loader instance for MEMORY.md file injection. */
+  memoryLoader?: MemoryLoader;
   onTextDelta?: (delta: string) => void;
   onToolCall?: (toolName: string, input: Record<string, unknown>) => void;
   onToolResult?: (toolName: string, result: string, isError: boolean) => void;

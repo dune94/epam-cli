@@ -8,6 +8,7 @@ import { AuditorRunner } from '../auditors/AuditorRunner.js';
 import { RalphWiggumLoop } from './RalphWiggumLoop.js';
 import type { BashToolResult, BashErrorClassification } from '../tools/builtin/Bash.js';
 import { logger } from '../utils/logger.js';
+import type { MemoryLoader } from '../memory/MemoryLoader.js';
 
 const DEFAULT_MAX_TOOL_OUTPUT_CHARS = 32_768;
 const DEFAULT_AUTO_COMPRESS_AT = 80_000;
@@ -39,20 +40,28 @@ export class AgentRunner {
   private totalOutputTokens = 0;
   private totalToolCalls = 0;
   private maxToolOutputChars: number;
+  private memoryLoader?: MemoryLoader;
+  private memoryPromptBlock?: string;
 
   constructor(private options: AgentRunOptions) {
     const toolRunner = options.toolRunner ?? new ToolRunner(options.tools, options.dangerousSkipApproval ?? false);
-    
+
     this.executor = new Executor({
       toolRunner,
       maxConcurrency: 3,
     });
     this.maxToolOutputChars = options.maxToolOutputChars ?? DEFAULT_MAX_TOOL_OUTPUT_CHARS;
+    this.memoryLoader = options.memoryLoader;
   }
 
   async run(): Promise<AgentRunResult> {
     const maxIterations = this.options.maxIterations ?? 20;
     const autoCompressAt = this.options.autoCompressAt ?? DEFAULT_AUTO_COMPRESS_AT;
+
+    // Load memory and inject into system prompt on first run
+    if (this.memoryLoader && !this.memoryPromptBlock) {
+      this.memoryPromptBlock = await this.memoryLoader.generateSystemPromptBlock();
+    }
 
     let messages: Message[] = [
       ...(this.options.history ?? []),
@@ -83,10 +92,13 @@ export class AgentRunner {
 
       let accumulatedText = '';
 
+      // Build system prompt with memory injection
+      const systemPrompt = this.buildSystemPrompt();
+
       const response = await this.options.provider.stream(
         {
           messages,
-          systemPrompt: this.options.systemPrompt,
+          systemPrompt,
           tools: this.options.tools.map(t => t.definition),
           model: this.options.model,
           stream: true,
@@ -292,5 +304,28 @@ export class AgentRunner {
       },
       messages,
     };
+  }
+
+  /**
+   * Build the system prompt with memory injection.
+   * Memory blocks are appended after the base system prompt.
+   */
+  private buildSystemPrompt(): string {
+    const base = this.options.systemPrompt;
+
+    if (!this.memoryPromptBlock) {
+      return base;
+    }
+
+    return `${base}\n\n${this.memoryPromptBlock}`;
+  }
+
+  /**
+   * Reload memory (called when /compact runs).
+   */
+  async reloadMemory(): Promise<void> {
+    if (this.memoryLoader) {
+      this.memoryPromptBlock = await this.memoryLoader.generateSystemPromptBlock();
+    }
   }
 }

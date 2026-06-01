@@ -26,6 +26,7 @@ import { AuthManager } from '../../auth/AuthManager.js';
 import { AuditorRegistry } from '../../auditors/AuditorRegistry.js';
 import type { AuditorGateDecision } from '../../auditors/types.js';
 import { isRedisAvailable, listHandoffs, getSessionMeta } from '../../context/RedisSessionStore.js';
+import { MemoryLoader } from '../../memory/MemoryLoader.js';
 
 interface ReplOptions {
   provider: LLMProvider;
@@ -52,6 +53,8 @@ export class Repl {
   private userEmail?: string;
   private rl?: import('readline').Interface;
   private promptZone?: PromptZone;
+  private memoryLoader?: MemoryLoader;
+  private agentRunner?: AgentRunner;
   /** Fires when the user presses Ctrl+C while an agent turn is running. */
   readonly sigintBus = new EventEmitter();
 
@@ -108,6 +111,13 @@ export class Repl {
     const auditorRegistry = new AuditorRegistry(config.projectRoot ?? process.cwd());
     await auditorRegistry.load();
     this.auditorRegistry = auditorRegistry;
+
+    // Initialize memory loader
+    if (config.projectRoot) {
+      this.memoryLoader = new MemoryLoader(config.projectRoot);
+      await this.memoryLoader.load();
+      this.memoryLoader.printWarnings();
+    }
 
     this.renderer.renderWelcome(version, config.provider, this.currentModel, config.projectRoot);
 
@@ -299,6 +309,7 @@ export class Repl {
           model: this.currentModel,
           tools: this.options.tools,
           toolRunner: this.toolRunner,
+          memoryLoader: this.memoryLoader,
           maxIterations: config.maxIterations,
           history: this.messages.slice(0, -1),
           autoCompressAt: config.autoCompressAt,
@@ -317,6 +328,7 @@ export class Repl {
           onBudgetCheck: async (check) => await this.handleBudgetCheck(check),
         });
 
+        this.agentRunner = runner;
         const agentResult = await runner.run();
         this.writer.newline();
 
@@ -628,6 +640,10 @@ export class Repl {
           this.options.provider,
           this.currentModel
         );
+        // Reload memory files on compact
+        if (this.agentRunner) {
+          await this.agentRunner.reloadMemory();
+        }
       },
 
       // Remove last user+assistant pair

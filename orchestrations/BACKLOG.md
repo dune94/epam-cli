@@ -22,7 +22,7 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | 5 | GAP-P8 | Constitution injection at agent invocation | done | swarm-forge |
 | 6 | GAP-P9 | Brownfield support — existing system context ingestion | done | codemie, smolagents |
 | 7 | GAP-P2 | External event triggers (webhook/Jira/Slack) | done | OpenHands, Cline |
-| 8 | GAP-P10 | Dynamic constitution augmentation | pending | Constitutional AI |
+| 8 | GAP-P10 | Dynamic constitution augmentation | done | Constitutional AI |
 | 9 | GAP-P11 | LLM-based topology routing | pending | kyegomez/swarms |
 | 10 | GAP-P1 | Docker sandbox execution | deferred | OpenHands, SWE-agent |
 | 11 | GAP-P3 | SWE-bench benchmark harness | deferred | SWE-agent (needs P1 first) |
@@ -230,7 +230,7 @@ Writeback closes the loop: at each pipeline milestone, the Jira client transitio
 
 ## GAP-P10 — Dynamic constitution augmentation
 
-**Status:** pending  
+**Status:** done  
 **Priority:** 8  
 **Effort:** low (1 story)
 

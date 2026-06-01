@@ -127,6 +127,71 @@ resolve_planner_settings() {
     fi
 }
 
+# resolve_dynamic_constitution <story_id>
+# Reads .epam/constitution-rules.json in PROJECT_ROOT and appends any rules
+# whose match criteria overlap the story's requiredSkills or agentRole to the
+# DYNAMIC_CONSTITUTION global. Resets the global on every call so rules from a
+# previous story never bleed into the next one.
+# When the rules file is absent, DYNAMIC_CONSTITUTION is empty (P8 behaviour).
+resolve_dynamic_constitution() {
+    local story_id="$1"
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    DYNAMIC_CONSTITUTION=""
+
+    local rules_file="${PROJECT_ROOT}/.epam/constitution-rules.json"
+    [ -f "$rules_file" ] || return 0
+
+    # Extract story metadata used for matching
+    local story_skills story_role
+    story_skills=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .technicalNotes.requiredSkills // [] | .[]' \
+        "$prd_target" 2>/dev/null | tr '\n' ' ' | xargs)
+    story_role=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .agentRole // ""' \
+        "$prd_target" 2>/dev/null || echo "")
+
+    # Match each rule entry against skills and role; collect matched rules
+    local rule_count matched_rules
+    rule_count=$(jq 'length' "$rules_file" 2>/dev/null || echo "0")
+    matched_rules=""
+
+    local i=0
+    while [ "$i" -lt "$rule_count" ]; do
+        local match_skills match_role
+        match_skills=$(jq -r --argjson idx "$i" '.[$idx].match.skills // [] | .[]' \
+            "$rules_file" 2>/dev/null | tr '\n' ' ' | xargs)
+        match_role=$(jq -r --argjson idx "$i" '.[$idx].match.agentRole // ""' \
+            "$rules_file" 2>/dev/null || echo "")
+
+        local hit=false
+        # Skill overlap: any match skill present in story skills
+        for ms in $match_skills; do
+            if echo " $story_skills " | grep -qi " $ms "; then
+                hit=true; break
+            fi
+        done
+        # Role match: agentRole in rule matches story role
+        if [ -n "$match_role" ] && [ "$match_role" = "$story_role" ]; then
+            hit=true
+        fi
+
+        if [ "$hit" = true ]; then
+            local rules_text
+            rules_text=$(jq -r --argjson idx "$i" '.[$idx].rules | .[]' \
+                "$rules_file" 2>/dev/null | while IFS= read -r rule; do
+                    echo "- $rule"
+                done)
+            matched_rules="${matched_rules}${rules_text}"$'\n'
+        fi
+        i=$((i + 1))
+    done
+
+    if [ -n "$matched_rules" ]; then
+        DYNAMIC_CONSTITUTION=$'\n'"ADDITIONAL BEHAVIORAL RULES FOR THIS STORY:"$'\n'"$matched_rules"
+        log "  DynamicConstitution: matched rules injected for story $story_id"
+    fi
+}
+
 # resolve_provider_settings <story_id>
 # Reads aiProvider from the story and sets STORY_PROVIDER global.
 # Values: claude-sonnet | claude-opus | opencode | codex | epam (default: claude-sonnet)
@@ -815,15 +880,17 @@ Produce 5-10 numbered implementation steps that a coding agent will follow exact
     plan_result_file=$(mktemp /tmp/plan-${story_id}-XXXXXX.json)
     local plan_text=""
 
+    local plan_constitution="${AGENT_CONSTITUTION}${DYNAMIC_CONSTITUTION}"
+    local plan_permissions=("--dangerously-skip-permissions" "--append-system-prompt" "$plan_constitution")
     if [ "${EPAM_SDK_INVOKE:-0}" = "1" ] && [ -f "$INVOKE_PY" ]; then
         echo "$planning_prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
             --model "$planner_model" \
-            --system-prompt "$AGENT_CONSTITUTION" \
+            --system-prompt "$plan_constitution" \
             --output "$plan_result_file" 2>/dev/null || true
         plan_text=$(jq -r '.result // empty' "$plan_result_file" 2>/dev/null || cat "$plan_result_file" 2>/dev/null || echo "")
     else
         echo "$planning_prompt" | "$CLAUDE_CMD" --print --output-format json \
-            --model "$planner_model" "${CLAUDE_PERMISSIONS[@]}" \
+            --model "$planner_model" "${plan_permissions[@]}" \
             2>/dev/null > "$plan_result_file" || true
         plan_text=$(jq -r '.result // empty' "$plan_result_file" 2>/dev/null || echo "")
     fi
@@ -866,6 +933,19 @@ implement_story() {
     esac
     # Resolve optional plannerModel — runs a planning pass before execution
     resolve_planner_settings "$story_id"
+    # Resolve dynamic constitution rules for this story (appends to AGENT_CONSTITUTION)
+    resolve_dynamic_constitution "$story_id"
+    # Build effective constitution = static base + any matched dynamic rules.
+    # Mirrors CLAUDE_PERMISSIONS: empty in interactive mode (no skip-permissions).
+    local effective_constitution="${AGENT_CONSTITUTION}${DYNAMIC_CONSTITUTION}"
+    local effective_permissions=()
+    if [ ${#CLAUDE_PERMISSIONS[@]} -gt 0 ]; then
+        effective_permissions=(
+            "--dangerously-skip-permissions"
+            "--append-system-prompt"
+            "$effective_constitution"
+        )
+    fi
     local model_flag=()
     local turns_flag=()
     [ -n "${STORY_MODEL:-}" ]     && model_flag=(--model "$STORY_MODEL")
@@ -949,7 +1029,7 @@ $story_plan"
             codemie-claude)
                 # codemie-claude: same invocation pattern as claude — --print --output-format json
                 if echo "$prompt" | codemie-claude --print --output-format json \
-                        "${model_flag[@]}" "${turns_flag[@]}" "${CLAUDE_PERMISSIONS[@]}" \
+                        "${model_flag[@]}" "${turns_flag[@]}" "${effective_permissions[@]}" \
                         2>>"$output_file" > "$json_result_file"; then
                     invoke_success=true
                 fi
@@ -986,13 +1066,13 @@ $story_plan"
                     fi
                     if echo "$prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
                             "${sdk_model_arg[@]}" "${sdk_think_arg[@]}" \
-                            --system-prompt "$AGENT_CONSTITUTION" \
+                            --system-prompt "$effective_constitution" \
                             --output "$json_result_file" 2>>"$output_file"; then
                         invoke_success=true
                     fi
                 else
                     if echo "$prompt" | "$CLAUDE_CMD" --print --output-format json \
-                            "${model_flag[@]}" "${turns_flag[@]}" "${CLAUDE_PERMISSIONS[@]}" \
+                            "${model_flag[@]}" "${turns_flag[@]}" "${effective_permissions[@]}" \
                             2>>"$output_file" > "$json_result_file"; then
                         invoke_success=true
                     fi
@@ -1015,13 +1095,13 @@ $story_plan"
                     fi
                     if echo "$prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
                             "${sdk_model_arg[@]}" \
-                            --system-prompt "$AGENT_CONSTITUTION" \
+                            --system-prompt "$effective_constitution" \
                             --output "$json_result_file" 2>>"$output_file"; then
                         invoke_success=true
                     fi
                 else
                     if echo "$prompt" | "$CLAUDE_CMD" --print --output-format json \
-                            "${model_flag[@]}" "${turns_flag[@]}" "${CLAUDE_PERMISSIONS[@]}" \
+                            "${model_flag[@]}" "${turns_flag[@]}" "${effective_permissions[@]}" \
                             2>>"$output_file" > "$json_result_file"; then
                         invoke_success=true
                     fi

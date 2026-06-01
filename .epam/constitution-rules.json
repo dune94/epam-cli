@@ -1,0 +1,30 @@
+[
+  {
+    "match": { "skills": ["auth", "jwt", "oauth", "session", "password", "credentials"] },
+    "rules": [
+      "Never store credentials, tokens, or passwords in plaintext. Always hash passwords with bcrypt (cost >= 12). Never log auth material.",
+      "Rotate secrets via environment variables only — never hardcode them in source files."
+    ]
+  },
+  {
+    "match": { "skills": ["database", "migration", "sql", "schema", "postgres", "mysql", "sqlite"] },
+    "rules": [
+      "Never DROP COLUMN or DROP TABLE. Only ADD COLUMN with a safe default. Never run destructive DDL without an explicit rollback script alongside it.",
+      "All schema changes must be wrapped in a transaction. If the transaction cannot roll back the change, do not proceed."
+    ]
+  },
+  {
+    "match": { "agentRole": "qa-engineer" },
+    "rules": [
+      "Never modify production source files. Write tests only. Do not fix the code under test — report the failure instead.",
+      "Every test assertion must include a failure message that identifies which acceptance criterion it covers."
+    ]
+  },
+  {
+    "match": { "skills": ["api", "rest", "graphql", "http", "endpoint", "controller"] },
+    "rules": [
+      "Validate and sanitize all inputs at the API boundary. Never pass raw user input to a database query or shell command.",
+      "Return structured error responses (status code + message). Never expose stack traces or internal paths in API responses."
+    ]
+  }
+]

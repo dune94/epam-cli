@@ -44,8 +44,3 @@
 - All 42 tests must pass before any PR: `~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run`
 - TypeScript must be clean: `npx tsc --noEmit`
 - Do not add tests for internal implementation details — test public behavior and contract
-
-## RAG & MCP Architecture Reference
-- When developing RAG stories in the `RAG Poc` stage, use the `/home/bjerome/projects/ai/codemie` project as a KEY reference.
-- `codemie` demonstrates a "Live RAG" architecture using MCP (Model Context Protocol) servers (Jira, Confluence, GitHub) rather than stale vector databases.
-- This dynamic, tool-based context ingestion is a key differentiator for the `epam-cli` project.

@@ -77,6 +77,9 @@ elif [ "${EPAM_ORCHESTRATION_PROVIDER:-}" = "codex" ]; then
 else
     CLAUDE_CMD="claude"
 fi
+
+EPAM_SANDBOX="${EPAM_SANDBOX:-false}"
+EPAM_SANDBOX_ALLOW_NETWORK="${EPAM_SANDBOX_ALLOW_NETWORK:-false}"
 mkdir -p "$LOG_DIR"
 DASHBOARD_WATCH_PID_FILE="$LOG_DIR/dashboards-watch.pid"
 DASHBOARD_WATCH_LOG="$LOG_DIR/dashboards-watch.log"
@@ -528,6 +531,14 @@ while [[ $# -gt 0 ]]; do
             SKIP_CLEANUP=true
             shift
             ;;
+        --sandbox)
+            EPAM_SANDBOX=true
+            shift
+            ;;
+        --allow-network)
+            EPAM_SANDBOX_ALLOW_NETWORK=true
+            shift
+            ;;
         --mode)
             if [ -z "${2:-}" ] || [[ "${2:-}" == --* ]]; then
                 error "--mode requires a value: bash|hybrid"
@@ -554,7 +565,16 @@ Options:
   --reset             Reset all story completed flags before running (clean re-run)
   --dry-run           Show execution plan without running
   --skip-cleanup      Don't cleanup worktrees on exit (for debugging)
+  --sandbox           Run each agent invocation inside a Docker/Podman container
+                      (filesystem isolation, resource limits, no privilege escalation)
+  --allow-network     Used with --sandbox: documents intent to allow full network
+                      (network is always required for LLM API calls)
   --help              Show this help message
+
+Sandbox env vars (used with --sandbox):
+  EPAM_SANDBOX_IMAGE   Container image  (default: epam-cli-sandbox:latest)
+  EPAM_SANDBOX_CPUS    CPU limit        (default: 2)
+  EPAM_SANDBOX_MEMORY  Memory limit     (default: 4g)
 
 Examples:
   $(basename "$0")                                    # Run test phase
@@ -571,6 +591,44 @@ EOF
             ;;
     esac
 done
+
+# ── Sandbox bootstrap ─────────────────────────────────────────────────────────
+if [ "${EPAM_SANDBOX:-false}" = "true" ]; then
+    SANDBOX_INVOKE="$SCRIPT_DIR/lib/sandbox-invoke.sh"
+    SANDBOX_IMAGE="${EPAM_SANDBOX_IMAGE:-epam-cli-sandbox:latest}"
+    SANDBOX_DOCKERFILE="$SCRIPT_DIR/Dockerfile.sandbox"
+    _RUNTIME=""
+    for _rt in docker podman; do
+        command -v "$_rt" &>/dev/null && { _RUNTIME="$_rt"; break; }
+    done
+    if [ -z "$_RUNTIME" ]; then
+        error "--sandbox requires docker or podman — neither found in PATH"
+        exit 1
+    fi
+    if [ ! -f "$SANDBOX_INVOKE" ]; then
+        error "sandbox-invoke.sh not found at $SANDBOX_INVOKE"
+        exit 1
+    fi
+    chmod +x "$SANDBOX_INVOKE"
+    # Build image if not already present
+    if ! "$_RUNTIME" image inspect "$SANDBOX_IMAGE" &>/dev/null 2>&1; then
+        log "[sandbox] Building image ${SANDBOX_IMAGE} from ${SANDBOX_DOCKERFILE}..."
+        "$_RUNTIME" build -t "$SANDBOX_IMAGE" -f "$SANDBOX_DOCKERFILE" "$SCRIPT_DIR" \
+            | sed 's/^/  [docker] /' || {
+            error "[sandbox] Image build failed — check Dockerfile.sandbox"
+            exit 1
+        }
+        success "[sandbox] Image ${SANDBOX_IMAGE} ready"
+    else
+        log "[sandbox] Image ${SANDBOX_IMAGE} already present — skipping build"
+    fi
+    # Override CLAUDE_CMD so claude.sh uses the sandbox wrapper
+    export CLAUDE_CMD="$SANDBOX_INVOKE"
+    export EPAM_SANDBOX_IMAGE="$SANDBOX_IMAGE"
+    export EPAM_SANDBOX_ALLOW_NETWORK="${EPAM_SANDBOX_ALLOW_NETWORK:-false}"
+    log "[sandbox] ENABLED — agent invocations will run in ${SANDBOX_IMAGE}"
+    log "[sandbox] Runtime: ${_RUNTIME} | CPUs: ${EPAM_SANDBOX_CPUS:-2} | Memory: ${EPAM_SANDBOX_MEMORY:-4g}"
+fi
 
 # Reset story completed flags if requested (idempotent re-runs)
 if [ "${RESET_STORIES:-false}" = "true" ]; then

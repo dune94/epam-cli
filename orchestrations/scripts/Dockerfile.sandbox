@@ -1,0 +1,21 @@
+FROM node:20-slim
+
+# System tools needed for typical agent tasks (git, jq, curl, build-essential for npm native deps)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git jq curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Claude Code CLI globally
+RUN npm install -g @anthropic-ai/claude-code
+
+# Non-root agent user — use a high uid to avoid collisions with base image users
+RUN useradd -m -u 10000 -s /bin/bash agent
+
+USER agent
+
+# Disable telemetry and non-essential traffic by default inside the sandbox
+ENV CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+ENV CLAUDE_CODE_SKIP_TELEMETRY=1
+
+ENTRYPOINT []
+CMD ["claude", "--version"]

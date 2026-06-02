@@ -26,7 +26,7 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | 9 | GAP-P11 | LLM-based topology routing | pending | kyegomez/swarms |
 | 10 | GAP-P15 | Cross-run scorecard dashboard | done | SWE-bench, OpenHands |
 | 11 | GAP-P18 | One-command demo (travel app + working API) | done | All competitors |
-| 12 | GAP-P14 | Sandboxing / security isolation for tool execution | pending | OpenHands, SWE-agent |
+| 12 | GAP-P14 | Sandboxing / security isolation for tool execution | done | OpenHands, SWE-agent |
 | 13 | GAP-P16 | First-class plugin/tool marketplace | pending | LangGraph, AutoGen |
 | 14 | GAP-P17 | Model-specific optimizations + structured outputs | pending | LangGraph, AutoGen |
 | 15 | GAP-P13 | Durable, distributed orchestration semantics | pending | Temporal, Prefect |
@@ -351,7 +351,7 @@ Phase 1 (low effort): add idempotency keys to every story execution record in `l
 
 ## GAP-P14 — Sandboxing / security isolation for tool execution
 
-**Status:** pending  
+**Status:** done  
 **Priority:** 12  
 **Effort:** high  
 **Source:** OpenHands, SWE-agent  

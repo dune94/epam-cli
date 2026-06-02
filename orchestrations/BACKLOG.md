@@ -24,13 +24,13 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | 7 | GAP-P2 | External event triggers (webhook/Jira/Slack) | done | OpenHands, Cline |
 | 8 | GAP-P10 | Dynamic constitution augmentation | done | Constitutional AI |
 | 9 | GAP-P11 | LLM-based topology routing | pending | kyegomez/swarms |
-| 10 | GAP-P12 | Library/framework ecosystem & composability | pending | LangGraph, AutoGen, CrewAI |
-| 11 | GAP-P13 | Durable, distributed orchestration semantics | pending | Temporal, Prefect |
-| 12 | GAP-P14 | Sandboxing / security isolation for tool execution | pending | OpenHands, SWE-agent |
-| 13 | GAP-P15 | Evaluation/benchmarks & measurable quality claims | pending | SWE-bench, OpenHands |
-| 14 | GAP-P16 | First-class plugin/tool marketplace | pending | LangGraph, AutoGen |
-| 15 | GAP-P17 | Model-specific optimizations + structured outputs | pending | LangGraph, AutoGen |
-| 16 | GAP-P18 | Polish + onboarding | pending | All competitors |
+| 10 | GAP-P14 | Sandboxing / security isolation for tool execution | pending | OpenHands, SWE-agent |
+| 11 | GAP-P15 | Cross-run scorecard dashboard | pending | SWE-bench, OpenHands |
+| 12 | GAP-P18 | One-command demo (travel app + working API) | pending | All competitors |
+| 13 | GAP-P16 | First-class plugin/tool marketplace | pending | LangGraph, AutoGen |
+| 14 | GAP-P17 | Model-specific optimizations + structured outputs | pending | LangGraph, AutoGen |
+| 15 | GAP-P13 | Durable, distributed orchestration semantics | pending | Temporal, Prefect |
+| 16 | GAP-P12 | Library/framework ecosystem & composability | pending | LangGraph, AutoGen, CrewAI |
 | 17 | GAP-P1 | Docker sandbox execution | deferred | OpenHands, SWE-agent |
 | 18 | GAP-P3 | SWE-bench benchmark harness | deferred | SWE-agent (needs P1 first) |
 
@@ -331,8 +331,8 @@ Expose a clean TypeScript SDK surface alongside the CLI. Key surfaces: `AgentRun
 ## GAP-P13 — Durable, distributed orchestration semantics
 
 **Status:** pending  
-**Priority:** 11  
-**Effort:** high  
+**Priority:** 15  
+**Effort:** Phase 1 low (1 story — idempotency keys + file checkpoints, no external services); Phase 2 medium (2 stories — resumable state machine); Phase 3 high (Temporal backend, future)  
 **Source:** Temporal, Prefect
 
 ### Problem
@@ -372,26 +372,27 @@ Add an optional `--sandbox` flag to `run-agent-orchestration.sh` that wraps each
 
 ---
 
-## GAP-P15 — Evaluation/benchmarks & measurable quality claims
+## GAP-P15 — Cross-run scorecard dashboard
 
 **Status:** pending  
-**Priority:** 13  
-**Effort:** medium  
+**Priority:** 11  
+**Effort:** low (1 story — data already emitted, gap is aggregation + view)  
 **Source:** SWE-bench, OpenHands  
-**Related:** GAP-P3 (SWE-bench harness, deferred — this is the prerequisite-free version)
+**Related:** GAP-P3 (SWE-bench harness, deferred)
 
 ### Problem
-Leaders increasingly ship with eval harnesses: SWE-bench style task sets, regression suites, scoring dashboards. EPAM has quality gates (vitest, semgrep, npm audit) which is good, but lacks standardized benchmark reporting, reproducible success metrics across runs, and a public-facing scorecard. Without this, quality claims are anecdotal.
+All the raw scoring data already exists: `phase-cost.jsonl` has per-story status/cost/time/tokens/turns; `testing-gates.jsonl` has gate verdicts (pass/fail per phase); `cpa-review.jsonl` has estimation accuracy vs actuals. What's missing is a cross-run aggregator that reads these files and renders a historical scorecard — story pass rate, test gate pass rate, cost/story, time/story, defect rate — comparable across runs. Without the aggregation layer, quality claims remain anecdotal even though the data is there.
 
 ### Approach
-Build a lightweight internal benchmark suite of 10–20 mini-PRDs (simple, known-correct apps) with gold-standard acceptance criteria. After each orchestration run against the benchmark set, emit a `benchmarks/results.json` with: story pass rate, test pass rate, cost per story, wall-clock minutes per story. A `benchmarks/dashboard.html` renders the scorecard. No SWE-bench infra required — uses existing vitest AC gate as the scoring signal.
+Add a `scorecard.html` dashboard to `orchestrations/dashboards/` that reads the three existing JSONL files via the same Eleventy data pipeline used by `phase-cost-monitor.html`. Compute per-run aggregates client-side: story pass rate (status=completed / total), gate pass rate (verdict=pass / total), mean cost/story, mean elapsed minutes/story, first-attempt success rate (stories completed on attempt 1 vs retried). Render a historical runs table (one row per run date/phase) and a summary pill strip matching the existing dashboard UI.
 
 ### Acceptance criteria
-- `scripts/run-benchmarks.sh` runs all benchmark PRDs sequentially and emits `benchmarks/results.json`
-- `results.json` includes: run date, story pass rate (%), test pass rate (%), mean cost per story, mean wall-clock minutes
-- `benchmarks/dashboard.html` renders a table of historical runs from `results.json`
-- At least 5 benchmark PRDs covering: TypeScript CLI, Express API, React component, database migration, multi-story parallelism
-- Results are reproducible: same PRD + same model → pass/fail is deterministic (no flaky gates)
+- `scorecard.html` loads in the Eleventy build and is linked from `monitor.html` nav
+- Reads `phase-cost.jsonl`, `testing-gates.jsonl`, and `cpa-review.jsonl` — no new log emitters required
+- Displays per-run metrics: story pass rate (%), gate pass rate (%), mean cost/story ($), mean time/story (min), first-attempt success rate (%)
+- Historical runs table sortable by date; current run row highlighted
+- Matches existing dashboard visual style (dark theme, pill strip, shared runtime overlay)
+- No new backend scripts required — purely a dashboard-layer addition
 
 ---
 
@@ -399,7 +400,7 @@ Build a lightweight internal benchmark suite of 10–20 mini-PRDs (simple, known
 
 **Status:** pending  
 **Priority:** 14  
-**Effort:** medium  
+**Effort:** medium (2-3 stories — interface definition + loader + docs; no registry infra needed initially)  
 **Source:** LangGraph, AutoGen
 
 ### Problem
@@ -421,7 +422,7 @@ Define a stable `ToolPlugin` interface (name, version, schema, execute) in `src/
 
 **Status:** pending  
 **Priority:** 15  
-**Effort:** medium  
+**Effort:** medium (2 stories — outputSchema field in PRD + StoryArtifact emitter; no provider changes needed)  
 **Source:** LangGraph, AutoGen
 
 ### Problem
@@ -439,25 +440,28 @@ Add an optional `outputSchema` field to story specs. When present, `claude.sh` a
 
 ---
 
-## GAP-P18 — Polish + onboarding
+## GAP-P18 — One-command demo (travel app + working API)
 
 **Status:** pending  
-**Priority:** 16  
-**Effort:** low-medium  
-**Source:** All competitors
+**Priority:** 12  
+**Effort:** low (demo mechanism exists; gap is travel app API endpoint + canned recording)  
+**Source:** All competitors  
+**Depends on:** SKY-001b (API discovery story) resolving the correct RapidAPI endpoint
 
 ### Problem
-Contest scoring and enterprise evaluations reward quick start, minimal dependencies, and a "one command demo." EPAM has many moving parts (dashboards, scripts, PRD files, Jira hooks, Redis, Langfuse) that can look heavy without a crisp happy path. A new user hitting the README today faces too many decisions before seeing value.
+The CLI already exists as a demo vehicle and the travel app PRD (`orchestrations/travel-app-prd.json`) is the right demo payload. The gap is that the Skyscanner API client uses a hallucinated endpoint (`sky-scanner3.p.rapidapi.com/search/flight` — returns 404). A demo that hits a 404 on the first real search is not a demo. SKY-001b (added 2026-06-02) adds an API discovery story that will fix this on the next rebuild. The secondary gap is a recorded/canned dashboard state so the demo works even without a live API key.
 
 ### Approach
-Add a `epam demo` command and a `demo/hello-world-prd.json` that: (1) scaffolds a minimal single-story PRD in-memory, (2) runs it against a local mock provider (no API key required), (3) prints a colored summary showing the agent loop, story completion, and test result. Add a `QUICKSTART.md` with exactly 3 steps (install → set API key → `epam demo`). Mark all advanced features (dashboards, Jira, Redis, Langfuse) as optional in README with a clear "required for demo: none" section at the top.
+1. **Fix the API endpoint** — run the travel app rebuild once SKY-001b is in place; the discovery story will produce the correct host/path in `docs/api-contract.md` and SKY-002 will implement against it.
+2. **Canned dashboard state** — snapshot a completed run's `logs/` JSONL files into `demo/logs/` so the dashboards render a full run without needing a live API key. Add a `scripts/demo-mode.sh` that symlinks `demo/logs/` into the active logs path.
+3. **QUICKSTART.md** — 3 steps: clone, set `RAPIDAPI_KEY`, run `orchestrations/scripts/run-travel-app-test.sh`. Link to canned dashboard recording for keyless preview.
 
 ### Acceptance criteria
-- `epam demo` runs end-to-end with only `EPAM_API_KEY_ANTHROPIC` set — no Redis, Langfuse, or Jira required
-- `QUICKSTART.md` fits on one screen; has exactly 3 numbered steps
-- README has a "Minimum setup" section above the fold listing only the one required env var
-- `epam demo` completes in under 2 minutes on a cold clone
-- All advanced features documented as optional with their required env vars listed in one place
+- Travel app rebuild with SKY-001b completes without 404 on `/search` or `/cheapest` endpoints
+- `demo/logs/` contains a complete snapshot of a successful travel app run (all JSONL files)
+- `scripts/demo-mode.sh` points dashboards at `demo/logs/` — dashboards render fully without a live run
+- `QUICKSTART.md` exists with exactly 3 numbered steps
+- README minimum-setup section lists only `RAPIDAPI_KEY` as required for the live demo path
 
 ---
 

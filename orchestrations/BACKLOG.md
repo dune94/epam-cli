@@ -24,9 +24,9 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | 7 | GAP-P2 | External event triggers (webhook/Jira/Slack) | done | OpenHands, Cline |
 | 8 | GAP-P10 | Dynamic constitution augmentation | done | Constitutional AI |
 | 9 | GAP-P11 | LLM-based topology routing | pending | kyegomez/swarms |
-| 10 | GAP-P14 | Sandboxing / security isolation for tool execution | pending | OpenHands, SWE-agent |
-| 11 | GAP-P15 | Cross-run scorecard dashboard | pending | SWE-bench, OpenHands |
-| 12 | GAP-P18 | One-command demo (travel app + working API) | pending | All competitors |
+| 10 | GAP-P15 | Cross-run scorecard dashboard | pending | SWE-bench, OpenHands |
+| 11 | GAP-P18 | One-command demo (travel app + working API) | pending | All competitors |
+| 12 | GAP-P14 | Sandboxing / security isolation for tool execution | pending | OpenHands, SWE-agent |
 | 13 | GAP-P16 | First-class plugin/tool marketplace | pending | LangGraph, AutoGen |
 | 14 | GAP-P17 | Model-specific optimizations + structured outputs | pending | LangGraph, AutoGen |
 | 15 | GAP-P13 | Durable, distributed orchestration semantics | pending | Temporal, Prefect |
@@ -375,7 +375,7 @@ Add an optional `--sandbox` flag to `run-agent-orchestration.sh` that wraps each
 ## GAP-P15 — Cross-run scorecard dashboard
 
 **Status:** pending  
-**Priority:** 11  
+**Priority:** 10  
 **Effort:** low (1 story — data already emitted, gap is aggregation + view)  
 **Source:** SWE-bench, OpenHands  
 **Related:** GAP-P3 (SWE-bench harness, deferred)
@@ -443,7 +443,7 @@ Add an optional `outputSchema` field to story specs. When present, `claude.sh` a
 ## GAP-P18 — One-command demo (travel app + working API)
 
 **Status:** pending  
-**Priority:** 12  
+**Priority:** 11  
 **Effort:** low (demo mechanism exists; gap is travel app API endpoint + canned recording)  
 **Source:** All competitors  
 **Depends on:** SKY-001b (API discovery story) resolving the correct RapidAPI endpoint

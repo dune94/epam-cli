@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EPAM CLI — Run Scorecard</title>
+<style>
+:root {
+  --bg: #fbfafa;  --bg1: #ffffff;  --bg2: #f4f4f4;  --bg3: #eaeaea;
+  --surface: #ffffff;  --surface2: #f4f4f4;  --surface3: #eaeaea;
+  --border: #e0e0e0;  --border2: #cccccc;
+  --text: #060606;  --text2: #4a4a4a;  --text3: #717171;  --text-muted: #717171;
+  --teal: #0047ff;  --teal2: #0047ff;  --teal-dim: rgba(0,71,255,0.08);
+  --accent: #0047ff;  --teal-glow: rgba(0,71,255,0.20);
+  --violet: #8453d2;  --violet2: #8453d2;  --violet-dim: rgba(132,83,210,0.10);
+  --green: #1a8f3f;  --green-dim: rgba(26,143,63,0.10);
+  --amber: #c87a00;  --amber-dim: rgba(200,122,0,0.10);
+  --red: #d93025;  --red-dim: rgba(217,48,37,0.08);
+  --pink: #c4186e;  --pink-dim: rgba(196,24,110,0.08);
+  --blue: #1a73e8;  --blue-dim: rgba(26,115,232,0.08);
+  --epam-gradient: linear-gradient(118.82deg, #0078c2 .5%, #0047ff 47.33%, #8453d2 76.12%);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg); color: var(--text);
+  font-size: 14px; line-height: 1.5; min-height: 100vh;
+}
+.header {
+  background: var(--epam-gradient);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 28px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  flex-wrap: wrap; gap: 8px;
+}
+.header-left { display: flex; align-items: center; gap: 13px; }
+.header-icon {
+  width: 36px; height: 36px; background: rgba(255,255,255,0.2);
+  border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.header-title { font-size: 18px; font-weight: 800; color: #fff; letter-spacing: -0.3px; }
+.header-sub { color: rgba(255,255,255,0.7); font-size: 11px; margin-top: 2px; letter-spacing: 0.3px; }
+.header-right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.refresh-meta { text-align: right; color: rgba(255,255,255,0.7); font-size: 11px; line-height: 1.8; }
+.live-dot {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: #fff;
+}
+.live-dot::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--green); flex-shrink: 0;
+  animation: pulse 1.6s ease-in-out infinite;
+  box-shadow: 0 0 6px var(--green);
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.8); }
+}
+.nav-links { font-size: 11px; display: flex; gap: 10px; flex-wrap: wrap; }
+.nav-links a { color: #fff; text-decoration: none; opacity: 0.7; transition: opacity .15s; }
+.nav-links a:hover { opacity: 1; }
+.nav-links a.active { opacity: 1; font-weight: 700; border-bottom: 2px solid #fff; padding-bottom: 2px; }
+.container { max-width: 1480px; margin: 0 auto; padding: 24px 28px; }
+.section-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1.5px; color: var(--text3); margin-bottom: 10px; margin-top: 28px;
+}
+.section-label:first-child { margin-top: 0; }
+
+/* ── KPI strip ── */
+.kpi-strip {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 4px;
+}
+.kpi-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 18px 20px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.kpi-val {
+  font-size: 32px; font-weight: 900; letter-spacing: -1px; line-height: 1;
+  background: var(--epam-gradient);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.kpi-val.green { background: linear-gradient(90deg, #22c55e, var(--green)); -webkit-background-clip: text; background-clip: text; }
+.kpi-val.amber { background: linear-gradient(90deg, #d97706, var(--amber)); -webkit-background-clip: text; background-clip: text; }
+.kpi-val.red   { background: linear-gradient(90deg, #ef4444, var(--red));   -webkit-background-clip: text; background-clip: text; }
+.kpi-lbl { font-size: 11px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; }
+.kpi-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+/* ── Tables ── */
+.table-wrap { overflow-x: auto; margin-top: 4px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead tr { background: var(--surface2); }
+th {
+  padding: 9px 12px; text-align: left;
+  color: var(--text3); font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.8px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer; user-select: none; white-space: nowrap;
+}
+th:hover { color: var(--teal); }
+th .sort-arrow { margin-left: 4px; font-size: 10px; color: var(--teal); }
+td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+tbody tr:hover td { background: rgba(0,71,255,0.03); }
+tbody tr.current-run td { background: rgba(132,83,210,0.06); }
+
+/* ── Rate bars ── */
+.rate-cell { display: flex; align-items: center; gap: 8px; min-width: 110px; }
+.rate-bar-bg { flex: 1; height: 6px; background: var(--surface3); border-radius: 999px; overflow: hidden; max-width: 80px; }
+.rate-bar-fill { height: 100%; border-radius: 999px; transition: width .5s ease; }
+.bar-green  { background: linear-gradient(90deg, #22c55e, var(--green)); }
+.bar-amber  { background: linear-gradient(90deg, #d97706, var(--amber)); }
+.bar-red    { background: linear-gradient(90deg, #ef4444, var(--red)); }
+
+/* ── Badges ── */
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 20px;
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.badge-pass   { background: var(--green-dim); color: var(--green); }
+.badge-fail   { background: var(--red-dim);   color: var(--red); }
+.badge-na     { background: var(--surface3);  color: var(--text3); }
+.badge-phase  { background: var(--teal-dim);  color: var(--teal); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+.badge-phase-ui { background: var(--violet-dim); color: var(--violet2); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* ── Accuracy badge ── */
+.acc-badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.acc-green  { background: var(--green-dim);  color: var(--green); }
+.acc-amber  { background: var(--amber-dim);  color: var(--amber); }
+.acc-red    { background: var(--red-dim);    color: var(--red); }
+
+/* ── Empty ── */
+.empty-state { text-align: center; padding: 60px 24px; color: var(--text3); }
+.empty-state .icon { font-size: 36px; margin-bottom: 12px; opacity: 0.4; }
+.empty-state h3 { font-size: 16px; color: var(--text2); margin-bottom: 8px; }
+.empty-state p { font-size: 13px; line-height: 1.7; }
+
+.refresh-footer { text-align: center; font-size: 11px; color: var(--text3); margin-top: 32px; padding-bottom: 16px; }
+
+@media (max-width: 900px) {
+  .kpi-strip { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <div class="header-icon">&#x1F4CA;</div>
+    <div>
+      <div class="header-title">EPAM CLI — Run Scorecard</div>
+      <div class="header-sub">Story pass rate &middot; Gate verdicts &middot; Cost &amp; time per story &middot; CPA accuracy across runs</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="refresh-meta">
+      <div class="live-dot">LIVE</div>
+      <div id="last-refresh">Initialising...</div>
+    </div>
+    <nav class="nav-links">
+      <a href="monitor.html">Monitor</a>
+      <a href="prd-viewer.html">PRD Viewer</a>
+      <a href="specification.html">Spec Diff</a>
+      <a href="orchestration-plan.html">Plan</a>
+      <a href="agents-orchestration.html">Orchestration</a>
+      <a href="pipeline-stages.html">Stages</a>
+      <a href="agent-profiles.html">Profiles</a>
+      <a href="agent-messages.html">Messages</a>
+      <a href="phase-cost-monitor.html">Costs</a>
+      <a href="quality-assurance.html">QA Gates</a>
+      <a href="agent-activity.html">Activity</a>
+      <a href="cpa-details.html">Estimation</a>
+      <a href="scorecard.html" class="active">Scorecard</a>
+      <a href="epam-cli-guide.html">CLI Guide</a>
+    </nav>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- §1 KPI strip -->
+  <div class="section-label">Overall Metrics (all runs)</div>
+  <div class="kpi-strip">
+    <div class="kpi-card">
+      <div class="kpi-val" id="kpi-runs">—</div>
+      <div class="kpi-lbl">Total Runs</div>
+      <div class="kpi-sub" id="kpi-runs-sub">phases recorded</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-val" id="kpi-story-pass">—</div>
+      <div class="kpi-lbl">Story Pass Rate</div>
+      <div class="kpi-sub" id="kpi-story-pass-sub">completed / attempted</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-val" id="kpi-gate-pass">—</div>
+      <div class="kpi-lbl">Gate Pass Rate</div>
+      <div class="kpi-sub" id="kpi-gate-pass-sub">phases passing QA gates</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-val" id="kpi-cost">—</div>
+      <div class="kpi-lbl">Avg Cost / Story</div>
+      <div class="kpi-sub" id="kpi-cost-sub">USD across all runs</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-val" id="kpi-time">—</div>
+      <div class="kpi-lbl">Avg Time / Story</div>
+      <div class="kpi-sub" id="kpi-time-sub">minutes per story</div>
+    </div>
+  </div>
+
+  <!-- §2 Runs table -->
+  <div class="section-label" style="margin-top: 32px;">Run History</div>
+  <div class="table-wrap">
+    <table id="runs-table">
+      <thead>
+        <tr>
+          <th data-col="date">Date <span class="sort-arrow">↓</span></th>
+          <th data-col="phase">Phase</th>
+          <th data-col="stories">Stories</th>
+          <th data-col="storyPass">Story Pass Rate</th>
+          <th data-col="firstAttempt">1st-Attempt %</th>
+          <th data-col="gate">Gate Verdict</th>
+          <th data-col="cost">Cost / Story</th>
+          <th data-col="time">Time / Story</th>
+          <th data-col="cpaAcc">CPA Accuracy</th>
+        </tr>
+      </thead>
+      <tbody id="runs-tbody">
+        <tr><td colspan="9" class="empty-state"><div class="icon">&#x1F4C5;</div><p>Loading run history…</p></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- §3 Story detail table -->
+  <div class="section-label" style="margin-top: 32px;">Story Detail (most recent run)</div>
+  <div class="table-wrap">
+    <table id="stories-table">
+      <thead>
+        <tr>
+          <th>Story ID</th>
+          <th>Phase</th>
+          <th>Status</th>
+          <th>Model</th>
+          <th>Effort</th>
+          <th>Cost ($)</th>
+          <th>Time (min)</th>
+          <th>Turns</th>
+          <th>CPA Est (min)</th>
+          <th>CPA Variance</th>
+        </tr>
+      </thead>
+      <tbody id="stories-tbody">
+        <tr><td colspan="10" class="empty-state"><p>Loading…</p></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="refresh-footer">Auto-refreshing every 10 seconds &middot; All times local &middot; EPAM CLI Run Scorecard</div>
+</div>
+
+<script>
+const REFRESH_MS = 10000;
+
+// ── JSONL parser ────────────────────────────────────────────────────────────
+function parseJSONL(text) {
+  return text.split('\n')
+    .map(l => l.trim())
+    .filter(Boolean)
+    .map(l => { try { return JSON.parse(l); } catch { return null; } })
+    .filter(Boolean);
+}
+
+// ── Fetch helpers ──────────────────────────────────────────────────────────
+async function fetchJSONL(path) {
+  try {
+    const r = await fetch(path + '?_t=' + Date.now());
+    if (!r.ok) return [];
+    return parseJSONL(await r.text());
+  } catch { return []; }
+}
+
+// ── Colour helpers ─────────────────────────────────────────────────────────
+function rateColour(pct) {
+  if (pct >= 90) return 'green';
+  if (pct >= 70) return 'amber';
+  return 'red';
+}
+
+function rateBarClass(pct) {
+  if (pct >= 90) return 'bar-green';
+  if (pct >= 70) return 'bar-amber';
+  return 'bar-red';
+}
+
+function rateCell(pct) {
+  const cls = rateBarClass(pct);
+  return `<div class="rate-cell">
+    <span>${pct.toFixed(0)}%</span>
+    <div class="rate-bar-bg"><div class="rate-bar-fill ${cls}" style="width:${pct}%"></div></div>
+  </div>`;
+}
+
+function accBadge(estMin, actualMin) {
+  if (!estMin || !actualMin) return '<span class="acc-badge acc-amber">N/A</span>';
+  const ratio = actualMin / estMin;
+  const sign = ratio > 1 ? '+' : '';
+  const pct = ((ratio - 1) * 100).toFixed(0);
+  if (Math.abs(ratio - 1) <= 0.2)  return `<span class="acc-badge acc-green">${sign}${pct}%</span>`;
+  if (Math.abs(ratio - 1) <= 0.5)  return `<span class="acc-badge acc-amber">${sign}${pct}%</span>`;
+  return `<span class="acc-badge acc-red">${sign}${pct}%</span>`;
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
+function phaseLabel(phase) {
+  const cls = (phase || '').includes('ui') ? 'badge-phase-ui' : 'badge-phase';
+  return `<span class="badge ${cls}">${phase || '—'}</span>`;
+}
+
+// ── Build run groups from cost events ──────────────────────────────────────
+// A "run" = unique (phase_id, date-of-day). Latest record per story within a
+// run determines the outcome (handles retries).
+function buildRuns(costEvents, gateEvents, cpaEvents) {
+  // Group cost events by run key
+  const runMap = new Map();
+
+  for (const ev of costEvents) {
+    const date = ev.started_at ? ev.started_at.slice(0, 10) : 'unknown';
+    const key = `${ev.phase_id}__${date}`;
+    if (!runMap.has(key)) {
+      runMap.set(key, {
+        key, phase: ev.phase_id, date,
+        storiesMap: new Map(), // story_id → latest record
+      });
+    }
+    const run = runMap.get(key);
+    const prev = run.storiesMap.get(ev.story_id);
+    // Keep latest record per story (by started_at)
+    if (!prev || ev.started_at > prev.started_at) {
+      run.storiesMap.set(ev.story_id, ev);
+    }
+  }
+
+  // Attach gate verdict
+  const gateMap = new Map();
+  for (const g of gateEvents) {
+    const date = g.timestamp ? g.timestamp.slice(0, 10) : 'unknown';
+    const key = `${g.phase_id}__${date}`;
+    // Last gate verdict for this run key wins
+    if (!gateMap.has(key) || g.timestamp > gateMap.get(key).timestamp) {
+      gateMap.set(key, g);
+    }
+  }
+
+  // Attach CPA estimates
+  const cpaMap = new Map(); // story_id → cpa record
+  for (const c of cpaEvents) {
+    const prev = cpaMap.get(c.storyId);
+    if (!prev || c.reviewedAt > prev.reviewedAt) cpaMap.set(c.storyId, c);
+  }
+
+  // Compute run-level metrics
+  const runs = [];
+  for (const [key, run] of runMap) {
+    const stories = Array.from(run.storiesMap.values());
+    const total = stories.length;
+    const completed = stories.filter(s => s.status === 'completed').length;
+    const storyPassPct = total > 0 ? (completed / total) * 100 : 0;
+
+    // First-attempt: stories with no prior record for same story_id in same run
+    // Proxy: count of stories where this is the only record (no retry)
+    const retryCounts = new Map();
+    for (const ev of costEvents) {
+      const date = ev.started_at ? ev.started_at.slice(0, 10) : 'unknown';
+      if (date !== run.date || ev.phase_id !== run.phase) continue;
+      retryCounts.set(ev.story_id, (retryCounts.get(ev.story_id) || 0) + 1);
+    }
+    const firstAttempt = stories.filter(s => (retryCounts.get(s.story_id) || 1) === 1).length;
+    const firstAttemptPct = total > 0 ? (firstAttempt / total) * 100 : 0;
+
+    const totalCost = stories.reduce((s, e) => s + (e.task_cost_usd || 0), 0);
+    const totalTime = stories.reduce((s, e) => s + (e.elapsed_minutes || 0), 0);
+    const avgCost = total > 0 ? totalCost / total : 0;
+    const avgTime = total > 0 ? totalTime / total : 0;
+
+    const gate = gateMap.get(key);
+
+    // CPA accuracy: mean ratio of actual/estimated for stories with both values
+    let cpaAcc = null;
+    let cpaCount = 0;
+    let cpaRatioSum = 0;
+    for (const s of stories) {
+      const cpa = cpaMap.get(s.story_id);
+      if (cpa && cpa.blendedEstimate && cpa.blendedEstimate.aiMinutes && s.elapsed_minutes) {
+        cpaRatioSum += s.elapsed_minutes / cpa.blendedEstimate.aiMinutes;
+        cpaCount++;
+      }
+    }
+    if (cpaCount > 0) cpaAcc = cpaRatioSum / cpaCount;
+
+    runs.push({
+      key, phase: run.phase, date: run.date,
+      total, completed, storyPassPct,
+      firstAttemptPct,
+      gate: gate ? gate.verdict : null,
+      avgCost, avgTime, totalCost, totalTime,
+      cpaAcc,
+      stories,
+      cpaMap,
+    });
+  }
+
+  // Sort by date desc
+  runs.sort((a, b) => b.date.localeCompare(a.date));
+  return runs;
+}
+
+// ── Render KPI strip ───────────────────────────────────────────────────────
+function renderKPIs(runs) {
+  const totalRuns = runs.length;
+  const allStories = runs.reduce((s, r) => s + r.total, 0);
+  const allCompleted = runs.reduce((s, r) => s + r.completed, 0);
+  const overallStoryPass = allStories > 0 ? (allCompleted / allStories) * 100 : 0;
+
+  const gateRuns = runs.filter(r => r.gate !== null);
+  const gatePassed = gateRuns.filter(r => r.gate === 'pass').length;
+  const overallGatePass = gateRuns.length > 0 ? (gatePassed / gateRuns.length) * 100 : 0;
+
+  const costRuns = runs.filter(r => r.total > 0);
+  const avgCost = costRuns.length > 0
+    ? costRuns.reduce((s, r) => s + r.avgCost, 0) / costRuns.length : 0;
+  const avgTime = costRuns.length > 0
+    ? costRuns.reduce((s, r) => s + r.avgTime, 0) / costRuns.length : 0;
+
+  const storyPassColour = rateColour(overallStoryPass);
+  const gatePassColour  = rateColour(overallGatePass);
+
+  document.getElementById('kpi-runs').textContent    = totalRuns;
+  document.getElementById('kpi-runs-sub').textContent = `${allStories} stories total`;
+
+  const spEl = document.getElementById('kpi-story-pass');
+  spEl.textContent = overallStoryPass.toFixed(0) + '%';
+  spEl.className = 'kpi-val ' + storyPassColour;
+  document.getElementById('kpi-story-pass-sub').textContent = `${allCompleted} / ${allStories} completed`;
+
+  const gpEl = document.getElementById('kpi-gate-pass');
+  gpEl.textContent = overallGatePass.toFixed(0) + '%';
+  gpEl.className = 'kpi-val ' + gatePassColour;
+  document.getElementById('kpi-gate-pass-sub').textContent = `${gatePassed} / ${gateRuns.length} gates passed`;
+
+  const cEl = document.getElementById('kpi-cost');
+  cEl.textContent = avgCost > 0 ? '$' + avgCost.toFixed(3) : '—';
+  cEl.className = 'kpi-val';
+
+  const tEl = document.getElementById('kpi-time');
+  tEl.textContent = avgTime > 0 ? avgTime.toFixed(1) + ' min' : '—';
+  tEl.className = 'kpi-val';
+}
+
+// ── Render runs table ──────────────────────────────────────────────────────
+function renderRunsTable(runs) {
+  const tbody = document.getElementById('runs-tbody');
+  if (!runs.length) {
+    tbody.innerHTML = `<tr><td colspan="9">
+      <div class="empty-state">
+        <div class="icon">&#x1F4C5;</div>
+        <h3>No runs recorded yet</h3>
+        <p>Run an orchestration to see scorecard data.</p>
+      </div>
+    </td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = runs.map((r, idx) => {
+    const isLatest = idx === 0;
+    const gateBadge = r.gate === 'pass'
+      ? '<span class="badge badge-pass">PASS</span>'
+      : r.gate === 'fail'
+        ? '<span class="badge badge-fail">FAIL</span>'
+        : '<span class="badge badge-na">—</span>';
+
+    const cpaAccCell = r.cpaAcc !== null
+      ? accBadge(1, r.cpaAcc) // ratio already computed
+      : '<span class="acc-badge acc-amber">N/A</span>';
+
+    return `<tr class="${isLatest ? 'current-run' : ''}">
+      <td>${r.date}${isLatest ? ' <span style="font-size:10px;color:var(--violet2);font-weight:700;">● LATEST</span>' : ''}</td>
+      <td>${phaseLabel(r.phase)}</td>
+      <td>${r.completed} / ${r.total}</td>
+      <td>${rateCell(r.storyPassPct)}</td>
+      <td>${rateCell(r.firstAttemptPct)}</td>
+      <td>${gateBadge}</td>
+      <td>$${r.avgCost.toFixed(3)}</td>
+      <td>${r.avgTime.toFixed(1)} min</td>
+      <td>${cpaAccCell}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Render story detail (most recent run) ──────────────────────────────────
+function renderStoryDetail(runs, cpaMap) {
+  const tbody = document.getElementById('stories-tbody');
+  if (!runs.length) { tbody.innerHTML = '<tr><td colspan="10"><div class="empty-state"><p>No data.</p></div></td></tr>'; return; }
+
+  const latest = runs[0];
+  const rows = latest.stories.slice().sort((a, b) => (a.story_id || '').localeCompare(b.story_id || ''));
+
+  tbody.innerHTML = rows.map(s => {
+    const cpa = cpaMap.get(s.story_id);
+    const estMin = cpa && cpa.blendedEstimate ? cpa.blendedEstimate.aiMinutes : null;
+    const statusBadge = s.status === 'completed'
+      ? '<span class="badge badge-pass">done</span>'
+      : '<span class="badge badge-fail">' + (s.status || 'unknown') + '</span>';
+
+    return `<tr>
+      <td><code style="font-size:12px;">${s.story_id || '—'}</code></td>
+      <td>${phaseLabel(s.phase_id)}</td>
+      <td>${statusBadge}</td>
+      <td style="font-size:11px;color:var(--text3);">${(s.resolvedModel || '—').replace('claude-','').replace('-20251001','')}</td>
+      <td><span class="badge badge-na" style="text-transform:uppercase;">${s.effort || '—'}</span></td>
+      <td>${s.task_cost_usd ? '$' + s.task_cost_usd.toFixed(4) : '—'}</td>
+      <td>${s.elapsed_minutes ? s.elapsed_minutes.toFixed(1) : '—'}</td>
+      <td>${s.task_turns || '—'}</td>
+      <td>${estMin ? estMin.toFixed(1) : '—'}</td>
+      <td>${accBadge(estMin, s.elapsed_minutes)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Main refresh ───────────────────────────────────────────────────────────
+async function refresh() {
+  const [costEvents, gateEvents, cpaEvents] = await Promise.all([
+    fetchJSONL('logs/phase-cost.jsonl'),
+    fetchJSONL('logs/testing-gates.jsonl'),
+    fetchJSONL('logs/cpa-review.jsonl'),
+  ]);
+
+  // Build global CPA map for story detail
+  const cpaMap = new Map();
+  for (const c of cpaEvents) {
+    const prev = cpaMap.get(c.storyId);
+    if (!prev || (c.reviewedAt || '') > (prev.reviewedAt || '')) cpaMap.set(c.storyId, c);
+  }
+
+  const runs = buildRuns(costEvents, gateEvents, cpaEvents);
+
+  renderKPIs(runs);
+  renderRunsTable(runs);
+  renderStoryDetail(runs, cpaMap);
+
+  document.getElementById('last-refresh').textContent =
+    'Updated ' + new Date().toLocaleTimeString();
+}
+
+refresh();
+setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>

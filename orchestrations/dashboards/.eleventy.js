@@ -21,6 +21,7 @@ const DASHBOARD_FILES = [
   'prd-viewer.html',
   'quality-assurance.html',
   'quality-dashboard.html',
+  'scorecard.html',
   'specification.html',
   'agent-activity.html'
 ];

@@ -1,0 +1,72 @@
+{
+  "phase_id": "sdk_lifecycle_test",
+  "timestamp": "2026-03-27T14:54:25-04:00",
+  "decision": "go",
+  "criteria": {
+    "stories_complete": true,
+    "deliverables_present": true,
+    "tests_passing": true,
+    "cost_variance_pct": -96.00,
+    "cost_tier": "ok",
+    "gate_warn_threshold": 30,
+    "gate_escalate_threshold": 150
+  },
+  "decision_maker": "check-phase-gate.sh",
+  "issues": [],
+  "notes": "All criteria met"
+}
+{
+  "phase_id": "sdk_lifecycle_test",
+  "timestamp": "2026-03-30T08:06:12-04:00",
+  "decision": "go",
+  "criteria": {
+    "stories_complete": true,
+    "deliverables_present": true,
+    "tests_passing": true,
+    "cost_variance_pct": -92.00,
+    "cost_tier": "ok",
+    "gate_warn_threshold": 30,
+    "gate_escalate_threshold": 150
+  },
+  "decision_maker": "check-phase-gate.sh",
+  "issues": [],
+  "notes": "All criteria met"
+}
+{
+  "phase_id": "hello_world_test",
+  "timestamp": "2026-05-25T10:00:14-04:00",
+  "decision": "go",
+  "criteria": {
+    "stories_complete": true,
+    "deliverables_present": true,
+    "tests_passing": true,
+    "cost_variance_pct": -99.00,
+    "cost_tier": "ok",
+    "gate_warn_threshold": 30,
+    "gate_escalate_threshold": 150
+  },
+  "decision_maker": "check-phase-gate.sh",
+  "issues": [],
+  "notes": "All criteria met"
+}
+{
+  "phase_id": "hello_world_test",
+  "timestamp": "2026-05-25T11:12:07-04:00",
+  "decision": "go",
+  "criteria": {
+    "stories_complete": true,
+    "deliverables_present": true,
+    "tests_passing": true,
+    "cost_variance_pct": -99.00,
+    "cost_tier": "ok",
+    "gate_warn_threshold": 30,
+    "gate_escalate_threshold": 150
+  },
+  "decision_maker": "check-phase-gate.sh",
+  "issues": [],
+  "notes": "All criteria met"
+}
+{"phase_id":"core","timestamp":"2026-05-31T07:32:21-04:00","decision":"go","criteria":{"stories_complete":true,"deliverables_present":true,"tests_passing":true,"cost_variance_pct":34.00,"cost_tier":"warn","gate_warn_threshold":30,"gate_escalate_threshold":150},"decision_maker":"check-phase-gate.sh","issues":[{"type":"cost_variance_warn","description":"Variance 34.00% exceeds warn threshold 30% -- auto-approved","severity":"warning","variance_pct":34.00,"threshold":30,"auto_approved":true}],"notes":"Auto-approved -- variance 34.00% in warn band [30%--150%)"}
+{"phase_id":"ui_and_review","timestamp":"2026-05-31T07:51:32-04:00","decision":"go","criteria":{"stories_complete":true,"deliverables_present":true,"tests_passing":true,"cost_variance_pct":23.00,"cost_tier":"ok","gate_warn_threshold":30,"gate_escalate_threshold":150},"decision_maker":"check-phase-gate.sh","issues":[],"notes":"All criteria met"}
+{"phase_id":"hello_world_test","timestamp":"2026-05-31T16:43:55-04:00","decision":"go","criteria":{"stories_complete":true,"deliverables_present":true,"tests_passing":true,"cost_variance_pct":-77.00,"cost_tier":"ok","gate_warn_threshold":30,"gate_escalate_threshold":150},"decision_maker":"check-phase-gate.sh","issues":[],"notes":"All criteria met"}
+{"phase_id":"scaffold","timestamp":"2026-06-01T20:19:35-04:00","decision":"go","criteria":{"stories_complete":true,"deliverables_present":true,"tests_passing":true,"cost_variance_pct":-12.00,"cost_tier":"ok","gate_warn_threshold":30,"gate_escalate_threshold":150},"decision_maker":"check-phase-gate.sh","issues":[],"notes":"All criteria met"}

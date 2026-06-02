@@ -24,8 +24,8 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | 7 | GAP-P2 | External event triggers (webhook/Jira/Slack) | done | OpenHands, Cline |
 | 8 | GAP-P10 | Dynamic constitution augmentation | done | Constitutional AI |
 | 9 | GAP-P11 | LLM-based topology routing | pending | kyegomez/swarms |
-| 10 | GAP-P15 | Cross-run scorecard dashboard | pending | SWE-bench, OpenHands |
-| 11 | GAP-P18 | One-command demo (travel app + working API) | pending | All competitors |
+| 10 | GAP-P15 | Cross-run scorecard dashboard | done | SWE-bench, OpenHands |
+| 11 | GAP-P18 | One-command demo (travel app + working API) | done | All competitors |
 | 12 | GAP-P14 | Sandboxing / security isolation for tool execution | pending | OpenHands, SWE-agent |
 | 13 | GAP-P16 | First-class plugin/tool marketplace | pending | LangGraph, AutoGen |
 | 14 | GAP-P17 | Model-specific optimizations + structured outputs | pending | LangGraph, AutoGen |
@@ -374,7 +374,7 @@ Add an optional `--sandbox` flag to `run-agent-orchestration.sh` that wraps each
 
 ## GAP-P15 — Cross-run scorecard dashboard
 
-**Status:** pending  
+**Status:** done  
 **Priority:** 10  
 **Effort:** low (1 story — data already emitted, gap is aggregation + view)  
 **Source:** SWE-bench, OpenHands  
@@ -442,7 +442,7 @@ Add an optional `outputSchema` field to story specs. When present, `claude.sh` a
 
 ## GAP-P18 — One-command demo (travel app + working API)
 
-**Status:** pending  
+**Status:** done  
 **Priority:** 11  
 **Effort:** low (demo mechanism exists; gap is travel app API endpoint + canned recording)  
 **Source:** All competitors  

@@ -24,8 +24,15 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | 7 | GAP-P2 | External event triggers (webhook/Jira/Slack) | done | OpenHands, Cline |
 | 8 | GAP-P10 | Dynamic constitution augmentation | done | Constitutional AI |
 | 9 | GAP-P11 | LLM-based topology routing | pending | kyegomez/swarms |
-| 10 | GAP-P1 | Docker sandbox execution | deferred | OpenHands, SWE-agent |
-| 11 | GAP-P3 | SWE-bench benchmark harness | deferred | SWE-agent (needs P1 first) |
+| 10 | GAP-P12 | Library/framework ecosystem & composability | pending | LangGraph, AutoGen, CrewAI |
+| 11 | GAP-P13 | Durable, distributed orchestration semantics | pending | Temporal, Prefect |
+| 12 | GAP-P14 | Sandboxing / security isolation for tool execution | pending | OpenHands, SWE-agent |
+| 13 | GAP-P15 | Evaluation/benchmarks & measurable quality claims | pending | SWE-bench, OpenHands |
+| 14 | GAP-P16 | First-class plugin/tool marketplace | pending | LangGraph, AutoGen |
+| 15 | GAP-P17 | Model-specific optimizations + structured outputs | pending | LangGraph, AutoGen |
+| 16 | GAP-P18 | Polish + onboarding | pending | All competitors |
+| 17 | GAP-P1 | Docker sandbox execution | deferred | OpenHands, SWE-agent |
+| 18 | GAP-P3 | SWE-bench benchmark harness | deferred | SWE-agent (needs P1 first) |
 
 ---
 
@@ -297,10 +304,167 @@ Cost: one Haiku call per phase (~$0.001). Acceptable overhead relative to phase 
 
 ---
 
+---
+
+## GAP-P12 — Library/framework ecosystem & composability
+
+**Status:** pending  
+**Priority:** 10  
+**Effort:** high (architectural)  
+**Source:** LangGraph, AutoGen, CrewAI
+
+### Problem
+Tools like LangGraph, AutoGen, and CrewAI win on being embeddable libraries with a broad community pattern library (nodes, tools, memory types, integrations, tutorials). EPAM CLI presents more like a productized workflow system + shell scripts — less obviously a reusable SDK that developers can import, subclass, and extend in their own codebases.
+
+### Approach
+Expose a clean TypeScript SDK surface alongside the CLI. Key surfaces: `AgentRunner` as a first-class importable class, `ProviderChain` composable from user code, `OrchestrationPlan` as a typed schema that callers can construct programmatically. Publish to npm. Add a "use as a library" section to README with a 10-line example. The CLI remains the primary interface; the SDK surface is additive.
+
+### Acceptance criteria
+- `import { AgentRunner, ProviderChain } from 'epam-cli'` works from an external project
+- Public API surface is documented with JSDoc and exported types
+- README includes a library usage example (not just CLI usage)
+- npm package published with `main`, `types`, and `exports` fields
+- No breaking changes to existing CLI behavior
+
+---
+
+## GAP-P13 — Durable, distributed orchestration semantics
+
+**Status:** pending  
+**Priority:** 11  
+**Effort:** high  
+**Source:** Temporal, Prefect
+
+### Problem
+Platforms like Temporal offer durable state, retries, deterministic workflow replay, and horizontal scalability. EPAM has Redis/session stores and a control plane, but lacks explicit durable-workflow guarantees: idempotency keys, replay-safe execution, distributed task scheduling across workers, and crash-safe mid-story resume. A process kill mid-story loses state.
+
+### Approach
+Phase 1 (low effort): add idempotency keys to every story execution record in `logs/agent-status.json`; on restart, skip stories whose key already completed. Phase 2 (medium effort): make `run-agent-orchestration.sh` a resumable state machine — checkpoint before and after each story so a restart replays from the last checkpoint rather than from scratch. Phase 3 (high effort, future): evaluate Temporal SDK as an optional execution backend.
+
+### Acceptance criteria
+- Killing and restarting orchestration mid-phase resumes from the last completed story, not from scratch
+- Each story execution has a deterministic idempotency key logged to `agent-status.json`
+- Duplicate story execution (same key) is a no-op, not a double-run
+- Phase 1 and 2 require no external services — file-based checkpoints only
+
+---
+
+## GAP-P14 — Sandboxing / security isolation for tool execution
+
+**Status:** pending  
+**Priority:** 12  
+**Effort:** high  
+**Source:** OpenHands, SWE-agent  
+**Supersedes:** GAP-P1 (Docker sandbox, deferred — this is the re-evaluation)
+
+### Problem
+Many judging panels and enterprise buyers require containerization/sandboxing for shell and file tools: per-run containers, seccomp profiles, network controls. EPAM has behavioral contracts (GAP-P8/P10) and path constraints, but those are prompt-level guardrails, not hard OS-level isolation. A compromised or misbehaving agent can still reach the host filesystem and network.
+
+### Approach
+Add an optional `--sandbox` flag to `run-agent-orchestration.sh` that wraps each agent invocation in a rootless `podman run` (or `docker run`) container with: (a) the project directory bind-mounted read-write, (b) no network access by default (override with `--allow-network`), (c) resource limits (CPU, memory). The container image is a minimal Node 20 image with the EPAM CLI installed. Without `--sandbox`, behaviour is unchanged.
+
+### Acceptance criteria
+- `--sandbox` flag is accepted; without it, behaviour is identical to current
+- Agent file writes land in the bind-mounted project dir and survive container exit
+- Network is blocked inside the container by default; `--allow-network` restores it
+- A test story that attempts to write outside PROJECT_ROOT fails with a permission error (not a prompt refusal)
+- Works on WSL2 with rootless podman or standard Docker Desktop
+
+---
+
+## GAP-P15 — Evaluation/benchmarks & measurable quality claims
+
+**Status:** pending  
+**Priority:** 13  
+**Effort:** medium  
+**Source:** SWE-bench, OpenHands  
+**Related:** GAP-P3 (SWE-bench harness, deferred — this is the prerequisite-free version)
+
+### Problem
+Leaders increasingly ship with eval harnesses: SWE-bench style task sets, regression suites, scoring dashboards. EPAM has quality gates (vitest, semgrep, npm audit) which is good, but lacks standardized benchmark reporting, reproducible success metrics across runs, and a public-facing scorecard. Without this, quality claims are anecdotal.
+
+### Approach
+Build a lightweight internal benchmark suite of 10–20 mini-PRDs (simple, known-correct apps) with gold-standard acceptance criteria. After each orchestration run against the benchmark set, emit a `benchmarks/results.json` with: story pass rate, test pass rate, cost per story, wall-clock minutes per story. A `benchmarks/dashboard.html` renders the scorecard. No SWE-bench infra required — uses existing vitest AC gate as the scoring signal.
+
+### Acceptance criteria
+- `scripts/run-benchmarks.sh` runs all benchmark PRDs sequentially and emits `benchmarks/results.json`
+- `results.json` includes: run date, story pass rate (%), test pass rate (%), mean cost per story, mean wall-clock minutes
+- `benchmarks/dashboard.html` renders a table of historical runs from `results.json`
+- At least 5 benchmark PRDs covering: TypeScript CLI, Express API, React component, database migration, multi-story parallelism
+- Results are reproducible: same PRD + same model → pass/fail is deterministic (no flaky gates)
+
+---
+
+## GAP-P16 — First-class plugin/tool marketplace
+
+**Status:** pending  
+**Priority:** 14  
+**Effort:** medium  
+**Source:** LangGraph, AutoGen
+
+### Problem
+Competitors offer a clean plugin interface, tool registry, and community-contributed integrations. EPAM has tools under `src/tools/builtin` and MCP server config, but there is no stable plugin API with versioning, no tool registry discoverable at runtime, and no extension documentation that would let a third-party author publish a compatible tool package.
+
+### Approach
+Define a stable `ToolPlugin` interface (name, version, schema, execute) in `src/tools/plugin.ts`. Add a `tools` array to `.epam/settings.json` where each entry is either a built-in tool name or an npm package path exporting a `ToolPlugin`. The tool resolver loads external plugins at startup alongside built-ins. Add `TOOL_REGISTRY.md` documenting the interface and publishing contract.
+
+### Acceptance criteria
+- `ToolPlugin` interface is exported from the package with stable semver guarantees
+- `.epam/settings.json` `tools` array is respected at startup; unknown built-in names warn, don't crash
+- An external npm package implementing `ToolPlugin` loads and executes correctly when listed in settings
+- `TOOL_REGISTRY.md` documents the interface, versioning policy, and a 20-line example plugin
+- Existing built-in tools continue to work with no behavior change
+
+---
+
+## GAP-P17 — Model-specific optimizations + structured outputs
+
+**Status:** pending  
+**Priority:** 15  
+**Effort:** medium  
+**Source:** LangGraph, AutoGen
+
+### Problem
+LangGraph and AutoGen ecosystems lean into structured outputs (JSON schemas, typed tool calls) and model-specific prompt optimizations. EPAM likely does some of this internally, but from the outside it can read as "shell scripts + prompts" unless structured contracts and typed artifacts are clearly showcased. Structured outputs also reduce parse failures and hallucinated field names.
+
+### Approach
+Add an optional `outputSchema` field to story specs. When present, `claude.sh` appends the schema as a JSON block to the agent system prompt and requests structured output. Pair with a `StoryArtifact` TypeScript type that captures the structured output (files written, tests run, AC results). Emit `StoryArtifact` to `logs/story-artifacts.jsonl` per story. Add a showcase section to README/docs.
+
+### Acceptance criteria
+- Story spec accepts optional `outputSchema` (JSON Schema object)
+- When set, agent system prompt includes the schema and a structured-output instruction
+- Agent response is parsed against the schema; parse failures are logged with the raw response for debugging
+- `logs/story-artifacts.jsonl` is emitted per story regardless of `outputSchema` (schema-less stories emit a minimal artifact)
+- README documents structured output usage with an example
+
+---
+
+## GAP-P18 — Polish + onboarding
+
+**Status:** pending  
+**Priority:** 16  
+**Effort:** low-medium  
+**Source:** All competitors
+
+### Problem
+Contest scoring and enterprise evaluations reward quick start, minimal dependencies, and a "one command demo." EPAM has many moving parts (dashboards, scripts, PRD files, Jira hooks, Redis, Langfuse) that can look heavy without a crisp happy path. A new user hitting the README today faces too many decisions before seeing value.
+
+### Approach
+Add a `epam demo` command and a `demo/hello-world-prd.json` that: (1) scaffolds a minimal single-story PRD in-memory, (2) runs it against a local mock provider (no API key required), (3) prints a colored summary showing the agent loop, story completion, and test result. Add a `QUICKSTART.md` with exactly 3 steps (install → set API key → `epam demo`). Mark all advanced features (dashboards, Jira, Redis, Langfuse) as optional in README with a clear "required for demo: none" section at the top.
+
+### Acceptance criteria
+- `epam demo` runs end-to-end with only `EPAM_API_KEY_ANTHROPIC` set — no Redis, Langfuse, or Jira required
+- `QUICKSTART.md` fits on one screen; has exactly 3 numbered steps
+- README has a "Minimum setup" section above the fold listing only the one required env var
+- `epam demo` completes in under 2 minutes on a cold clone
+- All advanced features documented as optional with their required env vars listed in one place
+
+---
+
 ## Deferred
 
 ### GAP-P1 — Docker sandbox execution
-Container isolation for agent Bash execution. High effort, low urgency for current single-operator usage. Re-evaluate at enterprise adoption stage.
+Superseded by GAP-P14 (Sandboxing / security isolation) which re-scopes to rootless podman with an optional flag. Re-evaluate alongside GAP-P14.
 
 ### GAP-P3 — SWE-bench benchmark harness
-Requires GAP-P1 (Docker sandbox) as a prerequisite.
+Full SWE-bench integration requires Docker sandbox (GAP-P14). GAP-P15 (internal benchmark suite) is the prerequisite-free alternative. Revisit after GAP-P14 and GAP-P15 are complete.

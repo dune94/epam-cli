@@ -89,7 +89,7 @@
   </head>
   <body>
     <main>
-      <p class="updated">Updated March 8, 2026</p>
+      <p class="updated">Updated June 2, 2026</p>
       <h1>EPAM CLI Technical Guide</h1>
       <p>
         Comprehensive reference for the EPAM CLI runtime, agent architecture,
@@ -114,22 +114,22 @@
           </tr>
           <tr>
             <td>Agent Core</td>
-            <td>Conversation loop, tools, failover</td>
+            <td>Conversation loop, tools, memory injection, failover</td>
             <td><code>src/agent/AgentRunner.ts</code>, <code>src/providers/ProviderChain.ts</code></td>
           </tr>
           <tr>
             <td>Context & Storage</td>
-            <td>Session JSONL, Redis export/import</td>
-            <td><code>src/context/*.ts</code></td>
+            <td>Session JSONL, Redis export/import, memory loader</td>
+            <td><code>src/context/*.ts</code>, <code>src/memory/</code></td>
           </tr>
           <tr>
             <td>Orchestration</td>
-            <td>PRD-driven phases, multi-agent runs</td>
+            <td>PRD-driven phases, multi-agent runs, behavioral contracts, brownfield ingestion, webhook triggers</td>
             <td><code>orchestrations/scripts/run-agent-orchestration.sh</code></td>
           </tr>
           <tr>
             <td>Dashboards</td>
-            <td>Eleventy builds, BrowserSync, deployment</td>
+            <td>Eleventy builds, BrowserSync, provider/model filters, deployment</td>
             <td><code>orchestrations/dashboards/*</code></td>
           </tr>
         </tbody>
@@ -156,6 +156,12 @@
           <strong>AuthManager</strong> runs device/browser login flows, persists
           secrets in the OS keychain, and backs <code>epam provider *</code> commands.
         </li>
+        <li>
+          <strong>v1 Auth bridge model (DEC-005):</strong> User-managed API keys stored via
+          <code>KeychainKeyStore</code>. Manual entry via <code>epam provider login &lt;provider&gt;</code>
+          or <code>EPAM_API_KEY_*</code> env vars. Browser PKCE for Codemie. No auto-provisioned
+          brokered keys in v1 — deferred to v2+. See <code>.epam/decisions.jsonl</code> DEC-005.
+        </li>
       </ul>
       <h3>2.3 Session Lifecycle</h3>
       <ul>
@@ -179,6 +185,11 @@
       <ol>
         <li><code>chat</code> builds the system prompt (constraints + consultation context).</li>
         <li><code>AgentRunner</code> maintains conversation state and token ceilings.</li>
+        <li><strong>MEMORY.md injection (EPAM-039):</strong> <code>MemoryLoader</code> reads <code>MEMORY.md</code>
+          from the project root, resolves linked memory files via <code>MemoryImportResolver</code>, and
+          injects a summarized block into the system prompt on the first <code>run()</code> call.
+          Memory reloads on <code>/compact</code>. Lazy injection avoids async I/O in the synchronous
+          constructor.</li>
         <li>Tool calls go through <code>ToolRunner</code> (Read/Write/List/Search/Fetch/Bash).</li>
         <li><code>RalphWiggumLoop</code> retries fragile bash steps automatically.</li>
         <li><code>AuditorRunner</code> feeds lint/test findings back into the chat.</li>
@@ -231,6 +242,34 @@
         <code>team-lead-review.sh</code>, <code>update-monitor.sh</code>, and
         <code>provider-cutover.sh</code>.
       </p>
+      <h3>3.6 Behavioral Contracts (GAP-P8 / GAP-P10)</h3>
+      <ul>
+        <li><strong>Static constitution (GAP-P8):</strong> <code>AGENT_CONSTITUTION</code> in <code>claude.sh</code> —
+          four non-negotiable rules (filesystem boundary, AC verification, protected paths, credential safety)
+          injected into every agent invocation.</li>
+        <li><strong>Dynamic augmentation (GAP-P10):</strong> <code>resolve_dynamic_constitution()</code> reads
+          <code>.epam/constitution-rules.json</code> at invocation time and appends rules whose
+          <code>match.skills</code> or <code>match.agentRole</code> overlap the story's metadata.
+          Rules reset per story. Absent file = identical to GAP-P8 behavior.</li>
+      </ul>
+      <h3>3.7 Brownfield Context Ingestion (GAP-P9)</h3>
+      <ul>
+        <li>Activated by <code>brownfield.repoRoot</code> in the PRD. <code>lib/brownfield-context.js</code>
+          runs at CPA time, chunking the target repo via <code>git ls-files</code> and scoring with TF-IDF.</li>
+        <li>Stage 2 reads <code>.epam/brownfield/jira.json</code> and <code>confluence.md</code> from the
+          target repo. When <code>JIRA_URL</code>/<code>JIRA_EMAIL</code>/<code>JIRA_TOKEN</code> are set,
+          fetches live Jira issues; falls back to stubs silently.</li>
+      </ul>
+      <h3>3.8 External Event Triggers (GAP-P2)</h3>
+      <ul>
+        <li><code>control-plane.js</code> exposes <code>POST /webhook/jira</code> (when
+          <code>JIRA_WEBHOOK_SECRET</code> is set). Payloads are HMAC-verified, adapted by
+          <code>lib/jira-adapter.js</code>, and queued by <code>lib/webhook-queue.js</code> with a
+          45-second debounce window. Urgent-labelled events bypass the window.</li>
+        <li><code>jira-writeback.sh</code> posts milestone updates (spec, CPA, story-complete,
+          review-done) back to Jira via <code>lib/jira-client.js</code>. No-ops when
+          <code>JIRA_URL</code> is unset.</li>
+      </ul>
       <h3>3.4 Logging</h3>
       <ul>
         <li><code>logs/agent-status.json</code> — live orchestration state.</li>
@@ -261,7 +300,15 @@
         selective logs into <code>orchestrations/dashboards/live</code>. Only required
         JSON/JSONL files are watched to limit rebuild noise.
       </p>
-      <h3>4.2 Snapshot & Overlay</h3>
+      <h3>4.1.1 Provider &amp; Model Filters</h3>
+      <p>
+        <code>monitor.html</code> and <code>prd-viewer.html</code> expose dropdown filters
+        for provider and model. Selecting a provider auto-populates the model dropdown
+        from <code>PROVIDER_MODELS</code> config. A blank selection clears both filters
+        and re-renders all rows. The filter state is kept in module-level variables so
+        re-renders (triggered by the Eleventy watcher) preserve the selection.
+      </p>
+      <h3>4.2 Snapshot &amp; Overlay</h3>
       <p>
         <code>build/snapshot.js</code> creates <code>build-info.json</code> (hashes, story
         counts, phase summaries). <code>runtime/build-info.js</code> polls that file in
@@ -302,6 +349,9 @@
         <li>Secrets: <code>EPAM_API_KEY_ANTHROPIC</code>, <code>EPAM_API_KEY_OPENAI</code>, etc.</li>
         <li>Orchestration: <code>CLAUDE_CMD</code>, <code>EPAM_ORCHESTRATION_PROVIDER</code>, <code>EPAM_DASH_AUTO_SERVE</code>, <code>EPAM_REDIS_URL</code>.</li>
         <li>Specification: <code>EPAM_SPEC_MODE</code> (default 1) toggles the spec pre-pass.</li>
+        <li>Brownfield: <code>EPAM_BROWNFIELD_ENABLED</code> (default 1), <code>EPAM_BROWNFIELD_MAX_FILES</code>, <code>EPAM_BROWNFIELD_MAX_TOKENS</code>.</li>
+        <li>Webhooks: <code>JIRA_WEBHOOK_SECRET</code>, <code>JIRA_BASE_URL</code>, <code>JIRA_API_TOKEN</code>, <code>JIRA_USER</code>, <code>CONTROL_PLANE_PORT</code> (default 3001).</li>
+        <li>MCP: each server entry in <code>.mcp.json</code> accepts <code>"enabled": false</code> to skip at init time.</li>
       </ul>
 
       <h2>6. Operations</h2>
@@ -341,6 +391,8 @@
         <li><code>epam orchestrate spec &lt;phase&gt;</code> — coordinator → OpenSpec/Speckit pre-pass.</li>
         <li><code>epam provider *</code> — provider auth lifecycle.</li>
         <li><code>epam import &lt;code&gt;</code> — hydrate Redis/shared sessions.</li>
+        <li><code>epam health-check-claude</code> — verify Claude CLI binary is reachable.</li>
+        <li><code>epam health-check-proxy</code> — ping <code>EPAM_BACKEND_URL</code> and report latency.</li>
       </ul>
       <h3>Orchestration</h3>
       <ul>
@@ -348,6 +400,11 @@
         <li><code>orchestrations/scripts/spec-mode-runner.js</code></li>
         <li><code>.../provider-cutover.sh</code>, <code>.../update-monitor.sh</code></li>
         <li><code>scripts/deploy-demo.sh</code> — keep demo env current.</li>
+        <li><code>orchestrations/scripts/lib/brownfield-context.js</code> — git ls-files + TF-IDF context injection.</li>
+        <li><code>orchestrations/scripts/lib/webhook-queue.js</code> — 45 s debounce queue for incoming Jira events.</li>
+        <li><code>orchestrations/scripts/lib/jira-adapter.js</code> — maps Jira webhook payload to story fields.</li>
+        <li><code>orchestrations/scripts/lib/jira-client.js</code> — REST wrapper for Jira Cloud v3 API.</li>
+        <li><code>orchestrations/scripts/jira-writeback.sh</code> — posts story status and comments back to Jira.</li>
       </ul>
       <h3>Dashboards</h3>
       <ul>
@@ -378,6 +435,19 @@
           <p>Add templates in <code>orchestrations/dashboards</code>, import the shared
             runtime overlay, and expose data via Eleventy data files.</p>
         </div>
+        <div class="card">
+          <h3>Add Constitution Rules</h3>
+          <p>Drop entries in <code>.epam/constitution-rules.json</code> with
+            <code>match.skills</code> or <code>match.agentRole</code> predicates.
+            Rules are injected per-story at runtime — no script changes needed.</p>
+        </div>
+        <div class="card">
+          <h3>Extend Brownfield Context</h3>
+          <p>Tune <code>EPAM_BROWNFIELD_MAX_FILES</code> and
+            <code>EPAM_BROWNFIELD_MAX_TOKENS</code>, or swap the TF-IDF ranker in
+            <code>lib/brownfield-context.js</code> for semantic embeddings when
+            <code>EPAM_API_KEY_OPENAI</code> is set.</p>
+        </div>
       </div>
 
       <h2>9. Key Paths</h2>
@@ -397,6 +467,15 @@
         <li>Specification dashboard: <code>orchestrations/dashboards/specification.html</code></li>
         <li>Deployment: <code>scripts/deploy-demo.sh</code></li>
         <li>Operational plan: <code>plans/orchestration-failover-plan.md</code></li>
+        <li>Memory loader: <code>src/memory/MemoryLoader.ts</code>, <code>src/memory/MemoryImportResolver.ts</code></li>
+        <li>Memory index: <code>~/.claude/projects/&lt;slug&gt;/memory/MEMORY.md</code></li>
+        <li>Health checks: <code>src/cli/commands/health-check-claude.ts</code>, <code>health-check-proxy.ts</code></li>
+        <li>Constitution rules: <code>.epam/constitution-rules.json</code></li>
+        <li>Brownfield context: <code>orchestrations/scripts/lib/brownfield-context.js</code></li>
+        <li>Webhook control plane: <code>orchestrations/scripts/lib/control-plane.js</code></li>
+        <li>Jira adapter &amp; client: <code>orchestrations/scripts/lib/jira-adapter.js</code>, <code>jira-client.js</code></li>
+        <li>Auth research: <code>.epam/provider-auth-research.md</code></li>
+        <li>Decision log: <code>.epam/decisions.jsonl</code></li>
       </ul>
     </main>
   </body>

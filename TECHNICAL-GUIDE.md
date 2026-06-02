@@ -1,6 +1,6 @@
 # EPAM CLI Technical Guide
 
-_Last updated: March 8, 2026_
+_Last updated: June 2, 2026_
 
 This document explains the full EPAM CLI platform — the interactive CLI, agent runtime, orchestration system, and supporting dashboards/operations pipelines. Use it as the canonical reference when onboarding engineers, debugging production issues, or extending automation.
 
@@ -11,10 +11,10 @@ This document explains the full EPAM CLI platform — the interactive CLI, agent
 | Layer | Responsibilities | Key Entry Points |
 | --- | --- | --- |
 | CLI Runtime | Command routing, authentication, REPL chat, non-interactive invocations | `src/index.ts`, `src/cli/index.ts`
-| Agent Core | Conversation loop, tool execution, auditing, history compression, provider failover | `src/agent/AgentRunner.ts`, `src/providers/ProviderChain.ts`
-| Context & Storage | Session JSONL store, Redis sharing, consultation context ingestion | `src/context/*.ts`, `.epam/sessions/`, Redis (`EPAM_REDIS_URL`)
-| Orchestration | Multi-agent story planner/executor, worktree management, monitoring | `orchestrations/scripts/run-agent-orchestration.sh`, `orchestrations/prd.json`
-| Dashboards & Ops | Eleventy snapshot builder, BrowserSync watcher, deployment to demo env | `orchestrations/dashboards/*`, `scripts/deploy-demo.sh`
+| Agent Core | Conversation loop, tool execution, memory injection, auditing, history compression, provider failover | `src/agent/AgentRunner.ts`, `src/providers/ProviderChain.ts`
+| Context & Storage | Session JSONL store, Redis sharing, consultation context ingestion, memory loader | `src/context/*.ts`, `src/memory/`, `.epam/sessions/`, Redis (`EPAM_REDIS_URL`)
+| Orchestration | Multi-agent story planner/executor, worktree management, behavioral contracts, brownfield ingestion, webhook triggers | `orchestrations/scripts/run-agent-orchestration.sh`, `orchestrations/prd.json`
+| Dashboards & Ops | Eleventy snapshot builder, BrowserSync watcher, provider/model filters, deployment to demo env | `orchestrations/dashboards/*`, `scripts/deploy-demo.sh`
 
 Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API adapters), `src/cli/repl` (TTY UX), `orchestrations/agents` (profiles, knowledge base), `plans/` (operational plans).
 
@@ -29,6 +29,7 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 ### 2.2 Configuration & Auth Resolution
 - `ConfigResolver` merges CLI flags, `EPAM_*` env variables, project-level `.epam/settings.json`, and global config (`~/.epam/config.json`). Provider/model metadata records the selection source (`flags`, `env`, `project`, or defaults) for auditability.
 - `AuthManager` coordinates device and browser login flows, keychain-backed credential storage, and provider logins (`epam provider <cmd>`). `resolveProviderSecret` fetches API keys lazily so commands can run in dry-run mode without secrets.
+- **v1 Auth bridge model (DEC-005):** User-managed API keys stored in the OS credential manager (`KeychainKeyStore`). Manual entry via `epam provider login <provider>` or `EPAM_API_KEY_*` env vars. Browser PKCE for Codemie. No auto-provisioned brokered keys in v1 — deferred to v2+. See `.epam/decisions.jsonl` DEC-005 and `.epam/provider-auth-research.md` for full rationale.
 
 ### 2.3 Session Lifecycle
 - `SessionStore` writes every REPL turn to `.epam/sessions/<ulid>.jsonl`, enabling `/resume`, `/fork`, and crash recovery. Files double as import/export payloads for `epam import <code>`.
@@ -42,9 +43,10 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 ### 2.5 Agent Execution Pipeline
 1. `chat` command builds the system prompt (project constraints + consultation context) and passes it to `AgentRunner`.
 2. `AgentRunner` maintains the conversation state, streams output, and enforces limits (`maxIterations`, `autoCompressAt`, `maxOutputTokens`).
-3. Tool calls are routed through `ToolRunner`, with built-ins `ReadFile`, `WriteFile`, `ListFiles`, `Search`, `FetchUrl`, and `Bash`. The `RalphWiggumLoop` retries bash commands on transient failures while keeping transcripts.
-4. `AuditorRunner` can run post-turn auditors (lint, tests, etc.) when requested, feeding findings back into the transcript.
-5. Memory compression uses `context/MemoryCompressor` to shrink history once token estimates cross thresholds.
+3. **MEMORY.md injection (EPAM-039):** `MemoryLoader` (`src/memory/MemoryLoader.ts`) reads `MEMORY.md` from the project root on REPL startup, resolves linked memory files via `MemoryImportResolver`, and injects a summarized block into the system prompt on the first `AgentRunner.run()` call. Memory reloads when `/compact` runs. Lazy injection pattern avoids async I/O in the synchronous `AgentRunner` constructor.
+4. Tool calls are routed through `ToolRunner`, with built-ins `ReadFile`, `WriteFile`, `ListFiles`, `Search`, `FetchUrl`, and `Bash`. The `RalphWiggumLoop` retries bash commands on transient failures while keeping transcripts.
+5. `AuditorRunner` can run post-turn auditors (lint, tests, etc.) when requested, feeding findings back into the transcript.
+6. Memory compression uses `context/MemoryCompressor` to shrink history once token estimates cross thresholds.
 
 ### 2.6 Provider Chain & Failover
 - `ProviderChain` instantiates provider slots (Anthropic, OpenAI, Gemini, Copilot, Codex, Cursor, Qwen, Codemie, Proxy) and keeps a `ProviderHealth` ledger. On errors it classifies whether to retry the same slot or advance to the next authenticated slot.
@@ -80,6 +82,23 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 - Wrapper scripts (`claude.sh`, `copilot.sh`, `openai.sh`, `cursor.sh`, etc.) normalize provider CLIs to the same contract expected by `run-agent-orchestration.sh`.
 - Supporting utilities: `contextualize-stories.sh` (phase context packaging), `estimate-stories.sh`, `team-lead-review.sh`, `worktree-health-check.sh`, `update-monitor.sh`, and `provider-cutover.sh` for bulk reassignment.
 
+### 3.6 Behavioral Contracts (GAP-P8 / GAP-P10)
+- **Static constitution (GAP-P8):** `AGENT_CONSTITUTION` in `claude.sh` is a four-rule behavioral contract (filesystem boundary, AC verification, protected paths, credential safety) injected into every agent invocation via `--append-system-prompt` (CLI) and `--system-prompt` (SDK). Rules are non-negotiable and cannot be overridden by story prompts.
+- **Dynamic augmentation (GAP-P10):** `resolve_dynamic_constitution()` reads `.epam/constitution-rules.json` at story invocation time and appends matching rules to the base contract. Each rule entry specifies `match.skills` (array of keywords matched against `technicalNotes.requiredSkills`) and/or `match.agentRole` (exact role match). Rules reset per story — no bleed between invocations. When the file is absent, behavior is identical to GAP-P8. Sample rule sets: auth/credentials, database migrations, QA role, API boundary validation.
+- To add project-specific rules: create or edit `.epam/constitution-rules.json` in `PROJECT_ROOT`. See the sample at `.epam/constitution-rules.json` in this repo.
+
+### 3.7 Brownfield Context Ingestion (GAP-P9)
+- Activated when `brownfield.repoRoot` is set in the PRD. `contextualize-stories.sh` calls `orchestrations/scripts/lib/brownfield-context.js` at CPA time, injecting repo context alongside KB chunks into each story prompt.
+- **Stage 1 — git context:** `brownfield-context.js` runs `git ls-files` on the target repo, chunks source files (25 lines), and scores chunks via TF-IDF against the story query. Source labels: `git:<relpath>`.
+- **Stage 2 — external stubs / live Jira:** Reads `.epam/brownfield/jira.json` (stub Jira issues) and `.epam/brownfield/confluence.md` (architecture notes) from the target repo's `.epam/brownfield/` directory. When `JIRA_URL`, `JIRA_EMAIL`, and `JIRA_TOKEN` are all set, fetches live Jira issues via REST v3 (ADF→plaintext); falls back to stubs silently. Source labels: `stub:jira:<key>`, `jira:<key>`, `stub:confluence`.
+- Greenfield behavior (no `brownfield` key in PRD) is completely unchanged.
+
+### 3.8 External Event Triggers (GAP-P2)
+- `control-plane.js` exposes `POST /webhook/jira` when `JIRA_WEBHOOK_SECRET` is set. Incoming payloads are HMAC-verified (`X-Hub-Signature-256`), adapted by `lib/jira-adapter.js` (Jira webhook → PRD story shape), and queued in `lib/webhook-queue.js`.
+- **Debounced batching:** Events are grouped by `projectKey` with a 45-second window before flushing to a PRD file in `WEBHOOK_PRD_DIR`. Events labelled `urgent` bypass the window and flush immediately. The queue persists to `.epam/webhook-queue.json` across restarts.
+- **Jira writeback (`jira-writeback.sh`):** Called at four pipeline milestones — spec pass (post elaborated ACs as comment), CPA complete (post cost/time estimate), story complete (transition to In Review + post PR link), review done (transition to Done or Reopened). No-ops when `JIRA_URL` is unset.
+- Env vars: `JIRA_URL`, `JIRA_EMAIL`, `JIRA_TOKEN`, `JIRA_WEBHOOK_SECRET`, `WEBHOOK_PRD_DIR`.
+
 ### 3.4 Logging & Persistence
 - `logs/agent-status.json` — real-time state for dashboards + automation (current phase, lane cursors, failovers, warnings).
 - `logs/agent-messages.jsonl` — streaming transcripts for each story.
@@ -100,6 +119,10 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 - `package.json` exposes `npm run dashboards:build|watch|serve`, all pointing to `orchestrations/dashboards/.eleventy.js`.
 - The config copies 11 dashboard HTML templates (including the specification dashboard), runtime assets, PRD data, profiles, and pruned log trees into `orchestrations/dashboards/live/`. Only JSON/JSONL inputs required by the dashboards are watched to avoid noisy rebuilds.
 - `orchestrations/dashboards/build/snapshot.js` digests PRD + logs into normalized metrics (`build-info.json`), including hashes, phase summaries, and recent events.
+
+### 4.1.1 Provider & Model Filters (EPAM-027)
+- `monitor.html` and `prd-viewer.html` now include Provider and Model filter dropdowns. Selecting a provider (Claude, OpenCode, Codex) or model tier (Haiku, Sonnet, Opus) filters the story lane view to matching stories in real time.
+- `sync-monitor-stories.sh` and `update-monitor.sh` emit `aiProvider` and `resolvedModel` fields into `agent-status.json` to power the filters.
 
 ### 4.2 Runtime Overlay & Health Signal
 - `orchestrations/dashboards/runtime/build-info.js` runs in every dashboard, polling `build-info.json`, rendering a global status pill, and firing `window.EPAMBuildInfo` events for page-specific scripts.
@@ -131,6 +154,9 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 - Provider keys: `EPAM_API_KEY_ANTHROPIC`, `EPAM_API_KEY_OPENAI`, `EPAM_API_KEY_GEMINI`, etc.
 - Orchestration/dashboards: `CLAUDE_CMD`, `EPAM_ORCHESTRATION_PROVIDER`, `EPAM_DASH_AUTO_SERVE`, `EPAM_DASH_PORT`, `EPAM_REDIS_URL`.
 - Specification: `EPAM_SPEC_MODE` (default `1`) toggles the spec pre-pass globally; set `EPAM_SPEC_MODE=0` to skip OpenSpec/Speckit when replaying historical runs.
+- Brownfield ingestion: `JIRA_URL`, `JIRA_EMAIL`, `JIRA_TOKEN` — when all three are set, `brownfield-context.js` fetches live Jira issues; absent means stub files used.
+- Webhook triggers: `JIRA_WEBHOOK_SECRET` — enables `POST /webhook/jira` on the control plane; `WEBHOOK_PRD_DIR` — output directory for flushed webhook PRD files.
+- MCP: `enabled` field on each server entry in `.mcp.json` (default `true`) — set `false` to disable a server without removing its config. Default `.mcp.json` ships with example servers disabled.
 
 ---
 
@@ -165,6 +191,8 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 - `epam orchestrate spec <phase>` — coordinator → OpenSpec/Speckit specification pass (also `/orchestrate spec` in the REPL).
 - `epam provider list/login/logout/status` — auth for Anthropic/OpenAI/Gemini/Copilot/Codex/etc.
 - `epam import <code>` — restore Redis/shared sessions into local storage.
+- `epam health-check-claude` — verify Claude CLI binary is reachable and returns a valid response (EPAM-HC-001).
+- `epam health-check-proxy` — verify the EPAM proxy backend (`EPAM_BACKEND_URL`) is reachable and healthy (EPAM-HC-004).
 
 ### Orchestration Scripts
 - `orchestrations/scripts/run-agent-orchestration.sh` — master orchestrator.
@@ -172,6 +200,11 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 - `.../provider-cutover.sh` — enforce backup provider plan.
 - `.../update-monitor.sh` — refresh dashboards + logs.
 - `.../team-lead-review.sh`, `.../code-review-cycle.sh` — specialized review loops.
+- `.../lib/brownfield-context.js` — brownfield repo + stub/live Jira context retrieval for CPA.
+- `.../lib/webhook-queue.js` — debounced Jira webhook event batching.
+- `.../lib/jira-adapter.js` — Jira webhook payload → PRD story shape normalizer.
+- `.../lib/jira-client.js` — Jira REST API client (get issue, add comment, transition, update field).
+- `.../jira-writeback.sh` — posts milestone updates (spec, CPA, story-complete, review-done) back to Jira.
 - `scripts/deploy-demo.sh` — sync build + dashboards to demo workspace.
 
 ### Dashboards Ops
@@ -188,6 +221,8 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 3. **Adding Tools/Auditors** — follow the patterns in `src/tools/builtin` and `src/auditors`, then register them in the agent/tool resolver so both CLI and orchestration can use them.
 4. **Expanding Dashboards** — create a template in `orchestrations/dashboards/`, wire data via Eleventy data files or the shared snapshot, and import `runtime/build-info.js` for consistent status UX.
 5. **Updating Plans** — store operational plans (like failover) under `plans/` so engineers can diff/iterate outside of PRD scripts.
+6. **Adding constitution rules** — add entries to `.epam/constitution-rules.json` with `match.skills` (keyword array) and/or `match.agentRole` (exact string) plus a `rules` array of constraint strings. Rules are injected only for stories whose metadata matches; all others are unaffected.
+7. **Adding brownfield context** — set `brownfield.repoRoot` in the PRD and optionally seed `.epam/brownfield/jira.json` and `.epam/brownfield/confluence.md` in the target repo. Set `JIRA_*` env vars for live ingestion; absent vars fall back to stubs silently.
 
 ---
 
@@ -197,10 +232,18 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 - Command registry: `src/cli/index.ts`
 - REPL runtime: `src/cli/repl/Repl.ts`, `src/cli/repl/RawInputBox.ts`
 - Agent loop: `src/agent/AgentRunner.ts`, `src/agent/Executor.ts`
+- Memory loader: `src/memory/MemoryLoader.ts`, `src/memory/MemoryImportResolver.ts`
+- Health checks: `src/cli/commands/health-check-claude.ts`, `src/cli/commands/health-check-proxy.ts`
 - Providers: `src/providers/ProviderChain.ts`, `src/providers/*`
 - Tools: `src/tools/builtin/*.ts`
 - Session stores: `src/context/SessionStore.ts`, `src/context/RedisSessionStore.ts`
 - Orchestration script: `orchestrations/scripts/run-agent-orchestration.sh`
+- Agent invocation / constitution: `orchestrations/scripts/claude.sh`
+- Constitution rules: `.epam/constitution-rules.json`
+- Brownfield context: `orchestrations/scripts/lib/brownfield-context.js`
+- Webhook queue: `orchestrations/scripts/lib/webhook-queue.js`
+- Jira adapter/client: `orchestrations/scripts/lib/jira-adapter.js`, `orchestrations/scripts/lib/jira-client.js`
+- Jira writeback: `orchestrations/scripts/jira-writeback.sh`
 - Dashboards config: `orchestrations/dashboards/.eleventy.js`
 - Snapshot builder: `orchestrations/dashboards/build/snapshot.js`
 - Runtime overlay: `orchestrations/dashboards/runtime/build-info.js`
@@ -208,6 +251,8 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 - Specification dashboard: `orchestrations/dashboards/specification.html`
 - Deployment script: `scripts/deploy-demo.sh`
 - Operational plan: `plans/orchestration-failover-plan.md`
+- Auth research: `.epam/provider-auth-research.md`
+- Decisions log: `.epam/decisions.jsonl`
 
 ---
 

@@ -108,7 +108,7 @@ run_tests() {
     rm -f "$json_out"
     set +e
     (cd "$workspace" && "$NODE20" ./node_modules/.bin/vitest run \
-        --reporter=json --outputFile="$json_out" 2>/dev/null)
+        --reporter=json --outputFile="$json_out" >/dev/null 2>/dev/null)
     set -e
     echo "$json_out"
 }
@@ -205,32 +205,38 @@ run_task() {
         warn "$task_id: fail_to_pass tests already pass in buggy code — task may be malformed"
     fi
 
-    # Generate a single-story PRD for the agent
+    # Generate a single-story PRD using jq for safe JSON escaping
     local prd_file="$workspace/bench-prd.json"
-    local fail_to_pass_ac
-    fail_to_pass_ac=$(jq -r '.fail_to_pass[]' "$task_json" | sed 's/^/- Fix so test passes: /' | tr '\n' '\n')
-
-    cat > "$prd_file" <<EOF
-{
-  "id": "bench-${task_id}",
-  "project": { "name": "${task_id}", "outputDir": "${workspace}" },
-  "stories": [{
-    "id": "${task_id}",
-    "title": "${title}",
-    "agentRole": "typescript-engineer",
-    "agentGroup": "main",
-    "status": "pending",
-    "completed": false,
-    "description": "${problem_statement} The source file(s) are in ${workspace}/src/. Do not modify the test files.",
-    "acceptanceCriteria": [
-      "All fail_to_pass tests now pass when vitest is run in ${workspace}",
-      "Test files in ${workspace}/src/*.test.ts are not modified",
-      "tsc --noEmit exits 0"
-    ],
-    "technicalNotes": { "workingDir": "${workspace}", "files": ["${workspace}/src/"] }
-  }]
-}
-EOF
+    local full_description="${problem_statement} The source file(s) are in ${workspace}/src/. Do not modify any test files (*.test.ts)."
+    jq -n \
+        --arg bench_id "bench-${task_id}" \
+        --arg task_id  "$task_id" \
+        --arg title    "$title" \
+        --arg desc     "$full_description" \
+        --arg workdir  "$workspace" \
+        '{
+            id: $bench_id,
+            project: { name: $task_id, outputDir: $workdir },
+            stories: [{
+                id: $task_id,
+                title: $title,
+                agentRole: "typescript-engineer",
+                agentGroup: "main",
+                status: "pending",
+                completed: false,
+                effort: "low",
+                description: $desc,
+                acceptanceCriteria: [
+                    ("All fail_to_pass tests now pass when vitest run executes in " + $workdir),
+                    ("Test files in " + $workdir + "/src/*.test.ts must not be modified"),
+                    "tsc --noEmit exits 0 with no type errors"
+                ],
+                technicalNotes: {
+                    workingDir: $workdir,
+                    files: [($workdir + "/src/")]
+                }
+            }]
+        }' > "$prd_file"
 
     # Run agent
     log "  Running agent on $task_id..."

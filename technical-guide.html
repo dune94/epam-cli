@@ -89,7 +89,7 @@
   </head>
   <body>
     <main>
-      <p class="updated">Updated June 2, 2026</p>
+      <p class="updated">Updated June 3, 2026</p>
       <h1>EPAM CLI Technical Guide</h1>
       <p>
         Comprehensive reference for the EPAM CLI runtime, agent architecture,
@@ -270,6 +270,50 @@
           review-done) back to Jira via <code>lib/jira-client.js</code>. No-ops when
           <code>JIRA_URL</code> is unset.</li>
       </ul>
+      <h3>3.9 LLM Topology Routing (GAP-P11)</h3>
+      <ul>
+        <li>Before execution, <code>run-agent-orchestration.sh</code> calls <code>lib/topology-router.js</code>
+          with story metadata. The router makes a single Haiku tool-call returning
+          <code>{topology, reason, source}</code> via Claude's structured output
+          (<code>select_topology</code> tool schema).</li>
+        <li><strong>single</strong> — lone story or tight coupling: collapse to main branch.
+          <strong>parallel</strong> — independent stories: existing worktree lane.
+          <strong>sequential</strong> — shared file scope or dep chain: run in order on main.</li>
+        <li>Falls back to count heuristic on API error or absent key — zero regression.
+          Decision + reason logged to <code>phase-cost.jsonl</code>.</li>
+      </ul>
+      <h3>3.10 Idempotent Execution &amp; Checkpointing (GAP-P13 Phase 1)</h3>
+      <ul>
+        <li>Each run gets a unique <code>ORCH_RUN_ID</code>. After each story completes,
+          <code>checkpoint_complete()</code> appends an idempotency entry to
+          <code>logs/checkpoint-&lt;phase&gt;-&lt;run-id&gt;.jsonl</code>.</li>
+        <li>On crash-restart with the same run ID, <code>checkpoint_already_done()</code> skips
+          already-finished stories — preserving partial progress without re-running clean.</li>
+        <li><code>RESET_STORIES=true</code> calls <code>checkpoint_clear()</code> before resetting PRD
+          flags to ensure a true clean slate.</li>
+      </ul>
+      <h3>3.11 Structured Story Outputs (GAP-P17)</h3>
+      <ul>
+        <li>PRD stories can declare <code>"outputSchema": {...}</code> (JSON Schema). When present,
+          <code>claude.sh</code> appends an output-schema instruction to the system prompt.</li>
+        <li><code>emit_story_artifact()</code> extracts the first JSON object from the agent result
+          and writes a <code>StoryArtifact</code> record to <code>logs/story-artifacts.jsonl</code>
+          for every story (schema-less stories emit <code>structuredOutput: null</code>).</li>
+      </ul>
+      <h3>3.12 Sandbox Isolation (GAP-P14)</h3>
+      <ul>
+        <li><code>run-agent-orchestration.sh --sandbox</code> wraps each agent in a Docker/Podman
+          container built from <code>Dockerfile.sandbox</code>
+          (node:20-slim + Claude CLI, non-root user).</li>
+        <li><code>lib/sandbox-invoke.sh</code> replaces <code>CLAUDE_CMD</code>: mounts only
+          <code>PROJECT_ROOT</code> r/w, sets <code>--security-opt no-new-privileges</code>,
+          <code>--cap-drop ALL</code>, CPU + memory limits (default 2 CPUs / 4 GB).</li>
+        <li>Verified: writes inside <code>PROJECT_ROOT</code> succeed; writes outside
+          (<code>/etc/shadow</code>) are blocked. Image auto-builds on first
+          <code>--sandbox</code> run.</li>
+        <li>Env overrides: <code>EPAM_SANDBOX_IMAGE</code>, <code>EPAM_SANDBOX_CPUS</code>,
+          <code>EPAM_SANDBOX_MEMORY</code>.</li>
+      </ul>
       <h3>3.4 Logging</h3>
       <ul>
         <li><code>logs/agent-status.json</code> — live orchestration state.</li>
@@ -330,12 +374,34 @@
         shared runtime overlay for freshness warnings.
       </p>
 
+      <h3>4.5 Scorecard Dashboard (GAP-P15)</h3>
+      <p>
+        <code>scorecard.html</code> aggregates <code>phase-cost.jsonl</code>,
+        <code>testing-gates.jsonl</code>, and <code>cpa-review.jsonl</code> into a
+        cross-run scorecard — no new instrumentation needed. Metrics: story pass rate,
+        gate pass rate, first-attempt %, avg cost/story, avg time/story, CPA accuracy.
+        Historical runs table with per-story detail for the most recent run.
+      </p>
+      <h3>4.6 SWE-bench Evaluation Dashboard (GAP-P3)</h3>
+      <p>
+        <code>swe-bench.html</code> displays results from the <strong>EPAM TypeScript
+        Benchmark</strong> — 5 curated bug-fix tasks (logic, data structures, async,
+        correctness). Score gauge, KPI strip, task table, run history. Results aggregated
+        by <code>syncBenchResults()</code> in <code>.eleventy.js</code> from
+        <code>benchmarks/results/*.json</code>. First run: <strong>5/5 resolved
+        (100%)</strong> at $0.40, avg 129 s/task.
+        Run: <code>bash scripts/run-swe-bench.sh</code> (add <code>--sandbox</code>
+        for containerized execution).
+      </p>
+
       <h2>5. Deployment & Environments</h2>
       <h3>5.1 Build Targets</h3>
       <ul>
-        <li><code>npm run build</code> — tsup compile to <code>dist/epam.js</code>.</li>
+        <li><code>npm run build</code> — tsup produces <code>dist/epam.js</code> (CLI) and
+          <code>dist/sdk.js</code> + <code>dist/sdk.d.ts</code> (library surface).</li>
         <li><code>npm run dev</code> — run entrypoint via <code>tsx</code>.</li>
         <li>Quality: <code>npm run lint</code>, <code>typecheck</code>, <code>test</code>, <code>dashboards:build</code>.</li>
+        <li>Import as a library: <code>import { AgentRunner, ProviderChain, createTools } from 'epam-cli/sdk'</code>. See <code>TOOL_REGISTRY.md</code> for plugin authoring.</li>
       </ul>
       <h3>5.2 Demo Deployment</h3>
       <ol>
@@ -343,6 +409,16 @@
         <li>Script rebuilds, copies <code>dist</code>, syncs dashboards to <code>epam-cli-demo</code>, and verifies via <code>node dist/epam.js --version</code>.</li>
         <li>Demo workspace mirrors live dashboards for testing orchestration flows.</li>
       </ol>
+      <h3>5.4 Quick-start &amp; Keyless Demo (GAP-P18)</h3>
+      <ul>
+        <li><code>QUICKSTART.md</code> — 3-step live demo (clone → set keys → run travel-app test).</li>
+        <li><code>demo/logs/</code> — canned snapshot of a completed Skyscanner orchestration run.</li>
+        <li><code>scripts/demo-mode.sh on/off</code> — symlinks <code>orchestrations/logs</code> to
+          <code>demo/logs/</code> so all dashboards render without a live run.
+          Restore with <code>demo-mode.sh off</code>.</li>
+        <li>Travel-app PRD includes <code>SKY-001b</code> (API discovery) as a scaffold prerequisite
+          so the client is always implemented against a verified endpoint contract.</li>
+      </ul>
       <h3>5.3 Environment Variables</h3>
       <ul>
         <li>CLI: <code>EPAM_BACKEND_URL</code>, <code>EPAM_PROVIDER</code>, <code>EPAM_MODEL</code>, <code>EPAM_MAX_ITERATIONS</code>, budget envs.</li>
@@ -352,6 +428,10 @@
         <li>Brownfield: <code>EPAM_BROWNFIELD_ENABLED</code> (default 1), <code>EPAM_BROWNFIELD_MAX_FILES</code>, <code>EPAM_BROWNFIELD_MAX_TOKENS</code>.</li>
         <li>Webhooks: <code>JIRA_WEBHOOK_SECRET</code>, <code>JIRA_BASE_URL</code>, <code>JIRA_API_TOKEN</code>, <code>JIRA_USER</code>, <code>CONTROL_PLANE_PORT</code> (default 3001).</li>
         <li>MCP: each server entry in <code>.mcp.json</code> accepts <code>"enabled": false</code> to skip at init time.</li>
+        <li>Sandbox: <code>EPAM_SANDBOX_IMAGE</code> (default <code>epam-cli-sandbox:latest</code>),
+          <code>EPAM_SANDBOX_CPUS</code> (default 2), <code>EPAM_SANDBOX_MEMORY</code> (default 4g).</li>
+        <li>Orchestration durability: <code>ORCH_RUN_ID</code> — override for crash-resume
+          (default: timestamp-based).</li>
       </ul>
 
       <h2>6. Operations</h2>
@@ -400,11 +480,16 @@
         <li><code>orchestrations/scripts/spec-mode-runner.js</code></li>
         <li><code>.../provider-cutover.sh</code>, <code>.../update-monitor.sh</code></li>
         <li><code>scripts/deploy-demo.sh</code> — keep demo env current.</li>
+        <li><code>orchestrations/scripts/lib/topology-router.js</code> — Haiku tool-call topology selector (single/parallel/sequential).</li>
+        <li><code>orchestrations/scripts/lib/sandbox-invoke.sh</code> — Docker CLAUDE_CMD replacement for sandboxed execution.</li>
+        <li><code>orchestrations/scripts/Dockerfile.sandbox</code> — container image (node:20-slim + Claude CLI).</li>
         <li><code>orchestrations/scripts/lib/brownfield-context.js</code> — git ls-files + TF-IDF context injection.</li>
         <li><code>orchestrations/scripts/lib/webhook-queue.js</code> — 45 s debounce queue for incoming Jira events.</li>
         <li><code>orchestrations/scripts/lib/jira-adapter.js</code> — maps Jira webhook payload to story fields.</li>
         <li><code>orchestrations/scripts/lib/jira-client.js</code> — REST wrapper for Jira Cloud v3 API.</li>
         <li><code>orchestrations/scripts/jira-writeback.sh</code> — posts story status and comments back to Jira.</li>
+        <li><code>scripts/run-swe-bench.sh</code> — EPAM TypeScript Benchmark harness (5 tasks, scored resolved/partial/failed).</li>
+        <li><code>scripts/demo-mode.sh</code> — toggle dashboards between live logs and canned demo snapshot.</li>
       </ul>
       <h3>Dashboards</h3>
       <ul>
@@ -426,9 +511,12 @@
             <code>ProviderChain</code>, add orchestration wrappers if needed.</p>
         </div>
         <div class="card">
-          <h3>Add Tools/Auditors</h3>
-          <p>Follow patterns under <code>src/tools/builtin</code> and
-            <code>src/auditors</code>, wire them into the tool resolver.</p>
+          <h3>Add Tools / Plugins</h3>
+          <p>Built-ins: follow patterns under <code>src/tools/builtin</code>.
+            External plugins: implement <code>ToolPlugin</code> (see
+            <code>TOOL_REGISTRY.md</code>), name the package <code>epam-tool-*</code>,
+            and list it in <code>.epam/settings.json</code> <code>tools</code> array.
+            <code>createTools()</code> loads all plugins at startup.</p>
         </div>
         <div class="card">
           <h3>Grow Dashboards</h3>
@@ -448,6 +536,26 @@
             <code>lib/brownfield-context.js</code> for semantic embeddings when
             <code>EPAM_API_KEY_OPENAI</code> is set.</p>
         </div>
+        <div class="card">
+          <h3>Add Structured Outputs</h3>
+          <p>Add <code>"outputSchema": {...}</code> (JSON Schema) to a PRD story.
+            The agent appends a conforming JSON block to its response;
+            <code>emit_story_artifact()</code> captures it in
+            <code>logs/story-artifacts.jsonl</code>.</p>
+        </div>
+        <div class="card">
+          <h3>Add Benchmark Tasks</h3>
+          <p>Create <code>benchmarks/tasks/&lt;id&gt;/</code> with
+            <code>task.json</code> (metadata + <code>fail_to_pass</code> test names),
+            <code>src/*.ts</code> (buggy source), and <code>src/*.test.ts</code>
+            (vitest tests). <code>run-swe-bench.sh</code> picks them up automatically.</p>
+        </div>
+        <div class="card">
+          <h3>Use as SDK</h3>
+          <p><code>import { AgentRunner, ProviderChain, createTools } from 'epam-cli/sdk'</code>.
+            Full stable surface in <code>src/sdk.ts</code>;
+            plugin authoring docs in <code>TOOL_REGISTRY.md</code>.</p>
+        </div>
       </div>
 
       <h2>9. Key Paths</h2>
@@ -457,7 +565,10 @@
         <li>REPL: <code>src/cli/repl/Repl.ts</code>, <code>RawInputBox.ts</code></li>
         <li>Agent loop: <code>src/agent/AgentRunner.ts</code>, <code>Executor.ts</code></li>
         <li>Providers: <code>src/providers/ProviderChain.ts</code>, <code>src/providers/*</code></li>
-        <li>Tools: <code>src/tools/builtin/*.ts</code></li>
+        <li>Tools (built-in): <code>src/tools/builtin/*.ts</code></li>
+        <li>Tool plugin interface: <code>src/tools/plugin.ts</code>, <code>PluginLoader.ts</code>, <code>createTools.ts</code></li>
+        <li>SDK library surface: <code>src/sdk.ts</code></li>
+        <li>Tool registry docs: <code>TOOL_REGISTRY.md</code></li>
         <li>Session stores: <code>src/context/SessionStore.ts</code>, <code>RedisSessionStore.ts</code></li>
         <li>Orchestration: <code>orchestrations/scripts/run-agent-orchestration.sh</code></li>
         <li>Specification runner: <code>orchestrations/scripts/spec-mode-runner.js</code></li>
@@ -476,6 +587,17 @@
         <li>Jira adapter &amp; client: <code>orchestrations/scripts/lib/jira-adapter.js</code>, <code>jira-client.js</code></li>
         <li>Auth research: <code>.epam/provider-auth-research.md</code></li>
         <li>Decision log: <code>.epam/decisions.jsonl</code></li>
+        <li>Topology router: <code>orchestrations/scripts/lib/topology-router.js</code></li>
+        <li>Sandbox wrapper: <code>orchestrations/scripts/lib/sandbox-invoke.sh</code></li>
+        <li>Sandbox image: <code>orchestrations/scripts/Dockerfile.sandbox</code></li>
+        <li>Benchmark harness: <code>scripts/run-swe-bench.sh</code></li>
+        <li>Benchmark tasks: <code>benchmarks/tasks/</code></li>
+        <li>Benchmark results: <code>benchmarks/results/</code></li>
+        <li>SWE-bench dashboard: <code>orchestrations/dashboards/swe-bench.html</code></li>
+        <li>Scorecard dashboard: <code>orchestrations/dashboards/scorecard.html</code></li>
+        <li>Demo log snapshot: <code>demo/logs/</code></li>
+        <li>Demo mode toggle: <code>scripts/demo-mode.sh</code></li>
+        <li>Quick-start guide: <code>QUICKSTART.md</code></li>
       </ul>
     </main>
   </body>

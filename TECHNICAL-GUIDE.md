@@ -1,6 +1,6 @@
 # EPAM CLI Technical Guide
 
-_Last updated: June 2, 2026_
+_Last updated: June 3, 2026_
 
 This document explains the full EPAM CLI platform — the interactive CLI, agent runtime, orchestration system, and supporting dashboards/operations pipelines. Use it as the canonical reference when onboarding engineers, debugging production issues, or extending automation.
 
@@ -10,11 +10,11 @@ This document explains the full EPAM CLI platform — the interactive CLI, agent
 
 | Layer | Responsibilities | Key Entry Points |
 | --- | --- | --- |
-| CLI Runtime | Command routing, authentication, REPL chat, non-interactive invocations | `src/index.ts`, `src/cli/index.ts`
-| Agent Core | Conversation loop, tool execution, memory injection, auditing, history compression, provider failover | `src/agent/AgentRunner.ts`, `src/providers/ProviderChain.ts`
+| CLI Runtime | Command routing, authentication, REPL chat, non-interactive invocations, SDK library surface | `src/index.ts`, `src/cli/index.ts`, `src/sdk.ts`
+| Agent Core | Conversation loop, tool execution, plugin tools, memory injection, auditing, history compression, provider failover | `src/agent/AgentRunner.ts`, `src/providers/ProviderChain.ts`, `src/tools/`
 | Context & Storage | Session JSONL store, Redis sharing, consultation context ingestion, memory loader | `src/context/*.ts`, `src/memory/`, `.epam/sessions/`, Redis (`EPAM_REDIS_URL`)
-| Orchestration | Multi-agent story planner/executor, worktree management, behavioral contracts, brownfield ingestion, webhook triggers | `orchestrations/scripts/run-agent-orchestration.sh`, `orchestrations/prd.json`
-| Dashboards & Ops | Eleventy snapshot builder, BrowserSync watcher, provider/model filters, deployment to demo env | `orchestrations/dashboards/*`, `scripts/deploy-demo.sh`
+| Orchestration | Multi-agent planner/executor, LLM topology routing, idempotent checkpointing, sandbox isolation, behavioral contracts, brownfield ingestion, webhook triggers | `orchestrations/scripts/run-agent-orchestration.sh`, `orchestrations/prd.json`
+| Dashboards & Ops | Eleventy pipeline, provider/model filters, scorecard, SWE-bench results, demo path | `orchestrations/dashboards/*`, `benchmarks/`, `scripts/`
 
 Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API adapters), `src/cli/repl` (TTY UX), `orchestrations/agents` (profiles, knowledge base), `plans/` (operational plans).
 
@@ -78,6 +78,30 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 9. **Monitoring & Cutover** — `update-monitor.sh` refreshes `agent-status.json`; when token ceilings are crossed, `provider-cutover.sh --apply` reassigns remaining stories to backup providers while logging the event for dashboards.
 10. **Reviews & Cleanup** — reviewer/QA agents validate outputs; on exit the script tears down worktrees unless `--skip-cleanup` is provided and stops the dashboards watcher.
 
+### 3.9 LLM Topology Routing (GAP-P11)
+- Before phase execution, `run-agent-orchestration.sh` calls `orchestrations/scripts/lib/topology-router.js` with story metadata (IDs, effort, roles, dependency edges, CPA file-overlap signals).
+- The router makes a single Haiku tool-call using Claude's structured output (`select_topology` tool schema) and returns `{topology: "single"|"parallel"|"sequential", reason: string, source: "llm"|"heuristic"}`.
+- `single` → lone story or tight coupling: collapsed to main branch, no worktree overhead. `parallel` → independent stories: existing worktree lane. `sequential` → shared file scope or dependency chain: stories run in order on main.
+- Falls back to the count heuristic when no API key is set or the call fails — zero regression. Decision + reason logged to `phase-cost.jsonl` for dashboard audit.
+
+### 3.10 Idempotent Execution & Checkpointing (GAP-P13 Phase 1)
+- Each orchestration run gets a unique `ORCH_RUN_ID` (timestamp-based). After each story completes successfully, `checkpoint_complete()` appends an idempotency entry to `logs/checkpoint-<phase>-<run-id>.jsonl`.
+- On crash-restart with the same `ORCH_RUN_ID`, `checkpoint_already_done()` detects already-finished stories and skips them without re-running — preserving partial progress without needing `RESET_STORIES=false`.
+- `RESET_STORIES=true` explicitly calls `checkpoint_clear()` to purge checkpoints before resetting PRD story flags, ensuring a true clean slate.
+- Checkpoint file location: `orchestrations/logs/checkpoint-<phase>-<run-id>.jsonl`.
+
+### 3.11 Structured Story Outputs (GAP-P17)
+- PRD stories can optionally declare `"outputSchema": { ... }` (a JSON Schema object). When present, `claude.sh` appends an `OUTPUT SCHEMA REQUIREMENT` block to the agent system prompt instructing it to conclude with a conforming JSON object.
+- After the story completes, `emit_story_artifact()` extracts the first JSON object/array from the agent's result text and emits a `StoryArtifact` record to `logs/story-artifacts.jsonl`.
+- Every story emits an artifact record regardless — stories without `outputSchema` emit `structuredOutput: null`. Fields: `storyId`, `phase`, `status`, `elapsedMinutes`, `costUsd`, `turns`, `outputSchema`, `structuredOutput`, `timestamp`.
+
+### 3.12 Sandbox Isolation (GAP-P14)
+- `run-agent-orchestration.sh --sandbox` wraps each agent invocation in a Docker/Podman container. The container is built from `orchestrations/scripts/Dockerfile.sandbox` (node:20-slim + Claude CLI + git/jq/curl, non-root user uid 10000, matching host uid at runtime via `--user $(id -u):$(id -g)`).
+- `orchestrations/scripts/lib/sandbox-invoke.sh` is the `CLAUDE_CMD` replacement injected when `--sandbox` is active. It calls `docker run --rm -i` with: only `PROJECT_ROOT` bind-mounted r/w, `--security-opt no-new-privileges`, `--cap-drop ALL`, CPU and memory limits (default: 2 CPUs, 4 GB).
+- The sandbox image is auto-built on first `--sandbox` run if not present. Network access is bridge (required for Anthropic API calls).
+- Verified: writes to `PROJECT_ROOT` succeed; writes outside (e.g. `/etc/shadow`) are blocked by container isolation.
+- Configurable: `EPAM_SANDBOX_IMAGE`, `EPAM_SANDBOX_CPUS`, `EPAM_SANDBOX_MEMORY`.
+
 ### 3.3 Provider Wrappers & Utilities
 - Wrapper scripts (`claude.sh`, `copilot.sh`, `openai.sh`, `cursor.sh`, etc.) normalize provider CLIs to the same contract expected by `run-agent-orchestration.sh`.
 - Supporting utilities: `contextualize-stories.sh` (phase context packaging), `estimate-stories.sh`, `team-lead-review.sh`, `worktree-health-check.sh`, `update-monitor.sh`, and `provider-cutover.sh` for bulk reassignment.
@@ -132,6 +156,18 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 - `run-agent-orchestration.sh` automatically launches the Eleventy watcher, ensuring BrowserSync reloads dashboards whenever PRD/logs change during a phase run.
 - Generated assets (`live/`) are excluded from git via `.gitignore` but deployed to the demo workspace (`scripts/deploy-demo.sh`) for validation.
 
+### 4.5 Scorecard Dashboard (GAP-P15)
+- `scorecard.html` aggregates `phase-cost.jsonl`, `testing-gates.jsonl`, and `cpa-review.jsonl` into a cross-run scorecard — no new instrumentation required, all data was already emitted.
+- Metrics per run: story pass rate (completed/attempted), gate pass rate (QA gate verdicts), first-attempt success rate, avg cost/story, avg time/story, CPA accuracy (actual vs estimated minutes).
+- Historical runs table (one row per phase+date, sortable), plus a story-level detail table for the most recent run with per-story cost/time/turns/CPA variance badges.
+
+### 4.6 SWE-bench Evaluation Dashboard (GAP-P3)
+- `swe-bench.html` displays results from `scripts/run-swe-bench.sh` against the **EPAM TypeScript Benchmark** — 5 curated bug-fix tasks covering logic, data structures, async, and correctness categories.
+- Score gauge shows resolved rate; KPI strip shows resolved/partial/failed counts, total cost, and avg time/task. Run history table supports multi-run comparison.
+- Results are aggregated by `.eleventy.js` `syncBenchResults()` from `benchmarks/results/*.json` into `swe-bench-results.json` on every build.
+- First run: **5/5 resolved (100%)** at $0.40 total, avg 129 s/task, using Haiku.
+- Run the harness: `bash scripts/run-swe-bench.sh` (add `--sandbox` for containerized execution, `--task ID` for single task).
+
 ### 4.4 Specification Dashboard
 - `specification.html` compares the latest spec baseline (`logs/spec-baseline.json`) against the current `prd.json`, highlights acceptance-criteria deltas per story, and surfaces the OpenSpec/Speckit ledger emitted by `logs/spec-phase.jsonl`.
 - The page relies on `logs/spec-summary.json` for coverage metrics and uses the shared runtime overlay to flag stale data; selecting a story shows before/after criteria and any split stories created by the spec pass.
@@ -141,13 +177,19 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 ## 5. Deployment & Environment Management
 
 ### 5.1 Building the CLI
-- `npm run build` (tsup) compiles TypeScript to `dist/epam.js`. `npm run dev` launches the CLI entrypoint via `tsx` for local iteration.
-- Quality scripts: `npm run lint`, `npm run typecheck`, `npm run test`, and `npm run dashboards:build`.
+- `npm run build` (tsup) produces two artifacts: `dist/epam.js` (CLI executable with shebang) and `dist/sdk.js` + `dist/sdk.d.ts` (importable library surface).
+- `npm run dev` launches the CLI via `tsx` for local iteration. Quality scripts: `npm run lint`, `npm run typecheck`, `npm run test`, `npm run dashboards:build`.
+- The SDK surface (`src/sdk.ts`) exports `AgentRunner`, `ProviderChain`, `ToolRegistry`, `createTools`, `ToolPlugin`, `PluginLoader`, and all built-in tools under the `epam-cli/sdk` import path. Package `exports` map routes `./sdk` and `./plugin` to the library build. See `TOOL_REGISTRY.md` for plugin authoring docs.
 
 ### 5.2 Demo Deployment Flow
 1. Run `scripts/deploy-demo.sh`.
 2. Script rebuilds the CLI (`npm run build`), copies `dist/epam.js` + sourcemap into `/home/bjerome/projects/ai/epam-cli-demo/dist`, syncs `orchestrations/dashboards/live`, copies Markdown references, and verifies with `node dist/epam.js --version`.
 3. Demo workspace already contains the Eleventy outputs so orchestrations/tests can run against the mirrored assets immediately.
+
+### 5.4 Quick-start & Keyless Demo (GAP-P18)
+- `QUICKSTART.md` documents the 3-step live demo: clone → set `EPAM_API_KEY_ANTHROPIC` + `RAPIDAPI_KEY` → run `bash orchestrations/scripts/run-travel-app-test.sh`.
+- `demo/logs/` contains a snapshot of a completed Skyscanner orchestration run. `scripts/demo-mode.sh on` symlinks `orchestrations/logs → demo/logs` so all dashboards render a full run without executing anything. Restore with `scripts/demo-mode.sh off`.
+- The travel-app PRD includes `SKY-001b` (API discovery story) as a scaffold-phase prerequisite for `SKY-002`. On a clean rebuild, `SKY-001b` probes the live RapidAPI endpoint and writes `docs/api-contract.md` so `SKY-002` implements the client against verified paths rather than assumed ones.
 
 ### 5.3 Environment Variables & Secrets
 - Core CLI: `EPAM_BACKEND_URL`, `EPAM_PROVIDER`, `EPAM_MODEL`, `EPAM_MAX_ITERATIONS`, `EPAM_BUDGET_WARNING_AT`, `EPAM_BUDGET_HARD_LIMIT_AT`.
@@ -195,17 +237,23 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 - `epam health-check-proxy` — verify the EPAM proxy backend (`EPAM_BACKEND_URL`) is reachable and healthy (EPAM-HC-004).
 
 ### Orchestration Scripts
-- `orchestrations/scripts/run-agent-orchestration.sh` — master orchestrator.
+- `orchestrations/scripts/run-agent-orchestration.sh` — master orchestrator (`--sandbox`, `--allow-network` flags added).
+- `orchestrations/scripts/claude.sh` — story agent invocation wrapper; handles constitutions, schemas, artifacts.
 - `orchestrations/scripts/spec-mode-runner.js` — specification coordinator (baseline snapshot + OpenSpec/Speckit execution).
 - `.../provider-cutover.sh` — enforce backup provider plan.
 - `.../update-monitor.sh` — refresh dashboards + logs.
 - `.../team-lead-review.sh`, `.../code-review-cycle.sh` — specialized review loops.
+- `.../lib/topology-router.js` — Haiku tool-call topology selector (single/parallel/sequential).
+- `.../lib/sandbox-invoke.sh` — Docker CLAUDE_CMD replacement for sandboxed execution.
+- `.../Dockerfile.sandbox` — container image for sandbox (node:20-slim + Claude CLI).
 - `.../lib/brownfield-context.js` — brownfield repo + stub/live Jira context retrieval for CPA.
 - `.../lib/webhook-queue.js` — debounced Jira webhook event batching.
 - `.../lib/jira-adapter.js` — Jira webhook payload → PRD story shape normalizer.
 - `.../lib/jira-client.js` — Jira REST API client (get issue, add comment, transition, update field).
 - `.../jira-writeback.sh` — posts milestone updates (spec, CPA, story-complete, review-done) back to Jira.
 - `scripts/deploy-demo.sh` — sync build + dashboards to demo workspace.
+- `scripts/run-swe-bench.sh` — EPAM TypeScript Benchmark harness (5 tasks, isolated workspace per task, scored resolved/partial/failed).
+- `scripts/demo-mode.sh` — toggle dashboards between live logs and canned demo snapshot.
 
 ### Dashboards Ops
 - `npm run dashboards:build` — one-off build into `orchestrations/dashboards/live`.
@@ -218,11 +266,14 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 
 1. **Adding a Command** — create a `src/cli/commands/<name>.ts`, export a factory that builds a Commander command, and register it in `src/cli/index.ts`.
 2. **Adding a Provider** — implement `LLMProvider` in `src/providers/<provider>/<Provider>.ts`, update `ProviderChain` slot creation, and supply wrapper scripts for orchestration if the provider requires a separate CLI.
-3. **Adding Tools/Auditors** — follow the patterns in `src/tools/builtin` and `src/auditors`, then register them in the agent/tool resolver so both CLI and orchestration can use them.
+3. **Adding Tools / External Plugins** — for built-ins, follow patterns in `src/tools/builtin`. For external plugins, create an npm package implementing `ToolPlugin` (see `TOOL_REGISTRY.md`), name it `epam-tool-*`, and list it in `.epam/settings.json` `tools` array. `createTools()` loads all listed plugins at startup.
 4. **Expanding Dashboards** — create a template in `orchestrations/dashboards/`, wire data via Eleventy data files or the shared snapshot, and import `runtime/build-info.js` for consistent status UX.
 5. **Updating Plans** — store operational plans (like failover) under `plans/` so engineers can diff/iterate outside of PRD scripts.
 6. **Adding constitution rules** — add entries to `.epam/constitution-rules.json` with `match.skills` (keyword array) and/or `match.agentRole` (exact string) plus a `rules` array of constraint strings. Rules are injected only for stories whose metadata matches; all others are unaffected.
 7. **Adding brownfield context** — set `brownfield.repoRoot` in the PRD and optionally seed `.epam/brownfield/jira.json` and `.epam/brownfield/confluence.md` in the target repo. Set `JIRA_*` env vars for live ingestion; absent vars fall back to stubs silently.
+8. **Adding structured outputs to a story** — add `"outputSchema": { ... }` (JSON Schema) to the story in the PRD. The agent will produce a conforming JSON object at the end of its response; the result is captured in `logs/story-artifacts.jsonl`.
+9. **Adding benchmark tasks** — create a directory under `benchmarks/tasks/<id>/` with `task.json` (metadata, `fail_to_pass` test names), `src/*.ts` (buggy source), and `src/*.test.ts` (vitest tests). `run-swe-bench.sh` picks them up automatically.
+10. **Using EPAM CLI as a library** — `import { AgentRunner, ProviderChain, createTools } from 'epam-cli/sdk'` after installing the package. See `src/sdk.ts` for the full stable surface.
 
 ---
 
@@ -235,7 +286,10 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 - Memory loader: `src/memory/MemoryLoader.ts`, `src/memory/MemoryImportResolver.ts`
 - Health checks: `src/cli/commands/health-check-claude.ts`, `src/cli/commands/health-check-proxy.ts`
 - Providers: `src/providers/ProviderChain.ts`, `src/providers/*`
-- Tools: `src/tools/builtin/*.ts`
+- Tools (built-in): `src/tools/builtin/*.ts`
+- Tool plugin interface: `src/tools/plugin.ts`, `src/tools/PluginLoader.ts`, `src/tools/createTools.ts`
+- Tool registry docs: `TOOL_REGISTRY.md`
+- SDK library surface: `src/sdk.ts`
 - Session stores: `src/context/SessionStore.ts`, `src/context/RedisSessionStore.ts`
 - Orchestration script: `orchestrations/scripts/run-agent-orchestration.sh`
 - Agent invocation / constitution: `orchestrations/scripts/claude.sh`
@@ -253,6 +307,17 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 - Operational plan: `plans/orchestration-failover-plan.md`
 - Auth research: `.epam/provider-auth-research.md`
 - Decisions log: `.epam/decisions.jsonl`
+- Topology router: `orchestrations/scripts/lib/topology-router.js`
+- Sandbox wrapper: `orchestrations/scripts/lib/sandbox-invoke.sh`
+- Sandbox image: `orchestrations/scripts/Dockerfile.sandbox`
+- Benchmark harness: `scripts/run-swe-bench.sh`
+- Benchmark tasks: `benchmarks/tasks/`
+- Benchmark results: `benchmarks/results/`
+- SWE-bench dashboard: `orchestrations/dashboards/swe-bench.html`
+- Scorecard dashboard: `orchestrations/dashboards/scorecard.html`
+- Demo log snapshot: `demo/logs/`
+- Demo mode toggle: `scripts/demo-mode.sh`
+- Quick-start guide: `QUICKSTART.md`
 
 ---
 

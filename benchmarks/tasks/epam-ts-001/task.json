@@ -1,0 +1,16 @@
+{
+  "id": "epam-ts-001",
+  "title": "Fix discount double-apply bug in calculateTotal",
+  "category": "logic",
+  "difficulty": "easy",
+  "lang": "typescript",
+  "fail_to_pass": [
+    "applies discount exactly once",
+    "coupon reduces price by correct percentage"
+  ],
+  "pass_to_pass": [
+    "returns subtotal when no coupon provided",
+    "returns zero for empty cart"
+  ],
+  "problem_statement": "The calculateTotal function in src/cart.ts is applying the discount twice when a coupon code is provided. A 10% coupon should reduce a $100 cart to $90, but the current implementation reduces it to $81. Fix the bug so the discount is applied exactly once."
+}

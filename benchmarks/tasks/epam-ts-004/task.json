@@ -1,0 +1,16 @@
+{
+  "id": "epam-ts-004",
+  "title": "Fix object cache key collision — toString() produces identical keys",
+  "category": "correctness",
+  "difficulty": "medium",
+  "lang": "typescript",
+  "fail_to_pass": [
+    "distinct objects get distinct cache entries",
+    "cache hit returns previously stored value"
+  ],
+  "pass_to_pass": [
+    "cache miss returns undefined",
+    "primitive keys are stored correctly"
+  ],
+  "problem_statement": "The memoize function in src/cache.ts generates cache keys using String(arg), which collapses all plain objects to '[object Object]'. This causes cache collisions — different arguments overwrite each other's cached results. Fix the key generation so distinct arguments produce distinct keys."
+}

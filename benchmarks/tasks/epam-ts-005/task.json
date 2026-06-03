@@ -1,0 +1,16 @@
+{
+  "id": "epam-ts-005",
+  "title": "Fix fetchWithRetry — attempts not reset between independent calls",
+  "category": "async",
+  "difficulty": "medium",
+  "lang": "typescript",
+  "fail_to_pass": [
+    "second call gets full retry budget",
+    "resets attempt count for each invocation"
+  ],
+  "pass_to_pass": [
+    "succeeds on first attempt without retrying",
+    "throws after exhausting all retries"
+  ],
+  "problem_statement": "The fetchWithRetry function in src/retry.ts uses a module-level attempts counter that is never reset. After one failed call exhausts the retry budget, subsequent calls immediately throw without making any attempts. Fix it so each call to fetchWithRetry gets its own independent attempt counter."
+}

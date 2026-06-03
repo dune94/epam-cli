@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EPAM CLI — SWE-bench Results</title>
+<style>
+:root {
+  --bg: #fbfafa;  --surface: #ffffff;  --surface2: #f4f4f4;  --surface3: #eaeaea;
+  --border: #e0e0e0;
+  --text: #060606;  --text2: #4a4a4a;  --text3: #717171;
+  --teal: #0047ff;  --teal-dim: rgba(0,71,255,0.08);
+  --violet: #8453d2;  --violet-dim: rgba(132,83,210,0.10);
+  --green: #1a8f3f;  --green-dim: rgba(26,143,63,0.10);
+  --amber: #c87a00;  --amber-dim: rgba(200,122,0,0.10);
+  --red: #d93025;    --red-dim: rgba(217,48,37,0.08);
+  --epam-gradient: linear-gradient(118.82deg, #0078c2 .5%, #0047ff 47.33%, #8453d2 76.12%);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+.header {
+  background: var(--epam-gradient); padding: 14px 28px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08); flex-wrap: wrap; gap: 8px;
+}
+.header-left { display: flex; align-items: center; gap: 13px; }
+.header-icon { width: 36px; height: 36px; background: rgba(255,255,255,0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.header-title { font-size: 18px; font-weight: 800; color: #fff; letter-spacing: -0.3px; }
+.header-sub { color: rgba(255,255,255,0.7); font-size: 11px; margin-top: 2px; }
+.header-right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.refresh-meta { text-align: right; color: rgba(255,255,255,0.7); font-size: 11px; line-height: 1.8; }
+.nav-links { font-size: 11px; display: flex; gap: 10px; flex-wrap: wrap; }
+.nav-links a { color: #fff; text-decoration: none; opacity: 0.7; transition: opacity .15s; }
+.nav-links a:hover { opacity: 1; }
+.nav-links a.active { opacity: 1; font-weight: 700; border-bottom: 2px solid #fff; padding-bottom: 2px; }
+.container { max-width: 1400px; margin: 0 auto; padding: 24px 28px; }
+.section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text3); margin-bottom: 10px; margin-top: 28px; }
+.section-label:first-child { margin-top: 0; }
+
+/* KPI strip */
+.kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+.kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; }
+.kpi-val { font-size: 36px; font-weight: 900; letter-spacing: -1.5px; line-height: 1; background: var(--epam-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.kpi-val.green { background: linear-gradient(90deg,#22c55e,var(--green)); -webkit-background-clip: text; background-clip: text; }
+.kpi-val.amber { background: linear-gradient(90deg,#d97706,var(--amber)); -webkit-background-clip: text; background-clip: text; }
+.kpi-val.red   { background: linear-gradient(90deg,#ef4444,var(--red));   -webkit-background-clip: text; background-clip: text; }
+.kpi-lbl { font-size: 11px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 4px; }
+.kpi-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+/* Score gauge */
+.gauge-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; display: flex; align-items: center; gap: 32px; }
+.gauge-circle { position: relative; width: 120px; height: 120px; flex-shrink: 0; }
+.gauge-circle svg { transform: rotate(-90deg); }
+.gauge-circle .pct-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 900; color: var(--green); }
+.gauge-info { flex: 1; }
+.gauge-title { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.gauge-sub { font-size: 13px; color: var(--text3); line-height: 1.6; }
+.gauge-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; background: var(--green-dim); color: var(--green); margin-top: 8px; }
+
+/* Tables */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { padding: 9px 12px; text-align: left; color: var(--text3); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tbody tr:hover td { background: rgba(0,71,255,0.03); }
+.badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.badge-resolved { background: var(--green-dim); color: var(--green); }
+.badge-partial  { background: var(--amber-dim); color: var(--amber); }
+.badge-failed   { background: var(--red-dim);   color: var(--red); }
+.badge-easy     { background: var(--teal-dim);   color: var(--teal); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.badge-medium   { background: var(--amber-dim);  color: var(--amber); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.badge-hard     { background: var(--red-dim);    color: var(--red); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+
+.run-selector { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.run-selector label { font-size: 11px; color: var(--text3); font-weight: 600; }
+.run-selector select { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 4px 10px; border-radius: 6px; font-size: 12px; }
+
+.empty-state { text-align: center; padding: 60px 24px; color: var(--text3); }
+.empty-state .icon { font-size: 36px; margin-bottom: 12px; opacity: 0.4; }
+.empty-state h3 { font-size: 16px; color: var(--text2); margin-bottom: 8px; }
+.empty-state p { font-size: 13px; line-height: 1.7; }
+.empty-state code { background: var(--surface3); padding: 2px 8px; border-radius: 4px; font-size: 12px; color: var(--teal); }
+
+.refresh-footer { text-align: center; font-size: 11px; color: var(--text3); margin-top: 32px; padding-bottom: 16px; }
+
+@media (max-width: 900px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <div class="header-icon">&#x1F9EA;</div>
+    <div>
+      <div class="header-title">EPAM CLI — SWE-bench Evaluation</div>
+      <div class="header-sub">EPAM TypeScript Benchmark &middot; Resolved rate &middot; Cost &amp; time per task</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="refresh-meta"><div id="last-refresh">Loading…</div></div>
+    <nav class="nav-links">
+      <a href="monitor.html">Monitor</a>
+      <a href="prd-viewer.html">PRD Viewer</a>
+      <a href="specification.html">Spec Diff</a>
+      <a href="orchestration-plan.html">Plan</a>
+      <a href="agents-orchestration.html">Orchestration</a>
+      <a href="pipeline-stages.html">Stages</a>
+      <a href="agent-profiles.html">Profiles</a>
+      <a href="agent-messages.html">Messages</a>
+      <a href="phase-cost-monitor.html">Costs</a>
+      <a href="quality-assurance.html">QA Gates</a>
+      <a href="agent-activity.html">Activity</a>
+      <a href="cpa-details.html">Estimation</a>
+      <a href="scorecard.html">Scorecard</a>
+      <a href="swe-bench.html" class="active">SWE-bench</a>
+      <a href="epam-cli-guide.html">CLI Guide</a>
+    </nav>
+  </div>
+</header>
+
+<div class="container">
+
+  <div id="no-results" style="display:none;">
+    <div class="empty-state">
+      <div class="icon">&#x1F9EA;</div>
+      <h3>No benchmark runs yet</h3>
+      <p>Run the harness to generate results:</p>
+      <p style="margin-top:12px;"><code>bash scripts/run-swe-bench.sh</code></p>
+    </div>
+  </div>
+
+  <div id="results-view" style="display:none;">
+
+    <!-- Run selector -->
+    <div class="run-selector">
+      <label>Run:</label>
+      <select id="run-select" onchange="selectRun(this.value)"></select>
+    </div>
+
+    <!-- Score gauge -->
+    <div class="section-label">Resolved Rate</div>
+    <div class="gauge-wrap">
+      <div class="gauge-circle">
+        <svg width="120" height="120" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="#e0e0e0" stroke-width="12"/>
+          <circle cx="60" cy="60" r="50" fill="none" stroke="#1a8f3f" stroke-width="12"
+            stroke-dasharray="314" id="gauge-arc" stroke-dashoffset="314"
+            stroke-linecap="round" style="transition:stroke-dashoffset .8s ease"/>
+        </svg>
+        <div class="pct-text" id="gauge-pct">0%</div>
+      </div>
+      <div class="gauge-info">
+        <div class="gauge-title" id="gauge-title">EPAM TypeScript Benchmark</div>
+        <div class="gauge-sub" id="gauge-sub">—</div>
+        <div class="gauge-badge" id="gauge-badge">—</div>
+      </div>
+    </div>
+
+    <!-- KPI strip -->
+    <div class="section-label" style="margin-top:24px;">Run Metrics</div>
+    <div class="kpi-strip">
+      <div class="kpi-card"><div class="kpi-val green" id="kpi-resolved">—</div><div class="kpi-lbl">Resolved</div><div class="kpi-sub">tasks fully passing</div></div>
+      <div class="kpi-card"><div class="kpi-val amber" id="kpi-partial">—</div><div class="kpi-lbl">Partial</div><div class="kpi-sub">some tests pass</div></div>
+      <div class="kpi-card"><div class="kpi-val red" id="kpi-failed">—</div><div class="kpi-lbl">Failed</div><div class="kpi-sub">no tests fixed</div></div>
+      <div class="kpi-card"><div class="kpi-val" id="kpi-cost">—</div><div class="kpi-lbl">Total Cost</div><div class="kpi-sub">USD this run</div></div>
+      <div class="kpi-card"><div class="kpi-val" id="kpi-time">—</div><div class="kpi-lbl">Avg Time</div><div class="kpi-sub">seconds per task</div></div>
+    </div>
+
+    <!-- Task table -->
+    <div class="section-label" style="margin-top:28px;">Task Results</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Task ID</th>
+            <th>Title</th>
+            <th>Outcome</th>
+            <th>Cost ($)</th>
+            <th>Time (s)</th>
+          </tr>
+        </thead>
+        <tbody id="task-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- History table -->
+    <div class="section-label" style="margin-top:28px;">Run History</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Run ID</th>
+            <th>Date</th>
+            <th>Tasks</th>
+            <th>Resolved %</th>
+            <th>Resolved</th>
+            <th>Partial</th>
+            <th>Failed</th>
+            <th>Total Cost</th>
+          </tr>
+        </thead>
+        <tbody id="history-tbody"></tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <div class="refresh-footer">EPAM CLI SWE-bench Dashboard &middot; Results from <code>benchmarks/results/</code></div>
+</div>
+
+<script>
+let allRuns = [];
+let currentRun = null;
+
+async function loadResults() {
+  try {
+    const r = await fetch('swe-bench-results.json?_t=' + Date.now());
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+
+function outcomeBadge(o) {
+  if (o === 'resolved') return '<span class="badge badge-resolved">RESOLVED</span>';
+  if (o === 'partial')  return '<span class="badge badge-partial">PARTIAL</span>';
+  return '<span class="badge badge-failed">FAILED</span>';
+}
+
+function pctColour(pct) {
+  if (pct >= 80) return 'green';
+  if (pct >= 50) return 'amber';
+  return 'red';
+}
+
+function renderRun(run) {
+  if (!run) return;
+  currentRun = run;
+  const s = run.summary;
+  const pct = s.resolved_pct || 0;
+
+  // Gauge
+  const circumference = 314;
+  const offset = circumference - (pct / 100) * circumference;
+  document.getElementById('gauge-arc').style.strokeDashoffset = offset;
+  document.getElementById('gauge-pct').textContent = pct.toFixed(0) + '%';
+  document.getElementById('gauge-title').textContent = 'EPAM TypeScript Benchmark — Run ' + run.run_id;
+  document.getElementById('gauge-sub').textContent =
+    `${s.resolved} resolved · ${s.partial} partial · ${s.failed} failed out of ${s.total} tasks`;
+  document.getElementById('gauge-badge').textContent = `${pct.toFixed(1)}% Resolved Rate`;
+
+  // KPIs
+  document.getElementById('kpi-resolved').textContent = s.resolved;
+  document.getElementById('kpi-resolved').className = 'kpi-val ' + pctColour(pct);
+  document.getElementById('kpi-partial').textContent = s.partial;
+  document.getElementById('kpi-failed').textContent = s.failed;
+  document.getElementById('kpi-cost').textContent = '$' + (s.total_cost_usd || 0).toFixed(4);
+  document.getElementById('kpi-time').textContent = ((s.avg_time_seconds || 0)).toFixed(0) + 's';
+
+  // Task table
+  const tbody = document.getElementById('task-tbody');
+  tbody.innerHTML = (run.tasks || []).map(t => `<tr>
+    <td><code style="font-size:12px;">${t.task_id}</code></td>
+    <td>${t.title}</td>
+    <td>${outcomeBadge(t.outcome)}</td>
+    <td>${t.cost_usd ? '$' + Number(t.cost_usd).toFixed(4) : '—'}</td>
+    <td>${t.elapsed_seconds || '—'}s</td>
+  </tr>`).join('');
+}
+
+function renderHistory(runs) {
+  const tbody = document.getElementById('history-tbody');
+  tbody.innerHTML = runs.map(r => {
+    const s = r.summary;
+    const pct = s.resolved_pct || 0;
+    const colour = pctColour(pct);
+    return `<tr>
+      <td><code style="font-size:11px;">${r.run_id}</code></td>
+      <td>${new Date(r.timestamp).toLocaleString()}</td>
+      <td>${s.total}</td>
+      <td><span class="kpi-val ${colour}" style="font-size:18px;">${pct.toFixed(1)}%</span></td>
+      <td>${s.resolved}</td>
+      <td>${s.partial}</td>
+      <td>${s.failed}</td>
+      <td>$${(s.total_cost_usd || 0).toFixed(4)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function selectRun(runId) {
+  const run = allRuns.find(r => r.run_id === runId);
+  if (run) renderRun(run);
+}
+
+async function refresh() {
+  const data = await loadResults();
+  document.getElementById('last-refresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+  if (!data || !data.runs || data.runs.length === 0) {
+    document.getElementById('no-results').style.display = '';
+    document.getElementById('results-view').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('no-results').style.display = 'none';
+  document.getElementById('results-view').style.display = '';
+
+  allRuns = data.runs.slice().sort((a, b) => b.run_id.localeCompare(a.run_id));
+
+  // Populate run selector
+  const sel = document.getElementById('run-select');
+  const prevVal = sel.value;
+  sel.innerHTML = allRuns.map(r =>
+    `<option value="${r.run_id}">${r.run_id} (${r.summary.resolved_pct.toFixed(1)}% resolved)</option>`
+  ).join('');
+  if (prevVal && allRuns.find(r => r.run_id === prevVal)) sel.value = prevVal;
+
+  renderRun(allRuns[0]);
+  renderHistory(allRuns);
+}
+
+refresh();
+setInterval(refresh, 15000);
+</script>
+</body>
+</html>

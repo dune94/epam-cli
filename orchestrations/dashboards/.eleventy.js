@@ -7,6 +7,8 @@ const OUTPUT_DIR = path.join(ABS_DASHBOARD_DIR, 'live');
 const ABS_PROJECT_ROOT = path.resolve(ABS_DASHBOARD_DIR, '..', '..');
 const ABS_LOG_SOURCE = path.resolve(ABS_DASHBOARD_DIR, '..', 'logs');
 const ABS_LOG_DEST = path.join(ABS_DASHBOARD_DIR, 'live', 'logs');
+const ABS_BENCH_RESULTS = path.resolve(ABS_PROJECT_ROOT, 'benchmarks', 'results');
+const ABS_BENCH_DEST = path.join(ABS_DASHBOARD_DIR, 'live', 'swe-bench-results.json');
 
 const DASHBOARD_FILES = [
   'agent-messages.html',
@@ -22,6 +24,7 @@ const DASHBOARD_FILES = [
   'quality-assurance.html',
   'quality-dashboard.html',
   'scorecard.html',
+  'swe-bench.html',
   'specification.html',
   'agent-activity.html'
 ];
@@ -102,6 +105,21 @@ function syncLogArtifacts() {
   pruneLogTree(ABS_LOG_SOURCE, ABS_LOG_DEST);
 }
 
+function syncBenchResults() {
+  if (!fs.existsSync(ABS_BENCH_RESULTS)) return;
+  const files = fs.readdirSync(ABS_BENCH_RESULTS)
+    .filter(f => f.endsWith('.json'))
+    .sort()
+    .reverse();
+  if (!files.length) return;
+  const runs = files.map(f => {
+    try { return JSON.parse(fs.readFileSync(path.join(ABS_BENCH_RESULTS, f), 'utf8')); }
+    catch { return null; }
+  }).filter(Boolean);
+  fs.mkdirSync(path.dirname(ABS_BENCH_DEST), { recursive: true });
+  fs.writeFileSync(ABS_BENCH_DEST, JSON.stringify({ runs }, null, 2));
+}
+
 function sanitizeOutputDashboardPaths() {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
   for (const file of DASHBOARD_FILES) {
@@ -141,9 +159,11 @@ module.exports = function (eleventyConfig) {
 
   sanitizeOutputDashboardPaths();
   syncLogArtifacts();
+  syncBenchResults();
   eleventyConfig.on('eleventy.before', () => {
     sanitizeOutputDashboardPaths();
     syncLogArtifacts();
+    syncBenchResults();
   });
   eleventyConfig.on('watchChange', (changedPath) => {
     if (!changedPath) return;

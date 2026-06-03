@@ -1,0 +1,16 @@
+{
+  "id": "epam-ts-003",
+  "title": "Fix Queue.drain returns items in LIFO order instead of FIFO",
+  "category": "data-structures",
+  "difficulty": "easy",
+  "lang": "typescript",
+  "fail_to_pass": [
+    "drain returns items in FIFO order",
+    "drain empties the queue"
+  ],
+  "pass_to_pass": [
+    "enqueue adds items to the queue",
+    "size returns correct count"
+  ],
+  "problem_statement": "The Queue class in src/queue.ts implements drain() using array.pop(), which removes from the end (LIFO). Fix it so drain() returns items in the order they were enqueued (FIFO), consistent with standard queue semantics."
+}

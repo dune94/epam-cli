@@ -1,0 +1,16 @@
+{
+  "id": "epam-ts-002",
+  "title": "Fix off-by-one in parseRange — end value excluded",
+  "category": "logic",
+  "difficulty": "easy",
+  "lang": "typescript",
+  "fail_to_pass": [
+    "includes end value in range",
+    "single value range returns one element"
+  ],
+  "pass_to_pass": [
+    "returns empty array for invalid range",
+    "ascending range is correctly ordered"
+  ],
+  "problem_statement": "The parseRange function in src/range.ts uses a strict less-than operator (<) in the loop condition, so the end value is never included in the result. Fix it so parseRange(1, 5) returns [1, 2, 3, 4, 5] instead of [1, 2, 3, 4]."
+}

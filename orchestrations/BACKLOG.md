@@ -32,7 +32,7 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | 15 | GAP-P13 | Durable, distributed orchestration semantics | pending | Temporal, Prefect |
 | 16 | GAP-P12 | Library/framework ecosystem & composability | pending | LangGraph, AutoGen, CrewAI |
 | 17 | GAP-P1 | Docker sandbox execution | deferred | OpenHands, SWE-agent |
-| 18 | GAP-P3 | SWE-bench benchmark harness | deferred | SWE-agent (needs P1 first) |
+| 18 | GAP-P3 | SWE-bench benchmark harness | done | SWE-agent |
 
 ---
 
@@ -471,4 +471,4 @@ The CLI already exists as a demo vehicle and the travel app PRD (`orchestrations
 Superseded by GAP-P14 (Sandboxing / security isolation) which re-scopes to rootless podman with an optional flag. Re-evaluate alongside GAP-P14.
 
 ### GAP-P3 — SWE-bench benchmark harness
-Full SWE-bench integration requires Docker sandbox (GAP-P14). GAP-P15 (internal benchmark suite) is the prerequisite-free alternative. Revisit after GAP-P14 and GAP-P15 are complete.
+**Status: done** (2026-06-03). 5 bundled TypeScript tasks + harness (`scripts/run-swe-bench.sh`) + `swe-bench.html` dashboard wired into Eleventy. Run: `bash scripts/run-swe-bench.sh`. Results aggregate into `benchmarks/results/` and render in the dashboard. Extend by adding tasks to `benchmarks/tasks/` following the existing format.

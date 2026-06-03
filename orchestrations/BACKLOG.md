@@ -31,8 +31,11 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | 14 | GAP-P17 | Model-specific optimizations + structured outputs | done | LangGraph, AutoGen |
 | 15 | GAP-P13 | Durable, distributed orchestration semantics | done | Temporal, Prefect |
 | 16 | GAP-P12 | Library/framework ecosystem & composability | done | LangGraph, AutoGen, CrewAI |
-| 17 | GAP-P1 | Docker sandbox execution | deferred | OpenHands, SWE-agent |
-| 18 | GAP-P3 | SWE-bench benchmark harness | done | SWE-agent |
+| 17 | GAP-P19 | Secrets redaction in logs and artifacts | pending | Enterprise security |
+| 18 | GAP-P20 | Deterministic replay and version pinning | pending | Temporal, Dagster |
+| 19 | GAP-P21 | Multi-repo / monorepo and enterprise GitOps | pending | Enterprise GitOps |
+| 20 | GAP-P1 | Docker sandbox execution | deferred | OpenHands, SWE-agent |
+| 21 | GAP-P3 | SWE-bench benchmark harness | done | SWE-agent |
 
 ---
 
@@ -462,6 +465,78 @@ The CLI already exists as a demo vehicle and the travel app PRD (`orchestrations
 - `scripts/demo-mode.sh` points dashboards at `demo/logs/` — dashboards render fully without a live run
 - `QUICKSTART.md` exists with exactly 3 numbered steps
 - README minimum-setup section lists only `RAPIDAPI_KEY` as required for the live demo path
+
+---
+
+---
+
+## GAP-P19 — Secrets redaction in logs and artifacts
+
+**Status:** pending  
+**Priority:** 17  
+**Effort:** medium (2 stories — scrubber library + wiring into all JSONL emitters)  
+**Source:** Enterprise security requirements, contest judging
+
+### Problem
+JSONL log files (`agent-messages.jsonl`, `phase-cost.jsonl`, `story-artifacts.jsonl`, `agent-activity.jsonl`) are written by agents and orchestration scripts without any scrubbing layer. If an agent echoes an env var, API key, or credential in its output (e.g. in a bash command result or reasoning trace), it lands in the log file unredacted. The behavioral constitution forbids this, but that's a prompt-level control — not a hard guarantee. Judges and enterprise buyers will ask whether secrets can leak into dashboards or JSONL artifacts.
+
+### Approach
+Add a `scrub()` pass to every JSONL write path. The scrubber regex-replaces known secret patterns (API key formats, env var names containing KEY/TOKEN/SECRET/PASSWORD/CREDENTIAL) and any value that was set in the process environment at startup. Redacted values are replaced with `[REDACTED]`. Wire into: `append_cost_record()` in `claude.sh`, the agent-messages writer in `run-agent-orchestration.sh`, and `emit_story_artifact()`. Add a `EPAM_LOG_REDACTION=1` env var (default on) with an opt-out for development environments.
+
+### Acceptance criteria
+- `scrub()` function in `orchestrations/scripts/lib/scrub.sh` replaces known secret patterns with `[REDACTED]`
+- All known `EPAM_API_KEY_*`, `ANTHROPIC_API_KEY`, `RAPIDAPI_KEY`, `JIRA_*_TOKEN` values from the environment are redacted before any JSONL write
+- Patterns: 40+ char hex/base64 strings, `sk-ant-*`, `ghp_*`, `Bearer *`, `token:*`
+- `EPAM_LOG_REDACTION=0` disables scrubbing (dev/debug only)
+- Dashboard JSON files (`agent-status.json`) pass through the same scrubber
+- Existing tests pass; new test verifies a known key value does not appear in output JSONL after a story run
+
+---
+
+## GAP-P20 — Deterministic replay and version pinning
+
+**Status:** pending  
+**Priority:** 18  
+**Effort:** medium (2-3 stories)  
+**Source:** Temporal/Dagster-style reproducibility, contest judging
+
+### Problem
+Orchestration runs are not deterministic across time. If a model is updated (e.g. `claude-haiku-4-5-20251001` → newer haiku), the same PRD produces different outputs. Prompt templates in `claude.sh` are not versioned. There is no way to replay a past run from its artifacts and get the same result. Judges expecting reproducibility guarantees will find this gap.
+
+### Approach
+Phase 1 (low effort): add a `runManifest` record to `logs/` at the start of each orchestration run capturing: `orchRunId`, `claudeShHash` (sha256 of claude.sh), model resolved per story, `prdHash` (sha256 of prd.json at run start), tool versions, Node version, and timestamp. This creates an auditable snapshot of "what ran".
+
+Phase 2 (medium effort): add `"model"` and `"toolVersions"` pinning fields to PRD story specs. When set, `claude.sh` asserts the resolved model matches the pinned value and warns (not errors) on mismatch. Add a `--replay <runManifest>` flag to `run-agent-orchestration.sh` that loads the manifest and enforces pinned values from it.
+
+### Acceptance criteria
+- `logs/run-manifest-<ORCH_RUN_ID>.json` is written at orchestration start with model, hash, and version fields
+- PRD story `"model"` field is respected as a hard pin (not just a preference)
+- `--replay <manifest>` flag loads the manifest and enforces all pinned values
+- `npm run test` still passes; manifest write does not block orchestration on error
+
+---
+
+## GAP-P21 — Multi-repo / monorepo and enterprise GitOps
+
+**Status:** pending  
+**Priority:** 19  
+**Effort:** high (3-4 stories)  
+**Source:** Enterprise GitOps adoption, contest judging
+
+### Problem
+Worktree-based parallelism works within a single git repository. Enterprise projects often involve: (a) multi-service changes spanning several repos with coordinated PRs, (b) mono-repo constraints where multiple packages share a root and branch naming is controlled, (c) GitOps release pipelines where story completion must trigger downstream CI/CD steps. EPAM CLI has no model for cross-repo coordination or GitOps integration hooks.
+
+### Approach
+Phase 1 (medium effort): add `"repos"` array to PRD project config. Stories can declare `repo: <alias>` to indicate which repository they modify. `run-agent-orchestration.sh` checks out each repo's worktree independently and merges independently. Phase handoff artifacts record cross-repo commit SHAs.
+
+Phase 2 (high effort): add a `POST /webhook/github` route to `control-plane.js` (mirroring the Jira webhook). On PR merge events, the control plane can trigger downstream phases or writeback to GitHub (PR comments, status checks). Wire `jira-writeback.sh` equivalents for GitHub via the existing `lib/jira-client.js` pattern.
+
+### Acceptance criteria
+- PRD `project.repos` array allows per-story `repo` field routing to different checkouts
+- Worktree creation respects the per-story repo root rather than assuming a single `GIT_WORK_ROOT`
+- Phase handoff artifact records `repoSha` per repo touched
+- `POST /webhook/github` route verified with a synthetic webhook payload (no live GitHub required for unit tests)
+- Existing single-repo behavior unchanged when `project.repos` is absent
 
 ---
 

@@ -80,6 +80,16 @@ fi
 
 EPAM_SANDBOX="${EPAM_SANDBOX:-false}"
 EPAM_SANDBOX_ALLOW_NETWORK="${EPAM_SANDBOX_ALLOW_NETWORK:-false}"
+
+# Timeout policy:
+#   STORY_TIMEOUT_SECS   — override flat timeout (skips effort-based scaling)
+#   EPAM_PAUSE_ON_TIMEOUT — when "true", double-timeout pauses for operator;
+#                           default "false" skips the story and continues
+#                           (appropriate for autonomous/CI runs)
+#   EPAM_MAX_PAUSE_SECS  — even when pausing, auto-resume after this many
+#                           seconds (default 300); prevents indefinite hangs
+EPAM_PAUSE_ON_TIMEOUT="${EPAM_PAUSE_ON_TIMEOUT:-false}"
+EPAM_MAX_PAUSE_SECS="${EPAM_MAX_PAUSE_SECS:-300}"
 mkdir -p "$LOG_DIR"
 DASHBOARD_WATCH_PID_FILE="$LOG_DIR/dashboards-watch.pid"
 DASHBOARD_WATCH_LOG="$LOG_DIR/dashboards-watch.log"
@@ -281,15 +291,37 @@ print(f"{total:.4f}")
     fi
 }
 
-  # Run a single story with timeout + one automatic retry on timeout.
-# On double timeout: writes a PAUSED sentinel so the operator can decide via
-# the dashboard whether to resume (skip the story) or kill the run.
-# Configurable: STORY_TIMEOUT_SECS (default 1800 = 30 min)
+# Run a single story with effort-based timeout + one automatic retry.
+# On double timeout:
+#   EPAM_PAUSE_ON_TIMEOUT=true  → pause and wait for operator (max EPAM_MAX_PAUSE_SECS)
+#   EPAM_PAUSE_ON_TIMEOUT=false → skip the story, log failure, continue (default)
+#
+# Effort-based defaults (overridden by STORY_TIMEOUT_SECS):
+#   low    → 600s  (10 min)
+#   medium → 1200s (20 min)
+#   high   → 2400s (40 min)
+#   *      → 900s  (15 min)
 run_story_with_watchdog() {
     local story_id="$1"
     local log_file="$2"
-    local timeout_secs="${STORY_TIMEOUT_SECS:-1800}"
     local _rc=0
+
+    # Determine timeout: explicit override wins, else scale by effort
+    local timeout_secs
+    if [ -n "${STORY_TIMEOUT_SECS:-}" ]; then
+        timeout_secs="$STORY_TIMEOUT_SECS"
+    else
+        local story_effort
+        story_effort=$(jq -r --arg id "$story_id" \
+            '.stories[] | select(.id == $id) | .effort // "medium"' \
+            "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "medium")
+        case "$story_effort" in
+            low)    timeout_secs=600  ;;
+            medium) timeout_secs=1200 ;;
+            high)   timeout_secs=2400 ;;
+            *)      timeout_secs=900  ;;
+        esac
+    fi
 
     set +e
     timeout "$timeout_secs" "$CLAUDE_SH" "$story_id" 2>&1 | tee "$log_file"
@@ -305,16 +337,28 @@ run_story_with_watchdog() {
     fi
 
     if [ $_rc -eq 124 ]; then
-        error "Watchdog: $story_id timed out twice (${timeout_secs}s × 2) — pausing orchestration"
-        printf '%s' "$(jq -n \
-            --arg reason  "story_timeout" \
-            --arg story   "$story_id" \
-            --arg phase   "$PHASE" \
-            --argjson tsecs "$timeout_secs" \
-            '{reason:$reason,storyId:$story,phase:$phase,timeoutSecs:$tsecs,pausedAt:(now|todate)}'
-        )" > "$LOG_DIR/PAUSED"
-        wait_if_paused
-        # Operator chose to resume — continue past the timed-out story
+        if [ "${EPAM_PAUSE_ON_TIMEOUT:-false}" = "true" ]; then
+            error "Watchdog: $story_id timed out twice — pausing (max ${EPAM_MAX_PAUSE_SECS}s)"
+            printf '%s' "$(jq -n \
+                --arg reason  "story_timeout" \
+                --arg story   "$story_id" \
+                --arg phase   "$PHASE" \
+                --argjson tsecs "$timeout_secs" \
+                '{reason:$reason,storyId:$story,phase:$phase,timeoutSecs:$tsecs,pausedAt:(now|todate)}'
+            )" > "$LOG_DIR/PAUSED"
+            wait_if_paused
+            # Operator resumed — continue past the timed-out story
+        else
+            error "Watchdog: $story_id timed out twice (${timeout_secs}s × 2) — skipping story and continuing"
+            warning "  Set EPAM_PAUSE_ON_TIMEOUT=true to pause for operator intervention instead"
+            # Log the timeout as a failed cost record so dashboards reflect it
+            jq -cn \
+                --arg pid "${CURRENT_PHASE:-unknown}" \
+                --arg sid "$story_id" \
+                --arg s   "timeout" \
+                '{phase_id:$pid, story_id:$sid, status:$s, timestamp:(now|todate)}' \
+                >> "${PHASE_COST_FILE:-$LOG_DIR/phase-cost.jsonl}" 2>/dev/null || true
+        fi
         return 0
     fi
 
@@ -357,12 +401,21 @@ wait_if_paused() {
         return
     fi
     local _waited=0
-    warning "Orchestration PAUSED by operator — waiting for resume signal..."
+    local _max="${EPAM_MAX_PAUSE_SECS:-300}"
+    warning "Orchestration PAUSED — waiting for resume signal (auto-resume in ${_max}s)..."
+    warning "  Resume: POST http://localhost:${CONTROL_PLANE_PORT}/resume"
+    warning "  Abort:  DELETE $LOG_DIR/PAUSED then kill the orchestration process"
     while [ -f "$LOG_DIR/PAUSED" ]; do
         sleep 5
         _waited=$(( _waited + 5 ))
         if (( _waited % 60 == 0 )); then
-            warning "Still paused (${_waited}s elapsed). POST http://localhost:${CONTROL_PLANE_PORT}/resume to continue."
+            warning "Still paused (${_waited}s / ${_max}s max). POST http://localhost:${CONTROL_PLANE_PORT}/resume to continue."
+        fi
+        # Hard ceiling — auto-resume after EPAM_MAX_PAUSE_SECS to prevent indefinite hangs
+        if [ "$_waited" -ge "$_max" ]; then
+            warning "Auto-resuming after ${_max}s pause ceiling — continuing past paused story."
+            rm -f "$LOG_DIR/PAUSED" 2>/dev/null || true
+            break
         fi
     done
     success "Orchestration RESUMED after ${_waited}s pause."
@@ -606,6 +659,11 @@ Options:
   --allow-network     Used with --sandbox: documents intent to allow full network
                       (network is always required for LLM API calls)
   --help              Show this help message
+
+Timeout env vars:
+  STORY_TIMEOUT_SECS      Override flat timeout per story (skips effort-based scaling)
+  EPAM_PAUSE_ON_TIMEOUT   "true" = pause for operator on double timeout (default: false)
+  EPAM_MAX_PAUSE_SECS     Hard ceiling on pause duration (default: 300s); auto-resumes
 
 Sandbox env vars (used with --sandbox):
   EPAM_SANDBOX_IMAGE   Container image  (default: epam-cli-sandbox:latest)

@@ -54,6 +54,9 @@ echo ""
 export RESET_STORIES=true
 export PRD_FILE="$PRD_FILE"
 export OUTPUT_LOGS="$AUTOMATION_DIR/logs/skyscanner"
+# Autonomous test run — never pause indefinitely waiting for operator intervention.
+# A timed-out story is skipped and logged; the run continues.
+export EPAM_PAUSE_ON_TIMEOUT=false
 exec "$SCRIPT_DIR/run-agent-orchestration.sh" \
      --phase "$PHASE" \
      "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}"

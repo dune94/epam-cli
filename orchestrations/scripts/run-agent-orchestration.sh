@@ -89,6 +89,13 @@ CONTROL_PLANE_PORT="${CONTROL_PLANE_PORT:-8094}"
 CONTROL_PLANE_PID=""
 CONTROL_PLANE_LOG="$LOG_DIR/control-plane.log"
 
+# GAP-P13 Phase 1 — Durable orchestration: idempotency key + file checkpoints
+# Each run gets a unique ID. After each story completes, a checkpoint entry is
+# written so a crash-restart can skip already-finished stories without needing
+# RESET_STORIES=false (which would otherwise re-run everything from scratch).
+ORCH_RUN_ID="${ORCH_RUN_ID:-$(date +%Y%m%dT%H%M%SZ)}"
+CHECKPOINT_FILE="${LOG_DIR}/checkpoint-${PHASE:-main}-${ORCH_RUN_ID}.jsonl"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -312,6 +319,35 @@ run_story_with_watchdog() {
     fi
 
     return $_rc
+}
+
+# ── GAP-P13 checkpoint helpers ──────────────────────────────────────────────
+# Write a completed checkpoint entry for a story.
+checkpoint_complete() {
+    local story_id="$1"
+    local idem_key="${ORCH_RUN_ID}:${PHASE:-main}:${story_id}"
+    jq -cn \
+        --arg key   "$idem_key" \
+        --arg sid   "$story_id" \
+        --arg phase "${PHASE:-main}" \
+        --arg runId "$ORCH_RUN_ID" \
+        '{idempotencyKey:$key, storyId:$sid, phase:$phase, runId:$runId,
+          status:"completed", completedAt:(now|todate)}' \
+        >> "$CHECKPOINT_FILE" 2>/dev/null || true
+}
+
+# Returns 0 (true) if the story already has a completed checkpoint in this run.
+# Used to skip stories that finished before a crash/restart.
+checkpoint_already_done() {
+    local story_id="$1"
+    [ ! -f "$CHECKPOINT_FILE" ] && return 1
+    local idem_key="${ORCH_RUN_ID}:${PHASE:-main}:${story_id}"
+    grep -q "\"idempotencyKey\":\"${idem_key}\"" "$CHECKPOINT_FILE" 2>/dev/null
+}
+
+# Clear checkpoints for this phase+run (called when RESET_STORIES=true).
+checkpoint_clear() {
+    rm -f "$CHECKPOINT_FILE" 2>/dev/null || true
 }
 
 # Block until the PAUSED sentinel is removed (operator resumes via dashboard).
@@ -638,6 +674,7 @@ if [ "${RESET_STORIES:-false}" = "true" ]; then
         (.phases[]?.stories[]? | select(.completed == true or .status == "failed")) |= (.completed = false | .status = "pending")' \
         "$PRD_FILE" > "$local_tmp" && mv "$local_tmp" "$PRD_FILE"
     success "Stories reset to pending"
+    checkpoint_clear
     # Clean up review artifacts for review stories being reset so AC pre-existing-file guard doesn't block re-runs
     while IFS= read -r _review_id; do
         [ -z "$_review_id" ] && continue
@@ -1212,11 +1249,16 @@ if [ -n "$main_stories" ]; then
         log "Step 1: Running main-branch stories..."
         while IFS= read -r story; do
             [ -z "$story" ] && continue
+            if checkpoint_already_done "$story"; then
+                info "  Skipping $story — already completed in checkpoint (run: $ORCH_RUN_ID)"
+                continue
+            fi
             check_cost_budget
             wait_if_paused
             apply_redirect_if_any "$story"
             log "  Running: $story"
             run_story_with_watchdog "$story" "$LOG_DIR/main-${story}.log"
+            checkpoint_complete "$story"
         done <<< "$non_review_main"
         success "Main-branch stories complete"
     fi

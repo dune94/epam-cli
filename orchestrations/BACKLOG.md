@@ -27,10 +27,10 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | 10 | GAP-P15 | Cross-run scorecard dashboard | done | SWE-bench, OpenHands |
 | 11 | GAP-P18 | One-command demo (travel app + working API) | done | All competitors |
 | 12 | GAP-P14 | Sandboxing / security isolation for tool execution | done | OpenHands, SWE-agent |
-| 13 | GAP-P16 | First-class plugin/tool marketplace | pending | LangGraph, AutoGen |
-| 14 | GAP-P17 | Model-specific optimizations + structured outputs | pending | LangGraph, AutoGen |
-| 15 | GAP-P13 | Durable, distributed orchestration semantics | pending | Temporal, Prefect |
-| 16 | GAP-P12 | Library/framework ecosystem & composability | pending | LangGraph, AutoGen, CrewAI |
+| 13 | GAP-P16 | First-class plugin/tool marketplace | done | LangGraph, AutoGen |
+| 14 | GAP-P17 | Model-specific optimizations + structured outputs | done | LangGraph, AutoGen |
+| 15 | GAP-P13 | Durable, distributed orchestration semantics | done | Temporal, Prefect |
+| 16 | GAP-P12 | Library/framework ecosystem & composability | done | LangGraph, AutoGen, CrewAI |
 | 17 | GAP-P1 | Docker sandbox execution | deferred | OpenHands, SWE-agent |
 | 18 | GAP-P3 | SWE-bench benchmark harness | done | SWE-agent |
 

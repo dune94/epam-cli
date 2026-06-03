@@ -1,12 +1,7 @@
 import { Command } from 'commander';
 import { resolveConfig } from '../../config/ConfigResolver.js';
 import { AuthManager } from '../../auth/AuthManager.js';
-import { ReadFileTool } from '../../tools/builtin/ReadFile.js';
-import { WriteFileTool } from '../../tools/builtin/WriteFile.js';
-import { BashTool } from '../../tools/builtin/Bash.js';
-import { ListFilesTool } from '../../tools/builtin/ListFiles.js';
-import { SearchTool } from '../../tools/builtin/Search.js';
-import { FetchUrlTool } from '../../tools/builtin/FetchUrl.js';
+import { createTools } from '../../tools/createTools.js';
 import { AgentRunner } from '../../agent/AgentRunner.js';
 import { buildSessionSystemPrompt } from '../../constraints/sessionPrompt.js';
 import { consumeConsultationContext } from '../../context/ContextBuilder.js';
@@ -83,12 +78,7 @@ export function createRunCommand(): Command {
 
       const tools = opts.tools
         ? [
-            new ReadFileTool(),
-            new WriteFileTool(),
-            new BashTool(),
-            new ListFilesTool(),
-            new SearchTool(),
-            new FetchUrlTool(),
+            ...createTools(),
           ]
         : [];
 

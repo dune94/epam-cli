@@ -2,12 +2,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { resolveConfig } from '../../config/ConfigResolver.js';
 import { AuthManager } from '../../auth/AuthManager.js';
-import { ReadFileTool } from '../../tools/builtin/ReadFile.js';
-import { WriteFileTool } from '../../tools/builtin/WriteFile.js';
-import { BashTool } from '../../tools/builtin/Bash.js';
-import { ListFilesTool } from '../../tools/builtin/ListFiles.js';
-import { SearchTool } from '../../tools/builtin/Search.js';
-import { FetchUrlTool } from '../../tools/builtin/FetchUrl.js';
+import { createTools } from '../../tools/createTools.js';
 import { Repl } from '../repl/Repl.js';
 import { PipeWriter } from '../output/PipeWriter.js';
 import { AgentRunner } from '../../agent/AgentRunner.js';
@@ -87,14 +82,7 @@ export function createChatCommand(): Command {
       // Wrap with Langfuse tracing if configured (LANGFUSE_SECRET_KEY + LANGFUSE_PUBLIC_KEY)
       const provider = wrapWithTracing(chain);
 
-      const tools = [
-        new ReadFileTool(),
-        new WriteFileTool(),
-        new BashTool(),
-        new ListFilesTool(),
-        new SearchTool(),
-        new FetchUrlTool(),
-      ];
+      const tools = createTools();
 
       if (!process.stdin.isTTY) {
         // Pipe mode: read stdin and run once

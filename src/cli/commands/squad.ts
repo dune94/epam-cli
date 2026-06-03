@@ -1,12 +1,7 @@
 import { Command } from 'commander';
 import { resolveConfig } from '../../config/ConfigResolver.js';
 import { AuthManager } from '../../auth/AuthManager.js';
-import { ReadFileTool } from '../../tools/builtin/ReadFile.js';
-import { WriteFileTool } from '../../tools/builtin/WriteFile.js';
-import { BashTool } from '../../tools/builtin/Bash.js';
-import { ListFilesTool } from '../../tools/builtin/ListFiles.js';
-import { SearchTool } from '../../tools/builtin/Search.js';
-import { FetchUrlTool } from '../../tools/builtin/FetchUrl.js';
+import { createTools } from '../../tools/createTools.js';
 import { ProviderChain } from '../../providers/ProviderChain.js';
 import { getApiKey as getEnvApiKey } from '../../config/EnvVarOverrides.js';
 import { resolveProviderSecret } from '../../auth/ProviderCredentialStore.js';
@@ -43,14 +38,7 @@ export function createSquadCommand(): Command {
 
       const provider = chain;
 
-      const tools = [
-        new ReadFileTool(),
-        new WriteFileTool(),
-        new BashTool(),
-        new ListFilesTool(),
-        new SearchTool(),
-        new FetchUrlTool(),
-      ];
+      const tools = createTools();
 
       // Progress callback - stream to terminal
       const onProgress = (role: string, message: string) => {

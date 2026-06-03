@@ -935,9 +935,20 @@ implement_story() {
     resolve_planner_settings "$story_id"
     # Resolve dynamic constitution rules for this story (appends to AGENT_CONSTITUTION)
     resolve_dynamic_constitution "$story_id"
-    # Build effective constitution = static base + any matched dynamic rules.
+    # GAP-P17: inject outputSchema instruction when story defines one
+    local schema_block=""
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    local story_output_schema
+    story_output_schema=$(jq -c --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .outputSchema // empty' \
+        "$prd_target" 2>/dev/null || echo "")
+    if [ -n "$story_output_schema" ]; then
+        schema_block=$'\n\nOUTPUT SCHEMA REQUIREMENT:\nYou MUST conclude your response with a JSON object that conforms to the following JSON Schema. Wrap it in a ```json code block.\n```json\n'"$story_output_schema"$'\n```'
+        log "  OutputSchema: structured output required for $story_id"
+    fi
+    # Build effective constitution = static base + dynamic rules + optional schema block.
     # Mirrors CLAUDE_PERMISSIONS: empty in interactive mode (no skip-permissions).
-    local effective_constitution="${AGENT_CONSTITUTION}${DYNAMIC_CONSTITUTION}"
+    local effective_constitution="${AGENT_CONSTITUTION}${DYNAMIC_CONSTITUTION}${schema_block}"
     local effective_permissions=()
     if [ ${#CLAUDE_PERMISSIONS[@]} -gt 0 ]; then
         effective_permissions=(
@@ -1261,6 +1272,59 @@ append_cost_record() {
               effort:$ef, storyType:$stype, resolvedModel:$rm,
               plannerModel:$pm,
               prompt_tokens_measured:$ptm, invokeMode:$im}' >> "$cost_file"
+    ) 200>"$lock_file"
+
+    # GAP-P17: emit StoryArtifact record to story-artifacts.jsonl
+    emit_story_artifact "$story_id" "$status" "$phase_id" "$elapsed_minutes" "$cost_usd" "$task_turns" "$json_result_file"
+}
+
+# GAP-P17 — Emit a StoryArtifact record to logs/story-artifacts.jsonl.
+# When the story has an outputSchema field in the PRD, the agent result text
+# is validated against it and the parsed object is included in the artifact.
+emit_story_artifact() {
+    local story_id=$1 status=$2 phase_id=$3 elapsed_minutes=$4 cost_usd=$5 task_turns=$6 json_result_file=${7:-}
+    local artifact_file="${LOG_DIR}/story-artifacts.jsonl"
+    local lock_file="${artifact_file}.lock"
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+
+    # Read outputSchema if defined for this story
+    local output_schema
+    output_schema=$(jq -c --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .outputSchema // empty' \
+        "$prd_target" 2>/dev/null || echo "")
+
+    # Try to parse structured output from the result file when schema is present
+    local structured_output="null"
+    if [ -n "$output_schema" ] && [ -n "$json_result_file" ] && [ -f "$json_result_file" ]; then
+        local result_text
+        result_text=$(jq -r '.result // ""' "$json_result_file" 2>/dev/null || echo "")
+        # Extract first JSON object/array from result text
+        local extracted
+        extracted=$(echo "$result_text" | node -e "
+const chunks = []; process.stdin.on('data', c => chunks.push(c)); process.stdin.on('end', () => {
+    const text = chunks.join('');
+    const m = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+    if (m) { try { JSON.parse(m[0]); process.stdout.write(m[0]); } catch { process.stdout.write('null'); } }
+    else process.stdout.write('null');
+});" 2>/dev/null || echo "null")
+        [ -n "$extracted" ] && structured_output="$extracted"
+    fi
+
+    (
+        flock -w 5 200 2>/dev/null || true
+        jq -cn \
+            --arg sid "$story_id" \
+            --arg phase "$phase_id" \
+            --arg status "$status" \
+            --argjson elapsed "${elapsed_minutes:-0}" \
+            --argjson cost "${cost_usd:-0}" \
+            --argjson turns "${task_turns:-0}" \
+            --argjson schema "${output_schema:-null}" \
+            --argjson structured "$structured_output" \
+            '{storyId:$sid, phase:$phase, status:$status,
+              elapsedMinutes:$elapsed, costUsd:$cost, turns:$turns,
+              outputSchema:$schema, structuredOutput:$structured,
+              timestamp:(now|todate)}' >> "$artifact_file"
     ) 200>"$lock_file"
 }
 

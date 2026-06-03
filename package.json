@@ -3,6 +3,25 @@
   "version": "0.1.0",
   "description": "Interactive AI coding assistant CLI",
   "main": "dist/epam.js",
+  "types": "dist/sdk.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/epam.js",
+      "types": "./dist/epam.d.ts"
+    },
+    "./sdk": {
+      "require": "./dist/sdk.js",
+      "types": "./dist/sdk.d.ts"
+    },
+    "./plugin": {
+      "require": "./dist/sdk.js",
+      "types": "./dist/sdk.d.ts"
+    }
+  },
+  "files": [
+    "dist/",
+    "TOOL_REGISTRY.md"
+  ],
   "bin": {
     "epam": "./dist/epam.js",
     "epam-cli": "./dist/epam.js"

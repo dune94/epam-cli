@@ -278,8 +278,8 @@ run_task() {
         failed)   fail    "$task_id: FAILED   (${elapsed}s, \$${cost})" ;;
     esac
 
-    # Emit result record
-    jq -n \
+    # Emit result record (compact — one JSON object per line for NDJSON)
+    jq -cn \
         --arg id "$task_id" \
         --arg title "$title" \
         --arg outcome "$outcome" \

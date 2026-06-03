@@ -1,0 +1,65 @@
+{
+  "run_id": "2026-06-03-114714",
+  "timestamp": "2026-06-03T16:54:02.599Z",
+  "summary": {
+    "total": 5,
+    "resolved": 5,
+    "partial": 0,
+    "failed": 0,
+    "resolved_pct": 100,
+    "total_cost_usd": 0.40305630000000003,
+    "avg_time_seconds": 129
+  },
+  "tasks": [
+    {
+      "task_id": "epam-ts-001",
+      "title": "Fix discount double-apply bug in calculateTotal",
+      "outcome": "resolved",
+      "run_id": "2026-06-03-114714",
+      "elapsed_seconds": 85,
+      "cost_usd": 0.04222085,
+      "agent_exit_code": 0,
+      "timestamp": "2026-06-03T15:48:43Z"
+    },
+    {
+      "task_id": "epam-ts-002",
+      "title": "Fix off-by-one in parseRange — end value excluded",
+      "outcome": "resolved",
+      "run_id": "2026-06-03-114714",
+      "elapsed_seconds": 151,
+      "cost_usd": 0.1468453,
+      "agent_exit_code": 0,
+      "timestamp": "2026-06-03T15:51:17Z"
+    },
+    {
+      "task_id": "epam-ts-003",
+      "title": "Fix Queue.drain returns items in LIFO order instead of FIFO",
+      "outcome": "resolved",
+      "run_id": "2026-06-03-114714",
+      "elapsed_seconds": 124,
+      "cost_usd": 0.0576925,
+      "agent_exit_code": 0,
+      "timestamp": "2026-06-03T15:53:24Z"
+    },
+    {
+      "task_id": "epam-ts-004",
+      "title": "Fix object cache key collision — toString() produces identical keys",
+      "outcome": "resolved",
+      "run_id": "2026-06-03-114714",
+      "elapsed_seconds": 159,
+      "cost_usd": 0.10759905000000002,
+      "agent_exit_code": 0,
+      "timestamp": "2026-06-03T15:56:09Z"
+    },
+    {
+      "task_id": "epam-ts-005",
+      "title": "Fix fetchWithRetry — attempts not reset between independent calls",
+      "outcome": "resolved",
+      "run_id": "2026-06-03-114714",
+      "elapsed_seconds": 126,
+      "cost_usd": 0.0486986,
+      "agent_exit_code": 0,
+      "timestamp": "2026-06-03T15:58:19Z"
+    }
+  ]
+}

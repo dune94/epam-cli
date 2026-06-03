@@ -867,23 +867,83 @@ primary_stories=$(topo_sort_stories "$primary_stories")
 independent_stories=$(topo_sort_stories "$independent_stories")
 review_stories=$(topo_sort_stories "$review_stories")
 
-# ── Topology routing ──────────────────────────────────────────────────────────
-# Count pending worktree stories (primary + independent).
-# When the total is 0 or 1, worktree overhead (git branch, merge, conflict
-# resolution) exceeds the parallelism benefit.  Route those stories onto the
-# main sequential lane instead — no worktrees created, no merge step.
-# This is the dominant case for test phases (hello_world_test, infra_test)
-# and any utility phase with a single story.
-_wt_count=0
-[ -n "$primary_stories" ]     && _wt_count=$(( _wt_count + $(echo "$primary_stories"     | grep -c '[^[:space:]]' || echo 0) ))
-[ -n "$independent_stories" ] && _wt_count=$(( _wt_count + $(echo "$independent_stories" | grep -c '[^[:space:]]' || echo 0) ))
+# ── Topology routing (GAP-P11) ────────────────────────────────────────────────
+# Build story metadata payload for the LLM router.
+# Falls back to count heuristic when no API key is set or the call fails.
+_wt_stories_list=""
+[ -n "$primary_stories" ]     && _wt_stories_list="${_wt_stories_list}${primary_stories}"$'\n'
+[ -n "$independent_stories" ] && _wt_stories_list="${_wt_stories_list}${independent_stories}"$'\n'
+_wt_count=$(echo "$_wt_stories_list" | grep -c '[^[:space:]]' || echo 0)
 
-if [ "$_wt_count" -le 1 ]; then
-    if [ "$_wt_count" -eq 1 ]; then
-        _collapsed="${primary_stories}${independent_stories}"
-        _collapsed=$(echo "$_collapsed" | tr -s '\n' | grep '[^[:space:]]' || true)
-        info "Topology: single-story worktree set — routing to main branch (no worktree overhead)"
-        # Append the lone worktree story to main; run it sequentially after existing main stories
+_router_js="$SCRIPT_DIR/lib/topology-router.js"
+_topology_decision=""
+_topology_reason=""
+_topology_source="heuristic"
+
+if [ -f "$_router_js" ] && command -v node &>/dev/null; then
+    # Build JSON payload: story metadata from PRD
+    _story_ids_json=$(echo "$_wt_stories_list" | grep '[^[:space:]]' | \
+        jq -R . | jq -s 'map(select(. != ""))' 2>/dev/null || echo "[]")
+
+    _stories_payload=$(jq -n \
+        --arg phase "$PHASE" \
+        --argjson ids "$_story_ids_json" \
+        --argjson prd "$(cat "$PRD_FILE" 2>/dev/null || echo '{}')" \
+        '{
+            phase: $phase,
+            stories: [
+                $prd.stories[]?
+                | select(.id as $id | $ids | index($id))
+                | { id, effort: (.effort // "low"), agentRole: (.agentRole // ""),
+                    storyType: (.storyType // "implementation"),
+                    dependencies: (.technicalNotes.dependsOn // []) }
+            ],
+            cpaSignals: [
+                $prd.stories[]?
+                | select(.id as $id | $ids | index($id))
+                | { id, filesExist: (.technicalNotes.filesExist // 0),
+                    estimatedTurns: (.estimatedTurns // null) }
+            ]
+        }' 2>/dev/null || echo '{"phase":"","stories":[],"cpaSignals":[]}')
+
+    _router_out=$(echo "$_stories_payload" | \
+        ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-${EPAM_API_KEY_ANTHROPIC:-}}" \
+        node "$_router_js" 2>/dev/null || echo "")
+
+    if [ -n "$_router_out" ]; then
+        _topology_decision=$(echo "$_router_out" | jq -r '.topology // empty' 2>/dev/null || echo "")
+        _topology_reason=$(echo "$_router_out"   | jq -r '.reason   // empty' 2>/dev/null || echo "")
+        _topology_source=$(echo "$_router_out"   | jq -r '.source   // "heuristic"' 2>/dev/null || echo "heuristic")
+    fi
+fi
+
+# Apply topology decision
+if [ -z "$_topology_decision" ]; then
+    # Pure count heuristic fallback
+    if   [ "$_wt_count" -le 1 ]; then _topology_decision="single"
+    elif [ "$_wt_count" -le 4 ]; then _topology_decision="parallel"
+    else                               _topology_decision="sequential"; fi
+    _topology_source="heuristic"
+fi
+
+# Log decision + reason to phase-cost.jsonl for dashboard visibility
+jq -n \
+    --arg phase    "$PHASE" \
+    --arg topology "$_topology_decision" \
+    --arg reason   "${_topology_reason:-}" \
+    --arg source   "$_topology_source" \
+    '{ event:"topology_decision", phase:$phase, topology:$topology,
+       reason:$reason, source:$source, timestamp:(now|todate) }' \
+    >> "${PHASE_COST_FILE:-/dev/null}" 2>/dev/null || true
+
+src_tag="[$_topology_source]"
+[ "$_topology_source" = "llm" ] && src_tag="[llm:$(echo "$_router_out" | jq -r '.model // "haiku"' 2>/dev/null | sed 's/claude-//;s/-20[0-9]*//'  )]"
+info "Topology: $_topology_decision $src_tag — ${_topology_reason:-count heuristic}"
+
+# Collapse worktree lane when topology is single or sequential
+if [ "$_topology_decision" = "single" ] || [ "$_topology_decision" = "sequential" ]; then
+    if [ "$_wt_count" -ge 1 ]; then
+        _collapsed=$(echo "$_wt_stories_list" | tr -s '\n' | grep '[^[:space:]]' || true)
         if [ -n "$main_stories" ]; then
             main_stories="${main_stories}
 ${_collapsed}"
@@ -895,6 +955,7 @@ ${_collapsed}"
     primary_stories=""
     independent_stories=""
 fi
+# topology=parallel: leave primary_stories + independent_stories as-is for worktree execution
 
 # Surface resume-from-failure: show progress if some stories already completed
 _phase_total=$(jq -r --arg phase "$PHASE" \

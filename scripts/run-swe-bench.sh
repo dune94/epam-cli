@@ -101,15 +101,14 @@ export default defineConfig({ test: { environment: 'node' } });
 EOF
 }
 
-# ── Run vitest and return JSON output ──────────────────────────────────────
+# ── Run vitest and return path to JSON output ─────────────────────────────
 run_tests() {
     local workspace="$1"
     local json_out="$workspace/test-results.json"
+    rm -f "$json_out"
     set +e
-    "$NODE20" "$workspace/node_modules/.bin/vitest" run \
-        --reporter=json --outputFile="$json_out" \
-        --config "$workspace/vitest.config.ts" \
-        "$workspace/src" 2>/dev/null
+    (cd "$workspace" && "$NODE20" ./node_modules/.bin/vitest run \
+        --reporter=json --outputFile="$json_out" 2>/dev/null)
     set -e
     echo "$json_out"
 }
@@ -190,16 +189,10 @@ run_task() {
     write_project_template "$workspace"
     cp "$task_dir/src/"* "$workspace/src/"
 
-    # Install deps (shared cache via npm)
+    # Install deps — run npm from the workspace directory
     log "  Installing dependencies..."
-    cd "$workspace"
-    "$NODE20" "$(which npm || echo npm)" install --silent 2>/dev/null || \
-        "$NODE20" /usr/lib/node_modules/npm/bin/npm-cli.js install --silent 2>/dev/null || true
-
-    if [ ! -d "$workspace/node_modules" ]; then
-        # Try npx as fallback
-        npx --yes npm install --prefix "$workspace" 2>/dev/null || true
-    fi
+    (cd "$workspace" && npm install --silent 2>/dev/null) || \
+    (cd "$workspace" && /home/bradleyjerome/.local/share/fnm/node-versions/v20.20.2/installation/bin/npm install --silent 2>/dev/null) || true
 
     # Baseline: verify failing tests actually fail
     log "  Verifying baseline (failing tests should fail)..."
@@ -351,10 +344,10 @@ console.log(JSON.stringify(output.summary));
     echo "═══════════════════════════════════════════════════════"
     echo "  Scorecard"
     echo "═══════════════════════════════════════════════════════"
-    jq -r '"  Resolved: " + (.resolved|tostring) + "/" + (.total|tostring) + "  (" + (.resolved_pct|tostring) + "%)"' "$RESULTS_FILE" 2>/dev/null | cat
-    jq -r '"  Partial:  " + (.partial|tostring)' "$RESULTS_FILE" 2>/dev/null | cat
-    jq -r '"  Failed:   " + (.failed|tostring)' "$RESULTS_FILE" 2>/dev/null | cat
-    jq -r '"  Cost:     $" + (.total_cost_usd|tostring)'  "$RESULTS_FILE" 2>/dev/null | cat || true
+    jq -r '"  Resolved: " + (.summary.resolved|tostring) + "/" + (.summary.total|tostring) + "  (" + (.summary.resolved_pct|tostring) + "%)"' "$RESULTS_FILE" 2>/dev/null | cat
+    jq -r '"  Partial:  " + (.summary.partial|tostring)' "$RESULTS_FILE" 2>/dev/null | cat
+    jq -r '"  Failed:   " + (.summary.failed|tostring)' "$RESULTS_FILE" 2>/dev/null | cat
+    jq -r '"  Cost:     $" + (.summary.total_cost_usd|tostring)'  "$RESULTS_FILE" 2>/dev/null | cat || true
     echo "  Results:  $RESULTS_FILE"
     echo "═══════════════════════════════════════════════════════"
 else

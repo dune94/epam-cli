@@ -23,7 +23,7 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | 6 | GAP-P9 | Brownfield support — existing system context ingestion | done | codemie, smolagents |
 | 7 | GAP-P2 | External event triggers (webhook/Jira/Slack) | done | OpenHands, Cline |
 | 8 | GAP-P10 | Dynamic constitution augmentation | done | Constitutional AI |
-| 9 | GAP-P11 | LLM-based topology routing | pending | kyegomez/swarms |
+| 9 | GAP-P11 | LLM-based topology routing | done | kyegomez/swarms |
 | 10 | GAP-P15 | Cross-run scorecard dashboard | done | SWE-bench, OpenHands |
 | 11 | GAP-P18 | One-command demo (travel app + working API) | done | All competitors |
 | 12 | GAP-P14 | Sandboxing / security isolation for tool execution | done | OpenHands, SWE-agent |
@@ -279,7 +279,7 @@ Add a `.epam/constitution-rules.json` file (per-project, optional) containing ma
 
 ## GAP-P11 — LLM-based topology routing
 
-**Status:** pending  
+**Status:** done  
 **Priority:** 9  
 **Effort:** medium (1-2 stories)
 

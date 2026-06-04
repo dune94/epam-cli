@@ -31,7 +31,8 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | 14 | GAP-P17 | Model-specific optimizations + structured outputs | done | LangGraph, AutoGen |
 | 15 | GAP-P13 | Durable, distributed orchestration semantics | done | Temporal, Prefect |
 | 16 | GAP-P12 | Library/framework ecosystem & composability | done | LangGraph, AutoGen, CrewAI |
-| 17 | GAP-P19 | Secrets redaction in logs and artifacts | pending | Enterprise security |
+| 17 | GAP-P22 | Full pipeline cost tracking (spec, CPA, gates, assessments) | pending | Cost observability |
+| 18 | GAP-P19 | Secrets redaction in logs and artifacts | pending | Enterprise security |
 | 18 | GAP-P20 | Deterministic replay and version pinning | pending | Temporal, Dagster |
 | 19 | GAP-P21 | Multi-repo / monorepo and enterprise GitOps | pending | Enterprise GitOps |
 | 20 | GAP-P1 | Docker sandbox execution | deferred | OpenHands, SWE-agent |
@@ -467,6 +468,28 @@ The CLI already exists as a demo vehicle and the travel app PRD (`orchestrations
 - README minimum-setup section lists only `RAPIDAPI_KEY` as required for the live demo path
 
 ---
+
+---
+
+## GAP-P22 — Full pipeline cost tracking (spec, CPA, gates, assessments)
+
+**Status:** pending  
+**Priority:** 17  
+**Effort:** medium (2-3 stories)  
+**Source:** Cost observability — identified during travel app test session
+
+### Problem
+`phase-cost.jsonl` only tracks story implementation agent costs. All support pipeline agents — spec pass (OpenSpec/Speckit), CPA estimation calls, topology router, pre/post-phase assessments, team lead review, and QA gate agents (SAST, spec-validator, review-ranger, mutant-hunter, fuzz-weaver, perf-sentinel) — are untracked. In practice these agents can cost 3–5× the story implementation total, making the dashboard cost figures unreliable and the scorecard's "cost/story" metric misleading. The Anthropic API dashboard shows the true total; the orchestration dashboard doesn't.
+
+### Approach
+Add a lightweight `append_pipeline_cost_record()` function (mirroring `append_cost_record()`) that emits to `phase-cost.jsonl` with an `agentType` field distinguishing pipeline agents from story agents. Wire it into: spec-mode-runner.js (per-story spec agent invocations), contextualize-stories.sh (CPA LLM call), topology-router.js, and the run_testing_gates() function in run-agent-orchestration.sh (each QA gate agent). The scorecard dashboard then sums all records and breaks down story vs pipeline costs separately.
+
+### Acceptance criteria
+- Every agent invocation in the pipeline emits a record to `phase-cost.jsonl` with `agentType: "spec"|"cpa"|"topology"|"assessment"|"qa-gate"|"story"`
+- `phase-cost.jsonl` total matches (within 5%) the cost shown on the Anthropic API dashboard for the same run
+- Scorecard dashboard shows story cost vs pipeline overhead as separate line items
+- CPA formula estimates account for pipeline overhead when computing phase-level budget forecasts
+- No regression in existing story cost tracking
 
 ---
 

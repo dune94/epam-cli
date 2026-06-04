@@ -71,10 +71,15 @@ CALIBRATE_MODE=false
 
 # ── Confidence thresholds ───────────────────────────────────────────────────
 BLEND_HIGH=0.75      # >= this: trust CPA fully
-BLEND_LOW=0.50       # < BLEND_HIGH and >= this: interpolate
+BLEND_LOW=0.60       # < BLEND_HIGH and >= this: interpolate (raised from 0.50 — narrows
+                     #   the zone where a low LLM estimate can dominate the blend)
 # < BLEND_LOW: keep formula + 20% uncertainty markup, gate=review
 GATE_BLOCK=0.35      # confidence < this: gate=block
 GATE_REVIEW_FLAGS=3  # riskFlags count > this: gate=review
+
+# Floor: adjusted estimate cannot be less than this fraction of formula.
+# Prevents the LLM from claiming a story costs 97% less than calibration data shows.
+BLEND_ADJ_FLOOR=0.25
 
 # ── Arg parsing ─────────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -455,8 +460,22 @@ blend_estimates() {
 
   local bmin bcost btok bturns
 
+  # Apply floor: adjusted estimate can't be < BLEND_ADJ_FLOOR × formula.
+  # Guards against LLM over-adjusting below what calibration data shows is realistic.
+  local floor="${BLEND_ADJ_FLOOR:-0.25}"
+  local adj_min_floored adj_cost_floored adj_tok_floored
+  adj_min_floored=$(bc_eval  "if ($adj_min  < $formula_min  * $floor) $formula_min  * $floor else $adj_min")
+  adj_cost_floored=$(bc_eval "if ($adj_cost < $formula_cost * $floor) $formula_cost * $floor else $adj_cost")
+  adj_tok_floored=$(echo "scale=0; \
+    if ($(echo "$adj_tok < $formula_tok * $floor" | bc -l)) \
+      $formula_tok * $floor / 1 \
+    else $adj_tok / 1" | bc 2>/dev/null || echo "$adj_tok")
+  adj_min="$adj_min_floored"
+  adj_cost="$adj_cost_floored"
+  adj_tok="$adj_tok_floored"
+
   if (( $(echo "$conf >= $BLEND_HIGH" | bc -l) )); then
-    # Trust CPA fully
+    # Trust CPA fully (floored)
     bmin="$adj_min"; bcost="$adj_cost"; btok="$adj_tok"; bturns="$adj_turns"
   elif (( $(echo "$conf >= $BLEND_LOW" | bc -l) )); then
     # Linear interpolation between CPA and formula

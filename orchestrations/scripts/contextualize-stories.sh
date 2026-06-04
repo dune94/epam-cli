@@ -346,21 +346,39 @@ load_calibration() {
   fi
 }
 
-# get_calibrated_baseline <effort> <storyType>
-# Looks up effort:storyType:invokeMode first; falls back to effort:storyType (legacy keys).
-# Prints: "minutes|cost|tokens|turns|n" or empty string if not enough data.
+# get_calibrated_baseline <effort> <storyType> [modelAlias]
+# Lookup order (most specific → least specific):
+#   1. effort:storyType:invokeMode:modelAlias  (model-aware — avoids Haiku/Sonnet blending)
+#   2. effort:storyType:invokeMode             (mode-specific legacy)
+#   3. effort:storyType                        (legacy two-part)
+# Prints: "minutes|cost|tokens|turns|n|key" or empty string if not enough data.
 get_calibrated_baseline() {
-  local effort="$1" stype="$2"
+  local effort="$1" stype="$2" model_alias="${3:-}"
   if [ -z "$CAL_DATA" ] || [ "$CAL_DATA" = "{}" ]; then
     echo ""; return
   fi
 
-  # Try mode-specific key first (three-part)
-  local key="${effort}:${stype}:${CAL_INVOKE_MODE}"
-  local n
+  local key n
+
+  # 1. Model-aware 4-part key (preferred when model is known)
+  if [ -n "$model_alias" ]; then
+    key="${effort}:${stype}:${CAL_INVOKE_MODE}:${model_alias}"
+    n=$(echo "$CAL_DATA" | jq -r --arg k "$key" '.categories[$k].n // 0' 2>/dev/null || echo "0")
+    if (( n >= CAL_MIN_N )); then
+      local cm cc ct cturns
+      cm=$(echo "$CAL_DATA"    | jq -r --arg k "$key" '.categories[$k].mean_minutes // 0' 2>/dev/null || echo "0")
+      cc=$(echo "$CAL_DATA"    | jq -r --arg k "$key" '.categories[$k].mean_cost    // 0' 2>/dev/null || echo "0")
+      ct=$(echo "$CAL_DATA"    | jq -r --arg k "$key" '.categories[$k].mean_tokens  // 0' 2>/dev/null || echo "0")
+      cturns=$(echo "$CAL_DATA"| jq -r --arg k "$key" '.categories[$k].mean_turns   // 0' 2>/dev/null || echo "0")
+      echo "${cm}|${cc}|${ct}|${cturns}|${n}|${key}"; return
+    fi
+  fi
+
+  # 2. Mode-specific 3-part key
+  key="${effort}:${stype}:${CAL_INVOKE_MODE}"
   n=$(echo "$CAL_DATA" | jq -r --arg k "$key" '.categories[$k].n // 0' 2>/dev/null || echo "0")
 
-  # Fall back to legacy two-part key if mode-specific has insufficient data
+  # 3. Legacy 2-part key
   if (( n < CAL_MIN_N )); then
     key="${effort}:${stype}"
     n=$(echo "$CAL_DATA" | jq -r --arg k "$key" '.categories[$k].n // 0' 2>/dev/null || echo "0")
@@ -538,18 +556,32 @@ while IFS= read -r sid; do
   fi
 
   # ── Override formula baseline with calibration actuals (when available) ──────
-  # calibration.json holds EMA means from real completed-story data, grouped by
-  # effort:storyType. When enough samples exist (n >= CAL_MIN_N), these empirical
-  # means replace the hand-entered prd.json formula values as the CPA baseline,
-  # giving Claude a grounded starting point instead of a made-up number.
-  cal_baseline=$(get_calibrated_baseline "$f_effort" "$s_type")
+  # Determine the model alias that will run this story so calibration lookup
+  # uses model-specific data (haiku/sonnet/opus) rather than a blended average.
+  _story_model=$(echo "$story_json" | jq -r '.model // ""' 2>/dev/null || echo "")
+  _model_alias=""
+  if [ -n "$_story_model" ] && [ "$_story_model" != "null" ]; then
+    case "$_story_model" in
+      *haiku*) _model_alias="haiku" ;;
+      *opus*)  _model_alias="opus"  ;;
+      *sonnet*)_model_alias="sonnet";;
+    esac
+  else
+    # Infer from effort (mirrors claude.sh resolve_model_settings logic)
+    case "$f_effort" in
+      low)    _model_alias="haiku"  ;;
+      high)   _model_alias="sonnet" ;;
+      *)      _model_alias="sonnet" ;;
+    esac
+  fi
+  cal_baseline=$(get_calibrated_baseline "$f_effort" "$s_type" "$_model_alias")
   f_baseline_source="prd.json"
   if [ -n "$cal_baseline" ]; then
     IFS='|' read -r cal_min cal_cost cal_tok cal_turns cal_n cal_key <<< "$cal_baseline"
-    # Mode-specific 3-part key: always preferred (same invoke mode, same model class)
+    # 4-part model-aware key or 3-part mode key: always preferred over legacy 2-part
     # Legacy 2-part key: only use when prd.json is zero (different mode may have run)
     is_mode_specific=false
-    [[ "$cal_key" == *":${CAL_INVOKE_MODE}" ]] && is_mode_specific=true
+    [[ "$cal_key" == *":${CAL_INVOKE_MODE}"* ]] && is_mode_specific=true
     if [ "$is_mode_specific" = true ] || \
        (( $(echo "$f_min == 0" | bc -l) )) || (( $(echo "$f_tok == 0" | bc -l) )); then
       f_min="$cal_min"

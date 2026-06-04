@@ -200,7 +200,20 @@ def build_calibration(records, decay, min_n):
             turns = int(r.get("task_turns") or 0)
             tokens = int(r.get("task_tokens_in") or 0) + int(r.get("task_tokens_out") or 0)
             invoke_mode = "sdk" if (turns <= 1 and tokens < 10_000) else "cli"
-        key = f"{effort}:{stype}:{invoke_mode}"
+        # Model alias — short canonical name used as 4th key segment so that
+        # Haiku and Sonnet calibrations never share a bucket.
+        model = r.get("resolvedModel") or ""
+        if "haiku" in model:
+            model_alias = "haiku"
+        elif "opus" in model:
+            model_alias = "opus"
+        elif "sonnet" in model:
+            model_alias = "sonnet"
+        else:
+            model_alias = "sonnet"  # safe default for unknown models
+
+        # 4-part key: effort:storyType:invokeMode:modelAlias
+        key = f"{effort}:{stype}:{invoke_mode}:{model_alias}"
 
         minutes = float(r.get("elapsed_minutes") or 0)
         tokens_in = int(r.get("task_tokens_in") or 0)
@@ -209,8 +222,7 @@ def build_calibration(records, decay, min_n):
         cost = float(r.get("task_cost_usd") or 0)
         # SDK path reports cost=0; derive from token counts + model pricing
         if cost == 0 and tokens > 0:
-            model = r.get("resolvedModel") or ""
-            cost = compute_cost(tokens_in, tokens_out, model)
+            cost = compute_cost(tokens_in, tokens_out, r.get("resolvedModel") or "")
         turns = int(r.get("task_turns") or 0)
 
         # Skip obviously broken records

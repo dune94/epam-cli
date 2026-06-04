@@ -184,12 +184,36 @@ class EMACategory:
 # Main calibration logic
 # ---------------------------------------------------------------------------
 
+def compute_pipeline_overhead_ratio(records) -> float:
+    """
+    Compute the ratio of pipeline agent cost to story implementation cost.
+    Returns 1.0 if insufficient data (safe default — no overhead added).
+    pipeline_overhead_ratio = 1 + (pipeline_cost / story_cost)
+    e.g. ratio=1.53 means total cost = story_cost * 1.53
+    """
+    story_cost = sum(
+        float(r.get("task_cost_usd") or 0)
+        for r in records
+        if r.get("status") == "completed" and not r.get("agent_type") and float(r.get("task_cost_usd") or 0) > 0
+    )
+    pipeline_cost = sum(
+        float(r.get("task_cost_usd") or 0)
+        for r in records
+        if r.get("agent_type") and float(r.get("task_cost_usd") or 0) > 0
+    )
+    if story_cost <= 0:
+        return 1.0
+    return 1.0 + (pipeline_cost / story_cost)
+
+
 def build_calibration(records, decay, min_n):
     categories: dict[str, EMACategory] = {}
 
     for r in records:
         if r.get("status") != "completed":
             continue
+        if r.get("agent_type"):
+            continue  # skip pipeline records — they don't belong in story calibration buckets
 
         effort = r.get("effort") or "medium"
         stype = r.get("storyType") or "implementation"
@@ -291,10 +315,21 @@ def main():
     existing = load_json(args.cal_file)
     merged = merge_with_existing(new_cats, existing)
 
+    pipeline_ratio = compute_pipeline_overhead_ratio(records)
+    # EMA blend with existing ratio (or use computed if no prior)
+    existing_ratio = existing.get("pipeline_overhead_ratio", 1.0)
+    if existing_ratio == 1.0:
+        blended_ratio = pipeline_ratio  # first measurement
+    else:
+        blended_ratio = args.decay * existing_ratio + (1 - args.decay) * pipeline_ratio
+
+    print(f"calibrate.py: pipeline overhead ratio = {pipeline_ratio:.3f} (blended: {blended_ratio:.3f})", file=sys.stderr)
+
     output = {
         "version": existing.get("version", 1),
         "updatedAt": datetime.now(timezone.utc).isoformat(),
         "decay": args.decay,
+        "pipeline_overhead_ratio": round(blended_ratio, 4),
         "categories": merged,
     }
 

@@ -346,10 +346,14 @@ CAL_INVOKE_MODE="cli"
 load_calibration() {
   if [ -f "$CAL_FILE" ]; then
     CAL_DATA="$(cat "$CAL_FILE" 2>/dev/null || echo '{}')"
+    # Load pipeline overhead ratio (default 1.0 = no overhead data yet)
+    PIPELINE_OVERHEAD_RATIO=$(echo "$CAL_DATA" | jq -r '.pipeline_overhead_ratio // 1.0' 2>/dev/null || echo "1.0")
   else
     CAL_DATA="{}"
+    PIPELINE_OVERHEAD_RATIO="1.0"
   fi
 }
+PIPELINE_OVERHEAD_RATIO="1.0"
 
 # get_calibrated_baseline <effort> <storyType> [modelAlias]
 # Lookup order (most specific → least specific):
@@ -816,6 +820,13 @@ while IFS= read -r sid; do
     printf "  %-22s %8.2f min  →  %8.2f min  (conf: %.2f, adj: %.2fx)\n" \
       "Machine time:" "$f_min" "$b_min" "$confidence" "$complexity_adj" >&2
     printf "  %-22s \$%-9.2f  →  \$%-9.2f\n" "Cost:" "$f_cost" "$b_cost" >&2
+    # Show total cost including pipeline overhead when ratio is calibrated
+    if (( $(echo "$PIPELINE_OVERHEAD_RATIO > 1.01" | bc -l) )); then
+      local total_cost
+      total_cost=$(bc_eval "$b_cost * $PIPELINE_OVERHEAD_RATIO")
+      printf "  %-22s \$%-9.2f      (incl. pipeline ×%.2f)\n" \
+        "Total (est):" "$total_cost" "$PIPELINE_OVERHEAD_RATIO" >&2
+    fi
     printf "  %-22s %-5d chunks retrieved   %-5d cited   cov: %.0f%%\n" \
       "KB coverage:" "$candidate_count" "$cited_count" \
       "$(echo "scale=0; $citation_cov * 100 / 1" | bc)" >&2
@@ -865,6 +876,7 @@ while IFS= read -r sid; do
     --argjson tokOut "$cpa_tokens_out" \
     --argjson tokEff "$token_eff" \
     --argjson latMs "$infer_ms" \
+    --arg por "${PIPELINE_OVERHEAD_RATIO:-1.0}" \
     '. + [{
       schema: "cpa-review-v1",
       runId: $runId,
@@ -876,7 +888,7 @@ while IFS= read -r sid; do
       humanHours: $humanHours,
       formulaEstimate: {aiMinutes: $formulaMin, cost: $formulaCost, tokens: $formulaTok, turns: $formulaTurns},
       adjustedEstimate: {aiMinutes: $adjMin, cost: $adjCost, tokens: $adjTok, turns: $adjTurns},
-      blendedEstimate: {aiMinutes: $bMin, cost: $bCost, tokens: $bTok, turns: $bTurns, machineHours: $bMhrs},
+      blendedEstimate: {aiMinutes: $bMin, cost: $bCost, tokens: $bTok, turns: $bTurns, machineHours: $bMhrs, totalCost: ($bCost * ($por | tonumber))},
       confidence: $confidence,
       complexityAdjustment: $complexityAdj,
       gate: $gate,

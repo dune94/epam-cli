@@ -201,8 +201,13 @@ tbody tr.current-run td { background: rgba(132,83,210,0.06); }
     </div>
     <div class="kpi-card">
       <div class="kpi-val" id="kpi-cost">—</div>
-      <div class="kpi-lbl">Avg Cost / Story</div>
-      <div class="kpi-sub" id="kpi-cost-sub">USD across all runs</div>
+      <div class="kpi-lbl">Avg Story Cost</div>
+      <div class="kpi-sub" id="kpi-cost-sub">story agents only</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-val" id="kpi-total-cost">—</div>
+      <div class="kpi-lbl">Avg Total Cost</div>
+      <div class="kpi-sub" id="kpi-total-cost-sub">incl. pipeline overhead</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-val" id="kpi-time">—</div>
@@ -339,13 +344,18 @@ function buildRuns(costEvents, gateEvents, cpaEvents) {
       runMap.set(key, {
         key, phase: ev.phase_id, date,
         storiesMap: new Map(), // story_id → latest record
+        pipelineCost: 0,       // GAP-P22: pipeline agent cost
       });
     }
     const run = runMap.get(key);
-    const prev = run.storiesMap.get(ev.story_id);
-    // Keep latest record per story (by started_at)
-    if (!prev || ev.started_at > prev.started_at) {
-      run.storiesMap.set(ev.story_id, ev);
+    if (ev.agent_type) {
+      // Pipeline record — accumulate overhead
+      run.pipelineCost = (run.pipelineCost || 0) + (ev.task_cost_usd || 0);
+    } else {
+      const prev = run.storiesMap.get(ev.story_id);
+      if (!prev || ev.started_at > prev.started_at) {
+        run.storiesMap.set(ev.story_id, ev);
+      }
     }
   }
 
@@ -387,8 +397,11 @@ function buildRuns(costEvents, gateEvents, cpaEvents) {
     const firstAttemptPct = total > 0 ? (firstAttempt / total) * 100 : 0;
 
     const totalCost = stories.reduce((s, e) => s + (e.task_cost_usd || 0), 0);
+    const pipelineCost = run.pipelineCost || 0;
+    const totalWithPipeline = totalCost + pipelineCost;
     const totalTime = stories.reduce((s, e) => s + (e.elapsed_minutes || 0), 0);
     const avgCost = total > 0 ? totalCost / total : 0;
+    const avgTotalCost = total > 0 ? totalWithPipeline / total : 0;
     const avgTime = total > 0 ? totalTime / total : 0;
 
     const gate = gateMap.get(key);
@@ -411,7 +424,7 @@ function buildRuns(costEvents, gateEvents, cpaEvents) {
       total, completed, storyPassPct,
       firstAttemptPct,
       gate: gate ? gate.verdict : null,
-      avgCost, avgTime, totalCost, totalTime,
+      avgCost, avgTotalCost, avgTime, totalCost, pipelineCost, totalWithPipeline, totalTime,
       cpaAcc,
       stories,
       cpaMap,
@@ -437,8 +450,11 @@ function renderKPIs(runs) {
   const costRuns = runs.filter(r => r.total > 0);
   const avgCost = costRuns.length > 0
     ? costRuns.reduce((s, r) => s + r.avgCost, 0) / costRuns.length : 0;
+  const avgTotalCost = costRuns.length > 0
+    ? costRuns.reduce((s, r) => s + r.avgTotalCost, 0) / costRuns.length : 0;
   const avgTime = costRuns.length > 0
     ? costRuns.reduce((s, r) => s + r.avgTime, 0) / costRuns.length : 0;
+  const hasPipeline = costRuns.some(r => r.pipelineCost > 0);
 
   const storyPassColour = rateColour(overallStoryPass);
   const gatePassColour  = rateColour(overallGatePass);
@@ -459,6 +475,13 @@ function renderKPIs(runs) {
   const cEl = document.getElementById('kpi-cost');
   cEl.textContent = avgCost > 0 ? '$' + avgCost.toFixed(3) : '—';
   cEl.className = 'kpi-val';
+
+  const tcEl = document.getElementById('kpi-total-cost');
+  tcEl.textContent = avgTotalCost > 0 ? '$' + avgTotalCost.toFixed(3) : '—';
+  tcEl.className = 'kpi-val';
+  document.getElementById('kpi-total-cost-sub').textContent = hasPipeline
+    ? `incl. ${((avgTotalCost / avgCost - 1) * 100).toFixed(0)}% pipeline overhead`
+    : 'pipeline not yet tracked';
 
   const tEl = document.getElementById('kpi-time');
   tEl.textContent = avgTime > 0 ? avgTime.toFixed(1) + ' min' : '—';

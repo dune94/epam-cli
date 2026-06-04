@@ -1,6 +1,6 @@
 # EPAM CLI Technical Guide
 
-_Last updated: June 3, 2026_
+_Last updated: June 4, 2026_
 
 This document explains the full EPAM CLI platform — the interactive CLI, agent runtime, orchestration system, and supporting dashboards/operations pipelines. Use it as the canonical reference when onboarding engineers, debugging production issues, or extending automation.
 
@@ -66,6 +66,14 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 - `orchestrations/agents/profiles.json` defines persona prompts for each autonomous agent; `AGENTS.md` captures learned behaviors.
 - Knowledge base entries live beside the profiles (`KB.md`) and are injected when generating prompts.
 
+### 3.13 Full Pipeline Cost Tracking (GAP-P22)
+- `run_orch_prompt()` in `run-agent-orchestration.sh` now passes `ORCH_JSON_RESULT` to `ai-run.sh`, which captures the claude CLI's `--output-format json` response to a temp file. After each invocation, cost and token data are extracted and written to `phase-cost.jsonl` via `append_pipeline_cost_record()`.
+- Every pipeline agent type is labeled: `assessment`, `spec-coordinator`, `qa-gate:*`, `topology-router`, `spec-pass`.
+- `calibrate.py` computes `pipeline_overhead_ratio` (EMA of pipeline/story cost ratio) and stores it in `calibration.json`. The CPA uses this ratio to show `Total (est): $X.XX (incl. pipeline ×N.NN)` alongside the story-level blended estimate.
+- `blendedEstimate.totalCost` field in `cpa-review.jsonl` reflects the story estimate × ratio for use in budget forecasting.
+- Scorecard dashboard (`scorecard.html`) shows separate "Avg Story Cost" and "Avg Total Cost" KPI cards with pipeline overhead percentage.
+- **Observation (first tracked run):** Assessment agents dominate pipeline overhead (~82% of pipeline cost). Full-gates hello-world run: pipeline = 7.75× story cost. The ratio calibrates via EMA and converges toward the true value over multiple runs.
+
 ### 3.2 run-agent-orchestration.sh Flow
 1. **Bootstrap** — resolves directories, PRD path, provider wrapper (`claude.sh`, `copilot.sh`, `codemie-claude.sh`, etc.), ensures logs exist, and installs traps for cleanup.
 2. **Dashboards Watcher** — unless `EPAM_DASH_AUTO_SERVE=0`, starts `npm run dashboards:serve` in the background, writes its PID to `orchestrations/logs/dashboards-watch.pid`, and streams logs to `dashboards-watch.log` so BrowserSync remains live.
@@ -77,6 +85,12 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 8. **Parallel Execution** — launches primary and independent agents (plus optional reviewers) via `CLAUDE_SH` wrapper calls. Each invocation pipes transcripts to `logs/agent-messages.jsonl` and cost data to `phase-cost.jsonl`.
 9. **Monitoring & Cutover** — `update-monitor.sh` refreshes `agent-status.json`; when token ceilings are crossed, `provider-cutover.sh --apply` reassigns remaining stories to backup providers while logging the event for dashboards.
 10. **Reviews & Cleanup** — reviewer/QA agents validate outputs; on exit the script tears down worktrees unless `--skip-cleanup` is provided and stops the dashboards watcher.
+
+### 3.14 CPA Calibration & Blended Forecast Improvements
+- **Model-aware calibration buckets** (June 3): `calibrate.py` now keys calibration on `effort:storyType:invokeMode:modelAlias` (haiku/sonnet/opus). Before this, Haiku and Sonnet actuals shared one bucket, causing 12× cost-per-token overestimates for Haiku stories.
+- **Blended estimate floor** (June 4): `BLEND_ADJ_FLOOR=0.25` prevents the CPA LLM from adjusting below 25% of the formula baseline. Guards against the pattern where high confidence + aggressive LLM adjustment produced $0.005 blended for a story the calibration showed costs $0.156.
+- **Tighter interpolation zone**: `BLEND_LOW` raised from 0.50 → 0.60. Stories with confidence below 0.60 now use the safe formula+20% path rather than a partially-LLM-dominated blend.
+- Impact: total blended variance improved from +233% to -14% across a clean travel app run (11 stories, no retries).
 
 ### 3.9 LLM Topology Routing (GAP-P11)
 - Before phase execution, `run-agent-orchestration.sh` calls `orchestrations/scripts/lib/topology-router.js` with story metadata (IDs, effort, roles, dependency edges, CPA file-overlap signals).
@@ -126,8 +140,9 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 ### 3.4 Logging & Persistence
 - `logs/agent-status.json` — real-time state for dashboards + automation (current phase, lane cursors, failovers, warnings).
 - `logs/agent-messages.jsonl` — streaming transcripts for each story.
-- `logs/phase-cost.jsonl` — append-only cost + token usage per provider/model/story (consumed by token guards and dashboards).
+- `logs/phase-cost.jsonl` — append-only cost + token usage for **all** agent invocations: story implementation agents (`agent_type` absent) and pipeline agents (`agent_type`: `assessment`, `spec-coordinator`, `qa-gate:sast`, `qa-gate:spec-validator`, `qa-gate:review-ranger`, `qa-gate:mutant-hunter`, `qa-gate:fuzz-weaver`, `qa-gate:perf-sentinel`, `qa-gate:e2e`, `topology-router`, `spec-pass`). Prior to GAP-P22 only story costs were tracked.
 - `logs/provider-failover.json` — sentinel for cross-process failover decisions consumed by agents and dashboards.
+- `logs/story-artifacts.jsonl` — per-story structured output records emitted by `emit_story_artifact()` (GAP-P17). Contains `structuredOutput` field when story has `outputSchema`.
 
 ### 3.5 Specification Mode (OpenSpec/Speckit)
 - `orchestrations/scripts/spec-mode-runner.js` powers the pre-pass: it snapshots `prd.json`, asks the coordinator agent which spec personas to launch, runs OpenSpec and/or Speckit per story (parallel subprocesses), merges acceptance criteria, and writes before/after fragments to `logs/spec-phase.jsonl`.
@@ -195,6 +210,7 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 - Core CLI: `EPAM_BACKEND_URL`, `EPAM_PROVIDER`, `EPAM_MODEL`, `EPAM_MAX_ITERATIONS`, `EPAM_BUDGET_WARNING_AT`, `EPAM_BUDGET_HARD_LIMIT_AT`.
 - Provider keys: `EPAM_API_KEY_ANTHROPIC`, `EPAM_API_KEY_OPENAI`, `EPAM_API_KEY_GEMINI`, etc.
 - Orchestration/dashboards: `CLAUDE_CMD`, `EPAM_ORCHESTRATION_PROVIDER`, `EPAM_DASH_AUTO_SERVE`, `EPAM_DASH_PORT`, `EPAM_REDIS_URL`.
+- Story timeout: `STORY_TIMEOUT_SECS` (flat override), `EPAM_PAUSE_ON_TIMEOUT` (default `false` — skip on double timeout, never hang), `EPAM_MAX_PAUSE_SECS` (default 300s auto-resume ceiling). Effort-based defaults: `low=600s`, `medium=1200s`, `high=2400s`.
 - Specification: `EPAM_SPEC_MODE` (default `1`) toggles the spec pre-pass globally; set `EPAM_SPEC_MODE=0` to skip OpenSpec/Speckit when replaying historical runs.
 - Brownfield ingestion: `JIRA_URL`, `JIRA_EMAIL`, `JIRA_TOKEN` — when all three are set, `brownfield-context.js` fetches live Jira issues; absent means stub files used.
 - Webhook triggers: `JIRA_WEBHOOK_SECRET` — enables `POST /webhook/jira` on the control plane; `WEBHOOK_PRD_DIR` — output directory for flushed webhook PRD files.

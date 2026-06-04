@@ -89,7 +89,7 @@
   </head>
   <body>
     <main>
-      <p class="updated">Updated June 3, 2026</p>
+      <p class="updated">Updated June 4, 2026</p>
       <h1>EPAM CLI Technical Guide</h1>
       <p>
         Comprehensive reference for the EPAM CLI runtime, agent architecture,
@@ -314,11 +314,39 @@
         <li>Env overrides: <code>EPAM_SANDBOX_IMAGE</code>, <code>EPAM_SANDBOX_CPUS</code>,
           <code>EPAM_SANDBOX_MEMORY</code>.</li>
       </ul>
+      <h3>3.13 Full Pipeline Cost Tracking (GAP-P22)</h3>
+      <ul>
+        <li><code>run_orch_prompt()</code> passes <code>ORCH_JSON_RESULT</code> to <code>ai-run.sh</code>,
+          which captures the JSON response so cost/tokens can be extracted and written to
+          <code>phase-cost.jsonl</code> via <code>append_pipeline_cost_record()</code>.</li>
+        <li>Every pipeline agent is labeled: <code>assessment</code>, <code>spec-coordinator</code>,
+          <code>qa-gate:sast</code>, <code>qa-gate:spec-validator</code>, <code>qa-gate:review-ranger</code>,
+          <code>qa-gate:mutant-hunter</code>, <code>qa-gate:fuzz-weaver</code>,
+          <code>qa-gate:perf-sentinel</code>, <code>qa-gate:e2e</code>, <code>topology-router</code>.</li>
+        <li><code>calibrate.py</code> computes <code>pipeline_overhead_ratio</code> (EMA of pipeline/story
+          cost ratio) stored in <code>calibration.json</code>. CPA output shows
+          <em>Total (est): $X.XX (incl. pipeline ×N.NN)</em> alongside story estimate.</li>
+        <li>Scorecard shows separate "Avg Story Cost" and "Avg Total Cost" KPI cards.</li>
+        <li>First measured ratio: assessment agents dominate (~82% of pipeline). Full-gates
+          hello-world pipeline = 7.75× story cost.</li>
+      </ul>
+      <h3>3.14 CPA Calibration &amp; Blended Forecast Improvements</h3>
+      <ul>
+        <li><strong>Model-aware buckets:</strong> calibration key is now
+          <code>effort:storyType:invokeMode:modelAlias</code> — Haiku and Sonnet never share a bucket.</li>
+        <li><strong>Blend floor:</strong> <code>BLEND_ADJ_FLOOR=0.25</code> — adjusted estimate
+          can't go below 25% of formula baseline.</li>
+        <li><strong>Tighter interpolation:</strong> <code>BLEND_LOW</code> raised 0.50 → 0.60.</li>
+        <li>Impact: total blended variance improved from +233% to -14% on a clean 11-story run.</li>
+      </ul>
       <h3>3.4 Logging</h3>
       <ul>
         <li><code>logs/agent-status.json</code> — live orchestration state.</li>
         <li><code>logs/agent-messages.jsonl</code> — streaming transcripts.</li>
-        <li><code>logs/phase-cost.jsonl</code> — token/cost ledger per story/provider.</li>
+        <li><code>logs/phase-cost.jsonl</code> — token/cost ledger for <strong>all</strong> agents:
+          story implementation (<code>agent_type</code> absent) and pipeline agents
+          (<code>agent_type</code> set). GAP-P22 added pipeline tracking June 4, 2026.</li>
+        <li><code>logs/story-artifacts.jsonl</code> — per-story structured output records (GAP-P17).</li>
         <li><code>logs/provider-failover.json</code> — sentinel for backup switches.</li>
       </ul>
       <h3>3.5 Specification Mode (OpenSpec/Speckit)</h3>

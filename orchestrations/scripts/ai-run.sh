@@ -82,7 +82,18 @@ run_provider_once() {
           return 1
         fi
       else
-        "$CLAUDE_CMD" --print --output-format text --dangerously-skip-permissions "${model_args[@]}" < "$PROMPT_FILE"
+        # GAP-P22: when ORCH_JSON_RESULT is set, capture full JSON for cost tracking
+        if [ -n "${ORCH_JSON_RESULT:-}" ]; then
+          local _json_out
+          _json_out=$(mktemp)
+          "$CLAUDE_CMD" --print --output-format json --dangerously-skip-permissions "${model_args[@]}" \
+              < "$PROMPT_FILE" > "$_json_out" 2>/dev/null
+          jq -r '.result // empty' "$_json_out" 2>/dev/null
+          cp "$_json_out" "$ORCH_JSON_RESULT" 2>/dev/null || true
+          rm -f "$_json_out"
+        else
+          "$CLAUDE_CMD" --print --output-format text --dangerously-skip-permissions "${model_args[@]}" < "$PROMPT_FILE"
+        fi
       fi
       ;;
     codemie-claude)

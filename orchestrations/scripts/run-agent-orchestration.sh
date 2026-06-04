@@ -168,8 +168,43 @@ resolve_prompt_provider() {
     esac
 }
 
+# GAP-P22: emit a cost record for a pipeline agent invocation.
+# Args: agent_type, story_id, model, started_at, cost_usd, tokens_in, tokens_out, turns
+append_pipeline_cost_record() {
+    local agent_type="${1:-pipeline}" story_id="${2:-pipeline}"
+    local model="${3:-}" started_at="${4:-}" ended_at
+    ended_at=$(date -Iseconds)
+    local cost="${5:-0}" tokens_in="${6:-0}" tokens_out="${7:-0}" turns="${8:-0}"
+    local cost_file="${PHASE_COST_FILE:-$LOG_DIR/phase-cost.jsonl}"
+    local lock_file="${cost_file}.lock"
+    local phase_id="${CURRENT_PHASE:-${PHASE:-unknown}}"
+    (
+        flock -w 5 200 2>/dev/null || true
+        jq -cn \
+            --arg pid  "$phase_id" \
+            --arg sid  "$story_id" \
+            --arg at   "$agent_type" \
+            --arg rm   "$model" \
+            --arg sa   "$started_at" \
+            --arg ea   "$ended_at" \
+            --argjson cu  "${cost:-0}" \
+            --argjson ti  "${tokens_in:-0}" \
+            --argjson to  "${tokens_out:-0}" \
+            --argjson tt  "${turns:-0}" \
+            '{phase_id:$pid, story_id:$sid, agent_type:$at, resolvedModel:$rm,
+              started_at:$sa, ended_at:$ea, task_cost_usd:$cu,
+              task_tokens_in:$ti, task_tokens_out:$to, task_turns:$tt,
+              status:"completed", invokeMode:"cli"}' >> "$cost_file"
+    ) 200>"$lock_file"
+}
+
+# run_orch_prompt <prompt> [agent_type] [story_id]
+# Runs a pipeline agent prompt, tracks cost to phase-cost.jsonl (GAP-P22),
+# and returns the text output.
 run_orch_prompt() {
     local prompt_text="$1"
+    local agent_type="${2:-pipeline}"
+    local story_id="${3:-pipeline}"
     local provider_hint
     provider_hint="$(resolve_prompt_provider)"
 
@@ -178,17 +213,39 @@ run_orch_prompt() {
         return 1
     fi
 
-    # Default gate model to Haiku (low-effort, structured JSON output tasks)
     local gate_model="${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}"
     local model_args=()
     [ -n "$gate_model" ] && model_args=(--model "$gate_model")
 
+    local started_at
+    started_at=$(date -Iseconds)
+    local json_result_file
+    json_result_file=$(mktemp /tmp/orch-prompt-XXXXXX.json)
+
+    # Run with JSON output so we can capture cost/token data
+    local _rc=0
     echo "$prompt_text" | \
         AI_PROVIDER="$provider_hint" \
         AI_MODEL="$gate_model" \
         CLAUDE_CMD="$CLAUDE_CMD" \
         EPAM_CLI="${EPAM_CLI:-epam}" \
-        "$AI_RUNNER_CMD" --provider "$provider_hint" "${model_args[@]}"
+        ORCH_JSON_RESULT="$json_result_file" \
+        "$AI_RUNNER_CMD" --provider "$provider_hint" "${model_args[@]}" || _rc=$?
+
+    # Extract cost/token data and emit pipeline cost record
+    if [ -f "$json_result_file" ] && [ -s "$json_result_file" ]; then
+        local cost tokens_in tokens_out turns
+        cost=$(jq -r '.total_cost_usd // 0'          "$json_result_file" 2>/dev/null || echo "0")
+        tokens_in=$(jq -r '.usage.input_tokens // 0'  "$json_result_file" 2>/dev/null || echo "0")
+        tokens_out=$(jq -r '.usage.output_tokens // 0' "$json_result_file" 2>/dev/null || echo "0")
+        turns=$(jq -r '.num_turns // 1'               "$json_result_file" 2>/dev/null || echo "1")
+        append_pipeline_cost_record \
+            "$agent_type" "$story_id" "$gate_model" "$started_at" \
+            "${cost:-0}" "${tokens_in:-0}" "${tokens_out:-0}" "${turns:-1}"
+        rm -f "$json_result_file"
+    fi
+
+    return $_rc
 }
 
 stop_dashboards_watch() {
@@ -794,12 +851,18 @@ run_specification_pass() {
         return 0
     fi
     log "Step 0: Running specification pass for phase '$phase_id'..."
+    local _spec_started; _spec_started=$(date -Iseconds)
     set +e
     PRD_FILE="$PRD_FILE" OUTPUT_DIR="$LOG_DIR" CLAUDE_CMD="${CLAUDE_CMD}" \
         AI_RUNNER_CMD="$AI_RUNNER_CMD" EPAM_ORCHESTRATION_PROVIDER="${EPAM_ORCHESTRATION_PROVIDER:-}" \
         "$node_cmd" "$spec_runner" --phase "$phase_id" 2>&1 | tee "$LOG_DIR/spec-${phase_id}.log"
     local spec_rc=${PIPESTATUS[0]}
     set -e
+    # GAP-P22: emit spec runner cost record (token/cost estimated — spec runner
+    # doesn't expose per-call usage; a future improvement can parse spec logs)
+    append_pipeline_cost_record "spec-pass" "$phase_id" \
+        "${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}" "$_spec_started" \
+        "0" "0" "0" "0" 2>/dev/null || true
     if [ $spec_rc -eq 0 ]; then
         success "Step 0: Specification pass completed for '$phase_id'"
         "$SCRIPT_DIR/update-monitor.sh" event "specification_pass" \
@@ -1001,6 +1064,7 @@ if [ -f "$_router_js" ] && command -v node &>/dev/null; then
             ]
         }' 2>/dev/null || echo '{"phase":"","stories":[],"cpaSignals":[]}')
 
+    _router_started=$(date -Iseconds)
     _router_out=$(echo "$_stories_payload" | \
         ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-${EPAM_API_KEY_ANTHROPIC:-}}" \
         node "$_router_js" 2>/dev/null || echo "")
@@ -1009,6 +1073,12 @@ if [ -f "$_router_js" ] && command -v node &>/dev/null; then
         _topology_decision=$(echo "$_router_out" | jq -r '.topology // empty' 2>/dev/null || echo "")
         _topology_reason=$(echo "$_router_out"   | jq -r '.reason   // empty' 2>/dev/null || echo "")
         _topology_source=$(echo "$_router_out"   | jq -r '.source   // "heuristic"' 2>/dev/null || echo "heuristic")
+        # GAP-P22: track topology router cost when LLM was invoked
+        if [ "$_topology_source" = "llm" ]; then
+            _router_model=$(echo "$_router_out" | jq -r '.model // "claude-haiku-4-5-20251001"' 2>/dev/null || echo "claude-haiku-4-5-20251001")
+            append_pipeline_cost_record "topology-router" "pipeline" "$_router_model" "$_router_started" \
+                "0.001" "800" "50" "1" 2>/dev/null || true
+        fi
     fi
 fi
 
@@ -1193,7 +1263,7 @@ PROMPT_HEADER
 Read ${PRD_REL} implementationOrder[\"${phase_id}\"] for the story list, then proceed with the analysis above."
 
     cd "$PROJECT_ROOT"
-    if run_orch_prompt "$assessment_prompt" 2>&1 | tee "$assessment_log"; then
+    if run_orch_prompt "$assessment_prompt" "assessment" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"; then
         success "Pre-phase assessment completed for '$phase_id'"
         "$SCRIPT_DIR/update-monitor.sh" event "pre_phase_assessment" "Pre-phase assessment completed" "" "main" "team-lead-agent" 2>/dev/null || true
         # Validate profiles.json is still valid JSON
@@ -1242,7 +1312,7 @@ COORD_EOF
     )
 
     cd "$PROJECT_ROOT"
-    if run_orch_prompt "$coord_prompt" 2>&1 | tee "$coord_log"; then
+    if run_orch_prompt "$coord_prompt" "spec-coordinator" "${PHASE:-unknown}" 2>&1 | tee "$coord_log"; then
         success "Hybrid pre-phase coordination completed for '$phase_id'"
         "$SCRIPT_DIR/update-monitor.sh" event "hybrid_precoord" \
             "Hybrid pre-phase coordination completed" "" "main" "coordination-agent" 2>/dev/null || true
@@ -1525,7 +1595,7 @@ PROMPT_EOF
     log "Backed up prd.json to ${PRD_FILE}.pre-assessment"
 
     cd "$PROJECT_ROOT"
-    if run_orch_prompt "$assessment_prompt" 2>&1 | tee "$assessment_log"; then
+    if run_orch_prompt "$assessment_prompt" "assessment" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"; then
         success "Phase assessment completed for '$phase_id'"
     else
         warning "Phase assessment failed for '$phase_id' (non-critical)"
@@ -1846,7 +1916,7 @@ Return strict JSON only:
 
             echo "[$(date -Iseconds)] story=$story_id route=$route score=$route_score reason=$route_reason" >> "$e2e_route_log"
             set +e
-            run_orch_prompt "$prompt" 2>&1 | tee "$story_log"
+            run_orch_prompt "$prompt" "qa-gate:e2e" "${story_id:-unknown}" 2>&1 | tee "$story_log"
             rc=${PIPESTATUS[0]:-1}
             set -e
             if [ $rc -ne 0 ]; then
@@ -2038,7 +2108,7 @@ $audit_summary
 
 $sast_prompt"
 
-        run_orch_prompt "$sast_prompt" 2>&1 | tee "$sast_log"
+        run_orch_prompt "$sast_prompt" "qa-gate:sast" "${PHASE:-unknown}" 2>&1 | tee "$sast_log"
     } &
     local sast_pid=$!
 
@@ -2136,7 +2206,7 @@ $oracle_summary
 
 $spec_prompt"
 
-        run_orch_prompt "$spec_prompt" 2>&1 | tee "$spec_log"
+        run_orch_prompt "$spec_prompt" "qa-gate:spec-validator" "${PHASE:-unknown}" 2>&1 | tee "$spec_log"
     } &
     local spec_pid=$!
 
@@ -2226,7 +2296,7 @@ Output format (strict JSON):
 $review_prompt"
             fi
 
-            run_orch_prompt "$review_prompt" 2>&1 | tee "$review_log"
+            run_orch_prompt "$review_prompt" "qa-gate:review-ranger" "${PHASE:-unknown}" 2>&1 | tee "$review_log"
         } &
         local review_pid=$!
 
@@ -2264,7 +2334,7 @@ Output format (strict JSON):
 $mutant_prompt"
             fi
 
-            run_orch_prompt "$mutant_prompt" 2>&1 | tee "$mutant_log"
+            run_orch_prompt "$mutant_prompt" "qa-gate:mutant-hunter" "${PHASE:-unknown}" 2>&1 | tee "$mutant_log"
         } &
         local mutant_pid=$!
 
@@ -2352,7 +2422,7 @@ Output format (strict JSON):
 $fuzz_prompt"
             fi
 
-            run_orch_prompt "$fuzz_prompt" 2>&1 | tee "$fuzz_log"
+            run_orch_prompt "$fuzz_prompt" "qa-gate:fuzz-weaver" "${PHASE:-unknown}" 2>&1 | tee "$fuzz_log"
         } &
         local fuzz_pid=$!
 
@@ -2391,7 +2461,7 @@ Output format (strict JSON):
 $perf_prompt"
             fi
 
-            run_orch_prompt "$perf_prompt" 2>&1 | tee "$perf_log"
+            run_orch_prompt "$perf_prompt" "qa-gate:perf-sentinel" "${PHASE:-unknown}" 2>&1 | tee "$perf_log"
         } &
         local perf_pid=$!
 

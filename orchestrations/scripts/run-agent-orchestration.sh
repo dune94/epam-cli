@@ -79,6 +79,8 @@ if [ -n "${CLAUDE_CMD:-}" ]; then
     CLAUDE_CMD="$CLAUDE_CMD"
 elif [ "${EPAM_ORCHESTRATION_PROVIDER:-}" = "codex" ]; then
     CLAUDE_CMD="codex"
+elif [ "${EPAM_ORCHESTRATION_PROVIDER:-}" = "qwen" ]; then
+    CLAUDE_CMD="qwen"
 else
     CLAUDE_CMD="claude"
 fi
@@ -218,7 +220,7 @@ run_orch_prompt() {
         return 1
     fi
 
-    local gate_model="${ORCH_GATE_MODEL:-gpt-5-codex}"
+    local gate_model="${ORCH_GATE_MODEL:-qwen/qwen3-coder-30b-a3b-instruct}"
     local model_args=()
     [ -n "$gate_model" ] && model_args=(--model "$gate_model")
 
@@ -866,7 +868,7 @@ run_specification_pass() {
     # GAP-P22: emit spec runner cost record (token/cost estimated — spec runner
     # doesn't expose per-call usage; a future improvement can parse spec logs)
     append_pipeline_cost_record "spec-pass" "$phase_id" \
-        "${ORCH_GATE_MODEL:-gpt-5-codex}" "$_spec_started" \
+        "${ORCH_GATE_MODEL:-qwen/qwen3-coder-30b-a3b-instruct}" "$_spec_started" \
         "0" "0" "0" "0" 2>/dev/null || true
     if [ $spec_rc -eq 0 ]; then
         success "Step 0: Specification pass completed for '$phase_id'"
@@ -1080,7 +1082,7 @@ if [ -f "$_router_js" ] && command -v node &>/dev/null; then
         _topology_source=$(echo "$_router_out"   | jq -r '.source   // "heuristic"' 2>/dev/null || echo "heuristic")
         # GAP-P22: track topology router cost when LLM was invoked
         if [ "$_topology_source" = "llm" ]; then
-            _router_model=$(echo "$_router_out" | jq -r '.model // "gpt-5-codex"' 2>/dev/null || echo "gpt-5-codex")
+            _router_model=$(echo "$_router_out" | jq -r '.model // "qwen/qwen3-coder-30b-a3b-instruct"' 2>/dev/null || echo "qwen/qwen3-coder-30b-a3b-instruct")
             append_pipeline_cost_record "topology-router" "pipeline" "$_router_model" "$_router_started" \
                 "0.001" "800" "50" "1" 2>/dev/null || true
         fi

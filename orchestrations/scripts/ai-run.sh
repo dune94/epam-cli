@@ -138,8 +138,27 @@ run_provider_once() {
       return 1
       ;;
     openai|qwen|cursor|copilot)
-      "$EPAM_CLI" run --provider "$provider" "${model_args[@]}" --json < "$PROMPT_FILE" \
-        | jq -r '.result // .message // .output // .text // empty'
+      # Capture to temp file so pino JSON lines on stdout don't corrupt jq parsing
+      local _epam_out
+      _epam_out="$(mktemp)"
+      if ! "$EPAM_CLI" run --provider "$provider" "${model_args[@]}" --json \
+          < "$PROMPT_FILE" > "$_epam_out" 2>/dev/null; then
+        cat "$_epam_out" >&2
+        rm -f "$_epam_out"
+        return 1
+      fi
+      # When cost tracking is requested, save the normalized JSON result
+      if [ -n "${ORCH_JSON_RESULT:-}" ]; then
+        # Extract the result object (select lines that have a .result field)
+        jq -rs '[.[] | select(.result != null)] | last // {}' "$_epam_out" \
+          > "$ORCH_JSON_RESULT" 2>/dev/null || true
+      fi
+      # Extract text result, tolerating mixed pino JSON lines in output
+      jq -rs '[.[] | select(.result != null and .result != "")] | last // {} | .result // .message // .output // .text // empty' \
+        "$_epam_out"
+      local _jq_rc=$?
+      rm -f "$_epam_out"
+      return $_jq_rc
       ;;
     *)
       echo "ai-run.sh: unsupported provider '$provider'" >&2

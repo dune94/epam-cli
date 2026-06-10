@@ -72,6 +72,17 @@ describe('extractTaggedJson', () => {
     const text = '<COORDINATOR>{"assignments":[]}</COORDINATOR>';
     expect(extractTaggedJson(text, 'COORDINATOR')).toEqual({ assignments: [] });
   });
+
+  it('returns null for empty/whitespace-only tag content', () => {
+    expect(extractTaggedJson('<SPEC_ASSIGNMENTS>\n</SPEC_ASSIGNMENTS>', 'SPEC_ASSIGNMENTS')).toBeNull();
+    expect(extractTaggedJson('<SPEC_ASSIGNMENTS>   </SPEC_ASSIGNMENTS>', 'SPEC_ASSIGNMENTS')).toBeNull();
+    expect(extractTaggedJson('<SPEC_ASSIGNMENTS>\n\n\t\n</SPEC_ASSIGNMENTS>', 'SPEC_ASSIGNMENTS')).toBeNull();
+  });
+
+  it('returns null when open tag present but no close tag (truncated response)', () => {
+    const text = '<SPEC_AGENT>{"storyId":"HW-001"';
+    expect(extractTaggedJson(text, 'SPEC_AGENT')).toBeNull();
+  });
 });
 
 // ─── resolvePromptProvider ───────────────────────────────────────────────────

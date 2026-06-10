@@ -242,10 +242,10 @@ run_orch_prompt() {
     # Extract cost/token data and emit pipeline cost record
     if [ -f "$json_result_file" ] && [ -s "$json_result_file" ]; then
         local cost tokens_in tokens_out turns
-        cost=$(jq -r '.total_cost_usd // 0'          "$json_result_file" 2>/dev/null || echo "0")
-        tokens_in=$(jq -r '.usage.input_tokens // 0'  "$json_result_file" 2>/dev/null || echo "0")
-        tokens_out=$(jq -r '.usage.output_tokens // 0' "$json_result_file" 2>/dev/null || echo "0")
-        turns=$(jq -r '.num_turns // 1'               "$json_result_file" 2>/dev/null || echo "1")
+        cost=$(jq -r '.cost_usd // .total_cost_usd // 0'                    "$json_result_file" 2>/dev/null || echo "0")
+        tokens_in=$(jq -r '.usage.inputTokens // .usage.input_tokens // 0'  "$json_result_file" 2>/dev/null || echo "0")
+        tokens_out=$(jq -r '.usage.outputTokens // .usage.output_tokens // 0' "$json_result_file" 2>/dev/null || echo "0")
+        turns=$(jq -r '.iterations // .num_turns // 1'                       "$json_result_file" 2>/dev/null || echo "1")
         append_pipeline_cost_record \
             "$agent_type" "$story_id" "$gate_model" "$started_at" \
             "${cost:-0}" "${tokens_in:-0}" "${tokens_out:-0}" "${turns:-1}"

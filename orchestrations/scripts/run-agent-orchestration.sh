@@ -862,6 +862,7 @@ run_specification_pass() {
     set +e
     PRD_FILE="$PRD_FILE" OUTPUT_DIR="$LOG_DIR" CLAUDE_CMD="${CLAUDE_CMD}" \
         AI_RUNNER_CMD="$AI_RUNNER_CMD" EPAM_ORCHESTRATION_PROVIDER="${EPAM_ORCHESTRATION_PROVIDER:-}" \
+        AI_MODEL="${ORCH_GATE_MODEL:-}" \
         "$node_cmd" "$spec_runner" --phase "$phase_id" 2>&1 | tee "$LOG_DIR/spec-${phase_id}.log"
     local spec_rc=${PIPESTATUS[0]}
     set -e

@@ -65,11 +65,7 @@ async function run() {
     : path.join(automationDir, 'logs');
   const aiRunnerCmd = process.env.AI_RUNNER_CMD || path.join(scriptDir, 'ai-run.sh');
   const monitorScript = path.join(scriptDir, 'update-monitor.sh');
-  const promptProvider = process.env.AI_PROVIDER
-    || process.env.EPAM_ORCHESTRATION_PROVIDER
-    || (/codex$/.test(process.env.CLAUDE_CMD || '') ? 'codex' : 'claude');
-  const promptExec = { cmd: aiRunnerCmd, args: ['--provider', promptProvider] };
-
+  const promptExec = resolvePromptExec(aiRunnerCmd);
   if (!fs.existsSync(prdPath)) {
     console.error('spec-mode-runner: prd.json not found at', prdPath);
     process.exit(1);
@@ -735,8 +731,33 @@ function runClaude(execSpec, prompt, logPath) {
   });
 }
 
+function resolvePromptProvider(env = process.env) {
+  return env.AI_PROVIDER
+    || env.EPAM_ORCHESTRATION_PROVIDER
+    || (/codex$/.test(env.CLAUDE_CMD || '') ? 'codex' : 'claude');
+}
 
-run().catch((err) => {
-  console.error('spec-mode-runner failed:', err);
-  process.exit(1);
-});
+function resolvePromptExec(aiRunnerCmd, env = process.env) {
+  const provider = resolvePromptProvider(env);
+  const gateModel = env.AI_MODEL || env.ORCH_GATE_MODEL || '';
+  const modelArgs = gateModel ? ['--model', gateModel] : [];
+  return { cmd: aiRunnerCmd, args: ['--provider', provider, ...modelArgs] };
+}
+
+if (require.main === module) {
+  run().catch((err) => {
+    console.error('spec-mode-runner failed:', err);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  extractTaggedJson,
+  buildAssignments,
+  captureStorySnapshot,
+  splitDepth,
+  applySpecChanges,
+  extractCodeRefs,
+  resolvePromptProvider,
+  resolvePromptExec,
+};

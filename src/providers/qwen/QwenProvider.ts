@@ -20,7 +20,7 @@ export const DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/api/v1';
 
 export class QwenProvider implements LLMProvider {
   readonly name = 'qwen';
-  readonly defaultModel = 'qwen/qwen3-coder';
+  readonly defaultModel = 'qwen/qwen3-coder-30b-a3b-instruct';
 
   private apiKey: string;
   private baseURL: string;

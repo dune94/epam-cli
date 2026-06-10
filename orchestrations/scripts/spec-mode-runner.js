@@ -689,10 +689,20 @@ function extractTaggedJson(text, tag) {
     }
   }
 
-  // Full pair: <TAG>content</TAG> — CLI mode where conversation text is echoed
-  const fullRegex = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`);
-  const fullMatch = fullRegex.exec(text);
-  if (fullMatch) return stripAndParse(fullMatch[1]);
+  // Full pair: <TAG>content</TAG> — find ALL matches, return the last parseable one.
+  // Models sometimes echo an empty template block from the prompt before outputting
+  // their real content (e.g. coordinator prompt contains empty <SPEC_ASSIGNMENTS></SPEC_ASSIGNMENTS>
+  // which the model echoes, then outputs the real block after "# Output").
+  const fullRegex = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, 'g');
+  const fullMatches = [...text.matchAll(fullRegex)];
+  if (fullMatches.length > 0) {
+    // Try matches in reverse — prefer the last well-formed JSON block
+    for (let i = fullMatches.length - 1; i >= 0; i--) {
+      const parsed = stripAndParse(fullMatches[i][1]);
+      if (parsed !== null) return parsed;
+    }
+    // All full-pair matches failed to parse; fall through to partial-match fallback
+  }
 
   // Partial (SDK single-turn): prompt injected the opening tag, model response
   // contains only content followed by </TAG>. Match everything up to the close tag.

@@ -73,15 +73,41 @@ describe('extractTaggedJson', () => {
     expect(extractTaggedJson(text, 'COORDINATOR')).toEqual({ assignments: [] });
   });
 
-  it('returns null for empty/whitespace-only tag content', () => {
+  it('returns null for empty/whitespace-only tag content (only match)', () => {
     expect(extractTaggedJson('<SPEC_ASSIGNMENTS>\n</SPEC_ASSIGNMENTS>', 'SPEC_ASSIGNMENTS')).toBeNull();
     expect(extractTaggedJson('<SPEC_ASSIGNMENTS>   </SPEC_ASSIGNMENTS>', 'SPEC_ASSIGNMENTS')).toBeNull();
     expect(extractTaggedJson('<SPEC_ASSIGNMENTS>\n\n\t\n</SPEC_ASSIGNMENTS>', 'SPEC_ASSIGNMENTS')).toBeNull();
   });
 
   it('returns null when open tag present but no close tag (truncated response)', () => {
-    const text = '<SPEC_AGENT>{"storyId":"HW-001"';
+    const text = '<SPEC_AGENT>{"storyId":"HW-001"}';
     expect(extractTaggedJson(text, 'SPEC_AGENT')).toBeNull();
+  });
+
+  it('returns last parseable match when model echoes empty template block before real output', () => {
+    // Coordinator prompt has empty <SPEC_ASSIGNMENTS></SPEC_ASSIGNMENTS> as template;
+    // model echoes it then outputs its real assignments after "# Output"
+    const realPayload = [{ storyId: 'HW-003', agents: ['speckit'], priority: 'high' }];
+    const text = [
+      '<SPEC_ASSIGNMENTS>',
+      '</SPEC_ASSIGNMENTS>',
+      '',
+      '# Output',
+      '<SPEC_ASSIGNMENTS>',
+      JSON.stringify(realPayload, null, 2),
+      '</SPEC_ASSIGNMENTS>',
+    ].join('\n');
+    expect(extractTaggedJson(text, 'SPEC_ASSIGNMENTS')).toEqual(realPayload);
+  });
+
+  it('skips malformed earlier blocks and returns last parseable one', () => {
+    const good = { storyId: 'HW-001', agent: 'speckit' };
+    const text = [
+      '<SPEC_AGENT>{bad json}</SPEC_AGENT>',
+      '<SPEC_AGENT></SPEC_AGENT>',
+      `<SPEC_AGENT>${JSON.stringify(good)}</SPEC_AGENT>`,
+    ].join('\n');
+    expect(extractTaggedJson(text, 'SPEC_AGENT')).toEqual(good);
   });
 });
 

@@ -1,5 +1,5 @@
 # Phase Handoff: ui_and_review
-Generated: 2026-05-31T07:53:23-04:00
+Generated: 2026-06-04T15:24:38-04:00
 
 ## Completed Stories
 - SKY-005: Build HTML dashboard at src/public/index.html
@@ -11,6 +11,6 @@ Generated: 2026-05-31T07:53:23-04:00
 
 ## Cost Summary
 Total cost: $0.0000
-Entries: 14
+Entries: 120
 
 ## Review Results

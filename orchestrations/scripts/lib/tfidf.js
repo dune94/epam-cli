@@ -17,7 +17,7 @@
 const fs   = require('fs');
 const path = require('path');
 
-// ── Arg parsing ────────────────────────────────────────────────────────────
+// ── Arg parsing (CLI mode only) ────────────────────────────────────────────
 const argv = process.argv.slice(2);
 const getArg = (flag, def = '') => {
   const i = argv.indexOf(flag);
@@ -25,16 +25,12 @@ const getArg = (flag, def = '') => {
 };
 const hasFlag = (flag) => argv.includes(flag);
 
+// These are read from args when run as CLI; tests use the exported functions directly.
 const KB_DIR     = getArg('--kb-dir');
 const QUERY      = getArg('--query');
 const TOP_K      = parseInt(getArg('--top', '5'), 10);
 const CHUNK_SIZE = parseInt(getArg('--chunk-size', '25'), 10);
 const EXTRA_DOCS = getArg('--extra-docs', ''); // comma-separated file paths
-
-if (!QUERY) {
-  process.stderr.write('Usage: node tfidf.js --kb-dir <path> --query <text> [--top <n>] [--chunk-size <lines>] [--extra-docs <csv>]\n');
-  process.exit(1);
-}
 
 // ── Stopwords ──────────────────────────────────────────────────────────────
 const STOPWORDS = new Set([
@@ -176,37 +172,46 @@ function extractChunk(doc, queryTerms) {
 
 // ── Main ───────────────────────────────────────────────────────────────────
 
-const corpus = loadCorpus();
+if (require.main === module) {
+  if (!QUERY) {
+    process.stderr.write('Usage: node tfidf.js --kb-dir <path> --query <text> [--top <n>] [--chunk-size <lines>] [--extra-docs <csv>]\n');
+    process.exit(1);
+  }
 
-if (corpus.length === 0) {
-  process.stdout.write('[]\n');
-  process.exit(0);
-}
+  const corpus = loadCorpus();
 
-const idf        = buildIDF(corpus);
-const queryTerms = tokenize(QUERY);
+  if (corpus.length === 0) {
+    process.stdout.write('[]\n');
+    process.exit(0);
+  }
 
-if (queryTerms.length === 0) {
-  // No useful query terms — return first TOP_K docs (truncated)
-  const fallback = corpus.slice(0, TOP_K).map(doc => ({
-    source: doc.source,
-    score: 0,
-    chunk: doc.lines.slice(0, CHUNK_SIZE).join('\n').trim(),
+  const idf        = buildIDF(corpus);
+  const queryTerms = tokenize(QUERY);
+
+  if (queryTerms.length === 0) {
+    // No useful query terms — return first TOP_K docs (truncated)
+    const fallback = corpus.slice(0, TOP_K).map(doc => ({
+      source: doc.source,
+      score: 0,
+      chunk: doc.lines.slice(0, CHUNK_SIZE).join('\n').trim(),
+    }));
+    process.stdout.write(JSON.stringify(fallback) + '\n');
+    process.exit(0);
+  }
+
+  const scored = corpus
+    .map(doc => ({ source: doc.source, score: scoreDoc(doc, queryTerms, idf), doc }))
+    .filter(d => d.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, TOP_K);
+
+  const results = scored.map(({ source, score, doc }) => ({
+    source,
+    score: Math.round(score * 10000) / 10000,
+    chunk: extractChunk(doc, queryTerms),
   }));
-  process.stdout.write(JSON.stringify(fallback) + '\n');
-  process.exit(0);
+
+  process.stdout.write(JSON.stringify(results) + '\n');
 }
 
-const scored = corpus
-  .map(doc => ({ source: doc.source, score: scoreDoc(doc, queryTerms, idf), doc }))
-  .filter(d => d.score > 0)
-  .sort((a, b) => b.score - a.score)
-  .slice(0, TOP_K);
-
-const results = scored.map(({ source, score, doc }) => ({
-  source,
-  score: Math.round(score * 10000) / 10000,
-  chunk: extractChunk(doc, queryTerms),
-}));
-
-process.stdout.write(JSON.stringify(results) + '\n');
+module.exports = { tokenize, computeTF, buildIDF, scoreDoc, extractChunk };

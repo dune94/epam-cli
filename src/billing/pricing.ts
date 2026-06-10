@@ -51,6 +51,10 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   'gemini-1.5-flash-8b':          { inputPerMillion: 0.0375,outputPerMillion: 0.15  },
   'gemini-3-pro-preview':         { inputPerMillion: 1.25,  outputPerMillion: 5.00  },
   // ─── Qwen / OpenRouter ────────────────────────────────────────────────────
+  'qwen/qwen3.7-max':             { inputPerMillion: 1.25,  outputPerMillion: 3.75  },
+  'qwen/qwen3.7-plus':            { inputPerMillion: 0.40,  outputPerMillion: 1.60  },
+  'qwen/qwen3.6-flash':           { inputPerMillion: 0.1875,outputPerMillion: 1.125 },
+  'qwen/qwen3-coder':             { inputPerMillion: 0.22,  outputPerMillion: 1.80  },
   'qwen-max':                     { inputPerMillion: 2.00,  outputPerMillion: 8.00  },
   'qwen-plus':                    { inputPerMillion: 0.50,  outputPerMillion: 2.00  },
   'qwen-turbo':                   { inputPerMillion: 0.10,  outputPerMillion: 0.40  },

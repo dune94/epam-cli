@@ -588,11 +588,17 @@ while IFS= read -r sid; do
       *haiku*) _model_alias="haiku" ;;
       *opus*)  _model_alias="opus"  ;;
       *sonnet*)_model_alias="sonnet";;
+      # Qwen via OpenRouter — keep calibration data separate from Claude tiers
+      *qwen3.7-max*)   _model_alias="qwen-max"   ;;
+      *qwen3.7-plus*)  _model_alias="qwen-plus"  ;;
+      *qwen3.6-flash*) _model_alias="qwen-flash" ;;
+      *qwen3-coder*)   _model_alias="qwen-coder" ;;
+      *qwen*)          _model_alias="qwen"       ;;
     esac
   else
     # Infer from effort (mirrors claude.sh resolve_model_settings logic)
     case "$f_effort" in
-      low)    _model_alias="haiku"  ;;
+      low)    _model_alias="qwen"   ;;
       high)   _model_alias="sonnet" ;;
       *)      _model_alias="sonnet" ;;
     esac
@@ -727,6 +733,8 @@ while IFS= read -r sid; do
   t_start=$(date +%s%3N)
   cpa_raw=$(echo "$inference_input" | \
     CLAUDE_CMD="${CLAUDE_CMD:-claude}" \
+    AI_PROVIDER="${CPA_PROVIDER:-${AI_PROVIDER:-qwen}}" \
+    AI_MODEL="${CPA_MODEL:-${AI_MODEL:-qwen/qwen3-coder}}" \
     "$NODE_CMD" "$LIB_DIR/cpa-inference.js" 2>/dev/null || echo "")
   t_end=$(date +%s%3N)
   infer_ms=$(( t_end - t_start ))
@@ -822,7 +830,6 @@ while IFS= read -r sid; do
     printf "  %-22s \$%-9.2f  →  \$%-9.2f\n" "Cost:" "$f_cost" "$b_cost" >&2
     # Show total cost including pipeline overhead when ratio is calibrated
     if (( $(echo "$PIPELINE_OVERHEAD_RATIO > 1.01" | bc -l) )); then
-      local total_cost
       total_cost=$(bc_eval "$b_cost * $PIPELINE_OVERHEAD_RATIO")
       printf "  %-22s \$%-9.2f      (incl. pipeline ×%.2f)\n" \
         "Total (est):" "$total_cost" "$PIPELINE_OVERHEAD_RATIO" >&2

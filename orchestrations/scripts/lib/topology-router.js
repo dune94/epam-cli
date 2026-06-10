@@ -137,6 +137,10 @@ async function main() {
   }
 }
 
-main().catch(err => {
-  process.stdout.write(JSON.stringify({ topology: 'parallel', reason: `Fatal: ${err.message}`, source: 'heuristic' }) + '\n');
-});
+if (require.main === module) {
+  main().catch(err => {
+    process.stdout.write(JSON.stringify({ topology: 'parallel', reason: `Fatal: ${err.message}`, source: 'heuristic' }) + '\n');
+  });
+}
+
+module.exports = { heuristicTopology };

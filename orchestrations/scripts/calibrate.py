@@ -44,6 +44,11 @@ MODEL_PRICING = {
     "claude-sonnet-4-6":           {"in": 0.003,    "out": 0.015},
     # Opus 4.6
     "claude-opus-4-6":             {"in": 0.015,    "out": 0.075},
+    # Qwen via OpenRouter (June 2026 rates)
+    "qwen/qwen3.7-max":            {"in": 0.00125,   "out": 0.00375},
+    "qwen/qwen3.7-plus":           {"in": 0.0004,    "out": 0.0016},
+    "qwen/qwen3.6-flash":          {"in": 0.0001875, "out": 0.001125},
+    "qwen/qwen3-coder":            {"in": 0.00022,   "out": 0.0018},
 }
 
 def compute_cost(tokens_in: int, tokens_out: int, model: str) -> float:

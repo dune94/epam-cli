@@ -27,9 +27,10 @@ const path          = require('path');
 // ── Configuration ──────────────────────────────────────────────────────────
 const CLAUDE_CMD = process.env.CLAUDE_CMD || 'claude';
 const AI_RUNNER_CMD = process.env.AI_RUNNER_CMD || path.resolve(__dirname, '..', 'ai-run.sh');
+// Default provider: qwen (OpenRouter). Override via CPA_PROVIDER or AI_PROVIDER env vars.
 const AI_PROVIDER = process.env.AI_PROVIDER
   || process.env.EPAM_ORCHESTRATION_PROVIDER
-  || (/codex$/.test(CLAUDE_CMD) ? 'codex' : 'claude');
+  || (/codex$/.test(CLAUDE_CMD) ? 'codex' : 'qwen');
 const TIMEOUT_MS = parseInt(process.env.CPA_TIMEOUT_MS || '120000', 10);
 
 // ── Read stdin ─────────────────────────────────────────────────────────────
@@ -222,7 +223,11 @@ async function main() {
   process.stdout.write(JSON.stringify(reviewData) + '\n');
 }
 
-main().catch(e => {
-  process.stderr.write(`FATAL: ${e.message}\n`);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch(e => {
+    process.stderr.write(`FATAL: ${e.message}\n`);
+    process.exit(1);
+  });
+}
+
+module.exports = { extractJSON, buildPrompt, skippedReview };

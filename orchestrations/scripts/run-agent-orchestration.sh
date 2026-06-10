@@ -14,6 +14,11 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
+
+# Load project .env so API keys are available to all subprocesses (worktrees, epam-run, etc.)
+_env_file="$(dirname "$AUTOMATION_DIR")/.env"
+if [ -f "$_env_file" ]; then set -a; . "$_env_file"; set +a; fi
+unset _env_file
 # When PRD_FILE is an external path (e.g. a test-app), derive PROJECT_ROOT from
 # the directory two levels above the PRD file (prd sits in <root>/orchestrations/ normally,
 # but for test apps it sits directly in the app root — detect via presence of package.json).
@@ -213,7 +218,7 @@ run_orch_prompt() {
         return 1
     fi
 
-    local gate_model="${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}"
+    local gate_model="${ORCH_GATE_MODEL:-gpt-5-codex}"
     local model_args=()
     [ -n "$gate_model" ] && model_args=(--model "$gate_model")
 
@@ -861,7 +866,7 @@ run_specification_pass() {
     # GAP-P22: emit spec runner cost record (token/cost estimated — spec runner
     # doesn't expose per-call usage; a future improvement can parse spec logs)
     append_pipeline_cost_record "spec-pass" "$phase_id" \
-        "${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}" "$_spec_started" \
+        "${ORCH_GATE_MODEL:-gpt-5-codex}" "$_spec_started" \
         "0" "0" "0" "0" 2>/dev/null || true
     if [ $spec_rc -eq 0 ]; then
         success "Step 0: Specification pass completed for '$phase_id'"
@@ -1075,7 +1080,7 @@ if [ -f "$_router_js" ] && command -v node &>/dev/null; then
         _topology_source=$(echo "$_router_out"   | jq -r '.source   // "heuristic"' 2>/dev/null || echo "heuristic")
         # GAP-P22: track topology router cost when LLM was invoked
         if [ "$_topology_source" = "llm" ]; then
-            _router_model=$(echo "$_router_out" | jq -r '.model // "claude-haiku-4-5-20251001"' 2>/dev/null || echo "claude-haiku-4-5-20251001")
+            _router_model=$(echo "$_router_out" | jq -r '.model // "gpt-5-codex"' 2>/dev/null || echo "gpt-5-codex")
             append_pipeline_cost_record "topology-router" "pipeline" "$_router_model" "$_router_started" \
                 "0.001" "800" "50" "1" 2>/dev/null || true
         fi
@@ -1456,16 +1461,28 @@ if [ -n "$INDEPENDENT_PID" ]; then
     fi
 fi
 
+if [ "$PRIMARY_EXIT" -ne 0 ] || [ "$INDEPENDENT_EXIT" -ne 0 ]; then
+    error "One or more worktree agents failed; stopping before commit and merge"
+    exit 1
+fi
+
 # ──────────────────────────────────────────────
 # Step 3.1: Worktree health check + auto-commit
 # Ensures agent-produced code is committed before gate assessment.
 # Agents sometimes write files without committing (common failure mode).
-log "Step 3.1: Worktree health check..."
-PHASE="$PHASE" AUTO_COMMIT=true "$SCRIPT_DIR/worktree-health-check.sh" \
-    2>&1 | tee "$LOG_DIR/worktree-health-${PHASE}.log" || {
-    warning "Worktree health check reported issues — see $LOG_DIR/worktree-health-${PHASE}.log"
-    warning "Continuing (auto-commit attempted) — verify files manually if build fails"
-}
+if [ "$need_worktrees" = true ]; then
+    log "Step 3.1: Worktree health check..."
+    GIT_WORK_ROOT="${GIT_WORK_ROOT:-$PROJECT_ROOT}" \
+        PHASE="$PHASE" AUTO_COMMIT=true "$SCRIPT_DIR/worktree-health-check.sh" \
+        2>&1 | tee "$LOG_DIR/worktree-health-${PHASE}.log"
+    _health_exit=${PIPESTATUS[0]}
+    if [ "$_health_exit" -ne 0 ]; then
+        error "Worktree health check failed — see $LOG_DIR/worktree-health-${PHASE}.log"
+        exit 1
+    fi
+else
+    info "Step 3.1: No worktrees — skipping health check"
+fi
 
 # ──────────────────────────────────────────────
 # Step 3.2: Merge worktree branches back to main branch
@@ -1482,17 +1499,22 @@ if [ "$need_worktrees" = true ]; then
 
     MERGE_FAILED=false
 
-    for _wt_branch in wt-primary wt-independent; do
-        # Skip branches that don't exist (no stories for that lane)
+    _active_wt_branches=()
+    [ -n "$primary_stories" ] && _active_wt_branches+=(wt-primary)
+    [ -n "$independent_stories" ] && _active_wt_branches+=(wt-independent)
+
+    for _wt_branch in "${_active_wt_branches[@]}"; do
         if ! git -C "$_merge_git_root" show-ref --verify --quiet "refs/heads/$_wt_branch"; then
-            info "  Branch $_wt_branch does not exist — skipping"
+            error "  Required branch $_wt_branch does not exist"
+            MERGE_FAILED=true
             continue
         fi
 
         # Check if the branch has commits ahead of the current branch
         _ahead=$(git -C "$_merge_git_root" rev-list --count "$_merge_current_branch..$_wt_branch" 2>/dev/null || echo "0")
         if [ "${_ahead:-0}" -eq 0 ]; then
-            info "  Branch $_wt_branch has no new commits — nothing to merge"
+            error "  Active branch $_wt_branch has no new commits"
+            MERGE_FAILED=true
             continue
         fi
 
@@ -1516,6 +1538,7 @@ if [ "$need_worktrees" = true ]; then
     if [ "$MERGE_FAILED" = true ]; then
         error "Step 3.2: One or more worktree merges failed — review conflicts before next phase"
         error "  Worktrees preserved for inspection. Re-run with --skip-cleanup to debug."
+        exit 1
     else
         success "Step 3.2: All worktree branches merged back successfully"
     fi

@@ -20,7 +20,7 @@ export const DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/api/v1';
 
 export class QwenProvider implements LLMProvider {
   readonly name = 'qwen';
-  readonly defaultModel = 'qwen/qwen-2.5-72b-instruct';
+  readonly defaultModel = 'qwen/qwen3-coder';
 
   private apiKey: string;
   private baseURL: string;
@@ -55,6 +55,10 @@ export class QwenProvider implements LLMProvider {
   private async completeOpenRouter(request: ProviderRequest): Promise<ProviderResponse> {
     const model = this.resolveModel(request.model);
     const messages = this.formatMessages(request.messages, request.systemPrompt);
+    const tools = request.tools?.map(t => ({
+      type: 'function' as const,
+      function: { name: t.name, description: t.description, parameters: t.inputSchema },
+    }));
 
     const response = await fetch(`${this.baseURL}/chat/completions`, {
       method: 'POST',
@@ -69,6 +73,7 @@ export class QwenProvider implements LLMProvider {
         messages,
         max_tokens: request.maxTokens || 4096,
         temperature: request.temperature || 0.7,
+        ...(tools && tools.length > 0 ? { tools } : {}),
       }),
     });
 
@@ -81,8 +86,23 @@ export class QwenProvider implements LLMProvider {
     const choice = data['choices']?.[0];
     if (!choice) throw new Error('OpenRouter returned no choices');
 
+    const content: ContentPart[] = [];
+    if (choice.message?.content) {
+      content.push({ type: 'text', text: choice.message.content });
+    }
+    if (choice.message?.tool_calls) {
+      for (const tc of choice.message.tool_calls) {
+        content.push({
+          type: 'tool_use',
+          id: tc.id,
+          name: tc.function.name,
+          input: JSON.parse(tc.function.arguments || '{}'),
+        });
+      }
+    }
+
     return {
-      content: [{ type: 'text', text: choice.message?.content || '' }],
+      content: content.length > 0 ? content : [{ type: 'text', text: '' }],
       stopReason: this.mapStopReason(choice.finish_reason),
       usage: {
         inputTokens: data['usage']?.prompt_tokens || 0,
@@ -94,6 +114,10 @@ export class QwenProvider implements LLMProvider {
   private async streamOpenRouter(request: ProviderRequest, handler: StreamHandler): Promise<ProviderResponse> {
     const model = this.resolveModel(request.model);
     const messages = this.formatMessages(request.messages, request.systemPrompt);
+    const tools = request.tools?.map(t => ({
+      type: 'function' as const,
+      function: { name: t.name, description: t.description, parameters: t.inputSchema },
+    }));
 
     const response = await fetch(`${this.baseURL}/chat/completions`, {
       method: 'POST',
@@ -109,6 +133,7 @@ export class QwenProvider implements LLMProvider {
         max_tokens: request.maxTokens || 4096,
         temperature: request.temperature || 0.7,
         stream: true,
+        ...(tools && tools.length > 0 ? { tools } : {}),
       }),
     });
 
@@ -125,6 +150,7 @@ export class QwenProvider implements LLMProvider {
     let inputTokens = 0;
     let outputTokens = 0;
     let stopReason: ProviderResponse['stopReason'] = 'end_turn';
+    const toolCalls: Map<number, { id: string; name: string; args: string }> = new Map();
 
     while (true) {
       const { done, value } = await reader.read();
@@ -140,6 +166,21 @@ export class QwenProvider implements LLMProvider {
             accumulatedText += choice.delta.content;
             handler({ type: 'text_delta', text: choice.delta.content });
           }
+          if (choice?.delta?.tool_calls) {
+            for (const tc of choice.delta.tool_calls) {
+              const idx = tc.index ?? 0;
+              if (!toolCalls.has(idx)) {
+                toolCalls.set(idx, { id: tc.id ?? '', name: tc.function?.name ?? '', args: '' });
+              }
+              const existing = toolCalls.get(idx)!;
+              if (tc.id) existing.id = tc.id;
+              if (tc.function?.name) existing.name = tc.function.name;
+              if (tc.function?.arguments) {
+                existing.args += tc.function.arguments;
+                handler({ type: 'tool_delta', id: existing.id, name: existing.name, input: tc.function.arguments });
+              }
+            }
+          }
           if (choice?.finish_reason) stopReason = this.mapStopReason(choice.finish_reason);
           if (parsed.usage) {
             inputTokens = parsed.usage.prompt_tokens || 0;
@@ -149,8 +190,20 @@ export class QwenProvider implements LLMProvider {
       }
     }
 
+    const content: ContentPart[] = [];
+    if (accumulatedText) content.push({ type: 'text', text: accumulatedText });
+    for (const tc of toolCalls.values()) {
+      content.push({
+        type: 'tool_use',
+        id: tc.id,
+        name: tc.name,
+        input: (() => { try { return JSON.parse(tc.args); } catch { return {}; } })(),
+      });
+    }
+    if (toolCalls.size > 0) stopReason = 'tool_use';
+
     return {
-      content: [{ type: 'text', text: accumulatedText }],
+      content: content.length > 0 ? content : [{ type: 'text', text: accumulatedText }],
       stopReason,
       usage: { inputTokens, outputTokens },
     };
@@ -309,35 +362,54 @@ export class QwenProvider implements LLMProvider {
   }
 
   /**
-   * Format messages for Qwen API
+   * Format messages for OpenAI-compatible API (OpenRouter or DashScope)
    */
   private formatMessages(messages: Message[], systemPrompt?: string): any[] {
     const formatted: any[] = [];
 
-    // Add system message if provided
     if (systemPrompt) {
-      formatted.push({
-        role: 'system',
-        content: systemPrompt,
-      });
+      formatted.push({ role: 'system', content: systemPrompt });
     }
 
-    // Format conversation messages
     for (const msg of messages) {
-      if (msg.role === 'tool') {
-        // Qwen doesn't support tool role, convert to user
-        formatted.push({
-          role: 'user',
-          content: typeof msg.content === 'string' 
-            ? `Tool result: ${msg.content}`
-            : JSON.stringify(msg.content),
-        });
+      if (msg.role === 'assistant') {
+        if (typeof msg.content === 'string') {
+          formatted.push({ role: 'assistant', content: msg.content });
+        } else {
+          const toolCalls = (msg.content as ContentPart[])
+            .filter(p => p.type === 'tool_use')
+            .map(p => ({
+              id: p.id ?? '',
+              type: 'function' as const,
+              function: { name: p.name ?? '', arguments: JSON.stringify(p.input ?? {}) },
+            }));
+          const textPart = (msg.content as ContentPart[]).find(p => p.type === 'text')?.text;
+          formatted.push({
+            role: 'assistant',
+            content: textPart ?? null,
+            ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
+          });
+        }
+      } else if (msg.role === 'tool') {
+        // Convert tool results to OpenAI tool role
+        const parts = Array.isArray(msg.content) ? msg.content as ContentPart[] : [];
+        for (const part of parts) {
+          if (part.type === 'tool_result') {
+            formatted.push({
+              role: 'tool',
+              tool_call_id: part.tool_use_id ?? '',
+              content: typeof part.content === 'string' ? part.content : JSON.stringify(part.content),
+            });
+          }
+        }
+        // Fallback if content is a plain string
+        if (typeof msg.content === 'string') {
+          formatted.push({ role: 'user', content: `Tool result: ${msg.content}` });
+        }
       } else {
         formatted.push({
           role: msg.role,
-          content: typeof msg.content === 'string' 
-            ? msg.content 
-            : JSON.stringify(msg.content),
+          content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
         });
       }
     }

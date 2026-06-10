@@ -163,10 +163,16 @@ CACHE_POS_3=0.55
 CACHE_POS_4PLUS=0.65
 CACHE_SAME_ROLE_BONUS=0.10
 
-# Pricing table (USD per 1M tokens)
+# Pricing table (USD per 1M tokens) — Claude tiers: Opus 4.6 / Sonnet 4.6 / Haiku 4.5
 declare -A PRICING_INPUT=( [high]=15.00 [medium]=3.00 [low]=0.80 )
 declare -A PRICING_CACHED=( [high]=1.50 [medium]=0.30 [low]=0.08 )
 declare -A PRICING_OUTPUT=( [high]=75.00 [medium]=15.00 [low]=4.00 )
+
+# Qwen via OpenRouter tiers: Qwen3.7 Max / Qwen3.7 Plus / Qwen3.6 Flash
+# Cache-read is 20% of input (OpenRouter rate for 3.7-max/plus; flash estimated at same ratio)
+declare -A QWEN_PRICING_INPUT=( [high]=1.25 [medium]=0.40 [low]=0.1875 )
+declare -A QWEN_PRICING_CACHED=( [high]=0.25 [medium]=0.08 [low]=0.0375 )
+declare -A QWEN_PRICING_OUTPUT=( [high]=3.75 [medium]=1.60 [low]=1.125 )
 
 # ────────────────────────────────────────────
 # Refinement from Historical Data
@@ -454,10 +460,10 @@ while IFS= read -r sid; do
     # Extract story metadata via single jq call
     story_data=$(jq -r --arg id "$sid" '
         .stories[] | select(.id == $id) |
-        "\(.id)|\(.title)|\(.humanHours // .estimatedHours // 0)|\(.priority // "medium")|\(.storyType // "implementation")|\(.agentRole // "none")|\(.dependencies | length)|\(.technicalNotes.requiredSkills | length)|\(.technicalNotes.files | length)|\(.technicalNotes.requiredSkills | join(","))"
+        "\(.id)|\(.title)|\(.humanHours // .estimatedHours // 0)|\(.priority // "medium")|\(.storyType // "implementation")|\(.agentRole // "none")|\(.dependencies // [] | length)|\(.technicalNotes.requiredSkills // [] | length)|\(.technicalNotes.files // [] | length)|\(.aiProvider // "claude")|\(.technicalNotes.requiredSkills // [] | join(","))"
     ' "$PRD_FILE")
 
-    IFS='|' read -r s_id s_title s_hours s_priority s_type s_role s_deps s_skills s_files s_skill_csv <<< "$story_data"
+    IFS='|' read -r s_id s_title s_hours s_priority s_type s_role s_deps s_skills s_files s_provider s_skill_csv <<< "$story_data"
 
     # Effort tier
     effort=$(get_effort_tier "$s_hours")
@@ -562,9 +568,18 @@ while IFS= read -r sid; do
     cache_tokens=$(echo "scale=0; ($input_tokens * $cache_ratio) / 1" | bc)
     uncached_input=$(echo "scale=0; ($input_tokens - $cache_tokens) / 1" | bc)
 
-    price_input="${PRICING_INPUT[$effort]}"
-    price_cached="${PRICING_CACHED[$effort]}"
-    price_output="${PRICING_OUTPUT[$effort]}"
+    case "$s_provider" in
+        qwen)
+            price_input="${QWEN_PRICING_INPUT[$effort]}"
+            price_cached="${QWEN_PRICING_CACHED[$effort]}"
+            price_output="${QWEN_PRICING_OUTPUT[$effort]}"
+            ;;
+        *)
+            price_input="${PRICING_INPUT[$effort]}"
+            price_cached="${PRICING_CACHED[$effort]}"
+            price_output="${PRICING_OUTPUT[$effort]}"
+            ;;
+    esac
 
     cost=$(echo "scale=4; ($uncached_input / 1000000) * $price_input + ($cache_tokens / 1000000) * $price_cached + ($output_tokens / 1000000) * $price_output" | bc)
 
@@ -601,12 +616,20 @@ while IFS= read -r sid; do
     # Cache percentage
     cache_pct=$(echo "scale=0; ($cache_ratio * 100) / 1" | bc)
 
-    # Model name by effort
-    case "$effort" in
-        low)    model_name="Haiku 4.5" ;;
-        medium) model_name="Sonnet 4.6" ;;
-        high)   model_name="Opus 4.6" ;;
-    esac
+    # Model name by effort (and provider)
+    if [ "$s_provider" = "qwen" ]; then
+        case "$effort" in
+            low)    model_name="Qwen3.6 Flash" ;;
+            medium) model_name="Qwen3.7 Plus" ;;
+            high)   model_name="Qwen3.7 Max" ;;
+        esac
+    else
+        case "$effort" in
+            low)    model_name="Haiku 4.5" ;;
+            medium) model_name="Sonnet 4.6" ;;
+            high)   model_name="Opus 4.6" ;;
+        esac
+    fi
 
     # Print formatted output
     if [ "$JSON_MODE" != true ]; then
@@ -628,6 +651,7 @@ while IFS= read -r sid; do
         --arg phase "$phase" \
         --arg effort "$effort" \
         --arg stype "$s_type" \
+        --arg provider "$s_provider" \
         --argjson hours "$s_hours" \
         --argjson ai_min "$ai_minutes" \
         --argjson tokens "$tokens" \
@@ -647,6 +671,7 @@ while IFS= read -r sid; do
             phase: $phase,
             effort: $effort,
             storyType: $stype,
+            aiProvider: $provider,
             humanHours: $hours,
             estimatedAiMinutes: ($ai_min * 100 | round / 100),
             estimatedTokens: $tokens,

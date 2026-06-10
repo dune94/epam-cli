@@ -81,9 +81,13 @@ const BUILTIN_PROVIDERS: ProvidersConfig = {
   },
   qwen: {
     label: 'Alibaba Qwen',
-    defaultModel: 'qwen/qwen-2.5-72b-instruct',
+    defaultModel: 'qwen/qwen3.7-plus',
     models: [
-      { id: 'qwen/qwen-2.5-72b-instruct',       desc: 'Qwen 2.5 72B (default)',   price: '$0.40/$1.60' },
+      { id: 'qwen/qwen3.7-max',                 desc: 'Qwen3.7 Max agentic flagship', price: '$1.25/$3.75' },
+      { id: 'qwen/qwen3.7-plus',                desc: 'Qwen3.7 Plus (default)',    price: '$0.40/$1.60' },
+      { id: 'qwen/qwen3.6-flash',               desc: 'Qwen3.6 Flash fast & cheap', price: '$0.1875/$1.125' },
+      { id: 'qwen/qwen3-coder',                 desc: 'Qwen3 Coder 480B',          price: '$0.22/$1.80' },
+      { id: 'qwen/qwen-2.5-72b-instruct',       desc: 'Qwen 2.5 72B (legacy)',     price: '$0.40/$1.60' },
       { id: 'qwen/qwen-2.5-7b-instruct',        desc: 'Qwen 2.5 7B compact',      price: '$0.04/$0.12' },
       { id: 'qwen/qwq-32b',                     desc: 'QwQ 32B reasoning',         price: '$0.20/$0.60' },
       { id: 'qwen/qwen3-235b-a22b',             desc: 'Qwen3 235B MoE flagship',   price: '$0.60/$2.40' },

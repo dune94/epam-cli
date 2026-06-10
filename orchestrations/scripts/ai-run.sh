@@ -16,6 +16,18 @@ INVOKE_PY="$_SCRIPT_DIR_AIRUN/invoke.py"
 INVOKE_PYTHON="${INVOKE_PYTHON:-$_SCRIPT_DIR_AIRUN/.venv/bin/python3}"
 [ -x "$INVOKE_PYTHON" ] || INVOKE_PYTHON="python3"
 
+load_env_file() {
+  local env_file="$1"
+  [ -f "$env_file" ] || return 0
+  set -a
+  # shellcheck disable=SC1090
+  . "$env_file"
+  set +a
+}
+
+load_env_file "$(dirname "$(dirname "$_SCRIPT_DIR_AIRUN")")/.env"
+load_env_file "${PROJECT_ROOT:-}/.env"
+
 usage() {
   cat <<'EOF'
 Usage: ai-run.sh [--provider NAME] [--model NAME]
@@ -100,21 +112,28 @@ run_provider_once() {
       codemie-claude --print --output-format text --dangerously-skip-permissions "${model_args[@]}" < "$PROMPT_FILE"
       ;;
     codex)
-      if ! command -v "$EPAM_CLI" >/dev/null 2>&1; then
-        echo "ai-run.sh: provider 'codex' requires '$EPAM_CLI run --provider codex --json'" >&2
+      if ! command -v codex >/dev/null 2>&1; then
+        echo "ai-run.sh: provider 'codex' requires codex CLI" >&2
         return 127
+      fi
+      local codex_model="${AI_MODEL:-gpt-5-codex}"
+      if ! echo "$codex_model" | grep -Eq '^(gpt-|o[0-9]|codex-)'; then
+        codex_model="gpt-5-codex"
       fi
       local raw_file
       raw_file="$(mktemp)"
-      if "$EPAM_CLI" run --provider codex "${model_args[@]}" --json < "$PROMPT_FILE" > "$raw_file"; then
-        if jq -e . "$raw_file" >/dev/null 2>&1; then
-          jq -r '.result // .message // .output // .text // empty' "$raw_file"
-        else
-          cat "$raw_file"
-        fi
+      if codex exec \
+          --ephemeral \
+          --skip-git-repo-check \
+          --dangerously-bypass-approvals-and-sandbox \
+          --model "$codex_model" \
+          --json - < "$PROMPT_FILE" > "$raw_file"; then
+        grep '"type":"item.completed"' "$raw_file" 2>/dev/null \
+          | jq -rs '[.[].item.text // ""] | join("")' 2>/dev/null || true
         rm -f "$raw_file"
         return 0
       fi
+      cat "$raw_file" >&2
       rm -f "$raw_file"
       return 1
       ;;

@@ -31,6 +31,18 @@ MONITOR_STATUS_FILE="${MONITOR_FILE:-$LOG_DIR/agent-status.json}"
 export MONITOR_FILE="$MONITOR_STATUS_FILE"
 export ACTIVITY_FILE="${ACTIVITY_FILE:-$LOG_DIR/agent-activity.jsonl}"
 
+load_env_file() {
+    local env_file="$1"
+    [ -f "$env_file" ] || return 0
+    set -a
+    # shellcheck disable=SC1090
+    . "$env_file"
+    set +a
+}
+
+load_env_file "$(dirname "$AUTOMATION_DIR")/.env"
+load_env_file "$PROJECT_ROOT/.env"
+
 # Git work root — the directory containing .git (defaults to PROJECT_ROOT)
 # Override when the git repo lives in a subdirectory (e.g., PROJECT_ROOT/application)
 GIT_WORK_ROOT="${GIT_WORK_ROOT:-$PROJECT_ROOT}"
@@ -62,9 +74,9 @@ INVOKE_PYTHON="${INVOKE_PYTHON:-$SCRIPT_DIR/.venv/bin/python3}"
 # Effort -> model + max-turns mapping
 # Stories carry an optional "effort" field: low | medium (default) | high
 # These map to a model and a max-turns cap for the Claude CLI invocation.
-EFFORT_MODEL_LOW="claude-haiku-4-5-20251001"
-EFFORT_MODEL_MEDIUM="claude-sonnet-4-5-20250929"
-EFFORT_MODEL_HIGH="claude-opus-4-6"
+EFFORT_MODEL_LOW="gpt-5-codex"
+EFFORT_MODEL_MEDIUM="gpt-5-codex"
+EFFORT_MODEL_HIGH="gpt-5-codex"
 # Set by resolve_planner_settings; empty means single-invocation mode (no split)
 STORY_PLANNER_MODEL=""
 
@@ -109,6 +121,19 @@ resolve_model_from_story() {
         STORY_MODEL="$story_model"
         log "  Model[prd.json] -> $STORY_MODEL (overrides effort default)"
     fi
+}
+
+resolve_codex_model_settings() {
+    local story_id="$1"
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    local story_model runtime_model
+    story_model=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .model // ""' \
+        "$prd_target" 2>/dev/null || echo "")
+    runtime_model=$(jq -r '.configuration.aiRuntime.defaultModel // ""' \
+        "$prd_target" 2>/dev/null || echo "")
+    STORY_MODEL="${story_model:-${runtime_model:-gpt-5-codex}}"
+    log "  Model[codex] -> $STORY_MODEL"
 }
 
 # resolve_planner_settings <story_id>
@@ -194,14 +219,14 @@ resolve_dynamic_constitution() {
 
 # resolve_provider_settings <story_id>
 # Reads aiProvider from the story and sets STORY_PROVIDER global.
-# Values: claude-sonnet | claude-opus | opencode | codex | epam (default: claude-sonnet)
+# Values: opencode | codex | epam | provider aliases (default: codex)
 resolve_provider_settings() {
     local story_id="$1"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
     STORY_PROVIDER=$(jq -r --arg id "$story_id" \
-        '.stories[] | select(.id == $id) | .aiProvider // "claude-sonnet"' \
+        '.stories[] | select(.id == $id) | .aiProvider // "codex"' \
         "$prd_target" 2>/dev/null | head -1)
-    STORY_PROVIDER="${STORY_PROVIDER:-claude-sonnet}"
+    STORY_PROVIDER="${STORY_PROVIDER:-codex}"
     log "  Provider[$STORY_PROVIDER] -> CLI=$(provider_to_cli "$STORY_PROVIDER")"
 }
 
@@ -214,7 +239,7 @@ provider_to_cli() {
         codemie-claude)              echo "codemie-claude" ;;
         copilot|openai|qwen|cursor)  echo "$EPAM_CLI" ;;
         epam)                        echo "$CLAUDE_CMD" ;;  # epam: treat same as claude for now
-        *)                           echo "$CLAUDE_CMD" ;;  # claude-sonnet, claude-opus, etc.
+        *)                           echo "$CLAUDE_CMD" ;;
     esac
 }
 
@@ -274,8 +299,8 @@ normalize_provider_json() {
             ;;
         epam-run)
             # epam run --json output: {result, cost_usd, usage:{inputTokens,outputTokens}}
-            # Normalize to the standard orchestration schema used by append_cost_record.
-            jq '{
+            # Pick the last JSON object with a non-empty result (guards against pino log lines).
+            jq -s '[.[] | select(.result != null and .result != "")] | last // {result:"",cost_usd:0,usage:{inputTokens:0,outputTokens:0}} | {
                 result:          (.result // ""),
                 total_cost_usd:  (.cost_usd // 0),
                 usage: {
@@ -541,7 +566,7 @@ PLAN_PROMPT_EOF
     if [ "${EPAM_SDK_INVOKE:-0}" = "1" ] && [ -f "$INVOKE_PY" ]; then
         # SDK path: extended thinking enabled for plan mode (high-complexity reasoning)
         if echo "$plan_prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
-                --model "${STORY_MODEL:-claude-sonnet-4-6}" \
+                --model "${STORY_MODEL:-gpt-5-codex}" \
                 --thinking-budget 8000 \
                 --output "$plan_json" 2>/dev/null; then
             plan_ok=true
@@ -796,7 +821,8 @@ build_implementation_prompt() {
     local acceptance_criteria=$(echo "$story_json" | jq -r '.acceptanceCriteria | join("\n- ")')
     local technical_notes=$(echo "$story_json" | jq -r '.technicalNotes // empty')
     local files=$(echo "$story_json" | jq -r '.technicalNotes.files // [] | join(", ")')
-    local dependencies=$(echo "$story_json" | jq -r '.dependencies | join(", ")')
+    local dependencies=$(echo "$story_json" | jq -r \
+        '(.dependencies // .technicalNotes.dependsOn // []) | join(", ")')
 
     cat << EOF
 Implement user story $story_id: $title
@@ -825,6 +851,40 @@ ${dependencies:-None}
 
 After implementation, provide a brief summary of what was created/modified.
 EOF
+}
+
+# Verify every file declared by the story exists in the execution root.
+# This prevents a successful provider response from completing a story that
+# produced no deliverables.
+verify_story_deliverables() {
+    local story_id="$1"
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    local missing=()
+    local declared=0
+    local file
+
+    while IFS= read -r file; do
+        [ -n "$file" ] || continue
+        declared=$((declared + 1))
+        if [ ! -e "$PROJECT_ROOT/$file" ]; then
+            missing+=("$file")
+        fi
+    done < <(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .technicalNotes.files[]? // empty' \
+        "$prd_target" 2>/dev/null)
+
+    if [ ${#missing[@]} -gt 0 ]; then
+        error "Story $story_id is missing ${#missing[@]} declared deliverable(s) in $PROJECT_ROOT:"
+        for file in "${missing[@]}"; do
+            error "  $file"
+        done
+        return 1
+    fi
+
+    if [ "$declared" -gt 0 ]; then
+        success "Verified $declared declared deliverable(s) for $story_id"
+    fi
+    return 0
 }
 
 # Update monitor lane/story status via update-monitor.sh
@@ -928,7 +988,8 @@ implement_story() {
     # Resolve aiProvider -> which CLI binary to use
     resolve_provider_settings "$story_id"
     # For epam-run providers, prd.json .model field overrides effort-based model
-    case "${STORY_PROVIDER:-claude-sonnet}" in
+    case "${STORY_PROVIDER:-codex}" in
+        codex) resolve_codex_model_settings "$story_id" ;;
         copilot|openai|qwen|cursor) resolve_model_from_story "$story_id" ;;
     esac
     # Resolve optional plannerModel — runs a planning pass before execution
@@ -962,7 +1023,7 @@ implement_story() {
     [ -n "${STORY_MODEL:-}" ]     && model_flag=(--model "$STORY_MODEL")
     [ -n "${STORY_MAX_TURNS:-}" ] && turns_flag=(--max-turns "$STORY_MAX_TURNS")
     local story_cli
-    story_cli=$(provider_to_cli "${STORY_PROVIDER:-claude-sonnet}")
+    story_cli=$(provider_to_cli "${STORY_PROVIDER:-codex}")
 
     # Planning phase: when plannerModel is set, run one planning invocation first.
     # The returned plan is injected into every execution attempt as fixed context.
@@ -1007,7 +1068,7 @@ $story_plan"
         local json_result_file="${output_file%.log}_result.json"
         local invoke_success=false
 
-        case "${STORY_PROVIDER:-claude-sonnet}" in
+        case "${STORY_PROVIDER:-codex}" in
             opencode)
                 # OpenCode: pass prompt via temp file (prompts can exceed arg limits)
                 # --format json emits JSONL stream; we normalize it after
@@ -1028,8 +1089,15 @@ $story_plan"
                 # Codex: reads prompt from stdin when '-' is passed
                 # --json emits JSONL stream; we normalize it after
                 local raw_file="${json_result_file%.json}_raw.jsonl"
-                if echo "$prompt" | codex exec --json - \
-                        > "$raw_file" 2>/dev/null; then
+                local codex_model_flag=()
+                [ -n "${STORY_MODEL:-}" ] && codex_model_flag=(--model "$STORY_MODEL")
+                if echo "$prompt" | codex exec \
+                        --ephemeral \
+                        --skip-git-repo-check \
+                        --dangerously-bypass-approvals-and-sandbox \
+                        "${codex_model_flag[@]}" \
+                        --json - \
+                        > "$raw_file" 2>>"$output_file"; then
                     normalize_provider_json "codex" "$raw_file" "$json_result_file"
                     # Append text output to log
                     grep '"type":"item.completed"' "$raw_file" 2>/dev/null \
@@ -1048,10 +1116,19 @@ $story_plan"
             copilot|openai|qwen|cursor)
                 # epam-run providers: invoke via `epam run --provider X --model M --json`
                 # EPAM_CLI can be overridden with a mock for zero-token testing.
+                # Explicitly forward API keys so subshells that didn't inherit them still work.
                 local raw_file="${json_result_file%.json}_raw.json"
                 local epam_model_flag=()
                 [ -n "${STORY_MODEL:-}" ] && epam_model_flag=(--model "$STORY_MODEL")
-                if echo "$prompt" | "$EPAM_CLI" run \
+                if echo "$prompt" | \
+                        EPAM_DANGEROUS_SKIP_APPROVAL=1 \
+                        OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
+                        EPAM_API_KEY_OPENROUTER="${EPAM_API_KEY_OPENROUTER:-}" \
+                        DASHSCOPE_API_KEY="${DASHSCOPE_API_KEY:-}" \
+                        EPAM_API_KEY_QWEN="${EPAM_API_KEY_QWEN:-}" \
+                        OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
+                        EPAM_API_KEY_OPENAI="${EPAM_API_KEY_OPENAI:-}" \
+                        "$EPAM_CLI" run \
                         --provider "$STORY_PROVIDER" \
                         "${epam_model_flag[@]}" \
                         --json - \
@@ -1090,7 +1167,7 @@ $story_plan"
                 fi
                 ;;
             *)
-                # Claude (claude-sonnet, claude-opus, or any claude-* value)
+                # Claude-compatible providers use the Claude CLI JSON output shape.
                 # SDK path: invoke.py via Anthropic Python SDK (EPAM_SDK_INVOKE=1)
                 # CLI path: claude --print --output-format json (default)
                 if [ "${EPAM_SDK_INVOKE:-0}" = "1" ] && [ -f "$INVOKE_PY" ]; then
@@ -1119,6 +1196,11 @@ $story_plan"
                 fi
                 ;;
         esac
+
+        if [ "$invoke_success" = true ] && ! verify_story_deliverables "$story_id"; then
+            warning "$story_cli returned success but story deliverables are incomplete"
+            invoke_success=false
+        fi
 
         if [ "$invoke_success" = true ]; then
             # Extract human-readable result text and append to output log
@@ -1201,6 +1283,7 @@ append_cost_record() {
     local title=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .title // "unknown"' "$prd_target")
     local agent_id=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .agentRole // "unknown"' "$prd_target")
     local forecast_hours=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .estimatedHours // 0' "$prd_target")
+    local forecast_cost=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .estimatedCost // 0' "$prd_target" 2>/dev/null || echo 0)
     local story_effort=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .effort // "medium"' "$prd_target")
     local story_type=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .storyType // "implementation"' "$prd_target")
     local resolved_model="${STORY_MODEL:-}"
@@ -1251,7 +1334,7 @@ append_cost_record() {
             --arg pid "$phase_id" --arg pn "$phase_id" \
             --arg sid "$story_id" --arg st "$title" \
             --arg aid "$agent_id" --arg an "$agent_id" \
-            --argjson fh "${forecast_hours:-0}" --argjson fc 0 \
+            --argjson fh "${forecast_hours:-0}" --argjson fc "${forecast_cost:-0}" \
             --arg sa "$started_at" --arg ea "$ended_at" \
             --argjson em "${elapsed_minutes:-0}" --argjson cu "$cost_usd" \
             --argjson ti "${tokens_in:-0}" --argjson to "${tokens_out:-0}" \

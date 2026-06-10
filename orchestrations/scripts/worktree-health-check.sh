@@ -17,7 +17,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="${GIT_WORK_ROOT:-${PROJECT_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}}"
+PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd)"
 
 # Colors
 RED='\033[0;31m'; YELLOW='\033[1;33m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; NC='\033[0m'
@@ -70,8 +71,8 @@ check_worktree() {
     local issues=0
 
     if [ ! -d "$wt_path" ]; then
-        warn "Worktree '$lane' does not exist at $wt_path -- skipped"
-        return 0
+        error "Worktree '$lane' does not exist at $wt_path"
+        return 2
     fi
 
     log "Checking worktree: $lane ($wt_path)"

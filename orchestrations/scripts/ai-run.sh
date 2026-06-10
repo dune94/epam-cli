@@ -141,7 +141,9 @@ run_provider_once() {
       # Capture to temp file so pino JSON lines on stdout don't corrupt jq parsing
       local _epam_out
       _epam_out="$(mktemp)"
-      if ! "$EPAM_CLI" run --provider "$provider" "${model_args[@]}" --json \
+      # --no-tools: prevent the model from generating function-call markup (e.g. <function=bash>)
+      # instead of the structured JSON output expected by spec-mode and pipeline agents
+      if ! "$EPAM_CLI" run --provider "$provider" "${model_args[@]}" --no-tools --json \
           < "$PROMPT_FILE" > "$_epam_out" 2>/dev/null; then
         cat "$_epam_out" >&2
         rm -f "$_epam_out"

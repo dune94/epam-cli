@@ -60,7 +60,10 @@ if [ -z "$PRIMARY_PROVIDER" ]; then
   cmd_base="$(basename "$CLAUDE_CMD")"
   case "$cmd_base" in
     codex|openai|qwen|cursor|copilot|codemie-claude) PRIMARY_PROVIDER="$cmd_base" ;;
-    *) PRIMARY_PROVIDER="claude" ;;
+    *)
+      echo "ai-run.sh: no provider configured. Set AI_PROVIDER or EPAM_ORCHESTRATION_PROVIDER." >&2
+      exit 1
+      ;;
   esac
 fi
 

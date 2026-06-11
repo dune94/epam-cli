@@ -243,14 +243,18 @@ resolve_provider_settings() {
 
 # provider_to_cli <provider>
 # Returns the CLI binary name for a given aiProvider value.
+# Exits with an error for unknown providers — no silent Claude fallback.
 provider_to_cli() {
     case "$1" in
         opencode)                    echo "opencode" ;;
         codex)                       echo "codex" ;;
         codemie-claude)              echo "codemie-claude" ;;
         copilot|openai|qwen|cursor)  echo "$EPAM_CLI" ;;
-        epam)                        echo "$CLAUDE_CMD" ;;  # epam: treat same as claude for now
-        *)                           echo "$CLAUDE_CMD" ;;
+        epam)                        echo "$EPAM_CLI" ;;
+        *)
+            error "Unknown aiProvider '$1' — set aiProvider in prd.json to one of: opencode|codex|copilot|openai|qwen|cursor|codemie-claude"
+            return 1
+            ;;
     esac
 }
 
@@ -332,9 +336,10 @@ normalize_provider_json() {
 # security incidents if violated.
 AGENT_CONSTITUTION="AGENT BEHAVIORAL CONTRACT — NON-NEGOTIABLE:
 1. Filesystem boundary: Never write, edit, or delete files outside PROJECT_ROOT (${PROJECT_ROOT}). All output must land inside the project directory.
-2. Acceptance criteria: Never mark a story or task complete without verifying every acceptance criterion passes. Run the specified tests if the story requires it.
-3. Protected paths: Never modify, rename, or delete files under .epam/, orchestrations/, or any path listed in .epam/protected-files.
-4. Credential safety: Never echo, log, print, or expose any environment variable or file content whose name contains KEY, TOKEN, SECRET, PASSWORD, or CREDENTIAL."
+2. Write code only: Write all files required by the story spec. Do NOT run compilers (tsc), test suites (vitest/jest/npm test), or linters. The orchestrator verifies correctness externally after your turn completes.
+3. No pre-flight reads: Do not read existing files before writing. Start from the spec directly. Only read a file if the story explicitly says to modify an existing file.
+4. Protected paths: Never modify, rename, or delete files under .epam/, orchestrations/, or any path listed in .epam/protected-files.
+5. Credential safety: Never echo, log, print, or expose any environment variable or file content whose name contains KEY, TOKEN, SECRET, PASSWORD, or CREDENTIAL."
 
 # Claude CLI permission flags
 # These allow Claude to read/write files and execute commands without prompting
@@ -408,11 +413,20 @@ check_prerequisites() {
         exit 1
     fi
 
-    # Check for Claude CLI
-    if ! command -v "$CLAUDE_CMD" &> /dev/null; then
-        error "Claude CLI not found. Expected command: $CLAUDE_CMD"
-        error "Install Claude Code CLI or set CLAUDE_CMD environment variable"
-        exit 1
+    # Check for Claude CLI only when actually needed (provider=claude or codemie-claude)
+    # For qwen/openai/copilot/cursor/codex all traffic goes through epam CLI or ai-run.sh
+    if command -v "$CLAUDE_CMD" &> /dev/null; then
+        : # claude is available — all paths work
+    else
+        # Only fatal if stories are configured to use the claude provider
+        if grep -q '"aiProvider"' "${PRD_FILE:-/dev/null}" 2>/dev/null && \
+           jq -e '.stories[].aiProvider // "codex" | select(. == "claude" or . == "codemie-claude")' \
+               "${PRD_FILE:-/dev/null}" >/dev/null 2>&1; then
+            error "Claude CLI not found. Expected command: $CLAUDE_CMD"
+            error "Install Claude Code CLI or set CLAUDE_CMD environment variable"
+            exit 1
+        fi
+        log "Claude CLI not found — OK since no stories use the claude provider"
     fi
 
     # Check PRD file
@@ -583,8 +597,21 @@ PLAN_PROMPT_EOF
             plan_ok=true
         fi
     else
-        if echo "$plan_prompt" | "$CLAUDE_CMD" --print --output-format json \
-                "${CLAUDE_PERMISSIONS[@]}" 2>>"$plan_log" > "$plan_json"; then
+        # Route through ai-run.sh with the configured orchestration provider
+        local _orch_provider="${EPAM_ORCHESTRATION_PROVIDER:-}"
+        local _orch_model="${ORCH_GATE_MODEL:-}"
+        if [ -z "$_orch_provider" ]; then
+            warning "Plan mode: EPAM_ORCHESTRATION_PROVIDER not set — skipping plan"
+        elif echo "$plan_prompt" | \
+                AI_PROVIDER="$_orch_provider" \
+                AI_MODEL="$_orch_model" \
+                EPAM_CLI="$EPAM_CLI" \
+                bash "$SCRIPT_DIR/ai-run.sh" --provider "$_orch_provider" \
+                ${_orch_model:+--model "$_orch_model"} \
+                > "$plan_json" 2>>"$plan_log"; then
+            # Wrap plain text output into the expected {result:...} shape
+            plan_text_raw=$(cat "$plan_json")
+            printf '{"result":%s}' "$(echo "$plan_text_raw" | jq -Rs .)" > "$plan_json"
             plan_ok=true
         fi
     fi
@@ -898,7 +925,55 @@ verify_story_deliverables() {
     return 0
 }
 
-# Update monitor lane/story status via update-monitor.sh
+# run_external_verification <story_id> <output_file>
+# Runs the project test suite externally after the agent writes files.
+# This keeps the agent loop short (write-only) while still enforcing AC tests.
+# Returns 0 on pass. On failure, appends a ## Verification Failure section
+# to output_file so the retry prompt includes the actual test output.
+VERIFICATION_FAILURE=""
+run_external_verification() {
+    local story_id="$1"
+    local output_file="${2:-/dev/null}"
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    VERIFICATION_FAILURE=""
+
+    # Read optional testCommand from PRD story.technicalNotes
+    local test_cmd
+    test_cmd=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .technicalNotes.testCommand // ""' \
+        "$prd_target" 2>/dev/null || echo "")
+
+    # Fall back to npm test if package.json has a test script
+    if [ -z "$test_cmd" ] && [ -f "$PROJECT_ROOT/package.json" ]; then
+        local has_test
+        has_test=$(jq -r '.scripts.test // ""' "$PROJECT_ROOT/package.json" 2>/dev/null || echo "")
+        [ -n "$has_test" ] && test_cmd="npm test"
+    fi
+
+    [ -z "$test_cmd" ] && return 0  # no test command configured — skip
+
+    log "  Running external verification: $test_cmd"
+    local test_output
+    local test_exit=0
+    test_output=$(cd "$PROJECT_ROOT" && eval "$test_cmd" 2>&1) || test_exit=$?
+
+    if [ "$test_exit" -ne 0 ]; then
+        warning "External verification failed for $story_id (exit $test_exit)"
+        VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe orchestrator ran `%s` after your files were written and it failed (exit code %d). Fix the code so the tests pass.\n\n```\n%s\n```\n' \
+            "$test_cmd" "$test_exit" "${test_output:0:4000}")
+        {
+            echo ""
+            echo "=== External verification failed (exit $test_exit) ==="
+            echo "$test_output" | head -60
+        } >> "$output_file"
+        return 1
+    fi
+
+    success "External verification passed for $story_id"
+    return 0
+}
+
+
 update_monitor_status() {
     local event="$1"   # "start" | "complete" | "fail"
     local story_id="$2"
@@ -960,10 +1035,18 @@ Produce 5-10 numbered implementation steps that a coding agent will follow exact
             --output "$plan_result_file" 2>/dev/null || true
         plan_text=$(jq -r '.result // empty' "$plan_result_file" 2>/dev/null || cat "$plan_result_file" 2>/dev/null || echo "")
     else
-        echo "$planning_prompt" | "$CLAUDE_CMD" --print --output-format json \
-            --model "$planner_model" "${plan_permissions[@]}" \
-            2>/dev/null > "$plan_result_file" || true
-        plan_text=$(jq -r '.result // empty' "$plan_result_file" 2>/dev/null || echo "")
+        # Route through ai-run.sh with the configured orchestration provider
+        local _orch_provider="${EPAM_ORCHESTRATION_PROVIDER:-}"
+        local _orch_model="${planner_model:-${ORCH_GATE_MODEL:-}}"
+        if [ -n "$_orch_provider" ]; then
+            plan_text=$(echo "$planning_prompt" | \
+                AI_PROVIDER="$_orch_provider" \
+                AI_MODEL="$_orch_model" \
+                EPAM_CLI="$EPAM_CLI" \
+                bash "$SCRIPT_DIR/ai-run.sh" --provider "$_orch_provider" \
+                ${_orch_model:+--model "$_orch_model"} \
+                2>/dev/null || echo "")
+        fi
     fi
 
     rm -f "$plan_result_file"
@@ -1212,6 +1295,13 @@ $story_plan"
 
         if [ "$invoke_success" = true ] && ! verify_story_deliverables "$story_id"; then
             warning "$story_cli returned success but story deliverables are incomplete"
+            invoke_success=false
+        fi
+
+        # External test verification — runs tests outside the agent loop so the
+        # agent only needs to write files (keeping iterations low).
+        if [ "$invoke_success" = true ] && ! run_external_verification "$story_id" "$output_file"; then
+            warning "$story_cli deliverables written but external tests failed"
             invoke_success=false
         fi
 
@@ -1478,6 +1568,11 @@ build_kb_prompt_section() {
     local retry_note=""
     [ "$retry_count" -gt 0 ] && \
         retry_note="**This is retry attempt ${retry_count}** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed."
+
+    # Inject external test failure context when available
+    if [ -n "${VERIFICATION_FAILURE:-}" ]; then
+        printf '%s\n' "$VERIFICATION_FAILURE"
+    fi
 
     printf '\n## Relevant Knowledge Base Entries\n'
     if [ -n "$kb_entries" ]; then
@@ -2168,7 +2263,17 @@ PROMPT_HEADER
     )
 
     cd "$PROJECT_ROOT"
-    if echo "$assessment_prompt" | "$CLAUDE_CMD" --print --output-format text --dangerously-skip-permissions 2>&1 | tee "$assessment_log"; then
+    local _orch_provider="${EPAM_ORCHESTRATION_PROVIDER:-}"
+    local _orch_model="${ORCH_GATE_MODEL:-}"
+    if [ -z "$_orch_provider" ]; then
+        warning "Pre-phase assessment: EPAM_ORCHESTRATION_PROVIDER not set — skipping (non-critical)"
+    elif echo "$assessment_prompt" | \
+            AI_PROVIDER="$_orch_provider" \
+            AI_MODEL="$_orch_model" \
+            EPAM_CLI="$EPAM_CLI" \
+            bash "$SCRIPT_DIR/ai-run.sh" --provider "$_orch_provider" \
+            ${_orch_model:+--model "$_orch_model"} \
+            2>&1 | tee "$assessment_log"; then
         success "Pre-phase assessment completed for '$phase_id'"
         if ! jq empty "$profiles_file" 2>/dev/null; then
             warning "Pre-phase assessment may have corrupted profiles.json! Restoring backup."

@@ -20,6 +20,19 @@ import { logger } from '../../utils/logger.js';
  * This parser extracts those blocks and converts them so the AgentRunner can
  * execute them normally. Exported for unit testing.
  */
+/**
+ * Strip <think>...</think> reasoning blocks from Qwen3 model responses.
+ *
+ * Qwen3-coder emits chain-of-thought inside <think> tags before its actual
+ * response. These blocks are 3-8K tokens each. If left in the text they
+ * accumulate in the AgentRunner message history and are resent on every
+ * subsequent iteration, causing quadratic token growth. Strip them here so
+ * they never enter the history. Exported for unit testing.
+ */
+export function stripThinkingBlocks(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+}
+
 export function parseMarkupToolCalls(text: string): { toolUses: ContentPart[]; cleanText: string } {
   const toolUses: ContentPart[] = [];
   let idCounter = 0;
@@ -136,7 +149,8 @@ export class QwenProvider implements LLMProvider {
 
     const content: ContentPart[] = [];
     if (choice.message?.content) {
-      content.push({ type: 'text', text: choice.message.content });
+      const cleaned = stripThinkingBlocks(choice.message.content);
+      if (cleaned) content.push({ type: 'text', text: cleaned });
     }
     if (choice.message?.tool_calls) {
       for (const tc of choice.message.tool_calls) {
@@ -153,7 +167,9 @@ export class QwenProvider implements LLMProvider {
     if (!choice.message?.tool_calls && choice.message?.content) {
       const { toolUses, cleanText } = parseMarkupToolCalls(choice.message.content);
       if (toolUses.length > 0) {
-        content[0] = { type: 'text', text: cleanText };
+        const stripped = stripThinkingBlocks(cleanText);
+        content.length = 0;
+        if (stripped) content.push({ type: 'text', text: stripped });
         content.push(...toolUses);
       }
     }
@@ -249,7 +265,7 @@ export class QwenProvider implements LLMProvider {
     }
 
     const content: ContentPart[] = [];
-    if (accumulatedText) content.push({ type: 'text', text: accumulatedText });
+    if (accumulatedText) content.push({ type: 'text', text: stripThinkingBlocks(accumulatedText) });
     for (const tc of toolCalls.values()) {
       content.push({
         type: 'tool_use',
@@ -264,8 +280,9 @@ export class QwenProvider implements LLMProvider {
     if (toolCalls.size === 0 && accumulatedText) {
       const { toolUses, cleanText } = parseMarkupToolCalls(accumulatedText);
       if (toolUses.length > 0) {
+        const stripped = stripThinkingBlocks(cleanText);
         content.length = 0;
-        if (cleanText) content.push({ type: 'text', text: cleanText });
+        if (stripped) content.push({ type: 'text', text: stripped });
         content.push(...toolUses);
         stopReason = 'tool_use';
       }

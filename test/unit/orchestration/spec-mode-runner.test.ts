@@ -148,14 +148,13 @@ describe('resolvePromptProvider', () => {
     expect(resolvePromptProvider({ CLAUDE_CMD: '/usr/local/bin/codex' })).toBe('codex');
   });
 
-  it('does NOT match codex for partial matches (e.g. "codex-cli")', () => {
-    // /codex$/ requires codex at end of string
-    const result = resolvePromptProvider({ CLAUDE_CMD: 'codex-cli' });
-    expect(result).toBe('claude'); // falls through to default
+  it('does NOT match codex for partial matches (e.g. "codex-cli") and throws', () => {
+    expect(() => resolvePromptProvider({ CLAUDE_CMD: 'codex-cli' }))
+      .toThrow('No AI provider configured');
   });
 
-  it('defaults to claude when nothing is set', () => {
-    expect(resolvePromptProvider({})).toBe('claude');
+  it('throws when nothing is set', () => {
+    expect(() => resolvePromptProvider({})).toThrow('No AI provider configured');
   });
 
   it('uses qwen when EPAM_ORCHESTRATION_PROVIDER=qwen and no AI_PROVIDER', () => {
@@ -207,7 +206,7 @@ describe('resolvePromptExec', () => {
   });
 
   it('sets cmd to provided aiRunnerCmd', () => {
-    const exec = resolvePromptExec('/custom/path/ai-run.sh', {});
+    const exec = resolvePromptExec('/custom/path/ai-run.sh', { AI_PROVIDER: 'qwen' });
     expect(exec.cmd).toBe('/custom/path/ai-run.sh');
   });
 });

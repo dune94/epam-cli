@@ -722,7 +722,10 @@ function runClaude(execSpec, prompt, logPath) {
   return new Promise((resolve, reject) => {
     const env = { ...process.env };
     delete env.CLAUDECODE;
-    const cmd = execSpec?.cmd || process.env.CLAUDE_CMD || 'claude';
+    const cmd = execSpec?.cmd;
+    if (!cmd) {
+      return reject(new Error('prompt runner exited with code 1: no execSpec.cmd — set EPAM_ORCHESTRATION_PROVIDER'));
+    }
     const args = Array.isArray(execSpec?.args) ? execSpec.args : [];
     const proc = spawn(cmd, args, { env });
     let stdout = '';
@@ -747,9 +750,15 @@ function runClaude(execSpec, prompt, logPath) {
 }
 
 function resolvePromptProvider(env = process.env) {
-  return env.AI_PROVIDER
+  const provider = env.AI_PROVIDER
     || env.EPAM_ORCHESTRATION_PROVIDER
-    || (/codex$/.test(env.CLAUDE_CMD || '') ? 'codex' : 'claude');
+    || (/codex$/.test(env.CLAUDE_CMD || '') ? 'codex' : null);
+  if (!provider) {
+    throw new Error(
+      'No AI provider configured. Set AI_PROVIDER or EPAM_ORCHESTRATION_PROVIDER (e.g. EPAM_ORCHESTRATION_PROVIDER=qwen).'
+    );
+  }
+  return provider;
 }
 
 function resolvePromptExec(aiRunnerCmd, env = process.env) {

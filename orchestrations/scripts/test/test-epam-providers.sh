@@ -54,8 +54,9 @@ _result=$(
         echo "openai=$(provider_to_cli openai)"
         echo "qwen=$(provider_to_cli qwen)"
         echo "cursor=$(provider_to_cli cursor)"
-        echo "claude-sonnet=$(provider_to_cli claude-sonnet)"
         echo "codex=$(provider_to_cli codex)"
+        # unknown provider — should fail
+        provider_to_cli unknown-llm 2>/dev/null && echo "unknown=ok" || echo "unknown=error"
     '
 )
 
@@ -63,8 +64,8 @@ assert_eq "$(echo "$_result" | grep '^copilot='   | cut -d= -f2)" "epam" "provid
 assert_eq "$(echo "$_result" | grep '^openai='    | cut -d= -f2)" "epam" "provider_to_cli openai  → epam"
 assert_eq "$(echo "$_result" | grep '^qwen='      | cut -d= -f2)" "epam" "provider_to_cli qwen    → epam"
 assert_eq "$(echo "$_result" | grep '^cursor='    | cut -d= -f2)" "epam" "provider_to_cli cursor  → epam"
-assert_eq "$(echo "$_result" | grep '^claude-sonnet=' | cut -d= -f2)" "claude" "provider_to_cli claude-sonnet → claude"
 assert_eq "$(echo "$_result" | grep '^codex='     | cut -d= -f2)" "codex"  "provider_to_cli codex   → codex"
+assert_eq "$(echo "$_result" | grep '^unknown='   | cut -d= -f2)" "error" "provider_to_cli unknown → error (no silent claude fallback)"
 
 echo ""
 
@@ -428,6 +429,110 @@ assert_eq "$empty_out" "" "ai-run qwen empty-result: no garbage output to stdout
 
 rm -f "$AIRUN_PROMPT" "$AIRUN_ORCH_RESULT"
 rm -rf "$MOCK_EPAM_DIR" "$MOCK_EPAM_EMPTY_DIR"
+echo ""
+
+# ─────────────────────────────────────────────────────────────────
+# Test 12: run_external_verification — skips when no testCommand and no package.json
+# ─────────────────────────────────────────────────────────────────
+echo "12. run_external_verification: skips when no test configured"
+
+_ext_skip_rc=0
+_ext_skip_result=$(bash -c '
+    set -euo pipefail
+    SCRIPT="'"$SCRIPTS_DIR"'/claude.sh"
+    # Extract the function
+    awk "/^run_external_verification\(\)/{found=1} found{print; if(/^\}$/ && found>1){exit} found++}" "$SCRIPT" > /tmp/_rev.sh
+    source /tmp/_rev.sh
+    VERIFICATION_FAILURE=""
+    # Use a temp dir that has no package.json
+    TMP_PROJ=$(mktemp -d)
+    PROJECT_ROOT="$TMP_PROJ"
+    # A minimal PRD with no testCommand
+    PRD=$(mktemp /tmp/prd_XXXXXX.json)
+    echo '"'"'{"stories":[{"id":"T-001","technicalNotes":{}}]}'"'"' > "$PRD"
+    PRD_FILE="$PRD"
+    run_external_verification "T-001" /dev/null
+    echo "exit:$? vf:${VERIFICATION_FAILURE:-empty}"
+    rm -rf "$TMP_PROJ" "$PRD"
+' 2>/dev/null) || _ext_skip_rc=$?
+
+echo "$_ext_skip_result" | grep -q "exit:0" && pass "run_external_verification: skips (returns 0) when no test configured" \
+    || fail "run_external_verification: should skip when no test configured (got: $_ext_skip_result)"
+echo "$_ext_skip_result" | grep -q "vf:empty" && pass "run_external_verification: VERIFICATION_FAILURE empty when skipped" \
+    || fail "run_external_verification: VERIFICATION_FAILURE should be empty when skipped"
+
+echo ""
+
+# ─────────────────────────────────────────────────────────────────
+# Test 13: run_external_verification — passes when testCommand exits 0
+# ─────────────────────────────────────────────────────────────────
+echo "13. run_external_verification: passes when testCommand exits 0"
+
+_ext_pass_result=$(bash -c '
+    SCRIPT="'"$SCRIPTS_DIR"'/claude.sh"
+    awk "/^run_external_verification\(\)/{found=1} found{print; if(/^\}$/ && found>1){exit} found++}" "$SCRIPT" > /tmp/_rev.sh
+
+    # Minimal stubs for sourcing the function
+    log() { :; }
+    success() { :; }
+    warning() { :; }
+    error() { :; }
+    source /tmp/_rev.sh
+
+    VERIFICATION_FAILURE=""
+    TMP_PROJ=$(mktemp -d)
+    PROJECT_ROOT="$TMP_PROJ"
+    PRD=$(mktemp /tmp/prd_XXXXXX.json)
+    echo '"'"'{"stories":[{"id":"T-002","technicalNotes":{"testCommand":"exit 0"}}]}'"'"' > "$PRD"
+    PRD_FILE="$PRD"
+    MAIN_PRD_FILE=""
+    run_external_verification "T-002" /dev/null
+    echo "exit:$? vf:${VERIFICATION_FAILURE:-empty}"
+    rm -rf "$TMP_PROJ" "$PRD"
+' 2>/dev/null)
+
+echo "$_ext_pass_result" | grep -q "exit:0" && pass "run_external_verification: returns 0 when testCommand passes" \
+    || fail "run_external_verification: should return 0 when testCommand passes (got: $_ext_pass_result)"
+echo "$_ext_pass_result" | grep -q "vf:empty" && pass "run_external_verification: VERIFICATION_FAILURE empty on pass" \
+    || fail "run_external_verification: VERIFICATION_FAILURE should be empty on pass"
+
+echo ""
+
+# ─────────────────────────────────────────────────────────────────
+# Test 14: run_external_verification — fails and sets VERIFICATION_FAILURE
+# ─────────────────────────────────────────────────────────────────
+echo "14. run_external_verification: sets VERIFICATION_FAILURE on test failure"
+
+_ext_fail_result=$(bash -c '
+    SCRIPT="'"$SCRIPTS_DIR"'/claude.sh"
+    awk "/^run_external_verification\(\)/{found=1} found{print; if(/^\}$/ && found>1){exit} found++}" "$SCRIPT" > /tmp/_rev.sh
+
+    log() { :; }
+    success() { :; }
+    warning() { :; }
+    error() { :; }
+    source /tmp/_rev.sh
+
+    VERIFICATION_FAILURE=""
+    TMP_PROJ=$(mktemp -d)
+    PROJECT_ROOT="$TMP_PROJ"
+    PRD=$(mktemp /tmp/prd_XXXXXX.json)
+    echo '"'"'{"stories":[{"id":"T-003","technicalNotes":{"testCommand":"echo FAIL_OUTPUT && exit 1"}}]}'"'"' > "$PRD"
+    PRD_FILE="$PRD"
+    MAIN_PRD_FILE=""
+    run_external_verification "T-003" /dev/null || true
+    echo "rc_is_nonzero:$([[ $? -ne 0 ]] && echo yes || echo no)"
+    echo "has_failure_section:$([[ "${VERIFICATION_FAILURE}" == *"Verification Failure"* ]] && echo yes || echo no)"
+    echo "has_output:$([[ "${VERIFICATION_FAILURE}" == *"FAIL_OUTPUT"* ]] && echo yes || echo no)"
+    rm -rf "$TMP_PROJ" "$PRD"
+' 2>/dev/null)
+
+echo "$_ext_fail_result" | grep -q "has_failure_section:yes" && pass "run_external_verification: VERIFICATION_FAILURE contains failure section" \
+    || fail "run_external_verification: VERIFICATION_FAILURE should contain ## Verification Failure (got: $_ext_fail_result)"
+echo "$_ext_fail_result" | grep -q "has_output:yes" && pass "run_external_verification: VERIFICATION_FAILURE contains test output" \
+    || fail "run_external_verification: VERIFICATION_FAILURE should include test output (got: $_ext_fail_result)"
+
+rm -f /tmp/_rev.sh /tmp/_ptc.sh
 echo ""
 
 

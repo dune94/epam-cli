@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseMarkupToolCalls } from '../../../src/providers/qwen/QwenProvider.js';
+import { parseMarkupToolCalls, stripThinkingBlocks } from '../../../src/providers/qwen/QwenProvider.js';
 
 describe('parseMarkupToolCalls', () => {
   it('returns empty toolUses and original text when input has no markup', () => {
@@ -88,5 +88,37 @@ describe('parseMarkupToolCalls', () => {
       name: 'read_file',
       input: { path: 'src/index.ts' },
     });
+  });
+});
+
+describe('stripThinkingBlocks', () => {
+  it('returns unchanged text when no think blocks present', () => {
+    expect(stripThinkingBlocks('Hello world')).toBe('Hello world');
+  });
+
+  it('strips a single think block', () => {
+    const text = '<think>lots of reasoning here</think>I will write the file.';
+    expect(stripThinkingBlocks(text)).toBe('I will write the file.');
+  });
+
+  it('strips multiline think blocks', () => {
+    const text = '<think>\nStep 1: analyse\nStep 2: plan\n</think>\nActual response.';
+    expect(stripThinkingBlocks(text)).toBe('Actual response.');
+  });
+
+  it('strips multiple think blocks', () => {
+    const text = '<think>first thought</think>code here<think>second thought</think>more code';
+    expect(stripThinkingBlocks(text)).toBe('code heremore code');
+  });
+
+  it('returns empty string when only a think block', () => {
+    expect(stripThinkingBlocks('<think>all reasoning, no output</think>')).toBe('');
+  });
+
+  it('handles think block with tool markup after it', () => {
+    const text = '<think>plan the write</think>\n<function=write_file>\n<parameter=path>a.ts</parameter>\n</function>';
+    const result = stripThinkingBlocks(text);
+    expect(result).not.toContain('<think>');
+    expect(result).toContain('<function=write_file>');
   });
 });

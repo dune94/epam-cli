@@ -14,6 +14,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
+# Always resolve to absolute path — relative paths break when CWD changes in worktrees
+PRD_FILE="$(cd "$(dirname "$PRD_FILE")" && pwd)/$(basename "$PRD_FILE")"
 
 # Load project .env so API keys are available to all subprocesses (worktrees, epam-run, etc.)
 _env_file="$(dirname "$AUTOMATION_DIR")/.env"
@@ -59,7 +61,10 @@ case "${EPAM_ORCHESTRATION_PROVIDER:-${CLAUDE_CMD}}" in
     qwen)           CLAUDE_SH="$SCRIPT_DIR/qwen.sh" ;;
     cursor)         CLAUDE_SH="$SCRIPT_DIR/cursor.sh" ;;
     codex)          CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
-    *)              CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
+    *)
+        error "Unknown EPAM_ORCHESTRATION_PROVIDER '${EPAM_ORCHESTRATION_PROVIDER:-}'. Set it to one of: qwen|openai|copilot|cursor|codex|codemie-claude|claude in your .env file."
+        exit 1
+        ;;
 esac
 LOG_DIR="${OUTPUT_DIR:-$AUTOMATION_DIR/logs}"
 MONITOR_STATUS_FILE="$LOG_DIR/agent-status.json"

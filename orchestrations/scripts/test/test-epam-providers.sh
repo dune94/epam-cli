@@ -535,6 +535,29 @@ echo "$_ext_fail_result" | grep -q "has_output:yes" && pass "run_external_verifi
 rm -f /tmp/_rev.sh /tmp/_ptc.sh
 echo ""
 
+# ─────────────────────────────────────────────────────────────────
+# Test 15: No unconditional Anthropic SDK calls in orchestration scripts
+# sandbox-invoke.sh is excluded — it is intentionally Claude/Anthropic-specific.
+# ─────────────────────────────────────────────────────────────────
+echo "15. No unconditional Anthropic calls (static analysis)"
+
+_anthropic_files=$(grep -rl "@anthropic-ai/sdk\|ANTHROPIC_API_KEY\|anthropic_api_key" \
+    "$SCRIPTS_DIR" --include="*.js" --include="*.ts" --include="*.sh" 2>/dev/null \
+    | grep -v "node_modules\|test-epam-providers\|\.env\|sandbox-invoke")
+
+_unguarded=0
+for _f in $_anthropic_files; do
+    if ! grep -q "EPAM_ORCHESTRATION_PROVIDER\|isNonAnthropic\|No ANTHROPIC\|no.*anthropic" "$_f" 2>/dev/null; then
+        echo "  UNGUARDED: $_f"
+        _unguarded=$((_unguarded + 1))
+    fi
+done
+
+[ "$_unguarded" -eq 0 ] && pass "No unconditional Anthropic SDK calls in orchestration scripts" \
+    || fail "$_unguarded file(s) call Anthropic SDK without non-Anthropic provider guard"
+
+echo ""
+
 
 TOTAL=$((PASS+FAIL))
 echo "Results: $PASS/$TOTAL passed"

@@ -74,9 +74,11 @@ async function main() {
 
   const { phase = '', stories = [], cpaSignals = [] } = input;
 
-  // Fast path: no API key
+  // Fast path: no API key, or orchestration is using a non-Anthropic provider
+  const orchProvider = process.env.EPAM_ORCHESTRATION_PROVIDER || '';
+  const isNonAnthropic = orchProvider && orchProvider !== 'claude' && orchProvider !== 'codemie-claude';
   const apiKey = process.env.ANTHROPIC_API_KEY || process.env.EPAM_API_KEY_ANTHROPIC;
-  if (!apiKey) {
+  if (!apiKey || isNonAnthropic) {
     process.stdout.write(JSON.stringify(heuristicTopology(stories)) + '\n');
     return;
   }

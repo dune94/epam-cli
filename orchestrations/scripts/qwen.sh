@@ -7,5 +7,4 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export EPAM_CLI="${EPAM_CLI:-epam}"
-export CLAUDE_CMD="${CLAUDE_CMD:-claude}"  # fallback for non-epam stories
 exec "$SCRIPT_DIR/claude.sh" "$@"

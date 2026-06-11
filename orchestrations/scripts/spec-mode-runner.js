@@ -677,6 +677,11 @@ function emitMonitorEvent({ monitorScript, type, message, storyId = '', lane = '
 function extractTaggedJson(text, tag) {
   if (!text) return null;
 
+  // Normalize variant opening tags that models sometimes emit:
+  //   <_TAG>  →  <TAG>   (Qwen adds leading underscore to distinguish from template echo)
+  //   <-TAG>  →  <TAG>   (similar dash-prefix variant)
+  text = text.replace(new RegExp(`<[_\\-]${tag}>`, 'g'), `<${tag}>`);
+
   function stripAndParse(jsonText) {
     jsonText = jsonText.trim();
     // Strip markdown code fences that LLMs often wrap around JSON

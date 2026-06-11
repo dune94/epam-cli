@@ -109,6 +109,27 @@ describe('extractTaggedJson', () => {
     ].join('\n');
     expect(extractTaggedJson(text, 'SPEC_AGENT')).toEqual(good);
   });
+
+  it('normalizes <_TAG> underscore-prefix variant that Qwen emits to distinguish from template echo', () => {
+    // Qwen outputs empty template block first, then its real content with <_TAG> opening
+    const realPayload = [{ storyId: 'HW-001', agents: ['openspec'], priority: 'high' }];
+    const text = [
+      '<SPEC_ASSIGNMENTS>',
+      '</SPEC_ASSIGNMENTS>',
+      '',
+      '# Output',
+      '<_SPEC_ASSIGNMENTS>',
+      JSON.stringify(realPayload, null, 2),
+      '</SPEC_ASSIGNMENTS>',
+    ].join('\n');
+    expect(extractTaggedJson(text, 'SPEC_ASSIGNMENTS')).toEqual(realPayload);
+  });
+
+  it('normalizes <-TAG> dash-prefix variant', () => {
+    const good = [{ storyId: 'HW-002', agents: ['speckit'], priority: 'medium' }];
+    const text = `<-SPEC_ASSIGNMENTS>\n${JSON.stringify(good)}\n</SPEC_ASSIGNMENTS>`;
+    expect(extractTaggedJson(text, 'SPEC_ASSIGNMENTS')).toEqual(good);
+  });
 });
 
 // ─── resolvePromptProvider ───────────────────────────────────────────────────

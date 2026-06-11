@@ -952,6 +952,13 @@ run_external_verification() {
 
     [ -z "$test_cmd" ] && return 0  # no test command configured — skip
 
+    # Ensure node_modules exist in the worktree — git worktrees don't inherit gitignored dirs.
+    # Without this, npm test fails with exit 127 (vitest binary not found).
+    if [ -f "$PROJECT_ROOT/package.json" ] && [ ! -d "$PROJECT_ROOT/node_modules" ]; then
+        log "  Installing dependencies (node_modules missing in worktree)..."
+        (cd "$PROJECT_ROOT" && npm install --silent 2>&1) || warning "  npm install failed — test may still fail"
+    fi
+
     log "  Running external verification: $test_cmd"
     local test_output
     local test_exit=0

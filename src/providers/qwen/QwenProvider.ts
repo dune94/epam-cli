@@ -8,6 +8,54 @@
 import type { LLMProvider, ProviderRequest, ProviderResponse, StreamHandler, Message, ContentPart } from '../types.js';
 import { logger } from '../../utils/logger.js';
 
+/**
+ * Parse Qwen-style text-markup tool calls into ContentPart tool_use blocks.
+ *
+ * Some Qwen models (via OpenRouter) emit function calls as plain text instead of
+ * API-level tool_calls, using this format:
+ *   <function=tool_name>
+ *   <parameter=param_name>value</parameter>
+ *   </function>
+ *
+ * This parser extracts those blocks and converts them so the AgentRunner can
+ * execute them normally. Exported for unit testing.
+ */
+export function parseMarkupToolCalls(text: string): { toolUses: ContentPart[]; cleanText: string } {
+  const toolUses: ContentPart[] = [];
+  let idCounter = 0;
+
+  const funcRegex = /<function=([^\s>]+)>([\s\S]*?)<\/function>/g;
+  const blocks: Array<{ full: string; name: string; rawParams: string }> = [];
+  let match: RegExpExecArray | null;
+  while ((match = funcRegex.exec(text)) !== null) {
+    blocks.push({ full: match[0], name: match[1], rawParams: match[2] });
+  }
+
+  if (blocks.length === 0) return { toolUses: [], cleanText: text };
+
+  let cleanText = text;
+  for (const block of blocks) {
+    const input: Record<string, string> = {};
+    const paramRegex = /<parameter=([^\s>]+)>([\s\S]*?)<\/parameter>/g;
+    let paramMatch: RegExpExecArray | null;
+    while ((paramMatch = paramRegex.exec(block.rawParams)) !== null) {
+      input[paramMatch[1].trim()] = paramMatch[2].trim();
+    }
+    toolUses.push({
+      type: 'tool_use',
+      id: `qwen_markup_${++idCounter}`,
+      name: block.name.trim(),
+      input,
+    });
+    cleanText = cleanText.replace(block.full, '');
+  }
+
+  // Remove stray </tool_call> artifacts that Qwen sometimes appends
+  cleanText = cleanText.replace(/<\/tool_call>/g, '').trim();
+
+  return { toolUses, cleanText };
+}
+
 export interface QwenConfig {
   apiKey: string;
   baseURL?: string;
@@ -101,9 +149,19 @@ export class QwenProvider implements LLMProvider {
       }
     }
 
+    // Fallback: model returned no API tool_calls but may have emitted markup in text
+    if (!choice.message?.tool_calls && choice.message?.content) {
+      const { toolUses, cleanText } = parseMarkupToolCalls(choice.message.content);
+      if (toolUses.length > 0) {
+        content[0] = { type: 'text', text: cleanText };
+        content.push(...toolUses);
+      }
+    }
+
+    const hasToolUse = content.some(p => p.type === 'tool_use');
     return {
       content: content.length > 0 ? content : [{ type: 'text', text: '' }],
-      stopReason: this.mapStopReason(choice.finish_reason),
+      stopReason: hasToolUse ? 'tool_use' : this.mapStopReason(choice.finish_reason),
       usage: {
         inputTokens: data['usage']?.prompt_tokens || 0,
         outputTokens: data['usage']?.completion_tokens || 0,
@@ -201,6 +259,17 @@ export class QwenProvider implements LLMProvider {
       });
     }
     if (toolCalls.size > 0) stopReason = 'tool_use';
+
+    // Fallback: model streamed no API tool_calls but may have emitted markup in text
+    if (toolCalls.size === 0 && accumulatedText) {
+      const { toolUses, cleanText } = parseMarkupToolCalls(accumulatedText);
+      if (toolUses.length > 0) {
+        content.length = 0;
+        if (cleanText) content.push({ type: 'text', text: cleanText });
+        content.push(...toolUses);
+        stopReason = 'tool_use';
+      }
+    }
 
     return {
       content: content.length > 0 ? content : [{ type: 'text', text: accumulatedText }],

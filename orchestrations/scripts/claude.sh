@@ -1227,6 +1227,7 @@ $story_plan"
                         EPAM_MAX_OUTPUT_TOKENS="${STORY_MAX_OUTPUT_TOKENS:-3072}" \
                         OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
                         EPAM_API_KEY_OPENROUTER="${EPAM_API_KEY_OPENROUTER:-}" \
+                        OPENROUTER_BASE_URL="${OPENROUTER_BASE_URL:-}" \
                         DASHSCOPE_API_KEY="${DASHSCOPE_API_KEY:-}" \
                         EPAM_API_KEY_QWEN="${EPAM_API_KEY_QWEN:-}" \
                         OPENAI_API_KEY="${OPENAI_API_KEY:-}" \

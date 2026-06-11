@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# ──────────────────────────────────────────────────────────────────────────────
+# Tier 2: Free-model pipeline run — real LLM, zero OpenRouter credits.
+#
+# Uses OpenRouter's free-tier models (`:free` suffix) which are rate-limited
+# but cost $0.  Validates real LLM integration: streaming, token handling,
+# QwenProvider parsing, and actual code generation on a small model.
+#
+# Prerequisite: Tier 1 must pass first.
+#   bash orchestrations/scripts/tier1-mock-run.sh
+#
+# What this tests (on top of Tier 1):
+#   • Real OpenRouter API calls (auth, headers, streaming SSE)
+#   • QwenProvider streaming/tool-call parsing on live responses
+#   • Actual code generation (not scripted) — model must write passing TS
+#   • Token accumulation stays within budget (autoCompressAt guard)
+#
+# Free models used (no credits consumed):
+#   meta-llama/llama-3.1-8b-instruct:free  — fast, capable enough for hello-world
+#
+# Usage:
+#   OPENROUTER_API_KEY=<your-key> bash orchestrations/scripts/tier2-free-run.sh
+# ──────────────────────────────────────────────────────────────────────────────
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+LOG_FILE="/tmp/tier2-free-run-$(date +%Y%m%dT%H%M%S).log"
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
+info()    { echo -e "${YELLOW}[tier2]${NC} $*"; }
+success() { echo -e "${GREEN}[tier2] ✓${NC} $*"; }
+fail()    { echo -e "${RED}[tier2] ✗${NC} $*"; exit 1; }
+
+if [ -z "${OPENROUTER_API_KEY:-}" ]; then
+  fail "OPENROUTER_API_KEY is not set. Export it before running this script."
+fi
+
+PRD_FILE="$REPO_ROOT/orchestrations/hello-world-prd.json"
+
+# Override the model to use the free-tier Llama model for all qwen stories.
+# The PRD has aiProvider=qwen, model=qwen/qwen3-coder-30b-a3b-instruct.
+# We override via EPAM_MODEL env var which ConfigResolver respects.
+FREE_MODEL="meta-llama/llama-3.1-8b-instruct:free"
+
+info "Tier 2 free-model run"
+info "  Model: $FREE_MODEL (zero credits)"
+info "  Log:   $LOG_FILE"
+echo ""
+
+cd "$REPO_ROOT"
+
+# Patch PRD temporarily to use free model, restore on exit
+BACKUP_PRD="/tmp/hello-world-prd-backup-$(date +%s).json"
+cp "$PRD_FILE" "$BACKUP_PRD"
+
+restore_prd() {
+  cp "$BACKUP_PRD" "$PRD_FILE"
+  info "PRD restored from backup"
+}
+trap restore_prd EXIT
+
+python3 - <<PYEOF
+import json
+with open('$PRD_FILE') as f:
+    d = json.load(f)
+for s in d['stories']:
+    if s.get('aiProvider') == 'qwen':
+        s['model'] = '$FREE_MODEL'
+with open('$PRD_FILE', 'w') as f:
+    json.dump(d, f, indent=2)
+print('[tier2] PRD patched: all qwen stories → $FREE_MODEL')
+PYEOF
+
+OPENROUTER_API_KEY="$OPENROUTER_API_KEY" \
+EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY" \
+PRD_FILE="$PRD_FILE" \
+SKIP_REGRESSION_GUARD=true \
+  bash orchestrations/scripts/run-agent-orchestration.sh \
+    --phase hello_world_test \
+    --reset \
+    2>&1 | tee "$LOG_FILE"
+
+PIPELINE_EXIT=${PIPESTATUS[0]}
+
+echo ""
+info "Validating story completion..."
+PASS=0; FAIL_LIST=""
+for story in HW-001 HW-002 HW-003 HW-004 HW-005 HW-006; do
+  status=$(python3 -c "
+import json, sys
+with open('$PRD_FILE') as f:
+  d = json.load(f)
+for s in d['stories']:
+  if s['id'] == '$story':
+    print(s.get('status','unknown'))
+    sys.exit(0)
+print('not_found')
+" 2>/dev/null)
+  if [ "$status" = "completed" ]; then
+    success "$story: completed"
+    PASS=$((PASS+1))
+  else
+    echo -e "${RED}[tier2] ✗${NC} $story: $status"
+    FAIL_LIST="$FAIL_LIST $story"
+  fi
+done
+
+echo ""
+if [ -n "$FAIL_LIST" ] || [ "$PIPELINE_EXIT" -ne 0 ]; then
+  fail "Tier 2 FAILED — stories not completed:$FAIL_LIST (pipeline exit: $PIPELINE_EXIT)"
+fi
+
+success "Tier 2 PASSED — all 6 stories completed with free model (zero credits spent)"
+echo ""
+echo "  Log: $LOG_FILE"
+echo "  Next: bash orchestrations/scripts/tier3-paid-run.sh"

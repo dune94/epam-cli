@@ -396,8 +396,9 @@ export class ProviderChain implements LLMProvider {
       case 'gemini':    return new GeminiProvider(apiKey);
       case 'qwen': {
         const openRouterKey = process.env.OPENROUTER_API_KEY ?? process.env.EPAM_API_KEY_OPENROUTER;
-        if (openRouterKey) return new QwenProvider({ apiKey: openRouterKey, openRouterMode: true });
-        return new QwenProvider({ apiKey });
+        const baseURL = process.env.OPENROUTER_BASE_URL || undefined;
+        if (openRouterKey) return new QwenProvider({ apiKey: openRouterKey, openRouterMode: true, baseURL });
+        return new QwenProvider({ apiKey, baseURL });
       }
       case 'cursor':    return new CursorProvider({ apiKey });
       default:

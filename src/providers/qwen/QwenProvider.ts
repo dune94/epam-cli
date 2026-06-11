@@ -528,7 +528,8 @@ export function createQwenProvider(apiKey?: string, model?: string): QwenProvide
   const dashScopeKey = apiKey ?? process.env.DASHSCOPE_API_KEY ?? process.env.QWEN_API_KEY;
 
   if (openRouterKey) {
-    return new QwenProvider({ apiKey: openRouterKey, openRouterMode: true });
+    const baseURL = process.env.OPENROUTER_BASE_URL || undefined;
+    return new QwenProvider({ apiKey: openRouterKey, openRouterMode: true, baseURL });
   }
 
   if (!dashScopeKey) {

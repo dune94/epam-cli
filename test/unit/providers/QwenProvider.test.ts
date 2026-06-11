@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { parseMarkupToolCalls, stripThinkingBlocks } from '../../../src/providers/qwen/QwenProvider.js';
+import { describe, it, expect, afterEach } from 'vitest';
+import { parseMarkupToolCalls, stripThinkingBlocks, createQwenProvider, OPENROUTER_BASE_URL } from '../../../src/providers/qwen/QwenProvider.js';
 
 describe('parseMarkupToolCalls', () => {
   it('returns empty toolUses and original text when input has no markup', () => {
@@ -120,5 +120,26 @@ describe('stripThinkingBlocks', () => {
     const result = stripThinkingBlocks(text);
     expect(result).not.toContain('<think>');
     expect(result).toContain('<function=write_file>');
+  });
+});
+
+describe('createQwenProvider — OPENROUTER_BASE_URL override', () => {
+  afterEach(() => {
+    delete process.env.OPENROUTER_API_KEY;
+    delete process.env.OPENROUTER_BASE_URL;
+  });
+
+  it('uses default OpenRouter base URL when OPENROUTER_BASE_URL is not set', () => {
+    process.env.OPENROUTER_API_KEY = 'test-key';
+    const provider = createQwenProvider();
+    expect(JSON.stringify(provider)).toContain(OPENROUTER_BASE_URL);
+  });
+
+  it('uses OPENROUTER_BASE_URL override when set — enables mock server', () => {
+    process.env.OPENROUTER_API_KEY = 'mock-key';
+    process.env.OPENROUTER_BASE_URL = 'http://localhost:4000/v1';
+    const provider = createQwenProvider();
+    expect(JSON.stringify(provider)).toContain('http://localhost:4000/v1');
+    expect(JSON.stringify(provider)).not.toContain(OPENROUTER_BASE_URL);
   });
 });

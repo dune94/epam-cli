@@ -10,9 +10,9 @@ import type { BashToolResult, BashErrorClassification } from '../tools/builtin/B
 import { logger } from '../utils/logger.js';
 import type { MemoryLoader } from '../memory/MemoryLoader.js';
 
-const DEFAULT_MAX_TOOL_OUTPUT_CHARS = 32_768;
-const DEFAULT_AUTO_COMPRESS_AT = 80_000;
-const DEFAULT_MAX_OUTPUT_TOKENS = 16_384;
+const DEFAULT_MAX_TOOL_OUTPUT_CHARS = 8_192;   // was 32768 — keeps tool results lean in history
+const DEFAULT_AUTO_COMPRESS_AT = 24_000;       // was 80000 — compress earlier to prevent history explosion
+const DEFAULT_MAX_OUTPUT_TOKENS = 4_096;       // was 16384 — enough for any code file, prevents verbose runaway
 
 function estimateTokens(messages: Message[]): number {
   let chars = 0;

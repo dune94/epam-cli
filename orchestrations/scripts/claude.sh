@@ -79,6 +79,11 @@ EFFORT_MODEL_MEDIUM="gpt-5-codex"
 EFFORT_MODEL_HIGH="gpt-5-codex"
 # Set by resolve_planner_settings; empty means single-invocation mode (no split)
 STORY_PLANNER_MODEL=""
+# Set by resolve_effort_settings; controls EPAM_MAX_ITERATIONS for epam-run stories.
+# Low=6 (write 2 files + tsc + vitest + one fix), medium=10, high=15
+STORY_MAX_ITERATIONS=6
+# Set by resolve_effort_settings; controls EPAM_MAX_OUTPUT_TOKENS for epam-run stories.
+STORY_MAX_OUTPUT_TOKENS=3072
 
 # resolve_effort_settings <story_id>
 # Sets STORY_MODEL and STORY_MAX_TURNS globals based on story's effort field.
@@ -94,17 +99,23 @@ resolve_effort_settings() {
         low)
             STORY_MODEL="$EFFORT_MODEL_LOW"
             STORY_MAX_TURNS=""
+            STORY_MAX_ITERATIONS=6
+            STORY_MAX_OUTPUT_TOKENS=3072
             ;;
         high)
             STORY_MODEL="$EFFORT_MODEL_HIGH"
             STORY_MAX_TURNS=""
+            STORY_MAX_ITERATIONS=15
+            STORY_MAX_OUTPUT_TOKENS=6144
             ;;
         *)  # medium (default)
             STORY_MODEL="$EFFORT_MODEL_MEDIUM"
             STORY_MAX_TURNS=""
+            STORY_MAX_ITERATIONS=10
+            STORY_MAX_OUTPUT_TOKENS=4096
             ;;
     esac
-    log "  Effort[$effort] -> model=$(basename $STORY_MODEL) turns=${STORY_MAX_TURNS:-unlimited}"
+    log "  Effort[$effort] -> model=$(basename $STORY_MODEL) turns=${STORY_MAX_TURNS:-unlimited} maxIter=${STORY_MAX_ITERATIONS} maxOutTok=${STORY_MAX_OUTPUT_TOKENS}"
 }
 
 # resolve_model_from_story <story_id>
@@ -1122,6 +1133,8 @@ $story_plan"
                 [ -n "${STORY_MODEL:-}" ] && epam_model_flag=(--model "$STORY_MODEL")
                 if echo "$prompt" | \
                         EPAM_DANGEROUS_SKIP_APPROVAL=1 \
+                        EPAM_MAX_ITERATIONS="${STORY_MAX_ITERATIONS:-6}" \
+                        EPAM_MAX_OUTPUT_TOKENS="${STORY_MAX_OUTPUT_TOKENS:-3072}" \
                         OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
                         EPAM_API_KEY_OPENROUTER="${EPAM_API_KEY_OPENROUTER:-}" \
                         DASHSCOPE_API_KEY="${DASHSCOPE_API_KEY:-}" \

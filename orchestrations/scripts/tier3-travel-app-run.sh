@@ -102,7 +102,7 @@ PIPELINE_EXIT=0
 if ! bash orchestrations/scripts/preflight-check.sh \
      --runner tier3-travel-app-run.sh \
      --prd "$PRD_FILE"; then
-  error "Pre-flight checks failed — aborting run. Fix issues above first."
+  fail "Pre-flight checks failed — aborting run. Fix issues above first."
   exit 1
 fi
 echo ""

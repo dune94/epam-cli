@@ -23,6 +23,18 @@
     "aiRuntime": {
       "provider": "qwen",
       "defaultModel": "MiniMax-M2.5"
+    },
+    "spikePattern": {
+      "description": "Time-boxed discovery stories that produce structured artifacts consumed by downstream user stories. Spikes NEVER write implementation code.",
+      "agentRole": "spike-agent",
+      "fields": {
+        "storyType": "spike",
+        "timebox": "minutes — agent must stop and write output artifact at timebox expiry",
+        "spikeOutputArtifact": "path to the artifact written by the spike (relative to OUTPUT_DIR)",
+        "informsStories": "story IDs that consume this spike output",
+        "dependsOnSpike": "ID of the spike this story depends on",
+        "spikeArtifact": "path to the artifact this story reads as input (must match spikeOutputArtifact of the spike)"
+      }
     }
   },
   "implementationOrder": {
@@ -3005,7 +3017,7 @@
     {
       "id": "SKY-001b-1",
       "title": "API Discovery: Execute Curl Probes and Capture Raw Results",
-      "agentRole": "typescript-engineer",
+      "agentRole": "spike-agent",
       "agentGroup": "main",
       "status": "completed",
       "completed": true,
@@ -3079,7 +3091,13 @@
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "lastAttempt": "2026-06-19T09:22:40-04:00",
-      "dependencies": []
+      "dependencies": [],
+      "storyType": "spike",
+      "timebox": 30,
+      "spikeOutputArtifact": "probe-summary.txt",
+      "informsStories": [
+        "SKY-001b-2"
+      ]
     },
     {
       "id": "SKY-001b-2",
@@ -3174,12 +3192,14 @@
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "lastAttempt": "2026-06-19T09:22:46-04:00",
-      "dependencies": []
+      "dependencies": [],
+      "dependsOnSpike": "SKY-001b-1",
+      "spikeArtifact": "probe-summary.txt"
     },
     {
       "id": "SKY-001b-1-1",
       "title": "API Discovery: Execute Curl Probes and Capture Raw Results",
-      "agentRole": "typescript-engineer",
+      "agentRole": "spike-agent",
       "agentGroup": "main",
       "status": "pending",
       "completed": false,
@@ -3264,7 +3284,13 @@
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "lastAttempt": "2026-06-19T09:22:53-04:00",
-      "dependencies": []
+      "dependencies": [],
+      "storyType": "spike",
+      "timebox": 30,
+      "spikeOutputArtifact": "probe-summary.txt",
+      "informsStories": [
+        "SKY-001b-2-1"
+      ]
     },
     {
       "id": "SKY-001b-2-1",
@@ -3371,7 +3397,9 @@
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "lastAttempt": "2026-06-19T09:22:59-04:00",
-      "dependencies": []
+      "dependencies": [],
+      "dependsOnSpike": "SKY-001b-1-1",
+      "spikeArtifact": "probe-summary.txt"
     },
     {
       "id": "SKY-003a-1",

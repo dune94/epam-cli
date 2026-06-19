@@ -117,7 +117,7 @@ for s in stories:
     if effort == 'low' and provider in ('qwen','openai','anthropic','claude','gemini'):
         warns.append(f"{sid}: effort=low maps to HAIKU badge in viewer — consider 'medium'")
 
-    if status not in ('pending','completed','failed'):
+    if status not in ('pending','completed','failed','deprecated'):
         errors.append(f"{sid}: status='{status}' is unexpected")
 
 for e in errors:

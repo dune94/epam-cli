@@ -1,5 +1,5 @@
 {
-  "_comment": "OpenRouter per-token pricing in USD per 1M tokens. input/output keys. Last updated 2026-06-18.",
+  "_comment": "OpenRouter per-token pricing in USD per 1M tokens. input/output keys. Last updated 2026-06-19.",
   "anthropic/claude-opus-4-8":              { "input": 5.00,  "output": 25.00 },
   "anthropic/claude-opus-4-7":              { "input": 5.00,  "output": 25.00 },
   "anthropic/claude-opus-4-6":              { "input": 5.00,  "output": 25.00 },
@@ -23,5 +23,17 @@
   "meta-llama/llama-3.3-70b-instruct":      { "input": 0.12,  "output": 0.30  },
   "mistralai/mistral-large":                { "input": 2.00,  "output": 6.00  },
   "deepseek/deepseek-chat-v3-0324":         { "input": 0.27,  "output": 1.10  },
-  "deepseek/deepseek-r1":                   { "input": 0.55,  "output": 2.19  }
+  "deepseek/deepseek-r1":                   { "input": 0.55,  "output": 2.19  },
+  "minimax/minimax-m3":                     { "input": 0.30,  "output": 1.20  },
+  "minimax/minimax-m2.7":                   { "input": 0.25,  "output": 1.00  },
+  "minimax/minimax-m2.7-highspeed":         { "input": 0.60,  "output": 2.40  },
+  "minimax/minimax-m2.5":                   { "input": 0.15,  "output": 0.90  },
+  "minimax/minimax-m2.1":                   { "input": 0.29,  "output": 0.95  },
+  "minimax/minimax-m2":                     { "input": 0.26,  "output": 1.00  },
+  "MiniMax-M3":                             { "input": 0.30,  "output": 1.20  },
+  "MiniMax-M2.7":                           { "input": 0.25,  "output": 1.00  },
+  "MiniMax-M2.7-highspeed":                 { "input": 0.60,  "output": 2.40  },
+  "MiniMax-M2.5":                           { "input": 0.15,  "output": 0.90  },
+  "MiniMax-M2.1":                           { "input": 0.29,  "output": 0.95  },
+  "MiniMax-M2":                             { "input": 0.26,  "output": 1.00  }
 }

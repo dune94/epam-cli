@@ -91,6 +91,14 @@ export LOG_DIR
 [ -n "${OPENROUTER_API_KEY:-}" ] && export OPENROUTER_API_KEY
 [ -n "${EPAM_API_KEY_OPENROUTER:-}" ] && export EPAM_API_KEY_OPENROUTER
 [ -n "${EPAM_QWEN_MODEL_OVERRIDE:-}" ] && export EPAM_QWEN_MODEL_OVERRIDE
+# Propagate MiniMax key to all subprocesses
+[ -n "${MINIMAX_API_KEY:-}" ] && export MINIMAX_API_KEY
+[ -n "${EPAM_API_KEY_MINIMAX:-}" ] && export EPAM_API_KEY_MINIMAX
+[ -n "${MINIMAX_BASE_URL:-}" ] && export MINIMAX_BASE_URL
+[ -n "${ORCH_MINI_MODEL:-}" ] && export ORCH_MINI_MODEL
+[ -n "${ORCH_UPGRADE_MODEL:-}" ] && export ORCH_UPGRADE_MODEL
+[ -n "${EPAM_FINAL_FALLBACK_MODEL:-}" ] && export EPAM_FINAL_FALLBACK_MODEL
+[ -n "${EPAM_FINAL_FALLBACK_PROVIDER:-}" ] && export EPAM_FINAL_FALLBACK_PROVIDER
 [ -n "${ORCH_GATE_PROVIDER:-}" ] && export ORCH_GATE_PROVIDER
 [ -n "${ORCH_GATE_MODEL:-}" ] && export ORCH_GATE_MODEL
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"

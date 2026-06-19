@@ -430,6 +430,7 @@ ${reviewPayload}
   //   catches false negatives the rules missed. LLM decision is final.
   // Both passes write to story.specification.modelUpgrade for full auditability.
   const upgradeModel = process.env.ORCH_UPGRADE_MODEL || 'anthropic/claude-sonnet-4-6';
+  const miniModel    = process.env.ORCH_MINI_MODEL    || 'openai/gpt-4.1-mini';
   const allPhaseStories = [...stories, ...newStories.map((ns) => ns.story)];
 
   // Pass A — rule-based signals for every story that has a model assigned
@@ -477,12 +478,12 @@ ${reviewPayload}
 
 A rule-based pass has already assessed every story's model assignment. Your job is to make the FINAL decision on each story's model — confirming rule recommendations, overriding them when wrong, and catching any false negatives the rules missed.
 
-## Available model tiers (via OpenRouter)
-- **mini-tier** (cheap, fast, ~$0.15/1M tokens): openai/gpt-4.1-mini, openai/gpt-4.1-nano
+## Available model tiers
+- **mini-tier** (fast, lower cost): ${miniModel}
   Best for: simple tasks, small outputs, <8 ACs, modifying existing code, writing single focused functions
   Risk: will timeout or fail on large generation tasks (>1500 output tokens in one turn)
 
-- **standard-tier** (moderate cost, ~$2–4/1M tokens): anthropic/claude-sonnet-4-6, openai/gpt-4.1
+- **standard-tier** (higher capability): ${upgradeModel}
   Best for: large single-file generation, 10+ ACs, HTML/UI files, self-contained complete modules
   Use when: story needs to generate >1000 tokens reliably in one turn
 
@@ -528,10 +529,10 @@ Use "keep-current" to accept the current (possibly rule-upgraded) model. Only pr
     if (Array.isArray(llmDecisions)) {
       // Tier label → canonical model ID (LLM sometimes echoes the tier label instead of a real model string)
       const TIER_LABEL_MAP = {
-        'standard-tier': 'anthropic/claude-sonnet-4-6',
-        'mini-tier':     'openai/gpt-4.1-mini',
-        'nano-tier':     'openai/gpt-4.1-nano',
-        'premium-tier':  'anthropic/claude-opus-4-8',
+        'standard-tier': upgradeModel,
+        'mini-tier':     miniModel,
+        'nano-tier':     miniModel,
+        'premium-tier':  process.env.ORCH_PREMIUM_MODEL || upgradeModel,
       };
       const resolveTierLabel = (m) => (m && TIER_LABEL_MAP[m]) ? TIER_LABEL_MAP[m] : m;
 
@@ -970,7 +971,11 @@ function resolvePromptExec(aiRunnerCmd, env = process.env) {
 function isMiniTierModel(model) {
   if (!model || typeof model !== 'string') return false;
   const m = model.toLowerCase();
-  return m.includes('-mini') || m.includes('-nano') || m.includes('-flash') || m.includes('-haiku');
+  // Named mini model from env var always qualifies
+  const miniModelEnv = (process.env.ORCH_MINI_MODEL || '').toLowerCase();
+  if (miniModelEnv && m === miniModelEnv) return true;
+  return m.includes('-mini') || m.includes('-nano') || m.includes('-flash') || m.includes('-haiku')
+      || m.startsWith('minimax-m2') || m.startsWith('minimax/minimax-m2');
 }
 
 // Compute story complexity signals and decide whether the assigned model needs upgrading.

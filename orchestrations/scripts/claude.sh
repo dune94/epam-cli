@@ -309,10 +309,10 @@ provider_to_cli() {
         opencode)                    echo "opencode" ;;
         codex)                       echo "codex" ;;
         codemie-claude)              echo "codemie-claude" ;;
-        copilot|openai|qwen|cursor)  echo "$EPAM_CLI" ;;
+        copilot|openai|qwen|cursor|minimax)  echo "$EPAM_CLI" ;;
         epam)                        echo "$EPAM_CLI" ;;
         *)
-            error "Unknown aiProvider '$1' — set aiProvider in prd.json to one of: opencode|codex|copilot|openai|qwen|cursor|codemie-claude"
+            error "Unknown aiProvider '$1' — set aiProvider in prd.json to one of: opencode|codex|copilot|openai|qwen|cursor|minimax|codemie-claude"
             return 1
             ;;
     esac
@@ -1484,7 +1484,7 @@ implement_story() {
     # For epam-run providers, prd.json .model field overrides effort-based model
     case "${STORY_PROVIDER:-codex}" in
         codex) resolve_codex_model_settings "$story_id" ;;
-        copilot|openai|qwen|cursor) resolve_model_from_story "$story_id" ;;
+        copilot|openai|qwen|cursor|minimax) resolve_model_from_story "$story_id" ;;
     esac
     # Resolve optional plannerModel — runs a planning pass before execution
     resolve_planner_settings "$story_id"
@@ -1540,6 +1540,16 @@ implement_story() {
                 '.stories[] | select(.id == $id) | .retryModel // ""' \
                 "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
             local escalated_model="${retry_model_prd:-${EPAM_RETRY_MODEL:-}}"
+            # Final-fallback tier: if retryModel == current model (e.g. both M3) and a fallback is set,
+            # route the last attempt to the fallback provider (e.g. sonnet via OpenRouter).
+            local _final_fallback_model="${EPAM_FINAL_FALLBACK_MODEL:-}"
+            local _final_fallback_provider="${EPAM_FINAL_FALLBACK_PROVIDER:-}"
+            if [ -n "$_final_fallback_model" ] && [ "$retry_count" -ge "$MAX_RETRIES" ] \
+               && [ "$escalated_model" = "${STORY_MODEL:-}" ]; then
+                log "  InferenceLadder: retryModel == current model — routing final attempt to fallback '$_final_fallback_model'"
+                escalated_model="$_final_fallback_model"
+                [ -n "$_final_fallback_provider" ] && STORY_PROVIDER="$_final_fallback_provider"
+            fi
             if [ -n "$escalated_model" ] && [ "${COORDINATOR_ESCALATE:-yes}" = "yes" ]; then
                 log "  InferenceLadder: escalating model from '${STORY_MODEL:-default}' to '$escalated_model' (retry $retry_count, class=$COORDINATOR_FAILURE_CLASS)"
                 STORY_MODEL="$escalated_model"
@@ -1549,7 +1559,7 @@ implement_story() {
             # Boost iterations for capability failures on epam-run providers
             if [ "${COORDINATOR_ESCALATE:-yes}" = "yes" ]; then
                 case "${STORY_PROVIDER:-codex}" in
-                    copilot|openai|qwen|cursor)
+                    copilot|openai|qwen|cursor|minimax)
                         STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
                         log "  InferenceLadder: boosting EPAM_MAX_ITERATIONS to $STORY_MAX_ITERATIONS for retry"
                         ;;
@@ -1653,7 +1663,7 @@ ${COORDINATOR_PROMPT_AMENDMENT}"
                     invoke_success=true
                 fi
                 ;;
-            copilot|openai|qwen|cursor)
+            copilot|openai|qwen|cursor|minimax)
                 # epam-run providers: invoke via `epam run --provider X --model M --json`
                 # EPAM_CLI can be overridden with a mock for zero-token testing.
                 # Explicitly forward API keys so subshells that didn't inherit them still work.
@@ -1670,6 +1680,12 @@ ${COORDINATOR_PROMPT_AMENDMENT}"
                         EPAM_QWEN_MODEL_OVERRIDE="${EPAM_QWEN_MODEL_OVERRIDE:-}" \
                         DASHSCOPE_API_KEY="${DASHSCOPE_API_KEY:-}" \
                         EPAM_API_KEY_QWEN="${EPAM_API_KEY_QWEN:-}" \
+                        MINIMAX_API_KEY="${MINIMAX_API_KEY:-}" \
+                        EPAM_API_KEY_MINIMAX="${EPAM_API_KEY_MINIMAX:-}" \
+                        MINIMAX_BASE_URL="${MINIMAX_BASE_URL:-}" \
+                        EPAM_MINIMAX_MODEL_OVERRIDE="${EPAM_MINIMAX_MODEL_OVERRIDE:-}" \
+                        EPAM_FINAL_FALLBACK_MODEL="${EPAM_FINAL_FALLBACK_MODEL:-}" \
+                        EPAM_FINAL_FALLBACK_PROVIDER="${EPAM_FINAL_FALLBACK_PROVIDER:-}" \
                         OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
                         EPAM_API_KEY_OPENAI="${EPAM_API_KEY_OPENAI:-}" \
                         EPAM_RALPH_WIGGUM_ENABLED="${EPAM_RALPH_WIGGUM_ENABLED:-}" \

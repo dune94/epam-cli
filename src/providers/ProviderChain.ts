@@ -9,6 +9,7 @@ import { GeminiProvider } from './gemini/GeminiProvider.js';
 import { ProxyProvider } from './proxy/ProxyProvider.js';
 import { CodexProvider } from './codex/CodexProvider.js';
 import { QwenProvider, createQwenProvider } from './qwen/QwenProvider.js';
+import { MiniMaxProvider, createMiniMaxProvider } from './minimax/MiniMaxProvider.js';
 import { CursorProvider, createCursorProvider } from './cursor/CursorProvider.js';
 import { CopilotProvider, createCopilotProvider } from './copilot/CopilotProvider.js';
 import { createCodemieProvider } from './codemie/CodemieProvider.js';
@@ -384,6 +385,15 @@ export class ProviderChain implements LLMProvider {
         slot.provider
       );
     }
+    // Providers that can self-resolve credentials from env vars skip the apiKey guard
+    if (!apiKey && slot.provider === 'minimax') {
+      const minimaxKey = process.env.MINIMAX_API_KEY ?? process.env.EPAM_API_KEY_MINIMAX;
+      if (minimaxKey) {
+        const baseURL = process.env.MINIMAX_BASE_URL || undefined;
+        return new MiniMaxProvider(minimaxKey, baseURL);
+      }
+    }
+
     if (!apiKey) {
       throw new ProviderError(`No credential configured for provider '${slot.provider}'. Run: /providers auth ${slot.provider}`);
     }
@@ -399,6 +409,11 @@ export class ProviderChain implements LLMProvider {
         const baseURL = process.env.OPENROUTER_BASE_URL || undefined;
         if (openRouterKey) return new QwenProvider({ apiKey: openRouterKey, openRouterMode: true, baseURL });
         return new QwenProvider({ apiKey, baseURL });
+      }
+      case 'minimax': {
+        const minimaxKey = process.env.MINIMAX_API_KEY ?? process.env.EPAM_API_KEY_MINIMAX ?? apiKey;
+        const baseURL = process.env.MINIMAX_BASE_URL || undefined;
+        return new MiniMaxProvider(minimaxKey, baseURL);
       }
       case 'cursor':    return new CursorProvider({ apiKey });
       default:

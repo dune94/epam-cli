@@ -101,7 +101,7 @@ with open('$PRD_FILE') as f:
 stories = d.get('stories', [])
 errors = []
 warns  = []
-valid_providers = {'qwen','openai','anthropic','claude','gemini','codex','cursor','opencode'}
+valid_providers = {'qwen','openai','anthropic','claude','gemini','codex','cursor','opencode','minimax'}
 for s in stories:
     sid = s.get('id','?')
     provider = s.get('aiProvider','')

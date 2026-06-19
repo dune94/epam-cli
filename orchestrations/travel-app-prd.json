@@ -42,7 +42,6 @@
       "SKY-001",
       "SKY-001-A",
       "SKY-001-B",
-      "SKY-001b",
       "SKY-001b-1",
       "SKY-001b-2",
       "SKY-001b-1-1",
@@ -122,8 +121,8 @@
       "title": "Scaffold TypeScript project with Vitest and Express",
       "agentRole": "typescript-engineer",
       "agentGroup": "main",
-      "status": "failed",
-      "completed": false,
+      "status": "completed",
+      "completed": true,
       "description": "Create the project skeleton at /tmp/skyscanner-app. Initialize a TypeScript Node.js project with: package.json (name: skyscanner-app, scripts for build/test/start/dev), tsconfig.json (strict mode, target ES2022, module CommonJS, moduleResolution Node, outDir dist/), vitest.config.ts (with include: ['src/**/*.test.ts'] to prevent CommonJS import errors from compiled dist files), .gitignore, and a src/index.ts entry-point placeholder. Install runtime dependency express and devDependencies typescript, tsx, vitest, @types/express, @types/node. Do NOT install Skyscanner SDKs — RapidAPI is called directly via fetch. The project must compile cleanly and vitest must exit 0 with no test files present.",
       "acceptanceCriteria": [
         "/tmp/skyscanner-app/package.json exists and the 'name' field equals exactly 'skyscanner-app'",
@@ -159,14 +158,14 @@
       },
       "estimate": 10,
       "specification": {
-        "runId": "20260619T143128Z",
+        "runId": "20260619T150651Z",
         "assignedAgents": [
           "openspec",
           "speckit"
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-19T14:31:29.237Z",
+        "updatedAt": "2026-06-19T15:06:51.398Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -175,7 +174,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T14:31:29.058Z"
+            "timestamp": "2026-06-19T15:06:51.342Z"
           },
           {
             "agent": "speckit",
@@ -183,7 +182,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T14:31:29.237Z"
+            "timestamp": "2026-06-19T15:06:51.398Z"
           }
         ],
         "coordinatorReview": {
@@ -220,7 +219,7 @@
       "effort": "medium",
       "cpaConfidence": 0.85,
       "cpaGate": "review",
-      "completedAt": "2026-06-19T09:41:31-04:00",
+      "completedAt": "2026-06-19T11:07:43-04:00",
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "lastAttempt": "2026-06-19T10:33:05-04:00"
@@ -230,7 +229,7 @@
       "title": "API Discovery: Verify and Document Skyscanner RapidAPI Contract",
       "agentRole": "typescript-engineer",
       "agentGroup": "main",
-      "status": "pending",
+      "status": "deprecated",
       "completed": false,
       "description": "Before implementing the Skyscanner client, discover and document the real RapidAPI endpoint contract. Using the RAPIDAPI_KEY environment variable, make live curl probes (via the Bash tool only — FetchUrl and WebSearch are prohibited) against the subscribed Skyscanner host to identify: (1) the correct x-rapidapi-host value, (2) working endpoint paths for flight search (one-way and/or roundtrip), (3) required query parameters with exact names and value formats, and (4) the response JSON shape including top-level keys and nested field names relevant to FlightResult. Write the discovered contract to /tmp/skyscanner-app/docs/api-contract.md. This file is the authoritative reference for SKY-002 (client implementation). Probe with `curl -si` so both status codes and response bodies are captured. A 429 (Too Many Requests) confirms a path is valid even when no 2xx body is obtained. Do NOT write any TypeScript, JavaScript, or compiled output in this story.",
       "acceptanceCriteria": [
@@ -258,14 +257,14 @@
       "estimate": 5,
       "effort": "high",
       "specification": {
-        "runId": "20260619T143128Z",
+        "runId": "20260619T150651Z",
         "assignedAgents": [
           "openspec",
           "speckit"
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-19T14:31:30.200Z",
+        "updatedAt": "2026-06-19T15:06:51.766Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -274,7 +273,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T14:31:29.980Z"
+            "timestamp": "2026-06-19T15:06:51.707Z"
           },
           {
             "agent": "speckit",
@@ -282,7 +281,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T14:31:30.200Z"
+            "timestamp": "2026-06-19T15:06:51.766Z"
           }
         ],
         "coordinatorReview": {
@@ -323,7 +322,13 @@
       "completedAt": "2026-06-19T09:42:06-04:00",
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
-      "lastAttempt": "2026-06-19T09:22:21-04:00"
+      "lastAttempt": "2026-06-19T11:13:49-04:00",
+      "storyType": "epic",
+      "deprecatedReason": "Split into spike SKY-001b-1 and user story SKY-001b-2. Execute children instead.",
+      "splitInto": [
+        "SKY-001b-1",
+        "SKY-001b-2"
+      ]
     },
     {
       "id": "SKY-002",
@@ -1318,8 +1323,8 @@
       "title": "Scaffold TypeScript/Express project file structure and configuration",
       "agentRole": "typescript-engineer",
       "agentGroup": "main",
-      "status": "failed",
-      "completed": false,
+      "status": "completed",
+      "completed": true,
       "description": "Create all required files and install dependencies for the skyscanner-app project at /tmp/skyscanner-app. This story covers file creation and content correctness only; runtime verification is covered in SKY-001-B.",
       "acceptanceCriteria": [
         "/tmp/skyscanner-app/package.json exists with name='skyscanner-app', scripts (build, test, start, dev), dependencies (express), and devDependencies (typescript, tsx, vitest, @types/express, @types/node)",
@@ -1349,7 +1354,7 @@
       "specification": {
         "createdFrom": "SKY-001",
         "createdAt": "2026-06-18T15:38:02.143Z",
-        "runId": "20260619T143128Z",
+        "runId": "20260619T150651Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "MiniMax-M2.5",
@@ -1372,7 +1377,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-19T14:31:29.534Z",
+        "updatedAt": "2026-06-19T15:06:51.524Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -1381,7 +1386,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T14:31:29.388Z"
+            "timestamp": "2026-06-19T15:06:51.459Z"
           },
           {
             "agent": "speckit",
@@ -1389,7 +1394,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T14:31:29.534Z"
+            "timestamp": "2026-06-19T15:06:51.524Z"
           }
         ]
       },
@@ -1401,7 +1406,7 @@
       "effort": "medium",
       "cpaConfidence": 0.85,
       "cpaGate": "review",
-      "completedAt": "2026-06-19T09:43:04-04:00",
+      "completedAt": "2026-06-19T11:14:47-04:00",
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "lastAttempt": "2026-06-19T10:38:22-04:00",
@@ -1435,7 +1440,7 @@
       "specification": {
         "createdFrom": "SKY-001",
         "createdAt": "2026-06-18T15:38:02.143Z",
-        "runId": "20260619T143128Z",
+        "runId": "20260619T150651Z",
         "splitDepth": 1,
         "assignedAgents": [
           "openspec",
@@ -1443,7 +1448,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-19T14:31:29.836Z",
+        "updatedAt": "2026-06-19T15:06:51.646Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -1452,7 +1457,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T14:31:29.713Z"
+            "timestamp": "2026-06-19T15:06:51.583Z"
           },
           {
             "agent": "speckit",
@@ -1460,7 +1465,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T14:31:29.836Z"
+            "timestamp": "2026-06-19T15:06:51.646Z"
           }
         ]
       },
@@ -1472,7 +1477,7 @@
       "effort": "medium",
       "cpaConfidence": 0.85,
       "cpaGate": "review",
-      "completedAt": "2026-06-19T10:39:42-04:00",
+      "completedAt": "2026-06-19T11:15:01-04:00",
       "model": "MiniMax-M2.5",
       "aiProvider": "minimax",
       "lastAttempt": "2026-06-19T09:22:34-04:00",
@@ -3057,7 +3062,7 @@
       "specification": {
         "createdFrom": "SKY-001b",
         "createdAt": "2026-06-19T11:20:27.397Z",
-        "runId": "20260619T143128Z",
+        "runId": "20260619T150651Z",
         "splitDepth": 1,
         "assignedAgents": [
           "openspec",
@@ -3065,7 +3070,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-19T14:31:30.481Z",
+        "updatedAt": "2026-06-19T15:06:51.887Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -3074,7 +3079,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T14:31:30.351Z"
+            "timestamp": "2026-06-19T15:06:51.826Z"
           },
           {
             "agent": "speckit",
@@ -3082,7 +3087,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T14:31:30.481Z"
+            "timestamp": "2026-06-19T15:06:51.887Z"
           }
         ]
       },
@@ -3093,7 +3098,7 @@
       "estimatedHours": 0.0617,
       "cpaConfidence": 0.85,
       "cpaGate": "review",
-      "completedAt": "2026-06-19T10:40:24-04:00",
+      "completedAt": "2026-06-19T11:16:54-04:00",
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "lastAttempt": "2026-06-19T09:22:40-04:00",
@@ -3143,7 +3148,7 @@
       "specification": {
         "createdFrom": "SKY-001b",
         "createdAt": "2026-06-19T11:20:27.397Z",
-        "runId": "20260619T143128Z",
+        "runId": "20260619T150651Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "MiniMax-M3",
@@ -3166,7 +3171,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-19T14:31:30.707Z",
+        "updatedAt": "2026-06-19T15:06:51.994Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -3175,7 +3180,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T14:31:30.588Z"
+            "timestamp": "2026-06-19T15:06:51.939Z"
           },
           {
             "agent": "speckit",
@@ -3183,7 +3188,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T14:31:30.707Z"
+            "timestamp": "2026-06-19T15:06:51.994Z"
           }
         ]
       },
@@ -3240,7 +3245,7 @@
       "specification": {
         "createdFrom": "SKY-001b",
         "createdAt": "2026-06-19T11:21:45.541Z",
-        "runId": "20260619T143128Z",
+        "runId": "20260619T150651Z",
         "splitDepth": 1,
         "assignedAgents": [
           "openspec",
@@ -3248,7 +3253,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-19T14:31:31.007Z",
+        "updatedAt": "2026-06-19T15:06:52.102Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -3257,7 +3262,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T14:31:30.906Z"
+            "timestamp": "2026-06-19T15:06:52.047Z"
           },
           {
             "agent": "speckit",
@@ -3265,7 +3270,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T14:31:31.007Z"
+            "timestamp": "2026-06-19T15:06:52.102Z"
           }
         ],
         "coordinatorReview": {
@@ -3337,7 +3342,7 @@
       "specification": {
         "createdFrom": "SKY-001b",
         "createdAt": "2026-06-19T11:21:45.541Z",
-        "runId": "20260619T143128Z",
+        "runId": "20260619T150651Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "anthropic/claude-sonnet-4-5",
@@ -3360,7 +3365,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-19T14:31:31.243Z",
+        "updatedAt": "2026-06-19T15:06:52.213Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -3369,7 +3374,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T14:31:31.132Z"
+            "timestamp": "2026-06-19T15:06:52.156Z"
           },
           {
             "agent": "speckit",
@@ -3377,7 +3382,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T14:31:31.243Z"
+            "timestamp": "2026-06-19T15:06:52.213Z"
           }
         ],
         "coordinatorReview": {
@@ -5013,5 +5018,5 @@
       "retryProvider": "minimax"
     }
   ],
-  "currentIteration": 474
+  "currentIteration": 479
 }

@@ -66,7 +66,12 @@ _usage_before=$(curl -s "https://openrouter.ai/api/v1/auth/key" \
 info "OpenRouter usage before: \$$_usage_before"
 echo ""
 
-# Ensure output directory exists
+# Clean output directory to prevent leftover artifacts from prior runs poisoning
+# external verification (e.g. stale test files causing npm test to fail)
+if [ -d "$OUTPUT_DIR" ]; then
+  info "Cleaning output directory: $OUTPUT_DIR"
+  rm -rf "$OUTPUT_DIR"
+fi
 mkdir -p "$OUTPUT_DIR"
 
 # Export all required env vars directly so subprocesses inherit them without
@@ -105,11 +110,15 @@ echo ""
 run_phase() {
   local phase="$1"
   info "━━━ Phase: $phase ━━━"
+  local phase_exit=0
   bash orchestrations/scripts/run-agent-orchestration.sh \
     --phase "$phase" \
     --reset \
-    2>&1 | tee -a "$LOG_FILE" || { PIPELINE_EXIT=$?; }
+    2>&1 | tee -a "$LOG_FILE" || phase_exit=${PIPESTATUS[0]}
   echo ""
+  if [ "$phase_exit" -ne 0 ]; then
+    fail "Phase '$phase' failed (exit $phase_exit) — aborting pipeline"
+  fi
 }
 
 run_phase "scaffold"

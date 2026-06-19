@@ -56,7 +56,7 @@ CURRENT_PHASE=""        # Current phase being executed (for cost tracking)
 # Configuration
 CLAUDE_CMD="${CLAUDE_CMD:-claude}"  # Allow override via environment
 EPAM_CLI="${EPAM_CLI:-epam}"        # epam-cli binary; override with mock for testing
-MAX_RETRIES=2
+MAX_RETRIES="${EPAM_MAX_RETRIES:-2}"
 RETRY_DELAY=5
 # Orchestration mode — inherited from run-agent-orchestration.sh or set directly
 ORCH_MODE="${ORCH_MODE:-bash}"
@@ -84,6 +84,8 @@ STORY_PLANNER_MODEL=""
 STORY_MAX_ITERATIONS=6
 # Set by resolve_effort_settings; controls EPAM_MAX_OUTPUT_TOKENS for epam-run stories.
 STORY_MAX_OUTPUT_TOKENS=3072
+# Set by resolve_generator_settings; true when agentRole=generator (pure file creation, no context reads).
+STORY_GENERATOR_MODE=""
 
 # resolve_effort_settings <story_id>
 # Sets STORY_MODEL and STORY_MAX_TURNS globals based on story's effort field.
@@ -118,6 +120,26 @@ resolve_effort_settings() {
     log "  Effort[$effort] -> model=$(basename $STORY_MODEL) turns=${STORY_MAX_TURNS:-unlimited} maxIter=${STORY_MAX_ITERATIONS} maxOutTok=${STORY_MAX_OUTPUT_TOKENS}"
 }
 
+# resolve_generator_settings <story_id>
+# When agentRole=generator, overrides iteration/token settings for pure file-creation stories.
+# Generator stories write one new file from spec — they need no context reads, few iterations,
+# and a large output token budget for the generated content.
+resolve_generator_settings() {
+    local story_id="$1"
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    STORY_GENERATOR_MODE=""
+    local role
+    role=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .agentRole // ""' \
+        "$prd_target" 2>/dev/null || echo "")
+    if [ "$role" = "generator" ]; then
+        STORY_GENERATOR_MODE="true"
+        STORY_MAX_ITERATIONS=3
+        STORY_MAX_OUTPUT_TOKENS=16384
+        log "  GeneratorMode: enabled (agentRole=generator) — maxIter=3 maxOutTok=16384"
+    fi
+}
+
 # resolve_model_from_story <story_id>
 # For epam-run providers (copilot/openai/qwen/cursor), the prd.json story carries
 # a .model field directly.  If set, it overrides the effort-based STORY_MODEL.
@@ -132,6 +154,44 @@ resolve_model_from_story() {
         STORY_MODEL="$story_model"
         log "  Model[prd.json] -> $STORY_MODEL (overrides effort default)"
     fi
+}
+
+# compute_token_cost <model> <tokens_in> <tokens_out>
+# Returns USD cost using model-pricing.json. Outputs "0" if model unknown or tokens are zero.
+# Handles "standard-tier" / "mini-tier" labels by falling back to STORY_MODEL.
+compute_token_cost() {
+    local model="$1"
+    local tin="${2:-0}"
+    local tout="${3:-0}"
+    local pricing_file
+    pricing_file="$(dirname "$(realpath "${BASH_SOURCE[0]}")")/model-pricing.json"
+    [ -f "$pricing_file" ] || { echo "0"; return; }
+    # Resolve tier labels to the actual model
+    case "$model" in
+        standard-tier|mini-tier|"") model="${STORY_MODEL:-}" ;;
+    esac
+    [ -z "$model" ] && { echo "0"; return; }
+    python3 - "$pricing_file" "$model" "$tin" "$tout" <<'PYEOF'
+import sys, json
+pricing_file, model, tin, tout = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
+try:
+    with open(pricing_file) as f:
+        table = json.load(f)
+    prices = table.get(model)
+    if not prices:
+        # Try prefix match (e.g. model has date suffix)
+        for k, v in table.items():
+            if model.startswith(k) or k.startswith(model):
+                prices = v
+                break
+    if prices:
+        cost = (tin * prices["input"] + tout * prices["output"]) / 1_000_000
+        print("{:.6f}".format(cost))
+    else:
+        print("0")
+except Exception:
+    print("0")
+PYEOF
 }
 
 resolve_codex_model_settings() {
@@ -338,7 +398,7 @@ AGENT_CONSTITUTION="AGENT BEHAVIORAL CONTRACT — NON-NEGOTIABLE:
 1. Filesystem boundary: Never write, edit, or delete files outside PROJECT_ROOT (${PROJECT_ROOT}). All output must land inside the project directory.
 2. Write code only: Write all files required by the story spec. Do NOT run compilers (tsc), test suites (vitest/jest/npm test), or linters. The orchestrator verifies correctness externally after your turn completes.
 3. No pre-flight reads: Do not read existing files before writing. Start from the spec directly. Only read a file if the story explicitly says to modify an existing file.
-4. Protected paths: Never modify, rename, or delete files under .epam/, orchestrations/, or any path listed in .epam/protected-files.
+4. Protected paths: Never modify, rename, or delete files under .epam/, orchestrations/, or any path listed in .epam/protected-files. Never modify .env or any file matching *.env, .env.*, or *credentials* — these contain secrets and are immutable to agents.
 5. Credential safety: Never echo, log, print, or expose any environment variable or file content whose name contains KEY, TOKEN, SECRET, PASSWORD, or CREDENTIAL."
 
 # Claude CLI permission flags
@@ -881,6 +941,8 @@ $files
 ${dependencies:-None}
 
 ## Instructions
+**IMPORTANT: You MUST use your file-writing and bash tools to create all required files. Do NOT just describe or plan what you will do — call tools immediately and write the files.**
+
 1. Implement all acceptance criteria for this story
 2. Follow the project's existing code patterns and conventions
 3. Create any necessary files in the locations specified
@@ -888,6 +950,52 @@ ${dependencies:-None}
 5. Do NOT create tests unless explicitly required in acceptance criteria
 
 After implementation, provide a brief summary of what was created/modified.
+EOF
+}
+
+build_generator_prompt() {
+    local story_id=$1
+    local story_json=$(get_story_details "$story_id")
+
+    local title=$(echo "$story_json" | jq -r '.title')
+    local description=$(echo "$story_json" | jq -r '.description')
+    local acceptance_criteria=$(echo "$story_json" | jq -r '.acceptanceCriteria | join("\n- ")')
+    local technical_notes=$(echo "$story_json" | jq -r '.technicalNotes // empty')
+    local files=$(echo "$story_json" | jq -r '.technicalNotes.files // [] | join(", ")')
+    local dependencies=$(echo "$story_json" | jq -r \
+        '(.dependencies // .technicalNotes.dependsOn // []) | join(", ")')
+
+    cat << EOF
+Generate file for story $story_id: $title
+
+## Story Description
+$description
+
+## Acceptance Criteria
+- $acceptance_criteria
+
+## Technical Notes
+$([ -n "$technical_notes" ] && echo "$technical_notes" | jq -r 'to_entries | map("- \(.key): \(.value)") | join("\n")' 2>/dev/null || echo "None specified")
+
+## Files to Create
+$files
+
+## Dependencies (already implemented — do NOT read them)
+${dependencies:-None}
+
+## GENERATOR CONTRACT — READ THIS FIRST
+You are a FILE GENERATOR. Your ONLY job is to write the file listed under "Files to Create".
+
+**MANDATORY FIRST ACTION: Call WriteFile immediately. Do NOT call any other tool first.**
+
+Rules:
+1. Your FIRST tool call MUST be WriteFile to the target path above.
+2. Do NOT call ReadFile, ListFiles, Bash, Search, or any other tool before WriteFile.
+3. Write the COMPLETE file content in a single WriteFile call.
+4. After WriteFile succeeds, you are done. No verification reads, no follow-up patches.
+5. All information you need is in this prompt. The spec is authoritative — do NOT read existing files for context.
+
+Generation approach: read every acceptance criterion once, hold them all in mind, then write a file that satisfies all of them in one shot.
 EOF
 }
 
@@ -904,7 +1012,14 @@ verify_story_deliverables() {
     while IFS= read -r file; do
         [ -n "$file" ] || continue
         declared=$((declared + 1))
-        if [ ! -e "$PROJECT_ROOT/$file" ]; then
+        # Support both absolute paths and paths relative to PROJECT_ROOT
+        local check_path
+        if [[ "$file" = /* ]]; then
+            check_path="$file"
+        else
+            check_path="$PROJECT_ROOT/$file"
+        fi
+        if [ ! -e "$check_path" ]; then
             missing+=("$file")
         fi
     done < <(jq -r --arg id "$story_id" \
@@ -1060,6 +1175,282 @@ Produce 5-10 numbered implementation steps that a coding agent will follow exact
     echo "$plan_text"
 }
 
+# ── Inference Ladder Coordinator ─────────────────────────────────────────────
+#
+# Two-layer gate that runs BEFORE each model-up event:
+#
+#   Layer 1 (rule-based triage, always on, zero cost):
+#     Inspects raw result file and result text to classify the failure into:
+#       env        — CLI crashed before any API call (raw = 0 bytes, non-zero exit)
+#       capability — model ran but hit max iterations or produced no deliverables
+#       quality    — deliverables exist but external tests failed
+#     Class "env" immediately suppresses escalation (a stronger model won't fix it).
+#
+#   Layer 2 (LLM gate, opt-in via EPAM_MODEL_COORDINATOR_ENABLED=1):
+#     For Class B/C failures, calls ORCH_GATE_MODEL with a structured prompt that
+#     includes the failure log snippet. The gate returns:
+#       escalate: yes|no        — whether to upgrade the model
+#       failure_class: <class>  — refined classification
+#       prompt_amendment: <txt> — optional targeted addition to the retry prompt
+#     This layer distinguishes "context limit hit" (upgrade helps) from
+#     "hallucination loop" (prompt amendment more effective than model upgrade).
+#
+# Sets globals:
+#   COORDINATOR_ESCALATE        — "yes" | "no"
+#   COORDINATOR_FAILURE_CLASS   — "env" | "capability" | "quality" | "unknown"
+#   COORDINATOR_PROMPT_AMENDMENT — additional text to append to retry prompt, or ""
+
+COORDINATOR_ESCALATE="yes"
+COORDINATOR_FAILURE_CLASS="unknown"
+COORDINATOR_PROMPT_AMENDMENT=""
+
+# classify_failure_class <raw_file> <result_json> <exit_code>
+# Layer 1: rule-based triage. Sets COORDINATOR_FAILURE_CLASS and COORDINATOR_ESCALATE.
+classify_failure_class() {
+    local raw_file="${1:-}"
+    local result_json="${2:-}"
+    local exit_code="${3:-1}"
+
+    COORDINATOR_FAILURE_CLASS="unknown"
+    COORDINATOR_ESCALATE="yes"
+
+    # Class A: environment crash — raw output is empty and exit code != 0
+    local raw_size=0
+    [ -f "$raw_file" ] && raw_size=$(wc -c < "$raw_file" 2>/dev/null || echo 0)
+    if [ "$raw_size" -eq 0 ] && [ "$exit_code" -ne 0 ]; then
+        COORDINATOR_FAILURE_CLASS="env"
+        COORDINATOR_ESCALATE="no"
+        warning "  Coordinator[L1]: environment failure detected (raw=0 bytes, exit=$exit_code) — diagnosing before escalation decision"
+        # Active crash diagnosis: check API key and binary health
+        local _diag_ok=true
+        # 1. Check epam binary is executable
+        if ! command -v "${EPAM_CLI:-epam}" >/dev/null 2>&1; then
+            warning "  Coordinator[Diag]: epam binary not found on PATH — check EPAM_CLI or PATH"
+            _diag_ok=false
+        fi
+        # 2. Check OpenRouter key validity (fast: uses cached auth endpoint)
+        local _or_key="${OPENROUTER_API_KEY:-${EPAM_API_KEY_OPENROUTER:-}}"
+        if [ -n "$_or_key" ]; then
+            local _key_status
+            _key_status=$(curl -s --max-time 5 \
+                "https://openrouter.ai/api/v1/auth/key" \
+                -H "Authorization: Bearer $_or_key" 2>/dev/null \
+                | jq -r '.data.label // "invalid"' 2>/dev/null || echo "unreachable")
+            if [ "$_key_status" = "invalid" ] || [ "$_key_status" = "unreachable" ]; then
+                warning "  Coordinator[Diag]: OPENROUTER_API_KEY check returned '$_key_status' — key may be expired or network is down"
+                _diag_ok=false
+            else
+                log "  Coordinator[Diag]: OpenRouter key OK (label=$_key_status)"
+            fi
+        else
+            warning "  Coordinator[Diag]: OPENROUTER_API_KEY is empty — provider will fail on any API call"
+            _diag_ok=false
+        fi
+        if [ "$_diag_ok" = true ]; then
+            log "  Coordinator[Diag]: binary and key are healthy — model/timeout issue; allowing escalation to retryModel"
+            COORDINATOR_ESCALATE="yes"
+        fi
+        return
+    fi
+
+    # Class B: capability failure — "reached maximum iterations" in result
+    local result_text=""
+    [ -f "$result_json" ] && result_text=$(jq -r '.result // ""' "$result_json" 2>/dev/null || echo "")
+    if echo "$result_text" | grep -qi "maximum iterations\|max.*iter"; then
+        COORDINATOR_FAILURE_CLASS="capability"
+        COORDINATOR_ESCALATE="yes"
+        log "  Coordinator[L1]: capability failure (max iterations) — escalation approved"
+        return
+    fi
+
+    # Class B variant: ran with tokens but no deliverables
+    local tokens_out=0
+    [ -f "$result_json" ] && tokens_out=$(jq -r '.usage.outputTokens // .usage.output_tokens // 0' "$result_json" 2>/dev/null || echo 0)
+    if [ "${tokens_out:-0}" -gt 100 ] && [ -z "$result_text" ]; then
+        COORDINATOR_FAILURE_CLASS="capability"
+        COORDINATOR_ESCALATE="yes"
+        log "  Coordinator[L1]: capability failure (tokens consumed, no result) — escalation approved"
+        return
+    fi
+
+    # Class C: quality failure — result exists, deliverables may exist, but tests failed
+    # This is identified by the caller (verify_story_deliverables or run_external_verification failing)
+    # If we reach here with non-empty result, it's likely quality
+    if [ -n "$result_text" ]; then
+        COORDINATOR_FAILURE_CLASS="quality"
+        COORDINATOR_ESCALATE="yes"
+        log "  Coordinator[L1]: quality failure (agent ran, result produced) — escalation tentatively approved"
+        return
+    fi
+
+    # Unknown: default to escalate (safe fallback)
+    COORDINATOR_FAILURE_CLASS="unknown"
+    COORDINATOR_ESCALATE="yes"
+    log "  Coordinator[L1]: unknown failure class — escalation approved (safe default)"
+
+    # Cross-run memory check: read story-failures.jsonl for repeated patterns.
+    # After 2+ consecutive env failures on the same story, suppress escalation and
+    # flag it as a persistent environment problem requiring operator intervention.
+    local _failures_file="${LOG_DIR}/story-failures.jsonl"
+    if [ -f "$_failures_file" ]; then
+        local _prior_env_count
+        _prior_env_count=$(jq -r --arg sid "${story_id:-}" \
+            'select(.storyId == $sid and .failureClass == "env") | .storyId' \
+            "$_failures_file" 2>/dev/null | wc -l | tr -d ' ')
+        if [ "${_prior_env_count:-0}" -ge 2 ]; then
+            COORDINATOR_FAILURE_CLASS="env"
+            COORDINATOR_ESCALATE="no"
+            warning "  Coordinator[L1]: story $story_id has ${_prior_env_count} prior env failures across runs — suppressing escalation, flagging for operator review"
+        fi
+        local _prior_cap_count
+        _prior_cap_count=$(jq -r --arg sid "${story_id:-}" \
+            'select(.storyId == $sid and .failureClass == "capability") | .storyId' \
+            "$_failures_file" 2>/dev/null | wc -l | tr -d ' ')
+        if [ "${_prior_cap_count:-0}" -ge 3 ]; then
+            log "  Coordinator[L1]: story $story_id has ${_prior_cap_count} prior capability failures — story may need decomposition (too many ACs for any single invocation)"
+            # Cross-run KB synthesis: emit a pattern entry after 3+ capability failures
+            # so future runs benefit from the accumulated failure pattern.
+            local _kb_file="$AUTOMATION_DIR/agents/KB.md"
+            local _today; _today=$(date +'%Y-%m-%d')
+            local _kb_entry_marker="KB-PERSIST-${story_id}"
+            if [ -f "$_kb_file" ] && ! grep -q "$_kb_entry_marker" "$_kb_file" 2>/dev/null; then
+                local _ac_count
+                _ac_count=$(jq -r --arg id "$story_id" \
+                    '.stories[] | select(.id == $id) | (.acceptanceCriteria // []) | length' \
+                    "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "unknown")
+                {
+                    printf '\n## %s -- %s\n\n' "$_kb_entry_marker" "$_today"
+                    printf '**Category:** orchestration\n'
+                    printf '**AgentRole:** any\n'
+                    printf '**Tags:** inference-ladder, story-decomposition, capability-failure\n'
+                    printf '**Trigger:** cross-run-synthesis\n'
+                    printf '**StoryRef:** %s\n\n' "$story_id"
+                    printf 'Story %s has failed %s times with capability class (max iterations / empty output). ' "$story_id" "$_prior_cap_count"
+                    printf 'It has %s ACs. Model escalation alone has not resolved this — the story likely needs to be ' "$_ac_count"
+                    printf 'decomposed into smaller children (≤8 ACs each) before the next run. '
+                    printf 'OpenSpec/SpecKit should split this story at Step 0 in the next pipeline run.\n'
+                } >> "$_kb_file" 2>/dev/null || true
+                log "  Coordinator[L1]: cross-run KB entry written for $story_id (${_prior_cap_count} capability failures)"
+            fi
+        fi
+    fi
+}
+
+# assess_model_escalation <story_id> <raw_file> <result_json> <log_file>
+# Layer 2 (opt-in): LLM coordinator gate for Class B/C failures.
+# Sets COORDINATOR_ESCALATE and COORDINATOR_PROMPT_AMENDMENT.
+# Only called when EPAM_MODEL_COORDINATOR_ENABLED=1.
+assess_model_escalation() {
+    local story_id="$1"
+    local raw_file="${2:-}"
+    local result_json="${3:-}"
+    local log_file="${4:-}"
+    local target_model="${5:-}"  # the model we're about to escalate to
+
+    [ "${EPAM_MODEL_COORDINATOR_ENABLED:-0}" != "1" ] && return
+
+    local gate_provider="${ORCH_GATE_PROVIDER:-}"
+    local gate_model="${ORCH_GATE_MODEL:-}"
+    [ -z "$gate_provider" ] && return
+
+    # Read failure evidence (cap at 3000 chars to stay within gate model budget)
+    local result_text=""
+    [ -f "$result_json" ] && result_text=$(jq -r '.result // ""' "$result_json" 2>/dev/null | head -c 1500 || echo "")
+    local log_tail=""
+    [ -f "$log_file" ] && log_tail=$(tail -30 "$log_file" 2>/dev/null | head -c 1500 || echo "")
+    # Include specific test failure output when available (Quality class failures)
+    local test_failure_snippet="${VERIFICATION_FAILURE:0:1000}"
+    # Cross-run memory: include prior failure pattern count for context
+    local _failures_file="${LOG_DIR}/story-failures.jsonl"
+    local prior_failure_summary=""
+    if [ -f "$_failures_file" ]; then
+        local _pf_count
+        _pf_count=$(jq -r --arg sid "$story_id" 'select(.storyId == $sid) | .failureClass' \
+            "$_failures_file" 2>/dev/null | sort | uniq -c | sort -rn | head -5 || echo "")
+        [ -n "$_pf_count" ] && prior_failure_summary="Prior failure pattern (this story across runs): ${_pf_count}"
+    fi
+
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    local story_title
+    story_title=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .title // ""' "$prd_target" 2>/dev/null || echo "")
+    local current_model="${STORY_MODEL:-unknown}"
+
+    local coordinator_prompt
+    coordinator_prompt=$(cat << COORD_PROMPT
+You are the inference ladder coordinator. A story implementation just failed. You must decide whether to escalate to a stronger model for the retry, and whether a targeted prompt amendment would help.
+
+## Story
+- ID: ${story_id}
+- Title: ${story_title}
+- Current model: ${current_model}
+- Proposed escalation model: ${target_model}
+- Failure class (preliminary): ${COORDINATOR_FAILURE_CLASS}
+
+## Failure Evidence (last attempt result)
+${result_text:-"(empty — agent produced no result)"}
+
+## Log Tail
+${log_tail:-"(no log available)"}
+
+## Test Failure Output (if tests ran)
+${test_failure_snippet:-"(no test failure output)"}
+
+## Cross-Run History
+${prior_failure_summary:-"(no prior failures recorded for this story)"}
+
+## Your Assessment
+Answer ONLY with a single-line JSON object (no markdown, no prose):
+{"escalate":"yes|no","failure_class":"env|capability|quality|unknown","prompt_amendment":"<targeted instruction to add to retry prompt, or empty string>","rationale":"<one sentence>"}
+
+Rules:
+- escalate "yes" ONLY when the failure is due to model capability limits (max iterations, context window, weak reasoning, missing knowledge)
+- escalate "no" when the failure is environmental (missing API key, binary crash, file permission) — a stronger model won't fix it
+- escalate "no" when the failure is a prompt misunderstanding — suggest a prompt_amendment instead
+- prompt_amendment should be a concrete instruction (e.g., "Do not import from node-fetch — use native global fetch only") not a vague suggestion
+- Keep rationale under 15 words
+COORD_PROMPT
+    )
+
+    local coord_result_file
+    coord_result_file=$(mktemp /tmp/coord-${story_id}-XXXXXX.json)
+
+    local coord_raw=""
+    if coord_raw=$(echo "$coordinator_prompt" | \
+            AI_PROVIDER="$gate_provider" \
+            AI_MODEL="$gate_model" \
+            EPAM_CLI="$EPAM_CLI" \
+            bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \
+            ${gate_model:+--model "$gate_model"} \
+            2>/dev/null); then
+        # Parse coordinator response
+        local coord_json=""
+        # Extract JSON object from response (strip any preamble)
+        coord_json=$(echo "$coord_raw" | grep -o '{[^}]*}' | head -1 || echo "")
+        if [ -n "$coord_json" ] && echo "$coord_json" | jq empty 2>/dev/null; then
+            local coord_escalate
+            coord_escalate=$(echo "$coord_json" | jq -r '.escalate // "yes"' 2>/dev/null || echo "yes")
+            local coord_class
+            coord_class=$(echo "$coord_json" | jq -r '.failure_class // "unknown"' 2>/dev/null || echo "unknown")
+            local coord_amendment
+            coord_amendment=$(echo "$coord_json" | jq -r '.prompt_amendment // ""' 2>/dev/null || echo "")
+            local coord_rationale
+            coord_rationale=$(echo "$coord_json" | jq -r '.rationale // ""' 2>/dev/null || echo "")
+
+            COORDINATOR_ESCALATE="$coord_escalate"
+            COORDINATOR_FAILURE_CLASS="$coord_class"
+            COORDINATOR_PROMPT_AMENDMENT="$coord_amendment"
+            log "  Coordinator[L2]: escalate=$coord_escalate class=$coord_class rationale='$coord_rationale'"
+            [ -n "$coord_amendment" ] && log "  Coordinator[L2]: prompt_amendment injected (${#coord_amendment} chars)"
+        else
+            warning "  Coordinator[L2]: could not parse coordinator response — keeping L1 decision"
+        fi
+    else
+        warning "  Coordinator[L2]: coordinator call failed — keeping L1 decision"
+    fi
+
+    rm -f "$coord_result_file"
+}
+
 # Invoke Claude CLI to implement a story
 implement_story() {
     local story_id=$1
@@ -1086,6 +1477,8 @@ implement_story() {
 
     # Resolve effort -> model + max-turns for this story (stable across retries)
     resolve_effort_settings "$story_id"
+    # Resolve generator mode — overrides effort settings when agentRole=generator
+    resolve_generator_settings "$story_id"
     # Resolve aiProvider -> which CLI binary to use
     resolve_provider_settings "$story_id"
     # For epam-run providers, prd.json .model field overrides effort-based model
@@ -1138,12 +1531,42 @@ implement_story() {
     fi
 
     while [ $retry_count -le $MAX_RETRIES ]; do
+        # Inference ladder: on retry, escalate to a stronger model.
+        # Gated by the coordinator — environment failures suppress escalation.
+        # retryModel in prd.json overrides; otherwise fall back to EPAM_RETRY_MODEL env var.
+        if [ "$retry_count" -gt 0 ]; then
+            local retry_model_prd
+            retry_model_prd=$(jq -r --arg id "$story_id" \
+                '.stories[] | select(.id == $id) | .retryModel // ""' \
+                "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
+            local escalated_model="${retry_model_prd:-${EPAM_RETRY_MODEL:-}}"
+            if [ -n "$escalated_model" ] && [ "${COORDINATOR_ESCALATE:-yes}" = "yes" ]; then
+                log "  InferenceLadder: escalating model from '${STORY_MODEL:-default}' to '$escalated_model' (retry $retry_count, class=$COORDINATOR_FAILURE_CLASS)"
+                STORY_MODEL="$escalated_model"
+            elif [ -n "$escalated_model" ]; then
+                log "  InferenceLadder: escalation suppressed by coordinator (class=$COORDINATOR_FAILURE_CLASS) — keeping model '${STORY_MODEL:-default}'"
+            fi
+            # Boost iterations for capability failures on epam-run providers
+            if [ "${COORDINATOR_ESCALATE:-yes}" = "yes" ]; then
+                case "${STORY_PROVIDER:-codex}" in
+                    copilot|openai|qwen|cursor)
+                        STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
+                        log "  InferenceLadder: boosting EPAM_MAX_ITERATIONS to $STORY_MAX_ITERATIONS for retry"
+                        ;;
+                esac
+            fi
+        fi
         # Rebuild prompt each attempt: retry_count and KB ID must reflect current state
         local next_kb_id
         next_kb_id=$(get_next_kb_id)
         local prompt
-        prompt="$(build_implementation_prompt "$story_id")
+        if [ "${STORY_GENERATOR_MODE:-}" = "true" ]; then
+            prompt="$(build_generator_prompt "$story_id")
 $(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
+        else
+            prompt="$(build_implementation_prompt "$story_id")
+$(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
+        fi
         # Inject execution plan when planner/executor split is active
         if [ -n "${story_plan:-}" ]; then
             prompt="$prompt
@@ -1151,6 +1574,15 @@ $(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
 ## Execution Plan
 Follow this plan step by step:
 $story_plan"
+        fi
+
+        # Inject coordinator prompt amendment when available (retry attempts only)
+        if [ "$retry_count" -gt 0 ] && [ -n "${COORDINATOR_PROMPT_AMENDMENT:-}" ]; then
+            prompt="$prompt
+
+## Coordinator Guidance (retry ${retry_count})
+The following targeted instruction was identified from the previous failure:
+${COORDINATOR_PROMPT_AMENDMENT}"
         fi
 
         # Log the prompt
@@ -1168,6 +1600,13 @@ $story_plan"
 
         local json_result_file="${output_file%.log}_result.json"
         local invoke_success=false
+        # Track the raw output file across all provider branches for coordinator triage
+        local attempt_raw_file="${json_result_file%.json}_raw.json"
+
+        # Optional per-story wall-clock timeout — set EPAM_STORY_TIMEOUT_SECS in the tier script.
+        # No default: if unset, no timeout is applied (behaviour is unchanged).
+        local _timeout_prefix=()
+        [ -n "${EPAM_STORY_TIMEOUT_SECS:-}" ] && _timeout_prefix=(timeout "$EPAM_STORY_TIMEOUT_SECS")
 
         case "${STORY_PROVIDER:-codex}" in
             opencode)
@@ -1176,7 +1615,7 @@ $story_plan"
                 local raw_file="${json_result_file%.json}_raw.jsonl"
                 local prompt_file="${json_result_file%.json}_prompt.txt"
                 echo "$prompt" > "$prompt_file"
-                if opencode run --format json "$(cat "$prompt_file")" \
+                if "${_timeout_prefix[@]}" opencode run --format json "$(cat "$prompt_file")" \
                         > "$raw_file" 2>/dev/null; then
                     normalize_provider_json "opencode" "$raw_file" "$json_result_file"
                     # Append text output to log
@@ -1192,7 +1631,7 @@ $story_plan"
                 local raw_file="${json_result_file%.json}_raw.jsonl"
                 local codex_model_flag=()
                 [ -n "${STORY_MODEL:-}" ] && codex_model_flag=(--model "$STORY_MODEL")
-                if echo "$prompt" | codex exec \
+                if echo "$prompt" | "${_timeout_prefix[@]}" codex exec \
                         --ephemeral \
                         --skip-git-repo-check \
                         --dangerously-bypass-approvals-and-sandbox \
@@ -1208,7 +1647,7 @@ $story_plan"
                 ;;
             codemie-claude)
                 # codemie-claude: same invocation pattern as claude — --print --output-format json
-                if echo "$prompt" | codemie-claude --print --output-format json \
+                if echo "$prompt" | "${_timeout_prefix[@]}" codemie-claude --print --output-format json \
                         "${model_flag[@]}" "${turns_flag[@]}" "${effective_permissions[@]}" \
                         2>>"$output_file" > "$json_result_file"; then
                     invoke_success=true
@@ -1228,15 +1667,19 @@ $story_plan"
                         OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
                         EPAM_API_KEY_OPENROUTER="${EPAM_API_KEY_OPENROUTER:-}" \
                         OPENROUTER_BASE_URL="${OPENROUTER_BASE_URL:-}" \
+                        EPAM_QWEN_MODEL_OVERRIDE="${EPAM_QWEN_MODEL_OVERRIDE:-}" \
                         DASHSCOPE_API_KEY="${DASHSCOPE_API_KEY:-}" \
                         EPAM_API_KEY_QWEN="${EPAM_API_KEY_QWEN:-}" \
                         OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
                         EPAM_API_KEY_OPENAI="${EPAM_API_KEY_OPENAI:-}" \
-                        "$EPAM_CLI" run \
+                        EPAM_RALPH_WIGGUM_ENABLED="${EPAM_RALPH_WIGGUM_ENABLED:-}" \
+                        EPAM_RALPH_WIGGUM_AGENTS="${EPAM_RALPH_WIGGUM_AGENTS:-}" \
+                        EPAM_RALPH_WIGGUM_TIMEOUT_MS="${EPAM_RALPH_WIGGUM_TIMEOUT_MS:-}" \
+                        "${_timeout_prefix[@]}" "$EPAM_CLI" run \
                         --provider "$STORY_PROVIDER" \
                         "${epam_model_flag[@]}" \
                         --json - \
-                        > "$raw_file" 2>/dev/null; then
+                        > "$raw_file" 2>> "$output_file"; then
                     normalize_provider_json "epam-run" "$raw_file" "$json_result_file"
                     jq -r '.result // empty' "$json_result_file" 2>/dev/null >> "$output_file" || true
                     invoke_success=true
@@ -1256,14 +1699,14 @@ $story_plan"
                         [ -n "$precount" ] && log "  Token pre-count: ${precount} input tokens"
                         STORY_PRECOUNT_TOKENS="${precount:-0}"
                     fi
-                    if echo "$prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
+                    if echo "$prompt" | "${_timeout_prefix[@]}" "$INVOKE_PYTHON" "$INVOKE_PY" \
                             "${sdk_model_arg[@]}" "${sdk_think_arg[@]}" \
                             --system-prompt "$effective_constitution" \
                             --output "$json_result_file" 2>>"$output_file"; then
                         invoke_success=true
                     fi
                 else
-                    if echo "$prompt" | "$CLAUDE_CMD" --print --output-format json \
+                    if echo "$prompt" | "${_timeout_prefix[@]}" "$CLAUDE_CMD" --print --output-format json \
                             "${model_flag[@]}" "${turns_flag[@]}" "${effective_permissions[@]}" \
                             2>>"$output_file" > "$json_result_file"; then
                         invoke_success=true
@@ -1285,14 +1728,14 @@ $story_plan"
                         [ -n "$precount" ] && log "  Token pre-count: ${precount} input tokens"
                         STORY_PRECOUNT_TOKENS="${precount:-0}"
                     fi
-                    if echo "$prompt" | "$INVOKE_PYTHON" "$INVOKE_PY" \
+                    if echo "$prompt" | "${_timeout_prefix[@]}" "$INVOKE_PYTHON" "$INVOKE_PY" \
                             "${sdk_model_arg[@]}" \
                             --system-prompt "$effective_constitution" \
                             --output "$json_result_file" 2>>"$output_file"; then
                         invoke_success=true
                     fi
                 else
-                    if echo "$prompt" | "$CLAUDE_CMD" --print --output-format json \
+                    if echo "$prompt" | "${_timeout_prefix[@]}" "$CLAUDE_CMD" --print --output-format json \
                             "${model_flag[@]}" "${turns_flag[@]}" "${effective_permissions[@]}" \
                             2>>"$output_file" > "$json_result_file"; then
                         invoke_success=true
@@ -1333,6 +1776,51 @@ $story_plan"
             fi
             echo "" >> "$output_file"
             echo "=== $story_cli exited with code $exit_code ===" >> "$output_file"
+
+            # ── Coordinator pre-assessment before next retry ──────────────────
+            # Resolve the actual raw file path (may differ by provider).
+            local _raw_for_coord="$attempt_raw_file"
+            [ ! -f "$_raw_for_coord" ] && _raw_for_coord="${json_result_file%.json}_raw.jsonl"
+            [ ! -f "$_raw_for_coord" ] && _raw_for_coord=""
+
+            # Layer 1: rule-based triage (always runs)
+            classify_failure_class "$_raw_for_coord" "$json_result_file" "$exit_code"
+
+            # Layer 2: LLM gate (only for capability/quality failures, only when enabled)
+            local _next_model
+            _next_model=$(jq -r --arg id "$story_id" \
+                '.stories[] | select(.id == $id) | .retryModel // ""' \
+                "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
+            _next_model="${_next_model:-${EPAM_RETRY_MODEL:-}}"
+            if [ "$COORDINATOR_ESCALATE" = "yes" ] && \
+               [ "$COORDINATOR_FAILURE_CLASS" != "env" ] && \
+               [ -n "$_next_model" ]; then
+                assess_model_escalation "$story_id" "$_raw_for_coord" "$json_result_file" "$output_file" "$_next_model"
+            fi
+
+            # Cross-run memory: persist failure evidence so future runs and the
+            # coordinator can detect repeated failure patterns across multiple runs.
+            local _failures_file="${LOG_DIR}/story-failures.jsonl"
+            local _raw_sz=0
+            [ -f "$_raw_for_coord" ] && _raw_sz=$(wc -c < "$_raw_for_coord" 2>/dev/null || echo 0)
+            local _tokens_out_mem=0
+            [ -f "$json_result_file" ] && _tokens_out_mem=$(jq -r '.usage.outputTokens // .usage.output_tokens // 0' "$json_result_file" 2>/dev/null || echo 0)
+            (
+                flock -w 5 300 2>/dev/null || true
+                jq -cn \
+                    --arg sid "$story_id" \
+                    --arg fc "$COORDINATOR_FAILURE_CLASS" \
+                    --arg model "${STORY_MODEL:-unknown}" \
+                    --argjson attempt "$retry_count" \
+                    --argjson exit_c "$exit_code" \
+                    --argjson raw_sz "${_raw_sz:-0}" \
+                    --argjson toks "${_tokens_out_mem:-0}" \
+                    --argjson iters "${STORY_MAX_ITERATIONS:-0}" \
+                    '{storyId:$sid, failureClass:$fc, model:$model,
+                      attempt:$attempt, exitCode:$exit_c, rawBytes:$raw_sz,
+                      outputTokens:$toks, maxIterations:$iters,
+                      timestamp:(now|todate)}' >> "$_failures_file"
+            ) 300>>"${_failures_file}.lock"
 
             retry_count=$((retry_count + 1))
             if [ $retry_count -le $MAX_RETRIES ]; then
@@ -1437,6 +1925,15 @@ append_cost_record() {
     [ -z "$tokens_out" ] && tokens_out=0
     [ -z "$cost_usd" ] && cost_usd=0
     [ -z "$task_turns" ] && task_turns=0
+
+    # If provider returned no cost (e.g. OpenRouter/qwen), compute from pricing table
+    if [ "${cost_usd}" = "0" ] || [ "${cost_usd}" = "0.0" ] || [ -z "${cost_usd}" ]; then
+        if [ "${tokens_in:-0}" -gt 0 ] || [ "${tokens_out:-0}" -gt 0 ]; then
+            local computed_cost
+            computed_cost=$(compute_token_cost "${resolved_model:-}" "$tokens_in" "$tokens_out")
+            [ -n "$computed_cost" ] && [ "$computed_cost" != "0" ] && cost_usd="$computed_cost"
+        fi
+    fi
 
     # Atomic JSONL append with flock
     (
@@ -2149,7 +2646,8 @@ main() {
     fi
 
     # Step 0.5: Pre-phase skill assessment (main process only, not worktree subprocesses)
-    [ -z "$WORKTREE_MODE" ] && run_pre_phase_assessment "$phase_filter"
+    # Skip when phase_filter is empty — per-story invocations have no phase context
+    [ -z "$WORKTREE_MODE" ] && [ "${SKIP_SKILL_ASSESSMENT:-0}" != "1" ] && [ -n "$phase_filter" ] && run_pre_phase_assessment "$phase_filter"
 
     # -- Parallel lane execution --
     # When not already in worktree mode, partition stories by agentGroup.
@@ -2246,27 +2744,41 @@ run_pre_phase_assessment() {
 
     local assessment_prompt
     assessment_prompt=$(cat << PROMPT_HEADER
-You are the skill assessment agent running in PRE-PHASE mode. Your job is to detect skill gaps in agent profiles BEFORE the phase runs, and augment profiles with missing knowledge.
+You are the skill assessment agent running in PRE-PHASE mode. Your job is to detect skill gaps in agent profiles BEFORE the phase runs, augment profiles with missing knowledge, and ensure test stories have the correct agent role.
+
+## PRD STRUCTURE (read this carefully before issuing any jq commands)
+The PRD file uses a FLAT structure — not nested phases. Key paths:
+- Story list: .stories[]
+- Phase story order: .implementationOrder["${phase_id}"] — returns an array of story IDs
+- Story lookup: .stories[] | select(.id == "<id>")
+- Agent role: .stories[] | select(.id == "<id>") | .agentRole
+- Files: .stories[] | select(.id == "<id>") | .technicalNotes.files[]
+
+DO NOT use .phases[0] — that path does not exist in this PRD.
 
 ## Task
-1. Read ${prd_rel} and find the stories in the current phase's implementationOrder
-2. For each story, extract required skills from description + technicalNotes (especially technicalNotes.requiredSkills)
-3. Read orchestrations/agents/profiles.json and find the profile for each story's agentRole
-4. Compare: does the agent's profile text mention each required skill?
-5. For any GAPS found:
-   a. Append a sentence to the agent's profile in profiles.json mentioning the missing skill
-   b. Append a JSONL record to orchestrations/logs/profiles-audit.jsonl:
-      {"timestamp":"<ISO8601>","phase_id":"<phase>","agent_role":"<role>","event":"skill_added","skill":"<skill>","skill_category":"<category>","context":"Story <id> requires <skill>","added_by":"pre-phase-assessment"}
-   c. Use flock when writing to JSONL files
-6. Write a summary to orchestrations/logs/phase-improvements/pre-${phase_id}.md
+1. Run: jq -r '.implementationOrder["${phase_id}"][]' ${prd_rel}
+   This gives you the list of story IDs for this phase.
+
+2. For each story ID, run: jq -c '.stories[] | select(.id == "<id>") | {id, agentRole, unitTests, technicalNotes}' ${prd_rel}
+
+3. ROLE VERIFICATION: For any story where all files in technicalNotes.files match *.test.ts or *.spec.ts:
+   - If agentRole is not "test-engineer", update it: jq --arg id "<id>" '(.stories[] | select(.id == \$id)).agentRole = "test-engineer"' ${prd_rel} > /tmp/prd_tmp.json && mv /tmp/prd_tmp.json ${prd_rel}
+   - Ensure the test-engineer profile exists in orchestrations/agents/profiles.json
+
+4. PROFILE CREATION: If "test-engineer" key is missing from profiles.json, add it based on the project's techStack in the PRD (read .project.techStack).
+
+5. SKILL GAP FILL: For each story, compare agentRole profile text against technicalNotes.requiredSkills. Add missing skills as sentences. Keep profiles.json valid JSON.
+
+6. Append JSONL audit records to orchestrations/logs/profiles-audit.jsonl using flock.
+
+7. Write summary to orchestrations/logs/phase-improvements/pre-${phase_id}.md
 
 Known skill categories: deployment_platform, language, framework, testing, database, infrastructure, api, cloud_service
 
-IMPORTANT: Keep profiles.json valid JSON at all times. Only ADD to existing profile strings, never remove content.
+CRITICAL: Keep profiles.json valid JSON. Only ADD content, never remove. Use the exact jq paths above.
 
 ## Phase: ${phase_id}
-
-Read ${prd_rel} implementationOrder["${phase_id}"] for the story list, then proceed with the analysis above.
 PROMPT_HEADER
     )
 

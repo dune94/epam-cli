@@ -424,6 +424,167 @@ ${reviewPayload}
     }
   }
 
+  // ── Step 5: Model adequacy re-assessment ──────────────────────────────
+  // Pass A (rule-based): score every story against measurable complexity signals.
+  // Pass B (LLM review): coordinator reviews all scores — confirms, overrides, or
+  //   catches false negatives the rules missed. LLM decision is final.
+  // Both passes write to story.specification.modelUpgrade for full auditability.
+  const upgradeModel = process.env.ORCH_UPGRADE_MODEL || 'anthropic/claude-sonnet-4-6';
+  const allPhaseStories = [...stories, ...newStories.map((ns) => ns.story)];
+
+  // Pass A — rule-based signals for every story that has a model assigned
+  const ruleAssessments = [];
+  for (const story of allPhaseStories) {
+    if (!story.model) continue;
+    const signals = modelComplexitySignals(story);
+    ruleAssessments.push({
+      storyId: story.id,
+      currentModel: story.model,
+      isMini: isMiniTierModel(story.model),
+      ruleRecommendation: signals.needsUpgrade ? upgradeModel : story.model,
+      ruleUpgrade: signals.needsUpgrade,
+      ruleReason: signals.reason || 'no upgrade signal detected',
+      signals: {
+        acCount: signals.acCount,
+        singleFile: signals.isSingleFile,
+        htmlOutput: signals.hasHtmlOutput,
+        selfContained: signals.hasSelfContainedKeyword
+      }
+    });
+  }
+
+  // Pass B — LLM coordinator reviews all rule assessments
+  let finalAssessments = ruleAssessments.map((a) => ({ ...a, finalModel: a.ruleRecommendation, llmOverride: false, llmReason: '' }));
+  try {
+    const storyContextForReview = allPhaseStories
+      .filter((s) => s.model)
+      .map((s) => {
+        const ra = ruleAssessments.find((a) => a.storyId === s.id);
+        return {
+          id: s.id,
+          title: s.title,
+          description: (s.description || '').slice(0, 400),
+          acCount: Array.isArray(s.acceptanceCriteria) ? s.acceptanceCriteria.length : 0,
+          outputFiles: (s.technicalNotes?.files || []).filter((f) => !f.endsWith('.test.ts') && !f.endsWith('.spec.ts')),
+          currentModel: s.model,
+          ruleUpgrade: ra ? ra.ruleUpgrade : false,
+          ruleReason: ra ? ra.ruleReason : '',
+          signals: ra ? ra.signals : {}
+        };
+      });
+
+    const modelReviewPrompt = `You are the EPAM CLI model assignment coordinator for phase ${opts.phase}.
+
+A rule-based pass has already assessed every story's model assignment. Your job is to make the FINAL decision on each story's model — confirming rule recommendations, overriding them when wrong, and catching any false negatives the rules missed.
+
+## Available model tiers (via OpenRouter)
+- **mini-tier** (cheap, fast, ~$0.15/1M tokens): openai/gpt-4.1-mini, openai/gpt-4.1-nano
+  Best for: simple tasks, small outputs, <8 ACs, modifying existing code, writing single focused functions
+  Risk: will timeout or fail on large generation tasks (>1500 output tokens in one turn)
+
+- **standard-tier** (moderate cost, ~$2–4/1M tokens): anthropic/claude-sonnet-4-6, openai/gpt-4.1
+  Best for: large single-file generation, 10+ ACs, HTML/UI files, self-contained complete modules
+  Use when: story needs to generate >1000 tokens reliably in one turn
+
+## Your decision criteria
+UPGRADE to standard-tier when:
+- Story must generate a large, complete artifact (full HTML page, large TypeScript module) in one agent turn
+- Story has >12 ACs targeting a single file output — generation load exceeds mini-tier reliability
+- Description uses "self-contained", "complete", "no build step" — indicates large monolithic output
+- Story involves HTML/CSS/JS UI generation — models smaller than standard-tier produce inconsistent results
+
+KEEP mini-tier when:
+- Story modifies existing code or adds small targeted functions
+- Output is small (<500 tokens estimated), well-scoped, and narrowly defined
+- Story primarily writes tests against already-specified contracts
+- AC count is high but spread across multiple small files, not one large generation
+
+IMPORTANT: A false negative (keeping mini when standard is needed) wastes 5+ minutes per attempt and burns 2 retries. A false positive (upgrading when mini would work) costs ~$0.01 extra. Err toward upgrading for borderline cases.
+
+## Stories to assess
+${JSON.stringify(storyContextForReview, null, 2)}
+
+Respond with JSON between <MODEL_REVIEW> and </MODEL_REVIEW>:
+[
+  {
+    "storyId": "...",
+    "finalModel": "keep-current | <model-string>",
+    "override": true/false,
+    "confidence": "high|medium|low",
+    "reason": "one sentence"
+  }
+]
+Use "keep-current" to accept the current (possibly rule-upgraded) model. Only provide a model string when changing it.
+
+<MODEL_REVIEW>
+</MODEL_REVIEW>`;
+
+    const reviewOutput = await runClaude(
+      promptExec,
+      modelReviewPrompt,
+      path.join(logDir, `spec-model-review-${opts.phase}.log`)
+    );
+    const llmDecisions = extractTaggedJson(reviewOutput, 'MODEL_REVIEW');
+    if (Array.isArray(llmDecisions)) {
+      // Tier label → canonical model ID (LLM sometimes echoes the tier label instead of a real model string)
+      const TIER_LABEL_MAP = {
+        'standard-tier': 'anthropic/claude-sonnet-4-6',
+        'mini-tier':     'openai/gpt-4.1-mini',
+        'nano-tier':     'openai/gpt-4.1-nano',
+        'premium-tier':  'anthropic/claude-opus-4-8',
+      };
+      const resolveTierLabel = (m) => (m && TIER_LABEL_MAP[m]) ? TIER_LABEL_MAP[m] : m;
+
+      const decisionMap = new Map();
+      llmDecisions.forEach((d) => { if (d && d.storyId) decisionMap.set(d.storyId, d); });
+      finalAssessments = finalAssessments.map((fa) => {
+        const decision = decisionMap.get(fa.storyId);
+        if (!decision) return fa;
+        const rawModel = decision.finalModel && decision.finalModel !== 'keep-current'
+          ? decision.finalModel
+          : fa.ruleRecommendation;
+        const llmModel = resolveTierLabel(rawModel);
+        return {
+          ...fa,
+          finalModel: llmModel,
+          llmOverride: decision.override === true,
+          llmReason: decision.reason || '',
+          llmConfidence: decision.confidence || 'medium'
+        };
+      });
+      console.log(`spec-mode: LLM model review completed for ${llmDecisions.length} stories`);
+    }
+  } catch (err) {
+    console.warn('spec-mode: LLM model review failed, using rule-based decisions only:', err.message);
+  }
+
+  // Apply final decisions
+  const modelChanges = [];
+  for (const fa of finalAssessments) {
+    const story = allPhaseStories.find((s) => s.id === fa.storyId);
+    if (!story) continue;
+    if (fa.finalModel !== story.model) {
+      const prev = story.model;
+      story.model = fa.finalModel;
+      if (!story.specification) story.specification = {};
+      story.specification.modelUpgrade = {
+        from: prev,
+        to: fa.finalModel,
+        ruleSignals: fa.signals,
+        ruleReason: fa.ruleReason,
+        llmOverride: fa.llmOverride,
+        llmReason: fa.llmReason,
+        llmConfidence: fa.llmConfidence || null,
+        upgradedAt: new Date().toISOString()
+      };
+      modelChanges.push({ storyId: story.id, from: prev, to: fa.finalModel, llmOverride: fa.llmOverride });
+      console.log(`spec-mode: model set ${story.id}: ${prev} → ${fa.finalModel}${fa.llmOverride ? ' [LLM override]' : ''}`);
+    }
+  }
+  if (modelChanges.length > 0) {
+    summary.stats.modelUpgrades = modelChanges;
+  }
+
   fs.writeFileSync(prdPath, JSON.stringify(prd, null, 2));
   summary.completedAt = new Date().toISOString();
   summary.storyCount = summary.stories.length;
@@ -442,21 +603,43 @@ ${reviewPayload}
 // Agent prompt builders
 // ─────────────────────────────────────────────────────────────────────────────
 
-// openspec: first-pass elaboration (unchanged from before)
+// openspec: first-pass elaboration
 async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir }) {
+  const acCount = Array.isArray(story.acceptanceCriteria) ? story.acceptanceCriteria.length : 0;
+  const files = story.technicalNotes?.files || [];
+  const testFiles = files.filter(f => f.endsWith('.test.ts') || f.endsWith('.spec.ts'));
+  const implFiles = files.filter(f => !f.endsWith('.test.ts') && !f.endsWith('.spec.ts'));
+  const splitDepthVal = story.specification?.splitDepth ?? 0;
+
   const storyPayload = JSON.stringify({
     id: story.id,
     title: story.title,
     description: story.description,
     acceptanceCriteria: story.acceptanceCriteria,
+    acCount,
     technicalNotes: story.technicalNotes,
     agentRole: story.agentRole,
     agentGroup: story.agentGroup,
-    dependencies: story.dependencies || []
+    dependencies: story.dependencies || [],
+    splitDepth: splitDepthVal
   }, null, 2);
-  const prompt = `You are the ${agent} specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.
 
-Generate refined acceptance criteria, optionally updated title/description, and optional split stories. Output JSON only between <SPEC_AGENT> tags using this schema:
+  const splitWarning = acCount > 12
+    ? `\nNOTE: This story has ${acCount} acceptance criteria — MANDATORY split required (see SPLIT RULES below).`
+    : testFiles.length > 0 && implFiles.length > 0
+      ? `\nNOTE: This story contains both implementation (${implFiles.length}) and test (${testFiles.length}) files — MANDATORY split required.`
+      : '';
+
+  // Surface any prior coordinator flags so openspec addresses them rather than rubber-stamping
+  const priorFlags = story.specification?.coordinatorReview?.flags;
+  const priorNotes = story.specification?.coordinatorReview?.reviewNotes;
+  const priorGapsBlock = (Array.isArray(priorFlags) && priorFlags.length > 0)
+    ? `\n\nPRIOR COORDINATOR FLAGS (you MUST address each one — do NOT declare the spec complete without resolving these):\n${priorFlags.map((f, i) => `${i + 1}. ${f}`).join('\n')}\n${priorNotes ? `\nAdditional context from prior review: ${priorNotes.slice(0, 500)}` : ''}`
+    : '';
+
+  const prompt = `You are the ${agent} specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.${splitWarning}${priorGapsBlock}
+
+Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output JSON only between <SPEC_AGENT> tags using this schema:
 {
   "storyId":"${story.id}",
   "agent":"${agent}",
@@ -464,9 +647,17 @@ Generate refined acceptance criteria, optionally updated title/description, and 
   "acceptanceCriteria":["..."],
   "description":"...",
   "title":"...",
-  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."]}]
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]
 }
 Use existing text when no change is needed.
+
+SPLIT RULES (mandatory, not optional — enforce these before refining AC):
+1. AC count > 12 → you MUST propose a split. Target ≤8 ACs per split child. Never leave a story with >12 ACs unsplit.
+2. Both implementation files AND test files in technicalNotes.files → split into one impl child (non-test files) and one test child (*.test.ts files). Assign agentRole "typescript-engineer" to impl, "test-engineer" to test.
+3. 3+ independent deliverable modules with no shared exports (e.g. client.ts, server.ts, cli.ts all in same story) → split per concern. Each split gets the files it owns.
+4. External API discovery + implementation in same story → split: first child discovers/documents the API contract, second child implements against that contract.
+These rules apply only when splitDepth === 0. Never split a story that is already a split child.
+
 Story context:
 ${storyPayload}
 
@@ -492,6 +683,13 @@ Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
 3. Flag any AC that are vague, untestable, or overlapping
 4. If openspec proposed story splits, validate the decomposition and refine AC per split
 5. Do NOT remove or duplicate openspec's good work — build on it
+
+SPLIT ENFORCEMENT (your independent obligation — do not defer to openspec on this):
+- Count the acceptanceCriteria in openspec's output. If the parent story still has >12 ACs and openspec did NOT propose splits, you MUST propose them yourself. Target ≤8 ACs per split child.
+- If technicalNotes.files contains both *.test.ts and non-test files AND openspec did not split, you MUST split into impl/test children.
+- If openspec's splits look correct, pass them through unchanged. If they are unbalanced (one child has >12 ACs), rebalance.
+- Set "agentRole" on each split child: "typescript-engineer" for impl, "test-engineer" for test-only children.
+- Do NOT split stories that are already split children (splitDepth > 0).
 
 OPENSPEC'S OUTPUT (your input to review):
 ${JSON.stringify(openspecOutput, null, 2)}
@@ -768,6 +966,42 @@ function resolvePromptExec(aiRunnerCmd, env = process.env) {
   return { cmd: aiRunnerCmd, args: ['--provider', provider, ...modelArgs] };
 }
 
+// Returns true when a model string is mini/nano/flash/haiku tier — fast but limited generation capacity.
+function isMiniTierModel(model) {
+  if (!model || typeof model !== 'string') return false;
+  const m = model.toLowerCase();
+  return m.includes('-mini') || m.includes('-nano') || m.includes('-flash') || m.includes('-haiku');
+}
+
+// Compute story complexity signals and decide whether the assigned model needs upgrading.
+function modelComplexitySignals(story) {
+  const acCount = Array.isArray(story.acceptanceCriteria) ? story.acceptanceCriteria.length : 0;
+  const files = story.technicalNotes?.files || [];
+  const outputFiles = files.filter((f) => !f.endsWith('.test.ts') && !f.endsWith('.spec.ts'));
+  const isSingleFile = outputFiles.length === 1;
+  const hasHtmlOutput = outputFiles.some((f) => f.endsWith('.html'));
+  const desc = (story.description || '').toLowerCase();
+  const hasSelfContainedKeyword =
+    desc.includes('self-contained') || desc.includes('no build') ||
+    desc.includes('complete') || desc.includes('single-file');
+
+  let needsUpgrade = false;
+  let reason = '';
+
+  if (acCount > 15 && isSingleFile) {
+    needsUpgrade = true;
+    reason = `${acCount} ACs on a single output file exceeds mini-tier generation capacity`;
+  } else if (acCount > 10 && hasHtmlOutput) {
+    needsUpgrade = true;
+    reason = `HTML output file with ${acCount} ACs requires strong generation capability`;
+  } else if (isSingleFile && hasSelfContainedKeyword && acCount > 8) {
+    needsUpgrade = true;
+    reason = `self-contained single-file story with ${acCount} ACs needs reliable large output`;
+  }
+
+  return { acCount, isSingleFile, hasHtmlOutput, hasSelfContainedKeyword, needsUpgrade, reason };
+}
+
 if (require.main === module) {
   run().catch((err) => {
     console.error('spec-mode-runner failed:', err);
@@ -784,4 +1018,6 @@ module.exports = {
   extractCodeRefs,
   resolvePromptProvider,
   resolvePromptExec,
+  isMiniTierModel,
+  modelComplexitySignals,
 };

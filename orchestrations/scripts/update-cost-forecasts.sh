@@ -103,7 +103,7 @@ while IFS= read -r line; do
     elapsed_hours=$(echo "scale=2; $elapsed_min / 60" | bc)
 
     # Accumulate statistics
-    if [ ! -v role_avg_hours[$agent] ]; then
+    if [[ ! -v role_avg_hours[$agent] ]]; then
         role_avg_hours[$agent]=0
         role_avg_cost[$agent]=0
         role_count[$agent]=0
@@ -157,7 +157,7 @@ declare -a recommendations=()
 
 while IFS='|' read -r story_id agent_role; do
     # Get recommended forecast based on agent role average
-    if [ -v role_avg_hours[$agent_role] ]; then
+    if [[ -v role_avg_hours[$agent_role] ]]; then
         recommended_hours=${role_avg_hours[$agent_role]}
         recommended_cost=${role_avg_cost[$agent_role]}
         confidence="High (based on ${role_count[$agent_role]} tasks)"

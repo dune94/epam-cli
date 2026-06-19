@@ -16,19 +16,24 @@ const RESPONSES = require('./responses.js');
 const PORT = process.env.PORT || 4000;
 
 // ── Story detection ────────────────────────────────────────────────────────────
-const STORY_PATTERNS = [
-  { id: 'HW-006', re: /HW-006|slugify/i },
-  { id: 'HW-005', re: /HW-005|truncate/i },
-  { id: 'HW-004', re: /HW-004|formatDate|format.*date/i },
-  { id: 'HW-003', re: /HW-003|code.?review.*greet|review.*greet\.ts/i },
-  { id: 'HW-002', re: /HW-002|verify.*tests.*pass|all tests.*pass/i },
-  { id: 'HW-001', re: /HW-001|greet\(|implement.*greet|greet\.ts/i },
-];
-
-function detectStory(allContent) {
-  for (const { id, re } of STORY_PATTERNS) {
-    if (re.test(allContent)) return id;
+// Find the EARLIEST HW-XXX mention in the content — this is the target story.
+// Do NOT use a priority list: the PRD context injected into prompts lists ALL
+// story IDs, so a priority-order scan always matches the wrong (higher-priority) story.
+function detectStory(content) {
+  // Find all HW-NNN occurrences with their positions
+  const re = /\bHW-(\d{3})\b/g;
+  let earliest = null;
+  let earliestPos = Infinity;
+  let m;
+  while ((m = re.exec(content)) !== null) {
+    if (m.index < earliestPos) {
+      earliestPos = m.index;
+      earliest = `HW-${m[1]}`;
+    }
   }
+  // Map to known story IDs
+  const known = ['HW-001', 'HW-002', 'HW-003', 'HW-004', 'HW-005', 'HW-006'];
+  if (earliest && known.includes(earliest)) return earliest;
   return 'unknown';
 }
 
@@ -119,13 +124,23 @@ function handleChatCompletions(req, res) {
       return;
     }
 
-    const allContent = messages.map(extractContent).join('\n');
-    const storyId = detectStory(allContent);
+    // Story detection: only scan the FIRST user message (the task assignment).
+    // Scanning all messages includes the full PRD context (all story IDs),
+    // which causes false matches (e.g. HW-001 prompt matches HW-005/truncate).
+    const firstUserMsg = messages.find(m => m.role === 'user');
+    const taskContent = firstUserMsg ? extractContent(firstUserMsg).slice(0, 2000) : '';
+    const storyId = detectStory(taskContent);
     const response = RESPONSES[storyId];
 
-    console.log(`[mock-llm] story=${storyId} hasToolResults=${hasToolResults} messages=${messages.length}`);
+    // When no tools are declared in the request (--no-tools callers: CPA, spec-mode-runner,
+    // ai-run.sh text queries), always return text — never tool_calls.
+    // Tool-calling requests (story agents via epam run with write_file registered) will
+    // have payload.tools populated.
+    const hasTools = Array.isArray(payload.tools) && payload.tools.length > 0;
 
-    if (!response || response.type === 'text') {
+    console.log(`[mock-llm] story=${storyId} hasTools=${hasTools} msgs=${messages.length} preview=${taskContent.slice(0,80).replace(/\n/g,' ')}`);
+
+    if (!hasTools || !response || response.type === 'text') {
       sseText(res, response ? response.content : 'Task acknowledged. No files to write.');
     } else {
       sseToolCalls(res, response.files);

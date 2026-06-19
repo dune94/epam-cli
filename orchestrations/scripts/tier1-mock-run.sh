@@ -38,9 +38,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# ── 1. Build / start mock server ───────────────────────────────────────────────
+# ── 1. Build epam dist + mock server ──────────────────────────────────────────
+info "Building epam CLI (ensures OPENROUTER_BASE_URL is compiled in)..."
+cd "$REPO_ROOT" && ~/.local/share/fnm/node-versions/v24.14.1/installation/bin/node ./node_modules/.bin/tsup 2>&1 | grep -E "success|error|warn" || true
+
 info "Building mock LLM image..."
-docker build -q -t epam-mock-llm "$MOCK_DIR"
+docker build --no-cache -q -t epam-mock-llm "$MOCK_DIR"
 
 info "Starting mock LLM container on port $MOCK_PORT..."
 docker rm -f "$MOCK_CONTAINER" >/dev/null 2>&1 || true
@@ -56,21 +59,38 @@ for i in $(seq 1 20); do
   sleep 1
 done
 
-# ── 2. Reset hello-world PRD ───────────────────────────────────────────────────
+# ── 2. Reset hello-world PRD and clean repo ───────────────────────────────────
 PRD_FILE="$REPO_ROOT/orchestrations/hello-world-prd.json"
 info "PRD: $PRD_FILE"
 
+HW_REPO="/home/bradleyjerome/projects/ai/epam-test-apps/hello-world"
+info "Resetting hello-world repo to pristine fixture (fixture-v1 tag)..."
+git -C "$HW_REPO" reset --hard fixture-v1 2>/dev/null || {
+  # Fallback: checkout+clean if tag reset fails
+  git -C "$HW_REPO" checkout -- . 2>/dev/null || true
+  git -C "$HW_REPO" clean -fd --quiet 2>/dev/null || true
+}
+git -C "$HW_REPO" clean -fd --quiet 2>/dev/null || true
+
 # ── 3. Run the pipeline ────────────────────────────────────────────────────────
 info "Launching pipeline (log: $LOG_FILE)..."
-info "  OPENROUTER_BASE_URL=$MOCK_URL"
-info "  OPENROUTER_API_KEY=mock-key (accepted by mock server)"
+info "  OPENROUTER_BASE_URL=$MOCK_URL (story agents → mock)"
+info "  ORCH_GATE_PROVIDER=qwen (coordinator calls → mock, all skipped anyway)"
 
 cd "$REPO_ROOT"
 OPENROUTER_API_KEY="mock-key" \
 OPENROUTER_BASE_URL="$MOCK_URL" \
 EPAM_API_KEY_OPENROUTER="mock-key" \
+ORCH_GATE_PROVIDER="qwen" \
+ORCH_GATE_MODEL="mock-gate" \
 PRD_FILE="$PRD_FILE" \
 SKIP_REGRESSION_GUARD=true \
+SKIP_CPA=1 \
+EPAM_SPEC_MODE=0 \
+SKIP_TESTING_GATES=true \
+SKIP_SKILL_ASSESSMENT=1 \
+EPAM_RALPH_WIGGUM_ENABLED=0 \
+EPAM_STORY_TIMEOUT_SECS=60 \
   bash orchestrations/scripts/run-agent-orchestration.sh \
     --phase hello_world_test \
     --reset \

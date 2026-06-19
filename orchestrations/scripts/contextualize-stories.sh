@@ -594,6 +594,14 @@ while IFS= read -r sid; do
       *qwen3.6-flash*) _model_alias="qwen-flash" ;;
       *qwen3-coder*)   _model_alias="qwen-coder" ;;
       *qwen*)          _model_alias="qwen"       ;;
+      # DeepSeek via OpenRouter — tracked separately from Qwen/Claude tiers
+      *deepseek*)      _model_alias="deepseek"   ;;
+      # OpenAI via OpenRouter — separate buckets per model family
+      *gpt-4o-mini*)   _model_alias="gpt4omini"  ;;
+      *gpt-4o*)        _model_alias="gpt4o"       ;;
+      *gpt-4.1-mini*)  _model_alias="gpt4omini"  ;;
+      *gpt-4.1*)       _model_alias="gpt4o"       ;;
+      *openai/*)       _model_alias="openai"      ;;
     esac
   else
     # Infer from effort (mirrors claude.sh resolve_model_settings logic)

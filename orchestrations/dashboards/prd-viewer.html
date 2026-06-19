@@ -192,6 +192,8 @@ body {
 .bl-opus     { background:rgba(132,83,210,0.15); color:#6a3cb5; border:1px solid rgba(132,83,210,0.35); }
 .bl-opencode { background:rgba(26,143,63,0.10); color:#1a8f3f; border:1px solid rgba(26,143,63,0.25); }
 .bl-codex    { background:rgba(196,24,110,0.08); color:#c4186e; border:1px solid rgba(196,24,110,0.25); }
+.bl-deepseek { background:rgba(0,180,160,0.10); color:#009688; border:1px solid rgba(0,180,160,0.30); }
+.bl-openai   { background:rgba(16,163,127,0.10); color:#10a37f; border:1px solid rgba(16,163,127,0.30); }
 .bt-unit   { background:rgba(26,143,63,0.10); color:#1a8f3f; border:1px solid rgba(26,143,63,0.25); }
 .bt-e2e    { background:rgba(132,83,210,0.10); color:#8453d2; border:1px solid rgba(132,83,210,0.25); }
 .bp-claude   { background:rgba(132,83,210,0.15); color:#6a3cb5; border:1px solid rgba(132,83,210,0.35); }
@@ -456,6 +458,18 @@ function modelInfo(story) {
   const provider = (story.aiProvider || '').toLowerCase();
   if (provider === 'opencode') return { label:'OPENCODE', cls:'opencode', turns:'—' };
   if (provider === 'codex')    return { label:'CODEX',    cls:'codex',   turns:'—' };
+  // Qwen/DeepSeek — show shortened model name
+  if (provider === 'qwen') {
+    const m = (story.model || 'deepseek').split('/').pop();
+    const label = m.startsWith('deepseek') ? 'DEEPSEEK' : m.toUpperCase().substring(0, 10);
+    return { label, cls:'deepseek', turns:'—' };
+  }
+  // OpenAI
+  if (provider === 'openai') {
+    const m = (story.model || 'gpt-4o').toLowerCase();
+    const label = m.includes('gpt-4o') ? 'GPT-4O' : m.toUpperCase().substring(0, 10);
+    return { label, cls:'openai', turns:'—' };
+  }
   // Claude providers — look up by exact model ID, fall back to effort
   if (story.model && MODEL_INFO[story.model]) return MODEL_INFO[story.model];
   const effort = (story.effort||'medium').toLowerCase();

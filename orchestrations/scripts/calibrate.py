@@ -49,6 +49,11 @@ MODEL_PRICING = {
     "qwen/qwen3.7-plus":           {"in": 0.0004,    "out": 0.0016},
     "qwen/qwen3.6-flash":          {"in": 0.0001875, "out": 0.001125},
     "qwen/qwen3-coder":            {"in": 0.00022,   "out": 0.0018},
+    # OpenAI via OpenRouter (June 2026 rates)
+    "openai/gpt-4o-mini":          {"in": 0.00015,   "out": 0.0006},
+    "openai/gpt-4o":               {"in": 0.0025,    "out": 0.01},
+    "openai/gpt-4.1":              {"in": 0.002,     "out": 0.008},
+    "openai/gpt-4.1-mini":         {"in": 0.0004,    "out": 0.0016},
 }
 
 def compute_cost(tokens_in: int, tokens_out: int, model: str) -> float:
@@ -238,8 +243,18 @@ def build_calibration(records, decay, min_n):
             model_alias = "opus"
         elif "sonnet" in model:
             model_alias = "sonnet"
+        elif "gpt-4o-mini" in model or "gpt4o-mini" in model:
+            model_alias = "gpt4omini"
+        elif "gpt-4o" in model or "gpt-4.1" in model:
+            model_alias = "gpt4o"
+        elif model.startswith("openai/"):
+            model_alias = "openai"
+        elif "deepseek" in model:
+            model_alias = "deepseek"
+        elif "qwen" in model or "mistral" in model or "llama" in model:
+            model_alias = "qwen"
         else:
-            model_alias = "sonnet"  # safe default for unknown models
+            model_alias = "unknown"
 
         # 4-part key: effort:storyType:invokeMode:modelAlias
         key = f"{effort}:{stype}:{invoke_mode}:{model_alias}"

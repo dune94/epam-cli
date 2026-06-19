@@ -16,10 +16,10 @@
 #   • Token accumulation stays within budget (autoCompressAt guard)
 #
 # Free models used (no credits consumed):
-#   meta-llama/llama-3.1-8b-instruct:free  — fast, capable enough for hello-world
+#   qwen/qwen3-coder:free  — same provider family as production Qwen3-Coder-30B
 #
 # Usage:
-#   OPENROUTER_API_KEY=<your-key> bash orchestrations/scripts/tier2-free-run.sh
+#   bash orchestrations/scripts/tier2-free-run.sh   (reads .env automatically)
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -32,16 +32,19 @@ info()    { echo -e "${YELLOW}[tier2]${NC} $*"; }
 success() { echo -e "${GREEN}[tier2] ✓${NC} $*"; }
 fail()    { echo -e "${RED}[tier2] ✗${NC} $*"; exit 1; }
 
+# Source .env if not already set
+if [ -z "${OPENROUTER_API_KEY:-}" ] && [ -f "$REPO_ROOT/.env" ]; then
+  set -a; source "$REPO_ROOT/.env"; set +a
+fi
+
 if [ -z "${OPENROUTER_API_KEY:-}" ]; then
-  fail "OPENROUTER_API_KEY is not set. Export it before running this script."
+  fail "OPENROUTER_API_KEY is not set. Export it or add it to .env"
 fi
 
 PRD_FILE="$REPO_ROOT/orchestrations/hello-world-prd.json"
 
-# Override the model to use the free-tier Llama model for all qwen stories.
-# The PRD has aiProvider=qwen, model=qwen/qwen3-coder-30b-a3b-instruct.
-# We override via EPAM_MODEL env var which ConfigResolver respects.
-FREE_MODEL="meta-llama/llama-3.1-8b-instruct:free"
+# Free Qwen coder model — same provider as production, zero credits
+FREE_MODEL="qwen/qwen3-coder:free"
 
 info "Tier 2 free-model run"
 info "  Model: $FREE_MODEL (zero credits)"

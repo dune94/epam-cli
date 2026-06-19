@@ -1,0 +1,4 @@
+services:
+  agent-monitor:
+    volumes:
+      - /home/bradleyjerome/projects/ai/epam-cli/orchestrations/travel-app-prd.json:/prd/active.json:ro

@@ -93,9 +93,12 @@ export class QwenProvider implements LLMProvider {
     this.baseURL = config.baseURL || (this.openRouterMode ? OPENROUTER_BASE_URL : DASHSCOPE_BASE_URL);
   }
 
-  /** Only use request.model if it looks like a qwen/openrouter model. Falls back to default. */
+  /** Only use request.model if it looks like a qwen/openrouter model. Falls back to default.
+   *  EPAM_QWEN_MODEL_OVERRIDE always wins — lets local Ollama models override PRD model names. */
   private resolveModel(requested?: string): string {
-    if (requested && /^(qwen|mistral|llama|deepseek|meta-llama)/.test(requested)) return requested;
+    const override = process.env.EPAM_QWEN_MODEL_OVERRIDE;
+    if (override) return override;
+    if (requested && /^(qwen|mistral|llama|deepseek|meta-llama|openai|google|anthropic)/.test(requested)) return requested;
     return this.defaultModel;
   }
 
@@ -493,10 +496,23 @@ export class QwenProvider implements LLMProvider {
           formatted.push({ role: 'user', content: `Tool result: ${msg.content}` });
         }
       } else {
-        formatted.push({
-          role: msg.role,
-          content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-        });
+        // Detect tool results sent as user role (AgentRunner uses role:'user' for tool results)
+        const parts = Array.isArray(msg.content) ? msg.content as ContentPart[] : [];
+        const toolResults = parts.filter(p => p.type === 'tool_result');
+        if (toolResults.length > 0) {
+          for (const part of toolResults) {
+            formatted.push({
+              role: 'tool',
+              tool_call_id: part.tool_use_id ?? '',
+              content: typeof part.content === 'string' ? part.content : JSON.stringify(part.content),
+            });
+          }
+        } else {
+          formatted.push({
+            role: msg.role,
+            content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+          });
+        }
       }
     }
 

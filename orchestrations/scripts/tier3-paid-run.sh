@@ -28,8 +28,12 @@ info()    { echo -e "${YELLOW}[tier3]${NC} $*"; }
 success() { echo -e "${GREEN}[tier3] ✓${NC} $*"; }
 fail()    { echo -e "${RED}[tier3] ✗${NC} $*"; exit 1; }
 
+if [ -z "${OPENROUTER_API_KEY:-}" ] && [ -f "$REPO_ROOT/.env" ]; then
+  set -a; source "$REPO_ROOT/.env"; set +a
+fi
+
 if [ -z "${OPENROUTER_API_KEY:-}" ]; then
-  fail "OPENROUTER_API_KEY is not set. Export it before running this script."
+  fail "OPENROUTER_API_KEY is not set. Export it or add it to .env"
 fi
 
 PRD_FILE="$REPO_ROOT/orchestrations/hello-world-prd.json"
@@ -45,16 +49,46 @@ read -rp "$(echo -e "${YELLOW}Confirm: spend OpenRouter credits? [yes/N]${NC} ")
 
 cd "$REPO_ROOT"
 
+# Record spend baseline
+_usage_before=$(curl -s "https://openrouter.ai/api/v1/auth/key" \
+  -H "Authorization: Bearer $OPENROUTER_API_KEY" 2>/dev/null | \
+  node -e "process.stdout.write(''+JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).data.usage)" 2>/dev/null || echo "0")
+info "Usage before: \$$_usage_before"
+
+# Clean hello-world repo state before run
+HW_REPO=$(python3 -c "import json; d=json.load(open('$PRD_FILE')); print(d['project']['outputDir'])" 2>/dev/null || echo "")
+if [ -n "$HW_REPO" ] && [ -d "$HW_REPO" ]; then
+  info "Resetting hello-world repo (checkout + clean)..."
+  git -C "$HW_REPO" checkout -- . 2>/dev/null || true
+  git -C "$HW_REPO" clean -fd --quiet 2>/dev/null || true
+fi
+
 OPENROUTER_API_KEY="$OPENROUTER_API_KEY" \
 EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY" \
+OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
+EPAM_API_KEY_OPENAI="${OPENAI_API_KEY:-}" \
+ORCH_GATE_PROVIDER="openai" \
+ORCH_GATE_MODEL="gpt-4o" \
 PRD_FILE="$PRD_FILE" \
 SKIP_REGRESSION_GUARD=true \
+EPAM_RALPH_WIGGUM_ENABLED=0 \
+EPAM_STORY_TIMEOUT_SECS=180 \
+EPAM_MAX_RETRIES=1 \
+SKIP_BROWSER_E2E_ROUTING=true \
   bash orchestrations/scripts/run-agent-orchestration.sh \
     --phase hello_world_test \
     --reset \
     2>&1 | tee "$LOG_FILE"
 
 PIPELINE_EXIT=${PIPESTATUS[0]}
+
+# Report spend
+_usage_after=$(curl -s "https://openrouter.ai/api/v1/auth/key" \
+  -H "Authorization: Bearer $OPENROUTER_API_KEY" 2>/dev/null | \
+  node -e "process.stdout.write(''+JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).data.usage)" 2>/dev/null || echo "0")
+_spent=$(node -e "console.log(($_usage_after-$_usage_before).toFixed(4))" 2>/dev/null || echo "?")
+info "Usage after: \$$_usage_after"
+info "Total spent this run: \$$_spent"
 
 echo ""
 info "Validating story completion..."

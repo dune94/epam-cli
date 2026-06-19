@@ -1549,7 +1549,7 @@ main() {
     fi
 
     # Step 0.5: Pre-phase skill assessment (main process only, not worktree subprocesses)
-    [ -z "$WORKTREE_MODE" ] && run_pre_phase_assessment "$phase_filter"
+    [ -z "$WORKTREE_MODE" ] && [ "${SKIP_SKILL_ASSESSMENT:-0}" != "1" ] && run_pre_phase_assessment "$phase_filter"
 
     # -- Parallel lane execution --
     # When not already in worktree mode, partition stories by agentGroup.

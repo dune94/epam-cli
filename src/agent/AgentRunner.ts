@@ -247,14 +247,33 @@ export class AgentRunner {
       return toolResults as any;
     }
 
+    // Env-var kill-switch: EPAM_RALPH_WIGGUM_ENABLED=0 disables recovery entirely.
+    // Use in CI, cost-sensitive runs, or when the loop is not yet validated.
+    if (process.env.EPAM_RALPH_WIGGUM_ENABLED === '0') {
+      logger.info({ command: bashRequest.input.command },
+        'RalphWiggumLoop: Skipped (EPAM_RALPH_WIGGUM_ENABLED=0)');
+      return toolResults as any;
+    }
+
     logger.info({
       command: bashRequest.input.command,
       reason: bashFailure.errorClassification?.reason,
     }, 'RalphWiggumLoop: Triggering parallel error recovery');
 
+    // Env-var overrides for cost/time control:
+    //   EPAM_RALPH_WIGGUM_AGENTS=1      — limit to 1 parallel agent (default: 3)
+    //   EPAM_RALPH_WIGGUM_TIMEOUT_MS=30000 — per-agent timeout ms (default: 120000)
+    const ralphConfig: Partial<import('./RalphWiggumLoop.types.js').RalphWiggumConfig> = {};
+    if (process.env.EPAM_RALPH_WIGGUM_AGENTS) {
+      ralphConfig.parallelAgents = Math.max(1, parseInt(process.env.EPAM_RALPH_WIGGUM_AGENTS, 10) || 3);
+    }
+    if (process.env.EPAM_RALPH_WIGGUM_TIMEOUT_MS) {
+      ralphConfig.agentTimeout = Math.max(5000, parseInt(process.env.EPAM_RALPH_WIGGUM_TIMEOUT_MS, 10) || 120000);
+    }
+
     // Trigger Ralph Wiggum Loop
-    const ralphWiggum = new RalphWiggumLoop();
-    
+    const ralphWiggum = new RalphWiggumLoop(ralphConfig);
+
     const result = await ralphWiggum.run(
       {
         command: bashRequest.input.command as string,

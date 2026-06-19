@@ -21,7 +21,7 @@
     "budget": 5,
     "aiRuntime": {
       "provider": "codex",
-      "defaultModel": "gpt-5-codex"
+      "defaultModel": "openai/gpt-4o-mini"
     }
   },
   "implementationOrder": {
@@ -82,17 +82,17 @@
       },
       "storyType": "implementation",
       "aiProvider": "qwen",
-      "model": "qwen/qwen3-coder-30b-a3b-instruct",
+      "model": "openai/gpt-4o-mini",
       "effort": "low",
       "specification": {
-        "runId": "20260610T154157Z",
+        "runId": "20260612T124505Z",
         "assignedAgents": [
           "openspec",
           "speckit"
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-10T15:42:01.538Z",
+        "updatedAt": "2026-06-12T12:45:07.341Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -101,7 +101,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-10T15:42:00.251Z"
+            "timestamp": "2026-06-12T12:45:06.687Z"
           },
           {
             "agent": "speckit",
@@ -109,7 +109,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-10T15:42:01.538Z"
+            "timestamp": "2026-06-12T12:45:07.341Z"
           }
         ],
         "coordinatorReview": {
@@ -120,15 +120,15 @@
           "reviewedAt": "2026-06-04T19:31:40.017Z"
         }
       },
-      "estimatedAiMinutes": 2.7107,
-      "estimatedCost": 0.0843,
-      "estimatedTokens": 216856,
-      "estimatedTurns": 6,
-      "estimatedHours": 0.0451,
+      "estimatedAiMinutes": 0.5097,
+      "estimatedCost": 0.002,
+      "estimatedTokens": 5662,
+      "estimatedTurns": 1,
+      "estimatedHours": 0.0084,
       "cpaConfidence": 0.95,
       "cpaGate": "pass",
-      "completedAt": "2026-06-10T11:43:21-04:00",
-      "lastAttempt": "2026-06-05T08:32:32-04:00"
+      "completedAt": "2026-06-12T08:46:03-04:00",
+      "lastAttempt": "2026-06-11T11:55:19-04:00"
     },
     {
       "id": "HW-002",
@@ -161,17 +161,17 @@
       },
       "storyType": "verification",
       "aiProvider": "qwen",
-      "model": "qwen/qwen3-coder-30b-a3b-instruct",
+      "model": "openai/gpt-4o-mini",
       "effort": "low",
       "specification": {
-        "runId": "20260610T154157Z",
+        "runId": "20260612T124505Z",
         "assignedAgents": [
           "openspec",
           "speckit"
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-10T15:42:04.275Z",
+        "updatedAt": "2026-06-12T12:45:08.320Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -180,7 +180,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-10T15:42:02.920Z"
+            "timestamp": "2026-06-12T12:45:07.808Z"
           },
           {
             "agent": "speckit",
@@ -188,7 +188,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-10T15:42:04.275Z"
+            "timestamp": "2026-06-12T12:45:08.320Z"
           }
         ],
         "coordinatorReview": {
@@ -202,14 +202,15 @@
           "reviewedAt": "2026-06-04T19:31:40.017Z"
         }
       },
-      "estimatedAiMinutes": 0.1183,
-      "estimatedCost": 0.0017,
-      "estimatedTokens": 946,
+      "estimatedAiMinutes": 0.3589,
+      "estimatedCost": 0.0021,
+      "estimatedTokens": 6633,
       "estimatedTurns": 1,
-      "estimatedHours": 0.0019,
-      "cpaConfidence": 0.8,
+      "estimatedHours": 0.0059,
+      "cpaConfidence": 0.9,
       "cpaGate": "pass",
-      "completedAt": "2026-06-10T11:43:42-04:00"
+      "completedAt": "2026-06-12T08:47:47-04:00",
+      "lastAttempt": "2026-06-10T20:03:47-04:00"
     },
     {
       "id": "HW-003",
@@ -251,17 +252,17 @@
       },
       "storyType": "review",
       "aiProvider": "qwen",
-      "model": "qwen/qwen3-coder-30b-a3b-instruct",
+      "model": "openai/gpt-4o-mini",
       "effort": "low",
       "specification": {
-        "runId": "20260610T154157Z",
+        "runId": "20260612T124505Z",
         "assignedAgents": [
           "openspec",
           "speckit"
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-10T15:42:07.224Z",
+        "updatedAt": "2026-06-12T12:45:09.410Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -270,7 +271,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-10T15:42:05.582Z"
+            "timestamp": "2026-06-12T12:45:08.901Z"
           },
           {
             "agent": "speckit",
@@ -278,7 +279,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-10T15:42:07.224Z"
+            "timestamp": "2026-06-12T12:45:09.410Z"
           }
         ],
         "coordinatorReview": {
@@ -292,14 +293,14 @@
           "reviewedAt": "2026-06-04T19:31:40.017Z"
         }
       },
-      "estimatedAiMinutes": 6.0,
-      "estimatedCost": 0.134,
-      "estimatedTokens": 48000,
-      "estimatedTurns": 12,
-      "estimatedHours": 0.1,
-      "cpaConfidence": 0.95,
+      "estimatedAiMinutes": 0.6857,
+      "estimatedCost": 0.0041,
+      "estimatedTokens": 12350,
+      "estimatedTurns": 1,
+      "estimatedHours": 0.0114,
+      "cpaConfidence": 0.85,
       "cpaGate": "pass",
-      "completedAt": "2026-06-10T11:57:26-04:00"
+      "completedAt": "2026-06-12T08:51:00-04:00"
     },
     {
       "id": "HW-004",
@@ -313,7 +314,7 @@
       "effort": "low",
       "storyType": "implementation",
       "aiProvider": "qwen",
-      "model": "qwen/qwen3-coder-30b-a3b-instruct",
+      "model": "openai/gpt-4o-mini",
       "acceptanceCriteria": [
         "formatDate.ts exists in the project root and exports `function formatDate(date: Date, format: 'short' | 'long'): string` (named export, exact signature)",
         "formatDate(new Date('2026-06-04'), 'short') returns '2026-06-04'",
@@ -338,17 +339,18 @@
         "files": [
           "formatDate.ts",
           "formatDate.test.ts"
-        ]
+        ],
+        "testCommand": "npx vitest run formatDate.test.ts"
       },
       "specification": {
-        "runId": "20260610T154157Z",
+        "runId": "20260612T124505Z",
         "assignedAgents": [
           "openspec",
           "speckit"
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-10T15:42:10.301Z",
+        "updatedAt": "2026-06-12T12:45:10.852Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -357,7 +359,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-10T15:42:08.924Z"
+            "timestamp": "2026-06-12T12:45:10.359Z"
           },
           {
             "agent": "speckit",
@@ -365,23 +367,24 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-10T15:42:10.301Z"
+            "timestamp": "2026-06-12T12:45:10.852Z"
           }
         ]
       },
-      "completedAt": "2026-06-10T11:45:32-04:00",
-      "estimatedAiMinutes": 3.6143,
-      "estimatedCost": 0.1123,
-      "estimatedTokens": 436536,
-      "estimatedTurns": 13,
-      "estimatedHours": 0.0602,
-      "cpaConfidence": 0.95,
-      "cpaGate": "pass"
+      "completedAt": "2026-06-12T08:48:43-04:00",
+      "estimatedAiMinutes": 0.7008,
+      "estimatedCost": 0.0027,
+      "estimatedTokens": 7780,
+      "estimatedTurns": 1,
+      "estimatedHours": 0.0116,
+      "cpaConfidence": 0.85,
+      "cpaGate": "pass",
+      "lastAttempt": "2026-06-12T07:57:57-04:00"
     },
     {
       "id": "HW-005",
       "title": "Implement truncate() utility with structured output",
-      "description": "Create truncate.ts in the project root. Export a single function `export function truncate(text: string, maxLength: number, suffix?: string): string` that truncates text to maxLength characters appending suffix (default '...'). If text.length <= maxLength return text unchanged. Create truncate.test.ts with at least 5 vitest tests. Do not modify any existing files.",
+      "description": "Create truncate.ts in the project root. Export a single function `export function truncate(text: string, maxLength: number, suffix?: string): string` that truncates text to maxLength characters appending suffix (default '...'). If text.length < maxLength (strictly less than) return text unchanged; otherwise truncate to fit suffix. Create truncate.test.ts with at least 5 vitest tests. Do not modify any existing files.",
       "priority": "medium",
       "agentRole": "typescript-engineer",
       "agentGroup": "independent",
@@ -390,36 +393,15 @@
       "effort": "low",
       "storyType": "implementation",
       "aiProvider": "qwen",
-      "model": "qwen/qwen3-coder-30b-a3b-instruct",
-      "outputSchema": {
-        "type": "object",
-        "properties": {
-          "filesCreated": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "testCount": {
-            "type": "number"
-          },
-          "edgeCasesCovered": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "filesCreated",
-          "testCount"
-        ]
-      },
+      "model": "openai/gpt-4o-mini",
       "acceptanceCriteria": [
-        "truncate.ts exists and exports truncate with correct signature",
-        "truncate('hello world', 5) returns 'he...'",
-        "truncate('hi', 10) returns 'hi' unchanged",
-        "truncate('hello', 5, '!') returns 'hell!'",
+        "truncate.ts exists and exports truncate with correct signature: export function truncate(text: string, maxLength: number, suffix?: string): string",
+        "truncate('hello world', 5) returns 'he...' (text longer than maxLength: truncate to fit suffix within maxLength)",
+        "truncate('hi', 10) returns 'hi' unchanged (text.length < maxLength: return as-is)",
+        "truncate('hello', 5) returns 'he...' (text.length === maxLength is NOT strictly less than, so truncate applies)",
+        "truncate('hello', 5, '!') returns 'hell!' (custom suffix: 5-1=4 chars, result is 4 chars + '!')",
+        "truncate('hello', 0) returns '...' (maxLength=0: suffix only, no text chars fit)",
+        "truncate('\u3053\u3093\u306b\u3061\u306f', 4) returns '\u3053...' (Unicode: 4-3=1 char fits before suffix)",
         "truncate.test.ts exists with at least 5 passing vitest tests",
         "tsc --noEmit exits 0",
         "vitest run exits 0 with all tests passing"
@@ -431,17 +413,18 @@
         "files": [
           "truncate.ts",
           "truncate.test.ts"
-        ]
+        ],
+        "testCommand": "npx vitest run truncate.test.ts"
       },
       "specification": {
-        "runId": "20260610T154157Z",
+        "runId": "20260612T124505Z",
         "assignedAgents": [
           "openspec",
           "speckit"
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-10T15:42:12.936Z",
+        "updatedAt": "2026-06-12T12:45:11.875Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -450,7 +433,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-10T15:42:11.611Z"
+            "timestamp": "2026-06-12T12:45:11.371Z"
           },
           {
             "agent": "speckit",
@@ -458,18 +441,19 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-10T15:42:12.936Z"
+            "timestamp": "2026-06-12T12:45:11.875Z"
           }
         ]
       },
-      "completedAt": "2026-06-10T11:47:58-04:00",
-      "estimatedAiMinutes": 2.7107,
-      "estimatedCost": 0.0843,
-      "estimatedTokens": 216856,
-      "estimatedTurns": 6,
-      "estimatedHours": 0.0451,
-      "cpaConfidence": 0.95,
-      "cpaGate": "pass"
+      "completedAt": "2026-06-12T08:49:08-04:00",
+      "estimatedAiMinutes": 0.7008,
+      "estimatedCost": 0.0027,
+      "estimatedTokens": 7709,
+      "estimatedTurns": 1,
+      "estimatedHours": 0.0116,
+      "cpaConfidence": 0.85,
+      "cpaGate": "pass",
+      "lastAttempt": "2026-06-12T08:16:13-04:00"
     },
     {
       "id": "HW-006",
@@ -483,7 +467,7 @@
       "effort": "low",
       "storyType": "implementation",
       "aiProvider": "qwen",
-      "model": "qwen/qwen3-coder-30b-a3b-instruct",
+      "model": "openai/gpt-4o-mini",
       "humanHours": 0.5,
       "acceptanceCriteria": [
         "slugify.ts exists and exports slugify with correct signature",
@@ -501,17 +485,18 @@
         "files": [
           "slugify.ts",
           "slugify.test.ts"
-        ]
+        ],
+        "testCommand": "npx vitest run slugify.test.ts"
       },
       "specification": {
-        "runId": "20260610T154157Z",
+        "runId": "20260612T124505Z",
         "assignedAgents": [
           "openspec",
           "speckit"
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-10T15:42:15.982Z",
+        "updatedAt": "2026-06-12T12:45:12.855Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -520,7 +505,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-10T15:42:14.716Z"
+            "timestamp": "2026-06-12T12:45:12.369Z"
           },
           {
             "agent": "speckit",
@@ -528,20 +513,20 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-10T15:42:15.981Z"
+            "timestamp": "2026-06-12T12:45:12.855Z"
           }
         ]
       },
-      "estimatedAiMinutes": 2.7107,
-      "estimatedCost": 0.0843,
-      "estimatedTokens": 216856,
-      "estimatedTurns": 6,
-      "estimatedHours": 0.0451,
-      "cpaConfidence": 0.95,
+      "estimatedAiMinutes": 0.7008,
+      "estimatedCost": 0.0027,
+      "estimatedTokens": 7709,
+      "estimatedTurns": 1,
+      "estimatedHours": 0.0116,
+      "cpaConfidence": 0.85,
       "cpaGate": "pass",
-      "lastAttempt": "2026-06-09T20:08:05-04:00",
-      "completedAt": "2026-06-10T11:48:37-04:00"
+      "lastAttempt": "2026-06-12T08:04:12-04:00",
+      "completedAt": "2026-06-12T08:49:29-04:00"
     }
   ],
-  "currentIteration": 99
+  "currentIteration": 219
 }

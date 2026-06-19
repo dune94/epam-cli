@@ -3848,3 +3848,21 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/SKY-006-B-1_*.log
 
+## SKY-001: Scaffold TypeScript project with Vitest and Express
+- **Date**: 2026-06-18 22:20:05
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001_*.log
+
+## SKY-001b: API Discovery: Verify and Document Skyscanner RapidAPI Contract
+- **Date**: 2026-06-18 22:20:51
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001b_*.log
+
+## SKY-001-A: Scaffold TypeScript/Express project file structure and configuration
+- **Date**: 2026-06-18 22:21:05
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001-A_*.log
+

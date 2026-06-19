@@ -24,21 +24,37 @@
         }
       ],
       "effects": [
+        "tsx",
         "vite"
       ],
       "range": "<=0.24.2",
       "nodes": [
-        "node_modules/vite/node_modules/esbuild"
+        "node_modules/esbuild",
+        "node_modules/tsx/node_modules/esbuild"
       ],
       "fixAvailable": {
         "name": "vitest",
-        "version": "4.1.8",
+        "version": "4.1.9",
         "isSemVerMajor": true
       }
     },
+    "tsx": {
+      "name": "tsx",
+      "severity": "moderate",
+      "isDirect": true,
+      "via": [
+        "esbuild"
+      ],
+      "effects": [],
+      "range": "3.13.0 - 4.19.2",
+      "nodes": [
+        "node_modules/tsx"
+      ],
+      "fixAvailable": true
+    },
     "vite": {
       "name": "vite",
-      "severity": "moderate",
+      "severity": "high",
       "isDirect": false,
       "via": [
         {
@@ -58,19 +74,53 @@
           },
           "range": "<=6.4.1"
         },
+        {
+          "source": 1120784,
+          "name": "vite",
+          "dependency": "vite",
+          "title": "launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows",
+          "url": "https://github.com/advisories/GHSA-v6wh-96g9-6wx3",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-73",
+            "CWE-522"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": "<=6.4.2"
+        },
+        {
+          "source": 1120789,
+          "name": "vite",
+          "dependency": "vite",
+          "title": "vite: `server.fs.deny` bypass on Windows alternate paths",
+          "url": "https://github.com/advisories/GHSA-fx2h-pf6j-xcff",
+          "severity": "high",
+          "cwe": [
+            "CWE-22",
+            "CWE-200"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": "<=6.4.2"
+        },
         "esbuild"
       ],
       "effects": [
         "vite-node",
         "vitest"
       ],
-      "range": "<=6.4.1",
+      "range": "<=6.4.2",
       "nodes": [
         "node_modules/vite"
       ],
       "fixAvailable": {
         "name": "vitest",
-        "version": "4.1.8",
+        "version": "4.1.9",
         "isSemVerMajor": true
       }
     },
@@ -90,7 +140,7 @@
       ],
       "fixAvailable": {
         "name": "vitest",
-        "version": "4.1.8",
+        "version": "4.1.9",
         "isSemVerMajor": true
       }
     },
@@ -100,7 +150,7 @@
       "isDirect": true,
       "via": [
         {
-          "source": 1120011,
+          "source": 1120126,
           "name": "vitest",
           "dependency": "vitest",
           "title": "When Vitest UI server is listening, arbitrary file can be read and executed",
@@ -113,19 +163,19 @@
             "score": 9.8,
             "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
           },
-          "range": "<4.1.0"
+          "range": "<3.2.6"
         },
         "vite",
         "vite-node"
       ],
       "effects": [],
-      "range": "<=4.1.0-beta.6",
+      "range": "<=3.2.5",
       "nodes": [
         "node_modules/vitest"
       ],
       "fixAvailable": {
         "name": "vitest",
-        "version": "4.1.8",
+        "version": "4.1.9",
         "isSemVerMajor": true
       }
     }
@@ -135,17 +185,17 @@
       "info": 0,
       "low": 0,
       "moderate": 3,
-      "high": 0,
+      "high": 1,
       "critical": 1,
-      "total": 4
+      "total": 5
     },
     "dependencies": {
-      "prod": 69,
-      "dev": 166,
-      "optional": 75,
+      "prod": 75,
+      "dev": 147,
+      "optional": 71,
       "peer": 0,
       "peerOptional": 0,
-      "total": 234
+      "total": 221
     }
   }
 }

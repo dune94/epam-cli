@@ -1,0 +1,416 @@
+{
+  "numTotalTestSuites": 8,
+  "numPassedTestSuites": 8,
+  "numFailedTestSuites": 0,
+  "numPendingTestSuites": 0,
+  "numTotalTests": 34,
+  "numPassedTests": 34,
+  "numFailedTests": 0,
+  "numPendingTests": 0,
+  "numTodoTests": 0,
+  "startTime": 1781835719007,
+  "success": true,
+  "testResults": [
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "",
+            "parseArguments"
+          ],
+          "fullName": " parseArguments parses all flags",
+          "status": "passed",
+          "title": "parses all flags",
+          "duration": 1,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "parseArguments"
+          ],
+          "fullName": " parseArguments returns undefined for missing flags",
+          "status": "passed",
+          "title": "returns undefined for missing flags",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "validateArguments"
+          ],
+          "fullName": " validateArguments throws exit:2 and writes to stderr if --from missing",
+          "status": "passed",
+          "title": "throws exit:2 and writes to stderr if --from missing",
+          "duration": 1,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "validateArguments"
+          ],
+          "fullName": " validateArguments throws exit:2 and writes to stderr if --to missing",
+          "status": "passed",
+          "title": "throws exit:2 and writes to stderr if --to missing",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "validateArguments"
+          ],
+          "fullName": " validateArguments throws exit:2 and writes to stderr if --date missing",
+          "status": "passed",
+          "title": "throws exit:2 and writes to stderr if --date missing",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "validateArguments"
+          ],
+          "fullName": " validateArguments throws exit:2 if --date format is invalid",
+          "status": "passed",
+          "title": "throws exit:2 if --date format is invalid",
+          "duration": 1,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "validateArguments"
+          ],
+          "fullName": " validateArguments throws exit:2 if --adults is not numeric",
+          "status": "passed",
+          "title": "throws exit:2 if --adults is not numeric",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "validateArguments"
+          ],
+          "fullName": " validateArguments throws exit:2 if --adults is float string",
+          "status": "passed",
+          "title": "throws exit:2 if --adults is float string",
+          "duration": 1,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "validateArguments"
+          ],
+          "fullName": " validateArguments throws exit:2 if --adults is zero",
+          "status": "passed",
+          "title": "throws exit:2 if --adults is zero",
+          "duration": 1,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "validateArguments"
+          ],
+          "fullName": " validateArguments throws exit:2 if --adults is negative",
+          "status": "passed",
+          "title": "throws exit:2 if --adults is negative",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "validateArguments"
+          ],
+          "fullName": " validateArguments throws exit:1 if RAPIDAPI_KEY is absent",
+          "status": "passed",
+          "title": "throws exit:1 if RAPIDAPI_KEY is absent",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "validateArguments"
+          ],
+          "fullName": " validateArguments throws exit:1 if RAPIDAPI_KEY is empty string",
+          "status": "passed",
+          "title": "throws exit:1 if RAPIDAPI_KEY is empty string",
+          "duration": 1,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "validateArguments"
+          ],
+          "fullName": " validateArguments defaults adults to 1 if not present",
+          "status": "passed",
+          "title": "defaults adults to 1 if not present",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "validateArguments"
+          ],
+          "fullName": " validateArguments returns validated arguments with correct types",
+          "status": "passed",
+          "title": "returns validated arguments with correct types",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "main"
+          ],
+          "fullName": " main exits 2 and prints error if --from missing",
+          "status": "passed",
+          "title": "exits 2 and prints error if --from missing",
+          "duration": 1,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "main"
+          ],
+          "fullName": " main exits 2 and prints error if --to missing",
+          "status": "passed",
+          "title": "exits 2 and prints error if --to missing",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "main"
+          ],
+          "fullName": " main exits 2 and prints error if --date missing",
+          "status": "passed",
+          "title": "exits 2 and prints error if --date missing",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "main"
+          ],
+          "fullName": " main exits 2 if --date format invalid",
+          "status": "passed",
+          "title": "exits 2 if --date format invalid",
+          "duration": 2,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "main"
+          ],
+          "fullName": " main exits 2 if --adults not numeric",
+          "status": "passed",
+          "title": "exits 2 if --adults not numeric",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "main"
+          ],
+          "fullName": " main exits 2 if --adults is float",
+          "status": "passed",
+          "title": "exits 2 if --adults is float",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "main"
+          ],
+          "fullName": " main exits 2 if --adults is zero",
+          "status": "passed",
+          "title": "exits 2 if --adults is zero",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "main"
+          ],
+          "fullName": " main exits 2 if --adults is negative",
+          "status": "passed",
+          "title": "exits 2 if --adults is negative",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "main"
+          ],
+          "fullName": " main exits 1 and prints error if RAPIDAPI_KEY absent",
+          "status": "passed",
+          "title": "exits 1 and prints error if RAPIDAPI_KEY absent",
+          "duration": 1,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "main"
+          ],
+          "fullName": " main exits 1 and prints error if RAPIDAPI_KEY empty string",
+          "status": "passed",
+          "title": "exits 1 and prints error if RAPIDAPI_KEY empty string",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "main"
+          ],
+          "fullName": " main calls searchFlights with correct arguments and renderTable with result (happy path)",
+          "status": "passed",
+          "title": "calls searchFlights with correct arguments and renderTable with result (happy path)",
+          "duration": 1,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "main"
+          ],
+          "fullName": " main calls searchFlights with adults=1 if --adults is absent",
+          "status": "passed",
+          "title": "calls searchFlights with adults=1 if --adults is absent",
+          "duration": 1,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "main"
+          ],
+          "fullName": " main calls renderTable with one arg if currency is not provided",
+          "status": "passed",
+          "title": "calls renderTable with one arg if currency is not provided",
+          "duration": 0,
+          "failureMessages": []
+        }
+      ],
+      "startTime": 1781835719523,
+      "endTime": 1781835719536,
+      "status": "passed",
+      "message": "",
+      "name": "/tmp/skyscanner-app/src/cli.test.ts"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "",
+            "placeholder test"
+          ],
+          "fullName": " placeholder test should pass",
+          "status": "passed",
+          "title": "should pass",
+          "duration": 1,
+          "failureMessages": []
+        }
+      ],
+      "startTime": 1781835719509,
+      "endTime": 1781835719510,
+      "status": "passed",
+      "message": "",
+      "name": "/tmp/skyscanner-app/src/index.test.ts"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "",
+            "SkyscannerClient"
+          ],
+          "fullName": " SkyscannerClient a) constructs correct URL and request headers (apiKey, User-Agent)",
+          "status": "passed",
+          "title": "a) constructs correct URL and request headers (apiKey, User-Agent)",
+          "duration": 2,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "SkyscannerClient"
+          ],
+          "fullName": " SkyscannerClient b) parses a successful array response body as FlightResult[]",
+          "status": "passed",
+          "title": "b) parses a successful array response body as FlightResult[]",
+          "duration": 1,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "SkyscannerClient"
+          ],
+          "fullName": " SkyscannerClient c) fetch returns ok=false with 4xx status: rejects with error containing status",
+          "status": "passed",
+          "title": "c) fetch returns ok=false with 4xx status: rejects with error containing status",
+          "duration": 1,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "SkyscannerClient"
+          ],
+          "fullName": " SkyscannerClient d) constructing with no apiKey and no RAPIDAPI_KEY env throws missing key error",
+          "status": "passed",
+          "title": "d) constructing with no apiKey and no RAPIDAPI_KEY env throws missing key error",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "SkyscannerClient"
+          ],
+          "fullName": " SkyscannerClient e) fetch json returns non-array or missing fields: rejects with parse/validation error",
+          "status": "passed",
+          "title": "e) fetch json returns non-array or missing fields: rejects with parse/validation error",
+          "duration": 0,
+          "failureMessages": []
+        },
+        {
+          "ancestorTitles": [
+            "",
+            "SkyscannerClient"
+          ],
+          "fullName": " SkyscannerClient f) fetch rejects: searchFlights rejects with unexpected/runtime error",
+          "status": "passed",
+          "title": "f) fetch rejects: searchFlights rejects with unexpected/runtime error",
+          "duration": 1,
+          "failureMessages": []
+        }
+      ],
+      "startTime": 1781835719518,
+      "endTime": 1781835719523,
+      "status": "passed",
+      "message": "",
+      "name": "/tmp/skyscanner-app/src/skyscanner/client.test.ts"
+    }
+  ]
+}

@@ -4376,3 +4376,285 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/SKY-001b-1_*.log
 
+## SKY-001b-2: API Discovery: Write api-contract.md from Probe Results
+- **Date**: 2026-06-19 10:11:13
+- **Phase**: scaffold
+- **Status**: failed
+- **Log**: logs/claude_outputs/SKY-001b-2_*.log
+
+## SKY-001b-1-1: API Discovery: Execute Curl Probes and Capture Raw Results
+- **Date**: 2026-06-19 10:14:44
+- **Phase**: scaffold
+- **Status**: failed
+- **Log**: logs/claude_outputs/SKY-001b-1-1_*.log
+
+## SKY-001b-2-1: API Discovery: Write api-contract.md from Probe Results
+- **Date**: 2026-06-19 10:15:08
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001b-2-1_*.log
+
+## SKY-002: Implement typed Skyscanner API client with unit tests
+- **Date**: 2026-06-19 10:15:49
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-002_*.log
+
+## SKY-004: Build Express REST API with /health, /search, /cheapest, and static dashboard endpoints
+- **Date**: 2026-06-19 10:16:25
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/SKY-004_*.log
+
+## SKY-004-A: Server skeleton: /health, GET /, API-key middleware, error handling, and package.json scripts
+- **Date**: 2026-06-19 10:17:44
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/SKY-004-A_*.log
+
+## SKY-004-B: Implement GET /search and GET /cheapest with full input validation and complete vitest test suite [SPLIT PARENT]
+- **Date**: 2026-06-19 10:20:52
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/SKY-004-B_*.log
+
+## SKY-002a: Implement typed Skyscanner API client (client.ts)
+- **Date**: 2026-06-19 10:21:48
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-002a_*.log
+
+## SKY-002b: Write unit tests for Skyscanner API client (client.test.ts)
+- **Date**: 2026-06-19 10:22:05
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-002b_*.log
+
+## SKY-002a-1: Implement typed Skyscanner API client (client.ts)
+- **Date**: 2026-06-19 10:22:38
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-002a-1_*.log
+
+## SKY-002b-1: Write unit tests for Skyscanner API client (client.test.ts)
+- **Date**: 2026-06-19 10:22:46
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-002b-1_*.log
+
+## SKY-004-A-1: Implement src/server.ts — Express app skeleton, route handlers, and package.json wiring
+- **Date**: 2026-06-19 10:23:26
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/SKY-004-A-1_*.log
+
+## SKY-004-B-1: Write src/server.test.ts — vitest + supertest integration tests for all server routes
+- **Date**: 2026-06-19 10:24:07
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-004-B-1_*.log
+
+## SKY-004-A-2: Implement src/server.ts — Express app skeleton, route handlers, and package.json wiring
+- **Date**: 2026-06-19 10:24:43
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-004-A-2_*.log
+
+## SKY-004-B-2: Write src/server.test.ts — vitest + supertest integration tests for all server routes
+- **Date**: 2026-06-19 10:25:19
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-004-B-2_*.log
+
+## SKY-004-B-IMPL: Implement src/server.ts: GET /search and GET /cheapest with validation, CORS, error handling
+- **Date**: 2026-06-19 10:25:58
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/SKY-004-B-IMPL_*.log
+
+## SKY-004-B-TEST: Write src/server.test.ts: full vitest + supertest suite for GET /search and GET /cheapest
+- **Date**: 2026-06-19 10:26:36
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/SKY-004-B-TEST_*.log
+
+## SKY-003: Implement flight search CLI entry point with formatted table output
+- **Date**: 2026-06-19 10:26:55
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003_*.log
+
+## SKY-003a: CLI argument parsing, env-var guard, and SkyscannerClient wiring (cli.ts implementation only)
+- **Date**: 2026-06-19 10:27:21
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003a_*.log
+
+## SKY-003b: Flight result table renderer with dynamic alignment, padding, and separator row
+- **Date**: 2026-06-19 10:28:28
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/SKY-003b_*.log
+
+## SKY-003a-test: Vitest test suite for cli.ts (cli.test.ts)
+- **Date**: 2026-06-19 10:28:45
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003a-test_*.log
+
+## SKY-003b-1: Implement renderTable core: dynamic widths, alignment, separator, and empty-array guard
+- **Date**: 2026-06-19 10:29:15
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003b-1_*.log
+
+## SKY-003b-2: Wire renderTable into cli.ts and handle searchFlights rejection
+- **Date**: 2026-06-19 10:29:45
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003b-2_*.log
+
+## SKY-003b-1-1: Implement renderTable core: dynamic widths, alignment, separator, and empty-array guard
+- **Date**: 2026-06-19 10:30:03
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003b-1-1_*.log
+
+## SKY-003b-2-1: Wire renderTable into cli.ts and handle searchFlights rejection
+- **Date**: 2026-06-19 10:30:24
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003b-2-1_*.log
+
+## SKY-003a-1: Implement cli.ts: argument parsing, env validation, table rendering, and process-exit ownership
+- **Date**: 2026-06-19 10:30:40
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003a-1_*.log
+
+## SKY-003a-test-1: Write cli.test.ts: vitest unit tests for cli.ts with SkyscannerClient mocked
+- **Date**: 2026-06-19 10:31:00
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003a-test-1_*.log
+
+## SKY-003a-2: Implement cli.ts: argument parsing, env validation, table rendering, and process-exit ownership
+- **Date**: 2026-06-19 10:31:23
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003a-2_*.log
+
+## SKY-003a-test-2: Write cli.test.ts: vitest unit tests for cli.ts with SkyscannerClient mocked
+- **Date**: 2026-06-19 10:31:51
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003a-test-2_*.log
+
+## SKY-003b-1-2: Implement src/table.ts renderTable function and wire into src/cli.ts
+- **Date**: 2026-06-19 10:32:39
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003b-1-2_*.log
+
+## SKY-001: Scaffold TypeScript project with Vitest and Express
+- **Date**: 2026-06-19 10:33:05
+- **Phase**: scaffold
+- **Status**: failed
+- **Log**: logs/claude_outputs/SKY-001_*.log
+
+## SKY-003b-2-2: Vitest unit tests for renderTable in src/table.test.ts
+- **Date**: 2026-06-19 10:33:15
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003b-2-2_*.log
+
+## SKY-003b-1-3: Implement src/table.ts renderTable function and wire into src/cli.ts
+- **Date**: 2026-06-19 10:33:47
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003b-1-3_*.log
+
+## SKY-003b-2-3: Vitest unit tests for renderTable in src/table.test.ts
+- **Date**: 2026-06-19 10:34:16
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003b-2-3_*.log
+
+## SKY-001b: API Discovery: Verify and Document Skyscanner RapidAPI Contract
+- **Date**: 2026-06-19 10:35:59
+- **Phase**: scaffold
+- **Status**: failed
+- **Log**: logs/claude_outputs/SKY-001b_*.log
+
+## SKY-001-A: Scaffold TypeScript/Express project file structure and configuration
+- **Date**: 2026-06-19 10:38:22
+- **Phase**: scaffold
+- **Status**: failed
+- **Log**: logs/claude_outputs/SKY-001-A_*.log
+
+## SKY-001-B: Verify scaffold compiles cleanly and vitest exits 0
+- **Date**: 2026-06-19 10:39:42
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001-B_*.log
+
+## SKY-001b-1: API Discovery: Execute Curl Probes and Capture Raw Results
+- **Date**: 2026-06-19 10:40:24
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001b-1_*.log
+
+## SKY-001: Scaffold TypeScript project with Vitest and Express
+- **Date**: 2026-06-19 11:07:43
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001_*.log
+
+## SKY-001b: API Discovery: Verify and Document Skyscanner RapidAPI Contract
+- **Date**: 2026-06-19 11:13:49
+- **Phase**: scaffold
+- **Status**: failed
+- **Log**: logs/claude_outputs/SKY-001b_*.log
+
+## SKY-001-A: Scaffold TypeScript/Express project file structure and configuration
+- **Date**: 2026-06-19 11:14:47
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001-A_*.log
+
+## SKY-001-B: Verify scaffold compiles cleanly and vitest exits 0
+- **Date**: 2026-06-19 11:15:01
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001-B_*.log
+
+## SKY-001b-1: API Discovery: Execute Curl Probes and Capture Raw Results
+- **Date**: 2026-06-19 11:16:54
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001b-1_*.log
+
+## SKY-001-A: Scaffold TypeScript/Express project file structure and configuration
+- **Date**: 2026-06-19 11:30:35
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001-A_*.log
+
+## SKY-001-B: Verify scaffold compiles cleanly and vitest exits 0
+- **Date**: 2026-06-19 11:30:54
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001-B_*.log
+
+## SKY-001b-1: API Discovery: Execute Curl Probes and Capture Raw Results
+- **Date**: 2026-06-19 11:34:14
+- **Phase**: scaffold
+- **Status**: failed
+- **Log**: logs/claude_outputs/SKY-001b-1_*.log
+
+## SKY-001b-2: API Discovery: Write api-contract.md from Probe Results
+- **Date**: 2026-06-19 11:36:35
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001b-2_*.log
+

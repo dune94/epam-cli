@@ -1517,6 +1517,7 @@ if [ -n "$main_stories" ]; then
 
     if [ -n "$non_review_main" ]; then
         log "Step 1: Running main-branch stories..."
+        _phase_story_failures=0
         while IFS= read -r story; do
             [ -z "$story" ] && continue
             if checkpoint_already_done "$story"; then
@@ -1527,9 +1528,14 @@ if [ -n "$main_stories" ]; then
             wait_if_paused
             apply_redirect_if_any "$story"
             log "  Running: $story"
-            run_story_with_watchdog "$story" "$LOG_DIR/main-${story}.log" || true
+            run_story_with_watchdog "$story" "$LOG_DIR/main-${story}.log" \
+                || { _phase_story_failures=$((_phase_story_failures+1)); }
             checkpoint_complete "$story"
         done <<< "$non_review_main"
+        if [ "$_phase_story_failures" -gt 0 ]; then
+            error "Phase '$PHASE': $_phase_story_failures story/stories failed — aborting phase"
+            exit 1
+        fi
         success "Main-branch stories complete"
     fi
 else

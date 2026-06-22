@@ -426,7 +426,7 @@
       "title": "Implement flight search CLI entry point with formatted table output",
       "agentRole": "typescript-engineer",
       "agentGroup": "independent",
-      "status": "failed",
+      "status": "pending",
       "completed": false,
       "description": "Create `src/cli.ts` \u2014 a standalone Node entry point that accepts flight search arguments via `process.argv` and prints results as an aligned table. Parse flags manually (no commander, no yargs, zero new runtime deps). Require `RAPIDAPI_KEY` env var; exit 1 with a human-readable message if absent. Instantiate `SkyscannerClient` from `src/skyscanner/client.ts` (SKY-002), call `searchFlights` forwarding all parsed arguments including adults count, and render results via `renderTable` imported from `./table`. Columns in fixed order: Airline | Price | Departure | Arrival | Duration | Stops. If no flights are returned print `No flights found.` and exit 0. On any thrown error print the message to stderr and exit 1. All process-exit and stderr responsibilities are owned exclusively by `cli.ts`. Shebang and chmod+x are explicitly out of scope; invocation is `node dist/cli.js`. Split children SKY-003a and SKY-003a-test carry all actionable work.",
       "acceptanceCriteria": [
@@ -449,14 +449,14 @@
       },
       "estimate": 15,
       "specification": {
-        "runId": "20260622T112440Z",
+        "runId": "20260622T144206Z",
         "assignedAgents": [
           "openspec",
           "speckit"
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T11:24:41.141Z",
+        "updatedAt": "2026-06-22T14:42:06.700Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -465,7 +465,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:24:41.092Z"
+            "timestamp": "2026-06-22T14:42:06.654Z"
           },
           {
             "agent": "speckit",
@@ -473,7 +473,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:24:41.141Z"
+            "timestamp": "2026-06-22T14:42:06.700Z"
           }
         ],
         "coordinatorReview": {
@@ -515,8 +515,7 @@
       "cpaGate": "review",
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
-      "unitTests": true,
-      "lastAttempt": "2026-06-22T07:29:29-04:00"
+      "unitTests": true
     },
     {
       "id": "SKY-004",
@@ -1284,8 +1283,8 @@
       "title": "Scaffold TypeScript/Express project file structure and configuration",
       "agentRole": "typescript-engineer",
       "agentGroup": "main",
-      "status": "completed",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "description": "Create all required files and install dependencies for the skyscanner-app project at /tmp/skyscanner-app. This story covers file creation and content correctness only; runtime verification is covered in SKY-001-B.",
       "acceptanceCriteria": [
         "/tmp/skyscanner-app/package.json exists with name='skyscanner-app', scripts (build, test, start, dev), dependencies (express), and devDependencies (typescript, tsx, vitest, @types/express, @types/node)",
@@ -1315,7 +1314,7 @@
       "specification": {
         "createdFrom": "SKY-001",
         "createdAt": "2026-06-18T15:38:02.143Z",
-        "runId": "20260622T111733Z",
+        "runId": "20260622T143416Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "MiniMax-M2.5",
@@ -1338,7 +1337,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T11:17:34.036Z",
+        "updatedAt": "2026-06-22T14:34:16.619Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -1347,7 +1346,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:17:33.988Z"
+            "timestamp": "2026-06-22T14:34:16.571Z"
           },
           {
             "agent": "speckit",
@@ -1355,7 +1354,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:17:34.036Z"
+            "timestamp": "2026-06-22T14:34:16.619Z"
           }
         ]
       },
@@ -1369,16 +1368,15 @@
       "cpaGate": "review",
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
-      "dependencies": [],
-      "completedAt": "2026-06-22T07:18:13-04:00"
+      "dependencies": []
     },
     {
       "id": "SKY-001-B",
       "title": "Verify scaffold compiles cleanly and vitest exits 0",
       "agentRole": "typescript-engineer",
       "agentGroup": "main",
-      "status": "completed",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "description": "Executable verification that the scaffolded project at /tmp/skyscanner-app passes TypeScript compilation and vitest run with no errors. Depends on SKY-001-A completing successfully.",
       "acceptanceCriteria": [
         "Running 'cd /tmp/skyscanner-app && ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit' exits with code 0 and produces no output",
@@ -1400,7 +1398,7 @@
       "specification": {
         "createdFrom": "SKY-001",
         "createdAt": "2026-06-18T15:38:02.143Z",
-        "runId": "20260622T111733Z",
+        "runId": "20260622T143416Z",
         "splitDepth": 1,
         "assignedAgents": [
           "openspec",
@@ -1408,7 +1406,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T11:17:34.131Z",
+        "updatedAt": "2026-06-22T14:34:16.712Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -1417,7 +1415,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:17:34.084Z"
+            "timestamp": "2026-06-22T14:34:16.667Z"
           },
           {
             "agent": "speckit",
@@ -1425,7 +1423,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:17:34.131Z"
+            "timestamp": "2026-06-22T14:34:16.712Z"
           }
         ]
       },
@@ -1439,8 +1437,7 @@
       "cpaGate": "review",
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
-      "dependencies": [],
-      "completedAt": "2026-06-22T07:18:31-04:00"
+      "dependencies": []
     },
     {
       "id": "SKY-002a",
@@ -1650,8 +1647,8 @@
       "title": "Implement typed Skyscanner API client (client.ts)",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
-      "status": "completed",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "description": "Create src/skyscanner/client.ts that wraps the Skyscanner RapidAPI using the global fetch. Export SkyscannerClient class, SearchParams interface, and FlightResult interface. Implement input validation, API key sanitization, HTTP error handling, malformed-response detection, header-based pagination with termination guard, User-Agent header, and runtime error wrapping with no double-wrapping of client-originated errors. tsc --noEmit must exit 0.",
       "acceptanceCriteria": [
         "src/skyscanner/client.ts exports a SkyscannerClient class whose constructor signature is exactly: constructor({ apiKey }: { apiKey?: string })",
@@ -1693,7 +1690,7 @@
       "specification": {
         "createdFrom": "SKY-002",
         "createdAt": "2026-06-18T15:53:39.814Z",
-        "runId": "20260622T112440Z",
+        "runId": "20260622T144206Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "MiniMax-M2.7",
@@ -1716,7 +1713,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T11:24:41.238Z",
+        "updatedAt": "2026-06-22T14:42:06.791Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -1725,7 +1722,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:24:41.190Z"
+            "timestamp": "2026-06-22T14:42:06.746Z"
           },
           {
             "agent": "speckit",
@@ -1733,7 +1730,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:24:41.238Z"
+            "timestamp": "2026-06-22T14:42:06.791Z"
           }
         ]
       },
@@ -1748,15 +1745,14 @@
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": false,
-      "dependencies": [],
-      "completedAt": "2026-06-22T07:26:30-04:00"
+      "dependencies": []
     },
     {
       "id": "SKY-002b-1",
       "title": "Write unit tests for Skyscanner API client (client.test.ts)",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
-      "status": "failed",
+      "status": "pending",
       "completed": false,
       "description": "Create src/skyscanner/client.test.ts with at least 6 vitest tests covering the SkyscannerClient. All fetch mocking must use vi.stubGlobal('fetch', ...) with afterEach(() => { vi.unstubAllGlobals(); }). Every fetch stub must include headers: { get: () => null }. Success-path stubs must return a plain array from json(). Any test that mutates process.env.RAPIDAPI_KEY must restore it in afterEach. vitest run must exit 0.",
       "acceptanceCriteria": [
@@ -1793,7 +1789,7 @@
       "specification": {
         "createdFrom": "SKY-002",
         "createdAt": "2026-06-18T15:53:39.814Z",
-        "runId": "20260622T112440Z",
+        "runId": "20260622T144206Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "MiniMax-M2.7",
@@ -1816,7 +1812,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T11:24:41.337Z",
+        "updatedAt": "2026-06-22T14:42:06.886Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -1825,7 +1821,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:24:41.287Z"
+            "timestamp": "2026-06-22T14:42:06.838Z"
           },
           {
             "agent": "speckit",
@@ -1833,7 +1829,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:24:41.337Z"
+            "timestamp": "2026-06-22T14:42:06.886Z"
           }
         ]
       },
@@ -1848,8 +1844,7 @@
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": false,
-      "dependencies": [],
-      "lastAttempt": "2026-06-22T07:27:09-04:00"
+      "dependencies": []
     },
     {
       "id": "SKY-003a-test",
@@ -2978,8 +2973,8 @@
       "title": "API Discovery: Execute Curl Probes and Capture Raw Results",
       "agentRole": "spike-agent",
       "agentGroup": "main",
-      "status": "completed",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "description": "Execute live curl probes against skyscanner.p.rapidapi.com using the RAPIDAPI_KEY environment variable. This child story covers the prerequisite gate, probe execution, abort conditions, and raw result capture only. No documentation writing occurs here \u2014 raw probe outputs are written to /tmp/skyscanner-app/docs/probes/ as intermediate artifacts for SKY-001b-2. Do NOT write any TypeScript, JavaScript, or compiled output.",
       "acceptanceCriteria": [
         "PREREQUISITE GATE: The RAPIDAPI_KEY environment variable must be set and non-empty before any other action. If absent or empty, the story aborts immediately with the message 'RAPIDAPI_KEY is not set \u2014 aborting discovery' written to stderr; no curl probes, directory creation, or file writes may occur. This is verified as the absolute first step and its pass/fail is recorded in /tmp/skyscanner-app/docs/probes/gate-result.txt.",
@@ -3010,7 +3005,7 @@
       "specification": {
         "createdFrom": "SKY-001b",
         "createdAt": "2026-06-19T11:20:27.397Z",
-        "runId": "20260622T111733Z",
+        "runId": "20260622T143416Z",
         "splitDepth": 1,
         "assignedAgents": [
           "openspec",
@@ -3018,7 +3013,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T11:17:34.223Z",
+        "updatedAt": "2026-06-22T14:34:16.805Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -3027,7 +3022,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:17:34.177Z"
+            "timestamp": "2026-06-22T14:34:16.760Z"
           },
           {
             "agent": "speckit",
@@ -3035,7 +3030,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:17:34.223Z"
+            "timestamp": "2026-06-22T14:34:16.805Z"
           }
         ]
       },
@@ -3054,16 +3049,15 @@
       "spikeOutputArtifact": "probe-summary.txt",
       "informsStories": [
         "SKY-001b-2"
-      ],
-      "completedAt": "2026-06-22T07:21:20-04:00"
+      ]
     },
     {
       "id": "SKY-001b-2",
       "title": "API Discovery: Write api-contract.md from Probe Results",
       "agentRole": "typescript-engineer",
       "agentGroup": "main",
-      "status": "completed",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "description": "Using the raw probe outputs produced by SKY-001b-1 (in /tmp/skyscanner-app/docs/probes/), write the authoritative /tmp/skyscanner-app/docs/api-contract.md. This child story covers all documentation sections, field mapping, key-safety scan, and the inferred-contract risk disclosure. SKY-001b-1 must be complete and its prerequisite gate must have passed before this story begins. Do NOT execute new curl probes. Do NOT write any TypeScript, JavaScript, or compiled output. IMPORTANT \u2014 inferred_contract_risk: If only 429 responses were obtained, the FlightResult field mappings in this document are inferred from available documentation and not confirmed by live 2xx responses. The human coordinator must explicitly accept this risk before SKY-002 proceeds to implementation.",
       "acceptanceCriteria": [
         "api-contract.md contains a 'Host' section documenting the confirmed x-rapidapi-host value (must be skyscanner.p.rapidapi.com) with the observed HTTP status code of the confirming probe (sourced from probe-summary.txt); a 429 response is sufficient proof of an active subscription.",
@@ -3095,7 +3089,7 @@
       "specification": {
         "createdFrom": "SKY-001b",
         "createdAt": "2026-06-19T11:20:27.397Z",
-        "runId": "20260622T111733Z",
+        "runId": "20260622T143416Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "MiniMax-M3",
@@ -3118,7 +3112,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T11:17:34.315Z",
+        "updatedAt": "2026-06-22T14:34:16.895Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -3127,7 +3121,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:17:34.269Z"
+            "timestamp": "2026-06-22T14:34:16.848Z"
           },
           {
             "agent": "speckit",
@@ -3135,7 +3129,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:17:34.315Z"
+            "timestamp": "2026-06-22T14:34:16.895Z"
           }
         ]
       },
@@ -3150,8 +3144,7 @@
       "aiProvider": "minimax",
       "dependencies": [],
       "dependsOnSpike": "SKY-001b-1",
-      "spikeArtifact": "probe-summary.txt",
-      "completedAt": "2026-06-22T07:24:36-04:00"
+      "spikeArtifact": "probe-summary.txt"
     },
     {
       "id": "SKY-001b-1-1",
@@ -3551,7 +3544,7 @@
       "title": "Implement cli.ts: argument parsing, env validation, table rendering, and process-exit ownership",
       "agentRole": "typescript-engineer",
       "agentGroup": "independent",
-      "status": "failed",
+      "status": "pending",
       "completed": false,
       "description": "Create `src/cli.ts` as the sole owner of all process-exit and stderr logic. Export `parseArguments`, `validateArguments`, and `main` with the exact signatures defined in the critical contract. Import `SkyscannerClient` from `./skyscanner/client` and `renderTable` from `./table`. All flag validation errors write to stderr and exit with the appropriate code before any network call. The `main` function catches `Error('exit:N')` and calls `process.exit(N)`. End with `if (require.main === module) { main(); }`. Do NOT write or modify `cli.test.ts`.",
       "acceptanceCriteria": [
@@ -3582,7 +3575,7 @@
       "specification": {
         "createdFrom": "SKY-003",
         "createdAt": "2026-06-19T11:32:44.707Z",
-        "runId": "20260622T112440Z",
+        "runId": "20260622T144206Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "MiniMax-M2.5",
@@ -3605,7 +3598,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T11:24:41.433Z",
+        "updatedAt": "2026-06-22T14:42:06.978Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -3614,7 +3607,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:24:41.385Z"
+            "timestamp": "2026-06-22T14:42:06.931Z"
           },
           {
             "agent": "speckit",
@@ -3622,7 +3615,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:24:41.433Z"
+            "timestamp": "2026-06-22T14:42:06.978Z"
           }
         ]
       },
@@ -3637,16 +3630,15 @@
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": true,
-      "dependencies": [],
-      "lastAttempt": "2026-06-22T07:30:22-04:00"
+      "dependencies": []
     },
     {
       "id": "SKY-003a-test-2",
       "title": "Write cli.test.ts: vitest unit tests for cli.ts with SkyscannerClient mocked",
       "agentRole": "typescript-engineer",
       "agentGroup": "independent",
-      "status": "completed",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "description": "Create `src/cli.test.ts` covering all specified scenarios using vitest with `SkyscannerClient` mocked at the module boundary. Tests must drive `main()` directly (not spawn subprocesses) and assert on stderr output, stdout output, and process exit codes. All required test cases must pass and `vitest run` must exit 0.",
       "acceptanceCriteria": [
         "`src/cli.test.ts` exists and imports from `./cli` only via its exported functions (`parseArguments`, `validateArguments`, `main`); `SkyscannerClient` is mocked at the module boundary using vitest's `vi.mock`.",
@@ -3680,7 +3672,7 @@
       "specification": {
         "createdFrom": "SKY-003",
         "createdAt": "2026-06-19T11:32:44.707Z",
-        "runId": "20260622T112440Z",
+        "runId": "20260622T144206Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "MiniMax-M2.5",
@@ -3703,7 +3695,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T11:24:41.525Z",
+        "updatedAt": "2026-06-22T14:42:07.070Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -3712,7 +3704,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:24:41.479Z"
+            "timestamp": "2026-06-22T14:42:07.024Z"
           },
           {
             "agent": "speckit",
@@ -3720,7 +3712,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:24:41.525Z"
+            "timestamp": "2026-06-22T14:42:07.070Z"
           }
         ]
       },
@@ -3735,8 +3727,7 @@
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": true,
-      "dependencies": [],
-      "completedAt": "2026-06-22T07:30:46-04:00"
+      "dependencies": []
     },
     {
       "id": "SKY-003b-1-2",
@@ -3931,8 +3922,8 @@
       "title": "Implement src/table.ts renderTable function and wire into src/cli.ts",
       "agentRole": "typescript-engineer",
       "agentGroup": "independent",
-      "status": "completed",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "description": "Implement `src/table.ts` exporting `renderTable(flights: Flight[], currency?: string): string`. The function is pure (no I/O). Column order: Airline | Price | Departure | Arrival | Duration | Stops. Dynamic width computation, left-align non-Price columns, right-align Price column, LF-joined rows, no trailing newline, empty-array returns `'No flights found.'`. Wire into existing `src/cli.ts`: pass Flight[] and currency option to renderTable, write result to stdout. HUMAN_REVIEW: confirm rejection-path ownership against SKY-003a before building.",
       "acceptanceCriteria": [
         "`src/table.ts` exists, exports `renderTable(flights: Flight[], currency?: string): string`, imports the `Flight` type from the existing types module (from SKY-002) without redeclaring it; if `src/types.ts` already exports `Flight` from SKY-002, `table.ts` must import from that same source and must not declare a second conflicting `Flight` interface; `tsc --noEmit` reports zero errors; field access uses typed property names (`flight.airline`, `flight.price`, etc.) so TypeScript surfaces compile-time errors on property renames \u2014 no string-keyed dynamic access, no `as any` casts that would bypass Flight type checking; `src/table.ts` must not import from `src/cli.ts` (dependency is strictly `cli.ts` \u2192 `table.ts`); the currency symbol is concatenated as a plain string with no `eval`, `Function()`, or dynamic code execution",
@@ -3960,7 +3951,7 @@
       "specification": {
         "createdFrom": "SKY-003b",
         "createdAt": "2026-06-19T11:36:50.734Z",
-        "runId": "20260622T112440Z",
+        "runId": "20260622T144206Z",
         "splitDepth": 2,
         "modelUpgrade": {
           "from": "MiniMax-M2.5",
@@ -3983,7 +3974,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T11:24:41.628Z",
+        "updatedAt": "2026-06-22T14:42:07.167Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -3992,7 +3983,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:24:41.571Z"
+            "timestamp": "2026-06-22T14:42:07.120Z"
           },
           {
             "agent": "speckit",
@@ -4000,7 +3991,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:24:41.628Z"
+            "timestamp": "2026-06-22T14:42:07.167Z"
           }
         ]
       },
@@ -4015,15 +4006,14 @@
       "dependencies": [],
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
-      "unitTests": true,
-      "completedAt": "2026-06-22T07:31:25-04:00"
+      "unitTests": true
     },
     {
       "id": "SKY-003b-2-3",
       "title": "Vitest unit tests for renderTable in src/table.test.ts",
       "agentRole": "typescript-engineer",
       "agentGroup": "independent",
-      "status": "failed",
+      "status": "pending",
       "completed": false,
       "description": "Write `src/table.test.ts` with Vitest unit tests covering all specified scenarios for `renderTable`. Import `renderTable` from `'./table'` only \u2014 never from `cli.ts`. All tests must pass under `vitest run`. Do NOT modify `src/cli.test.ts`. HUMAN_REVIEW: Before writing tests, inspect the pre-existing `src/cli.test.ts` to confirm whether it encodes hardcoded column-width string expectations; if it does, verify that the example dataset in technicalNotes naturally produces those widths via the dynamic algorithm (Airline=15 requires max airline name length \u2265 15 or header 'Airline'=7 padded to 15 by data, etc.).",
       "acceptanceCriteria": [
@@ -4053,7 +4043,7 @@
       "specification": {
         "createdFrom": "SKY-003b",
         "createdAt": "2026-06-19T11:36:50.734Z",
-        "runId": "20260622T112440Z",
+        "runId": "20260622T144206Z",
         "splitDepth": 2,
         "modelUpgrade": {
           "from": "MiniMax-M2.5",
@@ -4076,7 +4066,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T11:24:41.738Z",
+        "updatedAt": "2026-06-22T14:42:07.272Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -4085,7 +4075,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:24:41.679Z"
+            "timestamp": "2026-06-22T14:42:07.217Z"
           },
           {
             "agent": "speckit",
@@ -4093,7 +4083,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:24:41.738Z"
+            "timestamp": "2026-06-22T14:42:07.272Z"
           }
         ]
       },
@@ -4108,8 +4098,7 @@
       "dependencies": [],
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
-      "unitTests": true,
-      "lastAttempt": "2026-06-22T07:32:05-04:00"
+      "unitTests": true
     },
     {
       "id": "SKY-004-A-1",
@@ -4300,8 +4289,8 @@
       "title": "Implement src/server.ts \u2014 Express app skeleton, route handlers, and package.json wiring",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
-      "status": "completed",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "description": "Implement the Express HTTP server in src/server.ts. Import SkyscannerClient and FlightResult from './skyscanner/client' (SKY-002 export). Expose a named `app` export separate from the listen() call. Guard listen() with `require.main === module` (CJS project \u2014 do NOT use import.meta). Register /health, /, /search, and /cheapest routes with all validation and error handling described in ACs. Create src/public/index.html. Wire package.json 'start' and 'build' scripts. Only use installed packages: express, @types/express, typescript, tsup, vitest, supertest, @types/supertest. Do NOT import helmet, morgan, uuid, cors, compression, or any uninstalled package. Do NOT add req.id or requestId middleware. DEFERRED: CORS headers and query-injection hardening are explicitly out of scope.",
       "acceptanceCriteria": [
         "src/server.ts exports a named `app` (Express instance) separately from the `listen()` call; the `listen()` call is guarded with `if (require.main === module)` \u2014 this project emits CJS (verify via tsup.config.ts or the `tsup` field in package.json before coding); do NOT use import.meta.url or any ESM-only pattern",
@@ -4323,13 +4312,13 @@
           "SKY-002"
         ],
         "testCommand": "echo 'tests deferred to Step 4.5 unit test gate'",
-        "notes": "Do NOT write or modify server.test.ts \u2014 that file is owned by SKY-004-B. Focus only on server.ts implementation. server.ts MUST import SkyscannerClient from './skyscanner/client' (not './skyscanner-client').\n\nCRITICAL \u2014 Only use packages that are installed. Installed packages: express, @types/express, supertest, @types/supertest, typescript, tsup, vitest. Do NOT import helmet, morgan, uuid, cors, compression, or ANY other package \u2014 they are not installed and will cause a compile error.\n\nCRITICAL \u2014 Do NOT use import.meta.url or import.meta anywhere. This is a CommonJS project. Use require.main === module to guard the listen call.\n\nCRITICAL \u2014 Express Request does not have a .id property. Do not add req.id or requestId middleware that attaches to req."
+        "notes": "WRITE THE FILE FIRST \u2014 call your file-writing tool immediately with a complete src/server.ts. Do not plan or reason before writing. Write the file now, then verify. Do NOT write or modify server.test.ts \u2014 that file is owned by SKY-004-B. Focus only on server.ts implementation. server.ts MUST import SkyscannerClient from './skyscanner/client' (not './skyscanner-client').\n\nCRITICAL \u2014 Only use packages that are installed. Installed packages: express, @types/express, supertest, @types/supertest, typescript, tsup, vitest. Do NOT import helmet, morgan, uuid, cors, compression, or ANY other package \u2014 they are not installed and will cause a compile error.\n\nCRITICAL \u2014 Do NOT use import.meta.url or import.meta anywhere. This is a CommonJS project. Use require.main === module to guard the listen call.\n\nCRITICAL \u2014 Express Request does not have a .id property. Do not add req.id or requestId middleware that attaches to req."
       },
       "estimate": 25,
       "specification": {
         "createdFrom": "SKY-004",
         "createdAt": "2026-06-19T11:38:58.635Z",
-        "runId": "20260622T112440Z",
+        "runId": "20260622T144206Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "MiniMax-M2.5",
@@ -4352,7 +4341,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T11:24:41.836Z",
+        "updatedAt": "2026-06-22T14:42:07.374Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -4361,7 +4350,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:24:41.788Z"
+            "timestamp": "2026-06-22T14:42:07.327Z"
           },
           {
             "agent": "speckit",
@@ -4369,7 +4358,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:24:41.836Z"
+            "timestamp": "2026-06-22T14:42:07.374Z"
           }
         ]
       },
@@ -4378,14 +4367,13 @@
       "estimatedTokens": 1109433,
       "estimatedTurns": 31,
       "estimatedHours": 0.0561,
-      "effort": "medium",
+      "effort": "high",
       "cpaConfidence": 0.75,
       "cpaGate": "review",
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": true,
-      "dependencies": [],
-      "completedAt": "2026-06-22T07:27:40-04:00"
+      "dependencies": []
     },
     {
       "id": "SKY-004-B-2",
@@ -4485,8 +4473,8 @@
       "title": "Implement src/server.ts: GET /search and GET /cheapest with validation, CORS, error handling",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
-      "status": "completed",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "description": "Implement src/server.ts containing GET /search and GET /cheapest routes. Both routes validate from/to/date/adults query params (400 on invalid input), call client.searchFlights({ origin, destination, date, adults }), and instantiate SkyscannerClient({}) inside each route handler (per-request, never at module level). GET /cheapest returns 404 when no flights are found. CORS is implemented as inline middleware \u2014 the cors npm package is NOT used. A four-argument Express error-handling middleware handles unexpected rejections with HTTP 500. The listen call is guarded. The app instance is exported. No express.json() body-parsing middleware is added. No 503 middleware or RAPIDAPI_KEY check is added. Both npx tsc --noEmit must exit 0.",
       "acceptanceCriteria": [
         "GET /search with all valid params (from, to, date as YYYY-MM-DD, adults as positive integer string) returns HTTP 200 with Content-Type application/json and body { flights: FlightResult[], count: number, searchedAt: string } where count strictly equals flights.length and searchedAt is an ISO-8601 datetime string; GET /cheapest with all valid params returns HTTP 200 with body { flight: FlightResult, searchedAt: string } where flight is the lowest-price entry in the array (first in array order on a tie) and searchedAt is an ISO-8601 datetime string",
@@ -4514,7 +4502,7 @@
       "specification": {
         "createdFrom": "SKY-004-B",
         "createdAt": "2026-06-19T11:41:01.223Z",
-        "runId": "20260622T112440Z",
+        "runId": "20260622T144206Z",
         "splitDepth": 2,
         "modelUpgrade": {
           "from": "MiniMax-M2.7",
@@ -4537,7 +4525,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T11:24:41.936Z",
+        "updatedAt": "2026-06-22T14:42:07.467Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -4546,7 +4534,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:24:41.886Z"
+            "timestamp": "2026-06-22T14:42:07.420Z"
           },
           {
             "agent": "speckit",
@@ -4554,7 +4542,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:24:41.936Z"
+            "timestamp": "2026-06-22T14:42:07.467Z"
           }
         ]
       },
@@ -4569,15 +4557,14 @@
       "dependencies": [],
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
-      "unitTests": false,
-      "completedAt": "2026-06-22T07:28:03-04:00"
+      "unitTests": false
     },
     {
       "id": "SKY-004-B-TEST",
       "title": "Write src/server.test.ts: full vitest + supertest suite for GET /search and GET /cheapest",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
-      "status": "failed",
+      "status": "pending",
       "completed": false,
       "description": "Write src/server.test.ts covering all validation paths, happy paths, edge cases, CORS/OPTIONS preflight, and error handling for GET /search and GET /cheapest. Tests use supertest + vitest with vi.hoisted and a regular-function constructor mock. vi.clearAllMocks() is used in beforeEach. FlightResult is imported from './skyscanner/client'. Mock flight arrays are declared without FlightResult[] type annotation. The suite must contain at least 16 distinct test cases. vitest run must exit 0 with all tests green.",
       "acceptanceCriteria": [
@@ -4607,7 +4594,7 @@
       "specification": {
         "createdFrom": "SKY-004-B",
         "createdAt": "2026-06-19T11:41:01.223Z",
-        "runId": "20260622T112440Z",
+        "runId": "20260622T144206Z",
         "splitDepth": 2,
         "modelUpgrade": {
           "from": "MiniMax-M2.7",
@@ -4630,7 +4617,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T11:24:42.034Z",
+        "updatedAt": "2026-06-22T14:42:07.557Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -4639,7 +4626,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:24:41.985Z"
+            "timestamp": "2026-06-22T14:42:07.510Z"
           },
           {
             "agent": "speckit",
@@ -4647,7 +4634,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T11:24:42.034Z"
+            "timestamp": "2026-06-22T14:42:07.557Z"
           }
         ]
       },
@@ -4662,8 +4649,7 @@
       "dependencies": [],
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
-      "unitTests": false,
-      "lastAttempt": "2026-06-22T07:28:43-04:00"
+      "unitTests": false
     },
     {
       "id": "SKY-005-A",
@@ -4954,5 +4940,5 @@
       "deprecatedReason": "Superseded by canonical leaf story or parent retired after split"
     }
   ],
-  "currentIteration": 524
+  "currentIteration": 533
 }

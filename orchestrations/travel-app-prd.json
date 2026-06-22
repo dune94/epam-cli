@@ -1336,7 +1336,7 @@
       "specification": {
         "createdFrom": "SKY-001",
         "createdAt": "2026-06-18T15:38:02.143Z",
-        "runId": "20260619T152719Z",
+        "runId": "20260622T010921Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "MiniMax-M2.5",
@@ -1359,7 +1359,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-19T15:27:19.330Z",
+        "updatedAt": "2026-06-22T01:09:21.581Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -1368,7 +1368,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T15:27:19.261Z"
+            "timestamp": "2026-06-22T01:09:21.534Z"
           },
           {
             "agent": "speckit",
@@ -1376,7 +1376,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T15:27:19.330Z"
+            "timestamp": "2026-06-22T01:09:21.581Z"
           }
         ]
       },
@@ -1388,7 +1388,7 @@
       "effort": "medium",
       "cpaConfidence": 0.85,
       "cpaGate": "review",
-      "completedAt": "2026-06-19T11:30:35-04:00",
+      "completedAt": "2026-06-21T21:11:26-04:00",
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "lastAttempt": "2026-06-19T10:38:22-04:00",
@@ -1422,7 +1422,7 @@
       "specification": {
         "createdFrom": "SKY-001",
         "createdAt": "2026-06-18T15:38:02.143Z",
-        "runId": "20260619T152719Z",
+        "runId": "20260622T010921Z",
         "splitDepth": 1,
         "assignedAgents": [
           "openspec",
@@ -1430,7 +1430,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-19T15:27:19.486Z",
+        "updatedAt": "2026-06-22T01:09:21.680Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -1439,7 +1439,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T15:27:19.404Z"
+            "timestamp": "2026-06-22T01:09:21.630Z"
           },
           {
             "agent": "speckit",
@@ -1447,7 +1447,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T15:27:19.485Z"
+            "timestamp": "2026-06-22T01:09:21.680Z"
           }
         ]
       },
@@ -1459,7 +1459,7 @@
       "effort": "medium",
       "cpaConfidence": 0.85,
       "cpaGate": "review",
-      "completedAt": "2026-06-19T11:30:54-04:00",
+      "completedAt": "2026-06-21T21:11:42-04:00",
       "model": "MiniMax-M2.5",
       "aiProvider": "minimax",
       "lastAttempt": "2026-06-19T09:22:34-04:00",
@@ -3030,8 +3030,8 @@
       "title": "API Discovery: Execute Curl Probes and Capture Raw Results",
       "agentRole": "spike-agent",
       "agentGroup": "main",
-      "status": "pending",
-      "completed": false,
+      "status": "completed",
+      "completed": true,
       "description": "Execute live curl probes against skyscanner.p.rapidapi.com using the RAPIDAPI_KEY environment variable. This child story covers the prerequisite gate, probe execution, abort conditions, and raw result capture only. No documentation writing occurs here \u2014 raw probe outputs are written to /tmp/skyscanner-app/docs/probes/ as intermediate artifacts for SKY-001b-2. Do NOT write any TypeScript, JavaScript, or compiled output.",
       "acceptanceCriteria": [
         "PREREQUISITE GATE: The RAPIDAPI_KEY environment variable must be set and non-empty before any other action. If absent or empty, the story aborts immediately with the message 'RAPIDAPI_KEY is not set \u2014 aborting discovery' written to stderr; no curl probes, directory creation, or file writes may occur. This is verified as the absolute first step and its pass/fail is recorded in /tmp/skyscanner-app/docs/probes/gate-result.txt.",
@@ -3062,7 +3062,7 @@
       "specification": {
         "createdFrom": "SKY-001b",
         "createdAt": "2026-06-19T11:20:27.397Z",
-        "runId": "20260619T152719Z",
+        "runId": "20260622T010921Z",
         "splitDepth": 1,
         "assignedAgents": [
           "openspec",
@@ -3070,7 +3070,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-19T15:27:19.629Z",
+        "updatedAt": "2026-06-22T01:09:21.775Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -3079,7 +3079,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T15:27:19.551Z"
+            "timestamp": "2026-06-22T01:09:21.728Z"
           },
           {
             "agent": "speckit",
@@ -3087,7 +3087,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T15:27:19.629Z"
+            "timestamp": "2026-06-22T01:09:21.775Z"
           }
         ]
       },
@@ -3106,7 +3106,8 @@
       "spikeOutputArtifact": "probe-summary.txt",
       "informsStories": [
         "SKY-001b-2"
-      ]
+      ],
+      "completedAt": "2026-06-21T21:12:52-04:00"
     },
     {
       "id": "SKY-001b-2",
@@ -3139,14 +3140,14 @@
         "dependsOn": [
           "SKY-001"
         ],
-        "notes": "CRITICAL: Use your Bash tool to run curl commands directly. Do NOT use FetchUrl, WebSearch, or any web browsing tool. Do NOT look up external documentation. Run curl -si probes immediately using the Bash tool. RAPIDAPI_KEY is available in the environment. Known candidate host: skyscanner.p.rapidapi.com (429 responses confirm subscription active). sky-scanner3.p.rapidapi.com returns 404 \u2014 do not use it. A 429 (Too Many Requests) on an endpoint confirms the path is valid \u2014 document it. The goal is an accurate contract doc, not a working implementation. Probe sequence: (1) mkdir -p /tmp/skyscanner-app/docs, (2) run 2-3 curl -si probes to candidate endpoints, (3) write /tmp/skyscanner-app/docs/api-contract.md with all required sections."
+        "notes": "DO NOT run new curl probes \u2014 SKY-001b-1 has already completed discovery. Your job is to READ the existing probe output files and synthesize api-contract.md. Step 1: read /tmp/skyscanner-app/docs/probes/probe-summary.txt (Markdown table of all probes). Step 2: read each /tmp/skyscanner-app/docs/probes/probe-*.txt file for full curl output. Step 3: write /tmp/skyscanner-app/docs/api-contract.md with all required sections. The RAPIDAPI_KEY must appear only as \"$RAPIDAPI_KEY\" placeholder \u2014 scan the file before finishing to confirm no literal key substring > 4 chars is present. Do NOT write TypeScript, JavaScript, or any code files."
       },
       "estimate": 5,
       "effort": "high",
       "specification": {
         "createdFrom": "SKY-001b",
         "createdAt": "2026-06-19T11:20:27.397Z",
-        "runId": "20260619T152719Z",
+        "runId": "20260622T010921Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "MiniMax-M3",
@@ -3169,7 +3170,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-19T15:27:19.808Z",
+        "updatedAt": "2026-06-22T01:09:21.866Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -3178,7 +3179,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T15:27:19.713Z"
+            "timestamp": "2026-06-22T01:09:21.820Z"
           },
           {
             "agent": "speckit",
@@ -3186,7 +3187,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-19T15:27:19.808Z"
+            "timestamp": "2026-06-22T01:09:21.866Z"
           }
         ]
       },
@@ -5035,5 +5036,5 @@
       "deprecatedReason": "Superseded by canonical leaf story or parent retired after split"
     }
   ],
-  "currentIteration": 483
+  "currentIteration": 491
 }

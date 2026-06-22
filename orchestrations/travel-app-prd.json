@@ -426,7 +426,7 @@
       "title": "Implement flight search CLI entry point with formatted table output",
       "agentRole": "typescript-engineer",
       "agentGroup": "independent",
-      "status": "pending",
+      "status": "failed",
       "completed": false,
       "description": "Create `src/cli.ts` \u2014 a standalone Node entry point that accepts flight search arguments via `process.argv` and prints results as an aligned table. Parse flags manually (no commander, no yargs, zero new runtime deps). Require `RAPIDAPI_KEY` env var; exit 1 with a human-readable message if absent. Instantiate `SkyscannerClient` from `src/skyscanner/client.ts` (SKY-002), call `searchFlights` forwarding all parsed arguments including adults count, and render results via `renderTable` imported from `./table`. Columns in fixed order: Airline | Price | Departure | Arrival | Duration | Stops. If no flights are returned print `No flights found.` and exit 0. On any thrown error print the message to stderr and exit 1. All process-exit and stderr responsibilities are owned exclusively by `cli.ts`. Shebang and chmod+x are explicitly out of scope; invocation is `node dist/cli.js`. Split children SKY-003a and SKY-003a-test carry all actionable work.",
       "acceptanceCriteria": [
@@ -449,14 +449,14 @@
       },
       "estimate": 15,
       "specification": {
-        "runId": "20260622T021956Z",
+        "runId": "20260622T112440Z",
         "assignedAgents": [
           "openspec",
           "speckit"
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T02:19:57.084Z",
+        "updatedAt": "2026-06-22T11:24:41.141Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -465,7 +465,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:19:57.038Z"
+            "timestamp": "2026-06-22T11:24:41.092Z"
           },
           {
             "agent": "speckit",
@@ -473,7 +473,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:19:57.084Z"
+            "timestamp": "2026-06-22T11:24:41.141Z"
           }
         ],
         "coordinatorReview": {
@@ -513,9 +513,10 @@
       "effort": "medium",
       "cpaConfidence": 0.75,
       "cpaGate": "review",
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
-      "unitTests": true
+      "unitTests": true,
+      "lastAttempt": "2026-06-22T07:29:29-04:00"
     },
     {
       "id": "SKY-004",
@@ -603,7 +604,7 @@
       "effort": "medium",
       "cpaConfidence": 0.75,
       "cpaGate": "review",
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": true,
       "storyType": "user-story",
@@ -817,7 +818,7 @@
       "effort": "high",
       "cpaConfidence": 0.45,
       "cpaGate": "review",
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "retryModel": "MiniMax-M3",
       "retryProvider": "minimax",
@@ -929,7 +930,7 @@
       "cpaConfidence": 0.85,
       "cpaGate": "pass",
       "dependencies": [],
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": false,
       "storyType": "user-story",
@@ -1031,7 +1032,7 @@
       "cpaConfidence": 0.75,
       "cpaGate": "review",
       "dependencies": [],
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": true,
       "storyType": "user-story",
@@ -1314,7 +1315,7 @@
       "specification": {
         "createdFrom": "SKY-001",
         "createdAt": "2026-06-18T15:38:02.143Z",
-        "runId": "20260622T021203Z",
+        "runId": "20260622T111733Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "MiniMax-M2.5",
@@ -1337,7 +1338,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T02:12:03.387Z",
+        "updatedAt": "2026-06-22T11:17:34.036Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -1346,7 +1347,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:12:03.340Z"
+            "timestamp": "2026-06-22T11:17:33.988Z"
           },
           {
             "agent": "speckit",
@@ -1354,7 +1355,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:12:03.387Z"
+            "timestamp": "2026-06-22T11:17:34.036Z"
           }
         ]
       },
@@ -1369,7 +1370,7 @@
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "dependencies": [],
-      "completedAt": "2026-06-21T22:13:08-04:00"
+      "completedAt": "2026-06-22T07:18:13-04:00"
     },
     {
       "id": "SKY-001-B",
@@ -1399,7 +1400,7 @@
       "specification": {
         "createdFrom": "SKY-001",
         "createdAt": "2026-06-18T15:38:02.143Z",
-        "runId": "20260622T021203Z",
+        "runId": "20260622T111733Z",
         "splitDepth": 1,
         "assignedAgents": [
           "openspec",
@@ -1407,7 +1408,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T02:12:03.481Z",
+        "updatedAt": "2026-06-22T11:17:34.131Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -1416,7 +1417,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:12:03.432Z"
+            "timestamp": "2026-06-22T11:17:34.084Z"
           },
           {
             "agent": "speckit",
@@ -1424,7 +1425,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:12:03.481Z"
+            "timestamp": "2026-06-22T11:17:34.131Z"
           }
         ]
       },
@@ -1436,10 +1437,10 @@
       "effort": "medium",
       "cpaConfidence": 0.85,
       "cpaGate": "review",
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "dependencies": [],
-      "completedAt": "2026-06-21T22:13:33-04:00"
+      "completedAt": "2026-06-22T07:18:31-04:00"
     },
     {
       "id": "SKY-002a",
@@ -1637,7 +1638,7 @@
       "effort": "medium",
       "cpaConfidence": 0.85,
       "cpaGate": "review",
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": false,
       "dependencies": [],
@@ -1649,8 +1650,8 @@
       "title": "Implement typed Skyscanner API client (client.ts)",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
-      "status": "failed",
-      "completed": false,
+      "status": "completed",
+      "completed": true,
       "description": "Create src/skyscanner/client.ts that wraps the Skyscanner RapidAPI using the global fetch. Export SkyscannerClient class, SearchParams interface, and FlightResult interface. Implement input validation, API key sanitization, HTTP error handling, malformed-response detection, header-based pagination with termination guard, User-Agent header, and runtime error wrapping with no double-wrapping of client-originated errors. tsc --noEmit must exit 0.",
       "acceptanceCriteria": [
         "src/skyscanner/client.ts exports a SkyscannerClient class whose constructor signature is exactly: constructor({ apiKey }: { apiKey?: string })",
@@ -1692,7 +1693,7 @@
       "specification": {
         "createdFrom": "SKY-002",
         "createdAt": "2026-06-18T15:53:39.814Z",
-        "runId": "20260622T021956Z",
+        "runId": "20260622T112440Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "MiniMax-M2.7",
@@ -1715,7 +1716,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T02:19:57.177Z",
+        "updatedAt": "2026-06-22T11:24:41.238Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -1724,7 +1725,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:19:57.131Z"
+            "timestamp": "2026-06-22T11:24:41.190Z"
           },
           {
             "agent": "speckit",
@@ -1732,7 +1733,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:19:57.177Z"
+            "timestamp": "2026-06-22T11:24:41.238Z"
           }
         ]
       },
@@ -1748,7 +1749,7 @@
       "aiProvider": "minimax",
       "unitTests": false,
       "dependencies": [],
-      "lastAttempt": "2026-06-21T22:25:42-04:00"
+      "completedAt": "2026-06-22T07:26:30-04:00"
     },
     {
       "id": "SKY-002b-1",
@@ -1792,7 +1793,7 @@
       "specification": {
         "createdFrom": "SKY-002",
         "createdAt": "2026-06-18T15:53:39.814Z",
-        "runId": "20260622T021956Z",
+        "runId": "20260622T112440Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "MiniMax-M2.7",
@@ -1815,7 +1816,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T02:19:57.268Z",
+        "updatedAt": "2026-06-22T11:24:41.337Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -1824,7 +1825,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:19:57.224Z"
+            "timestamp": "2026-06-22T11:24:41.287Z"
           },
           {
             "agent": "speckit",
@@ -1832,7 +1833,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:19:57.268Z"
+            "timestamp": "2026-06-22T11:24:41.337Z"
           }
         ]
       },
@@ -1844,11 +1845,11 @@
       "effort": "medium",
       "cpaConfidence": 0.85,
       "cpaGate": "review",
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": false,
       "dependencies": [],
-      "lastAttempt": "2026-06-21T22:26:25-04:00"
+      "lastAttempt": "2026-06-22T07:27:09-04:00"
     },
     {
       "id": "SKY-003a-test",
@@ -1945,7 +1946,7 @@
       "cpaConfidence": 0.85,
       "cpaGate": "pass",
       "dependencies": [],
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": false,
       "storyType": "user-story",
@@ -2039,7 +2040,7 @@
       "cpaConfidence": 0.75,
       "cpaGate": "review",
       "dependencies": [],
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": true,
       "storyType": "user-story",
@@ -2128,7 +2129,7 @@
       "cpaConfidence": 0.75,
       "cpaGate": "review",
       "dependencies": [],
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": true,
       "storyType": "user-story",
@@ -2225,7 +2226,7 @@
       "cpaConfidence": 0.75,
       "cpaGate": "review",
       "dependencies": [],
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": true,
       "storyType": "user-story",
@@ -2314,7 +2315,7 @@
       "cpaConfidence": 0.75,
       "cpaGate": "review",
       "dependencies": [],
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": true,
       "storyType": "user-story",
@@ -2638,7 +2639,7 @@
       "effort": "high",
       "cpaConfidence": 0.45,
       "cpaGate": "review",
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "retryModel": "MiniMax-M3",
       "dependencies": [],
@@ -2857,7 +2858,7 @@
       "effort": "high",
       "cpaConfidence": 0.45,
       "cpaGate": "review",
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "retryModel": "MiniMax-M3",
       "dependencies": [],
@@ -3009,7 +3010,7 @@
       "specification": {
         "createdFrom": "SKY-001b",
         "createdAt": "2026-06-19T11:20:27.397Z",
-        "runId": "20260622T021203Z",
+        "runId": "20260622T111733Z",
         "splitDepth": 1,
         "assignedAgents": [
           "openspec",
@@ -3017,7 +3018,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T02:12:03.574Z",
+        "updatedAt": "2026-06-22T11:17:34.223Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -3026,7 +3027,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:12:03.528Z"
+            "timestamp": "2026-06-22T11:17:34.177Z"
           },
           {
             "agent": "speckit",
@@ -3034,7 +3035,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:12:03.574Z"
+            "timestamp": "2026-06-22T11:17:34.223Z"
           }
         ]
       },
@@ -3054,7 +3055,7 @@
       "informsStories": [
         "SKY-001b-2"
       ],
-      "completedAt": "2026-06-21T22:15:36-04:00"
+      "completedAt": "2026-06-22T07:21:20-04:00"
     },
     {
       "id": "SKY-001b-2",
@@ -3094,7 +3095,7 @@
       "specification": {
         "createdFrom": "SKY-001b",
         "createdAt": "2026-06-19T11:20:27.397Z",
-        "runId": "20260622T021203Z",
+        "runId": "20260622T111733Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "MiniMax-M3",
@@ -3117,7 +3118,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T02:12:03.664Z",
+        "updatedAt": "2026-06-22T11:17:34.315Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -3126,7 +3127,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:12:03.618Z"
+            "timestamp": "2026-06-22T11:17:34.269Z"
           },
           {
             "agent": "speckit",
@@ -3134,7 +3135,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:12:03.663Z"
+            "timestamp": "2026-06-22T11:17:34.315Z"
           }
         ]
       },
@@ -3150,7 +3151,7 @@
       "dependencies": [],
       "dependsOnSpike": "SKY-001b-1",
       "spikeArtifact": "probe-summary.txt",
-      "completedAt": "2026-06-21T22:19:52-04:00"
+      "completedAt": "2026-06-22T07:24:36-04:00"
     },
     {
       "id": "SKY-001b-1-1",
@@ -3442,7 +3443,7 @@
       "effort": "medium",
       "cpaConfidence": 0.75,
       "cpaGate": "review",
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": true,
       "dependencies": [],
@@ -3538,7 +3539,7 @@
       "effort": "medium",
       "cpaConfidence": 0.75,
       "cpaGate": "review",
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": true,
       "dependencies": [],
@@ -3550,7 +3551,7 @@
       "title": "Implement cli.ts: argument parsing, env validation, table rendering, and process-exit ownership",
       "agentRole": "typescript-engineer",
       "agentGroup": "independent",
-      "status": "pending",
+      "status": "failed",
       "completed": false,
       "description": "Create `src/cli.ts` as the sole owner of all process-exit and stderr logic. Export `parseArguments`, `validateArguments`, and `main` with the exact signatures defined in the critical contract. Import `SkyscannerClient` from `./skyscanner/client` and `renderTable` from `./table`. All flag validation errors write to stderr and exit with the appropriate code before any network call. The `main` function catches `Error('exit:N')` and calls `process.exit(N)`. End with `if (require.main === module) { main(); }`. Do NOT write or modify `cli.test.ts`.",
       "acceptanceCriteria": [
@@ -3581,7 +3582,7 @@
       "specification": {
         "createdFrom": "SKY-003",
         "createdAt": "2026-06-19T11:32:44.707Z",
-        "runId": "20260622T021956Z",
+        "runId": "20260622T112440Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "MiniMax-M2.5",
@@ -3604,7 +3605,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T02:19:57.357Z",
+        "updatedAt": "2026-06-22T11:24:41.433Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -3613,7 +3614,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:19:57.312Z"
+            "timestamp": "2026-06-22T11:24:41.385Z"
           },
           {
             "agent": "speckit",
@@ -3621,7 +3622,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:19:57.357Z"
+            "timestamp": "2026-06-22T11:24:41.433Z"
           }
         ]
       },
@@ -3633,18 +3634,19 @@
       "effort": "medium",
       "cpaConfidence": 0.75,
       "cpaGate": "review",
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": true,
-      "dependencies": []
+      "dependencies": [],
+      "lastAttempt": "2026-06-22T07:30:22-04:00"
     },
     {
       "id": "SKY-003a-test-2",
       "title": "Write cli.test.ts: vitest unit tests for cli.ts with SkyscannerClient mocked",
       "agentRole": "typescript-engineer",
       "agentGroup": "independent",
-      "status": "pending",
-      "completed": false,
+      "status": "completed",
+      "completed": true,
       "description": "Create `src/cli.test.ts` covering all specified scenarios using vitest with `SkyscannerClient` mocked at the module boundary. Tests must drive `main()` directly (not spawn subprocesses) and assert on stderr output, stdout output, and process exit codes. All required test cases must pass and `vitest run` must exit 0.",
       "acceptanceCriteria": [
         "`src/cli.test.ts` exists and imports from `./cli` only via its exported functions (`parseArguments`, `validateArguments`, `main`); `SkyscannerClient` is mocked at the module boundary using vitest's `vi.mock`.",
@@ -3678,7 +3680,7 @@
       "specification": {
         "createdFrom": "SKY-003",
         "createdAt": "2026-06-19T11:32:44.707Z",
-        "runId": "20260622T021956Z",
+        "runId": "20260622T112440Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "MiniMax-M2.5",
@@ -3701,7 +3703,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T02:19:57.449Z",
+        "updatedAt": "2026-06-22T11:24:41.525Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -3710,7 +3712,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:19:57.402Z"
+            "timestamp": "2026-06-22T11:24:41.479Z"
           },
           {
             "agent": "speckit",
@@ -3718,7 +3720,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:19:57.449Z"
+            "timestamp": "2026-06-22T11:24:41.525Z"
           }
         ]
       },
@@ -3730,10 +3732,11 @@
       "effort": "medium",
       "cpaConfidence": 0.75,
       "cpaGate": "review",
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": true,
-      "dependencies": []
+      "dependencies": [],
+      "completedAt": "2026-06-22T07:30:46-04:00"
     },
     {
       "id": "SKY-003b-1-2",
@@ -3823,7 +3826,7 @@
       "cpaConfidence": 0.75,
       "cpaGate": "review",
       "dependencies": [],
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": true,
       "storyType": "user-story",
@@ -3917,7 +3920,7 @@
       "cpaConfidence": 0.75,
       "cpaGate": "review",
       "dependencies": [],
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": true,
       "storyType": "user-story",
@@ -3928,8 +3931,8 @@
       "title": "Implement src/table.ts renderTable function and wire into src/cli.ts",
       "agentRole": "typescript-engineer",
       "agentGroup": "independent",
-      "status": "pending",
-      "completed": false,
+      "status": "completed",
+      "completed": true,
       "description": "Implement `src/table.ts` exporting `renderTable(flights: Flight[], currency?: string): string`. The function is pure (no I/O). Column order: Airline | Price | Departure | Arrival | Duration | Stops. Dynamic width computation, left-align non-Price columns, right-align Price column, LF-joined rows, no trailing newline, empty-array returns `'No flights found.'`. Wire into existing `src/cli.ts`: pass Flight[] and currency option to renderTable, write result to stdout. HUMAN_REVIEW: confirm rejection-path ownership against SKY-003a before building.",
       "acceptanceCriteria": [
         "`src/table.ts` exists, exports `renderTable(flights: Flight[], currency?: string): string`, imports the `Flight` type from the existing types module (from SKY-002) without redeclaring it; if `src/types.ts` already exports `Flight` from SKY-002, `table.ts` must import from that same source and must not declare a second conflicting `Flight` interface; `tsc --noEmit` reports zero errors; field access uses typed property names (`flight.airline`, `flight.price`, etc.) so TypeScript surfaces compile-time errors on property renames \u2014 no string-keyed dynamic access, no `as any` casts that would bypass Flight type checking; `src/table.ts` must not import from `src/cli.ts` (dependency is strictly `cli.ts` \u2192 `table.ts`); the currency symbol is concatenated as a plain string with no `eval`, `Function()`, or dynamic code execution",
@@ -3957,7 +3960,7 @@
       "specification": {
         "createdFrom": "SKY-003b",
         "createdAt": "2026-06-19T11:36:50.734Z",
-        "runId": "20260622T021956Z",
+        "runId": "20260622T112440Z",
         "splitDepth": 2,
         "modelUpgrade": {
           "from": "MiniMax-M2.5",
@@ -3980,7 +3983,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T02:19:57.540Z",
+        "updatedAt": "2026-06-22T11:24:41.628Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -3989,7 +3992,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:19:57.493Z"
+            "timestamp": "2026-06-22T11:24:41.571Z"
           },
           {
             "agent": "speckit",
@@ -3997,7 +4000,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:19:57.540Z"
+            "timestamp": "2026-06-22T11:24:41.628Z"
           }
         ]
       },
@@ -4010,16 +4013,17 @@
       "cpaConfidence": 0.75,
       "cpaGate": "review",
       "dependencies": [],
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
-      "unitTests": true
+      "unitTests": true,
+      "completedAt": "2026-06-22T07:31:25-04:00"
     },
     {
       "id": "SKY-003b-2-3",
       "title": "Vitest unit tests for renderTable in src/table.test.ts",
       "agentRole": "typescript-engineer",
       "agentGroup": "independent",
-      "status": "pending",
+      "status": "failed",
       "completed": false,
       "description": "Write `src/table.test.ts` with Vitest unit tests covering all specified scenarios for `renderTable`. Import `renderTable` from `'./table'` only \u2014 never from `cli.ts`. All tests must pass under `vitest run`. Do NOT modify `src/cli.test.ts`. HUMAN_REVIEW: Before writing tests, inspect the pre-existing `src/cli.test.ts` to confirm whether it encodes hardcoded column-width string expectations; if it does, verify that the example dataset in technicalNotes naturally produces those widths via the dynamic algorithm (Airline=15 requires max airline name length \u2265 15 or header 'Airline'=7 padded to 15 by data, etc.).",
       "acceptanceCriteria": [
@@ -4049,7 +4053,7 @@
       "specification": {
         "createdFrom": "SKY-003b",
         "createdAt": "2026-06-19T11:36:50.734Z",
-        "runId": "20260622T021956Z",
+        "runId": "20260622T112440Z",
         "splitDepth": 2,
         "modelUpgrade": {
           "from": "MiniMax-M2.5",
@@ -4072,7 +4076,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T02:19:57.629Z",
+        "updatedAt": "2026-06-22T11:24:41.738Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -4081,7 +4085,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:19:57.585Z"
+            "timestamp": "2026-06-22T11:24:41.679Z"
           },
           {
             "agent": "speckit",
@@ -4089,7 +4093,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:19:57.629Z"
+            "timestamp": "2026-06-22T11:24:41.738Z"
           }
         ]
       },
@@ -4102,9 +4106,10 @@
       "cpaConfidence": 0.75,
       "cpaGate": "review",
       "dependencies": [],
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
-      "unitTests": true
+      "unitTests": true,
+      "lastAttempt": "2026-06-22T07:32:05-04:00"
     },
     {
       "id": "SKY-004-A-1",
@@ -4191,7 +4196,7 @@
       "effort": "medium",
       "cpaConfidence": 0.75,
       "cpaGate": "review",
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": true,
       "dependencies": [],
@@ -4283,7 +4288,7 @@
       "effort": "medium",
       "cpaConfidence": 0.75,
       "cpaGate": "review",
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": true,
       "dependencies": [],
@@ -4295,8 +4300,8 @@
       "title": "Implement src/server.ts \u2014 Express app skeleton, route handlers, and package.json wiring",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
-      "status": "failed",
-      "completed": false,
+      "status": "completed",
+      "completed": true,
       "description": "Implement the Express HTTP server in src/server.ts. Import SkyscannerClient and FlightResult from './skyscanner/client' (SKY-002 export). Expose a named `app` export separate from the listen() call. Guard listen() with `require.main === module` (CJS project \u2014 do NOT use import.meta). Register /health, /, /search, and /cheapest routes with all validation and error handling described in ACs. Create src/public/index.html. Wire package.json 'start' and 'build' scripts. Only use installed packages: express, @types/express, typescript, tsup, vitest, supertest, @types/supertest. Do NOT import helmet, morgan, uuid, cors, compression, or any uninstalled package. Do NOT add req.id or requestId middleware. DEFERRED: CORS headers and query-injection hardening are explicitly out of scope.",
       "acceptanceCriteria": [
         "src/server.ts exports a named `app` (Express instance) separately from the `listen()` call; the `listen()` call is guarded with `if (require.main === module)` \u2014 this project emits CJS (verify via tsup.config.ts or the `tsup` field in package.json before coding); do NOT use import.meta.url or any ESM-only pattern",
@@ -4324,7 +4329,7 @@
       "specification": {
         "createdFrom": "SKY-004",
         "createdAt": "2026-06-19T11:38:58.635Z",
-        "runId": "20260622T021956Z",
+        "runId": "20260622T112440Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "MiniMax-M2.5",
@@ -4347,7 +4352,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T02:19:57.718Z",
+        "updatedAt": "2026-06-22T11:24:41.836Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -4356,7 +4361,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:19:57.674Z"
+            "timestamp": "2026-06-22T11:24:41.788Z"
           },
           {
             "agent": "speckit",
@@ -4364,7 +4369,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:19:57.718Z"
+            "timestamp": "2026-06-22T11:24:41.836Z"
           }
         ]
       },
@@ -4376,11 +4381,11 @@
       "effort": "medium",
       "cpaConfidence": 0.75,
       "cpaGate": "review",
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": true,
       "dependencies": [],
-      "lastAttempt": "2026-06-21T22:27:08-04:00"
+      "completedAt": "2026-06-22T07:27:40-04:00"
     },
     {
       "id": "SKY-004-B-2",
@@ -4468,7 +4473,7 @@
       "effort": "medium",
       "cpaConfidence": 0.75,
       "cpaGate": "review",
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "unitTests": true,
       "dependencies": [],
@@ -4480,8 +4485,8 @@
       "title": "Implement src/server.ts: GET /search and GET /cheapest with validation, CORS, error handling",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
-      "status": "pending",
-      "completed": false,
+      "status": "completed",
+      "completed": true,
       "description": "Implement src/server.ts containing GET /search and GET /cheapest routes. Both routes validate from/to/date/adults query params (400 on invalid input), call client.searchFlights({ origin, destination, date, adults }), and instantiate SkyscannerClient({}) inside each route handler (per-request, never at module level). GET /cheapest returns 404 when no flights are found. CORS is implemented as inline middleware \u2014 the cors npm package is NOT used. A four-argument Express error-handling middleware handles unexpected rejections with HTTP 500. The listen call is guarded. The app instance is exported. No express.json() body-parsing middleware is added. No 503 middleware or RAPIDAPI_KEY check is added. Both npx tsc --noEmit must exit 0.",
       "acceptanceCriteria": [
         "GET /search with all valid params (from, to, date as YYYY-MM-DD, adults as positive integer string) returns HTTP 200 with Content-Type application/json and body { flights: FlightResult[], count: number, searchedAt: string } where count strictly equals flights.length and searchedAt is an ISO-8601 datetime string; GET /cheapest with all valid params returns HTTP 200 with body { flight: FlightResult, searchedAt: string } where flight is the lowest-price entry in the array (first in array order on a tie) and searchedAt is an ISO-8601 datetime string",
@@ -4509,7 +4514,7 @@
       "specification": {
         "createdFrom": "SKY-004-B",
         "createdAt": "2026-06-19T11:41:01.223Z",
-        "runId": "20260622T021956Z",
+        "runId": "20260622T112440Z",
         "splitDepth": 2,
         "modelUpgrade": {
           "from": "MiniMax-M2.7",
@@ -4532,7 +4537,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T02:19:57.809Z",
+        "updatedAt": "2026-06-22T11:24:41.936Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -4541,7 +4546,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:19:57.765Z"
+            "timestamp": "2026-06-22T11:24:41.886Z"
           },
           {
             "agent": "speckit",
@@ -4549,7 +4554,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:19:57.809Z"
+            "timestamp": "2026-06-22T11:24:41.936Z"
           }
         ]
       },
@@ -4562,16 +4567,17 @@
       "cpaConfidence": 0.65,
       "cpaGate": "review",
       "dependencies": [],
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
-      "unitTests": false
+      "unitTests": false,
+      "completedAt": "2026-06-22T07:28:03-04:00"
     },
     {
       "id": "SKY-004-B-TEST",
       "title": "Write src/server.test.ts: full vitest + supertest suite for GET /search and GET /cheapest",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
-      "status": "pending",
+      "status": "failed",
       "completed": false,
       "description": "Write src/server.test.ts covering all validation paths, happy paths, edge cases, CORS/OPTIONS preflight, and error handling for GET /search and GET /cheapest. Tests use supertest + vitest with vi.hoisted and a regular-function constructor mock. vi.clearAllMocks() is used in beforeEach. FlightResult is imported from './skyscanner/client'. Mock flight arrays are declared without FlightResult[] type annotation. The suite must contain at least 16 distinct test cases. vitest run must exit 0 with all tests green.",
       "acceptanceCriteria": [
@@ -4601,7 +4607,7 @@
       "specification": {
         "createdFrom": "SKY-004-B",
         "createdAt": "2026-06-19T11:41:01.223Z",
-        "runId": "20260622T021956Z",
+        "runId": "20260622T112440Z",
         "splitDepth": 2,
         "modelUpgrade": {
           "from": "MiniMax-M2.7",
@@ -4624,7 +4630,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T02:19:57.898Z",
+        "updatedAt": "2026-06-22T11:24:42.034Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -4633,7 +4639,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:19:57.853Z"
+            "timestamp": "2026-06-22T11:24:41.985Z"
           },
           {
             "agent": "speckit",
@@ -4641,7 +4647,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T02:19:57.897Z"
+            "timestamp": "2026-06-22T11:24:42.034Z"
           }
         ]
       },
@@ -4654,9 +4660,10 @@
       "cpaConfidence": 0.65,
       "cpaGate": "review",
       "dependencies": [],
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "aiProvider": "minimax",
-      "unitTests": false
+      "unitTests": false,
+      "lastAttempt": "2026-06-22T07:28:43-04:00"
     },
     {
       "id": "SKY-005-A",
@@ -4845,7 +4852,7 @@
       "status": "pending",
       "completed": false,
       "aiProvider": "minimax",
-      "model": "MiniMax-M2.5",
+      "model": "MiniMax-M3",
       "agentRole": "typescript-engineer",
       "unitTests": false,
       "technicalNotes": {
@@ -4947,5 +4954,5 @@
       "deprecatedReason": "Superseded by canonical leaf story or parent retired after split"
     }
   ],
-  "currentIteration": 510
+  "currentIteration": 524
 }

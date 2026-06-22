@@ -1315,7 +1315,7 @@
       "specification": {
         "createdFrom": "SKY-001",
         "createdAt": "2026-06-18T15:38:02.143Z",
-        "runId": "20260622T145408Z",
+        "runId": "20260622T191757Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "MiniMax-M2.5",
@@ -1338,7 +1338,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T14:54:09.032Z",
+        "updatedAt": "2026-06-22T19:17:57.889Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -1347,7 +1347,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T14:54:08.983Z"
+            "timestamp": "2026-06-22T19:17:57.845Z"
           },
           {
             "agent": "speckit",
@@ -1355,7 +1355,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T14:54:09.031Z"
+            "timestamp": "2026-06-22T19:17:57.889Z"
           }
         ]
       },
@@ -1370,7 +1370,7 @@
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "dependencies": [],
-      "completedAt": "2026-06-22T10:54:57-04:00"
+      "completedAt": "2026-06-22T15:18:38-04:00"
     },
     {
       "id": "SKY-001-B",
@@ -1400,7 +1400,7 @@
       "specification": {
         "createdFrom": "SKY-001",
         "createdAt": "2026-06-18T15:38:02.143Z",
-        "runId": "20260622T145408Z",
+        "runId": "20260622T191757Z",
         "splitDepth": 1,
         "assignedAgents": [
           "openspec",
@@ -1408,7 +1408,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T14:54:09.127Z",
+        "updatedAt": "2026-06-22T19:17:57.981Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -1417,7 +1417,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T14:54:09.077Z"
+            "timestamp": "2026-06-22T19:17:57.936Z"
           },
           {
             "agent": "speckit",
@@ -1425,7 +1425,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T14:54:09.127Z"
+            "timestamp": "2026-06-22T19:17:57.981Z"
           }
         ]
       },
@@ -1440,7 +1440,7 @@
       "model": "MiniMax-M3",
       "aiProvider": "minimax",
       "dependencies": [],
-      "completedAt": "2026-06-22T10:55:22-04:00"
+      "completedAt": "2026-06-22T15:19:34-04:00"
     },
     {
       "id": "SKY-002a",
@@ -3014,7 +3014,7 @@
       "specification": {
         "createdFrom": "SKY-001b",
         "createdAt": "2026-06-19T11:20:27.397Z",
-        "runId": "20260622T145408Z",
+        "runId": "20260622T191757Z",
         "splitDepth": 1,
         "assignedAgents": [
           "openspec",
@@ -3022,7 +3022,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T14:54:09.224Z",
+        "updatedAt": "2026-06-22T19:17:58.068Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -3031,7 +3031,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T14:54:09.174Z"
+            "timestamp": "2026-06-22T19:17:58.025Z"
           },
           {
             "agent": "speckit",
@@ -3039,7 +3039,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T14:54:09.224Z"
+            "timestamp": "2026-06-22T19:17:58.068Z"
           }
         ]
       },
@@ -3059,25 +3059,22 @@
       "informsStories": [
         "SKY-001b-2"
       ],
-      "completedAt": "2026-06-22T11:00:14-04:00"
+      "completedAt": "2026-06-22T15:24:31-04:00"
     },
     {
       "id": "SKY-001b-2",
       "title": "API Discovery: Write api-contract.md from Probe Results",
       "agentRole": "typescript-engineer",
       "agentGroup": "main",
-      "status": "completed",
-      "completed": true,
+      "status": "failed",
+      "completed": false,
       "description": "Using the raw probe outputs produced by SKY-001b-1 (in /tmp/skyscanner-app/docs/probes/), write the authoritative /tmp/skyscanner-app/docs/api-contract.md. This child story covers all documentation sections, field mapping, key-safety scan, and the inferred-contract risk disclosure. SKY-001b-1 must be complete and its prerequisite gate must have passed before this story begins. Do NOT execute new curl probes. Do NOT write any TypeScript, JavaScript, or compiled output. IMPORTANT \u2014 inferred_contract_risk: If only 429 responses were obtained, the FlightResult field mappings in this document are inferred from available documentation and not confirmed by live 2xx responses. The human coordinator must explicitly accept this risk before SKY-002 proceeds to implementation.",
       "acceptanceCriteria": [
-        "api-contract.md contains a 'Host' section documenting the confirmed x-rapidapi-host value (must be skyscanner.p.rapidapi.com) with the observed HTTP status code of the confirming probe (sourced from probe-summary.txt); a 429 response is sufficient proof of an active subscription.",
-        "api-contract.md contains an 'Endpoints' section documenting at least one working endpoint path (2xx or 429 observed); paths returning only 404 must not be listed as working; paths on sky-scanner3.p.rapidapi.com must not appear anywhere in the document. Each entry includes: HTTP method, full path, and observed status code.",
-        "api-contract.md contains a 'Query Parameters' section with exact parameter names, expected value types, and at least one concrete example value (e.g. IATA airport codes, ISO 8601 date strings). Each parameter is explicitly marked 'required' or 'optional', and the basis for classification is stated as either 'observed: <probe-file>' or 'inferred from documentation'.",
-        "api-contract.md contains an 'Authentication' section documenting at minimum x-rapidapi-key and x-rapidapi-host headers, plus any additional headers observed in probe responses. The literal value of RAPIDAPI_KEY, or any substring longer than 4 consecutive characters, must not appear anywhere in api-contract.md \u2014 only the placeholder '$RAPIDAPI_KEY' or '<RAPIDAPI_KEY>' is permitted. A final automated scan of api-contract.md must confirm no match for any substring of the actual key longer than 4 characters.",
-        "api-contract.md includes at least one complete, reproducible curl command example targeting a documented working endpoint, with the key shown only as '$RAPIDAPI_KEY' or '<RAPIDAPI_KEY>', formatted so SKY-002 implementers can re-run it verbatim.",
-        "api-contract.md includes a 'Sample Response' section. If a live 2xx body was captured in any probe file, the section contains a valid, parseable JSON snippet showing the top-level response structure and at least one flight result object. If only 429 responses were received, the section includes the raw 429 error body and the explicit note: 'Flight result shape inferred from available documentation \u2014 no live 2xx response was obtained.'",
-        "api-contract.md contains a 'FlightResult Field Mapping' section mapping each API response field to its FlightResult counterpart (price, origin, destination, departureTime, arrivalTime, carrier, durationMinutes) or explicitly marking it 'absent' or 'derived'. Any mapping not confirmed by a live 2xx response must be individually marked '(inferred)'. The section must include the notice: 'INFERRED CONTRACT RISK: Field mappings marked (inferred) are not confirmed by live data. The human coordinator must explicitly accept this risk before SKY-002 proceeds to implementation.'",
-        "api-contract.md contains a 'Discovery Metadata' section with: (a) the ISO 8601 date the probes were run, (b) the curl version string, (c) a Markdown table with columns [Host, Path, HTTP Method, Observed Status] \u2014 one row per probe \u2014 sourced from probe-summary.txt. The table must use consistent pipe-delimited Markdown formatting so each row is unambiguously machine-parseable. The section also notes: if a Retry-After header was observed in any probe response, its value and semantics are documented; if HTTP 429 was observed, a note explains it means the path is valid but rate-limited. The 'RESTful conventions' assessment is included: for each documented endpoint, state whether the HTTP verb is used semantically (GET for retrieval, POST for submission), whether the path uses noun-based resource naming, and whether any path segments are redundant verbs \u2014 a path fails this check if it uses a non-semantic verb (e.g. POST to a retrieval-only resource without a body) or contains path segments that are themselves action verbs (e.g. /doSearch, /getFlights)."
+        "api-contract.md contains a 'Host' section: confirmed x-rapidapi-host value (must be skyscanner.p.rapidapi.com) and observed HTTP status code sourced from probe-summary.txt. A 429 response is sufficient proof of an active subscription.",
+        "api-contract.md contains an 'Endpoints' section: at least one working endpoint (2xx or 429 observed) with HTTP method, full path, and observed status. Paths returning only 404 must not be listed. Paths on sky-scanner3.p.rapidapi.com must not appear.",
+        "api-contract.md contains 'Authentication' and 'Query Parameters' sections: x-rapidapi-key and x-rapidapi-host documented; each parameter marked required or optional with at least one concrete example value. The literal RAPIDAPI_KEY value must not appear anywhere \u2014 only the placeholder '$RAPIDAPI_KEY'.",
+        "api-contract.md contains a 'Sample Response' section: if a live 2xx body was captured, include a JSON snippet showing the top-level structure and at least one flight result object; if only 429 responses, include the raw 429 body and note 'Flight result shape inferred from documentation'. Includes a 'FlightResult Field Mapping' table mapping price, origin, destination, departureTime, arrivalTime, carrier, durationMinutes to API fields or marking them absent/inferred.",
+        "api-contract.md contains a 'Discovery Metadata' section: ISO 8601 date the probes were run, and a Markdown table with columns [Host, Path, HTTP Method, Observed Status] sourced from probe-summary.txt \u2014 one row per probe."
       ],
       "technicalNotes": {
         "workingDir": "/tmp/skyscanner-app",
@@ -3099,7 +3096,7 @@
       "specification": {
         "createdFrom": "SKY-001b",
         "createdAt": "2026-06-19T11:20:27.397Z",
-        "runId": "20260622T145408Z",
+        "runId": "20260622T191757Z",
         "splitDepth": 1,
         "modelUpgrade": {
           "from": "MiniMax-M3",
@@ -3122,7 +3119,7 @@
         ],
         "coordinatorNotes": "",
         "status": "assigned",
-        "updatedAt": "2026-06-22T14:54:09.327Z",
+        "updatedAt": "2026-06-22T19:17:58.159Z",
         "appliedAgents": [],
         "agentContributions": [
           {
@@ -3131,7 +3128,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T14:54:09.277Z"
+            "timestamp": "2026-06-22T19:17:58.112Z"
           },
           {
             "agent": "speckit",
@@ -3139,7 +3136,7 @@
             "notes": "Agent output could not be parsed",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-06-22T14:54:09.327Z"
+            "timestamp": "2026-06-22T19:17:58.159Z"
           }
         ]
       },
@@ -3155,7 +3152,8 @@
       "dependencies": [],
       "dependsOnSpike": "SKY-001b-1",
       "spikeArtifact": "probe-summary.txt",
-      "completedAt": "2026-06-22T11:04:22-04:00"
+      "completedAt": "2026-06-22T11:04:22-04:00",
+      "lastAttempt": "2026-06-22T15:44:37-04:00"
     },
     {
       "id": "SKY-001b-1-1",
@@ -4958,5 +4956,5 @@
       "deprecatedReason": "Superseded by canonical leaf story or parent retired after split"
     }
   ],
-  "currentIteration": 547
+  "currentIteration": 551
 }

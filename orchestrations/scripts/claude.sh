@@ -114,7 +114,7 @@ resolve_effort_settings() {
             STORY_MODEL="$EFFORT_MODEL_MEDIUM"
             STORY_MAX_TURNS=""
             STORY_MAX_ITERATIONS=10
-            STORY_MAX_OUTPUT_TOKENS=4096
+            STORY_MAX_OUTPUT_TOKENS=6144
             ;;
     esac
     log "  Effort[$effort] -> model=$(basename $STORY_MODEL) turns=${STORY_MAX_TURNS:-unlimited} maxIter=${STORY_MAX_ITERATIONS} maxOutTok=${STORY_MAX_OUTPUT_TOKENS}"

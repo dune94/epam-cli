@@ -948,7 +948,10 @@ run_specification_pass() {
         "$SCRIPT_DIR/update-monitor.sh" event "specification_pass" \
             "Specification agents completed (OpenSpec/Speckit)" "" "main" "spec-coordinator" 2>/dev/null || true
     else
-        warning "Step 0: Specification pass encountered issues (see $LOG_DIR/spec-${phase_id}.log)"
+        error "Step 0: Specification pass FAILED for '$phase_id' — all agent invocations failed."
+        error "  Check EPAM_ORCHESTRATION_PROVIDER is set and supported by ai-run.sh."
+        error "  See: $LOG_DIR/spec-${phase_id}.log"
+        exit 1
     fi
 }
 

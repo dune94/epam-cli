@@ -140,7 +140,7 @@ run_provider_once() {
       rm -f "$raw_file"
       return 1
       ;;
-    openai|qwen|cursor|copilot)
+    openai|qwen|cursor|copilot|minimax)
       # Capture to temp file so pino JSON lines on stdout don't corrupt jq parsing
       local _epam_out
       _epam_out="$(mktemp)"

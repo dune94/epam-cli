@@ -184,7 +184,7 @@ ${storiesPayload}
     phase: opts.phase,
     startedAt: new Date().toISOString(),
     stories: [],
-    stats: { acceptanceUpdated: 0, splits: 0, agents: {} }
+    stats: { acceptanceUpdated: 0, splits: 0, agents: {}, agentFailures: 0, agentAttempts: 0 }
   };
   const newStories = [];
 
@@ -202,6 +202,7 @@ ${storiesPayload}
 
     // Run agents SEQUENTIALLY: openspec first, then speckit with openspec's output
     for (const agent of assigned.agents) {
+      summary.stats.agentAttempts += 1;
       const beforeSnapshot = captureStorySnapshot(story);
       await emitMonitorEvent({
         monitorScript,
@@ -225,6 +226,7 @@ ${storiesPayload}
       }
 
       if (!agentResult || !agentResult.payload) {
+        summary.stats.agentFailures += 1;
         await emitMonitorEvent({
           monitorScript,
           type: 'error',
@@ -598,6 +600,15 @@ Use "keep-current" to accept the current (possibly rule-upgraded) model. Only pr
     role: 'spec-coordinator'
   });
   console.log(`spec-mode: completed for phase ${opts.phase} (run ${runId})`);
+
+  // Abort pipeline if every agent invocation failed — indicates a broken provider/runner
+  if (summary.stats.agentAttempts > 0 && summary.stats.agentFailures === summary.stats.agentAttempts) {
+    console.error(
+      `spec-mode: FATAL — all ${summary.stats.agentAttempts} agent invocations failed for phase ${opts.phase}. ` +
+      `Check EPAM_ORCHESTRATION_PROVIDER is set and supported by ai-run.sh.`
+    );
+    process.exit(1);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

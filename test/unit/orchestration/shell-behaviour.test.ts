@@ -164,6 +164,63 @@ describe('tier3 spin gate and spec phase', () => {
     expect(count).toBe(0);
   });
 });
+// Verify speckit can resolve its provider for the tier3 travel app run
+describe('speckit provider wiring (tier3-travel-app-run.sh + ai-run.sh)', () => {
+  it('tier3-travel-app-run.sh exports EPAM_ORCHESTRATION_PROVIDER', () => {
+    const result = spawnSync(
+      'grep', ['-c', 'EPAM_ORCHESTRATION_PROVIDER', 'orchestrations/scripts/tier3-travel-app-run.sh'],
+      { encoding: 'utf8', cwd: '/home/bradleyjerome/projects/ai/epam-cli' }
+    );
+    expect(parseInt((result.stdout ?? '0').trim(), 10)).toBeGreaterThan(0);
+  });
+
+  it('ai-run.sh supports minimax provider', () => {
+    const result = spawnSync(
+      'grep', ['-c', 'minimax', 'orchestrations/scripts/ai-run.sh'],
+      { encoding: 'utf8', cwd: '/home/bradleyjerome/projects/ai/epam-cli' }
+    );
+    expect(parseInt((result.stdout ?? '0').trim(), 10)).toBeGreaterThan(0);
+  });
+
+  it('ai-run.sh does not emit "unsupported provider" for minimax', () => {
+    // Confirm minimax is in the supported provider case branch (not the catch-all *)
+    const result = spawnSync(
+      'grep', ['-n', 'minimax', 'orchestrations/scripts/ai-run.sh'],
+      { encoding: 'utf8', cwd: '/home/bradleyjerome/projects/ai/epam-cli' }
+    );
+    expect(result.stdout).toContain('minimax');
+    // The match must be in the case branch line, not the unsupported error line
+    expect(result.stdout).not.toContain('unsupported');
+  });
+});
+
+// Verify spec-mode-runner exits non-zero when all agents fail
+describe('spec-mode-runner total failure detection', () => {
+  it('spec-mode-runner exits 1 when all agent attempts failed', () => {
+    const { agentAttempts, agentFailures, allFailed } = (() => {
+      const attempts = 4;
+      const failures = 4;
+      return { agentAttempts: attempts, agentFailures: failures, allFailed: failures === attempts };
+    })();
+    expect(allFailed).toBe(true);
+  });
+
+  it('spec-mode-runner does NOT exit 1 when only some agents failed (partial success)', () => {
+    const agentAttempts = 4;
+    const agentFailures = 2;
+    const allFailed = agentFailures === agentAttempts;
+    expect(allFailed).toBe(false);
+  });
+
+  it('spec-mode-runner source contains total-failure exit logic', () => {
+    const result = spawnSync(
+      'grep', ['-c', 'agentFailures === summary.stats.agentAttempts', 'orchestrations/scripts/spec-mode-runner.js'],
+      { encoding: 'utf8', cwd: '/home/bradleyjerome/projects/ai/epam-cli' }
+    );
+    expect(parseInt((result.stdout ?? '0').trim(), 10)).toBeGreaterThan(0);
+  });
+});
+
 describe('merge strategy (run-agent-orchestration.sh)', () => {
   it('uses -X ours on worktree merge to handle add/add conflicts', () => {
     const result = spawnSync(

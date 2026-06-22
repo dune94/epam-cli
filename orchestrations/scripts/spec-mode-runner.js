@@ -147,7 +147,7 @@ Agent collaboration model:
   - Assign only openspec for simple elaboration
   - Assign only speckit for stories that just need test/security hardening
 
-Respond with JSON between <SPEC_ASSIGNMENTS> and </SPEC_ASSIGNMENTS> using this schema:
+Respond with raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
 [
   {"storyId":"EPAM-123","agents":["openspec","speckit"],"notes":"reason","priority":"high"}
 ]
@@ -155,9 +155,7 @@ If a story does not need spec work, provide an empty agents array.
 
 Stories JSON:
 ${storiesPayload}
-
-<SPEC_ASSIGNMENTS>
-</SPEC_ASSIGNMENTS>`;
+`;
 
   let assignmentsOutput = '';
   try {
@@ -432,7 +430,7 @@ ${reviewPayload}
   //   catches false negatives the rules missed. LLM decision is final.
   // Both passes write to story.specification.modelUpgrade for full auditability.
   const upgradeModel = process.env.ORCH_UPGRADE_MODEL || 'anthropic/claude-sonnet-4-6';
-  const miniModel    = process.env.ORCH_MINI_MODEL    || 'openai/gpt-4.1-mini';
+  const miniModel    = process.env.ORCH_MINI_MODEL    || 'MiniMax-M2.5';
   const allPhaseStories = [...stories, ...newStories.map((ns) => ns.story)];
 
   // Pass A — rule-based signals for every story that has a model assigned
@@ -651,7 +649,7 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir }) 
 
   const prompt = `You are the ${agent} specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.${splitWarning}${priorGapsBlock}
 
-Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output JSON only between <SPEC_AGENT> tags using this schema:
+Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
 {
   "storyId":"${story.id}",
   "agent":"${agent}",
@@ -672,8 +670,7 @@ These rules apply only when splitDepth === 0. Never split a story that is alread
 
 Story context:
 ${storyPayload}
-
-<SPEC_AGENT>`;
+`;
   try {
     const output = await runClaude(promptExec, prompt, path.join(logDir, `${story.id}-${agent}-spec.log`));
     const payload = extractTaggedJson(output, 'SPEC_AGENT');
@@ -716,15 +713,14 @@ ${JSON.stringify({
   dependencies: story.dependencies || []
 }, null, 2)}
 
-Produce your refined output between <SPEC_AGENT> tags. Include:
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
 - "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements)
 - "notes": What you changed and why (be specific — cite which criteria you added/modified)
 - "splitStories": Include if you refined openspec's splits, otherwise omit or pass through
 - "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
 - "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
 - "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
-
-<SPEC_AGENT>`;
+`;
   try {
     const output = await runClaude(
       promptExec, prompt,
@@ -924,6 +920,11 @@ function extractTaggedJson(text, tag) {
   const closeRegex = new RegExp(`^([\\s\\S]*?)<\\/${tag}>`, 'm');
   const closeMatch = closeRegex.exec(text.trim());
   if (closeMatch) return stripAndParse(closeMatch[1]);
+
+  // Raw JSON fallback: model ignored tag instructions and returned bare JSON.
+  // Strip markdown fences then try parsing the entire response directly.
+  const rawAttempt = stripAndParse(text);
+  if (rawAttempt !== null) return rawAttempt;
 
   return null;
 }

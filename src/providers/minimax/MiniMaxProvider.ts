@@ -55,6 +55,7 @@ export class MiniMaxProvider implements LLMProvider {
         max_tokens: request.maxTokens || 4096,
         temperature: request.temperature || 0.7,
         ...(tools && tools.length > 0 ? { tools } : {}),
+        ...(this.resolveResponseFormat(request) ? { response_format: { type: this.resolveResponseFormat(request) } } : {}),
       }),
     });
 
@@ -126,6 +127,7 @@ export class MiniMaxProvider implements LLMProvider {
         temperature: request.temperature || 0.7,
         stream: true,
         ...(tools && tools.length > 0 ? { tools } : {}),
+        ...(this.resolveResponseFormat(request) ? { response_format: { type: this.resolveResponseFormat(request) } } : {}),
       }),
     });
 
@@ -210,6 +212,13 @@ export class MiniMaxProvider implements LLMProvider {
       stopReason,
       usage: { inputTokens, outputTokens },
     };
+  }
+
+  private resolveResponseFormat(request: ProviderRequest): string | undefined {
+    // Explicit request field takes priority; env var EPAM_MINIMAX_JSON_MODE=1 as fallback.
+    if (request.responseFormat) return request.responseFormat;
+    if (process.env.EPAM_MINIMAX_JSON_MODE === '1') return 'json_object';
+    return undefined;
   }
 
   private formatMessages(messages: Message[], systemPrompt?: string): any[] {

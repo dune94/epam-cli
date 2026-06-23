@@ -31,6 +31,7 @@ export interface ProviderRequest {
   stream: boolean;
   maxTokens?: number;
   temperature?: number;
+  responseFormat?: 'json_object';
 }
 
 export interface TokenUsage {

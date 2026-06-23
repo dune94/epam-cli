@@ -19,6 +19,168 @@ const { spawn } = require('node:child_process');
 let _jsonrepair;
 try { _jsonrepair = require('jsonrepair').jsonrepair; } catch { _jsonrepair = null; }
 
+// ─── MiniMax tool-use definitions ────────────────────────────────────────────
+// Tool-use produces API-enforced valid JSON arguments — eliminates the M3
+// unescaped-char / truncation parse failures seen with raw JSON output.
+
+const MINIMAX_BASE_URL = 'https://api.minimaxi.chat/v1';
+
+const TOOL_SPEC_ASSIGNMENTS = {
+  name: 'submit_assignments',
+  description: 'Submit agent assignment decisions for each story in the phase.',
+  parameters: {
+    type: 'object',
+    required: ['assignments'],
+    properties: {
+      assignments: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['storyId', 'agents'],
+          properties: {
+            storyId: { type: 'string' },
+            agents: { type: 'array', items: { type: 'string' } },
+            notes: { type: 'string' },
+            priority: { type: 'string' },
+          },
+        },
+      },
+    },
+  },
+};
+
+const TOOL_SPEC_AGENT = {
+  name: 'submit_spec_result',
+  description: 'Submit the specification analysis result for one story.',
+  parameters: {
+    type: 'object',
+    required: ['storyId', 'agent', 'acceptanceCriteria'],
+    properties: {
+      storyId: { type: 'string' },
+      agent: { type: 'string' },
+      notes: { type: 'string' },
+      acceptanceCriteria: { type: 'array', items: { type: 'string' } },
+      description: { type: 'string' },
+      title: { type: 'string' },
+      acAddedBySpeckit: { type: 'array', items: { type: 'string' } },
+      acModifiedBySpeckit: { type: 'array', items: { type: 'object' } },
+      acFlagged: { type: 'array', items: { type: 'object' } },
+      splitStories: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            title: { type: 'string' },
+            description: { type: 'string' },
+            acceptanceCriteria: { type: 'array', items: { type: 'string' } },
+            agentRole: { type: 'string' },
+            technicalNotes: { type: 'object' },
+          },
+        },
+      },
+    },
+  },
+};
+
+const TOOL_SPEC_REVIEW = {
+  name: 'submit_spec_review',
+  description: 'Submit coordinator quality review results for all stories.',
+  parameters: {
+    type: 'object',
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['storyId', 'verdict'],
+          properties: {
+            storyId: { type: 'string' },
+            verdict: { type: 'string' },
+            reviewNotes: { type: 'string' },
+            qualityScore: { type: 'number' },
+            flags: { type: 'array', items: { type: 'string' } },
+          },
+        },
+      },
+    },
+  },
+};
+
+const TOOL_MODEL_REVIEW = {
+  name: 'submit_model_review',
+  description: 'Submit final model assignment decisions for all stories.',
+  parameters: {
+    type: 'object',
+    required: ['items'],
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['storyId', 'finalModel'],
+          properties: {
+            storyId: { type: 'string' },
+            finalModel: { type: 'string' },
+            override: { type: 'boolean' },
+            confidence: { type: 'string' },
+            reason: { type: 'string' },
+          },
+        },
+      },
+    },
+  },
+};
+
+// Call MiniMax API directly with a tool definition — arguments are API-enforced JSON.
+// itemsKey: if set, extracts result[itemsKey] (for array-returning tools); otherwise returns full args.
+async function callMiniMaxWithTool(prompt, toolDef, logPath, itemsKey) {
+  const apiKey = process.env.MINIMAX_API_KEY || process.env.EPAM_API_KEY_MINIMAX;
+  if (!apiKey) throw new Error('callMiniMaxWithTool: no API key (MINIMAX_API_KEY / EPAM_API_KEY_MINIMAX)');
+  const model = process.env.AI_MODEL || process.env.ORCH_GATE_MODEL || 'MiniMax-M3';
+  const baseURL = process.env.MINIMAX_BASE_URL || MINIMAX_BASE_URL;
+
+  const body = {
+    model,
+    messages: [{ role: 'user', content: prompt }],
+    max_tokens: 4096,
+    temperature: 0.2,
+    tools: [{ type: 'function', function: toolDef }],
+    tool_choice: { type: 'function', function: { name: toolDef.name } },
+  };
+
+  const res = await fetch(`${baseURL}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`MiniMax API error: ${res.status} ${await res.text()}`);
+
+  const data = await res.json();
+  const rawText = data.choices?.[0]?.message?.content || '';
+  const tc = data.choices?.[0]?.message?.tool_calls?.[0];
+  const argsRaw = tc?.function?.arguments || '{}';
+
+  if (logPath) {
+    fs.writeFileSync(logPath, `# Prompt\n${prompt}\n\n# Tool call args (raw)\n${argsRaw}\n\n# Text output\n${rawText}\n`);
+  }
+
+  const args = JSON.parse(argsRaw);
+  return itemsKey ? (args[itemsKey] ?? null) : args;
+}
+
+// Unified agent runner: tool-use for MiniMax, raw JSON for all other providers.
+async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey) {
+  const provider = (process.env.AI_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || '').toLowerCase();
+  if (provider === 'minimax') {
+    return callMiniMaxWithTool(prompt, toolDef, logPath, itemsKey);
+  }
+  // Fallback: existing raw text path with tag extraction + jsonrepair
+  const output = await runClaude(execSpec, prompt, logPath);
+  return extractTaggedJson(output, tag);
+}
+
 const args = process.argv.slice(2);
 function parseArgs(list) {
   const parsed = { phase: null, dryRun: false };
@@ -159,17 +321,19 @@ Stories JSON:
 ${storiesPayload}
 `;
 
-  let assignmentsOutput = '';
+  let assignments = null;
   try {
-    assignmentsOutput = await runClaude(
+    assignments = await runAgentForJson(
       promptExec,
       coordinatorPrompt,
-      path.join(logDir, `spec-coordinator-${opts.phase}.log`)
+      TOOL_SPEC_ASSIGNMENTS,
+      'SPEC_ASSIGNMENTS',
+      path.join(logDir, `spec-coordinator-${opts.phase}.log`),
+      'assignments'
     );
   } catch (error) {
     console.warn('spec-mode: coordinator failed, falling back to default agent pair:', error.message);
   }
-  const assignments = extractTaggedJson(assignmentsOutput, 'SPEC_ASSIGNMENTS');
   const assignmentsMap = buildAssignments(assignments, stories, runId);
 
   if (opts.dryRun) {
@@ -390,17 +554,19 @@ ${reviewPayload}
 <SPEC_REVIEW>
 </SPEC_REVIEW>`;
 
-    let reviewOutput = '';
+    let reviews = null;
     try {
-      reviewOutput = await runClaude(
+      reviews = await runAgentForJson(
         promptExec,
         reviewPrompt,
-        path.join(logDir, `spec-coordinator-review-${opts.phase}.log`)
+        TOOL_SPEC_REVIEW,
+        'SPEC_REVIEW',
+        path.join(logDir, `spec-coordinator-review-${opts.phase}.log`),
+        'items'
       );
     } catch (error) {
       console.warn('spec-mode: coordinator review failed:', error.message);
     }
-    const reviews = extractTaggedJson(reviewOutput, 'SPEC_REVIEW');
     if (Array.isArray(reviews)) {
       const reviewMap = new Map();
       reviews.forEach(r => { if (r && r.storyId) reviewMap.set(r.storyId, r); });
@@ -522,12 +688,14 @@ Use "keep-current" to accept the current (possibly rule-upgraded) model. Only pr
 <MODEL_REVIEW>
 </MODEL_REVIEW>`;
 
-    const reviewOutput = await runClaude(
+    const llmDecisions = await runAgentForJson(
       promptExec,
       modelReviewPrompt,
-      path.join(logDir, `spec-model-review-${opts.phase}.log`)
+      TOOL_MODEL_REVIEW,
+      'MODEL_REVIEW',
+      path.join(logDir, `spec-model-review-${opts.phase}.log`),
+      'items'
     );
-    const llmDecisions = extractTaggedJson(reviewOutput, 'MODEL_REVIEW');
     if (Array.isArray(llmDecisions)) {
       // Tier label → canonical model ID (LLM sometimes echoes the tier label instead of a real model string)
       const TIER_LABEL_MAP = {
@@ -674,8 +842,10 @@ Story context:
 ${storyPayload}
 `;
   try {
-    const output = await runClaude(promptExec, prompt, path.join(logDir, `${story.id}-${agent}-spec.log`));
-    const payload = extractTaggedJson(output, 'SPEC_AGENT');
+    const payload = await runAgentForJson(
+      promptExec, prompt, TOOL_SPEC_AGENT, 'SPEC_AGENT',
+      path.join(logDir, `${story.id}-${agent}-spec.log`), null
+    );
     return { agent, payload };
   } catch (error) {
     console.warn(`spec-mode: ${agent} run failed for ${story.id}:`, error.message);
@@ -724,11 +894,10 @@ Produce your refined output as raw JSON only (no XML tags, no markdown fences, n
 - "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
 `;
   try {
-    const output = await runClaude(
-      promptExec, prompt,
-      path.join(logDir, `${story.id}-speckit-review.log`)
+    const payload = await runAgentForJson(
+      promptExec, prompt, TOOL_SPEC_AGENT, 'SPEC_AGENT',
+      path.join(logDir, `${story.id}-speckit-review.log`), null
     );
-    const payload = extractTaggedJson(output, 'SPEC_AGENT');
     if (payload) payload.agent = 'speckit';
     return { agent: 'speckit', payload };
   } catch (error) {

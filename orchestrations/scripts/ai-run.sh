@@ -145,8 +145,10 @@ run_provider_once() {
       local _epam_out
       _epam_out="$(mktemp)"
       # --no-tools: prevent the model from generating function-call markup (e.g. <function=bash>)
-      # instead of the structured JSON output expected by spec-mode and pipeline agents
-      if ! "$EPAM_CLI" run --provider "$provider" "${model_args[@]}" --no-tools --json \
+      # instead of the structured JSON output expected by spec-mode and pipeline agents.
+      # EPAM_MINIMAX_JSON_MODE=1: enable response_format:json_object for MiniMax to guarantee
+      # syntactically valid JSON output (prevents M3 unescaped-char / truncation failures).
+      if ! EPAM_MINIMAX_JSON_MODE=1 "$EPAM_CLI" run --provider "$provider" "${model_args[@]}" --no-tools --json \
           < "$PROMPT_FILE" > "$_epam_out" 2>/dev/null; then
         cat "$_epam_out" >&2
         rm -f "$_epam_out"

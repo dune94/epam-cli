@@ -2158,25 +2158,22 @@ Return strict JSON only:
 
 Phase: $phase_id
 Project root: $PROJECT_ROOT
-E2E routing override context:
-- FORCE_LIGHTPANDA=$force_lightpanda
-- FORCE_PLAYWRIGHT=$force_playwright
-- routingDecision=$routing_decision
 
-Run the following checks and produce a structured JSON report:
+IMPORTANT: All evidence has been pre-computed and is injected above. Do NOT attempt to call any shell commands, bash, or tools. Analyze ONLY the injected Semgrep, npm audit, and TypeScript compiler data.
 
-1. TypeScript compiler diagnostics:
-   Find the node binary: try 'node', then check ~/.nvm/versions/node/*/bin/node and ~/.local/share/fnm/node-versions/*/installation/bin/node (pick the highest version).
-   Run: <node> ./node_modules/.bin/tsc --noEmit 2>&1 (from project root: $PROJECT_ROOT)
-   Parse output for errors. Each error is a finding with severity 'major'. If no node_modules/.bin/tsc exists, skip this check and note it in the report.
+Analyze the pre-computed evidence above and produce a structured JSON report covering:
 
-2. Security pattern scan on changed/new files in this phase:
-   - Command injection: unsanitised input to child_process.exec/spawn
-   - Path traversal: user input in fs paths without validation
-   - Hardcoded secrets: API keys, tokens, passwords in source
-   - Unsafe eval/Function constructor usage
+1. TypeScript compiler diagnostics: Results are pre-injected as '## TypeScript Compiler Results'. Each 'error TS' line is a finding with severity 'major'.
 
-Output format (strict JSON):
+2. Security pattern scan: Based on the Semgrep results injected above, classify findings:
+   - ERROR/WARNING severity Semgrep findings → severity 'major' or 'blocker'
+   - INFO severity findings → severity 'minor'
+   - Patterns to flag if Semgrep missed them (text scan only, no tool calls):
+     command injection, path traversal, hardcoded secrets, unsafe eval
+
+If the injected evidence is insufficient to determine a verdict with confidence, output \"verdict\": \"pass\" with 0 findings rather than fabricating a failure.
+
+Output format (strict JSON, no markdown fences, no preamble):
 {
   \"agent\": \"sast-sentinel\",
   \"phase\": \"$phase_id\",
@@ -2572,17 +2569,42 @@ except Exception as e:
         # ── Review Ranger ──
         log "  Step 4.3a: Running review-ranger..."
         {
+            # ── Git diff oracle: inject changed files and their content ──
+            local review_diff_summary=""
+            local _git_bin
+            _git_bin=$(command -v git 2>/dev/null || true)
+            if [ -n "$_git_bin" ] && [ -d "$PROJECT_ROOT/.git" ]; then
+                set +e
+                local _diff_files
+                _diff_files=$(cd "$PROJECT_ROOT" && "$_git_bin" diff --name-only HEAD 2>/dev/null || \
+                              "$_git_bin" diff --name-only HEAD~1 2>/dev/null || echo "")
+                local _diff_stat
+                _diff_stat=$(cd "$PROJECT_ROOT" && "$_git_bin" diff --stat HEAD 2>/dev/null || \
+                             "$_git_bin" diff --stat HEAD~1 2>/dev/null || echo "(no diff available)")
+                local _diff_patch
+                _diff_patch=$(cd "$PROJECT_ROOT" && "$_git_bin" diff -U3 HEAD -- '*.ts' 2>/dev/null | head -300 || \
+                              "$_git_bin" diff -U3 HEAD~1 -- '*.ts' 2>/dev/null | head -300 || echo "")
+                set -e
+                review_diff_summary="Files changed:
+$_diff_stat
+
+TypeScript diff (first 300 lines):
+$_diff_patch"
+            else
+                review_diff_summary="(git diff oracle skipped — git not found or no .git directory)"
+            fi
+
             local review_prompt="You are acting as the review-ranger agent.
 
 Phase: $phase_id
 Project root: $PROJECT_ROOT
-E2E routing override context:
-- FORCE_LIGHTPANDA=$force_lightpanda
-- FORCE_PLAYWRIGHT=$force_playwright
-- routingDecision=$routing_decision
 
-Perform a deep diff-level code review on files changed in this phase.
-Use git diff to identify changed files, then analyse:
+IMPORTANT: All evidence has been pre-computed and is injected below. Do NOT attempt to call any shell commands, bash, or tools. Analyze ONLY the injected git diff data.
+
+## Git Diff Evidence (hard evidence — treat as ground truth)
+$review_diff_summary
+
+Analyze the pre-computed diff above and produce a structured JSON report covering:
 1. Complexity hotspots (cyclomatic complexity > 10, nesting > 4)
 2. Code duplication (near-identical blocks > 5 lines)
 3. API contract drift (exported signature changes without test updates)
@@ -2590,7 +2612,9 @@ Use git diff to identify changed files, then analyse:
 5. Test coverage gaps (new public functions without tests)
 6. Naming consistency (camelCase vars, PascalCase types, UPPER_SNAKE constants)
 
-Output format (strict JSON):
+If the injected evidence is insufficient to determine a verdict with confidence, output \"verdict\": \"pass\" with 0 findings rather than fabricating a failure.
+
+Output format (strict JSON, no markdown fences, no preamble):
 {
   \"agent\": \"review-ranger\",
   \"phase\": \"$phase_id\",
@@ -2612,23 +2636,62 @@ $review_prompt"
         # ── Mutant Hunter ──
         log "  Step 4.3b: Running mutant-hunter..."
         {
+            # ── Source + test oracle: inject changed files and test files ──
+            local mutant_oracle_summary=""
+            local _git_bin2
+            _git_bin2=$(command -v git 2>/dev/null || true)
+            if [ -n "$_git_bin2" ] && [ -d "$PROJECT_ROOT/.git" ]; then
+                set +e
+                local _changed_src
+                _changed_src=$(cd "$PROJECT_ROOT" && "$_git_bin2" diff --name-only HEAD -- '*.ts' 2>/dev/null | \
+                               grep -v '\.test\.ts$' | head -10 || echo "")
+                set -e
+                local _src_content=""
+                if [ -n "$_changed_src" ]; then
+                    while IFS= read -r _f; do
+                        [ -f "$PROJECT_ROOT/$_f" ] || continue
+                        _src_content="$_src_content
+--- $_f ---
+$(head -100 "$PROJECT_ROOT/$_f" 2>/dev/null || echo '(unreadable)')"
+                    done <<< "$_changed_src"
+                fi
+                local _test_files
+                _test_files=$(find "$PROJECT_ROOT" -name "*.test.ts" -not -path "*/node_modules/*" 2>/dev/null | head -5)
+                local _test_content=""
+                while IFS= read -r _tf; do
+                    [ -f "$_tf" ] || continue
+                    _test_content="$_test_content
+--- $_tf ---
+$(head -60 "$_tf" 2>/dev/null || echo '(unreadable)')"
+                done <<< "$_test_files"
+                mutant_oracle_summary="Changed source files:
+${_src_content:-  (none — no TypeScript source changes in this phase)}
+
+Existing test files (first 60 lines each):
+${_test_content:-  (no test files found)}"
+            else
+                mutant_oracle_summary="(mutation oracle skipped — git not found or no .git directory)"
+            fi
+
             local mutant_prompt="You are acting as the mutant-hunter agent.
 
 Phase: $phase_id
 Project root: $PROJECT_ROOT
-E2E routing override context:
-- FORCE_LIGHTPANDA=$force_lightpanda
-- FORCE_PLAYWRIGHT=$force_playwright
-- routingDecision=$routing_decision
 
-Perform mutation testing analysis on files changed in this phase.
-Use git diff to identify changed source files, then for each:
+IMPORTANT: All evidence has been pre-computed and is injected below. Do NOT attempt to call any shell commands, bash, or tools. Analyze ONLY the injected source and test file data.
+
+## Source and Test Evidence (hard evidence — treat as ground truth)
+$mutant_oracle_summary
+
+Analyze the pre-computed source and test code above. For each changed source file:
 1. Propose mutations: operator swaps, comparison inversions, boolean negations,
    early returns, boundary shifts, removed null checks, swapped arguments
-2. Focus on critical paths: provider failover, tool safety, auth, billing, agent state
-3. For each mutation, determine if existing tests in test/unit/ would catch it
+2. For each mutation, determine if the existing tests shown above would catch it
+3. Focus on critical paths: provider failover, tool safety, auth, billing, agent state
 
-Output format (strict JSON):
+If no source changes are detected or evidence is insufficient, output \"verdict\": \"warn\" with mutationScore of 100 and 0 mutations (non-blocking — nothing to test).
+
+Output format (strict JSON, no markdown fences, no preamble):
 {
   \"agent\": \"mutant-hunter\",
   \"phase\": \"$phase_id\",

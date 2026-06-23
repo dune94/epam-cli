@@ -16,6 +16,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+let _jsonrepair;
+try { _jsonrepair = require('jsonrepair').jsonrepair; } catch { _jsonrepair = null; }
 
 const args = process.argv.slice(2);
 function parseArgs(list) {
@@ -895,7 +897,18 @@ function extractTaggedJson(text, tag) {
     try {
       return JSON.parse(jsonText);
     } catch (err) {
-      console.warn(`Failed to parse JSON for tag ${tag}:`, err.message);
+      // Try jsonrepair for M3-style malformed JSON (truncated strings, unescaped chars, double braces).
+      // Only attempt repair when text looks like JSON (starts with { or [) to avoid
+      // jsonrepair turning arbitrary plain text into a JSON string.
+      if (_jsonrepair && /^\s*[{[]/.test(jsonText)) {
+        try {
+          return JSON.parse(_jsonrepair(jsonText));
+        } catch (repairErr) {
+          console.warn(`Failed to parse JSON for tag ${tag}:`, err.message);
+        }
+      } else {
+        console.warn(`Failed to parse JSON for tag ${tag}:`, err.message);
+      }
       return null;
     }
   }

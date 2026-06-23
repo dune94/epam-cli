@@ -130,6 +130,43 @@ describe('extractTaggedJson', () => {
     const text = `<-SPEC_ASSIGNMENTS>\n${JSON.stringify(good)}\n</SPEC_ASSIGNMENTS>`;
     expect(extractTaggedJson(text, 'SPEC_ASSIGNMENTS')).toEqual(good);
   });
+
+  it('repairs M3-style trailing comma in object', () => {
+    // M3 often emits trailing commas that JSON.parse rejects
+    const text = '<SPEC_AGENT>{"storyId":"SKY-001","agent":"speckit",}</SPEC_AGENT>';
+    const result = extractTaggedJson(text, 'SPEC_AGENT');
+    expect(result).not.toBeNull();
+    expect(result.storyId).toBe('SKY-001');
+  });
+
+  it('repairs M3-style double-closing brace ("}}" at end)', () => {
+    const text = '<SPEC_AGENT>{"storyId":"SKY-002","agent":"openspec"}}</SPEC_AGENT>';
+    const result = extractTaggedJson(text, 'SPEC_AGENT');
+    expect(result).not.toBeNull();
+    expect(result.storyId).toBe('SKY-002');
+  });
+
+  it('repairs M3-style truncated string (unterminated at token limit)', () => {
+    // Simulates M3 being cut off mid-string value
+    const text = '<SPEC_AGENT>{"storyId":"SKY-003","description":"Implement the flight search</SPEC_AGENT>';
+    const result = extractTaggedJson(text, 'SPEC_AGENT');
+    expect(result).not.toBeNull();
+    expect(result.storyId).toBe('SKY-003');
+  });
+
+  it('repairs raw JSON (no tags) with trailing comma via jsonrepair fallback', () => {
+    // Model returned raw JSON without tags — raw fallback path + repair
+    const text = '{"storyId":"SKY-004","acceptanceCriteria":["a","b",]}';
+    const result = extractTaggedJson(text, 'SPEC_AGENT');
+    expect(result).not.toBeNull();
+    expect(result.storyId).toBe('SKY-004');
+  });
+
+  it('does NOT repair plain text (no JSON shape) — returns null', () => {
+    // jsonrepair must not turn arbitrary prose into a JSON string
+    expect(extractTaggedJson('no tags here', 'SPEC_AGENT')).toBeNull();
+    expect(extractTaggedJson('I cannot execute this task', 'SPEC_AGENT')).toBeNull();
+  });
 });
 
 // ─── resolvePromptProvider ───────────────────────────────────────────────────

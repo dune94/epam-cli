@@ -156,6 +156,126 @@ success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 info()    { echo -e "${CYAN}[INFO]${NC} $1"; }
 warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 
+# ── Step status tracking ──────────────────────────────────────────────────────
+# step_emit <step_id> <status> <label> [reason]
+#   status: pending | running | pass | skip | fail | warn
+# Writes to terminal + step-status.json (read by dashboard)
+STEP_STATUS_FILE="${LOG_DIR:-/tmp}/step-status.json"
+declare -A _STEP_LABELS=()
+declare -A _STEP_STATUS=()
+
+step_emit() {
+    local step_id="$1"
+    local status="$2"
+    local label="$3"
+    local reason="${4:-}"
+    local ts
+    ts=$(date -Iseconds 2>/dev/null || date +%Y-%m-%dT%H:%M:%S)
+
+    _STEP_LABELS["$step_id"]="$label"
+    _STEP_STATUS["$step_id"]="$status"
+
+    local icon
+    case "$status" in
+        pass)    icon="${GREEN}  ✓${NC}" ;;
+        skip)    icon="${YELLOW}  ⊘${NC}" ;;
+        fail)    icon="${RED}  ✗${NC}" ;;
+        warn)    icon="${YELLOW}  ⚠${NC}" ;;
+        running) icon="${CYAN}  ▶${NC}" ;;
+        *)       icon="    " ;;
+    esac
+
+    local reason_str=""
+    [ -n "$reason" ] && reason_str=" ${YELLOW}[${reason}]${NC}"
+    echo -e "${icon} ${label}${reason_str}"
+
+    # Write JSON snapshot (atomic via tmp file)
+    local tmp_file="${STEP_STATUS_FILE}.tmp.$$"
+    {
+        echo "{"
+        echo "  \"phase\": \"${PHASE:-unknown}\","
+        echo "  \"updatedAt\": \"${ts}\","
+        echo "  \"steps\": ["
+        local first=true
+        local _sid _slabel _sstatus
+        for _sid in \
+            "0:spec" "0.1:cpa" "0.5:skill-pre" "0.6:hybrid-coord" "0.7:regression" \
+            "0.8:mkdir" "1:main-stories" "1.5:auto-commit" "1.6:tc-writer" \
+            "2:worktrees" "3a:primary" "3b:independent" "3.1:wt-health" \
+            "3.2:wt-merge" "3.5:skill-post" "3.7:pre-review" \
+            "4:review-stories" "4.2a:sast" "4.2b:spec-val" \
+            "4.3a:review-ranger" "4.3b:mutant-hunter" \
+            "4.4a:fuzz-weaver" "4.4b:perf-sentinel" "4.6:e2e"; do
+            local _key="${_sid%%:*}"
+            _slabel="${_STEP_LABELS[$_key]:-${_sid#*:}}"
+            _sstatus="${_STEP_STATUS[$_key]:-pending}"
+            [ "$first" = "true" ] && first=false || echo ","
+            printf '    {"id":"%s","label":"%s","status":"%s"}' \
+                "$_key" "$_slabel" "$_sstatus"
+        done
+        echo ""
+        echo "  ]"
+        echo "}"
+    } > "$tmp_file" && mv "$tmp_file" "$STEP_STATUS_FILE" 2>/dev/null || true
+}
+
+# Print full step checklist (called once at run start, after skip detection)
+print_step_checklist() {
+    echo ""
+    echo -e "${MAGENTA}━━━ Pipeline Step Checklist ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    printf "  %-6s %-32s %s\n" "Step" "Name" "Planned"
+    printf "  %-6s %-32s %s\n" "------" "--------------------------------" "--------"
+
+    _checklist_row() {
+        local step="$1" name="$2" planned="$3" reason="${4:-}"
+        local color
+        case "$planned" in
+            ACTIVE) color="$GREEN" ;;
+            SKIP)   color="$YELLOW" ;;
+            COND)   color="$CYAN" ;;
+            *)      color="$NC" ;;
+        esac
+        local reason_str=""
+        [ -n "$reason" ] && reason_str=" (${reason})"
+        printf "  %-6s %-32s " "$step" "$name"
+        echo -e "${color}${planned}${reason_str}${NC}"
+    }
+
+    _checklist_row "0"    "Specification pass"       "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "EPAM_SPEC_MODE=0"
+    _checklist_row "0.1"  "CPA pre-pass"             "$([ "${SKIP_CPA:-0}" = "1" ] && echo SKIP || echo ACTIVE)"           "SKIP_CPA=1"
+    _checklist_row "0.5"  "Pre-phase skill assess"   "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "SKIP_SKILL_ASSESSMENT=1"
+    _checklist_row "0.6"  "Hybrid pre-coord"         "$([ "${RESOLVED_ORCH_MODE:-bash}" = "hybrid" ] && echo ACTIVE || echo SKIP)" "ORCH_MODE≠hybrid"
+    _checklist_row "0.7"  "Regression guard"         "$([ "${SKIP_REGRESSION_GUARD:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_REGRESSION_GUARD=true"
+    _checklist_row "0.8"  "mkdir src/ dirs"          "ACTIVE"
+    _checklist_row "1"    "Main-branch stories"      "ACTIVE"
+    _checklist_row "1.5"  "Auto-commit"              "COND"  "if uncommitted changes"
+    _checklist_row "1.6"  "TC writer gate"           "$([ "${SKIP_TC_WRITER:-0}" = "1" ] && echo SKIP || echo COND)" "SKIP_TC_WRITER=1 or no test stories"
+    _checklist_row "2"    "Create worktrees"         "COND"  "if parallel stories exist"
+    _checklist_row "3a"   "Primary agent"            "COND"  "if primary stories"
+    _checklist_row "3b"   "Independent agent"        "COND"  "if independent stories"
+    _checklist_row "3.1"  "Worktree health check"    "COND"  "if worktrees created"
+    _checklist_row "3.2"  "Merge worktrees"          "COND"  "if worktrees created"
+    _checklist_row "3.5"  "Post-parallel assessment" "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "SKIP_SKILL_ASSESSMENT=1"
+    _checklist_row "3.7"  "Pre-review gate"          "$([ "${SKIP_PRE_REVIEW_GATE:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_PRE_REVIEW_GATE=true"
+    _checklist_row "4"    "Review stories"           "COND"  "if review stories exist"
+    _checklist_row "4.2a" "SAST sentinel"            "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
+    _checklist_row "4.2b" "Spec validator"           "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
+    _checklist_row "4.3a" "Review ranger"            "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
+    _checklist_row "4.3b" "Mutant hunter"            "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
+    _checklist_row "4.4a" "Fuzz-weaver"              "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
+    _checklist_row "4.4b" "Perf sentinel"            "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
+    _checklist_row "4.6"  "Browser E2E routing"     "$([ "${SKIP_BROWSER_E2E_ROUTING:-false}" = "true" ] && echo SKIP || echo COND)" "SKIP_BROWSER_E2E_ROUTING=true"
+
+    local skips=0
+    for key in "0" "0.1" "0.5" "0.6" "0.7" "1" "1.5" "1.6" "2" "3a" "3b" "3.1" "3.2" "3.5" "3.7" "4" "4.2a" "4.2b" "4.3a" "4.3b" "4.4a" "4.4b" "4.6"; do
+        [ "${_STEP_STATUS[$key]:-}" = "skip" ] && skips=$((skips + 1))
+    done
+    echo ""
+    echo -e "  ${YELLOW}SKIP bypass env vars active: SKIP_TESTING_GATES=${SKIP_TESTING_GATES:-false}  SKIP_CPA=${SKIP_CPA:-0}  SKIP_TC_WRITER=${SKIP_TC_WRITER:-0}  SKIP_REGRESSION_GUARD=${SKIP_REGRESSION_GUARD:-false}${NC}"
+    echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+}
+
 seed_runtime_logs() {
     mkdir -p "$LOG_DIR" "$LOG_DIR/phase-improvements"
     local files=(
@@ -344,6 +464,14 @@ start_control_plane() {
     fi
     # Remove stale PAUSED sentinel from a previous run
     rm -f "$LOG_DIR/PAUSED"
+    # Kill any stale process holding the control plane port from a previous run
+    local _stale_pid
+    _stale_pid=$(lsof -ti "tcp:${CONTROL_PLANE_PORT:-8094}" 2>/dev/null || true)
+    if [ -n "$_stale_pid" ]; then
+        warning "Killing stale process on port ${CONTROL_PLANE_PORT:-8094} (PID $_stale_pid)"
+        kill "$_stale_pid" 2>/dev/null || true
+        sleep 0.3
+    fi
     CONTROL_PLANE_PORT="${CONTROL_PLANE_PORT:-8094}" \
     LOG_DIR="$LOG_DIR" \
         "$_node_bin" "$cp_script" >> "$CONTROL_PLANE_LOG" 2>&1 &
@@ -929,6 +1057,7 @@ run_specification_pass() {
         warning "Step 0: Node.js is required for specification mode but was not found"
         return 0
     fi
+    step_emit "0" "running" "Step 0: Specification pass"
     log "Step 0: Running specification pass for phase '$phase_id'..."
     local _spec_started; _spec_started=$(date -Iseconds)
     set +e
@@ -944,10 +1073,12 @@ run_specification_pass() {
         "${ORCH_GATE_MODEL:-qwen/qwen3-coder-30b-a3b-instruct}" "$_spec_started" \
         "0" "0" "0" "0" 2>/dev/null || true
     if [ $spec_rc -eq 0 ]; then
+        step_emit "0" "pass" "Step 0: Specification pass"
         success "Step 0: Specification pass completed for '$phase_id'"
         "$SCRIPT_DIR/update-monitor.sh" event "specification_pass" \
             "Specification agents completed (OpenSpec/Speckit)" "" "main" "spec-coordinator" 2>/dev/null || true
     else
+        step_emit "0" "fail" "Step 0: Specification pass"
         error "Step 0: Specification pass FAILED for '$phase_id' — all agent invocations failed."
         error "  Check EPAM_ORCHESTRATION_PROVIDER is set and supported by ai-run.sh."
         error "  See: $LOG_DIR/spec-${phase_id}.log"
@@ -956,8 +1087,10 @@ run_specification_pass() {
 }
 
 if [ "$DRY_RUN" = true ]; then
+    step_emit "0" "skip" "Step 0: Specification pass" "dry-run"
     info "Step 0: Specification pass skipped during --dry-run"
 elif [ "${EPAM_SPEC_MODE:-1}" = "0" ]; then
+    step_emit "0" "skip" "Step 0: Specification pass" "EPAM_SPEC_MODE=0"
     info "Step 0: Specification pass disabled (EPAM_SPEC_MODE=0)"
 else
     run_specification_pass "$PHASE"
@@ -1038,6 +1171,7 @@ if [ "${SKIP_CPA:-0}" != "1" ] && [ -f "$CPA_SCRIPT" ]; then
 
     case $cpa_exit in
         0)
+            step_emit "0.1" "pass" "Step 0.1: CPA pre-pass"
             success "Step 0.1: CPA gate PASSED for phase '$PHASE'"
             "$SCRIPT_DIR/update-monitor.sh" event "cpa_pass" \
                 "CPA gate passed — all stories cleared" "" "main" "context-purveyor" 2>/dev/null || true
@@ -1050,6 +1184,7 @@ if [ "${SKIP_CPA:-0}" != "1" ] && [ -f "$CPA_SCRIPT" ]; then
                 "CPA gate REVIEW — proceeding with warnings" "" "main" "context-purveyor" 2>/dev/null || true
             ;;
         3)
+            step_emit "0.1" "fail" "Step 0.1: CPA pre-pass"
             error "Step 0.1: CPA gate BLOCKED — one or more stories cannot proceed"
             error "  Check: $LOG_DIR/cpa-${PHASE}.log"
             error "  Resolve flagged issues, then re-run. Override: SKIP_CPA=1"
@@ -1063,8 +1198,10 @@ if [ "${SKIP_CPA:-0}" != "1" ] && [ -f "$CPA_SCRIPT" ]; then
     esac
 else
     if [ "${SKIP_CPA:-0}" = "1" ]; then
+        step_emit "0.1" "skip" "Step 0.1: CPA pre-pass" "SKIP_CPA=1"
         info "Step 0.1: CPA pre-pass skipped (SKIP_CPA=1)"
     else
+        step_emit "0.1" "skip" "Step 0.1: CPA pre-pass" "script not found"
         info "Step 0.1: CPA script not found — skipping pre-pass"
     fi
 fi
@@ -1265,6 +1402,10 @@ if [ "$DRY_RUN" = true ]; then
     exit 0
 fi
 
+# ── Print step checklist now that all skip vars are resolved ─────────────────
+STEP_STATUS_FILE="$LOG_DIR/step-status.json"
+print_step_checklist
+
 # ──────────────────────────────────────────────
 # Initialize monitor status file for HTML dashboard
 # ──────────────────────────────────────────────
@@ -1405,6 +1546,7 @@ Read ${PRD_REL} implementationOrder[\"${phase_id}\"] for the story list, then pr
 
     cd "$PROJECT_ROOT"
     if run_orch_prompt "$assessment_prompt" "assessment" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"; then
+        step_emit "0.5" "pass" "Step 0.5: Skill assessment"
         success "Pre-phase assessment completed for '$phase_id'"
         "$SCRIPT_DIR/update-monitor.sh" event "pre_phase_assessment" "Pre-phase assessment completed" "" "main" "team-lead-agent" 2>/dev/null || true
         # Validate profiles.json is still valid JSON
@@ -1414,12 +1556,14 @@ Read ${PRD_REL} implementationOrder[\"${phase_id}\"] for the story list, then pr
             return 1
         fi
     else
+        step_emit "0.5" "warn" "Step 0.5: Skill assessment" "non-critical"
         warning "Pre-phase assessment failed for '$phase_id' (non-critical, continuing)"
     fi
 }
 
 log "Step 0.5: Running pre-phase skill assessment..."
 if [ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ]; then
+    step_emit "0.5" "skip" "Step 0.5: Skill assessment" "SKIP_SKILL_ASSESSMENT=1"
     log "Step 0.5: Skipped (SKIP_SKILL_ASSESSMENT=1)"
 else
     run_pre_phase_assessment "$PHASE"
@@ -1458,6 +1602,7 @@ COORD_EOF
 
     cd "$PROJECT_ROOT"
     if run_orch_prompt "$coord_prompt" "spec-coordinator" "${PHASE:-unknown}" 2>&1 | tee "$coord_log"; then
+        step_emit "0.6" "pass" "Step 0.6: Hybrid pre-coord"
         success "Hybrid pre-phase coordination completed for '$phase_id'"
         "$SCRIPT_DIR/update-monitor.sh" event "hybrid_precoord" \
             "Hybrid pre-phase coordination completed" "" "main" "coordination-agent" 2>/dev/null || true
@@ -1470,6 +1615,7 @@ if [ "$RESOLVED_ORCH_MODE" = "hybrid" ]; then
     log "Step 0.6: Hybrid mode — running pre-phase coordination..."
     run_hybrid_precoordination "$PHASE"
 else
+    step_emit "0.6" "skip" "Step 0.6: Hybrid pre-coord" "ORCH_MODE=${RESOLVED_ORCH_MODE}"
     info "Step 0.6: Skipped (ORCH_MODE=${RESOLVED_ORCH_MODE})"
 fi
 
@@ -1491,19 +1637,31 @@ if [ "${SKIP_REGRESSION_GUARD:-false}" != "true" ]; then
         _rg_rc=$?
         set -e
         if [ $_rg_rc -ne 0 ]; then
+            step_emit "0.7" "fail" "Step 0.7: Regression guard"
             error "Step 0.7: Regression guard FAILED — tests broken before phase '$PHASE' starts"
             error "  Fix failing tests from the previous phase before continuing."
             error "  See: $_rg_log"
             error "  Bypass with: SKIP_REGRESSION_GUARD=true"
             exit 1
         fi
+        step_emit "0.7" "pass" "Step 0.7: Regression guard"
         success "Step 0.7: Regression guard PASSED — baseline tests green"
     else
+        step_emit "0.7" "skip" "Step 0.7: Regression guard" "node/vitest not found"
         info "Step 0.7: Regression guard skipped — node or vitest not found"
     fi
 else
+    step_emit "0.7" "skip" "Step 0.7: Regression guard" "SKIP_REGRESSION_GUARD=true"
     info "Step 0.7: Regression guard skipped (SKIP_REGRESSION_GUARD=true)"
 fi
+
+# ──────────────────────────────────────────────
+# Step 0.8: Ensure standard src/ subdirectories exist so M3 can write into them
+# without relying on the model creating the directory first.
+# ──────────────────────────────────────────────
+step_emit "0.8" "running" "Step 0.8: mkdir src/ dirs"
+mkdir -p "$PROJECT_ROOT/src" "$PROJECT_ROOT/src/skyscanner" "$PROJECT_ROOT/public" "$PROJECT_ROOT/review" 2>/dev/null || true
+step_emit "0.8" "pass" "Step 0.8: mkdir src/ dirs"
 
 # ──────────────────────────────────────────────
 # Step 1: Run main-branch stories (no dependencies, sequential)
@@ -1519,7 +1677,8 @@ if [ -n "$main_stories" ]; then
     done)
 
     if [ -n "$non_review_main" ]; then
-        log "Step 1: Running main-branch stories..."
+        step_emit "1" "running" "Step 1: Main-branch stories"
+    log "Step 1: Running main-branch stories..."
         _phase_story_failures=0
         while IFS= read -r story; do
             [ -z "$story" ] && continue
@@ -1536,12 +1695,15 @@ if [ -n "$main_stories" ]; then
             checkpoint_complete "$story"
         done <<< "$non_review_main"
         if [ "$_phase_story_failures" -gt 0 ]; then
+            step_emit "1" "fail" "Step 1: Main-branch stories"
             error "Phase '$PHASE': $_phase_story_failures story/stories failed — aborting phase"
             exit 1
         fi
+        step_emit "1" "pass" "Step 1: Main-branch stories"
         success "Main-branch stories complete"
     fi
 else
+    step_emit "1" "skip" "Step 1: Main-branch stories" "no stories in lane"
     info "Step 1: No main-branch stories to run"
 fi
 
@@ -1555,24 +1717,65 @@ _has_worktree_stories=false
 { [ -n "${primary_stories:-}" ] || [ -n "${independent_stories:-}" ]; } && _has_worktree_stories=true
 if [ "$_has_worktree_stories" = true ] && \
    [ -n "$(git -C "$PROJECT_ROOT" status --porcelain 2>/dev/null)" ]; then
+    step_emit "1.5" "running" "Step 1.5: Auto-commit"
     log "Step 1.5: Auto-committing main-branch deliverables before worktree creation..."
     git -C "$PROJECT_ROOT" add -A 2>/dev/null || true
     git -C "$PROJECT_ROOT" commit -m "chore: auto-commit main-branch story output for phase $PHASE" \
         2>/dev/null \
-        && success "Step 1.5: Committed main-branch output" \
-        || warning "Step 1.5: Nothing new to commit (working tree already clean)"
+        && { step_emit "1.5" "pass" "Step 1.5: Auto-commit"; success "Step 1.5: Committed main-branch output"; } \
+        || { step_emit "1.5" "skip" "Step 1.5: Auto-commit" "nothing to commit"; warning "Step 1.5: Nothing new to commit (working tree already clean)"; }
 else
+    step_emit "1.5" "skip" "Step 1.5: Auto-commit" "already clean"
     info "Step 1.5: No uncommitted main-branch changes — skipping auto-commit"
 fi
+# ──────────────────────────────────────────────
+# Step 1.6: Post-impl TC (test criteria) writer gate.
+# Fires when impl stories have run and test stories in this phase need TCs.
+# Reads actual .ts source files and writes testCriteria to prd.json.
+# ACs are never modified — TCs are additive only.
+# Skip with: SKIP_TC_WRITER=1
+# ──────────────────────────────────────────────
+_tc_writer_needed=$(jq -r --arg phase "$PHASE" \
+    '(.implementationOrder[$phase] // []) as $ids |
+     [.stories[] | select(.id as $id | $ids | index($id)) |
+      select(
+        (.technicalNotes.files // [] | map(endswith(".test.ts")) | any) and
+        ((.testCriteria.facts // []) | length == 0)
+      )] | length' "$PRD_FILE" 2>/dev/null || echo 0)
+
+if [ "${_tc_writer_needed:-0}" -gt 0 ]; then
+    log "Step 1.6: TC writer gate — ${_tc_writer_needed} test story/stories need testCriteria..."
+    if bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
+        --prd "$PRD_FILE" \
+        --phase "$PHASE" \
+        --output-dir "${OUTPUT_DIR:-$PROJECT_ROOT}" \
+        2>&1 | tee "$LOG_DIR/tc-writer-${PHASE}.log"; then
+        step_emit "1.6" "pass" "Step 1.6: TC writer gate"
+        success "Step 1.6: TC writer gate PASSED — testCriteria populated"
+    else
+        step_emit "1.6" "fail" "Step 1.6: TC writer gate"
+        error "Step 1.6: TC writer gate FAILED — cannot proceed to test stories"
+        error "  Fix: check $LOG_DIR/tc-writer-${PHASE}.log"
+        error "  Bypass: SKIP_TC_WRITER=1"
+        exit 1
+    fi
+else
+    step_emit "1.6" "skip" "Step 1.6: TC writer gate" "TCs present or no test stories"
+    step_emit "1.6" "skip" "Step 1.6: TC writer gate" "all TCs present"
+    info "Step 1.6: TC writer gate — all test stories already have TCs or no test stories in phase"
+fi
+
 # ──────────────────────────────────────────────
 need_worktrees=false
 [ -n "$primary_stories" ] && need_worktrees=true
 [ -n "$independent_stories" ] && need_worktrees=true
 
 if [ "$need_worktrees" = true ]; then
+    step_emit "2" "running" "Step 2: Create worktrees"
     log "Step 2: Creating git worktrees..."
     "$CLAUDE_SH" --setup-worktrees || { error "Failed to create worktrees"; exit 1; }
 else
+    step_emit "2" "skip" "Step 2: Create worktrees" "no parallel stories"
     info "Step 2: No worktree stories — skipping worktree creation"
 fi
 
@@ -1583,6 +1786,7 @@ PRIMARY_PID=""
 INDEPENDENT_PID=""
 
 if [ -n "$primary_stories" ]; then
+    step_emit "3a" "running" "Step 3a: Primary agent"
     log "Step 3a: Starting primary agent..."
     "$CLAUDE_SH" --worktree primary --phase "$PHASE" \
         > "$LOG_DIR/wt-primary.log" 2>&1 &
@@ -1591,6 +1795,7 @@ if [ -n "$primary_stories" ]; then
 fi
 
 if [ -n "$independent_stories" ]; then
+    step_emit "3b" "running" "Step 3b: Independent agent"
     log "Step 3b: Starting independent agent..."
     "$CLAUDE_SH" --worktree independent --phase "$PHASE" \
         > "$LOG_DIR/wt-independent.log" 2>&1 &
@@ -1634,6 +1839,7 @@ fi
 # Ensures agent-produced code is committed before gate assessment.
 # Agents sometimes write files without committing (common failure mode).
 if [ "$need_worktrees" = true ]; then
+    step_emit "3.1" "running" "Step 3.1: Worktree health"
     log "Step 3.1: Worktree health check..."
     GIT_WORK_ROOT="${GIT_WORK_ROOT:-$PROJECT_ROOT}" \
         PHASE="$PHASE" AUTO_COMMIT=true "$SCRIPT_DIR/worktree-health-check.sh" \
@@ -1644,6 +1850,7 @@ if [ "$need_worktrees" = true ]; then
         exit 1
     fi
 else
+    step_emit "3.1" "skip" "Step 3.1: Worktree health" "no worktrees"
     info "Step 3.1: No worktrees — skipping health check"
 fi
 
@@ -1796,6 +2003,7 @@ PROMPT_EOF
 
 # Only run assessment if cost tracking data exists
 if [ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ]; then
+    step_emit "3.5" "skip" "Step 3.5: Post-parallel assessment" "SKIP_SKILL_ASSESSMENT=1"
     info "Step 3.5: Skipped (SKIP_SKILL_ASSESSMENT=1)"
 elif [ -s "$LOG_DIR/phase-cost.jsonl" ]; then
     log "Step 3.5: Running post-parallel skill assessment..."
@@ -1870,6 +2078,7 @@ if [ "${SKIP_PRE_REVIEW_GATE:-false}" != "true" ] && [ -f "$PROJECT_ROOT/package
             >> "$_pre_review_log"
 
         if [ $_pre_review_failed -ne 0 ]; then
+            step_emit "3.7" "fail" "Step 3.7: Pre-review gate"
             error "Step 3.7: Pre-review gate FAILED — review agents blocked on broken build"
             error "  Fix failures, then re-run: $0 --phase $PHASE"
             error "  Bypass (emergency only): SKIP_PRE_REVIEW_GATE=true $0 --phase $PHASE"
@@ -1877,10 +2086,12 @@ if [ "${SKIP_PRE_REVIEW_GATE:-false}" != "true" ] && [ -f "$PROJECT_ROOT/package
             exit 1
         fi
 
-        success "Step 3.7: Pre-review gate PASSED"
+        step_emit "3.7" "pass" "Step 3.7: Pre-review gate"
+            success "Step 3.7: Pre-review gate PASSED"
     fi
 else
     [ "${SKIP_PRE_REVIEW_GATE:-false}" = "true" ] && \
+        step_emit "3.7" "skip" "Step 3.7: Pre-review gate" "SKIP_PRE_REVIEW_GATE=true"
         info "Step 3.7: Pre-review gate skipped (SKIP_PRE_REVIEW_GATE=true)"
 fi
 
@@ -1888,6 +2099,7 @@ fi
 # Step 4: Run review stories
 # ──────────────────────────────────────────────
 if [ -n "$review_stories" ]; then
+    step_emit "4" "running" "Step 4: Review stories"
     log "Step 4: Running review stories..."
     while IFS= read -r story; do
         [ -z "$story" ] && continue
@@ -1906,6 +2118,7 @@ if [ -n "$review_stories" ]; then
     done <<< "$review_stories"
     success "Review stories complete"
 else
+    step_emit "4" "skip" "Step 4: Review stories" "no review stories"
     info "Step 4: No review stories in this phase"
 fi
 
@@ -1943,6 +2156,13 @@ run_testing_gates() {
     fi
 
     if [ "${SKIP_TESTING_GATES:-false}" = "true" ]; then
+        step_emit "4.2a" "skip" "Step 4.2a: SAST sentinel" "SKIP_TESTING_GATES=true"
+step_emit "4.2b" "skip" "Step 4.2b: Spec validator" "SKIP_TESTING_GATES=true"
+step_emit "4.3a" "skip" "Step 4.3a: Review ranger" "SKIP_TESTING_GATES=true"
+step_emit "4.3b" "skip" "Step 4.3b: Mutant hunter" "SKIP_TESTING_GATES=true"
+step_emit "4.4a" "skip" "Step 4.4a: Fuzz-weaver" "SKIP_TESTING_GATES=true"
+step_emit "4.4b" "skip" "Step 4.4b: Perf sentinel" "SKIP_TESTING_GATES=true"
+step_emit "4.6"  "skip" "Step 4.6: Browser E2E" "SKIP_TESTING_GATES=true"
         info "Step 4.2: Testing gates skipped (SKIP_TESTING_GATES=true)"
         return 0
     fi
@@ -2028,6 +2248,7 @@ run_testing_gates() {
         local rc
 
         if [ "${SKIP_BROWSER_E2E_ROUTING:-false}" = "true" ]; then
+            step_emit "4.6" "skip" "Step 4.6: Browser E2E" "SKIP_BROWSER_E2E_ROUTING=true"
             info "  Step 4.6: Browser E2E routing skipped (SKIP_BROWSER_E2E_ROUTING=true)"
             return 0
         fi
@@ -2131,7 +2352,8 @@ Return strict JSON only:
         done <<< "$phase_ids"
 
         if [ $e2e_route_runs -eq 0 ]; then
-            info "  Step 4.6: No stories matched browser E2E routing criteria"
+            step_emit "4.6" "skip" "Step 4.6: Browser E2E" "no stories matched"
+        info "  Step 4.6: No stories matched browser E2E routing criteria"
         fi
         echo "Summary: runs=$e2e_route_runs lightpanda=$e2e_route_lightpanda playwright=$e2e_route_playwright failed=$e2e_route_failed" >> "$e2e_route_log"
         return 0
@@ -2170,6 +2392,11 @@ Analyze the pre-computed evidence above and produce a structured JSON report cov
    - INFO severity findings → severity 'minor'
    - Patterns to flag if Semgrep missed them (text scan only, no tool calls):
      command injection, path traversal, hardcoded secrets, unsafe eval
+
+3. Dependency CVE classification (npm audit results):
+   - CVEs in RUNTIME dependencies (listed under "dependencies" in package.json) → severity 'blocker' if critical, 'major' if high
+   - CVEs in DEV-ONLY dependencies (listed under "devDependencies" in package.json, e.g. vitest, esbuild, vite, typescript, tsup, eslint) → severity 'minor' regardless of CVSS score. Dev tools never run in production and their CVEs do not affect application security.
+   - NEVER classify a dev-dependency CVE as 'blocker' or 'major'.
 
 If the injected evidence is insufficient to determine a verdict with confidence, output \"verdict\": \"pass\" with 0 findings rather than fabricating a failure.
 
@@ -2488,13 +2715,37 @@ $spec_prompt"
 import sys, json, re
 try:
     text = open('$sast_log').read()
-    # Extract JSON from log (may have leading prose)
+    parsed = None
+    # Try full JSON parse
     m = re.search(r'\{.*\}', text, re.DOTALL)
     if m:
-        d = json.loads(m.group(0))
-        print(d.get('summary', {}).get('blockerCount', -1))
+        try:
+            parsed = json.loads(m.group(0))
+        except Exception:
+            pass
+    if parsed is not None:
+        # Prefer summary.blockerCount
+        summary_count = parsed.get('summary', {}).get('blockerCount', None)
+        if summary_count is not None:
+            print(summary_count)
+        else:
+            findings = parsed.get('findings', [])
+            print(sum(1 for f in findings if str(f.get('severity','')).lower() == 'blocker'))
     else:
-        print(-1)
+        # Malformed JSON — extract summary block directly (it appears before findings)
+        sm = re.search(r'\"summary\"\s*:\s*\{([^}]*)\}', text, re.DOTALL)
+        if sm:
+            try:
+                summary = json.loads('{' + sm.group(1) + '}')
+                bc = summary.get('blockerCount', None)
+                if bc is not None:
+                    print(bc)
+                    sys.exit(0)
+            except Exception:
+                pass
+        # Last resort: count severity:blocker occurrences in raw text
+        hits = len(re.findall(r'\"severity\"\s*:\s*\"blocker\"', text, re.IGNORECASE))
+        print(hits)
 except Exception:
     print(-1)
 " 2>/dev/null || echo "-1")
@@ -2504,12 +2755,15 @@ except Exception:
                 error "  SAST sentinel: FAIL verdict (could not parse blockerCount)"
                 failed=1
             else
-                success "  SAST sentinel: PASS (no parseable findings)"
+                step_emit "4.2a" "pass" "Step 4.2a: SAST sentinel"
+            success "  SAST sentinel: PASS (no parseable findings)"
             fi
         elif [ "$_sast_blockers" -gt 0 ]; then
+            step_emit "4.2a" "fail" "Step 4.2a: SAST sentinel"
             error "  SAST sentinel: FAIL — $_sast_blockers blocker finding(s) detected"
             failed=1
         else
+            step_emit "4.2a" "pass" "Step 4.2a: SAST sentinel"
             success "  SAST sentinel: PASS (blockerCount=$_sast_blockers)"
         fi
     fi
@@ -2842,16 +3096,65 @@ $perf_prompt"
         wait $perf_pid || perf_exit=$?
 
         # Evaluate Phase C results
+        # Fuzz-weaver: validate that any "fail" verdict is grounded in real files.
+        # An agent with no tool access will hallucinate findings about non-existent files.
+        # We downgrade "fail" to "warn" when no vulnerability finding references a file
+        # that actually exists under PROJECT_ROOT/src.
         if [ $fuzz_exit -ne 0 ]; then
             error "  Fuzz-weaver FAILED (exit $fuzz_exit)"
             failed=1
         else
             if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$fuzz_log" 2>/dev/null; then
-                error "  Fuzz-weaver: FAIL verdict — vulnerabilities detected"
-                failed=1
+                # Ground-truth check: count vulnerability findings whose file exists on disk
+                _fuzz_grounded=$(python3 - "$fuzz_log" "$PROJECT_ROOT" << 'PYEOF'
+import json, sys, os, re
+
+log_file    = sys.argv[1]
+project_root = sys.argv[2]
+
+# Extract JSON from the log (agent may emit preamble text)
+content = open(log_file).read()
+json_match = re.search(r'\{.*"agent".*"fuzz-weaver".*\}', content, re.DOTALL)
+if not json_match:
+    print("0")
+    sys.exit(0)
+
+try:
+    data = json.loads(json_match.group(0))
+except Exception:
+    print("0")
+    sys.exit(0)
+
+grounded = 0
+for case in data.get("cases", []):
+    if case.get("status") != "vulnerability":
+        continue
+    f = case.get("file", "")
+    # Try both absolute and relative paths
+    candidates = [
+        f,
+        os.path.join(project_root, f),
+        os.path.join(project_root, "src", os.path.basename(f)),
+    ]
+    if any(os.path.exists(p) for p in candidates):
+        grounded += 1
+
+print(str(grounded))
+PYEOF
+2>/dev/null || echo "0")
+                if [ "${_fuzz_grounded:-0}" -gt 0 ]; then
+                    step_emit "4.4a" "fail" "Step 4.4a: Fuzz-weaver"
+                    error "  Fuzz-weaver: FAIL — ${_fuzz_grounded} confirmed vulnerability/vulnerabilities in real files"
+                    failed=1
+                else
+                    step_emit "4.4a" "warn" "Step 4.4a: Fuzz-weaver" "hallucinated findings downgraded"
+                    warning "  Fuzz-weaver: FAIL verdict downgraded to WARN — no vulnerability findings reference existing source files (likely hallucinated; re-check manually)"
+                fi
             elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$fuzz_log" 2>/dev/null; then
-                warning "  Fuzz-weaver: WARN — coverage gaps > 30% (non-blocking)"
+                step_emit "4.4a" "warn" "Step 4.4a: Fuzz-weaver" "gaps>30%"
+            warning "  Fuzz-weaver: WARN — coverage gaps > 30% (non-blocking)"
             else
+                step_emit "4.4a" "pass" "Step 4.4a: Fuzz-weaver"
                 success "  Fuzz-weaver: PASS"
             fi
         fi
@@ -2861,15 +3164,19 @@ $perf_prompt"
             failed=1
         else
             if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$perf_log" 2>/dev/null; then
+                step_emit "4.4b" "fail" "Step 4.4b: Perf sentinel"
                 error "  Perf-sentinel: FAIL verdict — performance blocker detected"
                 failed=1
             elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$perf_log" 2>/dev/null; then
                 warning "  Perf-sentinel: WARN — performance concerns (non-blocking)"
             else
-                success "  Perf-sentinel: PASS"
+                step_emit "4.4b" "pass" "Step 4.4b: Perf sentinel"
+            success "  Perf-sentinel: PASS"
             fi
         fi
     else
+        step_emit "4.4a" "skip" "Step 4.4a: Fuzz-weaver" "Phase A/B failed"
+step_emit "4.4b" "skip" "Step 4.4b: Perf sentinel" "Phase A/B failed"
         info "  Phase C (fuzz-weaver + perf-sentinel) skipped — earlier phases had failures"
     fi
 

@@ -544,7 +544,13 @@ body {
     <div class="activity-empty">Loading activity…</div>
   </div>
 
-  <!-- ── 5. Live State Panel ───────────────────────────────────────────── -->
+  <!-- ── 5. Pipeline Step Checklist ──────────────────────────────────── -->
+  <div class="section-title">Pipeline Steps <span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">auto-refreshes · SKIP = bypassed via env var · COND = runs only when condition met</span></div>
+  <div id="pipelineSteps" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 20px;overflow-x:auto;">
+    <div style="color:var(--text3);font-size:12px;">Loading step status…</div>
+  </div>
+
+  <!-- ── 6. Live State Panel ───────────────────────────────────────────── -->
   <div class="section-title">Live Execution State</div>
   <div class="live-panel lp-inactive" id="livePanel">
     <div class="lp-header">
@@ -1093,15 +1099,105 @@ function detectActivePhase(phases) {
   return ph ? (ph.phaseName || ph.name) : (phases[0] ? (phases[0].phaseName || phases[0].name) : null);
 }
 
+/* ─── Pipeline step checklist ────────────────────────────────────────────── */
+const STEP_MANIFEST = [
+  {id:'0',    label:'Specification pass',          bypassVar:'EPAM_SPEC_MODE=0'},
+  {id:'0.1',  label:'CPA pre-pass',                bypassVar:'SKIP_CPA=1'},
+  {id:'0.5',  label:'Pre-phase skill assessment',  bypassVar:'SKIP_SKILL_ASSESSMENT=1'},
+  {id:'0.6',  label:'Hybrid pre-coordination',     bypassVar:'ORCH_MODE≠hybrid'},
+  {id:'0.7',  label:'Regression guard',            bypassVar:'SKIP_REGRESSION_GUARD=true'},
+  {id:'0.8',  label:'mkdir src/ dirs',             bypassVar:null},
+  {id:'1',    label:'Main-branch stories',         bypassVar:null},
+  {id:'1.5',  label:'Auto-commit',                 bypassVar:null},
+  {id:'1.6',  label:'TC writer gate',              bypassVar:'SKIP_TC_WRITER=1'},
+  {id:'2',    label:'Create worktrees',            bypassVar:null},
+  {id:'3a',   label:'Primary agent',               bypassVar:null},
+  {id:'3b',   label:'Independent agent',           bypassVar:null},
+  {id:'3.1',  label:'Worktree health check',       bypassVar:null},
+  {id:'3.2',  label:'Merge worktrees',             bypassVar:null},
+  {id:'3.5',  label:'Post-parallel assessment',    bypassVar:'SKIP_SKILL_ASSESSMENT=1'},
+  {id:'3.7',  label:'Pre-review gate',             bypassVar:'SKIP_PRE_REVIEW_GATE=true'},
+  {id:'4',    label:'Review stories',              bypassVar:null},
+  {id:'4.2a', label:'SAST sentinel',               bypassVar:'SKIP_TESTING_GATES=true'},
+  {id:'4.2b', label:'Spec validator',              bypassVar:'SKIP_TESTING_GATES=true'},
+  {id:'4.3a', label:'Review ranger',               bypassVar:'SKIP_TESTING_GATES=true'},
+  {id:'4.3b', label:'Mutant hunter',               bypassVar:'SKIP_TESTING_GATES=true'},
+  {id:'4.4a', label:'Fuzz-weaver',                 bypassVar:'SKIP_TESTING_GATES=true'},
+  {id:'4.4b', label:'Perf sentinel',               bypassVar:'SKIP_TESTING_GATES=true'},
+  {id:'4.6',  label:'Browser E2E routing',         bypassVar:'SKIP_BROWSER_E2E_ROUTING=true'},
+];
+
+async function fetchStepStatus() {
+  try {
+    const r = await fetch(`logs/step-status.json?t=${Date.now()}`);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+
+function renderPipelineSteps(stepData) {
+  const el = document.getElementById('pipelineSteps');
+  if (!el) return;
+
+  const statusMap = {};
+  if (stepData && Array.isArray(stepData.steps)) {
+    for (const s of stepData.steps) statusMap[s.id] = s;
+  }
+
+  const statusStyle = {
+    pass:    {bg:'var(--green-dim)',    color:'var(--green)',  icon:'✓', label:'PASS'},
+    fail:    {bg:'var(--red-dim)',      color:'var(--red)',    icon:'✗', label:'FAIL'},
+    skip:    {bg:'var(--amber-dim)',    color:'var(--amber)',  icon:'⊘', label:'SKIP'},
+    warn:    {bg:'var(--amber-dim)',    color:'var(--amber)',  icon:'⚠', label:'WARN'},
+    running: {bg:'var(--blue-dim)',     color:'var(--blue)',   icon:'▶', label:'RUNNING'},
+    pending: {bg:'var(--bg2)',          color:'var(--text3)',  icon:'○', label:'PENDING'},
+  };
+
+  const phase = stepData ? (stepData.phase || '') : '';
+  const updatedAt = stepData ? (stepData.updatedAt || '') : '';
+
+  const rows = STEP_MANIFEST.map(step => {
+    const live = statusMap[step.id];
+    const st = live ? (live.status || 'pending') : 'pending';
+    const style = statusStyle[st] || statusStyle.pending;
+    const reason = live && live.status === 'skip' && step.bypassVar ? step.bypassVar : '';
+    return `<tr>
+      <td style="padding:5px 12px 5px 0;color:var(--text3);font-size:11px;font-family:monospace;white-space:nowrap;">${step.id}</td>
+      <td style="padding:5px 12px 5px 0;">${step.label}</td>
+      <td style="padding:5px 8px;">
+        <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:${style.bg};color:${style.color};">
+          ${style.icon} ${style.label}
+        </span>
+      </td>
+      <td style="padding:5px 0;color:var(--text3);font-size:11px;">${reason ? `<code style="font-size:10px;">${reason}</code>` : ''}</td>
+    </tr>`;
+  }).join('');
+
+  const meta = phase ? `<div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Phase: <strong>${phase}</strong>${updatedAt ? ' · Updated: ' + new Date(updatedAt).toLocaleTimeString() : ''}</div>` : '';
+
+  el.innerHTML = meta + `<table style="border-collapse:collapse;width:100%;min-width:400px;">
+    <thead>
+      <tr style="border-bottom:1px solid var(--border);">
+        <th style="text-align:left;padding:4px 12px 8px 0;font-size:11px;color:var(--text3);font-weight:600;">Step</th>
+        <th style="text-align:left;padding:4px 12px 8px 0;font-size:11px;color:var(--text3);font-weight:600;">Name</th>
+        <th style="text-align:left;padding:4px 8px 8px;font-size:11px;color:var(--text3);font-weight:600;">Status</th>
+        <th style="text-align:left;padding:4px 0 8px;font-size:11px;color:var(--text3);font-weight:600;">Bypass</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
 /* ─── Main refresh loop ──────────────────────────────────────────────────── */
 async function refresh() {
   // Fetch all data sources in parallel
   await loadPrd();
-  const [phases, stories, events, liveStatus] = await Promise.all([
+  const [phases, stories, events, liveStatus, stepData] = await Promise.all([
     fetchPhasesFromPrd(),
     fetchStoriesFromPrd(),
     fetchActivityEvents(),
-    fetchAgentStatus()
+    fetchAgentStatus(),
+    fetchStepStatus()
   ]);
 
   const apiOnline = phases !== null || stories !== null;
@@ -1125,6 +1221,9 @@ async function refresh() {
 
   // Activity feed
   renderActivity(evList);
+
+  // Pipeline step checklist
+  renderPipelineSteps(stepData);
 
   // Live state panel
   renderLivePanel(liveStatus);

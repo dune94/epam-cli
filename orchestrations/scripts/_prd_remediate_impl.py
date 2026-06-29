@@ -21,14 +21,25 @@ by_id      = {s['id']: s for s in stories}
 changes    = []
 
 # ── 1. Remove stale bug-fix runtime splits ────────────────────────────────────
-# Pattern: <base>-(impl|test|table)-N where <base> is also an active story.
+# Two patterns:
+# (a) <base>-(impl|test|table)-N where <base> is also an active story.
+# (b) SPEC-N or SPEC-N-N: ephemeral sub-stories created by the spec-mode runner
+#     when it re-splits an already-active story mid-run. These should never
+#     survive into the next run — their parent is already scheduled.
 active_before = set(sid for phase in impl_order.values() for sid in phase)
-split_re = re.compile(r'^(.+)-(impl|test|table)-\d+$')
+split_re    = re.compile(r'^(.+)-(impl|test|table)-\d+$')
+spec_sub_re = re.compile(r'^SPEC-\d+(-\d+)*$')
 stale_splits = set()
 for sid in active_before:
     m = split_re.match(sid)
     if m and m.group(1) in active_before:
         stale_splits.add(sid)
+    # Ephemeral spec sub-story: generic SPEC-N id AND parent is still active
+    if spec_sub_re.match(sid):
+        s = by_id.get(sid, {})
+        parent = s.get('specification', {}).get('createdFrom', '')
+        if parent and parent in active_before:
+            stale_splits.add(sid)
 if stale_splits:
     for phase in impl_order:
         impl_order[phase] = [s for s in impl_order[phase] if s not in stale_splits]

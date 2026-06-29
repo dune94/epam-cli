@@ -3377,6 +3377,182 @@ step_emit "4.4b" "skip" "Step 4.4b: Perf sentinel" "Phase A/B failed"
         "Testing gates $verdict for $phase_id (${duration_ms}ms)" "" "main" "test-coordinator-agent" 2>/dev/null || true
 
     if [ $failed -ne 0 ]; then
+        # ── Self-healing: three-agent pipeline feeds gate findings back into PRD + profiles ──
+        # Agent 1 (gate-finding-analyst):  extracts grounded structured finding from gate log
+        # Agent 2 (story-ac-remediator):   augments the owning story's ACs in PRD
+        # Agent 3 (profile-augmentor):     appends novel anti-pattern to the relevant profile
+
+        # Collect all failing gate logs for this phase
+        local _failing_logs=()
+        local _log_labels=()
+        [ "${sast_exit:-0}"   -ne 0 ] && _failing_logs+=("$sast_log")   && _log_labels+=("sast-sentinel")
+        [ "${spec_exit:-0}"   -ne 0 ] && _failing_logs+=("$spec_log")   && _log_labels+=("spec-validator")
+        [ "${review_exit:-0}" -ne 0 ] && _failing_logs+=("$review_log") && _log_labels+=("review-ranger")
+        [ "${mutant_exit:-0}" -ne 0 ] && _failing_logs+=("$mutant_log") && _log_labels+=("mutant-hunter")
+        [ "${fuzz_exit:-0}"   -ne 0 ] && _failing_logs+=("$fuzz_log")   && _log_labels+=("fuzz-weaver")
+        [ "${perf_exit:-0}"   -ne 0 ] && _failing_logs+=("$perf_log")   && _log_labels+=("perf-sentinel")
+
+        local _profiles_file="${SCRIPT_DIR}/agents/profiles.json"
+
+        if [ "${SKIP_GATE_REMEDIATION:-0}" != "1" ] && [ ${#_failing_logs[@]} -gt 0 ]; then
+            warning "Step 4.2: Testing gates FAILED — running self-healing remediation pipeline..."
+            local _remediation_applied=0
+            local _rem_log="$LOG_DIR/gate-remediation-${phase_id}.log"
+
+            for i in "${!_failing_logs[@]}"; do
+                local _glog="${_failing_logs[$i]}"
+                local _glabel="${_log_labels[$i]}"
+                [ -f "$_glog" ] || continue
+
+                info "  [gate-finding-analyst] Extracting grounded finding from ${_glabel} log..."
+
+                # ── Agent 1: gate-finding-analyst ──────────────────────────────────
+                # Reads gate log + PRD, emits JSON { gate, story_id, file, line, rule, message, suggested_fix }
+                local _finding_prompt
+                _finding_prompt=$(cat << ENDPROMPT1
+$(cat "$_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('gate-finding-analyst',''))")
+
+Gate: ${_glabel}
+Gate log file: ${_glog}
+PRD file: ${PRD_FILE}
+Current phase: ${phase_id}
+
+Run your analysis now. Paste the verbatim log line proving the finding, then emit the JSON output.
+ENDPROMPT1
+)
+                local _finding_json
+                _finding_json=$(echo "$_finding_prompt" | \
+                    AI_GATE_ALLOW_TOOLS=1 \
+                    AI_PROVIDER="${ORCH_GATE_PROVIDER:-openai}" \
+                    AI_MODEL="${ORCH_GATE_MODEL:-gpt-4o}" \
+                    EPAM_DANGEROUS_SKIP_APPROVAL=1 \
+                    CLAUDE_CMD="$CLAUDE_CMD" \
+                    EPAM_CLI="${EPAM_CLI:-epam}" \
+                    "$AI_RUNNER_CMD" \
+                        --provider "${ORCH_GATE_PROVIDER:-openai}" \
+                        --model    "${ORCH_GATE_MODEL:-gpt-4o}" \
+                    2>&1 | tee -a "$_rem_log")
+
+                # Check analyst returned a grounded finding (has story_id and rule)
+                local _story_id
+                _story_id=$(echo "$_finding_json" | python3 -c "
+import sys, re, json
+txt = sys.stdin.read()
+for m in re.finditer(r'\{[^{}]*\"story_id\"[^{}]*\}', txt, re.DOTALL):
+    try:
+        obj = json.loads(m.group(0))
+        sid = obj.get('story_id')
+        if sid and sid != 'null':
+            print(sid)
+            break
+    except: pass
+" 2>/dev/null || true)
+
+                if [ -z "$_story_id" ] || [ "$_story_id" = "null" ]; then
+                    warning "  [gate-finding-analyst] No grounded finding for ${_glabel} — skipping remediation for this gate"
+                    continue
+                fi
+                info "  [gate-finding-analyst] Finding mapped to story: ${_story_id}"
+
+                # ── Agent 2: story-ac-remediator ───────────────────────────────────
+                # Reads the finding JSON + PRD, appends ACs to the owning story
+                info "  [story-ac-remediator] Augmenting ACs for story ${_story_id}..."
+                local _ac_prompt
+                _ac_prompt=$(cat << ENDPROMPT2
+$(cat "$_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('story-ac-remediator',''))")
+
+## Finding to remediate
+\`\`\`json
+${_finding_json}
+\`\`\`
+
+PRD file: ${PRD_FILE}
+Story to update: ${_story_id}
+
+Augment the story's acceptanceCriteria now. Write the updated PRD back to the file, then emit the JSON summary.
+ENDPROMPT2
+)
+                local _ac_result
+                _ac_result=$(echo "$_ac_prompt" | \
+                    AI_GATE_ALLOW_TOOLS=1 \
+                    AI_PROVIDER="${ORCH_GATE_PROVIDER:-openai}" \
+                    AI_MODEL="${ORCH_GATE_MODEL:-gpt-4o}" \
+                    EPAM_DANGEROUS_SKIP_APPROVAL=1 \
+                    CLAUDE_CMD="$CLAUDE_CMD" \
+                    EPAM_CLI="${EPAM_CLI:-epam}" \
+                    "$AI_RUNNER_CMD" \
+                        --provider "${ORCH_GATE_PROVIDER:-openai}" \
+                        --model    "${ORCH_GATE_MODEL:-gpt-4o}" \
+                    2>&1 | tee -a "$_rem_log")
+
+                local _acs_added
+                _acs_added=$(echo "$_ac_result" | python3 -c "
+import sys, re, json
+txt = sys.stdin.read()
+for m in re.finditer(r'\{[^{}]*\"acs_added\"[^{}]*\}', txt, re.DOTALL):
+    try:
+        obj = json.loads(m.group(0))
+        print(obj.get('acs_added', 0))
+        break
+    except: pass
+else: print(0)
+" 2>/dev/null || echo 0)
+
+                if [ "${_acs_added:-0}" -gt 0 ]; then
+                    success "  [story-ac-remediator] ${_acs_added} AC(s) added to ${_story_id}"
+                    _remediation_applied=1
+                else
+                    info "  [story-ac-remediator] No new ACs added (already covered or agent skipped)"
+                fi
+
+                # ── Agent 3: profile-augmentor ─────────────────────────────────────
+                # Checks if the pattern is novel; if so, appends to the relevant profile
+                info "  [profile-augmentor] Checking if pattern is novel for profiles..."
+                local _prof_prompt
+                _prof_prompt=$(cat << ENDPROMPT3
+$(cat "$_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('profile-augmentor',''))")
+
+## Finding to evaluate
+\`\`\`json
+${_finding_json}
+\`\`\`
+
+Profiles file: ${_profiles_file}
+
+Check if the pattern is novel and append a rule if needed. Write the updated profiles.json back, then emit the JSON summary.
+ENDPROMPT3
+)
+                local _prof_result
+                _prof_result=$(echo "$_prof_prompt" | \
+                    AI_GATE_ALLOW_TOOLS=1 \
+                    AI_PROVIDER="${ORCH_GATE_PROVIDER:-openai}" \
+                    AI_MODEL="${ORCH_GATE_MODEL:-gpt-4o}" \
+                    EPAM_DANGEROUS_SKIP_APPROVAL=1 \
+                    CLAUDE_CMD="$CLAUDE_CMD" \
+                    EPAM_CLI="${EPAM_CLI:-epam}" \
+                    "$AI_RUNNER_CMD" \
+                        --provider "${ORCH_GATE_PROVIDER:-openai}" \
+                        --model    "${ORCH_GATE_MODEL:-gpt-4o}" \
+                    2>&1 | tee -a "$_rem_log")
+
+                if echo "$_prof_result" | grep -q '"profile_updated"[[:space:]]*:[[:space:]]*true'; then
+                    success "  [profile-augmentor] Profile updated with new rule for ${_glabel} pattern"
+                else
+                    info "  [profile-augmentor] No profile update (pattern already covered)"
+                fi
+
+            done  # end per-gate loop
+
+            if [ "$_remediation_applied" = "1" ]; then
+                # Signal the caller (tier3 runner) to prd-remediate and retry the phase
+                warning "Step 4.2: Remediation applied — caller should reset stories and retry phase"
+                error "Step 4.2: Testing gates FAILED — remediation applied, retry required"
+                error "  Remediation log: $_rem_log"
+                error "  Bypass (skip remediation): SKIP_GATE_REMEDIATION=1 $0 --phase $phase_id"
+                return 2  # exit code 2 = "remediated, retry the phase"
+            fi
+        fi
+
         error "Step 4.2: Testing gates FAILED — fix findings and re-run"
         error "  SAST log: $sast_log"
         error "  Spec log: $spec_log"

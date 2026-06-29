@@ -138,6 +138,27 @@ run_phase() {
     --reset \
     2>&1 | tee -a "$LOG_FILE" || phase_exit=${PIPESTATUS[0]}
   echo ""
+
+  # exit 2 = gate remediation was applied — reset stories and retry once
+  if [ "$phase_exit" -eq 2 ]; then
+    info "  Self-healing: gate remediation applied — resetting and retrying phase '$phase'..."
+    if ! bash "$SCRIPT_DIR/prd-remediate.sh" --prd "$PRD_FILE" 2>&1 | tee -a "$LOG_FILE"; then
+      fail "PRD remediation failed during self-healing retry for phase '$phase'"
+    fi
+    echo ""
+    phase_exit=0
+    SKIP_GATE_REMEDIATION=1 bash orchestrations/scripts/run-agent-orchestration.sh \
+      --phase "$phase" \
+      --reset \
+      2>&1 | tee -a "$LOG_FILE" || phase_exit=${PIPESTATUS[0]}
+    echo ""
+    if [ "$phase_exit" -ne 0 ]; then
+      fail "Phase '$phase' failed after self-healing retry (exit $phase_exit) — aborting pipeline"
+    fi
+    success "Self-healing retry succeeded for phase '$phase'"
+    return 0
+  fi
+
   if [ "$phase_exit" -ne 0 ]; then
     fail "Phase '$phase' failed (exit $phase_exit) — aborting pipeline"
   fi

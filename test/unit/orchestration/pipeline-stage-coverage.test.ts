@@ -661,6 +661,10 @@ describe('Step 3b: Independent agent', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('Step 3.1: Worktree health', () => {
+  it('emits running when health check starts', () => {
+    expect(hasStepEmit('3.1', 'running')).toBe(true);
+  });
+
   it('emits pass when worktrees are healthy', () => {
     expect(hasStepEmit('3.1', 'pass')).toBe(true);
   });
@@ -1299,7 +1303,10 @@ describe('PRD auto-remediation', () => {
   it('remediation strips runtime fields from stories', () => {
     const src = fs.readFileSync(PRD_REMEDIATE_IMPL, 'utf8');
     expect(src).toMatch(/RUNTIME_FIELDS/);
-    expect(src).toMatch(/startedAt.*completedAt.*actualCost/);
+    // actualCost must NOT be in RUNTIME_FIELDS — it is historical data that survives remediation
+    expect(src).toMatch(/startedAt/);
+    expect(src).toMatch(/completedAt/);
+    expect(src).not.toMatch(/RUNTIME_FIELDS\s*=\s*\[[^\]]*actualCost/);
   });
 
   it('tier3 runner calls prd-remediate.sh before each phase', () => {

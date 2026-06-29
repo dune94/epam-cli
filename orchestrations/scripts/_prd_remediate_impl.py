@@ -5,7 +5,9 @@ import re
 import sys
 
 REQUIRED_PHASES = ['scaffold', 'core', 'ui_and_review']
-RUNTIME_FIELDS  = ['startedAt', 'completedAt', 'actualCost', 'error', 'agentLog']
+RUNTIME_FIELDS  = ['startedAt', 'completedAt', 'error', 'agentLog']
+# actualCost is intentionally preserved — it is the historical record of what each
+# story actually cost and is required for estimates-vs-actuals reporting.
 MAX_ACS = 24
 
 PRD_FILE = sys.argv[1]

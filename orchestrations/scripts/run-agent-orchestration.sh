@@ -352,6 +352,39 @@ append_pipeline_cost_record() {
     ) 200>"$lock_file"
 }
 
+# record_story_actual_cost <story_id> <log_file>
+# Extracts cost_usd from the story's JSONL log output and writes it back to
+# prd.json as .actualCost so estimates-vs-actuals can be compared per story.
+record_story_actual_cost() {
+    local story_id="$1"
+    local log_file="$2"
+    [ -f "$log_file" ] || return 0
+    # Extract cost from JSONL lines: epam run --json emits lines with cost_usd field
+    local actual_cost
+    actual_cost=$(grep -o '"cost_usd":[0-9.]*\|"total_cost_usd":[0-9.]*' "$log_file" 2>/dev/null \
+        | tail -1 | grep -o '[0-9.]*$' || echo "")
+    # Fallback: sum all task_cost_usd records for this story from phase-cost.jsonl
+    if [ -z "$actual_cost" ] || [ "$actual_cost" = "0" ]; then
+        local cost_file="${PHASE_COST_FILE:-$LOG_DIR/phase-cost.jsonl}"
+        if [ -f "$cost_file" ]; then
+            actual_cost=$(jq -rs --arg sid "$story_id" \
+                '[.[] | select(.story_id == $sid) | .task_cost_usd // 0] | add // 0' \
+                "$cost_file" 2>/dev/null || echo "")
+        fi
+    fi
+    [ -z "$actual_cost" ] && return 0
+    [ "$actual_cost" = "0" ] && [ -z "$(grep -c 'cost_usd' "$log_file" 2>/dev/null)" ] && return 0
+    # Write actualCost back to prd.json for this story
+    local prd="${MAIN_PRD_FILE:-$PRD_FILE}"
+    if [ -f "$prd" ]; then
+        local tmp
+        tmp=$(mktemp)
+        jq --arg sid "$story_id" --argjson cost "$actual_cost" \
+            '(.stories[] | select(.id == $sid)) |= (.actualCost = $cost)' \
+            "$prd" > "$tmp" && mv "$tmp" "$prd" || rm -f "$tmp"
+    fi
+}
+
 # run_orch_prompt <prompt> [agent_type] [story_id]
 # Runs a pipeline agent prompt, tracks cost to phase-cost.jsonl (GAP-P22),
 # and returns the text output.
@@ -1745,6 +1778,7 @@ if [ -n "$main_stories" ]; then
             log "  Running: $story"
             run_story_with_watchdog "$story" "$LOG_DIR/main-${story}.log" \
                 || { _phase_story_failures=$((_phase_story_failures+1)); }
+            record_story_actual_cost "$story" "$LOG_DIR/main-${story}.log"
             checkpoint_complete "$story"
         done <<< "$non_review_main"
         if [ "$_phase_story_failures" -gt 0 ]; then
@@ -2186,6 +2220,7 @@ if [ -n "$review_stories" ]; then
         fi
         log "  Running review: $story"
         run_story_with_watchdog "$story" "$LOG_DIR/review-${story}.log"
+        record_story_actual_cost "$story" "$LOG_DIR/review-${story}.log"
     done <<< "$review_stories"
     if [ "${_review_failed:-0}" -gt 0 ]; then
         step_emit "4" "fail" "Step 4: Review stories"

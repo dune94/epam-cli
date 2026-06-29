@@ -18,6 +18,19 @@ const prd = JSON.parse(readFileSync(PRD_PATH, 'utf8'));
 const profiles = JSON.parse(readFileSync(PROFILES_PATH, 'utf8'));
 const byId = new Map(prd.stories.map((s: any) => [s.id, s]));
 
+/** When a story has delegated its ACs to split children, collect ACs from all children too. */
+function acsOf(s: any): string[] {
+  const acs: string[] = s?.acceptanceCriteria ?? [];
+  const delegated = acs.some((ac: string) => /Delegated to split children/i.test(ac));
+  if (!delegated) return acs;
+  return [
+    ...acs,
+    ...prd.stories
+      .filter((c: any) => c?.specification?.createdFrom === s.id)
+      .flatMap((c: any) => acsOf(c)), // recurse for nested splits
+  ];
+}
+
 // ── 1. test-engineer profile enforces read-first ──────────────────────────────
 describe('test-engineer agent profile — read-first mandate', () => {
   it('profile contains IMPLEMENTATION READ-FIRST MANDATE', () => {
@@ -50,7 +63,7 @@ describe('test-engineer agent profile — read-first mandate', () => {
 // ── 2. table.test.ts story ACs match dynamic implementation ──────────────────
 describe('SKY-003b-2-3 (table.test.ts) — ACs match dynamic renderTable', () => {
   const story = byId.get('SKY-003b-2-3') as any;
-  const acs: string[] = story?.acceptanceCriteria ?? [];
+  const acs: string[] = acsOf(story);
   const notes: string = story?.technicalNotes?.notes ?? '';
 
   it('story exists', () => {
@@ -98,7 +111,7 @@ describe('SKY-003b-2-3 (table.test.ts) — ACs match dynamic renderTable', () =>
 // ── 3. server.test.ts story ACs match actual server routes ───────────────────
 describe('SKY-004-B-TEST (server.test.ts) — ACs match server.ts implementation', () => {
   const story = byId.get('SKY-004-B-TEST') as any;
-  const acs: string[] = story?.acceptanceCriteria ?? [];
+  const acs: string[] = acsOf(story);
   const notes: string = story?.technicalNotes?.notes ?? '';
 
   it('story exists', () => {
@@ -177,7 +190,7 @@ describe('SKY-003a-test-3 (cli.test.ts) — ACs match cli.ts implementation', ()
 // ── 5. client.test.ts story ACs match actual client.ts ───────────────────────
 describe('SKY-002b-1 (client.test.ts) — ACs match client.ts implementation', () => {
   const story = byId.get('SKY-002b-1') as any;
-  const acs: string[] = story?.acceptanceCriteria ?? [];
+  const acs: string[] = acsOf(story);
   const notes: string = story?.technicalNotes?.notes ?? '';
 
   it('story exists', () => {

@@ -346,7 +346,7 @@
       "aiProvider": "minimax",
       "dependencies": [],
       "lastAttempt": "2026-06-29T07:14:04-04:00",
-      "actualCost": 0
+      "actualCost": null
     },
     {
       "id": "SKY-001-B",
@@ -597,15 +597,15 @@
       "aiProvider": "minimax",
       "dependencies": [],
       "lastAttempt": "2026-06-29T07:17:42-04:00",
-      "actualCost": 0
+      "actualCost": null
     },
     {
       "id": "SKY-002a-1",
       "title": "Implement typed Skyscanner API client (client.ts) - Core Functionality",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
-      "status": "completed",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "description": "Create src/skyscanner/client Skyscanner RapidAPI using the global fetch. Export SkyscannerClient class, SearchParams interface, and FlightResult interface. Implement input validation, API key sanitization, HTTP error handling, malformed-response detection, header-based pagination with termination guard, User-Agent header, and runtime error wrapping with no double-wrapping of client-originated errors.",
       "acceptanceCriteria": [
         "src/skyscanner/client.ts exports a SkyscannerClient class whose constructor signature is exactly: constructor({ apiKey }: { apiKey?: string })",
@@ -723,7 +723,7 @@
       "unitTests": false,
       "dependencies": [],
       "lastAttempt": "2026-06-26T16:10:13-04:00",
-      "actualCost": 0,
+      "actualCost": null,
       "completedAt": "2026-06-29T16:42:47-04:00"
     },
     {
@@ -731,8 +731,8 @@
       "title": "Write unit tests for Skyscanner API client (client.test.ts) - Part 1",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
-      "status": "completed",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "description": "Create src/skyscanner/client.test.ts with at least 8 vitest tests covering the SkyscannerClient, including the two new tests (g) and (h) added to verify the SKY-002 impl story's AC-9 (constructor precedence: apiKey param wins over RAPIDAPI_KEY env var) and AC-10 (invalid apiKey format rejection at the constructor) contracts. All fetch mocking must use vi.stubGlobal('fetch', ...) with afterEach(() => { vi.unstubAllGlobals(); }) and no global beforeAll fetch stub that could leak across tests. Every fetch stub must include headers: { get: () => null }. Success-path stubs must return a plain array from json(). Any test that mutates process.env.RAPIDAPI_KEY must restore it in afterEach. vitest run must exit 0.",
       "acceptanceCriteria": [
         "Delegated to split children: SKY-002b-1-impl, SKY-002b-1-test"
@@ -958,7 +958,7 @@
         "mockStrategy": "",
         "bannedPatterns": []
       },
-      "actualCost": 0,
+      "actualCost": null,
       "completedAt": "2026-06-29T16:42:58-04:00"
     },
     {
@@ -1504,7 +1504,8 @@
       "aiProvider": "minimax",
       "unitTests": true,
       "lastAttempt": "2026-06-25T09:22:02-04:00",
-      "actualCost": 0
+      "actualCost": null,
+      "completedAt": "2026-06-29T16:50:19-04:00"
     },
     {
       "id": "SKY-003b-2-3",
@@ -1694,15 +1695,16 @@
         "mockStrategy": "",
         "bannedPatterns": []
       },
-      "actualCost": 0
+      "actualCost": null,
+      "completedAt": "2026-06-29T16:50:28-04:00"
     },
     {
       "id": "SKY-004-B-IMPL",
       "title": "Implement src/server.ts: GET /search with validation, CORS, error handling",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
-      "status": "completed",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "description": "Implement src/server.ts containing GET /search route with validation, CORS, error handling, and flight search functionality. The route validates from/to/date/adults query params (400 on invalid input), calls client.searchFlights({ origin, destination, date, adults }), and instantiates SkyscannerClient({}) inside each route handler (per-request, never at module level). CORS is implemented as inline middleware — the cors npm package is NOT used. A four-argument Express error-handling middleware handles unexpected rejections with HTTP 500. The listen call is guarded. The app instance is exported. No express.json() body-parsing middleware is added. No 503 middleware or RAPIDAPI_KEY check is added. Both npx tsc --noEmit must exit 0.",
       "acceptanceCriteria": [
         "GET /search with all valid parameters (from, to, date as YYYY-MM-DD, adults as positive integer string) returns HTTP 200 with Content-Type application/json and a body containing { flights: FlightResult[], count: number, searchedAt: string }, where count is strictly equal to the length of flights and searchedAt is a valid ISO-8601 datetime string.",
@@ -1874,7 +1876,7 @@
       "aiProvider": "minimax",
       "unitTests": false,
       "lastAttempt": "2026-06-25T07:42:48-04:00",
-      "actualCost": 0,
+      "actualCost": null,
       "completedAt": "2026-06-29T16:44:13-04:00"
     },
     {
@@ -1882,8 +1884,8 @@
       "title": "Write src/server.test.ts: full vitest + supertest suite for GET /search with CORS, error handling, and adults cap validation",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
-      "status": "completed",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "description": "Write src/server.test.ts covering all validation paths, happy paths, edge cases, CORS/OPTIONS preflight, and error handling for GET /search. Tests use supertest + vitest with vi.hoisted and a regular-function constructor mock. vi.clearAllMocks() is used in beforeEach. FlightResult is imported from './skyscanner/client'. Mock flight arrays are declared without FlightResult[] type annotation. The suite must contain at least 16 distinct test cases. vitest run must exit 0 with all tests green. Explicitly validate no upper bound on adults and CORS headers on all responses.",
       "acceptanceCriteria": [
         "Delegated to split children: SKY-004-B-TEST-IMPL, SKY-004-B-TEST-SUITE, SKY-004-B-TEST-IMPL-1, SKY-004-B-TEST-SUITE-1"
@@ -2064,7 +2066,7 @@
         "mockStrategy": "",
         "bannedPatterns": []
       },
-      "actualCost": 0,
+      "actualCost": null,
       "completedAt": "2026-06-29T16:45:18-04:00"
     },
     {
@@ -2374,7 +2376,8 @@
       "unitTests": true,
       "dependencies": [],
       "lastAttempt": "2026-06-25T10:17:25-04:00",
-      "actualCost": 0
+      "actualCost": null,
+      "completedAt": "2026-06-29T16:51:23-04:00"
     },
     {
       "id": "SKY-001-B-impl",
@@ -2482,7 +2485,7 @@
       "aiProvider": "minimax",
       "dependencies": [],
       "lastAttempt": "2026-06-29T07:29:19-04:00",
-      "actualCost": 0
+      "actualCost": null
     },
     {
       "id": "SKY-001-B-test",
@@ -2654,7 +2657,7 @@
       "aiProvider": "minimax",
       "dependencies": [],
       "lastAttempt": "2026-06-29T07:40:20-04:00",
-      "actualCost": 0
+      "actualCost": null
     },
     {
       "id": "SKY-003a-test-3",
@@ -2704,17 +2707,18 @@
         "mockStrategy": "",
         "bannedPatterns": []
       },
-      "actualCost": 0,
+      "actualCost": null,
       "estimatedCost": 0.15,
-      "estimatedTokens": 250000
+      "estimatedTokens": 250000,
+      "completedAt": "2026-06-29T16:51:42-04:00"
     },
     {
       "id": "SKY-004-B-TEST-IMPL",
       "title": "Implement GET /search route in src/server.ts with query parameter validation and CORS support",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
-      "status": "completed",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "description": "Implement the GET /search route in server.ts with proper query parameter validation, input sanitization, and CORS headers. The route should handle 'from', 'to', 'date', and 'adults' parameters and map 'from' to 'origin' and 'to' to 'destination' for the client call. Include CORS headers on all responses and guard app.listen() during tests.",
       "acceptanceCriteria": [
         "Server implements GET /search route with proper query parameter validation",
@@ -2775,7 +2779,7 @@
         "mockStrategy": "",
         "bannedPatterns": []
       },
-      "actualCost": 0,
+      "actualCost": null,
       "completedAt": "2026-06-29T16:46:05-04:00"
     },
     {
@@ -2783,8 +2787,8 @@
       "title": "Write comprehensive test suite for GET /search endpoint with validation, error handling, and CORS coverage",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
-      "status": "completed",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "description": "Write src/server.test.ts covering all validation paths, happy paths, edge cases, CORS/OPTIONS preflight, and error handling for GET /search. Tests use supertest + vitest with vi.hoisted and a regular-function constructor mock. vi.clearAllMocks() is used in beforeEach.",
       "acceptanceCriteria": [
         "All tests in server.test.ts pass with vitest and supertest — verify that running the test suite results in exit code 0 with all tests green.",
@@ -2856,7 +2860,7 @@
         "mockStrategy": "",
         "bannedPatterns": []
       },
-      "actualCost": 0,
+      "actualCost": null,
       "completedAt": "2026-06-29T16:46:25-04:00"
     },
     {
@@ -2864,8 +2868,8 @@
       "title": "Implement GET /search route in src/server.ts with query parameter validation and CORS support",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
-      "status": "completed",
-      "completed": true,
+      "status": "pending",
+      "completed": false,
       "description": "Implement the GET /search route in server.ts with proper query parameter validation, input sanitization, and CORS headers. The route should handle 'from', 'to', 'date', and 'adults' parameters and map 'from' to 'origin' and 'to' to 'destination' for the client call. Include CORS headers on all responses and guard app.listen() during tests.",
       "acceptanceCriteria": [
         "Server implements GET /search route with proper query parameter validation",
@@ -2926,7 +2930,7 @@
         "mockStrategy": "",
         "bannedPatterns": []
       },
-      "actualCost": 0,
+      "actualCost": null,
       "completedAt": "2026-06-29T16:47:20-04:00"
     },
     {
@@ -3009,7 +3013,7 @@
       "cpaConfidence": 0.65,
       "cpaGate": "review",
       "dependencies": [],
-      "model": "MiniMax-M3",
+      "model": "qwen/qwen3-235b-a22b",
       "aiProvider": "qwen",
       "unitTests": false,
       "lastAttempt": "2026-06-26T21:19:32-04:00",
@@ -3023,7 +3027,8 @@
         "mockStrategy": "",
         "bannedPatterns": []
       },
-      "actualCost": 0
+      "actualCost": null,
+      "completedAt": "2026-06-29T16:48:34-04:00"
     },
     {
       "id": "SKY-002b-1-impl",
@@ -3089,7 +3094,8 @@
         "mockStrategy": "",
         "bannedPatterns": []
       },
-      "actualCost": 0
+      "actualCost": null,
+      "completedAt": "2026-06-29T16:49:10-04:00"
     },
     {
       "id": "SKY-002b-1-test",
@@ -3171,7 +3177,8 @@
         "mockStrategy": "",
         "bannedPatterns": []
       },
-      "actualCost": 0
+      "actualCost": null,
+      "completedAt": "2026-06-29T16:49:36-04:00"
     },
     {
       "id": "SKY-003b-2-3a",
@@ -3189,7 +3196,8 @@
         "renderTable with special characters in airline names (e.g., 'Airline & Co.', 'Airline A (Special)') correctly computes column widths and preserves content.",
         "renderTable with empty strings in flight fields (airline='', departure='', etc.) correctly renders empty cells without breaking alignment.",
         "renderTable with extremely long airline names (e.g., 'Very Long Airline Name That Goes On Forever') correctly expands column width to accommodate full text.",
-        "renderTable properly handles numeric values that are not integers (e.g., price=99.99, duration=1.5) by converting them to strings without altering display format."
+        "renderTable properly handles numeric values that are not integers (e.g., price=99.99, duration=1.5) by converting them to strings without altering display format.",
+        "renderTable([]) returns the string 'No flights found.' when called with an empty array."
       ],
       "technicalNotes": {
         "workingDir": "/home/bradleyjerome/projects/skyscanner-app",
@@ -3235,7 +3243,8 @@
         "mockStrategy": "",
         "bannedPatterns": []
       },
-      "actualCost": 0
+      "actualCost": null,
+      "completedAt": "2026-06-29T16:51:53-04:00"
     },
     {
       "id": "SKY-003b-2-3b",
@@ -3308,7 +3317,8 @@
         "mockStrategy": "",
         "bannedPatterns": []
       },
-      "actualCost": 0
+      "actualCost": null,
+      "completedAt": "2026-06-29T16:52:15-04:00"
     },
     {
       "id": "SKY-003b-2-3a-1",
@@ -3372,7 +3382,8 @@
         "mockStrategy": "",
         "bannedPatterns": []
       },
-      "actualCost": 0
+      "actualCost": null,
+      "completedAt": "2026-06-29T16:52:26-04:00"
     },
     {
       "id": "SKY-003b-2-3b-1",
@@ -3445,8 +3456,9 @@
         "mockStrategy": "",
         "bannedPatterns": []
       },
-      "actualCost": 0
+      "actualCost": null,
+      "completedAt": "2026-06-29T16:52:45-04:00"
     }
   ],
-  "currentIteration": 978
+  "currentIteration": 989
 }

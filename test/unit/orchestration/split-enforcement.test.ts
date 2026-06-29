@@ -21,6 +21,7 @@ import { join } from 'node:path';
 const {
   canSplitStory,
   capSplitACs,
+  validateSplitFileCoherence,
   applySpecChanges,
   splitDepth,
   MAX_ACS_PER_STORY,
@@ -250,6 +251,112 @@ describe('applySpecChanges — split budget enforcement per-child', () => {
     applySpecChanges(story, payload, newStories, prd, 'core', 'run1');
     const child = (newStories[0] as { story: { acceptanceCriteria: string[] } }).story;
     expect(child.acceptanceCriteria).toHaveLength(MAX_ACS_PER_STORY);
+  });
+});
+
+// ── validateSplitFileCoherence ────────────────────────────────────────────────
+
+describe('validateSplitFileCoherence — same-file split detection (run 85 root cause)', () => {
+  it('returns no conflicts when each child owns a different file', () => {
+    const children = [
+      { id: 'C-1', technicalNotes: { files: ['src/skyscanner/client.ts'] } },
+      { id: 'C-2', technicalNotes: { files: ['src/server.ts'] } },
+    ];
+    expect(validateSplitFileCoherence(children)).toHaveLength(0);
+  });
+
+  it('detects conflict when two children write to the same non-test file', () => {
+    const children = [
+      { id: 'SKY-002a-1a', technicalNotes: { files: ['src/skyscanner/client.ts'] } },
+      { id: 'SKY-002a-1b', technicalNotes: { files: ['src/skyscanner/client.ts'] } },
+    ];
+    const conflicts = validateSplitFileCoherence(children);
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].file).toContain('client.ts');
+    expect(conflicts[0].childIds).toEqual(['SKY-002a-1a', 'SKY-002a-1b']);
+  });
+
+  it('detects conflict across 4 children sharing the same file (run 85 exact scenario)', () => {
+    const children = [
+      { id: 'SKY-002a-1a',   technicalNotes: { files: ['src/skyscanner/client.ts'] } },
+      { id: 'SKY-002a-1b',   technicalNotes: { files: ['src/skyscanner/client.ts'] } },
+      { id: 'SKY-002a-1c',   technicalNotes: { files: ['src/skyscanner/client.ts'] } },
+      { id: 'SKY-002a-1a-1', technicalNotes: { files: ['src/skyscanner/client.ts'] } },
+    ];
+    const conflicts = validateSplitFileCoherence(children);
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].childIds).toHaveLength(4);
+  });
+
+  it('allows multiple children writing to the same test file (test files are exempt)', () => {
+    const children = [
+      { id: 'C-1', technicalNotes: { files: ['src/skyscanner/client.ts', 'src/skyscanner/client.test.ts'] } },
+      { id: 'C-2', technicalNotes: { files: ['src/skyscanner/client.test.ts'] } },
+    ];
+    // Only client.ts would conflict, but C-2 doesn't write to it
+    expect(validateSplitFileCoherence(children)).toHaveLength(0);
+  });
+
+  it('allows one impl child and one test child for the same impl file', () => {
+    const children = [
+      { id: 'IMPL', technicalNotes: { files: ['src/server.ts'] } },
+      { id: 'TEST', technicalNotes: { files: ['src/server.test.ts'] } },
+    ];
+    expect(validateSplitFileCoherence(children)).toHaveLength(0);
+  });
+
+  it('handles children with no technicalNotes gracefully', () => {
+    const children = [
+      { id: 'C-1' },
+      { id: 'C-2', technicalNotes: {} },
+      { id: 'C-3', technicalNotes: { files: ['src/a.ts'] } },
+    ];
+    expect(() => validateSplitFileCoherence(children)).not.toThrow();
+    expect(validateSplitFileCoherence(children)).toHaveLength(0);
+  });
+});
+
+describe('applySpecChanges — same-file split rejection', () => {
+  it('rejects split and keeps parent ACs when children share a non-test file', () => {
+    const story = makeStory('SKY-002a-1', {
+      acceptanceCriteria: ['ac1', 'ac2', 'ac3'],
+      technicalNotes: { files: ['src/skyscanner/client.ts'] },
+    });
+    const prd = makePrd([story]);
+    const newStories: object[] = [];
+    const payload = {
+      splitStories: [
+        { id: 'SKY-002a-1a', title: 'Class', acceptanceCriteria: ['ac-class'],
+          technicalNotes: { files: ['src/skyscanner/client.ts'] } },
+        { id: 'SKY-002a-1b', title: 'Methods', acceptanceCriteria: ['ac-methods'],
+          technicalNotes: { files: ['src/skyscanner/client.ts'] } },
+      ],
+    };
+    const result = applySpecChanges(story, payload, newStories, prd, 'core', 'run86');
+    // Split must be rejected
+    expect(result.splitCount).toBe(0);
+    expect(newStories).toHaveLength(0);
+    // Parent ACs must NOT be replaced with delegation note
+    expect(story.acceptanceCriteria).not.toContain(expect.stringMatching(/Delegated/));
+    expect(story.acceptanceCriteria).toEqual(['ac1', 'ac2', 'ac3']);
+  });
+
+  it('accepts split when each child owns a distinct non-test file', () => {
+    const story = makeStory('SKY-002', { acceptanceCriteria: ['ac1', 'ac2'] });
+    const prd = makePrd([story]);
+    const newStories: object[] = [];
+    const payload = {
+      splitStories: [
+        { id: 'SKY-002-client', title: 'Client', acceptanceCriteria: ['ac-client'],
+          technicalNotes: { files: ['src/skyscanner/client.ts'] } },
+        { id: 'SKY-002-server', title: 'Server', acceptanceCriteria: ['ac-server'],
+          technicalNotes: { files: ['src/server.ts'] } },
+      ],
+    };
+    const result = applySpecChanges(story, payload, newStories, prd, 'core', 'run86');
+    expect(result.splitCount).toBe(2);
+    expect(newStories).toHaveLength(2);
+    expect(story.acceptanceCriteria[0]).toMatch(/Delegated/);
   });
 });
 

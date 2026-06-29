@@ -998,6 +998,10 @@ HARD LIMITS enforced in code (not just guidelines — violations are rejected au
 - Each split child MUST have ≤24 ACs. Excess ACs are silently truncated at registration.
 - Each parent may have at most 4 split children total. A 5th child proposal is rejected.
 - Depth ≥2 stories cannot be split further. Proposals for depth-2+ parents are dropped.
+- No two split children may declare the same non-test file in technicalNotes.files. If they do,
+  the ENTIRE split is rejected and the parent runs as a single story. Each file must have exactly
+  one owning child. Test files (*.test.ts, *.spec.ts) are exempt — multiple test children for one
+  impl file is valid.
 
 OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
 ${JSON.stringify({
@@ -1113,6 +1117,28 @@ function splitDepth(story, prd) {
   return depth;
 }
 
+// Detect same-file coherence violations: multiple split children claiming to write
+// the same non-test file. Each agent rewrites the file from scratch, so the last
+// writer wins and all prior agents' work is silently discarded.
+// Returns array of {file, childIds} conflicts. Empty array = coherent.
+function validateSplitFileCoherence(children) {
+  const fileToChildren = new Map();
+  for (const child of children) {
+    const files = (child.technicalNotes?.files || [])
+      .filter(f => typeof f === 'string')
+      .filter(f => !f.endsWith('.test.ts') && !f.endsWith('.spec.ts'));
+    for (const file of files) {
+      if (!fileToChildren.has(file)) fileToChildren.set(file, []);
+      fileToChildren.get(file).push(child.id);
+    }
+  }
+  const conflicts = [];
+  for (const [file, childIds] of fileToChildren) {
+    if (childIds.length > 1) conflicts.push({ file, childIds });
+  }
+  return conflicts;
+}
+
 // Hard code enforcement for split eligibility — not a prompt instruction, a code invariant.
 // Called before registering any split child (per-child, so budget check tightens as children accumulate).
 const MAX_ACS_PER_STORY = parseInt(process.env.SPEC_MAX_ACS || '24', 10);
@@ -1220,10 +1246,24 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId) {
         result.splitCount += 1;
       });
 
-      // Parent AC redistribution — clear parent ACs after split to prevent 93-AC parent stories.
-      // The parent story's ACs are now owned by its children; the parent should not be executed.
+      // Same-file coherence check: if >1 child writes the same non-test file, each agent
+      // overwrites the file from scratch and only the last writer's output survives.
+      // Reject the entire split — parent runs as a single story (with capped ACs).
       const addedChildren = newStories.filter(ns => ns.parentId === story.id).slice(childrenBefore);
-      if (addedChildren.length > 0) {
+      const fileConflicts = validateSplitFileCoherence(addedChildren.map(ns => ns.story));
+      if (fileConflicts.length > 0) {
+        for (const { file, childIds } of fileConflicts) {
+          console.warn(
+            `spec-mode: split coherence violation for ${story.id}: ` +
+            `children [${childIds.join(', ')}] all write to ${path.basename(file)} — ` +
+            `rejecting split (last writer wins = silent data loss)`
+          );
+        }
+        // Roll back all children added during this forEach
+        newStories.splice(newStories.length - addedChildren.length, addedChildren.length);
+        result.splitCount = 0;
+      } else if (addedChildren.length > 0) {
+        // Parent AC redistribution — clear parent ACs after split to prevent 93-AC parent stories.
         const childIds = addedChildren.map(ns => ns.story.id).join(', ');
         story.acceptanceCriteria = [`Delegated to split children: ${childIds}`];
         console.log(`spec-mode: parent ${story.id} ACs redistributed → delegated to ${childIds}`);
@@ -1510,6 +1550,24 @@ async function validateMidExecutionSplits(prdFile, storyIdsCsv) {
       if (!children.length) { hardViolations++; continue; }
     }
 
+    // Same-file coherence check — reject entire split if children share a non-test file
+    const fileConflicts = validateSplitFileCoherence(children);
+    if (fileConflicts.length > 0) {
+      for (const { file, childIds } of fileConflicts) {
+        console.warn(
+          `spec-mode: --validate-splits: coherence violation for ${parentId}: ` +
+          `children [${childIds.join(', ')}] all write to ${path.basename(file)} — rejecting split`
+        );
+      }
+      for (const child of children) {
+        child.specification.splitRejected = true;
+        child.specification.splitRejectionReason = `same-file coherence violation: multiple children write to the same file`;
+        child.status = 'deprecated';
+      }
+      hardViolations++;
+      continue;
+    }
+
     // AC cap on each child
     for (const child of children) capSplitACs(child, parentId);
 
@@ -1593,6 +1651,7 @@ module.exports = {
   splitDepth,
   canSplitStory,
   capSplitACs,
+  validateSplitFileCoherence,
   applySpecChanges,
   validateMidExecutionSplits,
   extractCodeRefs,

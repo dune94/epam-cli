@@ -168,6 +168,30 @@ describe('capSplitACs — AC cap enforcement', () => {
 
 // ── applySpecChanges — parent redistribution ──────────────────────────────────
 
+describe('applySpecChanges — AC cap on all AC updates (not just split creation)', () => {
+  it('caps ACs when speckit updates a split child past 24 (run 85 regression)', () => {
+    // Bug: capSplitACs only ran at split-child creation time. Speckit's subsequent
+    // AC update via applySpecChanges had no cap — SKY-004-B-IMPL ended up with 34 ACs.
+    const story = makeStory('SKY-004-B-IMPL', { acceptanceCriteria: ['ac1'] });
+    const prd = makePrd([story]);
+    const oversizedPayload = {
+      acceptanceCriteria: Array.from({ length: 34 }, (_, i) => `speckit-ac-${i}`),
+    };
+    applySpecChanges(story, oversizedPayload, [], prd, 'core', 'run85');
+    expect(story.acceptanceCriteria).toHaveLength(MAX_ACS_PER_STORY);
+    expect(story.acceptanceCriteria[0]).toBe('speckit-ac-0');
+    expect(story.acceptanceCriteria[MAX_ACS_PER_STORY - 1]).toBe(`speckit-ac-${MAX_ACS_PER_STORY - 1}`);
+  });
+
+  it('does not truncate ACs at or below the cap', () => {
+    const story = makeStory('S1', { acceptanceCriteria: [] });
+    const prd = makePrd([story]);
+    const payload = { acceptanceCriteria: Array.from({ length: 24 }, (_, i) => `ac-${i}`) };
+    applySpecChanges(story, payload, [], prd, 'core', 'run85');
+    expect(story.acceptanceCriteria).toHaveLength(24);
+  });
+});
+
 describe('applySpecChanges — parent AC redistribution after split', () => {
   it('clears parent ACs and sets delegation note after children registered', () => {
     const story = makeStory('PARENT', { acceptanceCriteria: Array.from({ length: 10 }, (_, i) => `ac${i}`) });

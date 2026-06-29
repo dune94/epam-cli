@@ -1148,10 +1148,14 @@ function capSplitACs(story, parentId) {
 function applySpecChanges(story, payload, newStories, prd, phaseId, runId) {
   const result = { acceptanceChanged: false, splitCount: 0 };
   if (Array.isArray(payload.acceptanceCriteria) && payload.acceptanceCriteria.length) {
+    const capped = payload.acceptanceCriteria.slice(0, MAX_ACS_PER_STORY);
+    if (capped.length < payload.acceptanceCriteria.length) {
+      console.warn(`spec-mode: AC cap enforced on ${story.id}: ${payload.acceptanceCriteria.length} → ${capped.length}`);
+    }
     const before = JSON.stringify(story.acceptanceCriteria || []);
-    const after = JSON.stringify(payload.acceptanceCriteria);
+    const after = JSON.stringify(capped);
     if (before !== after) {
-      story.acceptanceCriteria = payload.acceptanceCriteria;
+      story.acceptanceCriteria = capped;
       result.acceptanceChanged = true;
     }
   }

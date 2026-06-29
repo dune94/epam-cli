@@ -116,6 +116,12 @@ PIPELINE_EXIT=0
 # profiles.json.original is the authoritative set of agent profiles.
 # prd.json canonical is kept in git — restore it and strip orphan stories
 # (stories not in implementationOrder) so the file stays tight.
+# profiles.json.original is the canonical floor: all core agents + any non-core
+# agents added for this project's scaffolding. Update it whenever a new permanent
+# agent is introduced. The test in profiles-canonical.test.ts asserts that all
+# core pipeline agents are present. Restore from it before each run so
+# agent-accumulated mutations (extra profiles written by profile-augmentor) never
+# carry forward across runs.
 PROFILES_ORIG="$REPO_ROOT/orchestrations/agents/profiles.json.original"
 if [ -f "$PROFILES_ORIG" ]; then
   cp "$PROFILES_ORIG" "$REPO_ROOT/orchestrations/agents/profiles.json"

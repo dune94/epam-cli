@@ -135,6 +135,8 @@ const TOOL_MODEL_REVIEW = {
 
 // Call MiniMax API directly with a tool definition — arguments are API-enforced JSON.
 // itemsKey: if set, extracts result[itemsKey] (for array-returning tools); otherwise returns full args.
+const MINIMAX_TOOL_TIMEOUT_MS = parseInt(process.env.MINIMAX_TOOL_TIMEOUT_MS || '120000', 10);
+
 async function callMiniMaxWithTool(prompt, toolDef, logPath, itemsKey) {
   const apiKey = process.env.MINIMAX_API_KEY || process.env.EPAM_API_KEY_MINIMAX;
   if (!apiKey) throw new Error('callMiniMaxWithTool: no API key (MINIMAX_API_KEY / EPAM_API_KEY_MINIMAX)');
@@ -150,11 +152,21 @@ async function callMiniMaxWithTool(prompt, toolDef, logPath, itemsKey) {
     tool_choice: { type: 'function', function: { name: toolDef.name } },
   };
 
-  const res = await fetch(`${baseURL}/chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), MINIMAX_TOOL_TIMEOUT_MS);
+
+  let res;
+  try {
+    res = await fetch(`${baseURL}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+
   if (!res.ok) throw new Error(`MiniMax API error: ${res.status} ${await res.text()}`);
 
   const data = await res.json();
@@ -166,17 +178,91 @@ async function callMiniMaxWithTool(prompt, toolDef, logPath, itemsKey) {
     fs.writeFileSync(logPath, `# Prompt\n${prompt}\n\n# Tool call args (raw)\n${argsRaw}\n\n# Text output\n${rawText}\n`);
   }
 
-  const args = JSON.parse(argsRaw);
+  // Parse args — fall back to jsonrepair on truncated/malformed output from M3
+  let args;
+  try {
+    args = JSON.parse(argsRaw);
+  } catch (parseErr) {
+    if (_jsonrepair) {
+      try {
+        args = JSON.parse(_jsonrepair(argsRaw));
+        console.warn(`callMiniMaxWithTool: jsonrepair recovered truncated args for tool ${toolDef.name}`);
+      } catch {
+        console.warn(`callMiniMaxWithTool: failed to parse tool args even with jsonrepair (tool=${toolDef.name}): ${parseErr.message}`);
+        return null;
+      }
+    } else {
+      console.warn(`callMiniMaxWithTool: failed to parse tool args (tool=${toolDef.name}): ${parseErr.message}`);
+      return null;
+    }
+  }
+
   return itemsKey ? (args[itemsKey] ?? null) : args;
 }
 
 // Unified agent runner: tool-use for MiniMax, raw JSON for all other providers.
+// Ladder: if minimax times out or returns null, escalates to SPEC_PASS_LADDER_PROVIDER
+// (default: openai via OpenRouter) using the raw JSON + jsonrepair path.
+//
+// Fast-path: set SPEC_MODE_PROVIDER=qwen to skip MiniMax entirely.
+//   SPEC_MODE_OPENSPEC_MODEL — model for openspec calls (default: moonshotai/kimi-k2)
+//   SPEC_MODE_SPECKIT_MODEL  — model for speckit calls  (default: zhipuai/glm-4-plus)
+//   SPEC_MODE_MODEL          — fallback for all other spec-mode calls (default: moonshotai/kimi-k2)
 async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey) {
   const provider = (process.env.AI_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || '').toLowerCase();
-  if (provider === 'minimax') {
-    return callMiniMaxWithTool(prompt, toolDef, logPath, itemsKey);
+  const ladderProvider = (process.env.SPEC_PASS_LADDER_PROVIDER || 'qwen').toLowerCase();
+
+  // Fast-path: bypass MiniMax entirely when SPEC_MODE_PROVIDER is set.
+  // Detects openspec vs speckit from logPath to pick the right model.
+  const specModeProvider = (process.env.SPEC_MODE_PROVIDER || '').toLowerCase();
+  if (specModeProvider) {
+    const logName = (logPath || '').toLowerCase();
+    let specModel;
+    if (logName.includes('speckit')) {
+      specModel = process.env.SPEC_MODE_SPECKIT_MODEL || 'zhipuai/glm-4-plus';
+    } else if (logName.includes('openspec') || logName.includes('-openspec-') || logName.includes('-spec.log')) {
+      specModel = process.env.SPEC_MODE_OPENSPEC_MODEL || 'moonshotai/kimi-k2';
+    } else {
+      specModel = process.env.SPEC_MODE_MODEL || process.env.SPEC_MODE_OPENSPEC_MODEL || 'moonshotai/kimi-k2';
+    }
+    console.log(`spec-mode: fast-path ${specModeProvider}/${specModel} (skipping MiniMax)`);
+    const directExec = { cmd: execSpec.cmd, args: ['--provider', specModeProvider, '--model', specModel] };
+    const output = await runClaude(directExec, prompt, logPath, {});
+    return extractTaggedJson(output, tag);
   }
-  // Fallback: existing raw text path with tag extraction + jsonrepair
+
+  if (provider === 'minimax') {
+    let result = null;
+    try {
+      result = await callMiniMaxWithTool(prompt, toolDef, logPath, itemsKey);
+    } catch (err) {
+      const isTimeout = err.name === 'AbortError' || /aborted/i.test(err.message);
+      console.warn(`spec-mode: minimax tool-use failed (${err.message})${isTimeout ? ' — laddering to ' + ladderProvider : ''}`);
+      if (!isTimeout) throw err; // hard failure (no API key etc.) — don't ladder, surface the error
+    }
+    if (result !== null) return result;
+    // null = parse failed or aborted — ladder to fallback provider only if fast
+    // NOTE: OpenAI ladder via epam CLI spawns detached grandchildren that survive
+    // the 120s SIGKILL, causing indefinite hangs. Skip ladder when disabled.
+    if (process.env.SPEC_PASS_SKIP_LADDER === '1') {
+      console.warn(`spec-mode: minimax returned null — ladder disabled, using fallback spec`);
+      return null;
+    }
+    console.warn(`spec-mode: minimax returned null — laddering to ${ladderProvider}`);
+    const ladderTimeout = parseInt(process.env.SPEC_PASS_LADDER_TIMEOUT_MS || String(RUNCLAUDE_TIMEOUT_MS), 10);
+    // FIX: build a new execSpec for the ladder. The original execSpec has
+    // '--provider minimax' baked into its args. Passing AI_PROVIDER=openai via
+    // env overrides is insufficient — ai-run.sh reads the --provider CLI flag,
+    // which always wins. Without this fix the ladder calls MiniMax again.
+    const ladderExec = { cmd: execSpec.cmd, args: ['--provider', ladderProvider] };
+    const output = await Promise.race([
+      runClaude(ladderExec, prompt, logPath, {}),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`ladder hard-timeout after ${ladderTimeout}ms`)), ladderTimeout + 5000))
+    ]);
+    return extractTaggedJson(output, tag);
+  }
+
+  // Non-minimax: existing raw text path with tag extraction + jsonrepair
   const output = await runClaude(execSpec, prompt, logPath);
   return extractTaggedJson(output, tag);
 }
@@ -853,6 +939,36 @@ ${storyPayload}
   }
 }
 
+// ─── Speckit AC validator (runtime version mirrors test/unit/orchestration/speckit-validator.test.ts)
+const PRESCRIPTIVE_AC_PATTERNS = [
+  { pattern: /vi\.mock\s*\(/i,              reason: 'prescribes vi.mock() call' },
+  { pattern: /vi\.spyOn\s*\(/i,             reason: 'prescribes vi.spyOn() call' },
+  { pattern: /jest\.mock\s*\(/i,            reason: 'prescribes jest.mock() call' },
+  { pattern: /jest\.fn\s*\(/i,              reason: 'prescribes jest.fn() call' },
+  { pattern: /\.?mockReturnValue[\s(]/i,    reason: 'prescribes mockReturnValue' },
+  { pattern: /\.?mockResolvedValue[\s(]/i,  reason: 'prescribes mockResolvedValue' },
+  { pattern: /\.?mockImplementation[\s(]/i, reason: 'prescribes mockImplementation' },
+  { pattern: /import\s+\{[^}]+\}\s+from/i, reason: 'prescribes exact import statement' },
+  { pattern: /require\s*\(\s*['"`]/i,       reason: 'prescribes require() call' },
+  { pattern: /^use supertest/i,             reason: 'prescribes supertest usage' },
+  { pattern: /^import\s+/i,                reason: 'prescribes import statement' },
+];
+
+function stripPrescriptiveACs(acceptanceCriteria, storyId) {
+  const clean = [];
+  const flagged = [];
+  for (const ac of (acceptanceCriteria || [])) {
+    const hit = PRESCRIPTIVE_AC_PATTERNS.find(({ pattern }) => pattern.test(ac.trim()));
+    if (hit) {
+      console.warn(`spec-mode: speckit validator stripped prescriptive AC from ${storyId}: [${hit.reason}] "${ac.slice(0, 80)}"`);
+      flagged.push({ criterion: ac, flag: `speckit-validator: ${hit.reason} — describes HOW not WHAT` });
+    } else {
+      clean.push(ac);
+    }
+  }
+  return { clean, flagged };
+}
+
 // speckit: second-pass review of openspec's output — the collaboration point
 async function runSpeckitReview({ promptExec, story, openspecOutput, phase, runId, logDir }) {
   const prompt = `You are the speckit specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.
@@ -865,15 +981,30 @@ Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
 4. If openspec proposed story splits, validate the decomposition and refine AC per split
 5. Do NOT remove or duplicate openspec's good work — build on it
 
-SPLIT ENFORCEMENT (your independent obligation — do not defer to openspec on this):
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+━━━ SPLIT RULES ━━━
+MANDATORY split conditions (your independent obligation — do not defer to openspec):
 - Count the acceptanceCriteria in openspec's output. If the parent story still has >12 ACs and openspec did NOT propose splits, you MUST propose them yourself. Target ≤8 ACs per split child.
 - If technicalNotes.files contains both *.test.ts and non-test files AND openspec did not split, you MUST split into impl/test children.
 - If openspec's splits look correct, pass them through unchanged. If they are unbalanced (one child has >12 ACs), rebalance.
 - Set "agentRole" on each split child: "typescript-engineer" for impl, "test-engineer" for test-only children.
 - Do NOT split stories that are already split children (splitDepth > 0).
+HARD LIMITS enforced in code (not just guidelines — violations are rejected automatically):
+- Each split child MUST have ≤24 ACs. Excess ACs are silently truncated at registration.
+- Each parent may have at most 4 split children total. A 5th child proposal is rejected.
+- Depth ≥2 stories cannot be split further. Proposals for depth-2+ parents are dropped.
 
-OPENSPEC'S OUTPUT (your input to review):
-${JSON.stringify(openspecOutput, null, 2)}
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+${JSON.stringify({
+  acceptanceCriteria: openspecOutput?.acceptanceCriteria || [],
+  notes: openspecOutput?.notes || '',
+  splitStories: openspecOutput?.splitStories || undefined,
+}, null, 2)}
 
 ORIGINAL STORY CONTEXT:
 ${JSON.stringify({
@@ -886,8 +1017,8 @@ ${JSON.stringify({
 }, null, 2)}
 
 Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
-- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements)
-- "notes": What you changed and why (be specific — cite which criteria you added/modified)
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
 - "splitStories": Include if you refined openspec's splits, otherwise omit or pass through
 - "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
 - "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
@@ -898,7 +1029,27 @@ Produce your refined output as raw JSON only (no XML tags, no markdown fences, n
       promptExec, prompt, TOOL_SPEC_AGENT, 'SPEC_AGENT',
       path.join(logDir, `${story.id}-speckit-review.log`), null
     );
-    if (payload) payload.agent = 'speckit';
+    if (payload) {
+      payload.agent = 'speckit';
+      // Post-process: strip any prescriptive HOW-to-implement ACs the model still produced
+      const { clean, flagged } = stripPrescriptiveACs(payload.acceptanceCriteria, story.id);
+      if (flagged.length > 0) {
+        payload.acceptanceCriteria = clean;
+        payload.acFlagged = [...(payload.acFlagged || []), ...flagged];
+        console.log(`spec-mode: speckit validator stripped ${flagged.length} prescriptive AC(s) from ${story.id}`);
+      }
+      // Also validate splitStories children
+      if (Array.isArray(payload.splitStories)) {
+        for (const child of payload.splitStories) {
+          if (!child.acceptanceCriteria) continue;
+          const { clean: childClean, flagged: childFlagged } = stripPrescriptiveACs(child.acceptanceCriteria, `${story.id}/${child.id}`);
+          if (childFlagged.length > 0) {
+            child.acceptanceCriteria = childClean;
+            child.acFlagged = [...(child.acFlagged || []), ...childFlagged];
+          }
+        }
+      }
+    }
     return { agent: 'speckit', payload };
   } catch (error) {
     console.warn(`spec-mode: speckit review failed for ${story.id}:`, error.message);
@@ -917,7 +1068,10 @@ function buildAssignments(assignments, stories, runId) {
   if (Array.isArray(assignments)) {
     assignments.forEach((entry) => {
       if (!entry || !storyIds.has(entry.storyId)) return;
-      const agents = Array.isArray(entry.agents) && entry.agents.length ? entry.agents : [];
+      // Guard: only accept known agent names — LLM sometimes returns review content as agent name
+      const VALID_AGENTS = new Set(['openspec', 'speckit']);
+      const rawAgents = Array.isArray(entry.agents) ? entry.agents : [];
+      const agents = rawAgents.filter(a => typeof a === 'string' && VALID_AGENTS.has(a));
       map.set(entry.storyId, {
         storyId: entry.storyId,
         agents,
@@ -959,6 +1113,38 @@ function splitDepth(story, prd) {
   return depth;
 }
 
+// Hard code enforcement for split eligibility — not a prompt instruction, a code invariant.
+// Called before registering any split child (per-child, so budget check tightens as children accumulate).
+const MAX_ACS_PER_STORY = parseInt(process.env.SPEC_MAX_ACS || '24', 10);
+const MAX_CHILDREN_PER_SPLIT = parseInt(process.env.SPEC_MAX_CHILDREN || '4', 10);
+
+function canSplitStory(story, prd, newStories) {
+  const maxSplitDepth = parseInt(process.env.SPEC_MAX_SPLIT_DEPTH || '2', 10);
+  const currentDepth = splitDepth(story, prd);
+  if (currentDepth >= maxSplitDepth) {
+    return { ok: false, reason: `depth ${currentDepth} >= max ${maxSplitDepth}` };
+  }
+  const existingChildren = (prd.stories || []).filter(
+    s => s.specification?.createdFrom === story.id
+  ).length;
+  const pendingChildren = (newStories || []).filter(
+    ns => ns.parentId === story.id
+  ).length;
+  if (existingChildren + pendingChildren >= MAX_CHILDREN_PER_SPLIT) {
+    return { ok: false, reason: `split budget exhausted (${existingChildren + pendingChildren} children >= max ${MAX_CHILDREN_PER_SPLIT})` };
+  }
+  return { ok: true, reason: '' };
+}
+
+// AC cap — modifies story in place, logs if truncated
+function capSplitACs(story, parentId) {
+  const acs = Array.isArray(story.acceptanceCriteria) ? story.acceptanceCriteria : [];
+  if (acs.length > MAX_ACS_PER_STORY) {
+    console.warn(`spec-mode: AC cap enforced on ${story.id} (child of ${parentId}): ${acs.length} → ${MAX_ACS_PER_STORY}`);
+    story.acceptanceCriteria = acs.slice(0, MAX_ACS_PER_STORY);
+  }
+}
+
 function applySpecChanges(story, payload, newStories, prd, phaseId, runId) {
   const result = { acceptanceChanged: false, splitCount: 0 };
   if (Array.isArray(payload.acceptanceCriteria) && payload.acceptanceCriteria.length) {
@@ -979,16 +1165,23 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId) {
     story.technicalNotes = payload.technicalNotes;
   }
   if (Array.isArray(payload.splitStories) && payload.splitStories.length) {
-    // Enforce split-depth guard: count how many generations of createdFrom exist.
-    const maxSplitDepth = parseInt(process.env.SPEC_MAX_SPLIT_DEPTH || '2', 10);
     const currentDepth = splitDepth(story, prd);
+    const maxSplitDepth = parseInt(process.env.SPEC_MAX_SPLIT_DEPTH || '2', 10);
     if (currentDepth >= maxSplitDepth) {
       console.warn(
         `spec-mode: skipping splits for ${story.id} — depth ${currentDepth} >= max ${maxSplitDepth}`
       );
     } else {
+      const childrenBefore = newStories.filter(ns => ns.parentId === story.id).length;
+
       payload.splitStories.forEach((split, idx) => {
         if (!split || typeof split !== 'object') return;
+        // Per-child budget check — canSplitStory sees pendingChildren accumulate each iteration
+        const { ok, reason } = canSplitStory(story, prd, newStories);
+        if (!ok) {
+          console.warn(`spec-mode: split budget for ${story.id} child ${idx + 1} rejected — ${reason}`);
+          return;
+        }
         const baseId = split.id && typeof split.id === 'string' ? split.id : `${story.id}-SPEC-${idx + 1}`;
         let newId = baseId;
         let suffix = 1;
@@ -1018,9 +1211,19 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId) {
           runId,
           splitDepth: currentDepth + 1
         };
+        capSplitACs(newStory, story.id);
         newStories.push({ parentId: story.id, story: newStory, phase: phaseId });
         result.splitCount += 1;
       });
+
+      // Parent AC redistribution — clear parent ACs after split to prevent 93-AC parent stories.
+      // The parent story's ACs are now owned by its children; the parent should not be executed.
+      const addedChildren = newStories.filter(ns => ns.parentId === story.id).slice(childrenBefore);
+      if (addedChildren.length > 0) {
+        const childIds = addedChildren.map(ns => ns.story.id).join(', ');
+        story.acceptanceCriteria = [`Delegated to split children: ${childIds}`];
+        console.log(`spec-mode: parent ${story.id} ACs redistributed → delegated to ${childIds}`);
+      }
     }
   }
   return result;
@@ -1111,34 +1314,57 @@ function extractTaggedJson(text, tag) {
   return null;
 }
 
-function runClaude(execSpec, prompt, logPath) {
+const RUNCLAUDE_TIMEOUT_MS = parseInt(process.env.RUNCLAUDE_TIMEOUT_MS || '120000', 10);
+
+function runClaude(execSpec, prompt, logPath, envOverrides = {}) {
   return new Promise((resolve, reject) => {
-    const env = { ...process.env };
+    const env = { ...process.env, ...envOverrides };
     delete env.CLAUDECODE;
     const cmd = execSpec?.cmd;
     if (!cmd) {
       return reject(new Error('prompt runner exited with code 1: no execSpec.cmd — set EPAM_ORCHESTRATION_PROVIDER'));
     }
     const args = Array.isArray(execSpec?.args) ? execSpec.args : [];
-    const proc = spawn(cmd, args, { env });
+    // detached:true puts the child in its own process group so we can kill the
+    // entire group (child + grandchildren like epam CLI) on timeout.
+    const proc = spawn(cmd, args, { env, detached: true });
     let stdout = '';
     let stderr = '';
-    proc.stdout.on('data', (chunk) => {
-      stdout += chunk.toString();
-    });
-    proc.stderr.on('data', (chunk) => {
-      stderr += chunk.toString();
-    });
-    proc.on('error', (error) => reject(error));
+    let settled = false;
+
+    const killGroup = () => {
+      try { process.kill(-proc.pid, 'SIGKILL'); } catch { /* already gone */ }
+    };
+
+    const killTimer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      killGroup();
+      // FIX: destroy stdio streams so grandchildren that inherited these pipe fds
+      // (e.g. epam CLI spawning detached node subprocesses) don't keep the Node.js
+      // event loop alive after the process group is killed.
+      proc.stdout?.destroy();
+      proc.stderr?.destroy();
+      reject(new Error(`prompt runner timed out after ${RUNCLAUDE_TIMEOUT_MS}ms`));
+    }, RUNCLAUDE_TIMEOUT_MS);
+
+    proc.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
+    proc.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+    proc.on('error', (error) => { if (!settled) { settled = true; clearTimeout(killTimer); reject(error); } });
     proc.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(killTimer);
       const output = `${stdout}\n${stderr}`.trim();
-      fs.writeFileSync(logPath, `# Prompt\n${prompt}\n\n# Output\n${output}\n`);
+      if (logPath) fs.writeFileSync(logPath, `# Prompt\n${prompt}\n\n# Output\n${output}\n`);
       if (code !== 0) {
         return reject(new Error(`prompt runner exited with code ${code}`));
       }
       resolve(output);
     });
-    proc.stdin.end(prompt);
+    proc.unref(); // don't keep Node alive waiting for the child
+    proc.stdin?.on('error', () => { /* suppress EPIPE when process is killed before stdin flush */ });
+    proc.stdin?.end(prompt);
   });
 }
 
@@ -1201,11 +1427,159 @@ function modelComplexitySignals(story) {
   return { acCount, isSingleFile, hasHtmlOutput, hasSelfContainedKeyword, needsUpgrade, reason };
 }
 
-if (require.main === module) {
-  run().catch((err) => {
-    console.error('spec-mode-runner failed:', err);
+// ─────────────────────────────────────────────────────────────────────────────
+// Mid-execution split validation — called from run-agent-orchestration.sh
+// after any step that may write new stories to the PRD (Step 0.5, post-story).
+//
+// Flow: find unvalidated split children → run speckit in parent context →
+//       apply AC cap → redistribute parent ACs → mark speckitValidated → write PRD.
+// ─────────────────────────────────────────────────────────────────────────────
+async function validateMidExecutionSplits(prdFile, storyIdsCsv) {
+  const storyIds = (storyIdsCsv || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (!prdFile || !storyIds.length) {
+    console.log('spec-mode: --validate-splits: nothing to validate');
+    return;
+  }
+
+  const prd = JSON.parse(fs.readFileSync(prdFile, 'utf8'));
+  const scriptDir = path.dirname(fs.realpathSync(process.argv[1]));
+  const aiRunnerCmd = process.env.AI_RUNNER_CMD || path.join(scriptDir, 'ai-run.sh');
+  const promptExec = resolvePromptExec(aiRunnerCmd);
+  const phase = process.env.PHASE || 'unknown';
+  const runId = process.env.ORCH_RUN_ID || new Date().toISOString().replace(/[:-]/g, '');
+  const logDir = process.env.OUTPUT_DIR || path.join(path.dirname(prdFile), 'logs');
+  fs.mkdirSync(logDir, { recursive: true });
+
+  const storiesToValidate = storyIds
+    .map(id => prd.stories.find(s => s.id === id))
+    .filter(s => s && s.specification?.createdFrom && !s.specification?.speckitValidated);
+
+  if (!storiesToValidate.length) {
+    console.log('spec-mode: --validate-splits: all target stories already validated or not found');
+    return;
+  }
+
+  // Group by parent
+  const byParent = new Map();
+  for (const child of storiesToValidate) {
+    const parentId = child.specification.createdFrom;
+    if (!byParent.has(parentId)) byParent.set(parentId, []);
+    byParent.get(parentId).push(child);
+  }
+
+  let hardViolations = 0;
+
+  for (const [parentId, children] of byParent) {
+    const parentStory = prd.stories.find(s => s.id === parentId);
+    if (!parentStory) {
+      console.warn(`spec-mode: --validate-splits: parent ${parentId} not in PRD — skipping`);
+      continue;
+    }
+
+    // Depth guard (code, not prompt)
+    const currentDepth = splitDepth(parentStory, prd);
+    const maxSplitDepth = parseInt(process.env.SPEC_MAX_SPLIT_DEPTH || '2', 10);
+    if (currentDepth >= maxSplitDepth) {
+      console.warn(`spec-mode: --validate-splits: ${parentId} depth ${currentDepth} >= max ${maxSplitDepth} — rejecting ${children.length} children`);
+      for (const child of children) {
+        child.specification.splitRejected = true;
+        child.specification.splitRejectionReason = `depth ${currentDepth} >= max ${maxSplitDepth}`;
+        child.status = 'deprecated';
+      }
+      hardViolations++;
+      continue;
+    }
+
+    // Split budget guard — count against already-registered children from prior runs
+    const existingValidatedChildren = prd.stories.filter(
+      s => s.specification?.createdFrom === parentId && s.specification?.speckitValidated
+    ).length;
+    if (existingValidatedChildren + children.length > MAX_CHILDREN_PER_SPLIT) {
+      const allowed = Math.max(0, MAX_CHILDREN_PER_SPLIT - existingValidatedChildren);
+      console.warn(`spec-mode: --validate-splits: ${parentId} budget allows ${allowed} more children, got ${children.length} — capping`);
+      const rejected = children.splice(allowed);
+      for (const r of rejected) {
+        r.specification.splitRejected = true;
+        r.specification.splitRejectionReason = `split budget exhausted (max ${MAX_CHILDREN_PER_SPLIT})`;
+        r.status = 'deprecated';
+      }
+      if (!children.length) { hardViolations++; continue; }
+    }
+
+    // AC cap on each child
+    for (const child of children) capSplitACs(child, parentId);
+
+    // Run speckit — treat children as openspec's split proposals
+    const openspecOutput = {
+      acceptanceCriteria: parentStory.acceptanceCriteria || [],
+      notes: 'Mid-execution split registered by agent during story execution',
+      splitStories: children.map(c => ({
+        id: c.id,
+        title: c.title,
+        description: c.description,
+        acceptanceCriteria: c.acceptanceCriteria || [],
+        dependencies: c.dependencies || [],
+        agentRole: c.agentRole
+      }))
+    };
+
+    const speckitResult = await runSpeckitReview({
+      promptExec,
+      story: parentStory,
+      openspecOutput,
+      phase,
+      runId,
+      logDir
+    });
+
+    // Apply speckit refinements if returned
+    if (speckitResult?.payload?.splitStories) {
+      for (const sc of speckitResult.payload.splitStories) {
+        const child = children.find(c => c.id === sc.id);
+        if (child && Array.isArray(sc.acceptanceCriteria) && sc.acceptanceCriteria.length) {
+          const { clean } = stripPrescriptiveACs(sc.acceptanceCriteria, child.id);
+          child.acceptanceCriteria = clean.slice(0, MAX_ACS_PER_STORY);
+        }
+        if (child && sc.notes) {
+          child.specification.speckitNotes = sc.notes;
+        }
+      }
+    }
+
+    // Mark children validated
+    for (const child of children) {
+      child.specification.speckitValidated = true;
+      child.specification.speckitValidatedAt = new Date().toISOString();
+    }
+
+    // Parent AC redistribution
+    const childIds = children.map(c => c.id).join(', ');
+    parentStory.acceptanceCriteria = [`Delegated to split children: ${childIds}`];
+    console.log(`spec-mode: --validate-splits: ${parentId} → validated ${children.length} children (${childIds})`);
+  }
+
+  fs.writeFileSync(prdFile, JSON.stringify(prd, null, 2) + '\n');
+
+  if (hardViolations > 0) {
+    console.error(`spec-mode: --validate-splits: ${hardViolations} hard violation(s) — check PRD for deprecated splits`);
     process.exit(1);
-  });
+  }
+
+  console.log('spec-mode: --validate-splits: complete');
+}
+
+if (require.main === module) {
+  if (process.argv[2] === '--validate-splits') {
+    validateMidExecutionSplits(process.argv[3], process.argv[4]).catch((err) => {
+      console.error('spec-mode-runner --validate-splits failed:', err);
+      process.exit(1);
+    });
+  } else {
+    run().catch((err) => {
+      console.error('spec-mode-runner failed:', err);
+      process.exit(1);
+    });
+  }
 }
 
 module.exports = {
@@ -1213,10 +1587,15 @@ module.exports = {
   buildAssignments,
   captureStorySnapshot,
   splitDepth,
+  canSplitStory,
+  capSplitACs,
   applySpecChanges,
+  validateMidExecutionSplits,
   extractCodeRefs,
   resolvePromptProvider,
   resolvePromptExec,
   isMiniTierModel,
   modelComplexitySignals,
+  MAX_ACS_PER_STORY,
+  MAX_CHILDREN_PER_SPLIT,
 };

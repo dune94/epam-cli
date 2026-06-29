@@ -257,6 +257,7 @@ print_step_checklist() {
     _checklist_row "3.2"  "Merge worktrees"          "COND"  "if worktrees created"
     _checklist_row "3.5"  "Post-parallel assessment" "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP_SKILL_ASSESSMENT=1 || true)"
     _checklist_row "3.7"  "Pre-review gate"          "$([ "${SKIP_PRE_REVIEW_GATE:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_PRE_REVIEW_GATE=true"
+    _checklist_row "3.8"  "Lint gate"                "$([ "${SKIP_LINT_GATE:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_LINT_GATE=true"
     _checklist_row "4"    "Review stories"           "COND"  "if review stories exist"
     _checklist_row "4.2a" "SAST sentinel"            "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
     _checklist_row "4.2b" "Spec validator"           "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
@@ -1653,6 +1654,88 @@ else
     run_pre_phase_assessment "$PHASE"
 fi
 
+# ── Mid-execution split validation ────────────────────────────────────────────
+# Speckit must review ALL splits, not only those proposed by openspec during
+# the spec pass (Step 0). The pre-phase assessment agent (Step 0.5) may write
+# new stories directly to the PRD. Validate those before execution begins.
+validate_mid_execution_splits() {
+    local _phase_id="$1"
+    local _spec_runner="$SCRIPT_DIR/spec-mode-runner.js"
+    local _node_cmd="${NODE_CMD:-${HOME}/.nvm/versions/node/v20.20.0/bin/node}"
+    [ ! -x "$_node_cmd" ] && _node_cmd="$(command -v node 2>/dev/null || echo 'node')"
+
+    if [ ! -f "$_spec_runner" ] || ! command -v "$_node_cmd" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    # Find stories in implementationOrder for this phase that have createdFrom set
+    # but have NOT been speckit-validated (i.e., mid-execution splits)
+    local _new_split_ids
+    _new_split_ids=$(jq -r \
+        --arg phase "$_phase_id" \
+        '(.implementationOrder[$phase] // []) as $order |
+         .stories[] |
+         select(
+           (.id as $id | $order | index($id) != null) and
+           (.specification.createdFrom != null) and
+           (.specification.speckitValidated != true) and
+           (.specification.splitRejected != true)
+         ) | .id' \
+        "$PRD_FILE" 2>/dev/null | tr '\n' ',' | sed 's/,$//')
+
+    if [ -z "$_new_split_ids" ]; then
+        log "  [split-gate] No unvalidated mid-execution splits for phase '$_phase_id'"
+        return 0
+    fi
+
+    log "  [split-gate] Running speckit on mid-execution splits: $_new_split_ids"
+    set +e
+    PRD_FILE="$PRD_FILE" OUTPUT_DIR="$LOG_DIR" \
+        AI_RUNNER_CMD="$AI_RUNNER_CMD" \
+        EPAM_ORCHESTRATION_PROVIDER="${ORCH_GATE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-}}" \
+        SPEC_MODE_PROVIDER="${SPEC_MODE_PROVIDER:-}" \
+        SPEC_MODE_SPECKIT_MODEL="${SPEC_MODE_SPECKIT_MODEL:-}" \
+        PHASE="$_phase_id" ORCH_RUN_ID="$ORCH_RUN_ID" \
+        "$_node_cmd" "$_spec_runner" --validate-splits "$PRD_FILE" "$_new_split_ids" \
+        2>&1 | tee "$LOG_DIR/split-validate-${_phase_id}.log"
+    local _sv_exit=${PIPESTATUS[0]}
+    set -e
+    if [ "$_sv_exit" -ne 0 ]; then
+        warning "  [split-gate] Split validation found hard violations — check $LOG_DIR/split-validate-${_phase_id}.log"
+    else
+        success "  [split-gate] Mid-execution splits validated for phase '$_phase_id'"
+    fi
+}
+
+validate_mid_execution_splits "$PHASE"
+
+# ── Post-assessment AC invariant check ────────────────────────────────────────
+# No story in implementationOrder may have >24 ACs before execution begins.
+# Catches spec-pass overflow or Step 0.5 agent writes that bypassed capSplitACs.
+check_ac_invariant() {
+    local _phase_id="$1"
+    local _violations
+    _violations=$(jq -r \
+        --arg phase "$_phase_id" \
+        --argjson max 24 \
+        '(.implementationOrder[$phase] // []) as $order |
+         .stories[] |
+         select(
+           (.id as $id | $order | index($id) != null) and
+           ((.acceptanceCriteria // []) | length > $max)
+         ) | "\(.id): \((.acceptanceCriteria // []) | length) ACs"' \
+        "$PRD_FILE" 2>/dev/null)
+
+    if [ -n "$_violations" ]; then
+        warning "  [ac-invariant] Stories exceeding 24-AC limit (may cause spec-validator failures):"
+        while IFS= read -r _v; do warning "    $_v"; done <<< "$_violations"
+    else
+        log "  [ac-invariant] All stories within 24-AC limit for phase '$_phase_id'"
+    fi
+}
+
+check_ac_invariant "$PHASE"
+
 # ──────────────────────────────────────────────
 # Step 0.6 (hybrid only): Pre-phase coordination
 # Seeds the MCP message bus with guidance messages
@@ -1779,6 +1862,8 @@ if [ -n "$main_stories" ]; then
                 || { _phase_story_failures=$((_phase_story_failures+1)); }
             record_story_actual_cost "$story" "$LOG_DIR/main-${story}.log"
             checkpoint_complete "$story"
+            # Validate any splits the agent registered mid-execution before the next story runs
+            validate_mid_execution_splits "$PHASE"
         done <<< "$non_review_main"
         if [ "$_phase_story_failures" -gt 0 ]; then
             step_emit "1" "fail" "Step 1: Main-branch stories"
@@ -2170,8 +2255,10 @@ if [ "${SKIP_PRE_REVIEW_GATE:-false}" != "true" ] && [ -f "$PROJECT_ROOT/package
         fi
 
         log "  Running tsc --noEmit..."
-        if "$_node_bin" ./node_modules/.bin/tsc --noEmit \
-                2>&1 | tee -a "$_pre_review_log"; then
+        _tsc_exit=0
+        "$_node_bin" ./node_modules/.bin/tsc --noEmit 2>&1 | tee -a "$_pre_review_log"
+        _tsc_exit=${PIPESTATUS[0]}
+        if [ "$_tsc_exit" -eq 0 ]; then
             success "  tsc: PASS"
         else
             error "  tsc: FAIL — fix type errors before review proceeds"
@@ -2197,6 +2284,208 @@ else
     [ "${SKIP_PRE_REVIEW_GATE:-false}" = "true" ] && \
         step_emit "3.7" "skip" "Step 3.7: Pre-review gate" "SKIP_PRE_REVIEW_GATE=true"
         info "Step 3.7: Pre-review gate skipped (SKIP_PRE_REVIEW_GATE=true)"
+fi
+
+# ──────────────────────────────────────────────
+# Step 3.8: Lint gate — tsc + eslint on PROJECT_ROOT/src
+# Runs after the pre-review vitest/tsc gate and before review stories.
+# Catches syntax and type errors that agents introduce during Step 1 so they
+# don't propagate to expensive quality gates (SAST, perf-sentinel, etc.).
+# Bypass: SKIP_LINT_GATE=true
+# ──────────────────────────────────────────────
+if [ "${SKIP_LINT_GATE:-false}" != "true" ] && [ -n "$_node_bin" ] && [ -x "$_node_bin" ]; then
+    step_emit "3.8" "running" "Step 3.8: Lint gate"
+    log "Step 3.8: Lint gate (tsc + eslint)..."
+    _lint_log="$LOG_DIR/lint-gate-${PHASE}.log"
+    _lint_failed=0
+    echo "=== Lint Gate: $PHASE @ $(date -Iseconds) ===" > "$_lint_log"
+
+    # ── tsc --noEmit ──────────────────────────────────────────────────────────
+    log "  [lint] Running tsc --noEmit..."
+    _lint_tsc_exit=0
+    cd "$PROJECT_ROOT" && "$_node_bin" ./node_modules/.bin/tsc --noEmit 2>&1 | tee -a "$_lint_log"
+    _lint_tsc_exit=${PIPESTATUS[0]}
+    if [ "$_lint_tsc_exit" -eq 0 ]; then
+        success "  [lint] tsc: PASS"
+    else
+        error "  [lint] tsc: FAIL (exit $_lint_tsc_exit) — fix TypeScript errors before proceeding"
+        _lint_failed=1
+    fi
+
+    # ── eslint (if binary present) ────────────────────────────────────────────
+    _eslint_bin=""
+    for _candidate in \
+        "$PROJECT_ROOT/node_modules/.bin/eslint" \
+        "$(command -v eslint 2>/dev/null)"; do
+        [ -x "$_candidate" ] && { _eslint_bin="$_candidate"; break; }
+    done
+
+    # Verify eslint can actually resolve its config before running on src/.
+    # File-existence checks alone are insufficient: ESLint 6.x doesn't support .cjs/.mjs
+    # config formats even if the file exists. Use --print-config as a dry-run probe.
+    _eslint_config=""
+    if [ -n "$_eslint_bin" ]; then
+        _probe_file="$PROJECT_ROOT/src/index.ts"
+        [ -f "$_probe_file" ] || _probe_file="$(find "$PROJECT_ROOT/src" -name "*.ts" | head -1)"
+        if [ -n "$_probe_file" ] && \
+           cd "$PROJECT_ROOT" && "$_eslint_bin" --print-config "$_probe_file" > /dev/null 2>&1; then
+            _eslint_config="confirmed"
+        fi
+    fi
+
+    if [ -n "$_eslint_bin" ] && [ -n "$_eslint_config" ]; then
+        log "  [lint] Running eslint src/..."
+        _lint_eslint_exit=0
+        cd "$PROJECT_ROOT" && "$_eslint_bin" src/ --max-warnings 0 2>&1 | tee -a "$_lint_log"
+        _lint_eslint_exit=${PIPESTATUS[0]}
+        if [ "$_lint_eslint_exit" -eq 0 ]; then
+            success "  [lint] eslint: PASS"
+        else
+            error "  [lint] eslint: FAIL (exit $_lint_eslint_exit) — fix lint errors before proceeding"
+            _lint_failed=1
+        fi
+    elif [ -n "$_eslint_bin" ]; then
+        info "  [lint] eslint found but no config in PROJECT_ROOT — skipping eslint (tsc only)"
+        echo "eslint: binary present but no config file found" >> "$_lint_log"
+    else
+        info "  [lint] eslint not found in project — skipping eslint (tsc only)"
+        echo "eslint: not configured in project" >> "$_lint_log"
+    fi
+
+    echo "=== Gate Result: $([ "$_lint_failed" -eq 0 ] && echo PASS || echo FAIL) ===" >> "$_lint_log"
+
+    if [ "$_lint_failed" -ne 0 ]; then
+        step_emit "3.8" "fail" "Step 3.8: Lint gate"
+        error "Step 3.8: Lint gate FAILED — running self-healing remediation pipeline..."
+
+        # ── Self-healing: route lint failure through gate-finding-analyst ─────
+        # Same three-agent pipeline as testing gates (step 4.2):
+        #   Agent 1 (gate-finding-analyst):  extracts grounded finding from lint log
+        #   Agent 2 (story-ac-remediator):   augments owning story ACs in PRD
+        #   Agent 3 (profile-augmentor):     records anti-pattern in agent profile
+        _lint_remediation_applied=0
+        _lint_rem_log="$LOG_DIR/lint-remediation-${PHASE}.log"
+        _profiles_file="${SCRIPT_DIR}/agents/profiles.json"
+
+        if [ "${SKIP_GATE_REMEDIATION:-0}" != "1" ] && [ -f "$_lint_log" ]; then
+            info "  [lint-gate:analyst] Extracting grounded finding from lint log..."
+            _lint_finding_prompt="$(cat <<LINT_FIND_EOF
+You are the gate-finding-analyst. A lint gate (tsc --noEmit + eslint) failed during the '$PHASE' phase of an automated TypeScript project build.
+
+## Lint Gate Log
+$(cat "$_lint_log" 2>/dev/null | head -200)
+
+## PRD Stories (active)
+$(python3 -c "import json,sys; d=json.load(open('${MAIN_PRD_FILE:-$PRD_FILE}')); active=set(s for p in d['implementationOrder'].values() for s in p); [print(json.dumps({'id':s['id'],'title':s.get('title',''),'files':s.get('technicalNotes',{}).get('files',[])})) for s in d['stories'] if s['id'] in active]" 2>/dev/null | head -50)
+
+## Agent Profile
+$(cat "$_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('gate-finding-analyst',''))" 2>/dev/null)
+
+Identify: which story owns the file with the lint/type error? Output JSON only:
+{"gate":"lint","story_id":"<id>","file":"<path>","line":<n>,"rule":"<tsc-error-code or eslint-rule>","message":"<description>","suggested_fix":"<one-line fix>"}
+LINT_FIND_EOF
+)"
+            _lint_finding_raw="$(echo "$_lint_finding_prompt" | \
+                timeout 120 epam run --provider "${ORCH_GATE_PROVIDER:-anthropic}" \
+                    --model "${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}" \
+                    --json - 2>>"$_lint_rem_log" || echo "")"
+            _lint_story_id="$(echo "$_lint_finding_raw" | python3 -c "
+import sys,json,re
+raw=sys.stdin.read()
+m=re.search(r'\{[^{}]*\"story_id\"[^{}]*\}', raw, re.DOTALL)
+if m:
+    try: print(json.loads(m.group(0)).get('story_id',''))
+    except: pass
+" 2>/dev/null || echo "")"
+
+            if [ -n "$_lint_story_id" ]; then
+                info "  [lint-gate:analyst] Finding mapped to story: $_lint_story_id"
+                # Agent 2: story-ac-remediator — add AC to prevent recurrence
+                info "  [lint-gate:remediator] Augmenting ACs for story $_lint_story_id..."
+                _lint_ac_prompt="$(cat <<LINT_AC_EOF
+You are the story-ac-remediator. A lint gate failure was mapped to story '$_lint_story_id'.
+
+## Finding
+$_lint_finding_raw
+
+## Current story ACs
+$(python3 -c "import json; d=json.load(open('${MAIN_PRD_FILE:-$PRD_FILE}')); [print(json.dumps(s.get('acceptanceCriteria',[]))) for s in d['stories'] if s['id']=='$_lint_story_id']" 2>/dev/null)
+
+## Agent Profile
+$(cat "$_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('story-ac-remediator',''))" 2>/dev/null)
+
+Add 1-2 ACs to story '$_lint_story_id' that would prevent this lint failure. Output JSON only:
+{"story_id":"$_lint_story_id","new_acs":["<ac text>"],"rationale":"<why>"}
+LINT_AC_EOF
+)"
+                _lint_ac_raw="$(echo "$_lint_ac_prompt" | \
+                    timeout 120 epam run --provider "${ORCH_GATE_PROVIDER:-anthropic}" \
+                        --model "${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}" \
+                        --json - 2>>"$_lint_rem_log" || echo "")"
+                _lint_ac_tmp="$(mktemp)"
+                echo "$_lint_ac_raw" > "$_lint_ac_tmp"
+                _lint_acs_added="$(python3 - "${MAIN_PRD_FILE:-$PRD_FILE}" "$_lint_story_id" "$_lint_ac_tmp" <<'LINT_AC_PY'
+import sys,json,re
+prd_path=sys.argv[1]; story_id=sys.argv[2]; raw_file=sys.argv[3]
+raw=open(raw_file).read()
+m=re.search(r'\{[^{}]*"new_acs"[^{}]*\}', raw, re.DOTALL)
+if not m: sys.exit(0)
+try: payload=json.loads(m.group(0))
+except: sys.exit(0)
+new_acs=payload.get('new_acs',[])
+if not new_acs: sys.exit(0)
+with open(prd_path) as f: d=json.load(f)
+added=0
+for s in d['stories']:
+    if s['id']==story_id:
+        existing=[a.get('text','') if isinstance(a,dict) else str(a) for a in s.get('acceptanceCriteria',[])]
+        for ac in new_acs:
+            if ac and ac not in existing and len(existing)<24:
+                s.setdefault('acceptanceCriteria',[]).append({'text':ac,'status':'pending'})
+                added+=1
+with open(prd_path,'w') as f: json.dump(d,f,indent=2)
+print(added)
+LINT_AC_PY
+2>/dev/null || echo "0")"
+                rm -f "$_lint_ac_tmp"
+                if [ "${_lint_acs_added:-0}" -gt 0 ]; then
+                    success "  [lint-gate:remediator] ${_lint_acs_added} AC(s) added to $_lint_story_id"
+                    _lint_remediation_applied=1
+                fi
+
+                # Agent 3: profile-augmentor (fire-and-forget)
+                info "  [lint-gate:augmentor] Recording lint anti-pattern in profile..."
+                echo "$_lint_finding_raw" | \
+                    timeout 60 epam run --provider "${ORCH_GATE_PROVIDER:-anthropic}" \
+                        --model "${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}" \
+                        --json - 2>>"$_lint_rem_log" || true
+            else
+                warning "  [lint-gate:analyst] Could not map lint failure to a story — skipping AC remediation"
+            fi
+        fi
+
+        if [ "$_lint_remediation_applied" = "1" ]; then
+            warning "Step 3.8: Lint gate remediation applied — caller should retry phase"
+            error "Step 3.8: Lint gate FAILED — remediation applied, retry required"
+            error "  Remediation log: $_lint_rem_log"
+            exit 2  # exit 2 = remediated, tier3 runner resets and retries phase
+        fi
+
+        error "Step 3.8: Lint gate FAILED — fix errors before review proceeds"
+        error "  Log: $_lint_log"
+        error "  Bypass (emergency only): SKIP_LINT_GATE=true $0 --phase $PHASE"
+        exit 1
+    fi
+    step_emit "3.8" "pass" "Step 3.8: Lint gate"
+    success "Step 3.8: Lint gate PASSED"
+else
+    if [ "${SKIP_LINT_GATE:-false}" = "true" ]; then
+        step_emit "3.8" "skip" "Step 3.8: Lint gate" "SKIP_LINT_GATE=true"
+        info "Step 3.8: Lint gate skipped (SKIP_LINT_GATE=true)"
+    else
+        step_emit "3.8" "skip" "Step 3.8: Lint gate" "no node binary"
+        info "Step 3.8: Lint gate skipped (node binary not found)"
+    fi
 fi
 
 # ──────────────────────────────────────────────
@@ -2894,25 +3183,40 @@ except Exception:
         # Check for actual failing stories, not just the top-level overallVerdict.
         # An empty stories[] with overallVerdict:fail means the agent had no data — treat as warn.
         local _spec_failing
-        _spec_failing=$(python3 -c "
-import sys, json, re
+        _spec_failing=$(python3 - '$spec_log' <<'SPEC_EXTRACTOR_PY'
+import sys, re
+
+# The spec-validator agent often emits JSON with unescaped newlines inside string
+# values, making the output unparseable by json.loads regardless of extraction strategy.
+# Use targeted line-level pattern matching instead — robust against malformed JSON.
 try:
-    text = open('$spec_log').read()
-    m = re.search(r'\{.*\}', text, re.DOTALL)
-    if m:
-        d = json.loads(m.group(0))
-        stories = d.get('stories', [])
-        if not stories:
-            # No stories parsed — agent had no data to evaluate
-            print('no-data')
-        else:
-            failing = [s.get('storyId','?') for s in stories if s.get('verdict') == 'fail']
-            print(len(failing))
-    else:
+    text = open(sys.argv[1]).read()
+
+    # Check the agent ran at all (must contain storyId references)
+    if '"storyId"' not in text and '"stories"' not in text:
         print('no-json')
-except Exception as e:
+        sys.exit(0)
+
+    # Count story-level verdict:fail lines
+    failing_count = len(re.findall(r'"verdict"\s*:\s*"fail"', text))
+    # The overallVerdict line is a top-level field — distinct from per-story verdict
+    overall_m = re.search(r'"overallVerdict"\s*:\s*"(\w+)"', text)
+    overall = overall_m.group(1) if overall_m else None
+
+    # If no per-story verdicts at all, the agent had no data
+    if not re.search(r'"verdict"\s*:', text):
+        print('no-data')
+    elif failing_count > 0:
+        print(failing_count)
+    elif overall == 'warn':
+        # Non-blocking partial — treat as 0 failures (warn path handled separately)
+        print(0)
+    else:
+        print(0)
+except Exception:
     print('error')
-" 2>/dev/null || echo "error")
+SPEC_EXTRACTOR_PY
+2>/dev/null || echo "error")
         if [ "$_spec_failing" = "no-data" ] || [ "$_spec_failing" = "no-json" ] || [ "$_spec_failing" = "error" ]; then
             step_emit "4.2b" "warn" "Step 4.2b: Spec validator" "no story data"
             warning "  Spec validator: WARN — agent returned no story data (oracle injection needed)"
@@ -3336,6 +3640,10 @@ PERF_PYEOF
                     step_emit "4.4b" "fail" "Step 4.4b: Perf sentinel"
                     error "  Perf-sentinel: FAIL — confirmed performance blocker in analysed files"
                     failed=1
+                    # perf_exit=0 here (agent exited clean) so _failing_logs won't pick it up
+                    # via the exit-code check below — add it explicitly so remediation fires.
+                    _failing_logs+=("$perf_log")
+                    _log_labels+=("perf-sentinel")
                 else
                     step_emit "4.4b" "warn" "Step 4.4b: Perf sentinel" "hallucinated fail downgraded"
                     warning "  Perf-sentinel: FAIL verdict downgraded to WARN — no blocker findings with analysed files (agent had no tool access; re-check manually)"

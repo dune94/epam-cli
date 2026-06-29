@@ -563,6 +563,130 @@ Phase 2 (high effort): add a `POST /webhook/github` route to `control-plane.js` 
 
 ---
 
+---
+
+## GAP-P23 — Orchestration agent coverage — integration tests
+
+**Status:** pending  
+**Priority:** 20  
+**Effort:** medium (2-3 stories)  
+**Source:** Run 84 — identified during profiles.json audit
+
+### Problem
+The 10 orchestration/tooling agents (`project-initiator-agent`, `prd-project-manager-agent`, `agent-skills-agent`, `grooming-coordinator`, `readiness-checker`, `dedup-detector`, `generator`, `dashboard-orchestrator-agent`, `dashboard-test-agent`, `dashboard-update-agent`) have profiles in `profiles.json` but are only invoked from `src/scaffold/ProjectScaffolder.ts` (during `epam new init/generate`) or `reset-cost-test.sh` (a reset utility). They are never exercised by the tier3 travel-app pipeline, and no integration tests exist that invoke them end-to-end. A stale prompt, wrong output schema, or broken invocation path in any of these agents is undetectable until a user actually runs `epam new init`.
+
+### Approach
+Add a lightweight smoke-test suite under `test/integration/orchestration-agents/` that invokes each agent with a minimal fixture PRD and validates:
+1. The agent returns a structurally valid JSON response matching its declared output schema
+2. No agent crashes the process or produces an empty response
+3. Profiles in `profiles.json` match the schemas used in `ProjectScaffolder.ts`
+
+Use a mock LLM provider (`EPAM_PROVIDER=mock`) for CI so tests don't incur API costs. Each test asserts output schema validity only — not content quality.
+
+### Acceptance criteria
+- One integration test per orchestration agent (10 tests)
+- Tests run via `vitest run test/integration/orchestration-agents/`
+- Use mock provider — zero LLM cost, runs in CI without API keys
+- Test fails if agent returns empty output, crashes, or output fails JSON schema validation
+- Profile key in `profiles.json` validated against the key referenced in `ProjectScaffolder.ts` — mismatch is a test failure
+- All 10 tests pass on a clean checkout before any `epam new init` is run
+
+---
+
+## GAP-P24 — Documentation agent coverage — pipeline wiring and smoke tests
+
+**Status:** pending  
+**Priority:** 21  
+**Effort:** medium (2 stories)  
+**Source:** Run 84 — identified during profiles.json audit
+
+### Problem
+The 10 documentation agents (`doc-coordinator`, `docstring-agent`, `api-doc-generator`, `guide-author`, `architecture-doc-agent`, `changelog-agent`, `doc-reviewer`, `doc-index-builder`, `doc-search-agent`, `doc-site-builder`) have profiles in `profiles.json` but are not wired into `run-agent-orchestration.sh` at all. There is no doc-generation phase in the travel-app PRD or any other active PRD. The agents exist as profiles only — they have never produced a real output artifact in a live run. It is unknown whether their prompts are correct, their output formats are parseable by the pipeline, or their invocation mechanism works.
+
+### Approach
+Two parallel tracks:
+
+**Track 1 — Smoke tests (immediate):** Add smoke tests under `test/integration/doc-agents/` identical in structure to GAP-P23: mock provider, schema validation, one test per agent. These confirm at minimum that the agent can be invoked and returns valid output.
+
+**Track 2 — Doc phase wiring (pipeline):** Add an optional `doc` phase to the travel-app PRD (behind `SKIP_DOC_PHASE=true` env var by default). The doc phase runs after `ui_and_review` completes and invokes `doc-coordinator` → `docstring-agent` + `api-doc-generator` + `architecture-doc-agent` → `doc-reviewer` → `doc-index-builder` in sequence. Output: `docs/` directory in `OUTPUT_DIR`. Wire into `run-agent-orchestration.sh` and `tier3-travel-app-run.sh`.
+
+### Acceptance criteria
+**Track 1:**
+- 10 smoke tests, one per doc agent, using mock provider
+- Each test validates output schema — fails on empty or non-JSON response
+- Tests run in CI with zero API cost
+
+**Track 2:**
+- `SKIP_DOC_PHASE=false` enables the doc phase in tier3 travel-app runs
+- Doc phase steps appear in the tier3-checklist.py view
+- At least one complete travel-app run with doc phase enabled produces a non-empty `docs/` directory
+- `doc-reviewer` verdict gates the phase (warn on partial, fail on no docs produced)
+
+---
+
+---
+
+## GAP-P25 — Runtime story split enforcement: AC cap, depth guard, parent AC redistribution
+
+**Status:** pending  
+**Priority:** 1 (blocking quality — observed in Run 84 CORE phase)  
+**Effort:** medium (2-3 stories)  
+**Source:** Run 84 — SKY-002a-1 (93 ACs), SKY-004-B-IMPL (56 ACs), depth-6 splits observed
+
+### Problem
+
+Story splits bypass all enforcement that only runs at preflight time, causing three compounding failures observed in Run 84:
+
+**1. AC overflow on split stories.** `preflight-check.sh` validates the ≤24 AC limit on stories that exist at run start (`status=pending`). Split stories are dynamically added to the PRD mid-execution (during Step 1), after preflight has already passed. Result: 6 core stories exceeded the AC limit — including SKY-002a-1 with 93 ACs (4× the limit). The spec-validator, review-ranger, and mutant-hunter all receive this story and cannot meaningfully evaluate 93 ACs in a single prompt pass.
+
+**2. Parent ACs not redistributed on split.** When `spec-mode-runner.js` splits a story, children receive their own AC arrays but the parent's AC array is never cleared or trimmed. The parent continues to carry all its original ACs in addition to the children's ACs, creating redundant and contradictory coverage expectations.
+
+**3. Split depth exceeds max-depth=2 at runtime.** `spec-mode-runner.js` enforces `maxSplitDepth=2` only during the spec pass (Step 0). When stories request further splits mid-execution (during Step 1 agent runs), the depth guard is not re-applied. Result: `SKY-004-B-TEST-IMPL-1` and `SKY-004-B-TEST-VALIDATION-1` reached depth 6 parts — well beyond the canonical max of 2. A `split budget` of max 4 children per parent was also exceeded.
+
+### Root cause locations
+
+- **Architectural flow gap (primary):** speckit only runs during Step 0 (spec pass) on stories openspec just processed in the same pass. Mid-execution splits — stories registered by agents during Step 1 — bypass speckit entirely. There is no code path that routes a mid-execution split through speckit before it becomes active.
+- `orchestrations/scripts/spec-mode-runner.js` line 1133: `maxSplitDepth` check only runs in `applyPRDChanges()` during spec pass — not when stories self-register splits mid-execution.
+- `orchestrations/scripts/spec-mode-runner.js` line 1157: child ACs are set but parent ACs are never cleared after split.
+- `orchestrations/scripts/spec-mode-runner.js` lines 991–995: speckit's `SPLIT RULES` instruct it not to split `splitDepth > 0` stories — but this is a prompt instruction, not code enforcement. Mid-execution splits ignore it.
+- `orchestrations/scripts/preflight-check.sh`: AC limit check uses `status=pending` filter — excludes any story added after preflight runs.
+- No runtime split registration guard exists anywhere in the pipeline.
+
+### Approach
+
+**Fix 1 — Speckit as universal split gatekeeper (architectural fix, primary).**
+Speckit must review ALL splits regardless of when or how they are registered — not just splits proposed by openspec during the spec pass. Implement a `runSpeckitOnSplit(parentStory, splitStories, prd)` function in `spec-mode-runner.js` that is called from:
+- `applyPRDChanges()` — existing path (speckit already runs here via the agent loop, but make it explicit and mandatory)
+- The mid-execution PRD write path in `run-agent-orchestration.sh` — any time an agent writes new story entries to the PRD during Step 1, intercept the write and call speckit before committing to `implementationOrder`
+
+Speckit's review of mid-execution splits uses the same prompt it uses during the spec pass (lines 974–1010 of spec-mode-runner.js) with the parent story context + proposed children. If speckit rejects a split (returns empty splitStories or flags AC violations), the split is not registered and the agent is instructed to complete within scope.
+
+This makes speckit the single enforcement point for split quality — one place, all paths.
+
+**Fix 2 — Hard AC cap at split registration.** Add a `validateSplitStory(story, prd)` function called whenever a new story is written to the PRD (both in `spec-mode-runner.js` and in the mid-execution PRD write path in `run-agent-orchestration.sh`). If `story.acceptanceCriteria.length > 24`, truncate to 24 and log a warning. Never silently accept an over-limit story.
+
+**Fix 3 — Parent AC redistribution.** When a split is registered in `applyPRDChanges()`, clear the parent story's `acceptanceCriteria` array and replace with a single summary AC: `"Delegated to split children: <child_ids>"`. This prevents the spec-validator from seeing 93 ACs on a completed parent.
+
+**Fix 4 — Runtime depth guard (code, not prompt).** Move the depth check out of `applyPRDChanges()` and into a shared `canSplitStory(story, prd)` guard called from both spec-mode and any mid-execution PRD mutation path. Hard-reject (log error, skip split) any story where `splitDepth(story, prd) >= maxSplitDepth`. This is a code invariant — not a prompt instruction that an agent can ignore.
+
+**Fix 5 — Split budget per parent.** Track `story.splitCount` in the PRD. When a story requests a split, increment the counter. Reject the split if `splitCount >= MAX_CHILDREN_PER_SPLIT` (default: 4). Prevents runaway splitting on a single story.
+
+**Fix 6 — Post-phase AC invariant check.** After each phase completes (before starting the next phase), run a lightweight validation pass over all stories in `implementationOrder` — including dynamically added splits — and fail-fast with a clear error if any story exceeds 24 ACs or depth > 2. This catches violations before the quality gates try to evaluate them.
+
+**Fix 7 — Test coverage.** Add tests to `test/unit/orchestration/` verifying: (a) split registration rejects >24 ACs, (b) parent ACs are cleared after split, (c) depth guard fires at depth 2, (d) split budget fires at 4 children, (e) mid-execution split path invokes speckit before registering.
+
+### Acceptance criteria
+- **Flow:** Every split — regardless of whether it originates from openspec during Step 0 or from an agent mid-execution during Step 1 — passes through speckit review before being registered in `implementationOrder`. No split bypasses speckit.
+- **AC cap:** No story in any phase can have `acceptanceCriteria.length > 24` after a split — hard cap enforced at registration time, not as a prompt instruction
+- **Parent redistribution:** Parent story ACs are cleared and replaced with a delegation note when any child split is accepted
+- **Depth guard (code):** A story at `splitDepth >= 2` cannot spawn further splits — mid-execution split requests are hard-rejected in code, not just in prompt rules that agents can ignore
+- **Split budget:** No parent story can have more than 4 split children — 5th split request is rejected
+- **Post-phase invariant:** Runs automatically before each phase transition; blocks the next phase if any story violates AC or depth limits
+- **Tests:** All 5 new unit tests pass before any live run (AC cap, parent clear, depth guard, split budget, mid-execution speckit invocation)
+- **Preflight extended:** Covers all stories in `implementationOrder`, not just `status=pending` at run start
+
+---
+
 ## Deferred
 
 ### GAP-P1 — Docker sandbox execution

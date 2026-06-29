@@ -223,10 +223,17 @@ tc_file    = '$TC_OUT_FILE'
 phase      = '$PHASE'
 tc_exit    = $TC_EXIT
 
-if not os.path.exists(tc_file):
-    if tc_exit != 0:
+# Check agent exit FIRST — never use a stale tc_file from a previous run when
+# the current agent invocation failed. Using old TCs on failure silently applies
+# outdated criteria against new implementation code.
+if tc_exit != 0:
+    if os.path.exists(tc_file):
+        print(f"  [tc-writer] ERROR: Agent failed (exit {tc_exit}) — stale TC file exists but will NOT be used (unsafe)", file=sys.stderr)
+    else:
         print(f"  [tc-writer] ERROR: Agent failed (exit {tc_exit}) and no TC file written", file=sys.stderr)
-        sys.exit(1)
+    sys.exit(1)
+
+if not os.path.exists(tc_file):
     print("  [tc-writer] WARNING: Agent succeeded but wrote no TC file — treating as no-op")
     sys.exit(0)
 

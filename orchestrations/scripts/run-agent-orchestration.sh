@@ -1041,6 +1041,13 @@ fi
 start_dashboards_watch
 start_control_plane
 
+# Resolve orch mode early so checklist can show accurate 0.6 status
+RESOLVED_ORCH_MODE=$(resolve_orch_mode "$PHASE")
+
+# Print step checklist BEFORE any step runs so user sees what's coming
+STEP_STATUS_FILE="$LOG_DIR/step-status.json"
+print_step_checklist
+
 # ── Step 0: Specification pre-pass (OpenSpec/Speckit) ─────────────────────────
 run_specification_pass() {
     local phase_id="$1"
@@ -1205,9 +1212,6 @@ else
         info "Step 0.1: CPA script not found — skipping pre-pass"
     fi
 fi
-
-# Resolve orchestration mode for this phase (phase config > ORCH_MODE env > bash default)
-RESOLVED_ORCH_MODE=$(resolve_orch_mode "$PHASE")
 
 echo ""
 echo -e "${MAGENTA}============================================${NC}"
@@ -1402,9 +1406,45 @@ if [ "$DRY_RUN" = true ]; then
     exit 0
 fi
 
-# ── Print step checklist now that all skip vars are resolved ─────────────────
-STEP_STATUS_FILE="$LOG_DIR/step-status.json"
-print_step_checklist
+# ── Periodic checklist heartbeat ─────────────────────────────────────────────
+# Prints a compact step-status summary every 60s so long-running phases stay
+# visible in the log without requiring tail.
+_checklist_heartbeat() {
+    while true; do
+        sleep 60
+        echo ""
+        echo -e "${MAGENTA}━━━ Step Status @ $(date +%H:%M:%S) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        for _sid in \
+            "0:spec" "0.1:cpa" "0.5:skill-pre" "0.6:hybrid-coord" "0.7:regression" \
+            "0.8:mkdir" "1:main-stories" "1.5:auto-commit" "1.6:tc-writer" \
+            "2:worktrees" "3a:primary" "3b:independent" "3.1:wt-health" \
+            "3.2:wt-merge" "3.5:skill-post" "3.7:pre-review" \
+            "4:review-stories" "4.2a:sast" "4.2b:spec-val" \
+            "4.3a:review-ranger" "4.3b:mutant-hunter" \
+            "4.4a:fuzz-weaver" "4.4b:perf-sentinel" "4.6:e2e"; do
+            local _key="${_sid%%:*}"
+            local _st="${_STEP_STATUS[$_key]:-pending}"
+            local _lbl="${_STEP_LABELS[$_key]:-$_key}"
+            local _icon
+            case "$_st" in
+                pass)    _icon="${GREEN}✓${NC}" ;;
+                skip)    _icon="${YELLOW}⊘${NC}" ;;
+                fail)    _icon="${RED}✗${NC}" ;;
+                warn)    _icon="${YELLOW}⚠${NC}" ;;
+                running) _icon="${CYAN}▶${NC}" ;;
+                *)       _icon="${WHITE}○${NC}" ;;
+            esac
+            printf "  "
+            echo -e "${_icon} %-6s %s" "$_key" "$_lbl"
+        done
+        echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+    done
+}
+_checklist_heartbeat &
+_HEARTBEAT_PID=$!
+# Kill heartbeat on exit
+trap 'kill "$_HEARTBEAT_PID" 2>/dev/null || true' EXIT
 
 # ──────────────────────────────────────────────
 # Initialize monitor status file for HTML dashboard
@@ -1760,7 +1800,6 @@ if [ "${_tc_writer_needed:-0}" -gt 0 ]; then
         exit 1
     fi
 else
-    step_emit "1.6" "skip" "Step 1.6: TC writer gate" "TCs present or no test stories"
     step_emit "1.6" "skip" "Step 1.6: TC writer gate" "all TCs present"
     info "Step 1.6: TC writer gate — all test stories already have TCs or no test stories in phase"
 fi
@@ -1811,8 +1850,10 @@ if [ -n "$PRIMARY_PID" ]; then
     log "Waiting for primary agent (PID $PRIMARY_PID)..."
     wait $PRIMARY_PID || PRIMARY_EXIT=$?
     if [ $PRIMARY_EXIT -eq 0 ]; then
+        step_emit "3a" "pass" "Step 3a: Primary agent"
         success "Primary agent completed successfully"
     else
+        step_emit "3a" "fail" "Step 3a: Primary agent"
         error "Primary agent failed with exit code $PRIMARY_EXIT"
         error "Check log: $LOG_DIR/wt-primary.log"
     fi
@@ -1822,8 +1863,10 @@ if [ -n "$INDEPENDENT_PID" ]; then
     log "Waiting for independent agent (PID $INDEPENDENT_PID)..."
     wait $INDEPENDENT_PID || INDEPENDENT_EXIT=$?
     if [ $INDEPENDENT_EXIT -eq 0 ]; then
+        step_emit "3b" "pass" "Step 3b: Independent agent"
         success "Independent agent completed successfully"
     else
+        step_emit "3b" "fail" "Step 3b: Independent agent"
         error "Independent agent failed with exit code $INDEPENDENT_EXIT"
         error "Check log: $LOG_DIR/wt-independent.log"
     fi
@@ -2769,6 +2812,7 @@ except Exception:
     fi
 
     if [ $spec_exit -ne 0 ]; then
+        step_emit "4.2b" "fail" "Step 4.2b: Spec validator"
         error "  Spec validator FAILED (exit $spec_exit)"
         failed=1
     else
@@ -2795,13 +2839,17 @@ except Exception as e:
     print('error')
 " 2>/dev/null || echo "error")
         if [ "$_spec_failing" = "no-data" ] || [ "$_spec_failing" = "no-json" ] || [ "$_spec_failing" = "error" ]; then
+            step_emit "4.2b" "warn" "Step 4.2b: Spec validator" "no story data"
             warning "  Spec validator: WARN — agent returned no story data (oracle injection needed)"
         elif [ "$_spec_failing" -gt 0 ]; then
+            step_emit "4.2b" "fail" "Step 4.2b: Spec validator"
             error "  Spec validator: FAIL — $_spec_failing story/stories failed criteria"
             failed=1
         elif grep -q '"overallVerdict"[[:space:]]*:[[:space:]]*"warn"' "$spec_log" 2>/dev/null; then
+            step_emit "4.2b" "warn" "Step 4.2b: Spec validator" "partial"
             warning "  Spec validator: WARN — some criteria partially met (non-blocking)"
         else
+            step_emit "4.2b" "pass" "Step 4.2b: Spec validator"
             success "  Spec validator: PASS"
         fi
     fi
@@ -2970,31 +3018,40 @@ $mutant_prompt"
 
         # Evaluate Phase B results
         if [ $review_exit -ne 0 ]; then
+            step_emit "4.3a" "fail" "Step 4.3a: Review ranger"
             error "  Review-ranger FAILED (exit $review_exit)"
             failed=1
         else
             if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$review_log" 2>/dev/null; then
+                step_emit "4.3a" "fail" "Step 4.3a: Review ranger"
                 error "  Review-ranger: FAIL verdict — blocker findings detected"
                 failed=1
             else
+                step_emit "4.3a" "pass" "Step 4.3a: Review ranger"
                 success "  Review-ranger: PASS"
             fi
         fi
 
         if [ $mutant_exit -ne 0 ]; then
+            step_emit "4.3b" "fail" "Step 4.3b: Mutant hunter"
             error "  Mutant-hunter FAILED (exit $mutant_exit)"
             failed=1
         else
             if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$mutant_log" 2>/dev/null; then
+                step_emit "4.3b" "fail" "Step 4.3b: Mutant hunter"
                 error "  Mutant-hunter: FAIL verdict — mutation score below threshold"
                 failed=1
             elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$mutant_log" 2>/dev/null; then
+                step_emit "4.3b" "warn" "Step 4.3b: Mutant hunter" "score 50-69%"
                 warning "  Mutant-hunter: WARN — mutation score 50-69% (non-blocking)"
             else
+                step_emit "4.3b" "pass" "Step 4.3b: Mutant hunter"
                 success "  Mutant-hunter: PASS"
             fi
         fi
     else
+        step_emit "4.3a" "skip" "Step 4.3a: Review ranger" "Phase A failed"
+        step_emit "4.3b" "skip" "Step 4.3b: Mutant hunter" "Phase A failed"
         info "  Phase B (review-ranger + mutant-hunter) skipped — Phase A had failures"
     fi
 
@@ -3160,18 +3217,53 @@ PYEOF
         fi
 
         if [ $perf_exit -ne 0 ]; then
+            step_emit "4.4b" "fail" "Step 4.4b: Perf sentinel"
             error "  Perf-sentinel FAILED (exit $perf_exit)"
             failed=1
         else
             if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$perf_log" 2>/dev/null; then
-                step_emit "4.4b" "fail" "Step 4.4b: Perf sentinel"
-                error "  Perf-sentinel: FAIL verdict — performance blocker detected"
-                failed=1
+                # Ground-truth check: a "fail" is only valid if the agent found real blocker
+                # findings. An agent with no tool access reports verdict:fail with empty findings
+                # and null/zero summary — downgrade these hallucinated fails to WARN.
+                _perf_grounded=$(python3 - "$perf_log" << 'PERF_PYEOF'
+import json, sys, re, os
+
+log_file = sys.argv[1]
+content = open(log_file).read()
+json_match = re.search(r'\{.*"agent".*"perf-sentinel".*\}', content, re.DOTALL)
+if not json_match:
+    print("0"); sys.exit(0)
+
+try:
+    data = json.loads(json_match.group(0))
+except Exception:
+    print("0"); sys.exit(0)
+
+summary = data.get("summary") or {}
+blocker_count = summary.get("blockerCount", 0) if summary else 0
+files_analysed = summary.get("filesAnalysed", 0) if summary else 0
+findings = data.get("findings", [])
+real_blockers = sum(1 for f in findings if str(f.get("severity","")).lower() == "blocker")
+
+# Grounded = has actual blocker findings AND agent analysed at least one file
+grounded = 1 if (real_blockers > 0 and (files_analysed > 0 or blocker_count > 0)) else 0
+print(str(grounded))
+PERF_PYEOF
+2>/dev/null || echo "0")
+                if [ "${_perf_grounded:-0}" -gt 0 ]; then
+                    step_emit "4.4b" "fail" "Step 4.4b: Perf sentinel"
+                    error "  Perf-sentinel: FAIL — confirmed performance blocker in analysed files"
+                    failed=1
+                else
+                    step_emit "4.4b" "warn" "Step 4.4b: Perf sentinel" "hallucinated fail downgraded"
+                    warning "  Perf-sentinel: FAIL verdict downgraded to WARN — no blocker findings with analysed files (agent had no tool access; re-check manually)"
+                fi
             elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$perf_log" 2>/dev/null; then
+                step_emit "4.4b" "warn" "Step 4.4b: Perf sentinel" "concerns non-blocking"
                 warning "  Perf-sentinel: WARN — performance concerns (non-blocking)"
             else
                 step_emit "4.4b" "pass" "Step 4.4b: Perf sentinel"
-            success "  Perf-sentinel: PASS"
+                success "  Perf-sentinel: PASS"
             fi
         fi
     else

@@ -1122,11 +1122,13 @@ function splitDepth(story, prd) {
 // writer wins and all prior agents' work is silently discarded.
 // Returns array of {file, childIds} conflicts. Empty array = coherent.
 function validateSplitFileCoherence(children) {
+  // Check ALL declared files — test files included. Each split child rewrites its file
+  // from scratch (last writer wins), so two children declaring the same .test.ts lose
+  // all work from every child except the last one. No exemption for test files.
   const fileToChildren = new Map();
   for (const child of children) {
     const files = (child.technicalNotes?.files || [])
-      .filter(f => typeof f === 'string')
-      .filter(f => !f.endsWith('.test.ts') && !f.endsWith('.spec.ts'));
+      .filter(f => typeof f === 'string');
     for (const file of files) {
       if (!fileToChildren.has(file)) fileToChildren.set(file, []);
       fileToChildren.get(file).push(child.id);
@@ -1239,7 +1241,8 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId) {
           createdFrom: story.id,
           createdAt: new Date().toISOString(),
           runId,
-          splitDepth: currentDepth + 1
+          splitDepth: currentDepth + 1,
+          splitOrigin: 'spec-pass'  // marks spec-pass splits; mid-execution splits use 'mid-execution'
         };
         capSplitACs(newStory, story.id);
         newStories.push({ parentId: story.id, story: newStory, phase: phaseId });
@@ -1608,10 +1611,11 @@ async function validateMidExecutionSplits(prdFile, storyIdsCsv) {
       }
     }
 
-    // Mark children validated
+    // Mark children validated and tag as mid-execution so pre-flight can strip them on next restore
     for (const child of children) {
       child.specification.speckitValidated = true;
       child.specification.speckitValidatedAt = new Date().toISOString();
+      child.specification.splitOrigin = 'mid-execution';
     }
 
     // Parent AC redistribution

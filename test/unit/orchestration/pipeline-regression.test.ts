@@ -655,9 +655,10 @@ describe('Issue 7 — run 78 confidence: GLM slug, K2 timeout, perf-sentinel git
 
   // ── Perf-sentinel git repo ───────────────────────────────────────────────
   it('tier3 script initialises git repo in OUTPUT_DIR before stories run', () => {
-    // Must have git init guard so perf-sentinel can run git diff
-    expect(tier3Src).toMatch(/git.*init/);
-    expect(tier3Src).toMatch(/\.git/);
+    // Must have git init so perf-sentinel can run git diff
+    // Pattern: git -C "$OUTPUT_DIR" init (teardown recreates the repo)
+    expect(tier3Src).toMatch(/git\s+-C.*init/);
+    expect(tier3Src).toMatch(/git.*commit.*allow-empty/);
   });
 
   it('tier3 OUTPUT_DIR is a persistent path outside /tmp', () => {

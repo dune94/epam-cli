@@ -288,13 +288,15 @@ describe('validateSplitFileCoherence — same-file split detection (run 85 root 
     expect(conflicts[0].childIds).toHaveLength(4);
   });
 
-  it('allows multiple children writing to the same test file (test files are exempt)', () => {
+  it('flags multiple children writing to the same test file (test files are NOT exempt — last-writer-wins applies equally)', () => {
     const children = [
       { id: 'C-1', technicalNotes: { files: ['src/skyscanner/client.ts', 'src/skyscanner/client.test.ts'] } },
       { id: 'C-2', technicalNotes: { files: ['src/skyscanner/client.test.ts'] } },
     ];
-    // Only client.ts would conflict, but C-2 doesn't write to it
-    expect(validateSplitFileCoherence(children)).toHaveLength(0);
+    // Both C-1 and C-2 claim client.test.ts — this is a real conflict regardless of extension
+    const conflicts = validateSplitFileCoherence(children);
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].file).toContain('client.test.ts');
   });
 
   it('allows one impl child and one test child for the same impl file', () => {

@@ -61,7 +61,23 @@ if [[ -f "$RUNNER_SCRIPT" ]]; then
   done
 fi
 
-# ── 3. PRD file valid JSON with required fields ───────────────────────────────
+# ── 3. PRD integrity gate ────────────────────────────────────────────────────
+echo "[ PRD integrity ]"
+if [[ -z "$PRD_FILE" ]]; then
+  fail "No --prd specified (required for integrity gate)"
+elif [[ ! -f "$PRD_FILE" ]]; then
+  fail "PRD not found: $PRD_FILE"
+else
+  integrity_out=$(bash "$SCRIPT_DIR/preflight-prd-integrity.sh" --prd "$PRD_FILE" 2>&1) || integrity_exit=$?
+  echo "$integrity_out"
+  if [[ "${integrity_exit:-0}" -ne 0 ]]; then
+    FAIL=$((FAIL+1))
+  else
+    PASS=$((PASS+1))
+  fi
+fi
+
+# ── 4. PRD file valid JSON with required fields ───────────────────────────────
 echo "[ PRD file ]"
 if [[ -z "$PRD_FILE" ]]; then
   fail "No --prd specified"
@@ -85,7 +101,7 @@ else
 
   # Runner OUTPUT_DIR must match PRD outputDir
   if [[ -f "$RUNNER_SCRIPT" && -n "$OUTPUT_DIR_VAL" ]]; then
-    RUNNER_OUTPUT=$(grep 'OUTPUT_DIR=' "$RUNNER_SCRIPT" | grep -v '^#' | head -1 | sed 's/.*OUTPUT_DIR="\?\([^"]*\)"\?.*/\1/')
+    RUNNER_OUTPUT=$(grep 'OUTPUT_DIR=' "$RUNNER_SCRIPT" | grep -v '^#' | head -1 | sed 's/.*OUTPUT_DIR="\?\([^"]*\)"\?.*/\1/' | sed 's/\${\([A-Z_]*\):-\(.*\)}/\2/')
     if [[ "$RUNNER_OUTPUT" == "$OUTPUT_DIR_VAL" ]]; then
       ok "Runner OUTPUT_DIR matches PRD outputDir ($OUTPUT_DIR_VAL)"
     else
@@ -147,7 +163,7 @@ done
 
 # RAPIDAPI optional but warn
 if [[ -z "${RAPIDAPI_KEY:-}" ]]; then
-  echo "  ⚠ RAPIDAPI_KEY not set — SKY-001b API discovery story may fail"
+  echo "  ⚠ RAPIDAPI_KEY not set — API contract discovery story may fail"
 fi
 
 # ── 5. Dashboard is up ───────────────────────────────────────────────────────

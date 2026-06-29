@@ -138,7 +138,7 @@ You are the TC writer agent. Your job is to generate testCriteria JSON for test 
 
 Output format (one object, all story IDs as keys):
 {
-  "SKY-004-B-TEST": {
+  "<story-id>": {
     "verifiedAt": "<ISO8601 timestamp>",
     "sourceFiles": ["src/server.ts"],
     "facts": [

@@ -66,19 +66,16 @@ _usage_before=$(curl -s "https://openrouter.ai/api/v1/auth/key" \
 info "OpenRouter usage before: \$$_usage_before"
 echo ""
 
-# Clean output directory to prevent leftover artifacts from prior runs poisoning
-# external verification (e.g. stale test files causing npm test to fail).
-# Preserve the git repo if present so gates can diff; otherwise init a new one.
+# Tear down the entire output directory before every run.
+# DELETE EVERYTHING — not a git clean, not a status reset, full rm -rf.
+# Stale package.json, tsconfig, test files, and accumulated artifacts from
+# prior runs all poison the next run. The only safe state is no state.
+info "Tearing down output directory: $OUTPUT_DIR"
+rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR"
-if [ -d "$OUTPUT_DIR/.git" ]; then
-  info "Resetting output directory (preserving git): $OUTPUT_DIR"
-  git -C "$OUTPUT_DIR" clean -fdx --quiet
-  git -C "$OUTPUT_DIR" checkout -- . 2>/dev/null || true
-else
-  info "Initialising git repo in output directory: $OUTPUT_DIR"
-  git -C "$OUTPUT_DIR" init --quiet
-  git -C "$OUTPUT_DIR" commit --allow-empty -m "init: skyscanner-app" --quiet
-fi
+git -C "$OUTPUT_DIR" init --quiet
+git -C "$OUTPUT_DIR" commit --allow-empty -m "init: skyscanner-app" --quiet
+info "Output directory clean (deleted and reinitialised)"
 
 # Export all required env vars directly so subprocesses inherit them without
 # an `env` wrapper array (which caused silent exit due to empty-var expansion).
@@ -130,25 +127,18 @@ else
   info "profiles.json.original not found — skipping profiles restore"
 fi
 
-# Restore prd.json from git HEAD, then strip orphan stories (those not referenced
-# in implementationOrder) so stories[] stays clean across runs.
-git checkout HEAD -- "$PRD_FILE" 2>/dev/null && info "prd.json restored from git HEAD" || info "prd.json git restore skipped (no HEAD version)"
-python3 - "$PRD_FILE" <<'PYEOF'
-import json, sys
-path = sys.argv[1]
-with open(path) as f:
-    d = json.load(f)
-active = set(sid for phase in d['implementationOrder'].values() for sid in phase)
-before = len(d['stories'])
-d['stories'] = [s for s in d['stories'] if s['id'] in active]
-after = len(d['stories'])
-if before != after:
-    with open(path, 'w') as f:
-        json.dump(d, f, indent=2)
-    print(f"  prd.json pruned: {before} → {after} stories (removed {before-after} orphans)")
-else:
-    print(f"  prd.json stories already clean ({after} active stories)")
-PYEOF
+# Restore prd.json from the CANONICAL file — never from git HEAD.
+# git HEAD accumulates runtime split children across runs; the canonical file
+# contains only the 12 curated base stories and is never mutated at runtime.
+PRD_CANONICAL="$REPO_ROOT/orchestrations/travel-app-prd.canonical.json"
+if [ ! -f "$PRD_CANONICAL" ]; then
+  fail "travel-app-prd.canonical.json not found — cannot restore clean PRD. Aborting."
+fi
+# Restore from canonical (4 base user stories). The spec pass (Step 0) elaborates these
+# into implementation stories each run. SKY-005 and SKY-006 are generated dynamically.
+cp "$PRD_CANONICAL" "$PRD_FILE"
+_canonical_count=$(jq '.stories | length' "$PRD_FILE" 2>/dev/null || echo '?')
+info "prd.json restored from canonical file ($_canonical_count base user stories)"
 echo ""
 
 # ── Pre-run PRD remediation (before preflight, so stale artifacts don't block) ─
@@ -157,6 +147,37 @@ echo ""
 info "Pre-run PRD remediation..."
 if ! bash "$SCRIPT_DIR/prd-remediate.sh" --prd "$PRD_FILE"; then
   fail "Pre-run PRD remediation failed — aborting. Fix prd.json manually."
+fi
+echo ""
+
+# ── PRD integrity guard — abort if canonical restore produced a corrupt PRD ──
+# Checks: no accumulated split children (stories whose parent is also in the PRD),
+# all stories pending. If either fails, the canonical file itself is corrupt and
+# must be manually repaired before running.
+python3 - "$PRD_FILE" <<'PYEOF'
+import json, sys
+path = sys.argv[1]
+with open(path) as f:
+    d = json.load(f)
+# After restoring from canonical, the PRD has only the 4 base user stories.
+# Any mid-execution splits from a prior run must not be present.
+mid_exec = [s['id'] for s in d['stories']
+            if s.get('specification', {}).get('splitOrigin') == 'mid-execution']
+dirty = [s['id'] for s in d['stories']
+         if s.get('status') not in ('pending', 'deprecated') and s.get('deprecated') is not True]
+errors = []
+if mid_exec:
+    errors.append(f"ABORT: PRD has {len(mid_exec)} mid-execution splits from a prior run — canonical restore failed: {mid_exec}")
+if dirty:
+    errors.append(f"ABORT: PRD has {len(dirty)} stories with non-pending status: {dirty}")
+if errors:
+    for e in errors: print(e, file=sys.stderr)
+    sys.exit(1)
+print(f"  PRD integrity OK: {len(d['stories'])} stories, all pending, zero mid-execution splits")
+PYEOF
+if [ $? -ne 0 ]; then
+  fail "PRD integrity check failed — canonical file is corrupt. Repair travel-app-prd.canonical.json before running."
+  exit 1
 fi
 echo ""
 
@@ -243,19 +264,21 @@ info "OpenRouter usage after: \$$_usage_after"
 info "Total spent this run: \$$_spent"
 echo ""
 
-# Validate all 11 stories
+# Validate all stories from implementationOrder — read dynamically, never hardcoded
 info "Validating story completion..."
 PASS=0; FAIL_LIST=""
-for story in SKY-001 SKY-001b SKY-002 SKY-003 SKY-004 SKY-005 SKY-006 SKY-003a SKY-003b SKY-004-A SKY-004-B; do
+while IFS= read -r story; do
+  [ -z "$story" ] && continue
   status=$(python3 -c "
-import json, sys
+import json
 with open('$PRD_FILE') as f:
   d = json.load(f)
 for s in d['stories']:
   if s['id'] == '$story':
     print(s.get('status','unknown'))
-    sys.exit(0)
-print('not_found')
+    break
+else:
+  print('not_found')
 " 2>/dev/null)
   if [ "$status" = "completed" ]; then
     success "$story: completed"
@@ -264,14 +287,24 @@ print('not_found')
     echo -e "${RED}[tier3-travel] ✗${NC} $story: $status"
     FAIL_LIST="$FAIL_LIST $story"
   fi
-done
+done < <(python3 -c "
+import json
+with open('$PRD_FILE') as f:
+  d = json.load(f)
+seen = set()
+for ids in d.get('implementationOrder', {}).values():
+  for i in ids:
+    if i not in seen:
+      print(i)
+      seen.add(i)
+" 2>/dev/null)
 
 echo ""
 if [ -n "$FAIL_LIST" ] || [ "$PIPELINE_EXIT" -ne 0 ]; then
   fail "Tier 3 travel app FAILED — stories not completed:$FAIL_LIST"
 fi
 
-success "Tier 3 travel app PASSED — all $PASS/11 stories complete"
+success "Tier 3 travel app PASSED — all $PASS stories complete"
 echo ""
 echo "  App built at: $OUTPUT_DIR"
 echo "  Log: $LOG_FILE"

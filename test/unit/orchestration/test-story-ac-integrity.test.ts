@@ -27,8 +27,27 @@ function acsOf(s: any): string[] {
     ...acs,
     ...prd.stories
       .filter((c: any) => c?.specification?.createdFrom === s.id)
-      .flatMap((c: any) => acsOf(c)), // recurse for nested splits
+      .flatMap((c: any) => acsOf(c)),
   ];
+}
+
+/**
+ * Find a story by the file it owns (suffix match against technicalNotes.files).
+ * Searches all stories in the PRD — not just active ones — so spec-pass splits are found.
+ * Returns the first match. If multiple stories own the same file (sequential ownership),
+ * use storyByFileLast() to get the final writer.
+ */
+function storyByFile(fileSuffix: string): any {
+  return prd.stories.find((s: any) =>
+    (s.technicalNotes?.files ?? []).some((f: string) => f.endsWith(fileSuffix))
+  );
+}
+
+/** Returns all stories that claim a given file suffix. */
+function storiesByFile(fileSuffix: string): any[] {
+  return prd.stories.filter((s: any) =>
+    (s.technicalNotes?.files ?? []).some((f: string) => f.endsWith(fileSuffix))
+  );
 }
 
 // ── 1. test-engineer profile enforces read-first ──────────────────────────────
@@ -61,13 +80,23 @@ describe('test-engineer agent profile — read-first mandate', () => {
 });
 
 // ── 2. table.test.ts story ACs match dynamic implementation ──────────────────
-describe('SKY-003b-2-3 (table.test.ts) — ACs match dynamic renderTable', () => {
-  const story = byId.get('SKY-003b-2-3') as any;
+describe('story owning table.test.ts — ACs match dynamic renderTable', () => {
+  const story = storyByFile('table.test.ts');
   const acs: string[] = acsOf(story);
   const notes: string = story?.technicalNotes?.notes ?? '';
 
-  it('story exists', () => {
+  it('a story exists that owns table.test.ts', () => {
     expect(story).toBeTruthy();
+  });
+
+  it('exactly one story owns table.test.ts on a clean spec-pass PRD', () => {
+    if (!story) return; // pre-spec-pass: skip
+    // Only enforce on clean spec-pass PRD (no stale accumulated splits from prior runs)
+    const isClean = prd.stories.every((s: any) =>
+      !s?.specification?.createdFrom || s?.specification?.splitOrigin === 'spec-pass'
+    );
+    if (!isClean) return; // stale accumulated PRD: skip
+    expect(storiesByFile('table.test.ts')).toHaveLength(1);
   });
 
   it('no AC prescribes fixed column width as an assertion (Airline=15, Departure=10)', () => {
@@ -109,13 +138,22 @@ describe('SKY-003b-2-3 (table.test.ts) — ACs match dynamic renderTable', () =>
 });
 
 // ── 3. server.test.ts story ACs match actual server routes ───────────────────
-describe('SKY-004-B-TEST (server.test.ts) — ACs match server.ts implementation', () => {
-  const story = byId.get('SKY-004-B-TEST') as any;
+describe('story owning server.test.ts — ACs match server.ts implementation', () => {
+  const story = storyByFile('server.test.ts');
   const acs: string[] = acsOf(story);
   const notes: string = story?.technicalNotes?.notes ?? '';
 
-  it('story exists', () => {
+  it('a story exists that owns server.test.ts', () => {
     expect(story).toBeTruthy();
+  });
+
+  it('exactly one story owns server.test.ts on a clean spec-pass PRD', () => {
+    if (!story) return;
+    const isClean = prd.stories.every((s: any) =>
+      !s?.specification?.createdFrom || s?.specification?.splitOrigin === 'spec-pass'
+    );
+    if (!isClean) return;
+    expect(storiesByFile('server.test.ts')).toHaveLength(1);
   });
 
   it('no AC asserts /cheapest endpoint exists', () => {
@@ -149,13 +187,22 @@ describe('SKY-004-B-TEST (server.test.ts) — ACs match server.ts implementation
 });
 
 // ── 4. cli.test.ts story ACs match actual cli.ts ─────────────────────────────
-describe('SKY-003a-test-3 (cli.test.ts) — ACs match cli.ts implementation', () => {
-  const story = byId.get('SKY-003a-test-3') as any;
+describe('story owning cli.test.ts — ACs match cli.ts implementation', () => {
+  const story = storyByFile('cli.test.ts');
   const acs: string[] = story?.acceptanceCriteria ?? [];
   const notes: string = story?.technicalNotes?.notes ?? '';
 
-  it('story exists', () => {
+  it('a story exists that owns cli.test.ts', () => {
     expect(story).toBeTruthy();
+  });
+
+  it('exactly one story owns cli.test.ts on a clean spec-pass PRD', () => {
+    if (!story) return;
+    const isClean = prd.stories.every((s: any) =>
+      !s?.specification?.createdFrom || s?.specification?.splitOrigin === 'spec-pass'
+    );
+    if (!isClean) return;
+    expect(storiesByFile('cli.test.ts')).toHaveLength(1);
   });
 
   it('ACs state parseArguments([]) returns empty object (no defaults)', () => {
@@ -188,13 +235,22 @@ describe('SKY-003a-test-3 (cli.test.ts) — ACs match cli.ts implementation', ()
 });
 
 // ── 5. client.test.ts story ACs match actual client.ts ───────────────────────
-describe('SKY-002b-1 (client.test.ts) — ACs match client.ts implementation', () => {
-  const story = byId.get('SKY-002b-1') as any;
+describe('story owning client.test.ts — ACs match client.ts implementation', () => {
+  const story = storyByFile('client.test.ts');
   const acs: string[] = acsOf(story);
   const notes: string = story?.technicalNotes?.notes ?? '';
 
-  it('story exists', () => {
+  it('a story exists that owns client.test.ts', () => {
     expect(story).toBeTruthy();
+  });
+
+  it('exactly one story owns client.test.ts on a clean spec-pass PRD', () => {
+    if (!story) return;
+    const isClean = prd.stories.every((s: any) =>
+      !s?.specification?.createdFrom || s?.specification?.splitOrigin === 'spec-pass'
+    );
+    if (!isClean) return;
+    expect(storiesByFile('client.test.ts')).toHaveLength(1);
   });
 
   it('ACs state fetch uses POST method (not GET)', () => {
@@ -223,5 +279,51 @@ describe('SKY-002b-1 (client.test.ts) — ACs match client.ts implementation', (
 
   it('notes instruct agent to READ client.ts first', () => {
     expect(notes).toMatch(/read.*client\.ts|client\.ts.*first/i);
+  });
+
+  it('ACs specify SkyscannerClient constructor takes an object { apiKey } not a plain string', () => {
+    // Recurring failure: agents pass new SkyscannerClient("key") which is TS2345
+    const hasObjectForm = acsOf(story).some(ac =>
+      /\{\s*apiKey\s*\}|apiKey.*object|object.*apiKey|options.*object|new SkyscannerClient\(\{/i.test(ac)
+    );
+    expect(hasObjectForm).toBe(true);
+  });
+});
+
+// ── 6. scaffold integrity — app package.json and tsconfig prerequisites ───────
+describe('scaffold integrity — skyscanner-app package.json and tsconfig', () => {
+  // These tests catch missing devDependencies and tsconfig gaps BEFORE a run.
+  // If tests run against the actual app files, they fail fast rather than
+  // wasting a full run (server.test.ts failing with TS2307 after 30 minutes).
+
+  const appRoot = join(__dirname, '../../../orchestrations/../../../skyscanner-app');
+  const appPkgPath = join(appRoot, 'package.json');
+  const appTsconfigPath = join(appRoot, 'tsconfig.json');
+
+  let appPkg: any = null;
+  let appTsconfig: any = null;
+
+  try { appPkg = JSON.parse(readFileSync(appPkgPath, 'utf8')); } catch { /* app not scaffolded yet */ }
+  try { appTsconfig = JSON.parse(readFileSync(appTsconfigPath, 'utf8')); } catch { /* app not scaffolded yet */ }
+
+  it('server.test.ts imports supertest — supertest must be in devDependencies', () => {
+    if (!appPkg) return; // app not scaffolded yet, skip
+    const deps = { ...appPkg.dependencies, ...appPkg.devDependencies };
+    expect(Object.keys(deps)).toContain('supertest');
+  });
+
+  it('@types/supertest must be in devDependencies when supertest is used', () => {
+    if (!appPkg) return;
+    const deps = { ...appPkg.dependencies, ...appPkg.devDependencies };
+    if (!deps['supertest']) return;
+    expect(Object.keys(deps)).toContain('@types/supertest');
+  });
+
+  it('tsconfig.json types includes vitest/globals so tsc --noEmit resolves vi/expect/describe', () => {
+    // Without "vitest/globals" in types, tsc --noEmit throws TS2304 for vi, expect, describe.
+    // vitest globals=true in vitest.config.ts works at runtime but not for tsc.
+    if (!appTsconfig) return;
+    const types: string[] = appTsconfig?.compilerOptions?.types ?? [];
+    expect(types).toContain('vitest/globals');
   });
 });

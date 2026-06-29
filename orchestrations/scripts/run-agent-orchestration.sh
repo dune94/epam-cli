@@ -243,7 +243,7 @@ print_step_checklist() {
 
     _checklist_row "0"    "Specification pass"       "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "EPAM_SPEC_MODE=0"
     _checklist_row "0.1"  "CPA pre-pass"             "$([ "${SKIP_CPA:-0}" = "1" ] && echo SKIP || echo ACTIVE)"           "SKIP_CPA=1"
-    _checklist_row "0.5"  "Pre-phase skill assess"   "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "SKIP_SKILL_ASSESSMENT=1"
+    _checklist_row "0.5"  "Pre-phase skill assess"   "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP_SKILL_ASSESSMENT=1 || true)"
     _checklist_row "0.6"  "Hybrid pre-coord"         "$([ "${RESOLVED_ORCH_MODE:-bash}" = "hybrid" ] && echo ACTIVE || echo SKIP)" "ORCH_MODE≠hybrid"
     _checklist_row "0.7"  "Regression guard"         "$([ "${SKIP_REGRESSION_GUARD:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_REGRESSION_GUARD=true"
     _checklist_row "0.8"  "mkdir src/ dirs"          "ACTIVE"
@@ -255,7 +255,7 @@ print_step_checklist() {
     _checklist_row "3b"   "Independent agent"        "COND"  "if independent stories"
     _checklist_row "3.1"  "Worktree health check"    "COND"  "if worktrees created"
     _checklist_row "3.2"  "Merge worktrees"          "COND"  "if worktrees created"
-    _checklist_row "3.5"  "Post-parallel assessment" "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "SKIP_SKILL_ASSESSMENT=1"
+    _checklist_row "3.5"  "Post-parallel assessment" "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP_SKILL_ASSESSMENT=1 || true)"
     _checklist_row "3.7"  "Pre-review gate"          "$([ "${SKIP_PRE_REVIEW_GATE:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_PRE_REVIEW_GATE=true"
     _checklist_row "4"    "Review stories"           "COND"  "if review stories exist"
     _checklist_row "4.2a" "SAST sentinel"            "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
@@ -1478,8 +1478,7 @@ _checklist_heartbeat() {
                 running) _icon="${CYAN}▶${NC}" ;;
                 *)       _icon="${WHITE}○${NC}" ;;
             esac
-            printf "  "
-            echo -e "${_icon} %-6s %s" "$_key" "$_lbl"
+            printf "  %b %-6s %s\n" "${_icon}" "$_key" "$_lbl"
         done
         echo -e "${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo ""

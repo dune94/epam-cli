@@ -397,7 +397,7 @@ normalize_provider_json() {
 AGENT_CONSTITUTION="AGENT BEHAVIORAL CONTRACT — NON-NEGOTIABLE:
 1. Filesystem boundary: Never write, edit, or delete files outside PROJECT_ROOT (${PROJECT_ROOT}). All output must land inside the project directory.
 2. Write code only: Write all files required by the story spec. Do NOT run compilers (tsc), test suites (vitest/jest/npm test), or linters. The orchestrator verifies correctness externally after your turn completes.
-3. No pre-flight reads: Do not read existing files before writing. Start from the spec directly. Only read a file if the story explicitly says to modify an existing file.
+3. No pre-flight reads: Do NOT read any files before writing your first implementation file. Start writing immediately. Do NOT read KB.md, AGENTS.md, or any existing source files for context — all necessary context is in this prompt. Only read a file if you must modify it (and only after writing all new files first).
 4. Protected paths: Never modify, rename, or delete files under .epam/, orchestrations/, or any path listed in .epam/protected-files. Never modify .env or any file matching *.env, .env.*, or *credentials* — these contain secrets and are immutable to agents.
 5. Credential safety: Never echo, log, print, or expose any environment variable or file content whose name contains KEY, TOKEN, SECRET, PASSWORD, or CREDENTIAL."
 
@@ -922,7 +922,28 @@ build_implementation_prompt() {
     local dependencies=$(echo "$story_json" | jq -r \
         '(.dependencies // .technicalNotes.dependsOn // []) | join(", ")')
 
+    # Build a write-first directive listing each file with its exact absolute path
+    local write_first_lines=""
+    while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        # Resolve to absolute path
+        local abs_f
+        if [[ "$f" = /* ]]; then
+            abs_f="$f"
+        else
+            abs_f="$PROJECT_ROOT/$f"
+        fi
+        write_first_lines="${write_first_lines}   - WRITE ${abs_f} first, before any other action\n"
+    done < <(echo "$story_json" | jq -r '.technicalNotes.files[]? // empty')
+
     cat << EOF
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+$(printf '%b' "$write_first_lines")
+---
+
 Implement user story $story_id: $title
 
 ## Story Description
@@ -934,20 +955,21 @@ $description
 ## Technical Notes
 $([ -n "$technical_notes" ] && echo "$technical_notes" | jq -r 'to_entries | map("- \(.key): \(.value)") | join("\n")' 2>/dev/null || echo "None specified")
 
-## Files to Create/Modify
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
 $files
 
 ## Dependencies
 ${dependencies:-None}
 
 ## Instructions
-**IMPORTANT: You MUST use your file-writing and bash tools to create all required files. Do NOT just describe or plan what you will do — call tools immediately and write the files.**
+**CRITICAL — WRITE FILES FIRST:**
+$(printf '%b' "$write_first_lines")
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
 
-1. Implement all acceptance criteria for this story
-2. Follow the project's existing code patterns and conventions
-3. Create any necessary files in the locations specified
-4. Ensure code compiles/runs without errors
-5. Do NOT create tests unless explicitly required in acceptance criteria
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
 
 After implementation, provide a brief summary of what was created/modified.
 EOF
@@ -1040,6 +1062,40 @@ verify_story_deliverables() {
     return 0
 }
 
+# _scope_lock <story_id>
+# Makes every .ts file in PROJECT_ROOT/src that is NOT in the story's declared
+# technicalNotes.files read-only (chmod 444) before the agent runs. This is an
+# OS-level pre-emptive guard: Bash, WriteFile, or any other mechanism that tries
+# to write an out-of-scope file will get EACCES — no tool-layer workaround exists.
+_scope_lock() {
+    local story_id="$1"
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+
+    local -A _decl
+    while IFS= read -r _f; do
+        [ -n "$_f" ] && _decl["$_f"]=1
+    done < <(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .technicalNotes.files[]? // empty' \
+        "$prd_target" 2>/dev/null)
+
+    [ ${#_decl[@]} -eq 0 ] && return 0
+
+    local _locked=0
+    while IFS= read -r _f; do
+        [ -n "${_decl[$_f]+x}" ] && continue
+        chmod 444 "$_f" 2>/dev/null && ((_locked++))
+    done < <(find "$PROJECT_ROOT/src" -name "*.ts" -type f 2>/dev/null)
+
+    [ "$_locked" -gt 0 ] && log "  [scope-guard] Locked $_locked out-of-scope .ts file(s) (read-only) for $story_id"
+}
+
+# _scope_unlock
+# Restores write permissions on all .ts files in PROJECT_ROOT/src.
+# Always called after the agent finishes (success or failure).
+_scope_unlock() {
+    find "$PROJECT_ROOT/src" -name "*.ts" -type f -exec chmod 644 {} + 2>/dev/null || true
+}
+
 # run_external_verification <story_id> <output_file>
 # Runs the project test suite externally after the agent writes files.
 # This keeps the agent loop short (write-only) while still enforcing AC tests.
@@ -1066,6 +1122,37 @@ run_external_verification() {
     fi
 
     [ -z "$test_cmd" ] && return 0  # no test command configured — skip
+
+    # Scope guard: restore .ts files outside this story's declared scope from
+    # the pre-run snapshot. Agents frequently use Bash (not WriteFile) to write
+    # files, bypassing tool-level guards. This restores them before npm test so
+    # a story's verification only reflects the files it actually owns.
+    local _sg_backup="${SCOPE_GUARD_BACKUP_DIR:-}"
+    if [ -n "$_sg_backup" ] && [ -d "$_sg_backup" ]; then
+        # Build declared set (absolute paths)
+        local -A _sg_decl
+        while IFS= read -r _f; do
+            [ -n "$_f" ] && _sg_decl["$_f"]=1
+        done < <(jq -r --arg id "$story_id" \
+            '.stories[] | select(.id == $id) | .technicalNotes.files[]? // empty' \
+            "$prd_target" 2>/dev/null)
+
+        if [ ${#_sg_decl[@]} -gt 0 ]; then
+            local _sg_restored=0
+            while IFS= read -r _rel; do
+                local _abs="$PROJECT_ROOT/$_rel"
+                # Skip if this file is in the story's declared scope
+                [ -n "${_sg_decl[$_abs]+x}" ] && continue
+                local _bak="$_sg_backup/$_rel"
+                if [ -f "$_bak" ]; then
+                    cp "$_bak" "$_abs" 2>/dev/null && ((_sg_restored++))
+                fi
+            done < <(find "$_sg_backup" -type f | sed "s|^$_sg_backup/||")
+            if [ "$_sg_restored" -gt 0 ]; then
+                warning "  [scope-guard] Restored $_sg_restored out-of-scope .ts file(s) before verification (agent wrote outside ${story_id}'s declared scope)"
+            fi
+        fi
+    fi
 
     # Ensure node_modules exist in the worktree — git worktrees don't inherit gitignored dirs.
     # Without this, npm test fails with exit 127 (vitest binary not found).
@@ -1603,6 +1690,10 @@ ${COORDINATOR_PROMPT_AMENDMENT}"
 
         log "Invoking $story_cli (attempt $((retry_count + 1))/$((MAX_RETRIES + 1)))..."
 
+        # Scope guard: lock .ts files outside this story's declared scope read-only.
+        # Any write attempt — Bash, WriteFile, or otherwise — gets EACCES.
+        _scope_lock "$story_id"
+
         # Change to project root for the CLI to have correct context
         cd "$PROJECT_ROOT"
 
@@ -1670,8 +1761,15 @@ ${COORDINATOR_PROMPT_AMENDMENT}"
                 local raw_file="${json_result_file%.json}_raw.json"
                 local epam_model_flag=()
                 [ -n "${STORY_MODEL:-}" ] && epam_model_flag=(--model "$STORY_MODEL")
+                # Scope guard: build EPAM_ALLOWED_WRITE_PATHS from the story's declared files.
+                # WriteFile.ts uses this to block TS writes outside the story's scope.
+                local _allowed_write_paths
+                _allowed_write_paths=$(jq -r --arg id "$story_id" \
+                    '.stories[] | select(.id == $id) | .technicalNotes.files[]? // empty' \
+                    "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null | tr '\n' ':' | sed 's/:$//')
                 if echo "$prompt" | \
                         EPAM_DANGEROUS_SKIP_APPROVAL=1 \
+                        EPAM_ALLOWED_WRITE_PATHS="${_allowed_write_paths}" \
                         EPAM_MAX_ITERATIONS="${STORY_MAX_ITERATIONS:-6}" \
                         EPAM_MAX_OUTPUT_TOKENS="${STORY_MAX_OUTPUT_TOKENS:-3072}" \
                         OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
@@ -1759,6 +1857,10 @@ ${COORDINATOR_PROMPT_AMENDMENT}"
                 fi
                 ;;
         esac
+
+        # Scope guard: restore write permissions now that the agent has finished.
+        # Verification (npm test) only reads files — no write access needed.
+        _scope_unlock
 
         if [ "$invoke_success" = true ] && ! verify_story_deliverables "$story_id"; then
             warning "$story_cli returned success but story deliverables are incomplete"
@@ -1981,6 +2083,9 @@ append_cost_record() {
               prompt_tokens_measured:$ptm, invokeMode:$im}' >> "$cost_file"
     ) 200>"$lock_file"
 
+    # Emit human-readable cost summary to the run log so it appears in pipeline output.
+    log "  Cost[$story_id] model=${resolved_model:-unknown} in=${tokens_in} out=${tokens_out} cost=\$${cost_usd} elapsed=${elapsed_minutes}min status=${status}"
+
     # GAP-P17: emit StoryArtifact record to story-artifacts.jsonl
     emit_story_artifact "$story_id" "$status" "$phase_id" "$elapsed_minutes" "$cost_usd" "$task_turns" "$json_result_file"
 }
@@ -2103,10 +2208,12 @@ build_kb_prompt_section() {
         printf 'No prior KB entries match your agent role yet.\n'
     fi
 
-    printf '\n## Knowledge Base Contribution\n'
+    printf '\n## Knowledge Base Contribution (do this LAST — after writing all implementation files)\n'
     printf 'Your assigned KB entry ID for this run: **%s**\n' "$next_kb_id"
     [ -n "$retry_note" ] && printf '%s\n' "$retry_note"
-    printf '\nIf you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:\n\n'
+    printf '\nIMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.\n'
+    printf 'Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.\n\n'
+    printf 'If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:\n\n'
     printf '```markdown\n'
     printf '## %s -- %s\n\n' "$next_kb_id" "$today"
     printf '**Category:** <backend|frontend|infrastructure|testing|orchestration>\n'
@@ -2114,7 +2221,7 @@ build_kb_prompt_section() {
     printf '**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>\n'
     printf '**Trigger:** <retry|first-success>\n'
     printf '**StoryRef:** %s\n\n' "$story_id"
-    printf '<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>\n'
+    printf '<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>\n'
     printf '```\n\n'
     printf 'Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.\n'
 }

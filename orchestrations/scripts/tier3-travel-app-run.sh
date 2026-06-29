@@ -110,6 +110,50 @@ export SKIP_BROWSER_E2E_ROUTING=true
 
 PIPELINE_EXIT=0
 
+# ── Canonical restore: prd.json + profiles.json ──────────────────────────────
+# Every run starts from the canonical originals so accumulated agent mutations
+# (split stories, extra profiles, stale statuses) never carry forward.
+# profiles.json.original is the authoritative set of agent profiles.
+# prd.json canonical is kept in git — restore it and strip orphan stories
+# (stories not in implementationOrder) so the file stays tight.
+PROFILES_ORIG="$REPO_ROOT/orchestrations/agents/profiles.json.original"
+if [ -f "$PROFILES_ORIG" ]; then
+  cp "$PROFILES_ORIG" "$REPO_ROOT/orchestrations/agents/profiles.json"
+  info "profiles.json restored from canonical original ($(python3 -c "import json; print(len(json.load(open('$PROFILES_ORIG'))))" 2>/dev/null || echo '?') profiles)"
+else
+  info "profiles.json.original not found — skipping profiles restore"
+fi
+
+# Restore prd.json from git HEAD, then strip orphan stories (those not referenced
+# in implementationOrder) so stories[] stays clean across runs.
+git checkout HEAD -- "$PRD_FILE" 2>/dev/null && info "prd.json restored from git HEAD" || info "prd.json git restore skipped (no HEAD version)"
+python3 - "$PRD_FILE" <<'PYEOF'
+import json, sys
+path = sys.argv[1]
+with open(path) as f:
+    d = json.load(f)
+active = set(sid for phase in d['implementationOrder'].values() for sid in phase)
+before = len(d['stories'])
+d['stories'] = [s for s in d['stories'] if s['id'] in active]
+after = len(d['stories'])
+if before != after:
+    with open(path, 'w') as f:
+        json.dump(d, f, indent=2)
+    print(f"  prd.json pruned: {before} → {after} stories (removed {before-after} orphans)")
+else:
+    print(f"  prd.json stories already clean ({after} active stories)")
+PYEOF
+echo ""
+
+# ── Pre-run PRD remediation (before preflight, so stale artifacts don't block) ─
+# Removes BUG-* stories, stale splits, extra phases, completed-state flags, and
+# oversized ACs left by any previous failed run. The preflight then sees a clean PRD.
+info "Pre-run PRD remediation..."
+if ! bash "$SCRIPT_DIR/prd-remediate.sh" --prd "$PRD_FILE"; then
+  fail "Pre-run PRD remediation failed — aborting. Fix prd.json manually."
+fi
+echo ""
+
 # ── Pre-flight validation ─────────────────────────────────────────────────────
 if ! bash orchestrations/scripts/preflight-check.sh \
      --runner tier3-travel-app-run.sh \
@@ -163,6 +207,22 @@ run_phase() {
     fail "Phase '$phase' failed (exit $phase_exit) — aborting pipeline"
   fi
 }
+
+# ── Scope-guard snapshot ─────────────────────────────────────────────────────
+# Take a snapshot of all .ts source files before any agent runs. This baseline
+# is used by run_external_verification() in claude.sh to restore files outside
+# a story's declared scope before running npm test — so Bash-based file writes
+# cannot contaminate test results for stories that don't own those files.
+SCOPE_GUARD_BACKUP_DIR="/tmp/sg-backup-$$"
+export SCOPE_GUARD_BACKUP_DIR
+if [ -d "$PROJECT_ROOT/src" ]; then
+  mkdir -p "$SCOPE_GUARD_BACKUP_DIR"
+  (cd "$PROJECT_ROOT" && find src -name "*.ts" | while IFS= read -r f; do
+    mkdir -p "$SCOPE_GUARD_BACKUP_DIR/$(dirname "$f")"
+    cp "$f" "$SCOPE_GUARD_BACKUP_DIR/$f"
+  done)
+  info "[scope-guard] Source snapshot created at $SCOPE_GUARD_BACKUP_DIR ($(find "$SCOPE_GUARD_BACKUP_DIR" -name '*.ts' | wc -l) files)"
+fi
 
 run_phase "scaffold"
 run_phase "core"

@@ -45,7 +45,24 @@ info "Remediating PRD: $PRD_FILE"
 
 python3 "$SCRIPT_DIR/_prd_remediate_impl.py" "$PRD_FILE"
 
+# Detect canonical (pre-spec-pass) state: if the PRD has no elaborated stories
+# (no story has specification.createdFrom set), skip the strict phase/field checks.
+# Strict checks require aiProvider, testCriteria, and ui_and_review — none exist
+# on base user stories before the spec pass runs.
+_is_canonical=$(python3 -c "
+import json, sys
+d = json.load(open('$PRD_FILE'))
+has_splits = any(s.get('specification', {}).get('createdFrom') for s in d['stories'])
+print('false' if has_splits else 'true')
+" 2>/dev/null || echo "false")
+
 info "Verifying PRD integrity post-remediation..."
+if [ "$_is_canonical" = "true" ]; then
+    _count=$(python3 -c "import json; print(len(json.load(open('$PRD_FILE'))['stories']))" 2>/dev/null || echo "?")
+    success "PRD is canonical (pre-spec-pass, $_count base user stories) — strict checks skipped until spec pass elaborates"
+    exit 0
+fi
+
 if bash "$SCRIPT_DIR/preflight-prd-integrity.sh" --prd "$PRD_FILE"; then
     success "PRD remediation complete — integrity OK"
     exit 0

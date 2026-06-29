@@ -1,11 +1,11 @@
 {
   "id": "skyscanner-mini-app-v1",
-  "title": "Skyscanner Mini-App — Multi-Agent Orchestration Demo",
+  "title": "Skyscanner Mini-App \u2014 Multi-Agent Orchestration Demo",
   "version": "1.0.0",
   "lastUpdated": "2026-05-30",
   "project": {
     "name": "skyscanner-app",
-    "description": "A full TypeScript mini-app that searches flights via the Skyscanner RapidAPI, exposes a REST API with /search and /cheapest endpoints, a CLI tool, and an HTML dashboard — built entirely by autonomous multi-agent orchestration",
+    "description": "A full TypeScript mini-app that searches flights via the Skyscanner RapidAPI, exposes a REST API with /search and /cheapest endpoints, a CLI tool, and an HTML dashboard \u2014 built entirely by autonomous multi-agent orchestration",
     "stack": {
       "language": "TypeScript",
       "runtime": "Node.js 20",
@@ -13,7 +13,7 @@
       "testing": "vitest",
       "devEnvironment": "Ubuntu WSL2"
     },
-    "outputDir": "/tmp/skyscanner-app"
+    "outputDir": "/home/bradleyjerome/projects/skyscanner-app"
   },
   "configuration": {
     "profilesPath": "profiles.json",
@@ -57,27 +57,27 @@
       "agentGroup": "main",
       "status": "pending",
       "completed": false,
-      "description": "Create the project skeleton at /tmp/skyscanner-app. Initialize a TypeScript Node.js project with: package.json (name: skyscanner-app, scripts for build/test/start/dev), tsconfig.json (strict mode, target ES2022, module CommonJS, outDir dist/), vitest.config.ts, .gitignore, and a src/ directory. Install runtime dependency express and devDependencies typescript, tsx, vitest, @types/express, @types/node. Do NOT install Skyscanner SDKs — RapidAPI is called directly via fetch. The project must compile cleanly and vitest must exit 0 with no test files present.",
+      "description": "Create the project skeleton at /home/bradleyjerome/projects/skyscanner-app. Initialize a TypeScript Node.js project with: package.json (name: skyscanner-app, scripts for build/test/start/dev), tsconfig.json (strict mode, target ES2022, module CommonJS, outDir dist/), vitest.config.ts, .gitignore, and a src/ directory. Install runtime dependency express and devDependencies typescript, tsx, vitest, @types/express, @types/node. Do NOT install Skyscanner SDKs \u2014 RapidAPI is called directly via fetch. The project must compile cleanly and vitest must exit 0 with no test files present.",
       "acceptanceCriteria": [
-        "/tmp/skyscanner-app/package.json exists and the 'name' field equals exactly 'skyscanner-app'",
+        "/home/bradleyjerome/projects/skyscanner-app/package.json exists and the 'name' field equals exactly 'skyscanner-app'",
         "package.json 'scripts' object contains all four keys: build, test, start, dev",
         "package.json 'dependencies' includes 'express'",
         "package.json 'devDependencies' includes all of: typescript, tsx, vitest, @types/express, @types/node",
         "package.json contains no dependency whose name includes 'skyscanner', 'rapidapi', or any Skyscanner SDK",
-        "/tmp/skyscanner-app/tsconfig.json exists with compilerOptions: strict=true, target='ES2022', module='CommonJS', outDir='dist/'",
-        "/tmp/skyscanner-app/vitest.config.ts exists, imports defineConfig from 'vitest/config', and exports a default config object",
-        "/tmp/skyscanner-app/.gitignore exists and contains entries for both 'node_modules' and 'dist'",
-        "/tmp/skyscanner-app/src/ directory exists",
-        "/tmp/skyscanner-app/node_modules/ directory exists (npm install completed successfully)",
-        "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit inside /tmp/skyscanner-app exits with code 0 and produces no output",
-        "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run inside /tmp/skyscanner-app exits with code 0 (no test files is an acceptable passing state)"
+        "/home/bradleyjerome/projects/skyscanner-app/tsconfig.json exists with compilerOptions: strict=true, target='ES2022', module='CommonJS', outDir='dist/'",
+        "/home/bradleyjerome/projects/skyscanner-app/vitest.config.ts exists, imports defineConfig from 'vitest/config', and exports a default config object",
+        "/home/bradleyjerome/projects/skyscanner-app/.gitignore exists and contains entries for both 'node_modules' and 'dist'",
+        "/home/bradleyjerome/projects/skyscanner-app/src/ directory exists",
+        "/home/bradleyjerome/projects/skyscanner-app/node_modules/ directory exists (npm install completed successfully)",
+        "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 and produces no output",
+        "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 (no test files is an acceptable passing state)"
       ],
       "technicalNotes": {
-        "workingDir": "/tmp/skyscanner-app",
+        "workingDir": "/home/bradleyjerome/projects/skyscanner-app",
         "files": [
-          "/tmp/skyscanner-app/package.json",
-          "/tmp/skyscanner-app/tsconfig.json",
-          "/tmp/skyscanner-app/vitest.config.ts"
+          "/home/bradleyjerome/projects/skyscanner-app/package.json",
+          "/home/bradleyjerome/projects/skyscanner-app/tsconfig.json",
+          "/home/bradleyjerome/projects/skyscanner-app/vitest.config.ts"
         ]
       },
       "estimate": 10,
@@ -86,7 +86,7 @@
         "assignedAgents": [
           "speckit"
         ],
-        "coordinatorNotes": "openspec already ran and completed its elaboration pass (status: completed, acAdded covers structural ACs). Coordinator review scored 0.62 and flagged speckit_did_not_run as the primary process gap. Remaining substantive gaps are all in speckit's domain: missing src/index.ts entry-point AC, vitest.config.ts content underspecified (glob pattern, environment), tsconfig moduleResolution not asserted, and express wiring unverified. No re-elaboration needed — speckit should harden the existing AC set and close these four flagged gaps.",
+        "coordinatorNotes": "openspec already ran and completed its elaboration pass (status: completed, acAdded covers structural ACs). Coordinator review scored 0.62 and flagged speckit_did_not_run as the primary process gap. Remaining substantive gaps are all in speckit's domain: missing src/index.ts entry-point AC, vitest.config.ts content underspecified (glob pattern, environment), tsconfig moduleResolution not asserted, and express wiring unverified. No re-elaboration needed \u2014 speckit should harden the existing AC set and close these four flagged gaps.",
         "status": "completed",
         "updatedAt": "2026-05-30T21:55:13.682Z",
         "appliedAgents": [
@@ -96,67 +96,67 @@
           {
             "agent": "speckit",
             "applied": true,
-            "notes": "Criteria tightened: vitest.config.ts must use defineConfig import (not just be valid TS), tsconfig outDir normalized to 'dist/' string, .gitignore entries made explicit, added negative assertion that no Skyscanner/RapidAPI SDK appears in package.json dependencies, and reordered checks to reflect natural setup sequence. No split needed — this is a single atomic scaffold task.",
+            "notes": "Criteria tightened: vitest.config.ts must use defineConfig import (not just be valid TS), tsconfig outDir normalized to 'dist/' string, .gitignore entries made explicit, added negative assertion that no Skyscanner/RapidAPI SDK appears in package.json dependencies, and reordered checks to reflect natural setup sequence. No split needed \u2014 this is a single atomic scaffold task.",
             "acceptanceChanged": true,
             "splitCount": 0,
             "timestamp": "2026-05-30T21:55:13.682Z",
             "acBefore": [
-              "/tmp/skyscanner-app/package.json exists with name field equal to 'skyscanner-app'",
+              "/home/bradleyjerome/projects/skyscanner-app/package.json exists with name field equal to 'skyscanner-app'",
               "package.json scripts object contains keys: build, test, start, dev",
               "package.json dependencies includes express",
               "package.json devDependencies includes typescript, tsx, vitest, @types/express, @types/node",
-              "/tmp/skyscanner-app/tsconfig.json exists with strict: true, target: ES2022, module: CommonJS, and outDir: dist/",
-              "/tmp/skyscanner-app/vitest.config.ts exists and is valid TypeScript",
-              "/tmp/skyscanner-app/.gitignore exists and ignores node_modules and dist/",
-              "/tmp/skyscanner-app/src/ directory exists",
-              "/tmp/skyscanner-app/node_modules/ is present (npm install completed successfully)",
-              "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit in /tmp/skyscanner-app exits 0",
-              "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run in /tmp/skyscanner-app exits 0"
+              "/home/bradleyjerome/projects/skyscanner-app/tsconfig.json exists with strict: true, target: ES2022, module: CommonJS, and outDir: dist/",
+              "/home/bradleyjerome/projects/skyscanner-app/vitest.config.ts exists and is valid TypeScript",
+              "/home/bradleyjerome/projects/skyscanner-app/.gitignore exists and ignores node_modules and dist/",
+              "/home/bradleyjerome/projects/skyscanner-app/src/ directory exists",
+              "/home/bradleyjerome/projects/skyscanner-app/node_modules/ is present (npm install completed successfully)",
+              "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit in /home/bradleyjerome/projects/skyscanner-app exits 0",
+              "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run in /home/bradleyjerome/projects/skyscanner-app exits 0"
             ],
             "acAfter": [
-              "/tmp/skyscanner-app/package.json exists and the 'name' field equals exactly 'skyscanner-app'",
+              "/home/bradleyjerome/projects/skyscanner-app/package.json exists and the 'name' field equals exactly 'skyscanner-app'",
               "package.json 'scripts' object contains all four keys: build, test, start, dev",
               "package.json 'dependencies' includes 'express'",
               "package.json 'devDependencies' includes all of: typescript, tsx, vitest, @types/express, @types/node",
               "package.json contains no dependency whose name includes 'skyscanner', 'rapidapi', or any Skyscanner SDK",
-              "/tmp/skyscanner-app/tsconfig.json exists with compilerOptions: strict=true, target='ES2022', module='CommonJS', outDir='dist/'",
-              "/tmp/skyscanner-app/vitest.config.ts exists, imports defineConfig from 'vitest/config', and exports a default config object",
-              "/tmp/skyscanner-app/.gitignore exists and contains entries for both 'node_modules' and 'dist'",
-              "/tmp/skyscanner-app/src/ directory exists",
-              "/tmp/skyscanner-app/node_modules/ directory exists (npm install completed successfully)",
-              "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit inside /tmp/skyscanner-app exits with code 0 and produces no output",
-              "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run inside /tmp/skyscanner-app exits with code 0 (no test files is an acceptable passing state)"
+              "/home/bradleyjerome/projects/skyscanner-app/tsconfig.json exists with compilerOptions: strict=true, target='ES2022', module='CommonJS', outDir='dist/'",
+              "/home/bradleyjerome/projects/skyscanner-app/vitest.config.ts exists, imports defineConfig from 'vitest/config', and exports a default config object",
+              "/home/bradleyjerome/projects/skyscanner-app/.gitignore exists and contains entries for both 'node_modules' and 'dist'",
+              "/home/bradleyjerome/projects/skyscanner-app/src/ directory exists",
+              "/home/bradleyjerome/projects/skyscanner-app/node_modules/ directory exists (npm install completed successfully)",
+              "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 and produces no output",
+              "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 (no test files is an acceptable passing state)"
             ],
             "acAdded": [
-              "/tmp/skyscanner-app/package.json exists and the 'name' field equals exactly 'skyscanner-app'",
+              "/home/bradleyjerome/projects/skyscanner-app/package.json exists and the 'name' field equals exactly 'skyscanner-app'",
               "package.json 'scripts' object contains all four keys: build, test, start, dev",
               "package.json 'dependencies' includes 'express'",
               "package.json 'devDependencies' includes all of: typescript, tsx, vitest, @types/express, @types/node",
               "package.json contains no dependency whose name includes 'skyscanner', 'rapidapi', or any Skyscanner SDK",
-              "/tmp/skyscanner-app/tsconfig.json exists with compilerOptions: strict=true, target='ES2022', module='CommonJS', outDir='dist/'",
-              "/tmp/skyscanner-app/vitest.config.ts exists, imports defineConfig from 'vitest/config', and exports a default config object",
-              "/tmp/skyscanner-app/.gitignore exists and contains entries for both 'node_modules' and 'dist'",
-              "/tmp/skyscanner-app/node_modules/ directory exists (npm install completed successfully)",
-              "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit inside /tmp/skyscanner-app exits with code 0 and produces no output",
-              "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run inside /tmp/skyscanner-app exits with code 0 (no test files is an acceptable passing state)"
+              "/home/bradleyjerome/projects/skyscanner-app/tsconfig.json exists with compilerOptions: strict=true, target='ES2022', module='CommonJS', outDir='dist/'",
+              "/home/bradleyjerome/projects/skyscanner-app/vitest.config.ts exists, imports defineConfig from 'vitest/config', and exports a default config object",
+              "/home/bradleyjerome/projects/skyscanner-app/.gitignore exists and contains entries for both 'node_modules' and 'dist'",
+              "/home/bradleyjerome/projects/skyscanner-app/node_modules/ directory exists (npm install completed successfully)",
+              "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 and produces no output",
+              "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 (no test files is an acceptable passing state)"
             ],
             "acRemoved": [
-              "/tmp/skyscanner-app/package.json exists with name field equal to 'skyscanner-app'",
+              "/home/bradleyjerome/projects/skyscanner-app/package.json exists with name field equal to 'skyscanner-app'",
               "package.json scripts object contains keys: build, test, start, dev",
               "package.json dependencies includes express",
               "package.json devDependencies includes typescript, tsx, vitest, @types/express, @types/node",
-              "/tmp/skyscanner-app/tsconfig.json exists with strict: true, target: ES2022, module: CommonJS, and outDir: dist/",
-              "/tmp/skyscanner-app/vitest.config.ts exists and is valid TypeScript",
-              "/tmp/skyscanner-app/.gitignore exists and ignores node_modules and dist/",
-              "/tmp/skyscanner-app/node_modules/ is present (npm install completed successfully)",
-              "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit in /tmp/skyscanner-app exits 0",
-              "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run in /tmp/skyscanner-app exits 0"
+              "/home/bradleyjerome/projects/skyscanner-app/tsconfig.json exists with strict: true, target: ES2022, module: CommonJS, and outDir: dist/",
+              "/home/bradleyjerome/projects/skyscanner-app/vitest.config.ts exists and is valid TypeScript",
+              "/home/bradleyjerome/projects/skyscanner-app/.gitignore exists and ignores node_modules and dist/",
+              "/home/bradleyjerome/projects/skyscanner-app/node_modules/ is present (npm install completed successfully)",
+              "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit in /home/bradleyjerome/projects/skyscanner-app exits 0",
+              "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run in /home/bradleyjerome/projects/skyscanner-app exits 0"
             ]
           }
         ],
         "coordinatorReview": {
           "verdict": "needs_review",
-          "reviewNotes": "Both agents contributed meaningfully and non-overlappingly: openspec decomposed compound ACs into atomic, machine-verifiable checks and added structural coverage (.gitignore, src/, explicit dep lists); speckit hardened content specificity (defineConfig import constraint, 'no output' qualifier on tsc, negative SDK assertion, reordering). The negative Skyscanner/RapidAPI SDK assertion is a net-new correctness guard that neither predecessor flagged — good speckit initiative. However, speckit closed only 2 of the 4 substantive gaps flagged by the prior coordinator review: (1) missing_src_entry_point_ac remains unaddressed — src/ directory existing does not prove a usable scaffold; a src/index.ts stub AC is still absent. (2) tsconfig_moduleResolution_not_asserted remains unaddressed — with module: CommonJS and tsx in dev deps, an explicit moduleResolution: node AC would eliminate a latent tsc failure vector on path imports. (3) express_wiring_not_verified is partially mitigated by the tsc --noEmit clean AC, but the absence of a smoke-test import or listening-server check means a broken express wire could pass all current ACs. The vitest.config.ts gap is now mostly closed (defineConfig import required) but the test include glob and environment (node vs jsdom) remain unspecified — acceptable given the 'no test files is passing' allowance, but worth noting. Story is actionable as-is given the strong executable gates, but the three residual gaps warrant one more targeted speckit pass before locking.",
+          "reviewNotes": "Both agents contributed meaningfully and non-overlappingly: openspec decomposed compound ACs into atomic, machine-verifiable checks and added structural coverage (.gitignore, src/, explicit dep lists); speckit hardened content specificity (defineConfig import constraint, 'no output' qualifier on tsc, negative SDK assertion, reordering). The negative Skyscanner/RapidAPI SDK assertion is a net-new correctness guard that neither predecessor flagged \u2014 good speckit initiative. However, speckit closed only 2 of the 4 substantive gaps flagged by the prior coordinator review: (1) missing_src_entry_point_ac remains unaddressed \u2014 src/ directory existing does not prove a usable scaffold; a src/index.ts stub AC is still absent. (2) tsconfig_moduleResolution_not_asserted remains unaddressed \u2014 with module: CommonJS and tsx in dev deps, an explicit moduleResolution: node AC would eliminate a latent tsc failure vector on path imports. (3) express_wiring_not_verified is partially mitigated by the tsc --noEmit clean AC, but the absence of a smoke-test import or listening-server check means a broken express wire could pass all current ACs. The vitest.config.ts gap is now mostly closed (defineConfig import required) but the test include glob and environment (node vs jsdom) remain unspecified \u2014 acceptable given the 'no test files is passing' allowance, but worth noting. Story is actionable as-is given the strong executable gates, but the three residual gaps warrant one more targeted speckit pass before locking.",
           "qualityScore": 0.73,
           "flags": [
             "missing_src_entry_point_ac",
@@ -183,12 +183,12 @@
       "agentGroup": "primary",
       "status": "pending",
       "completed": false,
-      "description": "Create src/skyscanner/client.ts that wraps the Skyscanner RapidAPI. The client must: (1) export a SkyscannerClient class whose constructor accepts { apiKey: string }; if apiKey is omitted, fall back to the RAPIDAPI_KEY environment variable — throw a descriptive Error if neither is present; (2) implement searchFlights(params: SearchParams): Promise<FlightResult[]> using the Node.js 18+ global fetch (no third-party HTTP library); (3) export TypeScript interfaces SearchParams { origin: string; destination: string; date: string; adults?: number } and FlightResult { price: number; currency: string; airline: string; departure: string; arrival: string; duration: number; stops: number }; (4) throw on HTTP 4xx/5xx responses, including the status code in the message; (5) throw a descriptive parse error when the response body does not match the expected shape. Also create src/skyscanner/client.test.ts with vitest tests that mock the global fetch — no real network calls.",
+      "description": "Create src/skyscanner/client.ts that wraps the Skyscanner RapidAPI. The client must: (1) export a SkyscannerClient class whose constructor accepts { apiKey: string }; if apiKey is omitted, fall back to the RAPIDAPI_KEY environment variable \u2014 throw a descriptive Error if neither is present; (2) implement searchFlights(params: SearchParams): Promise<FlightResult[]> using the Node.js 18+ global fetch (no third-party HTTP library); (3) export TypeScript interfaces SearchParams { origin: string; destination: string; date: string; adults?: number } and FlightResult { price: number; currency: string; airline: string; departure: string; arrival: string; duration: number; stops: number }; (4) throw on HTTP 4xx/5xx responses, including the status code in the message; (5) throw a descriptive parse error when the response body does not match the expected shape. Also create src/skyscanner/client.test.ts with vitest tests that mock the global fetch \u2014 no real network calls.",
       "acceptanceCriteria": [
         "src/skyscanner/client.ts exports a SkyscannerClient class whose constructor signature is constructor({ apiKey }: { apiKey?: string })",
         "SearchParams interface is exported with exactly: origin: string, destination: string, date: string, adults?: number",
         "FlightResult interface is exported with exactly: price: number, currency: string, airline: string, departure: string, arrival: string, duration: number, stops: number",
-        "searchFlights uses the Node.js global fetch exclusively — no axios, node-fetch, or other HTTP dependency imported",
+        "searchFlights uses the Node.js global fetch exclusively \u2014 no axios, node-fetch, or other HTTP dependency imported",
         "When no apiKey is passed to the constructor and RAPIDAPI_KEY env var is unset, constructing SkyscannerClient throws an Error whose message references the missing key",
         "When the API returns a 4xx or 5xx status, searchFlights rejects with an Error that includes the HTTP status code",
         "When the API response body is malformed or missing expected fields, searchFlights rejects with a descriptive parse/validation Error",
@@ -202,10 +202,10 @@
         "The Error thrown by searchFlights on HTTP 4xx/5xx does not include the apiKey value anywhere in its message string"
       ],
       "technicalNotes": {
-        "workingDir": "/tmp/skyscanner-app",
+        "workingDir": "/home/bradleyjerome/projects/skyscanner-app",
         "files": [
-          "/tmp/skyscanner-app/src/skyscanner/client.ts",
-          "/tmp/skyscanner-app/src/skyscanner/client.test.ts"
+          "/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts",
+          "/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts"
         ],
         "dependsOn": [
           "SKY-001"
@@ -218,7 +218,7 @@
           "openspec",
           "speckit"
         ],
-        "coordinatorNotes": "Core API client — complex due to external HTTP integration, TypeScript interface contracts, error handling branches, and mock test patterns. openspec should deepen the fetch/response mapping and error taxonomy; speckit should harden edge cases (rate limits, malformed JSON, missing fields in response) and ensure test coverage is sufficient.",
+        "coordinatorNotes": "Core API client \u2014 complex due to external HTTP integration, TypeScript interface contracts, error handling branches, and mock test patterns. openspec should deepen the fetch/response mapping and error taxonomy; speckit should harden edge cases (rate limits, malformed JSON, missing fields in response) and ensure test coverage is sufficient.",
         "status": "completed",
         "updatedAt": "2026-05-31T00:14:20.831Z",
         "appliedAgents": [
@@ -229,7 +229,7 @@
           {
             "agent": "openspec",
             "applied": true,
-            "notes": "Refined ACs to be independently verifiable and unambiguous. Clarified env-var fallback vs constructor arg precedence. Added explicit AC for malformed-response guard and HTTP error surface. No split needed — scope is cohesive (one module + its unit tests).",
+            "notes": "Refined ACs to be independently verifiable and unambiguous. Clarified env-var fallback vs constructor arg precedence. Added explicit AC for malformed-response guard and HTTP error surface. No split needed \u2014 scope is cohesive (one module + its unit tests).",
             "acceptanceChanged": true,
             "splitCount": 0,
             "timestamp": "2026-05-31T00:13:03.506Z",
@@ -244,7 +244,7 @@
               "src/skyscanner/client.ts exports a SkyscannerClient class whose constructor signature is constructor({ apiKey }: { apiKey?: string })",
               "SearchParams interface is exported with exactly: origin: string, destination: string, date: string, adults?: number",
               "FlightResult interface is exported with exactly: price: number, currency: string, airline: string, departure: string, arrival: string, duration: number, stops: number",
-              "searchFlights uses the Node.js global fetch exclusively — no axios, node-fetch, or other HTTP dependency imported",
+              "searchFlights uses the Node.js global fetch exclusively \u2014 no axios, node-fetch, or other HTTP dependency imported",
               "When no apiKey is passed to the constructor and RAPIDAPI_KEY env var is unset, constructing SkyscannerClient throws an Error whose message references the missing key",
               "When the API returns a 4xx or 5xx status, searchFlights rejects with an Error that includes the HTTP status code",
               "When the API response body is malformed or missing expected fields, searchFlights rejects with a descriptive parse/validation Error",
@@ -256,7 +256,7 @@
               "src/skyscanner/client.ts exports a SkyscannerClient class whose constructor signature is constructor({ apiKey }: { apiKey?: string })",
               "SearchParams interface is exported with exactly: origin: string, destination: string, date: string, adults?: number",
               "FlightResult interface is exported with exactly: price: number, currency: string, airline: string, departure: string, arrival: string, duration: number, stops: number",
-              "searchFlights uses the Node.js global fetch exclusively — no axios, node-fetch, or other HTTP dependency imported",
+              "searchFlights uses the Node.js global fetch exclusively \u2014 no axios, node-fetch, or other HTTP dependency imported",
               "When no apiKey is passed to the constructor and RAPIDAPI_KEY env var is unset, constructing SkyscannerClient throws an Error whose message references the missing key",
               "When the API returns a 4xx or 5xx status, searchFlights rejects with an Error that includes the HTTP status code",
               "When the API response body is malformed or missing expected fields, searchFlights rejects with a descriptive parse/validation Error",
@@ -275,7 +275,7 @@
           {
             "agent": "speckit",
             "applied": true,
-            "notes": "Openspec's 10 ACs are well-scoped and independently verifiable — preserved all of them. Key gaps addressed: (1) AC-8 modified: test count raised from 4→5 and test (e) added for malformed-response path, because AC-7 requires that behavior but no test covered it; (2) added security guard: apiKey must never appear in error messages thrown on HTTP failure; (3) added private-field constraint so apiKey cannot be read back from the instance; (4) added empty-string treatment: both constructor empty string and env-var empty string must be treated as absent; (5) added afterEach fetch-restoration requirement (matches project's CopilotProvider.test.ts pattern); (6) added constructor-precedence AC: explicit apiKey overrides RAPIDAPI_KEY. Flagged: RapidAPI URL and headers AC is partially vague without a canonical host/path — needs human confirmation of the expected endpoint. Also flagged: date field format is unconstrained — team should decide if YYYY-MM-DD validation is in scope for this story.",
+            "notes": "Openspec's 10 ACs are well-scoped and independently verifiable \u2014 preserved all of them. Key gaps addressed: (1) AC-8 modified: test count raised from 4\u21925 and test (e) added for malformed-response path, because AC-7 requires that behavior but no test covered it; (2) added security guard: apiKey must never appear in error messages thrown on HTTP failure; (3) added private-field constraint so apiKey cannot be read back from the instance; (4) added empty-string treatment: both constructor empty string and env-var empty string must be treated as absent; (5) added afterEach fetch-restoration requirement (matches project's CopilotProvider.test.ts pattern); (6) added constructor-precedence AC: explicit apiKey overrides RAPIDAPI_KEY. Flagged: RapidAPI URL and headers AC is partially vague without a canonical host/path \u2014 needs human confirmation of the expected endpoint. Also flagged: date field format is unconstrained \u2014 team should decide if YYYY-MM-DD validation is in scope for this story.",
             "acceptanceChanged": true,
             "splitCount": 0,
             "timestamp": "2026-05-31T00:14:20.831Z",
@@ -283,7 +283,7 @@
               "src/skyscanner/client.ts exports a SkyscannerClient class whose constructor signature is constructor({ apiKey }: { apiKey?: string })",
               "SearchParams interface is exported with exactly: origin: string, destination: string, date: string, adults?: number",
               "FlightResult interface is exported with exactly: price: number, currency: string, airline: string, departure: string, arrival: string, duration: number, stops: number",
-              "searchFlights uses the Node.js global fetch exclusively — no axios, node-fetch, or other HTTP dependency imported",
+              "searchFlights uses the Node.js global fetch exclusively \u2014 no axios, node-fetch, or other HTTP dependency imported",
               "When no apiKey is passed to the constructor and RAPIDAPI_KEY env var is unset, constructing SkyscannerClient throws an Error whose message references the missing key",
               "When the API returns a 4xx or 5xx status, searchFlights rejects with an Error that includes the HTTP status code",
               "When the API response body is malformed or missing expected fields, searchFlights rejects with a descriptive parse/validation Error",
@@ -295,7 +295,7 @@
               "src/skyscanner/client.ts exports a SkyscannerClient class whose constructor signature is constructor({ apiKey }: { apiKey?: string })",
               "SearchParams interface is exported with exactly: origin: string, destination: string, date: string, adults?: number",
               "FlightResult interface is exported with exactly: price: number, currency: string, airline: string, departure: string, arrival: string, duration: number, stops: number",
-              "searchFlights uses the Node.js global fetch exclusively — no axios, node-fetch, or other HTTP dependency imported",
+              "searchFlights uses the Node.js global fetch exclusively \u2014 no axios, node-fetch, or other HTTP dependency imported",
               "When no apiKey is passed to the constructor and RAPIDAPI_KEY env var is unset, constructing SkyscannerClient throws an Error whose message references the missing key",
               "When the API returns a 4xx or 5xx status, searchFlights rejects with an Error that includes the HTTP status code",
               "When the API response body is malformed or missing expected fields, searchFlights rejects with a descriptive parse/validation Error",
@@ -323,11 +323,11 @@
         ],
         "coordinatorReview": {
           "verdict": "needs_review",
-          "reviewNotes": "Exemplary two-agent collaboration with clean division of labor. openspec correctly established the TypeScript contract layer (constructor signature, exact interface shapes, fetch-only constraint, env-var fallback, error taxonomy). speckit added non-overlapping security and correctness hardening: private field enforcement, empty-string equivalence for constructor and env-var, afterEach fetch restoration, constructor-arg precedence over env-var, and the security constraint that apiKey must never appear in error message strings. The AC-7/AC-8 test gap (malformed-response behavior specified but not tested) was correctly identified and closed by speckit (test case (e) added, count raised 4→5). Final 15 ACs are independently verifiable and non-overlapping. Blocked on two unresolved external knowledge gaps: (1) the RapidAPI host, path, and required header names are never specified — AC-8 test case (a) asserts 'correct RapidAPI URL and header construction' but an implementor cannot write a meaningful assertion against an unknown endpoint contract; this is BUILD-BLOCKING; (2) the `date` field in SearchParams carries no format constraint — YYYY-MM-DD validation may or may not be in scope for this story and must be decided before implementation starts. Both gaps were surfaced by speckit and are external knowledge failures, not spec failures.",
+          "reviewNotes": "Exemplary two-agent collaboration with clean division of labor. openspec correctly established the TypeScript contract layer (constructor signature, exact interface shapes, fetch-only constraint, env-var fallback, error taxonomy). speckit added non-overlapping security and correctness hardening: private field enforcement, empty-string equivalence for constructor and env-var, afterEach fetch restoration, constructor-arg precedence over env-var, and the security constraint that apiKey must never appear in error message strings. The AC-7/AC-8 test gap (malformed-response behavior specified but not tested) was correctly identified and closed by speckit (test case (e) added, count raised 4\u21925). Final 15 ACs are independently verifiable and non-overlapping. Blocked on two unresolved external knowledge gaps: (1) the RapidAPI host, path, and required header names are never specified \u2014 AC-8 test case (a) asserts 'correct RapidAPI URL and header construction' but an implementor cannot write a meaningful assertion against an unknown endpoint contract; this is BUILD-BLOCKING; (2) the `date` field in SearchParams carries no format constraint \u2014 YYYY-MM-DD validation may or may not be in scope for this story and must be decided before implementation starts. Both gaps were surfaced by speckit and are external knowledge failures, not spec failures.",
           "qualityScore": 0.87,
           "flags": [
-            "BLOCKING: RapidAPI endpoint URL (host + path) and required header names are unspecified — AC-8 test case (a) cannot be written as a meaningful assertion without this; requires human decision on expected host/path/header contract before story is buildable",
-            "NEEDS_DECISION: `date` field in SearchParams has no format constraint — team must decide if YYYY-MM-DD parsing/validation belongs in this story or a follow-on before implementation starts"
+            "BLOCKING: RapidAPI endpoint URL (host + path) and required header names are unspecified \u2014 AC-8 test case (a) cannot be written as a meaningful assertion without this; requires human decision on expected host/path/header contract before story is buildable",
+            "NEEDS_DECISION: `date` field in SearchParams has no format constraint \u2014 team must decide if YYYY-MM-DD parsing/validation belongs in this story or a follow-on before implementation starts"
           ],
           "reviewedAt": "2026-05-31T11:18:50.429Z"
         }
@@ -349,18 +349,18 @@
       "agentGroup": "independent",
       "status": "pending",
       "completed": false,
-      "description": "Create `src/cli.ts` — a standalone Node entry point that accepts flight search arguments via `process.argv` and prints results as an aligned table. Parse flags manually (no commander, no yargs, zero new runtime deps). Require `RAPIDAPI_KEY` env var; exit 1 with a human-readable message if absent. Instantiate `SkyscannerClient` from `src/skyscanner-client.ts` (SKY-002), call `searchFlights` forwarding all parsed arguments including adults count, and render results in a dynamically-padded table with columns: Airline | Price | Departure | Arrival | Duration | Stops. Column widths are determined by the widest value in each column (including the header). A separator row of hyphen characters must appear between the header and data rows. Price is right-aligned and prefixed with the currency symbol returned by the API (default £ if absent); all other columns are left-aligned. If no flights are returned print `No flights found.` and exit 0. On any thrown error print the message to stderr and exit 1. Create `src/cli.test.ts` covering argument validation, successful render, empty-result render, missing env var, and error handling using vitest with `SkyscannerClient` mocked at the module boundary. The compiled output must be invokable as `node dist/cli.js ...` after `tsc`; `tsconfig.json` must have `outDir` set to `dist` and emit CommonJS-compatible output.",
+      "description": "Create `src/cli.ts` \u2014 a standalone Node entry point that accepts flight search arguments via `process.argv` and prints results as an aligned table. Parse flags manually (no commander, no yargs, zero new runtime deps). Require `RAPIDAPI_KEY` env var; exit 1 with a human-readable message if absent. Instantiate `SkyscannerClient` from `src/skyscanner-client.ts` (SKY-002), call `searchFlights` forwarding all parsed arguments including adults count, and render results in a dynamically-padded table with columns: Airline | Price | Departure | Arrival | Duration | Stops. Column widths are determined by the widest value in each column (including the header). A separator row of hyphen characters must appear between the header and data rows. Price is right-aligned and prefixed with the currency symbol returned by the API (default \u00a3 if absent); all other columns are left-aligned. If no flights are returned print `No flights found.` and exit 0. On any thrown error print the message to stderr and exit 1. Create `src/cli.test.ts` covering argument validation, successful render, empty-result render, missing env var, and error handling using vitest with `SkyscannerClient` mocked at the module boundary. The compiled output must be invokable as `node dist/cli.js ...` after `tsc`; `tsconfig.json` must have `outDir` set to `dist` and emit CommonJS-compatible output.",
       "acceptanceCriteria": [
         "`src/cli.ts` exists and `tsc --noEmit` reports zero errors",
         "`tsconfig.json` sets `outDir` to `dist` and emits a module format compatible with `node dist/cli.js` invocation (CommonJS or ESM with .mjs extension consistently applied)",
         "Flags `--from`, `--to`, and `--date` are all required; if any is absent the CLI prints a usage hint to stderr (showing correct flag names) and exits with code 2",
         "The `--date` flag value must match the pattern `YYYY-MM-DD`; a value that does not match this format causes exit code 2 with a human-readable message written to stderr before any network call is made",
-        "Optional `--adults` flag defaults to 1 when omitted; a non-integer value, a value ≤ 0, or a non-numeric string causes exit code 2 with a human-readable message to stderr",
-        "The parsed `adults` value is forwarded as an argument to `SkyscannerClient.searchFlights` — the flag is not silently dropped",
+        "Optional `--adults` flag defaults to 1 when omitted; a non-integer value, a value \u2264 0, or a non-numeric string causes exit code 2 with a human-readable message to stderr",
+        "The parsed `adults` value is forwarded as an argument to `SkyscannerClient.searchFlights` \u2014 the flag is not silently dropped",
         "If `RAPIDAPI_KEY` env var is unset or empty, CLI prints 'Error: RAPIDAPI_KEY environment variable is required' to stderr and exits 1 before making any network call",
         "When `searchFlights` resolves with one or more results, stdout contains: (a) a header row with columns Airline, Price, Departure, Arrival, Duration, Stops; (b) a separator row of hyphen characters whose width matches each column exactly; (c) one data row per result; all columns padded to the width of the widest value in that column (including the header label)",
         "All columns except Price are left-aligned within their padded width; the Price column is right-aligned within its padded width",
-        "Price column values are prefixed with the currency symbol from the API response; if the API response omits a currency symbol, £ is used as the fallback",
+        "Price column values are prefixed with the currency symbol from the API response; if the API response omits a currency symbol, \u00a3 is used as the fallback",
         "When `searchFlights` resolves with an empty array, stdout contains exactly the line `No flights found.` and process exits 0",
         "When `searchFlights` rejects, the error message is written to stderr and process exits 1; stdout is empty",
         "`src/cli.test.ts` contains at least 8 passing vitest tests covering: missing --from, missing --to, missing --date, invalid --adults value, missing RAPIDAPI_KEY env var, table rendered correctly for valid multi-row results (verify separator row present and column alignment), empty-array result renders 'No flights found.', and error path (client throws)",
@@ -368,10 +368,10 @@
         "No runtime dependency other than Node built-ins and packages already in `package.json` (from SKY-001/SKY-002) is added"
       ],
       "technicalNotes": {
-        "workingDir": "/tmp/skyscanner-app",
+        "workingDir": "/home/bradleyjerome/projects/skyscanner-app",
         "files": [
-          "/tmp/skyscanner-app/src/cli.ts",
-          "/tmp/skyscanner-app/src/cli.test.ts"
+          "/home/bradleyjerome/projects/skyscanner-app/src/cli.ts",
+          "/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts"
         ],
         "dependsOn": [
           "SKY-002"
@@ -383,7 +383,7 @@
         "assignedAgents": [
           "speckit"
         ],
-        "coordinatorNotes": "Two targeted gaps survived the prior speckit pass: (1) TEST_GAP — AC-6 specifies RAPIDAPI_KEY-absent behavior (exit 1, stderr message, no network call) but AC-11's 7-test enumeration does not include this path; speckit should add it as test case (f) and bump the count to 8; (2) AC_NOTE_MISMATCH — openspec notes reference a shebang/chmod+x requirement never promoted to a formal AC; speckit should either add it as an AC or explicitly mark it out of scope for this story. No structural re-elaboration needed — these are narrow, surgical additions to an otherwise complete spec.",
+        "coordinatorNotes": "Two targeted gaps survived the prior speckit pass: (1) TEST_GAP \u2014 AC-6 specifies RAPIDAPI_KEY-absent behavior (exit 1, stderr message, no network call) but AC-11's 7-test enumeration does not include this path; speckit should add it as test case (f) and bump the count to 8; (2) AC_NOTE_MISMATCH \u2014 openspec notes reference a shebang/chmod+x requirement never promoted to a formal AC; speckit should either add it as an AC or explicitly mark it out of scope for this story. No structural re-elaboration needed \u2014 these are narrow, surgical additions to an otherwise complete spec.",
         "status": "completed",
         "updatedAt": "2026-05-31T11:17:12.190Z",
         "appliedAgents": [
@@ -393,7 +393,7 @@
           {
             "agent": "speckit",
             "applied": true,
-            "notes": "Added date-format validation AC (YYYY-MM-DD), clarified column alignment (left for all non-Price columns), upgraded minimum test count from 7 to 8 to include the RAPIDAPI_KEY missing scenario, and tightened separator-row wording to 'hyphen characters' to remove ambiguity. No split recommended — implementation and tests are too tightly coupled to separate usefully.",
+            "notes": "Added date-format validation AC (YYYY-MM-DD), clarified column alignment (left for all non-Price columns), upgraded minimum test count from 7 to 8 to include the RAPIDAPI_KEY missing scenario, and tightened separator-row wording to 'hyphen characters' to remove ambiguity. No split recommended \u2014 implementation and tests are too tightly coupled to separate usefully.",
             "acceptanceChanged": true,
             "splitCount": 0,
             "timestamp": "2026-05-31T11:17:12.190Z",
@@ -401,11 +401,11 @@
               "`src/cli.ts` exists and `tsc --noEmit` reports zero errors",
               "`tsconfig.json` sets `outDir` to `dist` and emits a module format compatible with `node dist/cli.js` invocation (CommonJS or ESM with .mjs extension consistently applied)",
               "Flags `--from`, `--to`, and `--date` are all required; if any is absent the CLI prints a usage hint to stderr (showing correct flag names) and exits with code 2",
-              "Optional `--adults` flag defaults to 1 when omitted; a non-integer value or a value ≤ 0 causes exit code 2 with a human-readable message to stderr",
-              "The parsed `adults` value is forwarded as an argument to `SkyscannerClient.searchFlights` — the flag is not silently dropped",
+              "Optional `--adults` flag defaults to 1 when omitted; a non-integer value or a value \u2264 0 causes exit code 2 with a human-readable message to stderr",
+              "The parsed `adults` value is forwarded as an argument to `SkyscannerClient.searchFlights` \u2014 the flag is not silently dropped",
               "If `RAPIDAPI_KEY` env var is unset or empty, CLI prints 'Error: RAPIDAPI_KEY environment variable is required' to stderr and exits 1 before making any network call",
               "When `searchFlights` resolves with one or more results, stdout contains: (a) a header row with columns Airline, Price, Departure, Arrival, Duration, Stops; (b) a separator row of dashes whose width matches each column; (c) one data row per result; all columns padded to the width of the widest value in that column (including the header label)",
-              "Price column values are right-aligned within their column and prefixed with the currency symbol from the API response; if the API response omits a currency symbol, £ is used as the fallback",
+              "Price column values are right-aligned within their column and prefixed with the currency symbol from the API response; if the API response omits a currency symbol, \u00a3 is used as the fallback",
               "When `searchFlights` resolves with an empty array, stdout contains exactly the line `No flights found.` and process exits 0",
               "When `searchFlights` rejects, the error message is written to stderr and process exits 1; stdout is empty",
               "`src/cli.test.ts` contains at least 7 passing vitest tests covering: missing --from, missing --to, missing --date, invalid --adults value, table rendered correctly for valid multi-row results (verify separator row present and column alignment), empty-array result renders 'No flights found.', and error path (client throws)",
@@ -417,12 +417,12 @@
               "`tsconfig.json` sets `outDir` to `dist` and emits a module format compatible with `node dist/cli.js` invocation (CommonJS or ESM with .mjs extension consistently applied)",
               "Flags `--from`, `--to`, and `--date` are all required; if any is absent the CLI prints a usage hint to stderr (showing correct flag names) and exits with code 2",
               "The `--date` flag value must match the pattern `YYYY-MM-DD`; a value that does not match this format causes exit code 2 with a human-readable message written to stderr before any network call is made",
-              "Optional `--adults` flag defaults to 1 when omitted; a non-integer value, a value ≤ 0, or a non-numeric string causes exit code 2 with a human-readable message to stderr",
-              "The parsed `adults` value is forwarded as an argument to `SkyscannerClient.searchFlights` — the flag is not silently dropped",
+              "Optional `--adults` flag defaults to 1 when omitted; a non-integer value, a value \u2264 0, or a non-numeric string causes exit code 2 with a human-readable message to stderr",
+              "The parsed `adults` value is forwarded as an argument to `SkyscannerClient.searchFlights` \u2014 the flag is not silently dropped",
               "If `RAPIDAPI_KEY` env var is unset or empty, CLI prints 'Error: RAPIDAPI_KEY environment variable is required' to stderr and exits 1 before making any network call",
               "When `searchFlights` resolves with one or more results, stdout contains: (a) a header row with columns Airline, Price, Departure, Arrival, Duration, Stops; (b) a separator row of hyphen characters whose width matches each column exactly; (c) one data row per result; all columns padded to the width of the widest value in that column (including the header label)",
               "All columns except Price are left-aligned within their padded width; the Price column is right-aligned within its padded width",
-              "Price column values are prefixed with the currency symbol from the API response; if the API response omits a currency symbol, £ is used as the fallback",
+              "Price column values are prefixed with the currency symbol from the API response; if the API response omits a currency symbol, \u00a3 is used as the fallback",
               "When `searchFlights` resolves with an empty array, stdout contains exactly the line `No flights found.` and process exits 0",
               "When `searchFlights` rejects, the error message is written to stderr and process exits 1; stdout is empty",
               "`src/cli.test.ts` contains at least 8 passing vitest tests covering: missing --from, missing --to, missing --date, invalid --adults value, missing RAPIDAPI_KEY env var, table rendered correctly for valid multi-row results (verify separator row present and column alignment), empty-array result renders 'No flights found.', and error path (client throws)",
@@ -431,26 +431,26 @@
             ],
             "acAdded": [
               "The `--date` flag value must match the pattern `YYYY-MM-DD`; a value that does not match this format causes exit code 2 with a human-readable message written to stderr before any network call is made",
-              "Optional `--adults` flag defaults to 1 when omitted; a non-integer value, a value ≤ 0, or a non-numeric string causes exit code 2 with a human-readable message to stderr",
+              "Optional `--adults` flag defaults to 1 when omitted; a non-integer value, a value \u2264 0, or a non-numeric string causes exit code 2 with a human-readable message to stderr",
               "When `searchFlights` resolves with one or more results, stdout contains: (a) a header row with columns Airline, Price, Departure, Arrival, Duration, Stops; (b) a separator row of hyphen characters whose width matches each column exactly; (c) one data row per result; all columns padded to the width of the widest value in that column (including the header label)",
               "All columns except Price are left-aligned within their padded width; the Price column is right-aligned within its padded width",
-              "Price column values are prefixed with the currency symbol from the API response; if the API response omits a currency symbol, £ is used as the fallback",
+              "Price column values are prefixed with the currency symbol from the API response; if the API response omits a currency symbol, \u00a3 is used as the fallback",
               "`src/cli.test.ts` contains at least 8 passing vitest tests covering: missing --from, missing --to, missing --date, invalid --adults value, missing RAPIDAPI_KEY env var, table rendered correctly for valid multi-row results (verify separator row present and column alignment), empty-array result renders 'No flights found.', and error path (client throws)"
             ],
             "acRemoved": [
-              "Optional `--adults` flag defaults to 1 when omitted; a non-integer value or a value ≤ 0 causes exit code 2 with a human-readable message to stderr",
+              "Optional `--adults` flag defaults to 1 when omitted; a non-integer value or a value \u2264 0 causes exit code 2 with a human-readable message to stderr",
               "When `searchFlights` resolves with one or more results, stdout contains: (a) a header row with columns Airline, Price, Departure, Arrival, Duration, Stops; (b) a separator row of dashes whose width matches each column; (c) one data row per result; all columns padded to the width of the widest value in that column (including the header label)",
-              "Price column values are right-aligned within their column and prefixed with the currency symbol from the API response; if the API response omits a currency symbol, £ is used as the fallback",
+              "Price column values are right-aligned within their column and prefixed with the currency symbol from the API response; if the API response omits a currency symbol, \u00a3 is used as the fallback",
               "`src/cli.test.ts` contains at least 7 passing vitest tests covering: missing --from, missing --to, missing --date, invalid --adults value, table rendered correctly for valid multi-row results (verify separator row present and column alignment), empty-array result renders 'No flights found.', and error path (client throws)"
             ]
           }
         ],
         "coordinatorReview": {
           "verdict": "needs_review",
-          "reviewNotes": "speckit ran solo and delivered solid hardening: date-format validation AC added (YYYY-MM-DD, closes the SKY-002 date-format deferral at the consumer layer), --adults validation tightened to cover non-numeric strings as a distinct error case, column alignment split into a dedicated AC (all non-Price columns left-aligned, Price right-aligned), separator row wording made unambiguous ('hyphen characters'), and currency symbol correctly moved to dynamic sourcing with £ as fallback only. The embedded coordinator review (timestamped 01:24) predates this speckit pass (timestamped 11:17) and is therefore stale on flag 1: speckit DID resolve the TEST_GAP — test count was bumped 7→8 and 'missing RAPIDAPI_KEY env var' was added to the AC-13 test enumeration. Flag 2 (shebang/chmod+x) was NOT addressed: speckit's notes are silent on it, no AC was added, and no explicit out-of-scope decision was recorded. Since AC-2 requires `node dist/cli.js` invocation (not direct execution), this is arguably already out of scope — but the ambiguity needs a one-line explicit decision before the story is handed to an implementor. Final 15 ACs are testable and non-overlapping.",
+          "reviewNotes": "speckit ran solo and delivered solid hardening: date-format validation AC added (YYYY-MM-DD, closes the SKY-002 date-format deferral at the consumer layer), --adults validation tightened to cover non-numeric strings as a distinct error case, column alignment split into a dedicated AC (all non-Price columns left-aligned, Price right-aligned), separator row wording made unambiguous ('hyphen characters'), and currency symbol correctly moved to dynamic sourcing with \u00a3 as fallback only. The embedded coordinator review (timestamped 01:24) predates this speckit pass (timestamped 11:17) and is therefore stale on flag 1: speckit DID resolve the TEST_GAP \u2014 test count was bumped 7\u21928 and 'missing RAPIDAPI_KEY env var' was added to the AC-13 test enumeration. Flag 2 (shebang/chmod+x) was NOT addressed: speckit's notes are silent on it, no AC was added, and no explicit out-of-scope decision was recorded. Since AC-2 requires `node dist/cli.js` invocation (not direct execution), this is arguably already out of scope \u2014 but the ambiguity needs a one-line explicit decision before the story is handed to an implementor. Final 15 ACs are testable and non-overlapping.",
           "qualityScore": 0.84,
           "flags": [
-            "NEEDS_DECISION: shebang (#!/usr/bin/env node) and chmod+x requirement was surfaced in openspec notes and carried forward unresolved — speckit neither added an AC nor explicitly deferred it; team should record a one-line scope decision (AC-2 implies node invocation only, which likely makes this out of scope)"
+            "NEEDS_DECISION: shebang (#!/usr/bin/env node) and chmod+x requirement was surfaced in openspec notes and carried forward unresolved \u2014 speckit neither added an AC nor explicitly deferred it; team should record a one-line scope decision (AC-2 implies node invocation only, which likely makes this out of scope)"
           ],
           "reviewedAt": "2026-05-31T11:18:50.429Z"
         }
@@ -472,17 +472,17 @@
       "agentGroup": "primary",
       "status": "pending",
       "completed": false,
-      "description": "Create src/server.ts — an Express HTTP server that exposes: (1) GET /health → { status: 'ok', uptime: number }, (2) GET /search?from=LHR&to=JFK&date=2026-08-01&adults=1 → { flights: FlightResult[], count: number, searchedAt: string }, (3) GET /cheapest?from=LHR&to=JFK&date=2026-08-01 → the single cheapest FlightResult or 404 JSON { error: string } if none found, (4) GET / → serves src/public/index.html. Server reads PORT from env (default 3000); reads RAPIDAPI_KEY from env and passes to SkyscannerClient. If RAPIDAPI_KEY is absent at startup all API routes (/search, /cheapest) return 503 { error: 'RAPIDAPI_KEY not configured' }; /health and / are never gated. The listen() call must be guarded so importing `app` in tests does not bind a port. Add 'start' script in package.json pointing to 'node dist/server.js'. Install supertest and @types/supertest. Create src/server.test.ts using vitest + supertest with at least 8 tests covering the scenarios in acceptance criteria. Depends on SKY-002 (SkyscannerClient and FlightResult type must exist before this story is started).",
+      "description": "Create src/server.ts \u2014 an Express HTTP server that exposes: (1) GET /health \u2192 { status: 'ok', uptime: number }, (2) GET /search?from=LHR&to=JFK&date=2026-08-01&adults=1 \u2192 { flights: FlightResult[], count: number, searchedAt: string }, (3) GET /cheapest?from=LHR&to=JFK&date=2026-08-01 \u2192 the single cheapest FlightResult or 404 JSON { error: string } if none found, (4) GET / \u2192 serves src/public/index.html. Server reads PORT from env (default 3000); reads RAPIDAPI_KEY from env and passes to SkyscannerClient. If RAPIDAPI_KEY is absent at startup all API routes (/search, /cheapest) return 503 { error: 'RAPIDAPI_KEY not configured' }; /health and / are never gated. The listen() call must be guarded so importing `app` in tests does not bind a port. Add 'start' script in package.json pointing to 'node dist/server.js'. Install supertest and @types/supertest. Create src/server.test.ts using vitest + supertest with at least 8 tests covering the scenarios in acceptance criteria. Depends on SKY-002 (SkyscannerClient and FlightResult type must exist before this story is started).",
       "acceptanceCriteria": [
         "src/server.ts exports a named `app` (Express instance) separately from the `listen()` call so supertest can import it without binding a port",
-        "The `listen()` call in src/server.ts is guarded by `import { pathToFileURL } from 'url'` and the condition `if (import.meta.url === pathToFileURL(process.argv[1]).href)` (ESM output) or `if (require.main === module)` (CJS output) — the guard form must match the tsup output format so that `vitest run` never binds a port",
+        "The `listen()` call in src/server.ts is guarded by `import { pathToFileURL } from 'url'` and the condition `if (import.meta.url === pathToFileURL(process.argv[1]).href)` (ESM output) or `if (require.main === module)` (CJS output) \u2014 the guard form must match the tsup output format so that `vitest run` never binds a port",
         "GET /health returns HTTP 200 with Content-Type application/json and body matching { status: 'ok', uptime: <positive number> }",
-        "GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent — the health endpoint is never gated by API key presence",
-        "GET / returns HTTP 200 with Content-Type matching text/html and response body equal to the contents of src/public/index.html — this route is never gated by RAPIDAPI_KEY",
+        "GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent \u2014 the health endpoint is never gated by API key presence",
+        "GET / returns HTTP 200 with Content-Type matching text/html and response body equal to the contents of src/public/index.html \u2014 this route is never gated by RAPIDAPI_KEY",
         "src/public/index.html exists and contains valid HTML (at minimum a non-empty file with an <html> root element)",
         "GET /search with valid query params (from, to, date, adults) returns HTTP 200 with body { flights: FlightResult[], count: number, searchedAt: ISO-8601 string } where count strictly equals flights.length",
         "GET /search missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }",
-        "When the `adults` query param is absent on GET /search, the request succeeds (HTTP 200) with a default value of 1 passed to SkyscannerClient — `adults` is optional, not required",
+        "When the `adults` query param is absent on GET /search, the request succeeds (HTTP 200) with a default value of 1 passed to SkyscannerClient \u2014 `adults` is optional, not required",
         "When the `adults` query param is present but non-numeric (e.g. 'abc', ''), GET /search returns HTTP 400 with Content-Type application/json and body { error: string }",
         "GET /cheapest with valid required query params (from, to, date) returns HTTP 200 with a single FlightResult whose `price` field is less than or equal to the `price` field of every FlightResult returned by SkyscannerClient for the same route/date (validated against a mocked client response); if `adults` is supplied it is forwarded, if absent it defaults to 1",
         "GET /cheapest returns HTTP 404 with Content-Type application/json and body { error: string } when SkyscannerClient returns an empty array for the given route/date",
@@ -490,7 +490,7 @@
         "When RAPIDAPI_KEY env var is absent at server initialisation, a single middleware (or equivalent) short-circuits GET /search and GET /cheapest with HTTP 503 Content-Type application/json body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected and return their normal responses",
         "When SkyscannerClient throws an error during a /search or /cheapest request (e.g. network failure, upstream 5xx), the server returns HTTP 500 with Content-Type application/json and body { error: string } and does not crash or emit an unhandled promise rejection",
         "The `searchedAt` field in the GET /search response is an ISO-8601 datetime string reflecting the time of the request (not a hardcoded value); successive requests separated by at least 1 ms return distinct values",
-        "The FlightResult type used in src/server.ts is imported from the SKY-002 type export (e.g. src/skyscanner-client.ts) and not redeclared inline — type definitions must not diverge between the client and server layers",
+        "The FlightResult type used in src/server.ts is imported from the SKY-002 type export (e.g. src/skyscanner-client.ts) and not redeclared inline \u2014 type definitions must not diverge between the client and server layers",
         "package.json contains a 'start' script with value 'node dist/server.js'",
         "package.json contains a 'build' script (tsup or equivalent) that produces dist/server.js such that `npm run build && npm run start` successfully starts the server and GET /health returns HTTP 200",
         "supertest and @types/supertest are listed in package.json devDependencies",
@@ -499,10 +499,10 @@
         "`vitest run` exits 0 with all tests passing"
       ],
       "technicalNotes": {
-        "workingDir": "/tmp/skyscanner-app",
+        "workingDir": "/home/bradleyjerome/projects/skyscanner-app",
         "files": [
-          "/tmp/skyscanner-app/src/server.ts",
-          "/tmp/skyscanner-app/src/server.test.ts"
+          "/home/bradleyjerome/projects/skyscanner-app/src/server.ts",
+          "/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts"
         ],
         "dependsOn": [
           "SKY-002"
@@ -514,7 +514,7 @@
         "assignedAgents": [
           "speckit"
         ],
-        "coordinatorNotes": "One BLOCKING gap survived both prior agent passes: the server URL query params use `from`/`to` while SkyscannerClient.SearchParams uses `origin`/`destination` — no AC requires or tests this mapping translation, meaning a conforming implementation will silently fail on every /search and /cheapest request at runtime. speckit should: (1) add an explicit AC requiring the server to map from→origin and to→destination when calling SkyscannerClient; (2) add a corresponding test to the AC-20 test enumeration; (3) make an explicit scope decision on CORS headers and query-injection hardening — either add ACs or formally defer to a follow-on story with a note in the spec. No openspec re-run needed; the structural elaboration is complete.",
+        "coordinatorNotes": "One BLOCKING gap survived both prior agent passes: the server URL query params use `from`/`to` while SkyscannerClient.SearchParams uses `origin`/`destination` \u2014 no AC requires or tests this mapping translation, meaning a conforming implementation will silently fail on every /search and /cheapest request at runtime. speckit should: (1) add an explicit AC requiring the server to map from\u2192origin and to\u2192destination when calling SkyscannerClient; (2) add a corresponding test to the AC-20 test enumeration; (3) make an explicit scope decision on CORS headers and query-injection hardening \u2014 either add ACs or formally defer to a follow-on story with a note in the spec. No openspec re-run needed; the structural elaboration is complete.",
         "status": "completed",
         "updatedAt": "2026-05-31T11:17:48.355Z",
         "appliedAgents": [
@@ -524,7 +524,7 @@
           {
             "agent": "speckit",
             "applied": true,
-            "notes": "Dependency field in story payload is empty [] but technicalNotes.dependsOn correctly lists SKY-002 — pipeline must enforce that SKY-002 is complete before this story is picked up. Added two missing criteria: (1) build output requirement so 'npm run start' is actually runnable, (2) consistent adults-optional handling for /cheapest (description omits it but the same defaulting logic should apply). Tightened the ESM guard criterion to call out the required 'url' import. Removed ambiguity in the 503 gate criterion about middleware vs per-route checks. No split recommended — implementation and test file are tightly coupled; separating them would create a story with no verifiable exit condition.",
+            "notes": "Dependency field in story payload is empty [] but technicalNotes.dependsOn correctly lists SKY-002 \u2014 pipeline must enforce that SKY-002 is complete before this story is picked up. Added two missing criteria: (1) build output requirement so 'npm run start' is actually runnable, (2) consistent adults-optional handling for /cheapest (description omits it but the same defaulting logic should apply). Tightened the ESM guard criterion to call out the required 'url' import. Removed ambiguity in the 503 gate criterion about middleware vs per-route checks. No split recommended \u2014 implementation and test file are tightly coupled; separating them would create a story with no verifiable exit condition.",
             "acceptanceChanged": true,
             "splitCount": 0,
             "timestamp": "2026-05-31T11:17:48.355Z",
@@ -532,12 +532,12 @@
               "src/server.ts exports a named `app` (Express instance) separately from the `listen()` call so supertest can import it without binding a port",
               "The `listen()` call in src/server.ts is guarded by an `if (import.meta.url === pathToFileURL(process.argv[1]).href)` check (or equivalent `require.main === module` guard for CommonJS output) so running `vitest run` never binds a port",
               "GET /health returns HTTP 200 with Content-Type application/json and body matching { status: 'ok', uptime: <positive number> }",
-              "GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent — the health endpoint must not be gated by API key presence",
-              "GET / returns HTTP 200 with Content-Type matching text/html and response body equal to the contents of src/public/index.html — this route is never gated by RAPIDAPI_KEY",
+              "GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent \u2014 the health endpoint must not be gated by API key presence",
+              "GET / returns HTTP 200 with Content-Type matching text/html and response body equal to the contents of src/public/index.html \u2014 this route is never gated by RAPIDAPI_KEY",
               "src/public/index.html exists and contains valid HTML (at minimum a non-empty file with an <html> root element)",
               "GET /search with valid query params (from, to, date, adults) returns HTTP 200 with body { flights: FlightResult[], count: number, searchedAt: ISO-8601 string } where count strictly equals flights.length",
               "GET /search missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }",
-              "When the `adults` query param is absent on GET /search, the request succeeds (HTTP 200) with a default value of 1 passed to SkyscannerClient — `adults` is optional, not required",
+              "When the `adults` query param is absent on GET /search, the request succeeds (HTTP 200) with a default value of 1 passed to SkyscannerClient \u2014 `adults` is optional, not required",
               "When the `adults` query param is present but non-numeric (e.g. 'abc', ''), GET /search returns HTTP 400 with Content-Type application/json and body { error: string }",
               "GET /cheapest with valid query params (from, to, date) returns HTTP 200 with a single FlightResult whose `price` field is less than or equal to the `price` field of every FlightResult returned by SkyscannerClient for the same route/date (validated against a mocked client response, not via a second /search request)",
               "GET /cheapest returns HTTP 404 with Content-Type application/json and body { error: string } when SkyscannerClient returns an empty array for the given route/date",
@@ -545,7 +545,7 @@
               "When RAPIDAPI_KEY env var is absent, GET /search and GET /cheapest both return HTTP 503 with Content-Type application/json and body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected",
               "When SkyscannerClient throws an error during a /search or /cheapest request (e.g. network failure, upstream 5xx), the server returns HTTP 500 with body { error: string } and does not crash or emit an unhandled promise rejection",
               "The `searchedAt` field in the GET /search response is an ISO-8601 datetime string that reflects the time of the request (not a hardcoded value); successive requests return distinct values separated by measurable time",
-              "The FlightResult type used in src/server.ts is imported from the SKY-002 type export (e.g. src/skyscanner-client.ts) and not redeclared inline — type definitions must not diverge between the client and server layers",
+              "The FlightResult type used in src/server.ts is imported from the SKY-002 type export (e.g. src/skyscanner-client.ts) and not redeclared inline \u2014 type definitions must not diverge between the client and server layers",
               "package.json contains a 'start' script with value 'node dist/server.js'",
               "supertest and @types/supertest are listed in package.json devDependencies",
               "src/server.test.ts contains at least 8 vitest tests, each covering a distinct scenario from the criteria above, with SkyscannerClient mocked (vi.mock or equivalent) so no real HTTP calls are made during `vitest run`",
@@ -554,14 +554,14 @@
             ],
             "acAfter": [
               "src/server.ts exports a named `app` (Express instance) separately from the `listen()` call so supertest can import it without binding a port",
-              "The `listen()` call in src/server.ts is guarded by `import { pathToFileURL } from 'url'` and the condition `if (import.meta.url === pathToFileURL(process.argv[1]).href)` (ESM output) or `if (require.main === module)` (CJS output) — the guard form must match the tsup output format so that `vitest run` never binds a port",
+              "The `listen()` call in src/server.ts is guarded by `import { pathToFileURL } from 'url'` and the condition `if (import.meta.url === pathToFileURL(process.argv[1]).href)` (ESM output) or `if (require.main === module)` (CJS output) \u2014 the guard form must match the tsup output format so that `vitest run` never binds a port",
               "GET /health returns HTTP 200 with Content-Type application/json and body matching { status: 'ok', uptime: <positive number> }",
-              "GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent — the health endpoint is never gated by API key presence",
-              "GET / returns HTTP 200 with Content-Type matching text/html and response body equal to the contents of src/public/index.html — this route is never gated by RAPIDAPI_KEY",
+              "GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent \u2014 the health endpoint is never gated by API key presence",
+              "GET / returns HTTP 200 with Content-Type matching text/html and response body equal to the contents of src/public/index.html \u2014 this route is never gated by RAPIDAPI_KEY",
               "src/public/index.html exists and contains valid HTML (at minimum a non-empty file with an <html> root element)",
               "GET /search with valid query params (from, to, date, adults) returns HTTP 200 with body { flights: FlightResult[], count: number, searchedAt: ISO-8601 string } where count strictly equals flights.length",
               "GET /search missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }",
-              "When the `adults` query param is absent on GET /search, the request succeeds (HTTP 200) with a default value of 1 passed to SkyscannerClient — `adults` is optional, not required",
+              "When the `adults` query param is absent on GET /search, the request succeeds (HTTP 200) with a default value of 1 passed to SkyscannerClient \u2014 `adults` is optional, not required",
               "When the `adults` query param is present but non-numeric (e.g. 'abc', ''), GET /search returns HTTP 400 with Content-Type application/json and body { error: string }",
               "GET /cheapest with valid required query params (from, to, date) returns HTTP 200 with a single FlightResult whose `price` field is less than or equal to the `price` field of every FlightResult returned by SkyscannerClient for the same route/date (validated against a mocked client response); if `adults` is supplied it is forwarded, if absent it defaults to 1",
               "GET /cheapest returns HTTP 404 with Content-Type application/json and body { error: string } when SkyscannerClient returns an empty array for the given route/date",
@@ -569,7 +569,7 @@
               "When RAPIDAPI_KEY env var is absent at server initialisation, a single middleware (or equivalent) short-circuits GET /search and GET /cheapest with HTTP 503 Content-Type application/json body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected and return their normal responses",
               "When SkyscannerClient throws an error during a /search or /cheapest request (e.g. network failure, upstream 5xx), the server returns HTTP 500 with Content-Type application/json and body { error: string } and does not crash or emit an unhandled promise rejection",
               "The `searchedAt` field in the GET /search response is an ISO-8601 datetime string reflecting the time of the request (not a hardcoded value); successive requests separated by at least 1 ms return distinct values",
-              "The FlightResult type used in src/server.ts is imported from the SKY-002 type export (e.g. src/skyscanner-client.ts) and not redeclared inline — type definitions must not diverge between the client and server layers",
+              "The FlightResult type used in src/server.ts is imported from the SKY-002 type export (e.g. src/skyscanner-client.ts) and not redeclared inline \u2014 type definitions must not diverge between the client and server layers",
               "package.json contains a 'start' script with value 'node dist/server.js'",
               "package.json contains a 'build' script (tsup or equivalent) that produces dist/server.js such that `npm run build && npm run start` successfully starts the server and GET /health returns HTTP 200",
               "supertest and @types/supertest are listed in package.json devDependencies",
@@ -578,8 +578,8 @@
               "`vitest run` exits 0 with all tests passing"
             ],
             "acAdded": [
-              "The `listen()` call in src/server.ts is guarded by `import { pathToFileURL } from 'url'` and the condition `if (import.meta.url === pathToFileURL(process.argv[1]).href)` (ESM output) or `if (require.main === module)` (CJS output) — the guard form must match the tsup output format so that `vitest run` never binds a port",
-              "GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent — the health endpoint is never gated by API key presence",
+              "The `listen()` call in src/server.ts is guarded by `import { pathToFileURL } from 'url'` and the condition `if (import.meta.url === pathToFileURL(process.argv[1]).href)` (ESM output) or `if (require.main === module)` (CJS output) \u2014 the guard form must match the tsup output format so that `vitest run` never binds a port",
+              "GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent \u2014 the health endpoint is never gated by API key presence",
               "GET /cheapest with valid required query params (from, to, date) returns HTTP 200 with a single FlightResult whose `price` field is less than or equal to the `price` field of every FlightResult returned by SkyscannerClient for the same route/date (validated against a mocked client response); if `adults` is supplied it is forwarded, if absent it defaults to 1",
               "When RAPIDAPI_KEY env var is absent at server initialisation, a single middleware (or equivalent) short-circuits GET /search and GET /cheapest with HTTP 503 Content-Type application/json body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected and return their normal responses",
               "When SkyscannerClient throws an error during a /search or /cheapest request (e.g. network failure, upstream 5xx), the server returns HTTP 500 with Content-Type application/json and body { error: string } and does not crash or emit an unhandled promise rejection",
@@ -588,7 +588,7 @@
             ],
             "acRemoved": [
               "The `listen()` call in src/server.ts is guarded by an `if (import.meta.url === pathToFileURL(process.argv[1]).href)` check (or equivalent `require.main === module` guard for CommonJS output) so running `vitest run` never binds a port",
-              "GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent — the health endpoint must not be gated by API key presence",
+              "GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent \u2014 the health endpoint must not be gated by API key presence",
               "GET /cheapest with valid query params (from, to, date) returns HTTP 200 with a single FlightResult whose `price` field is less than or equal to the `price` field of every FlightResult returned by SkyscannerClient for the same route/date (validated against a mocked client response, not via a second /search request)",
               "When RAPIDAPI_KEY env var is absent, GET /search and GET /cheapest both return HTTP 503 with Content-Type application/json and body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected",
               "When SkyscannerClient throws an error during a /search or /cheapest request (e.g. network failure, upstream 5xx), the server returns HTTP 500 with body { error: string } and does not crash or emit an unhandled promise rejection",
@@ -598,11 +598,11 @@
         ],
         "coordinatorReview": {
           "verdict": "needs_review",
-          "reviewNotes": "speckit added genuine correctness value: the listen() guard AC (app export alone is insufficient — a bare import during vitest will still bind a port without the guard), FlightResult type-import AC (enforces SKY-002 dependency and prevents silent type drift between layers), non-numeric adults → 400 AC (closes a validation gap), searchedAt distinctness tightened to '1 ms apart', and 503 scope correctly narrowed to API routes only with /health and / explicitly unaffected. The build script AC is a practical addition. Final 23 ACs are well-formed and non-overlapping. However, the BLOCKING gap called out explicitly in the coordinator notes was NOT resolved by speckit: the server URL query params use `from`/`to` while SkyscannerClient.SearchParams uses `origin`/`destination` — no AC requires this mapping translation to be implemented or tested. An implementor following the ACs as written can pass all 8 mandated tests while forwarding `from` directly into a `from` key on SearchParams, which the client will silently ignore or reject at runtime. Every /search and /cheapest request will fail in production. This translation must be added as an explicit AC with a corresponding test before the story is buildable. The CORS/security-headers deferral was noted but no explicit scope decision was recorded.",
+          "reviewNotes": "speckit added genuine correctness value: the listen() guard AC (app export alone is insufficient \u2014 a bare import during vitest will still bind a port without the guard), FlightResult type-import AC (enforces SKY-002 dependency and prevents silent type drift between layers), non-numeric adults \u2192 400 AC (closes a validation gap), searchedAt distinctness tightened to '1 ms apart', and 503 scope correctly narrowed to API routes only with /health and / explicitly unaffected. The build script AC is a practical addition. Final 23 ACs are well-formed and non-overlapping. However, the BLOCKING gap called out explicitly in the coordinator notes was NOT resolved by speckit: the server URL query params use `from`/`to` while SkyscannerClient.SearchParams uses `origin`/`destination` \u2014 no AC requires this mapping translation to be implemented or tested. An implementor following the ACs as written can pass all 8 mandated tests while forwarding `from` directly into a `from` key on SearchParams, which the client will silently ignore or reject at runtime. Every /search and /cheapest request will fail in production. This translation must be added as an explicit AC with a corresponding test before the story is buildable. The CORS/security-headers deferral was noted but no explicit scope decision was recorded.",
           "qualityScore": 0.75,
           "flags": [
-            "BLOCKING: No AC requires or tests the from→origin / to→destination parameter mapping between URL query params and SkyscannerClient.SearchParams — this translation is a runtime correctness requirement; without it every /search and /cheapest call will silently forward wrong keys; must be added as an AC with a corresponding test before story is buildable",
-            "DEFERRED_SCOPE: CORS headers and query-injection hardening were raised by coordinator and not addressed by speckit — team must explicitly record whether these are in scope for SKY-004 or a follow-on story"
+            "BLOCKING: No AC requires or tests the from\u2192origin / to\u2192destination parameter mapping between URL query params and SkyscannerClient.SearchParams \u2014 this translation is a runtime correctness requirement; without it every /search and /cheapest call will silently forward wrong keys; must be added as an AC with a corresponding test before story is buildable",
+            "DEFERRED_SCOPE: CORS headers and query-injection hardening were raised by coordinator and not addressed by speckit \u2014 team must explicitly record whether these are in scope for SKY-004 or a follow-on story"
           ],
           "reviewedAt": "2026-05-31T11:18:50.429Z"
         }

@@ -68,12 +68,27 @@ if [[ -z "$PRD_FILE" ]]; then
 elif [[ ! -f "$PRD_FILE" ]]; then
   fail "PRD not found: $PRD_FILE"
 else
-  integrity_out=$(bash "$SCRIPT_DIR/preflight-prd-integrity.sh" --prd "$PRD_FILE" 2>&1) || integrity_exit=$?
-  echo "$integrity_out"
-  if [[ "${integrity_exit:-0}" -ne 0 ]]; then
-    FAIL=$((FAIL+1))
-  else
+  # Detect canonical (pre-spec-pass) PRD: no story has specification.createdFrom set.
+  # Strict phase/field checks only apply to elaborated PRDs — skip them for canonical.
+  _prd_is_canonical=$(python3 -c "
+import json
+d = json.load(open('$PRD_FILE'))
+has_splits = any(s.get('specification', {}).get('createdFrom') for s in d.get('stories', []))
+print('false' if has_splits else 'true')
+" 2>/dev/null || echo "false")
+
+  if [[ "$_prd_is_canonical" == "true" ]]; then
+    _base_count=$(python3 -c "import json; print(len(json.load(open('$PRD_FILE'))['stories']))" 2>/dev/null || echo "?")
+    ok "PRD integrity OK — $_base_count base user stories (canonical/pre-spec-pass — strict phase checks deferred until after spec pass elaboration)"
     PASS=$((PASS+1))
+  else
+    integrity_out=$(bash "$SCRIPT_DIR/preflight-prd-integrity.sh" --prd "$PRD_FILE" 2>&1) || integrity_exit=$?
+    echo "$integrity_out"
+    if [[ "${integrity_exit:-0}" -ne 0 ]]; then
+      FAIL=$((FAIL+1))
+    else
+      PASS=$((PASS+1))
+    fi
   fi
 fi
 
@@ -109,8 +124,12 @@ else
     fi
   fi
 
-  # Story checks
-  python3 << PYEOF
+  # Story field checks — skip for canonical PRD (aiProvider/model added by spec pass)
+  if [[ "$_prd_is_canonical" == "true" ]]; then
+    ok "Story field checks deferred — canonical PRD has no implementation stories yet"
+    PASS=$((PASS+1))
+  else
+    python3 << PYEOF
 import json, sys
 with open('$PRD_FILE') as f:
     d = json.load(f)
@@ -144,8 +163,9 @@ if not errors:
     print(f"  ✓ All {len(stories)} stories have valid aiProvider/model/status")
 sys.exit(1 if errors else 0)
 PYEOF
-  story_exit=$?
-  [[ $story_exit -eq 0 ]] && ((PASS++)) || ((FAIL++))
+    story_exit=$?
+    [[ $story_exit -eq 0 ]] && ((PASS++)) || ((FAIL++))
+  fi
 fi
 
 # ── 4. Required API keys ──────────────────────────────────────────────────────

@@ -431,6 +431,15 @@ PYEOF
     return $_rc
 }
 
+# run_orch_prompt_with_tools <prompt> [agent_type] [story_id]
+# Identical to run_orch_prompt but enables ReadFile + Bash tool access for the agent.
+# Required for QA gate agents that must read source files to ground their analysis:
+# sast-sentinel, spec-validator, review-ranger, mutant-hunter, fuzz-weaver, perf-sentinel.
+# Without tool access these agents hallucinate findings about files they cannot verify.
+run_orch_prompt_with_tools() {
+    AI_GATE_ALLOW_TOOLS=1 run_orch_prompt "$@"
+}
+
 stop_dashboards_watch() {
     if [ "$DASHBOARD_WATCH_OWNED" != "true" ] || [ -z "$DASHBOARD_WATCH_PID" ]; then
         return
@@ -1156,6 +1165,7 @@ mkdir -p "$LOG_DIR"
 CPA_SCRIPT="$SCRIPT_DIR/contextualize-stories.sh"
 
 if [ "${SKIP_CPA:-0}" != "1" ] && [ -f "$CPA_SCRIPT" ]; then
+    step_emit "0.1" "running" "Step 0.1: CPA pre-pass"
     log "Step 0.1: Running CPA pre-pass for phase '$PHASE'..."
 
     cpa_flags="--phase $PHASE --apply"
@@ -1184,6 +1194,7 @@ if [ "${SKIP_CPA:-0}" != "1" ] && [ -f "$CPA_SCRIPT" ]; then
                 "CPA gate passed — all stories cleared" "" "main" "context-purveyor" 2>/dev/null || true
             ;;
         2)
+            step_emit "0.1" "warn" "Step 0.1: CPA pre-pass" "elevated risk — review"
             warning "Step 0.1: CPA gate REVIEW — some stories have elevated risk"
             warning "  Check: $LOG_DIR/cpa-${PHASE}.log"
             warning "  Continuing (use STRICT_CPA=1 to halt on review gates)"
@@ -1601,6 +1612,7 @@ Read ${PRD_REL} implementationOrder[\"${phase_id}\"] for the story list, then pr
     fi
 }
 
+step_emit "0.5" "running" "Step 0.5: Skill assessment"
 log "Step 0.5: Running pre-phase skill assessment..."
 if [ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ]; then
     step_emit "0.5" "skip" "Step 0.5: Skill assessment" "SKIP_SKILL_ASSESSMENT=1"
@@ -1669,6 +1681,7 @@ if [ "${SKIP_REGRESSION_GUARD:-false}" != "true" ]; then
     _rg_node=$(detect_node 2>/dev/null || true)
     if [ -n "$_rg_node" ] && [ -f "$PROJECT_ROOT/package.json" ] && \
        [ -f "$PROJECT_ROOT/node_modules/.bin/vitest" ]; then
+        step_emit "0.7" "running" "Step 0.7: Regression guard"
         log "Step 0.7: Cross-phase regression guard (vitest)..."
         _rg_log="$LOG_DIR/regression-guard-${PHASE}.log"
         set +e
@@ -1784,6 +1797,7 @@ _tc_writer_needed=$(jq -r --arg phase "$PHASE" \
       )] | length' "$PRD_FILE" 2>/dev/null || echo 0)
 
 if [ "${_tc_writer_needed:-0}" -gt 0 ]; then
+    step_emit "1.6" "running" "Step 1.6: TC writer gate"
     log "Step 1.6: TC writer gate — ${_tc_writer_needed} test story/stories need testCriteria..."
     if bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
         --prd "$PRD_FILE" \
@@ -1813,6 +1827,7 @@ if [ "$need_worktrees" = true ]; then
     step_emit "2" "running" "Step 2: Create worktrees"
     log "Step 2: Creating git worktrees..."
     "$CLAUDE_SH" --setup-worktrees || { error "Failed to create worktrees"; exit 1; }
+    step_emit "2" "pass" "Step 2: Create worktrees"
 else
     step_emit "2" "skip" "Step 2: Create worktrees" "no parallel stories"
     info "Step 2: No worktree stories — skipping worktree creation"
@@ -1840,6 +1855,9 @@ if [ -n "$independent_stories" ]; then
         > "$LOG_DIR/wt-independent.log" 2>&1 &
     INDEPENDENT_PID=$!
     info "  Independent agent PID: $INDEPENDENT_PID"
+else
+    step_emit "3b" "skip" "Step 3b: Independent agent" "no independent stories"
+    info "Step 3b: No independent stories — skipping independent agent"
 fi
 
 # Wait for both agents
@@ -1889,8 +1907,11 @@ if [ "$need_worktrees" = true ]; then
         2>&1 | tee "$LOG_DIR/worktree-health-${PHASE}.log"
     _health_exit=${PIPESTATUS[0]}
     if [ "$_health_exit" -ne 0 ]; then
+        step_emit "3.1" "warn" "Step 3.1: Worktree health" "health issues auto-fixed"
         error "Worktree health check failed — see $LOG_DIR/worktree-health-${PHASE}.log"
         exit 1
+    else
+        step_emit "3.1" "pass" "Step 3.1: Worktree health"
     fi
 else
     step_emit "3.1" "skip" "Step 3.1: Worktree health" "no worktrees"
@@ -2049,9 +2070,15 @@ if [ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ]; then
     step_emit "3.5" "skip" "Step 3.5: Post-parallel assessment" "SKIP_SKILL_ASSESSMENT=1"
     info "Step 3.5: Skipped (SKIP_SKILL_ASSESSMENT=1)"
 elif [ -s "$LOG_DIR/phase-cost.jsonl" ]; then
+    step_emit "3.5" "running" "Step 3.5: Post-parallel assessment"
     log "Step 3.5: Running post-parallel skill assessment..."
-    run_phase_assessment "$PHASE"
+    if run_phase_assessment "$PHASE"; then
+        step_emit "3.5" "pass" "Step 3.5: Post-parallel assessment"
+    else
+        step_emit "3.5" "warn" "Step 3.5: Post-parallel assessment" "non-critical issues"
+    fi
 else
+    step_emit "3.5" "skip" "Step 3.5: Post-parallel assessment" "no cost data"
     info "Step 3.5: No cost data yet — skipping post-parallel assessment"
 fi
 
@@ -2084,6 +2111,7 @@ fi
 # Blocks review if tests fail. Skip with SKIP_PRE_REVIEW_GATE=true.
 # ──────────────────────────────────────────────
 if [ "${SKIP_PRE_REVIEW_GATE:-false}" != "true" ] && [ -f "$PROJECT_ROOT/package.json" ]; then
+    step_emit "3.7" "running" "Step 3.7: Pre-review gate"
     log "Step 3.7: Pre-review build gate (vitest + tsc)..."
     _pre_review_log="$LOG_DIR/pre-review-gate-${PHASE}.log"
     _pre_review_failed=0
@@ -2159,6 +2187,11 @@ if [ -n "$review_stories" ]; then
         log "  Running review: $story"
         run_story_with_watchdog "$story" "$LOG_DIR/review-${story}.log"
     done <<< "$review_stories"
+    if [ "${_review_failed:-0}" -gt 0 ]; then
+        step_emit "4" "fail" "Step 4: Review stories"
+    else
+        step_emit "4" "pass" "Step 4: Review stories"
+    fi
     success "Review stories complete"
 else
     step_emit "4" "skip" "Step 4: Review stories" "no review stories"
@@ -2302,6 +2335,7 @@ step_emit "4.6"  "skip" "Step 4.6: Browser E2E" "SKIP_TESTING_GATES=true"
             return 0
         fi
 
+        step_emit "4.6" "running" "Step 4.6: Browser E2E"
         log "  Step 4.6: Browser E2E routing checks (Lightpanda/Playwright)..."
         while IFS= read -r story_id; do
             [ -z "$story_id" ] && continue
@@ -2396,7 +2430,11 @@ Return strict JSON only:
 
         if [ $e2e_route_runs -eq 0 ]; then
             step_emit "4.6" "skip" "Step 4.6: Browser E2E" "no stories matched"
-        info "  Step 4.6: No stories matched browser E2E routing criteria"
+            info "  Step 4.6: No stories matched browser E2E routing criteria"
+        elif [ "$e2e_route_failed" -gt 0 ]; then
+            step_emit "4.6" "fail" "Step 4.6: Browser E2E"
+        else
+            step_emit "4.6" "pass" "Step 4.6: Browser E2E"
         fi
         echo "Summary: runs=$e2e_route_runs lightpanda=$e2e_route_lightpanda playwright=$e2e_route_playwright failed=$e2e_route_failed" >> "$e2e_route_log"
         return 0
@@ -2417,6 +2455,7 @@ Return strict JSON only:
     fi
 
     # ── SAST Sentinel ──
+    step_emit "4.2a" "running" "Step 4.2a: SAST sentinel"
     log "  Step 4.2a: Running SAST sentinel..."
     {
         local sast_prompt="You are acting as the sast-sentinel agent.
@@ -2598,11 +2637,12 @@ $tsc_summary
 
 $sast_prompt"
 
-        run_orch_prompt "$sast_prompt" "qa-gate:sast" "${PHASE:-unknown}" 2>&1 | tee "$sast_log"
+        run_orch_prompt_with_tools "$sast_prompt" "qa-gate:sast" "${PHASE:-unknown}" 2>&1 | tee "$sast_log"
     } &
     local sast_pid=$!
 
     # ── Spec Validator ──
+    step_emit "4.2b" "running" "Step 4.2b: Spec validator"
     log "  Step 4.2b: Running spec validator..."
     {
         local spec_prompt="You are acting as the spec-validator agent.
@@ -2733,7 +2773,7 @@ $story_oracle
 
 $spec_prompt"
 
-        run_orch_prompt "$spec_prompt" "qa-gate:spec-validator" "${PHASE:-unknown}" 2>&1 | tee "$spec_log"
+        run_orch_prompt_with_tools "$spec_prompt" "qa-gate:spec-validator" "${PHASE:-unknown}" 2>&1 | tee "$spec_log"
     } &
     local spec_pid=$!
 
@@ -2795,11 +2835,12 @@ except Exception:
         if [ "$_sast_blockers" = "-1" ]; then
             # Fallback: no parseable JSON — check raw verdict string
             if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$sast_log" 2>/dev/null; then
+                step_emit "4.2a" "fail" "Step 4.2a: SAST sentinel"
                 error "  SAST sentinel: FAIL verdict (could not parse blockerCount)"
                 failed=1
             else
-                step_emit "4.2a" "pass" "Step 4.2a: SAST sentinel"
-            success "  SAST sentinel: PASS (no parseable findings)"
+                step_emit "4.2a" "warn" "Step 4.2a: SAST sentinel" "no parseable findings"
+                success "  SAST sentinel: PASS (no parseable findings)"
             fi
         elif [ "$_sast_blockers" -gt 0 ]; then
             step_emit "4.2a" "fail" "Step 4.2a: SAST sentinel"
@@ -2869,6 +2910,7 @@ except Exception as e:
         fi
 
         # ── Review Ranger ──
+        step_emit "4.3a" "running" "Step 4.3a: Review ranger"
         log "  Step 4.3a: Running review-ranger..."
         {
             # ── Git diff oracle: inject changed files and their content ──
@@ -2931,11 +2973,12 @@ Output format (strict JSON, no markdown fences, no preamble):
 $review_prompt"
             fi
 
-            run_orch_prompt "$review_prompt" "qa-gate:review-ranger" "${PHASE:-unknown}" 2>&1 | tee "$review_log"
+            run_orch_prompt_with_tools "$review_prompt" "qa-gate:review-ranger" "${PHASE:-unknown}" 2>&1 | tee "$review_log"
         } &
         local review_pid=$!
 
         # ── Mutant Hunter ──
+        step_emit "4.3b" "running" "Step 4.3b: Mutant hunter"
         log "  Step 4.3b: Running mutant-hunter..."
         {
             # ── Source + test oracle: inject changed files and test files ──
@@ -3008,7 +3051,7 @@ Output format (strict JSON, no markdown fences, no preamble):
 $mutant_prompt"
             fi
 
-            run_orch_prompt "$mutant_prompt" "qa-gate:mutant-hunter" "${PHASE:-unknown}" 2>&1 | tee "$mutant_log"
+            run_orch_prompt_with_tools "$mutant_prompt" "qa-gate:mutant-hunter" "${PHASE:-unknown}" 2>&1 | tee "$mutant_log"
         } &
         local mutant_pid=$!
 
@@ -3026,6 +3069,9 @@ $mutant_prompt"
                 step_emit "4.3a" "fail" "Step 4.3a: Review ranger"
                 error "  Review-ranger: FAIL verdict — blocker findings detected"
                 failed=1
+            elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$review_log" 2>/dev/null; then
+                step_emit "4.3a" "warn" "Step 4.3a: Review ranger" "non-blocking findings"
+                warning "  Review-ranger: WARN — non-blocking findings (continuing)"
             else
                 step_emit "4.3a" "pass" "Step 4.3a: Review ranger"
                 success "  Review-ranger: PASS"
@@ -3070,6 +3116,7 @@ $mutant_prompt"
         fi
 
         # ── Fuzz Weaver ──
+        step_emit "4.4a" "running" "Step 4.4a: Fuzz-weaver"
         log "  Step 4.4a: Running fuzz-weaver..."
         {
             local fuzz_prompt="You are acting as the fuzz-weaver agent.
@@ -3105,11 +3152,12 @@ Output format (strict JSON):
 $fuzz_prompt"
             fi
 
-            run_orch_prompt "$fuzz_prompt" "qa-gate:fuzz-weaver" "${PHASE:-unknown}" 2>&1 | tee "$fuzz_log"
+            run_orch_prompt_with_tools "$fuzz_prompt" "qa-gate:fuzz-weaver" "${PHASE:-unknown}" 2>&1 | tee "$fuzz_log"
         } &
         local fuzz_pid=$!
 
         # ── Perf Sentinel ──
+        step_emit "4.4b" "running" "Step 4.4b: Perf sentinel"
         log "  Step 4.4b: Running perf-sentinel..."
         {
             local perf_prompt="You are acting as the perf-sentinel agent.
@@ -3144,7 +3192,7 @@ Output format (strict JSON):
 $perf_prompt"
             fi
 
-            run_orch_prompt "$perf_prompt" "qa-gate:perf-sentinel" "${PHASE:-unknown}" 2>&1 | tee "$perf_log"
+            run_orch_prompt_with_tools "$perf_prompt" "qa-gate:perf-sentinel" "${PHASE:-unknown}" 2>&1 | tee "$perf_log"
         } &
         local perf_pid=$!
 

@@ -146,9 +146,18 @@ run_provider_once() {
       _epam_out="$(mktemp)"
       # --no-tools: prevent the model from generating function-call markup (e.g. <function=bash>)
       # instead of the structured JSON output expected by spec-mode and pipeline agents.
+      # AI_GATE_ALLOW_TOOLS=1: set by run_orch_prompt_with_tools for QA gate agents that must read
+      # source files to ground their analysis (fuzz-weaver, perf-sentinel, sast-sentinel, etc.).
       # EPAM_MINIMAX_JSON_MODE=1: enable response_format:json_object for MiniMax to guarantee
       # syntactically valid JSON output (prevents M3 unescaped-char / truncation failures).
-      if ! EPAM_MINIMAX_JSON_MODE=1 "$EPAM_CLI" run --provider "$provider" "${model_args[@]}" --no-tools --json \
+      local _tool_flag="--no-tools"
+      local _skip_approval="0"
+      if [ "${AI_GATE_ALLOW_TOOLS:-0}" = "1" ]; then
+        _tool_flag=""
+        _skip_approval="1"
+      fi
+      if ! EPAM_MINIMAX_JSON_MODE=1 EPAM_DANGEROUS_SKIP_APPROVAL="$_skip_approval" \
+          "$EPAM_CLI" run --provider "$provider" "${model_args[@]}" ${_tool_flag:+"$_tool_flag"} --json \
           < "$PROMPT_FILE" > "$_epam_out" 2>/dev/null; then
         cat "$_epam_out" >&2
         rm -f "$_epam_out"

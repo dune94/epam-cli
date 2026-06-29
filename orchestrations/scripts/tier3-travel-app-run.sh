@@ -41,7 +41,7 @@ for arg in "$@"; do [[ "$arg" == "--yes" || "$arg" == "-y" ]] && AUTO_YES=true; 
 [[ ! -t 0 ]] && AUTO_YES=true
 
 PRD_FILE="$REPO_ROOT/orchestrations/travel-app-prd.json"
-OUTPUT_DIR="/tmp/skyscanner-app"
+OUTPUT_DIR="${OUTPUT_DIR:-/home/bradleyjerome/projects/skyscanner-app}"
 
 info "Tier 3 travel app run — DeepSeek V3 agents + GPT-4o gates (USES CREDITS)"
 info "  PRD: $PRD_FILE"
@@ -67,12 +67,18 @@ info "OpenRouter usage before: \$$_usage_before"
 echo ""
 
 # Clean output directory to prevent leftover artifacts from prior runs poisoning
-# external verification (e.g. stale test files causing npm test to fail)
-if [ -d "$OUTPUT_DIR" ]; then
-  info "Cleaning output directory: $OUTPUT_DIR"
-  rm -rf "$OUTPUT_DIR"
-fi
+# external verification (e.g. stale test files causing npm test to fail).
+# Preserve the git repo if present so gates can diff; otherwise init a new one.
 mkdir -p "$OUTPUT_DIR"
+if [ -d "$OUTPUT_DIR/.git" ]; then
+  info "Resetting output directory (preserving git): $OUTPUT_DIR"
+  git -C "$OUTPUT_DIR" clean -fdx --quiet
+  git -C "$OUTPUT_DIR" checkout -- . 2>/dev/null || true
+else
+  info "Initialising git repo in output directory: $OUTPUT_DIR"
+  git -C "$OUTPUT_DIR" init --quiet
+  git -C "$OUTPUT_DIR" commit --allow-empty -m "init: skyscanner-app" --quiet
+fi
 
 # Export all required env vars directly so subprocesses inherit them without
 # an `env` wrapper array (which caused silent exit due to empty-var expansion).
@@ -85,15 +91,20 @@ export EPAM_API_KEY_OPENAI="$OPENAI_API_KEY"
 export ORCH_GATE_PROVIDER="minimax"
 export EPAM_ORCHESTRATION_PROVIDER="minimax"
 export ORCH_GATE_MODEL="MiniMax-M3"
+export SPEC_MODE_PROVIDER="qwen"
+export SPEC_MODE_OPENSPEC_MODEL="${SPEC_MODE_OPENSPEC_MODEL:-moonshotai/kimi-k2}"
+export SPEC_MODE_SPECKIT_MODEL="${SPEC_MODE_SPECKIT_MODEL:-zhipuai/glm-4-plus}"
+export SPEC_MODE_MODEL="${SPEC_MODE_MODEL:-moonshotai/kimi-k2}"
+export MINIMAX_TOOL_TIMEOUT_MS="${MINIMAX_TOOL_TIMEOUT_MS:-15000}"
 export ORCH_MINI_MODEL="${ORCH_MINI_MODEL:-MiniMax-M2.5}"
 export ORCH_UPGRADE_MODEL="${ORCH_UPGRADE_MODEL:-MiniMax-M3}"
-export EPAM_FINAL_FALLBACK_MODEL="${EPAM_FINAL_FALLBACK_MODEL:-anthropic/claude-sonnet-4-6}"
+export EPAM_FINAL_FALLBACK_MODEL="${EPAM_FINAL_FALLBACK_MODEL:-moonshotai/kimi-k2}"
 export EPAM_FINAL_FALLBACK_PROVIDER="${EPAM_FINAL_FALLBACK_PROVIDER:-qwen}"
 export PRD_FILE
 export SKIP_REGRESSION_GUARD=true
 export EPAM_RALPH_WIGGUM_ENABLED=0
 export EPAM_STORY_TIMEOUT_SECS=600
-export EPAM_MAX_RETRIES=1
+export EPAM_MAX_RETRIES=3
 export SKIP_BROWSER_E2E_ROUTING=true
 [ -n "${RAPIDAPI_KEY:-}" ] && export RAPIDAPI_KEY
 
@@ -111,6 +122,16 @@ echo ""
 run_phase() {
   local phase="$1"
   info "━━━ Phase: $phase ━━━"
+
+  # Auto-remediate PRD before every phase: removes stale splits, trims ACs,
+  # resets story state, and verifies integrity. Prevents run failures from
+  # prior-run mutations without requiring manual intervention.
+  info "  Pre-phase PRD remediation..."
+  if ! bash "$SCRIPT_DIR/prd-remediate.sh" --prd "$PRD_FILE" 2>&1 | tee -a "$LOG_FILE"; then
+    fail "PRD remediation failed for phase '$phase' — aborting. Fix prd.json manually."
+  fi
+  echo ""
+
   local phase_exit=0
   bash orchestrations/scripts/run-agent-orchestration.sh \
     --phase "$phase" \

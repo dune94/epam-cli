@@ -360,6 +360,64 @@ describe('applySpecChanges — same-file split rejection', () => {
   });
 });
 
+// ── Per-story tsc gate ────────────────────────────────────────────────────────
+
+describe('run-agent-orchestration.sh — per-story tsc gate (permanent fix for recurring TS errors)', () => {
+  it('story_tsc_gate function is defined in orch script', () => {
+    expect(orchSrc).toContain('story_tsc_gate()');
+  });
+
+  it('tsc gate runs tsc --noEmit with PIPESTATUS[0] exit capture', () => {
+    const fnIdx = orchSrc.indexOf('story_tsc_gate()');
+    const block = orchSrc.slice(fnIdx, fnIdx + 1200);
+    expect(block).toContain('tsc --noEmit');
+    expect(block).toContain('PIPESTATUS[0]');
+  });
+
+  it('tsc gate is skipped when tsconfig.json does not exist', () => {
+    const fnIdx = orchSrc.indexOf('story_tsc_gate()');
+    const block = orchSrc.slice(fnIdx, fnIdx + 1200);
+    expect(block).toContain('tsconfig.json');
+    expect(block).toMatch(/return 0/);
+  });
+
+  it('tsc gate is skipped for test-engineer role stories', () => {
+    const fnIdx = orchSrc.indexOf('story_tsc_gate()');
+    const block = orchSrc.slice(fnIdx, fnIdx + 1200);
+    expect(block).toContain('test-engineer');
+    expect(block).toContain('agentRole');
+  });
+
+  it('tsc gate has SKIP_STORY_TSC_GATE bypass', () => {
+    const fnIdx = orchSrc.indexOf('story_tsc_gate()');
+    const block = orchSrc.slice(fnIdx, fnIdx + 1200);
+    expect(block).toContain('SKIP_STORY_TSC_GATE');
+  });
+
+  it('tsc gate is called in Step 1 loop only after story succeeds (not on failure)', () => {
+    // Gate must be inside the else branch of the _story_exit check — not unconditional
+    const step1Idx = orchSrc.indexOf('story_tsc_gate "$story"');
+    expect(step1Idx).toBeGreaterThan(-1);
+    const preGate = orchSrc.slice(step1Idx - 400, step1Idx);
+    // The else branch follows the "if _story_exit -ne 0" failure path
+    expect(preGate).toMatch(/else/);
+    expect(preGate).toContain('_story_exit');
+  });
+
+  it('story failure from tsc gate increments _phase_story_failures', () => {
+    const step1Idx = orchSrc.indexOf('story_tsc_gate "$story"');
+    const gateLine = orchSrc.slice(step1Idx, step1Idx + 80);
+    expect(gateLine).toContain('_phase_story_failures');
+  });
+
+  it('tsc gate logs output to a per-story log file', () => {
+    const fnIdx = orchSrc.indexOf('story_tsc_gate()');
+    const block = orchSrc.slice(fnIdx, fnIdx + 800);
+    expect(block).toContain('tsc-gate-');
+    expect(block).toContain('_tsc_log');
+  });
+});
+
 // ── Orch script — mid-execution split validation wiring ──────────────────────
 
 describe('run-agent-orchestration.sh — mid-execution split validation', () => {
@@ -377,10 +435,11 @@ describe('run-agent-orchestration.sh — mid-execution split validation', () => 
   });
 
   it('validate_mid_execution_splits is called after each story in Step 1 execution loop', () => {
-    // Find the Step 1 story execution loop
+    // Find the Step 1 story execution loop — after run_story_with_watchdog + tsc gate
     const step1Idx = orchSrc.indexOf('run_story_with_watchdog "$story" "$LOG_DIR/main-${story}.log"');
     expect(step1Idx).toBeGreaterThan(-1);
-    const postStory = orchSrc.slice(step1Idx, step1Idx + 500);
+    // validate_mid_execution_splits appears within ~750 chars (includes tsc gate block)
+    const postStory = orchSrc.slice(step1Idx, step1Idx + 750);
     expect(postStory).toContain('validate_mid_execution_splits "$PHASE"');
   });
 

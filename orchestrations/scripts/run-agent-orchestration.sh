@@ -1844,6 +1844,36 @@ if [ -n "$main_stories" ]; then
         fi
     done)
 
+    # Per-story TypeScript compile gate — runs tsc --noEmit after each story succeeds.
+    # Catches TS errors at the responsible story rather than at phase level (step 3.7).
+    # Bypassed when: tsconfig.json not yet present, SKIP_STORY_TSC_GATE=1, or test-only stories.
+    story_tsc_gate() {
+        local _sid="$1"
+        [ "${SKIP_STORY_TSC_GATE:-0}" = "1" ] && return 0
+        [ ! -f "$PROJECT_ROOT/tsconfig.json" ] && return 0
+        # Skip tsc gate for test-only stories (they extend existing files, not create TS modules)
+        local _role
+        _role=$(jq -r --arg id "$_sid" '.stories[] | select(.id==$id) | .agentRole // ""' "$PRD_FILE" 2>/dev/null)
+        [ "$_role" = "test-engineer" ] && return 0
+
+        local _node_cmd="${NODE_CMD:-${HOME}/.nvm/versions/node/v20.20.0/bin/node}"
+        [ ! -x "$_node_cmd" ] && _node_cmd="$(command -v node 2>/dev/null || echo 'node')"
+        local _tsc_log="$LOG_DIR/tsc-gate-${_sid}.log"
+
+        set +e
+        cd "$PROJECT_ROOT" && "$_node_cmd" ./node_modules/.bin/tsc --noEmit 2>&1 | tee "$_tsc_log"
+        local _tsc_exit=${PIPESTATUS[0]}
+        set -e
+
+        if [ "$_tsc_exit" -ne 0 ]; then
+            error "  [tsc-gate] $story: TypeScript errors after story completed — story marked failed"
+            error "  [tsc-gate] Fix required before next story runs. Log: ${_tsc_log##*/}"
+            return 1
+        fi
+        success "  [tsc-gate] $story: tsc --noEmit passed"
+        return 0
+    }
+
     if [ -n "$non_review_main" ]; then
         step_emit "1" "running" "Step 1: Main-branch stories"
     log "Step 1: Running main-branch stories..."
@@ -1858,9 +1888,15 @@ if [ -n "$main_stories" ]; then
             wait_if_paused
             apply_redirect_if_any "$story"
             log "  Running: $story"
-            run_story_with_watchdog "$story" "$LOG_DIR/main-${story}.log" \
-                || { _phase_story_failures=$((_phase_story_failures+1)); }
+            _story_exit=0
+            run_story_with_watchdog "$story" "$LOG_DIR/main-${story}.log" || _story_exit=$?
             record_story_actual_cost "$story" "$LOG_DIR/main-${story}.log"
+            if [ "$_story_exit" -ne 0 ]; then
+                _phase_story_failures=$((_phase_story_failures+1))
+            else
+                # Story reported success — verify TypeScript still compiles before moving on
+                story_tsc_gate "$story" || _phase_story_failures=$((_phase_story_failures+1))
+            fi
             checkpoint_complete "$story"
             # Validate any splits the agent registered mid-execution before the next story runs
             validate_mid_execution_splits "$PHASE"

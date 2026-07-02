@@ -1685,14 +1685,15 @@ TEST FAILURE OUTPUT:
 __VERIFICATION_FAILURE__
 
 Output ONLY a single JSON object. No markdown fences, no prose outside the JSON:
-{"diagnosis":"<one sentence: what specifically went wrong in the code>","target":"prd|skill|kb|none","ac_patches":[{"index":<0-based AC index>,"new_text":"<exact replacement text for that AC>"}],"skill_note":"<if target=skill or target=kb: concrete coding instruction>","reason":"<why this change prevents the same failure on retry>"}
+{"diagnosis":"<one sentence: what specifically went wrong in the code>","target":"prd|tc|skill|kb|none","ac_patches":[{"index":<0-based AC index>,"new_text":"<exact replacement text for that AC>"}],"tc_patches":[{"index":<0-based TC fact index>,"new_text":"<exact replacement text for that TC fact>"}],"skill_note":"<if target=skill or target=kb: concrete coding instruction>","reason":"<why this change prevents the same failure on retry>"}
 
 Decision rules:
 - target=prd: the AC wording was ambiguous or contradictory, causing the agent to write wrong code. Fix the AC.
+- target=tc: the testCriteria facts are wrong or incomplete — the test agent followed them but they described incorrect behavior. Fix the TC facts.
 - target=skill: the agent used a bad coding pattern that should be injected into this retry's prompt only.
 - target=kb: the failure reveals a reusable coding rule that ALL future agents with this agent role should know — append to the role-specific KB.
-- target=none: ACs and skill are both correct; the agent made a transient code mistake. Retry with stronger model should fix it.
-- Only include ac_patches entries when target=prd; use [] for other targets.
+- target=none: spec and skill are both correct; the agent made a transient code mistake. Retry with stronger model should fix it.
+- Only include ac_patches when target=prd, tc_patches when target=tc; use [] for other targets.
 - skill_note must be a concrete "do/don't" instruction (e.g. "Never use backtick template literals in test files — use single-quoted strings only").
 - Keep diagnosis under 20 words, reason under 15 words.
 ANALYST_PROMPT_END
@@ -1793,6 +1794,47 @@ PYEOF
                         log "  [FailureAnalyst] target=prd but no ac_patches provided — no change made"
                     fi
                     ;;
+                tc)
+                    local tc_patches_json
+                    tc_patches_json=$(echo "$analyst_json" | jq -c '.tc_patches // []' 2>/dev/null || echo "[]")
+                    if [ "$tc_patches_json" != "[]" ]; then
+                        log "  [FailureAnalyst] Patching testCriteria facts for $story_id..."
+                        while IFS= read -r patch; do
+                            [ -z "$patch" ] && continue
+                            local tc_idx tc_new_text
+                            tc_idx=$(echo "$patch" | jq -r '.index // ""' 2>/dev/null || echo "")
+                            tc_new_text=$(echo "$patch" | jq -r '.new_text // ""' 2>/dev/null || echo "")
+                            if [ -n "$tc_idx" ] && [ -n "$tc_new_text" ]; then
+                                python3 - "$tc_new_text" << PYEOF 2>&1 | while IFS= read -r line; do log "  [FailureAnalyst] $line"; done
+import json, sys
+prd_path = '$prd_target'
+story_id = '$story_id'
+idx = $tc_idx
+new_text = sys.argv[1]
+with open(prd_path) as f:
+    prd = json.load(f)
+for s in prd.get('stories', []):
+    if s.get('id') == story_id:
+        tc = s.setdefault('testCriteria', {})
+        facts = tc.setdefault('facts', [])
+        if 0 <= idx < len(facts):
+            old = facts[idx]
+            facts[idx] = new_text
+            print(f'TC fact {idx+1} patched: {repr(old[:50])} → {repr(new_text[:50])}')
+        else:
+            print(f'TC index {idx} out of range (story has {len(facts)} facts)', file=sys.stderr)
+        break
+with open(prd_path, 'w') as f:
+    json.dump(prd, f, indent=2)
+PYEOF
+                                patch_count=$((patch_count + 1))
+                            fi
+                        done < <(echo "$tc_patches_json" | jq -c '.[]' 2>/dev/null)
+                        log "  [FailureAnalyst] Applied $patch_count TC patch(es) — retry will use updated testCriteria"
+                    else
+                        log "  [FailureAnalyst] target=tc but no tc_patches provided — TC writer will regenerate on next deliverable pass"
+                    fi
+                    ;;
                 skill)
                     if [ -n "$skill_note" ]; then
                         log "  [FailureAnalyst] Injected skill guidance into retry prompt (${#skill_note} chars)"
@@ -1859,6 +1901,8 @@ PYEOF
 Fix: ${skill_note}"
             [ "$target" = "prd" ] && _analyst_guidance="${_analyst_guidance}
 The acceptance criteria for this story have been updated — re-read them carefully before writing code."
+            [ "$target" = "tc" ] && _analyst_guidance="${_analyst_guidance}
+The testCriteria facts for this story have been updated — re-read the Test Criteria section carefully before writing tests."
             [ "$target" = "none" ] && _analyst_guidance="${_analyst_guidance}
 The spec is correct — the model made a code-level mistake. Write correct code this time."
             local _existing="${COORDINATOR_PROMPT_AMENDMENT:-}"
@@ -2317,6 +2361,29 @@ ${COORDINATOR_PROMPT_AMENDMENT}"
         if [ "$invoke_success" = true ] && ! verify_story_deliverables "$story_id"; then
             warning "$story_cli returned success but story deliverables are incomplete"
             invoke_success=false
+        fi
+
+        # Inline TC writer — fires after impl deliverables are verified, before
+        # external test. Generates testCriteria in the PRD for sibling test
+        # stories so the test agent has precise facts, not just abstract ACs.
+        # Skipped for test stories themselves (they don't generate TCs).
+        if [ "$invoke_success" = true ] && [ "${SKIP_TC_WRITER:-0}" != "1" ]; then
+            local _story_files_are_tests
+            _story_files_are_tests=$(jq -r --arg id "$story_id" \
+                '.stories[] | select(.id == $id) | .technicalNotes.files[]? // empty' \
+                "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null | grep -c '\.test\.ts$' || echo 0)
+            if [ "${_story_files_are_tests:-0}" -eq 0 ]; then
+                log "  [tc-writer] Generating TCs for phase '${CURRENT_PHASE:-unknown}' (post-impl, pre-test)..."
+                if bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
+                    --prd "${MAIN_PRD_FILE:-$PRD_FILE}" \
+                    --phase "${CURRENT_PHASE:-unknown}" \
+                    --output-dir "$PROJECT_ROOT" \
+                    2>&1 | tee -a "$output_file"; then
+                    log "  [tc-writer] TC generation complete — test stories have testCriteria"
+                else
+                    warning "  [tc-writer] TC generation failed — test stories will run without TCs (non-fatal)"
+                fi
+            fi
         fi
 
         # External test verification — runs tests outside the agent loop so the

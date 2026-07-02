@@ -22,16 +22,16 @@ const mockPrd   = JSON.parse(readFileSync(MOCK_PRD, 'utf8'));
 
 // ── 1. Retry ladder exists and is unconditional (all phases) ─────────────────
 describe('claude.sh — retry ladder fires for any story in any phase', () => {
-  it('implement_story loop contains InferenceLadder R1', () => {
-    expect(claudeSrc).toMatch(/InferenceLadder\[R1\]/);
+  it('implement_story loop contains InferenceLadder Rung1 log line', () => {
+    expect(claudeSrc).toMatch(/InferenceLadder\[Rung1\//);
   });
 
-  it('implement_story loop contains InferenceLadder R2', () => {
-    expect(claudeSrc).toMatch(/InferenceLadder\[R2\]/);
+  it('implement_story loop contains InferenceLadder Rung2 log line', () => {
+    expect(claudeSrc).toMatch(/InferenceLadder\[Rung2\//);
   });
 
-  it('implement_story loop contains InferenceLadder R3 or dynamic Rn', () => {
-    expect(claudeSrc).toMatch(/InferenceLadder\[R3\]|InferenceLadder\[R\$\{retry_count\}\]/);
+  it('implement_story loop contains InferenceLadder Rung3 log line', () => {
+    expect(claudeSrc).toMatch(/InferenceLadder\[Rung3\//);
   });
 
   it('EPAM_REASONING_EFFORT is exported so subprocesses receive it', () => {

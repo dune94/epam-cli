@@ -69,7 +69,7 @@ CURRENT_PHASE=""        # Current phase being executed (for cost tracking)
 # Configuration
 CLAUDE_CMD="${CLAUDE_CMD:-claude}"  # Allow override via environment
 EPAM_CLI="${EPAM_CLI:-epam}"        # epam-cli binary; override with mock for testing
-MAX_RETRIES="${EPAM_MAX_RETRIES:-2}"
+MAX_RETRIES="${EPAM_MAX_RETRIES:-7}"
 RETRY_DELAY=5
 # Orchestration mode — inherited from run-agent-orchestration.sh or set directly
 ORCH_MODE="${ORCH_MODE:-bash}"
@@ -947,6 +947,13 @@ build_implementation_prompt() {
         description="${description//${MAIN_PROJECT_ROOT}/${PROJECT_ROOT}}"
     fi
 
+    # testCriteria — written by TC writer from actual source; ground truth for test stories.
+    # Extracted after worktree path rewriting (TC fields don't contain absolute paths).
+    local tc_facts tc_mock_strategy tc_banned
+    tc_facts=$(echo "$story_json" | jq -r '.testCriteria.facts // [] | map("- " + .) | join("\n")' 2>/dev/null || echo "")
+    tc_mock_strategy=$(echo "$story_json" | jq -r '.testCriteria.mockStrategy // ""' 2>/dev/null || echo "")
+    tc_banned=$(echo "$story_json" | jq -r '.testCriteria.bannedPatterns // [] | join(", ")' 2>/dev/null || echo "")
+
     # Build a write-first directive listing each file with its exact absolute path
     local write_first_lines=""
     while IFS= read -r f; do
@@ -981,6 +988,9 @@ $description
 
 ## Acceptance Criteria
 - $acceptance_criteria
+$([ -n "$tc_facts" ] && printf '\n## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)\n%s\n' "$tc_facts" || true)
+$([ -n "$tc_mock_strategy" ] && printf '\n## Mock Strategy\n%s\n' "$tc_mock_strategy" || true)
+$([ -n "$tc_banned" ] && printf '\n## Banned Patterns (must NOT appear in your file)\n%s\n' "$tc_banned" || true)
 
 ## Technical Notes
 $([ -n "$technical_notes" ] && echo "$technical_notes" | jq -r 'to_entries | map("- \(.key): \(.value)") | join("\n")' 2>/dev/null || echo "None specified")
@@ -998,7 +1008,7 @@ $(printf '%b' "$write_first_lines")
 
 1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
 2. Implement all acceptance criteria for this story
-3. Follow the project's existing code patterns and conventions
+$([ -n "$tc_facts" ] && echo "3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly" || echo "3. Follow the project's existing code patterns and conventions")
 4. Do NOT create tests unless explicitly required in acceptance criteria
 
 After implementation, provide a brief summary of what was created/modified.
@@ -1634,19 +1644,28 @@ run_failure_analyst() {
 
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
 
-    # Build numbered AC list from story
+    # Build spec context: prefer testCriteria.facts (ground truth from TC writer) over ACs
     local story_acs story_role skill_addendum profiles_file
-    story_acs=$(jq -r --arg id "$story_id" \
-        '.stories[] | select(.id == $id) | .acceptanceCriteria // [] | to_entries | map("AC\(.key+1): \(.value)") | join("\n")' \
-        "$prd_target" 2>/dev/null || echo "(no ACs found)")
+    local tc_facts_raw
+    tc_facts_raw=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .testCriteria.facts // [] | to_entries | map("TC\(.key+1): \(.value)") | join("\n")' \
+        "$prd_target" 2>/dev/null || echo "")
+    if [ -n "$tc_facts_raw" ]; then
+        story_acs="$tc_facts_raw"
+    else
+        story_acs=$(jq -r --arg id "$story_id" \
+            '.stories[] | select(.id == $id) | .acceptanceCriteria // [] | to_entries | map("AC\(.key+1): \(.value)") | join("\n")' \
+            "$prd_target" 2>/dev/null || echo "(no ACs found)")
+    fi
     story_role=$(jq -r --arg id "$story_id" \
-        '.stories[] | select(.id == $id) | .agentProfile // "typescript-engineer"' \
+        '.stories[] | select(.id == $id) | .agentRole // "typescript-engineer"' \
         "$prd_target" 2>/dev/null || echo "typescript-engineer")
     profiles_file="$(dirname "$SCRIPT_DIR")/agents/profiles.json"
     skill_addendum=""
     if [ -f "$profiles_file" ]; then
-        skill_addendum=$(jq -r --arg role "$story_role" \
-            '.profiles[$role].addendum // ""' "$profiles_file" 2>/dev/null | head -c 1500 || echo "")
+        # profiles.json is flat {role: "prompt string"} — extract [Self-Heal] lines only
+        skill_addendum=$(jq -r --arg role "$story_role" '.[$role] // ""' "$profiles_file" 2>/dev/null | \
+            grep '\[Self-Heal\]' | head -c 1500 || echo "")
     fi
 
     local analyst_prompt
@@ -1656,7 +1675,7 @@ You are a self-healing pipeline analyst. A coding agent has failed its test suit
 STORY: __STORY_ID__
 AGENT ROLE: __STORY_ROLE__
 
-CURRENT ACCEPTANCE CRITERIA:
+CURRENT TEST CRITERIA (TC facts when available, ACs as fallback):
 __STORY_ACS__
 
 AGENT SKILL ADDENDUM (instructions in the agent's system prompt):
@@ -1786,10 +1805,11 @@ role = '$story_role'
 note = '[Self-Heal] ' + r'''$skill_note'''
 with open(profiles_path) as f:
     profiles = json.load(f)
-if role in profiles.get('profiles', {}):
-    existing = profiles['profiles'][role].get('addendum', '')
+# profiles.json is flat {role: "prompt string"} — append note to the string value
+if role in profiles:
+    existing = profiles[role]
     sep = '\n\n' if existing else ''
-    profiles['profiles'][role]['addendum'] = existing + sep + note
+    profiles[role] = existing + sep + note
     with open(profiles_path, 'w') as f:
         json.dump(profiles, f, indent=2)
     print(f'Skill note appended to [{role}] profile — persisted for future runs')
@@ -1804,7 +1824,7 @@ PYEOF
                     ;;
                 kb)
                     if [ -n "$skill_note" ]; then
-                        # Agent-specific KB: KB-{agentProfile}.md — keeps context injection small.
+                        # Agent-specific KB: KB-{agentRole}.md — keeps context injection small.
                         # Shared rules go to KB-shared.md; agent-specific rules go to role file.
                         local kb_dir
                         kb_dir="$(dirname "$SCRIPT_DIR")/agents"
@@ -1892,7 +1912,7 @@ check_healing_effectiveness() {
 import json, sys
 path = '${heal_log}'
 story = '${story_id}'
-diag  = '''${current_diagnosis}'''[:100]  # truncate for comparison
+diag  = '''${current_diagnosis}'''[:20]  # 20-char prefix tolerates analyst rephrasing of same root cause
 events = []
 with open(path) as f:
     for line in f:
@@ -1900,11 +1920,11 @@ with open(path) as f:
         if not line: continue
         try:
             obj = json.loads(line)
-            if obj.get('story_id') == story:
-                events.append(obj.get('diagnosis','')[:100])
+            if obj.get('story_id') == story and obj.get('event') != 'HEALING_BROKEN':
+                events.append(obj.get('diagnosis','')[:20])
         except Exception:
             pass
-# Count how many of the last events share the current diagnosis
+# Count how many of the last events share the same root cause (prefix match)
 count = 0
 for d in reversed(events):
     if d == diag:
@@ -2017,57 +2037,66 @@ implement_story() {
         # Priority: PRD retryModel > EPAM_RETRY_MODEL env var > built-in get_model_ladder_step().
         # Principle: NEVER retry with the same model — every failure steps up. Logged visibly.
         if [ "$retry_count" -gt 0 ]; then
-            # ── Three-phase inference ladder ──────────────────────────────────────
-            # R1: bump reasoning effort (same model — let the model think harder)
-            # R2: escalate model to next in ladder (cross-family), reset effort
-            # R3: keep escalated model, bump reasoning effort to maximum
-            # ─────────────────────────────────────────────────────────────────────
-            case "$retry_count" in
-                1)
-                    # Phase R1: reasoning effort ↑, model unchanged
-                    export EPAM_REASONING_EFFORT="medium"
-                    STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
-                    log "  InferenceLadder[R1]: model='${STORY_MODEL:-default}' unchanged — reasoning effort → medium"
-                    ;;
-                2)
-                    # Phase R2: model ↑ (ladder step), effort medium for new model
-                    local retry_model_prd ladder_step_r2
-                    retry_model_prd=$(jq -r --arg id "$story_id" \
-                        '.stories[] | select(.id == $id) | .retryModel // ""' \
-                        "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
-                    local escalated_model_r2="${retry_model_prd:-${EPAM_RETRY_MODEL:-}}"
-                    if [ -z "$escalated_model_r2" ]; then
-                        ladder_step_r2=$(get_model_ladder_step "${STORY_MODEL:-}" 2)
-                        [ -n "$ladder_step_r2" ] && escalated_model_r2="$ladder_step_r2"
-                    fi
-                    if [ -n "$escalated_model_r2" ] && [ "$escalated_model_r2" != "${STORY_MODEL:-}" ]; then
-                        log "  InferenceLadder[R2]: model '${STORY_MODEL:-default}' → '$escalated_model_r2' — reasoning effort → medium"
-                        STORY_MODEL="$escalated_model_r2"
-                        # Switch provider when the escalated model needs a different one
-                        case "$escalated_model_r2" in
-                            zhipuai/*|moonshotai/*|glm-*|kimi-*) STORY_PROVIDER="qwen" ;;
-                            MiniMax-*)                            STORY_PROVIDER="minimax" ;;
-                        esac
-                    else
-                        log "  InferenceLadder[R2]: no ladder step from '${STORY_MODEL:-default}' — keeping model, effort → medium"
-                    fi
-                    export EPAM_REASONING_EFFORT="medium"
-                    STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
-                    ;;
-                *)
-                    # Phase R3: keep escalated model, reasoning effort → high (max)
-                    # If still on original model and EPAM_FINAL_FALLBACK_MODEL set, use it now.
-                    local _ffm="${EPAM_FINAL_FALLBACK_MODEL:-}" _ffp="${EPAM_FINAL_FALLBACK_PROVIDER:-}"
-                    if [ -n "$_ffm" ] && [ "${STORY_MODEL:-}" = "${STORY_MODEL_ORIGINAL:-}" ]; then
-                        log "  InferenceLadder[R${retry_count}]: no prior escalation — routing to fallback '$_ffm'"
-                        STORY_MODEL="$_ffm"
-                        [ -n "$_ffp" ] && STORY_PROVIDER="$_ffp"
-                    fi
-                    export EPAM_REASONING_EFFORT="high"
-                    STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
-                    log "  InferenceLadder[R${retry_count}]: model='${STORY_MODEL:-default}' — reasoning effort → high (maximum)"
-                    ;;
-            esac
+            # ── Rung-based inference ladder ────────────────────────────────────────
+            # 2 attempts per rung: attempt 1 (cold), self-healing fires, attempt 2
+            # (informed). Escalate only when entering a new rung.
+            #
+            # Rung 0 (retries 0-1): base model, base effort
+            # Rung 1 (retries 2-3): same model, reasoning effort → medium
+            # Rung 2 (retries 4-5): escalated model, reasoning effort → medium
+            # Rung 3 (retries 6-7): escalated model, reasoning effort → high
+            # ──────────────────────────────────────────────────────────────────────
+            local _rung=$(( retry_count / 2 ))
+            local _entering_rung=$(( retry_count % 2 == 0 ))   # 1 = first attempt of rung
+
+            if [ "$_entering_rung" -eq 1 ]; then
+                case "$_rung" in
+                    1)
+                        # Rung 1: same model, effort → medium
+                        export EPAM_REASONING_EFFORT="medium"
+                        STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
+                        log "  InferenceLadder[Rung1/R${retry_count}]: model='${STORY_MODEL:-default}' unchanged — effort → medium"
+                        ;;
+                    2)
+                        # Rung 2: model escalation, effort → medium
+                        local retry_model_prd ladder_step_r2
+                        retry_model_prd=$(jq -r --arg id "$story_id" \
+                            '.stories[] | select(.id == $id) | .retryModel // ""' \
+                            "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
+                        local escalated_model_r2="${retry_model_prd:-${EPAM_RETRY_MODEL:-}}"
+                        if [ -z "$escalated_model_r2" ]; then
+                            ladder_step_r2=$(get_model_ladder_step "${STORY_MODEL:-}" 2)
+                            [ -n "$ladder_step_r2" ] && escalated_model_r2="$ladder_step_r2"
+                        fi
+                        if [ -n "$escalated_model_r2" ] && [ "$escalated_model_r2" != "${STORY_MODEL:-}" ]; then
+                            log "  InferenceLadder[Rung2/R${retry_count}]: model '${STORY_MODEL:-default}' → '$escalated_model_r2' — effort → medium"
+                            STORY_MODEL="$escalated_model_r2"
+                            case "$escalated_model_r2" in
+                                zhipuai/*|moonshotai/*|glm-*|kimi-*) STORY_PROVIDER="qwen" ;;
+                                MiniMax-*)                            STORY_PROVIDER="minimax" ;;
+                            esac
+                        else
+                            log "  InferenceLadder[Rung2/R${retry_count}]: no ladder step — keeping model, effort → medium"
+                        fi
+                        export EPAM_REASONING_EFFORT="medium"
+                        STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
+                        ;;
+                    *)
+                        # Rung 3+: escalated model, effort → high (maximum)
+                        local _ffm="${EPAM_FINAL_FALLBACK_MODEL:-}" _ffp="${EPAM_FINAL_FALLBACK_PROVIDER:-}"
+                        if [ -n "$_ffm" ] && [ "${STORY_MODEL:-}" = "${STORY_MODEL_ORIGINAL:-}" ]; then
+                            log "  InferenceLadder[Rung3/R${retry_count}]: no prior escalation — routing to fallback '$_ffm'"
+                            STORY_MODEL="$_ffm"
+                            [ -n "$_ffp" ] && STORY_PROVIDER="$_ffp"
+                        fi
+                        export EPAM_REASONING_EFFORT="high"
+                        STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
+                        log "  InferenceLadder[Rung3/R${retry_count}]: model='${STORY_MODEL:-default}' — effort → high (maximum)"
+                        ;;
+                esac
+            else
+                log "  InferenceLadder[Rung${_rung}/R${retry_count}]: same rung — no escalation, self-heal guidance active"
+            fi
         fi
         # Rebuild prompt each attempt: retry_count and KB ID must reflect current state
         local next_kb_id
@@ -2370,6 +2399,21 @@ ${COORDINATOR_PROMPT_AMENDMENT}"
             fi
 
             retry_count=$((retry_count + 1))
+            # If self-healing is confirmed broken, skip to the start of the next rung
+            # rather than burning the second attempt. At the last rung (3), abort instead.
+            if [ "${HEALING_BROKEN:-0}" -eq 1 ]; then
+                local _cur_rung=$(( (retry_count - 1) / 2 ))
+                local _next_rung_start=$(( (_cur_rung + 1) * 2 ))
+                HEALING_BROKEN=0
+                export HEALING_BROKEN
+                if [ "$_cur_rung" -ge 3 ] || [ "$_next_rung_start" -gt "$MAX_RETRIES" ]; then
+                    error "  [HealingBroken] At max rung — aborting $story_id"
+                    break
+                else
+                    warning "  [HealingBroken] Skipping to rung $((_cur_rung + 1)) (retry $_next_rung_start) for $story_id"
+                    retry_count=$_next_rung_start
+                fi
+            fi
             if [ $retry_count -le $MAX_RETRIES ]; then
                 warning "$story_cli failed, retrying in ${RETRY_DELAY}s..."
                 sleep $RETRY_DELAY
@@ -2595,7 +2639,7 @@ get_relevant_kb_entries() {
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
     local agent_profile
     agent_profile=$(jq -r --arg id "$story_id" \
-        '.stories[] | select(.id == $id) | .agentProfile // ""' "$prd_target" 2>/dev/null || echo "")
+        '.stories[] | select(.id == $id) | .agentRole // ""' "$prd_target" 2>/dev/null || echo "")
     [ -z "$agent_profile" ] && return
 
     # Collect last 10 lines from role-specific KB + shared KB (shared is a fallback)

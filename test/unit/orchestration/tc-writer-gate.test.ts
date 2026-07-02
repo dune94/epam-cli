@@ -376,6 +376,86 @@ describe('TC gate — orchestration script wiring', () => {
   });
 });
 
+// ─── 7a. build_implementation_prompt injects testCriteria ────────────────────
+describe('TC gate — build_implementation_prompt injects testCriteria into agent prompt', () => {
+  const claudeSrc = readFileSync(
+    join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8'
+  );
+
+  function getImplPromptBody(): string {
+    const start = claudeSrc.indexOf('build_implementation_prompt()');
+    const end   = claudeSrc.indexOf('\nbuild_generator_prompt()', start);
+    return claudeSrc.slice(start, end);
+  }
+
+  it('extracts tc_facts from testCriteria.facts in story JSON', () => {
+    expect(getImplPromptBody()).toMatch(/tc_facts/);
+    expect(getImplPromptBody()).toMatch(/testCriteria.*facts|\.testCriteria/);
+  });
+
+  it('extracts tc_mock_strategy from testCriteria.mockStrategy', () => {
+    expect(getImplPromptBody()).toMatch(/tc_mock_strategy|mockStrategy/);
+  });
+
+  it('extracts tc_banned from testCriteria.bannedPatterns', () => {
+    expect(getImplPromptBody()).toMatch(/tc_banned|bannedPatterns/);
+  });
+
+  it('emits Test Criteria section in the prompt when tc_facts is non-empty', () => {
+    expect(getImplPromptBody()).toContain('Test Criteria');
+  });
+
+  it('marks testCriteria as ground truth that overrides conflicting ACs', () => {
+    expect(getImplPromptBody()).toMatch(/ground truth|OVERRIDE/);
+  });
+
+  it('TC section is conditional — only rendered when testCriteria exists', () => {
+    // Must be guarded so stories without testCriteria don't get empty headers
+    expect(getImplPromptBody()).toMatch(/\[ -n.*tc_facts|tc_facts.*&&/);
+  });
+
+  it('instructs agent that TC facts assertions MUST be matched exactly', () => {
+    expect(getImplPromptBody()).toMatch(/MUST match|match them exactly|match exactly/i);
+  });
+});
+
+// ─── 7b. run_failure_analyst reads testCriteria, falls back to ACs ────────────
+describe('TC gate — run_failure_analyst uses testCriteria.facts as primary source', () => {
+  const claudeSrc = readFileSync(
+    join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8'
+  );
+
+  function getAnalystBody(): string {
+    const start = claudeSrc.indexOf('run_failure_analyst()');
+    const end   = claudeSrc.indexOf('\n}', start + 100);
+    return claudeSrc.slice(start, end);
+  }
+
+  it('failure analyst reads testCriteria.facts from PRD story', () => {
+    expect(getAnalystBody()).toMatch(/testCriteria\.facts|\.testCriteria/);
+  });
+
+  it('prefers testCriteria over acceptanceCriteria when tc_facts_raw is non-empty', () => {
+    const body = getAnalystBody();
+    expect(body).toMatch(/tc_facts_raw/);
+    expect(body).toMatch(/if.*-n.*tc_facts_raw|tc_facts_raw.*then/);
+  });
+
+  it('falls back to acceptanceCriteria when testCriteria is absent', () => {
+    expect(getAnalystBody()).toContain('acceptanceCriteria');
+  });
+
+  it('analyst prompt label reflects TC-first approach', () => {
+    expect(getAnalystBody()).toMatch(/TEST CRITERIA|TC facts/);
+  });
+
+  it('story_acs variable is still used in prompt substitution (__STORY_ACS__)', () => {
+    const body = getAnalystBody();
+    expect(body).toContain('story_acs');
+    expect(body).toContain('__STORY_ACS__');
+  });
+});
+
 // ─── 7. Preflight integrity: checks 17 and 18 ───────────────────────────────
 describe('TC gate — preflight integrity checks', () => {
   it('preflight-prd-integrity.sh contains TC schema check (check 17)', () => {

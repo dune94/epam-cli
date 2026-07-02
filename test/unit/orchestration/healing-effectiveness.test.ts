@@ -97,11 +97,12 @@ describe('claude.sh — get_relevant_kb_entries uses agent-specific KB + bounded
     expect(body).toMatch(/tail.*-n\s+\d+/);
   });
 
-  it('reads agentProfile field (not agentRole) to match the fail-analyst logic', () => {
+  it('reads agentRole field (not agentProfile) — canonical PRD stories have agentRole only', () => {
     const funcStart = claudeSrc.indexOf('get_relevant_kb_entries()');
     const funcEnd   = claudeSrc.indexOf('\n}', funcStart + 50);
     const body      = claudeSrc.slice(funcStart, funcEnd);
-    expect(body).toMatch(/agentProfile/);
+    expect(body).toMatch(/agentRole/);
+    expect(body).not.toMatch(/agentProfile/);
   });
 });
 
@@ -452,5 +453,233 @@ echo "exit_ok=1"
     writeFileSync(scriptPath, script);
     const result = execSync(`bash "${scriptPath}"`).toString();
     expect(result).toContain('HEALING_BROKEN_VALUE=1');
+  });
+});
+
+// ── 6. Regression: Bug — agentRole vs agentProfile ────────────────────────────
+// Both run_failure_analyst and get_relevant_kb_entries must read .agentRole.
+// PRD canonical stories have agentRole only; agentProfile does not exist.
+// Reading .agentProfile silently fell back to "typescript-engineer" for every story.
+describe('regression: agentRole used everywhere (not agentProfile)', () => {
+  it('run_failure_analyst reads .agentRole from PRD (not .agentProfile)', () => {
+    const funcStart = claudeSrc.indexOf('run_failure_analyst()');
+    const funcEnd   = claudeSrc.indexOf('\n}', funcStart + 100);
+    const body      = claudeSrc.slice(funcStart, funcEnd);
+    // The jq query that sets story_role must use agentRole
+    expect(body).toMatch(/\.agentRole\s*\/\/\s*["']typescript-engineer["']/);
+    expect(body).not.toMatch(/\.agentProfile\s*\/\/\s*["']typescript-engineer["']/);
+  });
+
+  it('get_relevant_kb_entries reads .agentRole from PRD (not .agentProfile)', () => {
+    const funcStart = claudeSrc.indexOf('get_relevant_kb_entries()');
+    const funcEnd   = claudeSrc.indexOf('\n}', funcStart + 50);
+    const body      = claudeSrc.slice(funcStart, funcEnd);
+    expect(body).toMatch(/\.agentRole/);
+    expect(body).not.toMatch(/\.agentProfile/);
+  });
+
+  it('neither function contains the string "agentProfile" anywhere in its body', () => {
+    const analystStart = claudeSrc.indexOf('run_failure_analyst()');
+    const analystEnd   = claudeSrc.indexOf('\n}', analystStart + 100);
+    const kbStart      = claudeSrc.indexOf('get_relevant_kb_entries()');
+    const kbEnd        = claudeSrc.indexOf('\n}', kbStart + 50);
+    const analystBody  = claudeSrc.slice(analystStart, analystEnd);
+    const kbBody       = claudeSrc.slice(kbStart, kbEnd);
+    expect(analystBody).not.toContain('agentProfile');
+    expect(kbBody).not.toContain('agentProfile');
+  });
+});
+
+// ── 7. Regression: Bug — flat profiles.json skill persistence ─────────────────
+// profiles.json is {role: "prompt string"} — NOT {profiles: {role: {addendum: ""}}}
+// The old nested-write silently printed an error and left profiles unchanged.
+describe('regression: skill persistence handles flat profiles.json structure', () => {
+  it('skill case python uses profiles[role] (flat) not profiles["profiles"][role]["addendum"]', () => {
+    const skillStart = claudeSrc.indexOf("\n                skill)");
+    const skillEnd   = claudeSrc.indexOf('\n                    ;;\n', skillStart);
+    const body       = claudeSrc.slice(skillStart, skillEnd);
+    // Flat write: profiles[role] = ...
+    expect(body).toMatch(/profiles\[role\]\s*=/);
+    // Must NOT use the nested nested path that failed
+    expect(body).not.toMatch(/profiles\['profiles'\]\[role\]/);
+    expect(body).not.toMatch(/profiles\.get\(['"]profiles['"]/);
+  });
+
+  it('skill_addendum reading in run_failure_analyst uses flat .[$role] + grep (not .profiles[$role].addendum)', () => {
+    const funcStart = claudeSrc.indexOf('run_failure_analyst()');
+    const funcEnd   = claudeSrc.indexOf('\n}', funcStart + 100);
+    const body      = claudeSrc.slice(funcStart, funcEnd);
+    // Must NOT use the old nested jq path
+    expect(body).not.toMatch(/\.profiles\[\$role\]\.addendum/);
+    // Must extract Self-Heal lines from the flat profile string
+    expect(body).toMatch(/\[Self-Heal\]/);
+    expect(body).toMatch(/grep.*\[Self-Heal\]|grep.*Self-Heal/);
+  });
+
+  it('integration: python persists skill note to flat profiles.json format', () => {
+    const { mkdtempSync, writeFileSync, readFileSync } = require('node:fs');
+    const { execSync } = require('node:child_process');
+    const { join } = require('node:path');
+    const tmp = mkdtempSync('/tmp/flat-profile-test-');
+    const profilesPath = join(tmp, 'profiles.json');
+
+    // Flat structure — matches real profiles.json
+    writeFileSync(profilesPath, JSON.stringify({
+      'typescript-engineer': 'You are a TypeScript engineer. Build production-quality code.',
+      'frontend-engineer':   'You are a frontend engineer. Build UI components.',
+    }, null, 2));
+
+    const scriptPath = join(tmp, 'run.sh');
+    writeFileSync(scriptPath, `#!/usr/bin/env bash
+python3 - << 'PYEOF'
+import json, sys
+profiles_path = '${profilesPath}'
+role = 'typescript-engineer'
+note = '[Self-Heal] Never use require() in ES module files'
+with open(profiles_path) as f:
+    profiles = json.load(f)
+if role in profiles:
+    existing = profiles[role]
+    sep = '\\n\\n' if existing else ''
+    profiles[role] = existing + sep + note
+    with open(profiles_path, 'w') as f:
+        json.dump(profiles, f, indent=2)
+    print('persisted')
+else:
+    print('NOT FOUND', file=sys.stderr)
+    sys.exit(1)
+PYEOF
+`);
+    const result = execSync(`bash "${scriptPath}"`).toString();
+    expect(result).toContain('persisted');
+    const updated = JSON.parse(readFileSync(profilesPath, 'utf8'));
+    expect(updated['typescript-engineer']).toContain('[Self-Heal]');
+    expect(updated['typescript-engineer']).toContain('Never use require()');
+    // Other roles must be untouched
+    expect(updated['frontend-engineer']).not.toContain('[Self-Heal]');
+    require('node:fs').rmSync(tmp, { recursive: true, force: true });
+  });
+});
+
+// ── 8. Regression: Bug — HEALING_BROKEN wording variation tolerance ───────────
+// The old code compared full diagnosis strings (exact match).
+// Analysts rephrase the same root cause slightly across retries, defeating the check.
+// Fix: compare first 50 chars of the diagnosis (prefix match).
+describe('regression: HEALING_BROKEN fires on wording variations (50-char prefix match)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync('/tmp/heal-wording-test-');
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function extractCheckFn(): string {
+    const start = claudeSrc.indexOf('check_healing_effectiveness()');
+    const rest  = claudeSrc.slice(start);
+    const end   = rest.indexOf('\n}') + 2;
+    return rest.slice(0, end);
+  }
+
+  it('structural: truncates diagnosis to 20 chars for comparison (prefix match, not exact match)', () => {
+    const funcStart = claudeSrc.indexOf('check_healing_effectiveness()');
+    const funcEnd   = claudeSrc.indexOf('\n}', funcStart + 50);
+    const body      = claudeSrc.slice(funcStart, funcEnd);
+    // [:20] prefix match — tolerates analyst rephrasing of same root cause
+    expect(body).toMatch(/\[:20\]/);
+    expect(body).not.toMatch(/\[:100\]/);
+    expect(body).not.toMatch(/\[:50\]/);
+  });
+
+  it('integration: fires when two diagnoses share the same 20-char prefix despite different wording', () => {
+    const healLog = join(tmpDir, 'healing-events.jsonl');
+    // Analysts rephrase the same root cause differently — but first 20 chars match.
+    // "vi.mock called insid..." covers both "inside it()" and "inside describe()" variants.
+    const diag1   = 'vi.mock called inside it() blocks is not hoisted — mock setup is silently ignored by vitest';
+    const diag2   = 'vi.mock called inside describe() — vitest hoisting only works at module top level, not nested';
+    const current = diag2;
+
+    const funcDef = extractCheckFn();
+    const events  = [
+      JSON.stringify({ ts: '2026-07-02T09:51:00Z', story_id: 'MOCK-001', retry: 1, target: 'skill', diagnosis: diag1, patches_applied: 0, profile_updated: false }),
+      JSON.stringify({ ts: '2026-07-02T09:53:00Z', story_id: 'MOCK-001', retry: 2, target: 'skill', diagnosis: diag2, patches_applied: 0, profile_updated: false }),
+    ].join('\n');
+
+    const scriptPath = join(tmpDir, 'run.sh');
+    writeFileSync(scriptPath, `#!/bin/bash
+${funcDef}
+error() { echo "ERROR: \$*" >&2; }
+OUTPUT_DIR="${tmpDir}"
+cat > "${healLog}" << 'EVEOF'
+${events}
+EVEOF
+HEALING_BROKEN=""
+check_healing_effectiveness "MOCK-001" "${current}"
+echo "HEALING_BROKEN_VALUE=\${HEALING_BROKEN:-}"
+`);
+    const result = execSync(`bash "${scriptPath}"`).toString();
+    expect(result).toContain('HEALING_BROKEN_VALUE=1');
+  });
+
+  it('integration: does NOT fire when 20-char prefixes are genuinely different root causes', () => {
+    const healLog = join(tmpDir, 'healing-events.jsonl');
+    const diag1   = 'missing null check causes TypeError when accessing .length on undefined value';
+    const diag2   = 'process.exit mock not reset between tests bleeds into subsequent assertions';
+    const current = diag2;
+
+    const funcDef = extractCheckFn();
+    const events  = [
+      JSON.stringify({ ts: '2026-07-02T09:51:00Z', story_id: 'MOCK-001', retry: 1, target: 'skill', diagnosis: diag1, patches_applied: 0, profile_updated: false }),
+      JSON.stringify({ ts: '2026-07-02T09:53:00Z', story_id: 'MOCK-001', retry: 2, target: 'skill', diagnosis: diag2, patches_applied: 0, profile_updated: false }),
+    ].join('\n');
+
+    const scriptPath = join(tmpDir, 'run.sh');
+    writeFileSync(scriptPath, `#!/bin/bash
+${funcDef}
+error() { echo "ERROR: \$*" >&2; }
+OUTPUT_DIR="${tmpDir}"
+cat > "${healLog}" << 'EVEOF'
+${events}
+EVEOF
+HEALING_BROKEN=""
+check_healing_effectiveness "MOCK-001" "${current}"
+echo "HEALING_BROKEN_VALUE=\${HEALING_BROKEN:-}"
+`);
+    const result = execSync(`bash "${scriptPath}"`).toString();
+    expect(result).not.toContain('HEALING_BROKEN_VALUE=1');
+  });
+});
+
+// ── 9. Regression: Bug — HEALING_BROKEN must abort the retry loop ─────────────
+// HEALING_BROKEN was set and exported but the retry loop never checked it.
+// Retries continued burning tokens even when healing was confirmed broken.
+describe('regression: HEALING_BROKEN check exists in retry loop (implement_story)', () => {
+  // Extract implement_story body by finding the block between the function start
+  // and the "error Failed to implement" line that marks the end of the retry loop.
+  function getImplStoryBody(): string {
+    const funcStart  = claudeSrc.indexOf('implement_story()');
+    const endMarker  = claudeSrc.indexOf('Failed to implement', funcStart);
+    return claudeSrc.slice(funcStart, endMarker);
+  }
+
+  it('implement_story checks HEALING_BROKEN and breaks out of retry loop', () => {
+    const body = getImplStoryBody();
+    expect(body).toMatch(/HEALING_BROKEN:-0.*-eq\s+1|HEALING_BROKEN.*-eq\s+1/);
+    expect(body).toMatch(/\bbreak\b/);
+  });
+
+  it('HEALING_BROKEN is reset to 0 after aborting (prevents bleed into next story)', () => {
+    const body = getImplStoryBody();
+    expect(body).toContain('HEALING_BROKEN=0');
+  });
+
+  it('abort check appears after run_failure_analyst call in the body', () => {
+    const body           = getImplStoryBody();
+    const analystIdx     = body.indexOf('run_failure_analyst');
+    const brokenCheckIdx = body.indexOf('HEALING_BROKEN:-0');
+    expect(analystIdx).toBeGreaterThan(-1);
+    expect(brokenCheckIdx).toBeGreaterThan(analystIdx);
   });
 });

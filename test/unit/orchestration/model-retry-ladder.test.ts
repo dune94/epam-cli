@@ -73,8 +73,9 @@ describe('tier3 script — EPAM_MODEL_LADDER is exported with valid format', () 
 
 // ── 3. Three-phase ladder sequence ───────────────────────────────────────────
 describe('claude.sh — three-phase inference ladder (R1: effort↑, R2: model↑, R3: effort↑)', () => {
-  it('R1 sets EPAM_REASONING_EFFORT=medium (same model, think harder)', () => {
-    expect(src).toMatch(/EPAM_REASONING_EFFORT.*medium.*R1|R1.*EPAM_REASONING_EFFORT.*medium|InferenceLadder\[R1\]/is);
+  it('Rung1 sets EPAM_REASONING_EFFORT=medium (same model, think harder)', () => {
+    expect(src).toMatch(/InferenceLadder\[Rung1\//is);
+    expect(src).toMatch(/EPAM_REASONING_EFFORT.*medium/is);
   });
 
   it('R2 calls get_model_ladder_step to switch model family', () => {
@@ -138,16 +139,16 @@ describe('claude.sh — final fallback used when ladder produces no step', () =>
 
 // ── 6. No silent failures in the retry ladder ────────────────────────────────
 describe('claude.sh — retry ladder emits visible log lines at each step', () => {
-  it('R1 step emits an InferenceLadder log line', () => {
-    expect(src).toMatch(/InferenceLadder\[R1\]/);
+  it('Rung1 step emits an InferenceLadder log line', () => {
+    expect(src).toMatch(/InferenceLadder\[Rung1\//);
   });
 
-  it('R2 step emits an InferenceLadder log line', () => {
-    expect(src).toMatch(/InferenceLadder\[R2\]/);
+  it('Rung2 step emits an InferenceLadder log line', () => {
+    expect(src).toMatch(/InferenceLadder\[Rung2\//);
   });
 
-  it('R3 step emits an InferenceLadder log line', () => {
-    expect(src).toMatch(/InferenceLadder\[R3\]|InferenceLadder\[R\$\{/);
+  it('Rung3 step emits an InferenceLadder log line', () => {
+    expect(src).toMatch(/InferenceLadder\[Rung3\//);
   });
 
   it('InferenceLadder lines do not contain "temp=" (reasoning effort ≠ temperature)', () => {

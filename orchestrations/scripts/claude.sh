@@ -1840,11 +1840,11 @@ PYEOF
                         log "  [FailureAnalyst] Injected skill guidance into retry prompt (${#skill_note} chars)"
                         # Persist skill note to profiles.json so future runs inherit this learning
                         if [ -f "$profiles_file" ]; then
-                            python3 - << PYEOF 2>&1 | while IFS= read -r line; do log "  [FailureAnalyst] $line"; done
+                            python3 - "$skill_note" << PYEOF 2>&1 | while IFS= read -r line; do log "  [FailureAnalyst] $line"; done
 import json, sys
 profiles_path = '$profiles_file'
 role = '$story_role'
-note = '[Self-Heal] ' + r'''$skill_note'''
+note = '[Self-Heal] ' + sys.argv[1]
 with open(profiles_path) as f:
     profiles = json.load(f)
 # profiles.json is flat {role: "prompt string"} — append note to the string value

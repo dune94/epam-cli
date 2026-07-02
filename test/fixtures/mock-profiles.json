@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "typescript-engineer": {
+      "name": "TypeScript Engineer",
+      "addendum": "Write clean, idiomatic TypeScript. Prefer explicit types over inference where it aids clarity."
+    },
+    "frontend-engineer": {
+      "name": "Frontend Engineer",
+      "addendum": "Use functional React components with hooks. Never use class components."
+    }
+  }
+}

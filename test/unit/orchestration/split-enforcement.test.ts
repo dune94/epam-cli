@@ -414,7 +414,7 @@ describe('run-agent-orchestration.sh — per-story tsc gate (permanent fix for r
 
   it('tsc gate logs output to a per-story log file', () => {
     const fnIdx = orchSrc.indexOf('story_tsc_gate()');
-    const block = orchSrc.slice(fnIdx, fnIdx + 800);
+    const block = orchSrc.slice(fnIdx, fnIdx + 1200);
     expect(block).toContain('tsc-gate-');
     expect(block).toContain('_tsc_log');
   });

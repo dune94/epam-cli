@@ -98,8 +98,18 @@ export class QwenProvider implements LLMProvider {
   private resolveModel(requested?: string): string {
     const override = process.env.EPAM_QWEN_MODEL_OVERRIDE;
     if (override) return override;
-    if (requested && /^(qwen|mistral|llama|deepseek|meta-llama|openai|google|anthropic)/.test(requested)) return requested;
+    if (requested && /^(qwen|mistral|llama|deepseek|meta-llama|openai|google|anthropic|moonshotai|moonshot|zhipuai|glm|kimi|minimax)/.test(requested)) return requested;
     return this.defaultModel;
+  }
+
+  /** For OpenRouter, pass reasoning.effort when effort level is explicitly set.
+   *  This is a native API parameter — completely separate from temperature. */
+  private resolveOpenRouterReasoning(request: ProviderRequest): Record<string, unknown> | undefined {
+    const effort = request.reasoningEffort ?? process.env.EPAM_REASONING_EFFORT as string | undefined;
+    if (effort === 'low' || effort === 'medium' || effort === 'high') {
+      return { reasoning: { effort } };
+    }
+    return undefined;
   }
 
   async complete(request: ProviderRequest): Promise<ProviderResponse> {
@@ -136,8 +146,9 @@ export class QwenProvider implements LLMProvider {
         model,
         messages,
         max_tokens: request.maxTokens || 4096,
-        temperature: request.temperature || 0.7,
+        temperature: request.temperature ?? 0.7,
         ...(tools && tools.length > 0 ? { tools } : {}),
+        ...this.resolveOpenRouterReasoning(request),
       }),
     });
 
@@ -208,9 +219,10 @@ export class QwenProvider implements LLMProvider {
         model,
         messages,
         max_tokens: request.maxTokens || 4096,
-        temperature: request.temperature || 0.7,
+        temperature: request.temperature ?? 0.7,
         stream: true,
         ...(tools && tools.length > 0 ? { tools } : {}),
+        ...this.resolveOpenRouterReasoning(request),
       }),
     });
 
@@ -316,7 +328,7 @@ export class QwenProvider implements LLMProvider {
           input: { messages },
           parameters: {
             max_tokens: request.maxTokens || 4096,
-            temperature: request.temperature || 0.7,
+            temperature: request.temperature ?? 0.7,
             result_format: 'message',
           },
         }),
@@ -370,7 +382,7 @@ export class QwenProvider implements LLMProvider {
           input: { messages },
           parameters: {
             max_tokens: request.maxTokens || 4096,
-            temperature: request.temperature || 0.7,
+            temperature: request.temperature ?? 0.7,
             result_format: 'message',
             incremental_output: true,
           },

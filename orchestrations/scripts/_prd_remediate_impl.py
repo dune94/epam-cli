@@ -20,6 +20,18 @@ impl_order = prd.get('implementationOrder', {})
 by_id      = {s['id']: s for s in stories}
 changes    = []
 
+# ── 0. Remove all BUG-* stories (stale bug-fix artifacts from prior runs) ────
+# BUG-* stories are generated during failed runs. They must never persist into
+# the next run — their originals are still in stories[] and will be re-run.
+bug_ids = {s['id'] for s in stories if s['id'].startswith('BUG-')}
+if bug_ids:
+    for phase in impl_order:
+        impl_order[phase] = [s for s in impl_order[phase] if s not in bug_ids]
+    prd['stories'] = [s for s in stories if s['id'] not in bug_ids]
+    stories = prd['stories']
+    by_id   = {s['id']: s for s in stories}
+    changes.append(f"removed {len(bug_ids)} stale BUG-* stories from prior run")
+
 # ── 1. Remove stale bug-fix runtime splits ────────────────────────────────────
 # Two patterns:
 # (a) <base>-(impl|test|table)-N where <base> is also an active story.

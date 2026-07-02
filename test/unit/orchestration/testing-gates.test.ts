@@ -110,7 +110,9 @@ describe('fuzz-weaver profile — hallucination guards', () => {
 
 // ── 2. Fuzz-weaver grounding check: hallucinated findings ────────────────────
 describe('fuzz-weaver grounding check — non-existent files', () => {
-  const realProjectRoot = '/home/bradleyjerome/projects/skyscanner-app';
+  // Use the epam-cli repo itself — src/index.ts always exists here regardless
+  // of skyscanner-app state (which is cleaned before every run).
+  const realProjectRoot = process.cwd();
 
   it('returns 0 grounded vulnerabilities when all files are non-existent', () => {
     const log = makeFuzzLog(
@@ -140,9 +142,9 @@ describe('fuzz-weaver grounding check — non-existent files', () => {
   });
 
   it('returns >0 when a vulnerability finding references a real file', () => {
-    // server.ts actually exists in the skyscanner-app
+    // src/index.ts always exists in the epam-cli repo (realProjectRoot = process.cwd())
     const log = makeFuzzLog(
-      [{ status: 'vulnerability', file: 'src/server.ts', function: 'someFunction' }],
+      [{ status: 'vulnerability', file: 'src/index.ts', function: 'someFunction' }],
       'fail'
     );
     const grounded = runFuzzGroundingCheck(log, realProjectRoot);

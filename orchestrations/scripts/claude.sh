@@ -40,8 +40,21 @@ load_env_file() {
     set +a
 }
 
+# Save caller-set gate overrides BEFORE loading .env so tier-script values survive.
+# .env contains stale defaults; the tier script intentionally overrides them at runtime.
+_claude_pre_gate_provider="${ORCH_GATE_PROVIDER:-}"
+_claude_pre_gate_model="${ORCH_GATE_MODEL:-}"
+_claude_pre_orch_provider="${EPAM_ORCHESTRATION_PROVIDER:-}"
+
 load_env_file "$(dirname "$AUTOMATION_DIR")/.env"
 load_env_file "$PROJECT_ROOT/.env"
+
+# Restore: tier-script values win over .env defaults
+[ -n "$_claude_pre_gate_provider" ] && ORCH_GATE_PROVIDER="$_claude_pre_gate_provider"
+[ -n "$_claude_pre_gate_model"    ] && ORCH_GATE_MODEL="$_claude_pre_gate_model"
+[ -n "$_claude_pre_orch_provider" ] && EPAM_ORCHESTRATION_PROVIDER="$_claude_pre_orch_provider"
+unset _claude_pre_gate_provider _claude_pre_gate_model _claude_pre_orch_provider
+export ORCH_GATE_PROVIDER ORCH_GATE_MODEL EPAM_ORCHESTRATION_PROVIDER
 
 # Git work root — the directory containing .git (defaults to PROJECT_ROOT)
 # Override when the git repo lives in a subdirectory (e.g., PROJECT_ROOT/application)
@@ -922,14 +935,31 @@ build_implementation_prompt() {
     local dependencies=$(echo "$story_json" | jq -r \
         '(.dependencies // .technicalNotes.dependsOn // []) | join(", ")')
 
+    # In worktree mode, rewrite ALL occurrences of the main repo absolute path in the
+    # prompt text. The canonical PRD embeds absolute paths in acceptanceCriteria,
+    # technicalNotes, and files — agents read these and write to those exact paths,
+    # bypassing any write-first directive. Replace every reference so the agent only
+    # ever sees the worktree path and writes files to the correct directory.
+    if [ -n "${WORKTREE_MODE:-}" ] && [ -n "${MAIN_PROJECT_ROOT:-}" ]; then
+        acceptance_criteria="${acceptance_criteria//${MAIN_PROJECT_ROOT}/${PROJECT_ROOT}}"
+        technical_notes="${technical_notes//${MAIN_PROJECT_ROOT}/${PROJECT_ROOT}}"
+        files="${files//${MAIN_PROJECT_ROOT}/${PROJECT_ROOT}}"
+        description="${description//${MAIN_PROJECT_ROOT}/${PROJECT_ROOT}}"
+    fi
+
     # Build a write-first directive listing each file with its exact absolute path
     local write_first_lines=""
     while IFS= read -r f; do
         [ -z "$f" ] && continue
-        # Resolve to absolute path
+        # Resolve to absolute path; in worktree mode, rewrite main-repo absolute paths
+        # to the worktree so the agent writes files in the correct directory.
         local abs_f
         if [[ "$f" = /* ]]; then
-            abs_f="$f"
+            if [ -n "${WORKTREE_MODE:-}" ] && [ -n "${MAIN_PROJECT_ROOT:-}" ] && [[ "$f" = "${MAIN_PROJECT_ROOT}"* ]]; then
+                abs_f="${PROJECT_ROOT}${f#${MAIN_PROJECT_ROOT}}"
+            else
+                abs_f="$f"
+            fi
         else
             abs_f="$PROJECT_ROOT/$f"
         fi
@@ -987,6 +1017,14 @@ build_generator_prompt() {
     local dependencies=$(echo "$story_json" | jq -r \
         '(.dependencies // .technicalNotes.dependsOn // []) | join(", ")')
 
+    # Rewrite main-repo absolute paths to worktree path in all prompt fields
+    if [ -n "${WORKTREE_MODE:-}" ] && [ -n "${MAIN_PROJECT_ROOT:-}" ]; then
+        acceptance_criteria="${acceptance_criteria//${MAIN_PROJECT_ROOT}/${PROJECT_ROOT}}"
+        technical_notes="${technical_notes//${MAIN_PROJECT_ROOT}/${PROJECT_ROOT}}"
+        files="${files//${MAIN_PROJECT_ROOT}/${PROJECT_ROOT}}"
+        description="${description//${MAIN_PROJECT_ROOT}/${PROJECT_ROOT}}"
+    fi
+
     cat << EOF
 Generate file for story $story_id: $title
 
@@ -1034,10 +1072,17 @@ verify_story_deliverables() {
     while IFS= read -r file; do
         [ -n "$file" ] || continue
         declared=$((declared + 1))
-        # Support both absolute paths and paths relative to PROJECT_ROOT
+        # Support both absolute paths and paths relative to PROJECT_ROOT.
+        # In worktree mode, absolute paths in technicalNotes.files point to the main
+        # repo (e.g. /skyscanner-app/src/foo.ts). Rewrite them to the worktree path
+        # so the deliverable check and agent prompt target the correct directory.
         local check_path
         if [[ "$file" = /* ]]; then
-            check_path="$file"
+            if [ -n "${WORKTREE_MODE:-}" ] && [ -n "${MAIN_PROJECT_ROOT:-}" ] && [[ "$file" = "${MAIN_PROJECT_ROOT}"* ]]; then
+                check_path="${PROJECT_ROOT}${file#${MAIN_PROJECT_ROOT}}"
+            else
+                check_path="$file"
+            fi
         else
             check_path="$PROJECT_ROOT/$file"
         fi
@@ -1423,6 +1468,32 @@ classify_failure_class() {
     fi
 }
 
+# get_model_ladder_step <current_model>
+# Reads EPAM_MODEL_LADDER (pipe-separated "from=to" pairs) and returns the next model.
+# Fully configurable — no hardcoded model names in this function.
+# Set EPAM_MODEL_LADDER in the tier/run script to define the escalation path.
+# Example:
+#   export EPAM_MODEL_LADDER="MiniMax-M3=zhipuai/glm-z1-32b|moonshotai/kimi-k2=zhipuai/glm-4-plus"
+# Returns empty string when current model is not in the ladder or EPAM_MODEL_LADDER is unset.
+get_model_ladder_step() {
+    local current_model="$1"
+    local ladder="${EPAM_MODEL_LADDER:-}"
+    [ -z "$ladder" ] && { echo ""; return; }
+    local pair from to IFS_SAVE="$IFS"
+    IFS='|'
+    read -ra pairs <<< "$ladder"
+    IFS="$IFS_SAVE"
+    for pair in "${pairs[@]}"; do
+        from="${pair%%=*}"
+        to="${pair#*=}"
+        if [ "$from" = "$current_model" ]; then
+            echo "$to"
+            return
+        fi
+    done
+    echo ""
+}
+
 # assess_model_escalation <story_id> <raw_file> <result_json> <log_file>
 # Layer 2 (opt-in): LLM coordinator gate for Class B/C failures.
 # Sets COORDINATOR_ESCALATE and COORDINATOR_PROMPT_AMENDMENT.
@@ -1538,6 +1609,326 @@ COORD_PROMPT
     rm -f "$coord_result_file"
 }
 
+# run_failure_analyst <story_id> <output_file> <retry_num>
+# Layer 3 (self-heal): AI reads the test failure, diagnoses root cause, then patches
+# PRD ACs (for ambiguous specs) or injects skill guidance into the coordinator
+# amendment (for bad coding patterns) — before the next retry.
+# Only meaningful when VERIFICATION_FAILURE is set (external test suite failed).
+# Uses ORCH_GATE_PROVIDER/ORCH_GATE_MODEL (same gate as assess_model_escalation).
+run_failure_analyst() {
+    local story_id="$1"
+    local output_file="${2:-/dev/null}"
+    local retry_num="${3:-0}"
+
+    # Only analyze test-suite failures; missing-deliverable failures lack useful output
+    [ -z "${VERIFICATION_FAILURE:-}" ] && return 0
+
+    local gate_provider="${ORCH_GATE_PROVIDER:-}"
+    local gate_model="${ORCH_GATE_MODEL:-}"
+    if [ -z "$gate_provider" ]; then
+        log "  [FailureAnalyst] No gate provider configured — skipping self-heal analysis"
+        return 0
+    fi
+
+    log "  [FailureAnalyst] Analyzing test failure for $story_id (gate=$gate_model)..."
+
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+
+    # Build numbered AC list from story
+    local story_acs story_role skill_addendum profiles_file
+    story_acs=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .acceptanceCriteria // [] | to_entries | map("AC\(.key+1): \(.value)") | join("\n")' \
+        "$prd_target" 2>/dev/null || echo "(no ACs found)")
+    story_role=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .agentProfile // "typescript-engineer"' \
+        "$prd_target" 2>/dev/null || echo "typescript-engineer")
+    profiles_file="$(dirname "$SCRIPT_DIR")/agents/profiles.json"
+    skill_addendum=""
+    if [ -f "$profiles_file" ]; then
+        skill_addendum=$(jq -r --arg role "$story_role" \
+            '.profiles[$role].addendum // ""' "$profiles_file" 2>/dev/null | head -c 1500 || echo "")
+    fi
+
+    local analyst_prompt
+    analyst_prompt=$(cat << 'ANALYST_PROMPT_END'
+You are a self-healing pipeline analyst. A coding agent has failed its test suite. Diagnose the exact root cause and prescribe the minimum fix so the NEXT retry succeeds.
+
+STORY: __STORY_ID__
+AGENT ROLE: __STORY_ROLE__
+
+CURRENT ACCEPTANCE CRITERIA:
+__STORY_ACS__
+
+AGENT SKILL ADDENDUM (instructions in the agent's system prompt):
+__SKILL_ADDENDUM__
+
+TEST FAILURE OUTPUT:
+__VERIFICATION_FAILURE__
+
+Output ONLY a single JSON object. No markdown fences, no prose outside the JSON:
+{"diagnosis":"<one sentence: what specifically went wrong in the code>","target":"prd|skill|kb|none","ac_patches":[{"index":<0-based AC index>,"new_text":"<exact replacement text for that AC>"}],"skill_note":"<if target=skill or target=kb: concrete coding instruction>","reason":"<why this change prevents the same failure on retry>"}
+
+Decision rules:
+- target=prd: the AC wording was ambiguous or contradictory, causing the agent to write wrong code. Fix the AC.
+- target=skill: the agent used a bad coding pattern that should be injected into this retry's prompt only.
+- target=kb: the failure reveals a reusable coding rule that ALL future agents with this agent role should know — append to the role-specific KB.
+- target=none: ACs and skill are both correct; the agent made a transient code mistake. Retry with stronger model should fix it.
+- Only include ac_patches entries when target=prd; use [] for other targets.
+- skill_note must be a concrete "do/don't" instruction (e.g. "Never use backtick template literals in test files — use single-quoted strings only").
+- Keep diagnosis under 20 words, reason under 15 words.
+ANALYST_PROMPT_END
+    )
+    # Substitute placeholders (safe substitution avoids heredoc quoting issues)
+    analyst_prompt="${analyst_prompt//__STORY_ID__/$story_id}"
+    analyst_prompt="${analyst_prompt//__STORY_ROLE__/$story_role}"
+    analyst_prompt="${analyst_prompt//__STORY_ACS__/$story_acs}"
+    analyst_prompt="${analyst_prompt//__SKILL_ADDENDUM__/$skill_addendum}"
+    analyst_prompt="${analyst_prompt//__VERIFICATION_FAILURE__/${VERIFICATION_FAILURE:0:2500}}"
+
+    local analyst_raw=""
+    if analyst_raw=$(echo "$analyst_prompt" | \
+            AI_PROVIDER="$gate_provider" \
+            AI_MODEL="$gate_model" \
+            EPAM_CLI="$EPAM_CLI" \
+            bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \
+            ${gate_model:+--model "$gate_model"} \
+            2>>"$output_file"); then
+
+        # Extract first valid JSON object (handles nested structures via Python)
+        local analyst_json=""
+        analyst_json=$(echo "$analyst_raw" | python3 -c "
+import sys, json
+text = sys.stdin.read()
+try:
+    obj = json.loads(text.strip())
+    print(json.dumps(obj))
+    sys.exit(0)
+except Exception:
+    pass
+depth = 0; start = -1
+for i, c in enumerate(text):
+    if c == '{':
+        if depth == 0: start = i
+        depth += 1
+    elif c == '}':
+        depth -= 1
+        if depth == 0 and start >= 0:
+            try:
+                obj = json.loads(text[start:i+1])
+                print(json.dumps(obj))
+                sys.exit(0)
+            except Exception:
+                pass
+" 2>/dev/null || echo "")
+
+        if [ -n "$analyst_json" ] && echo "$analyst_json" | jq empty 2>/dev/null; then
+            local diagnosis target skill_note reason patch_count _profile_updated
+            diagnosis=$(echo "$analyst_json" | jq -r '.diagnosis // "unknown"' 2>/dev/null || echo "unknown")
+            target=$(echo "$analyst_json" | jq -r '.target // "none"' 2>/dev/null || echo "none")
+            skill_note=$(echo "$analyst_json" | jq -r '.skill_note // ""' 2>/dev/null || echo "")
+            reason=$(echo "$analyst_json" | jq -r '.reason // ""' 2>/dev/null || echo "")
+            patch_count=0
+            _profile_updated="false"
+
+            log "  [FailureAnalyst] Diagnosis: $diagnosis"
+            log "  [FailureAnalyst] Target=$target — $reason"
+
+            case "$target" in
+                prd)
+                    local patches_json
+                    patches_json=$(echo "$analyst_json" | jq -c '.ac_patches // []' 2>/dev/null || echo "[]")
+                    if [ "$patches_json" != "[]" ]; then
+                        log "  [FailureAnalyst] Patching PRD ACs for $story_id..."
+                        while IFS= read -r patch; do
+                            [ -z "$patch" ] && continue
+                            local idx new_text
+                            idx=$(echo "$patch" | jq -r '.index // ""' 2>/dev/null || echo "")
+                            new_text=$(echo "$patch" | jq -r '.new_text // ""' 2>/dev/null || echo "")
+                            if [ -n "$idx" ] && [ -n "$new_text" ]; then
+                                python3 - "$new_text" << PYEOF 2>&1 | while IFS= read -r line; do log "  [FailureAnalyst] $line"; done
+import json, sys
+prd_path = '$prd_target'
+story_id = '$story_id'
+idx = $idx
+new_text = sys.argv[1]
+with open(prd_path) as f:
+    prd = json.load(f)
+for s in prd.get('stories', []):
+    if s.get('id') == story_id:
+        acs = s.get('acceptanceCriteria', [])
+        if 0 <= idx < len(acs):
+            old = acs[idx]
+            acs[idx] = new_text
+            print(f'AC{idx+1} patched: {repr(old[:50])} → {repr(new_text[:50])}')
+        else:
+            print(f'AC index {idx} out of range (story has {len(acs)} ACs)', file=sys.stderr)
+        break
+with open(prd_path, 'w') as f:
+    json.dump(prd, f, indent=2)
+PYEOF
+                                patch_count=$((patch_count + 1))
+                            fi
+                        done < <(echo "$patches_json" | jq -c '.[]' 2>/dev/null)
+                        log "  [FailureAnalyst] Applied $patch_count AC patch(es) — retry will use updated spec"
+                    else
+                        log "  [FailureAnalyst] target=prd but no ac_patches provided — no change made"
+                    fi
+                    ;;
+                skill)
+                    if [ -n "$skill_note" ]; then
+                        log "  [FailureAnalyst] Injected skill guidance into retry prompt (${#skill_note} chars)"
+                        # Persist skill note to profiles.json so future runs inherit this learning
+                        if [ -f "$profiles_file" ]; then
+                            python3 - << PYEOF 2>&1 | while IFS= read -r line; do log "  [FailureAnalyst] $line"; done
+import json, sys
+profiles_path = '$profiles_file'
+role = '$story_role'
+note = '[Self-Heal] ' + r'''$skill_note'''
+with open(profiles_path) as f:
+    profiles = json.load(f)
+if role in profiles.get('profiles', {}):
+    existing = profiles['profiles'][role].get('addendum', '')
+    sep = '\n\n' if existing else ''
+    profiles['profiles'][role]['addendum'] = existing + sep + note
+    with open(profiles_path, 'w') as f:
+        json.dump(profiles, f, indent=2)
+    print(f'Skill note appended to [{role}] profile — persisted for future runs')
+else:
+    print(f'Profile role [{role}] not found in profiles.json — skill note NOT persisted', file=sys.stderr)
+PYEOF
+                            _profile_updated="true"
+                        fi
+                    else
+                        log "  [FailureAnalyst] target=skill but skill_note empty — falling back to diagnosis only"
+                    fi
+                    ;;
+                kb)
+                    if [ -n "$skill_note" ]; then
+                        # Agent-specific KB: KB-{agentProfile}.md — keeps context injection small.
+                        # Shared rules go to KB-shared.md; agent-specific rules go to role file.
+                        local kb_dir
+                        kb_dir="$(dirname "$SCRIPT_DIR")/agents"
+                        local kb_file="${kb_dir}/KB-${story_role}.md"
+                        local kb_ts
+                        kb_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "unknown")
+                        # Truncate to 200 chars — entries are single actionable rules, not essays
+                        local short_note="${skill_note:0:200}"
+                        # Compact 2-line format: timestamp + rule only (no verbose headers)
+                        printf '\n- [%s] %s\n' "$kb_ts" "$short_note" >> "$kb_file" 2>/dev/null || true
+                        log "  [FailureAnalyst] KB entry appended to KB-${story_role}.md (${#short_note} chars)"
+                        _profile_updated="true"
+                    else
+                        log "  [FailureAnalyst] target=kb but skill_note empty — no KB entry written"
+                    fi
+                    ;;
+                none)
+                    log "  [FailureAnalyst] No structural fix needed — model escalation ladder handles retry"
+                    ;;
+                *)
+                    log "  [FailureAnalyst] Unknown target '$target' — injecting diagnosis only"
+                    ;;
+            esac
+            # Record the healing event for observability and post-run audit
+            run_healing_recorder "$story_id" "$retry_num" "$target" "$diagnosis" "$patch_count" "$_profile_updated"
+            # Detect repeat failures — same diagnosis 2+ times means healing is broken
+            check_healing_effectiveness "$story_id" "$diagnosis"
+            # Always inject the failure summary into the coordinator amendment so the
+            # downstream retry agent knows EXACTLY what went wrong and how to avoid it.
+            local _analyst_guidance="Root cause: ${diagnosis}"
+            [ -n "$skill_note" ] && _analyst_guidance="${_analyst_guidance}
+Fix: ${skill_note}"
+            [ "$target" = "prd" ] && _analyst_guidance="${_analyst_guidance}
+The acceptance criteria for this story have been updated — re-read them carefully before writing code."
+            [ "$target" = "none" ] && _analyst_guidance="${_analyst_guidance}
+The spec is correct — the model made a code-level mistake. Write correct code this time."
+            local _existing="${COORDINATOR_PROMPT_AMENDMENT:-}"
+            COORDINATOR_PROMPT_AMENDMENT="${_existing}
+## Self-Heal: Failure Analyst Summary
+${_analyst_guidance}"
+        else
+            warning "  [FailureAnalyst] Could not parse JSON from analyst response — proceeding with retry as-is"
+        fi
+    else
+        warning "  [FailureAnalyst] Gate model call failed — proceeding with retry as-is"
+    fi
+}
+
+# run_healing_recorder <story_id> <retry_num> <target> <diagnosis> <patches_applied> <profile_updated>
+# Appends a JSONL record to $OUTPUT_DIR/healing-events.jsonl after each analyst cycle.
+# Each record is independently parseable so the log survives partial runs.
+run_healing_recorder() {
+    local story_id="$1"
+    local retry_num="${2:-0}"
+    local target="${3:-none}"
+    local diagnosis="${4:-unknown}"
+    local patches_applied="${5:-0}"
+    local profile_updated="${6:-false}"
+    local ts
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "unknown")
+    local heal_log="${OUTPUT_DIR:-$LOG_DIR}/healing-events.jsonl"
+    mkdir -p "$(dirname "$heal_log")"
+    # Safe JSON serialisation — escape quotes and backslashes in diagnosis
+    local safe_diagnosis
+    safe_diagnosis=$(printf '%s' "$diagnosis" | sed 's/\\/\\\\/g; s/"/\\"/g')
+    printf '{"ts":"%s","story_id":"%s","retry":%s,"target":"%s","diagnosis":"%s","patches_applied":%s,"profile_updated":%s}\n' \
+        "$ts" "$story_id" "$retry_num" "$target" "$safe_diagnosis" \
+        "$patches_applied" "$profile_updated" \
+        >> "$heal_log"
+    log "  [HealingRecorder] Event written (story=$story_id retry=$retry_num target=$target)"
+}
+
+# check_healing_effectiveness <story_id> <current_diagnosis>
+# Reads healing-events.jsonl and checks if the same diagnosis has appeared 2+ times
+# for this story without a different diagnosis in between. If so, self-healing is
+# not working — log a CRITICAL alert and set HEALING_BROKEN=1 to abort retries.
+check_healing_effectiveness() {
+    local story_id="$1"
+    local current_diagnosis="$2"
+    local heal_log="${OUTPUT_DIR:-$LOG_DIR}/healing-events.jsonl"
+    [ -f "$heal_log" ] || return 0
+    # Count consecutive same-diagnosis events for this story (most recent N events)
+    local repeat_count
+    repeat_count=$(python3 - << PYEOF 2>/dev/null || echo 0
+import json, sys
+path = '${heal_log}'
+story = '${story_id}'
+diag  = '''${current_diagnosis}'''[:100]  # truncate for comparison
+events = []
+with open(path) as f:
+    for line in f:
+        line = line.strip()
+        if not line: continue
+        try:
+            obj = json.loads(line)
+            if obj.get('story_id') == story:
+                events.append(obj.get('diagnosis','')[:100])
+        except Exception:
+            pass
+# Count how many of the last events share the current diagnosis
+count = 0
+for d in reversed(events):
+    if d == diag:
+        count += 1
+    else:
+        break
+print(count)
+PYEOF
+)
+    if [ "${repeat_count:-0}" -ge 2 ]; then
+        error "  [HealingBroken] CRITICAL: '${current_diagnosis}' has recurred ${repeat_count}+ times for $story_id without a different fix — self-healing is NOT working."
+        error "  [HealingBroken] Check: (1) gate model is reachable (2) failure analyst is diagnosing correctly (3) patches are being applied"
+        # Write a HEALING_BROKEN sentinel record so the run summary captures this
+        local ts
+        ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "unknown")
+        local safe_diag
+        safe_diag=$(printf '%s' "$current_diagnosis" | sed 's/\\/\\\\/g; s/"/\\"/g')
+        printf '{"ts":"%s","story_id":"%s","event":"HEALING_BROKEN","repeated_diagnosis":"%s","count":%s}\n' \
+            "$ts" "$story_id" "$safe_diag" "$repeat_count" >> "$heal_log"
+        HEALING_BROKEN=1
+        export HEALING_BROKEN
+    fi
+}
+
 # Invoke Claude CLI to implement a story
 implement_story() {
     local story_id=$1
@@ -1568,6 +1959,10 @@ implement_story() {
     resolve_generator_settings "$story_id"
     # Resolve aiProvider -> which CLI binary to use
     resolve_provider_settings "$story_id"
+    # Capture original model so phase R3 can detect whether R2 escalated it
+    STORY_MODEL_ORIGINAL="${STORY_MODEL:-}"
+    # Reset reasoning effort to default at story start (previous story's setting must not leak)
+    export EPAM_REASONING_EFFORT="low"
     # For epam-run providers, prd.json .model field overrides effort-based model
     case "${STORY_PROVIDER:-codex}" in
         codex) resolve_codex_model_settings "$story_id" ;;
@@ -1618,40 +2013,61 @@ implement_story() {
     fi
 
     while [ $retry_count -le $MAX_RETRIES ]; do
-        # Inference ladder: on retry, escalate to a stronger model.
-        # Gated by the coordinator — environment failures suppress escalation.
-        # retryModel in prd.json overrides; otherwise fall back to EPAM_RETRY_MODEL env var.
+        # Inference ladder: on retry, escalate to a stronger model + increase reasoning effort.
+        # Priority: PRD retryModel > EPAM_RETRY_MODEL env var > built-in get_model_ladder_step().
+        # Principle: NEVER retry with the same model — every failure steps up. Logged visibly.
         if [ "$retry_count" -gt 0 ]; then
-            local retry_model_prd
-            retry_model_prd=$(jq -r --arg id "$story_id" \
-                '.stories[] | select(.id == $id) | .retryModel // ""' \
-                "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
-            local escalated_model="${retry_model_prd:-${EPAM_RETRY_MODEL:-}}"
-            # Final-fallback tier: if retryModel == current model (e.g. both M3) and a fallback is set,
-            # route the last attempt to the fallback provider (e.g. sonnet via OpenRouter).
-            local _final_fallback_model="${EPAM_FINAL_FALLBACK_MODEL:-}"
-            local _final_fallback_provider="${EPAM_FINAL_FALLBACK_PROVIDER:-}"
-            if [ -n "$_final_fallback_model" ] && [ "$retry_count" -ge "$MAX_RETRIES" ] \
-               && [ "$escalated_model" = "${STORY_MODEL:-}" ]; then
-                log "  InferenceLadder: retryModel == current model — routing final attempt to fallback '$_final_fallback_model'"
-                escalated_model="$_final_fallback_model"
-                [ -n "$_final_fallback_provider" ] && STORY_PROVIDER="$_final_fallback_provider"
-            fi
-            if [ -n "$escalated_model" ] && [ "${COORDINATOR_ESCALATE:-yes}" = "yes" ]; then
-                log "  InferenceLadder: escalating model from '${STORY_MODEL:-default}' to '$escalated_model' (retry $retry_count, class=$COORDINATOR_FAILURE_CLASS)"
-                STORY_MODEL="$escalated_model"
-            elif [ -n "$escalated_model" ]; then
-                log "  InferenceLadder: escalation suppressed by coordinator (class=$COORDINATOR_FAILURE_CLASS) — keeping model '${STORY_MODEL:-default}'"
-            fi
-            # Boost iterations for capability failures on epam-run providers
-            if [ "${COORDINATOR_ESCALATE:-yes}" = "yes" ]; then
-                case "${STORY_PROVIDER:-codex}" in
-                    copilot|openai|qwen|cursor|minimax)
-                        STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
-                        log "  InferenceLadder: boosting EPAM_MAX_ITERATIONS to $STORY_MAX_ITERATIONS for retry"
-                        ;;
-                esac
-            fi
+            # ── Three-phase inference ladder ──────────────────────────────────────
+            # R1: bump reasoning effort (same model — let the model think harder)
+            # R2: escalate model to next in ladder (cross-family), reset effort
+            # R3: keep escalated model, bump reasoning effort to maximum
+            # ─────────────────────────────────────────────────────────────────────
+            case "$retry_count" in
+                1)
+                    # Phase R1: reasoning effort ↑, model unchanged
+                    export EPAM_REASONING_EFFORT="medium"
+                    STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
+                    log "  InferenceLadder[R1]: model='${STORY_MODEL:-default}' unchanged — reasoning effort → medium"
+                    ;;
+                2)
+                    # Phase R2: model ↑ (ladder step), effort medium for new model
+                    local retry_model_prd ladder_step_r2
+                    retry_model_prd=$(jq -r --arg id "$story_id" \
+                        '.stories[] | select(.id == $id) | .retryModel // ""' \
+                        "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
+                    local escalated_model_r2="${retry_model_prd:-${EPAM_RETRY_MODEL:-}}"
+                    if [ -z "$escalated_model_r2" ]; then
+                        ladder_step_r2=$(get_model_ladder_step "${STORY_MODEL:-}" 2)
+                        [ -n "$ladder_step_r2" ] && escalated_model_r2="$ladder_step_r2"
+                    fi
+                    if [ -n "$escalated_model_r2" ] && [ "$escalated_model_r2" != "${STORY_MODEL:-}" ]; then
+                        log "  InferenceLadder[R2]: model '${STORY_MODEL:-default}' → '$escalated_model_r2' — reasoning effort → medium"
+                        STORY_MODEL="$escalated_model_r2"
+                        # Switch provider when the escalated model needs a different one
+                        case "$escalated_model_r2" in
+                            zhipuai/*|moonshotai/*|glm-*|kimi-*) STORY_PROVIDER="qwen" ;;
+                            MiniMax-*)                            STORY_PROVIDER="minimax" ;;
+                        esac
+                    else
+                        log "  InferenceLadder[R2]: no ladder step from '${STORY_MODEL:-default}' — keeping model, effort → medium"
+                    fi
+                    export EPAM_REASONING_EFFORT="medium"
+                    STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
+                    ;;
+                *)
+                    # Phase R3: keep escalated model, reasoning effort → high (max)
+                    # If still on original model and EPAM_FINAL_FALLBACK_MODEL set, use it now.
+                    local _ffm="${EPAM_FINAL_FALLBACK_MODEL:-}" _ffp="${EPAM_FINAL_FALLBACK_PROVIDER:-}"
+                    if [ -n "$_ffm" ] && [ "${STORY_MODEL:-}" = "${STORY_MODEL_ORIGINAL:-}" ]; then
+                        log "  InferenceLadder[R${retry_count}]: no prior escalation — routing to fallback '$_ffm'"
+                        STORY_MODEL="$_ffm"
+                        [ -n "$_ffp" ] && STORY_PROVIDER="$_ffp"
+                    fi
+                    export EPAM_REASONING_EFFORT="high"
+                    STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
+                    log "  InferenceLadder[R${retry_count}]: model='${STORY_MODEL:-default}' — reasoning effort → high (maximum)"
+                    ;;
+            esac
         fi
         # Rebuild prompt each attempt: retry_count and KB ID must reflect current state
         local next_kb_id
@@ -1767,6 +2183,13 @@ ${COORDINATOR_PROMPT_AMENDMENT}"
                 _allowed_write_paths=$(jq -r --arg id "$story_id" \
                     '.stories[] | select(.id == $id) | .technicalNotes.files[]? // empty' \
                     "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null | tr '\n' ':' | sed 's/:$//')
+                # Rewrite allowed paths to worktree when in worktree mode.
+                # Without this, WriteFile.ts blocks writes to the worktree path and reports
+                # "Permitted paths: /main-repo/src/foo.ts" — the model reads that error and
+                # writes to the main repo instead of the worktree.
+                if [ -n "${WORKTREE_MODE:-}" ] && [ -n "${MAIN_PROJECT_ROOT:-}" ]; then
+                    _allowed_write_paths="${_allowed_write_paths//${MAIN_PROJECT_ROOT}/${PROJECT_ROOT}}"
+                fi
                 if echo "$prompt" | \
                         EPAM_DANGEROUS_SKIP_APPROVAL=1 \
                         EPAM_ALLOWED_WRITE_PATHS="${_allowed_write_paths}" \
@@ -1939,6 +2362,12 @@ ${COORDINATOR_PROMPT_AMENDMENT}"
                       outputTokens:$toks, maxIterations:$iters,
                       timestamp:(now|todate)}' >> "$_failures_file"
             ) 300>>"${_failures_file}.lock"
+
+            # Layer 3: failure analyst — diagnose test failure and patch PRD or inject
+            # skill guidance before the next retry. Only runs when more retries remain.
+            if [ $retry_count -lt $MAX_RETRIES ]; then
+                run_failure_analyst "$story_id" "$output_file" "$retry_count"
+            fi
 
             retry_count=$((retry_count + 1))
             if [ $retry_count -le $MAX_RETRIES ]; then
@@ -2156,28 +2585,28 @@ get_next_kb_id() {
     fi
 }
 
-# Return KB entries from orchestrations/agents/KB.md whose AgentRole matches the current story
+# Return KB entries relevant to a story's agent role.
+# Reads from KB-{agentProfile}.md (role-specific) and KB-shared.md.
+# Returns at most 10 entries total to bound context injection size.
 get_relevant_kb_entries() {
     local story_id=$1
-    local kb_file="$AUTOMATION_DIR/agents/KB.md"
-    [ ! -f "$kb_file" ] && return
+    local kb_dir="$AUTOMATION_DIR/agents"
 
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
-    local agent_role
-    agent_role=$(jq -r --arg id "$story_id" \
-        '.stories[] | select(.id == $id) | .agentRole // ""' "$prd_target")
-    [ -z "$agent_role" ] && return
+    local agent_profile
+    agent_profile=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .agentProfile // ""' "$prd_target" 2>/dev/null || echo "")
+    [ -z "$agent_profile" ] && return
 
-    # Extract full entry blocks whose AgentRole line contains the role
-    awk -v role="$agent_role" '
-        /^## KB-[0-9]/ {
-            if (entry != "" && matched) printf "%s\n", entry
-            entry = $0 "\n"; matched = 0; next
-        }
-        { entry = entry $0 "\n" }
-        /\*\*AgentRole:\*\*/ { if (index($0, role) > 0) matched = 1 }
-        END { if (entry != "" && matched) printf "%s\n", entry }
-    ' "$kb_file"
+    # Collect last 10 lines from role-specific KB + shared KB (shared is a fallback)
+    local role_kb="${kb_dir}/KB-${agent_profile}.md"
+    local shared_kb="${kb_dir}/KB-shared.md"
+    local combined=""
+    [ -f "$role_kb"   ] && combined="${combined}$(tail -n 20 "$role_kb" 2>/dev/null)"$'\n'
+    [ -f "$shared_kb" ] && combined="${combined}$(tail -n 10 "$shared_kb" 2>/dev/null)"$'\n'
+
+    # Strip blank lines and return at most 10 bullet entries
+    printf '%s' "$combined" | grep -v '^[[:space:]]*$' | tail -n 10
 }
 
 # Build the KB section appended to every implementation prompt
@@ -2637,9 +3066,15 @@ main() {
                 WORKTREE_MODE="$2"
                 # Save main PRD location for reference
                 MAIN_PRD_FILE="$PRD_FILE"
+                # Save main project root BEFORE switching to worktree path.
+                # technicalNotes.files in the PRD contain absolute paths referencing
+                # the main repo (e.g. /path/to/skyscanner-app/src/foo.ts).
+                # We rewrite these to the worktree path in verify_story_deliverables
+                # and in the agent prompt so agents write to the worktree, not the main repo.
+                MAIN_PROJECT_ROOT="$(cd "$GIT_WORK_ROOT" && pwd)"
                 # Update GIT_WORK_ROOT and PROJECT_ROOT to worktree for file operations
                 local _git_basename
-                _git_basename="$(basename "$(cd "$GIT_WORK_ROOT" && pwd)")"
+                _git_basename="$(basename "$MAIN_PROJECT_ROOT")"
                 GIT_WORK_ROOT="$(cd "$GIT_WORK_ROOT/.." && pwd)/${_git_basename}-wt-$WORKTREE_MODE"
                 PROJECT_ROOT="$GIT_WORK_ROOT"
                 # Keep PRD_FILE pointing to MAIN - single source of truth

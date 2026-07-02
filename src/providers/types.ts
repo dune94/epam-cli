@@ -31,6 +31,8 @@ export interface ProviderRequest {
   stream: boolean;
   maxTokens?: number;
   temperature?: number;
+  /** Reasoning effort level — controls thinking depth. Providers map this to their native parameter. */
+  reasoningEffort?: 'low' | 'medium' | 'high';
   responseFormat?: 'json_object';
 }
 

@@ -1,0 +1,55 @@
+{
+  "project": "mock-framework-test",
+  "version": "1.0",
+  "stories": [
+    {
+      "id": "MOCK-001",
+      "title": "Scaffold the project",
+      "agentProfile": "typescript-engineer",
+      "phase": "scaffold",
+      "effort": "medium",
+      "acceptanceCriteria": [
+        "A package.json exists with name field set",
+        "Running tsc --noEmit exits 0 with no errors",
+        "Running vitest run exits 0 with all tests passing"
+      ],
+      "technicalNotes": {
+        "files": ["package.json", "tsconfig.json", "src/index.ts"]
+      }
+    },
+    {
+      "id": "MOCK-002",
+      "title": "Implement core API",
+      "agentProfile": "typescript-engineer",
+      "phase": "core",
+      "effort": "medium",
+      "acceptanceCriteria": [
+        "GET /health returns 200 with status ok",
+        "GET /api returns 503 when REQUIRED_KEY env var is missing",
+        "Running vitest run exits 0 with all tests passing"
+      ],
+      "technicalNotes": {
+        "files": ["src/server.ts", "src/client.ts", "test/server.test.ts"]
+      }
+    },
+    {
+      "id": "MOCK-003",
+      "title": "Build UI components",
+      "agentProfile": "frontend-engineer",
+      "phase": "ui_and_review",
+      "effort": "low",
+      "acceptanceCriteria": [
+        "Component renders without errors",
+        "Running vitest run exits 0 with all tests passing"
+      ],
+      "technicalNotes": {
+        "files": ["src/App.tsx", "test/App.test.tsx"]
+      }
+    }
+  ],
+  "implementationOrder": {
+    "scaffold": ["MOCK-001"],
+    "core": ["MOCK-002"],
+    "ui_and_review": ["MOCK-003"]
+  }
+}

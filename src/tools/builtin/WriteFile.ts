@@ -32,6 +32,22 @@ export class WriteFileTool implements Tool {
 
     try {
       const resolved = path.resolve(filePath);
+
+      // Scope guard: when EPAM_ALLOWED_WRITE_PATHS is set, block writes to TypeScript
+      // source files outside the story's declared scope. This prevents scaffold agents
+      // from overwriting core-phase implementations with incompatible stubs.
+      const allowedPathsEnv = process.env.EPAM_ALLOWED_WRITE_PATHS;
+      if (allowedPathsEnv && (resolved.endsWith('.ts') || resolved.endsWith('.tsx'))) {
+        const allowed = allowedPathsEnv.split(':').filter(Boolean).map(p => path.resolve(p));
+        const inScope = allowed.some(a => resolved === a || resolved.startsWith(a + path.sep));
+        if (!inScope) {
+          return {
+            toolUseId: '',
+            content: `[scope-guard] Write blocked: ${resolved} is outside this story's declared scope. Permitted paths: ${allowed.join(', ')}. Only modify files listed in the story's technicalNotes.files.`,
+            isError: true,
+          };
+        }
+      }
       await ensureDir(path.dirname(resolved));
       if (append) {
         await fs.appendFile(resolved, content, 'utf-8');

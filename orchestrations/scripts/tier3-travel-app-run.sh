@@ -1,19 +1,25 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────────────────────
-# Tier 3: Travel App (Skyscanner) — DeepSeek V3 story agents + GPT-4o gates.
+# Tier 3: Travel App (Skyscanner) — MiniMax + GLM + Kimi multi-model pipeline.
 #
-# Runs all three phases in sequence:
-#   scaffold → core → ui_and_review
+# Runs two implementation phases in sequence:
+#   scaffold → core
+#
+# Model assignment:
+#   Story agents : MiniMax-M3 (direct) and moonshotai/kimi-k2 (OpenRouter)
+#   Gates/analyst: MiniMax-M3
+#   Retry ladder : MiniMax-M3 → zhipuai/glm-z1-32b → moonshotai/kimi-k2
+#   Reasoning    : low (attempt 1) → medium (R1) → medium+model↑ (R2) → high (R3)
 #
 # Prerequisites:
-#   - OPENROUTER_API_KEY set (DeepSeek V3 story agents)
-#   - OPENAI_API_KEY set (GPT-4o coordinator + gates)
-#   - RAPIDAPI_KEY set (SKY-001b API contract discovery)
+#   - MINIMAX_API_KEY set (MiniMax-M3 story agents + gate model)
+#   - OPENROUTER_API_KEY set (Kimi K2, GLM-4-plus, GLM-Z1 via OpenRouter)
+#   - RAPIDAPI_KEY set (Skyscanner API key for runtime verification)
 #
-# Estimated cost: $0.05–0.15 (11 stories, all low effort, DeepSeek pricing)
+# Estimated cost: $0.05–0.20 (MiniMax + OpenRouter pricing)
 #
 # Usage:
-#   OPENROUTER_API_KEY=<key> OPENAI_API_KEY=<key> bash orchestrations/scripts/tier3-travel-app-run.sh
+#   MINIMAX_API_KEY=<key> OPENROUTER_API_KEY=<key> bash orchestrations/scripts/tier3-travel-app-run.sh
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -26,13 +32,13 @@ info()    { echo -e "${YELLOW}[tier3-travel]${NC} $*"; }
 success() { echo -e "${GREEN}[tier3-travel] ✓${NC} $*"; }
 fail()    { echo -e "${RED}[tier3-travel] ✗${NC} $*"; exit 1; }
 
-# Load .env if keys not already in environment
-if [ -z "${OPENROUTER_API_KEY:-}" ] && [ -f "$REPO_ROOT/.env" ]; then
-  set -a; source "$REPO_ROOT/.env"; set +a
+# Load .env if any required key is missing
+if [ -z "${MINIMAX_API_KEY:-}" ] || [ -z "${OPENROUTER_API_KEY:-}" ]; then
+  [ -f "$REPO_ROOT/.env" ] && { set -a; source "$REPO_ROOT/.env"; set +a; }
 fi
 
+[ -z "${MINIMAX_API_KEY:-}" ]    && fail "MINIMAX_API_KEY is not set. Export it or add it to .env"
 [ -z "${OPENROUTER_API_KEY:-}" ] && fail "OPENROUTER_API_KEY is not set. Export it or add it to .env"
-[ -z "${OPENAI_API_KEY:-}" ]     && fail "OPENAI_API_KEY is not set (needed for GPT-4o gates)"
 
 # Auto-confirm when: --yes/-y flag, CI env var set, or no TTY (non-interactive shell)
 AUTO_YES=false
@@ -43,7 +49,7 @@ for arg in "$@"; do [[ "$arg" == "--yes" || "$arg" == "-y" ]] && AUTO_YES=true; 
 PRD_FILE="$REPO_ROOT/orchestrations/travel-app-prd.json"
 OUTPUT_DIR="${OUTPUT_DIR:-/home/bradleyjerome/projects/skyscanner-app}"
 
-info "Tier 3 travel app run — DeepSeek V3 agents + GPT-4o gates (USES CREDITS)"
+info "Tier 3 travel app run — MiniMax + GLM + Kimi multi-model pipeline (USES CREDITS)"
 info "  PRD: $PRD_FILE"
 info "  Output: $OUTPUT_DIR"
 info "  Estimated cost: \$0.05–0.15"
@@ -53,7 +59,7 @@ echo ""
 if [ "$AUTO_YES" = true ]; then
   info "Auto-confirmed (--yes flag)"
 else
-  read -rp "$(echo -e "${YELLOW}Confirm: spend OpenRouter + OpenAI credits? [yes/N]${NC} ")" confirm
+  read -rp "$(echo -e "${YELLOW}Confirm: spend MiniMax + OpenRouter credits? [yes/N]${NC} ")" confirm
   [ "$confirm" != "yes" ] && { info "Aborted."; exit 0; }
 fi
 
@@ -72,6 +78,10 @@ echo ""
 # prior runs all poison the next run. The only safe state is no state.
 info "Tearing down output directory: $OUTPUT_DIR"
 rm -rf "$OUTPUT_DIR"
+# Also remove sibling worktree dirs left by previous parallel-phase runs
+for _wt_dir in "${OUTPUT_DIR}-wt-"*; do
+  [ -e "$_wt_dir" ] && rm -rf "$_wt_dir" && info "Removed leftover worktree: $_wt_dir"
+done
 mkdir -p "$OUTPUT_DIR"
 git -C "$OUTPUT_DIR" init --quiet
 git -C "$OUTPUT_DIR" commit --allow-empty -m "init: skyscanner-app" --quiet
@@ -81,22 +91,35 @@ info "Output directory clean (deleted and reinitialised)"
 # an `env` wrapper array (which caused silent exit due to empty-var expansion).
 export OUTPUT_DIR
 export PROJECT_ROOT="$OUTPUT_DIR"
+# MiniMax (direct API — story agents + gate model)
+export MINIMAX_API_KEY
+export EPAM_API_KEY_MINIMAX="$MINIMAX_API_KEY"
+# OpenRouter (Kimi K2, GLM-4-plus, GLM-Z1 via unified API)
 export OPENROUTER_API_KEY
 export EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY"
-export OPENAI_API_KEY
-export EPAM_API_KEY_OPENAI="$OPENAI_API_KEY"
+# Gate/coordinator model: MiniMax-M3 (same API as story agents — no extra key needed)
 export ORCH_GATE_PROVIDER="minimax"
 export EPAM_ORCHESTRATION_PROVIDER="minimax"
 export ORCH_GATE_MODEL="MiniMax-M3"
+# Spec-mode models: Kimi for openspec/speckit, GLM for validation
 export SPEC_MODE_PROVIDER="qwen"
 export SPEC_MODE_OPENSPEC_MODEL="${SPEC_MODE_OPENSPEC_MODEL:-moonshotai/kimi-k2}"
 export SPEC_MODE_SPECKIT_MODEL="${SPEC_MODE_SPECKIT_MODEL:-zhipuai/glm-4-plus}"
 export SPEC_MODE_MODEL="${SPEC_MODE_MODEL:-moonshotai/kimi-k2}"
+# GLM model family (via OpenRouter / zhipuai)
+export GLM_GENERAL_MODEL="${GLM_GENERAL_MODEL:-zhipuai/glm-4-plus}"
+export GLM_REASONING_MODEL="${GLM_REASONING_MODEL:-zhipuai/glm-z1-32b}"
+# Model escalation ladder: pipe-separated "from=to" pairs consumed by get_model_ladder_step().
+# R2 cross-family escalation: MiniMax → GLM reasoning, Kimi → GLM general, GLM → Kimi.
+# Override individual entries by re-exporting EPAM_MODEL_LADDER before invoking this script.
+export EPAM_MODEL_LADDER="${EPAM_MODEL_LADDER:-MiniMax-M2.5=MiniMax-M3|MiniMax-M3=${GLM_REASONING_MODEL:-zhipuai/glm-z1-32b}|moonshotai/kimi-k2=${GLM_GENERAL_MODEL:-zhipuai/glm-4-plus}|zhipuai/glm-4-plus=moonshotai/kimi-k2|zhipuai/glm-z1-32b=moonshotai/kimi-k2|zhipuai/glm-z1-9b=moonshotai/kimi-k2}"
+# Final fallback: used at R3 when the story model was never escalated at R2
+export EPAM_FINAL_FALLBACK_MODEL="${EPAM_FINAL_FALLBACK_MODEL:-moonshotai/kimi-k2}"
+export EPAM_FINAL_FALLBACK_PROVIDER="${EPAM_FINAL_FALLBACK_PROVIDER:-qwen}"
+# MiniMax runtime settings
 export MINIMAX_TOOL_TIMEOUT_MS="${MINIMAX_TOOL_TIMEOUT_MS:-15000}"
 export ORCH_MINI_MODEL="${ORCH_MINI_MODEL:-MiniMax-M2.5}"
 export ORCH_UPGRADE_MODEL="${ORCH_UPGRADE_MODEL:-MiniMax-M3}"
-export EPAM_FINAL_FALLBACK_MODEL="${EPAM_FINAL_FALLBACK_MODEL:-moonshotai/kimi-k2}"
-export EPAM_FINAL_FALLBACK_PROVIDER="${EPAM_FINAL_FALLBACK_PROVIDER:-qwen}"
 export PRD_FILE
 export SKIP_REGRESSION_GUARD=true
 export EPAM_RALPH_WIGGUM_ENABLED=0
@@ -253,7 +276,6 @@ fi
 
 run_phase "scaffold"
 run_phase "core"
-run_phase "ui_and_review"
 
 # Report spend
 _usage_after=$(curl -s "https://openrouter.ai/api/v1/auth/key" \

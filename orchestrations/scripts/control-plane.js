@@ -217,8 +217,16 @@ const server = http.createServer(async (req, res) => {
   send(res, 404, { error: 'not found' });
 });
 
-server.listen(PORT, '127.0.0.1', () => {
-  process.stdout.write(`[control-plane] listening on http://127.0.0.1:${PORT}  LOG_DIR=${LOG_DIR}\n`);
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    process.stderr.write(`[control-plane] port ${PORT} already in use — another instance running? Exiting cleanly.\n`);
+    process.exit(0);
+  }
+  throw err;
+});
+
+server.listen(PORT, '0.0.0.0', () => {
+  process.stdout.write(`[control-plane] listening on http://0.0.0.0:${PORT}  LOG_DIR=${LOG_DIR}\n`);
 });
 
 process.on('SIGTERM', () => { server.close(); process.exit(0); });

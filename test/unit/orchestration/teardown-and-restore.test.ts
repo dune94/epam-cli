@@ -189,7 +189,50 @@ describe('drift detection — spec pass elaboration must be re-playable (100% st
   });
 });
 
-// ── 6. Pre-flight aborts on accumulated splits ───────────────────────────────
+// ── 6. Worktree sibling directory cleanup ────────────────────────────────────
+describe('teardown — parallel worktree dirs must be removed before every run', () => {
+  // Run 94 failure: teardown wiped OUTPUT_DIR but left sibling dirs:
+  //   skyscanner-app-wt-primary/   and   skyscanner-app-wt-independent/
+  // These are NOT inside OUTPUT_DIR so rm -rf OUTPUT_DIR leaves them.
+  // Next run's worktree creation sees them as "already exists", skips init,
+  // and the merge step fails because the wt-primary / wt-independent branches
+  // were never committed into them.
+
+  it('tier3 removes OUTPUT_DIR-wt-* sibling dirs during teardown', () => {
+    // Pattern used: for _wt_dir in "${OUTPUT_DIR}-wt-"*; do rm -rf "$_wt_dir"
+    expect(tier3Src).toMatch(/OUTPUT_DIR.*-wt-.*rm -rf|rm -rf.*_wt_dir/);
+  });
+
+  it('teardown glob covers all wt-* variants with a wildcard (not hardcoded names)', () => {
+    // Must use a glob like "${OUTPUT_DIR}-wt-"* — hardcoding wt-primary/wt-independent
+    // would break when new worktree types are added.
+    expect(tier3Src).toMatch(/OUTPUT_DIR.*-wt-["']\*/);
+  });
+
+  it('worktree cleanup happens before mkdir OUTPUT_DIR (teardown order is correct)', () => {
+    const rmWtIdx = tier3Src.search(/\$\{?OUTPUT_DIR\}?-wt-/);
+    const mkdirIdx = tier3Src.search(/mkdir -p.*OUTPUT_DIR|mkdir -p.*\$\{?OUTPUT_DIR/);
+    expect(rmWtIdx).toBeGreaterThan(-1);
+    expect(mkdirIdx).toBeGreaterThan(-1);
+    expect(rmWtIdx).toBeLessThan(mkdirIdx);
+  });
+
+  it('no skyscanner-app-wt-* dirs exist right now (confirms clean state)', () => {
+    // If this fails, leftover worktree dirs from a prior run are present.
+    // Run: rm -rf /home/bradleyjerome/projects/skyscanner-app-wt-*
+    const { execSync } = require('node:child_process');
+    const result = execSync(
+      'ls /home/bradleyjerome/projects/skyscanner-app-wt-* 2>/dev/null | wc -l',
+      { encoding: 'utf8' }
+    ).trim();
+    expect(
+      parseInt(result),
+      'Leftover skyscanner-app-wt-* dirs exist — tier3 teardown did not clean them'
+    ).toBe(0);
+  });
+});
+
+// ── 7. Pre-flight aborts on accumulated splits ───────────────────────────────
 describe('pre-flight integrity — abort if PRD has mid-execution split children', () => {
   it('tier3 has a PRD integrity guard that exits non-zero on mid-execution splits', () => {
     expect(tier3Src).toContain('mid-execution');

@@ -229,6 +229,29 @@ describe('Warn paths — grounding downgrades hallucinated fails', () => {
     expect(hasStepEmit('4.2b', 'warn')).toBe(true);
   });
 
+  it('spec validator extractor uses line-level regex not json.loads (run 84 regression)', () => {
+    // Bug: the old extractor used greedy r'\{.*\}' with DOTALL which failed when the
+    // agent embedded raw newlines inside JSON string values — json.loads raised
+    // "Invalid control character" and the gate fell through to "no story data" warn.
+    // Fix: targeted regex patterns on individual lines, bypassing full JSON parsing.
+    const specIdx = orchSrc.indexOf('SPEC_EXTRACTOR_PY');
+    expect(specIdx, 'SPEC_EXTRACTOR_PY heredoc not found').toBeGreaterThan(-1);
+    const block = orchSrc.slice(specIdx, specIdx + 2000);
+
+    // Must NOT use json.loads on the full blob (the root cause of the bug)
+    expect(block).not.toMatch(/json\.loads\s*\(\s*text\b/);
+    expect(block).not.toMatch(/json\.loads\s*\(\s*m\.group/);
+
+    // Must use targeted pattern matching for verdict and storyId presence
+    expect(block).toContain('"verdict"');
+    expect(block).toContain('"storyId"');
+    expect(block).toContain('"overallVerdict"');
+
+    // Must handle the no-data case (agent returned nothing useful)
+    expect(block).toContain('no-data');
+    expect(block).toContain('no-json');
+  });
+
   it('Step 4.4a fuzz-weaver ungrounded fail → step_emit warn', () => {
     expect(orchSrc).toMatch(/step_emit "4\.4a" "warn" "Step 4\.4a: Fuzz-weaver" "hallucinated findings downgraded"/);
   });

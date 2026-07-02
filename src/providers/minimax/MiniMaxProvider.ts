@@ -35,6 +35,12 @@ export class MiniMaxProvider implements LLMProvider {
     return this.defaultModel;
   }
 
+  /** MiniMax reasoning effort — passed as `reasoning_effort` when the model supports it.
+   *  Falls back to env var EPAM_REASONING_EFFORT. Returns undefined when not set. */
+  private resolveReasoningEffort(request: ProviderRequest): string | undefined {
+    return request.reasoningEffort ?? process.env.EPAM_REASONING_EFFORT as string | undefined;
+  }
+
   async complete(request: ProviderRequest): Promise<ProviderResponse> {
     const model = this.resolveModel(request.model);
     const messages = this.formatMessages(request.messages, request.systemPrompt);
@@ -42,6 +48,7 @@ export class MiniMaxProvider implements LLMProvider {
       type: 'function' as const,
       function: { name: t.name, description: t.description, parameters: t.inputSchema },
     }));
+    const reasoningEffort = this.resolveReasoningEffort(request);
 
     const response = await fetch(`${this.baseURL}/chat/completions`, {
       method: 'POST',
@@ -53,7 +60,8 @@ export class MiniMaxProvider implements LLMProvider {
         model,
         messages,
         max_tokens: request.maxTokens || 4096,
-        temperature: request.temperature || 0.7,
+        temperature: request.temperature ?? 0.7,
+        ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
         ...(tools && tools.length > 0 ? { tools } : {}),
         ...(this.resolveResponseFormat(request) ? { response_format: { type: this.resolveResponseFormat(request) } } : {}),
       }),
@@ -114,6 +122,7 @@ export class MiniMaxProvider implements LLMProvider {
       function: { name: t.name, description: t.description, parameters: t.inputSchema },
     }));
 
+    const reasoningEffort = this.resolveReasoningEffort(request);
     const response = await fetch(`${this.baseURL}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -124,7 +133,8 @@ export class MiniMaxProvider implements LLMProvider {
         model,
         messages,
         max_tokens: request.maxTokens || 4096,
-        temperature: request.temperature || 0.7,
+        temperature: request.temperature ?? 0.7,
+        ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
         stream: true,
         ...(tools && tools.length > 0 ? { tools } : {}),
         ...(this.resolveResponseFormat(request) ? { response_format: { type: this.resolveResponseFormat(request) } } : {}),

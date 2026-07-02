@@ -121,17 +121,17 @@ describe('spec-mode-runner.js — no hardcoded story IDs in executable code', ()
 });
 
 // ── 6. test infrastructure — test files use file-based lookup ────────────────
-describe('test-story-ac-integrity.test.ts — file-based lookup, no hardcoded IDs', () => {
+describe('test-story-ac-integrity.test.ts — mock data only, no hardcoded story IDs', () => {
   const src = readFileSync(
     join(REPO, 'test/unit/orchestration/test-story-ac-integrity.test.ts'), 'utf8'
   );
 
-  it('uses storyByFile() helper, not byId.get() with literal story IDs', () => {
-    expect(src).toContain('storyByFile(');
+  it('uses mock PRD fixture data (not real travel-app PRD)', () => {
+    // The file must use mock data, not the live travel-app-prd.canonical.json
+    expect(src).toMatch(/mock-prd|MOCK_PRD|mock-profiles|MOCK_PROFILES/);
   });
 
   it('no byId.get() call passes a literal SKY-* string', () => {
-    // byId.get('SKY-...') is forbidden — must use storyByFile() instead
     expect(src).not.toMatch(/byId\.get\(['"]SKY-/);
   });
 
@@ -194,8 +194,8 @@ describe('storyByFile coverage — key source files have exactly one story owner
 
   function hasElaboratedStories(): boolean {
     if (!prd) return false;
-    // The canonical PRD has only base user stories with no technicalNotes.files
-    return prd.stories.some((s: any) => (s.technicalNotes?.files ?? []).length > 0);
+    // True only after spec-pass has split stories (creating specification.createdFrom links)
+    return prd.stories.some((s: any) => s?.specification?.createdFrom);
   }
 
   it('client.test.ts is owned by exactly one story after spec pass (skip if pre-spec-pass)', () => {

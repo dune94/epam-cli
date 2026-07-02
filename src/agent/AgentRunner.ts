@@ -67,6 +67,7 @@ export class AgentRunner {
       ...(this.options.history ?? []),
       { role: 'user', content: this.options.userMessage },
     ];
+    let nudgeCount = 0;
 
     let finalResponse = '';
 
@@ -142,6 +143,24 @@ export class AgentRunner {
       }
 
       if (response.stopReason === 'end_turn' || toolUses.length === 0) {
+        // When the model outputs only planning/thinking text with no tool calls,
+        // nudge it to actually call the tool rather than exiting the loop.
+        // M3 often emits <think>...</think> as its first response then stops.
+        const responseText = textParts.map(p => p.text ?? '').join('') || accumulatedText;
+        const isThinkingOnly = toolUses.length === 0 &&
+          nudgeCount < 2 &&
+          responseText.trim().length > 0 &&
+          (/<think>/i.test(responseText) || /^(I('ll| will)|Let me|Now I|First,|To (implement|write|create)|I need to)/i.test(responseText.trim()));
+
+        if (isThinkingOnly) {
+          // Model is planning but hasn't acted — nudge it to call the tool.
+          // Max 2 nudges per run to avoid infinite loops if model never calls tools.
+          nudgeCount++;
+          messages.push({ role: 'assistant', content: response.content });
+          messages.push({ role: 'user', content: 'Please call your WriteFile tool now to write the required file(s). Do not output any more text — just call the tool.' });
+          continue;
+        }
+
         // Append the final assistant message so messages array is complete
         messages.push({ role: 'assistant', content: response.content });
 

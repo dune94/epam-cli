@@ -1040,6 +1040,7 @@ if [ "${RESET_STORIES:-false}" = "true" ]; then
         success "Stories reset to pending (all phases)"
     fi
     checkpoint_clear
+
     # Clean up review artifacts for review stories being reset so AC pre-existing-file guard doesn't block re-runs
     while IFS= read -r _review_id; do
         [ -z "$_review_id" ] && continue
@@ -1851,6 +1852,10 @@ if [ -n "$main_stories" ]; then
         local _sid="$1"
         [ "${SKIP_STORY_TSC_GATE:-0}" = "1" ] && return 0
         [ ! -f "$PROJECT_ROOT/tsconfig.json" ] && return 0
+        # Skip when no .ts source files exist yet (scaffold phase creates structure but no source)
+        local _ts_count
+        _ts_count=$(find "$PROJECT_ROOT/src" -name "*.ts" 2>/dev/null | grep -v node_modules | wc -l)
+        [ "$_ts_count" -eq 0 ] && return 0
         # Skip tsc gate for test-only stories (they extend existing files, not create TS modules)
         local _role
         _role=$(jq -r --arg id "$_sid" '.stories[] | select(.id==$id) | .agentRole // ""' "$PRD_FILE" 2>/dev/null)
@@ -2292,13 +2297,18 @@ if [ "${SKIP_PRE_REVIEW_GATE:-false}" != "true" ] && [ -f "$PROJECT_ROOT/package
 
         log "  Running tsc --noEmit..."
         _tsc_exit=0
-        "$_node_bin" ./node_modules/.bin/tsc --noEmit 2>&1 | tee -a "$_pre_review_log"
-        _tsc_exit=${PIPESTATUS[0]}
-        if [ "$_tsc_exit" -eq 0 ]; then
-            success "  tsc: PASS"
+        _pre_review_ts_count=$(find "$PROJECT_ROOT/src" -name "*.ts" 2>/dev/null | grep -v node_modules | wc -l)
+        if [ "$_pre_review_ts_count" -eq 0 ]; then
+            success "  tsc: SKIP (no .ts files in src/ yet)"
         else
-            error "  tsc: FAIL — fix type errors before review proceeds"
-            _pre_review_failed=1
+            "$_node_bin" ./node_modules/.bin/tsc --noEmit 2>&1 | tee -a "$_pre_review_log"
+            _tsc_exit=${PIPESTATUS[0]}
+            if [ "$_tsc_exit" -eq 0 ]; then
+                success "  tsc: PASS"
+            else
+                error "  tsc: FAIL — fix type errors before review proceeds"
+                _pre_review_failed=1
+            fi
         fi
 
         echo "=== Gate Result: $([ $_pre_review_failed -eq 0 ] && echo PASS || echo FAIL) ===" \
@@ -2339,13 +2349,18 @@ if [ "${SKIP_LINT_GATE:-false}" != "true" ] && [ -n "$_node_bin" ] && [ -x "$_no
     # ── tsc --noEmit ──────────────────────────────────────────────────────────
     log "  [lint] Running tsc --noEmit..."
     _lint_tsc_exit=0
-    cd "$PROJECT_ROOT" && "$_node_bin" ./node_modules/.bin/tsc --noEmit 2>&1 | tee -a "$_lint_log"
-    _lint_tsc_exit=${PIPESTATUS[0]}
-    if [ "$_lint_tsc_exit" -eq 0 ]; then
-        success "  [lint] tsc: PASS"
+    _lint_ts_count=$(find "$PROJECT_ROOT/src" -name "*.ts" 2>/dev/null | grep -v node_modules | wc -l)
+    if [ "$_lint_ts_count" -eq 0 ]; then
+        success "  [lint] tsc: SKIP (no .ts files in src/ yet)"
     else
-        error "  [lint] tsc: FAIL (exit $_lint_tsc_exit) — fix TypeScript errors before proceeding"
-        _lint_failed=1
+        cd "$PROJECT_ROOT" && "$_node_bin" ./node_modules/.bin/tsc --noEmit 2>&1 | tee -a "$_lint_log"
+        _lint_tsc_exit=${PIPESTATUS[0]}
+        if [ "$_lint_tsc_exit" -eq 0 ]; then
+            success "  [lint] tsc: PASS"
+        else
+            error "  [lint] tsc: FAIL (exit $_lint_tsc_exit) — fix TypeScript errors before proceeding"
+            _lint_failed=1
+        fi
     fi
 
     # ── eslint (if binary present) ────────────────────────────────────────────
@@ -2401,7 +2416,7 @@ if [ "${SKIP_LINT_GATE:-false}" != "true" ] && [ -n "$_node_bin" ] && [ -x "$_no
         #   Agent 3 (profile-augmentor):     records anti-pattern in agent profile
         _lint_remediation_applied=0
         _lint_rem_log="$LOG_DIR/lint-remediation-${PHASE}.log"
-        _profiles_file="${SCRIPT_DIR}/agents/profiles.json"
+        _profiles_file="${AUTOMATION_DIR}/agents/profiles.json"
 
         if [ "${SKIP_GATE_REMEDIATION:-0}" != "1" ] && [ -f "$_lint_log" ]; then
             info "  [lint-gate:analyst] Extracting grounded finding from lint log..."
@@ -3735,7 +3750,7 @@ step_emit "4.4b" "skip" "Step 4.4b: Perf sentinel" "Phase A/B failed"
         [ "${fuzz_exit:-0}"   -ne 0 ] && _failing_logs+=("$fuzz_log")   && _log_labels+=("fuzz-weaver")
         [ "${perf_exit:-0}"   -ne 0 ] && _failing_logs+=("$perf_log")   && _log_labels+=("perf-sentinel")
 
-        local _profiles_file="${SCRIPT_DIR}/agents/profiles.json"
+        local _profiles_file="${AUTOMATION_DIR}/agents/profiles.json"
 
         if [ "${SKIP_GATE_REMEDIATION:-0}" != "1" ] && [ ${#_failing_logs[@]} -gt 0 ]; then
             warning "Step 4.2: Testing gates FAILED — running self-healing remediation pipeline..."

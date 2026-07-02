@@ -155,9 +155,10 @@ describe('gate-finding-analyst — orch script wiring', () => {
   });
 
   it('orch script passes gate log path and PRD_FILE to the analyst prompt', () => {
-    const analystIdx = orchSrc.indexOf('[gate-finding-analyst]');
-    // The prompt is built after the label — search 1000 chars after
-    const analystBlock = orchSrc.slice(analystIdx, analystIdx + 1000);
+    // Anchor on the testing-gates remediation loop (not the lint gate which also uses this agent)
+    const loopIdx = orchSrc.indexOf('for i in "${!_failing_logs[@]}"');
+    expect(loopIdx).toBeGreaterThan(-1);
+    const analystBlock = orchSrc.slice(loopIdx, loopIdx + 2000);
     expect(analystBlock).toMatch(/_glog|_glabel/);
     expect(analystBlock).toMatch(/PRD_FILE/);
   });

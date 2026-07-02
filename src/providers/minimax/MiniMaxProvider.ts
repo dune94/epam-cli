@@ -136,6 +136,7 @@ export class MiniMaxProvider implements LLMProvider {
         temperature: request.temperature ?? 0.7,
         ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
         stream: true,
+        stream_options: { include_usage: true },
         ...(tools && tools.length > 0 ? { tools } : {}),
         ...(this.resolveResponseFormat(request) ? { response_format: { type: this.resolveResponseFormat(request) } } : {}),
       }),

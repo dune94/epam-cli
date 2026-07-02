@@ -2565,18 +2565,20 @@ append_cost_record() {
         elapsed_minutes=$(echo "scale=2; ($end_epoch - $start_epoch) / 60" | bc 2>/dev/null || echo "0")
     fi
 
-    # Parse cost/token/turn usage from Claude CLI JSON result (--output-format json)
+    # Parse cost/token/turn usage from JSON result file.
+    # Handles two output shapes:
+    #   Claude CLI (--output-format json): total_cost_usd, usage.input_tokens, usage.output_tokens
+    #   epam run --json (AgentRunner):     cost_usd,        usage.inputTokens,  usage.outputTokens
     local tokens_in=0 tokens_out=0 cost_usd=0 task_turns=0
     if [ -n "$json_result_file" ] && [ -f "$json_result_file" ]; then
-        cost_usd=$(jq -r '.total_cost_usd // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
-        tokens_in=$(jq -r '.usage.input_tokens // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
-        tokens_out=$(jq -r '.usage.output_tokens // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
-        # Turn count: Claude CLI may report num_turns or turns
-        task_turns=$(jq -r '.num_turns // .turns // .usage.turns // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
-        # Also capture cache tokens if present
+        cost_usd=$(jq -r '.total_cost_usd // .cost_usd // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
+        tokens_in=$(jq -r '.usage.input_tokens // .usage.inputTokens // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
+        tokens_out=$(jq -r '.usage.output_tokens // .usage.outputTokens // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
+        # Turn count: Claude CLI reports num_turns/turns; AgentRunner reports iterations
+        task_turns=$(jq -r '.num_turns // .turns // .usage.turns // .iterations // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
+        # Cache tokens (Claude CLI only; no-op for epam output)
         local cache_create=$(jq -r '.usage.cache_creation_input_tokens // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
         local cache_read=$(jq -r '.usage.cache_read_input_tokens // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
-        # Total input includes base + cache tokens
         tokens_in=$(( ${tokens_in:-0} + ${cache_create:-0} + ${cache_read:-0} ))
     fi
     [ -z "$tokens_in" ] && tokens_in=0

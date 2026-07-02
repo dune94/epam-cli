@@ -1361,8 +1361,8 @@ if [ -z "$_topology_decision" ]; then
     _topology_source="heuristic"
 fi
 
-# Log decision + reason to phase-cost.jsonl for dashboard visibility
-jq -n \
+# Log decision + reason to phase-cost.jsonl for dashboard visibility (compact — must be single-line JSONL)
+jq -cn \
     --arg phase    "$PHASE" \
     --arg topology "$_topology_decision" \
     --arg reason   "${_topology_reason:-}" \

@@ -55,6 +55,25 @@ export type StreamDelta =
 
 export type StreamHandler = (delta: StreamDelta) => void;
 
+/**
+ * Resolves the effective temperature for a request: explicit request.temperature
+ * takes priority, then EPAM_TEMPERATURE (set per-story by the orchestration
+ * layer — e.g. to 0 for a narrow, scoped fix where token-selection variance is
+ * undesirable), then the provider's own default. Mirrors the same
+ * request-field-then-env-var-then-default pattern already used for
+ * reasoningEffort (see QwenProvider/MiniMaxProvider's resolveReasoningEffort),
+ * so both knobs are wired consistently.
+ */
+export function resolveTemperature(request: ProviderRequest, defaultTemperature: number): number {
+  if (typeof request.temperature === 'number') return request.temperature;
+  const envValue = process.env.EPAM_TEMPERATURE;
+  if (envValue !== undefined && envValue !== '') {
+    const parsed = parseFloat(envValue);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return defaultTemperature;
+}
+
 export interface LLMProvider {
   readonly name: string;
   readonly defaultModel: string;

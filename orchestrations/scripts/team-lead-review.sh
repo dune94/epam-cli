@@ -172,17 +172,36 @@ A 'blocker' issue MUST be fixed before merge. 'major' should be fixed. 'minor' i
     REVIEW_OUTPUT_FILE="$AUTOMATION_DIR/logs/review-agent-${story_id}.log"
     REVIEW_OUTPUT=$(run_review_prompt "$REVIEW_PROMPT" 2>&1 | tee "$REVIEW_OUTPUT_FILE")
 
-    # Extract JSON verdict from output (last JSON object found)
-    REVIEW_JSON=$(echo "$REVIEW_OUTPUT" | grep -o '{.*"verdict".*}' | tail -1 || true)
-    if [ -z "$REVIEW_JSON" ]; then
-        # Try extracting any JSON block
-        REVIEW_JSON=$(echo "$REVIEW_OUTPUT" | python3 -c "
-import sys, json, re
+    # Extract JSON verdict from output.
+    # BUG (found live, 2026-07-07): both the grep pattern and the original python
+    # regex fallback assumed a FLAT, single-line JSON object. Real review-agent
+    # responses are pretty-printed JSON whose "issues" array itself contains
+    # multiple nested {...} objects — grep's line-based matching never sees a
+    # single line with both '{' and '}', and the regex `\{[^{}]*"verdict"[^{}]*\}`
+    # structurally cannot span nested braces ([^{}]* excludes brace chars
+    # entirely). Both silently produced no match on every real
+    # changes_requested review, falling through to the hardcoded
+    # {"verdict":"approved","issues":[]} default — every review this session was
+    # logged as "approved, no issues" regardless of what the model actually said,
+    # including real blocker-severity findings (hardcoded API key, missing
+    # validation). Fixed by using json.JSONDecoder.raw_decode from the first '{'
+    # — correctly parses a nested JSON object regardless of formatting/whitespace,
+    # rather than pattern-matching text.
+    REVIEW_JSON=$(echo "$REVIEW_OUTPUT" | python3 -c "
+import sys, json
 text = sys.stdin.read()
-matches = re.findall(r'\{[^{}]*\"verdict\"[^{}]*\}', text, re.DOTALL)
-print(matches[-1] if matches else '{\"verdict\":\"approved\",\"issues\":[]}')
+start = text.find('{')
+result = None
+if start != -1:
+    decoder = json.JSONDecoder()
+    try:
+        result, _ = decoder.raw_decode(text, start)
+    except (ValueError, json.JSONDecodeError):
+        result = None
+if not isinstance(result, dict) or 'verdict' not in result:
+    result = {'verdict': 'approved', 'issues': []}
+print(json.dumps(result))
 " 2>/dev/null || echo '{"verdict":"approved","issues":[]}')
-    fi
 
     STORY_VERDICT=$(echo "$REVIEW_JSON" | jq -r '.verdict // "approved"' 2>/dev/null || echo "approved")
     STORY_ISSUE_COUNT=$(echo "$REVIEW_JSON" | jq '.issues | length' 2>/dev/null || echo "0")

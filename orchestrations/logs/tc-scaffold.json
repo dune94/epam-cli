@@ -1,0 +1,46 @@
+{
+  "SKY-001-test": {
+    "verifiedAt": "2025-07-06T22:31:29Z",
+    "sourceFiles": [
+      "package.json",
+      "tsconfig.json",
+      "vitest.config.ts",
+      "README.md",
+      ".env.example",
+      "src/index.ts"
+    ],
+    "facts": [
+      "package.json exists with scripts.build='tsc', scripts.test='vitest run', scripts.start='node dist/index.js', scripts.dev='tsx watch src/index.ts'",
+      "tsconfig.json exists with compilerOptions.strict=true, compilerOptions.noImplicitAny=true, compilerOptions.strictNullChecks=true, compilerOptions.strictFunctionTypes=true, compilerOptions.strictBindCallApply=true, compilerOptions.strictPropertyInitialization=true, compilerOptions.noImplicitThis=true, compilerOptions.alwaysStrict=true",
+      "tsconfig.json has no compilerOptions.noImplicitAny=false, no compilerOptions.noUnusedLocals=false, no compilerOptions.noUnusedParameters=false",
+      "tsconfig.json exclude includes '**/*.test.ts' and '**/*.spec.ts'",
+      "vitest.config.ts exists with test.globals=true, test.passWithNoTests=true, test.environment='node', test.include=['src/**/*.test.ts', 'src/**/*.spec.ts']",
+      "vitest.config.ts has no coverage.enabled=true, no isolate=false",
+      "dev script 'tsx watch src/index.ts' does NOT contain 127.0.0.1, localhost, or HOST binding - uses default tsx behavior",
+      "dev script 'tsx watch src/index.ts' does NOT contain 0.0.0.0 or --host 0.0.0.0",
+      "src/index.ts binds to HOST env var defaulting to '127.0.0.1' via app.listen(PORT, HOST, callback)",
+      "package.json scripts do NOT reference any environment variables (no ${VAR} or $VAR patterns)",
+      "README.md exists with content length > 0, contains markdown heading '# skyscanner-app', contains 'npm install' instruction",
+      ".env.example exists with RAPIDAPI_KEY=, RAPIDAPI_HOST=skyscanner-api.p.rapidapi.com, PORT=3000",
+      "__tests__/scaffold-verification.test.ts imports from 'vitest' not '@jest/globals'",
+      "Test file uses execSync from 'node:child_process', readFileSync/statSync/readdirSync/existsSync from 'node:fs', join from 'node:path'",
+      "No world-writable files (mode & 0o002 === 0) exist in project excluding node_modules, .git, dist"
+    ],
+    "mockStrategy": "No mocking required - test uses execSync to run tsc and vitest CLI commands; use vi.spyOn or direct fs operations for file system tests",
+    "bannedPatterns": [
+      "@jest/globals",
+      "jest.",
+      "import {.*} from 'fs'",
+      "import {.*} from 'path'",
+      "tsc --noEmit --project",
+      "vitest run --coverage",
+      "tsx watch --host 0.0.0.0",
+      "noImplicitAny: false",
+      "noUnusedLocals: false",
+      "noUnusedParameters: false",
+      "isolate: false",
+      "coverage: { enabled: true }",
+      "process.env.PORT"
+    ]
+  }
+}

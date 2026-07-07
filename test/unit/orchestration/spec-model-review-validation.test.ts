@@ -1,0 +1,138 @@
+/**
+ * Regression guard for a live-run defect (tier3 core phase, 2026-07-02):
+ * spec-mode-runner.js's LLM model-review pass wrote decision.finalModel
+ * straight to story.model with ZERO validation. The reviewer hallucinated
+ * "moonshotai/MiniMax-M3" (mixing the moonshotai org prefix with the
+ * minimax model name — matches no real model on any provider), and every
+ * subsequent API call for that story failed instantly (cost=$0, 0 tokens),
+ * burning all 8 retry attempts. The InferenceLadder cannot recover from a
+ * malformed model string — escalation only helps when the current model is
+ * real but insufficient.
+ *
+ * This was NOT caught by the earlier self-healing audit because that audit
+ * only covered applySpecChanges (the spec_pass AC/description rewrite path)
+ * — a SEPARATE code path in the same file (the model-review pass) also
+ * writes directly to story.model and was missed.
+ *
+ * Fix: buildKnownValidModels()/isValidModelString() validate the LLM's
+ * finalModel against a known-good allow-list before it's ever assigned to
+ * story.model; an unrecognized string falls back to the rule-based
+ * recommendation (which is validated by construction — it only ever
+ * produces the current model or the configured upgrade/mini model).
+ *
+ * Both functions are exported specifically so this validation is
+ * REAL-EXECUTION tested here, not just grepped for — the point is to catch
+ * this bug CLASS (any future unvalidated LLM-written PRD field), not just
+ * this one instance.
+ */
+
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const REPO_ROOT = join(__dirname, '../../../');
+const SPEC_RUNNER = join(REPO_ROOT, 'orchestrations/scripts/spec-mode-runner.js');
+const src = readFileSync(SPEC_RUNNER, 'utf8');
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { buildKnownValidModels, isValidModelString } = require(SPEC_RUNNER);
+
+describe('buildKnownValidModels — the allow-list', () => {
+  it('includes the current production model roster', () => {
+    const set = buildKnownValidModels('MiniMax-M3', 'MiniMax-M2.5');
+    expect(set.has('MiniMax-M3')).toBe(true);
+    expect(set.has('MiniMax-M2.5')).toBe(true);
+    expect(set.has('moonshotai/kimi-k2')).toBe(true);
+    expect(set.has('z-ai/glm-5.2')).toBe(true);
+  });
+
+  it('includes the dynamically-configured upgradeModel and miniModel', () => {
+    const set = buildKnownValidModels('some-custom-upgrade-model', 'some-custom-mini-model');
+    expect(set.has('some-custom-upgrade-model')).toBe(true);
+    expect(set.has('some-custom-mini-model')).toBe(true);
+  });
+
+  it('does NOT include the hallucinated model string from the live-run defect', () => {
+    const set = buildKnownValidModels('MiniMax-M3', 'MiniMax-M2.5');
+    expect(set.has('moonshotai/MiniMax-M3')).toBe(false);
+  });
+});
+
+describe('isValidModelString — real execution against the exact hallucinated defect', () => {
+  const knownValidModels = buildKnownValidModels('MiniMax-M3', 'MiniMax-M2.5');
+
+  it('REPRODUCES the exact live-run defect: rejects "moonshotai/MiniMax-M3"', () => {
+    expect(isValidModelString('moonshotai/MiniMax-M3', 'moonshotai/kimi-k2', knownValidModels)).toBe(false);
+  });
+
+  it('accepts a known-valid model string', () => {
+    expect(isValidModelString('z-ai/glm-5.2', 'MiniMax-M3', knownValidModels)).toBe(true);
+  });
+
+  it('accepts the unchanged current model even if not in the allow-list (no-op is always safe)', () => {
+    expect(isValidModelString('some-unlisted-model', 'some-unlisted-model', knownValidModels)).toBe(true);
+  });
+
+  it('rejects non-string values (null, undefined, numbers, objects)', () => {
+    expect(isValidModelString(null, 'MiniMax-M3', knownValidModels)).toBe(false);
+    expect(isValidModelString(undefined, 'MiniMax-M3', knownValidModels)).toBe(false);
+    expect(isValidModelString(42, 'MiniMax-M3', knownValidModels)).toBe(false);
+    expect(isValidModelString({ model: 'MiniMax-M3' }, 'MiniMax-M3', knownValidModels)).toBe(false);
+  });
+
+  it('rejects other plausible-looking but unlisted org/model combinations', () => {
+    // Same failure shape as the live bug: valid-looking org prefix, wrong model
+    expect(isValidModelString('qwen/MiniMax-M3', 'MiniMax-M3', knownValidModels)).toBe(false);
+    expect(isValidModelString('moonshotai/glm-5.2', 'MiniMax-M3', knownValidModels)).toBe(false);
+  });
+});
+
+describe('spec-mode-runner.js — model-review pass wired to validate before assignment', () => {
+  it('calls buildKnownValidModels before deciding finalModel', () => {
+    const idx = src.indexOf('const knownValidModels = buildKnownValidModels(');
+    expect(idx).toBeGreaterThan(-1);
+  });
+
+  it('isValidModel wraps isValidModelString with the built allow-list', () => {
+    expect(src).toMatch(/isValidModel = \(m, currentModel\) => isValidModelString\(m, currentModel, knownValidModels\)/);
+  });
+
+  it('rejects an invalid llmModel and falls back to fa.ruleRecommendation (not silently kept)', () => {
+    const idx = src.indexOf('if (!isValidModel(llmModel, fa.currentModel)) {');
+    expect(idx).toBeGreaterThan(-1);
+    const block = src.slice(idx, idx + 400);
+    expect(block).toMatch(/llmModel = fa\.ruleRecommendation/);
+    expect(block).toMatch(/console\.warn/);
+  });
+
+  it('marks llmOverride false when the invalid model was rejected (audit trail reflects reality)', () => {
+    const idx = src.indexOf('if (!isValidModel(llmModel, fa.currentModel)) {');
+    const block = src.slice(idx, idx + 700);
+    expect(block).toMatch(/rejectedInvalidModel = true/);
+    expect(block).toMatch(/llmOverride: decision\.override === true && !rejectedInvalidModel/);
+  });
+
+  it('exports buildKnownValidModels and isValidModelString for direct testability', () => {
+    expect(src).toMatch(/buildKnownValidModels,/);
+    expect(src).toMatch(/isValidModelString,/);
+  });
+});
+
+// ── Structural class-of-bug guard ────────────────────────────────────────────
+// The specific defect was one unvalidated write site. The broader lesson: ANY
+// direct `story.model = <llm-provided value>` assignment must pass through
+// validation first. This test enumerates every such assignment in the file
+// and confirms it's downstream of a validated variable, not a raw decision
+// field.
+
+describe('structural guard — no unvalidated story.model assignment exists', () => {
+  it('the only story.model assignment site uses fa.finalModel (already validated upstream)', () => {
+    const assignments = [...src.matchAll(/\bstory\.model\s*=\s*([^;]+);/g)].map((m) => m[1].trim());
+    expect(assignments.length).toBeGreaterThan(0);
+    for (const rhs of assignments) {
+      // Must not assign a raw decision/LLM field directly
+      expect(rhs, `Unvalidated assignment: story.model = ${rhs}`).not.toMatch(/decision\.finalModel/);
+      expect(rhs, `Unvalidated assignment: story.model = ${rhs}`).not.toMatch(/^rawModel$/);
+    }
+  });
+});

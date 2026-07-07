@@ -6,6 +6,7 @@ import { BashTool } from './builtin/Bash.js';
 import { ListFilesTool } from './builtin/ListFiles.js';
 import { SearchTool } from './builtin/Search.js';
 import { FetchUrlTool } from './builtin/FetchUrl.js';
+import { EscalateDefectTool } from './builtin/EscalateDefect.js';
 import { ToolRegistry } from './registry.js';
 import { PluginLoader } from './PluginLoader.js';
 
@@ -25,6 +26,7 @@ export function createTools(): Tool[] {
     new ListFilesTool(),
     new SearchTool(),
     new FetchUrlTool(),
+    new EscalateDefectTool(),
   ];
 
   const pluginEntries = PluginLoader.readPluginList(SETTINGS_PATH);

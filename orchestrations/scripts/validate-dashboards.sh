@@ -162,7 +162,9 @@ header "4. agent-messages.jsonl data"
 # ─────────────────────────────────────────────────────────────────────────────
 MSG_FILE="$LOGS_DIR/agent-messages.jsonl"
 if [ -f "$MSG_FILE" ]; then
-    msg_count=$(grep -c '"message_type"' "$MSG_FILE" 2>/dev/null || echo 0)
+    # grep -c already prints "0" on zero matches while also exiting 1 —
+    # `|| echo 0` would double-print ("0\n0"), breaking the -gt test below.
+    msg_count=$({ grep -c '"message_type"' "$MSG_FILE" 2>/dev/null || true; })
     if [ "$msg_count" -gt 0 ]; then
         pass "agent-messages.jsonl: $msg_count messages"
         # Show senders
@@ -213,7 +215,9 @@ header "6. phase-cost.jsonl data"
 # ─────────────────────────────────────────────────────────────────────────────
 COST_FILE="$LOGS_DIR/phase-cost.jsonl"
 if [ -f "$COST_FILE" ] && [ -s "$COST_FILE" ]; then
-    cost_count=$(grep -c '"story_id"' "$COST_FILE" 2>/dev/null || echo 0)
+    # grep -c already prints "0" on zero matches while also exiting 1 —
+    # `|| echo 0` would double-print ("0\n0"), garbling this message.
+    cost_count=$({ grep -c '"story_id"' "$COST_FILE" 2>/dev/null || true; })
     pass "phase-cost.jsonl: $cost_count cost records"
 else
     warn "phase-cost.jsonl: empty (cost tracking not firing — check append_cost_record)"

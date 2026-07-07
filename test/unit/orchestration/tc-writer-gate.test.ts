@@ -359,20 +359,41 @@ describe('TC gate — orchestration script wiring', () => {
 
   it('Step 1.6 passes --prd, --phase, and --output-dir to the gate script', () => {
     const src = readFileSync(ORCH_SCRIPT, 'utf8');
-    const step16 = src.slice(src.indexOf('Step 1.6'), src.indexOf('need_worktrees=false'));
+    // Step 1.6 now executes after Step 3.2 (see ordering test below) — find
+    // the SECOND "Step 1.6" occurrence, which is the real execution block
+    // (the first is the moved-comment marker left at the old location).
+    const firstIdx = src.indexOf('Step 1.6');
+    const secondIdx = src.indexOf('Step 1.6', firstIdx + 1);
+    const step16 = src.slice(secondIdx, src.indexOf('sync-monitor-stories.sh', secondIdx));
     expect(step16).toContain('--prd');
     expect(step16).toContain('--phase');
     expect(step16).toContain('--output-dir');
   });
 
-  it('Step 1.6 fires after Step 1.5 (auto-commit) but before worktree creation', () => {
+  it('Step 1.6 fires after Step 3.2 (worktree merge-back), not before Step 3 (worktree creation)', () => {
+    // Root cause of a live-run defect (2026-07-02): Step 1.6 used to run right
+    // after Step 1.5, BEFORE Step 3's worktree implementation. For any phase
+    // using worktree topology, Step 1 ("main-branch stories") is empty ("no
+    // stories in lane"), so Step 1.6 always found zero source files and
+    // hard-aborted the entire phase before implementation ever ran. It must
+    // run after worktree merge-back so both topologies (main-branch and
+    // worktree) are guaranteed to have real implementation on the branch.
     const src = readFileSync(ORCH_SCRIPT, 'utf8');
-    const i15  = src.indexOf('Step 1.5');
-    const i16  = src.indexOf('Step 1.6');
-    const iwt  = src.indexOf('need_worktrees=false');
-    expect(i15).toBeGreaterThan(-1);
-    expect(i16).toBeGreaterThan(i15);
-    expect(iwt).toBeGreaterThan(i16);
+    const iMergeSuccess = src.indexOf('Step 3.2: All worktree branches merged back successfully');
+    const i16 = src.indexOf('Step 1.6', iMergeSuccess);
+    const iSyncMonitor = src.indexOf('sync-monitor-stories.sh', i16);
+    expect(iMergeSuccess).toBeGreaterThan(-1);
+    expect(i16).toBeGreaterThan(iMergeSuccess);
+    expect(iSyncMonitor).toBeGreaterThan(i16);
+  });
+
+  it('does NOT execute Step 1.6 before Step 3 worktree launch (only a comment marker remains there)', () => {
+    const src = readFileSync(ORCH_SCRIPT, 'utf8');
+    const iNeedWorktrees = src.indexOf('need_worktrees=false');
+    const before = src.slice(Math.max(0, iNeedWorktrees - 600), iNeedWorktrees);
+    // The old location only has an explanatory comment now, not the gate logic
+    expect(before).toMatch(/has moved — see after Step 3\.2 below/);
+    expect(before).not.toMatch(/post-impl-tc-writer\.sh/);
   });
 });
 

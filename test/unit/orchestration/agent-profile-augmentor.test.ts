@@ -175,11 +175,9 @@ describe('profile-augmentor — orch script wiring', () => {
   });
 
   it('orch script checks profile_updated: true to log success', () => {
-    const a3Idx = orchSrc.indexOf('[profile-augmentor]');
-    // success message and grep check appear up to 1400 chars after the label
-    const a3Block = orchSrc.slice(a3Idx, a3Idx + 1500);
-    expect(a3Block).toMatch(/profile_updated.*true|profile_updated"[^"]*:[^"]*true/);
-    expect(a3Block).toMatch(/Profile updated/i);
+    // profile_updated grep and success message appear after the reviewer block
+    expect(orchSrc).toMatch(/profile_updated.*true|profile_updated"[^"]*:[^"]*true/);
+    expect(orchSrc).toMatch(/\[profile-augmentor\].*Profile updated/is);
   });
 
   it('Agent 3 result does NOT affect _remediation_applied (profile update is a bonus)', () => {

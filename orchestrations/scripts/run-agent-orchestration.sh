@@ -199,10 +199,10 @@ step_emit() {
         local first=true
         local _sid _slabel _sstatus
         for _sid in \
-            "0:spec" "0.1:cpa" "0.5:skill-pre" "0.6:hybrid-coord" "0.7:regression" \
-            "0.8:mkdir" "1:main-stories" "1.5:auto-commit" "1.6:tc-writer" \
+            "0:spec" "0a:openspec" "0b:speckit" "0.1:cpa" "0.5:skill-pre" "0.6:hybrid-coord" "0.7:regression" \
+            "0.8:mkdir" "0.9:model-coord" "1:main-stories" "1.5:auto-commit" "1.6:tc-writer" \
             "2:worktrees" "3a:primary" "3b:independent" "3.1:wt-health" \
-            "3.2:wt-merge" "3.5:skill-post" "3.7:pre-review" \
+            "3.2:wt-merge" "3.5:skill-post" "3.7:pre-review" "3.8:lint-gate" \
             "4:review-stories" "4.2a:sast" "4.2b:spec-val" \
             "4.3a:review-ranger" "4.3b:mutant-hunter" \
             "4.4a:fuzz-weaver" "4.4b:perf-sentinel" "4.6:e2e"; do
@@ -242,11 +242,14 @@ print_step_checklist() {
     }
 
     _checklist_row "0"    "Specification pass"       "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "EPAM_SPEC_MODE=0"
+    _checklist_row "0a"   "  openspec (elaboration)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "${SPEC_MODE_OPENSPEC_MODEL:-moonshotai/kimi-k2}"
+    _checklist_row "0b"   "  speckit (verification)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "${SPEC_MODE_SPECKIT_MODEL:-moonshotai/kimi-k2}"
     _checklist_row "0.1"  "CPA pre-pass"             "$([ "${SKIP_CPA:-0}" = "1" ] && echo SKIP || echo ACTIVE)"           "SKIP_CPA=1"
     _checklist_row "0.5"  "Pre-phase skill assess"   "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP_SKILL_ASSESSMENT=1 || true)"
     _checklist_row "0.6"  "Hybrid pre-coord"         "$([ "${RESOLVED_ORCH_MODE:-bash}" = "hybrid" ] && echo ACTIVE || echo SKIP)" "ORCH_MODE≠hybrid"
     _checklist_row "0.7"  "Regression guard"         "$([ "${SKIP_REGRESSION_GUARD:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_REGRESSION_GUARD=true"
     _checklist_row "0.8"  "mkdir src/ dirs"          "ACTIVE"
+    _checklist_row "0.9"  "PRD model coordinator"    "$([ "${SKIP_PRD_MODEL_COORDINATOR:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "$([ "${SKIP_PRD_MODEL_COORDINATOR:-0}" = "1" ] && echo SKIP_PRD_MODEL_COORDINATOR=1 || true)"
     _checklist_row "1"    "Main-branch stories"      "ACTIVE"
     _checklist_row "1.5"  "Auto-commit"              "COND"  "if uncommitted changes"
     _checklist_row "1.6"  "TC writer gate"           "$([ "${SKIP_TC_WRITER:-0}" = "1" ] && echo SKIP || echo COND)" "SKIP_TC_WRITER=1 or no test stories"
@@ -268,7 +271,7 @@ print_step_checklist() {
     _checklist_row "4.6"  "Browser E2E routing"     "$([ "${SKIP_BROWSER_E2E_ROUTING:-false}" = "true" ] && echo SKIP || echo COND)" "SKIP_BROWSER_E2E_ROUTING=true"
 
     local skips=0
-    for key in "0" "0.1" "0.5" "0.6" "0.7" "1" "1.5" "1.6" "2" "3a" "3b" "3.1" "3.2" "3.5" "3.7" "4" "4.2a" "4.2b" "4.3a" "4.3b" "4.4a" "4.4b" "4.6"; do
+    for key in "0" "0.1" "0.5" "0.6" "0.7" "0.8" "0.9" "1" "1.5" "1.6" "2" "3a" "3b" "3.1" "3.2" "3.5" "3.7" "4" "4.2a" "4.2b" "4.3a" "4.3b" "4.4a" "4.4b" "4.6"; do
         [ "${_STEP_STATUS[$key]:-}" = "skip" ] && skips=$((skips + 1))
     done
     echo ""
@@ -404,7 +407,7 @@ run_orch_prompt() {
         return 1
     fi
 
-    local gate_model="${ORCH_GATE_MODEL:-gpt-4o}"
+    local gate_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
     local model_args=()
     [ -n "$gate_model" ] && model_args=(--model "$gate_model")
 
@@ -582,6 +585,95 @@ print(f"{total:.4f}")
     fi
 }
 
+# hot_swap_story_model_if_unstable <story_id>
+# Called after a story's FIRST watchdog timeout, before the automatic retry.
+# A timeout means the invocation produced NO signal at all within the full
+# effort-scaled window — that's categorically different from a normal retry
+# (which at least has failure content to learn from). Retrying with the exact
+# same model+provider pairing risks repeating an unstable/misrouted
+# combination for the full timeout window again.
+#
+# Root cause this addresses (found live, 2026-07-07): a story ended up with
+# aiProvider="qwen" (OpenRouter) paired with model="MiniMax-M3" (a MiniMax-
+# native model) after spec-mode's LLM model-review step changed .model without
+# syncing .aiProvider — see resolveModelProvider()'s docstring in
+# spec-mode-runner.js for the full story. That specific mismatch is now fixed
+# at the source, but ANY model/provider pairing can still be transiently
+# unstable (rate limits, upstream outage) — this is a general resilience
+# measure, not just a patch for that one bug.
+#
+# Escalates exactly ONE ladder step (reusing the same EPAM_MODEL_LADDER_MEDIUM/
+# HIGH / EPAM_MODEL_PROVIDER_MAP config already used by claude.sh's inference
+# ladder — duplicated here in minimal form because run-agent-orchestration.sh
+# invokes claude.sh as a SEPARATE PROCESS via `timeout`, not sourced, so
+# claude.sh's bash functions aren't available in this process). No vendor/
+# model names hardcoded — every decision reads from env-configured maps.
+# No-op (silent) when no ladder step is configured for the current model.
+hot_swap_story_model_if_unstable() {
+    local story_id="$1"
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+
+    local current_model
+    current_model=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .model // ""' "$prd_target" 2>/dev/null || echo "")
+    [ -z "$current_model" ] && return 0
+
+    local tier
+    tier=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .ladderTier // "medium"' "$prd_target" 2>/dev/null || echo "medium")
+    local ladder="${EPAM_MODEL_LADDER:-}"
+    if [ -z "$ladder" ]; then
+        case "$tier" in
+            high) ladder="${EPAM_MODEL_LADDER_HIGH:-}" ;;
+            *)    ladder="${EPAM_MODEL_LADDER_MEDIUM:-}" ;;
+        esac
+    fi
+    [ -z "$ladder" ] && return 0
+
+    local new_model="" pair from to IFS_SAVE="$IFS"
+    IFS='|'
+    read -ra pairs <<< "$ladder"
+    IFS="$IFS_SAVE"
+    for pair in "${pairs[@]}"; do
+        from="${pair%%=*}"
+        to="${pair#*=}"
+        if [ "$from" = "$current_model" ]; then
+            new_model="$to"
+            break
+        fi
+    done
+    [ -z "$new_model" ] && return 0
+
+    local new_provider="" map_pair map_from map_to
+    if [ -n "${EPAM_MODEL_PROVIDER_MAP:-}" ]; then
+        IFS='|'
+        read -ra map_pairs <<< "$EPAM_MODEL_PROVIDER_MAP"
+        IFS="$IFS_SAVE"
+        for map_pair in "${map_pairs[@]}"; do
+            map_from="${map_pair%%=*}"
+            map_to="${map_pair#*=}"
+            case "$new_model" in
+                $map_from) new_provider="$map_to"; break ;;
+            esac
+        done
+    fi
+
+    local jq_args=(--arg id "$story_id" --arg m "$new_model")
+    local jq_filter='(.stories[] | select(.id == $id) | .model) = $m'
+    if [ -n "$new_provider" ]; then
+        jq_args+=(--arg p "$new_provider")
+        jq_filter='(.stories[] | select(.id == $id) | .model) = $m | (.stories[] | select(.id == $id) | .aiProvider) = $p'
+    fi
+    local tmp_prd
+    tmp_prd=$(mktemp)
+    if jq "${jq_args[@]}" "$jq_filter" "$prd_target" > "$tmp_prd" 2>/dev/null; then
+        mv "$tmp_prd" "$prd_target"
+        warning "Watchdog: hot-swapping $story_id model after timeout: '$current_model' -> '$new_model'${new_provider:+ (provider -> $new_provider)}"
+    else
+        rm -f "$tmp_prd"
+    fi
+}
+
 # Run a single story with effort-based timeout + one automatic retry.
 # On double timeout:
 #   EPAM_PAUSE_ON_TIMEOUT=true  → pause and wait for operator (max EPAM_MAX_PAUSE_SECS)
@@ -620,9 +712,26 @@ run_story_with_watchdog() {
     set -e
 
     if [ $_rc -eq 124 ]; then
-        warning "Watchdog: $story_id timed out after ${timeout_secs}s — retrying once..."
+        # Scale the retry's timeout up (found live, 2026-07-07): a story that
+        # timed out once has, by construction, already burned several internal
+        # self-heal attempts within that window — each one appends more KB/
+        # coordinator-guidance context, so by the time the SAME flat timeout
+        # budget is handed to the retry, the cumulative prompt is already larger
+        # than attempt 1's. A live process inspection during a real timeout
+        # confirmed a genuinely in-flight, still-connected API call (not a
+        # stuck/crashed one) — the retry deserves more room, not the same
+        # budget that already proved insufficient once. Multiplier is
+        # configurable (EPAM_WATCHDOG_RETRY_MULTIPLIER, default 1.5x); set to 1
+        # to restore the old flat-timeout behavior.
+        local retry_timeout_secs
+        retry_timeout_secs=$(python3 -c "
+import math
+print(math.ceil(${timeout_secs} * ${EPAM_WATCHDOG_RETRY_MULTIPLIER:-1.5}))
+" 2>/dev/null || echo "$timeout_secs")
+        warning "Watchdog: $story_id timed out after ${timeout_secs}s — retrying once with an extended ${retry_timeout_secs}s budget..."
+        hot_swap_story_model_if_unstable "$story_id"
         set +e
-        timeout "$timeout_secs" "$CLAUDE_SH" "$story_id" 2>&1 | tee -a "$log_file"
+        timeout "$retry_timeout_secs" "$CLAUDE_SH" "$story_id" 2>&1 | tee -a "$log_file"
         _rc=${PIPESTATUS[0]}
         set -e
     fi
@@ -635,12 +744,13 @@ run_story_with_watchdog() {
                 --arg story   "$story_id" \
                 --arg phase   "$PHASE" \
                 --argjson tsecs "$timeout_secs" \
-                '{reason:$reason,storyId:$story,phase:$phase,timeoutSecs:$tsecs,pausedAt:(now|todate)}'
+                --argjson retryTsecs "${retry_timeout_secs:-$timeout_secs}" \
+                '{reason:$reason,storyId:$story,phase:$phase,timeoutSecs:$tsecs,retryTimeoutSecs:$retryTsecs,pausedAt:(now|todate)}'
             )" > "$LOG_DIR/PAUSED"
             wait_if_paused
             # Operator resumed — continue past the timed-out story
         else
-            error "Watchdog: $story_id timed out twice (${timeout_secs}s × 2) — skipping story and continuing"
+            error "Watchdog: $story_id timed out twice (${timeout_secs}s then ${retry_timeout_secs:-$timeout_secs}s) — skipping story and continuing"
             warning "  Set EPAM_PAUSE_ON_TIMEOUT=true to pause for operator intervention instead"
             # Log the timeout as a failed cost record so dashboards reflect it
             jq -cn \
@@ -1114,7 +1224,7 @@ run_specification_pass() {
     set +e
     PRD_FILE="$PRD_FILE" OUTPUT_DIR="$LOG_DIR" CLAUDE_CMD="${CLAUDE_CMD}" \
         AI_RUNNER_CMD="$AI_RUNNER_CMD" EPAM_ORCHESTRATION_PROVIDER="${ORCH_GATE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-}}" \
-        AI_MODEL="${ORCH_GATE_MODEL:-gpt-4o}" \
+        AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
         "$node_cmd" "$spec_runner" --phase "$phase_id" 2>&1 | tee "$LOG_DIR/spec-${phase_id}.log"
     local spec_rc=${PIPESTATUS[0]}
     set -e
@@ -1123,13 +1233,32 @@ run_specification_pass() {
     append_pipeline_cost_record "spec-pass" "$phase_id" \
         "${ORCH_GATE_MODEL:-qwen/qwen3-coder-30b-a3b-instruct}" "$_spec_started" \
         "0" "0" "0" "0" 2>/dev/null || true
+    # Surface openspec/speckit as visible checklist sub-steps instead of only
+    # showing as "spec-mode: fast-path ..." log lines buried inside Step 0's
+    # own log — parses the summary spec-mode-runner.js already writes
+    # (summary.stats.agents: {agentName: invocationCount}) for a real story
+    # count per agent; model comes from the same env vars the runner itself
+    # uses (SPEC_MODE_OPENSPEC_MODEL/SPEC_MODE_SPECKIT_MODEL).
+    local _spec_summary="$LOG_DIR/spec-summary.json"
+    local _openspec_model="${SPEC_MODE_OPENSPEC_MODEL:-moonshotai/kimi-k2}"
+    local _speckit_model="${SPEC_MODE_SPECKIT_MODEL:-moonshotai/kimi-k2}"
+    local _openspec_count=0 _speckit_count=0
+    if [ -f "$_spec_summary" ]; then
+        _openspec_count=$(jq -r '.stats.agents.openspec // 0' "$_spec_summary" 2>/dev/null || echo 0)
+        _speckit_count=$(jq -r '.stats.agents.speckit // 0' "$_spec_summary" 2>/dev/null || echo 0)
+    fi
+
     if [ $spec_rc -eq 0 ]; then
         step_emit "0" "pass" "Step 0: Specification pass"
+        step_emit "0a" "pass" "  openspec (elaboration)" "${_openspec_model}, ${_openspec_count} stor(y/ies)"
+        step_emit "0b" "pass" "  speckit (verification)" "${_speckit_model}, ${_speckit_count} stor(y/ies)"
         success "Step 0: Specification pass completed for '$phase_id'"
         "$SCRIPT_DIR/update-monitor.sh" event "specification_pass" \
             "Specification agents completed (OpenSpec/Speckit)" "" "main" "spec-coordinator" 2>/dev/null || true
     else
         step_emit "0" "fail" "Step 0: Specification pass"
+        step_emit "0a" "fail" "  openspec (elaboration)" "${_openspec_model}"
+        step_emit "0b" "fail" "  speckit (verification)" "${_speckit_model}"
         error "Step 0: Specification pass FAILED for '$phase_id' — all agent invocations failed."
         error "  Check EPAM_ORCHESTRATION_PROVIDER is set and supported by ai-run.sh."
         error "  See: $LOG_DIR/spec-${phase_id}.log"
@@ -1139,9 +1268,13 @@ run_specification_pass() {
 
 if [ "$DRY_RUN" = true ]; then
     step_emit "0" "skip" "Step 0: Specification pass" "dry-run"
+    step_emit "0a" "skip" "  openspec (elaboration)" "dry-run"
+    step_emit "0b" "skip" "  speckit (verification)" "dry-run"
     info "Step 0: Specification pass skipped during --dry-run"
 elif [ "${EPAM_SPEC_MODE:-1}" = "0" ]; then
     step_emit "0" "skip" "Step 0: Specification pass" "EPAM_SPEC_MODE=0"
+    step_emit "0a" "skip" "  openspec (elaboration)" "EPAM_SPEC_MODE=0"
+    step_emit "0b" "skip" "  speckit (verification)" "EPAM_SPEC_MODE=0"
     info "Step 0: Specification pass disabled (EPAM_SPEC_MODE=0)"
 else
     run_specification_pass "$PHASE"
@@ -1461,10 +1594,10 @@ _checklist_heartbeat() {
         echo ""
         echo -e "${MAGENTA}━━━ Step Status @ $(date +%H:%M:%S) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         for _sid in \
-            "0:spec" "0.1:cpa" "0.5:skill-pre" "0.6:hybrid-coord" "0.7:regression" \
-            "0.8:mkdir" "1:main-stories" "1.5:auto-commit" "1.6:tc-writer" \
+            "0:spec" "0a:openspec" "0b:speckit" "0.1:cpa" "0.5:skill-pre" "0.6:hybrid-coord" "0.7:regression" \
+            "0.8:mkdir" "0.9:model-coord" "1:main-stories" "1.5:auto-commit" "1.6:tc-writer" \
             "2:worktrees" "3a:primary" "3b:independent" "3.1:wt-health" \
-            "3.2:wt-merge" "3.5:skill-post" "3.7:pre-review" \
+            "3.2:wt-merge" "3.5:skill-post" "3.7:pre-review" "3.8:lint-gate" \
             "4:review-stories" "4.2a:sast" "4.2b:spec-val" \
             "4.3a:review-ranger" "4.3b:mutant-hunter" \
             "4.4a:fuzz-weaver" "4.4b:perf-sentinel" "4.6:e2e"; do
@@ -1615,7 +1748,7 @@ CRITICAL RULES:
 - A test-engineer profile must instruct the agent to ONLY write test files — never touch implementation files.
 - The same agentRole must NEVER appear on both an implementation story and its paired test story in the same phase.
 - Inferred skill additions must be specific and actionable (a concrete rule the agent can follow), not vague capability claims.
-- NEVER write example API keys, tokens, or secrets into any source file — not even as placeholders. If example values are needed in documentation, use the pattern `process.env.SKYSCANNER_API_KEY` or the literal string `YOUR_API_KEY_HERE`. Any string matching `/sk-[a-z]+-[a-zA-Z0-9]+/` or resembling a credential will trigger a SAST blocker.
+- NEVER write example API keys, tokens, or secrets into any source file — not even as placeholders. If example values are needed in documentation, use the pattern \`process.env.SKYSCANNER_API_KEY\` or the literal string \`YOUR_API_KEY_HERE\`. Any string matching \`/sk-[a-z]+-[a-zA-Z0-9]+/\` or resembling a credential will trigger a SAST blocker.
 - NEVER modify package.json, tsconfig.json, vitest.config.ts, or any other scaffold-phase infrastructure file. These are owned by the scaffold phase and are immutable to all subsequent phases. If a story appears to require changing these files, flag it as a blocker in skills-gap-report.jsonl instead.
 - NEVER rewrite the PRD file (${PRD_REL}) with a different story structure. You may only update agentRole fields and append to profiles.json. Any other structural change to the PRD is forbidden.
 - NEVER modify .env, .env.*, *credentials*, or any file containing API keys or secrets. These files are immutable to all agents — modification would break the entire pipeline for all subsequent runs.
@@ -1629,6 +1762,11 @@ PROMPT_HEADER
 
 Read ${PRD_REL} implementationOrder[\"${phase_id}\"] for the story list, then proceed with the analysis above."
 
+    # Fresh pre-call snapshot for reviewer diffing (profiles_backup is the
+    # canonical original floor, not necessarily the immediately-prior state).
+    local _pfa_profiles_before
+    _pfa_profiles_before=$(cat "$profiles_file" 2>/dev/null || echo "{}")
+
     cd "$PROJECT_ROOT"
     if run_orch_prompt "$assessment_prompt" "assessment" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"; then
         step_emit "0.5" "pass" "Step 0.5: Skill assessment"
@@ -1639,6 +1777,78 @@ Read ${PRD_REL} implementationOrder[\"${phase_id}\"] for the story list, then pr
             error "Pre-phase assessment corrupted profiles.json! Restoring backup."
             cp "$profiles_backup" "$profiles_file"
             return 1
+        fi
+
+        # Reviewer gate — Step 0.5 can create brand-new profiles from scratch
+        # and append arbitrary skill rules to existing ones (typescript-engineer,
+        # sast-sentinel, review-ranger, etc). The jq-empty check above only
+        # catches JSON syntax corruption; this catches bad CONTENT before it
+        # reaches every agent invocation for the rest of the run.
+        if [ -n "${ORCH_GATE_PROVIDER:-}" ]; then
+            local _pfa_before_tmp
+            _pfa_before_tmp=$(mktemp)
+            printf '%s' "$_pfa_profiles_before" > "$_pfa_before_tmp"
+            local _pfa_diff
+            _pfa_diff=$(python3 - "$_pfa_before_tmp" "$profiles_file" <<'PFA_DIFF_PY'
+import json, sys
+with open(sys.argv[1]) as f:
+    before = json.load(f)
+with open(sys.argv[2]) as f:
+    after = json.load(f)
+new_keys = [k for k in after if k not in before]
+changed_keys = [k for k in after if k in before and after[k] != before[k]]
+out = {
+    "new_profiles": {k: after[k][:1500] for k in new_keys},
+    "changed_profiles": {k: {"before": before[k][-800:], "after": after[k][-800:]} for k in changed_keys}
+}
+print(json.dumps(out))
+PFA_DIFF_PY
+)
+            rm -f "$_pfa_before_tmp"
+            local _pfa_has_changes
+            _pfa_has_changes=$(echo "$_pfa_diff" | python3 -c "import sys,json; d=json.load(sys.stdin); print(1 if d['new_profiles'] or d['changed_profiles'] else 0)" 2>/dev/null || echo 0)
+
+            if [ "${_pfa_has_changes:-0}" = "1" ]; then
+                local _pfa_reviewer_profile
+                _pfa_reviewer_profile=$(jq -r '."prd-change-reviewer" // ""' "$profiles_file" 2>/dev/null || echo "")
+                if [ -n "$_pfa_reviewer_profile" ]; then
+                    local _pfa_verdict
+                    _pfa_verdict=$(echo "${_pfa_reviewer_profile}
+
+STORY: pre-phase-assessment-${phase_id}
+CHANGE TYPE: profile_creation
+
+BEFORE/AFTER DIFF:
+${_pfa_diff:0:3000}
+
+Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
+                        AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
+                        AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
+                        EPAM_CLI="${EPAM_CLI:-epam}" \
+                        "$AI_RUNNER_CMD" \
+                            --provider "${ORCH_GATE_PROVIDER}" \
+                            --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
+                        2>/dev/null | \
+                        python3 -c "
+import sys, json, re
+text = sys.stdin.read()
+try:
+    obj = json.loads(text.strip())
+    print(obj.get('verdict','pass'))
+    sys.exit(0)
+except Exception:
+    pass
+m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
+print(m.group(1) if m else 'pass')
+" 2>/dev/null || echo "pass")
+                    if [ "$_pfa_verdict" = "fail" ]; then
+                        warning "  [pre-phase-assessment] Profile changes REJECTED by reviewer — reverting profiles.json"
+                        echo "$_pfa_profiles_before" > "$profiles_file" 2>/dev/null || true
+                    else
+                        success "  [pre-phase-assessment] Profile changes approved by reviewer"
+                    fi
+                fi
+            fi
         fi
     else
         step_emit "0.5" "warn" "Step 0.5: Skill assessment" "non-critical"
@@ -1833,6 +2043,160 @@ mkdir -p "$PROJECT_ROOT/src" "$PROJECT_ROOT/src/skyscanner" "$PROJECT_ROOT/publi
 step_emit "0.8" "pass" "Step 0.8: mkdir src/ dirs"
 
 # ──────────────────────────────────────────────
+# Step 0.9: PRD model coordinator — ensures every pending story (base +
+# split children created by the spec pass) has explicit model, aiProvider,
+# and reasoningEffort fields written into the PRD itself. Without this,
+# split children silently fall back to a provider's hardcoded default model
+# (e.g. MiniMax-M2.5 instead of MiniMax-M3) because they inherit no fields
+# from their parent story. The PRD, not env vars or provider defaults, is
+# the single source of truth for per-story model assignment.
+# ──────────────────────────────────────────────
+step_emit "0.9" "running" "Step 0.9: PRD model coordinator"
+if [ "${SKIP_PRD_MODEL_COORDINATOR:-0}" = "1" ]; then
+    info "  [prd-model-coordinator] Skipped (SKIP_PRD_MODEL_COORDINATOR=1)"
+    step_emit "0.9" "skip" "Step 0.9: PRD model coordinator" "SKIP_PRD_MODEL_COORDINATOR=1"
+else
+    _mc_phase="${CURRENT_PHASE:-${PHASE:-unknown}}"
+    _mc_prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    _mc_profiles_file="${AUTOMATION_DIR}/agents/profiles.json"
+
+    _mc_missing_count=$(jq -r --arg ph "$_mc_phase" '
+        [.stories[] | select((.phase // $ph) == $ph)
+          | select(.status == "pending")
+          | select((.model // "") == "" or (.aiProvider // "") == "" or (.reasoningEffort // "") == "")
+        ] | length
+    ' "$_mc_prd_target" 2>/dev/null || echo 0)
+
+    if [ "${_mc_missing_count:-0}" -eq 0 ]; then
+        info "  [prd-model-coordinator] All pending stories already have model/aiProvider/reasoningEffort"
+    else
+        info "  [prd-model-coordinator] ${_mc_missing_count} pending stor(y/ies) missing model assignment — coordinating..."
+        _mc_prd_before=$(cat "$_mc_prd_target" 2>/dev/null || echo "{}")
+
+        _mc_prompt=$(cat << ENDPROMPT_MC
+$(cat "$_mc_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('prd-model-coordinator',''))" 2>/dev/null)
+
+PRD file: ${_mc_prd_target}
+Phase: ${_mc_phase}
+
+Assign model, aiProvider, and reasoningEffort to every pending story in this phase that is missing one or more of these fields. Write the updated PRD back to the file, then emit the JSON summary.
+ENDPROMPT_MC
+)
+        _mc_result=$(echo "$_mc_prompt" | \
+            AI_GATE_ALLOW_TOOLS=1 \
+            AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
+            AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
+            EPAM_DANGEROUS_SKIP_APPROVAL=1 \
+            CLAUDE_CMD="$CLAUDE_CMD" \
+            EPAM_CLI="${EPAM_CLI:-epam}" \
+            "$AI_RUNNER_CMD" \
+                --provider "${ORCH_GATE_PROVIDER:-minimax}" \
+                --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
+            2>&1 | tee -a "$LOG_DIR/prd-model-coordinator-${_mc_phase}.log")
+
+        _mc_assigned_count=$(echo "$_mc_result" | python3 -c "
+import sys, re, json
+txt = sys.stdin.read()
+for m in re.finditer(r'\{[^{}]*\"assigned_count\"[^{}]*\}', txt, re.DOTALL):
+    try:
+        obj = json.loads(m.group(0))
+        print(obj.get('assigned_count', 0))
+        break
+    except: pass
+else: print(0)
+" 2>/dev/null || echo 0)
+
+        _mc_prd_after=$(cat "$_mc_prd_target" 2>/dev/null || echo "{}")
+        # Gate on whether the PRD FILE actually changed, not the agent's own
+        # self-reported assigned_count. Root cause of a live-run defect
+        # (2026-07-03): the agent has tool access (AI_GATE_ALLOW_TOOLS=1) and
+        # can write the PRD directly via WriteFile regardless of what its own
+        # JSON summary claims. It silently split SKY-001 into SKY-001-A/B
+        # while reporting "no assignments made" (assigned_count absent/0) —
+        # so the old assigned_count-gated check never even looked at the
+        # file, and the rogue split was never reviewed or reverted.
+        if [ "${_mc_assigned_count:-0}" -gt 0 ] || [ "$_mc_prd_before" != "$_mc_prd_after" ]; then
+            # Reviewer gate before accepting the PRD mutation
+            _mc_reviewer_profile=$(cat "$_mc_profiles_file" | \
+                python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('prd-change-reviewer',''))" 2>/dev/null || echo "")
+            _mc_verdict="pass"
+            if [ -n "${ORCH_GATE_PROVIDER:-}" ] && [ -n "$_mc_reviewer_profile" ]; then
+                _mc_verdict=$(echo "${_mc_reviewer_profile}
+
+STORY: ${_mc_phase}
+CHANGE TYPE: model_assignment
+
+BEFORE (excerpt, last 1000 chars):
+${_mc_prd_before: -1000}
+
+AFTER (excerpt, last 1000 chars):
+${_mc_prd_after: -1000}
+
+Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
+                    AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
+                    AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
+                    EPAM_CLI="${EPAM_CLI:-epam}" \
+                    "$AI_RUNNER_CMD" \
+                        --provider "${ORCH_GATE_PROVIDER:-minimax}" \
+                        --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
+                    2>/dev/null | \
+                    python3 -c "
+import sys, json, re
+text = sys.stdin.read()
+try:
+    obj = json.loads(text.strip())
+    print(obj.get('verdict','pass'))
+    sys.exit(0)
+except Exception:
+    pass
+m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
+print(m.group(1) if m else 'pass')
+" 2>/dev/null || echo "pass")
+            fi
+            if [ "$_mc_verdict" = "fail" ]; then
+                warning "  [prd-model-coordinator] REJECTED by reviewer — reverting PRD"
+                echo "$_mc_prd_before" > "$_mc_prd_target" 2>/dev/null || true
+            else
+                success "  [prd-model-coordinator] ${_mc_assigned_count} stor(y/ies) assigned model/aiProvider/reasoningEffort (reviewer approved)"
+            fi
+        else
+            info "  [prd-model-coordinator] No assignments made (agent found nothing to do or failed)"
+        fi
+    fi
+
+    # Post-condition safety net: any pending story STILL missing a field after
+    # the coordinator (agent unavailable, rejected, or skipped a story) falls
+    # back to a fixed default so the pipeline never silently relies on a
+    # provider's own hardcoded default model.
+    python3 - "$_mc_prd_target" "$_mc_phase" <<'MC_FALLBACK_PY'
+import json, sys
+prd_path, phase = sys.argv[1], sys.argv[2]
+with open(prd_path) as f:
+    prd = json.load(f)
+changed = False
+for s in prd.get('stories', []):
+    if s.get('status') != 'pending':
+        continue
+    if s.get('phase', phase) != phase:
+        continue
+    if not s.get('model'):
+        s['model'] = 'MiniMax-M3'
+        changed = True
+    if not s.get('aiProvider'):
+        s['aiProvider'] = 'minimax'
+        changed = True
+    if not s.get('reasoningEffort'):
+        eff = s.get('effort', 'medium')
+        s['reasoningEffort'] = eff if eff in ('low', 'high') else 'medium'
+        changed = True
+if changed:
+    with open(prd_path, 'w') as f:
+        json.dump(prd, f, indent=2)
+MC_FALLBACK_PY
+fi
+step_emit "0.9" "pass" "Step 0.9: PRD model coordinator"
+
+# ──────────────────────────────────────────────
 # Step 1: Run main-branch stories (no dependencies, sequential)
 # ──────────────────────────────────────────────
 if [ -n "$main_stories" ]; then
@@ -1941,42 +2305,12 @@ else
     info "Step 1.5: No uncommitted main-branch changes — skipping auto-commit"
 fi
 # ──────────────────────────────────────────────
-# Step 1.6: Post-impl TC (test criteria) writer gate.
-# Fires when impl stories have run and test stories in this phase need TCs.
-# Reads actual .ts source files and writes testCriteria to prd.json.
-# ACs are never modified — TCs are additive only.
-# Skip with: SKIP_TC_WRITER=1
-# ──────────────────────────────────────────────
-_tc_writer_needed=$(jq -r --arg phase "$PHASE" \
-    '(.implementationOrder[$phase] // []) as $ids |
-     [.stories[] | select(.id as $id | $ids | index($id)) |
-      select(
-        (.technicalNotes.files // [] | map(endswith(".test.ts")) | any) and
-        ((.testCriteria.facts // []) | length == 0)
-      )] | length' "$PRD_FILE" 2>/dev/null || echo 0)
-
-if [ "${_tc_writer_needed:-0}" -gt 0 ]; then
-    step_emit "1.6" "running" "Step 1.6: TC writer gate"
-    log "Step 1.6: TC writer gate — ${_tc_writer_needed} test story/stories need testCriteria..."
-    if bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
-        --prd "$PRD_FILE" \
-        --phase "$PHASE" \
-        --output-dir "${OUTPUT_DIR:-$PROJECT_ROOT}" \
-        2>&1 | tee "$LOG_DIR/tc-writer-${PHASE}.log"; then
-        step_emit "1.6" "pass" "Step 1.6: TC writer gate"
-        success "Step 1.6: TC writer gate PASSED — testCriteria populated"
-    else
-        step_emit "1.6" "fail" "Step 1.6: TC writer gate"
-        error "Step 1.6: TC writer gate FAILED — cannot proceed to test stories"
-        error "  Fix: check $LOG_DIR/tc-writer-${PHASE}.log"
-        error "  Bypass: SKIP_TC_WRITER=1"
-        exit 1
-    fi
-else
-    step_emit "1.6" "skip" "Step 1.6: TC writer gate" "all TCs present"
-    info "Step 1.6: TC writer gate — all test stories already have TCs or no test stories in phase"
-fi
-
+# Step 1.6 (TC writer gate) has moved — see after Step 3.2 below. Running it
+# here (before Step 3's worktree implementation) meant it ALWAYS found zero
+# source files for any phase using worktree topology, since main-branch Step 1
+# is empty in that case ("no stories in lane") and the real implementation
+# only exists after Step 3a/3b run and Step 3.2 merges them back. Confirmed
+# live: this hard-aborted the entire core phase before implementation ever ran.
 # ──────────────────────────────────────────────
 need_worktrees=false
 [ -n "$primary_stories" ] && need_worktrees=true
@@ -2049,9 +2383,18 @@ if [ -n "$INDEPENDENT_PID" ]; then
     fi
 fi
 
+# Do NOT exit immediately on a worktree failure. Stories inside a worktree now
+# commit their own work as they complete (see commit_completed_story() in
+# claude.sh); if a LATER story in the same lane exhausts its retries, the lane's
+# exit code is non-zero even though earlier stories genuinely succeeded. Skipping
+# Step 3.1/3.2 here used to mean those earlier commits were never merged and were
+# then destroyed when the worktree got force-removed. Instead, continue through
+# health-check + merge so completed work lands on the main branch, then fail the
+# phase afterward (WORKTREE_HAD_FAILURE) so the pipeline still stops correctly.
+WORKTREE_HAD_FAILURE=false
 if [ "$PRIMARY_EXIT" -ne 0 ] || [ "$INDEPENDENT_EXIT" -ne 0 ]; then
-    error "One or more worktree agents failed; stopping before commit and merge"
-    exit 1
+    WORKTREE_HAD_FAILURE=true
+    error "One or more worktree agents failed — attempting to commit/merge whatever stories DID complete before failing the phase"
 fi
 
 # ──────────────────────────────────────────────
@@ -2145,6 +2488,60 @@ else
     info "Step 3.2: No worktrees — skipping merge-back"
 fi
 
+# Now that any completed stories' commits have had a chance to merge, fail the
+# phase if a worktree agent reported a failed story earlier.
+if [ "$WORKTREE_HAD_FAILURE" = true ]; then
+    error "One or more stories failed in a worktree agent — phase '$PHASE' did not fully succeed"
+    error "  (completed stories in the same lane, if any, were committed and merged above)"
+    exit 1
+fi
+
+# ──────────────────────────────────────────────
+# Step 1.6: Post-impl TC (test criteria) writer gate.
+# Runs HERE (after worktree merge-back, not before Step 3) so it always has
+# real implementation to read regardless of topology — main-branch stories
+# (Step 1) and worktree stories (Step 3a/3b, merged in Step 3.2) are both
+# guaranteed to exist on the current branch by this point.
+# Fires when impl stories have run and test stories in this phase need TCs.
+# Reads actual .ts source files and writes testCriteria to prd.json.
+# ACs are never modified — TCs are additive only.
+# Skip with: SKIP_TC_WRITER=1
+# ──────────────────────────────────────────────
+_tc_writer_needed=$(jq -r --arg phase "$PHASE" \
+    '(.implementationOrder[$phase] // []) as $ids |
+     [.stories[] | select(.id as $id | $ids | index($id)) |
+      select(
+        (.technicalNotes.files // [] | map(endswith(".test.ts")) | any) and
+        ((.testCriteria.facts // []) | length == 0)
+      )] | length' "$PRD_FILE" 2>/dev/null || echo 0)
+
+if [ "${_tc_writer_needed:-0}" -gt 0 ]; then
+    step_emit "1.6" "running" "Step 1.6: TC writer gate"
+    log "Step 1.6: TC writer gate — ${_tc_writer_needed} test story/stories need testCriteria..."
+    # `if CMD | tee file; then` checks tee's exit code, not CMD's — tee almost
+    # always exits 0, so this previously reported PASS even when the TC writer
+    # agent itself failed. Use PIPESTATUS[0] to check the real exit code.
+    bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
+        --prd "$PRD_FILE" \
+        --phase "$PHASE" \
+        --output-dir "${OUTPUT_DIR:-$PROJECT_ROOT}" \
+        2>&1 | tee "$LOG_DIR/tc-writer-${PHASE}.log"
+    _tc_writer_exit=${PIPESTATUS[0]}
+    if [ "$_tc_writer_exit" -eq 0 ]; then
+        step_emit "1.6" "pass" "Step 1.6: TC writer gate"
+        success "Step 1.6: TC writer gate PASSED — testCriteria populated"
+    else
+        step_emit "1.6" "fail" "Step 1.6: TC writer gate"
+        error "Step 1.6: TC writer gate FAILED — cannot proceed to test stories"
+        error "  Fix: check $LOG_DIR/tc-writer-${PHASE}.log"
+        error "  Bypass: SKIP_TC_WRITER=1"
+        exit 1
+    fi
+else
+    step_emit "1.6" "skip" "Step 1.6: TC writer gate" "all TCs present"
+    info "Step 1.6: TC writer gate — all test stories already have TCs or no test stories in phase"
+fi
+
 # ──────────────────────────────────────────────
 # Sync story data to monitor from cost log
 "$SCRIPT_DIR/sync-monitor-stories.sh" 2>/dev/null || true
@@ -2167,7 +2564,10 @@ run_phase_assessment() {
         return 0
     fi
 
-    local phase_records=$(grep -c "\"phase_id\":\"$phase_id\"" "$cost_file" 2>/dev/null || echo 0)
+    # grep -c already prints "0" on zero matches while also exiting 1 — `|| echo 0`
+    # would double-print ("0\n0"), breaking the numeric -eq test below.
+    local phase_records
+    phase_records=$({ grep -c "\"phase_id\":\"$phase_id\"" "$cost_file" 2>/dev/null || true; })
     if [ "${phase_records:-0}" -eq 0 ]; then
         warning "No cost records for phase '$phase_id' — skipping assessment"
         return 0
@@ -2283,7 +2683,13 @@ if [ "${SKIP_PRE_REVIEW_GATE:-false}" != "true" ] && [ -f "$PROJECT_ROOT/package
         cd "$PROJECT_ROOT"
 
         log "  Running vitest..."
-        if "$_node_bin" ./node_modules/.bin/vitest run \
+        # Bounded timeout (added 2026-07-06): every vitest/npm invocation in
+        # this file and claude.sh was unguarded — a live run's story-level
+        # watchdog silently absorbed a hang in one of these (network-dependent
+        # npm install, or a test that leaves a server/resource open) with zero
+        # diagnostic signal about which command was actually stuck. Same fix
+        # applied consistently across every instance in this file.
+        if timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" "$_node_bin" ./node_modules/.bin/vitest run \
                 2>&1 | tee -a "$_pre_review_log"; then
             success "  vitest: PASS"
             "$SCRIPT_DIR/update-monitor.sh" event "pre_review_test_pass" \
@@ -2997,8 +3403,10 @@ $sast_prompt"
                 _src_count=$(find "$PROJECT_ROOT/src" -name "*.ts" 2>/dev/null | wc -l || echo "?")
                 tsc_summary="tsc: PASS (exit 0) — $_src_count .ts files checked, no errors"
             else
+                # grep -c already prints "0" on zero matches while also exiting 1 —
+                # `|| echo "?"` would double-print ("0\n?"), garbling this message.
                 local _err_count
-                _err_count=$(echo "$_tsc_out" | grep -c "error TS" 2>/dev/null || echo "?")
+                _err_count=$(echo "$_tsc_out" | { grep -c "error TS" 2>/dev/null || true; })
                 tsc_summary="tsc: FAIL (exit $_tsc_rc) — $_err_count error(s)
 $(echo "$_tsc_out" | head -40)"
             fi
@@ -3234,7 +3642,15 @@ except Exception:
         # Check for actual failing stories, not just the top-level overallVerdict.
         # An empty stories[] with overallVerdict:fail means the agent had no data — treat as warn.
         local _spec_failing
-        _spec_failing=$(python3 - '$spec_log' <<'SPEC_EXTRACTOR_PY'
+        # BUG (found live, 2026-07-07): '$spec_log' was single-quoted — bash never
+        # expanded it, so python3 received the literal 8-character string
+        # "$spec_log" as sys.argv[1], not the real log path. open() then raised
+        # FileNotFoundError every single time, caught by the blanket except and
+        # mapped to the generic "no story data"/"error" path — meaning a REAL
+        # spec-validator "fail" verdict (e.g. SKY-004 missing /search, /cheapest,
+        # dashboard) was silently downgraded to a non-blocking warning on every
+        # run, never once actually parsed. Fixed: double-quote so bash expands it.
+        _spec_failing=$(python3 - "$spec_log" <<'SPEC_EXTRACTOR_PY'
 import sys, re
 
 # The spec-validator agent often emits JSON with unescaped newlines inside string
@@ -3781,14 +4197,14 @@ ENDPROMPT1
                 local _finding_json
                 _finding_json=$(echo "$_finding_prompt" | \
                     AI_GATE_ALLOW_TOOLS=1 \
-                    AI_PROVIDER="${ORCH_GATE_PROVIDER:-openai}" \
-                    AI_MODEL="${ORCH_GATE_MODEL:-gpt-4o}" \
+                    AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
+                    AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
                     EPAM_DANGEROUS_SKIP_APPROVAL=1 \
                     CLAUDE_CMD="$CLAUDE_CMD" \
                     EPAM_CLI="${EPAM_CLI:-epam}" \
                     "$AI_RUNNER_CMD" \
-                        --provider "${ORCH_GATE_PROVIDER:-openai}" \
-                        --model    "${ORCH_GATE_MODEL:-gpt-4o}" \
+                        --provider "${ORCH_GATE_PROVIDER:-minimax}" \
+                        --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
                     2>&1 | tee -a "$_rem_log")
 
                 # Check analyst returned a grounded finding (has story_id and rule)
@@ -3833,14 +4249,14 @@ ENDPROMPT2
                 local _ac_result
                 _ac_result=$(echo "$_ac_prompt" | \
                     AI_GATE_ALLOW_TOOLS=1 \
-                    AI_PROVIDER="${ORCH_GATE_PROVIDER:-openai}" \
-                    AI_MODEL="${ORCH_GATE_MODEL:-gpt-4o}" \
+                    AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
+                    AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
                     EPAM_DANGEROUS_SKIP_APPROVAL=1 \
                     CLAUDE_CMD="$CLAUDE_CMD" \
                     EPAM_CLI="${EPAM_CLI:-epam}" \
                     "$AI_RUNNER_CMD" \
-                        --provider "${ORCH_GATE_PROVIDER:-openai}" \
-                        --model    "${ORCH_GATE_MODEL:-gpt-4o}" \
+                        --provider "${ORCH_GATE_PROVIDER:-minimax}" \
+                        --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
                     2>&1 | tee -a "$_rem_log")
 
                 local _acs_added
@@ -3866,6 +4282,9 @@ else: print(0)
                 # ── Agent 3: profile-augmentor ─────────────────────────────────────
                 # Checks if the pattern is novel; if so, appends to the relevant profile
                 info "  [profile-augmentor] Checking if pattern is novel for profiles..."
+                # Snapshot profiles.json before augmentor writes so reviewer can compare + revert
+                local _profiles_before
+                _profiles_before=$(cat "$_profiles_file" 2>/dev/null || echo "{}")
                 local _prof_prompt
                 _prof_prompt=$(cat << ENDPROMPT3
 $(cat "$_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('profile-augmentor',''))")
@@ -3883,18 +4302,63 @@ ENDPROMPT3
                 local _prof_result
                 _prof_result=$(echo "$_prof_prompt" | \
                     AI_GATE_ALLOW_TOOLS=1 \
-                    AI_PROVIDER="${ORCH_GATE_PROVIDER:-openai}" \
-                    AI_MODEL="${ORCH_GATE_MODEL:-gpt-4o}" \
+                    AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
+                    AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
                     EPAM_DANGEROUS_SKIP_APPROVAL=1 \
                     CLAUDE_CMD="$CLAUDE_CMD" \
                     EPAM_CLI="${EPAM_CLI:-epam}" \
                     "$AI_RUNNER_CMD" \
-                        --provider "${ORCH_GATE_PROVIDER:-openai}" \
-                        --model    "${ORCH_GATE_MODEL:-gpt-4o}" \
+                        --provider "${ORCH_GATE_PROVIDER:-minimax}" \
+                        --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
                     2>&1 | tee -a "$_rem_log")
 
                 if echo "$_prof_result" | grep -q '"profile_updated"[[:space:]]*:[[:space:]]*true'; then
-                    success "  [profile-augmentor] Profile updated with new rule for ${_glabel} pattern"
+                    # Reviewer gate — validate the change before accepting it
+                    local _profiles_after
+                    _profiles_after=$(cat "$_profiles_file" 2>/dev/null || echo "{}")
+                    local _reviewer_profile
+                    _reviewer_profile=$(echo "$_profiles_after" | \
+                        python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('prd-change-reviewer',''))" 2>/dev/null || echo "")
+                    local _review_verdict="pass"
+                    if [ -n "${ORCH_GATE_PROVIDER:-}" ] && [ -n "$_reviewer_profile" ]; then
+                        _review_verdict=$(echo "${_reviewer_profile}
+
+STORY: gate-remediation
+CHANGE TYPE: profile_addendum
+
+BEFORE (excerpt, last 500 chars):
+${_profiles_before: -500}
+
+AFTER (excerpt, last 500 chars):
+${_profiles_after: -500}
+
+Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
+                            AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
+                            AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
+                            EPAM_CLI="${EPAM_CLI:-epam}" \
+                            "$AI_RUNNER_CMD" \
+                                --provider "${ORCH_GATE_PROVIDER:-minimax}" \
+                                --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
+                            2>/dev/null | \
+                            python3 -c "
+import sys, json, re
+text = sys.stdin.read()
+try:
+    obj = json.loads(text.strip())
+    print(obj.get('verdict','pass'))
+    sys.exit(0)
+except Exception:
+    pass
+m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
+print(m.group(1) if m else 'pass')
+" 2>/dev/null || echo "pass")
+                    fi
+                    if [ "$_review_verdict" = "fail" ]; then
+                        warning "  [profile-augmentor] Profile change REJECTED by reviewer — reverting profiles.json"
+                        echo "$_profiles_before" > "$_profiles_file" 2>/dev/null || true
+                    else
+                        success "  [profile-augmentor] Profile updated with new rule for ${_glabel} pattern (reviewer approved)"
+                    fi
                 else
                     info "  [profile-augmentor] No profile update (pattern already covered)"
                 fi
@@ -3944,7 +4408,7 @@ _run_vitest_check() {
     out_file=$(mktemp)
 
     local vitest_exit=0
-    "$_node_bin" ./node_modules/.bin/vitest run > "$out_file" 2>&1 || vitest_exit=$?
+    timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" "$_node_bin" ./node_modules/.bin/vitest run > "$out_file" 2>&1 || vitest_exit=$?
     cat "$out_file" >> "$gate_log"
 
     if [ "$vitest_exit" -ne 0 ]; then
@@ -4012,10 +4476,10 @@ _create_bug_fix_phase() {
             story_provider="$provider_override"
         else
             story_model=$(jq -r --arg id "$owner_story" \
-                '.stories[] | select(.id == $id) | .model // "openai/gpt-4.1"' \
+                '.stories[] | select(.id == $id) | .model // "MiniMax-M3"' \
                 "$PRD_FILE" 2>/dev/null)
             story_provider=$(jq -r --arg id "$owner_story" \
-                '.stories[] | select(.id == $id) | .aiProvider // "openrouter"' \
+                '.stories[] | select(.id == $id) | .aiProvider // "qwen"' \
                 "$PRD_FILE" 2>/dev/null)
         fi
 
@@ -4033,7 +4497,7 @@ _create_bug_fix_phase() {
             --arg title "Bug fix: failing tests in ${failing_file}" \
             --arg desc "Fix the failing vitest tests in ${failing_file}. Do not rewrite the whole file — make the minimum change to fix the failures below. The technicalNotes carry the original story CRITICAL constraints — they still apply.\n\nFAILING TESTS:\n${failure_excerpt}" \
             --arg phase "$bug_phase" \
-            --arg ffile "/tmp/skyscanner-app/${failing_file}" \
+            --arg ffile "${PROJECT_ROOT}/${failing_file}" \
             --argjson onotes "$owner_notes" \
             '
             .stories += [{
@@ -4092,8 +4556,9 @@ _emit_unfixed_bug_list() {
 # On failure: creates BUG-* stories, runs them through the full pipeline
 # (openspec → story agent → QA gates) in a bug_fix sub-phase.
 # Round 1 uses the original story model; round 2 escalates to
-# openrouter/anthropic/claude-sonnet-4-6.
-# If sonnet cannot fix it → hard fail with structured bug list.
+# ESCALATION_MODEL (same model the InferenceLadder uses, default z-ai/glm-5.2)
+# via the qwen (OpenRouter) provider.
+# If the escalated model cannot fix it → hard fail with structured bug list.
 # UNIT_TEST_BUG_DEPTH env var prevents recursive bug story creation.
 run_unit_tests_gate() {
     local phase_id="$1"
@@ -4134,8 +4599,13 @@ run_unit_tests_gate() {
     if [ ! -d "$PROJECT_ROOT/node_modules" ]; then
         log "  node_modules missing — running npm install..."
         local install_output install_exit=0
-        install_output=$(cd "$PROJECT_ROOT" && npm install 2>&1) || install_exit=$?
+        install_output=$(cd "$PROJECT_ROOT" && timeout "${EPAM_INSTALL_TIMEOUT_SECS:-180}" npm install 2>&1) || install_exit=$?
         echo "$install_output" >> "$gate_log"
+        if [ "$install_exit" -eq 124 ]; then
+            error "  npm install TIMED OUT after ${EPAM_INSTALL_TIMEOUT_SECS:-180}s — cannot run vitest"
+            echo "$install_output" | tail -20 >&2
+            return 1
+        fi
         if [ "$install_exit" -ne 0 ]; then
             error "  npm install failed — cannot run vitest"
             echo "$install_output" | tail -20 >&2
@@ -4151,7 +4621,7 @@ run_unit_tests_gate() {
 
     # ── Initial vitest run ─────────────────────────────────────────────────────
     local vitest_output vitest_exit=0
-    vitest_output=$(cd "$PROJECT_ROOT" && "$_node_bin" ./node_modules/.bin/vitest run 2>&1) || vitest_exit=$?
+    vitest_output=$(cd "$PROJECT_ROOT" && timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" "$_node_bin" ./node_modules/.bin/vitest run 2>&1) || vitest_exit=$?
     echo "$vitest_output" >> "$gate_log"
 
     if [ "$vitest_exit" -eq 0 ]; then
@@ -4181,7 +4651,11 @@ run_unit_tests_gate() {
         return 1
     fi
 
-    # ── Bug-fix rounds: round 1 = original model, round 2 = sonnet ────────────
+    # ── Bug-fix rounds: round 1 = original model, round 2 = escalated model ───
+    # Uses the same ESCALATION_MODEL as the InferenceLadder (claude.sh Rung 2/3)
+    # rather than a separate hardcoded model/provider — this pipeline's model
+    # roster is deliberately scoped to MiniMax + OpenRouter (kimi-k2/GLM); a
+    # hardcoded Anthropic model here would be a third, inconsistent path.
     local bug_round model_override provider_override
     for bug_round in 1 2; do
         if [ "$bug_round" -eq 1 ]; then
@@ -4189,9 +4663,9 @@ run_unit_tests_gate() {
             provider_override=""
             log "Step 4.5: Creating bug fix stories (round $bug_round — original model)..."
         else
-            model_override="anthropic/claude-sonnet-4-6"
-            provider_override="openrouter"
-            log "Step 4.5: Creating bug fix stories (round $bug_round — sonnet escalation)..."
+            model_override="${ESCALATION_MODEL:-z-ai/glm-5.2}"
+            provider_override="qwen"
+            log "Step 4.5: Creating bug fix stories (round $bug_round — escalated model: ${model_override})..."
         fi
 
         local bug_phase="bug_fix_${phase_id}_r${bug_round}"
@@ -4210,7 +4684,7 @@ run_unit_tests_gate() {
 
         # Re-run vitest after bug fix phase completes
         vitest_exit=0
-        vitest_output=$(cd "$PROJECT_ROOT" && "$_node_bin" ./node_modules/.bin/vitest run 2>&1) || vitest_exit=$?
+        vitest_output=$(cd "$PROJECT_ROOT" && timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" "$_node_bin" ./node_modules/.bin/vitest run 2>&1) || vitest_exit=$?
         echo "=== Post-bug-fix vitest (round $bug_round) ===" >> "$gate_log"
         echo "$vitest_output" >> "$gate_log"
 

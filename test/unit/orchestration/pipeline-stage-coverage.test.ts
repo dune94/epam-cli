@@ -1183,14 +1183,38 @@ describe('Pipeline step checklist — ordering and heartbeat', () => {
     expect(callIdx).toBeLessThan(specPassIdx);
   });
 
-  it('print_step_checklist function lists all 23 step IDs', () => {
+  // 2026-07-06: this list was stale — missing 0.9 (PRD model coordinator),
+  // 3.2 (merge worktrees), and 3.8 (lint gate), all of which already existed
+  // as real step_emit() call sites in the script; re-verified against the
+  // live source via `grep -n 'step_emit "[0-9]'` rather than trusting the old
+  // list. Also added 0a/0b (openspec/speckit sub-steps, newly surfaced this
+  // session — previously only visible as buried "spec-mode: fast-path" log
+  // lines, not in the checklist at all).
+  it('print_step_checklist function lists all 27 step IDs (25 pipeline steps + 2 spec-mode sub-steps)', () => {
     const fn = orchSrc.match(/print_step_checklist\(\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const ids = ['0', '0.1', '0.5', '0.6', '0.7', '0.8', '1', '1.5', '1.6',
-                 '2', '3a', '3b', '3.1', '3.5', '3.7',
+    const ids = ['0', '0a', '0b', '0.1', '0.5', '0.6', '0.7', '0.8', '0.9', '1', '1.5', '1.6',
+                 '2', '3a', '3b', '3.1', '3.2', '3.5', '3.7', '3.8',
                  '4', '4.2a', '4.2b', '4.3a', '4.3b', '4.4a', '4.4b', '4.6'];
     for (const id of ids) {
       expect(fn).toMatch(new RegExp(`"${id.replace('.', '\\.')}"`));
     }
+  });
+
+  it('openspec/speckit sub-steps (0a/0b) show the actual configured model, not a hardcoded one', () => {
+    const fn = orchSrc.match(/print_step_checklist\(\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(fn).toMatch(/0a.*SPEC_MODE_OPENSPEC_MODEL/);
+    expect(fn).toMatch(/0b.*SPEC_MODE_SPECKIT_MODEL/);
+  });
+
+  it('run_specification_pass emits live step_emit calls for 0a/0b (not just the pre-scan row) with model + story count parsed from spec-summary.json', () => {
+    const fnStart = orchSrc.indexOf('run_specification_pass()');
+    const fnEnd = orchSrc.indexOf('\n}', fnStart);
+    const fnBody = orchSrc.slice(fnStart, fnEnd);
+    expect(fnBody).toMatch(/spec-summary\.json/);
+    expect(fnBody).toMatch(/step_emit "0a"/);
+    expect(fnBody).toMatch(/step_emit "0b"/);
+    expect(fnBody).toMatch(/\.stats\.agents\.openspec/);
+    expect(fnBody).toMatch(/\.stats\.agents\.speckit/);
   });
 
   it('heartbeat fires every 60 seconds', () => {
@@ -1301,7 +1325,15 @@ describe('PRD auto-remediation', () => {
     const src = fs.readFileSync(PRD_REMEDIATE_IMPL, 'utf8');
     expect(src).toMatch(/extra_phases/);
     expect(src).toMatch(/REQUIRED_PHASES/);
-    expect(src).toMatch(/scaffold.*core.*ui_and_review/);
+    // ui_and_review removed (2026-07-07): pipeline is scaffold -> core only.
+    // A 'documentation' phase was requested but investigation confirmed it
+    // was never wired into phase execution (dead agent profiles only, no
+    // phase-loop code) — not added here until it's actually built. Check the
+    // actual REQUIRED_PHASES line specifically, not the whole file (a
+    // comment elsewhere legitimately mentions "ui_and_review" as removed).
+    const phasesLine = src.split('\n').find((l) => l.includes('REQUIRED_PHASES =')) ?? '';
+    expect(phasesLine).toMatch(/scaffold.*core/);
+    expect(phasesLine).not.toMatch(/ui_and_review/);
   });
 
   it('remediation trims ACs exceeding 24 to exactly 24', () => {

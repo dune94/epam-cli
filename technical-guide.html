@@ -89,7 +89,7 @@
   </head>
   <body>
     <main>
-      <p class="updated">Updated June 4, 2026</p>
+      <p class="updated">Updated July 2, 2026</p>
       <h1>EPAM CLI Technical Guide</h1>
       <p>
         Comprehensive reference for the EPAM CLI runtime, agent architecture,
@@ -362,6 +362,62 @@
         <li>Toggle with <code>EPAM_SPEC_MODE</code> when you need to replay phases without rerunning
           spec agents.</li>
       </ul>
+
+      <h3>3.15 Agent Profile Roster &amp; Persona System</h3>
+      <ul>
+        <li><code>orchestrations/agents/profiles.json</code> — flat <code>{role: "prompt string"}</code> map, ~49 specialized
+          personas covering implementation (<code>typescript-engineer</code>, <code>test-engineer</code>, <code>frontend-engineer</code>,
+          <code>ui-engineer</code>, <code>generator</code>), specification (<code>openspec-agent</code>, <code>speckit-agent</code>,
+          <code>spec-coordinator-agent</code>, <code>spec-validator</code>), QA gates (<code>sast-sentinel</code>, <code>review-ranger</code>,
+          <code>mutant-hunter</code>, <code>fuzz-weaver</code>, <code>perf-sentinel</code>), documentation (<code>doc-coordinator</code>,
+          <code>doc-reviewer</code>, <code>guide-author</code>, <code>changelog-agent</code>, <code>docstring-agent</code>), and
+          project/PRD management (<code>prd-project-manager-agent</code>, <code>grooming-coordinator</code>, <code>readiness-checker</code>).</li>
+        <li><code>profiles.json.original</code> is the canonical floor — restored at the start of every tier-3 run so
+          drift from a prior run's self-healing writes never persists across runs.</li>
+        <li>App-specific profiles are generated dynamically per project from the manifest + PRD (<code>INIT-001</code>);
+          <code>INIT-002</code> keeps every story's <code>agentRole</code> synced to an existing profile key.</li>
+      </ul>
+      <h3>3.16 Self-Healing Reviewer Gates</h3>
+      <p>
+        Every automated write to <code>prd.json</code> or <code>profiles.json</code> made by a pipeline agent (not a
+        human) is validated by <code>prd-change-reviewer</code> (or the stricter <code>kb-change-reviewer</code> for
+        permanent KB entries) before it is accepted. The reviewer snapshots the file before and after the write,
+        emits a <code>{"verdict":"pass|fail","issues":[...]}</code> verdict, and the caller reverts to the
+        pre-write snapshot on <code>fail</code>. Non-blocking by design — an unconfigured or unreachable gate model
+        defaults to <code>pass</code> rather than stalling the pipeline.
+      </p>
+      <ul>
+        <li><strong>ac_patch / tc_patch</strong> — self-heal AC/testCriteria patches written by <code>claude.sh</code>'s
+          failure-recovery loop.</li>
+        <li><strong>skill_note / kb_entry</strong> — permanent knowledge-base and profile-addendum writes.</li>
+        <li><strong>profile_addendum / profile_creation</strong> — <code>profile-augmentor</code> (gate-finding remediation)
+          and the Step 0.5 pre-phase skill assessment agent, which can create brand-new agent profiles from scratch.</li>
+        <li><strong>model_assignment</strong> — <code>prd-model-coordinator</code> (Step 0.9) writing <code>model</code>/
+          <code>aiProvider</code>/<code>reasoningEffort</code> onto stories, including spec-pass split children that
+          would otherwise silently inherit a provider's hardcoded default model.</li>
+        <li><strong>spec_pass</strong> — <code>spec-mode-runner.js</code>'s OpenSpec/Speckit acceptance-criteria and
+          description/title rewrites (runs every phase, every story — the highest-frequency gated write in the pipeline).</li>
+        <li><strong>cpa_estimate</strong> — CPA pre-pass writing blended cost/effort/confidence estimates, with
+          surgical per-field revert (not whole-file) on rejection.</li>
+      </ul>
+      <h3>3.17 Rung-Based Inference Ladder</h3>
+      <p>
+        <code>claude.sh</code>'s retry loop escalates in four rungs (two attempts each, <code>EPAM_MAX_RETRIES</code>
+        default 7 → 8 total attempts): Rung 0/1 keep the base model and raise <code>EPAM_REASONING_EFFORT</code> from
+        low → medium; Rung 2 escalates the model itself via <code>EPAM_MODEL_LADDER</code> (a configurable pipe-separated
+        <code>from=to</code> table, e.g. <code>MiniMax-M3=z-ai/glm-5.2</code>); Rung 3 keeps the escalated model at
+        <code>EPAM_REASONING_EFFORT=high</code>. A failed self-heal attempt can skip straight to the next rung instead of
+        burning a second attempt on a healing strategy already known to be broken. <code>EPAM_FINAL_FALLBACK_MODEL</code>
+        guarantees Rung 3 always has an escalated model even if Rung 2's ladder lookup produced nothing.
+      </p>
+      <h3>3.18 tsc Verification Inside the Retry Loop</h3>
+      <p>
+        <code>run_tsc_verification()</code> runs <code>tsc --noEmit</code> as part of the same <code>invoke_success</code>
+        gate chain as external test verification — <em>inside</em> the retry loop, not after it. A TypeScript compile
+        failure sets the same <code>VERIFICATION_FAILURE</code> channel the failure analyst and retry prompt already
+        consume, so a tsc error gets full InferenceLadder treatment (model/effort escalation) before the story is
+        marked failed, instead of exiting the phase on the very first compile error with zero retries.
+      </p>
 
       <h2>4. Dashboards & Real-Time Updates</h2>
       <h3>4.1 Eleventy Pipeline</h3>

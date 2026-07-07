@@ -11,6 +11,7 @@
  */
 
 import type { LLMProvider, ProviderRequest, ProviderResponse, StreamHandler, Message, ContentPart } from '../types.js';
+import { resolveTemperature } from '../types.js';
 import { stripThinkingBlocks, parseMarkupToolCalls } from '../qwen/QwenProvider.js';
 import { logger } from '../../utils/logger.js';
 
@@ -60,7 +61,7 @@ export class MiniMaxProvider implements LLMProvider {
         model,
         messages,
         max_tokens: request.maxTokens || 4096,
-        temperature: request.temperature ?? 0.7,
+        temperature: resolveTemperature(request, 0.7),
         ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
         ...(tools && tools.length > 0 ? { tools } : {}),
         ...(this.resolveResponseFormat(request) ? { response_format: { type: this.resolveResponseFormat(request) } } : {}),
@@ -133,7 +134,7 @@ export class MiniMaxProvider implements LLMProvider {
         model,
         messages,
         max_tokens: request.maxTokens || 4096,
-        temperature: request.temperature ?? 0.7,
+        temperature: resolveTemperature(request, 0.7),
         ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
         stream: true,
         stream_options: { include_usage: true },

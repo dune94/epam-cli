@@ -35,7 +35,8 @@ import json, re, sys
 PRD_FILE = """$PRD_FILE"""
 KNOWN_PROVIDERS = {'qwen', 'minimax', 'anthropic', 'claude', 'gemini', 'opencode', 'codex', 'cursor'}
 KNOWN_MINIMAX_MODELS = {'MiniMax-M3', 'MiniMax-M2.5', 'MiniMax-M1.5', 'MiniMax-M1', 'upgrade'}
-REQUIRED_PHASES = ['scaffold', 'core', 'ui_and_review']
+# ui_and_review removed (2026-07-07): the pipeline is scaffold -> core only.
+REQUIRED_PHASES = ['scaffold', 'core']
 MAX_ACS = 24
 
 with open(PRD_FILE) as f:
@@ -84,7 +85,7 @@ if not extra_phases and not missing_phases:
     # Check order
     idxs = [phases.index(p) for p in REQUIRED_PHASES if p in phases]
     if idxs == sorted(idxs):
-        print(f"  ✓ Exactly 3 phases in correct order: {REQUIRED_PHASES}")
+        print(f"  ✓ Exactly {len(REQUIRED_PHASES)} phases in correct order: {REQUIRED_PHASES}")
     else:
         err(f"Phase order wrong: {phases}")
 
@@ -272,6 +273,18 @@ if tc_source_bad:
     warn(f"testCriteria.sourceFiles reference files not declared in any story: {tc_source_bad}")
 else:
     print("  ✓ All testCriteria.sourceFiles align with known story files")
+
+# NOTE: a check for "no pre-baked specification block" was tried here and
+# reverted (2026-07-06) — this script only runs on the POST-split-pass branch
+# (is_canonical bypass in preflight-check.sh/prd-remediate.sh routes here only
+# once spec pass has already produced split children), so by the time this
+# script runs, every active story legitimately HAS a specification block from
+# this run's own elaboration. There is no way to distinguish "stale, baked
+# into canonical" from "legitimate, this run" using only this script's inputs.
+# The real fix for stale pre-baked specification data lives in the
+# is_canonical branches of preflight-check.sh and prd-remediate.sh instead,
+# which run BEFORE spec pass and can correctly check "specification present
+# AND not yet completed" == prior-run contamination.
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 print("")

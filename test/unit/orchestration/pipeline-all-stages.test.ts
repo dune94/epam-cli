@@ -155,8 +155,8 @@ describe('PRD — structural invariants (all phases)', () => {
     expect(bad).toHaveLength(0);
   });
 
-  it('all declared file paths are under the project outputDir (/tmp/skyscanner-app)', () => {
-    const outputDir = prd.project?.outputDir ?? '/tmp/skyscanner-app';
+  it('all declared file paths are under the project outputDir (prd.project.outputDir)', () => {
+    const outputDir = prd.project?.outputDir;
     const bad: string[] = [];
     for (const s of activeStories) {
       for (const f of filesOf(s)) {
@@ -614,7 +614,7 @@ describe('Phase: ui_and_review — story contracts', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('Expected output file contracts — PRD declares correct paths', () => {
-  const outputDir = prd.project?.outputDir ?? '/tmp/skyscanner-app';
+  const outputDir = prd.project?.outputDir;
 
   const expectedFiles: Record<string, string[]> = {
     'SKY-002a-1':   [`${outputDir}/src/skyscanner/client.ts`],

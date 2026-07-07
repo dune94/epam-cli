@@ -16,6 +16,38 @@ import { join } from 'node:path';
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
 const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
 
+// check_healing_effectiveness() now embeds a Python heredoc containing a
+// multi-line STOPWORDS set literal whose closing `}` sits at column 0 — a naive
+// `indexOf('\n}', ...)` search (used throughout this file for the other,
+// simpler functions) stops at that line and truncates the body. Scan
+// line-by-line tracking heredoc state instead, and only treat a column-0 `}`
+// as the function's end when NOT currently inside a heredoc.
+function extractHealingEffectivenessBody(): string {
+  const name = 'check_healing_effectiveness';
+  const lines = claudeSrc.split('\n');
+  const startIdx = lines.findIndex(l => l.trim() === `${name}() {`);
+  if (startIdx === -1) throw new Error(`Could not find start of function ${name}`);
+  let inHeredoc = false;
+  let heredocDelim = '';
+  const body: string[] = [lines[startIdx]];
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    const line = lines[i];
+    body.push(line);
+    if (!inHeredoc) {
+      const m = line.match(/<<-?\s*'?(\w+)'?/);
+      if (m) {
+        inHeredoc = true;
+        heredocDelim = m[1];
+        continue;
+      }
+      if (line === '}') return body.join('\n');
+    } else if (line.trim() === heredocDelim) {
+      inHeredoc = false;
+    }
+  }
+  throw new Error(`Could not find end of function ${name}`);
+}
+
 // ── 1. target=kb structural contract ─────────────────────────────────────────
 describe('claude.sh — target=kb structural contract', () => {
   it('kb case exists in run_failure_analyst', () => {
@@ -113,46 +145,34 @@ describe('claude.sh — check_healing_effectiveness structural contract', () => 
   });
 
   it('reads healing-events.jsonl to count consecutive same-diagnosis events', () => {
-    const funcStart = claudeSrc.indexOf('check_healing_effectiveness()');
-    const funcEnd   = claudeSrc.indexOf('\n}', funcStart + 50);
-    const body      = claudeSrc.slice(funcStart, funcEnd);
+    const body = extractHealingEffectivenessBody();
     expect(body).toMatch(/healing-events\.jsonl/);
   });
 
   it('uses python3 to count consecutive same-diagnosis events (shell arithmetic insufficient)', () => {
-    const funcStart = claudeSrc.indexOf('check_healing_effectiveness()');
-    const funcEnd   = claudeSrc.indexOf('\n}', funcStart + 50);
-    const body      = claudeSrc.slice(funcStart, funcEnd);
+    const body = extractHealingEffectivenessBody();
     expect(body).toMatch(/python3/);
   });
 
   it('triggers at threshold ≥ 2 consecutive same-diagnosis repeats', () => {
-    const funcStart = claudeSrc.indexOf('check_healing_effectiveness()');
-    const funcEnd   = claudeSrc.indexOf('\n}', funcStart + 50);
-    const body      = claudeSrc.slice(funcStart, funcEnd);
+    const body = extractHealingEffectivenessBody();
     expect(body).toMatch(/-ge\s+2/);
   });
 
   it('sets HEALING_BROKEN=1 when threshold exceeded', () => {
-    const funcStart = claudeSrc.indexOf('check_healing_effectiveness()');
-    const funcEnd   = claudeSrc.indexOf('\n}', funcStart + 50);
-    const body      = claudeSrc.slice(funcStart, funcEnd);
+    const body = extractHealingEffectivenessBody();
     expect(body).toContain('HEALING_BROKEN=1');
     expect(body).toContain('export HEALING_BROKEN');
   });
 
   it('writes HEALING_BROKEN sentinel record to healing-events.jsonl', () => {
-    const funcStart = claudeSrc.indexOf('check_healing_effectiveness()');
-    const funcEnd   = claudeSrc.indexOf('\n}', funcStart + 50);
-    const body      = claudeSrc.slice(funcStart, funcEnd);
+    const body = extractHealingEffectivenessBody();
     expect(body).toContain('HEALING_BROKEN');
     expect(body).toMatch(/>> "\$heal_log"/);
   });
 
   it('emits CRITICAL log message when healing broken', () => {
-    const funcStart = claudeSrc.indexOf('check_healing_effectiveness()');
-    const funcEnd   = claudeSrc.indexOf('\n}', funcStart + 50);
-    const body      = claudeSrc.slice(funcStart, funcEnd);
+    const body = extractHealingEffectivenessBody();
     expect(body).toMatch(/CRITICAL|HealingBroken/);
   });
 
@@ -174,9 +194,7 @@ describe('claude.sh — check_healing_effectiveness structural contract', () => 
   });
 
   it('returns early (no-op) when healing-events.jsonl does not exist yet', () => {
-    const funcStart = claudeSrc.indexOf('check_healing_effectiveness()');
-    const funcEnd   = claudeSrc.indexOf('\n}', funcStart + 50);
-    const body      = claudeSrc.slice(funcStart, funcEnd);
+    const body = extractHealingEffectivenessBody();
     expect(body).toMatch(/\[ -f "\$heal_log" \] \|\| return 0/);
   });
 });
@@ -301,11 +319,7 @@ describe('check_healing_effectiveness — bash integration with mock data', () =
   });
 
   function extractCheckFn(): string {
-    const start = claudeSrc.indexOf('check_healing_effectiveness()');
-    if (start === -1) throw new Error('check_healing_effectiveness not found in claude.sh');
-    const rest  = claudeSrc.slice(start);
-    const end   = rest.indexOf('\n}') + 2;
-    return rest.slice(0, end);
+    return extractHealingEffectivenessBody();
   }
 
   function buildScript(healLog: string, events: Array<{ story_id: string; diagnosis: string }>, storyId: string, diagnosis: string): string {
@@ -561,11 +575,17 @@ PYEOF
   });
 });
 
-// ── 8. Regression: Bug — HEALING_BROKEN wording variation tolerance ───────────
-// The old code compared full diagnosis strings (exact match).
-// Analysts rephrase the same root cause slightly across retries, defeating the check.
-// Fix: compare first 50 chars of the diagnosis (prefix match).
-describe('regression: HEALING_BROKEN fires on wording variations (50-char prefix match)', () => {
+// ── 8. Regression: Bug — 20-char exact-prefix match missed real paraphrased repeats ──
+// Live-confirmed (run #14, 2026-07-04): SKY-004 attempts 6 and 7 diagnosed the SAME
+// bug (wrong/missing public/index.html path), but the analyst phrased them
+// completely differently ("Code uses '../public/index.html'..." vs "Agent referenced
+// src/public/index.html but didn't create the file...") — zero shared 20-char prefix,
+// so the old exact-prefix-match design silently missed the repeat right after
+// escalating to the top of the retry ladder, the most expensive point to miss it.
+// Fix: token-overlap matching — extract significant words (len>=4, minus stopwords)
+// from each diagnosis; treat as the same root cause when the overlap is both at
+// least min(3, vocab size) words AND at least 40% of the smaller diagnosis's vocabulary.
+describe('regression: HEALING_BROKEN fires on paraphrased repeats (token-overlap match)', () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -577,29 +597,30 @@ describe('regression: HEALING_BROKEN fires on wording variations (50-char prefix
   });
 
   function extractCheckFn(): string {
-    const start = claudeSrc.indexOf('check_healing_effectiveness()');
-    const rest  = claudeSrc.slice(start);
-    const end   = rest.indexOf('\n}') + 2;
-    return rest.slice(0, end);
+    return extractHealingEffectivenessBody();
   }
 
-  it('structural: truncates diagnosis to 20 chars for comparison (prefix match, not exact match)', () => {
-    const funcStart = claudeSrc.indexOf('check_healing_effectiveness()');
-    const funcEnd   = claudeSrc.indexOf('\n}', funcStart + 50);
-    const body      = claudeSrc.slice(funcStart, funcEnd);
-    // [:20] prefix match — tolerates analyst rephrasing of same root cause
-    expect(body).toMatch(/\[:20\]/);
-    expect(body).not.toMatch(/\[:100\]/);
-    expect(body).not.toMatch(/\[:50\]/);
+  it('structural: uses word-token extraction (>=4 chars) with a stopword list, not a fixed-length prefix', () => {
+    const body = extractHealingEffectivenessBody();
+    expect(body).toMatch(/STOPWORDS/);
+    expect(body).toMatch(/\{4,\}/);
+    expect(body).not.toMatch(/diag\s*=.*\[:20\]/);
   });
 
-  it('integration: fires when two diagnoses share the same 20-char prefix despite different wording', () => {
+  it('structural: requires both an absolute overlap floor AND a ratio floor (either alone is exploitable)', () => {
+    const body = extractHealingEffectivenessBody();
+    expect(body).toMatch(/min\(3,\s*len\(ta\),\s*len\(tb\)\)/);
+    expect(body).toMatch(/ratio >= 0\.4/);
+  });
+
+  it('integration: fires when two diagnoses describe the same root cause with zero shared 20-char prefix (live SKY-004 case)', () => {
     const healLog = join(tmpDir, 'healing-events.jsonl');
-    // Analysts rephrase the same root cause differently — but first 20 chars match.
-    // "vi.mock called insid..." covers both "inside it()" and "inside describe()" variants.
-    const diag1   = 'vi.mock called inside it() blocks is not hoisted — mock setup is silently ignored by vitest';
-    const diag2   = 'vi.mock called inside describe() — vitest hoisting only works at module top level, not nested';
+    // Real diagnoses from run #14 (2026-07-04) — same public/index.html path bug,
+    // completely different phrasing, no shared prefix at all.
+    const diag1   = "Code uses '../public/index.html' from src/server.ts, but file lives at src/public/index.html, so readFileSync resolves to a missing path.";
+    const diag2   = "Agent referenced src/public/index.html but didn't create the file and used wrong relative path (../public/index.html).";
     const current = diag2;
+    expect(diag1.slice(0, 20)).not.toBe(diag2.slice(0, 20));
 
     const funcDef = extractCheckFn();
     const events  = [

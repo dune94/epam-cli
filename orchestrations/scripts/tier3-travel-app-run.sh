@@ -8,7 +8,7 @@
 # Model assignment:
 #   Story agents : MiniMax-M3 (direct) and moonshotai/kimi-k2 (OpenRouter)
 #   Gates/analyst: MiniMax-M3
-#   Retry ladder : MiniMax-M3 → zhipuai/glm-z1-32b → moonshotai/kimi-k2
+#   Retry ladder : MiniMax-M3 → z-ai/glm-5.2 (Rungs 2/3, reasoning, 1M ctx)
 #   Reasoning    : low (attempt 1) → medium (R1) → medium+model↑ (R2) → high (R3)
 #
 # Prerequisites:
@@ -87,6 +87,74 @@ git -C "$OUTPUT_DIR" init --quiet
 git -C "$OUTPUT_DIR" commit --allow-empty -m "init: skyscanner-app" --quiet
 info "Output directory clean (deleted and reinitialised)"
 
+# Dependency-check manifest — this project's stack is npm/TypeScript, so this
+# tier script (not the generic run-agent-orchestration.sh / claude.sh) is the
+# right place to declare it. claude.sh's run_dependency_check() itself knows
+# nothing about npm — it just reads whatever manifest is here. A Python or
+# Rust orchestration would supply its own manifest with the same shape.
+mkdir -p "$OUTPUT_DIR/.epam"
+cat > "$OUTPUT_DIR/.epam/dependency-check.json" << 'DEPCHECK_EOF'
+{
+  "manifestFile": "package.json",
+  "manifestKeys": ["dependencies", "devDependencies"],
+  "scanFileExtensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
+  "importPattern": "from\\s+['\"]([^./][^'\"]*)['\"]|require\\(\\s*['\"]([^./][^'\"]*)['\"]\\s*\\)",
+  "installCommand": "npm install --save-dev {package}",
+  "ignorePackages": ["assert","buffer","child_process","cluster","crypto","dgram","dns","domain","events","fs","http","http2","https","net","os","path","perf_hooks","process","punycode","querystring","readline","repl","stream","string_decoder","timers","tls","tty","url","util","v8","vm","worker_threads","zlib","node:assert","node:buffer","node:child_process","node:crypto","node:events","node:fs","node:http","node:https","node:net","node:os","node:path","node:process","node:stream","node:url","node:util","node:vm","node:zlib"],
+  "requiredDevDependencies": ["typescript", "@types/node", "vitest", "tsx"]
+}
+DEPCHECK_EOF
+
+# Contract-generation manifest — same "engine knows nothing about the stack,
+# manifest supplies all the syntax/regex knowledge" pattern as dependency-check.json
+# above. claude.sh's generate_story_contract() parses this project's source with
+# whatever regex/templates are declared here; a Python or Go orchestration would
+# supply its own manifest with the same shape (different regexes, different mock
+# templates) and the engine function would not need to change at all.
+cat > "$OUTPUT_DIR/.epam/contract-generation.json" << 'CONTRACTGEN_EOF'
+{
+  "language": "typescript",
+  "sourceExtensions": [".ts"],
+  "excludePattern": "\\.(test|spec)\\.ts$",
+  "interfacePattern": "export\\s+interface\\s+(\\w+)\\s*\\{([^}]*)\\}",
+  "classPattern": "export\\s+class\\s+(\\w+)\\s*(?:extends\\s+\\w+\\s*)?\\{",
+  "ctorPattern": "constructor\\s*\\(([^)]*)\\)",
+  "methodPattern": "^\\s*(?:public\\s+|private\\s+|protected\\s+)?(async\\s+)?(\\w+)\\s*\\(([^)]*)\\)\\s*(?::\\s*([^{;]+))?\\s*\\{",
+  "interfaceRenderTemplate": "export interface {{name}} {{{body}}}",
+  "classDeclarationTemplate": "export class {{className}} {\n  constructor({{ctorParams}});\n{{methodSignatures}}\n}",
+  "methodSignatureTemplate": "  {{asyncPrefix}}{{methodName}}({{params}}){{returnAnnotation}};",
+  "asyncPrefixKeyword": "async ",
+  "returnAnnotationPrefix": ": ",
+  "mockFactoryTemplate": "vi.mock('<import-path-to-{{className}}>', () => ({\n  {{className}}: vi.fn().mockImplementation(() => ({\n{{methodMocks}}\n  })),\n}));",
+  "mockMethodTemplateSync": "    {{methodName}}: vi.fn(),",
+  "mockMethodTemplateAsync": "    {{methodName}}: vi.fn().mockResolvedValue(undefined),",
+  "testFileExtensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
+  "testFilePattern": "\\.(test|spec)\\.[a-zA-Z0-9]+$",
+  "mockFactoryStartPattern": "vi\\.mock\\(\\s*['\"](\\.[^'\"]+)['\"]\\s*,\\s*\\(\\)\\s*=>\\s*\\(\\{",
+  "mockClassPattern": "(\\w+)\\s*:\\s*vi\\.fn\\(\\)\\.mockImplementation\\(\\(\\)\\s*=>\\s*\\(\\{",
+  "mockedMethodPattern": "^\\s*(\\w+)\\s*:",
+  "testFileAgentRole": "test-engineer"
+}
+CONTRACTGEN_EOF
+
+# Known-fixes registry — deterministic second-line safety net for self-heal
+# (see apply_known_fix() in claude.sh). Each entry maps a recurring failure
+# SYMPTOM (regex against the FailureAnalyst's diagnosis text) to a mechanical,
+# one-line patch on an already-scaffolded file. Only engages after the same
+# diagnosis has recurred 2+ times with no LLM-routed fix able to touch it.
+cat > "$OUTPUT_DIR/.epam/known-fixes.json" << 'KNOWNFIXES_EOF'
+[
+  {
+    "id": "vitest-pass-with-no-tests",
+    "symptomPattern": "(?:vitest|test).*(?:no test files|zero test files).*exit|exit.*1.*(?:no|zero) test files|passWithNoTests",
+    "targetFile": "vitest.config.ts",
+    "checkPattern": "passWithNoTests",
+    "insertAfterPattern": "test:\\s*\\{",
+    "insertText": "\n    passWithNoTests: true,"
+  }
+]
+KNOWNFIXES_EOF
+
 # Export all required env vars directly so subprocesses inherit them without
 # an `env` wrapper array (which caused silent exit due to empty-var expansion).
 export OUTPUT_DIR
@@ -101,21 +169,58 @@ export EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY"
 export ORCH_GATE_PROVIDER="minimax"
 export EPAM_ORCHESTRATION_PROVIDER="minimax"
 export ORCH_GATE_MODEL="MiniMax-M3"
-# Spec-mode models: Kimi for openspec/speckit, GLM for validation
+# Escalation model: GLM 5.2 for Rung 2/3 (reasoning model, 1M ctx; routes via OpenRouter/qwen provider)
+export ESCALATION_MODEL="${ESCALATION_MODEL:-z-ai/glm-5.2}"
+# HIGH tier: stronger/pricier model than the medium-tier ESCALATION_MODEL.
+# claude.sh's classify_ladder_tier() dynamically decides medium vs high per
+# story from its own recorded failure history (story-failures.jsonl) — never
+# hardcoded per story ID.
+export ESCALATION_MODEL_HIGH="${ESCALATION_MODEL_HIGH:-z-ai/glm-5.1}"
+# Spec-mode models: openspec/speckit make MANDATORY, non-negotiable decisions
+# (AC elaboration, story splitting) with NO escalation ladder of their own —
+# unlike implementation stories, a bad spec-pass decision can't be retried at
+# a stronger model automatically. Root cause of a live defect (2026-07-06):
+# openspec on the base model (moonshotai/kimi-k2) repeatedly ignored its own
+# "MANDATORY split required" prompt instruction for stories exceeding the
+# split thresholds (see checkSplitMandateViolation() in spec-mode-runner.js),
+# burning the ENTIRE downstream implementation retry/escalation ladder on an
+# overloaded, un-split story instead. Fix: always use the strongest configured
+# model (the HIGH ladder tier) for spec-mode's own decisions, since there's no
+# later opportunity to escalate a bad split/elaboration call the way there is
+# for implementation.
 export SPEC_MODE_PROVIDER="qwen"
-export SPEC_MODE_OPENSPEC_MODEL="${SPEC_MODE_OPENSPEC_MODEL:-moonshotai/kimi-k2}"
-export SPEC_MODE_SPECKIT_MODEL="${SPEC_MODE_SPECKIT_MODEL:-zhipuai/glm-4-plus}"
-export SPEC_MODE_MODEL="${SPEC_MODE_MODEL:-moonshotai/kimi-k2}"
-# GLM model family (via OpenRouter / zhipuai)
-export GLM_GENERAL_MODEL="${GLM_GENERAL_MODEL:-zhipuai/glm-4-plus}"
-export GLM_REASONING_MODEL="${GLM_REASONING_MODEL:-zhipuai/glm-z1-32b}"
+export SPEC_MODE_OPENSPEC_MODEL="${SPEC_MODE_OPENSPEC_MODEL:-${ESCALATION_MODEL_HIGH}}"
+export SPEC_MODE_SPECKIT_MODEL="${SPEC_MODE_SPECKIT_MODEL:-${ESCALATION_MODEL_HIGH}}"
+export SPEC_MODE_MODEL="${SPEC_MODE_MODEL:-${ESCALATION_MODEL_HIGH}}"
 # Model escalation ladder: pipe-separated "from=to" pairs consumed by get_model_ladder_step().
-# R2 cross-family escalation: MiniMax → GLM reasoning, Kimi → GLM general, GLM → Kimi.
+# R2: MiniMax-M3 → deepseek-r1 (reasoning escalation). Legacy GLM entries kept for story-level retryModel compat.
 # Override individual entries by re-exporting EPAM_MODEL_LADDER before invoking this script.
-export EPAM_MODEL_LADDER="${EPAM_MODEL_LADDER:-MiniMax-M2.5=MiniMax-M3|MiniMax-M3=${GLM_REASONING_MODEL:-zhipuai/glm-z1-32b}|moonshotai/kimi-k2=${GLM_GENERAL_MODEL:-zhipuai/glm-4-plus}|zhipuai/glm-4-plus=moonshotai/kimi-k2|zhipuai/glm-z1-32b=moonshotai/kimi-k2|zhipuai/glm-z1-9b=moonshotai/kimi-k2}"
+#
+# BUG (found live via SKY-003 sandbox test, 2026-07-05): SKY-002/003/004 are all
+# assigned moonshotai/kimi-k2 as their base model (per prd.json aiProvider/model),
+# but neither tier had an entry keyed on it — get_model_ladder_step() returned
+# empty ("no ladder step — keeping model"), so a story on kimi-k2 could reach
+# Rung 3 (max rung, "effort → high (maximum)") without the model EVER actually
+# changing. Confirmed: SKY-003 repeated the identical trivial mistake (added a
+# .js extension to a relative import) across every rung and exhausted all 8
+# attempts still on kimi-k2, then aborted — a mechanical, easily-fixed mistake
+# that likely would have resolved in 1-2 attempts on a stronger model.
+export EPAM_MODEL_LADDER_MEDIUM="${EPAM_MODEL_LADDER_MEDIUM:-MiniMax-M2.5=MiniMax-M3|MiniMax-M3=${ESCALATION_MODEL}|zhipuai/glm-z1-32b=${ESCALATION_MODEL}|zhipuai/glm-z1-9b=${ESCALATION_MODEL}|moonshotai/kimi-k2=${ESCALATION_MODEL}}"
+export EPAM_MODEL_LADDER_HIGH="${EPAM_MODEL_LADDER_HIGH:-MiniMax-M2.5=MiniMax-M3|MiniMax-M3=${ESCALATION_MODEL_HIGH}|zhipuai/glm-z1-32b=${ESCALATION_MODEL_HIGH}|zhipuai/glm-z1-9b=${ESCALATION_MODEL_HIGH}|${ESCALATION_MODEL}=${ESCALATION_MODEL_HIGH}|moonshotai/kimi-k2=${ESCALATION_MODEL_HIGH}}"
+# Back-compat: EPAM_MODEL_LADDER (no suffix) still works as an override that
+# forces BOTH tiers to the same ladder — set it explicitly to opt out of the
+# medium/high split.
+export EPAM_MODEL_LADDER="${EPAM_MODEL_LADDER:-}"
 # Final fallback: used at R3 when the story model was never escalated at R2
 export EPAM_FINAL_FALLBACK_MODEL="${EPAM_FINAL_FALLBACK_MODEL:-moonshotai/kimi-k2}"
 export EPAM_FINAL_FALLBACK_PROVIDER="${EPAM_FINAL_FALLBACK_PROVIDER:-qwen}"
+# Model-to-provider routing for post-escalation model steps (consumed by
+# claude.sh's resolve_model_provider() — zero vendor names hardcoded in the
+# engine itself, see that function's comment). This project routes every
+# OpenRouter-hosted vendor through the "qwen" provider umbrella; MiniMax
+# direct-API models route through "minimax". A project using different model
+# vendors/providers would supply a different map here.
+export EPAM_MODEL_PROVIDER_MAP="${EPAM_MODEL_PROVIDER_MAP:-zhipuai/*=qwen|moonshotai/*=qwen|z-ai/*=qwen|glm-*=qwen|kimi-*=qwen|deepseek/*=qwen|MiniMax-*=minimax}"
 # MiniMax runtime settings
 export MINIMAX_TOOL_TIMEOUT_MS="${MINIMAX_TOOL_TIMEOUT_MS:-15000}"
 export ORCH_MINI_MODEL="${ORCH_MINI_MODEL:-MiniMax-M2.5}"
@@ -221,7 +326,7 @@ run_phase() {
   # resets story state, and verifies integrity. Prevents run failures from
   # prior-run mutations without requiring manual intervention.
   info "  Pre-phase PRD remediation..."
-  if ! bash "$SCRIPT_DIR/prd-remediate.sh" --prd "$PRD_FILE" 2>&1 | tee -a "$LOG_FILE"; then
+  if ! bash "$SCRIPT_DIR/prd-remediate.sh" --prd "$PRD_FILE" --phase "$phase" 2>&1 | tee -a "$LOG_FILE"; then
     fail "PRD remediation failed for phase '$phase' — aborting. Fix prd.json manually."
   fi
   echo ""
@@ -236,7 +341,7 @@ run_phase() {
   # exit 2 = gate remediation was applied — reset stories and retry once
   if [ "$phase_exit" -eq 2 ]; then
     info "  Self-healing: gate remediation applied — resetting and retrying phase '$phase'..."
-    if ! bash "$SCRIPT_DIR/prd-remediate.sh" --prd "$PRD_FILE" 2>&1 | tee -a "$LOG_FILE"; then
+    if ! bash "$SCRIPT_DIR/prd-remediate.sh" --prd "$PRD_FILE" --phase "$phase" 2>&1 | tee -a "$LOG_FILE"; then
       fail "PRD remediation failed during self-healing retry for phase '$phase'"
     fi
     echo ""

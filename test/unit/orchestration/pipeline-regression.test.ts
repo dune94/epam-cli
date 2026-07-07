@@ -560,12 +560,26 @@ describe('Issue 5 — spec-mode bypasses MiniMax when SPEC_MODE_PROVIDER is set'
     expect(tier3Src).toMatch(/SPEC_MODE_PROVIDER=["']?qwen["']?/);
   });
 
-  it('tier3 script sets SPEC_MODE_OPENSPEC_MODEL to kimi-k2', () => {
-    expect(tier3Src).toMatch(/SPEC_MODE_OPENSPEC_MODEL.*kimi-k2/);
+  // 2026-07-06: openspec/speckit make MANDATORY, non-retryable decisions (AC
+  // elaboration, story splitting) with no escalation ladder of their own — a
+  // bad decision on the base model can't be corrected later the way an
+  // implementation story's can. Root cause of a live defect: openspec on
+  // moonshotai/kimi-k2 repeatedly ignored its own "MANDATORY split required"
+  // instruction for oversized stories. Fix: default to the strongest
+  // configured ladder tier (ESCALATION_MODEL_HIGH), not a fixed weak model.
+  it('tier3 script defaults SPEC_MODE_OPENSPEC_MODEL to ESCALATION_MODEL_HIGH (strongest tier, not a hardcoded weak model)', () => {
+    expect(tier3Src).toMatch(/SPEC_MODE_OPENSPEC_MODEL="\$\{SPEC_MODE_OPENSPEC_MODEL:-\$\{ESCALATION_MODEL_HIGH\}\}"/);
   });
 
-  it('tier3 script sets SPEC_MODE_SPECKIT_MODEL to glm', () => {
-    expect(tier3Src).toMatch(/SPEC_MODE_SPECKIT_MODEL.*glm/i);
+  it('tier3 script defaults SPEC_MODE_SPECKIT_MODEL to ESCALATION_MODEL_HIGH (strongest tier, not a hardcoded weak model)', () => {
+    expect(tier3Src).toMatch(/SPEC_MODE_SPECKIT_MODEL="\$\{SPEC_MODE_SPECKIT_MODEL:-\$\{ESCALATION_MODEL_HIGH\}\}"/);
+  });
+
+  it('ESCALATION_MODEL_HIGH is defined BEFORE the SPEC_MODE_* exports that reference it (bash var expansion order)', () => {
+    const escHighIdx = tier3Src.indexOf('export ESCALATION_MODEL_HIGH=');
+    const specOpenspecIdx = tier3Src.indexOf('export SPEC_MODE_OPENSPEC_MODEL=');
+    expect(escHighIdx).toBeGreaterThan(-1);
+    expect(specOpenspecIdx).toBeGreaterThan(escHighIdx);
   });
 });
 
@@ -614,28 +628,21 @@ describe('Issue 7 — run 78 confidence: GLM slug, K2 timeout, perf-sentinel git
   );
 
   // ── GLM slug format ──────────────────────────────────────────────────────
-  it('SPEC_MODE_SPECKIT_MODEL slug follows OpenRouter org/model format', () => {
-    // OpenRouter slugs must be "org/model-name" — no spaces, no bare model names
-    const match = tier3Src.match(/SPEC_MODE_SPECKIT_MODEL[^"'\n]*["']?([a-z0-9._-]+\/[a-z0-9._-]+)["']?/i);
+  // SPEC_MODE_SPECKIT_MODEL/SPEC_MODE_OPENSPEC_MODEL now default to the
+  // ${ESCALATION_MODEL_HIGH} variable rather than a literal slug (2026-07-06),
+  // so the slug-format check resolves through ESCALATION_MODEL_HIGH's own
+  // default instead — same guarantee (a valid OpenRouter org/model slug),
+  // single source of truth.
+  it('ESCALATION_MODEL_HIGH (which SPEC_MODE_* now default to) follows OpenRouter org/model slug format', () => {
+    const match = tier3Src.match(/ESCALATION_MODEL_HIGH:-([a-z0-9._-]+\/[a-z0-9._-]+)\}/i);
     expect(match).not.toBeNull();
     const slug = match![1];
     expect(slug).toMatch(/^[a-z0-9_-]+\/[a-z0-9._-]+$/i);
   });
 
-  it('SPEC_MODE_SPECKIT_MODEL slug contains zhipuai org (Zhipu AI GLM)', () => {
-    expect(tier3Src).toMatch(/SPEC_MODE_SPECKIT_MODEL.*zhipuai/i);
-  });
-
-  it('SPEC_MODE_SPECKIT_MODEL slug contains glm model name', () => {
-    expect(tier3Src).toMatch(/SPEC_MODE_SPECKIT_MODEL.*glm/i);
-  });
-
-  it('SPEC_MODE_OPENSPEC_MODEL slug contains moonshotai org (Kimi K2)', () => {
-    expect(tier3Src).toMatch(/SPEC_MODE_OPENSPEC_MODEL.*moonshotai/i);
-  });
-
-  it('SPEC_MODE_OPENSPEC_MODEL slug contains kimi-k2 model name', () => {
-    expect(tier3Src).toMatch(/SPEC_MODE_OPENSPEC_MODEL.*kimi-k2/i);
+  it('SPEC_MODE_SPECKIT_MODEL and SPEC_MODE_OPENSPEC_MODEL both resolve through ESCALATION_MODEL_HIGH, not a separately hardcoded model', () => {
+    expect(tier3Src).toMatch(/SPEC_MODE_SPECKIT_MODEL:-\$\{ESCALATION_MODEL_HIGH\}/);
+    expect(tier3Src).toMatch(/SPEC_MODE_OPENSPEC_MODEL:-\$\{ESCALATION_MODEL_HIGH\}/);
   });
 
   // ── K2 fast-path timeout handling ───────────────────────────────────────

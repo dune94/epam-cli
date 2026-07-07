@@ -169,6 +169,23 @@ resolve_model_from_story() {
     fi
 }
 
+# resolve_reasoning_effort_from_story <story_id>
+# The prd-model-coordinator agent writes a .reasoningEffort field onto every
+# story before execution begins. If present, it overrides the hardcoded
+# "low" reset at story start. Absent field leaves the "low" default in place.
+resolve_reasoning_effort_from_story() {
+    local story_id="$1"
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    local story_effort
+    story_effort=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .reasoningEffort // ""' \
+        "$prd_target" 2>/dev/null || echo "")
+    if [ -n "$story_effort" ]; then
+        export EPAM_REASONING_EFFORT="$story_effort"
+        log "  ReasoningEffort[prd.json] -> $EPAM_REASONING_EFFORT"
+    fi
+}
+
 # compute_token_cost <model> <tokens_in> <tokens_out>
 # Returns USD cost using model-pricing.json. Outputs "0" if model unknown or tokens are zero.
 # Handles "standard-tier" / "mini-tier" labels by falling back to STORY_MODEL.
@@ -224,7 +241,21 @@ resolve_codex_model_settings() {
 # Reads optional plannerModel from story spec and sets STORY_PLANNER_MODEL global.
 # When set, the first invocation uses STORY_PLANNER_MODEL to produce a structured
 # execution plan; subsequent (execution) invocations use STORY_MODEL.
-# When absent, STORY_PLANNER_MODEL is cleared and behaviour is unchanged.
+# When absent, falls back to a COMPLEXITY-ADAPTIVE auto-trigger: the classify_ladder_tier
+# function (the same signal CPA's cpaGate/effort fields already feed into the model-
+# escalation ladder — see its own docstring) is reused here to decide EXECUTION
+# SHAPE, not just escalation tier. A story classified "high" gets a plan-turn before its
+# very first execution attempt (not just after failures) — the whole point is avoiding
+# retries for genuinely complex stories, not reacting to them after the fact. "medium"
+# (the default) keeps today's single-shot behavior unchanged, so simple stories pay no
+# planning-turn overhead.
+# Opt-out: SKIP_PLAN_THEN_EXECUTE=true disables the auto-trigger entirely (explicit
+# per-story .plannerModel still works either way — it's a manual override, not part of
+# the auto-trigger this flag controls).
+# Model used for the auto-triggered plan turn: EPAM_PLANNER_MODEL_HIGH_TIER if set,
+# else falls back to ORCH_GATE_MODEL (the same gate model already used for reviews/
+# assessments) — no vendor/model name hardcoded here, consistent with the
+# config-driven pattern used by the model-provider and model-ladder-step helpers.
 resolve_planner_settings() {
     local story_id="$1"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
@@ -233,6 +264,19 @@ resolve_planner_settings() {
         "$prd_target" 2>/dev/null || echo "")
     if [ -n "$STORY_PLANNER_MODEL" ]; then
         log "  PlannerModel[$STORY_PLANNER_MODEL] -> planning turn, then execution on $STORY_MODEL"
+        return
+    fi
+
+    [ "${SKIP_PLAN_THEN_EXECUTE:-false}" = "true" ] && return
+
+    local _tier
+    _tier=$(classify_ladder_tier "$story_id")
+    if [ "$_tier" = "high" ]; then
+        local _auto_planner="${EPAM_PLANNER_MODEL_HIGH_TIER:-${ORCH_GATE_MODEL:-}}"
+        if [ -n "$_auto_planner" ]; then
+            STORY_PLANNER_MODEL="$_auto_planner"
+            log "  PlannerModel[auto/high-tier: $STORY_PLANNER_MODEL] -> planning turn, then execution on $STORY_MODEL"
+        fi
     fi
 }
 
@@ -954,6 +998,28 @@ build_implementation_prompt() {
     tc_mock_strategy=$(echo "$story_json" | jq -r '.testCriteria.mockStrategy // ""' 2>/dev/null || echo "")
     tc_banned=$(echo "$story_json" | jq -r '.testCriteria.bannedPatterns // [] | join(", ")' 2>/dev/null || echo "")
 
+    # Exact String Invariant guardrail (found live, 2026-07-06): SKY-002-impl
+    # failed 8 times with 8 DIFFERENT bugs, several of them a slightly-wrong
+    # paraphrase of an AC's literal error-message string (e.g. "via the
+    # constructor" instead of "via the constructor options.apiKey"). A quoted
+    # substring in an AC is a literal test assertion, not a summary the model
+    # is free to reword — extract every quoted string and tell it explicitly
+    # not to paraphrase them. Deterministic (no LLM judgment about which
+    # strings matter); fully generic (works for any story's ACs, not just
+    # SKY-002's).
+    local string_invariants string_invariants_block=""
+    string_invariants=$(printf '%s' "$acceptance_criteria" | grep -oE '"[^"]{3,}"' | sort -u)
+    if [ -n "$string_invariants" ]; then
+        string_invariants_block="
+## CRITICAL COMPLIANCE: STRING INVARIANTS
+The Acceptance Criteria above contain exact string matches required by the test suite.
+You are FORBIDDEN from paraphrasing, summarizing, or optimizing these strings — reproduce them character-for-character, including case and spacing, wherever the AC requires them.
+
+LITERAL STRINGS TO USE VERBATIM:
+$(printf '%s\n' "$string_invariants" | sed 's/^/- /')
+"
+    fi
+
     # Build a write-first directive listing each file with its exact absolute path
     local write_first_lines=""
     while IFS= read -r f; do
@@ -973,8 +1039,117 @@ build_implementation_prompt() {
         write_first_lines="${write_first_lines}   - WRITE ${abs_f} first, before any other action\n"
     done < <(echo "$story_json" | jq -r '.technicalNotes.files[]? // empty')
 
+    # Deterministic contract injection — root cause of a recurring live-run
+    # failure (validated live: baseline model call guessed the wrong import
+    # path './skyscanner-client'; with the dependency's contract injected,
+    # it used the correct './skyscanner/client' every time). The typescript-
+    # engineer profile already instructs agents to WRITE a contract file
+    # after finishing (.contracts/<storyId>.md — exact exports, constructor
+    # signature, ready-to-paste import/mock pattern) — but nothing ever READ
+    # it back for a dependent story. Reading was 100% dependent on the
+    # dependent story's agent choosing to open the file itself, which it
+    # unreliably did. Inject it directly so it's guaranteed, not requested.
+    local dependency_contracts=""
+    local _dep_ids_json="[]"
+    if [ -n "$dependencies" ]; then
+        _dep_ids_json=$(echo "$story_json" | jq -c '[(.dependencies // .technicalNotes.dependsOn // [])[]? // empty]')
+        local _dep_id
+        while IFS= read -r _dep_id; do
+            [ -z "$_dep_id" ] && continue
+            local _contract_file="$PROJECT_ROOT/.contracts/${_dep_id}.md"
+            if [ -f "$_contract_file" ]; then
+                dependency_contracts="${dependency_contracts}
+### Contract: ${_dep_id}
+$(cat "$_contract_file")
+"
+            fi
+        done < <(echo "$_dep_ids_json" | jq -r '.[]?')
+    fi
+
+    # Spec-reality cross-check (added 2026-07-06 — see project_backlog memory
+    # "Spec-reality cross-check"). Root cause this catches: the PRD itself is
+    # an LLM-authored/elaborated artifact, just as hallucination-prone as
+    # agent-generated code — a live defect had SKY-003's own description
+    # assert "Instantiate SkyscannerClient from `src/skyscanner-client.ts`"
+    # when the real file SKY-002 built was at `src/skyscanner/client.ts`. The
+    # model faithfully followed a WRONG instruction baked into its own task
+    # description — hooks (session-time, per-WriteFile) would NOT catch this,
+    # since the bug is in what the agent was TOLD, not in what it produced.
+    # Deterministically extracts backtick-quoted path-like strings from this
+    # story's own description/ACs and checks each against a dependency's REAL
+    # technicalNotes.files (ground truth, not model-transcribed) — flagging a
+    # mismatch instead of silently injecting the correct contract ALONGSIDE
+    # an uncorrected wrong claim (which is what happened live: the agent saw
+    # both the correct contract and the wrong prose path and still guessed
+    # wrong on early attempts).
+    local spec_reality_warning=""
+    if [ "$_dep_ids_json" != "[]" ]; then
+        local _dep_files_json
+        _dep_files_json=$(jq -c --argjson ids "$_dep_ids_json" \
+            '[.stories[] | select(.id as $sid | $ids | index($sid)) | .technicalNotes.files[]? // empty]' \
+            "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "[]")
+        spec_reality_warning=$(python3 - "$description" "$acceptance_criteria" "$_dep_files_json" << 'PYEOF'
+import json, os, re, sys
+
+description, acs, dep_files_json = sys.argv[1], sys.argv[2], sys.argv[3]
+dep_files = json.loads(dep_files_json)
+
+# Same token-overlap heuristic already proven in the relative-import-check's
+# suggestion logic — a basename EQUALITY check is too strict for the actual
+# live bug shape (`skyscanner-client.ts` vs the real `client.ts` under
+# `skyscanner/` — different basenames, same underlying identifier).
+def tokenize(name):
+    return set(re.split(r'[^a-zA-Z0-9]+', name.lower())) - {''}
+
+def is_test_file(path):
+    return bool(re.search(r'\.(test|spec)\.[a-zA-Z0-9]+$', path))
+
+dep_impl_files = [f for f in dep_files if not is_test_file(f)]
+
+# Backtick-quoted, path-like strings only (contains a slash, ends in a
+# common source extension) — plain identifiers/method names in backticks
+# are not file-path claims and shouldn't be checked here.
+PATH_RE = re.compile(r'`([\w./-]+/[\w.-]+\.(?:ts|tsx|js|jsx|mjs|cjs))`')
+
+mismatches = []
+seen = set()
+for text in (description, acs):
+    for m in PATH_RE.finditer(text):
+        claimed = m.group(1)
+        if claimed in seen:
+            continue
+        seen.add(claimed)
+        if any(claimed == f or f.endswith('/' + claimed) for f in dep_files):
+            continue  # exact match against a real dependency file — no mismatch
+        claimed_tokens = tokenize(os.path.splitext(os.path.basename(claimed))[0])
+        if not claimed_tokens:
+            continue
+        best_real, best_overlap = None, 0
+        for real in dep_impl_files:
+            real_tokens = tokenize(os.path.splitext(os.path.basename(real))[0])
+            if not real_tokens:
+                continue
+            overlap = claimed_tokens & real_tokens
+            ratio = len(overlap) / min(len(claimed_tokens), len(real_tokens))
+            if ratio >= 0.5 and len(overlap) > best_overlap:
+                best_real, best_overlap = real, len(overlap)
+        if best_real:
+            mismatches.append((claimed, best_real))
+
+if mismatches:
+    lines = [
+        "## SPEC-REALITY MISMATCH (auto-detected — the description/ACs above contain a WRONG file path)",
+        "The following path(s) in this story's own description/ACs do NOT match the real file a dependency actually built. TRUST THE CONTRACT SECTION BELOW, NOT THE WRONG PATH ABOVE:",
+    ]
+    for claimed, real in mismatches:
+        lines.append(f"- Description/ACs say `{claimed}` — the REAL file is at `{real}`. Use the real path.")
+    print('\n'.join(lines))
+PYEOF
+)
+    fi
+
     cat << EOF
-CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+$([ -n "$spec_reality_warning" ] && printf '%s\n\n' "$spec_reality_warning" || true)CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
 Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
 Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
 
@@ -988,6 +1163,7 @@ $description
 
 ## Acceptance Criteria
 - $acceptance_criteria
+$([ -n "$string_invariants_block" ] && printf '%s\n' "$string_invariants_block" || true)
 $([ -n "$tc_facts" ] && printf '\n## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)\n%s\n' "$tc_facts" || true)
 $([ -n "$tc_mock_strategy" ] && printf '\n## Mock Strategy\n%s\n' "$tc_mock_strategy" || true)
 $([ -n "$tc_banned" ] && printf '\n## Banned Patterns (must NOT appear in your file)\n%s\n' "$tc_banned" || true)
@@ -1000,6 +1176,7 @@ $files
 
 ## Dependencies
 ${dependencies:-None}
+$([ -n "$dependency_contracts" ] && printf '\n## Dependency Contracts (EXACT import paths and signatures — use these verbatim, do NOT guess a different path)\n%s\n' "$dependency_contracts" || true)
 
 ## Instructions
 **CRITICAL — WRITE FILES FIRST:**
@@ -1119,9 +1296,23 @@ verify_story_deliverables() {
 
 # _scope_lock <story_id>
 # Makes every .ts file in PROJECT_ROOT/src that is NOT in the story's declared
-# technicalNotes.files read-only (chmod 444) before the agent runs. This is an
-# OS-level pre-emptive guard: Bash, WriteFile, or any other mechanism that tries
-# to write an out-of-scope file will get EACCES — no tool-layer workaround exists.
+# technicalNotes.files read-only (chmod 444) before the agent runs, PLUS every
+# file (any extension, any location under PROJECT_ROOT) declared by a DIFFERENT
+# story — i.e. a file that already belongs to a prior (or sibling) story's own
+# scope. This is an OS-level pre-emptive guard: Bash, WriteFile, or any other
+# mechanism that tries to write an out-of-scope file will get EACCES — no
+# tool-layer workaround exists.
+#
+# Root cause the second part fixes (found live, 2026-07-06): the original
+# version only ever locked .ts files under src/ — tsconfig.json, package.json,
+# vitest.config.ts (root-level, non-.ts scaffold artifacts) were completely
+# unprotected. SKY-002 rewrote tsconfig.json — a file it never declared and
+# had no business touching — changing a VALID moduleResolution SKY-001 had
+# correctly scaffolded into an INVALID one, then regenerated the same wrong
+# value on every retry attempt, exhausting the entire retry/escalation ladder
+# on a self-inflicted regression in a file outside its own scope. Generic: not
+# hardcoded to config-file names — protects whatever any OTHER story declared,
+# whatever its extension or location.
 _scope_lock() {
     local story_id="$1"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
@@ -1133,22 +1324,570 @@ _scope_lock() {
         '.stories[] | select(.id == $id) | .technicalNotes.files[]? // empty' \
         "$prd_target" 2>/dev/null)
 
-    [ ${#_decl[@]} -eq 0 ] && return 0
-
     local _locked=0
+
+    if [ ${#_decl[@]} -gt 0 ]; then
+        while IFS= read -r _f; do
+            [ -n "${_decl[$_f]+x}" ] && continue
+            chmod 444 "$_f" 2>/dev/null && ((_locked++))
+        done < <(find "$PROJECT_ROOT/src" -name "*.ts" -type f 2>/dev/null)
+    fi
+
+    local _other_locked=0
     while IFS= read -r _f; do
+        [ -z "$_f" ] && continue
         [ -n "${_decl[$_f]+x}" ] && continue
-        chmod 444 "$_f" 2>/dev/null && ((_locked++))
-    done < <(find "$PROJECT_ROOT/src" -name "*.ts" -type f 2>/dev/null)
+        local _abs_f="$_f"
+        [[ "$_f" != /* ]] && _abs_f="$PROJECT_ROOT/$_f"
+        [ -f "$_abs_f" ] || continue
+        chmod 444 "$_abs_f" 2>/dev/null && ((_other_locked++))
+    done < <(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id != $id) | .technicalNotes.files[]? // empty' \
+        "$prd_target" 2>/dev/null | sort -u)
 
     [ "$_locked" -gt 0 ] && log "  [scope-guard] Locked $_locked out-of-scope .ts file(s) (read-only) for $story_id"
+    [ "$_other_locked" -gt 0 ] && log "  [scope-guard] Locked $_other_locked file(s) owned by other stories (read-only) for $story_id"
 }
 
-# _scope_unlock
-# Restores write permissions on all .ts files in PROJECT_ROOT/src.
-# Always called after the agent finishes (success or failure).
+# _scope_unlock <story_id>
+# Restores write permissions on all .ts files in PROJECT_ROOT/src, plus every
+# file owned by a different story that _scope_lock locked above.
 _scope_unlock() {
+    local story_id="${1:-}"
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+
     find "$PROJECT_ROOT/src" -name "*.ts" -type f -exec chmod 644 {} + 2>/dev/null || true
+
+    [ -z "$story_id" ] && return 0
+    while IFS= read -r _f; do
+        [ -z "$_f" ] && continue
+        local _abs_f="$_f"
+        [[ "$_f" != /* ]] && _abs_f="$PROJECT_ROOT/$_f"
+        [ -f "$_abs_f" ] && chmod 644 "$_abs_f" 2>/dev/null || true
+    done < <(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id != $id) | .technicalNotes.files[]? // empty' \
+        "$prd_target" 2>/dev/null | sort -u)
+}
+
+# run_dependency_check <project_root>
+# Deterministic (non-LLM) replacement for "hope the agent remembers to
+# install what it imports" — the exact recurring failure class this session
+# kept hitting (supertest imported but never added to devDependencies,
+# burning full retry cycles on the same mechanical mistake every time).
+#
+# Fully generic: reads <project_root>/.epam/dependency-check.json for the
+# manifest file, its dependency keys, the import-statement regex, and the
+# install command template — all data, no npm/pip/cargo/language assumption
+# anywhere in this function. Different orchestrations (Python, Rust, etc.)
+# supply their own manifest; this function is identical for all of them.
+# No manifest present = no-op (opt-in feature, old projects unaffected).
+run_dependency_check() {
+    local project_root="$1"
+    local config_file="${project_root}/.epam/dependency-check.json"
+    [ -f "$config_file" ] || return 0
+
+    python3 - "$project_root" "$config_file" << 'PYEOF'
+import json, re, subprocess, sys, os, signal
+
+project_root, config_file = sys.argv[1], sys.argv[2]
+
+with open(config_file) as f:
+    cfg = json.load(f)
+
+manifest_path = os.path.join(project_root, cfg['manifestFile'])
+if not os.path.exists(manifest_path):
+    sys.exit(0)
+with open(manifest_path) as f:
+    manifest = json.load(f)
+
+declared = set()
+for key in cfg.get('manifestKeys', []):
+    declared.update(manifest.get(key, {}).keys())
+
+pattern = re.compile(cfg['importPattern'])
+# Live bug (2026-07-06): scanning EVERY file under project_root (no extension
+# filter) meant the import regex also ran against orchestration artifacts like
+# spec-summary.json, whose free-text LLM coordinator notes can contain prose
+# that coincidentally matches an import pattern (e.g. a sentence describing
+# "mapping from 'from/to' to 'origin/destination'" was parsed as `from '...'`
+# and treated as a missing third-party package named "from/to", which then
+# hung retrying against the npm registry indefinitely). Restrict scanning to
+# actual source file extensions, config-supplied so this stays generic across
+# languages/stacks rather than hardcoding '.ts'/'.js'.
+scan_extensions = tuple(cfg.get('scanFileExtensions', []))
+imported = set()
+for root, dirs, files in os.walk(project_root):
+    dirs[:] = [d for d in dirs if d not in ('node_modules', 'dist', '.git', '__pycache__', '.venv')]
+    for fname in files:
+        if scan_extensions and not fname.endswith(scan_extensions):
+            continue
+        fpath = os.path.join(root, fname)
+        try:
+            with open(fpath, encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+        except OSError:
+            continue
+        for m in pattern.finditer(content):
+            pkg = next((g for g in m.groups() if g), None)
+            if pkg:
+                imported.add(pkg)
+
+# A declared entry satisfies an import if it matches exactly or is a prefix
+# component (handles npm scoped packages / subpath imports generically,
+# without hardcoding npm's specific scoping syntax).
+# ignorePackages is config-supplied (e.g. Node builtins like 'url', 'fs') —
+# this function has no language-specific knowledge of what counts as a
+# builtin; the orchestration's manifest declares that list.
+ignore_packages = set(cfg.get('ignorePackages', []))
+missing = []
+for pkg in sorted(imported):
+    if pkg in ignore_packages:
+        continue
+    # Live bug (2026-07-06): a Node builtin SUBPATH import (e.g. 'fs/promises',
+    # 'node:fs/promises') was only recognized if the exact subpath string was
+    # itself enumerated in ignorePackages — 'fs' being listed didn't cover
+    # 'fs/promises', so it was treated as a missing THIRD-PARTY package and
+    # the configured package manager was invoked on 'fs/promises' as if it
+    # were a third-party package, which tries to git-clone a nonexistent
+    # GitHub repo and fails outright. Prefix-match against
+    # ignorePackages the same way declared deps are already prefix-matched
+    # below — generic (any builtin's subpath is covered, not just fs's),
+    # not a hardcoded 'fs/promises' special case.
+    if any(pkg == d or pkg.startswith(d + '/') for d in ignore_packages):
+        continue
+    if pkg in declared:
+        continue
+    if any(pkg == d or pkg.startswith(d + '/') or d.startswith(pkg + '/') for d in declared):
+        continue
+    missing.append(pkg)
+
+# requiredDevDependencies (added 2026-07-07): tooling packages invoked as a
+# CLI binary (e.g. `tsc`, from the 'typescript' package) are never `import`ed
+# in source code, so the import-scanning logic above structurally cannot
+# detect them as missing — found live when a scaffold story's package.json
+# genuinely omitted 'typescript' entirely; nothing ever caught it until the
+# phase-level pre-review gate's `tsc --noEmit` call failed with
+# "Cannot find module '.../node_modules/.bin/tsc'". Config-supplied (not
+# engine-hardcoded) list of package names that must always be present in
+# devDependencies regardless of whether anything imports them.
+for pkg in cfg.get('requiredDevDependencies', []):
+    if pkg not in declared and pkg not in missing:
+        missing.append(pkg)
+
+for pkg in missing:
+    # Install the top-level package, not a scoped/subpath import string
+    # (found live, 2026-07-06): a package.json missing its devDependencies
+    # entirely made a real dependency ('vitest', imported as 'vitest/config'
+    # in vitest.config.ts) look undeclared. The install command was then
+    # built from the FULL matched string — 'vitest/config' — which isn't a
+    # real package name, so npm hung retrying against the registry
+    # indefinitely (no timeout on this call at all, on top of that). Scoped
+    # packages (@scope/name) keep their first TWO segments; anything else
+    # keeps only the first segment before a subpath.
+    parts = pkg.split('/')
+    install_pkg = '/'.join(parts[:2]) if pkg.startswith('@') else parts[0]
+    cmd = cfg['installCommand'].format(package=install_pkg)
+    print(f"  [dependency-check] Installing missing import: {install_pkg} (from '{pkg}')" if install_pkg != pkg else f"  [dependency-check] Installing missing import: {pkg}")
+    install_timeout = int(os.environ.get('EPAM_DEPENDENCY_INSTALL_TIMEOUT_SECS', '120'))
+    # start_new_session=True + killing the whole process GROUP on timeout
+    # (not just subprocess.run(timeout=...)'s default, which only kills the
+    # immediate shell): with shell=True, the immediate child is `/bin/sh -c
+    # "..."` — if that shell has already forked a real grandchild (npm and
+    # ITS children) before the timeout fires, killing just the shell leaves
+    # the grandchild orphaned, still running and still holding the shared
+    # stdout file descriptor open. Any caller doing a proper read-until-EOF
+    # on that output (a test harness capturing output, or a future caller
+    # piping this function's output) would then hang waiting for that
+    # orphaned process to exit — potentially for as long as the ORIGINAL
+    # unbounded hang this fix exists to prevent.
+    proc = subprocess.Popen(cmd, shell=True, cwd=project_root, start_new_session=True)
+    try:
+        proc.wait(timeout=install_timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        proc.wait()
+        print(f"  [dependency-check] Install of '{install_pkg}' TIMED OUT after {install_timeout}s — skipping")
+PYEOF
+}
+
+# run_mock_completeness_check <project_root> <output_file>
+# Deterministic pre-test gate for the recurring "incomplete vi.mock() factory"
+# failure class (live-diagnosed repeatedly for SKY-004: "vi.mock factory for
+# SkyscannerClient omits `search` method", "vi.mock factory is incomplete;
+# unmocked methods are undefined, handlers throw"). The corresponding
+# [Self-Heal] skill note ("mock ALL exported methods or spread real ones via
+# vi.importActual") was already present in the system prompt from attempt 1
+# and was still violated — prompt-based compliance for this rule is
+# effectively zero. This check makes the fact deterministic instead: for
+# every `vi.mock('<path>', () => ({ ClassName: vi.fn().mockImplementation(()
+# => ({ ...methods... })) }))` factory found in a test file, resolve <path>
+# to its real source file, parse the REAL class's public method names (same
+# regex as generate_story_contract), and fail fast — before the slow test
+# run — if any real method is missing from the mock's method list.
+# Returns 0 if every mock factory found is complete (or none found). Returns
+# 1 and sets VERIFICATION_FAILURE naming the missing method(s) otherwise.
+run_mock_completeness_check() {
+    local project_root="$1"
+    local output_file="${2:-/dev/null}"
+    local config_file="${project_root}/.epam/contract-generation.json"
+    [ -f "$config_file" ] || return 0
+
+    local result
+    result=$(python3 - "$project_root" "$config_file" << 'PYEOF'
+import json, os, re, sys
+
+project_root, config_file = sys.argv[1], sys.argv[2]
+with open(config_file) as f:
+    cfg = json.load(f)
+TEST_FILE_EXTS = tuple(cfg['testFileExtensions'])
+
+def is_test_file(path):
+    return bool(re.search(cfg['testFilePattern'], path))
+
+def resolve_import(base_dir, spec):
+    candidate = os.path.normpath(os.path.join(base_dir, spec))
+    if os.path.isfile(candidate):
+        return candidate
+    for ext in TEST_FILE_EXTS:
+        if os.path.isfile(candidate + ext):
+            return candidate + ext
+        if os.path.isfile(os.path.join(candidate, 'index' + ext)):
+            return os.path.join(candidate, 'index' + ext)
+    return None
+
+def find_matching_brace(text, open_idx):
+    depth = 0
+    for i in range(open_idx, len(text)):
+        if text[i] == '{':
+            depth += 1
+        elif text[i] == '}':
+            depth -= 1
+            if depth == 0:
+                return i
+    return -1
+
+def top_level_matches(text, pattern):
+    # Live bug (2026-07-06, found via SKY-003's repeated false rejections):
+    # a plain regex scan over the WHOLE class body has no notion of brace
+    # depth, so control-flow statements nested inside a real method's body
+    # (e.g. `if (!key) {`) also match `\w+\s*\(...\)\s*{` and get
+    # misidentified as class methods (a phantom method literally named
+    # "if"). This falsely rejected a CORRECT, COMPLETE mock for "missing"
+    # a method that doesn't exist — burning the entire retry/escalation
+    # ladder on a check bug, not a real defect. Same fix already applied
+    # to generate_story_contract()'s identical parsing: only count a match
+    # as a real method when it's a DIRECT child of the class body (depth 1
+    # relative to the body's own opening brace), not nested inside another
+    # block.
+    depth_at = [0] * (len(text) + 1)
+    depth = 0
+    for i, c in enumerate(text):
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+        depth_at[i + 1] = depth
+    return [m for m in pattern.finditer(text) if depth_at[m.start()] == 1]
+
+def real_class_methods(source_text, class_name):
+    # Config-driven (2026-07-06): find ALL classes via cfg['classPattern'] and
+    # match by captured name, instead of substituting class_name into a
+    # hand-rolled pattern — this way the class-matching regex itself is
+    # entirely config-supplied, same as generate_story_contract() already
+    # does, with zero stack-specific syntax hardcoded in this function.
+    class_re = re.compile(cfg['classPattern'])
+    m = None
+    for candidate in class_re.finditer(source_text):
+        if candidate.group(1) == class_name:
+            m = candidate
+            break
+    if not m:
+        return None
+    body_start = m.end() - 1
+    body_end = find_matching_brace(source_text, body_start)
+    if body_end == -1:
+        return None
+    body = source_text[body_start:body_end + 1]
+    method_re = re.compile(cfg['methodPattern'], re.M)
+    methods = set()
+    for mm in top_level_matches(body, method_re):
+        # cfg['methodPattern']'s group shape is fixed by contract-generation.json:
+        # (asyncKeyword, methodName, params, returnType) — same groups()
+        # ordering generate_story_contract() already relies on.
+        name = mm.group(2)
+        if name != 'constructor':
+            methods.add(name)
+    return methods
+
+MOCK_START_RE = re.compile(cfg['mockFactoryStartPattern'])
+CLASS_MOCK_RE = re.compile(cfg['mockClassPattern'])
+MOCKED_METHOD_RE = re.compile(cfg['mockedMethodPattern'], re.M)
+
+problems = []
+for root, dirs, files in os.walk(project_root):
+    dirs[:] = [d for d in dirs if d not in ('node_modules', 'dist', '.git', '__pycache__', '.venv', '.contracts')]
+    for fname in files:
+        if not fname.endswith(TEST_FILE_EXTS) or not is_test_file(fname):
+            continue
+        fpath = os.path.join(root, fname)
+        try:
+            with open(fpath, encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+        except OSError:
+            continue
+
+        for mock_m in MOCK_START_RE.finditer(content):
+            import_path = mock_m.group(1)
+            outer_start = mock_m.end() - 1
+            outer_end = find_matching_brace(content, outer_start)
+            if outer_end == -1:
+                continue
+            outer_body = content[outer_start:outer_end + 1]
+
+            for class_m in CLASS_MOCK_RE.finditer(outer_body):
+                class_name = class_m.group(1)
+                inner_start = class_m.end() - 1
+                inner_end = find_matching_brace(outer_body, inner_start)
+                if inner_end == -1:
+                    continue
+                inner_body = outer_body[inner_start:inner_end + 1]
+                mocked_methods = set(MOCKED_METHOD_RE.findall(inner_body))
+
+                real_path = resolve_import(root, import_path)
+                if not real_path:
+                    continue  # relative-import-check already flags unresolvable paths
+                try:
+                    with open(real_path, encoding='utf-8', errors='ignore') as f:
+                        source_text = f.read()
+                except OSError:
+                    continue
+                real_methods = real_class_methods(source_text, class_name)
+                if real_methods is None:
+                    continue  # class not found at that path — not this check's concern
+                missing = sorted(real_methods - mocked_methods)
+                if missing:
+                    rel_test = os.path.relpath(fpath, project_root)
+                    rel_real = os.path.relpath(real_path, project_root)
+                    problems.append(
+                        f"{rel_test}: vi.mock() factory for '{class_name}' (from '{import_path}' -> {rel_real}) "
+                        f"is missing method(s): {', '.join(missing)}"
+                    )
+
+if problems:
+    print("INCOMPLETE")
+    for line in problems:
+        print(line)
+else:
+    print("OK")
+PYEOF
+)
+
+    if [ "$(echo "$result" | head -1)" = "OK" ]; then
+        return 0
+    fi
+
+    local details
+    details=$(echo "$result" | tail -n +2)
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nA vi.mock() factory is missing method(s) that the real class exports — any test calling a missing method will throw "X is not a function". Add the missing method(s) to the mock before anything else:\n\n%s\n' "$details")
+    {
+        echo ""
+        echo "=== Mock completeness check failed ==="
+        echo "$details"
+    } >> "$output_file"
+    return 1
+}
+
+# run_relative_import_check <project_root> <output_file> [story_id]
+# Option D — deterministic detection of a relative import that does not
+# resolve to a real file. Root cause this targets: an agent guessing the
+# wrong path for a sibling module it can't directly see (recurring live
+# failure: './skyscanner-client' guessed, real file at
+# './skyscanner/client') — previously only discoverable after a full,
+# often multi-minute test run, then re-diagnosed from scratch by the
+# failure analyst every single retry. This runs in milliseconds, for free,
+# right after the agent's files are written, and suggests the likely
+# correct path via filename-token overlap — fully generic, no project- or
+# language-specific knowledge (works for .ts/.js relative imports; the
+# token-matching heuristic makes no npm/TypeScript-specific assumption).
+#
+# Auto-apply (added 2026-07-07, opt-in via EPAM_AUTO_FIX_RELATIVE_IMPORTS=true,
+# default OFF — preserves the original "detection, not silent rewrite" design
+# below unless explicitly enabled): originally this check only ever suggested
+# a fix in the retry prompt, on the stated reasoning that auto-rewriting
+# "risks breaking a valid but unusual import." That reasoning holds for LOW-
+# confidence matches, but a live run showed the SAME violation surviving
+# THREE full ladder escalations (base model through the strongest configured
+# model) because it's a mechanical habit (appending a redundant .js extension
+# in a CommonJS project), not a reasoning-capability gap — no amount of model
+# escalation fixes a training-data habit. When enabled, auto-apply is scoped
+# conservatively to address the original safety concern: (1) only fires on
+# HIGH-confidence matches (token-overlap score >= 2, stricter than the >0
+# threshold used for merely suggesting), (2) only rewrites files the CURRENT
+# story actually owns (technicalNotes.files, the same boundary scope-guard
+# already enforces) — never a file outside this attempt's own scope, (3) only
+# replaces the exact broken specifier text, preserving original quote style.
+# Returns 0 if all relative imports resolve (or all were auto-fixed). Returns
+# 1 and sets VERIFICATION_FAILURE with a suggestion for any that remain broken.
+run_relative_import_check() {
+    local project_root="$1"
+    local output_file="${2:-/dev/null}"
+    local story_id="${3:-}"
+    local auto_fix="${EPAM_AUTO_FIX_RELATIVE_IMPORTS:-false}"
+
+    local owned_files_json="[]"
+    if [ -n "$story_id" ] && [ "$auto_fix" = "true" ]; then
+        owned_files_json=$(jq -c --arg id "$story_id" \
+            '.stories[] | select(.id == $id) | .technicalNotes.files // []' \
+            "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "[]")
+    fi
+
+    local result
+    result=$(python3 - "$project_root" "$auto_fix" "$owned_files_json" << 'PYEOF'
+import os, re, sys, json
+
+project_root = sys.argv[1]
+auto_fix = sys.argv[2] == 'true'
+owned_files = set(os.path.normpath(os.path.join(project_root, f) if not os.path.isabs(f) else f)
+                   for f in json.loads(sys.argv[3]))
+SOURCE_EXTS = ('.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs')
+IMPORT_RE = re.compile(r"from\s+['\"](\.[^'\"]*)['\"]|require\(\s*['\"](\.[^'\"]*)['\"]\s*\)")
+
+def resolves(base_dir, spec):
+    candidate = os.path.normpath(os.path.join(base_dir, spec))
+    if os.path.isfile(candidate):
+        return True
+    for ext in SOURCE_EXTS:
+        if os.path.isfile(candidate + ext):
+            return True
+        if os.path.isfile(os.path.join(candidate, 'index' + ext)):
+            return True
+    return False
+
+def tokenize(path):
+    return set(re.split(r'[^a-zA-Z0-9]+', path.lower())) - {''}
+
+def is_test_file(path):
+    return bool(re.search(r'\.(test|spec)\.[a-zA-Z0-9]+$', path))
+
+# Candidate pool for suggestions EXCLUDES test files. Root cause of a live-run
+# defect: an implementation file and its test sibling (client.ts / client.test.ts)
+# always tie on token overlap ({"skyscanner","client"} matches both equally) —
+# without this exclusion, the suggestion algorithm can non-deterministically
+# recommend the TEST file as "the module to import", which is never correct
+# for application code and actively misleads the retry.
+all_source_files = []
+for root, dirs, files in os.walk(project_root):
+    dirs[:] = [d for d in dirs if d not in ('node_modules', 'dist', '.git', '__pycache__', '.venv', '.contracts')]
+    for fname in files:
+        if fname.endswith(SOURCE_EXTS) and not is_test_file(fname):
+            all_source_files.append(os.path.relpath(os.path.join(root, fname), project_root))
+
+broken = []
+auto_fixed = []
+for root, dirs, files in os.walk(project_root):
+    dirs[:] = [d for d in dirs if d not in ('node_modules', 'dist', '.git', '__pycache__', '.venv', '.contracts')]
+    for fname in files:
+        if not fname.endswith(SOURCE_EXTS):
+            continue
+        fpath = os.path.join(root, fname)
+        try:
+            with open(fpath, encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+        except OSError:
+            continue
+        fixed_content = content
+        file_changed = False
+        for m in IMPORT_RE.finditer(content):
+            spec = next((g for g in m.groups() if g), None)
+            if not spec:
+                continue
+            if resolves(root, spec):
+                continue
+            spec_tokens = tokenize(spec)
+            best = None
+            best_score = 0
+            for cand in all_source_files:
+                cand_tokens = tokenize(cand)
+                score = len(spec_tokens & cand_tokens)
+                if score > best_score:
+                    best_score = score
+                    best = cand
+            rel_fpath = os.path.relpath(fpath, project_root)
+            if best and best_score > 0:
+                best_abs = os.path.join(project_root, best)
+                rel_from_importer = os.path.relpath(best_abs, root)
+                if not rel_from_importer.startswith('.'):
+                    rel_from_importer = './' + rel_from_importer
+                # Strip the source extension — TS/JS import specifiers omit it
+                for ext in SOURCE_EXTS:
+                    if rel_from_importer.endswith(ext):
+                        rel_from_importer = rel_from_importer[: -len(ext)]
+                        break
+                suggestion = f" Did you mean '{rel_from_importer}'? (found at {best})"
+            else:
+                suggestion = ""
+                rel_from_importer = None
+
+            can_auto_fix = (
+                auto_fix
+                and rel_from_importer
+                and best_score >= 2
+                and os.path.normpath(fpath) in owned_files
+            )
+            if can_auto_fix:
+                for quote in ("'", '"'):
+                    old_spec_quoted = f"{quote}{spec}{quote}"
+                    if old_spec_quoted in fixed_content:
+                        fixed_content = fixed_content.replace(
+                            old_spec_quoted, f"{quote}{rel_from_importer}{quote}"
+                        )
+                        file_changed = True
+                        auto_fixed.append(f"{rel_fpath}: '{spec}' -> '{rel_from_importer}'")
+                        break
+            else:
+                broken.append(f"{rel_fpath}: imports '{spec}' which does not exist.{suggestion}")
+
+        if file_changed:
+            with open(fpath, 'w', encoding='utf-8') as f:
+                f.write(fixed_content)
+
+if broken:
+    print("BROKEN")
+    for line in broken:
+        print(line)
+else:
+    print("OK")
+for line in auto_fixed:
+    print("AUTOFIXED:" + line)
+PYEOF
+)
+
+    local autofixed_lines
+    autofixed_lines=$(echo "$result" | grep "^AUTOFIXED:" || true)
+    if [ -n "$autofixed_lines" ]; then
+        while IFS= read -r _fix_line; do
+            [ -z "$_fix_line" ] && continue
+            log "  [relative-import-check] Auto-corrected ${_fix_line#AUTOFIXED:}"
+        done <<< "$autofixed_lines"
+    fi
+    result=$(echo "$result" | grep -v "^AUTOFIXED:" || true)
+
+    if [ "$(echo "$result" | head -1)" = "OK" ]; then
+        return 0
+    fi
+
+    local details
+    details=$(echo "$result" | tail -n +2)
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nA relative import does not resolve to a real file — this will fail immediately when the test suite runs. Fix the import path before anything else:\n\n%s\n' "$details")
+    {
+        echo ""
+        echo "=== Relative import check failed ==="
+        echo "$details"
+    } >> "$output_file"
+    return 1
 }
 
 # run_external_verification <story_id> <output_file>
@@ -1156,12 +1895,21 @@ _scope_unlock() {
 # This keeps the agent loop short (write-only) while still enforcing AC tests.
 # Returns 0 on pass. On failure, appends a ## Verification Failure section
 # to output_file so the retry prompt includes the actual test output.
+# DETERMINISTIC_CHECK_FAILURE distinguishes "a deterministic pre-test check found a
+# known, precisely-described violation" (relative-import-check, mock-completeness-
+# check) from "the actual test suite failed" (needs an LLM to diagnose). The former
+# never needed an LLM call to know what's wrong — the check's own message already
+# names the exact fix — so the retry loop skips run_failure_analyst's gate-model
+# call for these and doesn't spend ladder-escalation budget on them either (see
+# the retry loop inside implement_story, below).
 VERIFICATION_FAILURE=""
+DETERMINISTIC_CHECK_FAILURE=0
 run_external_verification() {
     local story_id="$1"
     local output_file="${2:-/dev/null}"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
     VERIFICATION_FAILURE=""
+    DETERMINISTIC_CHECK_FAILURE=0
 
     # Read optional testCommand from PRD story.technicalNotes
     local test_cmd
@@ -1211,15 +1959,89 @@ run_external_verification() {
 
     # Ensure node_modules exist in the worktree — git worktrees don't inherit gitignored dirs.
     # Without this, npm test fails with exit 127 (vitest binary not found).
+    # Bounded timeout (added 2026-07-06): a live run's story-level 600s
+    # watchdog killed the entire claude.sh subprocess with the LAST log line
+    # being "Installing dependencies..." — the actual agent call had already
+    # finished in 11s (confirmed via the per-story result.json timestamp),
+    # but this npm install (registry/network dependent, no timeout) silently
+    # consumed the rest of the 600s budget with zero further signal. Same
+    # class of bug as the npm test / git-operation hangs fixed earlier this
+    # session — this was the third unbounded external command, missed then.
     if [ -f "$PROJECT_ROOT/package.json" ] && [ ! -d "$PROJECT_ROOT/node_modules" ]; then
         log "  Installing dependencies (node_modules missing in worktree)..."
-        (cd "$PROJECT_ROOT" && npm install --silent 2>&1) || warning "  npm install failed — test may still fail"
+        local _install_timeout="${EPAM_INSTALL_TIMEOUT_SECS:-180}"
+        # Capture $? directly from the command substitution — NOT via
+        # `if ! (cmd); then`, which collapses any non-zero exit code (124
+        # included) into a plain boolean 1 through the `!` negation, making
+        # exit 124 indistinguishable from a normal failure (this exact bug
+        # shipped in the first version of this fix and was caught by its own
+        # test suite: the TIMED OUT branch never fired).
+        local _install_output
+        _install_output=$(cd "$PROJECT_ROOT" && timeout "$_install_timeout" npm install --silent 2>&1)
+        local _install_rc=$?
+        if [ "$_install_rc" -eq 124 ]; then
+            warning "  npm install TIMED OUT after ${_install_timeout}s — test may still fail"
+        elif [ "$_install_rc" -ne 0 ]; then
+            warning "  npm install failed — test may still fail"
+        fi
+    fi
+
+    run_dependency_check "$PROJECT_ROOT"
+
+    # Fail fast on a broken relative import BEFORE running the (often
+    # multi-minute) test command — this recurring failure class was
+    # previously only discoverable by waiting for a full test run, then
+    # having the failure analyst re-diagnose the same "wrong import path"
+    # pattern from scratch every retry (validated live: baseline model call
+    # guessed './skyscanner-client' when the real file was
+    # './skyscanner/client'). Skip test execution entirely if found.
+    if ! run_relative_import_check "$PROJECT_ROOT" "$output_file" "$story_id"; then
+        warning "  [relative-import-check] Broken import detected — skipping test run"
+        DETERMINISTIC_CHECK_FAILURE=1
+        export DETERMINISTIC_CHECK_FAILURE
+        return 1
+    fi
+
+    # Fail fast on an incomplete vi.mock() factory BEFORE running the test
+    # command — same rationale as relative-import-check above, targeting the
+    # other recurring live failure class (mock factory missing a real method,
+    # e.g. SKY-004's SkyscannerClient mock omitting `search`).
+    if ! run_mock_completeness_check "$PROJECT_ROOT" "$output_file"; then
+        warning "  [mock-completeness-check] Incomplete vi.mock() factory detected — skipping test run"
+        DETERMINISTIC_CHECK_FAILURE=1
+        export DETERMINISTIC_CHECK_FAILURE
+        return 1
     fi
 
     log "  Running external verification: $test_cmd"
     local test_output
     local test_exit=0
-    test_output=$(cd "$PROJECT_ROOT" && eval "$test_cmd" 2>&1) || test_exit=$?
+    # Bounded timeout (added 2026-07-06): a live run's story-level 600s
+    # watchdog killed the ENTIRE claude.sh subprocess with zero diagnostic
+    # output after this exact command hung — the story's own implementation
+    # had already succeeded; `npm test` (vitest) itself never returned. The
+    # classic cause for a server story: a test calls app.listen() without a
+    # matching server.close() in afterAll, so Node's event loop never drains
+    # and the test process hangs forever. Without a bound here, that failure
+    # mode silently consumes the entire watchdog budget with no signal at all
+    # about which command was actually stuck. EPAM_TEST_TIMEOUT_SECS default
+    # (300s) is comfortably under the lowest story-level watchdog ceiling
+    # (600s for low-effort stories) so this always fires first and gives a
+    # clear, actionable diagnosis instead of a generic outer timeout.
+    local _test_timeout="${EPAM_TEST_TIMEOUT_SECS:-300}"
+    test_output=$(cd "$PROJECT_ROOT" && timeout "$_test_timeout" bash -c "$test_cmd" 2>&1) || test_exit=$?
+
+    if [ "$test_exit" -eq 124 ]; then
+        warning "External verification TIMED OUT for $story_id after ${_test_timeout}s (test command: $test_cmd)"
+        VERIFICATION_FAILURE=$(printf '\n## Verification Failure — TIMEOUT\n\nThe orchestrator ran `%s` after your files were written and it did NOT complete within %ds — it hung. The most common cause for a server story: a test calls app.listen() (or an equivalent server-start call) without closing it (server.close()) in an afterAll/afterEach hook, so the test process never exits. Check every test that starts a server or opens a long-lived resource (timers, sockets, watchers) and ensure it is torn down.\n\n```\n%s\n```\n' \
+            "$test_cmd" "$_test_timeout" "${test_output:0:4000}")
+        {
+            echo ""
+            echo "=== External verification TIMED OUT after ${_test_timeout}s ==="
+            echo "$test_output" | head -60
+        } >> "$output_file"
+        return 1
+    fi
 
     if [ "$test_exit" -ne 0 ]; then
         warning "External verification failed for $story_id (exit $test_exit)"
@@ -1234,6 +2056,53 @@ run_external_verification() {
     fi
 
     success "External verification passed for $story_id"
+    return 0
+}
+
+# run_tsc_verification <story_id> <output_file>
+# Runs `tsc --noEmit` inside the retry loop (not after it) so a TypeScript
+# compile failure re-enters the same failure-analyst/InferenceLadder path as
+# any other verification failure, instead of silently exiting the phase with
+# zero retries. The one-and-done exit at the outer story_tsc_gate() in
+# run-agent-orchestration.sh remains only as a defensive last-resort check —
+# this function is what actually gives tsc failures a chance to self-heal.
+# Returns 0 (pass or skipped) or 1 (tsc errors found).
+run_tsc_verification() {
+    local story_id="$1"
+    local output_file="${2:-/dev/null}"
+    [ "${SKIP_STORY_TSC_GATE:-0}" = "1" ] && return 0
+    [ ! -f "$PROJECT_ROOT/tsconfig.json" ] && return 0
+
+    # Skip when no .ts source files exist yet (scaffold phase creates structure but no source)
+    local _ts_count
+    _ts_count=$(find "$PROJECT_ROOT/src" -name "*.ts" 2>/dev/null | grep -v node_modules | wc -l)
+    [ "$_ts_count" -eq 0 ] && return 0
+
+    # Skip tsc gate for test-only stories (they extend existing files, not create TS modules)
+    local _role
+    _role=$(jq -r --arg id "$story_id" '.stories[] | select(.id==$id) | .agentRole // ""' \
+        "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null)
+    [ "$_role" = "test-engineer" ] && return 0
+
+    local _node_cmd="${NODE_CMD:-${HOME}/.nvm/versions/node/v20.20.0/bin/node}"
+    [ ! -x "$_node_cmd" ] && _node_cmd="$(command -v node 2>/dev/null || echo 'node')"
+
+    local _tsc_output _tsc_exit=0
+    _tsc_output=$(cd "$PROJECT_ROOT" && "$_node_cmd" ./node_modules/.bin/tsc --noEmit 2>&1) || _tsc_exit=$?
+
+    if [ "$_tsc_exit" -ne 0 ]; then
+        warning "  [tsc-verify] $story_id: TypeScript errors — feeding into retry loop"
+        VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe orchestrator ran `tsc --noEmit` after your files were written and it failed (exit code %d). Fix the type errors so tsc exits 0.\n\n```\n%s\n```\n' \
+            "$_tsc_exit" "${_tsc_output:0:4000}")
+        {
+            echo ""
+            echo "=== tsc --noEmit failed (exit $_tsc_exit) ==="
+            echo "$_tsc_output" | head -60
+        } >> "$output_file"
+        return 1
+    fi
+
+    success "  [tsc-verify] $story_id: tsc --noEmit passed"
     return 0
 }
 
@@ -1315,6 +2184,133 @@ Produce 5-10 numbered implementation steps that a coding agent will follow exact
 
     rm -f "$plan_result_file"
     echo "$plan_text"
+}
+
+# review_and_correct_plan <story_id> <plan_text>
+# Gate between the plan-turn and the execute-turn: catches a hallucinated file
+# path/API in the plan BEFORE any code is written, using the same ground-truth
+# dependency contracts (.contracts/<dep_id>.md) already proven to fix this class
+# of bug for implementation prompts (see the "Spec-reality cross-check" comment
+# in build_implementation_prompt()). Without this gate, run_planning_phase()'s
+# output was previously injected as fixed context completely unreviewed — a
+# wrong plan would be followed just as faithfully as a right one.
+# Bounded to exactly ONE corrective re-plan (same "one bounded retry" pattern as
+# the split-mandate gate and escalation-resolution elsewhere in this file) —
+# never an unbounded loop.
+# Echoes the final plan text (corrected if a fix was applied, original otherwise).
+review_and_correct_plan() {
+    local story_id="$1"
+    local plan_text="$2"
+    [ -z "$plan_text" ] && { echo "$plan_text"; return; }
+
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    local _dep_ids_json
+    _dep_ids_json=$(jq -c --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | [(.dependencies // .technicalNotes.dependsOn // [])[]? // empty]' \
+        "$prd_target" 2>/dev/null || echo "[]")
+
+    local dependency_contracts=""
+    local _dep_id
+    while IFS= read -r _dep_id; do
+        [ -z "$_dep_id" ] && continue
+        local _contract_file="$PROJECT_ROOT/.contracts/${_dep_id}.md"
+        if [ -f "$_contract_file" ]; then
+            dependency_contracts="${dependency_contracts}
+### Contract: ${_dep_id}
+$(cat "$_contract_file")
+"
+        fi
+    done < <(echo "$_dep_ids_json" | jq -r '.[]?' 2>/dev/null)
+
+    # No dependencies (or no contracts yet) — nothing ground-truth to check the
+    # plan against, so there's nothing this gate can catch. Skip, don't block.
+    if [ -z "$dependency_contracts" ]; then
+        echo "$plan_text"
+        return
+    fi
+
+    local _orch_provider="${EPAM_ORCHESTRATION_PROVIDER:-}"
+    [ -z "$_orch_provider" ] && { echo "$plan_text"; return; }
+
+    local review_prompt="You are reviewing an implementation PLAN (not code) for story ${story_id} before any code is written.
+
+Below is the plan, followed by ground-truth dependency contracts (real exported file paths, class/function signatures from already-completed dependency stories).
+
+Check ONLY: does the plan reference any file path, import path, exported class/function/type name that CONTRADICTS what the dependency contracts say is actually true? Do not flag stylistic concerns.
+
+Respond with ONLY a JSON object, no markdown fences:
+{\"verdict\":\"ok\"} if the plan is consistent with the contracts, OR
+{\"verdict\":\"mismatch\",\"corrections\":\"<one paragraph telling the planning agent exactly what to fix, citing the real path/signature from the contract>\"}
+
+## Plan
+${plan_text}
+
+## Dependency Contracts (ground truth)
+${dependency_contracts}"
+
+    local review_output
+    review_output=$(echo "$review_prompt" | \
+        AI_PROVIDER="$_orch_provider" \
+        AI_MODEL="${ORCH_GATE_MODEL:-}" \
+        EPAM_CLI="$EPAM_CLI" \
+        bash "$SCRIPT_DIR/ai-run.sh" --provider "$_orch_provider" \
+        ${ORCH_GATE_MODEL:+--model "$ORCH_GATE_MODEL"} \
+        2>/dev/null || echo "")
+
+    # Robust JSON extraction (not a flat-object regex — see the identical bug
+    # fixed live in team-lead-review.sh/code-review-cycle.sh, 2026-07-07: a
+    # pretty-printed or otherwise non-single-line response silently fails a
+    # naive '{.*"verdict".*}' grep). raw_decode correctly parses regardless of
+    # formatting/whitespace.
+    local review_json
+    review_json=$(echo "$review_output" | python3 -c "
+import sys, json
+text = sys.stdin.read()
+start = text.find('{')
+result = None
+if start != -1:
+    decoder = json.JSONDecoder()
+    try:
+        result, _ = decoder.raw_decode(text, start)
+    except (ValueError, json.JSONDecodeError):
+        result = None
+print(json.dumps(result) if isinstance(result, dict) and 'verdict' in result else '')
+" 2>/dev/null || echo "")
+    [ -z "$review_json" ] && { echo "$plan_text"; return; }
+
+    local verdict corrections
+    verdict=$(echo "$review_json" | jq -r '.verdict // "ok"' 2>/dev/null || echo "ok")
+    if [ "$verdict" != "mismatch" ]; then
+        echo "$plan_text"
+        return
+    fi
+
+    corrections=$(echo "$review_json" | jq -r '.corrections // ""' 2>/dev/null || echo "")
+    warning "  PlanReview: mismatch detected for $story_id against dependency contracts — one corrective re-plan"
+
+    local corrective_prompt="You previously produced this plan for story ${story_id}:
+
+${plan_text}
+
+A review found it inconsistent with the real dependency contracts. Specific correction needed:
+${corrections}
+
+Produce the CORRECTED numbered execution plan only — no prose, no code, same format as before."
+
+    local corrected_plan
+    corrected_plan=$(echo "$corrective_prompt" | \
+        AI_PROVIDER="$_orch_provider" \
+        AI_MODEL="${STORY_PLANNER_MODEL:-${ORCH_GATE_MODEL:-}}" \
+        EPAM_CLI="$EPAM_CLI" \
+        bash "$SCRIPT_DIR/ai-run.sh" --provider "$_orch_provider" \
+        ${STORY_PLANNER_MODEL:+--model "$STORY_PLANNER_MODEL"} \
+        2>/dev/null || echo "")
+
+    if [ -n "$corrected_plan" ]; then
+        echo "$corrected_plan"
+    else
+        echo "$plan_text"
+    fi
 }
 
 # ── Inference Ladder Coordinator ─────────────────────────────────────────────
@@ -1478,16 +2474,77 @@ classify_failure_class() {
     fi
 }
 
-# get_model_ladder_step <current_model>
-# Reads EPAM_MODEL_LADDER (pipe-separated "from=to" pairs) and returns the next model.
-# Fully configurable — no hardcoded model names in this function.
-# Set EPAM_MODEL_LADDER in the tier/run script to define the escalation path.
+# classify_ladder_tier <story_id>
+# Dynamically decides whether a story's Rung 2/3 escalation should use the
+# "medium" or "high" ladder — NOT hardcoded per story ID. Reads the story's
+# own recorded failure history (story-failures.jsonl, cross-run, written by
+# every retry attempt) and classifies "high" only when the evidence shows
+# this story has already exhausted a full retry cycle before (a real,
+# measured signal — not a guess): either a prior attempt reached MAX_RETRIES,
+# or the story has failed across 2+ separate watchdog/run cycles.
+# Echoes "medium" or "high". No model names appear in this function.
+classify_ladder_tier() {
+    local story_id="$1"
+
+    # PRD-level explicit override — a story can pin its own tier ("medium" or
+    # "high") when the author already knows it's hard, bypassing the
+    # historical-signal classifier below. Same override pattern as
+    # .retryModel / .model / .aiProvider elsewhere in this file.
+    local _prd_tier
+    _prd_tier=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .ladderTier // ""' \
+        "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
+    case "$_prd_tier" in
+        medium|high) echo "$_prd_tier"; return ;;
+    esac
+
+    local _failures_file="${LOG_DIR}/story-failures.jsonl"
+    [ -f "$_failures_file" ] || { echo "medium"; return; }
+
+    local _max_attempt _cycle_count
+    _max_attempt=$(jq -s -r --arg sid "$story_id" \
+        '[.[] | select(.storyId == $sid) | .attempt] | max // -1' \
+        "$_failures_file" 2>/dev/null || echo -1)
+    # A prior cycle reaching MAX_RETRIES means it was fully exhausted once
+    # already — the next cycle should not repeat the same cheap-first ramp.
+    if [ "${_max_attempt:-0}" -ge "${MAX_RETRIES:-7}" ]; then
+        echo "high"
+        return
+    fi
+
+    # Distinct failure timestamps far apart (different watchdog/run cycles)
+    # also indicate a genuinely hard story, even if no single cycle hit
+    # MAX_RETRIES (e.g. it kept timing out before exhausting attempts).
+    _cycle_count=$(jq -r --arg sid "$story_id" \
+        'select(.storyId == $sid) | .attempt' \
+        "$_failures_file" 2>/dev/null | sort -u | wc -l | tr -d ' ')
+    if [ "${_cycle_count:-0}" -ge 6 ]; then
+        echo "high"
+        return
+    fi
+    echo "medium"
+}
+
+# get_model_ladder_step <current_model> [tier]
+# Reads EPAM_MODEL_LADDER_<TIER> (pipe-separated "from=to" pairs) and returns
+# the next model. Fully configurable — no hardcoded model names in this
+# function. tier defaults to "medium"; pass "high" for the stronger ladder.
+# EPAM_MODEL_LADDER (no suffix), if explicitly set, overrides BOTH tiers to
+# the same ladder — an explicit opt-out of the medium/high split.
 # Example:
-#   export EPAM_MODEL_LADDER="MiniMax-M3=zhipuai/glm-z1-32b|moonshotai/kimi-k2=zhipuai/glm-4-plus"
-# Returns empty string when current model is not in the ladder or EPAM_MODEL_LADDER is unset.
+#   export EPAM_MODEL_LADDER_MEDIUM="MiniMax-M3=zhipuai/glm-z1-32b"
+#   export EPAM_MODEL_LADDER_HIGH="MiniMax-M3=deepseek/deepseek-r1"
+# Returns empty string when current model is not in the ladder or no ladder is configured.
 get_model_ladder_step() {
     local current_model="$1"
+    local tier="${2:-medium}"
     local ladder="${EPAM_MODEL_LADDER:-}"
+    if [ -z "$ladder" ]; then
+        case "$tier" in
+            high) ladder="${EPAM_MODEL_LADDER_HIGH:-}" ;;
+            *)    ladder="${EPAM_MODEL_LADDER_MEDIUM:-}" ;;
+        esac
+    fi
     [ -z "$ladder" ] && { echo ""; return; }
     local pair from to IFS_SAVE="$IFS"
     IFS='|'
@@ -1500,6 +2557,39 @@ get_model_ladder_step() {
             echo "$to"
             return
         fi
+    done
+    echo ""
+}
+
+# resolve_model_provider <model>
+# Reads EPAM_MODEL_PROVIDER_MAP (pipe-separated "glob-pattern=provider" pairs)
+# and returns the provider for a model name, matched via bash glob patterns —
+# no hardcoded vendor/model names in this function. Per-project tier scripts
+# supply their own map (e.g. tier3-travel-app-run.sh sets
+# "zhipuai/*=qwen|moonshotai/*=qwen|z-ai/*=qwen|glm-*=qwen|kimi-*=qwen|deepseek/*=qwen|MiniMax-*=minimax"
+# because this project routes all OpenRouter-hosted vendors through the
+# "qwen" provider umbrella and MiniMax direct-API models through "minimax").
+# Root cause this replaces: the escalation-ladder code used to hardcode this
+# exact vendor-name case statement twice inline (found live, 2026-07-06) —
+# a project using different model vendors/providers would get silently wrong
+# (or no) provider routing after a model-ladder step. Returns empty string
+# when no map is configured or no pattern matches (caller keeps STORY_PROVIDER
+# unchanged in that case, same as before).
+resolve_model_provider() {
+    local model="$1"
+    local map="${EPAM_MODEL_PROVIDER_MAP:-}"
+    [ -z "$map" ] && { echo ""; return; }
+    local pair pattern provider IFS_SAVE="$IFS"
+    IFS='|'
+    read -ra pairs <<< "$map"
+    IFS="$IFS_SAVE"
+    for pair in "${pairs[@]}"; do
+        pattern="${pair%%=*}"
+        provider="${pair#*=}"
+        # shellcheck disable=SC2254 # intentional glob match against a config-supplied pattern
+        case "$model" in
+            $pattern) echo "$provider"; return ;;
+        esac
     done
     echo ""
 }
@@ -1619,6 +2709,222 @@ COORD_PROMPT
     rm -f "$coord_result_file"
 }
 
+# run_prd_change_reviewer <story_id> <change_type> <before_json> <after_json>
+# Validates a proposed PRD AC/TC or profiles.json change using the gate model.
+# change_type: ac_patch | tc_patch | skill_note | profile_addendum
+# Echoes "pass" or "fail"; caller decides whether to revert on fail.
+# Silently returns "pass" if gate model is not configured (non-blocking).
+run_prd_change_reviewer() {
+    local story_id="$1"
+    local change_type="$2"
+    local before_json="$3"
+    local after_json="$4"
+
+    local gate_provider="${ORCH_GATE_PROVIDER:-}"
+    if [ -z "$gate_provider" ]; then
+        echo "pass"
+        return 0
+    fi
+    local gate_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
+
+    # Select profile based on change type — KB entries use the stricter kb-change-reviewer
+    local _profile_key="prd-change-reviewer"
+    [ "$change_type" = "kb_entry" ] && _profile_key="kb-change-reviewer"
+    local reviewer_profile=""
+    if [ -f "$profiles_file" ]; then
+        reviewer_profile=$(jq -r --arg k "$_profile_key" '.[$k] // ""' "$profiles_file" 2>/dev/null || echo "")
+    fi
+    [ -z "$reviewer_profile" ] && reviewer_profile="You are a change reviewer. Validate the proposed change and emit {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}."
+
+    local review_prompt
+    review_prompt="${reviewer_profile}
+
+STORY: ${story_id}
+CHANGE TYPE: ${change_type}
+
+BEFORE:
+${before_json:0:1000}
+
+AFTER:
+${after_json:0:1000}
+
+Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[\"<issue1>\"],\"reason\":\"<15 words max>\"}"
+
+    local review_raw=""
+    review_raw=$(echo "$review_prompt" | \
+        AI_PROVIDER="$gate_provider" \
+        AI_MODEL="$gate_model" \
+        EPAM_CLI="$EPAM_CLI" \
+        bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \
+        ${gate_model:+--model "$gate_model"} \
+        2>/dev/null || echo '{"verdict":"pass","issues":[],"reason":"reviewer unavailable"}')
+
+    local verdict=""
+    verdict=$(echo "$review_raw" | python3 -c "
+import sys, json, re
+text = sys.stdin.read()
+try:
+    obj = json.loads(text.strip())
+    print(obj.get('verdict','pass'))
+    sys.exit(0)
+except Exception:
+    pass
+m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
+print(m.group(1) if m else 'pass')
+" 2>/dev/null || echo "pass")
+
+    local issues=""
+    issues=$(echo "$review_raw" | python3 -c "
+import sys, json
+text = sys.stdin.read()
+try:
+    obj = json.loads(text.strip())
+    issues = obj.get('issues', [])
+    if issues: print('; '.join(str(i) for i in issues))
+except Exception:
+    pass
+" 2>/dev/null || echo "")
+
+    # CRITICAL: this function's return value is captured via command substitution
+    # ($(run_prd_change_reviewer ...)). warning()/log() write to stdout as well as
+    # the progress log, so any call to them here would pollute the captured verdict
+    # with extra lines — making `[ "$verdict" = "fail" ]` at every call site always
+    # false (the string would be "warning text\nfail", not "fail"), silently treating
+    # every rejection as an approval. Redirect to stderr so only the final echo
+    # reaches the caller.
+    # Exposes the rejection reason to callers (e.g. run_change_with_reviewer_retry).
+    # Every caller invokes this function via $(...) command substitution, which
+    # forks a subshell — a plain variable assignment here (PRD_REVIEW_ISSUES=...)
+    # would never be visible to the caller's shell. A file survives the subshell
+    # exit, so use that instead. $$ scopes the file to this process (worktree
+    # primary/independent run as separate PIDs, so no cross-process collision).
+    printf '%s' "$issues" > "${TMPDIR:-/tmp}/.prd-review-issues-$$" 2>/dev/null || true
+
+    if [ "$verdict" = "fail" ]; then
+        warning "  [PRD-Reviewer] REJECTED ${change_type} for ${story_id}: ${issues:-no details}" >&2
+        echo "fail"
+    else
+        log "  [PRD-Reviewer] APPROVED ${change_type} for ${story_id}" >&2
+        echo "pass"
+    fi
+}
+
+# run_prd_change_summarizer <story_id> <change_type> <issues> <rejected_text>
+# Rewrites rejected self-heal text to address the reviewer's stated issues instead
+# of discarding it outright. Most kb_entry/skill_note rejections are FORMAT problems
+# (over 200 chars, wrong verb tense, references a specific story ID, truncated
+# mid-sentence) — the underlying lesson is usually sound, only its shape is wrong.
+# Prints the reformatted text to stdout (falls back to the original text if the
+# gate model is unavailable or returns nothing usable).
+run_prd_change_summarizer() {
+    local story_id="$1"
+    local change_type="$2"
+    local issues="$3"
+    local rejected_text="$4"
+
+    local gate_provider="${ORCH_GATE_PROVIDER:-}"
+    if [ -z "$gate_provider" ]; then
+        printf '%s' "$rejected_text"
+        return 0
+    fi
+    local gate_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
+
+    # tool_creation rewrites a bash script, not a short prose rule — the
+    # kb_entry/skill_note constraints (single line, under 200 chars, imperative
+    # verb) would corrupt working code. Branch the prompt AND the post-processing
+    # (no `tr -d '\n'` — a script needs its newlines) by change type.
+    local summarize_prompt output_cap
+    if [ "$change_type" = "tool_creation" ]; then
+        summarize_prompt="You are a bash script reviewer-summarizer. A dynamic tool script for story ${story_id} was REJECTED by the change reviewer for these reasons:
+${issues:-no details}
+
+ORIGINAL SCRIPT:
+${rejected_text:0:2000}
+
+Rewrite the script to fix ONLY the issues listed above — a real bash bug (syntax error, subshell variable scoping, unquoted expansion, etc). Preserve the shebang line, the overall purpose, and every argument (\$1, \$2, ...) exactly as used. The script must remain idempotent (safe to run more than once).
+
+Emit ONLY the corrected script — no markdown fences, no commentary, no explanation."
+        output_cap=4000
+    else
+        summarize_prompt="You are a PRD change summarizer. A ${change_type} for story ${story_id} was REJECTED by the change reviewer for these reasons:
+${issues:-no details}
+
+ORIGINAL TEXT:
+${rejected_text:0:1000}
+
+Rewrite the text to fix ONLY the issues listed above, preserving the original actionable rule. Requirements: no reference to any specific story ID; start with an imperative verb (Use, Always, Never, Prefer, Avoid); under 200 characters; end on a complete sentence; no markdown, no headers, no commentary.
+
+Emit ONLY the corrected text — nothing else."
+        output_cap=400
+    fi
+
+    local summarized=""
+    summarized=$(echo "$summarize_prompt" | \
+        AI_PROVIDER="$gate_provider" \
+        AI_MODEL="$gate_model" \
+        EPAM_CLI="$EPAM_CLI" \
+        bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \
+        ${gate_model:+--model "$gate_model"} \
+        2>/dev/null | head -c "$output_cap" || echo "")
+    if [ "$change_type" = "tool_creation" ]; then
+        summarized="$(echo "$summarized" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    else
+        summarized="$(echo "$summarized" | tr -d '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    fi
+
+    if [ -n "$summarized" ]; then
+        printf '%s' "$summarized"
+    else
+        printf '%s' "$rejected_text"
+    fi
+}
+
+# run_change_with_reviewer_retry <story_id> <change_type> <before> <candidate> [max_retries=3]
+# Wraps run_prd_change_reviewer with a summarize-and-resubmit loop instead of discarding
+# a rejected self-heal change immediately. On rejection, run_prd_change_summarizer
+# rewrites the candidate to address the reviewer's stated issues, then resubmits — up
+# to <max_retries> total review attempts. This exists because kb_entry/skill_note
+# writes were being rejected (and discarded) near-100% of the time on fixable FORMAT
+# issues, silently defeating the entire self-heal-persistence mechanism.
+# Prints "pass" or "fail" to stdout (same contract as run_prd_change_reviewer).
+# Sets REVIEWER_RETRY_TEXT to the final (possibly reformatted) candidate either way.
+run_change_with_reviewer_retry() {
+    local story_id="$1"
+    local change_type="$2"
+    local before="$3"
+    local candidate="$4"
+    local max_retries="${5:-3}"
+
+    # Same subshell-scope issue as PRD_REVIEW_ISSUES: this whole function is also
+    # invoked via $(...) by its callers, so a plain REVIEWER_RETRY_TEXT=... here
+    # would never reach them. File-based side channel again; callers read it
+    # right after the command substitution (see kb)/skill) cases in
+    # run_failure_analyst).
+    local _issues_file="${TMPDIR:-/tmp}/.prd-review-issues-$$"
+    local _retry_text_file="${TMPDIR:-/tmp}/.reviewer-retry-text-$$"
+
+    local attempt=1
+    local current="$candidate"
+    local verdict="" review_issues=""
+    while [ "$attempt" -le "$max_retries" ]; do
+        verdict=$(run_prd_change_reviewer "$story_id" "$change_type" "$before" "$current")
+        if [ "$verdict" != "fail" ]; then
+            printf '%s' "$current" > "$_retry_text_file" 2>/dev/null || true
+            echo "pass"
+            return 0
+        fi
+        review_issues=$(cat "$_issues_file" 2>/dev/null || echo "")
+        if [ "$attempt" -lt "$max_retries" ]; then
+            log "  [PRD-Summarizer] Rewriting rejected ${change_type} for ${story_id} (attempt ${attempt}/${max_retries}): ${review_issues:-no details}" >&2
+            current=$(run_prd_change_summarizer "$story_id" "$change_type" "$review_issues" "$current")
+        fi
+        attempt=$((attempt + 1))
+    done
+    printf '%s' "$current" > "$_retry_text_file" 2>/dev/null || true
+    echo "fail"
+    return 1
+}
+
 # run_failure_analyst <story_id> <output_file> <retry_num>
 # Layer 3 (self-heal): AI reads the test failure, diagnoses root cause, then patches
 # PRD ACs (for ambiguous specs) or injects skill guidance into the coordinator
@@ -1668,9 +2974,16 @@ run_failure_analyst() {
             grep '\[Self-Heal\]' | head -c 1500 || echo "")
     fi
 
+    # Load failure-analyst profile from profiles.json (role-level instructions)
+    local analyst_profile=""
+    if [ -f "$profiles_file" ]; then
+        analyst_profile=$(jq -r '."failure-analyst" // ""' "$profiles_file" 2>/dev/null || echo "")
+    fi
+    [ -z "$analyst_profile" ] && analyst_profile="You are a self-healing pipeline analyst. Diagnose the exact root cause of the test failure and prescribe the minimum fix so the NEXT retry succeeds."
+
     local analyst_prompt
     analyst_prompt=$(cat << 'ANALYST_PROMPT_END'
-You are a self-healing pipeline analyst. A coding agent has failed its test suite. Diagnose the exact root cause and prescribe the minimum fix so the NEXT retry succeeds.
+__ANALYST_PROFILE__
 
 STORY: __STORY_ID__
 AGENT ROLE: __STORY_ROLE__
@@ -1685,38 +2998,43 @@ TEST FAILURE OUTPUT:
 __VERIFICATION_FAILURE__
 
 Output ONLY a single JSON object. No markdown fences, no prose outside the JSON:
-{"diagnosis":"<one sentence: what specifically went wrong in the code>","target":"prd|tc|skill|kb|none","ac_patches":[{"index":<0-based AC index>,"new_text":"<exact replacement text for that AC>"}],"tc_patches":[{"index":<0-based TC fact index>,"new_text":"<exact replacement text for that TC fact>"}],"skill_note":"<if target=skill or target=kb: concrete coding instruction>","reason":"<why this change prevents the same failure on retry>"}
+{"diagnosis":"<one sentence: what specifically went wrong in the code>","target":"prd|tc|skill|kb|tool|none","ac_patches":[{"index":<0-based AC index>,"new_text":"<exact replacement text for that AC>"}],"tc_patches":[{"index":<0-based TC fact index>,"new_text":"<exact replacement text for that TC fact>"}],"skill_note":"<if target=skill or target=kb: concrete coding instruction>","tool_spec":{"name":"<kebab-case tool name, e.g. add-dependency>","purpose":"<one sentence: what repeated mechanical step this automates>","recipe":"<the exact shell commands the tool script should run, using $1 $2 ... for its arguments>"},"reason":"<why this change prevents the same failure on retry>"}
 
 Decision rules:
 - target=prd: the AC wording was ambiguous or contradictory, causing the agent to write wrong code. Fix the AC.
 - target=tc: the testCriteria facts are wrong or incomplete — the test agent followed them but they described incorrect behavior. Fix the TC facts.
 - target=skill: the agent used a bad coding pattern that should be injected into this retry's prompt only.
 - target=kb: the failure reveals a reusable coding rule that ALL future agents with this agent role should know — append to the role-specific KB.
+- target=tool: the failure is a repeated MECHANICAL step (not a knowledge gap) that a small shell script can perform reliably every time — e.g. "add a package to package.json and install it before importing it". Only use target=tool when a KB rule alone has already failed to prevent the same class of failure, or the fix is a multi-step shell recipe error-prone to repeat by hand. Provide tool_spec.
 - target=none: spec and skill are both correct; the agent made a transient code mistake. Retry with stronger model should fix it.
-- Only include ac_patches when target=prd, tc_patches when target=tc; use [] for other targets.
+- Only include ac_patches when target=prd, tc_patches when target=tc; use [] for other targets. Only include tool_spec when target=tool; omit otherwise.
 - skill_note must be a concrete "do/don't" instruction (e.g. "Never use backtick template literals in test files — use single-quoted strings only").
+- tool_spec.recipe must be idempotent shell — safe to run more than once (e.g. check before installing).
 - Keep diagnosis under 20 words, reason under 15 words.
 ANALYST_PROMPT_END
     )
     # Substitute placeholders (safe substitution avoids heredoc quoting issues)
+    analyst_prompt="${analyst_prompt//__ANALYST_PROFILE__/$analyst_profile}"
     analyst_prompt="${analyst_prompt//__STORY_ID__/$story_id}"
     analyst_prompt="${analyst_prompt//__STORY_ROLE__/$story_role}"
     analyst_prompt="${analyst_prompt//__STORY_ACS__/$story_acs}"
     analyst_prompt="${analyst_prompt//__SKILL_ADDENDUM__/$skill_addendum}"
     analyst_prompt="${analyst_prompt//__VERIFICATION_FAILURE__/${VERIFICATION_FAILURE:0:2500}}"
 
-    local analyst_raw=""
-    if analyst_raw=$(echo "$analyst_prompt" | \
-            AI_PROVIDER="$gate_provider" \
-            AI_MODEL="$gate_model" \
-            EPAM_CLI="$EPAM_CLI" \
-            bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \
-            ${gate_model:+--model "$gate_model"} \
-            2>>"$output_file"); then
+    local analyst_raw="" analyst_json="" _analyst_call_ok="false"
+    local _analyst_max_attempts=3 _analyst_attempt=1
+    while [ "$_analyst_attempt" -le "$_analyst_max_attempts" ]; do
+        if analyst_raw=$(echo "$analyst_prompt" | \
+                AI_PROVIDER="$gate_provider" \
+                AI_MODEL="$gate_model" \
+                EPAM_CLI="$EPAM_CLI" \
+                bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \
+                ${gate_model:+--model "$gate_model"} \
+                2>>"$output_file"); then
+            _analyst_call_ok="true"
 
-        # Extract first valid JSON object (handles nested structures via Python)
-        local analyst_json=""
-        analyst_json=$(echo "$analyst_raw" | python3 -c "
+            # Extract first valid JSON object (handles nested structures via Python)
+            analyst_json=$(echo "$analyst_raw" | python3 -c "
 import sys, json
 text = sys.stdin.read()
 try:
@@ -1741,12 +3059,30 @@ for i, c in enumerate(text):
                 pass
 " 2>/dev/null || echo "")
 
+            if [ -n "$analyst_json" ] && echo "$analyst_json" | jq empty 2>/dev/null; then
+                break
+            fi
+            analyst_json=""
+            if [ "$_analyst_attempt" -lt "$_analyst_max_attempts" ]; then
+                warning "  [FailureAnalyst] Could not parse JSON from analyst response — retrying gate call (attempt $((_analyst_attempt + 1))/${_analyst_max_attempts})"
+            fi
+        else
+            _analyst_call_ok="false"
+        fi
+        _analyst_attempt=$((_analyst_attempt + 1))
+    done
+
+    if [ "$_analyst_call_ok" = "true" ]; then
         if [ -n "$analyst_json" ] && echo "$analyst_json" | jq empty 2>/dev/null; then
             local diagnosis target skill_note reason patch_count _profile_updated
             diagnosis=$(echo "$analyst_json" | jq -r '.diagnosis // "unknown"' 2>/dev/null || echo "unknown")
             target=$(echo "$analyst_json" | jq -r '.target // "none"' 2>/dev/null || echo "none")
             skill_note=$(echo "$analyst_json" | jq -r '.skill_note // ""' 2>/dev/null || echo "")
             reason=$(echo "$analyst_json" | jq -r '.reason // ""' 2>/dev/null || echo "")
+            local tool_name tool_purpose tool_recipe
+            tool_name=$(echo "$analyst_json" | jq -r '.tool_spec.name // ""' 2>/dev/null || echo "")
+            tool_purpose=$(echo "$analyst_json" | jq -r '.tool_spec.purpose // ""' 2>/dev/null || echo "")
+            tool_recipe=$(echo "$analyst_json" | jq -r '.tool_spec.recipe // ""' 2>/dev/null || echo "")
             patch_count=0
             _profile_updated="false"
 
@@ -1759,6 +3095,11 @@ for i, c in enumerate(text):
                     patches_json=$(echo "$analyst_json" | jq -c '.ac_patches // []' 2>/dev/null || echo "[]")
                     if [ "$patches_json" != "[]" ]; then
                         log "  [FailureAnalyst] Patching PRD ACs for $story_id..."
+                        # Snapshot ACs before patching so reviewer can compare and we can revert
+                        local _ac_before _ac_after
+                        _ac_before=$(jq -c --arg id "$story_id" \
+                            '.stories[] | select(.id == $id) | .acceptanceCriteria' \
+                            "$prd_target" 2>/dev/null || echo "[]")
                         while IFS= read -r patch; do
                             [ -z "$patch" ] && continue
                             local idx new_text
@@ -1789,7 +3130,32 @@ PYEOF
                                 patch_count=$((patch_count + 1))
                             fi
                         done < <(echo "$patches_json" | jq -c '.[]' 2>/dev/null)
-                        log "  [FailureAnalyst] Applied $patch_count AC patch(es) — retry will use updated spec"
+                        _ac_after=$(jq -c --arg id "$story_id" \
+                            '.stories[] | select(.id == $id) | .acceptanceCriteria' \
+                            "$prd_target" 2>/dev/null || echo "[]")
+                        # Reviewer gate — revert on fail to prevent corrupt ACs reaching agent
+                        local _review_verdict
+                        _review_verdict=$(run_prd_change_reviewer "$story_id" "ac_patch" "$_ac_before" "$_ac_after")
+                        if [ "$_review_verdict" = "fail" ]; then
+                            warning "  [FailureAnalyst] AC patch rejected by reviewer — reverting to original ACs"
+                            python3 - "$_ac_before" << PYEOF 2>/dev/null || true
+import json, sys
+prd_path = '$prd_target'
+story_id = '$story_id'
+acs = json.loads(sys.argv[1])
+with open(prd_path) as f:
+    prd = json.load(f)
+for s in prd.get('stories', []):
+    if s.get('id') == story_id:
+        s['acceptanceCriteria'] = acs
+        break
+with open(prd_path, 'w') as f:
+    json.dump(prd, f, indent=2)
+PYEOF
+                            patch_count=0
+                        else
+                            log "  [FailureAnalyst] Applied $patch_count AC patch(es) — retry will use updated spec"
+                        fi
                     else
                         log "  [FailureAnalyst] target=prd but no ac_patches provided — no change made"
                     fi
@@ -1799,6 +3165,11 @@ PYEOF
                     tc_patches_json=$(echo "$analyst_json" | jq -c '.tc_patches // []' 2>/dev/null || echo "[]")
                     if [ "$tc_patches_json" != "[]" ]; then
                         log "  [FailureAnalyst] Patching testCriteria facts for $story_id..."
+                        # Snapshot TC facts before patching for reviewer and revert
+                        local _tc_before _tc_after
+                        _tc_before=$(jq -c --arg id "$story_id" \
+                            '.stories[] | select(.id == $id) | .testCriteria.facts // []' \
+                            "$prd_target" 2>/dev/null || echo "[]")
                         while IFS= read -r patch; do
                             [ -z "$patch" ] && continue
                             local tc_idx tc_new_text
@@ -1830,7 +3201,32 @@ PYEOF
                                 patch_count=$((patch_count + 1))
                             fi
                         done < <(echo "$tc_patches_json" | jq -c '.[]' 2>/dev/null)
-                        log "  [FailureAnalyst] Applied $patch_count TC patch(es) — retry will use updated testCriteria"
+                        _tc_after=$(jq -c --arg id "$story_id" \
+                            '.stories[] | select(.id == $id) | .testCriteria.facts // []' \
+                            "$prd_target" 2>/dev/null || echo "[]")
+                        # Reviewer gate — revert on fail to prevent bad TCs reaching test agent
+                        local _tc_review_verdict
+                        _tc_review_verdict=$(run_prd_change_reviewer "$story_id" "tc_patch" "$_tc_before" "$_tc_after")
+                        if [ "$_tc_review_verdict" = "fail" ]; then
+                            warning "  [FailureAnalyst] TC patch rejected by reviewer — reverting to original facts"
+                            python3 - "$_tc_before" << PYEOF 2>/dev/null || true
+import json, sys
+prd_path = '$prd_target'
+story_id = '$story_id'
+facts = json.loads(sys.argv[1])
+with open(prd_path) as f:
+    prd = json.load(f)
+for s in prd.get('stories', []):
+    if s.get('id') == story_id:
+        s.setdefault('testCriteria', {})['facts'] = facts
+        break
+with open(prd_path, 'w') as f:
+    json.dump(prd, f, indent=2)
+PYEOF
+                            patch_count=0
+                        else
+                            log "  [FailureAnalyst] Applied $patch_count TC patch(es) — retry will use updated testCriteria"
+                        fi
                     else
                         log "  [FailureAnalyst] target=tc but no tc_patches provided — TC writer will regenerate on next deliverable pass"
                     fi
@@ -1840,7 +3236,28 @@ PYEOF
                         log "  [FailureAnalyst] Injected skill guidance into retry prompt (${#skill_note} chars)"
                         # Persist skill note to profiles.json so future runs inherit this learning
                         if [ -f "$profiles_file" ]; then
-                            python3 - "$skill_note" << PYEOF 2>&1 | while IFS= read -r line; do log "  [FailureAnalyst] $line"; done
+                            # Reviewer validates skill note before persisting. Rejections
+                            # get up to 3 summarize-and-resubmit rounds (same mechanism as
+                            # kb_entry) before being discarded.
+                            local _skill_review_verdict
+                            _skill_review_verdict=$(run_change_with_reviewer_retry "$story_id" "skill_note" \
+                                "$(jq -c --arg role "$story_role" '.[$role] // ""' "$profiles_file" 2>/dev/null | head -c 500)" \
+                                "$skill_note" 3)
+                            # run_change_with_reviewer_retry ran inside the $(...) above, so its
+                            # REVIEWER_RETRY_TEXT assignment was scoped to that subshell — read
+                            # the file-based side channel it left behind instead.
+                            REVIEWER_RETRY_TEXT=$(cat "${TMPDIR:-/tmp}/.reviewer-retry-text-$$" 2>/dev/null || echo "$skill_note")
+                            local _skill_note_to_persist="$REVIEWER_RETRY_TEXT"
+                            if [ "$_skill_review_verdict" = "fail" ]; then
+                                # Same fallback as kb_entry above (2026-07-06): don't discard a
+                                # genuinely useful lesson just because its WORDING failed review
+                                # 3 times — persist a length-safe, tagged-unreviewed fallback
+                                # instead of losing the knowledge outright.
+                                warning "  [FailureAnalyst] Skill note rejected by reviewer after 3 attempts — persisting raw fallback (unreviewed) instead of discarding"
+                                _skill_note_to_persist="[unreviewed-fallback] ${skill_note:0:200}"
+                            fi
+                            REVIEWER_RETRY_TEXT="$_skill_note_to_persist"
+                            python3 - "$REVIEWER_RETRY_TEXT" << PYEOF 2>&1 | while IFS= read -r line; do log "  [FailureAnalyst] $line"; done
 import json, sys
 profiles_path = '$profiles_file'
 role = '$story_role'
@@ -1875,12 +3292,79 @@ PYEOF
                         kb_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "unknown")
                         # Truncate to 200 chars — entries are single actionable rules, not essays
                         local short_note="${skill_note:0:200}"
-                        # Compact 2-line format: timestamp + rule only (no verbose headers)
-                        printf '\n- [%s] %s\n' "$kb_ts" "$short_note" >> "$kb_file" 2>/dev/null || true
-                        log "  [FailureAnalyst] KB entry appended to KB-${story_role}.md (${#short_note} chars)"
-                        _profile_updated="true"
+                        # Read last 3 existing KB entries to give reviewer dedup context
+                        local _kb_last3=""
+                        _kb_last3=$(tail -6 "$kb_file" 2>/dev/null || echo "")
+                        # KB reviewer gate — permanent entries must pass strict validation.
+                        # Rejections get up to 3 summarize-and-resubmit rounds before being
+                        # discarded (see run_change_with_reviewer_retry).
+                        local _kb_review_verdict
+                        _kb_review_verdict=$(run_change_with_reviewer_retry \
+                            "$story_id" "kb_entry" \
+                            "$_kb_last3" \
+                            "$short_note" 3)
+                        # See the skill_note call site above for why this file read is needed.
+                        REVIEWER_RETRY_TEXT=$(cat "${TMPDIR:-/tmp}/.reviewer-retry-text-$$" 2>/dev/null || echo "$short_note")
+                        if [ "$_kb_review_verdict" = "fail" ]; then
+                            # Root cause this replaces (found live, 2026-07-06):
+                            # a genuinely correct, useful rule ("must export
+                            # main(argv)") got REJECTED 3 times purely for
+                            # WORDING issues (over the char limit, wrong verb,
+                            # "not generalizable") and then silently dropped —
+                            # the actual lesson was lost forever, not just its
+                            # phrasing. $short_note is already a mechanically
+                            # safe, length-compliant truncation of the raw
+                            # content computed BEFORE the reviewer ever ran, so
+                            # persist THAT as a last-resort fallback (tagged as
+                            # unreviewed) instead of discarding the knowledge
+                            # outright. A future reviewer/human pass can still
+                            # clean up the wording; nothing is lost meanwhile.
+                            warning "  [FailureAnalyst] KB entry rejected by reviewer after 3 attempts — persisting raw fallback (unreviewed) instead of discarding"
+                            printf '\n- [%s] [unreviewed-fallback] %s\n' "$kb_ts" "$short_note" >> "$kb_file" 2>/dev/null || true
+                            _profile_updated="true"
+                        else
+                            # Compact 2-line format: timestamp + rule only (no verbose headers)
+                            printf '\n- [%s] %s\n' "$kb_ts" "$REVIEWER_RETRY_TEXT" >> "$kb_file" 2>/dev/null || true
+                            log "  [FailureAnalyst] KB entry appended to KB-${story_role}.md (${#REVIEWER_RETRY_TEXT} chars)"
+                            _profile_updated="true"
+                        fi
                     else
                         log "  [FailureAnalyst] target=kb but skill_note empty — no KB entry written"
+                    fi
+                    ;;
+                tool)
+                    if [ -n "$tool_name" ] && [ -n "$tool_recipe" ]; then
+                        local tools_dir="$PROJECT_ROOT/.epam/dynamic-tools"
+                        mkdir -p "$tools_dir" 2>/dev/null
+                        local tool_path="${tools_dir}/${tool_name}.sh"
+                        local _tool_before=""
+                        [ -f "$tool_path" ] && _tool_before=$(cat "$tool_path")
+
+                        # Build the candidate script: header comment (purpose, used for
+                        # prompt injection) + the recipe as the executable body.
+                        local _tool_candidate
+                        _tool_candidate=$(printf '#!/usr/bin/env bash\n# %s\nset -e\n%s\n' "$tool_purpose" "$tool_recipe")
+
+                        # Reviewer gate — validates the script before it's trusted for
+                        # future runs. Same snapshot/revert pattern as every other
+                        # self-heal write. Rejections get up to 3 summarize-and-resubmit
+                        # rounds (same mechanism as kb_entry/skill_note) before being
+                        # discarded — a rejected tool used to be a dead end even when the
+                        # rejection was a fixable bash bug (e.g. subshell variable scoping).
+                        local _tool_review_verdict
+                        _tool_review_verdict=$(run_change_with_reviewer_retry "$story_id" "tool_creation" \
+                            "$_tool_before" "$_tool_candidate" 3)
+                        REVIEWER_RETRY_TEXT=$(cat "${TMPDIR:-/tmp}/.reviewer-retry-text-$$" 2>/dev/null || echo "$_tool_candidate")
+                        if [ "$_tool_review_verdict" = "fail" ]; then
+                            warning "  [FailureAnalyst] Dynamic tool '${tool_name}' rejected by reviewer after 3 attempts — NOT written"
+                        else
+                            printf '%s' "$REVIEWER_RETRY_TEXT" > "$tool_path"
+                            chmod +x "$tool_path" 2>/dev/null
+                            log "  [FailureAnalyst] Dynamic tool written: .epam/dynamic-tools/${tool_name}.sh — ${tool_purpose}"
+                            _profile_updated="true"
+                        fi
+                    else
+                        log "  [FailureAnalyst] target=tool but tool_spec incomplete — falling back to diagnosis only"
                     fi
                     ;;
                 none)
@@ -1894,6 +3378,9 @@ PYEOF
             run_healing_recorder "$story_id" "$retry_num" "$target" "$diagnosis" "$patch_count" "$_profile_updated"
             # Detect repeat failures — same diagnosis 2+ times means healing is broken
             check_healing_effectiveness "$story_id" "$diagnosis"
+            # Detect diverse failures — a DIFFERENT diagnosis each attempt while still
+            # on the base model means the model can't converge on this story at all
+            check_failure_diversity "$story_id" "$retry_num" "$diagnosis"
             # Always inject the failure summary into the coordinator amendment so the
             # downstream retry agent knows EXACTLY what went wrong and how to avoid it.
             local _analyst_guidance="Root cause: ${diagnosis}"
@@ -1910,7 +3397,7 @@ The spec is correct — the model made a code-level mistake. Write correct code 
 ## Self-Heal: Failure Analyst Summary
 ${_analyst_guidance}"
         else
-            warning "  [FailureAnalyst] Could not parse JSON from analyst response — proceeding with retry as-is"
+            warning "  [FailureAnalyst] Could not parse JSON from analyst response after ${_analyst_max_attempts} attempts — proceeding with retry as-is"
         fi
     else
         warning "  [FailureAnalyst] Gate model call failed — proceeding with retry as-is"
@@ -1941,6 +3428,182 @@ run_healing_recorder() {
     log "  [HealingRecorder] Event written (story=$story_id retry=$retry_num target=$target)"
 }
 
+# apply_known_fix <project_root> <diagnosis>
+# Deterministic second-line safety net for recurring self-heal failures.
+#
+# Root cause this fixes (found live, 2026-07-06): the FailureAnalyst's fix-routing
+# has exactly 5 targets (prd, tc, tool, skill, kb), and NONE of them means "directly
+# patch the content of a file the agent already wrote." For a known, mechanical,
+# single-line config gap (e.g. vitest.config.ts missing `passWithNoTests: true`,
+# so `vitest run` exits 1 with zero test files even though the AC explicitly
+# allows that), the analyst correctly diagnosed the exact fix needed at TWO
+# different model tiers, but both times picked the nearest-available-but-wrong
+# target (`tool` = writes an unrelated helper script; `tc` = patches documentation
+# text) — neither can touch the actual file content, so the diagnosis recurred
+# and the story exhausted its entire retry ladder on a fix that was correctly
+# identified but could never be mechanically applied.
+#
+# Deliberately NOT a 6th LLM-facing target: growing the analyst's enum gives it
+# one more way to be wrong, not a better chance of being right — the gap isn't
+# "not enough categories," it's "no category exists that means what's needed."
+# Instead, this is a separate, deterministic, non-LLM layer that only engages
+# AFTER check_healing_effectiveness has already detected 2+ repeats of the same
+# diagnosis — the LLM stays the fast first responder for everything else, and
+# this is a safety net for the narrow class of "correctly diagnosed, wrongly
+# routed" mechanical fixes. All stack-specific knowledge (which file, which
+# snippet, which symptom pattern) lives in the project's own
+# .epam/known-fixes.json — same "config supplies stack knowledge, engine has
+# none" convention as .epam/dependency-check.json and .epam/contract-generation.json.
+#
+# Returns 0 (and logs) if a fix was found and applied; returns 1 otherwise —
+# callers must treat 1 as "no known fix, fall through to existing behavior."
+apply_known_fix() {
+    local project_root="$1"
+    local diagnosis="$2"
+    local config_file="${project_root}/.epam/known-fixes.json"
+    [ -f "$config_file" ] || return 1
+
+    local applied_id
+    applied_id=$(python3 - "$project_root" "$config_file" "$diagnosis" << 'PYEOF' 2>/dev/null
+import json, re, sys, os
+
+project_root, config_file, diagnosis = sys.argv[1], sys.argv[2], sys.argv[3]
+
+with open(config_file) as f:
+    fixes = json.load(f)
+
+for fix in fixes:
+    try:
+        if not re.search(fix['symptomPattern'], diagnosis, re.IGNORECASE):
+            continue
+        target_path = os.path.join(project_root, fix['targetFile'])
+        if not os.path.exists(target_path):
+            continue
+        with open(target_path) as tf:
+            content = tf.read()
+        # Already present — this symptom must have a different cause; don't
+        # falsely claim success, let the caller fall through to normal handling.
+        if fix['checkPattern'] in content:
+            continue
+        m = re.search(fix['insertAfterPattern'], content)
+        if not m:
+            continue
+        new_content = content[:m.end()] + fix['insertText'] + content[m.end():]
+        with open(target_path, 'w') as tf:
+            tf.write(new_content)
+        print(fix['id'])
+        sys.exit(0)
+    except (KeyError, re.error):
+        continue
+
+sys.exit(1)
+PYEOF
+)
+    local rc=$?
+    if [ "$rc" -eq 0 ] && [ -n "$applied_id" ]; then
+        log "  [KnownFix] Applied deterministic fix '${applied_id}' for recurring diagnosis (see .epam/known-fixes.json)"
+        return 0
+    fi
+    return 1
+}
+
+# resolve_escalation <escalating_story_id>
+# Checks for a pending .epam/escalations/<story_id>.json filed by the
+# escalate_defect_to_sibling_story tool (src/tools/builtin/EscalateDefect.ts).
+#
+# Root cause this fixes (found live, 2026-07-06): a split story pair (e.g.
+# SKY-002-impl / SKY-002-test) can end up with the test child's tests failing
+# because the impl child's code is missing something (e.g. constructor
+# validation) — the test child's own FailureAnalyst correctly diagnoses this
+# every retry, but is structurally unable to fix it (the fix lives in a file
+# outside its own declared scope, correctly locked by the scope guard), so it
+# just burns its entire retry ladder re-diagnosing a true root cause it can
+# never act on.
+#
+# Resolution: find the sibling story that actually owns the target file
+# (same split parent via specification.createdFrom, or — for non-split
+# cross-story dependencies — any other story that declares the file), and
+# reuse the implement_story function itself (all provider branches, JSON
+# handling, tsc verification already correct and tested) to apply ONE narrow,
+# targeted fix
+# there, via the existing COORDINATOR_PROMPT_AMENDMENT injection mechanism.
+# Bounded to a small retry budget (ESCALATION_FIX_MAX_RETRIES, default 1) —
+# this is meant to be a single scoped patch, not a full re-implementation.
+#
+# Returns 0 if a fix was resolved (caller should grant a free retry); returns
+# 1 if there was no escalation, or if it could not be resolved (caller falls
+# through to normal retry handling — the diagnosis will surface again and be
+# caught by check_healing_effectiveness like any other repeat).
+resolve_escalation() {
+    local escalating_story_id="$1"
+    local escalation_file="${PROJECT_ROOT}/.epam/escalations/${escalating_story_id}.json"
+    [ -f "$escalation_file" ] || return 1
+
+    local target_file diagnosis required_fix
+    target_file=$(jq -r '.targetFile // empty' "$escalation_file" 2>/dev/null)
+    diagnosis=$(jq -r '.diagnosis // empty' "$escalation_file" 2>/dev/null)
+    required_fix=$(jq -r '.requiredFix // empty' "$escalation_file" 2>/dev/null)
+    if [ -z "$target_file" ] || [ -z "$required_fix" ]; then
+        warning "  [Escalation] Malformed escalation file for $escalating_story_id — ignoring"
+        rm -f "$escalation_file"
+        return 1
+    fi
+
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    local parent_id
+    parent_id=$(jq -r --arg id "$escalating_story_id" \
+        '.stories[] | select(.id == $id) | .specification.createdFrom // empty' \
+        "$prd_target" 2>/dev/null)
+
+    # Prefer a split-sibling match (same parent) so a genuinely unrelated story
+    # that happens to also touch the file isn't picked by mistake; fall back to
+    # a project-wide owner search for non-split cross-story dependencies.
+    local sibling_id
+    sibling_id=$(jq -r --arg parent "$parent_id" --arg file "$target_file" --arg self "$escalating_story_id" \
+        '.stories[] | select(($parent != "") and .specification.createdFrom == $parent and .id != $self) | select(.technicalNotes.files[]? == $file) | .id' \
+        "$prd_target" 2>/dev/null | head -1)
+    if [ -z "$sibling_id" ]; then
+        sibling_id=$(jq -r --arg file "$target_file" --arg self "$escalating_story_id" \
+            '.stories[] | select(.id != $self) | select(.technicalNotes.files[]? == $file) | .id' \
+            "$prd_target" 2>/dev/null | head -1)
+    fi
+
+    if [ -z "$sibling_id" ]; then
+        warning "  [Escalation] Could not resolve an owning story for $target_file — no story declares it in technicalNotes.files"
+        rm -f "$escalation_file"
+        return 1
+    fi
+
+    log "  [Escalation] $escalating_story_id escalated a defect in $target_file (owned by $sibling_id): $diagnosis"
+
+    local _saved_amendment="${COORDINATOR_PROMPT_AMENDMENT:-}"
+    local _saved_max_retries="$MAX_RETRIES"
+    COORDINATOR_PROMPT_AMENDMENT="
+## URGENT: Escalated defect from sibling story ${escalating_story_id}
+${diagnosis}
+Required fix: ${required_fix}
+Apply ONLY this fix to ${target_file}. Do not make any other changes to this file or any other file — this is a narrow, targeted patch, not a full re-implementation."
+    export COORDINATOR_PROMPT_AMENDMENT
+    MAX_RETRIES="${ESCALATION_FIX_MAX_RETRIES:-1}"
+
+    implement_story "$sibling_id"
+    local fix_result=$?
+
+    COORDINATOR_PROMPT_AMENDMENT="$_saved_amendment"
+    export COORDINATOR_PROMPT_AMENDMENT
+    MAX_RETRIES="$_saved_max_retries"
+
+    rm -f "$escalation_file"
+
+    if [ "$fix_result" -eq 0 ]; then
+        success "  [Escalation] Scoped fix resolved for $sibling_id — resuming $escalating_story_id"
+        return 0
+    else
+        warning "  [Escalation] Scoped fix for $sibling_id did not converge within ${ESCALATION_FIX_MAX_RETRIES:-1} retr(y/ies) — $escalating_story_id will re-diagnose on its next attempt"
+        return 1
+    fi
+}
+
 # check_healing_effectiveness <story_id> <current_diagnosis>
 # Reads healing-events.jsonl and checks if the same diagnosis has appeared 2+ times
 # for this story without a different diagnosis in between. If so, self-healing is
@@ -1950,28 +3613,63 @@ check_healing_effectiveness() {
     local current_diagnosis="$2"
     local heal_log="${OUTPUT_DIR:-$LOG_DIR}/healing-events.jsonl"
     [ -f "$heal_log" ] || return 0
-    # Count consecutive same-diagnosis events for this story (most recent N events)
+    # Count consecutive same-root-cause events for this story (most recent N events).
+    # A naive 20-char exact-prefix match was live-confirmed to miss real repeats: the
+    # gate model rarely phrases the same root cause identically twice (e.g. "Code uses
+    # '../public/index.html'..." vs "Agent referenced src/public/index.html but didn't
+    # create the file..." — same bug, zero shared 20-char prefix). Token-overlap
+    # matching catches paraphrased repeats: extract significant words (len>=4, minus
+    # stopwords) from each diagnosis and compare against the current one; treat as the
+    # same root cause when at least 3 significant words overlap AND that overlap is a
+    # sizeable share (>=40%) of the smaller diagnosis's vocabulary. Both thresholds are
+    # needed together — overlap-count alone lets short diagnoses false-positive on one
+    # shared word; ratio alone lets two long, mostly-unrelated diagnoses match on a
+    # handful of incidental shared words (e.g. both mentioning "file" and "server").
     local repeat_count
-    repeat_count=$(python3 - << PYEOF 2>/dev/null || echo 0
-import json, sys
-path = '${heal_log}'
-story = '${story_id}'
-diag  = '''${current_diagnosis}'''[:20]  # 20-char prefix tolerates analyst rephrasing of same root cause
+    repeat_count=$(python3 - "$heal_log" "$story_id" "$current_diagnosis" 2>/dev/null << 'PYEOF' || echo 0
+import json, re, sys
+
+heal_log, story, current = sys.argv[1], sys.argv[2], sys.argv[3]
+
+STOPWORDS = {
+    'the', 'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were', 'be', 'been',
+    'to', 'of', 'in', 'on', 'at', 'for', 'with', 'from', 'by', 'as', 'not', 'it',
+    'its', 'this', 'that', 'which', 'so', 'than', 'then', 'because', 'due', 'into',
+    'used', 'use', 'uses', 'using', 'causes', 'cause', 'caused', 'agent', 'code',
+}
+
+def tokens(text):
+    words = re.findall(r"[a-zA-Z']{4,}", text.lower())
+    return set(w for w in words if w not in STOPWORDS)
+
+def same_root_cause(a, b):
+    ta, tb = tokens(a), tokens(b)
+    if not ta or not tb:
+        return a[:20] == b[:20]
+    overlap = ta & tb
+    ratio = len(overlap) / min(len(ta), len(tb))
+    # min(3, ...) scales the absolute-overlap floor down for short diagnoses — a
+    # diagnosis with only 2 significant words (e.g. "exact repeats") could never
+    # reach a flat floor of 3 even when identical to itself.
+    min_overlap = min(3, len(ta), len(tb))
+    return len(overlap) >= min_overlap and ratio >= 0.4
+
 events = []
-with open(path) as f:
+with open(heal_log) as f:
     for line in f:
         line = line.strip()
-        if not line: continue
+        if not line:
+            continue
         try:
             obj = json.loads(line)
             if obj.get('story_id') == story and obj.get('event') != 'HEALING_BROKEN':
-                events.append(obj.get('diagnosis','')[:20])
+                events.append(obj.get('diagnosis', ''))
         except Exception:
             pass
-# Count how many of the last events share the same root cause (prefix match)
+
 count = 0
 for d in reversed(events):
-    if d == diag:
+    if same_root_cause(d, current):
         count += 1
     else:
         break
@@ -1979,6 +3677,15 @@ print(count)
 PYEOF
 )
     if [ "${repeat_count:-0}" -ge 2 ]; then
+        # Deterministic safety net before giving up: a known, mechanical fix may
+        # exist for this exact recurring symptom even though the LLM analyst
+        # couldn't apply it through its 5-target routing. If found and applied,
+        # skip the HEALING_BROKEN escalation entirely and let the next retry use
+        # the now-patched file.
+        if apply_known_fix "${PROJECT_ROOT:-}" "$current_diagnosis"; then
+            log "  [HealingBroken] Deterministic known-fix applied — not counting this as a broken-healing cycle"
+            return 0
+        fi
         error "  [HealingBroken] CRITICAL: '${current_diagnosis}' has recurred ${repeat_count}+ times for $story_id without a different fix — self-healing is NOT working."
         error "  [HealingBroken] Check: (1) gate model is reachable (2) failure analyst is diagnosing correctly (3) patches are being applied"
         # Write a HEALING_BROKEN sentinel record so the run summary captures this
@@ -1993,10 +3700,151 @@ PYEOF
     fi
 }
 
+# check_failure_diversity <story_id> <retry_num> <current_diagnosis>
+# Mirror of check_healing_effectiveness, inverted: that function detects the SAME
+# diagnosis repeating (healing is broken, skip ahead). This detects consecutive
+# DIFFERENT diagnoses while still on the un-escalated base model (Rung 0-1,
+# retries 0-3) — evidence of a genuine capability gap, not a transient mistake
+# "one more attempt" will fix. Root cause addressed: SKY-004 spent 4 of 8
+# attempts (half its budget) on MiniMax-M3 despite 4 DIFFERENT failures
+# surfacing in that window (wrong import path -> incomplete mock factory ->
+# missing test import/mock export -> ...), only reaching model escalation at
+# attempt 5. Sets EARLY_ESCALATION_NEEDED=1 so the retry loop can jump straight
+# to Rung 2 instead of exhausting the rest of the base-model budget on a model
+# that's visibly not converging. No-op once the model has already escalated
+# (rung >= 2) — this signal only matters before that point.
+check_failure_diversity() {
+    local story_id="$1"
+    local retry_num="$2"
+    local current_diagnosis="$3"
+
+    local _rung=$(( retry_num / 2 ))
+    [ "$_rung" -ge 2 ] && return 0
+
+    local heal_log="${OUTPUT_DIR:-$LOG_DIR}/healing-events.jsonl"
+    [ -f "$heal_log" ] || return 0
+
+    local is_different
+    is_different=$(python3 - "$heal_log" "$story_id" "$current_diagnosis" 2>/dev/null << 'PYEOF' || echo "false"
+import json, re, sys
+
+heal_log, story, current = sys.argv[1], sys.argv[2], sys.argv[3]
+
+STOPWORDS = {
+    'the', 'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were', 'be', 'been',
+    'to', 'of', 'in', 'on', 'at', 'for', 'with', 'from', 'by', 'as', 'not', 'it',
+    'its', 'this', 'that', 'which', 'so', 'than', 'then', 'because', 'due', 'into',
+    'used', 'use', 'uses', 'using', 'causes', 'cause', 'caused', 'agent', 'code',
+}
+
+def tokens(text):
+    words = re.findall(r"[a-zA-Z']{4,}", text.lower())
+    return set(w for w in words if w not in STOPWORDS)
+
+def same_root_cause(a, b):
+    ta, tb = tokens(a), tokens(b)
+    if not ta or not tb:
+        return a[:20] == b[:20]
+    overlap = ta & tb
+    ratio = len(overlap) / min(len(ta), len(tb))
+    min_overlap = min(3, len(ta), len(tb))
+    return len(overlap) >= min_overlap and ratio >= 0.4
+
+events = []
+with open(heal_log) as f:
+    for line in f:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+            if obj.get('story_id') == story and obj.get('event') != 'HEALING_BROKEN':
+                events.append(obj.get('diagnosis', ''))
+        except Exception:
+            pass
+
+# events[-1] is the diagnosis just written for THIS attempt (run_healing_recorder
+# runs before this check, same ordering as check_healing_effectiveness). Compare
+# it against the immediately preceding attempt's diagnosis.
+if len(events) < 2:
+    print("false")
+else:
+    prev, cur = events[-2], events[-1]
+    print("false" if same_root_cause(prev, cur) else "true")
+PYEOF
+)
+
+    if [ "$is_different" = "true" ]; then
+        warning "  [FailureDiversity] Different failure class than the previous attempt while still on the base model — likely a capability gap, not a transient mistake"
+        EARLY_ESCALATION_NEEDED=1
+        export EARLY_ESCALATION_NEEDED
+    fi
+}
+
+# same_root_cause_diagnoses <diagnosis_a> <diagnosis_b>
+# Standalone version of the token-overlap comparison embedded in
+# check_healing_effectiveness/check_failure_diversity — extracted here because a
+# THIRD caller needs it (deterministic-check repeat detection, added live during
+# run #15) that already has both text strings in hand and has no reason to read
+# or write healing-events.jsonl for this comparison. Echoes "true" or "false".
+same_root_cause_diagnoses() {
+    local a="$1"
+    local b="$2"
+    python3 - "$a" "$b" 2>/dev/null << 'PYEOF' || echo "false"
+import re, sys
+
+a, b = sys.argv[1], sys.argv[2]
+
+STOPWORDS = {
+    'the', 'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were', 'be', 'been',
+    'to', 'of', 'in', 'on', 'at', 'for', 'with', 'from', 'by', 'as', 'not', 'it',
+    'its', 'this', 'that', 'which', 'so', 'than', 'then', 'because', 'due', 'into',
+    'used', 'use', 'uses', 'using', 'causes', 'cause', 'caused', 'agent', 'code',
+}
+
+def tokens(text):
+    words = re.findall(r"[a-zA-Z']{4,}", text.lower())
+    return set(w for w in words if w not in STOPWORDS)
+
+ta, tb = tokens(a), tokens(b)
+if not ta or not tb:
+    print("true" if a[:20] == b[:20] else "false")
+else:
+    overlap = ta & tb
+    ratio = len(overlap) / min(len(ta), len(tb))
+    min_overlap = min(3, len(ta), len(tb))
+    print("true" if len(overlap) >= min_overlap and ratio >= 0.4 else "false")
+PYEOF
+}
+
 # Invoke Claude CLI to implement a story
 implement_story() {
     local story_id=$1
     local retry_count=0
+    # Caps free retries granted for deterministic-check failures (see
+    # DETERMINISTIC_CHECK_FAILURE) — these don't count against retry_count/the
+    # ladder, but an unbounded free-retry loop is still a real risk if a check
+    # keeps finding a violation the agent can't seem to fix. After this many
+    # free retries, fall through to a normal counted retry instead.
+    local _free_retry_count=0
+    # Counts every actual invocation (unlike retry_count, which free retries
+    # deliberately do NOT advance) — used to gate COORDINATOR_PROMPT_AMENDMENT
+    # injection below ("is this the first attempt of THIS story or not").
+    local _total_attempts=0
+    # Tracks the last deterministic-check violation message for this story, so a
+    # repeat can be detected WITHOUT going through run_failure_analyst (which
+    # deterministic-check failures deliberately skip). Confirmed live (run #15,
+    # 2026-07-05): without this, the SAME relative-import-check violation
+    # repeated 5 times across free AND counted retries with no escalation at
+    # all, because check_healing_effectiveness's repeat detector only runs
+    # inside run_failure_analyst.
+    local _prev_deterministic_violation=""
+    # run_implementation() processes multiple stories in one claude.sh
+    # invocation; COORDINATOR_PROMPT_AMENDMENT is a script-global set by the
+    # previous story's failure-analyst/deterministic-check path and was never
+    # reset between stories, so a stale amendment from story A could otherwise
+    # leak into story B's first attempt.
+    COORDINATOR_PROMPT_AMENDMENT=""
     local output_file="$CLAUDE_OUTPUT_DIR/${story_id}_$(date +'%Y%m%d_%H%M%S').log"
     local story_started_at=$(date -Iseconds)
 
@@ -2027,11 +3875,16 @@ implement_story() {
     STORY_MODEL_ORIGINAL="${STORY_MODEL:-}"
     # Reset reasoning effort to default at story start (previous story's setting must not leak)
     export EPAM_REASONING_EFFORT="low"
+    # Reset temperature override at story start (previous story's FailureDiversity
+    # or escalation-triggered override must not leak into an unrelated story).
+    unset EPAM_TEMPERATURE
     # For epam-run providers, prd.json .model field overrides effort-based model
     case "${STORY_PROVIDER:-codex}" in
         codex) resolve_codex_model_settings "$story_id" ;;
         copilot|openai|qwen|cursor|minimax) resolve_model_from_story "$story_id" ;;
     esac
+    # prd-model-coordinator's .reasoningEffort field overrides the "low" reset above
+    resolve_reasoning_effort_from_story "$story_id"
     # Resolve optional plannerModel — runs a planning pass before execution
     resolve_planner_settings "$story_id"
     # Resolve dynamic constitution rules for this story (appends to AGENT_CONSTITUTION)
@@ -2071,12 +3924,14 @@ implement_story() {
     if [ -n "${STORY_PLANNER_MODEL:-}" ]; then
         log "  Running planning phase with $STORY_PLANNER_MODEL..."
         story_plan=$(run_planning_phase "$story_id" "$STORY_PLANNER_MODEL")
+        story_plan=$(review_and_correct_plan "$story_id" "$story_plan")
         local plan_words
         plan_words=$(echo "$story_plan" | wc -w)
-        log "  Planning phase complete ($plan_words words)"
+        log "  Planning phase complete ($plan_words words, reviewed)"
     fi
 
     while [ $retry_count -le $MAX_RETRIES ]; do
+        _total_attempts=$((_total_attempts + 1))
         # Inference ladder: on retry, escalate to a stronger model + increase reasoning effort.
         # Priority: PRD retryModel > EPAM_RETRY_MODEL env var > built-in get_model_ladder_step().
         # Principle: NEVER retry with the same model — every failure steps up. Logged visibly.
@@ -2109,16 +3964,18 @@ implement_story() {
                             "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
                         local escalated_model_r2="${retry_model_prd:-${EPAM_RETRY_MODEL:-}}"
                         if [ -z "$escalated_model_r2" ]; then
-                            ladder_step_r2=$(get_model_ladder_step "${STORY_MODEL:-}" 2)
+                            local _ladder_tier
+                            _ladder_tier=$(classify_ladder_tier "$story_id")
+                            ladder_step_r2=$(get_model_ladder_step "${STORY_MODEL:-}" "$_ladder_tier")
                             [ -n "$ladder_step_r2" ] && escalated_model_r2="$ladder_step_r2"
+                            log "  InferenceLadder[Rung2/R${retry_count}]: tier=${_ladder_tier}"
                         fi
                         if [ -n "$escalated_model_r2" ] && [ "$escalated_model_r2" != "${STORY_MODEL:-}" ]; then
                             log "  InferenceLadder[Rung2/R${retry_count}]: model '${STORY_MODEL:-default}' → '$escalated_model_r2' — effort → medium"
                             STORY_MODEL="$escalated_model_r2"
-                            case "$escalated_model_r2" in
-                                zhipuai/*|moonshotai/*|glm-*|kimi-*) STORY_PROVIDER="qwen" ;;
-                                MiniMax-*)                            STORY_PROVIDER="minimax" ;;
-                            esac
+                            local _resolved_provider_r2
+                            _resolved_provider_r2=$(resolve_model_provider "$escalated_model_r2")
+                            [ -n "$_resolved_provider_r2" ] && STORY_PROVIDER="$_resolved_provider_r2"
                         else
                             log "  InferenceLadder[Rung2/R${retry_count}]: no ladder step — keeping model, effort → medium"
                         fi
@@ -2126,12 +3983,45 @@ implement_story() {
                         STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
                         ;;
                     *)
-                        # Rung 3+: escalated model, effort → high (maximum)
+                        # Rung 3+: escalate to the strongest configured model, effort → high (maximum).
+                        #
+                        # BUG (found live, 2026-07-04): this branch only ever escalated the model
+                        # when the story had had ZERO prior escalation (STORY_MODEL == the
+                        # original). But every story that reaches Rung 3 already escalated once at
+                        # Rung 2 by construction — so that condition was always false here, and
+                        # Rung 3 silently kept Rung 2's model, only bumping the reasoning-effort
+                        # flag. Confirmed on SKY-004: attempts 5-8 all ran on z-ai/glm-5.2 (the
+                        # MEDIUM-tier target); z-ai/glm-5.1 (the HIGH-tier target, configured
+                        # specifically for hard stories) was never invoked in the entire 8-attempt
+                        # cycle. Fix: if the story already escalated once, step it again — from
+                        # whatever model Rung 2 landed on.
+                        #
+                        # BUG 2 (found live, 2026-07-05): this branch originally passed a hardcoded
+                        # literal "high" to get_model_ladder_step, instead of the story's ACTUAL
+                        # classified tier — silently pushing a "medium"-complexity story onto the
+                        # HIGH ladder anyway, overriding what classify_ladder_tier() (now populated
+                        # from real CPA complexity signals: cpaGate/effort, see
+                        # contextualize-stories.sh) says this story needs. Fixed: call
+                        # classify_ladder_tier() here too, same as Rung 2 — the PRD's classified
+                        # tier is the ceiling all the way through the ladder, not just at Rung 2.
                         local _ffm="${EPAM_FINAL_FALLBACK_MODEL:-}" _ffp="${EPAM_FINAL_FALLBACK_PROVIDER:-}"
                         if [ -n "$_ffm" ] && [ "${STORY_MODEL:-}" = "${STORY_MODEL_ORIGINAL:-}" ]; then
                             log "  InferenceLadder[Rung3/R${retry_count}]: no prior escalation — routing to fallback '$_ffm'"
                             STORY_MODEL="$_ffm"
                             [ -n "$_ffp" ] && STORY_PROVIDER="$_ffp"
+                        else
+                            local _ladder_tier_r3
+                            _ladder_tier_r3=$(classify_ladder_tier "$story_id")
+                            log "  InferenceLadder[Rung3/R${retry_count}]: tier=${_ladder_tier_r3}"
+                            local ladder_step_r3
+                            ladder_step_r3=$(get_model_ladder_step "${STORY_MODEL:-}" "$_ladder_tier_r3")
+                            if [ -n "$ladder_step_r3" ] && [ "$ladder_step_r3" != "${STORY_MODEL:-}" ]; then
+                                log "  InferenceLadder[Rung3/R${retry_count}]: model '${STORY_MODEL:-default}' → '$ladder_step_r3' (${_ladder_tier_r3} tier)"
+                                STORY_MODEL="$ladder_step_r3"
+                                local _resolved_provider_r3
+                                _resolved_provider_r3=$(resolve_model_provider "$ladder_step_r3")
+                                [ -n "$_resolved_provider_r3" ] && STORY_PROVIDER="$_resolved_provider_r3"
+                            fi
                         fi
                         export EPAM_REASONING_EFFORT="high"
                         STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
@@ -2162,13 +4052,72 @@ Follow this plan step by step:
 $story_plan"
         fi
 
-        # Inject coordinator prompt amendment when available (retry attempts only)
-        if [ "$retry_count" -gt 0 ] && [ -n "${COORDINATOR_PROMPT_AMENDMENT:-}" ]; then
+        # Inject coordinator prompt amendment when available (retry attempts only).
+        # Uses _total_attempts, not retry_count — a free retry (deterministic-check
+        # failure) doesn't advance retry_count, but it IS a real subsequent attempt
+        # and must still see the guidance from what just failed.
+        if [ "$_total_attempts" -gt 1 ] && [ -n "${COORDINATOR_PROMPT_AMENDMENT:-}" ]; then
             prompt="$prompt
 
 ## Coordinator Guidance (retry ${retry_count})
 The following targeted instruction was identified from the previous failure:
 ${COORDINATOR_PROMPT_AMENDMENT}"
+        fi
+
+        # Prompt-size scratchpad summarization (found live, 2026-07-07): each retry
+        # PREPENDS a new "## Self-Heal: Failure Analyst Summary"/coordinator-guidance
+        # block onto COORDINATOR_PROMPT_AMENDMENT without ever dropping older ones —
+        # by attempt 4-5 within a single claude.sh invocation the cumulative prompt
+        # is measurably larger than attempt 1's, and a model reasoning over a bigger
+        # prompt can legitimately take long enough to blow the watchdog's timeout
+        # budget for that story. Root cause was misread at first as model/API
+        # instability (see the hot-swap mechanism above) — a live process
+        # inspection confirmed a genuine, still-connected, in-flight API call, not a
+        # stuck/crashed one; the real issue is unbounded prompt growth.
+        # Fix: once the prompt exceeds a configurable size, persist the FULL prompt
+        # (with complete retry history) to a scratchpad file for audit/debugging,
+        # then trim the in-prompt coordinator guidance down to only the MOST
+        # RECENT "## "-headed section — the model still gets the latest, most
+        # relevant guidance; it just isn't re-reading every prior attempt's guidance
+        # every single retry. Opt-out: EPAM_PROMPT_SCRATCHPAD_THRESHOLD_CHARS=0
+        # disables trimming entirely.
+        local _scratchpad_threshold="${EPAM_PROMPT_SCRATCHPAD_THRESHOLD_CHARS:-16000}"
+        if [ "$_scratchpad_threshold" -gt 0 ] && [ "${#prompt}" -gt "$_scratchpad_threshold" ]; then
+            local _scratchpad_dir="${LOG_DIR}/kb-scratchpad"
+            mkdir -p "$_scratchpad_dir" 2>/dev/null || true
+            local _scratchpad_file="${_scratchpad_dir}/${story_id}-attempt-$((retry_count + 1)).md"
+            printf '%s' "$prompt" > "$_scratchpad_file" 2>/dev/null || true
+
+            local _trimmed_amendment
+            _trimmed_amendment=$(printf '%s' "$COORDINATOR_PROMPT_AMENDMENT" | python3 -c "
+import sys
+text = sys.stdin.read()
+lines = text.split(chr(10))
+heading_idxs = [i for i, l in enumerate(lines) if l.startswith('## ')]
+print(chr(10).join(lines[heading_idxs[-1]:]) if heading_idxs else text)
+" 2>/dev/null || echo "$COORDINATOR_PROMPT_AMENDMENT")
+
+            if [ -n "$_trimmed_amendment" ] && [ "${#_trimmed_amendment}" -lt "${#COORDINATOR_PROMPT_AMENDMENT}" ]; then
+                warning "  [PromptScratchpad] Prompt exceeded ${_scratchpad_threshold} chars ($(( ${#prompt} )) actual) — full history written to $_scratchpad_file, trimming to most recent guidance only"
+                if [ "${STORY_GENERATOR_MODE:-}" = "true" ]; then
+                    prompt="$(build_generator_prompt "$story_id")
+$(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
+                else
+                    prompt="$(build_implementation_prompt "$story_id")
+$(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
+                fi
+                if [ -n "${story_plan:-}" ]; then
+                    prompt="$prompt
+
+## Execution Plan
+Follow this plan step by step:
+$story_plan"
+                fi
+                prompt="$prompt
+
+## Coordinator Guidance (retry ${retry_count}, showing most recent only — full retry history: ${_scratchpad_file})
+${_trimmed_amendment}"
+            fi
         fi
 
         # Log the prompt
@@ -2356,7 +4305,7 @@ ${COORDINATOR_PROMPT_AMENDMENT}"
 
         # Scope guard: restore write permissions now that the agent has finished.
         # Verification (npm test) only reads files — no write access needed.
-        _scope_unlock
+        _scope_unlock "$story_id"
 
         if [ "$invoke_success" = true ] && ! verify_story_deliverables "$story_id"; then
             warning "$story_cli returned success but story deliverables are incomplete"
@@ -2369,9 +4318,16 @@ ${COORDINATOR_PROMPT_AMENDMENT}"
         # Skipped for test stories themselves (they don't generate TCs).
         if [ "$invoke_success" = true ] && [ "${SKIP_TC_WRITER:-0}" != "1" ]; then
             local _story_files_are_tests
+            # grep -c ALREADY prints "0" on zero matches (its own count) while
+            # also exiting 1 — combining that with `|| echo 0` double-prints
+            # ("0\n0"), which then fails the `-eq` numeric test below with
+            # "integer expression expected" (found live, 2026-07-06, blocking
+            # external verification for every non-test story with exit 127).
+            # `|| true` only suppresses the exit code (needed since this
+            # script runs under `set -e`), without adding extra output.
             _story_files_are_tests=$(jq -r --arg id "$story_id" \
                 '.stories[] | select(.id == $id) | .technicalNotes.files[]? // empty' \
-                "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null | grep -c '\.test\.ts$' || echo 0)
+                "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null | { grep -c '\.test\.ts$' || true; })
             if [ "${_story_files_are_tests:-0}" -eq 0 ]; then
                 log "  [tc-writer] Generating TCs for phase '${CURRENT_PHASE:-unknown}' (post-impl, pre-test)..."
                 if bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
@@ -2390,6 +4346,15 @@ ${COORDINATOR_PROMPT_AMENDMENT}"
         # agent only needs to write files (keeping iterations low).
         if [ "$invoke_success" = true ] && ! run_external_verification "$story_id" "$output_file"; then
             warning "$story_cli deliverables written but external tests failed"
+            invoke_success=false
+        fi
+
+        # TypeScript compile check — inside the retry loop so a tsc failure
+        # gets the same self-healing treatment (failure analyst, InferenceLadder
+        # escalation) as any other verification failure, rather than exiting
+        # the phase with zero retries.
+        if [ "$invoke_success" = true ] && ! run_tsc_verification "$story_id" "$output_file"; then
+            warning "$story_cli deliverables written but tsc --noEmit failed"
             invoke_success=false
         fi
 
@@ -2461,9 +4426,86 @@ ${COORDINATOR_PROMPT_AMENDMENT}"
 
             # Layer 3: failure analyst — diagnose test failure and patch PRD or inject
             # skill guidance before the next retry. Only runs when more retries remain.
-            if [ $retry_count -lt $MAX_RETRIES ]; then
+            # Skipped for deterministic-check failures (relative-import-check,
+            # mock-completeness-check): the check's own message already names the
+            # exact violation precisely — spending a gate-model call to "diagnose"
+            # something already known is pure waste. Inject the check's message
+            # directly as retry guidance instead.
+            if [ "${DETERMINISTIC_CHECK_FAILURE:-0}" -eq 1 ]; then
+                log "  [DeterministicCheck] Skipping failure-analyst — violation already precisely known"
+                local _existing_amendment="${COORDINATOR_PROMPT_AMENDMENT:-}"
+                COORDINATOR_PROMPT_AMENDMENT="${_existing_amendment}
+## Deterministic Check Failure
+${VERIFICATION_FAILURE}
+This was caught by an automated check before the test suite even ran — fix the exact issue named above."
+
+                # A deterministic-check violation repeating IDENTICALLY across attempts
+                # is just as strong an escalation signal as an LLM-diagnosed repeat, but
+                # check_healing_effectiveness never sees it (it only runs inside
+                # run_failure_analyst, deliberately skipped above). Confirmed live
+                # (run #15, 2026-07-05): SKY-003 repeated the SAME relative-import-check
+                # violation 5 times across free AND counted retries with zero
+                # escalation, because the only repeat-detector was being bypassed.
+                # Reuse the existing HEALING_BROKEN flag/skip-to-next-rung consumer
+                # logic below instead of building a separate signal.
+                #
+                # BUG (found live, 2026-07-05): comparing the RAW VERIFICATION_FAILURE
+                # text false-triggered a repeat between two GENUINELY DIFFERENT
+                # violations (a relative-import-check failure, then a totally
+                # unrelated mock-completeness-check failure on the retry) — every
+                # deterministic check's message shares the same templated preamble
+                # ("## Verification Failure\n\n<intro sentence>... anything else:\n\n")
+                # plus the same recurring file/class names for this story, so generic
+                # boilerplate words alone crossed the token-overlap threshold (11
+                # shared tokens, ratio 0.52) even though the actual problem was
+                # unrelated. Fix: strip the templated intro (everything through the
+                # first ":\n\n") before comparing — only the check-specific detail
+                # lines that follow are meaningful signal.
+                local _prev_violation_detail _cur_violation_detail
+                _prev_violation_detail="${_prev_deterministic_violation#*:$'\n'$'\n'}"
+                _cur_violation_detail="${VERIFICATION_FAILURE#*:$'\n'$'\n'}"
+                if [ -n "$_prev_deterministic_violation" ]; then
+                    local _same_violation
+                    _same_violation=$(same_root_cause_diagnoses "$_prev_violation_detail" "$_cur_violation_detail")
+                    if [ "$_same_violation" = "true" ]; then
+                        error "  [DeterministicCheck] CRITICAL: same violation repeated for $story_id without resolution — treating as HealingBroken"
+                        HEALING_BROKEN=1
+                        export HEALING_BROKEN
+                    fi
+                fi
+                _prev_deterministic_violation="$VERIFICATION_FAILURE"
+            elif [ $retry_count -lt $MAX_RETRIES ]; then
                 run_failure_analyst "$story_id" "$output_file" "$retry_count"
             fi
+
+            # An escalated defect (see escalate_defect_to_sibling_story) takes
+            # priority over normal retry handling — if the escalating story's
+            # agent correctly diagnosed a defect in a sibling's file it cannot
+            # touch, resolve it now rather than letting the story burn its own
+            # retry ladder re-diagnosing something it structurally cannot fix.
+            if resolve_escalation "$story_id"; then
+                success "  [Escalation] Resolved — free retry for $story_id (not counted against the ladder)"
+                continue
+            fi
+
+            # Deterministic-check failures get up to 3 FREE retries — they don't
+            # advance retry_count (so they don't consume ladder/model-escalation
+            # budget), since a mechanical "you missed a spot" violation is not
+            # evidence of a capability gap the way a real test failure is. After 3
+            # free retries without resolution, fall through to a normal counted
+            # retry to bound the loop. Skipped entirely when the violation just
+            # repeated identically (HEALING_BROKEN set above) — granting another
+            # free retry on a KNOWN-non-converging violation just wastes an attempt;
+            # fall straight through to the counted/rung-skip path instead.
+            if [ "${DETERMINISTIC_CHECK_FAILURE:-0}" -eq 1 ] && [ "${HEALING_BROKEN:-0}" -ne 1 ] && [ "$_free_retry_count" -lt 3 ]; then
+                _free_retry_count=$((_free_retry_count + 1))
+                DETERMINISTIC_CHECK_FAILURE=0
+                export DETERMINISTIC_CHECK_FAILURE
+                warning "  [DeterministicCheck] Free retry ${_free_retry_count}/3 for $story_id — not counted against the model-escalation ladder"
+                continue
+            fi
+            DETERMINISTIC_CHECK_FAILURE=0
+            export DETERMINISTIC_CHECK_FAILURE
 
             retry_count=$((retry_count + 1))
             # If self-healing is confirmed broken, skip to the start of the next rung
@@ -2480,6 +4522,30 @@ ${COORDINATOR_PROMPT_AMENDMENT}"
                     warning "  [HealingBroken] Skipping to rung $((_cur_rung + 1)) (retry $_next_rung_start) for $story_id"
                     retry_count=$_next_rung_start
                 fi
+            fi
+            # Early escalation: the model made a DIFFERENT mistake on back-to-back
+            # attempts while still un-escalated (Rung 0-1) — jump straight to Rung 2
+            # (model escalation) instead of exhausting the rest of the base-model
+            # budget. Mutually exclusive with HEALING_BROKEN by construction (a pair
+            # of diagnoses can't be both the same root cause and different root
+            # causes), so no ordering conflict between the two blocks.
+            if [ "${EARLY_ESCALATION_NEEDED:-0}" -eq 1 ]; then
+                EARLY_ESCALATION_NEEDED=0
+                export EARLY_ESCALATION_NEEDED
+                if [ "$retry_count" -lt 4 ] && [ 4 -le "$MAX_RETRIES" ]; then
+                    warning "  [FailureDiversity] Jumping to Rung 2 (retry 4) for $story_id — base model isn't converging"
+                    retry_count=4
+                fi
+                # Different failure classes across attempts (not the same bug
+                # recurring) is the signature of token-selection variance, not a
+                # capability gap — the model is making a DIFFERENT plausible
+                # mistake each time rather than converging on the fix. Pin
+                # temperature to near-zero for the remainder of this story so it
+                # stops exploring alternative (and equally wrong) approaches and
+                # sticks to its single most likely path, making exact-string ACs
+                # (e.g. a literal error-message substring) reachable.
+                warning "  [FailureDiversity] Pinning temperature to 0 for the remainder of $story_id — non-repeating failures indicate token-variance, not a capability gap"
+                export EPAM_TEMPERATURE="0"
             fi
             if [ $retry_count -le $MAX_RETRIES ]; then
                 warning "$story_cli failed, retrying in ${RETRY_DELAY}s..."
@@ -2766,6 +4832,22 @@ build_kb_prompt_section() {
     printf '<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>\n'
     printf '```\n\n'
     printf 'Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.\n'
+
+    # Surface any dynamic tools the self-heal loop has written for this project.
+    # These are small shell scripts synthesized by the failure analyst (target=tool)
+    # to automate a mechanical step that kept getting skipped by hand (e.g. adding a
+    # package to package.json before importing it). Invoke them via the bash tool.
+    local tools_dir="$PROJECT_ROOT/.epam/dynamic-tools"
+    if [ -d "$tools_dir" ] && [ -n "$(find "$tools_dir" -maxdepth 1 -name '*.sh' 2>/dev/null)" ]; then
+        printf '\n## Available Dynamic Tools\n'
+        printf 'This project has the following helper scripts, written by prior self-healing runs. Use them via the bash tool instead of repeating the equivalent steps by hand:\n\n'
+        local _tool_file _tool_purpose_line
+        for _tool_file in "$tools_dir"/*.sh; do
+            [ -f "$_tool_file" ] || continue
+            _tool_purpose_line=$(sed -n '2p' "$_tool_file" | sed 's/^# //')
+            printf -- '- `bash %s <args>` — %s\n' "$_tool_file" "$_tool_purpose_line"
+        done
+    fi
 }
 
 # Update AGENTS.md with implementation record
@@ -2917,6 +4999,240 @@ dry_run() {
 }
 
 # Main implementation loop
+# commit_completed_story <story_id>
+# Stages and commits whatever a completed story wrote, scoped to the current
+# GIT_WORK_ROOT (the worktree checkout when running --worktree, the main repo
+# otherwise). Best-effort: a commit failure here must not fail the story itself,
+# since the retry/health-check machinery downstream still has its own commit gates.
+# generate_story_contract <story_id>
+# Deterministically writes .contracts/<story_id>.md by extracting exported
+# interfaces/classes/methods directly from the story's own source files —
+# NOT by asking the model to transcribe them. The typescript-engineer profile
+# has a "CONTRACT SCRATCHPAD — MANDATORY LAST STEP" instruction telling the
+# agent to hand-write this file, but that step was observed live to have near-
+# 0% compliance: SKY-002 never produced .contracts/SKY-002.md across multiple
+# runs, so build_implementation_prompt()'s contract injection (which only
+# activates `if [ -f "$_contract_file" ]`) had nothing to inject — dependent
+# stories (SKY-003/SKY-004) guessed import paths and mock shapes from scratch,
+# reproducing exactly the bug class contract injection was built to prevent.
+# A regex-based extractor is not as complete as a real TS parser, but it is
+# ALWAYS produced (no model compliance required) and always matches the
+# actual source, so it can never be wrong the way an LLM transcription could.
+#
+# Fully generic (2026-07-05): all regex patterns and mock-rendering templates
+# are read from <project_root>/.epam/contract-generation.json — this function
+# has no TypeScript/Vitest-specific knowledge. Each project's tier script
+# supplies its own manifest (see tier3-travel-app-run.sh for the current
+# skyscanner-app one); a Python/pytest or Go project would supply a manifest
+# with different regexes and mock templates, and this function would not
+# change. No manifest present = no-op (opt-in feature, same pattern as
+# run_dependency_check()'s .epam/dependency-check.json).
+generate_story_contract() {
+    local story_id="$1"
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    local _commit_root="${GIT_WORK_ROOT:-$PROJECT_ROOT}"
+    local config_file="${_commit_root}/.epam/contract-generation.json"
+    [ -f "$config_file" ] || return 0
+
+    local files_json
+    files_json=$(jq -c --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .technicalNotes.files // []' \
+        "$prd_target" 2>/dev/null || echo "[]")
+    [ "$files_json" = "[]" ] && return 0
+
+    # technicalNotes.files stores ABSOLUTE paths rooted at MAIN_PROJECT_ROOT (the
+    # non-worktree checkout) — same rewrite already applied to ACs/technicalNotes/
+    # description elsewhere in this file (see the WORKTREE_MODE substitution near
+    # line 960). Without this, resolving files against $_commit_root (the worktree)
+    # silently misses every file (they don't exist under the main root yet — the
+    # story hasn't merged), so no interfaces/classes are ever found and no contract
+    # is written, with no visible error. Confirmed live: run #15's .contracts/
+    # directory existed but was empty after SKY-002 completed.
+    if [ -n "${WORKTREE_MODE:-}" ] && [ -n "${MAIN_PROJECT_ROOT:-}" ]; then
+        files_json="${files_json//${MAIN_PROJECT_ROOT}/${_commit_root}}"
+    fi
+
+    local contracts_dir="${_commit_root}/.contracts"
+    mkdir -p "$contracts_dir" 2>/dev/null
+    local contract_file="${contracts_dir}/${story_id}.md"
+
+    python3 - "$_commit_root" "$contract_file" "$files_json" "$story_id" "$config_file" << 'PYEOF'
+import json, re, sys, os
+
+project_root, contract_file, files_json, story_id, config_file = sys.argv[1:6]
+files = json.loads(files_json)
+
+with open(config_file) as f:
+    cfg = json.load(f)
+
+exts = tuple(cfg['sourceExtensions'])
+exclude_re = re.compile(cfg['excludePattern'])
+src_files = [f for f in files if f.endswith(exts) and not exclude_re.search(f)]
+if not src_files:
+    sys.exit(0)
+
+interface_re = re.compile(cfg['interfacePattern'], re.S)
+class_re = re.compile(cfg['classPattern'])
+ctor_re = re.compile(cfg['ctorPattern'])
+method_re = re.compile(cfg['methodPattern'], re.M)
+
+# Live bug (2026-07-05, found backfilling SKY-002's contract): methodPattern
+# is a plain regex scan over the WHOLE class body — it has no notion of brace
+# depth, so control-flow statements nested inside a real method's body (e.g.
+# `if (!key) {`, `for (const x of y) {`) also match `\w+\s*\(...\)\s*{` and get
+# misidentified as methods, producing duplicate/garbage entries (a mock
+# skeleton with duplicate "if" mock-method entries — an invalid object
+# literal in the generated skeleton). This is a brace-
+# nesting concern, not a stack-specific one — applies to any C-like language a
+# future config might target — so it's engine logic, not per-project config.
+def top_level_matches(text, pattern):
+    depth_at = [0] * (len(text) + 1)
+    depth = 0
+    for i, c in enumerate(text):
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+        depth_at[i + 1] = depth
+    return [m for m in pattern.finditer(text) if depth_at[m.start()] == 1]
+
+interfaces, classes = [], []
+for relpath in src_files:
+    full = os.path.join(project_root, relpath)
+    if not os.path.isfile(full):
+        continue
+    with open(full) as f:
+        text = f.read()
+
+    for m in interface_re.finditer(text):
+        interfaces.append((m.group(1), m.group(2).strip()))
+
+    for m in class_re.finditer(text):
+        cname = m.group(1)
+        start = m.end() - 1
+        depth, end = 0, start
+        for i, c in enumerate(text[start:], start):
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+        body = text[start:end + 1]
+        ctor_m = ctor_re.search(body)
+        ctor_params = ctor_m.group(1).strip() if ctor_m else ''
+        methods = []
+        for mm in top_level_matches(body, method_re):
+            is_async, mname, params, ret = mm.groups()
+            if mname == 'constructor':
+                continue
+            methods.append((mname, (params or '').strip(), (ret or '').strip(), bool(is_async)))
+        classes.append((cname, ctor_params, methods))
+
+if not interfaces and not classes:
+    sys.exit(0)
+
+lines = [
+    f"# Contract: {story_id}", "",
+    "Auto-generated from actual source (deterministic — not model-transcribed).", "",
+]
+
+for name, body in interfaces:
+    rendered = cfg['interfaceRenderTemplate'].replace('{{name}}', name).replace('{{body}}', body)
+    lines += ["```typescript", rendered, "```", ""]
+
+mock_blocks = []
+for cname, ctor, methods in classes:
+    sig_lines = []
+    for mname, params, ret, is_async in methods:
+        async_prefix = cfg['asyncPrefixKeyword'] if is_async else ''
+        return_annotation = f"{cfg['returnAnnotationPrefix']}{ret}" if ret else ''
+        sig_lines.append(
+            cfg['methodSignatureTemplate']
+            .replace('{{asyncPrefix}}', async_prefix)
+            .replace('{{methodName}}', mname)
+            .replace('{{params}}', params)
+            .replace('{{returnAnnotation}}', return_annotation)
+        )
+    class_block = (
+        cfg['classDeclarationTemplate']
+        .replace('{{className}}', cname)
+        .replace('{{ctorParams}}', ctor)
+        .replace('{{methodSignatures}}', '\n'.join(sig_lines))
+    )
+    lines.append("```typescript")
+    lines.append(class_block)
+    lines.append("```")
+    lines.append("")
+
+    mock_methods = []
+    for mname, params, ret, is_async in methods:
+        template = cfg['mockMethodTemplateAsync'] if (is_async or 'Promise' in ret) else cfg['mockMethodTemplateSync']
+        mock_methods.append(template.replace('{{methodName}}', mname))
+    factory = (
+        cfg['mockFactoryTemplate']
+        .replace('{{className}}', cname)
+        .replace('{{methodMocks}}', '\n'.join(mock_methods))
+    )
+    mock_blocks.append(factory.split('\n'))
+
+if mock_blocks:
+    lines.append("Mock factory skeleton — every exported method MUST appear here (every method name is real; fill in real return values):")
+    lines.append("```typescript")
+    for block in mock_blocks:
+        lines.extend(block)
+    lines.append("```")
+
+with open(contract_file, 'w') as f:
+    f.write('\n'.join(lines))
+print(f"Contract auto-generated: {len(interfaces)} interface(s), {len(classes)} class(es)")
+PYEOF
+}
+
+commit_completed_story() {
+    local story_id="$1"
+    local _commit_root="${GIT_WORK_ROOT:-$PROJECT_ROOT}"
+    # Bounded timeout on git operations (added 2026-07-06): a live run's story-
+    # level 600s watchdog killed the whole claude.sh subprocess with zero log
+    # output after a story succeeded — generate_story_contract()/
+    # commit_completed_story() were the only unlogged steps left, and neither
+    # had any bound on how long its git/python calls could take (e.g. a stale
+    # lock, a slow filesystem). 60s is generous for `git add`/`git commit` on
+    # this project's size; a hang here now fails fast and visibly instead of
+    # silently consuming the entire story-level watchdog budget.
+    local _git_timeout="${EPAM_COMMIT_TIMEOUT_SECS:-60}"
+
+    timeout "$_git_timeout" git -C "$_commit_root" add -A -- \
+        ':!orchestrations/logs/*' \
+        ':!*/node_modules/*' \
+        ':!*/build/*' \
+        ':!*/.next/*' \
+        2>/dev/null || timeout "$_git_timeout" git -C "$_commit_root" add -A 2>/dev/null
+    local _add_rc=$?
+    if [ "$_add_rc" -eq 124 ]; then
+        warning "  [commit_completed_story] git add timed out after ${_git_timeout}s for ${story_id} — work remains staged/uncommitted"
+        return 1
+    fi
+
+    local _changed_count
+    _changed_count=$(timeout "$_git_timeout" git -C "$_commit_root" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
+    if [ "${_changed_count:-0}" -eq 0 ]; then
+        return 0
+    fi
+
+    if timeout "$_git_timeout" git -C "$_commit_root" commit -m "story: complete ${story_id} (${_changed_count} file(s))" >/dev/null 2>&1; then
+        log "  Committed ${_changed_count} file(s) for ${story_id}"
+    else
+        local _commit_rc=$?
+        if [ "$_commit_rc" -eq 124 ]; then
+            warning "  [commit_completed_story] git commit timed out after ${_git_timeout}s for ${story_id} — work remains staged/uncommitted"
+        else
+            warning "  Commit failed for ${story_id} — work remains staged/uncommitted"
+        fi
+    fi
+}
+
 run_implementation() {
     local stories=("$@")
     local implemented=0
@@ -2985,6 +5301,30 @@ run_implementation() {
         if implement_story "$story_id"; then
             update_story_status "$story_id" "completed"
             implemented=$((implemented + 1))
+            # Deterministically regenerate the dependency contract from the actual
+            # source this story just wrote — before committing, so the contract file
+            # itself is included in the same commit and visible to dependent stories.
+            # Diagnostic timestamps (added 2026-07-06): a live run's watchdog killed
+            # a story's claude.sh subprocess after 600s even though the story itself
+            # had already succeeded in 15s — neither generate_story_contract() nor
+            # commit_completed_story() logged anything before/after, so it was
+            # impossible to tell which one (if either) actually hung. These log
+            # lines make the next occurrence immediately diagnosable instead of
+            # another blind guess.
+            log "  [post-story] Generating dependency contract for $story_id..."
+            generate_story_contract "$story_id"
+            log "  [post-story] Contract generation complete for $story_id"
+            # Commit this story's work immediately. Stories in the same worktree run
+            # sequentially (chained by dependency), and if a LATER story in this loop
+            # exhausts its retries and fails, the whole worktree process returns non-zero
+            # — which makes the orchestrator skip Step 3.1/3.2 (auto-commit + merge)
+            # entirely and force-remove the worktree, permanently destroying every
+            # earlier story's uncommitted work. Committing per-story means that work
+            # survives on the wt-* branch (worktree removal deletes the checkout, not
+            # the branch/commits) even when a downstream story in the chain fails.
+            log "  [post-story] Committing completed work for $story_id..."
+            commit_completed_story "$story_id"
+            log "  [post-story] Commit step complete for $story_id"
         else
             update_story_status "$story_id" "failed"
             failed=$((failed + 1))
@@ -3026,10 +5366,27 @@ setup_worktrees() {
         local wt_path="$git_root/../${git_basename}-wt-$wt"
         local wt_branch="wt-$wt"
 
-        # Check if worktree already exists
+        # A directory existing at $wt_path is NOT sufficient proof of a usable
+        # worktree — a prior crash (or a raw `rm -rf` instead of `git worktree
+        # remove`) can leave a stale, non-git-tracked directory here, or a
+        # directory whose worktree registration was lost. Silently "continuing"
+        # on directory-existence alone left the CALLER believing a real
+        # worktree was set up when it wasn't — verify it's actually a
+        # registered, valid worktree of THIS repo before skipping creation.
         if [ -d "$wt_path" ]; then
-            warning "Worktree already exists: $wt_path"
-            continue
+            # `git worktree list --porcelain` reports canonicalized, resolved
+            # paths — $wt_path contains a literal `..` component, so a raw
+            # string comparison against the porcelain output NEVER matches
+            # even for a genuinely valid worktree. Resolve $wt_path the same
+            # way before comparing.
+            local wt_path_resolved
+            wt_path_resolved="$(cd "$wt_path" 2>/dev/null && pwd)"
+            if [ -n "$wt_path_resolved" ] && git -C "$git_root" worktree list --porcelain 2>/dev/null | grep -q "^worktree ${wt_path_resolved}$"; then
+                warning "Worktree already exists and is valid: $wt_path"
+                continue
+            fi
+            warning "Stale non-worktree directory found at $wt_path (not registered with git) — removing before recreating"
+            rm -rf "$wt_path"
         fi
 
         # Delete branch if it exists from previous run
@@ -3062,22 +5419,53 @@ cleanup_worktrees() {
 
     for wt in "${worktrees[@]}"; do
         local wt_path="$git_root/../${git_basename}-wt-$wt"
+        local wt_branch="wt-$wt"
 
         # Check if worktree exists
         if [ ! -d "$wt_path" ]; then
             info "Worktree does not exist: $wt_path (already removed)"
-            continue
+        else
+            # Remove worktree — fall back to manual rm + prune if `git worktree
+            # remove` fails (e.g. the directory was already partially deleted
+            # out-of-band), so a failed removal never leaves the checkout
+            # behind for the next run to trip over.
+            info "Removing worktree: $wt ($wt_path)"
+            if ! git -C "$git_root" worktree remove "$wt_path" --force 2>/dev/null; then
+                warning "git worktree remove failed for $wt — falling back to manual rm + prune"
+                rm -rf "$wt_path"
+            fi
         fi
 
-        # Remove worktree
-        info "Removing worktree: $wt ($wt_path)"
-        git -C "$git_root" worktree remove "$wt_path" --force || {
-            warning "Failed to remove worktree: $wt (may need manual cleanup)"
-        }
+        # Prune BEFORE attempting the branch delete below — if the worktree
+        # directory was removed out-of-band (not via `git worktree remove`),
+        # git still considers the branch "checked out" by the orphaned admin
+        # metadata and silently refuses `git branch -D` until pruned. This bug
+        # was found live via this exact scenario in this function's own tests.
+        git -C "$git_root" worktree prune 2>/dev/null || true
+
+        # Delete the branch too — a worktree checkout being removed does NOT
+        # delete the branch it pointed to, and a leftover branch collides with
+        # the NEXT setup_worktrees() call's `git worktree add -b $wt_branch`
+        # (the exact "fatal: a branch named 'wt-primary' already exists" live
+        # failure this fixes). setup_worktrees() also deletes stale branches
+        # defensively, but cleanup should not rely on the next run to do it.
+        if git -C "$git_root" show-ref --verify --quiet "refs/heads/$wt_branch"; then
+            git -C "$git_root" branch -D "$wt_branch" 2>/dev/null || true
+        fi
     done
 
     # Prune worktree references
     git -C "$git_root" worktree prune
+
+    # Final verification — a pristine cleanup MUST end with zero wt-* worktrees
+    # registered. Fail loudly instead of silently leaving a corrupt registry.
+    local remaining
+    remaining=$(git -C "$git_root" worktree list --porcelain 2>/dev/null | grep -c "^worktree .*-wt-\(primary\|independent\)$" || true)
+    if [ "${remaining:-0}" -gt 0 ]; then
+        error "Worktree cleanup incomplete — ${remaining} wt-* worktree(s) still registered"
+        git -C "$git_root" worktree list
+        return 1
+    fi
 
     success "Worktrees cleaned up"
     return 0

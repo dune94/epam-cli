@@ -78,9 +78,30 @@ print('false' if has_splits else 'true')
 " 2>/dev/null || echo "false")
 
   if [[ "$_prd_is_canonical" == "true" ]]; then
-    _base_count=$(python3 -c "import json; print(len(json.load(open('$PRD_FILE'))['stories']))" 2>/dev/null || echo "?")
-    ok "PRD integrity OK — $_base_count base user stories (canonical/pre-spec-pass — strict phase checks deferred until after spec pass elaboration)"
-    PASS=$((PASS+1))
+    # Even on a canonical (pre-spec-pass) PRD, no base story should carry a
+    # pre-baked 'specification' block (status, coordinatorReview, etc.) from
+    # a prior run — the spec-mode coordinator reads this field to decide
+    # whether to (re)assign agents, and stale "completed" data silently makes
+    # it skip re-elaboration (and the split-mandate check inside that loop)
+    # for that story. This has happened once already (2026-07-06); the
+    # `has_splits` bypass above wouldn't catch it because these stories have
+    # no `createdFrom`, only stale status data. A story already completed=true
+    # in THIS run (e.g. SKY-001 after the scaffold phase) legitimately carries
+    # its own real specification data from this run's own spec pass — only
+    # PENDING stories carrying specification data indicate prior-run
+    # contamination baked into canonical.
+    _stale_spec=$(python3 -c "
+import json
+d = json.load(open('$PRD_FILE'))
+print(','.join(s['id'] for s in d.get('stories', []) if s.get('specification') and not s.get('completed')))
+" 2>/dev/null || echo "")
+    if [[ -n "$_stale_spec" ]]; then
+      fail "Canonical PRD has pre-baked 'specification' blocks on base stories (must be lean/unelaborated): $_stale_spec"
+    else
+      _base_count=$(python3 -c "import json; print(len(json.load(open('$PRD_FILE'))['stories']))" 2>/dev/null || echo "?")
+      ok "PRD integrity OK — $_base_count base user stories (canonical/pre-spec-pass — strict phase checks deferred until after spec pass elaboration)"
+      PASS=$((PASS+1))
+    fi
   else
     integrity_out=$(bash "$SCRIPT_DIR/preflight-prd-integrity.sh" --prd "$PRD_FILE" 2>&1) || integrity_exit=$?
     echo "$integrity_out"

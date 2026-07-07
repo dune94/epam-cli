@@ -214,15 +214,26 @@ _REVIEW_OUTPUT=$(run_review_prompt "$_REVIEW_PROMPT" 2>&1 | tee "$_REVIEW_OUTPUT
 # Also write to canonical log (latest) for subsequent iterations to reference
 cp "$_REVIEW_OUTPUT_FILE" "$AUTOMATION_DIR/logs/review-agent-${STORY_ID}.log"
 
-_REVIEW_JSON=$(echo "$_REVIEW_OUTPUT" | grep -o '{.*"verdict".*}' | tail -1 || true)
-if [ -z "$_REVIEW_JSON" ]; then
-    _REVIEW_JSON=$(echo "$_REVIEW_OUTPUT" | python3 -c "
-import sys, re
+# Same bug/fix as team-lead-review.sh (found live, 2026-07-07): the old
+# regex-based extraction (both the grep and the python fallback) assumed a
+# flat, non-nested JSON object — real review responses' "issues" array
+# contains nested {...} objects, which neither pattern can span, silently
+# falling through to the "approved" default regardless of the actual verdict.
+_REVIEW_JSON=$(echo "$_REVIEW_OUTPUT" | python3 -c "
+import sys, json
 text = sys.stdin.read()
-matches = re.findall(r'\{[^{}]*\"verdict\"[^{}]*\}', text, re.DOTALL)
-print(matches[-1] if matches else '{\"verdict\":\"approved\",\"issues\":[]}')
+start = text.find('{')
+result = None
+if start != -1:
+    decoder = json.JSONDecoder()
+    try:
+        result, _ = decoder.raw_decode(text, start)
+    except (ValueError, json.JSONDecodeError):
+        result = None
+if not isinstance(result, dict) or 'verdict' not in result:
+    result = {'verdict': 'approved', 'issues': []}
+print(json.dumps(result))
 " 2>/dev/null || echo '{"verdict":"approved","issues":[]}')
-fi
 
 ISSUES=()
 _RAW_VERDICT=$(echo "$_REVIEW_JSON" | jq -r '.verdict // "approved"' 2>/dev/null || echo "approved")

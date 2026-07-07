@@ -137,18 +137,11 @@ if [ ! -f "$LIB_DIR/tfidf.js" ]; then
   error "tfidf.js not found: $LIB_DIR/tfidf.js"; exit 1
 fi
 
-# Semantic search availability: requires semantic-search.js + EPAM_API_KEY_OPENAI.
-# When available, semantic-search.js is used instead of tfidf.js.
-# Falls back to tfidf.js silently when the key is absent or the script fails.
+# Semantic search disabled — pipeline is MiniMax/GLM/Kimi only; no OpenAI embeddings.
+# TF-IDF (tfidf.js) is used unconditionally.
 SEMANTIC_SEARCH_JS="$LIB_DIR/semantic-search.js"
-OPENAI_KEY_FOR_RAG="${EPAM_API_KEY_OPENAI:-${OPENAI_API_KEY:-}}"
 USE_SEMANTIC_RAG=false
-if [ -f "$SEMANTIC_SEARCH_JS" ] && [ -n "$OPENAI_KEY_FOR_RAG" ]; then
-  USE_SEMANTIC_RAG=true
-  info "Retrieval: semantic-search (text-embedding-3-small)"
-else
-  info "Retrieval: TF-IDF (set EPAM_API_KEY_OPENAI for semantic search)"
-fi
+info "Retrieval: TF-IDF"
 
 # Brownfield context: optional existing-repo ingestion.
 # Set via PRD .brownfield.repoRoot — absent means greenfield (no change).
@@ -304,7 +297,9 @@ else
   story_ids=$(jq -r '[.implementationOrder[]] | flatten | .[]' "$PRD_FILE")
 fi
 
-story_count=$(echo "$story_ids" | grep -c '.' || echo 0)
+# grep -c already prints "0" on zero matches while also exiting 1 —
+# `|| echo 0` would double-print ("0\n0"), garbling this log message.
+story_count=$(echo "$story_ids" | { grep -c '.' || true; })
 log "Found $story_count stories to contextualize"
 
 # ── Build phase-position map for cache ratio ─────────────────────────────────
@@ -656,29 +651,8 @@ while IFS= read -r sid; do
   kb_chunks="[]"
 
   if [ -n "$retrieval_query" ]; then
-    if [ "$USE_SEMANTIC_RAG" = true ]; then
-      # Semantic path: cosine similarity over OpenAI embeddings.
-      # semantic-search.js exits 1 on API error; we fall back to TF-IDF in that case.
-      kb_chunks=$(EPAM_API_KEY_OPENAI="$OPENAI_KEY_FOR_RAG" \
-        "$NODE_CMD" "$SEMANTIC_SEARCH_JS" \
-        --kb-dir "$KB_DIR" \
-        --query "$retrieval_query" \
-        --top 5 \
-        --chunk-size 25 \
-        --extra-docs "$EXTRA_DOCS" \
-        2>/dev/null)
-      # Empty or error — fall back to TF-IDF
-      if [ -z "$kb_chunks" ] || [ "$kb_chunks" = "[]" ] || ! echo "$kb_chunks" | jq -e 'type == "array"' >/dev/null 2>&1; then
-        warning "  $sid: semantic retrieval empty — falling back to TF-IDF"
-        kb_chunks=$("$NODE_CMD" "$LIB_DIR/tfidf.js" \
-          --kb-dir "$KB_DIR" \
-          --query "$retrieval_query" \
-          --top 5 \
-          --chunk-size 25 \
-          --extra-docs "$EXTRA_DOCS" \
-          2>/dev/null || echo "[]")
-      fi
-    else
+    # TF-IDF only — OpenAI semantic search is disabled (pipeline uses MiniMax/GLM/Kimi)
+    if true; then
       kb_chunks=$("$NODE_CMD" "$LIB_DIR/tfidf.js" \
         --kb-dir "$KB_DIR" \
         --query "$retrieval_query" \
@@ -978,6 +952,9 @@ if [ "$APPLY_MODE" = true ] && [ "$DRY_RUN" != true ]; then
   cp "$PRD_FILE" "$backup"
   success "Backed up prd.json → $(basename "$backup")"
 
+  _cpa_profiles_file="${AUTOMATION_DIR}/agents/profiles.json"
+  _cpa_ai_runner_cmd="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
+
   while IFS= read -r sid; do
     [ -z "$sid" ] && continue
     story_result=$(echo "$JSON_RESULTS" | jq --arg id "$sid" 'first(.[] | select(.storyId==$id))')
@@ -995,6 +972,27 @@ if [ "$APPLY_MODE" = true ] && [ "$DRY_RUN" != true ]; then
     b_conf=$(echo "$story_result" | jq '.confidence')
     b_gate=$(echo "$story_result" | jq -r '.gate')
 
+    # Set the story's INITIAL model-escalation ladder tier from complexity
+    # signals CPA just computed — fully automated, no human override, no LLM
+    # call (classify_ladder_tier() in claude.sh already checks a PRD
+    # .ladderTier override FIRST, before its own reactive failure-history
+    # fallback; this is what populates that override, deterministically, at
+    # the point complexity is first known). Reuses cpaGate/effort AS-IS
+    # (already-established categorical values: gate is pass|review|block,
+    # effort is low|medium|high) rather than inventing a new numeric
+    # threshold on cpaConfidence.
+    case "$b_gate" in
+      block|review) b_ladder_tier="high" ;;
+      *)
+        case "$b_eff" in
+          high) b_ladder_tier="high" ;;
+          *)    b_ladder_tier="medium" ;;
+        esac
+        ;;
+    esac
+
+    _cpa_before=$(jq --arg id "$sid" '.stories[] | select(.id==$id) | {estimatedAiMinutes,estimatedCost,estimatedTokens,estimatedTurns,estimatedHours,effort,cpaConfidence,cpaGate,ladderTier}' "$backup" 2>/dev/null || echo '{}')
+
     jq --arg id "$sid" \
        --argjson aim "$b_min" \
        --argjson cost "$b_cost" \
@@ -1004,6 +1002,7 @@ if [ "$APPLY_MODE" = true ] && [ "$DRY_RUN" != true ]; then
        --arg efr "$b_eff" \
        --argjson conf "$b_conf" \
        --arg gate "$b_gate" \
+       --arg ltier "$b_ladder_tier" \
        '(.stories[] | select(.id==$id)) |=
          . + {
            estimatedAiMinutes: $aim,
@@ -1013,9 +1012,57 @@ if [ "$APPLY_MODE" = true ] && [ "$DRY_RUN" != true ]; then
            estimatedHours: $mhrs,
            effort: $efr,
            cpaConfidence: $conf,
-           cpaGate: $gate
+           cpaGate: $gate,
+           ladderTier: $ltier
          }' \
        "$PRD_FILE" > "${PRD_FILE}.tmp" && mv "${PRD_FILE}.tmp" "$PRD_FILE"
+
+    # Reviewer gate — validates the estimate/effort write before accepting it.
+    # A bad `effort` value here silently propagates into resolve_effort_settings
+    # (iteration/token budget) and prd-model-coordinator's reasoningEffort default.
+    if [ -n "${ORCH_GATE_PROVIDER:-}" ] && [ -f "$_cpa_profiles_file" ]; then
+      _cpa_after=$(jq --arg id "$sid" '.stories[] | select(.id==$id) | {estimatedAiMinutes,estimatedCost,estimatedTokens,estimatedTurns,estimatedHours,effort,cpaConfidence,cpaGate}' "$PRD_FILE" 2>/dev/null || echo '{}')
+      _cpa_reviewer_profile=$(jq -r '."prd-change-reviewer" // ""' "$_cpa_profiles_file" 2>/dev/null || echo "")
+      if [ -n "$_cpa_reviewer_profile" ]; then
+        _cpa_verdict=$(echo "${_cpa_reviewer_profile}
+
+STORY: ${sid}
+CHANGE TYPE: cpa_estimate
+
+BEFORE:
+${_cpa_before}
+
+AFTER:
+${_cpa_after}
+
+Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
+          AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
+          AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
+          EPAM_CLI="${EPAM_CLI:-epam}" \
+          "$_cpa_ai_runner_cmd" \
+              --provider "${ORCH_GATE_PROVIDER}" \
+              --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
+          2>/dev/null | \
+          python3 -c "
+import sys, json, re
+text = sys.stdin.read()
+try:
+    obj = json.loads(text.strip())
+    print(obj.get('verdict','pass'))
+    sys.exit(0)
+except Exception:
+    pass
+m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
+print(m.group(1) if m else 'pass')
+" 2>/dev/null || echo "pass")
+        if [ "$_cpa_verdict" = "fail" ]; then
+          warning "  $sid: CPA estimate REJECTED by reviewer — reverting to pre-CPA values"
+          jq --arg id "$sid" --argjson before "$_cpa_before" \
+             '(.stories[] | select(.id==$id)) |= (. + $before)' \
+             "$PRD_FILE" > "${PRD_FILE}.tmp" && mv "${PRD_FILE}.tmp" "$PRD_FILE"
+        fi
+      fi
+    fi
 
   done < <(printf '%s\n' "$story_ids" | awk 'NF && !seen[$0]++')
 

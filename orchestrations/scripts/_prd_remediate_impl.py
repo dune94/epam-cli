@@ -4,13 +4,28 @@ import json
 import re
 import sys
 
-REQUIRED_PHASES = ['scaffold', 'core', 'ui_and_review']
+# ui_and_review removed (2026-07-07): the pipeline is scaffold -> core only.
+# 'documentation' is NOT added here despite being requested — investigation
+# (2026-07-07) confirmed it has never been wired into phase execution at all:
+# the doc-* agent profiles (doc-coordinator, guide-author, etc.) exist in
+# profiles.json but no phase-loop code in run-agent-orchestration.sh/
+# tier3-travel-app-run.sh ever invokes them. Adding it to REQUIRED_PHASES now
+# would fail every run against a PRD that (correctly, today) has no
+# documentation phase. See project memory for the scoped list of what
+# building it for real would require.
+REQUIRED_PHASES = ['scaffold', 'core']
 RUNTIME_FIELDS  = ['startedAt', 'completedAt', 'error', 'agentLog']
 # actualCost is intentionally preserved — it is the historical record of what each
 # story actually cost and is required for estimates-vs-actuals reporting.
 MAX_ACS = 24
 
-PRD_FILE = sys.argv[1]
+PRD_FILE   = sys.argv[1]
+# Optional: restrict the destructive status-reset (step 6) to a single phase's
+# stories. Without this, remediation running before phase N would reset stories
+# already completed (and merged) in phase N-1 back to pending — this script runs
+# before EVERY phase transition within a single pipeline run, not just at the
+# start of a fresh run, so a global reset silently destroys prior-phase progress.
+TARGET_PHASE = sys.argv[2] if len(sys.argv) > 2 else None
 
 with open(PRD_FILE) as f:
     prd = json.load(f)
@@ -112,9 +127,15 @@ if deduped_count:
     changes.append(f"removed {deduped_count} exact-duplicate file path(s) within stories")
 
 # ── 6. Reset active story status to pending + strip runtime fields ────────────
+# Scoped to TARGET_PHASE when given — must never reset a story that belongs to a
+# different (e.g. already-completed, already-merged) phase.
+reset_scope_ids = active_ids
+if TARGET_PHASE is not None:
+    reset_scope_ids = set(impl_order.get(TARGET_PHASE, []))
+
 reset_count = 0
 for s in stories:
-    if s['id'] not in active_ids:
+    if s['id'] not in reset_scope_ids:
         continue
     changed = False
     if s.get('status') not in ('pending', 'deprecated') or s.get('completed'):

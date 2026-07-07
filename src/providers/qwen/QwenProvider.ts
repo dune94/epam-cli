@@ -6,6 +6,7 @@
  */
 
 import type { LLMProvider, ProviderRequest, ProviderResponse, StreamHandler, Message, ContentPart } from '../types.js';
+import { resolveTemperature } from '../types.js';
 import { logger } from '../../utils/logger.js';
 
 /**
@@ -98,8 +99,21 @@ export class QwenProvider implements LLMProvider {
   private resolveModel(requested?: string): string {
     const override = process.env.EPAM_QWEN_MODEL_OVERRIDE;
     if (override) return override;
-    if (requested && /^(qwen|mistral|llama|deepseek|meta-llama|openai|google|anthropic|moonshotai|moonshot|zhipuai|glm|kimi|minimax)/.test(requested)) return requested;
+    if (requested && /^(qwen|mistral|llama|deepseek|meta-llama|openai|google|anthropic|moonshotai|moonshot|zhipuai|z-ai|glm|kimi|minimax)/.test(requested)) return requested;
     return this.defaultModel;
+  }
+
+  /** OpenRouter's ":exacto" model-slug suffix biases routing toward high-precision
+   *  providers, avoiding erratic/low-precision alternatives that can hallucinate,
+   *  waste tokens on retries, or fail tool-use — the same class of instability
+   *  diagnosed live in a model/provider-mismatch hang (2026-07-07). Opt-in via
+   *  EPAM_OPENROUTER_EXACTO=true (default off — not universally available for
+   *  every model, and changes routing behavior, so this is a deliberate choice,
+   *  not a silent default). OpenRouter-only; never applied to DashScope calls. */
+  private applyExactoSuffix(model: string): string {
+    if (process.env.EPAM_OPENROUTER_EXACTO !== 'true') return model;
+    if (model.endsWith(':exacto')) return model;
+    return `${model}:exacto`;
   }
 
   /** For OpenRouter, pass reasoning.effort when effort level is explicitly set.
@@ -127,7 +141,7 @@ export class QwenProvider implements LLMProvider {
   // ─── OpenRouter (OpenAI-compatible) ────────────────────────────────────────
 
   private async completeOpenRouter(request: ProviderRequest): Promise<ProviderResponse> {
-    const model = this.resolveModel(request.model);
+    const model = this.applyExactoSuffix(this.resolveModel(request.model));
     const messages = this.formatMessages(request.messages, request.systemPrompt);
     const tools = request.tools?.map(t => ({
       type: 'function' as const,
@@ -146,7 +160,7 @@ export class QwenProvider implements LLMProvider {
         model,
         messages,
         max_tokens: request.maxTokens || 4096,
-        temperature: request.temperature ?? 0.7,
+        temperature: resolveTemperature(request, 0.7),
         ...(tools && tools.length > 0 ? { tools } : {}),
         ...this.resolveOpenRouterReasoning(request),
       }),
@@ -200,7 +214,7 @@ export class QwenProvider implements LLMProvider {
   }
 
   private async streamOpenRouter(request: ProviderRequest, handler: StreamHandler): Promise<ProviderResponse> {
-    const model = this.resolveModel(request.model);
+    const model = this.applyExactoSuffix(this.resolveModel(request.model));
     const messages = this.formatMessages(request.messages, request.systemPrompt);
     const tools = request.tools?.map(t => ({
       type: 'function' as const,
@@ -219,7 +233,7 @@ export class QwenProvider implements LLMProvider {
         model,
         messages,
         max_tokens: request.maxTokens || 4096,
-        temperature: request.temperature ?? 0.7,
+        temperature: resolveTemperature(request, 0.7),
         stream: true,
         ...(tools && tools.length > 0 ? { tools } : {}),
         ...this.resolveOpenRouterReasoning(request),
@@ -328,7 +342,7 @@ export class QwenProvider implements LLMProvider {
           input: { messages },
           parameters: {
             max_tokens: request.maxTokens || 4096,
-            temperature: request.temperature ?? 0.7,
+            temperature: resolveTemperature(request, 0.7),
             result_format: 'message',
           },
         }),
@@ -382,7 +396,7 @@ export class QwenProvider implements LLMProvider {
           input: { messages },
           parameters: {
             max_tokens: request.maxTokens || 4096,
-            temperature: request.temperature ?? 0.7,
+            temperature: resolveTemperature(request, 0.7),
             result_format: 'message',
             incremental_output: true,
           },

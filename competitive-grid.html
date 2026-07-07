@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>epam-cli — Competitive Feature Grid</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface2: #263248;
+      --border: #334155;
+      --ink: #e2e8f0;
+      --muted: #94a3b8;
+      --brand: #38bdf8;
+      --green: #4ade80;
+      --red: #f87171;
+      --amber: #fbbf24;
+      --unique: #a78bfa;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      padding: 2rem;
+      min-height: 100vh;
+    }
+
+    header {
+      margin-bottom: 2.5rem;
+    }
+
+    header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--brand);
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      color: var(--muted);
+      margin-top: 0.4rem;
+      font-size: 0.9rem;
+    }
+
+    /* ── Section headers ── */
+    .section-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 0.5rem 0.75rem;
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── Main grid table ── */
+    .grid-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      margin-bottom: 2.5rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.83rem;
+    }
+
+    thead tr {
+      background: var(--surface2);
+    }
+
+    thead th {
+      padding: 0.7rem 0.9rem;
+      text-align: left;
+      font-weight: 600;
+      color: var(--muted);
+      font-size: 0.75rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      border-bottom: 1px solid var(--border);
+    }
+
+    thead th:first-child {
+      color: var(--ink);
+      min-width: 220px;
+    }
+
+    thead th.epam-col {
+      color: var(--brand);
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+
+    tbody tr:last-child { border-bottom: none; }
+
+    tbody tr:hover { background: var(--surface2); }
+
+    tbody tr.section-row td {
+      padding: 0;
+    }
+
+    td {
+      padding: 0.6rem 0.9rem;
+      vertical-align: top;
+      line-height: 1.5;
+    }
+
+    td:first-child {
+      color: var(--ink);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    td.note {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-style: italic;
+    }
+
+    /* ── Cell badges ── */
+    .yes  { color: var(--green); font-weight: 600; }
+    .no   { color: #475569; }
+    .partial { color: var(--amber); font-weight: 500; }
+    .unique  { color: var(--unique); font-weight: 700; }
+
+    .epam-cell {
+      color: var(--ink);
+      font-size: 0.8rem;
+    }
+
+    .epam-cell .badge {
+      display: inline-block;
+      padding: 0.15rem 0.45rem;
+      border-radius: 0.3rem;
+      font-size: 0.72rem;
+      font-weight: 600;
+      margin-right: 0.35rem;
+      vertical-align: middle;
+    }
+
+    .badge-yes     { background: #14532d; color: #4ade80; }
+    .badge-unique  { background: #3b0764; color: #c4b5fd; }
+    .badge-no      { background: #1e293b; color: #475569; }
+    .badge-partial { background: #451a03; color: #fbbf24; }
+
+    .detail {
+      display: block;
+      color: var(--muted);
+      font-size: 0.75rem;
+      margin-top: 0.2rem;
+      font-weight: 400;
+    }
+
+    /* ── Unique features panel ── */
+    .unique-panel {
+      border: 1px solid #4c1d95;
+      border-radius: 0.75rem;
+      overflow: hidden;
+      margin-bottom: 2.5rem;
+    }
+
+    .unique-panel-header {
+      background: #2e1065;
+      padding: 0.75rem 1.1rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #c4b5fd;
+    }
+
+    .unique-list {
+      list-style: none;
+    }
+
+    .unique-list li {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 1rem;
+      padding: 0.75rem 1.1rem;
+      border-bottom: 1px solid #3b1272;
+      font-size: 0.85rem;
+    }
+
+    .unique-list li:last-child { border-bottom: none; }
+
+    .unique-list .feat-name {
+      font-weight: 700;
+      color: #c4b5fd;
+    }
+
+    .unique-list .feat-desc {
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* ── Gaps panel ── */
+    .gaps-panel {
+      border: 1px solid #7f1d1d;
+      border-radius: 0.75rem;
+      overflow: hidden;
+    }
+
+    .gaps-panel-header {
+      background: #450a0a;
+      padding: 0.75rem 1.1rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #fca5a5;
+    }
+
+    .gap-list {
+      list-style: none;
+    }
+
+    .gap-list li {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 1rem;
+      padding: 0.75rem 1.1rem;
+      border-bottom: 1px solid #7f1d1d;
+      font-size: 0.85rem;
+    }
+
+    .gap-list li:last-child { border-bottom: none; }
+
+    .gap-list .gap-name {
+      font-weight: 700;
+      color: #f87171;
+    }
+
+    .gap-list .gap-desc {
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    footer {
+      margin-top: 2rem;
+      font-size: 0.75rem;
+      color: #334155;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>epam-cli — Competitive Feature Grid</h1>
+  <p>epam-cli vs. AutoGen · CrewAI · OpenHands · LangGraph · SWE-agent &nbsp;|&nbsp; Assessed July 2026</p>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════════ MAIN GRID -->
+<div class="grid-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th class="epam-col">epam-cli</th>
+        <th>AutoGen</th>
+        <th>CrewAI</th>
+        <th>OpenHands</th>
+        <th>LangGraph</th>
+        <th>SWE-agent</th>
+      </tr>
+    </thead>
+    <tbody>
+
+      <!-- ── Core Loop ── -->
+      <tr class="section-row"><td colspan="7"><div class="section-label">Core Agent Loop</div></td></tr>
+
+      <tr>
+        <td>Multi-turn agent loop</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">streaming, budget-gated, history-compressed</span></td>
+        <td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td>
+      </tr>
+      <tr>
+        <td>Dynamic agent spawning at runtime</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">AgentHandoff + delegate_to_agent tool</span></td>
+        <td class="yes">✓</td><td class="yes">✓</td><td class="partial">partial</td><td class="yes">✓</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>Inter-agent communication</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">SquadRunner shared results + HandoffTool</span></td>
+        <td class="yes">✓ GroupChat</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>Multi-agent orchestration</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">phase pipeline + squad (Leader / Coder / Tester / Auditor)</span></td>
+        <td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td>
+      </tr>
+      <tr>
+        <td>History / context compression</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">LLM summarisation at 24k char threshold</span></td>
+        <td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="partial">partial</td><td class="yes">✓</td>
+      </tr>
+
+      <!-- ── Error Recovery ── -->
+      <tr class="section-row"><td colspan="7"><div class="section-label">Error Recovery</div></td></tr>
+
+      <tr>
+        <td>Parallel error recovery</td>
+        <td class="epam-cell"><span class="badge badge-unique">★ UNIQUE</span><span class="detail">Ralph Wiggum — N agents × 5 strategies, quality scoring, file snapshots, rollback</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>Failure pattern memory</td>
+        <td class="epam-cell"><span class="badge badge-unique">★ UNIQUE</span><span class="detail">Agents write KB entries on retry; semantic retrieval injects them into future runs</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>Mid-task human consultation</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">/plan interactive edit, consult command, pending-consultation queue</span></td>
+        <td class="yes">✓ HumanProxy</td><td class="no">✗</td><td class="no">✗</td><td class="yes">✓ interrupt</td><td class="no">✗</td>
+      </tr>
+
+      <!-- ── Memory ── -->
+      <tr class="section-row"><td colspan="7"><div class="section-label">Memory</div></td></tr>
+
+      <tr>
+        <td>Semantic / vector memory</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">KB.md + text-embedding-3-small + cosine-sim cache (.epam/kb-embeddings.json) + TF-IDF fallback</span></td>
+        <td class="no">✗</td><td class="yes">✓</td><td class="partial">partial</td><td class="yes">✓</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>Recursive MEMORY.md injection</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">@import syntax, 3-level nesting, circular-import detection</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>Enterprise asset injection</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">Keyword-matched assets prepended to user messages</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+
+      <!-- ── Quality Gates ── -->
+      <tr class="section-row"><td colspan="7"><div class="section-label">Quality &amp; Safety</div></td></tr>
+
+      <tr>
+        <td>Pre-implementation spec critique</td>
+        <td class="epam-cell"><span class="badge badge-unique">★ UNIQUE</span><span class="detail">OpenSpec / Speckit pre-pass per story before implementation begins</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>QA gate cascade</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">7 gates / 3 phases — SAST, spec compliance, code review, mutation, fuzz, perf, E2E</span></td>
+        <td class="no">✗</td><td class="partial">partial</td><td class="partial">partial</td><td class="no">✗</td><td class="yes">✓</td>
+      </tr>
+      <tr>
+        <td>Dynamic behavioral contracts</td>
+        <td class="epam-cell"><span class="badge badge-unique">★ UNIQUE</span><span class="detail">Per-story constitution rules matched on agent role or required skills</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>Reviewer-gated self-healing writes</td>
+        <td class="epam-cell"><span class="badge badge-unique">★ UNIQUE</span><span class="detail">Every automated PRD/profile write (AC patches, spec-pass rewrites, CPA estimates, profile creation, model assignment) is validated by a reviewer agent with snapshot + revert-on-fail before it's accepted</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>Rung-based model/effort escalation</td>
+        <td class="epam-cell"><span class="badge badge-unique">★ UNIQUE</span><span class="detail">4-rung retry ladder: same-model effort escalation first, then configurable cross-provider model escalation, with skip-ahead when a healing strategy is known broken</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>Test criteria driven from verified code, not just AC</td>
+        <td class="epam-cell"><span class="badge badge-unique">★ UNIQUE</span><span class="detail">TC writer reads the actual implementation post-hoc and extracts verified facts (signatures, error strings, mock strategy) for the paired test story — ACs alone are pre-implementation and necessarily abstract</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>Sandboxed execution (Docker)</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">Docker/Podman per-agent with CPU/mem limits, read-only project bind</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="yes">✓</td><td class="no">✗</td><td class="yes">✓</td>
+      </tr>
+
+      <!-- ── Orchestration Intelligence ── -->
+      <tr class="section-row"><td colspan="7"><div class="section-label">Orchestration Intelligence</div></td></tr>
+
+      <tr>
+        <td>LLM topology routing</td>
+        <td class="epam-cell"><span class="badge badge-unique">★ UNIQUE</span><span class="detail">Single cheap LLM call decides single / parallel / sequential per dependency graph</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>Idempotent crash-restart</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">Checkpoint JSONL per phase + run-id; completed stories skipped on restart</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="yes">✓</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>Structured story output schemas</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">JSON schema extraction + validation; emitted to story-artifacts.jsonl</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="yes">✓</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>Dynamic tool / plugin system</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">Per-project PluginLoader + runtime skill registration</span></td>
+        <td class="yes">✓</td><td class="partial">partial</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">✗</td>
+      </tr>
+
+      <!-- ── Budget & Cost ── -->
+      <tr class="section-row"><td colspan="7"><div class="section-label">Budget &amp; Cost</div></td></tr>
+
+      <tr>
+        <td>Budget enforcement (per LLM call)</td>
+        <td class="epam-cell"><span class="badge badge-unique">★ UNIQUE</span><span class="detail">Warn / downgrade / hard-pause after every response — not just session tracking</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>Model auto-downgrade on budget hit</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>Cost forecasting (CPA + EMA)</td>
+        <td class="epam-cell"><span class="badge badge-unique">★ UNIQUE</span><span class="detail">Blended model-calibrated estimates with pipeline overhead ratio from actuals</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+
+      <!-- ── Provider & Infra ── -->
+      <tr class="section-row"><td colspan="7"><div class="section-label">Provider &amp; Infrastructure</div></td></tr>
+
+      <tr>
+        <td>Provider chain w/ smart failover</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">Slot-based, error classification, cooldown backoff, 9 provider types</span></td>
+        <td class="partial">partial</td><td class="partial">partial</td><td class="partial">partial</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>BYOK + proxy routing</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">API key bypasses proxy; no key falls back to proxy tier</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="partial">partial</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>MCP support</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span></td>
+        <td class="yes">✓</td><td class="no">✗</td><td class="no">✗</td><td class="partial">partial</td><td class="no">✗</td>
+      </tr>
+
+      <!-- ── External Integration ── -->
+      <tr class="section-row"><td colspan="7"><div class="section-label">External Integration</div></td></tr>
+
+      <tr>
+        <td>Brownfield context ingestion</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">TF-IDF / semantic git chunks + live Jira + Confluence</span></td>
+        <td class="no">✗</td><td class="partial">partial</td><td class="yes">✓</td><td class="no">✗</td><td class="yes">✓</td>
+      </tr>
+      <tr>
+        <td>External webhook triggers (Jira)</td>
+        <td class="epam-cell"><span class="badge badge-unique">★ UNIQUE</span><span class="detail">HMAC-verified, debounced batching, writeback at 4 pipeline milestones</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>GitIngest codebase context</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span></td>
+        <td class="no">✗</td><td class="partial">partial</td><td class="no">✗</td><td class="no">✗</td><td class="yes">✓</td>
+      </tr>
+
+      <!-- ── Observability ── -->
+      <tr class="section-row"><td colspan="7"><div class="section-label">Observability</div></td></tr>
+
+      <tr>
+        <td>Live orchestration dashboards</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">8 dashboards (monitor, PRD, cost, profiles, QA, spec, scorecard, SWE-bench)</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="yes">✓</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>Langfuse LLM tracing</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">Tokens, cost, latency, tool calls, stop reason per call</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="yes">✓</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>OpenTelemetry spans</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="partial">partial</td><td class="no">✗</td>
+      </tr>
+
+      <!-- ── Developer Experience ── -->
+      <tr class="section-row"><td colspan="7"><div class="section-label">Developer Experience</div></td></tr>
+
+      <tr>
+        <td>REPL with slash commands</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">28 commands (/plan, /squad, /review, /handoff, /remote, /fork, /stash…)</span></td>
+        <td class="no">✗</td><td class="partial">partial</td><td class="yes">✓</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>Project scaffolding</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">Full workspace init — PRD, profiles, KB, dashboards, scripts</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>Team collaboration / QR handoff</td>
+        <td class="epam-cell"><span class="badge badge-yes">✓</span><span class="detail">Redis-backed sessions, AES-256-GCM encryption, QR mobile handoff</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td>
+      </tr>
+
+      <!-- ── Gaps ── -->
+      <tr class="section-row"><td colspan="7"><div class="section-label">Remaining Gaps</div></td></tr>
+
+      <tr>
+        <td>Auto-PR / git commit at story close</td>
+        <td class="epam-cell"><span class="badge badge-no">✗</span><span class="detail">Stories complete to filesystem; no automatic branch + commit + PR</span></td>
+        <td class="no">✗</td><td class="no">✗</td><td class="yes">✓</td><td class="no">✗</td><td class="yes">✓</td>
+      </tr>
+      <tr>
+        <td>Multimodal input (vision)</td>
+        <td class="epam-cell"><span class="badge badge-no">✗</span><span class="detail">Cannot accept Figma screenshots, wireframes, or design files</span></td>
+        <td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="no">✗</td>
+      </tr>
+      <tr>
+        <td>Python ecosystem</td>
+        <td class="epam-cell"><span class="badge badge-no">✗</span><span class="detail">TypeScript — deliberate choice, narrows addressable integrations</span></td>
+        <td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td><td class="yes">✓</td>
+      </tr>
+
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ UNIQUE PANEL -->
+<div class="unique-panel">
+  <div class="unique-panel-header">★ &nbsp; Unique to epam-cli — no equivalent in any OSS framework</div>
+  <ul class="unique-list">
+    <li>
+      <span class="feat-name">Ralph Wiggum Loop</span>
+      <span class="feat-desc">Parallel N-agent error recovery with 5 fix strategies (minimal_change, refactor_approach, alternative_impl, dependency_fix, configuration_fix), quality scoring, file-system snapshots, and first-to-succeed cancellation.</span>
+    </li>
+    <li>
+      <span class="feat-name">OpenSpec / Speckit</span>
+      <span class="feat-desc">Autonomous spec-refinement pre-pass per story before any implementation begins. Coordinator decides which spec personas run; acceptance criteria are merged back into the PRD.</span>
+    </li>
+    <li>
+      <span class="feat-name">Failure Pattern Memory</span>
+      <span class="feat-desc">Agents are instructed to write a KB entry to KB.md on every retry, documenting root cause and fix. On subsequent stories, semantic search (text-embedding-3-small cosine similarity) retrieves relevant entries and injects them into the agent prompt. Learning compounds across runs.</span>
+    </li>
+    <li>
+      <span class="feat-name">Dynamic Behavioral Contracts</span>
+      <span class="feat-desc">Per-story constitution rules loaded from .epam/constitution-rules.json, matched on agent role or required skills. Non-overridable by story prompts — enforced at prompt-assembly time.</span>
+    </li>
+    <li>
+      <span class="feat-name">LLM Topology Routing</span>
+      <span class="feat-desc">A single cheap LLM call (Haiku) analyses story metadata, effort, dependency edges, and file-overlap signals to decide single / parallel / sequential execution mode. Decision and reasoning logged to phase-cost.jsonl.</span>
+    </li>
+    <li>
+      <span class="feat-name">CPA + EMA Cost Calibration</span>
+      <span class="feat-desc">Cost-per-agent forecasting with exponential-moving-average calibration from actuals, bucketed by model and invoke mode. Includes pipeline-overhead ratio so forecasts reflect total cost, not just story cost.</span>
+    </li>
+    <li>
+      <span class="feat-name">Jira Webhook Pipeline</span>
+      <span class="feat-desc">HMAC-verified inbound triggers with 45-second debounced batching, urgent-event bypass, queue persistence, and writeback to Jira at 4 pipeline milestones (spec pass, estimate, story complete, review done).</span>
+    </li>
+    <li>
+      <span class="feat-name">Real-time Budget Enforcement</span>
+      <span class="feat-desc">Hard budget check after every LLM response — not session-level tracking. Actions: warn, auto-downgrade model, or hard-pause requiring approval. Prevents runaway spend mid-orchestration.</span>
+    </li>
+    <li>
+      <span class="feat-name">Reviewer-Gated Self-Healing</span>
+      <span class="feat-desc">A dedicated reviewer agent (prd-change-reviewer / kb-change-reviewer) validates every automated write to prd.json or profiles.json — AC/TC patches, spec-pass rewrites, CPA estimates, skill-assessment profile creation, model assignment — with a before/after snapshot and revert-on-reject. No other framework gates its own self-modifying writes with a second agent.</span>
+    </li>
+    <li>
+      <span class="feat-name">Rung-Based Inference Ladder</span>
+      <span class="feat-desc">Four-rung retry escalation: same-model effort increase first (cheap), then a configurable cross-provider model escalation (EPAM_MODEL_LADDER), with a final-fallback safety net and skip-ahead logic when a healing strategy is already known to be broken.</span>
+    </li>
+    <li>
+      <span class="feat-name">Post-Implementation Test Criteria</span>
+      <span class="feat-desc">Acceptance criteria are written before the code exists, so they're necessarily abstract. The TC writer runs after the paired implementation story completes, reads the actual source, and extracts verified facts — exact function signatures, error message strings, mock strategy, banned patterns — into the test story's testCriteria field. The test-engineer agent then writes tests against verified behavior instead of guessing at implementation details from prose, closing a failure mode most agentic frameworks don't model at all: test-writers hallucinating APIs that don't match what was actually built.</span>
+    </li>
+  </ul>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ GAPS PANEL -->
+<div style="margin-top: 2.5rem;">
+  <div class="gaps-panel">
+    <div class="gaps-panel-header">✗ &nbsp; Genuine remaining gaps (3)</div>
+    <ul class="gap-list">
+      <li>
+        <span class="gap-name">Auto-PR / git commit</span>
+        <span class="gap-desc">Stories complete to the filesystem. There is no automatic <code>git commit</code> + <code>gh pr create</code> at story close. OpenHands and SWE-agent do this natively — it closes the loop to a reviewable PR without manual intervention.</span>
+      </li>
+      <li>
+        <span class="gap-name">Multimodal input</span>
+        <span class="gap-desc">No vision support. Cannot accept Figma exports, hand-drawn wireframes, screenshots, or design files as story inputs. Increasingly relevant for frontend and UI stories.</span>
+      </li>
+      <li>
+        <span class="gap-name">Python ecosystem</span>
+        <span class="gap-desc">TypeScript narrows the addressable universe of integrations — HuggingFace, Pydantic AI, and the broader ML/AI tooling world are Python-first. This is a deliberate architectural choice, not an oversight.</span>
+      </li>
+    </ul>
+  </div>
+</div>
+
+<footer>epam-cli competitive analysis · July 2026</footer>
+
+</body>
+</html>

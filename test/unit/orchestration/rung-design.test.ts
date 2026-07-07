@@ -81,8 +81,15 @@ describe('claude.sh — each rung escalates correctly', () => {
 
   it('Rung 3 sets EPAM_REASONING_EFFORT=high', () => {
     const rung3Start = src.indexOf('# Rung 3+:');
-    const rung3Block = src.slice(rung3Start, rung3Start + 600);
+    const rung3Block = src.slice(rung3Start, rung3Start + 3600);
     expect(rung3Block).toMatch(/EPAM_REASONING_EFFORT.*high/);
+  });
+
+  it('Rung 3 escalates further using the story\'s classified tier (not a hardcoded "high" literal — a story classified "medium" by CPA complexity stays capped at the medium ladder)', () => {
+    const rung3Start = src.indexOf('# Rung 3+:');
+    const rung3Block = src.slice(rung3Start, rung3Start + 3600);
+    expect(rung3Block).toMatch(/_ladder_tier_r3=\$\(classify_ladder_tier "\$story_id"\)/);
+    expect(rung3Block).toMatch(/get_model_ladder_step\s+"\$\{STORY_MODEL:-\}"\s+"\$_ladder_tier_r3"/);
   });
 });
 
@@ -104,9 +111,12 @@ describe('claude.sh — HEALING_BROKEN skips to next rung (not abort except at R
   });
 
   it('HEALING_BROKEN resets to 0 after handling (no bleed to next story)', () => {
-    const hbCheckIdx = src.indexOf('HEALING_BROKEN:-0}') > -1
-      ? src.indexOf('HEALING_BROKEN:-0}')
-      : src.indexOf('"${HEALING_BROKEN:-0}"');
+    // Anchor on the "-eq 1" handling block specifically — a deterministic-check
+    // repeat-detection fix (added 2026-07-05) introduced an EARLIER occurrence
+    // of the "HEALING_BROKEN:-0}" substring (a "-ne 1" free-retry-cap guard),
+    // which a naive first-match indexOf would latch onto instead.
+    const hbCheckIdx = src.indexOf('"${HEALING_BROKEN:-0}" -eq 1');
+    expect(hbCheckIdx).toBeGreaterThan(-1);
     const afterHBCheck = src.slice(hbCheckIdx, hbCheckIdx + 400);
     expect(afterHBCheck).toMatch(/HEALING_BROKEN=0/);
     expect(afterHBCheck).toMatch(/export HEALING_BROKEN/);
@@ -126,21 +136,47 @@ describe('claude.sh — HEALING_BROKEN skips to next rung (not abort except at R
   });
 });
 
-// ── 5. HEALING_BROKEN 20-char prefix comparison ───────────────────────────────
-describe('claude.sh — HEALING_BROKEN uses 20-char prefix to tolerate analyst rephrasing', () => {
-  it('diagnosis is truncated to [:20] before comparison', () => {
-    const healingIdx = src.indexOf('check_healing_effectiveness()');
-    const healingEnd = src.indexOf('\n}', healingIdx + 100);
-    const body       = src.slice(healingIdx, healingEnd);
-    expect(body).toMatch(/\[:20\]/g);
+// ── 5. HEALING_BROKEN token-overlap comparison (tolerates analyst rephrasing) ──
+// Superseded design (2026-07-04): a flat [:20] exact-prefix match missed real
+// paraphrased repeats (see healing-effectiveness.test.ts for the live SKY-004
+// case). Replaced with token-overlap matching — see deterministic-contract-
+// generation.test.ts's sibling file healing-effectiveness.test.ts for the full
+// regression coverage of the new algorithm; these two checks just confirm the
+// structural building blocks are present.
+describe('claude.sh — HEALING_BROKEN uses token-overlap matching to tolerate analyst rephrasing', () => {
+  function extractHealingBody(): string {
+    const lines = src.split('\n');
+    const startIdx = lines.findIndex((l: string) => l.trim() === 'check_healing_effectiveness() {');
+    let inHeredoc = false;
+    let heredocDelim = '';
+    const body: string[] = [lines[startIdx]];
+    for (let i = startIdx + 1; i < lines.length; i++) {
+      const line = lines[i];
+      body.push(line);
+      if (!inHeredoc) {
+        const m = line.match(/<<-?\s*'?(\w+)'?/);
+        if (m) { inHeredoc = true; heredocDelim = m[1]; continue; }
+        if (line === '}') return body.join('\n');
+      } else if (line.trim() === heredocDelim) {
+        inHeredoc = false;
+      }
+    }
+    throw new Error('end of function not found');
+  }
+
+  it('extracts significant word tokens (len>=4) as the PRIMARY comparison, not a fixed-length prefix', () => {
+    const body = extractHealingBody();
+    expect(body).toMatch(/\{4,\}/);
+    expect(body).toMatch(/STOPWORDS/);
+    // [:20] may still appear as a fallback for the rare case both diagnoses have
+    // zero significant tokens — but it must not be the primary matching path.
+    expect(body).toMatch(/if not ta or not tb/);
   });
 
-  it('both diag AND events entries use the same [:20] truncation', () => {
-    const healingIdx = src.indexOf('check_healing_effectiveness()');
-    const healingEnd = src.indexOf('\n}', healingIdx + 100);
-    const body       = src.slice(healingIdx, healingEnd);
-    const matches    = body.match(/\[:20\]/g) ?? [];
-    expect(matches.length).toBeGreaterThanOrEqual(2);
+  it('requires both an overlap-count floor and a ratio floor between two diagnoses', () => {
+    const body = extractHealingBody();
+    expect(body).toMatch(/min\(3,\s*len\(ta\),\s*len\(tb\)\)/);
+    expect(body).toMatch(/ratio >= 0\.4/);
   });
 
   it('no [:50] or [:100] truncation remains (mixed lengths would break comparison)', () => {

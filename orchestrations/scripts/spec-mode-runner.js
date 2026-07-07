@@ -206,7 +206,7 @@ async function callMiniMaxWithTool(prompt, toolDef, logPath, itemsKey) {
 //
 // Fast-path: set SPEC_MODE_PROVIDER=qwen to skip MiniMax entirely.
 //   SPEC_MODE_OPENSPEC_MODEL — model for openspec calls (default: moonshotai/kimi-k2)
-//   SPEC_MODE_SPECKIT_MODEL  — model for speckit calls  (default: zhipuai/glm-4-plus)
+//   SPEC_MODE_SPECKIT_MODEL  — model for speckit calls  (default: moonshotai/kimi-k2)
 //   SPEC_MODE_MODEL          — fallback for all other spec-mode calls (default: moonshotai/kimi-k2)
 async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey) {
   const provider = (process.env.AI_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || '').toLowerCase();
@@ -219,7 +219,7 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     const logName = (logPath || '').toLowerCase();
     let specModel;
     if (logName.includes('speckit')) {
-      specModel = process.env.SPEC_MODE_SPECKIT_MODEL || 'zhipuai/glm-4-plus';
+      specModel = process.env.SPEC_MODE_SPECKIT_MODEL || 'moonshotai/kimi-k2';
     } else if (logName.includes('openspec') || logName.includes('-openspec-') || logName.includes('-spec.log')) {
       specModel = process.env.SPEC_MODE_OPENSPEC_MODEL || 'moonshotai/kimi-k2';
     } else {
@@ -323,6 +323,13 @@ async function run() {
   fs.mkdirSync(logDir, { recursive: true });
 
   const prd = JSON.parse(fs.readFileSync(prdPath, 'utf8'));
+
+  // Load agent profiles — spec-coordinator-agent provides the system-level role instruction
+  const profilesPath = path.join(automationDir, 'agents', 'profiles.json');
+  let profiles = {};
+  try { profiles = JSON.parse(fs.readFileSync(profilesPath, 'utf8')); } catch { /* no profiles */ }
+  const specCoordinatorProfile = profiles['spec-coordinator-agent'] || '';
+
   const phaseStories = Array.isArray(prd.implementationOrder?.[opts.phase])
     ? prd.implementationOrder[opts.phase]
     : [];
@@ -384,7 +391,7 @@ async function run() {
     2
   );
 
-  const coordinatorPrompt = `You are the EPAM CLI specification coordinator agent for phase ${opts.phase}.
+  const coordinatorPrompt = `${specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : ''}You are the EPAM CLI specification coordinator agent for phase ${opts.phase}.
 
 Decide which specification agents should run for each story below.
 Available agents and their roles:
@@ -449,6 +456,11 @@ ${storiesPayload}
     let openspecPayload = null;
     const codeRefs = extractCodeRefs(story);
     const codeHint = codeRefs.length ? ` files=${codeRefs.join(',')}` : '';
+    // Captured BEFORE either agent runs — the split-mandate check (after the
+    // agent loop below) needs the story's ORIGINAL shape, not an intermediate
+    // one, since openspec+speckit can both mutate it across two iterations.
+    const originalStorySnapshot = captureStorySnapshot(story);
+    let totalSplitCountForStory = 0;
 
     // Run agents SEQUENTIALLY: openspec first, then speckit with openspec's output
     for (const agent of assigned.agents) {
@@ -503,9 +515,54 @@ ${storiesPayload}
       }
 
       payload.runId = runId;
+      const newStoriesCountBefore = newStories.length;
       const changes = applySpecChanges(story, payload, newStories, prd, opts.phase, runId);
 
-      const afterSnapshot = captureStorySnapshot(story);
+      let afterSnapshot = captureStorySnapshot(story);
+
+      // Reviewer gate — validates the AC/description/title rewrite (and any
+      // split children just created) before it's accepted. Runs every phase,
+      // every story: this is the spec pass's only content-quality check, since
+      // applySpecChanges itself only enforces structural caps (AC count, split
+      // depth), not whether the rewritten content is actually good.
+      // NOTE: applySpecChanges can rewrite description/title/technicalNotes
+      // independently of acceptanceChanged (that flag only tracks the AC
+      // array). Check the full snapshot, not just changes.acceptanceChanged,
+      // so a description/title-only rewrite doesn't slip through unreviewed.
+      const anyFieldChanged =
+        changes.acceptanceChanged ||
+        changes.splitCount > 0 ||
+        afterSnapshot.description !== beforeSnapshot.description ||
+        afterSnapshot.title !== beforeSnapshot.title ||
+        JSON.stringify(afterSnapshot.technicalNotes) !== JSON.stringify(beforeSnapshot.technicalNotes);
+      // A split whose ONLY substantive effect is the deterministic "Delegated
+      // to split children" placeholder has nothing left for a content
+      // reviewer to assess — applySpecChanges already verified the split's
+      // structural correctness (file coherence, depth, budget). Skip the
+      // review call entirely rather than asking an LLM to judge a
+      // machine-generated marker it has no way to recognize as one.
+      if (anyFieldChanged && isSplitDelegationOnlyChange(beforeSnapshot, afterSnapshot, changes.splitCount)) {
+        console.log(`spec-mode: skipping prd-change-reviewer for ${story.id} — split-only change (delegation marker is deterministic, already structurally verified)`);
+      } else if (anyFieldChanged) {
+        const { verdict, issues } = await reviewPrdChange({
+          aiRunnerCmd, profiles, storyId: story.id, changeType: 'spec_pass',
+          before: beforeSnapshot, after: afterSnapshot, logDir,
+          splitOccurred: changes.splitCount > 0
+        });
+        if (verdict === 'fail') {
+          console.warn(`spec-mode: prd-change-reviewer REJECTED ${agent}'s changes to ${story.id}: ${issues.join('; ') || 'no details'} — reverting`);
+          story.acceptanceCriteria = beforeSnapshot.acceptanceCriteria;
+          story.description = beforeSnapshot.description;
+          story.title = beforeSnapshot.title;
+          story.technicalNotes = beforeSnapshot.technicalNotes;
+          if (newStories.length > newStoriesCountBefore) {
+            newStories.splice(newStoriesCountBefore, newStories.length - newStoriesCountBefore);
+          }
+          changes.acceptanceChanged = false;
+          changes.splitCount = 0;
+          afterSnapshot = captureStorySnapshot(story);
+        }
+      }
 
       // Log each agent's contribution as a separate JSONL entry
       appendJsonl(specLogPath, {
@@ -561,19 +618,98 @@ ${storiesPayload}
       agentContributions.push(contrib);
 
       summary.stats.splits += changes.splitCount;
+      totalSplitCountForStory += changes.splitCount;
       summary.stats.agents[agent] = (summary.stats.agents[agent] || 0) + 1;
     }
 
+    // Deterministic split-MANDATE check — see checkSplitMandateViolation()'s
+    // comment for the live defect this catches: openspec's prompt already
+    // said "MANDATORY split required" and was ignored, so a same-run reject-
+    // and-retry is needed (user directive, 2026-07-06: "check number of ACs —
+    // if > 12 then reject and send back to coordinator" — this is the
+    // deterministic gate, not just another round of unenforced prose).
+    let mandateCheck = checkSplitMandateViolation(originalStorySnapshot, totalSplitCountForStory);
+    if (mandateCheck.violated) {
+      console.warn(
+        `spec-mode: split MANDATE violation for ${story.id}: ${mandateCheck.reason} ` +
+        `— openspec was instructed to split but did not; forcing an immediate retry`
+      );
+      const forcedRetryNote =
+        `CRITICAL — YOUR PREVIOUS OUTPUT VIOLATED A MANDATORY RULE. This story ${mandateCheck.reason}, ` +
+        `which REQUIRES a split, and you did not produce one. This is NOT optional and NOT a suggestion. ` +
+        `You MUST output a non-empty "splitStories" array in your response this time.`;
+      summary.stats.agentAttempts += 1;
+      let retryResult;
+      try {
+        retryResult = await runSpecAgent({ promptExec, agent: 'openspec', story, phase: opts.phase, runId, logDir, forcedRetryNote });
+      } catch (err) {
+        retryResult = null;
+      }
+      if (retryResult && retryResult.payload) {
+        retryResult.payload.runId = runId;
+        const childrenCountBefore = newStories.length;
+        const retryChanges = applySpecChanges(story, retryResult.payload, newStories, prd, opts.phase, runId);
+        summary.stats.splits += retryChanges.splitCount;
+        totalSplitCountForStory += retryChanges.splitCount;
+
+        // Root cause of a live cascade defect (2026-07-06): a split "counts"
+        // by splitCount alone, but a LAZY/non-compliant split — every child
+        // inheriting the FULL original acceptanceCriteria array verbatim,
+        // instead of an actual partition — technically produces
+        // splitStories.length > 0 while leaving every child STILL over the
+        // AC threshold. Each child then re-triggers its OWN split-mandate
+        // violation on its own turn, recursively splitting again and again
+        // until the max-split-depth cap — SKY-001 (a simple scaffold story)
+        // cascaded into 4 stories in one run this way. Verify the CHILDREN
+        // are actually compliant, not just that splitCount > 0. If they are
+        // NOT, do not attempt a second forced retry (that's how the cascade
+        // started) — fall back to flagging, same as any other unresolved
+        // violation.
+        const newChildren = newStories.slice(childrenCountBefore).map((ns) => ns.story);
+        const nonCompliantChildren = newChildren.filter((child) => storyRequiresSplit(captureStorySnapshot(child)).required);
+        mandateCheck = checkSplitMandateViolation(originalStorySnapshot, totalSplitCountForStory);
+        if (!mandateCheck.violated && nonCompliantChildren.length > 0) {
+          console.warn(
+            `spec-mode: forced retry for ${story.id} produced a LAZY split — ${nonCompliantChildren.map((c) => c.id).join(', ')} ` +
+            `still violate(s) the split mandate (likely inherited the full AC list verbatim) — treating as unresolved, not retrying again`
+          );
+          mandateCheck = { violated: true, reason: `split produced non-compliant child/children: ${nonCompliantChildren.map((c) => c.id).join(', ')}` };
+        }
+        if (!mandateCheck.violated) {
+          console.log(`spec-mode: forced retry resolved the split MANDATE violation for ${story.id}`);
+        } else {
+          console.warn(
+            `spec-mode: forced retry did NOT resolve the split MANDATE violation for ${story.id} ` +
+            `— flagging for the next specification pass`
+          );
+        }
+      } else {
+        summary.stats.agentFailures += 1;
+        console.warn(`spec-mode: forced split-mandate retry produced no parsable output for ${story.id} — flagging for the next specification pass`);
+      }
+    }
+
     const specStatus = appliedAgents.length ? 'completed' : 'assigned';
+    const existingSpec = story.specification || {};
+    const existingReview = existingSpec.coordinatorReview || {};
+    const existingFlags = Array.isArray(existingReview.flags) ? existingReview.flags : [];
     story.specification = {
-      ...(story.specification || {}),
+      ...existingSpec,
       runId,
       assignedAgents: assigned.agents,
       coordinatorNotes: assigned.notes,
       status: specStatus,
       updatedAt: new Date().toISOString(),
       appliedAgents,
-      agentContributions
+      agentContributions,
+      ...(mandateCheck.violated
+        ? {
+            coordinatorReview: {
+              ...existingReview,
+              flags: [...existingFlags, `MANDATORY split was required (${mandateCheck.reason}) but was not performed — split this story now`]
+            }
+          }
+        : {})
     };
     summary.stories.push({
       storyId: story.id,
@@ -600,6 +736,18 @@ ${storiesPayload}
         parentInsertOffsets[insert.parentId] = offset + 1;
       }
     }
+    // Remove successfully-delegated parents from the active phase list — every
+    // parentId here had its children genuinely accepted (rejected splits are
+    // spliced out of newStories earlier, in applySpecChanges), so its own
+    // status was just marked 'deprecated' above. Leaving it in
+    // implementationOrder made downstream consumers (TC writer, the main
+    // implementation loop) treat it as still-active work with real source
+    // files, when its implementation is now entirely delegated to children.
+    const delegatedParentIds = new Set(Object.keys(parentInsertOffsets));
+    const order = prd.implementationOrder?.[opts.phase];
+    if (Array.isArray(order)) {
+      prd.implementationOrder[opts.phase] = order.filter((id) => !delegatedParentIds.has(id));
+    }
   }
 
   // ── Step 4: Coordinator review pass ────────────────────────────────────
@@ -617,7 +765,7 @@ ${storiesPayload}
         .map(c => ({ id: c.id, title: c.title, acceptanceCriteria: c.acceptanceCriteria }))
     })), null, 2);
 
-    const reviewPrompt = `You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase ${opts.phase}.
+    const reviewPrompt = `${specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : ''}You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase ${opts.phase}.
 
 Each story was processed by a sequential agent pipeline:
   1. openspec elaborated requirements (AC refinement, story splits, technical depth)
@@ -728,7 +876,7 @@ ${reviewPayload}
         };
       });
 
-    const modelReviewPrompt = `You are the EPAM CLI model assignment coordinator for phase ${opts.phase}.
+    const modelReviewPrompt = `${specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : ''}You are the EPAM CLI model assignment coordinator for phase ${opts.phase}.
 
 A rule-based pass has already assessed every story's model assignment. Your job is to make the FINAL decision on each story's model — confirming rule recommendations, overriding them when wrong, and catching any false negatives the rules missed.
 
@@ -792,6 +940,9 @@ Use "keep-current" to accept the current (possibly rule-upgraded) model. Only pr
       };
       const resolveTierLabel = (m) => (m && TIER_LABEL_MAP[m]) ? TIER_LABEL_MAP[m] : m;
 
+      const knownValidModels = buildKnownValidModels(upgradeModel, miniModel);
+      const isValidModel = (m, currentModel) => isValidModelString(m, currentModel, knownValidModels);
+
       const decisionMap = new Map();
       llmDecisions.forEach((d) => { if (d && d.storyId) decisionMap.set(d.storyId, d); });
       finalAssessments = finalAssessments.map((fa) => {
@@ -800,11 +951,20 @@ Use "keep-current" to accept the current (possibly rule-upgraded) model. Only pr
         const rawModel = decision.finalModel && decision.finalModel !== 'keep-current'
           ? decision.finalModel
           : fa.ruleRecommendation;
-        const llmModel = resolveTierLabel(rawModel);
+        let llmModel = resolveTierLabel(rawModel);
+        let rejectedInvalidModel = false;
+        if (!isValidModel(llmModel, fa.currentModel)) {
+          console.warn(
+            `spec-mode: LLM model review for ${fa.storyId} returned unrecognized model "${llmModel}" — ` +
+            `ignoring and using rule-based recommendation "${fa.ruleRecommendation}" instead`
+          );
+          llmModel = fa.ruleRecommendation;
+          rejectedInvalidModel = true;
+        }
         return {
           ...fa,
           finalModel: llmModel,
-          llmOverride: decision.override === true,
+          llmOverride: decision.override === true && !rejectedInvalidModel,
           llmReason: decision.reason || '',
           llmConfidence: decision.confidence || 'medium'
         };
@@ -823,6 +983,17 @@ Use "keep-current" to accept the current (possibly rule-upgraded) model. Only pr
     if (fa.finalModel !== story.model) {
       const prev = story.model;
       story.model = fa.finalModel;
+      // Keep aiProvider in sync with the new model — see resolveModelProvider's
+      // docstring for the live bug this fixes (stale provider + new model
+      // silently misrouting requests, causing an indefinite hang).
+      const newProvider = resolveModelProvider(fa.finalModel);
+      if (newProvider && newProvider !== story.aiProvider) {
+        const prevProvider = story.aiProvider;
+        story.aiProvider = newProvider;
+        console.log(
+          `spec-mode: provider set ${story.id}: ${prevProvider} → ${newProvider} (model changed to ${fa.finalModel})`
+        );
+      }
       if (!story.specification) story.specification = {};
       story.specification.modelUpgrade = {
         from: prev,
@@ -870,11 +1041,8 @@ Use "keep-current" to accept the current (possibly rule-upgraded) model. Only pr
 // ─────────────────────────────────────────────────────────────────────────────
 
 // openspec: first-pass elaboration
-async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir }) {
+async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, forcedRetryNote }) {
   const acCount = Array.isArray(story.acceptanceCriteria) ? story.acceptanceCriteria.length : 0;
-  const files = story.technicalNotes?.files || [];
-  const testFiles = files.filter(f => f.endsWith('.test.ts') || f.endsWith('.spec.ts'));
-  const implFiles = files.filter(f => !f.endsWith('.test.ts') && !f.endsWith('.spec.ts'));
   const splitDepthVal = story.specification?.splitDepth ?? 0;
 
   const storyPayload = JSON.stringify({
@@ -890,11 +1058,14 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir }) 
     splitDepth: splitDepthVal
   }, null, 2);
 
-  const splitWarning = acCount > 12
-    ? `\nNOTE: This story has ${acCount} acceptance criteria — MANDATORY split required (see SPLIT RULES below).`
-    : testFiles.length > 0 && implFiles.length > 0
-      ? `\nNOTE: This story contains both implementation (${implFiles.length}) and test (${testFiles.length}) files — MANDATORY split required.`
-      : '';
+  // Uses the SAME threshold function as checkSplitMandateViolation() (below)
+  // so the prompt warning and the deterministic post-hoc check can never
+  // drift apart — one is prose telling the agent what's required, the other
+  // verifies the agent actually did it.
+  const splitRequirement = storyRequiresSplit(captureStorySnapshot(story));
+  const splitWarning = splitRequirement.required
+    ? `\nNOTE: This story ${splitRequirement.reason} — MANDATORY split required (see SPLIT RULES below).`
+    : '';
 
   // Surface any prior coordinator flags so openspec addresses them rather than rubber-stamping
   const priorFlags = story.specification?.coordinatorReview?.flags;
@@ -903,7 +1074,14 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir }) 
     ? `\n\nPRIOR COORDINATOR FLAGS (you MUST address each one — do NOT declare the spec complete without resolving these):\n${priorFlags.map((f, i) => `${i + 1}. ${f}`).join('\n')}\n${priorNotes ? `\nAdditional context from prior review: ${priorNotes.slice(0, 500)}` : ''}`
     : '';
 
-  const prompt = `You are the ${agent} specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.${splitWarning}${priorGapsBlock}
+  // Forced-retry note goes at the VERY TOP — highest-salience position in the
+  // prompt (primacy). Root cause this addresses (found live, 2026-07-06):
+  // the mid-prompt "MANDATORY split required" NOTE was already present on the
+  // FIRST attempt and still got ignored. A same-session forced retry needs
+  // maximum prominence, not just a repeat of the same mid-prompt phrasing.
+  const forcedRetryBlock = forcedRetryNote ? `${forcedRetryNote}\n\n` : '';
+
+  const prompt = `${forcedRetryBlock}You are the ${agent} specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.${splitWarning}${priorGapsBlock}
 
 Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
 {
@@ -1117,6 +1295,162 @@ function splitDepth(story, prd) {
   return depth;
 }
 
+// Split MANDATE thresholds — shared by the prompt warning (runSpecAgent) and the
+// deterministic post-hoc check below (checkSplitMandateViolation), so the two
+// can never drift apart. Fully generic: no project/domain names, just AC count
+// and impl/test file shape — applies identically to any project's stories.
+const SPLIT_MANDATE_AC_THRESHOLD = 12;
+
+function storyRequiresSplit(snapshot) {
+  const acCount = Array.isArray(snapshot.acceptanceCriteria) ? snapshot.acceptanceCriteria.length : 0;
+  const files = snapshot.technicalNotes?.files || [];
+  const testFiles = files.filter((f) => f.endsWith('.test.ts') || f.endsWith('.spec.ts'));
+  const implFiles = files.filter((f) => !f.endsWith('.test.ts') && !f.endsWith('.spec.ts'));
+  if (acCount > SPLIT_MANDATE_AC_THRESHOLD) {
+    return { required: true, reason: `${acCount} acceptance criteria (> ${SPLIT_MANDATE_AC_THRESHOLD})` };
+  }
+  if (testFiles.length > 0 && implFiles.length > 0) {
+    return { required: true, reason: `combines ${implFiles.length} implementation file(s) and ${testFiles.length} test file(s)` };
+  }
+  return { required: false, reason: '' };
+}
+
+// Root cause this catches (found live, 2026-07-06): openspec's prompt already
+// says "MANDATORY split required" whenever storyRequiresSplit() is true — but
+// that's pure prose, never verified afterward. A story meeting the mandate can
+// silently stay unsplit for its entire lifetime with zero visible signal,
+// because the ONLY existing split check (validateSplitFileCoherence, above)
+// only fires when a split DID happen and is incoherent — it has nothing to
+// say about a split that should have happened but never did. Confirmed live:
+// a story with 15 ACs and combined impl+test files went through 3 separate
+// openspec passes across 2 full pipeline runs and was never split, exhausting
+// its entire model-escalation ladder on a single overloaded story instead.
+// Returns {violated, reason} — detection only (Option D pattern: deterministic
+// detection, not a silent auto-split, since auto-splitting requires domain
+// judgment about where the split boundary goes).
+function checkSplitMandateViolation(beforeSnapshot, splitCountAfter) {
+  if (splitCountAfter > 0) {
+    return { violated: false, reason: '' };
+  }
+  const { required, reason } = storyRequiresSplit(beforeSnapshot);
+  if (!required) {
+    return { violated: false, reason: '' };
+  }
+  return { violated: true, reason };
+}
+
+// Root cause this fixes (found live, 2026-07-06, tier3-full-run-18): a split
+// child whose files are ALL test files (e.g. SKY-002-TEST, owning only
+// client.test.ts) kept the PARENT's implementation-oriented agentRole
+// (typescript-engineer) instead of a test-oriented role. The only existing
+// correction mechanism was an LLM instruction buried in the Step 0.5 "skill
+// assessment" prompt ("if all files match *.test.ts, update agentRole to
+// test-engineer") — and it silently failed to apply to EVERY split child
+// created this run, not just one. A rule this simple (file-extension pattern
+// -> role) should never depend on an LLM correctly executing free-text
+// instructions.
+//
+// Deliberately NOT hardcoding a role name here — agent roles are project-
+// defined and dynamic (profiles.json is generated per-project, not fixed).
+// The correct role name and the pattern that identifies "this is a test-only
+// story" both come from the project's own .epam/contract-generation.json
+// (testFilePattern / testFileAgentRole), the same "config supplies stack
+// knowledge, engine has none" convention already used for dependency-check.json
+// and elsewhere in this file. If the project hasn't supplied testFileAgentRole,
+// this is a no-op — the child simply keeps whatever role it already had.
+function correctSplitChildAgentRoleIfTestOnly(prd, story) {
+  const outputDir = prd.project?.outputDir;
+  if (!outputDir) return;
+  const configPath = path.join(outputDir, '.epam', 'contract-generation.json');
+  let cfg;
+  try {
+    cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } catch {
+    return;
+  }
+  if (!cfg.testFileAgentRole || !cfg.testFilePattern) return;
+  const files = story.technicalNotes?.files;
+  if (!Array.isArray(files) || files.length === 0) return;
+  const testFileRe = new RegExp(cfg.testFilePattern);
+  const allTestFiles = files.every((f) => testFileRe.test(f));
+  if (allTestFiles) {
+    story.agentRole = cfg.testFileAgentRole;
+  }
+}
+
+// resolveModelProvider(model, env)
+// JS port of claude.sh's resolve_model_provider() — reads EPAM_MODEL_PROVIDER_MAP
+// (pipe-separated "glob-pattern=provider" pairs) and returns the provider for a
+// model name via glob matching. Zero hardcoded vendor/model names here, same
+// config-driven pattern as the bash original. Returns null when no map is
+// configured or no pattern matches (caller keeps the story's existing aiProvider).
+//
+// Root cause this fixes (found live, 2026-07-07): spec-mode's LLM model-review
+// step (below) can override a story's .model field (e.g. moonshotai/kimi-k2 ->
+// MiniMax-M3) but never touched .aiProvider — a story ended up with
+// aiProvider="qwen" (correct for the OLD model) paired with model="MiniMax-M3"
+// (which needs the "minimax" provider), silently sending a MiniMax-native model
+// name to the OpenRouter-routed qwen provider. That request never resolves
+// correctly and hangs until the pipeline's 600s watchdog kills it — the actual
+// root cause of SKY-002-test/SKY-003-test repeatedly stalling with zero output
+// in that day's live run, misread at first as a flaky-API/network issue.
+function resolveModelProvider(model, env = process.env) {
+  const map = env.EPAM_MODEL_PROVIDER_MAP;
+  if (!map || !model) return null;
+  const globToRegExp = (glob) =>
+    new RegExp('^' + glob.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
+  for (const pair of map.split('|')) {
+    const eq = pair.indexOf('=');
+    if (eq === -1) continue;
+    const pattern = pair.slice(0, eq);
+    const provider = pair.slice(eq + 1);
+    if (globToRegExp(pattern).test(model)) return provider;
+  }
+  return null;
+}
+
+// Matches the exact placeholder applySpecChanges writes onto a parent story's
+// acceptanceCriteria after a successful split (see "Delegated to split
+// children:" above). Deliberately a single-purpose string check, not a general
+// AC-quality heuristic — this only needs to recognize the ONE deterministic
+// template the engine itself produces.
+const SPLIT_DELEGATION_AC_PATTERN = /^Delegated to split children: /;
+
+function isSplitDelegationAc(acceptanceCriteria) {
+  return (
+    Array.isArray(acceptanceCriteria) &&
+    acceptanceCriteria.length === 1 &&
+    SPLIT_DELEGATION_AC_PATTERN.test(acceptanceCriteria[0])
+  );
+}
+
+// Root cause this fixes (found live, 2026-07-06, first surfaced only once
+// splits started actually succeeding): prd-change-reviewer is a content-quality
+// gate that judges a story's AC/description/title rewrite on its own merits —
+// it has no way to know "Delegated to split children: X, Y" is a deterministic,
+// engine-written placeholder rather than an organically-authored AC, so it
+// correctly-by-its-own-lights flags it as "vague and unmeasurable" and reverts
+// the ENTIRE change, undoing a structurally-valid split (which applySpecChanges
+// had already verified via file coherence, depth, and budget checks) purely
+// because of how the resulting placeholder text reads. A split's correctness
+// is already deterministically verified elsewhere; asking an LLM to also judge
+// the placeholder text it can't recognize as a placeholder is a pure false
+// positive, not a real quality signal.
+//
+// Returns true when the review gate should be skipped for this change because
+// a split occurred and the ONLY substantive difference from beforeSnapshot is
+// the deterministic delegation marker — description/title/technicalNotes are
+// unchanged, so there is nothing else here for a content reviewer to assess.
+function isSplitDelegationOnlyChange(beforeSnapshot, afterSnapshot, splitCount) {
+  if (!(splitCount > 0)) return false;
+  if (!isSplitDelegationAc(afterSnapshot.acceptanceCriteria)) return false;
+  return (
+    afterSnapshot.description === beforeSnapshot.description &&
+    afterSnapshot.title === beforeSnapshot.title &&
+    JSON.stringify(afterSnapshot.technicalNotes) === JSON.stringify(beforeSnapshot.technicalNotes)
+  );
+}
+
 // Detect same-file coherence violations: multiple split children claiming to write
 // the same non-test file. Each agent rewrites the file from scratch, so the last
 // writer wins and all prior agents' work is silently discarded.
@@ -1237,6 +1571,16 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId) {
         newStory.status = 'pending';
         newStory.completed = false;
         newStory.dependencies = Array.isArray(split.dependencies) ? split.dependencies : [];
+        // Root cause of "no split has ever succeeded" (found live, 2026-07-06):
+        // newStory starts as a full clone of the PARENT (including its combined
+        // technicalNotes.files) and this field was never overwritten with the
+        // split proposal's own file ownership — every child silently inherited
+        // ALL of the parent's files regardless of what was actually proposed,
+        // guaranteeing every split looked incoherent (every child "wrote" every
+        // file) and was rejected below, no matter how the model partitioned it.
+        if (split.technicalNotes && typeof split.technicalNotes === 'object') {
+          newStory.technicalNotes = split.technicalNotes;
+        }
         newStory.specification = {
           createdFrom: story.id,
           createdAt: new Date().toISOString(),
@@ -1245,6 +1589,7 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId) {
           splitOrigin: 'spec-pass'  // marks spec-pass splits; mid-execution splits use 'mid-execution'
         };
         capSplitACs(newStory, story.id);
+        correctSplitChildAgentRoleIfTestOnly(prd, newStory);
         newStories.push({ parentId: story.id, story: newStory, phase: phaseId });
         result.splitCount += 1;
       });
@@ -1270,6 +1615,20 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId) {
         const childIds = addedChildren.map(ns => ns.story.id).join(', ');
         story.acceptanceCriteria = [`Delegated to split children: ${childIds}`];
         console.log(`spec-mode: parent ${story.id} ACs redistributed → delegated to ${childIds}`);
+        // Root cause of a real bug (found live, 2026-07-06, tier3-full-run-15):
+        // a delegated parent's technicalNotes.files still lists its ORIGINAL
+        // files (including any .test.ts), and it stayed in
+        // implementationOrder[phase] alongside its own children — every
+        // downstream consumer that scans implementationOrder (the TC writer,
+        // the main implementation loop) still saw it as an active "test
+        // story" with real source, when its actual implementation is now
+        // entirely delegated. Mark it deprecated/completed so consumers that
+        // already check those fields skip it; implementationOrder itself is
+        // cleaned up separately (see the Step 3 insertion loop and
+        // validateMidExecutionSplits, which both know the split-vs-parent
+        // topology needed to do that safely).
+        story.status = 'deprecated';
+        story.completed = true;
       }
     }
   }
@@ -1434,6 +1793,109 @@ function resolvePromptExec(aiRunnerCmd, env = process.env) {
   return { cmd: aiRunnerCmd, args: ['--provider', provider, ...modelArgs] };
 }
 
+// buildKnownValidModels <upgradeModel, miniModel>
+// isValidModelString <model, currentModel, knownValidModels>
+//
+// Root cause of a live-run defect (2026-07-02 tier3 core phase): the LLM
+// model-review pass's finalModel string was assigned to story.model with
+// ZERO validation. The reviewer hallucinated "moonshotai/MiniMax-M3" —
+// mixing the moonshotai org prefix with the minimax model name, a string
+// that matches no real model on any provider — and every subsequent API
+// call for that story failed instantly (cost=$0, 0 tokens), burning all 8
+// retry attempts on a broken model string the InferenceLadder could never
+// fix (escalation only helps when the *current* model works well enough to
+// diagnose a real failure — it can't recover from a malformed model string).
+//
+// Extracted as standalone functions (not inlined in run()) so this
+// validation is directly unit-testable, not just greppable — the whole
+// point is to catch this bug CLASS (any future unvalidated LLM-written
+// PRD field), not just this one instance.
+function buildKnownValidModels(upgradeModel, miniModel) {
+  return new Set([
+    'MiniMax-M3', 'MiniMax-M2.5', 'MiniMax-M2.7', 'MiniMax-M2.1', 'MiniMax-M2',
+    'moonshotai/kimi-k2', 'z-ai/glm-5.2', 'z-ai/glm-5.1', 'z-ai/glm-4.7',
+    upgradeModel, miniModel,
+  ]);
+}
+
+function isValidModelString(model, currentModel, knownValidModels) {
+  return typeof model === 'string' && (model === currentModel || knownValidModels.has(model));
+}
+
+// buildGateExec <aiRunnerCmd>
+// The gate model (ORCH_GATE_PROVIDER/ORCH_GATE_MODEL) is independent of the
+// story-agent provider resolved by resolvePromptExec — reviewer calls always
+// use the gate model, defaulting to minimax/MiniMax-M3 like claude.sh's
+// run_prd_change_reviewer.
+function buildGateExec(aiRunnerCmd, env = process.env) {
+  const provider = env.ORCH_GATE_PROVIDER || 'minimax';
+  const model = env.ORCH_GATE_MODEL || 'MiniMax-M3';
+  return { cmd: aiRunnerCmd, args: ['--provider', provider, '--model', model] };
+}
+
+// parseReviewVerdict <text>
+// Extracts {"verdict":"pass|fail",...} from raw LLM output. Mirrors the
+// python parsing in claude.sh's run_prd_change_reviewer: try strict JSON
+// parse first, fall back to a regex scan for the verdict field.
+function parseReviewVerdict(text) {
+  const raw = (text || '').trim();
+  try {
+    const obj = JSON.parse(raw);
+    if (obj && (obj.verdict === 'pass' || obj.verdict === 'fail')) {
+      return { verdict: obj.verdict, issues: obj.issues || [] };
+    }
+  } catch { /* fall through to regex */ }
+  const m = raw.match(/"verdict"\s*:\s*"(pass|fail)"/);
+  return { verdict: m ? m[1] : 'pass', issues: [] };
+}
+
+// reviewPrdChange <opts>
+// Calls the prd-change-reviewer gate agent to validate a proposed spec-pass
+// change (AC/description/title rewrite or split creation) before it is
+// accepted. Non-blocking by design: any call failure or unconfigured gate
+// defaults to "pass" (matches claude.sh's run_prd_change_reviewer contract) —
+// this is a quality gate, not a hard dependency for the spec pass to function.
+async function reviewPrdChange({ aiRunnerCmd, profiles, storyId, changeType, before, after, logDir, splitOccurred }) {
+  const gateProvider = process.env.ORCH_GATE_PROVIDER || '';
+  if (!gateProvider) return { verdict: 'pass', issues: [] };
+
+  const reviewerProfile = profiles['prd-change-reviewer'] || '';
+  if (!reviewerProfile) return { verdict: 'pass', issues: [] };
+
+  // When a split occurred alongside other field changes (description/title),
+  // the parent's acceptanceCriteria is a deterministic engine-written
+  // placeholder ("Delegated to split children: ..."), not organically
+  // authored content — tell the reviewer explicitly so it doesn't flag that
+  // placeholder as a vague/unmeasurable AC (see isSplitDelegationOnlyChange
+  // for the more common case where this skips the reviewer call entirely).
+  const splitNote = splitOccurred
+    ? '\nNOTE: This story was just split into child stories. Its acceptanceCriteria field is a deterministic "Delegated to split children: ..." placeholder written by the engine, not an authored AC — do NOT flag that placeholder as vague or unmeasurable. Only evaluate the description/title changes.\n'
+    : '';
+
+  const prompt = `${reviewerProfile}
+
+STORY: ${storyId}
+CHANGE TYPE: ${changeType}
+${splitNote}
+BEFORE:
+${JSON.stringify(before).slice(0, 1000)}
+
+AFTER:
+${JSON.stringify(after).slice(0, 1000)}
+
+Emit ONLY: {"verdict":"pass|fail","issues":["<issue1>"],"reason":"<15 words max>"}`;
+
+  try {
+    const gateExec = buildGateExec(aiRunnerCmd);
+    const logPath = logDir ? path.join(logDir, `prd-reviewer-${storyId}-${changeType}.log`) : null;
+    const output = await runClaude(gateExec, prompt, logPath, {});
+    return parseReviewVerdict(output);
+  } catch (err) {
+    console.warn(`spec-mode: prd-change-reviewer call failed for ${storyId} (${err.message}) — defaulting to pass`);
+    return { verdict: 'pass', issues: [] };
+  }
+}
+
 // Returns true when a model string is mini/nano/flash/haiku tier — fast but limited generation capacity.
 function isMiniTierModel(model) {
   if (!model || typeof model !== 'string') return false;
@@ -1514,6 +1976,22 @@ async function validateMidExecutionSplits(prdFile, storyIdsCsv) {
     byParent.get(parentId).push(child);
   }
 
+  // Root cause this fixes (found live, 2026-07-06, tier3-full-run-16): a
+  // rejected split child (depth guard, budget guard, or coherence violation)
+  // gets marked status='deprecated' below, but was never removed from
+  // implementationOrder[phase] — it was already inserted there by whatever
+  // created the mid-execution split BEFORE this validation ran, unlike
+  // applySpecChanges' spec-pass path (where rejected children are spliced out
+  // of the pending-insert list entirely and never reach implementationOrder
+  // in the first place). Violates the same "no deprecated story in
+  // implementationOrder" invariant the parent-delegation fix maintains.
+  function removeFromImplementationOrder(storyId) {
+    const order = prd.implementationOrder?.[phase];
+    if (Array.isArray(order)) {
+      prd.implementationOrder[phase] = order.filter((id) => id !== storyId);
+    }
+  }
+
   let hardViolations = 0;
 
   for (const [parentId, children] of byParent) {
@@ -1532,6 +2010,7 @@ async function validateMidExecutionSplits(prdFile, storyIdsCsv) {
         child.specification.splitRejected = true;
         child.specification.splitRejectionReason = `depth ${currentDepth} >= max ${maxSplitDepth}`;
         child.status = 'deprecated';
+        removeFromImplementationOrder(child.id);
       }
       hardViolations++;
       continue;
@@ -1549,6 +2028,7 @@ async function validateMidExecutionSplits(prdFile, storyIdsCsv) {
         r.specification.splitRejected = true;
         r.specification.splitRejectionReason = `split budget exhausted (max ${MAX_CHILDREN_PER_SPLIT})`;
         r.status = 'deprecated';
+        removeFromImplementationOrder(r.id);
       }
       if (!children.length) { hardViolations++; continue; }
     }
@@ -1566,6 +2046,7 @@ async function validateMidExecutionSplits(prdFile, storyIdsCsv) {
         child.specification.splitRejected = true;
         child.specification.splitRejectionReason = `same-file coherence violation: multiple children write to the same file`;
         child.status = 'deprecated';
+        removeFromImplementationOrder(child.id);
       }
       hardViolations++;
       continue;
@@ -1573,6 +2054,7 @@ async function validateMidExecutionSplits(prdFile, storyIdsCsv) {
 
     // AC cap on each child
     for (const child of children) capSplitACs(child, parentId);
+    for (const child of children) correctSplitChildAgentRoleIfTestOnly(prd, child);
 
     // Run speckit — treat children as openspec's split proposals
     const openspecOutput = {
@@ -1622,6 +2104,18 @@ async function validateMidExecutionSplits(prdFile, storyIdsCsv) {
     const childIds = children.map(c => c.id).join(', ');
     parentStory.acceptanceCriteria = [`Delegated to split children: ${childIds}`];
     console.log(`spec-mode: --validate-splits: ${parentId} → validated ${children.length} children (${childIds})`);
+    // Same fix as applySpecChanges' spec-pass split path (found live,
+    // 2026-07-06, tier3-full-run-15): a validated parent's technicalNotes.
+    // files still lists its original (now-delegated) files, and it stayed in
+    // implementationOrder[phase] alongside its own children — the TC writer
+    // and main implementation loop both scan implementationOrder and saw it
+    // as active work with real source, when it's now entirely delegated.
+    parentStory.status = 'deprecated';
+    parentStory.completed = true;
+    const order = prd.implementationOrder?.[phase];
+    if (Array.isArray(order)) {
+      prd.implementationOrder[phase] = order.filter((id) => id !== parentId);
+    }
   }
 
   fs.writeFileSync(prdFile, JSON.stringify(prd, null, 2) + '\n');
@@ -1656,11 +2150,23 @@ module.exports = {
   canSplitStory,
   capSplitACs,
   validateSplitFileCoherence,
+  storyRequiresSplit,
+  checkSplitMandateViolation,
+  isSplitDelegationAc,
+  correctSplitChildAgentRoleIfTestOnly,
+  resolveModelProvider,
+  isSplitDelegationOnlyChange,
+  SPLIT_MANDATE_AC_THRESHOLD,
   applySpecChanges,
   validateMidExecutionSplits,
   extractCodeRefs,
   resolvePromptProvider,
   resolvePromptExec,
+  buildGateExec,
+  parseReviewVerdict,
+  reviewPrdChange,
+  buildKnownValidModels,
+  isValidModelString,
   isMiniTierModel,
   modelComplexitySignals,
   MAX_ACS_PER_STORY,

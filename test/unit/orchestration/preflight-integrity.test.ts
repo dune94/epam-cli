@@ -7,8 +7,10 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 // Use canonical PRD — the runtime prd.json is reset before every run and should
 // not be used in tests (its content varies with run state).
@@ -254,5 +256,174 @@ describe('PRD integrity — control plane resilience', () => {
       'utf8'
     );
     expect(src).toContain('EADDRINUSE');
+  });
+});
+
+// ── Real execution — proves the SCRIPT itself (not a reimplementation) works ──
+describe('preflight-prd-integrity.sh — real subprocess execution', () => {
+  const SCRIPT = join(__dirname, '../../../orchestrations/scripts/preflight-prd-integrity.sh');
+  const outputDir = '/tmp/preflight-integrity-fixture-app';
+
+  function baseFixture(): any {
+    return {
+      project: { outputDir },
+      stories: [
+        {
+          id: 'FIX-001',
+          status: 'pending',
+          completed: false,
+          effort: 'medium',
+          aiProvider: 'qwen',
+          model: 'moonshotai/kimi-k2',
+          acceptanceCriteria: ['does a thing'],
+          technicalNotes: { files: [`${outputDir}/src/thing.ts`] },
+        },
+      ],
+      // ui_and_review removed (2026-07-07): pipeline is scaffold -> core only.
+      implementationOrder: { scaffold: [], core: ['FIX-001'] },
+    };
+  }
+
+  function runPreflight(prd: any): { code: number; stdout: string } {
+    const dir = mkdtempSync(join(tmpdir(), 'preflight-fixture-'));
+    const prdPath = join(dir, 'prd.json');
+    writeFileSync(prdPath, JSON.stringify(prd));
+    try {
+      const stdout = execFileSync('bash', [SCRIPT, '--prd', prdPath], { encoding: 'utf8' });
+      return { code: 0, stdout };
+    } catch (e: any) {
+      return { code: e.status ?? 1, stdout: (e.stdout ?? '').toString() + (e.stderr ?? '').toString() };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('passes (exit 0) on a clean fixture', () => {
+    const result = runPreflight(baseFixture());
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('PRD integrity OK');
+  });
+
+  // A stale-specification check was tried directly in this script and reverted
+  // (2026-07-06 same-day regression): this script only ever runs on the
+  // POST-split-pass branch, where every active story legitimately has a
+  // specification block from this run's own elaboration — the check fired on
+  // SKY-001 the moment scaffold phase completed and aborted a clean run. The
+  // real fix lives in preflight-check.sh / prd-remediate.sh instead (tested
+  // below), which run BEFORE spec pass and can distinguish "not yet completed
+  // but already has specification data" (stale) from "legitimately completed
+  // with its own data" (fine).
+  it('does not flag a legitimately-elaborated, completed story as having a stale specification block (this script has no completed-vs-stale check — that lives upstream)', () => {
+    const prd = baseFixture();
+    prd.stories[0].status = 'completed';
+    prd.stories[0].completed = true;
+    prd.stories[0].specification = { status: 'completed', appliedAgents: ['openspec', 'speckit'] };
+    // completed stories are expected to fail check 10 (clean pending state) in
+    // this fixture regardless — the point here is specifically that no
+    // specification-related check exists in this script to also fire.
+    const result = runPreflight(prd);
+    expect(result.stdout).not.toMatch(/specification/);
+  });
+
+  it('fails (exit 1) on a stale BUG- story (sanity check that exit-code plumbing works end to end)', () => {
+    const prd = baseFixture();
+    prd.stories.push({
+      id: 'BUG-001',
+      status: 'pending',
+      completed: false,
+      effort: 'low',
+      aiProvider: 'qwen',
+      model: 'moonshotai/kimi-k2',
+      acceptanceCriteria: [],
+      technicalNotes: { files: [] },
+    });
+    const result = runPreflight(prd);
+    expect(result.code).toBe(1);
+    expect(result.stdout).toMatch(/Stale BUG- stories/);
+  });
+
+  // preflight-prd-integrity.sh's own testCriteria check is for POST-spec-pass
+  // elaborated PRDs. Canonical (pre-spec-pass) base stories are only ever run
+  // through it via the is_canonical bypass wrapper in preflight-check.sh /
+  // prd-remediate.sh (tested below) — calling it directly on the raw
+  // canonical file is expected to fail on that one known pre-spec-pass gap.
+  // ui_and_review is no longer a required phase (removed 2026-07-07) — the
+  // canonical PRD's 2 phases (scaffold, core) now satisfy the phase check.
+  it('direct invocation on the raw canonical PRD fails only on the known pre-spec-pass gap (testCriteria stub) — phase check now passes with 2 phases', () => {
+    const result = runPreflight(JSON.parse(readFileSync(PRD_PATH, 'utf8')));
+    expect(result.code).toBe(1);
+    expect(result.stdout).not.toMatch(/Missing required phases/);
+    expect(result.stdout).toMatch(/Exactly 2 phases in correct order/);
+    expect(result.stdout).toMatch(/Test stories missing testCriteria field/);
+  });
+});
+
+// ── The is_canonical bypass wrappers must also catch stale specification data,
+// scoped correctly by the 'completed' flag (this exact scoping bug shipped
+// and broke a live run on 2026-07-06: SKY-001's OWN legitimate specification
+// data from this run's scaffold-phase spec pass was misflagged as "stale"
+// because the first version of this check didn't exclude completed stories) ─
+describe('preflight-check.sh / prd-remediate.sh — canonical bypass catches stale specification blocks (completed-scoped)', () => {
+  const CANONICAL_SHAPED = {
+    project: { outputDir: '/tmp/preflight-canonical-fixture-app' },
+    stories: [
+      { id: 'SKY-001', status: 'pending', completed: false, effort: 'medium', aiProvider: 'qwen', model: 'moonshotai/kimi-k2', acceptanceCriteria: ['a'], technicalNotes: { files: [] } },
+    ],
+    implementationOrder: { scaffold: [], core: [], ui_and_review: [] },
+  };
+
+  function runPrdRemediate(prd: any): { code: number; stdout: string } {
+    const dir = mkdtempSync(join(tmpdir(), 'prd-remediate-fixture-'));
+    const prdPath = join(dir, 'prd.json');
+    writeFileSync(prdPath, JSON.stringify(prd));
+    try {
+      const stdout = execFileSync(
+        'bash',
+        [join(__dirname, '../../../orchestrations/scripts/prd-remediate.sh'), '--prd', prdPath],
+        { encoding: 'utf8' }
+      );
+      return { code: 0, stdout };
+    } catch (e: any) {
+      return { code: e.status ?? 1, stdout: (e.stdout ?? '').toString() + (e.stderr ?? '').toString() };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('prd-remediate.sh fails when a PENDING (not-yet-processed) story carries a pre-baked specification block', () => {
+    const prd = structuredClone(CANONICAL_SHAPED);
+    (prd.stories[0] as any).specification = { status: 'completed', appliedAgents: ['openspec', 'speckit'] };
+    const result = runPrdRemediate(prd);
+    expect(result.code).toBe(1);
+    expect(result.stdout).toMatch(/pre-baked 'specification' blocks on base stories/);
+  });
+
+  it('prd-remediate.sh does NOT flag a COMPLETED story carrying its own legitimate specification data (reproduces + fixes the live SKY-001 false positive)', () => {
+    const prd = structuredClone(CANONICAL_SHAPED);
+    prd.stories[0].status = 'completed';
+    prd.stories[0].completed = true;
+    (prd.stories[0] as any).specification = { status: 'completed', appliedAgents: ['openspec', 'speckit'] };
+    const result = runPrdRemediate(prd);
+    expect(result.code).toBe(0);
+    expect(result.stdout).not.toMatch(/pre-baked 'specification' blocks/);
+  });
+
+  it('prd-remediate.sh passes clean on a truly lean canonical-shaped PRD (no specification anywhere)', () => {
+    const result = runPrdRemediate(CANONICAL_SHAPED);
+    expect(result.code).toBe(0);
+  });
+
+  it('preflight-check.sh and prd-remediate.sh both scope the stale-specification check by the completed flag (static contract, both files)', () => {
+    for (const file of ['preflight-check.sh', 'prd-remediate.sh']) {
+      const script = readFileSync(join(__dirname, `../../../orchestrations/scripts/${file}`), 'utf8');
+      expect(script).toMatch(/_stale_spec=/);
+      expect(script).toMatch(/s\.get\('specification'\) and not s\.get\('completed'\)/);
+    }
+  });
+
+  it('the real canonical PRD (as committed) has zero stale specification blocks — this is the bug that was just fixed', () => {
+    const prd = JSON.parse(readFileSync(PRD_PATH, 'utf8'));
+    const stale = prd.stories.filter((s: any) => s.specification);
+    expect(stale.map((s: any) => s.id)).toHaveLength(0);
   });
 });

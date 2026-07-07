@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { parseMarkupToolCalls, stripThinkingBlocks, createQwenProvider, OPENROUTER_BASE_URL } from '../../../src/providers/qwen/QwenProvider.js';
 
 describe('parseMarkupToolCalls', () => {
@@ -141,5 +141,78 @@ describe('createQwenProvider — OPENROUTER_BASE_URL override', () => {
     const provider = createQwenProvider();
     expect(JSON.stringify(provider)).toContain('http://localhost:4000/v1');
     expect(JSON.stringify(provider)).not.toContain(OPENROUTER_BASE_URL);
+  });
+});
+
+/**
+ * EPAM_OPENROUTER_EXACTO — opt-in ":exacto" model-slug suffix (2026-07-07).
+ * OpenRouter biases routing toward high-precision providers when this suffix
+ * is present, avoiding erratic/low-precision alternatives — the same class of
+ * instability diagnosed live in a model/provider-mismatch hang this session.
+ * Off by default: not universally available for every model, so it must be a
+ * deliberate opt-in, never a silent default.
+ */
+describe('QwenProvider — EPAM_OPENROUTER_EXACTO suffix', () => {
+  afterEach(() => {
+    delete process.env.OPENROUTER_API_KEY;
+    delete process.env.EPAM_OPENROUTER_EXACTO;
+    vi.unstubAllGlobals();
+  });
+
+  function stubFetchCapturingBody(): { getLastBody: () => any } {
+    let lastBody: any;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init: RequestInit) => {
+        lastBody = JSON.parse(init.body as string);
+        return {
+          ok: true,
+          json: async () => ({
+            choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
+            usage: { prompt_tokens: 1, completion_tokens: 1 },
+          }),
+        } as Response;
+      }),
+    );
+    return { getLastBody: () => lastBody };
+  }
+
+  it('does NOT append :exacto by default', async () => {
+    process.env.OPENROUTER_API_KEY = 'test-key';
+    const { getLastBody } = stubFetchCapturingBody();
+    const provider = createQwenProvider();
+    await provider.complete({ messages: [{ role: 'user', content: 'hi' }], model: 'z-ai/glm-5.2', stream: false });
+    expect(getLastBody().model).toBe('z-ai/glm-5.2');
+  });
+
+  it('appends :exacto when EPAM_OPENROUTER_EXACTO=true', async () => {
+    process.env.OPENROUTER_API_KEY = 'test-key';
+    process.env.EPAM_OPENROUTER_EXACTO = 'true';
+    const { getLastBody } = stubFetchCapturingBody();
+    const provider = createQwenProvider();
+    await provider.complete({ messages: [{ role: 'user', content: 'hi' }], model: 'z-ai/glm-5.2', stream: false });
+    expect(getLastBody().model).toBe('z-ai/glm-5.2:exacto');
+  });
+
+  it('does not double-append :exacto if the model string already has it', async () => {
+    process.env.OPENROUTER_API_KEY = 'test-key';
+    process.env.EPAM_OPENROUTER_EXACTO = 'true';
+    const { getLastBody } = stubFetchCapturingBody();
+    const provider = createQwenProvider();
+    await provider.complete({
+      messages: [{ role: 'user', content: 'hi' }],
+      model: 'z-ai/glm-5.2:exacto',
+      stream: false,
+    });
+    expect(getLastBody().model).toBe('z-ai/glm-5.2:exacto');
+  });
+
+  it('any value other than the exact string "true" leaves the model unsuffixed (strict opt-in)', async () => {
+    process.env.OPENROUTER_API_KEY = 'test-key';
+    process.env.EPAM_OPENROUTER_EXACTO = '1';
+    const { getLastBody } = stubFetchCapturingBody();
+    const provider = createQwenProvider();
+    await provider.complete({ messages: [{ role: 'user', content: 'hi' }], model: 'z-ai/glm-5.2', stream: false });
+    expect(getLastBody().model).toBe('z-ai/glm-5.2');
   });
 });

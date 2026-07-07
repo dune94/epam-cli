@@ -7,7 +7,7 @@
  * Failure modes tested:
  *   1. Wrong deliverable type — review stories should produce .md, not .ts
  *   2. HTML stories should produce .html, not .ts/.md
- *   3. All deliverables under the expected base dir (/tmp/skyscanner-app)
+ *   3. All deliverables under the expected base dir (prd.project.outputDir)
  *   4. Sequential file ownership (.html creators before .html extenders) is documented
  *      as intentional, not flagged as a conflict
  *   5. Review stories don't claim source code deliverables

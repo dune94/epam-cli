@@ -1,0 +1,106 @@
+/**
+ * Regression guard for a live-run defect (tier3 core phase, 2026-07-02):
+ * every TC writer invocation failed with "error: unknown option '--cwd'"
+ * (epam run has no --cwd flag), yet Step 1.6 reported
+ * "TC writer gate PASSED — testCriteria populated" anyway.
+ *
+ * Two stacked bugs:
+ *   1. post-impl-tc-writer.sh passed --cwd to `epam run`, which Commander
+ *      rejects as an unknown option — the agent invocation always failed.
+ *   2. run-agent-orchestration.sh checked `if CMD | tee file; then` — this
+ *      tests tee's exit code (almost always 0), not CMD's. So even once (1)
+ *      is fixed, a real failure would still have been silently reported as
+ *      a pass.
+ *
+ * Net effect before the fix: testCriteria were never actually written by
+ * this path, but the pipeline always proceeded as if they had been.
+ */
+
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const REPO_ROOT = join(__dirname, '../../../');
+const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
+const TC_WRITER_SH = join(REPO_ROOT, 'orchestrations/scripts/post-impl-tc-writer.sh');
+const RUN_TS = join(REPO_ROOT, 'src/cli/commands/run.ts');
+
+const orchSrc = readFileSync(ORCH_SH, 'utf8');
+const tcWriterSrc = readFileSync(TC_WRITER_SH, 'utf8');
+const runTsSrc = readFileSync(RUN_TS, 'utf8');
+
+describe('epam run — confirms --cwd was never a real flag (root cause)', () => {
+  it('the run command does not declare a --cwd option', () => {
+    expect(runTsSrc).not.toMatch(/--cwd/);
+  });
+});
+
+describe('post-impl-tc-writer.sh — invokes epam run without --cwd', () => {
+  it('does not pass --cwd to the epam run invocation', () => {
+    const idx = tcWriterSrc.indexOf('"$EPAM_BIN" run "$TC_PROMPT"');
+    expect(idx).toBeGreaterThan(-1);
+    const block = tcWriterSrc.slice(idx, idx + 50);
+    expect(block).not.toMatch(/--cwd/);
+  });
+
+  it('changes directory via a subshell (cd "$OUTPUT_DIR" && ...) instead', () => {
+    const idx = tcWriterSrc.indexOf('"$EPAM_BIN" run "$TC_PROMPT"');
+    const block = tcWriterSrc.slice(Math.max(0, idx - 200), idx);
+    expect(block).toMatch(/cd "\$OUTPUT_DIR" &&/);
+  });
+
+  it('the cd + epam run invocation is wrapped in a subshell (parentheses) so cwd does not leak', () => {
+    const idx = tcWriterSrc.indexOf('cd "$OUTPUT_DIR" &&');
+    const before = tcWriterSrc.slice(Math.max(0, idx - 10), idx);
+    expect(before).toMatch(/\(\s*$/);
+  });
+
+  it('still captures the real exit code via PIPESTATUS[0] after the subshell | tee', () => {
+    const idx = tcWriterSrc.indexOf('cd "$OUTPUT_DIR" &&');
+    const afterBlock = tcWriterSrc.slice(idx, idx + 400);
+    expect(afterBlock).toMatch(/\) 2>&1 \| tee "\$LOG_FILE"/);
+    expect(afterBlock).toMatch(/TC_EXIT=\$\{PIPESTATUS\[0\]\}/);
+  });
+
+  it('the python3 validator treats a nonzero TC_EXIT as a hard failure regardless of stale TC files', () => {
+    const idx = tcWriterSrc.indexOf('if tc_exit != 0:');
+    expect(idx).toBeGreaterThan(-1);
+    const block = tcWriterSrc.slice(idx, idx + 500);
+    expect(block).toMatch(/sys\.exit\(1\)/);
+  });
+
+  it('the python3 validator is the last statement in the file (propagates TC_EXIT as the script exit code)', () => {
+    const trimmed = tcWriterSrc.trimEnd();
+    expect(trimmed.endsWith('PYEOF')).toBe(true);
+    const lastPyBlockIdx = tcWriterSrc.lastIndexOf('python3 << PYEOF');
+    expect(lastPyBlockIdx).toBeGreaterThan(-1);
+    // Nothing meaningful after the heredoc besides its own closing marker
+    const afterHeredoc = tcWriterSrc.slice(tcWriterSrc.lastIndexOf('PYEOF') + 5).trim();
+    expect(afterHeredoc).toBe('');
+  });
+});
+
+describe('run-agent-orchestration.sh — Step 1.6 no longer masks the real exit code with tee', () => {
+  const idx = orchSrc.indexOf('Step 1.6: TC writer gate — ${_tc_writer_needed}');
+  const block = orchSrc.slice(idx, idx + 1200);
+
+  it('does NOT use the `if CMD | tee file; then` pattern (checks tee, not CMD)', () => {
+    expect(block).not.toMatch(/if bash "\$SCRIPT_DIR\/post-impl-tc-writer\.sh"[\s\S]*?\| tee[\s\S]*?; then/);
+  });
+
+  it('captures the real exit code via PIPESTATUS[0] after piping to tee', () => {
+    expect(block).toMatch(/\| tee "\$LOG_DIR\/tc-writer-\$\{PHASE\}\.log"/);
+    expect(block).toMatch(/_tc_writer_exit=\$\{PIPESTATUS\[0\]\}/);
+  });
+
+  it('checks _tc_writer_exit -eq 0 to decide pass/fail (not tee\'s own exit code)', () => {
+    expect(block).toMatch(/if \[ "\$_tc_writer_exit" -eq 0 \]; then/);
+  });
+
+  it('still fails the gate and exits 1 when the writer genuinely fails', () => {
+    const failIdx = block.indexOf('else');
+    const failBlock = block.slice(failIdx, failIdx + 300);
+    expect(failBlock).toMatch(/TC writer gate FAILED/);
+    expect(failBlock).toMatch(/exit 1/);
+  });
+});

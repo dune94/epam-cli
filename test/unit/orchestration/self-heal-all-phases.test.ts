@@ -192,13 +192,19 @@ describe('tier3 script(s) — gate model env vars are exported (not which model)
     expect(tier3Src).toMatch(/export\s+ORCH_GATE_MODEL/);
   });
 
-  it('exports EPAM_MODEL_LADDER with at least one from=to mapping (pipe-separated)', () => {
+  it('exports EPAM_MODEL_LADDER_MEDIUM and EPAM_MODEL_LADDER_HIGH, each with at least one from=to mapping', () => {
     // Format: "MODEL_A=MODEL_B|MODEL_C=MODEL_D" — check structure not specific models
-    const idx  = tier3Src.indexOf('EPAM_MODEL_LADDER=');
-    const line = tier3Src.slice(idx, tier3Src.indexOf('\n', idx));
-    expect(idx).toBeGreaterThan(-1);
-    expect(line).toContain('=');
-    expect(line).toContain('|');
+    for (const varName of ['EPAM_MODEL_LADDER_MEDIUM', 'EPAM_MODEL_LADDER_HIGH']) {
+      const idx  = tier3Src.indexOf(`${varName}=`);
+      const line = tier3Src.slice(idx, tier3Src.indexOf('\n', idx));
+      expect(idx, `${varName} not exported`).toBeGreaterThan(-1);
+      expect(line).toContain('=');
+      expect(line).toContain('|');
+    }
+  });
+
+  it('EPAM_MODEL_LADDER (no suffix) is still exported as a back-compat single-ladder override', () => {
+    expect(tier3Src).toMatch(/export\s+EPAM_MODEL_LADDER="\$\{EPAM_MODEL_LADDER:-\}"/);
   });
 });
 
@@ -254,22 +260,27 @@ describe('providers — EPAM_REASONING_EFFORT maps to native API param, not temp
     join(__dirname, '../../../src/providers/qwen/QwenProvider.ts'), 'utf8'
   );
 
-  it('MiniMaxProvider has resolveReasoningEffort (not resolveTemperature)', () => {
+  it('MiniMaxProvider has resolveReasoningEffort, which stays independent of temperature', () => {
     expect(minimaxSrc).toMatch(/resolveReasoningEffort/);
-    expect(minimaxSrc).not.toMatch(/resolveTemperature/);
+    // resolveTemperature (added 2026-07-06, see resolveTemperature.test.ts) is a
+    // separate, independent knob read from EPAM_TEMPERATURE — this guards that
+    // resolveReasoningEffort itself never reads/touches temperature.
+    const fnStart = minimaxSrc.indexOf('resolveReasoningEffort(request: ProviderRequest)');
+    const fnEnd = minimaxSrc.indexOf('\n  }', fnStart);
+    expect(minimaxSrc.slice(fnStart, fnEnd)).not.toMatch(/temperature/i);
   });
 
   it('MiniMaxProvider passes reasoning_effort as a separate request field', () => {
     expect(minimaxSrc).toMatch(/reasoning_effort/);
   });
 
-  it('MiniMaxProvider temperature uses request.temperature, not effort mapping', () => {
-    expect(minimaxSrc).toMatch(/request\.temperature/);
+  it('MiniMaxProvider temperature is resolved via resolveTemperature (request.temperature > EPAM_TEMPERATURE > default), not effort mapping', () => {
+    expect(minimaxSrc).toMatch(/resolveTemperature\(request, 0\.7\)/);
     expect(minimaxSrc).not.toMatch(/effort.*===.*'high'.*return 0\.1|effort.*===.*'medium'.*return 0\.3/);
   });
 
-  it('QwenProvider has no resolveTemperature method', () => {
-    expect(qwenSrc).not.toMatch(/resolveTemperature/);
+  it('QwenProvider resolves temperature independently of reasoning effort (resolveTemperature never reads EPAM_REASONING_EFFORT)', () => {
+    expect(qwenSrc).toMatch(/resolveTemperature\(request, 0\.7\)/);
   });
 
   it('QwenProvider sends reasoning.effort to OpenRouter via resolveOpenRouterReasoning', () => {

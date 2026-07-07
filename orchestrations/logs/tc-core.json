@@ -1,0 +1,108 @@
+{
+  "SKY-002": null,
+  "SKY-002-test": {
+    "verifiedAt": "2025-01-21T20:00:00Z",
+    "sourceFiles": ["/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts", "/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts"],
+    "facts": [
+      "Constructor signature: constructor({ apiKey }: { apiKey?: string } = {})",
+      "Constructor throws Error with message 'SkyscannerClient requires an apiKey option or RAPIDAPI_KEY environment variable' when no apiKey provided and RAPIDAPI_KEY env var unset",
+      "searchFlights method signature: async searchFlights(params: SearchParams): Promise<FlightResult[]>",
+      "SearchParams interface: { origin: string; destination: string; date: string; adults?: number }",
+      "FlightResult interface: { price: number; currency: string; airline: string; departure: string; arrival: string; duration: number; stops: number }",
+      "RapidAPI URL: https://skyscanner44.p.rapidapi.com/search",
+      "Query params sent to API: origin, destination, date, adults (optional)",
+      "Request headers: { 'X-RapidAPI-Key': this.apiKey, 'X-RapidAPI-Host': 'skyscanner44.p.rapidapi.com' }",
+      "HTTP error thrown as: throw new Error(`HTTP error ${response.status}: ${response.statusText}`)",
+      "Parse error thrown as: throw new Error('Parse error: response body does not match expected shape') when data is null or not object",
+      "Returns empty array [] when itineraries is not an array",
+      "Maps response data.itineraries array to FlightResult[], extracting from legs[0], carriers.marketing[0].name",
+      "Test file uses vi.stubGlobal('fetch', mockFetch) for mocking fetch",
+      "afterEach uses vi.restoreAllMocks()",
+      "beforeEach saves originalFetch = globalThis.fetch",
+      "afterEach restores globalThis.fetch = originalFetch"
+    ],
+    "mockStrategy": "Use vi.stubGlobal('fetch', mockFetch) with vi.hoisted for mock data; beforeEach saves original fetch, afterEach restores original fetch and calls vi.restoreAllMocks()",
+    "bannedPatterns": [
+      "@jest/globals",
+      "jest.mock",
+      "vi.mock('./skyscanner/client')",
+      "origin/destination instead of from/to for query params",
+      "POST /search",
+      "/api/search",
+      "skyscanner-api.com"
+    ]
+  },
+  "SKY-003": null,
+  "SKY-003-test": {
+    "verifiedAt": "2025-01-21T20:00:00Z",
+    "sourceFiles": ["/home/bradleyjerome/projects/skyscanner-app/src/cli.ts", "/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts"],
+    "facts": [
+      "CLI entry point: main(argv: string[]) function exported from src/cli.ts",
+      "CLI arguments parsed with -- prefix: --origin, --destination, --date, --adults",
+      "Missing --origin error: 'Missing required argument: --origin'",
+      "Missing --destination error: 'Missing required argument: --destination'",
+      "Missing --date error: 'Missing required argument: --date'",
+      "Invalid adults error: 'Invalid adults count: must be a positive integer' thrown when adults is NaN or < 1",
+      "Adults defaults to 1 when not specified",
+      "Missing RAPIDAPI_KEY error: 'Error: RAPIDAPI_KEY environment variable is required' logged to console.error",
+      "process.exit(1) called on errors, process.exit(0) on success",
+      "Empty results output: 'No flights found.' to console.log",
+      "Table headers: ['Airline', 'Price', 'Departure', 'Arrival', 'Duration', 'Stops']",
+      "Column alignment: Airline (padRight), Price (padLeft), Departure (padRight), Arrival (padRight), Duration (padRight), Stops (padRight)",
+      "Separator row uses '-'.repeat(w) for each column joined with '-+-'",
+      "Data rows joined with ' | ' separator",
+      "Currency symbols: GBP='£', USD='$', EUR='€', JPY='¥', default falls back to currency code",
+      "Price format: `${symbol}${price.toFixed(2)}`",
+      "Duration format: `${hours}h ${mins}m` from minutes input",
+      "Import path: './skyscanner/client.js' (note .js extension)",
+      "Test mocks SkyscannerClient with vi.mock('./skyscanner/client.js', ...)"
+    ],
+    "mockStrategy": "Use vi.mock('./skyscanner/client.js') with mockImplementation returning { searchFlights: vi.fn(), isValidResponse: vi.fn(), transformResponse: vi.fn() }; spy on process.exit and console methods; beforeEach sets process.env.RAPIDAPI_KEY, afterEach restores process.env and calls vi.restoreAllMocks()",
+    "bannedPatterns": [
+      "@jest/globals",
+      "jest.mock",
+      "--from/--to instead of --origin/--destination",
+      "'origin' or 'from' in error messages (actual errors reference --origin, --destination)",
+      "left-pad for Airline column",
+      "right-pad for Price column",
+      "import from './skyscanner/client' without .js extension"
+    ]
+  },
+  "SKY-004": null,
+  "SKY-004-test": {
+    "verifiedAt": "2025-01-21T20:00:00Z",
+    "sourceFiles": ["/home/bradleyjerome/projects/skyscanner-app/src/server.ts", "/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts"],
+    "facts": [
+      "Server uses express framework",
+      "GET /health endpoint returns { status: 'ok', uptime: number } with 200 status",
+      "GET /search endpoint query params: from, to, date (required), adults (optional)",
+      "GET /search returns 400 with body { error: 'Missing required parameters: from, to, date' } when params missing",
+      "GET /search returns 503 with body { error: 'RAPIDAPI_KEY not configured' } when RAPIDAPI_KEY not set",
+      "GET /search returns 200 with body { flights: FlightResult[], count: number, searchedAt: ISO string } on success",
+      "GET /search returns 500 with body { error: 'Failed to search flights' } on API error",
+      "GET /cheapest endpoint query params: from, to, date (adults hardcoded to 1)",
+      "GET /cheapest returns 400 with body { error: 'Missing required parameters: from, to, date' } when params missing",
+      "GET /cheapest returns 503 with body { error: 'RAPIDAPI_KEY not configured' } when RAPIDAPI_KEY not set",
+      "GET /cheapest returns 404 with body { error: 'No flights found' } when no flights",
+      "GET /cheapest returns 200 with single FlightResult object (cheapest by price) on success",
+      "GET /cheapest returns 500 with body { error: 'Failed to find cheapest flight' } on API error",
+      "GET / serves static file from __dirname/public/index.html (no API key required)",
+      "requireApiKey middleware checks RAPIDAPI_KEY env var, returns 503 if missing",
+      "Server exports: { app, PORT } where PORT defaults to 3000",
+      "Test uses supertest for HTTP assertions",
+      "Test uses vi.mock('./skyscanner/client.js') to mock SkyscannerClient",
+      "Test uses vi.resetModules() in beforeEach to get fresh module instances",
+      "Test uses vi.clearAllMocks() in afterEach"
+    ],
+    "mockStrategy": "Use vi.mock('./skyscanner/client.js') with mockImplementation; use supertest for HTTP testing; beforeEach calls vi.resetModules() and sets process.env; afterEach restores process.env and calls vi.clearAllMocks()",
+    "bannedPatterns": [
+      "@jest/globals",
+      "jest.mock",
+      "origin/destination as query param names (actual params are from/to)",
+      "POST /search or POST /cheapest",
+      "/api prefix on routes",
+      "import from './skyscanner/client' without .js extension",
+      "vi.stubGlobal"
+    ]
+  }
+}

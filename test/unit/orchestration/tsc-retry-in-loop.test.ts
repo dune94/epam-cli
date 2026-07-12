@@ -49,8 +49,12 @@ describe('claude.sh — run_tsc_verification exists and mirrors the external gat
     expect(fnBlock).toMatch(/_ts_count.*-eq 0/);
   });
 
-  it('skips for test-engineer role stories', () => {
-    expect(fnBlock).toMatch(/agentRole.*test-engineer|test-engineer.*return 0/is);
+  it('does NOT blanket-skip test-engineer role stories (fixed 2026-07-12 — see tsc-gate-test-engineer-blindspot.test.ts)', () => {
+    // A .test.ts file is compiled/type-checked by tsc exactly like any other
+    // .ts file; a live run showed every syntax-class error observed was in a
+    // .test.ts file written by a test-engineer story — precisely the case
+    // this skip used to disable the check for.
+    expect(fnBlock).not.toMatch(/test-engineer.*return 0/is);
   });
 
   it('runs tsc --noEmit against PROJECT_ROOT', () => {
@@ -84,13 +88,18 @@ describe('claude.sh — tsc verification sets VERIFICATION_FAILURE (same channel
 });
 
 describe('claude.sh — run_tsc_verification is wired into the invoke_success gate chain', () => {
-  it('is called after run_external_verification, before the success branch', () => {
+  it('is called BEFORE run_external_verification, before the success branch (reordered 2026-07-12)', () => {
+    // A cheap, near-instant tsc/syntax check should never run AFTER an
+    // often-multi-minute external test command already paid for a doomed
+    // run — see tsc-gate-test-engineer-blindspot.test.ts for the live
+    // incident (5 syntax errors, each needing a full npm test + FailureAnalyst
+    // LLM call to discover) this reordering fixes.
     const extIdx = claudeSrc.indexOf('! run_external_verification "$story_id" "$output_file"');
     const tscIdx = claudeSrc.indexOf('! run_tsc_verification "$story_id" "$output_file"');
     const successIdx = claudeSrc.indexOf('if [ "$invoke_success" = true ]; then', tscIdx);
     expect(extIdx).toBeGreaterThan(-1);
-    expect(tscIdx).toBeGreaterThan(extIdx);
-    expect(successIdx).toBeGreaterThan(tscIdx);
+    expect(tscIdx).toBeLessThan(extIdx);
+    expect(successIdx).toBeGreaterThan(extIdx);
   });
 
   it('is gated by invoke_success = true (short-circuits when a prior check already failed)', () => {

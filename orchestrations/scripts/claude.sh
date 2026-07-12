@@ -2698,11 +2698,17 @@ run_tsc_verification() {
     _ts_count=$(find "$PROJECT_ROOT/src" -name "*.ts" 2>/dev/null | grep -v node_modules | wc -l)
     [ "$_ts_count" -eq 0 ] && return 0
 
-    # Skip tsc gate for test-only stories (they extend existing files, not create TS modules)
-    local _role
-    _role=$(jq -r --arg id "$story_id" '.stories[] | select(.id==$id) | .agentRole // ""' \
-        "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null)
-    [ "$_role" = "test-engineer" ] && return 0
+    # NOTE: this gate used to skip test-engineer-role stories entirely ("they
+    # extend existing files, not create TS modules"). That reasoning doesn't
+    # hold: a .test.ts file is compiled/type-checked by tsc exactly like any
+    # other .ts file, and a syntax error inside one is exactly what `tsc
+    # --noEmit` catches. Removed 2026-07-12 after a live run showed EVERY
+    # syntax-class error observed (unterminated strings, mismatched parens, a
+    # stray-token typo) was in a .test.ts file written by a test-engineer
+    # story — precisely the case this skip disabled the check for, forcing
+    # each one through a full external `npm test` run + FailureAnalyst LLM
+    # call + model-tier escalation to catch what tsc would have caught for
+    # free in the same turn.
 
     local _node_cmd="${NODE_CMD:-${HOME}/.nvm/versions/node/v20.20.0/bin/node}"
     [ ! -x "$_node_cmd" ] && _node_cmd="$(command -v node 2>/dev/null || echo 'node')"
@@ -5230,19 +5236,24 @@ ${_trimmed_amendment}"
             fi
         fi
 
+        # TypeScript compile check — runs BEFORE external verification
+        # (reordered 2026-07-12; see run_tsc_verification()'s own comment for
+        # the live incident this fixes). A syntax/type error is a cheap,
+        # near-instant deterministic check; the (often multi-minute) external
+        # test command below should never run against code that can't even
+        # compile. Still inside the retry loop so a tsc failure gets the same
+        # self-healing treatment (failure analyst, InferenceLadder escalation)
+        # as any other verification failure, rather than exiting the phase
+        # with zero retries.
+        if [ "$invoke_success" = true ] && ! run_tsc_verification "$story_id" "$output_file"; then
+            warning "$story_cli deliverables written but tsc --noEmit failed"
+            invoke_success=false
+        fi
+
         # External test verification — runs tests outside the agent loop so the
         # agent only needs to write files (keeping iterations low).
         if [ "$invoke_success" = true ] && ! run_external_verification "$story_id" "$output_file"; then
             warning "$story_cli deliverables written but external tests failed"
-            invoke_success=false
-        fi
-
-        # TypeScript compile check — inside the retry loop so a tsc failure
-        # gets the same self-healing treatment (failure analyst, InferenceLadder
-        # escalation) as any other verification failure, rather than exiting
-        # the phase with zero retries.
-        if [ "$invoke_success" = true ] && ! run_tsc_verification "$story_id" "$output_file"; then
-            warning "$story_cli deliverables written but tsc --noEmit failed"
             invoke_success=false
         fi
 

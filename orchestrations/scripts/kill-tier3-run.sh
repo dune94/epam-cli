@@ -34,7 +34,14 @@ if [ -f "$PID_FILE" ]; then
 fi
 
 echo "[kill-tier3] Sweeping for orphaned orchestration processes (pre-fix runs, stragglers)..."
-orphan_pattern='orchestrations/scripts/tier3-travel-app-run\.sh|orchestrations/scripts/run-agent-orchestration\.sh|orchestrations/scripts/ai-run\.sh'
+# Found live 2026-07-12: claude.sh (the per-story implementation loop) and its
+# `epam run` subprocess are NOT direct descendants reached by the process-
+# group kill above when the run was launched without going through whatever
+# triggers tier3-travel-app-run.sh's own setsid/pidfile write (e.g. a plain
+# `nohup ... &` launch) — no pidfile exists, so only this sweep runs, and it
+# used to miss these two, leaving them running (and billing) after the "kill"
+# reported success.
+orphan_pattern='orchestrations/scripts/tier3-travel-app-run\.sh|orchestrations/scripts/run-agent-orchestration\.sh|orchestrations/scripts/ai-run\.sh|orchestrations/scripts/claude\.sh|epam run --provider'
 orphans="$(pgrep -f "$orphan_pattern" 2>/dev/null || true)"
 if [ -n "$orphans" ]; then
   echo "$orphans" | xargs -r kill -TERM 2>/dev/null || true

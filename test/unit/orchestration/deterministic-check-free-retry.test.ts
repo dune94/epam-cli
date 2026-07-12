@@ -125,7 +125,10 @@ describe('claude.sh — DETERMINISTIC_CHECK_FAILURE design', () => {
 describe('claude.sh — _total_attempts fixes the amendment-injection gate for free retries', () => {
   it('implement_story declares _total_attempts and increments it every loop iteration (unlike retry_count)', () => {
     const fnStart = claudeSrc.indexOf('implement_story() {');
-    const nearby = claudeSrc.slice(fnStart, fnStart + 800);
+    // Widened from 800 (2026-07-12): the retry-extension-coordinator's
+    // MAX_RETRIES shadow-local + explanatory comment pushed this declaration
+    // further into the function.
+    const nearby = claudeSrc.slice(fnStart, fnStart + 1600);
     expect(nearby).toMatch(/local _total_attempts=0/);
     const loopIdx = claudeSrc.indexOf('while [ $retry_count -le $MAX_RETRIES ]; do');
     const afterLoop = claudeSrc.slice(loopIdx, loopIdx + 200);

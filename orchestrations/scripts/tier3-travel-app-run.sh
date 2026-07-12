@@ -275,6 +275,14 @@ export EPAM_MODEL_LADDER="${EPAM_MODEL_LADDER:-}"
 # Final fallback: used at R3 when the story model was never escalated at R2
 export EPAM_FINAL_FALLBACK_MODEL="${EPAM_FINAL_FALLBACK_MODEL:-moonshotai/kimi-k2}"
 export EPAM_FINAL_FALLBACK_PROVIDER="${EPAM_FINAL_FALLBACK_PROVIDER:-qwen}"
+# Dynamic retry-extension coordinator (2026-07-12): ships DISABLED by
+# default, same rollout discipline as the DeepEval groundedness check --
+# prove it via fixture tests and observe it advisory-only before letting it
+# affect real run behavior. EPAM_RETRY_EXTENSION_MAX bounds how many extra
+# retries a single extension can ever grant, regardless of what the
+# coordinator agent requests.
+export EPAM_RETRY_EXTENSION_ENABLED="${EPAM_RETRY_EXTENSION_ENABLED:-0}"
+export EPAM_RETRY_EXTENSION_MAX="${EPAM_RETRY_EXTENSION_MAX:-2}"
 # Model-to-provider routing for post-escalation model steps (consumed by
 # claude.sh's resolve_model_provider() — zero vendor names hardcoded in the
 # engine itself, see that function's comment). This project routes every

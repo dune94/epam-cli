@@ -4743,10 +4743,209 @@ else:
 PYEOF
 }
 
+# compute_retry_extension_evidence <story_id>
+# Deterministic (no LLM cost) evidence gathering for the retry-extension
+# coordinator, computed purely from two JSONL logs that already exist:
+#   healing-events.jsonl              (run_healing_recorder, self-heal events
+#                                       + the HEALING_BROKEN sentinel record)
+#   failure-diagnosis-groundedness.jsonl (run_diagnosis_groundedness_check)
+# Prints a single JSON object to stdout:
+#   {"total_heal_events":N,"distinct_diagnoses":N,"healing_broken_ever":bool,
+#    "avg_groundedness":N,"groundedness_sample_count":N}
+compute_retry_extension_evidence() {
+    local story_id="$1"
+    local heal_log="${OUTPUT_DIR:-$LOG_DIR}/healing-events.jsonl"
+    local grounded_log="${OUTPUT_DIR:-$LOG_DIR}/failure-diagnosis-groundedness.jsonl"
+
+    local total_heal_events=0 distinct_diagnoses=0 healing_broken_ever="false"
+    if [ -f "$heal_log" ]; then
+        total_heal_events=$(jq -r --arg s "$story_id" 'select(.story_id == $s and .event != "HEALING_BROKEN")' "$heal_log" 2>/dev/null | jq -s 'length' 2>/dev/null || echo 0)
+        # NOTE: `grep -c .` exits 1 (even though it correctly PRINTS "0")
+        # when zero lines match -- under this script's `set -e`, a bare
+        # `local var=$(pipeline-ending-in-grep-c)` with no matches SILENTLY
+        # ABORTS THE WHOLE FUNCTION (and, being under set -e, potentially
+        # the whole claude.sh process) the moment any story has zero heal
+        # events -- the common/healthy case. Confirmed via direct
+        # `set -e` reproduction while building this. `wc -l` exits 0
+        # unconditionally and prints "0" for empty input just as correctly
+        # -- use that instead, never grep -c, for any count-of-lines-that-
+        # might-be-zero computation under this file's set -e.
+        distinct_diagnoses=$(jq -r --arg s "$story_id" 'select(.story_id == $s and .event != "HEALING_BROKEN") | .diagnosis' "$heal_log" 2>/dev/null | sort -u | wc -l | tr -d ' ')
+        if jq -e --arg s "$story_id" 'select(.story_id == $s and .event == "HEALING_BROKEN")' "$heal_log" >/dev/null 2>&1; then
+            healing_broken_ever="true"
+        fi
+    fi
+
+    local avg_groundedness=0 groundedness_sample_count=0
+    if [ -f "$grounded_log" ]; then
+        groundedness_sample_count=$(jq -r --arg s "$story_id" 'select(.storyId == $s and .skipped == false)' "$grounded_log" 2>/dev/null | jq -s 'length' 2>/dev/null || echo 0)
+        if [ "${groundedness_sample_count:-0}" -gt 0 ] 2>/dev/null; then
+            avg_groundedness=$(jq -r --arg s "$story_id" 'select(.storyId == $s and .skipped == false) | .score' "$grounded_log" 2>/dev/null | \
+                python3 -c "
+import sys
+scores = [float(l) for l in sys.stdin if l.strip()]
+print(sum(scores)/len(scores) if scores else 0)
+" 2>/dev/null || echo 0)
+        fi
+    fi
+
+    jq -nc --argjson total "${total_heal_events:-0}" --argjson distinct "${distinct_diagnoses:-0}" \
+        --argjson broken "$healing_broken_ever" --argjson avg "${avg_groundedness:-0}" \
+        --argjson samples "${groundedness_sample_count:-0}" \
+        '{total_heal_events:$total, distinct_diagnoses:$distinct, healing_broken_ever:$broken, avg_groundedness:$avg, groundedness_sample_count:$samples}'
+}
+
+# run_retry_extension_coordinator <story_id>
+# Dynamic self-heal augmentation (2026-07-12, user request): a story that
+# exhausted MAX_RETRIES with genuine, converging progress (each failure a
+# DIFFERENT diagnosed bug, not a repeat) shouldn't necessarily be abandoned
+# at a fixed, one-size-fits-all ceiling. This is a bounded, evidence-gated
+# extension of that ceiling — NOT free-form LLM re-judgment of the hardcoded
+# limit: deterministic evidence is computed first, and the LLM is only
+# consulted when that evidence is genuinely ambiguous (see the pre-gate
+# below), mirroring the "trust the deterministic oracle over an LLM opinion"
+# principle already used elsewhere in this pipeline (e.g. SAST/spec-
+# validator's blockerCount-over-self-reported-verdict trust).
+#
+# Prints the number of EXTRA retries granted (0 if not extending) to stdout.
+# Fails closed (prints 0) on any error, disabled state, or malformed gate
+# response -- this must never be able to grant an extension it can't justify
+# with real evidence.
+run_retry_extension_coordinator() {
+    local story_id="$1"
+    if [ "${EPAM_RETRY_EXTENSION_ENABLED:-0}" != "1" ]; then
+        echo 0
+        return 0
+    fi
+
+    local evidence
+    evidence=$(compute_retry_extension_evidence "$story_id")
+    if [ -z "$evidence" ] || ! echo "$evidence" | jq empty 2>/dev/null; then
+        echo 0
+        return 0
+    fi
+
+    local total_heal_events distinct_diagnoses healing_broken_ever
+    total_heal_events=$(echo "$evidence" | jq -r '.total_heal_events')
+    distinct_diagnoses=$(echo "$evidence" | jq -r '.distinct_diagnoses')
+    healing_broken_ever=$(echo "$evidence" | jq -r '.healing_broken_ever')
+
+    # Deterministic pre-gate: skip the LLM call entirely when the evidence
+    # already answers the question. A repeated (non-distinct) diagnosis, or
+    # a HEALING_BROKEN sentinel, is direct proof of non-convergence -- no
+    # amount of LLM judgment changes that, so don't spend a gate-model call
+    # asking.
+    if [ "$healing_broken_ever" = "true" ] || [ "${distinct_diagnoses:-0}" -lt "${total_heal_events:-0}" ] 2>/dev/null; then
+        log "  [RetryExtension] $story_id: evidence shows non-convergence (healing_broken=$healing_broken_ever distinct=$distinct_diagnoses/$total_heal_events) — not extending, no gate call made"
+        echo 0
+        return 0
+    fi
+
+    local gate_provider="${ORCH_GATE_PROVIDER:-}"
+    local gate_model="${ORCH_GATE_MODEL:-}"
+    if [ -z "$gate_provider" ]; then
+        echo 0
+        return 0
+    fi
+
+    local profiles_file="$(dirname "$SCRIPT_DIR")/agents/profiles.json"
+    local coordinator_profile=""
+    if [ -f "$profiles_file" ]; then
+        coordinator_profile=$(jq -r '."retry-extension-coordinator" // ""' "$profiles_file" 2>/dev/null || echo "")
+    fi
+    [ -z "$coordinator_profile" ] && coordinator_profile="You are the retry-extension coordinator. Given hard evidence about a story's self-heal history, decide whether one more bounded batch of retries is pragmatic."
+
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    local ac_count
+    ac_count=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | ((.acceptanceCriteria // []) | length)' "$prd_target" 2>/dev/null || echo 0)
+
+    local coord_prompt
+    coord_prompt="${coordinator_profile}
+
+STORY: ${story_id}
+Current retry_count: ${retry_count:-unknown} / MAX_RETRIES: ${MAX_RETRIES:-unknown}
+Acceptance criteria count (scope proxy): ${ac_count}
+
+EVIDENCE (pre-computed, treat as ground truth -- do not re-derive):
+${evidence}
+
+Every self-heal attempt so far produced a DISTINCT diagnosis (no repeats), and no HEALING_BROKEN sentinel has fired -- this story is showing real, converging progress, not a stuck loop. Decide if extending its retry budget is pragmatic.
+
+Output ONLY: {\"extend\":true|false,\"extraRetries\":<1-3>,\"reason\":\"<one sentence>\"}"
+
+    local coord_raw=""
+    coord_raw=$(echo "$coord_prompt" | \
+        AI_PROVIDER="$gate_provider" \
+        AI_MODEL="$gate_model" \
+        EPAM_CLI="$EPAM_CLI" \
+        bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \
+        ${gate_model:+--model "$gate_model"} \
+        2>/dev/null || echo '{"extend":false,"extraRetries":0,"reason":"coordinator unavailable"}')
+
+    local extend="false" extra_retries=0 reason=""
+    local parsed
+    parsed=$(echo "$coord_raw" | python3 -c "
+import sys, json, re
+text = sys.stdin.read()
+try:
+    obj = json.loads(text.strip())
+    print(json.dumps(obj))
+    sys.exit(0)
+except Exception:
+    pass
+m = re.search(r'\{[^{}]*\"extend\"[^{}]*\}', text, re.DOTALL)
+if m:
+    try:
+        print(json.dumps(json.loads(m.group(0))))
+        sys.exit(0)
+    except Exception:
+        pass
+print(json.dumps({\"extend\": False, \"extraRetries\": 0, \"reason\": \"unparseable\"}))
+" 2>/dev/null || echo '{"extend":false,"extraRetries":0,"reason":"unparseable"}')
+
+    extend=$(echo "$parsed" | jq -r '.extend // false' 2>/dev/null || echo "false")
+    extra_retries=$(echo "$parsed" | jq -r '.extraRetries // 0' 2>/dev/null || echo 0)
+    reason=$(echo "$parsed" | jq -r '.reason // ""' 2>/dev/null || echo "")
+
+    local granted=0
+    if [ "$extend" = "true" ]; then
+        local _max="${EPAM_RETRY_EXTENSION_MAX:-2}"
+        granted="$extra_retries"
+        [ "$granted" -gt "$_max" ] 2>/dev/null && granted="$_max"
+        [ "$granted" -lt 0 ] 2>/dev/null && granted=0
+        # Re-validate is an int; a malformed extraRetries (non-numeric) fails closed.
+        case "$granted" in
+            ''|*[!0-9]*) granted=0 ;;
+        esac
+    fi
+
+    mkdir -p "${OUTPUT_DIR:-$LOG_DIR}" 2>/dev/null
+    jq -nc --arg story "$story_id" --argjson evidence "$evidence" --arg extend "$extend" \
+        --argjson granted "${granted:-0}" --arg reason "$reason" --arg ts "$(date -Iseconds)" \
+        '{storyId: $story, evidence: $evidence, extend: ($extend == "true"), extraRetriesGranted: $granted, reason: $reason, timestamp: $ts}' \
+        >> "${OUTPUT_DIR:-$LOG_DIR}/retry-extension-decisions.jsonl" 2>/dev/null || true
+
+    if [ "${granted:-0}" -gt 0 ] 2>/dev/null; then
+        log "  [RetryExtension] $story_id: extending by $granted retr(y/ies) — $reason"
+    fi
+    echo "${granted:-0}"
+    return 0
+}
+
 # Invoke Claude CLI to implement a story
 implement_story() {
     local story_id=$1
     local retry_count=0
+    # Shadows the script-global MAX_RETRIES for the duration of THIS story
+    # only. run_retry_extension_coordinator() (below) can bump this local
+    # copy when it grants a bounded extension -- shadowing it here (rather
+    # than mutating and manually restoring the global) means bash itself
+    # guarantees the original value comes back on EVERY exit path from this
+    # function (success mid-loop return, or the failure path at the bottom),
+    # with no risk of a granted extension leaking into the NEXT story's
+    # budget in the same claude.sh process.
+    local MAX_RETRIES="$MAX_RETRIES"
+    local _retry_extension_used=0
     # Caps free retries granted for deterministic-check failures (see
     # DETERMINISTIC_CHECK_FAILURE) — these don't count against retry_count/the
     # ladder, but an unbounded free-retry loop is still a real risk if a check
@@ -4868,6 +5067,7 @@ implement_story() {
         log "  Planning phase complete ($plan_words words, reviewed)"
     fi
 
+    while true; do
     while [ $retry_count -le $MAX_RETRIES ]; do
         _total_attempts=$((_total_attempts + 1))
         # Inference ladder: on retry, escalate to a stronger model + increase reasoning effort.
@@ -5518,6 +5718,22 @@ This was caught by an automated check before the test suite even ran — fix the
                 sleep $RETRY_DELAY
             fi
         fi
+    done
+
+    # Retry-extension coordinator (2026-07-12): the inner loop just exhausted
+    # MAX_RETRIES. Before giving up, ask (at most once per story) whether the
+    # evidence justifies a bounded extension -- see
+    # run_retry_extension_coordinator()'s own docstring for the full design.
+    if [ "$_retry_extension_used" -eq 0 ]; then
+        _retry_extension_used=1
+        local _granted_extra_retries
+        _granted_extra_retries=$(run_retry_extension_coordinator "$story_id")
+        if [ -n "$_granted_extra_retries" ] && [ "$_granted_extra_retries" -gt 0 ] 2>/dev/null; then
+            MAX_RETRIES=$((MAX_RETRIES + _granted_extra_retries))
+            continue
+        fi
+    fi
+    break
     done
 
     error "Failed to implement $story_id after $((MAX_RETRIES + 1)) attempts"

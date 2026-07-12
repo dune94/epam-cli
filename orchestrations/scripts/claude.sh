@@ -3674,7 +3674,12 @@ run_diagnosis_groundedness_check() {
     fi
 
     mkdir -p "${LOG_DIR}" 2>/dev/null
-    jq -n --arg story "$story_id" --arg diag "$diagnosis" --argjson result "$_dgc_result" --arg ts "$(date -Iseconds)" \
+    # -c (compact) is required here, not cosmetic: without it jq pretty-
+    # prints each object across multiple lines, breaking the "one JSON
+    # object per line" contract every JSONL consumer (line-based tailing,
+    # wc -l counting, streaming parsers) depends on -- found live 2026-07-12
+    # while building a report script against this exact file.
+    jq -nc --arg story "$story_id" --arg diag "$diagnosis" --argjson result "$_dgc_result" --arg ts "$(date -Iseconds)" \
         '{storyId: $story, diagnosis: $diag, timestamp: $ts} + $result' \
         >> "${LOG_DIR}/failure-diagnosis-groundedness.jsonl" 2>/dev/null || true
     return 0

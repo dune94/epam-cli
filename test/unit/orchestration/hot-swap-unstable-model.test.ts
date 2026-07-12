@@ -156,6 +156,119 @@ describe('hot_swap_story_model_if_unstable — REAL execution', () => {
 });
 
 /**
+ * REPRODUCES a live incident (2026-07-12, tier3-travel-app run): SKY-003-test
+ * timed out on z-ai/glm-5.1 (a raw provider hang -- the API call's own raw
+ * result file was 0 bytes, i.e. genuinely no response within the full
+ * effort-scaled window, not a slow-but-working call). z-ai/glm-5.1 is
+ * ESCALATION_MODEL_HIGH -- the TOP of both EPAM_MODEL_LADDER_MEDIUM and
+ * EPAM_MODEL_LADDER_HIGH in tier3-travel-app-run.sh -- so
+ * hot_swap_story_model_if_unstable() found no further ladder step and
+ * silently no-op'd. The retry then re-invoked the IDENTICAL model/provider,
+ * hit the same class of hang again, and the story was skipped entirely
+ * after the second timeout -- exactly the "we gave up instead of healing"
+ * gap flagged after this run.
+ *
+ * Fix: when no ladder step is available (the story is already at the top of
+ * its ladder), fall back to EPAM_FINAL_FALLBACK_MODEL/PROVIDER -- a
+ * genuinely DIFFERENT model+provider pairing already configured elsewhere in
+ * this pipeline for exactly this "nowhere left to escalate" situation (see
+ * claude.sh's own InferenceLadder Rung3 fallback) -- instead of silently
+ * repeating the identical, already-failed pairing.
+ */
+describe('hot_swap_story_model_if_unstable — top-of-ladder fallback (fixes live gap)', () => {
+  function run(opts: {
+    currentModel: string;
+    ladderTier?: string;
+    ladderMedium?: string;
+    ladderHigh?: string;
+    providerMap?: string;
+    finalFallbackModel?: string;
+    finalFallbackProvider?: string;
+  }): { model: string; aiProvider: string | null; warned: string[] } {
+    const dir = mkdtempSync(join(tmpdir(), 'hot-swap-fallback-test-'));
+    try {
+      const fnBody = extractFunctionBodyBraceCounted('hot_swap_story_model_if_unstable');
+      const prdFile = join(dir, 'prd.json');
+      writeFileSync(
+        prdFile,
+        JSON.stringify({
+          stories: [{ id: 'SKY-999', model: opts.currentModel, aiProvider: 'qwen', ladderTier: opts.ladderTier }],
+        }),
+      );
+      const scriptPath = join(dir, 'run.sh');
+      writeFileSync(
+        scriptPath,
+        [
+          `PRD_FILE="${prdFile}"`,
+          `warning() { echo "WARN: $*" >&2; }`,
+          opts.ladderMedium ? `EPAM_MODEL_LADDER_MEDIUM="${opts.ladderMedium}"` : '',
+          opts.ladderHigh ? `EPAM_MODEL_LADDER_HIGH="${opts.ladderHigh}"` : '',
+          opts.providerMap ? `EPAM_MODEL_PROVIDER_MAP="${opts.providerMap}"` : '',
+          opts.finalFallbackModel ? `EPAM_FINAL_FALLBACK_MODEL="${opts.finalFallbackModel}"` : '',
+          opts.finalFallbackProvider ? `EPAM_FINAL_FALLBACK_PROVIDER="${opts.finalFallbackProvider}"` : '',
+          fnBody,
+          `hot_swap_story_model_if_unstable "SKY-999"`,
+        ]
+          .filter(Boolean)
+          .join('\n'),
+      );
+      const stderr = execFileSync('bash', [scriptPath], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+      const prd = JSON.parse(readFileSync(prdFile, 'utf8'));
+      return {
+        model: prd.stories[0].model,
+        aiProvider: prd.stories[0].aiProvider,
+        warned: stderr.split('\n').filter(Boolean),
+      };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('REPRODUCES the live gap: a model at the top of its ladder (no configured step) now falls back to EPAM_FINAL_FALLBACK_MODEL instead of silently no-opping', () => {
+    const result = run({
+      currentModel: 'z-ai/glm-5.1',
+      ladderTier: 'high',
+      ladderHigh: 'MiniMax-M3=z-ai/glm-5.1', // z-ai/glm-5.1 is a TARGET, never a source -- no step FROM it
+      providerMap: 'z-ai/*=qwen|moonshotai/*=qwen',
+      finalFallbackModel: 'moonshotai/kimi-k2',
+      finalFallbackProvider: 'qwen',
+    });
+    // Desired (post-fix): swaps to the configured final fallback, a genuinely
+    // different model, instead of leaving z-ai/glm-5.1 in place to repeat
+    // the same hang on retry.
+    expect(result.model).toBe('moonshotai/kimi-k2');
+    expect(result.aiProvider).toBe('qwen');
+  });
+
+  it('does not fall back when the current model already IS the final fallback (nothing left to try)', () => {
+    const result = run({
+      currentModel: 'moonshotai/kimi-k2',
+      ladderTier: 'medium',
+      finalFallbackModel: 'moonshotai/kimi-k2',
+      finalFallbackProvider: 'qwen',
+    });
+    expect(result.model).toBe('moonshotai/kimi-k2');
+  });
+
+  it('remains a true no-op when no final fallback is configured at all (preserves old behavior)', () => {
+    const result = run({ currentModel: 'z-ai/glm-5.1', ladderTier: 'high' });
+    expect(result.model).toBe('z-ai/glm-5.1');
+  });
+
+  it('a normal mid-ladder model still prefers its OWN ladder step over the final fallback (fallback is last-resort only)', () => {
+    const result = run({
+      currentModel: 'moonshotai/kimi-k2',
+      ladderTier: 'medium',
+      ladderMedium: 'moonshotai/kimi-k2=MiniMax-M3',
+      providerMap: 'MiniMax-*=minimax',
+      finalFallbackModel: 'z-ai/glm-5.1',
+      finalFallbackProvider: 'qwen',
+    });
+    expect(result.model).toBe('MiniMax-M3');
+  });
+});
+
+/**
  * Watchdog retry-timeout scaling (2026-07-07): found live that a story's SECOND
  * watchdog attempt (post-hot-swap) can time out too — a live process inspection
  * during a real timeout showed a genuinely in-flight, still-ESTABLISHED API

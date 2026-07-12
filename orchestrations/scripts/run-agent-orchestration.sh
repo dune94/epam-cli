@@ -644,9 +644,30 @@ hot_swap_story_model_if_unstable() {
             break
         fi
     done
+
+    # Top-of-ladder fallback (found live, 2026-07-12): a model that has NO
+    # configured step FROM it (because it's already the ladder's own top rung
+    # -- e.g. ESCALATION_MODEL_HIGH itself) used to leave this function a
+    # silent no-op, so the retry re-invoked the IDENTICAL model+provider,
+    # hit the same class of hang again, and the story was skipped entirely
+    # after the second timeout. A watchdog timeout means genuinely zero
+    # response within the full window (see this function's own docstring) --
+    # that's real evidence the CURRENT pairing is unhealthy, not just slow,
+    # so retrying it unchanged a second time is not a meaningful self-heal
+    # attempt. Fall back to EPAM_FINAL_FALLBACK_MODEL/PROVIDER -- a
+    # genuinely different pairing already configured for exactly this
+    # "nowhere left to escalate" case (see claude.sh's own InferenceLadder
+    # Rung3 fallback) -- rather than repeating a pairing already known to
+    # have failed once.
+    if [ -z "$new_model" ] && [ -n "${EPAM_FINAL_FALLBACK_MODEL:-}" ] && [ "${EPAM_FINAL_FALLBACK_MODEL}" != "$current_model" ]; then
+        new_model="${EPAM_FINAL_FALLBACK_MODEL}"
+    fi
     [ -z "$new_model" ] && return 0
 
     local new_provider="" map_pair map_from map_to
+    if [ "$new_model" = "${EPAM_FINAL_FALLBACK_MODEL:-}" ] && [ -n "${EPAM_FINAL_FALLBACK_PROVIDER:-}" ]; then
+        new_provider="${EPAM_FINAL_FALLBACK_PROVIDER}"
+    fi
     if [ -n "${EPAM_MODEL_PROVIDER_MAP:-}" ]; then
         IFS='|'
         read -ra map_pairs <<< "$EPAM_MODEL_PROVIDER_MAP"
@@ -670,7 +691,9 @@ hot_swap_story_model_if_unstable() {
     tmp_prd=$(mktemp)
     if jq "${jq_args[@]}" "$jq_filter" "$prd_target" > "$tmp_prd" 2>/dev/null; then
         mv "$tmp_prd" "$prd_target"
-        warning "Watchdog: hot-swapping $story_id model after timeout: '$current_model' -> '$new_model'${new_provider:+ (provider -> $new_provider)}"
+        local _swap_reason="ladder step"
+        [ "$new_model" = "${EPAM_FINAL_FALLBACK_MODEL:-}" ] && _swap_reason="top-of-ladder fallback"
+        warning "Watchdog: hot-swapping $story_id model after timeout ($_swap_reason): '$current_model' -> '$new_model'${new_provider:+ (provider -> $new_provider)}"
     else
         rm -f "$tmp_prd"
     fi

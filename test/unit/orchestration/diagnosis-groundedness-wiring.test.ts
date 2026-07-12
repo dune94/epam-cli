@@ -67,6 +67,15 @@ describe('run_diagnosis_groundedness_check() — exists and is wired into run_fa
     expect(fnBody).toMatch(/failure-diagnosis-groundedness\.jsonl/);
   });
 
+  it('writes compact (one-line) JSON, not pretty-printed -- required for a valid JSONL file (found live, 2026-07-12: broke line-based tailing/counting)', () => {
+    const fnBody = extractFunctionBody('run_diagnosis_groundedness_check');
+    const writeCallIdx = fnBody.indexOf('>> "${LOG_DIR}/failure-diagnosis-groundedness.jsonl"');
+    const jqCallIdx = fnBody.lastIndexOf('jq -n', writeCallIdx);
+    expect(jqCallIdx).toBeGreaterThan(-1);
+    const jqInvocation = fnBody.slice(jqCallIdx, jqCallIdx + 20);
+    expect(jqInvocation).toMatch(/^jq -nc\b/);
+  });
+
   it('bounds the call with a timeout (must never hang the retry loop)', () => {
     const fnBody = extractFunctionBody('run_diagnosis_groundedness_check');
     expect(fnBody).toMatch(/timeout \d+/);

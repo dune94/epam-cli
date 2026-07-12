@@ -3620,6 +3620,66 @@ run_change_with_reviewer_retry() {
     return 1
 }
 
+# run_diagnosis_groundedness_check <story_id> <diagnosis>
+# Advisory-only (2026-07-12): scores the FailureAnalyst's own diagnosis
+# against the real failure log (VERIFICATION_FAILURE) using DeepEval's
+# GEval metric as an LLM judge over OpenRouter -- see
+# orchestrations/scripts/tools/diagnosis-groundedness-check.py for the full
+# rationale (a live incident already on record for this pipeline: the
+# analyst confidently asserted a root cause that was flatly wrong, and every
+# retry then "fixed" the wrong thing because the diagnosis guiding it was
+# false). Logs to orchestrations/logs/failure-diagnosis-groundedness.jsonl
+# so a future decision to make this blocking is backed by measurement, not
+# guesswork -- it NEVER alters target/patch handling, and the call site
+# deliberately does not capture this function's return value.
+# Silently no-ops (no warning spam) if the venv/script/API key isn't
+# available, so this optional tooling can never break the retry loop.
+run_diagnosis_groundedness_check() {
+    local story_id="$1"
+    local diagnosis="$2"
+    [ "${SKIP_DIAGNOSIS_GROUNDEDNESS_CHECK:-0}" = "1" ] && return 0
+
+    local _dgc_script="${SCRIPT_DIR}/tools/diagnosis-groundedness-check.py"
+    local _dgc_venv_python="${SCRIPT_DIR}/tools/.venv-deepeval/bin/python"
+    [ -x "$_dgc_venv_python" ] || return 0
+    [ -f "$_dgc_script" ] || return 0
+
+    local _dgc_input
+    _dgc_input=$(jq -n --arg diag "$diagnosis" --arg log "${VERIFICATION_FAILURE:0:6000}" \
+        '{diagnosis: $diag, log_excerpt: $log}' 2>/dev/null)
+    [ -z "$_dgc_input" ] && return 0
+
+    local _dgc_result
+    _dgc_result=$(echo "$_dgc_input" | timeout 30 "$_dgc_venv_python" "$_dgc_script" 2>/dev/null)
+    [ -z "$_dgc_result" ] && return 0
+    echo "$_dgc_result" | jq empty 2>/dev/null || return 0
+
+    # NOTE: `.skipped // true` would be wrong here -- jq's `//` alternative
+    # operator treats a literal `false` value as falsy too (not just null/
+    # absent), so it would silently collapse a genuine {"skipped": false}
+    # result into "true" and this check would NEVER accept a real
+    # evaluation. `has("skipped")` distinguishes "field present and false"
+    # from "field absent" correctly.
+    local _dgc_skipped
+    _dgc_skipped=$(echo "$_dgc_result" | jq -r 'if has("skipped") then .skipped else true end' 2>/dev/null)
+    [ "$_dgc_skipped" = "true" ] && return 0
+
+    local _dgc_verdict _dgc_score
+    _dgc_verdict=$(echo "$_dgc_result" | jq -r '.verdict // "unknown"' 2>/dev/null)
+    _dgc_score=$(echo "$_dgc_result" | jq -r '.score // 0' 2>/dev/null)
+    if [ "$_dgc_verdict" = "ungrounded" ]; then
+        warning "  [DiagnosisGroundedness] $story_id: diagnosis may be ungrounded (score=$_dgc_score) — advisory only, not blocking"
+    else
+        log "  [DiagnosisGroundedness] $story_id: diagnosis grounded (score=$_dgc_score)"
+    fi
+
+    mkdir -p "${LOG_DIR}" 2>/dev/null
+    jq -n --arg story "$story_id" --arg diag "$diagnosis" --argjson result "$_dgc_result" --arg ts "$(date -Iseconds)" \
+        '{storyId: $story, diagnosis: $diag, timestamp: $ts} + $result' \
+        >> "${LOG_DIR}/failure-diagnosis-groundedness.jsonl" 2>/dev/null || true
+    return 0
+}
+
 # run_failure_analyst <story_id> <output_file> <retry_num>
 # Layer 3 (self-heal): AI reads the test failure, diagnoses root cause, then patches
 # PRD ACs (for ambiguous specs) or injects skill guidance into the coordinator
@@ -3818,6 +3878,8 @@ for i, c in enumerate(text):
 
             log "  [FailureAnalyst] Diagnosis: $diagnosis"
             log "  [FailureAnalyst] Target=$target — $reason"
+
+            run_diagnosis_groundedness_check "$story_id" "$diagnosis"
 
             case "$target" in
                 prd)

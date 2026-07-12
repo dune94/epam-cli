@@ -64,7 +64,11 @@ orchestrations/dashboards/live/dashboard/
 
 # Python virtual environment
 orchestrations/scripts/.venv/
+orchestrations/scripts/tools/.venv-deepeval/
 .venv/
+
+# DeepEval runtime telemetry/cache (created on first import)
+.deepeval/
 
 # Local Claude settings
 .claude/settings.local.json

@@ -192,7 +192,7 @@ describe('fuzz-weaver orchestration wiring', () => {
     // The block that sets failed=1 must check _fuzz_grounded first
     const fuzzBlock = src.slice(
       src.indexOf('_fuzz_grounded='),
-      src.indexOf('_fuzz_grounded=') + 1200
+      src.indexOf('_fuzz_grounded=') + 3500
     );
     expect(fuzzBlock).toContain('_fuzz_grounded:-0');
     expect(fuzzBlock).toContain('failed=1');
@@ -346,7 +346,7 @@ describe('run 81 regression — fuzz-weaver hallucination scenario', () => {
     const src = readFileSync(ORCH_SCRIPT, 'utf8');
     // Find the section that evaluates _fuzz_grounded and decides whether to set failed=1
     const evalStart = src.indexOf('if [ "${_fuzz_grounded:-0}"');
-    const evalBlock = src.slice(evalStart, evalStart + 600);
+    const evalBlock = src.slice(evalStart, evalStart + 900);
     // Must contain a warning/downgrade path when grounded == 0
     expect(evalBlock).toContain('warning');
     expect(evalBlock).toMatch(/downgraded|hallucinate|no vulnerability/i);

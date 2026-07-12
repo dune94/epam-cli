@@ -117,7 +117,7 @@ describe('spec-validator extractor — REAL execution against the actual live ou
     // The spec-validator agent frequently emits JSON with literal newlines inside
     // string values — this must still be parseable since the extractor uses
     // regex, not a strict JSON parser.
-    const malformed = `{"stories":[{"storyId":"SKY-004","criteria":[{"text":"multi\nline\nvalue"}],"verdict":"fail"}],"overallVerdict":"fail"}`;
+    const malformed = `{"stories":[{"storyId":"SKY-004","criteria":[{"text":"multi\nline\nvalue","status":"unmet"}],"verdict":"fail"}],"overallVerdict":"fail"}`;
     expect(runExtractor(malformed)).toBe('1');
   });
 });

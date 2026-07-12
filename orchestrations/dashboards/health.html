@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Health — EPAM CLI</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f172a; --surface: #1e293b; --surface2: #263248; --border: #334155;
+  --text: #e2e8f0; --text2: #94a3b8; --text3: #64748b;
+  --brand: #38bdf8; --violet: #a78bfa; --green: #4ade80; --amber: #fbbf24; --red: #f87171;
+  --epam-gradient: linear-gradient(118.82deg, #0078c2 .5%, #0047ff 47.33%, #8453d2 76.12%);
+}
+body { background: var(--bg); color: var(--text); font-family: "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 14px; line-height: 1.45; }
+.header { background: var(--epam-gradient); color: #fff; padding: 16px 28px; }
+.header h1 { font-size: 20px; font-weight: 800; }
+.header p { color: rgba(255,255,255,0.76); margin-top: 4px; font-size: 12px; }
+.page { max-width: 1360px; margin: 0 auto; padding: 18px 28px 40px; }
+.nav-links { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 18px; }
+.nav-links a { color: var(--text3); text-decoration: none; font-size: 12px; font-weight: 700; padding: 8px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); }
+.nav-links a.active { color: #fff; background: var(--brand); border-color: var(--brand); }
+.intro { color: var(--text2); font-size: 13px; margin-bottom: 16px; max-width: 900px; }
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.metric-label { color: var(--text3); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.metric-value { margin-top: 8px; font-size: 28px; font-weight: 800; }
+.metric-note { margin-top: 4px; color: var(--text3); font-size: 12px; }
+.layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.section-title { font-size: 16px; font-weight: 800; margin-bottom: 10px; }
+.section-sub { color: var(--text3); font-size: 12px; margin: -6px 0 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--text3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.badge-new { background: rgba(167,139,250,0.12); color: var(--violet); }
+.badge-role { background: rgba(56,189,248,0.10); color: var(--brand); }
+.badge-target { background: rgba(74,222,128,0.12); color: var(--green); }
+.badge-broken { background: rgba(248,113,113,0.10); color: var(--red); }
+code { background: var(--surface2); border-radius: 4px; padding: 1px 5px; font-size: 12px; }
+.empty { color: var(--text3); font-size: 12px; padding: 10px 0; }
+.footer-note { color: var(--text3); font-size: 12px; margin-top: 14px; }
+@media (max-width: 1100px) { .grid { grid-template-columns: 1fr 1fr; } .layout { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+  <header class="header">
+    <h1>EPAM CLI — Pipeline Health &amp; Self-Healing</h1>
+    <p>Where the pipeline diagnosed its own failures, patched skills or tools, and got better without a human editing the PRD.</p>
+  </header>
+  <main class="page">
+    <nav class="nav-links">
+      <a href="monitor.html">Monitor</a>
+      <a href="prd-viewer.html">PRD Viewer</a>
+      <a href="specification.html">Spec Diff</a>
+      <a href="orchestration-plan.html">Plan</a>
+      <a href="agents-orchestration.html">Orchestration</a>
+      <a href="pipeline-stages.html">Stages</a>
+      <a href="agent-profiles.html">Profiles</a>
+      <a href="agent-messages.html">Messages</a>
+      <a href="phase-cost-monitor.html">Costs</a>
+      <a href="quality-assurance.html">QA Gates</a>
+      <a href="quality-dashboard.html">Quality</a>
+      <a href="agent-activity.html">Activity</a>
+      <a href="cpa-details.html">Estimation</a>
+      <a href="scorecard.html">Scorecard</a>
+      <a href="swe-bench.html">SWE-bench</a>
+      <a href="health.html" class="active">Health</a>
+      <a href="epam-cli-guide.html">CLI Guide</a>
+    </nav>
+    <p class="intro">
+      When a story fails a gate, the failure-analyst diagnoses it and routes a fix to one of three targets:
+      a <strong>skill</strong> note appended to the responsible agent's profile, a brand-new <strong>tool</strong>
+      script synthesized into <code>.epam/dynamic-tools/</code>, or occasionally a new agent <strong>profile</strong>.
+      This page reads <code>healing-events.jsonl</code>, <code>profiles.json</code> vs. its restored floor, and the
+      dynamic tools directory to show that learning loop directly.
+    </p>
+    <section class="grid" id="summaryGrid"></section>
+    <section class="layout">
+      <div class="card">
+        <div class="section-title">Skill Notes Added Per Role</div>
+        <div class="section-sub">Growth in each agent profile compared to its <code>profiles.json.original</code> floor.</div>
+        <table>
+          <thead><tr><th>Role</th><th>Self-Heal Notes Added</th><th></th></tr></thead>
+          <tbody id="skillTable"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="section-title">Dynamic Tools Synthesized</div>
+        <div class="section-sub">Idempotent shell scripts the failure-analyst wrote into <code>.epam/dynamic-tools/</code>.</div>
+        <table>
+          <thead><tr><th>Tool</th><th>Purpose</th></tr></thead>
+          <tbody id="toolsTable"></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="card" style="margin-bottom: 16px;">
+      <div class="section-title">Healing Broken — Escalations</div>
+      <div class="section-sub">Fired when the same diagnosis repeats across retries and self-healing gives up, escalating instead of looping forever.</div>
+      <table>
+        <thead><tr><th>Time</th><th>Story</th><th>Repeated Diagnosis</th><th>Count</th></tr></thead>
+        <tbody id="brokenTable"></tbody>
+      </table>
+    </section>
+    <section class="card">
+      <div class="section-title">Recent Analyst Cycles</div>
+      <div class="section-sub">Most recent diagnose-and-patch cycles, newest last.</div>
+      <table>
+        <thead><tr><th>Time</th><th>Story</th><th>Retry</th><th>Target</th><th>Diagnosis</th><th>Patches</th><th>Profile Updated</th></tr></thead>
+        <tbody id="cyclesTable"></tbody>
+      </table>
+      <div class="footer-note" id="generatedAt"></div>
+    </section>
+  </main>
+<script src="runtime/build-info.js" defer></script>
+<script>
+const summaryGrid = document.getElementById('summaryGrid');
+const skillTable = document.getElementById('skillTable');
+const toolsTable = document.getElementById('toolsTable');
+const brokenTable = document.getElementById('brokenTable');
+const cyclesTable = document.getElementById('cyclesTable');
+const generatedAt = document.getElementById('generatedAt');
+
+function metricCard(label, value, note) {
+  return `<div class="card"><div class="metric-label">${label}</div><div class="metric-value">${value}</div><div class="metric-note">${note}</div></div>`;
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function render(info) {
+  if (!info) return;
+  const sh = info.metrics?.selfHealing;
+  if (!sh) {
+    summaryGrid.innerHTML = `<div class="card"><div class="metric-label">No Data</div><div class="metric-note">metrics.selfHealing missing from build-info.json — rebuild dashboards.</div></div>`;
+    return;
+  }
+  const healing = sh.healing || {};
+  const skillNotes = sh.skillNotes || { perRole: [], totalAdded: 0, newRoles: 0 };
+  const dynamicTools = sh.dynamicTools || [];
+
+  summaryGrid.innerHTML = [
+    metricCard('Analyst Cycles', healing.analystCycles ?? 0, 'Diagnose-and-patch cycles run'),
+    metricCard('Stories Healed', healing.storiesHealed ?? 0, 'Distinct stories with a healing cycle'),
+    metricCard('Profile Updates', healing.profileUpdates ?? 0, 'Cycles that wrote a skill note'),
+    metricCard('Patches Applied', healing.patchesApplied ?? 0, 'Code/config patches from analyst cycles'),
+    metricCard('Skill Notes Added', skillNotes.totalAdded ?? 0, `${skillNotes.newRoles ?? 0} new role(s) since floor`),
+    metricCard('Dynamic Tools', dynamicTools.length, 'Scripts synthesized into .epam/dynamic-tools/'),
+    metricCard('Healing Broken', healing.healingBrokenCount ?? 0, 'Escalations after repeated diagnosis'),
+    metricCard('Story Failure Events', sh.storyFailureEvents ?? 0, 'Entries in story-failures.jsonl')
+  ].join('');
+
+  const perRole = [...skillNotes.perRole].sort((a, b) => b.added - a.added);
+  skillTable.innerHTML = perRole.length
+    ? perRole.map((r) => `<tr><td><span class="badge badge-role">${esc(r.role)}</span></td><td>${r.added}</td><td>${r.isNewRole ? '<span class="badge badge-new">new role</span>' : ''}</td></tr>`).join('')
+    : `<tr><td colspan="3" class="empty">No skill-note growth recorded yet.</td></tr>`;
+
+  toolsTable.innerHTML = dynamicTools.length
+    ? dynamicTools.map((t) => `<tr><td><code>${esc(t.name)}.sh</code></td><td>${esc(t.purpose) || '<span class="empty">—</span>'}</td></tr>`).join('')
+    : `<tr><td colspan="2" class="empty">No dynamic tools synthesized yet.</td></tr>`;
+
+  const broken = healing.healingBrokenRecent || [];
+  brokenTable.innerHTML = broken.length
+    ? [...broken].reverse().map((e) => `<tr><td>${esc(e.ts)}</td><td><strong>${esc(e.story_id)}</strong></td><td>${esc(e.repeated_diagnosis)}</td><td><span class="badge badge-broken">${esc(e.count)}</span></td></tr>`).join('')
+    : `<tr><td colspan="4" class="empty">No escalations — every retried diagnosis eventually changed or resolved.</td></tr>`;
+
+  const byTarget = healing.byTarget || {};
+  const targetSummary = Object.keys(byTarget).length
+    ? `Target breakdown: ${Object.entries(byTarget).map(([k, v]) => `<span class="badge badge-target">${esc(k)}: ${v}</span>`).join(' ')}`
+    : '';
+
+  generatedAt.innerHTML = `Generated at ${esc(info.generatedAt)} · project output: <code>${esc(sh.projectOutputDir)}</code>${targetSummary ? ' · ' + targetSummary : ''}`;
+
+  const recentCycles = healing.recentCycles || [];
+  cyclesTable.innerHTML = recentCycles.length
+    ? [...recentCycles].reverse().map((c) => `<tr><td>${esc(c.ts)}</td><td><strong>${esc(c.story_id)}</strong></td><td>${esc(c.retry)}</td><td><span class="badge badge-target">${esc(c.target)}</span></td><td>${esc(c.diagnosis)}</td><td>${esc(c.patches_applied)}</td><td>${c.profile_updated === true || c.profile_updated === 'true' ? 'yes' : 'no'}</td></tr>`).join('')
+    : `<tr><td colspan="7" class="empty">No analyst cycles recorded yet.</td></tr>`;
+}
+
+if (window.EPAMBuildInfo) {
+  window.EPAMBuildInfo.subscribe((detail) => {
+    if (detail.info) render(detail.info);
+    else if (detail.error) {
+      summaryGrid.innerHTML = `<div class="card"><div class="metric-label">Load Error</div><div class="metric-note">${esc(detail.error.message || String(detail.error))}</div></div>`;
+    }
+  });
+} else {
+  fetch(`build-info.json?t=${Date.now()}`)
+    .then((r) => r.json())
+    .then(render)
+    .catch((err) => {
+      summaryGrid.innerHTML = `<div class="card"><div class="metric-label">Load Error</div><div class="metric-note">${esc(String(err))}</div></div>`;
+    });
+}
+</script>
+</body>
+</html>

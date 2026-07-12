@@ -266,7 +266,9 @@ describe('Step 3.2 merge — branch must have commits ahead of main', () => {
   it('worktrees left in place after merge failure so developer can inspect them', () => {
     // Worktrees must NOT be auto-deleted on merge failure — developer needs them to debug
     const mergeIdx = orchSrc.indexOf('Step 3.2: Merging');
-    const block = orchSrc.slice(mergeIdx, mergeIdx + 3200);
+    // Widened from 3200 (2026-07-12): the merge-integrity guard added ahead
+    // of the real `-X ours` merge call pushed this text further away.
+    const block = orchSrc.slice(mergeIdx, mergeIdx + 6000);
     // Error message must say worktrees are preserved for inspection
     expect(block).toMatch(/skip.*cleanup|inspection|preserved/i);
   });

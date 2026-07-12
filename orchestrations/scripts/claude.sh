@@ -45,6 +45,11 @@ load_env_file() {
 _claude_pre_gate_provider="${ORCH_GATE_PROVIDER:-}"
 _claude_pre_gate_model="${ORCH_GATE_MODEL:-}"
 _claude_pre_orch_provider="${EPAM_ORCHESTRATION_PROVIDER:-}"
+# Launcher-provided temperature floor (e.g. tier3-travel-app-run.sh's project-wide
+# GLM pin) — captured once here so the per-story reset below can restore it
+# instead of unsetting to nothing. Read-only for the rest of this process; the
+# mid-story FailureDiversity override still applies on top per-story as before.
+_claude_temperature_floor="${EPAM_TEMPERATURE:-}"
 
 load_env_file "$(dirname "$AUTOMATION_DIR")/.env"
 load_env_file "$PROJECT_ROOT/.env"
@@ -151,6 +156,48 @@ resolve_generator_settings() {
         STORY_MAX_OUTPUT_TOKENS=16384
         log "  GeneratorMode: enabled (agentRole=generator) — maxIter=3 maxOutTok=16384"
     fi
+}
+
+# resolve_test_engineer_effort_floor <story_id>
+# Test-writing structurally requires MORE research/verification turns than
+# implementation at the same nominal effort tier: a test story must read its
+# contract file AND the paired impl story's full source, extract exact
+# signatures/error strings verbatim, THEN write mocks, THEN iterate until the
+# real test suite actually passes -- work an impl story of the same "effort"
+# label never has to do (it defines its own interface as it goes). Root cause
+# found live (2026-07-11, tier3-travel-app run): impl stories at effort=low
+# (maxIter=6) routinely completed in 1 attempt; test-engineer stories at the
+# SAME effort=low budget needed repeated retries and even a watchdog timeout
+# before ever reaching npm test, purely from running out of iterations partway
+# through the read-then-write workflow above -- not from any deficiency in the
+# test-engineer profile's own guidance. Bump the effort tier ONE step for any
+# agentRole == "test-engineer" story (low->medium, medium->high); high stays
+# high. Only ever raises the budget, never lowers it.
+resolve_test_engineer_effort_floor() {
+    local story_id="$1"
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    local role
+    role=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .agentRole // ""' \
+        "$prd_target" 2>/dev/null || echo "")
+    [ "$role" = "test-engineer" ] || return 0
+    local effort
+    effort=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .effort // "medium"' \
+        "$prd_target" 2>/dev/null || echo "medium")
+    case "$effort" in
+        low)
+            STORY_MAX_ITERATIONS=10
+            STORY_MAX_OUTPUT_TOKENS=6144
+            log "  TestEngineerEffortFloor: low -> medium (maxIter=10 maxOutTok=6144) -- test-writing needs more research/verification turns than impl at the same tier"
+            ;;
+        medium)
+            STORY_MAX_ITERATIONS=15
+            STORY_MAX_OUTPUT_TOKENS=6144
+            log "  TestEngineerEffortFloor: medium -> high (maxIter=15 maxOutTok=6144)"
+            ;;
+        *) : ;;  # high already has the largest budget -- nothing to bump
+    esac
 }
 
 # resolve_model_from_story <story_id>
@@ -719,7 +766,13 @@ PLAN_PROMPT_EOF
         local _orch_model="${ORCH_GATE_MODEL:-}"
         if [ -z "$_orch_provider" ]; then
             warning "Plan mode: EPAM_ORCHESTRATION_PROVIDER not set — skipping plan"
+        # AI_GATE_ALLOW_TOOLS=1: the plan_prompt below explicitly instructs the
+        # agent to "Read orchestrations/prd.json for story ${story_id}" — without
+        # this, ai-run.sh's epam-umbrella branch defaults to --no-tools and the
+        # agent has no way to actually read anything, so the plan gets
+        # fabricated from whatever it happens to guess (found live 2026-07-08).
         elif echo "$plan_prompt" | \
+                AI_GATE_ALLOW_TOOLS=1 \
                 AI_PROVIDER="$_orch_provider" \
                 AI_MODEL="$_orch_model" \
                 EPAM_CLI="$EPAM_CLI" \
@@ -1369,6 +1422,173 @@ _scope_unlock() {
         "$prd_target" 2>/dev/null | sort -u)
 }
 
+# _get_vendor_dirs <project_root>
+# Reads the generic, project-supplied list of vendored-dependency directories
+# from .epam/dependency-check.json's "vendorDirs" key (e.g. ["node_modules"]
+# for an npm project, ["venv", "site-packages"] for Python, ["vendor"] for Go
+# — never hardcoded in this engine, since a future project may not use npm at
+# all). Opt-in: no config file or no "vendorDirs" key = no output, callers
+# no-op. Echoes one absolute path per line for directories that actually exist.
+_get_vendor_dirs() {
+    local project_root="$1"
+    local config_file="${project_root}/.epam/dependency-check.json"
+    [ -f "$config_file" ] || return 0
+    jq -r '.vendorDirs[]? // empty' "$config_file" 2>/dev/null | while IFS= read -r _d; do
+        [ -z "$_d" ] && continue
+        local _abs="$project_root/$_d"
+        [ -d "$_abs" ] && echo "$_abs"
+    done
+}
+
+# _vendor_lock <project_root>
+# Root cause this addresses (found live, 2026-07-07): a story's agent,
+# repeatedly failing to get its real test tool working, OVERWROTE the actual
+# installed package's own entry point file (node_modules/vitest/vitest.mjs)
+# with a fake stub that unconditionally echoed "passed" — the agent faking
+# verification success rather than fixing the underlying problem. HealingBroken
+# eventually caught the recurring failure and the story was correctly marked
+# failed, not falsely passed, but the tampering itself should never have been
+# possible in the first place.
+#
+# chmod -R a-w on every configured vendor dir, same OS-level pre-emptive
+# guard already proven for _scope_lock's per-story file protection — applied
+# once per story attempt (before invoking the agent), not per-file, since
+# vendor dirs are NEVER a legitimate write target for any story, unlike
+# src/ files which rotate ownership between stories.
+# Note (same limitation _scope_lock already documents): this deters, it does
+# not cryptographically prevent — the file owner can still `chmod +w` via
+# Bash and bypass it. See run_vendor_integrity_check() below for the backstop
+# that catches tampering even when the lock itself is bypassed.
+_vendor_lock() {
+    local project_root="$1"
+    local _locked=0
+    local _vendor_dir
+    while IFS= read -r _vendor_dir; do
+        [ -z "$_vendor_dir" ] && continue
+        chmod -R a-w "$_vendor_dir" 2>/dev/null && ((_locked++))
+    done < <(_get_vendor_dirs "$project_root")
+    if [ "$_locked" -gt 0 ]; then
+        mkdir -p "$project_root/.epam" 2>/dev/null || true
+        touch "$project_root/.epam/.vendor-lock-marker" 2>/dev/null || true
+        log "  [vendor-guard] Locked $_locked vendor director(y/ies) read-only"
+    fi
+}
+
+# _vendor_unlock <project_root>
+# Restores write permissions on configured vendor dirs — called after the
+# agent's own turn ends, before run_dependency_check's own LEGITIMATE
+# installs (which do need to write there) and the deterministic checks/test
+# run. The integrity check itself (run_vendor_integrity_check) runs BEFORE
+# this unlock and before run_dependency_check, so it only ever sees changes
+# from the agent's own turn, never dependency-check's sanctioned writes.
+_vendor_unlock() {
+    local project_root="$1"
+    local _vendor_dir
+    while IFS= read -r _vendor_dir; do
+        [ -z "$_vendor_dir" ] && continue
+        chmod -R u+w "$_vendor_dir" 2>/dev/null || true
+    done < <(_get_vendor_dirs "$project_root")
+}
+
+# run_dynamic_tools_in_unlocked_window <project_root> <output_file>
+# Deterministically executes every dynamic tool the self-healing loop has
+# written for this project, in the SANCTIONED unlocked window (right after
+# _vendor_unlock, before the test command runs) — not left to the agent to
+# invoke via Bash sometime during its own turn.
+#
+# Root cause this fixes (found live, 2026-07-09, tier3-travel-app run):
+# _vendor_lock() chmods vendor dirs (e.g. node_modules) read-only for the
+# WHOLE story turn, before the agent runs. When the failure-analyst diagnoses
+# a missing dependency and writes a dynamic tool that runs `npm install X`,
+# the agent's own invocation of that tool happens DURING the same locked
+# turn — the install either fails outright (permission denied, surfacing as
+# the exact same "X not found" diagnosis on every retry) or partially writes
+# just enough to trip run_vendor_integrity_check's tamper detector, hard-
+# failing the story before the fix ever had a chance to land. A dependency-
+# installing dynamic tool could NEVER succeed under the old lock ordering —
+# confirmed live: SKY-002-test/SKY-002-test-1 each burned all 8 retries on
+# "vitest not found" without the repeatedly-rewritten install-vitest.sh tool
+# ever actually installing vitest.
+#
+# Tools are already required to be idempotent (enforced by the tool_creation
+# reviewer's own rules), so running them here — unconditionally, every retry,
+# in a genuinely unlocked window — is safe even if the agent ALSO tries to
+# invoke the same tool itself during its turn.
+#
+# Safety floor: each tool is syntax-checked (bash -n) before being trusted to
+# execute. The orchestrator (not just the agent) now runs these
+# unconditionally every retry, so a tool that's merely syntactically broken
+# must not be blindly executed — skip and log rather than let a malformed
+# script corrupt state or hang the pipeline.
+run_dynamic_tools_in_unlocked_window() {
+    local project_root="$1"
+    local output_file="${2:-/dev/null}"
+    local tools_dir="$project_root/.epam/dynamic-tools"
+    [ -d "$tools_dir" ] || return 0
+    [ -n "$(find "$tools_dir" -maxdepth 1 -name '*.sh' 2>/dev/null)" ] || return 0
+
+    local _tool_file _tool_base
+    for _tool_file in "$tools_dir"/*.sh; do
+        [ -f "$_tool_file" ] || continue
+        _tool_base="${_tool_file##*/}"
+        # Only reviewed tools are ever used by downstream agents or the
+        # orchestrator itself — an explicit, checkable marker, not an
+        # assumption that the directory only ever contains reviewed scripts.
+        if [ ! -f "${_tool_file}.reviewed" ]; then
+            warning "  [dynamic-tools] Skipping ${_tool_base} — no .reviewed marker (not approved by the reviewer gate)"
+            continue
+        fi
+        if ! bash -n "$_tool_file" 2>>"$output_file"; then
+            warning "  [dynamic-tools] Skipping ${_tool_base} — fails bash syntax check"
+            continue
+        fi
+        log "  [dynamic-tools] Running ${_tool_base} in sanctioned unlocked window..."
+        if ! (cd "$project_root" && bash "$_tool_file") >> "$output_file" 2>&1; then
+            warning "  [dynamic-tools] ${_tool_base} exited non-zero (continuing)"
+        fi
+    done
+}
+
+# run_vendor_integrity_check <project_root> <output_file>
+# Deterministic backstop (found live, 2026-07-07 — see _vendor_lock's
+# docstring for the exact live defect this catches): detects any file under a
+# configured vendor dir modified since the lock marker was touched at story-
+# attempt start, regardless of whether the chmod lock itself was bypassed.
+# A legitimate story NEVER needs to modify an already-installed vendored
+# package's own files — only add NEW dependencies via the manifest, which
+# run_dependency_check's sanctioned install step handles AFTER this check
+# runs. Any hit here is treated as a hard, deterministic failure — no LLM
+# diagnosis needed, the fact itself is certain.
+# Returns 0 if clean (or no vendor dirs configured / no marker yet). Returns 1
+# and sets VERIFICATION_FAILURE otherwise.
+run_vendor_integrity_check() {
+    local project_root="$1"
+    local output_file="${2:-/dev/null}"
+    local marker="$project_root/.epam/.vendor-lock-marker"
+    [ -f "$marker" ] || return 0
+
+    local tampered=()
+    local _vendor_dir
+    while IFS= read -r _vendor_dir; do
+        [ -z "$_vendor_dir" ] && continue
+        while IFS= read -r _f; do
+            [ -n "$_f" ] && tampered+=("$_f")
+        done < <(find "$_vendor_dir" -type f -newer "$marker" 2>/dev/null)
+    done < <(_get_vendor_dirs "$project_root")
+
+    [ "${#tampered[@]}" -eq 0 ] && return 0
+
+    local details
+    details=$(printf '%s\n' "${tampered[@]}" | head -20)
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nFile(s) inside a vendored/third-party dependency directory were modified — this is never legitimate (only NEW dependencies should be added via the manifest, never an existing installed package edited directly). Revert this change and fix the ACTUAL problem (e.g. wrong package.json config, missing devDependency) instead:\n\n%s\n' "$details")
+    {
+        echo ""
+        echo "=== Vendor directory integrity check failed ==="
+        echo "$details"
+    } >> "$output_file"
+    return 1
+}
+
 # run_dependency_check <project_root>
 # Deterministic (non-LLM) replacement for "hope the agent remembers to
 # install what it imports" — the exact recurring failure class this session
@@ -1881,10 +2101,307 @@ PYEOF
 
     local details
     details=$(echo "$result" | tail -n +2)
+
+    # Root cause fix (found live, 2026-07-11, tier3-travel-app run): the
+    # broken import's IMPORTER file (not just the corrected-path suggestion)
+    # can belong to a DIFFERENT, already-completed sibling story —
+    # scope-guard correctly locks it read-only for the current story, so
+    # "fix the import path" is structurally impossible for this story to do.
+    # Deterministic checks skip the failure-analyst (a cost-efficiency
+    # optimization), so they never got a chance to register a sibling
+    # escalation the way an LLM-diagnosed cross-story defect would — this
+    # burned all 8 attempts on SKY-003-test, which was told every retry to
+    # fix a broken import in cli.ts, a file owned by the already-completed
+    # SKY-003-impl. Detect this and register the SAME escalation file
+    # resolve_escalation() already knows how to consume (it already runs at
+    # the top of every retry, see its call site's own docstring), instead of
+    # retrying the current story against a fix it structurally cannot apply.
+    if [ -n "$story_id" ]; then
+        local _first_broken_file
+        _first_broken_file=$(echo "$details" | head -1 | sed -E 's/^([^:]+):.*/\1/')
+        if [ -n "$_first_broken_file" ]; then
+            local _owns_file
+            _owns_file=$(jq -r --arg id "$story_id" --arg f "$_first_broken_file" \
+                '.stories[] | select(.id == $id) | (.technicalNotes.files // []) | map(. == $f or endswith("/" + $f)) | any' \
+                "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "false")
+            if [ "$_owns_file" != "true" ]; then
+                # BUG B FIX (found live, 2026-07-12, tier3-travel-app run): this
+                # lookup used to scan ALL stories with no deprecated-status
+                # filter and take the FIRST array match — a split PARENT marked
+                # deprecated (but still carrying its ORIGINAL pre-split combined
+                # technicalNotes.files, e.g. SKY-003 listing both cli.ts AND
+                # cli.test.ts) commonly appears BEFORE its active child
+                # (SKY-003-impl) in the stories array, so the escalation got
+                # misattributed to the dead parent instead of the real,
+                # already-completed active owner. Exclude deprecated stories,
+                # and prefer a same-split sibling (same specification.createdFrom
+                # as the current story) over any other match — mirroring the
+                # SAME two-tier preference resolve_escalation() already uses
+                # when it later consumes this escalation.
+                local _self_parent
+                _self_parent=$(jq -r --arg id "$story_id" \
+                    '.stories[] | select(.id == $id) | .specification.createdFrom // empty' \
+                    "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null)
+                local _owner_id
+                _owner_id=$(jq -r --arg self "$story_id" --arg f "$_first_broken_file" --arg parent "$_self_parent" \
+                    '[.stories[] | select(.id != $self) | select(.status != "deprecated") | select((.technicalNotes.files // []) | map(. == $f or endswith("/" + $f)) | any) | select(($parent != "") and .specification.createdFrom == $parent)][0].id
+                     // [.stories[] | select(.id != $self) | select(.status != "deprecated") | select((.technicalNotes.files // []) | map(. == $f or endswith("/" + $f)) | any)][0].id
+                     // empty' \
+                    "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null)
+                if [ -n "$_owner_id" ]; then
+                    local _first_broken_detail
+                    _first_broken_detail=$(echo "$details" | head -1)
+                    mkdir -p "${PROJECT_ROOT}/.epam/escalations"
+                    jq -n --arg tf "$_first_broken_file" \
+                        --arg diag "Relative import in ${_first_broken_file} does not resolve to a real file (detected by deterministic check while implementing ${story_id})." \
+                        --arg fix "$_first_broken_detail" \
+                        '{targetFile: $tf, diagnosis: $diag, requiredFix: $fix}' \
+                        > "${PROJECT_ROOT}/.epam/escalations/${story_id}.json"
+                    log "  [relative-import-check] Broken import lives in ${_first_broken_file}, owned by ${_owner_id} (not ${story_id}) — registered sibling escalation instead of retrying an impossible fix"
+                fi
+            fi
+        fi
+    fi
+
     VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nA relative import does not resolve to a real file — this will fail immediately when the test suite runs. Fix the import path before anything else:\n\n%s\n' "$details")
     {
         echo ""
         echo "=== Relative import check failed ==="
+        echo "$details"
+    } >> "$output_file"
+    return 1
+}
+
+# run_named_import_check <project_root> <output_file> [story_id]
+# Deterministic detection (same shape as run_relative_import_check above) of a
+# named import whose identifier doesn't actually exist among the target
+# file's exports — even though the FILE PATH itself resolves correctly.
+#
+# Root cause this targets: a live run burned a story's ENTIRE ladder
+# escalation (8 attempts, ending on the strongest configured model, $0.25)
+# on `import { SkyScannerClient } from './client'` when the real export is
+# `SkyscannerClient` (one-character casing difference) — and never converged
+# because the failure-analyst MISDIAGNOSED it as a default-vs-named export
+# mismatch (it wasn't; the class is correctly a named export, just spelled
+# differently). Every retry, including the strongest model, "fixed" the
+# wrong thing because the diagnosis guiding it was wrong. A deterministic
+# check that names the exact real export (case-insensitive match) removes
+# the misdiagnosis risk entirely — no model judgment involved.
+#
+# Fully generic — no hardcoded class/identifier names, no project-specific
+# knowledge. Parses exports via regex (export class/function/const/let/var/
+# interface/type/enum Name, and export { A, B as C } lists) and named imports
+# via the same import-statement regex as run_relative_import_check, then
+# checks each imported identifier is actually in the target's export set.
+# Suggests the closest case-insensitive match when one exists (the exact bug
+# shape found live), consistent with relative-import-check's "Did you mean
+# X?" pattern.
+#
+# Auto-apply (opt-in via EPAM_AUTO_FIX_NAMED_IMPORTS=true, default OFF, same
+# conservative design as relative-import-check's auto-fix): only fires when
+# there is EXACTLY ONE case-insensitive match among the target's real
+# exports (unambiguous), and only rewrites files the current story owns.
+#
+# Returns 0 if all named imports resolve to a real export (or none found).
+# Returns 1 and sets VERIFICATION_FAILURE with a suggestion otherwise.
+run_named_import_check() {
+    local project_root="$1"
+    local output_file="${2:-/dev/null}"
+    local story_id="${3:-}"
+    local auto_fix="${EPAM_AUTO_FIX_NAMED_IMPORTS:-false}"
+
+    # owned_files is now always resolved when a story_id is given (previously
+    # gated behind auto_fix=true, so it was only ever computed for auto-fix
+    # ELIGIBILITY, never for scoping which findings BLOCK the current story).
+    # Root cause this fixes (found live, 2026-07-09/10, tier3-travel-app run):
+    # this check walks the ENTIRE project tree, so a pre-existing broken
+    # import in a file the CURRENT story doesn't own (e.g. SKY-003-impl's
+    # cli.ts importing a type SKY-002-impl's client.ts never exported)
+    # permanently blocked an unrelated story (SKY-002-test, which owns only
+    # client.test.ts and is scope-guarded from ever touching cli.ts) —
+    # exhausting all 8 retries on a bug it was structurally incapable of
+    # fixing. has_story_context distinguishes "we know what this story owns,
+    # scope blocking to that" from "no story_id given, preserve old global
+    # behavior" (e.g. a caller with no per-story context at all).
+    local owned_files_json="[]"
+    local has_story_context="false"
+    if [ -n "$story_id" ]; then
+        has_story_context="true"
+        owned_files_json=$(jq -c --arg id "$story_id" \
+            '.stories[] | select(.id == $id) | .technicalNotes.files // []' \
+            "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "[]")
+    fi
+
+    local result
+    result=$(python3 - "$project_root" "$auto_fix" "$owned_files_json" "$has_story_context" << 'PYEOF'
+import os, re, sys, json
+
+project_root = sys.argv[1]
+auto_fix = sys.argv[2] == 'true'
+owned_files = set(os.path.normpath(os.path.join(project_root, f) if not os.path.isabs(f) else f)
+                   for f in json.loads(sys.argv[3]))
+has_story_context = sys.argv[4] == 'true'
+SOURCE_EXTS = ('.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs')
+
+IMPORT_RE = re.compile(r"import\s+(?:type\s+)?\{([^}]*)\}\s+from\s+['\"](\.[^'\"]*)['\"]")
+EXPORT_DECL_RE = re.compile(
+    r"export\s+(?:default\s+)?(?:abstract\s+)?(?:class|function|const|let|var|interface|type|enum)\s+([A-Za-z_$][\w$]*)"
+)
+EXPORT_LIST_RE = re.compile(r"export\s*\{([^}]*)\}(?!\s*from)")
+
+def resolves(base_dir, spec):
+    candidate = os.path.normpath(os.path.join(base_dir, spec))
+    if os.path.isfile(candidate):
+        return candidate
+    for ext in SOURCE_EXTS:
+        if os.path.isfile(candidate + ext):
+            return candidate + ext
+        if os.path.isfile(os.path.join(candidate, 'index' + ext)):
+            return os.path.join(candidate, 'index' + ext)
+    return None
+
+_export_cache = {}
+def get_exports(fpath):
+    if fpath in _export_cache:
+        return _export_cache[fpath]
+    try:
+        with open(fpath, encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+    except OSError:
+        _export_cache[fpath] = set()
+        return set()
+    names = set(EXPORT_DECL_RE.findall(content))
+    for group in EXPORT_LIST_RE.findall(content):
+        for item in group.split(','):
+            item = item.strip()
+            if not item:
+                continue
+            # `export { A as B }` — B is the externally-visible name
+            parts = re.split(r'\s+as\s+', item)
+            names.add(parts[-1].strip())
+    _export_cache[fpath] = names
+    return names
+
+broken = []
+out_of_scope = []
+auto_fixed = []
+for root, dirs, files in os.walk(project_root):
+    dirs[:] = [d for d in dirs if d not in ('node_modules', 'dist', '.git', '__pycache__', '.venv', '.contracts')]
+    for fname in files:
+        if not fname.endswith(SOURCE_EXTS):
+            continue
+        fpath = os.path.join(root, fname)
+        try:
+            with open(fpath, encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+        except OSError:
+            continue
+        fixed_content = content
+        file_changed = False
+        for m in IMPORT_RE.finditer(content):
+            names_raw, spec = m.group(1), m.group(2)
+            target = resolves(root, spec)
+            if not target:
+                continue  # a broken PATH is run_relative_import_check's job, not this one
+            exports = get_exports(target)
+            rel_fpath = os.path.relpath(fpath, project_root)
+            for raw_name in names_raw.split(','):
+                raw_name = raw_name.strip()
+                if not raw_name:
+                    continue
+                # `import { A as B }` — A is the identifier that must exist in the target
+                imported_name = re.split(r'\s+as\s+', raw_name)[0].strip()
+                if imported_name in exports:
+                    continue
+                case_matches = [e for e in exports if e.lower() == imported_name.lower() and e != imported_name]
+                if len(case_matches) == 1:
+                    suggestion = f" Did you mean '{case_matches[0]}'? (exported from {os.path.relpath(target, project_root)})"
+                else:
+                    suggestion = ""
+
+                can_auto_fix = auto_fix and len(case_matches) == 1 and os.path.normpath(fpath) in owned_files
+                if can_auto_fix:
+                    # Whole-file word-boundary replace — the wrong identifier is
+                    # typically used both in the import AND at call sites (the
+                    # exact live bug: `import { SkyScannerClient }` AND
+                    # `new SkyScannerClient()` both had the typo). Patching only
+                    # the import line would leave usage sites referencing a now-
+                    # undefined name — a different but equally broken result.
+                    correct_name = case_matches[0]
+                    pattern = re.compile(r'\b' + re.escape(imported_name) + r'\b')
+                    new_content = pattern.sub(correct_name, fixed_content)
+                    if new_content != fixed_content:
+                        fixed_content = new_content
+                        file_changed = True
+                        auto_fixed.append(f"{rel_fpath}: '{imported_name}' -> '{correct_name}'")
+                if not can_auto_fix:
+                    line = f"{rel_fpath}: imports '{imported_name}' from '{spec}' which is not exported there.{suggestion}"
+                    # Root cause this scopes (found live, 2026-07-09/10): a
+                    # pre-existing broken import in a file the CURRENT story
+                    # doesn't own (has_story_context=true and fpath not in
+                    # owned_files) permanently blocked an UNRELATED story that
+                    # is structurally incapable of fixing it (scope-guard
+                    # prevents it from ever touching that file) — exhausting
+                    # all retries on a bug that was never this story's to fix.
+                    # Only block the CURRENT story on findings in files it
+                    # actually owns; report everything else as non-blocking
+                    # visibility so the information isn't silently lost.
+                    if has_story_context and os.path.normpath(fpath) not in owned_files:
+                        out_of_scope.append(line)
+                    else:
+                        broken.append(line)
+
+        if file_changed:
+            with open(fpath, 'w', encoding='utf-8') as f:
+                f.write(fixed_content)
+
+for line in out_of_scope:
+    print("OUT_OF_SCOPE:" + line)
+if broken:
+    print("BROKEN")
+    for line in broken:
+        print(line)
+else:
+    print("OK")
+for line in auto_fixed:
+    print("AUTOFIXED:" + line)
+PYEOF
+)
+
+    local autofixed_lines
+    autofixed_lines=$(echo "$result" | grep "^AUTOFIXED:" || true)
+    if [ -n "$autofixed_lines" ]; then
+        while IFS= read -r _fix_line; do
+            [ -z "$_fix_line" ] && continue
+            log "  [named-import-check] Auto-corrected ${_fix_line#AUTOFIXED:}"
+        done <<< "$autofixed_lines"
+    fi
+    result=$(echo "$result" | grep -v "^AUTOFIXED:" || true)
+
+    # Findings in files this story doesn't own are surfaced (visibility) but
+    # never block this story's own turn — see the Python block's own comment
+    # for the live defect this fixes (an unrelated story permanently blocked
+    # by a bug it was structurally incapable of fixing).
+    local out_of_scope_lines
+    out_of_scope_lines=$(echo "$result" | grep "^OUT_OF_SCOPE:" || true)
+    if [ -n "$out_of_scope_lines" ]; then
+        while IFS= read -r _oos_line; do
+            [ -z "$_oos_line" ] && continue
+            warning "  [named-import-check] Broken import outside this story's scope (not blocking): ${_oos_line#OUT_OF_SCOPE:}"
+        done <<< "$out_of_scope_lines"
+    fi
+    result=$(echo "$result" | grep -v "^OUT_OF_SCOPE:" || true)
+
+    if [ "$(echo "$result" | head -1)" = "OK" ]; then
+        return 0
+    fi
+
+    local details
+    details=$(echo "$result" | tail -n +2)
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nA named import does not exist as an export in its target file — this will fail immediately when the test suite runs (the model likely misspelled/mis-cased an identifier, not a default-vs-named export issue). Fix the identifier name before anything else:\n\n%s\n' "$details")
+    {
+        echo ""
+        echo "=== Named import check failed ==="
         echo "$details"
     } >> "$output_file"
     return 1
@@ -1911,20 +2428,110 @@ run_external_verification() {
     VERIFICATION_FAILURE=""
     DETERMINISTIC_CHECK_FAILURE=0
 
+    # Vendor-dir integrity check runs FIRST, before anything else in this
+    # function (including run_dependency_check's own sanctioned writes to the
+    # same directories) — so it only ever attributes a change to THIS story's
+    # own agent turn, never to a later legitimate install. Runs regardless of
+    # whether a test command is configured (tampering here could poison a
+    # LATER story sharing the same vendor dirs even if this story has no
+    # tests of its own). No-op when no vendorDirs are configured.
+    #
+    # BUG (caught before ever shipping live, 2026-07-07 — found by re-reading
+    # the code under scrutiny, not by a live run): the original version
+    # returned 1 on tampering BEFORE calling _vendor_unlock, meaning the vendor
+    # dirs would stay chmod -R a-w'd (read-only) PERMANENTLY the very first
+    # time tampering was ever caught — breaking every subsequent retry's own
+    # legitimate run_dependency_check installs, and every later story in the
+    # whole run, since nothing else ever unlocks it. Fixed: unlock ALWAYS runs
+    # regardless of the check's result; only the return code differs.
+    local _vendor_check_rc=0
+    run_vendor_integrity_check "$PROJECT_ROOT" "$output_file" || _vendor_check_rc=1
+    _vendor_unlock "$PROJECT_ROOT"
+    if [ "$_vendor_check_rc" -ne 0 ]; then
+        warning "  [vendor-guard] Vendor directory tampering detected — skipping test run"
+        DETERMINISTIC_CHECK_FAILURE=1
+        export DETERMINISTIC_CHECK_FAILURE
+        return 1
+    fi
+
+    # Run any reviewed dynamic tools now, in this genuinely unlocked window —
+    # see run_dynamic_tools_in_unlocked_window()'s own docstring for the
+    # live defect this fixes (a dependency-installing dynamic tool could
+    # never succeed while the agent's own turn held vendor dirs locked).
+    run_dynamic_tools_in_unlocked_window "$PROJECT_ROOT" "$output_file"
+
     # Read optional testCommand from PRD story.technicalNotes
     local test_cmd
     test_cmd=$(jq -r --arg id "$story_id" \
         '.stories[] | select(.id == $id) | .technicalNotes.testCommand // ""' \
         "$prd_target" 2>/dev/null || echo "")
 
-    # Fall back to npm test if package.json has a test script
+    # Fall back to npm test if package.json has a test script — but only for
+    # stories that actually own a test file. Without this guard, a scaffold
+    # story whose only job is writing package.json (with a required
+    # scripts.test entry, per its own ACs) would trip external verification
+    # the moment it does its job correctly: npm test then fails because no
+    # test files exist ANYWHERE yet (true on the very first scaffold story),
+    # the failure-analyst misdiagnoses "missing test files" and tries to
+    # create one, and the scope-guard correctly blocks that write since the
+    # story never declared ownership of any .test.ts/.spec.ts file — a
+    # structurally guaranteed infinite retry loop, confirmed live 2026-07-08
+    # on SKY-001A (package.json-only story, retries 0-2 all hit the same
+    # "no test files found" diagnosis before HEALING_BROKEN fired each time).
     if [ -z "$test_cmd" ] && [ -f "$PROJECT_ROOT/package.json" ]; then
         local has_test
         has_test=$(jq -r '.scripts.test // ""' "$PROJECT_ROOT/package.json" 2>/dev/null || echo "")
-        [ -n "$has_test" ] && test_cmd="npm test"
+        local _owns_test_file
+        _owns_test_file=$(jq -r --arg id "$story_id" \
+            '.stories[] | select(.id == $id) | (.technicalNotes.files // []) | map(select(test("\\.(test|spec)\\.[jt]sx?$"))) | length' \
+            "$prd_target" 2>/dev/null || echo 0)
+        if [ -n "$has_test" ] && [ "${_owns_test_file:-0}" -gt 0 ]; then
+            test_cmd="npm test"
+        fi
     fi
 
     [ -z "$test_cmd" ] && return 0  # no test command configured — skip
+
+    # Exposed for run_failure_analyst's tool_creation gate (added 2026-07-12):
+    # a dynamic tool that independently re-invokes this SAME test command is a
+    # duplicate-verification risk, not a mechanical fixup — see that check for
+    # the live incident this closes.
+    LAST_TEST_CMD="$test_cmd"
+    export LAST_TEST_CMD
+
+    # Sanitize the child-process environment for npm install/test (added
+    # 2026-07-11, after a live test failure no amount of model escalation
+    # could ever fix): claude.sh inherits the orchestrator's OWN .env
+    # (Anthropic/OpenRouter/MiniMax keys, etc — sourced by
+    # run-agent-orchestration.sh) all the way down to whatever test command
+    # runs INSIDE the generated app. Root cause found live: epam-cli's own
+    # .env happens to define RAPIDAPI_KEY (a real credential) — the exact
+    # env var name a generated SkyscannerClient story checked as a
+    # constructor fallback. Every retry of its "should throw when no API key
+    # provided" test failed identically because the constructor legitimately
+    # found a REAL key in the inherited environment and didn't throw — the
+    # generated app's code was correct the entire time; the test's
+    # environment was contaminated by a secret that belongs to the
+    # ORCHESTRATOR, not the app under test. No model escalation or skill
+    # guidance can ever fix a test that's structurally unwinnable this way.
+    # Strip every var name defined in the orchestrator's own .env from the
+    # install/test subprocess environment so the generated app is tested in
+    # real isolation.
+    #
+    # Deliberately uses bash's own `unset` builtin, NOT `env -u` — this
+    # environment's PATH shadows the real GNU coreutils `env` with an
+    # unrelated PATH-setup shell shim at ~/.local/bin/env that doesn't
+    # implement `-u` (confirmed live: `env -u FOO bash -c '...'` silently
+    # produced none of the command's effects). A prefixed `unset` string has
+    # no dependency on any external binary and can't be shadowed this way.
+    local _orch_env_file="$(dirname "$AUTOMATION_DIR")/.env"
+    local _orch_env_unset_prefix=""
+    if [ -f "$_orch_env_file" ]; then
+        while IFS='=' read -r _envkey _envval; do
+            [[ "$_envkey" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+            _orch_env_unset_prefix="${_orch_env_unset_prefix}unset ${_envkey}; "
+        done < <(grep -v '^[[:space:]]*#' "$_orch_env_file" | grep -v '^[[:space:]]*$')
+    fi
 
     # Scope guard: restore .ts files outside this story's declared scope from
     # the pre-run snapshot. Agents frequently use Bash (not WriteFile) to write
@@ -1977,7 +2584,7 @@ run_external_verification() {
         # shipped in the first version of this fix and was caught by its own
         # test suite: the TIMED OUT branch never fired).
         local _install_output
-        _install_output=$(cd "$PROJECT_ROOT" && timeout "$_install_timeout" npm install --silent 2>&1)
+        _install_output=$(cd "$PROJECT_ROOT" && timeout "$_install_timeout" bash -c "${_orch_env_unset_prefix}npm install --silent" 2>&1)
         local _install_rc=$?
         if [ "$_install_rc" -eq 124 ]; then
             warning "  npm install TIMED OUT after ${_install_timeout}s — test may still fail"
@@ -1997,6 +2604,19 @@ run_external_verification() {
     # './skyscanner/client'). Skip test execution entirely if found.
     if ! run_relative_import_check "$PROJECT_ROOT" "$output_file" "$story_id"; then
         warning "  [relative-import-check] Broken import detected — skipping test run"
+        DETERMINISTIC_CHECK_FAILURE=1
+        export DETERMINISTIC_CHECK_FAILURE
+        return 1
+    fi
+
+    # Fail fast on a named import whose identifier doesn't exist in its
+    # target's exports — same rationale as relative-import-check above, but
+    # for a different failure shape (file path resolves fine, the imported
+    # NAME is wrong/mis-cased). Root cause: a live run burned a story's
+    # entire ladder escalation on this exact bug because the failure-analyst
+    # misdiagnosed it as a default-vs-named export mismatch.
+    if ! run_named_import_check "$PROJECT_ROOT" "$output_file" "$story_id"; then
+        warning "  [named-import-check] Non-existent named import detected — skipping test run"
         DETERMINISTIC_CHECK_FAILURE=1
         export DETERMINISTIC_CHECK_FAILURE
         return 1
@@ -2029,7 +2649,7 @@ run_external_verification() {
     # (600s for low-effort stories) so this always fires first and gives a
     # clear, actionable diagnosis instead of a generic outer timeout.
     local _test_timeout="${EPAM_TEST_TIMEOUT_SECS:-300}"
-    test_output=$(cd "$PROJECT_ROOT" && timeout "$_test_timeout" bash -c "$test_cmd" 2>&1) || test_exit=$?
+    test_output=$(cd "$PROJECT_ROOT" && timeout "$_test_timeout" bash -c "${_orch_env_unset_prefix}${test_cmd}" 2>&1) || test_exit=$?
 
     if [ "$test_exit" -eq 124 ]; then
         warning "External verification TIMED OUT for $story_id after ${_test_timeout}s (test command: $test_cmd)"
@@ -2879,6 +3499,66 @@ Emit ONLY the corrected text — nothing else."
     fi
 }
 
+# _skill_note_format_ok <note> <story_id> <existing_profile_text>
+# Deterministic pre-check for the OBJECTIVELY verifiable skill_note/kb_entry
+# format rules already stated in profiles.json's prd-change-reviewer /
+# kb-change-reviewer profiles: length cap, imperative opener, no story-ID
+# reference, not a verbatim duplicate of an existing line in the same
+# profile. These are checkable facts, not subjective judgment calls -- yet a
+# live run (2026-07-07) observed the LLM reviewer reject notes that already
+# satisfied every one of these rules (e.g. "Always end TypeScript statements
+# with semicolons...", well under 200 chars, no story ID), 3/3 times, purely
+# on flaky format judgment. That burns a gate round-trip per rejection for
+# zero benefit. When a candidate passes this check, skip the LLM review
+# entirely for format -- genuinely subjective calls (does this CONTRADICT an
+# existing rule, is the underlying lesson actually sound) are out of scope
+# here and still need a real reviewer, so this only short-circuits the
+# specific failure mode that was observed wasting cost.
+_skill_note_format_ok() {
+    local note="$1"
+    local story_id="$2"
+    local existing_profile_text="${3:-}"
+    [ -z "$note" ] && return 1
+    [ "${#note}" -le 200 ] || return 1
+    echo "$note" | grep -Eiq '^(do not|never|always|avoid|use|prefer)\b' || return 1
+    if [ -n "$story_id" ] && echo "$note" | grep -qi "$story_id"; then
+        return 1
+    fi
+    if [ -n "$existing_profile_text" ] && echo "$existing_profile_text" | grep -qF "$note"; then
+        return 1
+    fi
+    return 0
+}
+
+# _tool_recipe_reinvokes_test_cmd <recipe> <test_cmd>
+# Deterministic pre-check for a dynamic-tool recipe re-running the project's
+# OWN configured test command (e.g. "npm test") as part of its own recipe.
+#
+# Root cause this closes (found live, 2026-07-11/12, tier3-travel-app run,
+# SKY-004-test): a dynamic tool (build-before-test.sh) whose stated purpose
+# was "ensure the build runs before tests" wrote a recipe of
+# `npm run build && npx vitest run` — independently re-invoking the FULL test
+# suite a second time, outside the orchestrator's own dedicated, captured
+# `run_external_verification()` test run. That duplicate, uncaptured
+# invocation is a real risk: any stray output it produces (or any process it
+# leaves running) is NOT isolated from the orchestrator's own subsequent
+# capture of $test_output, which is fed directly into the failure-analyst's
+# next diagnosis as trusted ground truth. A tool's job is the ONE mechanical
+# step it was written for (installing a dependency, running a build) — never
+# a second, uncoordinated run of the test suite itself.
+#
+# Generic/config-driven, not hardcoded to any test runner: compares the
+# recipe against THIS project's own resolved test command (passed in from
+# run_external_verification's LAST_TEST_CMD), not a fixed "vitest"/"jest"
+# pattern list.
+_tool_recipe_reinvokes_test_cmd() {
+    local recipe="$1"
+    local test_cmd="${2:-}"
+    [ -z "$test_cmd" ] && return 1
+    echo "$recipe" | grep -qF -- "$test_cmd" && return 0
+    return 1
+}
+
 # run_change_with_reviewer_retry <story_id> <change_type> <before> <candidate> [max_retries=3]
 # Wraps run_prd_change_reviewer with a summarize-and-resubmit loop instead of discarding
 # a rejected self-heal change immediately. On rejection, run_prd_change_summarizer
@@ -2888,6 +3568,7 @@ Emit ONLY the corrected text — nothing else."
 # issues, silently defeating the entire self-heal-persistence mechanism.
 # Prints "pass" or "fail" to stdout (same contract as run_prd_change_reviewer).
 # Sets REVIEWER_RETRY_TEXT to the final (possibly reformatted) candidate either way.
+
 run_change_with_reviewer_retry() {
     local story_id="$1"
     local change_type="$2"
@@ -2902,6 +3583,14 @@ run_change_with_reviewer_retry() {
     # run_failure_analyst).
     local _issues_file="${TMPDIR:-/tmp}/.prd-review-issues-$$"
     local _retry_text_file="${TMPDIR:-/tmp}/.reviewer-retry-text-$$"
+
+    if { [ "$change_type" = "skill_note" ] || [ "$change_type" = "kb_entry" ]; } \
+        && _skill_note_format_ok "$candidate" "$story_id" "$before"; then
+        printf '%s' "$candidate" > "$_retry_text_file" 2>/dev/null || true
+        log "  [PRD-Reviewer] Skipped LLM review for ${change_type} (${story_id}) -- deterministic format check passed" >&2
+        echo "pass"
+        return 0
+    fi
 
     local attempt=1
     local current="$candidate"
@@ -2981,6 +3670,34 @@ run_failure_analyst() {
     fi
     [ -z "$analyst_profile" ] && analyst_profile="You are a self-healing pipeline analyst. Diagnose the exact root cause of the test failure and prescribe the minimum fix so the NEXT retry succeeds."
 
+    # Dependency contract injection (added 2026-07-07): same ground-truth
+    # mechanism already proven for build_implementation_prompt() — the
+    # failure-analyst was previously diagnosing failures with NO visibility
+    # into a dependency's REAL exports/signatures, and got it wrong on a live
+    # run: it called a casing-typo'd import ("SkyScannerClient" vs the real
+    # "SkyscannerClient") a "default vs named export mismatch," which is
+    # simply false — the class IS correctly a named export, just mis-cased.
+    # Every retry (including the strongest configured model) then "fixed" the
+    # wrong thing because the diagnosis GUIDING it was wrong. A stronger model
+    # can't out-reason a false premise it's been handed as ground truth.
+    local dependency_contracts=""
+    local _fa_dep_ids_json
+    _fa_dep_ids_json=$(jq -c --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | [(.dependencies // .technicalNotes.dependsOn // [])[]? // empty]' \
+        "$prd_target" 2>/dev/null || echo "[]")
+    local _fa_dep_id
+    while IFS= read -r _fa_dep_id; do
+        [ -z "$_fa_dep_id" ] && continue
+        local _fa_contract_file="$PROJECT_ROOT/.contracts/${_fa_dep_id}.md"
+        if [ -f "$_fa_contract_file" ]; then
+            dependency_contracts="${dependency_contracts}
+### Contract: ${_fa_dep_id}
+$(cat "$_fa_contract_file")
+"
+        fi
+    done < <(echo "$_fa_dep_ids_json" | jq -r '.[]?' 2>/dev/null)
+    [ -z "$dependency_contracts" ] && dependency_contracts="(no dependency contracts available)"
+
     local analyst_prompt
     analyst_prompt=$(cat << 'ANALYST_PROMPT_END'
 __ANALYST_PROFILE__
@@ -2993,6 +3710,12 @@ __STORY_ACS__
 
 AGENT SKILL ADDENDUM (instructions in the agent's system prompt):
 __SKILL_ADDENDUM__
+
+DEPENDENCY CONTRACTS (ground truth — auto-generated from actual source, not
+model-transcribed; trust this over any assumption you'd otherwise make about
+what a dependency exports, including its exact class/function names and
+casing):
+__DEPENDENCY_CONTRACTS__
 
 TEST FAILURE OUTPUT:
 __VERIFICATION_FAILURE__
@@ -3019,6 +3742,7 @@ ANALYST_PROMPT_END
     analyst_prompt="${analyst_prompt//__STORY_ROLE__/$story_role}"
     analyst_prompt="${analyst_prompt//__STORY_ACS__/$story_acs}"
     analyst_prompt="${analyst_prompt//__SKILL_ADDENDUM__/$skill_addendum}"
+    analyst_prompt="${analyst_prompt//__DEPENDENCY_CONTRACTS__/$dependency_contracts}"
     analyst_prompt="${analyst_prompt//__VERIFICATION_FAILURE__/${VERIFICATION_FAILURE:0:2500}}"
 
     local analyst_raw="" analyst_json="" _analyst_call_ok="false"
@@ -3106,8 +3830,9 @@ for i, c in enumerate(text):
                             idx=$(echo "$patch" | jq -r '.index // ""' 2>/dev/null || echo "")
                             new_text=$(echo "$patch" | jq -r '.new_text // ""' 2>/dev/null || echo "")
                             if [ -n "$idx" ] && [ -n "$new_text" ]; then
+                                ( flock -w 10 200 || { error "  [FailureAnalyst] Could not acquire lock on $prd_target"; return 1; }
                                 python3 - "$new_text" << PYEOF 2>&1 | while IFS= read -r line; do log "  [FailureAnalyst] $line"; done
-import json, sys
+import json, sys, os
 prd_path = '$prd_target'
 story_id = '$story_id'
 idx = $idx
@@ -3124,9 +3849,12 @@ for s in prd.get('stories', []):
         else:
             print(f'AC index {idx} out of range (story has {len(acs)} ACs)', file=sys.stderr)
         break
-with open(prd_path, 'w') as f:
+_tmp_prd_path = prd_path + '.tmp'
+with open(_tmp_prd_path, 'w') as f:
     json.dump(prd, f, indent=2)
+os.replace(_tmp_prd_path, prd_path)
 PYEOF
+                                ) 200>"${prd_target}.lock"
                                 patch_count=$((patch_count + 1))
                             fi
                         done < <(echo "$patches_json" | jq -c '.[]' 2>/dev/null)
@@ -3138,8 +3866,9 @@ PYEOF
                         _review_verdict=$(run_prd_change_reviewer "$story_id" "ac_patch" "$_ac_before" "$_ac_after")
                         if [ "$_review_verdict" = "fail" ]; then
                             warning "  [FailureAnalyst] AC patch rejected by reviewer — reverting to original ACs"
+                            ( flock -w 10 200 || { error "  [FailureAnalyst] Could not acquire lock on $prd_target"; return 1; }
                             python3 - "$_ac_before" << PYEOF 2>/dev/null || true
-import json, sys
+import json, sys, os
 prd_path = '$prd_target'
 story_id = '$story_id'
 acs = json.loads(sys.argv[1])
@@ -3149,9 +3878,12 @@ for s in prd.get('stories', []):
     if s.get('id') == story_id:
         s['acceptanceCriteria'] = acs
         break
-with open(prd_path, 'w') as f:
+_tmp_prd_path = prd_path + '.tmp'
+with open(_tmp_prd_path, 'w') as f:
     json.dump(prd, f, indent=2)
+os.replace(_tmp_prd_path, prd_path)
 PYEOF
+                            ) 200>"${prd_target}.lock"
                             patch_count=0
                         else
                             log "  [FailureAnalyst] Applied $patch_count AC patch(es) — retry will use updated spec"
@@ -3176,8 +3908,9 @@ PYEOF
                             tc_idx=$(echo "$patch" | jq -r '.index // ""' 2>/dev/null || echo "")
                             tc_new_text=$(echo "$patch" | jq -r '.new_text // ""' 2>/dev/null || echo "")
                             if [ -n "$tc_idx" ] && [ -n "$tc_new_text" ]; then
+                                ( flock -w 10 200 || { error "  [FailureAnalyst] Could not acquire lock on $prd_target"; return 1; }
                                 python3 - "$tc_new_text" << PYEOF 2>&1 | while IFS= read -r line; do log "  [FailureAnalyst] $line"; done
-import json, sys
+import json, sys, os
 prd_path = '$prd_target'
 story_id = '$story_id'
 idx = $tc_idx
@@ -3195,9 +3928,12 @@ for s in prd.get('stories', []):
         else:
             print(f'TC index {idx} out of range (story has {len(facts)} facts)', file=sys.stderr)
         break
-with open(prd_path, 'w') as f:
+_tmp_prd_path = prd_path + '.tmp'
+with open(_tmp_prd_path, 'w') as f:
     json.dump(prd, f, indent=2)
+os.replace(_tmp_prd_path, prd_path)
 PYEOF
+                                ) 200>"${prd_target}.lock"
                                 patch_count=$((patch_count + 1))
                             fi
                         done < <(echo "$tc_patches_json" | jq -c '.[]' 2>/dev/null)
@@ -3209,8 +3945,9 @@ PYEOF
                         _tc_review_verdict=$(run_prd_change_reviewer "$story_id" "tc_patch" "$_tc_before" "$_tc_after")
                         if [ "$_tc_review_verdict" = "fail" ]; then
                             warning "  [FailureAnalyst] TC patch rejected by reviewer — reverting to original facts"
+                            ( flock -w 10 200 || { error "  [FailureAnalyst] Could not acquire lock on $prd_target"; return 1; }
                             python3 - "$_tc_before" << PYEOF 2>/dev/null || true
-import json, sys
+import json, sys, os
 prd_path = '$prd_target'
 story_id = '$story_id'
 facts = json.loads(sys.argv[1])
@@ -3220,9 +3957,12 @@ for s in prd.get('stories', []):
     if s.get('id') == story_id:
         s.setdefault('testCriteria', {})['facts'] = facts
         break
-with open(prd_path, 'w') as f:
+_tmp_prd_path = prd_path + '.tmp'
+with open(_tmp_prd_path, 'w') as f:
     json.dump(prd, f, indent=2)
+os.replace(_tmp_prd_path, prd_path)
 PYEOF
+                            ) 200>"${prd_target}.lock"
                             patch_count=0
                         else
                             log "  [FailureAnalyst] Applied $patch_count TC patch(es) — retry will use updated testCriteria"
@@ -3236,12 +3976,40 @@ PYEOF
                         log "  [FailureAnalyst] Injected skill guidance into retry prompt (${#skill_note} chars)"
                         # Persist skill note to profiles.json so future runs inherit this learning
                         if [ -f "$profiles_file" ]; then
+                            local _current_role_profile
+                            _current_role_profile=$(jq -c --arg role "$story_role" '.[$role] // ""' "$profiles_file" 2>/dev/null)
+                            # Duplicate guard (fixed 2026-07-11, after a live run persisted an
+                            # exact duplicate note): the reviewer call below already correctly
+                            # rejects an exact-duplicate skill note as a "fail" verdict (same
+                            # dedup mechanism the 2026-07-10 fix restored) -- but the
+                            # unreviewed-fallback path just below was designed to rescue a
+                            # genuinely NEW lesson that failed 3 review rounds on WORDING
+                            # alone, and didn't distinguish that from "rejected because it's a
+                            # verbatim duplicate." It persisted the duplicate anyway,
+                            # defeating the entire dedup mechanism it sits next to. Check for
+                            # an exact duplicate FIRST and skip the whole reviewer+persist
+                            # flow when found -- there is nothing to review or fall back to.
+                            if echo "$_current_role_profile" | grep -qF -- "$skill_note"; then
+                                log "  [FailureAnalyst] Skill note is an exact duplicate of an existing note in [${story_role}] — discarding, not persisting again"
+                            else
                             # Reviewer validates skill note before persisting. Rejections
                             # get up to 3 summarize-and-resubmit rounds (same mechanism as
                             # kb_entry) before being discarded.
                             local _skill_review_verdict
+                            # Root cause fix (found live, 2026-07-10, tier3-travel-app run):
+                            # this used to `head -c 500` the existing profile text before
+                            # handing it to the duplicate check inside
+                            # run_change_with_reviewer_retry/_skill_note_format_ok. New notes
+                            # are appended to the END of the profile string, so once a
+                            # profile grows past 500 chars (typescript-engineer reached
+                            # 12K+), the dedup check was structurally blind to every note
+                            # already there — guaranteeing duplicates for any profile past
+                            # that length. Observed: the same self-contradictory "don't use
+                            # 'as'... use 'value as Type'" note persisted twice verbatim in
+                            # one story's retry loop. Pass the FULL profile text so the
+                            # exact-duplicate check (grep -qF) can actually see prior notes.
                             _skill_review_verdict=$(run_change_with_reviewer_retry "$story_id" "skill_note" \
-                                "$(jq -c --arg role "$story_role" '.[$role] // ""' "$profiles_file" 2>/dev/null | head -c 500)" \
+                                "$_current_role_profile" \
                                 "$skill_note" 3)
                             # run_change_with_reviewer_retry ran inside the $(...) above, so its
                             # REVIEWER_RETRY_TEXT assignment was scoped to that subshell — read
@@ -3257,8 +4025,9 @@ PYEOF
                                 _skill_note_to_persist="[unreviewed-fallback] ${skill_note:0:200}"
                             fi
                             REVIEWER_RETRY_TEXT="$_skill_note_to_persist"
+                            ( flock -w 10 200 || { error "  [FailureAnalyst] Could not acquire lock on $profiles_file"; return 1; }
                             python3 - "$REVIEWER_RETRY_TEXT" << PYEOF 2>&1 | while IFS= read -r line; do log "  [FailureAnalyst] $line"; done
-import json, sys
+import json, sys, os
 profiles_path = '$profiles_file'
 role = '$story_role'
 note = '[Self-Heal] ' + sys.argv[1]
@@ -3269,13 +4038,17 @@ if role in profiles:
     existing = profiles[role]
     sep = '\n\n' if existing else ''
     profiles[role] = existing + sep + note
-    with open(profiles_path, 'w') as f:
+    _tmp_profiles_path = profiles_path + '.tmp'
+    with open(_tmp_profiles_path, 'w') as f:
         json.dump(profiles, f, indent=2)
+    os.replace(_tmp_profiles_path, profiles_path)
     print(f'Skill note appended to [{role}] profile — persisted for future runs')
 else:
     print(f'Profile role [{role}] not found in profiles.json — skill note NOT persisted', file=sys.stderr)
 PYEOF
+                            ) 200>"${profiles_file}.lock"
                             _profile_updated="true"
+                            fi
                         fi
                     else
                         log "  [FailureAnalyst] target=skill but skill_note empty — falling back to diagnosis only"
@@ -3292,6 +4065,22 @@ PYEOF
                         kb_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "unknown")
                         # Truncate to 200 chars — entries are single actionable rules, not essays
                         local short_note="${skill_note:0:200}"
+                        # Exact-duplicate check against the FULL kb_file BEFORE ever calling
+                        # the reviewer (found live, 2026-07-12): unlike the skill_note case
+                        # above (which does exactly this grep against the full profile text),
+                        # this path only ever fed the reviewer the LAST 6 LINES of the KB file
+                        # as dedup context, relying entirely on the LLM's subjective judgment
+                        # for everything older than that. Live evidence:
+                        # KB-typescript-engineer.md accumulated 4 reworded variants of the
+                        # exact same "verify test-file imports are in package.json
+                        # devDependencies before writing tests" rule, all appended within one
+                        # 5-minute window — the LLM reviewer approved each as "not a duplicate"
+                        # since the wording differed each time. This catches the EXACT-repeat
+                        # case deterministically; genuine near-duplicate rewording is still the
+                        # reviewer's call, same scope boundary the skill_note fix drew.
+                        if [ -f "$kb_file" ] && grep -qF -- "$short_note" "$kb_file"; then
+                            log "  [FailureAnalyst] KB note is an exact duplicate of an existing entry in KB-${story_role}.md — discarding, not persisting again"
+                        else
                         # Read last 3 existing KB entries to give reviewer dedup context
                         local _kb_last3=""
                         _kb_last3=$(tail -6 "$kb_file" 2>/dev/null || echo "")
@@ -3328,12 +4117,16 @@ PYEOF
                             log "  [FailureAnalyst] KB entry appended to KB-${story_role}.md (${#REVIEWER_RETRY_TEXT} chars)"
                             _profile_updated="true"
                         fi
+                        fi
                     else
                         log "  [FailureAnalyst] target=kb but skill_note empty — no KB entry written"
                     fi
                     ;;
                 tool)
-                    if [ -n "$tool_name" ] && [ -n "$tool_recipe" ]; then
+                    if [ -n "$tool_name" ] && [ -n "$tool_recipe" ] && \
+                       _tool_recipe_reinvokes_test_cmd "$tool_recipe" "${LAST_TEST_CMD:-}"; then
+                        warning "  [FailureAnalyst] Dynamic tool '${tool_name}' recipe re-invokes this project's own test command ('${LAST_TEST_CMD}') — a tool's job is the ONE mechanical step it automates, never a second independent test run; NOT written"
+                    elif [ -n "$tool_name" ] && [ -n "$tool_recipe" ]; then
                         local tools_dir="$PROJECT_ROOT/.epam/dynamic-tools"
                         mkdir -p "$tools_dir" 2>/dev/null
                         local tool_path="${tools_dir}/${tool_name}.sh"
@@ -3360,6 +4153,19 @@ PYEOF
                         else
                             printf '%s' "$REVIEWER_RETRY_TEXT" > "$tool_path"
                             chmod +x "$tool_path" 2>/dev/null
+                            # Explicit, auditable "this exact tool was reviewed and
+                            # approved" marker — a sidecar file, not a marker embedded
+                            # in the script itself, so it never collides with the
+                            # `sed -n '2p'` purpose-line extraction used elsewhere.
+                            # Both run_dynamic_tools_in_unlocked_window() (the
+                            # orchestrator's own deterministic execution) and the
+                            # agent-prompt tool listing check for this marker before
+                            # trusting/surfacing a tool — today's only write path
+                            # already requires review, but this makes "only reviewed
+                            # tools are ever used" an explicit, checkable invariant
+                            # rather than an implicit assumption about there being no
+                            # other writer.
+                            printf 'reviewed_at=%s\nstory_id=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$story_id" > "${tool_path}.reviewed"
                             log "  [FailureAnalyst] Dynamic tool written: .epam/dynamic-tools/${tool_name}.sh — ${tool_purpose}"
                             _profile_updated="true"
                         fi
@@ -3376,6 +4182,10 @@ PYEOF
             esac
             # Record the healing event for observability and post-run audit
             run_healing_recorder "$story_id" "$retry_num" "$target" "$diagnosis" "$patch_count" "$_profile_updated"
+            # A pure syntax error escalates immediately (see check_syntax_class_error's
+            # docstring) — check this BEFORE the repeat-based check below, which would
+            # otherwise wait for the same syntax error to recur once more first.
+            check_syntax_class_error "$story_id" "$diagnosis"
             # Detect repeat failures — same diagnosis 2+ times means healing is broken
             check_healing_effectiveness "$story_id" "$diagnosis"
             # Detect diverse failures — a DIFFERENT diagnosis each attempt while still
@@ -3558,13 +4368,28 @@ resolve_escalation() {
     # Prefer a split-sibling match (same parent) so a genuinely unrelated story
     # that happens to also touch the file isn't picked by mistake; fall back to
     # a project-wide owner search for non-split cross-story dependencies.
+    #
+    # BUG A FIX (found live, 2026-07-11/12, tier3-travel-app runs): targetFile
+    # comes from run_relative_import_check()'s escalation write, which stores
+    # a RELATIVE path (Python's os.path.relpath, e.g. "src/cli.ts") — but the
+    # PRD's technicalNotes.files ALWAYS stores ABSOLUTE paths (e.g.
+    # "/home/.../skyscanner-app/src/cli.ts"). An exact `== $file` match can
+    # NEVER succeed for any escalation this codebase actually writes, so this
+    # resolution step failed 100% of the time since the mechanism was built —
+    # confirmed live: SKY-003-test burned its full 8-attempt retry ladder
+    # twice (2026-07-11 and again 2026-07-12) on the exact defect this
+    # mechanism exists to solve, because the escalation it wrote for itself
+    # was silently unresolvable on the very next retry. Match the SAME
+    # flexible pattern the write side (run_relative_import_check) already
+    # uses for its OWN "do I own this file" check: exact match OR the
+    # candidate path ending in "/" + the (possibly relative) target file.
     local sibling_id
     sibling_id=$(jq -r --arg parent "$parent_id" --arg file "$target_file" --arg self "$escalating_story_id" \
-        '.stories[] | select(($parent != "") and .specification.createdFrom == $parent and .id != $self) | select(.technicalNotes.files[]? == $file) | .id' \
+        '.stories[] | select(($parent != "") and .specification.createdFrom == $parent and .id != $self) | select((.technicalNotes.files // []) | map(. == $file or endswith("/" + $file)) | any) | .id' \
         "$prd_target" 2>/dev/null | head -1)
     if [ -z "$sibling_id" ]; then
         sibling_id=$(jq -r --arg file "$target_file" --arg self "$escalating_story_id" \
-            '.stories[] | select(.id != $self) | select(.technicalNotes.files[]? == $file) | .id' \
+            '.stories[] | select(.id != $self) | select((.technicalNotes.files // []) | map(. == $file or endswith("/" + $file)) | any) | .id' \
             "$prd_target" 2>/dev/null | head -1)
     fi
 
@@ -3601,6 +4426,34 @@ Apply ONLY this fix to ${target_file}. Do not make any other changes to this fil
     else
         warning "  [Escalation] Scoped fix for $sibling_id did not converge within ${ESCALATION_FIX_MAX_RETRIES:-1} retr(y/ies) — $escalating_story_id will re-diagnose on its next attempt"
         return 1
+    fi
+}
+
+# check_syntax_class_error <story_id> <current_diagnosis>
+# A pure syntax error (unbalanced brace, missing semicolon, unterminated string,
+# invalid type assertion, TS10xx/TS11xx parser diagnostics) is never a subtle
+# logic mistake that benefits from a same-tier retry with a text hint — the
+# model either can/can't produce syntactically valid TypeScript, and repeating
+# the SAME model tier just burns attempts waiting for check_healing_effectiveness's
+# 2-repeat threshold to fire. Escalate to the next rung on the FIRST occurrence
+# instead of waiting for a repeat.
+#
+# Root cause this fixes (observed live, 2026-07-10, tier3-travel-app run):
+# SKY-003-impl hit "Missing closing brace in cli.ts at line 375" and retried at
+# the SAME model tier twice before HealingBroken's repeat-of-2 threshold finally
+# forced an escalation to z-ai/glm-5.2, which then converged immediately. The
+# same class of syntax error (unterminated strings, invalid 'as' syntax, missing
+# semicolons) recurred across multiple DIFFERENT stories this session, always
+# eventually fixed only after burning 2+ same-tier attempts first.
+check_syntax_class_error() {
+    local story_id="$1"
+    local diagnosis="$2"
+    [ "${HEALING_BROKEN:-0}" = "1" ] && return 0
+    if echo "$diagnosis" | grep -qiE \
+        'missing (closing|opening) (brace|paren(thesis)?|bracket)|unterminated (string|template)|missing semicolon|invalid type assertion|unexpected token|\bTS1[01][0-9]{2}\b|syntax error'; then
+        log "  [SyntaxClassEscalation] '$diagnosis' matches a syntax-error pattern — escalating immediately instead of waiting for a repeat"
+        HEALING_BROKEN=1
+        export HEALING_BROKEN
     fi
 }
 
@@ -3869,6 +4722,10 @@ implement_story() {
     resolve_effort_settings "$story_id"
     # Resolve generator mode — overrides effort settings when agentRole=generator
     resolve_generator_settings "$story_id"
+    # Bump the iteration/token budget one tier for test-engineer stories —
+    # see resolve_test_engineer_effort_floor's own docstring for why.
+    resolve_test_engineer_effort_floor "$story_id"
+    log "  Effort[final] -> maxIter=${STORY_MAX_ITERATIONS} maxOutTok=${STORY_MAX_OUTPUT_TOKENS}"
     # Resolve aiProvider -> which CLI binary to use
     resolve_provider_settings "$story_id"
     # Capture original model so phase R3 can detect whether R2 escalated it
@@ -3876,8 +4733,16 @@ implement_story() {
     # Reset reasoning effort to default at story start (previous story's setting must not leak)
     export EPAM_REASONING_EFFORT="low"
     # Reset temperature override at story start (previous story's FailureDiversity
-    # or escalation-triggered override must not leak into an unrelated story).
-    unset EPAM_TEMPERATURE
+    # or escalation-triggered override must not leak into an unrelated story) —
+    # but restore the launcher-provided floor (_claude_temperature_floor, captured
+    # once at process start) rather than unsetting to nothing. Without this, a
+    # project-wide pin (e.g. tier3-travel-app-run.sh's EPAM_TEMPERATURE=0 for GLM
+    # models) would be wiped before the very first model call of every story.
+    if [ -n "$_claude_temperature_floor" ]; then
+        export EPAM_TEMPERATURE="$_claude_temperature_floor"
+    else
+        unset EPAM_TEMPERATURE
+    fi
     # For epam-run providers, prd.json .model field overrides effort-based model
     case "${STORY_PROVIDER:-codex}" in
         codex) resolve_codex_model_settings "$story_id" ;;
@@ -4089,16 +4954,28 @@ ${COORDINATOR_PROMPT_AMENDMENT}"
             printf '%s' "$prompt" > "$_scratchpad_file" 2>/dev/null || true
 
             local _trimmed_amendment
+            # Keep the last 3 headings, not just 1 (fixed 2026-07-11, after a live
+            # run repeated an identical mistake 5 retries after already being told
+            # not to): retry-0's diagnosed fix ("don't reuse validation logic
+            # across flags") became invisible to retry 5's prompt the moment a
+            # NEWER heading (e.g. a missing-export fix) pushed the trim window past
+            # it -- the guidance was still archived in COORDINATOR_PROMPT_AMENDMENT
+            # and the scratchpad file, but never shown to the model again, so it
+            # repeated the exact mistake it had already been corrected on. Keeping
+            # the last 3 distinct headings instead of 1 still bounds prompt growth
+            # (the original purpose of this trim) while giving recent-but-not-
+            # newest guidance a real chance to stay visible for a few more retries.
             _trimmed_amendment=$(printf '%s' "$COORDINATOR_PROMPT_AMENDMENT" | python3 -c "
 import sys
 text = sys.stdin.read()
 lines = text.split(chr(10))
 heading_idxs = [i for i, l in enumerate(lines) if l.startswith('## ')]
-print(chr(10).join(lines[heading_idxs[-1]:]) if heading_idxs else text)
+keep_from = heading_idxs[-3] if len(heading_idxs) >= 3 else (heading_idxs[0] if heading_idxs else 0)
+print(chr(10).join(lines[keep_from:]) if heading_idxs else text)
 " 2>/dev/null || echo "$COORDINATOR_PROMPT_AMENDMENT")
 
             if [ -n "$_trimmed_amendment" ] && [ "${#_trimmed_amendment}" -lt "${#COORDINATOR_PROMPT_AMENDMENT}" ]; then
-                warning "  [PromptScratchpad] Prompt exceeded ${_scratchpad_threshold} chars ($(( ${#prompt} )) actual) — full history written to $_scratchpad_file, trimming to most recent guidance only"
+                warning "  [PromptScratchpad] Prompt exceeded ${_scratchpad_threshold} chars ($(( ${#prompt} )) actual) — full history written to $_scratchpad_file, trimming to most recent guidance (up to 3)"
                 if [ "${STORY_GENERATOR_MODE:-}" = "true" ]; then
                     prompt="$(build_generator_prompt "$story_id")
 $(build_kb_prompt_section "$story_id" "$retry_count" "$next_kb_id")"
@@ -4115,7 +4992,7 @@ $story_plan"
                 fi
                 prompt="$prompt
 
-## Coordinator Guidance (retry ${retry_count}, showing most recent only — full retry history: ${_scratchpad_file})
+## Coordinator Guidance (retry ${retry_count}, showing most recent up to 3 — full retry history: ${_scratchpad_file})
 ${_trimmed_amendment}"
             fi
         fi
@@ -4131,6 +5008,11 @@ ${_trimmed_amendment}"
         # Scope guard: lock .ts files outside this story's declared scope read-only.
         # Any write attempt — Bash, WriteFile, or otherwise — gets EACCES.
         _scope_lock "$story_id"
+        # Vendor-dir guard: lock configured vendored-dependency directories
+        # (e.g. node_modules) read-only — no story ever legitimately writes
+        # inside an already-installed third-party package. No-op if
+        # .epam/dependency-check.json has no vendorDirs configured.
+        _vendor_lock "$PROJECT_ROOT"
 
         # Change to project root for the CLI to have correct context
         cd "$PROJECT_ROOT"
@@ -4306,6 +5188,12 @@ ${_trimmed_amendment}"
         # Scope guard: restore write permissions now that the agent has finished.
         # Verification (npm test) only reads files — no write access needed.
         _scope_unlock "$story_id"
+        # Vendor-dir guard: NOT unlocked here — run_vendor_integrity_check()
+        # (called at the very start of run_external_verification, before
+        # run_dependency_check's own sanctioned writes) needs the lock marker
+        # and current permissions intact to correctly attribute any tamper to
+        # this attempt. _vendor_unlock() is called from inside
+        # run_external_verification itself, right after that check passes.
 
         if [ "$invoke_success" = true ] && ! verify_story_deliverables "$story_id"; then
             warning "$story_cli returned success but story deliverables are incomplete"
@@ -4844,6 +5732,12 @@ build_kb_prompt_section() {
         local _tool_file _tool_purpose_line
         for _tool_file in "$tools_dir"/*.sh; do
             [ -f "$_tool_file" ] || continue
+            # Only reviewed tools are ever surfaced to an agent — same
+            # explicit .reviewed marker check as
+            # run_dynamic_tools_in_unlocked_window(), so an unreviewed or
+            # stale script (however it got there) is never offered as if
+            # trusted.
+            [ -f "${_tool_file}.reviewed" ] || continue
             _tool_purpose_line=$(sed -n '2p' "$_tool_file" | sed 's/^# //')
             printf -- '- `bash %s <args>` — %s\n' "$_tool_file" "$_tool_purpose_line"
         done
@@ -5219,6 +6113,25 @@ commit_completed_story() {
     _changed_count=$(timeout "$_git_timeout" git -C "$_commit_root" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
     if [ "${_changed_count:-0}" -eq 0 ]; then
         return 0
+    fi
+
+    # Generic credential scan (flow-gap analysis finding #2, 2026-07-12): no
+    # commit site in this pipeline scanned staged changes for accidentally-
+    # committed secrets before this. SAST (Step 4.2) is the first thing that
+    # even looks at code content for this, and it runs long after this commit
+    # would already be in git history. scan-secrets.sh is generic and stack-
+    # agnostic (well-known credential formats only) — see its own header.
+    local _scan_sh="${SCRIPT_DIR}/scan-secrets.sh"
+    if [ -f "$_scan_sh" ]; then
+        local _scan_output _scan_rc
+        _scan_output=$(bash "$_scan_sh" "$_commit_root" 2>&1)
+        _scan_rc=$?
+        if [ "$_scan_rc" -ne 0 ]; then
+            warning "  [commit_completed_story] $_scan_output"
+            warning "  [commit_completed_story] Refusing to commit for ${story_id} — unstaging (SECRET_SCAN)"
+            timeout "$_git_timeout" git -C "$_commit_root" reset 2>/dev/null || true
+            return 1
+        fi
     fi
 
     if timeout "$_git_timeout" git -C "$_commit_root" commit -m "story: complete ${story_id} (${_changed_count} file(s))" >/dev/null 2>&1; then
@@ -5846,7 +6759,16 @@ PROMPT_HEADER
     local _orch_model="${ORCH_GATE_MODEL:-}"
     if [ -z "$_orch_provider" ]; then
         warning "Pre-phase assessment: EPAM_ORCHESTRATION_PROVIDER not set — skipping (non-critical)"
+    # AI_GATE_ALLOW_TOOLS=1: the prompt above instructs the agent to run real
+    # jq commands against the PRD and read/write orchestrations/agents/profiles.json
+    # directly — without this, ai-run.sh's epam-umbrella branch defaults to
+    # --no-tools, so the agent can't actually run jq or touch any file; it can
+    # only print a JSON description of what it WOULD do, and no real profile
+    # augmentation or role-fix ever happens (found live 2026-07-08 — a run's
+    # assessment step logged a fabricated "content" diff for profiles.json that
+    # was never actually written to disk).
     elif echo "$assessment_prompt" | \
+            AI_GATE_ALLOW_TOOLS=1 \
             AI_PROVIDER="$_orch_provider" \
             AI_MODEL="$_orch_model" \
             EPAM_CLI="$EPAM_CLI" \

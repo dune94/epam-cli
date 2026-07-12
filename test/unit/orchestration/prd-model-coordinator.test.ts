@@ -179,45 +179,71 @@ describe('run-agent-orchestration.sh — Step 0.9 wiring', () => {
 
   it('skips the LLM call entirely when no pending story is missing a field', () => {
     const idx = orchSrc.indexOf('Step 0.9: PRD model coordinator');
-    const block = orchSrc.slice(idx, idx + 6000);
+    const block = orchSrc.slice(idx, idx + 9000);
     expect(block).toMatch(/_mc_missing_count.*-eq 0/s);
   });
 
   it('reads prd-model-coordinator profile from profiles.json (AUTOMATION_DIR, not SCRIPT_DIR)', () => {
     const idx = orchSrc.indexOf('Step 0.9: PRD model coordinator');
-    const block = orchSrc.slice(idx, idx + 6000);
+    const block = orchSrc.slice(idx, idx + 9000);
     expect(block).toMatch(/prd-model-coordinator/);
     expect(block).toMatch(/AUTOMATION_DIR.*agents\/profiles\.json/);
   });
 
   it('grants tool access via AI_GATE_ALLOW_TOOLS=1 (agent must write PRD directly)', () => {
     const idx = orchSrc.indexOf('Step 0.9: PRD model coordinator');
-    const block = orchSrc.slice(idx, idx + 6000);
+    const block = orchSrc.slice(idx, idx + 9000);
     expect(block).toMatch(/AI_GATE_ALLOW_TOOLS=1/);
   });
 
   it('snapshots PRD before the coordinator writes, for revert-on-fail', () => {
     const idx = orchSrc.indexOf('Step 0.9: PRD model coordinator');
-    const block = orchSrc.slice(idx, idx + 6000);
+    const block = orchSrc.slice(idx, idx + 9000);
     expect(block).toMatch(/_mc_prd_before=/);
   });
 
-  it('calls the reviewer with change type model_assignment', () => {
+  // The reviewer gate USED to be an LLM call fed a BEFORE/AFTER excerpt
+  // truncated to the last 1000 characters of the PRD — for any real multi-KB
+  // PRD, structurally blind to a change anywhere earlier in the file. Root
+  // cause of a live-run defect (2026-07-08/09): the coordinator silently
+  // stripped technicalNotes.files from SKY-002/003/004 while that excerpt-
+  // based reviewer saw nothing wrong. "Only model/aiProvider/reasoningEffort
+  // may change" is a 100% mechanically checkable invariant, so it's now a
+  // deterministic full-file, every-story, every-field diff in Python instead
+  // of an LLM judgment call on a truncated excerpt.
+  it('the reviewer gate is a deterministic Python diff, not a truncated-excerpt LLM call', () => {
     const idx = orchSrc.indexOf('Step 0.9: PRD model coordinator');
-    const block = orchSrc.slice(idx, idx + 6000);
-    expect(block).toMatch(/CHANGE TYPE: model_assignment/);
+    const block = orchSrc.slice(idx, idx + 9000);
+    expect(block).not.toMatch(/last 1000 chars/);
+    expect(block).not.toMatch(/CHANGE TYPE: model_assignment/);
+    expect(block).toMatch(/ALLOWED_FIELDS = \{'model', 'aiProvider', 'reasoningEffort'\}/);
+  });
+
+  it('the deterministic diff compares every story by ID, not a truncated text excerpt', () => {
+    const idx = orchSrc.indexOf('Step 0.9: PRD model coordinator');
+    const block = orchSrc.slice(idx, idx + 9000);
+    expect(block).toMatch(/before_by_id = \{s\['id'\]: s for s in before\.get\('stories', \[\]\)/);
+    expect(block).toMatch(/after_by_id = \{s\['id'\]: s for s in after\.get\('stories', \[\]\)/);
+  });
+
+  it('flags added/removed stories and implementationOrder changes as violations too, not just field changes', () => {
+    const idx = orchSrc.indexOf('Step 0.9: PRD model coordinator');
+    const block = orchSrc.slice(idx, idx + 9000);
+    expect(block).toMatch(/stories added:/);
+    expect(block).toMatch(/stories removed:/);
+    expect(block).toMatch(/implementationOrder was modified/);
   });
 
   it('reverts the PRD to the snapshot when the reviewer verdict is fail', () => {
     const idx = orchSrc.indexOf('Step 0.9: PRD model coordinator');
-    const block = orchSrc.slice(idx, idx + 6000);
+    const block = orchSrc.slice(idx, idx + 9000);
     expect(block).toMatch(/REJECTED by reviewer.*reverting PRD/is);
     expect(block).toMatch(/echo "\$_mc_prd_before" > "\$_mc_prd_target"/);
   });
 
   it('has a post-condition Python fallback that fills any still-missing field', () => {
     const idx = orchSrc.indexOf('Step 0.9: PRD model coordinator');
-    const block = orchSrc.slice(idx, idx + 8000);
+    const block = orchSrc.slice(idx, idx + 10000);
     expect(block).toMatch(/Post-condition safety net/i);
     expect(block).toMatch(/s\['model'\] = 'MiniMax-M3'/);
     expect(block).toMatch(/s\['aiProvider'\] = 'minimax'/);
@@ -226,7 +252,7 @@ describe('run-agent-orchestration.sh — Step 0.9 wiring', () => {
 
   it('fallback only touches pending stories in the current phase', () => {
     const idx = orchSrc.indexOf('Step 0.9: PRD model coordinator');
-    const block = orchSrc.slice(idx, idx + 8000);
+    const block = orchSrc.slice(idx, idx + 10000);
     expect(block).toMatch(/status'\) != 'pending'/);
     expect(block).toMatch(/get\('phase', phase\) != phase/);
   });

@@ -1,0 +1,33 @@
+{"phase_id":"scaffold","story_id":"scaffold","agent_type":"spec-pass","resolvedModel":"gpt-4o","started_at":"2026-06-12T10:57:53-04:00","ended_at":"2026-06-12T10:58:29-04:00","task_cost_usd":0,"task_tokens_in":0,"task_tokens_out":0,"task_turns":0,"status":"completed","invokeMode":"cli"}
+{
+  "event": "topology_decision",
+  "phase": "scaffold",
+  "topology": "single",
+  "reason": "Count heuristic: ≤1 worktree story.",
+  "source": "heuristic",
+  "timestamp": "2026-06-12T14:58:42Z"
+}
+{"phase_id":"scaffold","story_id":"scaffold","agent_type":"assessment","resolvedModel":"gpt-4o","started_at":"2026-06-12T10:58:42-04:00","ended_at":"2026-06-12T10:58:44-04:00","task_cost_usd":0,"task_tokens_in":0,"task_tokens_out":0,"task_turns":1,"status":"completed","invokeMode":"cli"}
+{"phase_id":"scaffold","phase_name":"scaffold","story_id":"SKY-001","story_title":"Scaffold TypeScript project with Vitest and Express","agent_id":"typescript-engineer","agent_name":"typescript-engineer","forecast_hours":0.0514,"forecast_cost_usd":0.5969,"started_at":"2026-06-12T10:59:22-04:00","ended_at":"2026-06-12T11:02:33-04:00","elapsed_minutes":3.18,"task_cost_usd":0.0072,"task_tokens_in":20862,"task_tokens_out":1426,"task_turns":0,"cache_read_tokens":0,"cache_create_tokens":0,"status":"failed","notes":"","effort":"medium","storyType":"implementation","resolvedModel":"deepseek/deepseek-chat","plannerModel":"","prompt_tokens_measured":0,"invokeMode":"cli"}
+{"phase_id":"core","story_id":"core","agent_type":"spec-pass","resolvedModel":"gpt-4o","started_at":"2026-06-12T11:02:34-04:00","ended_at":"2026-06-12T11:05:14-04:00","task_cost_usd":0,"task_tokens_in":0,"task_tokens_out":0,"task_turns":0,"status":"completed","invokeMode":"cli"}
+{
+  "event": "topology_decision",
+  "phase": "core",
+  "topology": "sequential",
+  "reason": "Count heuristic: 7 stories → sequential (large set).",
+  "source": "heuristic",
+  "timestamp": "2026-06-12T15:05:50Z"
+}
+{"phase_id":"core","story_id":"core","agent_type":"assessment","resolvedModel":"gpt-4o","started_at":"2026-06-12T11:05:50-04:00","ended_at":"2026-06-12T11:05:52-04:00","task_cost_usd":0,"task_tokens_in":0,"task_tokens_out":0,"task_turns":1,"status":"completed","invokeMode":"cli"}
+{"phase_id":"core","phase_name":"core","story_id":"SKY-002","story_title":"Implement typed Skyscanner API client","agent_id":"typescript-engineer","agent_name":"typescript-engineer","forecast_hours":0.0561,"forecast_cost_usd":0.6535,"started_at":"2026-06-12T11:05:58-04:00","ended_at":"2026-06-12T11:08:30-04:00","elapsed_minutes":2.53,"task_cost_usd":0.0044,"task_tokens_in":7565,"task_tokens_out":2187,"task_turns":0,"cache_read_tokens":0,"cache_create_tokens":0,"status":"failed","notes":"","effort":"medium","storyType":"implementation","resolvedModel":"deepseek/deepseek-chat","plannerModel":"","prompt_tokens_measured":0,"invokeMode":"cli"}
+{"phase_id":"ui_and_review","story_id":"ui_and_review","agent_type":"spec-pass","resolvedModel":"gpt-4o","started_at":"2026-06-12T11:08:31-04:00","ended_at":"2026-06-12T11:08:50-04:00","task_cost_usd":0,"task_tokens_in":0,"task_tokens_out":0,"task_turns":0,"status":"completed","invokeMode":"cli"}
+{
+  "event": "topology_decision",
+  "phase": "ui_and_review",
+  "topology": "single",
+  "reason": "Count heuristic: ≤1 worktree story.",
+  "source": "heuristic",
+  "timestamp": "2026-06-12T15:09:04Z"
+}
+{"phase_id":"ui_and_review","story_id":"ui_and_review","agent_type":"assessment","resolvedModel":"gpt-4o","started_at":"2026-06-12T11:09:04-04:00","ended_at":"2026-06-12T11:09:06-04:00","task_cost_usd":0,"task_tokens_in":0,"task_tokens_out":0,"task_turns":1,"status":"completed","invokeMode":"cli"}
+{"phase_id":"ui_and_review","phase_name":"ui_and_review","story_id":"SKY-005","story_title":"Build HTML dashboard at src/public/index.html","agent_id":"frontend-engineer","agent_name":"frontend-engineer","forecast_hours":0.0514,"forecast_cost_usd":0.5954,"started_at":"2026-06-12T11:09:08-04:00","ended_at":"2026-06-12T11:12:46-04:00","elapsed_minutes":3.63,"task_cost_usd":0.0068,"task_tokens_in":9910,"task_tokens_out":3745,"task_turns":0,"cache_read_tokens":0,"cache_create_tokens":0,"status":"failed","notes":"","effort":"medium","storyType":"implementation","resolvedModel":"deepseek/deepseek-chat","plannerModel":"","prompt_tokens_measured":0,"invokeMode":"cli"}

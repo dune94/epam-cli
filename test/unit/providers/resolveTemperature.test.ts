@@ -67,3 +67,57 @@ describe('resolveTemperature', () => {
     expect(resolveTemperature(makeRequest({ temperature: 0 }), 0.7)).toBe(0);
   });
 });
+
+/**
+ * EPAM_TEMPERATURE_MODEL_PATTERN (2026-07-07) — explicit user directive:
+ * "Only for GLM models" when pinning temperature for the tier3 travel-app run,
+ * not project-wide across every model in the ladder (MiniMax, Kimi, etc. must
+ * stay unaffected). Config-driven glob matching, same pattern as
+ * resolve_model_provider()/EPAM_MODEL_PROVIDER_MAP — no hardcoded vendor names
+ * in the matching logic itself.
+ */
+describe('resolveTemperature — EPAM_TEMPERATURE_MODEL_PATTERN scoping', () => {
+  const savedEnv = process.env.EPAM_TEMPERATURE;
+  const savedPattern = process.env.EPAM_TEMPERATURE_MODEL_PATTERN;
+  afterEach(() => {
+    if (savedEnv === undefined) delete process.env.EPAM_TEMPERATURE;
+    else process.env.EPAM_TEMPERATURE = savedEnv;
+    if (savedPattern === undefined) delete process.env.EPAM_TEMPERATURE_MODEL_PATTERN;
+    else process.env.EPAM_TEMPERATURE_MODEL_PATTERN = savedPattern;
+  });
+
+  it('applies EPAM_TEMPERATURE when the model matches the pattern', () => {
+    process.env.EPAM_TEMPERATURE = '0';
+    process.env.EPAM_TEMPERATURE_MODEL_PATTERN = 'z-ai/glm-*|zhipuai/glm-*';
+    expect(resolveTemperature(makeRequest({ model: 'z-ai/glm-5.1' }), 0.7)).toBe(0);
+    expect(resolveTemperature(makeRequest({ model: 'zhipuai/glm-4-plus' }), 0.7)).toBe(0);
+  });
+
+  it('ignores EPAM_TEMPERATURE (uses provider default) when the model does NOT match the pattern', () => {
+    process.env.EPAM_TEMPERATURE = '0';
+    process.env.EPAM_TEMPERATURE_MODEL_PATTERN = 'z-ai/glm-*|zhipuai/glm-*';
+    expect(resolveTemperature(makeRequest({ model: 'MiniMax-M3' }), 0.7)).toBe(0.7);
+    expect(resolveTemperature(makeRequest({ model: 'moonshotai/kimi-k2' }), 0.7)).toBe(0.7);
+  });
+
+  it('applies to all models when EPAM_TEMPERATURE_MODEL_PATTERN is unset (preserves prior behavior)', () => {
+    delete process.env.EPAM_TEMPERATURE_MODEL_PATTERN;
+    process.env.EPAM_TEMPERATURE = '0';
+    expect(resolveTemperature(makeRequest({ model: 'MiniMax-M3' }), 0.7)).toBe(0);
+    expect(resolveTemperature(makeRequest({ model: 'anything-at-all' }), 0.7)).toBe(0);
+  });
+
+  it('explicit request.temperature still wins even when the pattern would otherwise exclude the model', () => {
+    process.env.EPAM_TEMPERATURE = '0';
+    process.env.EPAM_TEMPERATURE_MODEL_PATTERN = 'z-ai/glm-*';
+    expect(resolveTemperature(makeRequest({ model: 'MiniMax-M3', temperature: 0.5 }), 0.7)).toBe(0.5);
+  });
+
+  it('is domain-agnostic: works for an arbitrary hypothetical pattern, not tied to GLM specifically', () => {
+    process.env.EPAM_TEMPERATURE = '0.2';
+    process.env.EPAM_TEMPERATURE_MODEL_PATTERN = 'gpt-*|claude-*';
+    expect(resolveTemperature(makeRequest({ model: 'gpt-5-codex' }), 0.7)).toBe(0.2);
+    expect(resolveTemperature(makeRequest({ model: 'claude-sonnet-5' }), 0.7)).toBe(0.2);
+    expect(resolveTemperature(makeRequest({ model: 'Llama-3' }), 0.7)).toBe(0.7);
+  });
+});

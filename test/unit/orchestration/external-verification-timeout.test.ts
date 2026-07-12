@@ -67,7 +67,7 @@ describe('run_external_verification() — bounded test-command timeout (static)'
   const body = extractHeredocAwareFunctionBody('run_external_verification');
 
   it('wraps the test command with `timeout`, not a bare eval', () => {
-    expect(body).toMatch(/timeout "\$_test_timeout" bash -c "\$test_cmd"/);
+    expect(body).toMatch(/timeout "\$_test_timeout" bash -c "\$\{_orch_env_unset_prefix\}\$\{test_cmd\}"/);
     expect(body).not.toMatch(/\$\(cd "\$PROJECT_ROOT" && eval "\$test_cmd" 2>&1\)/);
   });
 
@@ -143,6 +143,10 @@ describe('run_external_verification() — REAL execution, proves the timeout act
           `success() { echo "SUCCESS: $*"; }`,
           `run_dependency_check() { :; }`,
           `run_relative_import_check() { return 0; }`,
+          `run_named_import_check() { return 0; }`,
+          `run_vendor_integrity_check() { return 0; }`,
+          `run_dynamic_tools_in_unlocked_window() { :; }`,
+          `_vendor_unlock() { :; }`,
           `run_mock_completeness_check() { return 0; }`,
           fnBody,
           `run_external_verification "SKY-TEST" "/dev/null"`,
@@ -165,7 +169,7 @@ describe('run_external_verification() — REAL execution, proves the timeout act
     }
   }
 
-  const BASE_STORY = [{ id: 'SKY-TEST', technicalNotes: { files: [] } }];
+  const BASE_STORY = [{ id: 'SKY-TEST', technicalNotes: { files: ['src/index.test.ts'] } }];
 
   it('REPRODUCES the exact live failure mode: a hanging test command (simulating an unclosed server) is killed by the timeout instead of blocking indefinitely', () => {
     // Simulates vitest hanging forever because a test left an http.Server open.
@@ -242,6 +246,10 @@ describe('run_external_verification() — bounded npm-install timeout (found liv
           `success() { echo "SUCCESS: $*"; }`,
           `run_dependency_check() { :; }`,
           `run_relative_import_check() { return 0; }`,
+          `run_named_import_check() { return 0; }`,
+          `run_vendor_integrity_check() { return 0; }`,
+          `run_dynamic_tools_in_unlocked_window() { :; }`,
+          `_vendor_unlock() { :; }`,
           `run_mock_completeness_check() { return 0; }`,
           fnBody,
           `run_external_verification "SKY-TEST" "/dev/null"`,
@@ -263,7 +271,7 @@ describe('run_external_verification() — bounded npm-install timeout (found liv
     }
   }
 
-  const BASE_STORY = [{ id: 'SKY-TEST', technicalNotes: { files: [] } }];
+  const BASE_STORY = [{ id: 'SKY-TEST', technicalNotes: { files: ['src/index.test.ts'] } }];
 
   it('REPRODUCES the exact live failure: a hanging `npm install` (simulating a slow/unreachable registry) is killed by the timeout instead of blocking indefinitely', () => {
     const hangingNpm = '#!/usr/bin/env bash\nsleep 300\n';

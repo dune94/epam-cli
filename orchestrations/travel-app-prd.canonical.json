@@ -246,7 +246,7 @@
       "estimatedTokens": 337509,
       "estimatedTurns": 9,
       "estimatedHours": 0.0413,
-      "effort": "low",
+      "effort": "high",
       "cpaConfidence": 0.52,
       "cpaGate": "review",
       "completedAt": "2026-05-31T07:30:50-04:00",

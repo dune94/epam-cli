@@ -114,17 +114,42 @@ while IFS= read -r story_id; do
     STORY_DESC=$(jq -r --arg id "$story_id" \
         '.stories[] | select(.id == $id) | .description // ""' \
         "$PRD_FILE" 2>/dev/null)
+    # No cap on a story's OWN declared file list — this is bounded by design
+    # (a single story's technicalNotes.files is a handful of paths, not
+    # arbitrary-length input), unlike the diff below. Root cause this avoids
+    # (2026-07-09 pipeline audit): a head -20 cap here silently dropped files
+    # from a multi-file story's OWN review scope, so the reviewer never even
+    # saw them to judge.
     STORY_FILES=$(jq -r --arg id "$story_id" \
         '.stories[] | select(.id == $id) | .technicalNotes.files[]? // empty' \
-        "$PRD_FILE" 2>/dev/null | head -20 | tr '\n' ' ')
+        "$PRD_FILE" 2>/dev/null | tr '\n' ' ')
 
-    # Collect recent git diff scoped to relevant files (last 5 commits max)
+    # Collect recent git diff scoped to relevant files (last 5 commits max).
+    # Root cause this fixes (2026-07-09 pipeline audit): head -400/-300 caps
+    # silently truncated the diff fed to the LLM reviewer with no indication
+    # anything was cut — a multi-file story routinely produces diffs longer
+    # than that, so real defects in the tail were structurally invisible to
+    # the verdict. Caps are raised substantially (still bounded, to protect
+    # against a truly pathological diff blowing the prompt budget) AND any
+    # actual truncation is now an EXPLICIT marker in the reviewer's own
+    # input, so a verdict is never silently based on incomplete data.
     STORY_DIFF=""
     if [ -d "$PROJECT_ROOT/.git" ]; then
-        STORY_DIFF=$(git -C "$PROJECT_ROOT" diff HEAD~5 HEAD -- \
-            $(echo "$STORY_FILES") 2>/dev/null | head -400 || true)
-        if [ -z "$STORY_DIFF" ]; then
-            STORY_DIFF=$(git -C "$PROJECT_ROOT" diff HEAD~3 HEAD 2>/dev/null | head -300 || true)
+        _diff_full=$(git -C "$PROJECT_ROOT" diff HEAD~5 HEAD -- \
+            $(echo "$STORY_FILES") 2>/dev/null || true)
+        if [ -z "$_diff_full" ]; then
+            _diff_full=$(git -C "$PROJECT_ROOT" diff HEAD~3 HEAD 2>/dev/null || true)
+        fi
+        if [ -n "$_diff_full" ]; then
+            _diff_total_lines=$(printf '%s\n' "$_diff_full" | wc -l)
+            if [ "$_diff_total_lines" -gt 2000 ]; then
+                STORY_DIFF=$(printf '%s\n' "$_diff_full" | head -2000)
+                STORY_DIFF="${STORY_DIFF}
+
+[TRUNCATED — ${_diff_total_lines} total lines, only the first 2000 shown. Do not assume the omitted tail is defect-free.]"
+            else
+                STORY_DIFF="$_diff_full"
+            fi
         fi
     fi
     [ -z "$STORY_DIFF" ] && STORY_DIFF="(no diff available — review source files directly)"

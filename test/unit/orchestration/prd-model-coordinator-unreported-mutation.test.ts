@@ -41,10 +41,15 @@ describe('Step 0.9 — PRD mutation is gated on actual file diff, not self-repor
     expect(gateLine).toMatch(/"\$_mc_prd_before" != "\$_mc_prd_after"/);
   });
 
-  it('reaches the reviewer call even when assigned_count is 0, as long as the file changed', () => {
+  it('reaches the (now-deterministic) reviewer gate even when assigned_count is 0, as long as the file changed', () => {
     const gateIdx = orchSrc.indexOf('if [ "${_mc_assigned_count:-0}" -gt 0 ]');
-    const block = orchSrc.slice(gateIdx, gateIdx + 2000);
-    expect(block).toMatch(/CHANGE TYPE: model_assignment/);
+    const block = orchSrc.slice(gateIdx, gateIdx + 4000);
+    // The reviewer gate was replaced (2026-07-09) with a deterministic
+    // Python diff — see prd-model-coordinator-deterministic-reviewer.test.ts
+    // — because the old LLM call fed only the last 1000 characters of the
+    // PRD as a text excerpt, structurally blind to a change anywhere else
+    // in a real multi-KB file.
+    expect(block).toMatch(/ALLOWED_FIELDS = \{'model', 'aiProvider', 'reasoningEffort'\}/);
     expect(block).toMatch(/REJECTED by reviewer — reverting PRD/);
   });
 

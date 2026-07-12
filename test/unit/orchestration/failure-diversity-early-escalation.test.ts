@@ -118,11 +118,12 @@ describe('claude.sh — retry loop jumps to Rung 2 on EARLY_ESCALATION_NEEDED', 
 });
 
 describe('claude.sh — EPAM_TEMPERATURE reset at story start (no leak across stories)', () => {
-  it('unsets EPAM_TEMPERATURE before resolving effort/provider settings for a new story', () => {
+  it('resets EPAM_TEMPERATURE before resolving effort/provider settings for a new story — restoring a launcher floor if one was captured, else unsetting (see temperature-floor-restore.test.ts for full behavior coverage)', () => {
     const resetIdx = claudeSrc.indexOf('Reset temperature override at story start');
     expect(resetIdx).toBeGreaterThan(-1);
-    const block = claudeSrc.slice(resetIdx, resetIdx + 250);
+    const block = claudeSrc.slice(resetIdx, resetIdx + 700);
     expect(block).toMatch(/unset EPAM_TEMPERATURE/);
+    expect(block).toMatch(/_claude_temperature_floor/);
   });
 });
 

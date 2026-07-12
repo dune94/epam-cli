@@ -1,0 +1,40 @@
+{"phase_id":"scaffold","story_id":"scaffold","agent_type":"spec-pass","resolvedModel":"qwen/qwen3-coder-30b-a3b-instruct","started_at":"2026-06-12T10:14:47-04:00","ended_at":"2026-06-12T10:14:49-04:00","task_cost_usd":0,"task_tokens_in":0,"task_tokens_out":0,"task_turns":0,"status":"completed","invokeMode":"cli"}
+{"phase_id":"scaffold","story_id":"scaffold","agent_type":"spec-pass","resolvedModel":"qwen/qwen3-coder-30b-a3b-instruct","started_at":"2026-06-12T10:15:09-04:00","ended_at":"2026-06-12T10:15:11-04:00","task_cost_usd":0,"task_tokens_in":0,"task_tokens_out":0,"task_turns":0,"status":"completed","invokeMode":"cli"}
+{
+  "event": "topology_decision",
+  "phase": "scaffold",
+  "topology": "single",
+  "reason": "Count heuristic: ≤1 worktree story.",
+  "source": "heuristic",
+  "timestamp": "2026-06-12T14:15:20Z"
+}
+{"phase_id":"scaffold","story_id":"scaffold","agent_type":"spec-pass","resolvedModel":"qwen/qwen3-coder-30b-a3b-instruct","started_at":"2026-06-12T10:19:05-04:00","ended_at":"2026-06-12T10:19:07-04:00","task_cost_usd":0,"task_tokens_in":0,"task_tokens_out":0,"task_turns":0,"status":"completed","invokeMode":"cli"}
+{
+  "event": "topology_decision",
+  "phase": "scaffold",
+  "topology": "single",
+  "reason": "Count heuristic: ≤1 worktree story.",
+  "source": "heuristic",
+  "timestamp": "2026-06-12T14:19:16Z"
+}
+{"phase_id":"scaffold","story_id":"scaffold","agent_type":"spec-pass","resolvedModel":"qwen/qwen3-coder-30b-a3b-instruct","started_at":"2026-06-12T10:19:47-04:00","ended_at":"2026-06-12T10:19:49-04:00","task_cost_usd":0,"task_tokens_in":0,"task_tokens_out":0,"task_turns":0,"status":"completed","invokeMode":"cli"}
+{
+  "event": "topology_decision",
+  "phase": "scaffold",
+  "topology": "single",
+  "reason": "Count heuristic: ≤1 worktree story.",
+  "source": "heuristic",
+  "timestamp": "2026-06-12T14:19:57Z"
+}
+{"phase_id":"scaffold","phase_name":"scaffold","story_id":"SKY-001","story_title":"Scaffold TypeScript project with Vitest and Express","agent_id":"typescript-engineer","agent_name":"typescript-engineer","forecast_hours":0.0084,"forecast_cost_usd":0.0020,"started_at":"2026-06-12T10:19:57-04:00","ended_at":"2026-06-12T10:21:28-04:00","elapsed_minutes":1.51,"task_cost_usd":0.0054,"task_tokens_in":17993,"task_tokens_out":494,"task_turns":0,"cache_read_tokens":0,"cache_create_tokens":0,"status":"failed","notes":"","effort":"low","storyType":"implementation","resolvedModel":"deepseek/deepseek-chat","plannerModel":"","prompt_tokens_measured":0,"invokeMode":"cli"}
+{"phase_id":"scaffold","story_id":"scaffold","agent_type":"spec-pass","resolvedModel":"gpt-4o","started_at":"2026-06-12T10:32:04-04:00","ended_at":"2026-06-12T10:32:42-04:00","task_cost_usd":0,"task_tokens_in":0,"task_tokens_out":0,"task_turns":0,"status":"completed","invokeMode":"cli"}
+{
+  "event": "topology_decision",
+  "phase": "scaffold",
+  "topology": "single",
+  "reason": "Count heuristic: ≤1 worktree story.",
+  "source": "heuristic",
+  "timestamp": "2026-06-12T14:32:54Z"
+}
+{"phase_id":"scaffold","story_id":"scaffold","agent_type":"assessment","resolvedModel":"gpt-4o","started_at":"2026-06-12T10:32:54-04:00","ended_at":"2026-06-12T10:32:57-04:00","task_cost_usd":0,"task_tokens_in":0,"task_tokens_out":0,"task_turns":1,"status":"completed","invokeMode":"cli"}
+{"phase_id":"scaffold","phase_name":"scaffold","story_id":"SKY-001","story_title":"Scaffold TypeScript project with Vitest and Express","agent_id":"typescript-engineer","agent_name":"typescript-engineer","forecast_hours":0.0090,"forecast_cost_usd":0.0021,"started_at":"2026-06-12T10:33:34-04:00","ended_at":"2026-06-12T10:36:24-04:00","elapsed_minutes":2.83,"task_cost_usd":0.0055,"task_tokens_in":18437,"task_tokens_out":454,"task_turns":0,"cache_read_tokens":0,"cache_create_tokens":0,"status":"failed","notes":"","effort":"low","storyType":"implementation","resolvedModel":"deepseek/deepseek-chat","plannerModel":"","prompt_tokens_measured":0,"invokeMode":"cli"}

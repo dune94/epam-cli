@@ -18,6 +18,14 @@
  * only the MOST RECENT "## "-headed section — the model still sees the latest,
  * most relevant guidance, it just isn't re-reading every prior attempt's
  * guidance on every single retry.
+ *
+ * UPDATE (2026-07-11): keeping only 1 heading went too far — a live run
+ * showed a story repeat an EXACT mistake 5 retries after being told not to,
+ * because the retry-0 fix's heading fell out of the single-heading trim
+ * window once 2 newer headings had accumulated. Now keeps the last 3
+ * distinct headings instead of 1 — still bounds prompt growth, but gives
+ * recent-but-not-newest guidance a few more retries of visibility. See
+ * coordinator-guidance-trim-window.test.ts for the dedicated tests on this.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -41,12 +49,12 @@ describe('claude.sh — prompt scratchpad summarization (source inspection)', ()
     expect(claudeSrc).toMatch(/_scratchpad_threshold" -gt 0/);
   });
 
-  it('trims COORDINATOR_PROMPT_AMENDMENT down to only the last "## "-headed section', () => {
+  it('trims COORDINATOR_PROMPT_AMENDMENT down to the last 3 "## "-headed sections', () => {
     const idx = claudeSrc.indexOf('_trimmed_amendment=$(printf');
     expect(idx).toBeGreaterThan(-1);
-    const block = claudeSrc.slice(idx, idx + 400);
+    const block = claudeSrc.slice(idx, idx + 600);
     expect(block).toMatch(/heading_idxs = \[i for i, l in enumerate\(lines\) if l\.startswith\('## '\)\]/);
-    expect(block).toMatch(/heading_idxs\[-1\]/);
+    expect(block).toMatch(/heading_idxs\[-3\]/);
   });
 });
 
@@ -78,7 +86,24 @@ function runTrimmer(input: string): string {
 }
 
 describe('coordinator-guidance trimmer — REAL execution', () => {
-  it('keeps only the most recent "## "-headed section when multiple are stacked', () => {
+  it('keeps the last 3 "## "-headed sections when MORE than 3 are stacked (drops only the earliest)', () => {
+    const stacked = `
+## Self-Heal: Failure Analyst Summary
+Root cause: wrong import path.
+## Self-Heal: Failure Analyst Summary
+Root cause: incomplete mock factory.
+## Self-Heal: Failure Analyst Summary
+Root cause: missing test params.
+## Self-Heal: Failure Analyst Summary
+Root cause: missing null check.`;
+    const trimmed = runTrimmer(stacked);
+    expect(trimmed).toContain('missing null check');
+    expect(trimmed).toContain('missing test params');
+    expect(trimmed).toContain('incomplete mock factory');
+    expect(trimmed).not.toContain('wrong import path');
+  });
+
+  it('keeps all headings when there are exactly 3 or fewer (no premature dropping)', () => {
     const stacked = `
 ## Self-Heal: Failure Analyst Summary
 Root cause: wrong import path.
@@ -88,8 +113,8 @@ Root cause: incomplete mock factory.
 Root cause: missing test params.`;
     const trimmed = runTrimmer(stacked);
     expect(trimmed).toContain('missing test params');
-    expect(trimmed).not.toContain('wrong import path');
-    expect(trimmed).not.toContain('incomplete mock factory');
+    expect(trimmed).toContain('incomplete mock factory');
+    expect(trimmed).toContain('wrong import path');
   });
 
   it('returns the text unchanged when there is only one heading', () => {
@@ -183,16 +208,21 @@ The following targeted instruction was identified from the previous failure:
     expect(finalPromptContainsFullHistory).toBe(true);
   });
 
-  it('above threshold: writes a scratchpad file and trims the prompt to only the most recent guidance', () => {
+  it('above threshold: writes a scratchpad file and trims the prompt, dropping guidance older than the last 3 headings', () => {
     const bigBase = 'x'.repeat(20000);
     const { scratchpadFiles, finalPromptContainsFullHistory } = run({
       promptBase: bigBase,
       amendment:
-        '\n## Self-Heal: Failure Analyst Summary\nEARLIEST GUIDANCE here.\n## Self-Heal: Failure Analyst Summary\nMOST RECENT GUIDANCE here.',
+        '\n## Self-Heal: Failure Analyst Summary\nEARLIEST GUIDANCE here.' +
+        '\n## Self-Heal: Failure Analyst Summary\nSECOND GUIDANCE here.' +
+        '\n## Self-Heal: Failure Analyst Summary\nTHIRD GUIDANCE here.' +
+        '\n## Self-Heal: Failure Analyst Summary\nMOST RECENT GUIDANCE here.',
       threshold: '100',
     });
     expect(scratchpadFiles.length).toBeGreaterThan(0);
     expect(scratchpadFiles[0]).toMatch(/^SKY-999-attempt-5\.md$/);
+    // Only the EARLIEST heading (4th-from-last) falls outside the "keep last
+    // 3" window — everything from the second heading onward survives.
     expect(finalPromptContainsFullHistory).toBe(false);
   });
 });

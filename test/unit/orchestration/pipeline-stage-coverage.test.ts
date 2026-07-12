@@ -236,7 +236,7 @@ describe('Warn paths — grounding downgrades hallucinated fails', () => {
     // Fix: targeted regex patterns on individual lines, bypassing full JSON parsing.
     const specIdx = orchSrc.indexOf('SPEC_EXTRACTOR_PY');
     expect(specIdx, 'SPEC_EXTRACTOR_PY heredoc not found').toBeGreaterThan(-1);
-    const block = orchSrc.slice(specIdx, specIdx + 2000);
+    const block = orchSrc.slice(specIdx, specIdx + 2800);
 
     // Must NOT use json.loads on the full blob (the root cause of the bug)
     expect(block).not.toMatch(/json\.loads\s*\(\s*text\b/);
@@ -253,7 +253,7 @@ describe('Warn paths — grounding downgrades hallucinated fails', () => {
   });
 
   it('Step 4.4a fuzz-weaver ungrounded fail → step_emit warn', () => {
-    expect(orchSrc).toMatch(/step_emit "4\.4a" "warn" "Step 4\.4a: Fuzz-weaver" "hallucinated findings downgraded"/);
+    expect(orchSrc).toMatch(/step_emit "4\.4a" "warn" "Step 4\.4a: Fuzz-weaver" "unverified findings downgraded"/);
   });
 
   it('Step 4.4b perf-sentinel ungrounded fail → step_emit warn', () => {
@@ -966,7 +966,7 @@ describe('Step 4.4a: Fuzz-weaver', () => {
   });
 
   it('emits warn when verdict=fail but findings are ungrounded', () => {
-    expect(orchSrc).toMatch(/step_emit "4\.4a" "warn" "Step 4\.4a: Fuzz-weaver" "hallucinated findings downgraded"/);
+    expect(orchSrc).toMatch(/step_emit "4\.4a" "warn" "Step 4\.4a: Fuzz-weaver" "unverified findings downgraded"/);
   });
 
   it('emits skip when SKIP_TESTING_GATES=true', () => {

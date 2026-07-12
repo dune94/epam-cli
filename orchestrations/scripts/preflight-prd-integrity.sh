@@ -270,9 +270,58 @@ for sid in active_ids:
         if bname and bname not in all_story_files:
             tc_source_bad.append(f"{sid}: sourceFiles references unknown file '{bname}'")
 if tc_source_bad:
-    warn(f"testCriteria.sourceFiles reference files not declared in any story: {tc_source_bad}")
+    # Hard failure, not a warning (upgraded 2026-07-09, pipeline audit): unlike
+    # check #16 (AC import paths — a "from './x'" mention is often a
+    # legitimate cross-story reference, since importing a file you don't own
+    # is completely normal), this checks against the UNION of every story's
+    # OWN declared files. A sourceFile that matches NOTHING anywhere in the
+    # whole project's declared scope is not a normal cross-reference — it is
+    # either a hallucinated file the TC writer never actually read, or a stale
+    # reference surviving a rename/split. Both silently corrupt test
+    # generation if only warned about, not blocked.
+    err(f"testCriteria.sourceFiles reference files not declared in any story: {tc_source_bad}")
 else:
     print("  ✓ All testCriteria.sourceFiles align with known story files")
+
+# ── 19. No AC references a file path outside this story's own scope ─────────
+# Root cause this catches (found live, 2026-07-09, tier3-travel-app run):
+# check #16 above only matches "from './x'" IMPORT syntax in AC text — it
+# missed a spec-pass elaboration that wrote a NATURAL-LANGUAGE AC on SKY-001
+# ("/…/skyscanner-app/src/server.ts file exists and is a valid TypeScript
+# file") referencing server.ts, a file that belongs to a DIFFERENT story
+# (SKY-004) and was never in SKY-001's own technicalNotes.files. The
+# implementation (correctly scope-guarded) never created server.ts, so the
+# AC went permanently unmet and the spec-validator testing gate failed the
+# whole phase — with no indication the root cause was an elaboration defect,
+# not an implementation gap. This is a HARD failure (not check #16's warn),
+# since a story that can NEVER satisfy its own AC blocks the phase forever.
+#
+# Only matches an EXISTENCE claim ("<path> exists" / "<path> file exists"),
+# not a cross-story reference — a legitimate AC pattern is "type imported
+# from the SKY-002 export (e.g. src/skyscanner/client.ts)", which mentions
+# a file another story owns for import-consistency purposes, not a claim
+# that THIS story must create it. Distinguishing on "exists" immediately
+# following the path (not merely mentioning the path) avoids flagging that.
+scope_violations = []
+path_re = re.compile(r'\b(src/[\w./-]+\.(?:ts|tsx|js|jsx))\b\s+(?:file\s+)?exists\b')
+for sid in active_ids:
+    s = by_id.get(sid, {})
+    files = s.get('technicalNotes', {}).get('files', [])
+    declared_rel = set()
+    for f in files:
+        # Normalize to a project-relative form (src/...) so absolute paths
+        # under any outputDir compare equal to the story's own declared files.
+        m = re.search(r'(src/[\w./-]+)$', f)
+        if m:
+            declared_rel.add(m.group(1))
+    for ac in s.get('acceptanceCriteria', []):
+        for mentioned in path_re.findall(ac):
+            if mentioned not in declared_rel:
+                scope_violations.append(f"{sid}: AC references '{mentioned}' — not in this story's technicalNotes.files")
+if scope_violations:
+    err(f"ACs reference file paths outside the story's own declared scope (elaboration defect — story can never satisfy its own AC): {scope_violations}")
+else:
+    print("  ✓ No AC references a file path outside its own story's declared scope")
 
 # NOTE: a check for "no pre-baked specification block" was tried here and
 # reverted (2026-07-06) — this script only runs on the POST-split-pass branch

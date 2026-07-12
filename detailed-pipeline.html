@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orchestration Engine — Detailed Pipeline Reference</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #263248;
+    --border: #334155;
+    --ink: #e2e8f0;
+    --muted: #94a3b8;
+    --brand: #38bdf8;
+    --green: #4ade80;
+    --red: #f87171;
+    --amber: #fbbf24;
+    --unique: #a78bfa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.55;
+    font-size: 15px;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 40px 28px 100px; }
+  h1 { font-size: 1.9rem; font-weight: 700; color: var(--brand); letter-spacing: -0.02em; margin-bottom: 4px; }
+  .subtitle { color: var(--muted); margin-top: 0; margin-bottom: 28px; }
+  code {
+    background: var(--surface2);
+    color: #7dd3fc;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.88em;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+  }
+  .legend {
+    display: flex; gap: 18px; flex-wrap: wrap;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 16px; margin-bottom: 28px; font-size: 0.85rem; color: var(--muted);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .dot.fixed-dot { background: var(--unique); }
+  .dot.new-dot { background: var(--amber); }
+
+  .toolbar { margin-bottom: 20px; }
+  .toolbar button {
+    font-size: 0.8rem; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface); cursor: pointer; margin-right: 8px; color: var(--ink);
+  }
+  .toolbar button:hover { background: rgba(56, 189, 248, 0.12); border-color: var(--brand); }
+
+  details {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin: 8px 0;
+    background: var(--bg);
+  }
+  details > summary {
+    cursor: pointer;
+    padding: 10px 14px;
+    font-weight: 600;
+    list-style: none;
+    background: var(--surface);
+    color: var(--ink);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before {
+    content: "▸";
+    display: inline-block;
+    color: var(--muted);
+    transition: transform 0.1s;
+    font-size: 0.75em;
+    width: 10px;
+  }
+  details[open] > summary::before { transform: rotate(90deg); }
+  details[open] > summary { border-radius: 8px 8px 0 0; }
+
+  /* nesting depth indentation */
+  details details { margin-left: 18px; }
+
+  .body-block { padding: 12px 16px 14px 30px; }
+  .body-block p { margin: 6px 0; }
+  .body-block ul { margin: 6px 0; padding-left: 20px; }
+  .body-block li { margin: 4px 0; }
+
+  .meta-row {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin: 6px 0 10px 30px;
+    font-size: 0.78rem;
+  }
+  .pill {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 999px;
+    padding: 2px 10px; color: var(--muted); font-family: "SF Mono", Menlo, Consolas, monospace;
+  }
+  .badge-fixed {
+    background: rgba(167, 139, 250, 0.14); color: var(--unique); border: 1px solid var(--unique);
+    border-radius: 999px; padding: 1px 9px; font-size: 0.72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .badge-new {
+    background: rgba(251, 191, 36, 0.14); color: var(--amber); border: 1px solid var(--amber);
+    border-radius: 999px; padding: 1px 9px; font-size: 0.72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.03em;
+  }
+
+  h2.section {
+    font-size: 1.3rem;
+    color: var(--brand);
+    margin-top: 44px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--border);
+  }
+  .toc {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 20px; margin-bottom: 32px; font-size: 0.9rem;
+  }
+  .toc ul { margin: 4px 0; padding-left: 20px; }
+  .toc a { color: var(--brand); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  footer { margin-top: 60px; padding-top: 18px; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.82rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Orchestration Engine — Detailed Pipeline Reference</h1>
+  <p class="subtitle">Full technical map of every step, gate, agent, and self-healing mechanism in the pipeline. For a high-level introduction first, see <code>onboarding.html</code>.</p>
+
+  <div class="legend">
+    <span><span class="dot fixed-dot"></span> <span class="badge-fixed">fixed</span> = built into the engine for every project (not project-specific)</span>
+    <span><span class="dot new-dot"></span> <span class="badge-new">recent</span> = mechanism added/hardened in the most recent hardening pass</span>
+  </div>
+
+  <div class="toolbar">
+    <button onclick="document.querySelectorAll('details').forEach(d=>d.open=true)">Expand all</button>
+    <button onclick="document.querySelectorAll('details').forEach(d=>d.open=false)">Collapse all</button>
+  </div>
+
+  <div class="toc">
+    <strong>Sections</strong>
+    <ul>
+      <li><a href="#setup">1. Setup (one-time, per project)</a></li>
+      <li><a href="#pipeline">2. Phase Execution Pipeline — every step, with self-healing/guard mechanisms inline where they actually run</a></li>
+      <li><a href="#agents">3. Agent Roster &amp; Responsibilities (50 profiles)</a></li>
+      <li><a href="#toolsskills">4. Tools, Skills &amp; Dynamic Generation</a></li>
+      <li><a href="#cost">5. Model Assignment &amp; Cost Tracking</a></li>
+      <li><a href="#config">6. Config-Driven Extensibility</a></li>
+      <li><a href="#glossary">7. Glossary of Acronyms</a></li>
+    </ul>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="setup">1. Setup (one-time, per project)</h2>
+  <p>Covered at a conceptual level in <code>onboarding.html</code>. Technical entry points:</p>
+
+  <details>
+    <summary>epam new init &amp; epam new generate</summary>
+    <div class="body-block">
+      <p><code>src/cli/commands/new.ts</code> — two subcommands:</p>
+      <ul>
+        <li><code>epam new init &lt;path&gt;</code> → <code>runInit()</code> → instantiates <code>ProjectScaffolder</code> (<code>src/scaffold/ProjectScaffolder.ts</code>) with an empty PRD skeleton; writes directory structure, no LLM call.</li>
+        <li><code>epam new generate &lt;path&gt;</code> → <code>runGenerate()</code> → reads <code>manifest.md</code>, calls three LLM phases in <code>src/scaffold/ManifestAnalyzer.ts</code>:
+          <ul>
+            <li><code>analyzeManifest()</code> → <code>{ summary, projectName, suggestedPrefix, techStack, questions }</code> — may surface clarifying questions to the human before proceeding.</li>
+            <li><code>proposeAgents()</code> → project-specific <code>profiles.json</code> entries (name, systemPrompt, rationale), given the manifest plus the clarification Q&amp;A. This is the FIRST agent-generation event in a project's life — see §4.</li>
+            <li><code>generatePrd()</code> → the actual <code>prd.json</code> (stories + <code>implementationOrder</code>)</li>
+          </ul>
+        </li>
+      </ul>
+      <div class="meta-row"><span class="pill">src/cli/commands/new.ts</span><span class="pill">src/scaffold/ManifestAnalyzer.ts</span><span class="pill">src/scaffold/ProjectScaffolder.ts</span></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Manifest-driven config generation (.epam/*.json)</summary>
+    <div class="body-block">
+      <p>Scaffolding also produces the stack-specific manifests the engine reads at runtime — the engine itself contains zero language/stack assumptions; everything stack-specific lives in these files:</p>
+      <ul>
+        <li><code>.epam/dependency-check.json</code> — manifest file name, import-detection regex, install command, ignore-list, required dev dependencies, and <code>vendorDirs</code> (vendor-directory tamper-protection targets, e.g. <code>node_modules</code>)</li>
+        <li><code>.epam/contract-generation.json</code> — regex/templates used to auto-generate <code>.contracts/&lt;storyId&gt;.md</code> dependency contracts from real source</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>Entry points to actually launch a run</summary>
+    <div class="body-block">
+      <ul>
+        <li><code>epam orchestrate --phase &lt;id&gt; --prd &lt;path&gt; --output-dir &lt;path&gt;</code> (<code>src/cli/commands/orchestrate.ts</code>) — generic wrapper; spawns <code>run-agent-orchestration.sh</code> as a child process, forwards <code>PRD_FILE</code>/<code>OUTPUT_DIR</code>/<code>EPAM_ORCHESTRATION_PROVIDER</code> as env vars.</li>
+        <li>Direct: <code>bash orchestrations/scripts/run-agent-orchestration.sh --phase &lt;id&gt;</code> — reads <code>PRD_FILE</code>/<code>OUTPUT_DIR</code> from env, not CLI flags.</li>
+        <li>Project-specific launcher scripts (e.g. <code>tier3-travel-app-run.sh</code>) wrap the above with project-specific env (model assignments, teardown/rebuild of the output directory, gate-model configuration) and run all configured phases in sequence.</li>
+        <li><span class="badge-new">recent</span> Project-specific launchers now re-exec themselves under <code>setsid</code> and write their own PID to a pidfile (<code>TIER3_PID_FILE</code>), so the whole descendant process tree can be killed with one command instead of hunting orphaned children individually — see <code>orchestrations/scripts/kill-tier3-run.sh</code>.</li>
+      </ul>
+    </div>
+  </details>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="pipeline">2. Phase Execution Pipeline</h2>
+  <p>
+    Everything below runs once per phase, in this order, driven by <code>run_testing_gates()</code> and the
+    surrounding step sequence in <code>orchestrations/scripts/run-agent-orchestration.sh</code>. Self-healing and
+    guard mechanisms are described <strong>at the step where they actually fire</strong>, not in a separate section
+    — several of them (scope guard, vendor guard, the inference ladder) recur at multiple steps, and are cross-
+    referenced rather than repeated in full.
+  </p>
+
+  <details>
+    <summary>Step 0 — Specification pass <span class="badge-fixed">fixed</span></summary>
+    <div class="body-block">
+      <p>Elaborates and validates the phase's stories before any implementation begins. Two sub-agents run per story:</p>
+      <ul>
+        <li><strong>0a — openspec</strong> (<code>openspec-agent</code>): elaboration. Given a story's id/title/description/ACs/technicalNotes/dependencies/agentRole, produces refined acceptance criteria in strict JSON, may propose splits, preserves existing detail unless improvement is required, and enforces the ROLE ASSIGNMENT RULE — any child story whose files are only <code>*.test.ts</code>/<code>*.spec.ts</code> must get <code>agentRole: test-engineer</code>, never the same role as its paired implementation story.</li>
+        <li><strong>0b — speckit</strong> (<code>speckit-agent</code>): verification, operating like the hosted Speckit workflow — converts requirements into executable specs, highlights missing ACs, and recommends decompositions. Designed to complement openspec's output, not duplicate it (system-level coverage, interface contracts, verification steps) and applies the same role-assignment rule independently.</li>
+      </ul>
+      <p>Before openspec/speckit run, three pre-spec sub-stage agents may groom the backlog: <code>readiness-checker</code> validates stories against INVEST criteria and a configurable checklist; <code>grooming-coordinator</code> orchestrates that backlog-grooming pipeline; <code>dedup-detector</code> flags semantically overlapping or conflicting stories before they're elaborated. <code>spec-coordinator-agent</code> reads the PRD before every phase, evaluates risk/dependencies/technical readiness, and decides which spec personas actually need to run.</p>
+      <p>Every proposed change (AC edits, splits, profile edits) from any of these agents passes through <code>run_prd_change_reviewer()</code> before being accepted — see §2, Step 4.2 sequencing below and §3.</p>
+      <p><strong>Split governance rules</strong> (all deterministic, code-level checks — not left to LLM judgment):</p>
+      <ul>
+        <li><em>Split coherence</em>: rejects a split where multiple children would write to the same file (silent last-writer-wins data loss).</li>
+        <li><em>AC cap enforcement</em>: caps any single story at 24 acceptance criteria; forces a split above that.</li>
+        <li><em>Split mandate</em>: if a story exceeds the cap and wasn't split, forces one retry; if the retry still doesn't resolve it (e.g. a lazy split that just copies the full AC list to one child), the violation is flagged for the next specification pass rather than retried indefinitely.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>Step 0.1 — CPA pre-pass (Cost/Complexity Assessment) <span class="badge-fixed">fixed</span></summary>
+    <div class="body-block">
+      <p>
+        Runs <code>contextualize-stories.sh</code>, which per pending story builds a rich context payload and pipes
+        it to <code>lib/cpa-inference.js</code> for LLM review:
+      </p>
+      <ul>
+        <li><strong>Formula estimate</strong> — a deterministic baseline (<code>aiMinutes</code>, <code>cost</code>, <code>tokens</code>, <code>turns</code>) computed from the story's effort/type before any LLM involvement.</li>
+        <li><strong>Codebase signals</strong> — total LOC, file count, import count, whether referenced files already exist, plus relevant file snippets.</li>
+        <li><strong>KB retrieval</strong> — semantically-matched knowledge-base chunks for the story's required skills (empty section noted explicitly if none match).</li>
+        <li><strong>Adjacent stories</strong> — sibling story id/title/effort/status for context.</li>
+        <li><strong>Prior-phase handoff</strong> — the most recent <code>phase-handoff-&lt;phase&gt;.md</code> from another phase (if any) is injected so the estimate accounts for what already landed.</li>
+      </ul>
+      <p>
+        The LLM returns a structured review: <code>confidence</code>, <code>complexityAdjustment</code>,
+        <code>adjustedEstimate</code> (the blended final numbers), <code>riskFlags</code>, <code>missingKbCoverage</code>,
+        <code>citedSources</code>, and <code>reasoning</code>. If the inference call itself is unavailable, a
+        <code>skippedReview()</code> fallback returns the formula estimate unchanged with <code>confidence: 0.70</code>
+        rather than blocking the phase.
+      </p>
+      <p>Gate outcome, by <code>contextualize-stories.sh</code>'s exit code:</p>
+      <ul>
+        <li><strong>0 — pass</strong>: all stories cleared, phase proceeds normally.</li>
+        <li><strong>2 — review</strong>: one or more stories carry elevated risk; the phase continues with a warning unless <code>STRICT_CPA=1</code> is set, in which case this halts the phase for human review.</li>
+        <li><strong>3 — block</strong>: one or more stories cannot proceed at all; the phase halts (exit 3) regardless of <code>STRICT_CPA</code>. Override: <code>SKIP_CPA=1</code> to bypass the gate entirely.</li>
+      </ul>
+      <p>Every write this step makes to a story's estimate fields (<code>estimatedAiMinutes</code>/<code>estimatedCost</code>/<code>estimatedTokens</code>/<code>estimatedTurns</code>/<code>effort</code>/<code>cpaConfidence</code>/<code>cpaGate</code>) is validated by <code>prd-change-reviewer</code> before being accepted, with surgical per-field revert (not whole-file) on rejection — see §3.</p>
+      <div class="meta-row"><span class="pill">contextualize-stories.sh</span><span class="pill">lib/cpa-inference.js</span></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Step 0.5 — Pre-phase skill assessment <span class="badge-fixed">fixed</span></summary>
+    <div class="body-block">
+      <p>
+        Run by <code>team-lead-agent</code> in PRE-PHASE mode (or a phase-scoped assessment agent, depending on
+        wiring) before the phase's stories execute. This step is where <strong>agent generation happens
+        mid-project</strong>, not just at initial scaffolding — see §4 for the full mechanism:
+      </p>
+      <ul>
+        <li>Verifies every story's <code>agentRole</code> matches what its declared files actually require (e.g. a test-only story must have <code>agentRole: test-engineer</code>, never shared with its paired implementation story).</li>
+        <li><strong>Profile creation</strong>: if a story needs a role that doesn't exist yet in <code>profiles.json</code>, this step can create the profile from scratch, based on the project's <code>techStack</code>.</li>
+        <li><strong>Skill-gap fill</strong>: for each story, compares the assigned role's existing profile text against the story's <code>technicalNotes.requiredSkills</code> and appends missing-skill sentences as needed — proactive, before the story ever fails, not reactive self-heal.</li>
+      </ul>
+      <p><span class="badge-new">recent</span> Runs via <code>run_orch_prompt_with_tools</code> (real file/Bash access) — the prompt instructs running real <code>jq</code> against the PRD and reading/writing <code>profiles.json</code> directly, which requires tool access to actually do. Previously wired without it, so no real profile augmentation ever happened — the agent could only print a JSON description of what it would have done.</p>
+      <div class="meta-row"><span class="pill">run-agent-orchestration.sh:1660</span></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Step 0.6 — Hybrid pre-coordination <span class="badge-fixed">fixed</span> (hybrid mode only)</summary>
+    <div class="body-block">
+      <p>Only active when <code>ORCH_MODE=hybrid</code>. Seeds the MCP message bus (<code>agent-messages.jsonl</code>) with cross-lane dependency/handoff guidance and flags stories requiring plan mode (see this step's Step 1 entry below). <span class="badge-new">recent</span> Also runs with tool access now — it reads the PRD and flock-appends real JSONL messages, the same fix applied to Step 0.5.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Step 0.7 — Regression guard <span class="badge-fixed">fixed</span></summary>
+    <div class="body-block"><p>Bypass: <code>SKIP_REGRESSION_GUARD=true</code>. Guards against reintroducing a previously-fixed failure pattern in the same phase.</p></div>
+  </details>
+
+  <details>
+    <summary>Step 0.8 — mkdir src/ dirs <span class="badge-fixed">fixed</span></summary>
+    <div class="body-block"><p>Ensures the directory structure declared in stories' <code>technicalNotes.files</code> exists before implementation begins.</p></div>
+  </details>
+
+  <details>
+    <summary>Step 0.9 — PRD model coordinator <span class="badge-fixed">fixed</span></summary>
+    <div class="body-block">
+      <p>
+        Run by <code>prd-model-coordinator</code>, once per phase after the specification pass has elaborated
+        stories and created any split children, before story execution begins. Fills in <code>model</code>/
+        <code>aiProvider</code>/<code>reasoningEffort</code> for any pending story missing one or more of these
+        fields — <strong>never overwrites a pre-existing value</strong>, and split children inherit their parent's
+        assignment when the parent has one, rather than silently falling back to a provider's hardcoded default.
+        Runs with tool access (writes the PRD back to disk); its own writes go through <code>prd-change-reviewer</code>,
+        which additionally rejects any change touching a field other than <code>model</code>/<code>aiProvider</code>/
+        <code>reasoningEffort</code> on any story.
+      </p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Step 1 — Main-branch stories (the implementation loop) <span class="badge-fixed">fixed</span></summary>
+    <div class="body-block">
+      <p>The core loop: each main-branch story is implemented in sequence by its assigned agent role (a project-specific implementation role — see §3). Each attempt goes through:</p>
+      <ul>
+        <li><strong>Scope guard</strong> (<code>_scope_lock</code>/<code>_scope_unlock</code>, claude.sh:1327) — makes files outside the story's own declared scope, and files owned by other stories, read-only for the duration of the attempt. Restores out-of-scope files from a pre-run snapshot before external verification, so Bash-written files bypassing tool-level guards can't contaminate another story's test results.</li>
+        <li><strong>Vendor guard</strong> (<code>_vendor_lock</code>/<code>_vendor_unlock</code>/<code>run_vendor_integrity_check</code>, claude.sh:1420+) — makes configured <code>vendorDirs</code> (e.g. <code>node_modules</code>) read-only during the attempt, and separately verifies (via mtime) that they weren't tampered with even if the lock itself were bypassed. Config-driven — the engine has zero hardcoded vendor-directory names.</li>
+        <li><strong>Plan-then-execute</strong> (high-complexity stories only) — <code>check_plan_mode_required()</code> (claude.sh:637) triggers a planning turn when <code>estimatedHours ≥ 6</code>, dependency count <code>≥ 2</code>, or an explicit <code>planModeRequired</code> flag is set. <code>run_plan_mode</code>/<code>run_planning_phase</code> produce a numbered execution plan from the story's ACs; <code>review_and_correct_plan</code> checks it against real dependency contracts (ground-truth exports from already-completed dependency stories) and requests one corrective re-plan if it contradicts them. <span class="badge-new">recent</span> <code>run_plan_mode</code>'s prompt explicitly says "Read orchestrations/prd.json for story X" and now runs with tool access to actually do that — previously it had none, so the plan was fabricated from whatever the model guessed rather than the real PRD content.</li>
+        <li><strong>Implementation call</strong> — the agent writes code against the story's acceptance criteria / test criteria (TC — see §3, Step 1.6 below).</li>
+        <li><strong>Dependency contracts</strong> — if the story declares dependencies, auto-generated <code>.contracts/&lt;depId&gt;.md</code> files (real exported class/function signatures, not model-transcribed) are available as ground truth to the plan reviewer and, on failure, the failure analyst.</li>
+        <li><strong>External verification</strong> (<code>run_external_verification</code>, claude.sh:2216, and <code>run_tsc_verification</code>, claude.sh:2418) — runs the project's real test command and a real <code>tsc</code> compile check outside the agent's own turn, so a story can't self-report success. A tsc failure sets the same <code>VERIFICATION_FAILURE</code> channel as a test failure, so it gets full retry-ladder treatment instead of exiting the phase on the very first compile error.</li>
+        <li><strong>On failure — retry &amp; escalation</strong>: <code>assess_model_escalation</code> (claude.sh:2949) classifies the failure as <code>env</code> / <code>capability</code> / <code>quality</code> / <code>unknown</code> and decides whether to escalate the model and/or inject a targeted prompt amendment. The retry loop runs four rungs (two attempts each, <code>EPAM_MAX_RETRIES</code> default 7 → 8 total attempts): Rung 0/1 keep the base model and raise reasoning effort low→medium; Rung 2 escalates the model via a tier-aware ladder (<code>EPAM_MODEL_LADDER_MEDIUM</code>/<code>_HIGH</code> — see §5); Rung 3 keeps the escalated model at high effort. <code>check_healing_effectiveness</code>/<code>check_failure_diversity</code> (claude.sh:4034/4139) detect the SAME failure signature recurring 2-3+ times despite self-heal attempts ("HealingBroken") and force a rung-skip rather than retrying at the same tier indefinitely.</li>
+        <li><strong>Deep diagnosis</strong> — <code>run_failure_analyst</code> (claude.sh:3322) diagnoses the root cause and prescribes a fix, routed to one of <code>prd</code> (AC patch) / <code>tc</code> (test-criteria patch) / <code>skill</code> (profile addendum) / <code>kb</code> (knowledge-base entry) / <code>tool</code> (synthesize a dynamic shell helper — see §4) / <code>none</code>. All context (test failure output, TC facts, skill addendum, dependency contracts) is injected as text — the analyst never needs file access itself. <span class="badge-new">recent</span> Dependency-contract injection was added after a live diagnosis error: the analyst called a casing-typo'd import a "default vs named export mismatch," which was false — the class was correctly a named export, just mis-cased — and every retry (including the strongest configured model) then "fixed" the wrong thing because the diagnosis guiding it was wrong.</li>
+        <li><strong>Deterministic pre-checks</strong> run before any of the above, wherever the failure mode is mechanically checkable — see §4. If one of these fires, it can grant a "free retry" not counted against the escalation ladder.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>Step 1.5 — Auto-commit <span class="badge-fixed">fixed</span> (conditional)</summary>
+    <div class="body-block"><p>Only runs if there are uncommitted main-branch changes after Step 1. Every completed story is auto-committed as part of its own completion (<code>"story: complete &lt;id&gt; (N file(s))"</code>) — this step catches anything left over.</p></div>
+  </details>
+
+  <details>
+    <summary>Step 1.6 — TC writer gate <span class="badge-fixed">fixed</span> (conditional)</summary>
+    <div class="body-block">
+      <p>
+        Run by <code>tc-writer-agent</code> — bridges the gap between spec-authored ACs (written before the code
+        exists, necessarily abstract) and implementation reality. Reads the paired implementation story's real
+        source after it completes and extracts verified facts (<code>sourceFiles</code>, <code>facts</code>,
+        <code>mockStrategy</code>, <code>bannedPatterns</code>) into the test story's <code>testCriteria</code> field
+        — exact function signatures, error message strings, mock strategy — before the test story runs. Once
+        present, <code>testCriteria</code> supersedes plain ACs as the ground truth the failure-analyst and
+        spec-validator check against. Bypass: <code>SKIP_TC_WRITER=1</code>.
+      </p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Step 2 — Create worktrees <span class="badge-fixed">fixed</span> (conditional)</summary>
+    <div class="body-block"><p>Only runs if the phase has stories assigned to parallel lanes. Creates isolated git worktrees so parallel agents don't collide on the same working directory.</p></div>
+  </details>
+
+  <details>
+    <summary>Steps 3a / 3b — Primary / Independent agent lanes <span class="badge-fixed">fixed</span> (conditional)</summary>
+    <div class="body-block"><p>Run stories assigned to the "primary" and "independent" agent groups in their own worktrees, in parallel with each other and with the main-branch lane. Each lane's stories go through the same scope-guard/vendor-guard/verification/retry-ladder machinery described under Step 1.</p></div>
+  </details>
+
+  <details>
+    <summary>Step 3.1 / 3.2 — Worktree health check &amp; merge <span class="badge-fixed">fixed</span> (conditional)</summary>
+    <div class="body-block"><p>Verifies each worktree lane is in a healthy state, then merges completed worktree branches back into the main branch. A failure in one lane doesn't block merging the other lane's completed work.</p></div>
+  </details>
+
+  <details>
+    <summary>Step 3.5 — Post-parallel assessment <span class="badge-fixed">fixed</span></summary>
+    <div class="body-block">
+      <p>Compares actual vs. forecast time/cost per story (against the Step 0.1 CPA estimate), and can correct <code>agentRole</code> assignments for <em>future</em> phases' pending stories if a systematic skill mismatch is detected (never modifies already-completed phases). Writes a human-readable improvement report to <code>logs/phase-improvements/&lt;phase&gt;.md</code>. <span class="badge-new">recent</span> Also runs with tool access now, for the same reason as Step 0.5.</p>
+      <div class="meta-row"><span class="pill">run-agent-orchestration.sh:2617</span></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Step 3.7 — Pre-review gate <span class="badge-fixed">fixed</span></summary>
+    <div class="body-block"><p>Bypass: <code>SKIP_PRE_REVIEW_GATE=true</code>.</p></div>
+  </details>
+
+  <details>
+    <summary>Step 3.8 — Lint gate (tsc + eslint) <span class="badge-fixed">fixed</span></summary>
+    <div class="body-block"><p>Bypass: <code>SKIP_LINT_GATE=true</code>.</p></div>
+  </details>
+
+  <details>
+    <summary>Step 4.2 — Testing gates, Phase A <span class="badge-fixed">fixed</span></summary>
+    <div class="body-block">
+      <p>Runs SAST and spec-validator in parallel. If either fails, Phase B and Phase C (below) are skipped entirely — see "Testing-gate phase sequencing" at the end of this step group.</p>
+    </div>
+    <details>
+      <summary>4.2a — SAST sentinel</summary>
+      <div class="body-block">
+        <p><code>sast-sentinel</code> receives pre-computed hard evidence injected into its prompt — real <code>tsc --noEmit</code> output, real <code>npm audit</code> results — and is explicitly told <em>not</em> to call tools; it classifies the pre-computed evidence rather than gathering its own. Classifies dependency CVEs: runtime deps can be blocker/major, dev-only deps (vitest, esbuild, vite, typescript, eslint, etc.) are always minor regardless of CVSS score.</p>
+        <p><span class="badge-new">recent</span> Before SAST even runs, a deterministic self-heal step checks the tsc output for <code>error TS18003</code> ("No inputs were found"). This recurred live when a phase's spec-pass split left no story creating an actual source file, so <code>tsconfig.json</code>'s own <code>include</code> glob matched zero files. The fix reads the glob already on disk, and — if truly zero files match — writes one minimal placeholder file (<code>export {};</code>) at the location the glob implies (no hardcoded file names), re-runs <code>tsc</code> to confirm, and commits the placeholder to git so downstream phases see a clean state. Falls through to normal gate evaluation if <code>tsc</code> still fails for unrelated reasons.</p>
+        <div class="meta-row"><span class="pill">run-agent-orchestration.sh:3438 (self-heal)</span></div>
+      </div>
+    </details>
+    <details>
+      <summary>4.2b — Spec validator</summary>
+      <div class="body-block">
+        <p><code>spec-validator</code> classifies each story's acceptance criteria as <code>met</code> / <code>partial</code> / <code>unmet</code> / <code>untestable</code>. Receives real vitest results and the story ACs pulled straight from <code>prd.json</code> as pre-injected hard evidence, but must use its own Read-tool access to verify file-content-level criteria (e.g. exact <code>package.json</code> field values) — this is the one thing that isn't pre-injected.</p>
+        <p><span class="badge-new">recent</span> Grounding check on the story-fail count: a story's <code>fail</code> verdict only counts toward blocking the gate if at least one of its criteria has a status other than <code>untestable</code>. If literally every criterion in every failing story is <code>untestable</code> (the agent had no real evidence — e.g. it never actually used its Read tool despite having access, observed live), the fail is downgraded to a non-blocking warning instead of aborting the phase. Implemented via story-boundary text slicing (line-level regex, not full JSON parsing — spec-validator output frequently contains raw newlines inside string values that break <code>json.loads</code>).</p>
+        <div class="meta-row"><span class="pill">run-agent-orchestration.sh:3670 (SPEC_EXTRACTOR_PY)</span></div>
+      </div>
+    </details>
+
+    <details>
+      <summary>Step 4.3 — Testing gates, Phase B <span class="badge-fixed">fixed</span> — only if Phase A passed</summary>
+      <div class="body-block">
+        <details>
+          <summary>4.3a — Review ranger</summary>
+          <div class="body-block"><p><code>review-ranger</code> performs deep, PR-level code review that goes beyond the structural checks of the more general-purpose <code>review-agent</code> — diff-level analysis of the changed files, with full Read-tool access.</p></div>
+        </details>
+        <details>
+          <summary>4.3b — Mutant hunter</summary>
+          <div class="body-block"><p><code>mutant-hunter</code> assesses whether existing tests would actually catch introduced bugs (mutation-testing style reasoning applied to the vitest suite), not just whether they pass.</p></div>
+        </details>
+      </div>
+    </details>
+
+    <details>
+      <summary>Step 4.4 — Testing gates, Phase C <span class="badge-fixed">fixed</span> — only if Phase A + B passed</summary>
+      <div class="body-block">
+        <details>
+          <summary>4.4a — Fuzz-weaver</summary>
+          <div class="body-block">
+            <p><code>fuzz-weaver</code> proposes property-based/fuzz test cases for changed functions and flags gaps or vulnerabilities in edge-case handling.</p>
+            <p><span class="badge-new">recent</span> Executable-evidence verification: any case marked <code>status: vulnerability</code> must now include an <code>executableTest</code> field — a real vitest test the agent writes asserting the SAFE/expected behavior. The gate actually runs that test against the real code (via the JSON reporter, checking <code>numFailedTests &gt; 0</code> specifically — a nonzero exit code alone doesn't distinguish a real assertion failure from a syntax/transform error). If the test fails, the vulnerability is confirmed for real; if it passes, the claim was false and gets downgraded to a non-blocking warning instead of hallucinating a block. Found live: fuzz-weaver had previously claimed a function "accepts zero and negative numbers as valid" when direct testing showed both were correctly rejected.</p>
+            <div class="meta-row"><span class="pill">run-agent-orchestration.sh:4065 (verification block)</span></div>
+          </div>
+        </details>
+        <details>
+          <summary>4.4b — Perf sentinel</summary>
+          <div class="body-block"><p><code>perf-sentinel</code> flags algorithmic complexity, memory hotspots, and async/startup performance issues in changed files.</p></div>
+        </details>
+      </div>
+    </details>
+
+    <details>
+      <summary>Step 4.6 — Browser E2E routing <span class="badge-fixed">fixed</span> (conditional)</summary>
+      <div class="body-block">
+        <p>Routes UI stories to either <code>playwright-agent</code> (high-complexity flows: auth, checkout, multi-step, flaky edge cases) or <code>lightpanda-agent</code> (fast, deterministic low/medium-complexity checks — page load, form interactions, validation messages) based on a computed complexity score. Bypass: <code>SKIP_BROWSER_E2E_ROUTING=true</code>.</p>
+        <p><span class="badge-new">recent</span> Both agent profiles instruct actually <em>running</em> real browser tests — this is now wired with tool access; previously it ran without any execution capability at all, meaning every verdict was guaranteed to be fabricated rather than based on a real test run.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Testing-gate phase sequencing &amp; gate-remediation (applies across 4.2 / 4.3 / 4.4)</summary>
+      <div class="body-block">
+        <ul>
+          <li>Phase A (4.2) failing skips Phase B (4.3) and Phase C (4.4) entirely — they emit <code>skip</code>, not <code>pending</code>.</li>
+          <li>Each gate's exit-code check (<code>sast_exit</code>, <code>spec_exit</code>, etc.) only reflects whether the underlying agent <em>process</em> crashed — not whether the gate's <em>content</em> reported a real failure. <span class="badge-new">recent</span> Every gate's "agent ran fine, content says fail" branch now explicitly appends its own log to the remediation candidate list; previously only perf-sentinel had this fix, so the other five gates' content-based failures never reached self-heal remediation at all and went straight to a hard pipeline abort.</li>
+          <li>On a gate failure, a 3-agent remediation pipeline attempts to fix forward rather than aborting outright — see §3/§4 for each agent's role: <code>gate-finding-analyst</code> extracts a grounded finding, <code>story-ac-remediator</code> augments the owning story's ACs, <code>profile-augmentor</code> appends a preventive profile rule if the anti-pattern is novel.</li>
+          <li>When a gate's finding can't be grounded to a story by the LLM, <span class="badge-new">recent</span> a deterministic git-blame fallback now runs before giving up: it reads the finding's <code>file</code> path, runs <code>git log --follow -1</code> on it, and extracts the owning story ID from the commit subject using the existing <code>"story: complete &lt;id&gt; (N file(s))"</code> convention every post-story commit already uses. Falls through to skipping remediation only if git has no matching commit.</li>
+          <li>A successful remediation signals the caller to reset and retry the phase (exit code 2) rather than hard-aborting.</li>
+        </ul>
+        <div class="meta-row"><span class="pill">run-agent-orchestration.sh:2990 (run_testing_gates)</span><span class="pill">run-agent-orchestration.sh:4233 (remediation pipeline)</span><span class="pill">run-agent-orchestration.sh:4442 (git-blame fallback)</span></div>
+      </div>
+    </details>
+  </details>
+
+  <details>
+    <summary>Process supervision (launcher level, cross-cutting)</summary>
+    <div class="body-block">
+      <p><span class="badge-new">recent</span> Project-specific launcher scripts (e.g. <code>tier3-travel-app-run.sh</code>) re-exec themselves under <code>setsid</code> on first launch, becoming the leader of a new process group, and write their own PID to a pidfile. <code>orchestrations/scripts/kill-tier3-run.sh</code> sends the kill signal to the negative of that PID (the whole process group at once), then sweeps for any orphaned process matching the known script names as a fallback for pre-fix runs or a stale pidfile.</p>
+    </div>
+  </details>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="agents">3. Agent Roster &amp; Responsibilities</h2>
+  <p>
+    <code>profiles.json</code> currently defines <strong>50 agent profiles</strong>. Each is a flat
+    <code>{role: "prompt string"}</code> entry — a named responsibility paired with the instructions that role
+    follows. They fall into the categories below. Roles marked <span class="badge-fixed">fixed</span> exist in
+    every project; unmarked implementation roles are generated per-project (see §1 and §4).
+  </p>
+
+  <details>
+    <summary>Initialization agents (run once, at project birth)</summary>
+    <div class="body-block">
+      <ul>
+        <li><strong><code>project-initiator-agent</code></strong> <span class="badge-fixed">fixed</span> — runs as INIT-001, the absolute first story in every project, before dashboards or any implementation work begins.</li>
+        <li><strong><code>prd-project-manager-agent</code></strong> <span class="badge-fixed">fixed</span> — INIT-002, runs after project-initiator-agent completes. The authority on <code>prd.json</code> — validates its structure.</li>
+        <li><strong><code>dashboard-orchestrator-agent</code></strong> <span class="badge-fixed">fixed</span> — DASH-001, the first task of every scaffolded project; static infrastructure agent responsible for the dashboard build.</li>
+        <li><strong><code>dashboard-test-agent</code></strong> <span class="badge-fixed">fixed</span> — DASH-002, runs immediately after DASH-001. Read-only validation agent — never modifies dashboard files, only checks them.</li>
+        <li><strong><code>dashboard-update-agent</code></strong> <span class="badge-fixed">fixed</span> — DASH-003, runs after DASH-001 and DASH-002 both pass. Validates real-time dashboard behavior.</li>
+        <li><strong><code>agent-skills-agent</code></strong> <span class="badge-fixed">fixed</span> — SKILLS-001, a post-spec gate that runs after openspec-agent and speckit-agent have fully elaborated all stories, checking for skill gaps across the whole PRD.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>Specification agents (Step 0)</summary>
+    <div class="body-block">
+      <ul>
+        <li><strong><code>readiness-checker</code></strong> <span class="badge-fixed">fixed</span> — pre-spec sub-stage; validates stories against INVEST criteria and a configurable checklist.</li>
+        <li><strong><code>grooming-coordinator</code></strong> <span class="badge-fixed">fixed</span> — pre-spec sub-stage; orchestrates the backlog-grooming pipeline that runs before openspec/speckit.</li>
+        <li><strong><code>dedup-detector</code></strong> <span class="badge-fixed">fixed</span> — pre-spec sub-stage; identifies semantically overlapping, duplicate, or conflicting stories.</li>
+        <li><strong><code>spec-coordinator-agent</code></strong> <span class="badge-fixed">fixed</span> — reads the PRD before every phase, evaluates risk/dependencies/readiness, decides which spec personas run.</li>
+        <li><strong><code>openspec-agent</code></strong> <span class="badge-fixed">fixed</span> — elaboration pass; see Step 0 above for full detail.</li>
+        <li><strong><code>speckit-agent</code></strong> <span class="badge-fixed">fixed</span> — verification pass; see Step 0 above for full detail.</li>
+        <li><strong><code>spike-agent</code></strong> <span class="badge-fixed">fixed</span> — runs exclusively on stories with <code>storyType: spike</code>; time-boxed technical discovery, never writes implementation code.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>Coordination &amp; assessment agents (run across the phase lifecycle)</summary>
+    <div class="body-block">
+      <ul>
+        <li><strong><code>team-lead-agent</code></strong> <span class="badge-fixed">fixed</span> — tri-modal: PRE-PHASE (Step 0.5 skill assessment), POST-PHASE (Step 3.5 forecast-vs-actual comparison), and TEAM-LEAD (general coordination).</li>
+        <li><strong><code>test-coordinator-agent</code></strong> <span class="badge-fixed">fixed</span> — governs the testing-gate sequence between code review and unit-test verification; sequences the specialist testing agents in phases (see Step 4.2/4.3/4.4).</li>
+        <li><strong><code>prd-model-coordinator</code></strong> <span class="badge-fixed">fixed</span> — Step 0.9; fills in missing model/provider/effort assignments.</li>
+        <li><strong><code>tc-writer-agent</code></strong> <span class="badge-fixed">fixed</span> — Step 1.6; extracts verified test criteria from completed implementation source.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>Testing-gate agents (Step 4.2 / 4.3 / 4.4 / 4.6)</summary>
+    <div class="body-block">
+      <ul>
+        <li><strong><code>sast-sentinel</code></strong> <span class="badge-fixed">fixed</span> — security/compilation issues; see Step 4.2a.</li>
+        <li><strong><code>spec-validator</code></strong> <span class="badge-fixed">fixed</span> — acceptance-criteria compliance; see Step 4.2b.</li>
+        <li><strong><code>review-agent</code></strong> <span class="badge-fixed">fixed</span> — general structural code review (findings by severity: blocker/major/minor) — the broader-scope counterpart to review-ranger's diff-level depth.</li>
+        <li><strong><code>review-ranger</code></strong> <span class="badge-fixed">fixed</span> — deep, PR-level diff analysis; see Step 4.3a.</li>
+        <li><strong><code>mutant-hunter</code></strong> <span class="badge-fixed">fixed</span> — mutation-testing quality assessment; see Step 4.3b.</li>
+        <li><strong><code>fuzz-weaver</code></strong> <span class="badge-fixed">fixed</span> — fuzz/property-based edge-case analysis; see Step 4.4a.</li>
+        <li><strong><code>perf-sentinel</code></strong> <span class="badge-fixed">fixed</span> — performance regression/bottleneck analysis; see Step 4.4b.</li>
+        <li><strong><code>playwright-agent</code></strong> <span class="badge-fixed">fixed</span> — high-complexity browser E2E; see Step 4.6.</li>
+        <li><strong><code>lightpanda-agent</code></strong> <span class="badge-fixed">fixed</span> — fast, deterministic browser E2E; see Step 4.6.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>Self-heal &amp; remediation agents (fire on failure, not on the happy path)</summary>
+    <div class="body-block">
+      <ul>
+        <li><strong><code>failure-analyst</code></strong> <span class="badge-fixed">fixed</span> — diagnoses story implementation failures; routes fixes to prd/tc/skill/kb/tool targets. See Step 1 and §4.</li>
+        <li><strong><code>prd-change-reviewer</code></strong> <span class="badge-fixed">fixed</span> — validates every automated write to <code>prd.json</code> or <code>profiles.json</code> before it's accepted; snapshots before/after, reverts on <code>fail</code>.</li>
+        <li><strong><code>kb-change-reviewer</code></strong> <span class="badge-fixed">fixed</span> — stricter variant of the above, specifically for permanent <code>KB-{agentRole}.md</code> writes (these persist across every future run, so the bar is higher).</li>
+        <li><strong><code>gate-finding-analyst</code></strong> <span class="badge-fixed">fixed</span> — extracts a grounded finding from a failed testing gate's log and maps it to the owning story (with the git-blame fallback described under Step 4.2 sequencing).</li>
+        <li><strong><code>story-ac-remediator</code></strong> <span class="badge-fixed">fixed</span> — augments the owning story's acceptance criteria with a concrete fix requirement, given the gate-finding-analyst's structured finding.</li>
+        <li><strong><code>profile-augmentor</code></strong> <span class="badge-fixed">fixed</span> — checks whether a gate finding's underlying anti-pattern is novel; if so, appends a preventive rule to the relevant agent's profile.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>Implementation agents (project-specific — generated per stack, not fixed)</summary>
+    <div class="body-block">
+      <p>Generated by <code>epam new generate</code>'s <code>proposeAgents()</code> at project scaffolding time (see §1/§4), tailored to the project's declared tech stack. Common examples seen in TypeScript/Node projects:</p>
+      <ul>
+        <li><code>typescript-engineer</code> — writes implementation code.</li>
+        <li><code>test-engineer</code> — writes test files only, never implementation.</li>
+        <li><code>frontend-engineer</code> / <code>ui-engineer</code> — UI-focused implementation roles for projects with a frontend surface.</li>
+        <li><code>generator</code> <span class="badge-fixed">fixed</span> — a narrow-purpose file generator: creates a single complete new file from a fully-specified prompt, with no need to read any existing file.</li>
+      </ul>
+      <p>The engine imposes no fixed list of implementation roles — whatever roles a project's stack needs are created (or filled in mid-project by Step 0.5) as required.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Documentation agents (defined in profiles.json — see note on wiring)</summary>
+    <div class="body-block">
+      <p><code>doc-coordinator</code>, <code>doc-reviewer</code>, <code>guide-author</code>, <code>changelog-agent</code>, <code>docstring-agent</code>, <code>api-doc-generator</code>, <code>architecture-doc-agent</code>, <code>doc-index-builder</code>, <code>doc-search-agent</code>, <code>doc-site-builder</code> — a full documentation-generation roster exists as fixed profiles. As of this writing these profiles are not yet invoked by any phase-loop code (no "documentation phase" currently calls them) — they exist as a ready-to-wire capability, not an active step in the pipeline described in §2.</p>
+    </div>
+  </details>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="toolsskills">4. Tools, Skills &amp; Dynamic Generation</h2>
+  <p>
+    Three distinct things are all sometimes loosely called "tools" in this system — worth keeping separate:
+    the <strong>built-in tools</strong> an agent uses during its own turn, the <strong>skills</strong> tracked
+    per agent role, and <strong>dynamic tools</strong> the pipeline synthesizes for itself.
+  </p>
+
+  <details>
+    <summary>Built-in tools (what an agent can DO during its turn)</summary>
+    <div class="body-block">
+      <p>Read, Write, List, Search, Fetch, and Bash — the standard tool surface every implementation and gate agent draws on when it has tool access. Whether a given pipeline call grants this access is a wiring decision (<code>AI_GATE_ALLOW_TOOLS=1</code> / <code>run_orch_prompt_with_tools</code>) made per call site, not a property of the agent role itself — several gate agents (SAST, the failure analyst, the PRD-change reviewer) deliberately do NOT get tool access because all the evidence they need is injected as text in the prompt; giving them tools they don't need adds nothing but cost and risk of an ungrounded tangent.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Skills (what an agent role is expected to know)</summary>
+    <div class="body-block">
+      <p>
+        A story can declare <code>technicalNotes.requiredSkills</code> — plain-language skill tags (e.g.
+        "TypeScript", "vitest", "Express routing"). Step 0.5's pre-phase assessment compares each story's
+        required skills against its assigned role's existing profile text and appends missing-skill sentences
+        proactively, before the story is ever attempted.
+      </p>
+      <p>
+        Reactively, when the failure analyst diagnoses a failure with <code>target: skill</code>, it proposes a
+        short imperative "self-heal" sentence to append to the role's profile (e.g. "Always end TypeScript
+        statements with semicolons..."). <span class="badge-new">recent</span> A deterministic pre-check
+        (<code>_skill_note_format_ok</code>) verifies the objectively-checkable format rules — length ≤200 chars,
+        imperative opener, no story-ID reference, not a duplicate of an existing line — before this goes to the
+        LLM reviewer at all; if it already passes, the reviewer call is skipped entirely. Found live: the reviewer
+        was rejecting already-well-formed notes 3/3 times purely on flaky format judgment, burning a gate
+        round-trip each time for zero benefit — these are checkable facts, not something that needs an LLM's
+        opinion.
+      </p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Dynamic tool synthesis (the pipeline writing its own helper scripts)</summary>
+    <div class="body-block">
+      <p>
+        When the failure analyst diagnoses a failure as a repeated MECHANICAL step — not a knowledge gap, but a
+        multi-step shell recipe that's error-prone to repeat by hand (its own profile's example: "add a package to
+        <code>package.json</code> and install it before importing it") — it can propose <code>target: tool</code>
+        instead of a KB entry or skill note. This is reserved for cases where a KB rule alone has already failed
+        to prevent the same class of failure.
+      </p>
+      <p>
+        The proposed script (a <code>tool_spec</code>: name, purpose, and the exact recipe) goes through the same
+        <code>run_change_with_reviewer_retry</code> gate as any other self-heal write, using the
+        <code>tool_creation</code> change type specifically — the reviewer checks the recipe is idempotent (safe
+        to run twice), does nothing beyond its stated purpose, never deletes files or force-pushes git, and stays
+        inside the project's own working directory. On approval, it's written to
+        <code>.epam/dynamic-tools/&lt;name&gt;.sh</code>.
+      </p>
+      <p>
+        From then on, <strong>every subsequent agent prompt for that project</strong> automatically surfaces a
+        list of available dynamic tools ("Use them via the bash tool instead of repeating the equivalent steps by
+        hand") — the pipeline is literally extending its own toolset over the life of a project, scoped to that
+        project's own <code>.epam/dynamic-tools/</code> directory, not the shared engine.
+      </p>
+      <div class="meta-row"><span class="pill">claude.sh:3180 (tool_creation review)</span><span class="pill">claude.sh:3760 (write dynamic tool)</span><span class="pill">claude.sh:5279 (surface to future prompts)</span></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Dynamic agent/profile generation (the pipeline writing its own agent roster)</summary>
+    <div class="body-block">
+      <p>Two distinct moments create new agent profiles, not just new tools:</p>
+      <ul>
+        <li><strong>At project birth</strong> — <code>epam new generate</code>'s <code>proposeAgents()</code> (§1) generates the initial set of project-specific implementation roles from the manifest and clarification Q&amp;A. This is a one-time, human-in-the-loop step (interactive confirmation unless <code>--no-interactive</code> is passed).</li>
+        <li><strong>Mid-project</strong> — Step 0.5's pre-phase skill assessment can create a brand-new profile key from scratch if a phase's stories need a role that doesn't exist yet, based on the project's declared tech stack. No human confirmation step here — it goes through the same <code>prd-change-reviewer</code> gate (change type <code>profile_creation</code>) as any other automated profiles.json write, which checks the new profile states its file-writing scope, doesn't introduce out-of-stack technology, and doesn't duplicate an existing role's responsibilities.</li>
+      </ul>
+    </div>
+  </details>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="cost">5. Model Assignment &amp; Cost Tracking</h2>
+
+  <details>
+    <summary>How a story's model gets assigned</summary>
+    <div class="body-block">
+      <ol>
+        <li>Explicit assignment already present on the story in <code>prd.json</code> — never overwritten.</li>
+        <li>Step 0.9's PRD model coordinator fills any gap (<code>model</code>/<code>aiProvider</code>/<code>reasoningEffort</code>) based on effort/role.</li>
+        <li>On a failed retry, <code>assess_model_escalation</code> may replace the model for that retry only, per the tier-aware ladder rules below.</li>
+      </ol>
+    </div>
+  </details>
+
+  <details>
+    <summary>The two escalation ladders</summary>
+    <div class="body-block">
+      <p>Config-driven (<code>EPAM_MODEL_LADDER_MEDIUM</code> / <code>EPAM_MODEL_LADDER_HIGH</code>), each a set of direct current→next model mappings rather than a fixed linear chain:</p>
+      <ul>
+        <li><strong>Medium</strong>: base models each jump directly to the medium ceiling model (single hop).</li>
+        <li><strong>High</strong>: same single-hop pattern to the high ceiling model, <em>plus</em> a bridge mapping (medium-ceiling model → high-ceiling model) for a story already sitting at the medium ceiling that's classified high-tier and needs one more escalation.</li>
+      </ul>
+      <p><code>EPAM_MODEL_LADDER</code> (no suffix) explicitly overrides both tiers to the same table. <code>EPAM_FINAL_FALLBACK_MODEL</code>/<code>_PROVIDER</code> guarantee Rung 3 always has an escalated model even if the tier's ladder lookup produced nothing.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Cost recording</summary>
+    <div class="body-block">
+      <p>Every agent invocation (story implementation, gate agents, coordination agents) emits a cost record to <code>phase-cost.jsonl</code>: model, tokens in/out, computed cost (from <code>model-pricing.json</code>, falling back to prefix-matching if an exact model key isn't found), elapsed time, and status. Gate/coordination calls are tagged with an <code>agent_type</code> (e.g. <code>assessment</code>, <code>qa-gate:sast</code>) distinct from story-implementation records, so gate cost and story-implementation cost can be broken out separately. The CPA pre-pass (§2, Step 0.1) is the forecasting counterpart to this actuals ledger — its blended estimates are meant to be compared against what actually lands here.</p>
+    </div>
+  </details>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="config">6. Config-Driven Extensibility</h2>
+  <p>The engine (<code>claude.sh</code> / <code>run-agent-orchestration.sh</code>) contains no hardcoded story IDs, file names, or stack/language assumptions. Everything project-specific is one of:</p>
+  <ul>
+    <li><code>prd.json</code> — what to build</li>
+    <li><code>profiles.json</code> — who builds it, and the fixed gate/coordination roles' instructions</li>
+    <li><code>.epam/dependency-check.json</code> — how to detect/install a missing dependency for this stack</li>
+    <li><code>.epam/contract-generation.json</code> — how to auto-generate a dependency contract for this stack</li>
+    <li>Launcher-script env vars (e.g. <code>EPAM_TEMPERATURE_MODEL_PATTERN</code>, <code>ORCH_GATE_MODEL</code>, <code>EPAM_MODEL_LADDER_MEDIUM</code>/<code>_HIGH</code>) — project-level tuning, not engine code</li>
+  </ul>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="glossary">7. Glossary of Acronyms</h2>
+  <table>
+    <tr><th style="text-align:left; border-bottom:1px solid var(--border); padding:6px 10px; background:var(--surface2); color:var(--muted);">Term</th><th style="text-align:left; border-bottom:1px solid var(--border); padding:6px 10px; background:var(--surface2); color:var(--muted);">Meaning</th></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>AC</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">Acceptance Criteria — the specific, checkable conditions a story must satisfy to be considered complete.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>ADF</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">Atlassian Document Format — the rich-text JSON structure Jira Cloud uses for issue descriptions; relevant to the (separate, discussed-not-built) Jira-webhook integration path.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>API</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">Application Programming Interface.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>CLI</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">Command-Line Interface.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>CPA</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">Cost/Complexity Pre-pass Assessment — the Step 0.1 gate that estimates time/cost/effort for a story before implementation begins.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>CVSS</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">Common Vulnerability Scoring System — the standard severity score used for dependency CVEs.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>DASH-00N</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">The fixed IDs (DASH-001/002/003) for the dashboard-orchestrator/test/update agents that run at project scaffolding.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>E2E</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">End-to-End (testing) — Step 4.6's browser-level test routing.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>GLM</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">A model family (z-ai/glm-*) used as one of the configurable ladder/gate models.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>INIT-00N</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">The fixed IDs (INIT-001/002) for the project-initiator and PRD-project-manager agents that run at project birth.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>INVEST</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">Independent, Negotiable, Valuable, Estimable, Small, Testable — the standard checklist <code>readiness-checker</code> validates stories against.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>JSON</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">JavaScript Object Notation — the format used for <code>prd.json</code>, <code>profiles.json</code>, and most structured agent output.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>JSONL</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">JSON Lines — one JSON object per line, used for append-only logs (e.g. <code>phase-cost.jsonl</code>, <code>story-failures.jsonl</code>).</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>KB</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">Knowledge Base — a persistent, agent-role-specific markdown file of learned rules/fixes that carries across runs.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>LLM</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">Large Language Model.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>LOC</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">Lines of Code — one of the codebase signals fed into the CPA pre-pass.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>MCP</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">Model Context Protocol — the message-bus mechanism used for cross-lane coordination in hybrid mode.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>PID</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">Process ID.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>PGID</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">Process Group ID — used by <code>kill-tier3-run.sh</code> to stop an entire launcher's process tree in one signal.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>PRD</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">Product Requirements Document — the <code>prd.json</code> file; the master specification of what to build.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>SAST</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">Static Application Security Testing — the gate agent that checks compilation, security patterns, and dependency CVEs.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>SKILLS-00N</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">The fixed ID (SKILLS-001) for the post-spec agent-skills-agent gate.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>TC</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">Test Criteria — facts extracted from a completed implementation story's real source, used as ground truth by the paired test story (supersedes plain AC for test-writing purposes).</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>TS18003</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">TypeScript compiler error code for "No inputs were found in config file" — fires when a <code>tsconfig.json</code>'s <code>include</code> glob matches zero files.</td></tr>
+    <tr><td style="padding:6px 10px; border-bottom:1px solid var(--border);"><code>tsc</code></td><td style="padding:6px 10px; border-bottom:1px solid var(--border);">The TypeScript compiler CLI, typically invoked as <code>tsc --noEmit</code> for a type/compile check without producing output files.</td></tr>
+    <tr><td style="padding:6px 10px;"><code>UI</code></td><td style="padding:6px 10px;">User Interface.</td></tr>
+  </table>
+
+  <footer>Detailed pipeline reference — orchestration engine. Reflects the pipeline as implemented, including mechanisms hardened during the most recent troubleshooting pass.</footer>
+
+</div>
+</body>
+</html>

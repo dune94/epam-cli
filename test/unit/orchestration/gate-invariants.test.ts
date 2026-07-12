@@ -193,7 +193,7 @@ describe('step 3.8 lint gate', () => {
     const lintIdx = orchSrc.indexOf('step_emit "3.8" "running"');
     // Gate includes self-healing remediation before the exit — measure with:
     // node -e "src=require('fs').readFileSync('orchestrations/scripts/run-agent-orchestration.sh','utf8'); s=src.indexOf('step_emit \"3.8\" \"running\"'); console.log(src.indexOf('exit 1',s)-s)"
-    const block = orchSrc.slice(lintIdx, lintIdx + 10000);
+    const block = orchSrc.slice(lintIdx, lintIdx + 10600);
     expect(block).toContain('_lint_failed=1');
     // exit 2 = remediation applied (retry); exit 1 = fallback (hard abort). Both must be present.
     expect(block).toContain('exit 2');

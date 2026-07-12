@@ -20,12 +20,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PRD_FILE=""
 PHASE=""
 OUTPUT_DIR=""
+STORY=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
     --prd)        PRD_FILE="$2";    shift 2 ;;
     --phase)      PHASE="$2";       shift 2 ;;
     --output-dir) OUTPUT_DIR="$2";  shift 2 ;;
+    # Optional: scope the gate to a single story instead of every test story
+    # in the phase. Root cause this fixes (found live, 2026-07-08): the
+    # inline per-story call site in run-agent-orchestration.sh's Step 1 loop
+    # invokes this script right before ONE specific story runs — but without
+    # scoping, it also processes every OTHER test story in the phase whose
+    # impl hasn't run yet, gets a correct null/"source doesn't exist" reply
+    # for them, and that unrelated null hard-failed the whole gate (and thus
+    # aborted the phase) even though the one story the caller actually cared
+    # about (e.g. SKY-002-test) was fine. When set, only that one story is
+    # considered "needed" and only that one story is checked for success.
+    --story)      STORY="$2";       shift 2 ;;
     *) echo "Unknown arg: $1" >&2; exit 1 ;;
   esac
 done
@@ -63,8 +75,22 @@ with open('$PRD_FILE') as f:
 phase_ids = d.get('implementationOrder', {}).get('$PHASE', [])
 by_id = {s['id']: s for s in d['stories']}
 results = []
+story_filter = '$STORY'
+
+# The TARGET story (--story) must always be considered "needed" if it
+# structurally qualifies, regardless of implementationOrder timing — a
+# mid-execution split can leave a story transiently absent from
+# implementationOrder[phase] even though it's a real, scheduled story.
+# Root cause this fixes (found live, 2026-07-09): SKY-003-test's inline gate
+# reported "TC writer populated testCriteria" while the story's own
+# testCriteria.facts remained empty, because this exact query silently
+# excluded it and the caller trusted the exit code alone.
+if story_filter and story_filter not in phase_ids:
+    phase_ids = phase_ids + [story_filter]
 
 for sid in phase_ids:
+    if story_filter and sid != story_filter:
+        continue
     s = by_id.get(sid, {})
     # Defensive check (found live, 2026-07-06, tier3-full-run-15): a story
     # that was split delegates its ENTIRE implementation to child stories —
@@ -110,9 +136,19 @@ with open('$PRD_FILE') as f:
 phase_ids = d.get('implementationOrder', {}).get('$PHASE', [])
 by_id = {s['id']: s for s in d['stories']}
 output_dir = '$OUTPUT_DIR'
+story_filter = '$STORY'
+
+# Same fix as the TC_NEEDED query above — the target story must be considered
+# even if implementationOrder[phase] transiently lacks it. Peer-file discovery
+# below still iterates the ORIGINAL implementationOrder-derived list, which is
+# correct and must not change.
+if story_filter and story_filter not in phase_ids:
+    phase_ids = phase_ids + [story_filter]
 
 lines = []
 for sid in phase_ids:
+    if story_filter and sid != story_filter:
+        continue
     s = by_id.get(sid, {})
     files = s.get('technicalNotes', {}).get('files', [])
     is_test_story = any(f.endswith('.test.ts') for f in files)
@@ -244,13 +280,14 @@ set -e
 
 # ── Validate and apply TCs to prd.json ─────────────────────────────────────────
 python3 << PYEOF
-import json, sys, os
+import json, re, sys, os
 from datetime import datetime, timezone
 
 prd_file   = '$PRD_FILE'
 tc_file    = '$TC_OUT_FILE'
 phase      = '$PHASE'
 tc_exit    = $TC_EXIT
+story_filter = '$STORY'
 
 # Check agent exit FIRST — never use a stale tc_file from a previous run when
 # the current agent invocation failed. Using old TCs on failure silently applies
@@ -266,18 +303,72 @@ if not os.path.exists(tc_file):
     print("  [tc-writer] WARNING: Agent succeeded but wrote no TC file — treating as no-op")
     sys.exit(0)
 
+with open(tc_file) as f:
+    tc_raw = f.read()
 try:
-    with open(tc_file) as f:
-        tc_data = json.load(f)
+    tc_data = json.loads(tc_raw)
 except json.JSONDecodeError as e:
-    print(f"  [tc-writer] ERROR: TC file is not valid JSON: {e}", file=sys.stderr)
-    sys.exit(1)
+    # Root cause this repairs (found live, 2026-07-09, tier3-travel-app run):
+    # the TC writer agent is explicitly asked to describe validation regexes
+    # verbatim as "facts" (this PRD is full of date/IATA-code regex ACs) —
+    # e.g. "regex /^\d{4}-\d{2}-\d{2}$/" — and routinely writes the literal
+    # backslash from \d, \s, etc. into the JSON string without escaping it to
+    # \\d. \d is not a valid JSON escape sequence, so json.load hard-fails and
+    # the whole phase aborted even though every OTHER fact in the file was
+    # fine. Since the invalid-escape defect class is narrow and mechanical
+    # (a lone backslash not forming one of JSON's actual escape sequences),
+    # repair it deterministically — escape any such backslash — and retry
+    # once before giving up. A genuinely different JSON syntax error (missing
+    # comma, unterminated string, etc.) will still fail after the repair
+    # attempt, since this only touches backslash sequences.
+    # Built from chr(92) rather than a literal backslash — this whole block
+    # sits inside an UNQUOTED bash heredoc (<< PYEOF, not <<'PYEOF'), which
+    # collapses literal '\\' sequences before Python ever sees them. A
+    # callable repl (not a plain string) sidesteps re.sub's OWN backslash/
+    # backreference processing on the replacement text entirely.
+    #
+    # Root cause of a SECOND live failure (found 2026-07-09, same run):
+    # the original repair matched each backslash independently ("a backslash
+    # not immediately followed by a valid escape char"), which corrupts an
+    # ALREADY-VALID "\\" (escaped-backslash) pair — e.g. a regex fact like
+    # "\\s\\-" is valid JSON (two proper \\  pairs), but the old regex saw
+    # the SECOND backslash of each pair as "a backslash followed by 's'/'-',
+    # neither of which is a valid escape char" and inserted a spurious extra
+    # backslash, silently changing \s (whitespace) into \\s (literal
+    # backslash-s) in the decoded string. Fixed by matching whole runs of
+    # backslashes and only padding a run when its length is ODD (a genuine
+    # dangling backslash) AND the character immediately after the run isn't
+    # a valid escape completion — even-length runs (already-paired) are left
+    # untouched.
+    _bs = chr(92)
+    _valid_escape_chars = (_bs, '"', '/', 'b', 'f', 'n', 'r', 't', 'u')
+
+    def _repair_backslash_run(m):
+        run, nxt = m.group(1), m.group(2)
+        if len(run) % 2 == 1 and nxt not in _valid_escape_chars:
+            run = run + _bs
+        return run + nxt
+
+    _pattern = '(' + (_bs * 2) + '+)(.)'
+    repaired = re.sub(_pattern, _repair_backslash_run, tc_raw)
+    try:
+        tc_data = json.loads(repaired)
+        print(f"  [tc-writer] WARNING: TC file had invalid JSON escape sequence(s) ({e}) — auto-repaired by escaping stray backslashes")
+    except json.JSONDecodeError:
+        print(f"  [tc-writer] ERROR: TC file is not valid JSON (repair attempt also failed): {e}", file=sys.stderr)
+        sys.exit(1)
 
 with open(prd_file) as f:
     prd = json.load(f)
 
 phase_ids_list = prd.get('implementationOrder', {}).get(phase, [])
+# Same fix as the two queries above — gating on whether a story is "in scope
+# to apply a TC to" must always include the target (--story) story, even if
+# implementationOrder[phase] transiently lacks it. peer_ids_for() below still
+# iterates the ORIGINAL phase_ids_list for peer-file discovery, unaffected.
 phase_ids = set(phase_ids_list)
+if story_filter and story_filter not in phase_ids:
+    phase_ids = phase_ids | {story_filter}
 by_id = {s['id']: s for s in prd['stories']}
 applied = []
 skipped = []
@@ -357,17 +448,23 @@ for story in prd['stories']:
     story['testCriteria'] = tc
     applied.append(sid)
 
-with open(prd_file, 'w') as f:
+_tmp_prd_file = prd_file + '.tmp'
+with open(_tmp_prd_file, 'w') as f:
     json.dump(prd, f, indent=2)
+os.replace(_tmp_prd_file, prd_file)
 
 print(f"  [tc-writer] Applied TCs to {len(applied)} stories: {applied}")
 if skipped:
     print(f"  [tc-writer] WARNING: Skipped {skipped}")
 
-# Verify all needed stories got TCs
+# Verify all needed stories got TCs — scoped to just --story when set, so an
+# unrelated test story elsewhere in the phase whose impl hasn't run yet (and
+# therefore correctly got a null/"source not found" TC) doesn't fail THIS
+# story's gate.
 by_id = {s['id']: s for s in prd['stories']}
 still_missing = []
-for sid in phase_ids:
+check_ids = [story_filter] if story_filter else phase_ids
+for sid in check_ids:
     s = by_id.get(sid, {})
     files = s.get('technicalNotes', {}).get('files', [])
     if any(f.endswith('.test.ts') for f in files) and not s.get('testCriteria', {}).get('facts'):

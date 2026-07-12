@@ -147,17 +147,34 @@ _STORY_ACS=$(jq -r --arg id "$STORY_ID" \
 _STORY_DESC=$(jq -r --arg id "$STORY_ID" \
     '.stories[] | select(.id == $id) | .description // ""' \
     "$PRD_FILE" 2>/dev/null)
+# No cap on a story's OWN declared file list — see team-lead-review.sh's
+# sibling comment (2026-07-09 pipeline audit) for why a head -20 cap here
+# silently dropped files from a multi-file story's OWN review scope.
 _STORY_FILES=$(jq -r --arg id "$STORY_ID" \
     '.stories[] | select(.id == $id) | .technicalNotes.files[]? // empty' \
-    "$PRD_FILE" 2>/dev/null | head -20 | tr '\n' ' ')
+    "$PRD_FILE" 2>/dev/null | tr '\n' ' ')
 
-# Collect git diff
+# Collect git diff. Root cause this fixes (2026-07-09 pipeline audit):
+# head -400/-300 caps silently truncated the diff fed to the LLM reviewer
+# with no indication anything was cut. Caps raised substantially; any actual
+# truncation is now an EXPLICIT marker in the reviewer's own input.
 _STORY_DIFF=""
 if [ -d "$PROJECT_ROOT/.git" ]; then
-    _STORY_DIFF=$(git -C "$PROJECT_ROOT" diff HEAD~5 HEAD -- \
-        $(echo "$_STORY_FILES") 2>/dev/null | head -400 || true)
-    [ -z "$_STORY_DIFF" ] && \
-        _STORY_DIFF=$(git -C "$PROJECT_ROOT" diff HEAD~3 HEAD 2>/dev/null | head -300 || true)
+    _diff_full=$(git -C "$PROJECT_ROOT" diff HEAD~5 HEAD -- \
+        $(echo "$_STORY_FILES") 2>/dev/null || true)
+    [ -z "$_diff_full" ] && \
+        _diff_full=$(git -C "$PROJECT_ROOT" diff HEAD~3 HEAD 2>/dev/null || true)
+    if [ -n "$_diff_full" ]; then
+        _diff_total_lines=$(printf '%s\n' "$_diff_full" | wc -l)
+        if [ "$_diff_total_lines" -gt 2000 ]; then
+            _STORY_DIFF=$(printf '%s\n' "$_diff_full" | head -2000)
+            _STORY_DIFF="${_STORY_DIFF}
+
+[TRUNCATED — ${_diff_total_lines} total lines, only the first 2000 shown. Do not assume the omitted tail is defect-free.]"
+        else
+            _STORY_DIFF="$_diff_full"
+        fi
+    fi
 fi
 [ -z "$_STORY_DIFF" ] && _STORY_DIFF="(no diff available)"
 

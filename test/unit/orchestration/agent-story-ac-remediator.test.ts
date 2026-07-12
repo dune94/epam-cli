@@ -38,8 +38,8 @@ describe('story-ac-remediator — input contract', () => {
     expect(agent).toMatch(/gate-finding-analyst|gate finding/i);
   });
 
-  it('expects the PRD file path as input', () => {
-    expect(agent).toMatch(/PRD file/i);
+  it('expects the story\'s existing ACs given inline in the prompt (not a PRD file path — the agent has no file access)', () => {
+    expect(agent).toMatch(/existing acceptanceCriteria/i);
   });
 
   it('expects a story_id to locate the target story', () => {
@@ -91,16 +91,34 @@ describe('story-ac-remediator — AC quality constraints', () => {
 // ── Write-back contract ───────────────────────────────────────────────────────
 
 describe('story-ac-remediator — write-back contract', () => {
-  it('appends to acceptanceCriteria array (does not replace it)', () => {
-    expect(agent).toMatch(/Append.*ACs|append.*acceptanceCriteria/i);
+  // The write-back itself is now the ORCHESTRATOR's job, applied
+  // deterministically from the agent's JSON output — not the agent's own
+  // responsibility (fixed 2026-07-11: the agent narrating "I wrote the PRD"
+  // in its text response is not the same as it having actually called a
+  // write tool; the live PRD was never updated despite the agent claiming
+  // it was). The agent's profile now explicitly says it has no write access.
+  it('the agent profile explicitly disclaims file write access', () => {
+    expect(agent).toMatch(/NO file write access/i);
   });
 
-  it('writes the updated PRD back to disk atomically', () => {
-    expect(agent).toMatch(/Write.*PRD.*back|atomically/i);
+  it('the orch script AC-apply logic appends to acceptanceCriteria (does not replace it)', () => {
+    const applyIdx = orchSrc.indexOf('AC_APPLY_PY');
+    const block = orchSrc.slice(applyIdx, applyIdx + 2200);
+    expect(block).toMatch(/setdefault\('acceptanceCriteria', \[\]\)\.append/);
   });
 
-  it('does not modify any other fields in the story', () => {
-    expect(agent).toMatch(/Do NOT change.*other fields|only.*acceptanceCriteria/i);
+  it('the orch script writes the updated PRD back to disk', () => {
+    const applyIdx = orchSrc.indexOf('AC_APPLY_PY');
+    const block = orchSrc.slice(applyIdx, applyIdx + 2200);
+    expect(block).toMatch(/json\.dump\(prd, f/);
+  });
+
+  it('the orch script AC-apply logic does not modify any other story field', () => {
+    const applyIdx = orchSrc.indexOf('AC_APPLY_PY');
+    const block = orchSrc.slice(applyIdx, applyIdx + 2200);
+    // Only ever mutates s['acceptanceCriteria'] on the matched story — no
+    // other key assignment appears in the apply loop.
+    expect(block).not.toMatch(/s\[['"](?!acceptanceCriteria)\w+['"]\]\s*=/);
   });
 });
 
@@ -146,8 +164,10 @@ describe('story-ac-remediator — orch script wiring', () => {
 
   it('orch script reads acs_added from Agent 2 output to decide if remediation succeeded', () => {
     const a2Idx = orchSrc.indexOf('[story-ac-remediator]');
-    // _acs_added and _remediation_applied appear up to 1700 chars after the label
-    const a2Block = orchSrc.slice(a2Idx, a2Idx + 1800);
+    // Widened window (2026-07-11): the deterministic AC-apply script (a full
+    // Python heredoc that scans for and applies the agent's proposed ACs)
+    // now sits between the agent call and the _remediation_applied check.
+    const a2Block = orchSrc.slice(a2Idx, a2Idx + 4200);
     expect(a2Block).toMatch(/_acs_added/);
     expect(a2Block).toMatch(/_acs_added.*-gt 0|\[ "\${_acs_added:-0}" -gt 0/);
     expect(a2Block).toMatch(/_remediation_applied=1/);

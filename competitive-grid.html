@@ -507,8 +507,8 @@
       <tr class="section-row"><td colspan="7"><div class="section-label">Remaining Gaps</div></td></tr>
 
       <tr>
-        <td>Auto-PR / git commit at story close</td>
-        <td class="epam-cell"><span class="badge badge-no">✗</span><span class="detail">Stories complete to filesystem; no automatic branch + commit + PR</span></td>
+        <td>Auto-commit / auto-PR at story close</td>
+        <td class="epam-cell"><span class="badge badge-partial">partial</span><span class="detail">Every completed story is auto-committed ("story: complete &lt;id&gt; (N file(s))"); no automatic gh pr create</span></td>
         <td class="no">✗</td><td class="no">✗</td><td class="yes">✓</td><td class="no">✗</td><td class="yes">✓</td>
       </tr>
       <tr>
@@ -583,8 +583,8 @@
     <div class="gaps-panel-header">✗ &nbsp; Genuine remaining gaps (3)</div>
     <ul class="gap-list">
       <li>
-        <span class="gap-name">Auto-PR / git commit</span>
-        <span class="gap-desc">Stories complete to the filesystem. There is no automatic <code>git commit</code> + <code>gh pr create</code> at story close. OpenHands and SWE-agent do this natively — it closes the loop to a reviewable PR without manual intervention.</span>
+        <span class="gap-name">Auto-PR (not auto-commit)</span>
+        <span class="gap-desc">Each completed story is auto-committed to its branch. What's missing is the next step: an automatic <code>gh pr create</code> to open a reviewable pull request. OpenHands and SWE-agent do this natively — it closes the loop to a reviewable PR without manual intervention.</span>
       </li>
       <li>
         <span class="gap-name">Multimodal input</span>

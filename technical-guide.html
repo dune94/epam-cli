@@ -89,7 +89,7 @@
   </head>
   <body>
     <main>
-      <p class="updated">Updated July 2, 2026</p>
+      <p class="updated">Updated July 8, 2026</p>
       <h1>EPAM CLI Technical Guide</h1>
       <p>
         Comprehensive reference for the EPAM CLI runtime, agent architecture,
@@ -404,11 +404,21 @@
       <p>
         <code>claude.sh</code>'s retry loop escalates in four rungs (two attempts each, <code>EPAM_MAX_RETRIES</code>
         default 7 → 8 total attempts): Rung 0/1 keep the base model and raise <code>EPAM_REASONING_EFFORT</code> from
-        low → medium; Rung 2 escalates the model itself via <code>EPAM_MODEL_LADDER</code> (a configurable pipe-separated
-        <code>from=to</code> table, e.g. <code>MiniMax-M3=z-ai/glm-5.2</code>); Rung 3 keeps the escalated model at
+        low → medium; Rung 2 escalates the model itself; Rung 3 keeps the escalated model at
         <code>EPAM_REASONING_EFFORT=high</code>. A failed self-heal attempt can skip straight to the next rung instead of
-        burning a second attempt on a healing strategy already known to be broken. <code>EPAM_FINAL_FALLBACK_MODEL</code>
-        guarantees Rung 3 always has an escalated model even if Rung 2's ladder lookup produced nothing.
+        burning a second attempt on a healing strategy already known to be broken.
+      </p>
+      <p>
+        The model-escalation lookup is <strong>tier-aware</strong>: <code>classify_ladder_tier()</code> picks between
+        two configurable, pipe-separated <code>from=to</code> tables — <code>EPAM_MODEL_LADDER_MEDIUM</code> (e.g.
+        <code>MiniMax-M3=z-ai/glm-5.2</code>) for ordinary stories, and <code>EPAM_MODEL_LADDER_HIGH</code> (e.g.
+        <code>MiniMax-M3=z-ai/glm-5.1</code>) for stories the classifier flags as needing a stronger ceiling. Each
+        table is a set of direct current→next mappings rather than one fixed chain — most base models jump straight
+        to their tier's ceiling model in a single hop, plus one bridge entry lets a story already at the medium
+        ceiling escalate one further step to the high ceiling if it's reclassified high-tier mid-run. Setting
+        <code>EPAM_MODEL_LADDER</code> (no suffix) explicitly overrides both tiers to the same table, for projects
+        that don't need tier-based differentiation. <code>EPAM_FINAL_FALLBACK_MODEL</code>/<code>_PROVIDER</code>
+        guarantee Rung 3 always has an escalated model even if the tier's ladder lookup produced nothing.
       </p>
       <h3>3.18 tsc Verification Inside the Retry Loop</h3>
       <p>
@@ -417,6 +427,48 @@
         failure sets the same <code>VERIFICATION_FAILURE</code> channel the failure analyst and retry prompt already
         consume, so a tsc error gets full InferenceLadder treatment (model/effort escalation) before the story is
         marked failed, instead of exiting the phase on the very first compile error with zero retries.
+      </p>
+
+      <h3>3.19 Testing Gates &amp; Self-Healing Remediation</h3>
+      <p>
+        After a phase's stories are implemented, <code>run_testing_gates()</code> in
+        <code>run-agent-orchestration.sh</code> runs a fixed sequence of quality-check agents in three
+        dependency-ordered phases — Phase B only runs if Phase A passed, Phase C only if A and B passed:
+      </p>
+      <ul>
+        <li><strong>Phase A (4.2):</strong> <code>sast-sentinel</code> (security/compilation, driven by
+          pre-injected <code>tsc</code>/<code>npm audit</code> evidence) and <code>spec-validator</code>
+          (classifies each acceptance criterion as met/partial/unmet/untestable).</li>
+        <li><strong>Phase B (4.3):</strong> <code>review-ranger</code> (code review) and
+          <code>mutant-hunter</code> (whether tests would actually catch introduced bugs).</li>
+        <li><strong>Phase C (4.4):</strong> <code>fuzz-weaver</code> (edge-case/vulnerability analysis) and
+          <code>perf-sentinel</code> (algorithmic complexity/perf hotspots).</li>
+        <li><strong>4.6:</strong> browser E2E routing — UI stories are routed to <code>playwright-agent</code>
+          (high-complexity flows) or <code>lightpanda-agent</code> (fast, deterministic checks) by a computed
+          complexity score.</li>
+      </ul>
+      <p>
+        Several gates apply a <strong>grounding check</strong> before treating a "fail" verdict as blocking:
+        <code>fuzz-weaver</code>'s vulnerability claims must include an <code>executableTest</code> that is
+        actually run against the real code (a claim only counts as confirmed if the test genuinely fails);
+        <code>spec-validator</code>'s per-story fail only counts if at least one of that story's criteria has a
+        status other than <code>untestable</code>. Both exist to prevent an ungrounded "the agent said fail with
+        no real evidence" verdict from aborting a phase.
+      </p>
+      <p>
+        On a gate failure, a 3-agent remediation pipeline attempts to fix forward rather than aborting outright:
+        <code>gate-finding-analyst</code> extracts a grounded <code>{story_id, file, rule, ...}</code> finding
+        from the gate log (falling back to a git-history lookup — the file's most recent
+        <code>"story: complete &lt;id&gt;"</code> commit — when the LLM can't ground it to a story itself);
+        <code>story-ac-remediator</code> augments that story's acceptance criteria with a concrete fix
+        requirement; <code>profile-augmentor</code> appends a preventive rule to the relevant agent's profile if
+        the anti-pattern is novel. A successful remediation signals the caller to reset and retry the phase.
+      </p>
+      <p>
+        Each main-branch story attempt also runs inside a <strong>scope guard</strong> (files outside the
+        story's declared scope, and files owned by other stories, are made read-only for the duration of the
+        attempt) and a <strong>vendor guard</strong> (configured vendor directories, e.g. <code>node_modules</code>,
+        are locked read-only during the attempt and separately checked for tampering via mtime).
       </p>
 
       <h2>4. Dashboards & Real-Time Updates</h2>
@@ -510,7 +562,7 @@
         <li>Orchestration: <code>CLAUDE_CMD</code>, <code>EPAM_ORCHESTRATION_PROVIDER</code>, <code>EPAM_DASH_AUTO_SERVE</code>, <code>EPAM_REDIS_URL</code>.</li>
         <li>Specification: <code>EPAM_SPEC_MODE</code> (default 1) toggles the spec pre-pass.</li>
         <li>Brownfield: <code>EPAM_BROWNFIELD_ENABLED</code> (default 1), <code>EPAM_BROWNFIELD_MAX_FILES</code>, <code>EPAM_BROWNFIELD_MAX_TOKENS</code>.</li>
-        <li>Webhooks: <code>JIRA_WEBHOOK_SECRET</code>, <code>JIRA_BASE_URL</code>, <code>JIRA_API_TOKEN</code>, <code>JIRA_USER</code>, <code>CONTROL_PLANE_PORT</code> (default 3001).</li>
+        <li>Webhooks: <code>JIRA_WEBHOOK_SECRET</code>, <code>JIRA_URL</code>, <code>JIRA_EMAIL</code>, <code>JIRA_TOKEN</code>, <code>CONTROL_PLANE_PORT</code> (default 8094).</li>
         <li>MCP: each server entry in <code>.mcp.json</code> accepts <code>"enabled": false</code> to skip at init time.</li>
         <li>Sandbox: <code>EPAM_SANDBOX_IMAGE</code> (default <code>epam-cli-sandbox:latest</code>),
           <code>EPAM_SANDBOX_CPUS</code> (default 2), <code>EPAM_SANDBOX_MEMORY</code> (default 4g).</li>
@@ -574,6 +626,8 @@
         <li><code>orchestrations/scripts/jira-writeback.sh</code> — posts story status and comments back to Jira.</li>
         <li><code>scripts/run-swe-bench.sh</code> — EPAM TypeScript Benchmark harness (5 tasks, scored resolved/partial/failed).</li>
         <li><code>scripts/demo-mode.sh</code> — toggle dashboards between live logs and canned demo snapshot.</li>
+        <li><code>run_testing_gates()</code> in <code>run-agent-orchestration.sh</code> — the Phase A/B/C testing-gate sequence and 3-agent gate-remediation pipeline.</li>
+        <li><code>orchestrations/scripts/kill-tier3-run.sh</code> — stop a project-specific launcher run (and its full process tree) in one command.</li>
       </ul>
       <h3>Dashboards</h3>
       <ul>

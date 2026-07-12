@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orchestration Engine — Onboarding</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #263248;
+    --border: #334155;
+    --ink: #e2e8f0;
+    --muted: #94a3b8;
+    --brand: #38bdf8;
+    --green: #4ade80;
+    --red: #f87171;
+    --amber: #fbbf24;
+    --unique: #a78bfa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.6;
+  }
+  .wrap {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 48px 32px 96px;
+  }
+  h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--brand);
+    letter-spacing: -0.02em;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 1.05rem;
+    margin-top: 0;
+    margin-bottom: 40px;
+  }
+  h2 {
+    font-size: 1.4rem;
+    color: var(--brand);
+    margin-top: 56px;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--border);
+  }
+  h3 {
+    font-size: 1.1rem;
+    color: var(--ink);
+    margin-top: 28px;
+    margin-bottom: 10px;
+  }
+  p { margin: 10px 0; }
+  ul, ol { margin: 10px 0; padding-left: 24px; }
+  li { margin: 6px 0; }
+  code {
+    background: var(--surface2);
+    color: #7dd3fc;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+  }
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+    line-height: 1.55;
+  }
+  .card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 22px;
+    margin: 18px 0;
+    background: var(--surface);
+  }
+  .card h3 { margin-top: 0; }
+  .card-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin: 18px 0;
+  }
+  .card-row .card {
+    flex: 1 1 260px;
+    margin: 0;
+  }
+  .tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(56, 189, 248, 0.12);
+    color: var(--brand);
+    margin-bottom: 8px;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--surface2);
+    color: var(--muted);
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  /* Flow diagram */
+  .flow {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin: 24px 0;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+  .flow-step {
+    flex: 1 1 0;
+    min-width: 150px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 14px;
+    position: relative;
+    margin-right: 28px;
+  }
+  .flow-step:last-child { margin-right: 0; }
+  .flow-step::after {
+    content: "→";
+    position: absolute;
+    right: -26px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    font-size: 1.3rem;
+  }
+  .flow-step:last-child::after { content: ""; }
+  .flow-step .step-num {
+    display: inline-block;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--brand);
+    color: #0f172a;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-align: center;
+    line-height: 22px;
+    margin-bottom: 8px;
+  }
+  .flow-step h4 {
+    margin: 0 0 6px;
+    font-size: 0.95rem;
+    color: var(--ink);
+  }
+  .flow-step p {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+
+  .gate-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin: 16px 0;
+  }
+  .gate-pill {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    background: var(--surface);
+  }
+  .gate-pill .name { font-weight: 600; display: block; margin-bottom: 3px; color: var(--brand); }
+  .gate-pill .desc { color: var(--muted); font-size: 0.8rem; }
+
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 22px;
+  }
+  .toc ul { margin: 6px 0; padding-left: 20px; }
+  .toc a { color: var(--brand); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  footer {
+    margin-top: 64px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>How the Orchestration Engine Works</h1>
+  <p class="subtitle">An onboarding overview for business analysts, delivery managers, and technical staff new to agentic build pipelines.</p>
+
+  <div class="toc">
+    <strong>On this page</strong>
+    <ul>
+      <li><a href="#overview">What this system does</a></li>
+      <li><a href="#three-files">The three required inputs</a></li>
+      <li><a href="#setup">How a new project gets set up</a></li>
+      <li><a href="#flow">The orchestration flow (running a phase)</a></li>
+      <li><a href="#agents">The kinds of agents involved</a></li>
+      <li><a href="#glossary">Glossary</a></li>
+    </ul>
+  </div>
+
+  <h2 id="overview">What this system does</h2>
+  <p>
+    This engine turns a written specification — what needs to be built, and how to know it's done correctly —
+    into working, tested code. It does this by coordinating a series of AI agents, each with a specific job,
+    working through the specification one piece at a time. A human defines <em>what</em> needs to be built and
+    <em>what "done" looks like</em>; the engine coordinates the agents that build it, check it, and confirm it
+    meets the stated criteria before moving on.
+  </p>
+  <p>
+    Work is organized into <strong>phases</strong> (e.g. "scaffold," "core," "ui_and_review"), and each phase is
+    made up of <strong>stories</strong> — individually scoped units of work with their own acceptance criteria.
+    The engine works through one phase at a time, and within a phase, through its stories, in a defined order.
+  </p>
+
+  <h2 id="three-files">The three required inputs</h2>
+  <p>Every orchestration run is driven by three files. All three exist before any agent writes a line of code.</p>
+
+  <div class="card-row">
+    <div class="card">
+      <span class="tag">Required</span>
+      <h3><code>prd.json</code></h3>
+      <p>The master specification. Contains the full list of stories to be built, each with:</p>
+      <ul>
+        <li>A unique ID and title</li>
+        <li>A plain-language description of what to build</li>
+        <li>Acceptance criteria — the specific, checkable conditions that define "done"</li>
+        <li>Which files it's expected to create or modify</li>
+        <li>Which phase it belongs to, and what it depends on</li>
+        <li>Which agent role is responsible for it</li>
+      </ul>
+      <p>It also defines the phase order (<code>implementationOrder</code>) — which stories run in which phase, and in what sequence.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Required</span>
+      <h3><code>profiles.json</code></h3>
+      <p>Defines the agent roles available to the engine. Each entry is a named role paired with the instructions
+      that role follows — its area of responsibility, the conventions it must respect, and (for implementation
+      roles) the technology stack it works in.</p>
+      <p>Profiles fall into two groups:</p>
+      <ul>
+        <li><strong>Fixed roles</strong> — <em>provided by the engine itself</em>, not something a project author
+        writes (for example, the quality-check agents described below). These already exist, unchanged, in every
+        project.</li>
+        <li><strong>Project-specific roles</strong> — generated for each project based on its tech stack (for
+        example, a TypeScript engineer role, or a test-writing role). These are tailored to what the project
+        actually needs.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <span class="tag">Setup-only</span>
+      <h3><code>manifest.md</code></h3>
+      <p><strong>A human-authored input, not something the pipeline generates.</strong> Think of it the way you'd
+      think of a <code>package.json</code> or Python's <code>requirements.txt</code> — a short declarative brief
+      that says what this project is and what it needs, written once by a person before any tooling runs against
+      it. No project ships with one already in place; someone has to write it, the same way no project ships with
+      its dependencies already declared for you.</p>
+      <p>The manifest is <em>not</em> read directly by the orchestration engine while it runs. Its only job is to
+      be the source material the engine reads once, up front, to generate the first draft of <code>prd.json</code>
+      and the project-specific entries in <code>profiles.json</code> for a brand-new project.</p>
+    </div>
+  </div>
+
+  <h2 id="setup">How a new project gets set up</h2>
+  <p>Setting up a new project is a two-step, one-time process, run before any orchestration begins. Two things must exist before generation can run: a scaffolded directory (step 1) and a manifest a human has actually written (step 2) — there is no default or template manifest shipped with the project, the same way there's no default <code>package.json</code> shipped with a new Node project.</p>
+
+  <div class="flow">
+    <div class="flow-step">
+      <span class="step-num">1</span>
+      <h4>Scaffold structure</h4>
+      <p>Creates the project's directory structure — scripts, dashboards, settings. No AI involved at this step.</p>
+    </div>
+    <div class="flow-step">
+      <span class="step-num">2</span>
+      <h4>Write the manifest</h4>
+      <p>A human writes <code>manifest.md</code>: project name, tech stack, requirements, constraints. Nothing generates this for you.</p>
+    </div>
+    <div class="flow-step">
+      <span class="step-num">3</span>
+      <h4>Generate PRD + profiles</h4>
+      <p>An LLM reads the manifest, may ask clarifying questions, and produces <code>prd.json</code> (the story
+      list) and the project-specific entries in <code>profiles.json</code>.</p>
+    </div>
+    <div class="flow-step">
+      <span class="step-num">4</span>
+      <h4>Ready to run</h4>
+      <p>With <code>prd.json</code> and <code>profiles.json</code> in place, the project is ready for the
+      orchestration engine to begin working through its phases.</p>
+    </div>
+  </div>
+
+  <h2 id="flow">The orchestration flow (running a phase)</h2>
+  <p>
+    Once a project has its <code>prd.json</code> and <code>profiles.json</code>, the engine works through the
+    phases defined in the PRD one at a time. For each phase, the same sequence runs:
+  </p>
+
+  <div class="flow">
+    <div class="flow-step">
+      <span class="step-num">1</span>
+      <h4>Specification pass</h4>
+      <p>The stories assigned to this phase are reviewed and elaborated — acceptance criteria are refined, and
+      a story may be split into smaller pieces if it covers too much ground for one unit of work.</p>
+    </div>
+    <div class="flow-step">
+      <span class="step-num">2</span>
+      <h4>Story implementation</h4>
+      <p>Stories are handed to the appropriate agent role in order. Each agent writes the code needed to satisfy
+      its story's acceptance criteria.</p>
+    </div>
+    <div class="flow-step">
+      <span class="step-num">3</span>
+      <h4>Testing gates</h4>
+      <p>A set of automated quality-check agents review the phase's output — correctness, security, test
+      coverage, and performance are each checked independently.</p>
+    </div>
+    <div class="flow-step">
+      <span class="step-num">4</span>
+      <h4>Phase complete</h4>
+      <p>Once the phase's stories are implemented and its gates pass, the engine moves on to the next phase in
+      the PRD's defined order.</p>
+    </div>
+  </div>
+
+  <p>
+    Every story goes through an external verification step after the agent writes it — its own tests are run, and
+    a type/compile check is performed, before the story is considered complete. If a story's own verification
+    doesn't pass, the engine retries it before moving on.
+  </p>
+
+  <h2 id="agents">The kinds of agents involved</h2>
+  <p>Agents in this system fall into three broad categories:</p>
+
+  <h3>Implementation agents</h3>
+  <p>
+    These are project-specific (defined per project in <code>profiles.json</code>, based on its tech stack).
+    They write the actual code, and the tests for that code, against a story's acceptance criteria. A typical
+    project has at least one engineering role (writes implementation code) and one testing role (writes test
+    files only).
+  </p>
+
+  <h3>Testing-gate agents</h3>
+  <p>These are fixed, built-in roles that run automatically after a phase's stories are implemented. Each one checks a different dimension of quality:</p>
+  <div class="gate-grid">
+    <div class="gate-pill"><span class="name">sast-sentinel</span><span class="desc">Security and compilation issues</span></div>
+    <div class="gate-pill"><span class="name">spec-validator</span><span class="desc">Whether each acceptance criterion is actually met</span></div>
+    <div class="gate-pill"><span class="name">review-ranger</span><span class="desc">Code review — quality and maintainability</span></div>
+    <div class="gate-pill"><span class="name">mutant-hunter</span><span class="desc">Whether tests actually catch real bugs</span></div>
+    <div class="gate-pill"><span class="name">fuzz-weaver</span><span class="desc">Edge cases and unexpected inputs</span></div>
+    <div class="gate-pill"><span class="name">perf-sentinel</span><span class="desc">Performance issues in changed code</span></div>
+  </div>
+
+  <h3>Coordination agents</h3>
+  <p>
+    These fixed roles support the process itself rather than writing product code — for example, the
+    specification-pass agents that elaborate and split stories, and an assessment agent that checks whether
+    the right agent roles are assigned to the right stories before a phase begins.
+  </p>
+
+  <h2 id="glossary">Glossary</h2>
+  <table>
+    <tr><th>Term</th><th>Meaning</th></tr>
+    <tr><td>PRD</td><td>Product Requirements Document — the <code>prd.json</code> file; the master specification of what to build.</td></tr>
+    <tr><td>Story</td><td>A single, scoped unit of work within the PRD, with its own acceptance criteria.</td></tr>
+    <tr><td>Acceptance criteria</td><td>The specific, checkable conditions a story must satisfy to be considered complete.</td></tr>
+    <tr><td>Phase</td><td>A named group of stories that run together, in a defined order relative to other phases.</td></tr>
+    <tr><td>Agent role</td><td>A named responsibility (e.g. "typescript-engineer," "sast-sentinel") defined in <code>profiles.json</code>, with its own instructions.</td></tr>
+    <tr><td>Manifest</td><td>The free-form <code>manifest.md</code> brief a human writes once, at project setup, to generate the initial PRD and profiles.</td></tr>
+    <tr><td>Testing gate</td><td>An automated quality check that runs after a phase's stories are implemented.</td></tr>
+  </table>
+
+  <footer>
+    Onboarding overview — orchestration engine. Describes the standard, expected flow of the system as designed.
+  </footer>
+
+</div>
+</body>
+</html>

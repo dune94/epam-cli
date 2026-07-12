@@ -44,31 +44,25 @@ describe('profile-augmentor — input contract', () => {
   });
 });
 
-// ── Gate-to-profile routing table ────────────────────────────────────────────
+// ── Target profile selection ──────────────────────────────────────────────────
+// Root cause this section fixes (found live, 2026-07-09): a static
+// "gate name -> profile" table (e.g. "sast-sentinel finding -> typescript-
+// engineer profile") assumed every finding was written by a
+// typescript-engineer-roled story. For any other role, the wrong profile got
+// updated — the agent who'll actually rewrite the offending code never sees
+// the new rule. The offending story's REAL agentRole (already resolved by
+// gate-finding-analyst and passed into this prompt as context) is now the
+// only thing that selects the target profile.
 
-describe('profile-augmentor — gate-to-profile routing', () => {
-  it('routes sast-sentinel findings to typescript-engineer profile', () => {
-    expect(agent).toMatch(/sast-sentinel.*typescript-engineer/i);
+describe('profile-augmentor — target profile selection', () => {
+  it('targets the story\'s own agentRole, not a static gate-name table', () => {
+    expect(agent).toMatch(/story's OWN agentRole/i);
+    expect(agent).toMatch(/Do NOT guess a profile from\s*\n?\s*the gate name/i);
   });
 
-  it('routes spec-validator findings to openspec-agent profile', () => {
-    expect(agent).toMatch(/spec-validator.*openspec-agent/i);
-  });
-
-  it('routes review-ranger findings to typescript-engineer profile', () => {
-    expect(agent).toMatch(/review-ranger.*typescript-engineer/i);
-  });
-
-  it('routes mutant-hunter findings to test-engineer profile', () => {
-    expect(agent).toMatch(/mutant-hunter.*test-engineer/i);
-  });
-
-  it('routes fuzz-weaver findings to typescript-engineer profile', () => {
-    expect(agent).toMatch(/fuzz-weaver.*typescript-engineer/i);
-  });
-
-  it('routes perf-sentinel findings to typescript-engineer profile', () => {
-    expect(agent).toMatch(/perf-sentinel.*typescript-engineer/i);
+  it('no longer hardcodes a gate-name -> profile mapping', () => {
+    expect(agent).not.toMatch(/sast-sentinel finding.*typescript-engineer profile/i);
+    expect(agent).not.toMatch(/spec-validator finding.*openspec-agent profile/i);
   });
 });
 

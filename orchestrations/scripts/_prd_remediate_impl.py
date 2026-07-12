@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """PRD remediation logic. Called by prd-remediate.sh."""
 import json
+import os
 import re
 import sys
 
@@ -151,9 +152,131 @@ for s in stories:
 if reset_count:
     changes.append(f"reset {reset_count} active stories to pending")
 
-# ── Write back ────────────────────────────────────────────────────────────────
-with open(PRD_FILE, 'w') as f:
+# ── 7. Deterministic gate: no pending story may be orphaned from every
+#      implementationOrder phase ─────────────────────────────────────────────
+# Root cause this catches (found live, 2026-07-08/09, tier3-travel-app run):
+# Step 0.9's prd-model-coordinator has tool write access and processes ALL
+# pending stories PRD-wide (not scoped to the phase currently running); its
+# own reviewer gate only diffs the LAST 1000 CHARACTERS of before/after PRD
+# content (run-agent-orchestration.sh, "${_mc_prd_before: -1000}") — for any
+# real multi-KB PRD, that reviewer is structurally blind to a rewrite
+# corrupting a story earlier in stories[]. That corruption silently stripped
+# technicalNotes.files from SKY-002/003/004 during the scaffold phase; step 2
+# above then (correctly, per its own logic, but disastrously here) dropped
+# those now-fileless stories from implementationOrder.core, and the core
+# phase silently ran as a no-op ("phase core has no stories; skipping") with
+# ZERO error — the failure was completely invisible until manually inspected.
+#
+# This check is intentionally NOT gated behind the is_canonical fast path in
+# prd-remediate.sh (it runs before that decision is even made) — the exact
+# scenario above looked "canonical" from core's own perspective (no splits of
+# ITS OWN stories yet), even though the orphaning had already happened.
+orphaned_pending = []
+all_active_ids = set(sid for ids in impl_order.values() for sid in ids)
+for s in stories:
+    if s.get('status') == 'pending' and not s.get('completed') and s['id'] not in all_active_ids:
+        orphaned_pending.append(s['id'])
+if orphaned_pending:
+    print(
+        f"  FATAL: {len(orphaned_pending)} pending stor(y/ies) are not in ANY "
+        f"implementationOrder phase — a phase would silently run as a no-op: "
+        f"{orphaned_pending}",
+        file=sys.stderr,
+    )
+    print(
+        "  This usually means a prior write (e.g. Step 0.9 prd-model-coordinator) "
+        "corrupted technicalNotes.files on these stories. Restore from the "
+        "canonical PRD or manually re-add these IDs to implementationOrder.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+# ── 8. Backfill split-sibling dependencies (backward-compat repair) ──────────
+# Root cause this repairs (found live, 2026-07-09, tier3-travel-app run): a
+# split child's `dependencies` array comes straight from the LLM's own split
+# proposal — nothing deterministically cross-referenced a test-only sibling
+# to its impl sibling from the SAME split, so claude.sh's deterministic
+# dependency-contract injection (which grounds a story in its dependency's
+# REAL exported signatures) never fired for these pairs. This is now fixed at
+# split-creation time in spec-mode-runner.js (wireSplitSiblingDependencies),
+# but PRDs split BEFORE that fix shipped (e.g. the live SKY-003-test/
+# SKY-004-test case) still have empty `dependencies` — this step retroactively
+# repairs those using the identical basename-matching algorithm, so a fresh
+# spec-pass is not required to pick up the fix. No-ops cleanly (like the JS
+# version) if the project has no .epam/contract-generation.json, or if that
+# config lacks the (already-standard) testFilePattern/sourceExtensions keys —
+# same stack-agnostic, config-driven convention as every other consumer of
+# that file.
+import os
+
+output_dir = prd.get('project', {}).get('outputDir')
+backfilled = []
+if output_dir:
+    config_path = os.path.join(output_dir, '.epam', 'contract-generation.json')
+    cfg = None
+    try:
+        with open(config_path) as f:
+            cfg = json.load(f)
+    except OSError:
+        cfg = None
+    except json.JSONDecodeError:
+        cfg = None
+
+    test_file_pattern = (cfg or {}).get('testFilePattern')
+    source_extensions = (cfg or {}).get('sourceExtensions')
+    if test_file_pattern and isinstance(source_extensions, list) and source_extensions:
+        test_re = re.compile(test_file_pattern)
+        exts = sorted(source_extensions, key=len, reverse=True)
+
+        def stem_of(file_path, is_test):
+            base = file_path.rsplit('/', 1)[-1]
+            if is_test:
+                return test_re.sub('', base)
+            for ext in exts:
+                if base.endswith(ext):
+                    return base[: -len(ext)]
+            return base
+
+        by_parent = {}
+        for s in stories:
+            parent = s.get('specification', {}).get('createdFrom')
+            if parent:
+                by_parent.setdefault(parent, []).append(s)
+
+        for parent_id, siblings in by_parent.items():
+            if len(siblings) < 2:
+                continue
+            for test_sibling in siblings:
+                files = test_sibling.get('technicalNotes', {}).get('files', [])
+                if not files or not all(test_re.search(f) for f in files):
+                    continue
+                if test_sibling.get('dependencies'):
+                    continue  # already wired (by the live fix or a prior backfill)
+                test_stems = {stem_of(f, True) for f in files}
+                deps = set()
+                for impl_sibling in siblings:
+                    if impl_sibling is test_sibling:
+                        continue
+                    impl_files = impl_sibling.get('technicalNotes', {}).get('files', [])
+                    if not impl_files or any(test_re.search(f) for f in impl_files):
+                        continue
+                    impl_stems = {stem_of(f, False) for f in impl_files}
+                    if test_stems & impl_stems:
+                        deps.add(impl_sibling['id'])
+                if deps:
+                    test_sibling['dependencies'] = sorted(deps)
+                    backfilled.append(f"{test_sibling['id']} -> {sorted(deps)}")
+if backfilled:
+    changes.append(f"backfilled {len(backfilled)} split-sibling dependency link(s): {backfilled}")
+
+# ── Write back (atomic: write to a temp file then rename, so a kill mid-write
+# never leaves the PRD truncated/corrupted — the real cause behind at least
+# one live "Bad control character in string literal" PRD corruption incident,
+# 2026-07-11) ────────────────────────────────────────────────────────────────
+_tmp_prd_file = PRD_FILE + '.tmp'
+with open(_tmp_prd_file, 'w') as f:
     json.dump(prd, f, indent=2)
+os.replace(_tmp_prd_file, PRD_FILE)
 
 if changes:
     for c in changes:

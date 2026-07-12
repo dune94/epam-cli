@@ -67,6 +67,7 @@ with open(${JSON.stringify(prdPath)}) as f:
     d = json.load(f)
 phase_ids = d.get('implementationOrder', {}).get(${JSON.stringify(phase)}, [])
 by_id = {s['id']: s for s in d['stories']}
+story_filter = ''
 ${bodySnippet}
 `;
     try {

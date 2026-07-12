@@ -66,6 +66,7 @@ function runRetryScenario(fakeAiRun: string, candidate: string, maxRetries = 3):
     writeFileSync(aiRunPath, fakeAiRun);
     chmodSync(aiRunPath, 0o755);
 
+    const formatCheckBody = extractFunctionBody('_skill_note_format_ok');
     const reviewerBody = extractFunctionBody('run_prd_change_reviewer');
     const summarizerBody = extractFunctionBody('run_prd_change_summarizer');
     const retryBody = extractFunctionBody('run_change_with_reviewer_retry');
@@ -78,6 +79,7 @@ ORCH_GATE_MODEL="fake-model"
 profiles_file=""
 warning() { :; }
 log() { :; }
+${formatCheckBody}
 ${reviewerBody}
 ${summarizerBody}
 ${retryBody}

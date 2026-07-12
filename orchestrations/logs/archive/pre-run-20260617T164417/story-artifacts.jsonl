@@ -1,0 +1,3 @@
+{"storyId":"SKY-001","phase":"scaffold","status":"failed","elapsedMinutes":3.18,"costUsd":0.0072,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-06-12T15:02:33Z"}
+{"storyId":"SKY-002","phase":"core","status":"failed","elapsedMinutes":2.53,"costUsd":0.0044,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-06-12T15:08:30Z"}
+{"storyId":"SKY-005","phase":"ui_and_review","status":"failed","elapsedMinutes":3.63,"costUsd":0.0068,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-06-12T15:12:46Z"}

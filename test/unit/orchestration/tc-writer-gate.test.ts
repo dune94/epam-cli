@@ -395,6 +395,44 @@ describe('TC gate — orchestration script wiring', () => {
     expect(before).toMatch(/has moved — see after Step 3\.2 below/);
     expect(before).not.toMatch(/post-impl-tc-writer\.sh/);
   });
+
+  // Root cause of a live-run defect (2026-07-08): the post-Step-3.2 placement
+  // above only runs ONCE, after the entire Step 1 main-branch loop (impl AND
+  // test stories, interleaved in implementationOrder) has already finished.
+  // For main-branch topology, a test story like SKY-002-test started
+  // implementing while testCriteria was still null, because nothing in the
+  // Step 1 loop itself ever checked for or generated TCs before running it —
+  // the gate only fired afterward, too late to have grounded that story.
+  it('Step 1 loop contains an inline TC writer check, before run_story_with_watchdog', () => {
+    const src = readFileSync(ORCH_SCRIPT, 'utf8');
+    const loopStart = src.indexOf('while IFS= read -r story; do');
+    const loopBody = src.slice(loopStart, src.indexOf('done <<< "$non_review_main"', loopStart));
+    expect(loopBody).toContain('post-impl-tc-writer.sh');
+    const tcIdx = loopBody.indexOf('post-impl-tc-writer.sh');
+    const runIdx = loopBody.indexOf('run_story_with_watchdog');
+    expect(tcIdx).toBeGreaterThan(-1);
+    expect(runIdx).toBeGreaterThan(tcIdx);
+  });
+
+  it('the inline TC writer check only fires for a story that itself needs TCs (test file owner, empty facts)', () => {
+    const src = readFileSync(ORCH_SCRIPT, 'utf8');
+    const loopStart = src.indexOf('while IFS= read -r story; do');
+    const loopBody = src.slice(loopStart, src.indexOf('done <<< "$non_review_main"', loopStart));
+    expect(loopBody).toContain('_needs_tc');
+    expect(loopBody).toMatch(/endswith\(".test.ts"\)/);
+    expect(loopBody).toMatch(/testCriteria\.facts/);
+    expect(loopBody).toMatch(/if \[ -n "\$_needs_tc" \]/);
+  });
+
+  it('the inline TC writer check aborts the phase on failure (same semantics as the post-Step-3.2 gate)', () => {
+    const src = readFileSync(ORCH_SCRIPT, 'utf8');
+    const loopStart = src.indexOf('while IFS= read -r story; do');
+    const loopBody = src.slice(loopStart, src.indexOf('done <<< "$non_review_main"', loopStart));
+    const tcIdx = loopBody.indexOf('post-impl-tc-writer.sh');
+    const block = loopBody.slice(tcIdx, tcIdx + 1400);
+    expect(block).toMatch(/exit 1/);
+    expect(block).toMatch(/SKIP_TC_WRITER=1/);
+  });
 });
 
 // ─── 7a. build_implementation_prompt injects testCriteria ────────────────────

@@ -55,17 +55,38 @@ export type StreamDelta =
 
 export type StreamHandler = (delta: StreamDelta) => void;
 
+/** Glob-to-regex helper, same pattern as spec-mode-runner.js's resolveModelProvider
+ *  and claude.sh's resolve_model_provider() — config-driven, no hardcoded vendor
+ *  names in the matching logic itself. */
+function globToRegExp(glob: string): RegExp {
+  return new RegExp('^' + glob.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
+}
+
 /**
  * Resolves the effective temperature for a request: explicit request.temperature
- * takes priority, then EPAM_TEMPERATURE (set per-story by the orchestration
- * layer — e.g. to 0 for a narrow, scoped fix where token-selection variance is
- * undesirable), then the provider's own default. Mirrors the same
- * request-field-then-env-var-then-default pattern already used for
- * reasoningEffort (see QwenProvider/MiniMaxProvider's resolveReasoningEffort),
- * so both knobs are wired consistently.
+ * takes priority, then EPAM_TEMPERATURE (set per-story or project-wide by the
+ * orchestration layer — e.g. 0 for reduced token-selection variance), then the
+ * provider's own default. Mirrors the same request-field-then-env-var-then-default
+ * pattern already used for reasoningEffort (see QwenProvider/MiniMaxProvider's
+ * resolveReasoningEffort), so both knobs are wired consistently.
+ *
+ * EPAM_TEMPERATURE_MODEL_PATTERN (optional, pipe-separated globs, e.g.
+ * "z-ai/glm-*|zhipuai/glm-*") scopes EPAM_TEMPERATURE to only the models it
+ * matches — added 2026-07-07 per explicit direction to pin temperature for GLM
+ * models specifically, not project-wide across every model in the ladder.
+ * Unset (default): EPAM_TEMPERATURE applies to all models, preserving prior
+ * behavior. When set and request.model doesn't match any pattern, EPAM_TEMPERATURE
+ * is ignored and the provider default is used instead.
  */
 export function resolveTemperature(request: ProviderRequest, defaultTemperature: number): number {
   if (typeof request.temperature === 'number') return request.temperature;
+
+  const pattern = process.env.EPAM_TEMPERATURE_MODEL_PATTERN;
+  if (pattern && request.model) {
+    const matches = pattern.split('|').some((glob) => globToRegExp(glob).test(request.model as string));
+    if (!matches) return defaultTemperature;
+  }
+
   const envValue = process.env.EPAM_TEMPERATURE;
   if (envValue !== undefined && envValue !== '') {
     const parsed = parseFloat(envValue);

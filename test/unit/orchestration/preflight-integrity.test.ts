@@ -367,21 +367,25 @@ describe('preflight-check.sh / prd-remediate.sh — canonical bypass catches sta
   const CANONICAL_SHAPED = {
     project: { outputDir: '/tmp/preflight-canonical-fixture-app' },
     stories: [
-      { id: 'SKY-001', status: 'pending', completed: false, effort: 'medium', aiProvider: 'qwen', model: 'moonshotai/kimi-k2', acceptanceCriteria: ['a'], technicalNotes: { files: [] } },
+      { id: 'SKY-001', status: 'pending', completed: false, effort: 'medium', aiProvider: 'qwen', model: 'moonshotai/kimi-k2', acceptanceCriteria: ['a'], technicalNotes: { files: ['src/index.ts'] } },
     ],
-    implementationOrder: { scaffold: [], core: [], ui_and_review: [] },
+    // scaffold lists SKY-001 with a non-empty technicalNotes.files (matching
+    // how a real canonical PRD looks even pre-spec-pass — see
+    // travel-app-prd.canonical.json's own implementationOrder/technicalNotes)
+    // so neither step 2's no-files removal nor the orphaned-pending-story
+    // gate added 2026-07-09 fire and mask what this describe block actually
+    // tests (the specification-block check below).
+    implementationOrder: { scaffold: ['SKY-001'], core: [], ui_and_review: [] },
   };
 
-  function runPrdRemediate(prd: any): { code: number; stdout: string } {
+  function runPrdRemediate(prd: any, phase?: string): { code: number; stdout: string } {
     const dir = mkdtempSync(join(tmpdir(), 'prd-remediate-fixture-'));
     const prdPath = join(dir, 'prd.json');
     writeFileSync(prdPath, JSON.stringify(prd));
     try {
-      const stdout = execFileSync(
-        'bash',
-        [join(__dirname, '../../../orchestrations/scripts/prd-remediate.sh'), '--prd', prdPath],
-        { encoding: 'utf8' }
-      );
+      const args = [join(__dirname, '../../../orchestrations/scripts/prd-remediate.sh'), '--prd', prdPath];
+      if (phase) args.push('--phase', phase);
+      const stdout = execFileSync('bash', args, { encoding: 'utf8' });
       return { code: 0, stdout };
     } catch (e: any) {
       return { code: e.status ?? 1, stdout: (e.stdout ?? '').toString() + (e.stderr ?? '').toString() };
@@ -403,7 +407,11 @@ describe('preflight-check.sh / prd-remediate.sh — canonical bypass catches sta
     prd.stories[0].status = 'completed';
     prd.stories[0].completed = true;
     (prd.stories[0] as any).specification = { status: 'completed', appliedAgents: ['openspec', 'speckit'] };
-    const result = runPrdRemediate(prd);
+    // Scope to a phase that does NOT contain SKY-001 (it lives in 'scaffold')
+    // so step 6's reset-to-pending doesn't touch it — this test is about the
+    // specification-block check honoring an already-completed story, not
+    // about step 6's own (correct, separate) reset behavior.
+    const result = runPrdRemediate(prd, 'ui_and_review');
     expect(result.code).toBe(0);
     expect(result.stdout).not.toMatch(/pre-baked 'specification' blocks/);
   });

@@ -32,11 +32,13 @@ fail()    { echo -e "${RED}[prd-remediate] ✗${NC} $*" >&2; exit 1; }
 
 PRD_FILE=""
 PHASE=""
+MID_PHASE_RETRY=0
 while [[ $# -gt 0 ]]; do
   case $1 in
     --prd) PRD_FILE="$2"; shift 2 ;;
     --phase) PHASE="$2"; shift 2 ;;
-    *)     fail "Unknown argument: $1. Usage: --prd <path> [--phase <phase>]" ;;
+    --mid-phase-retry) MID_PHASE_RETRY=1; shift ;;
+    *)     fail "Unknown argument: $1. Usage: --prd <path> [--phase <phase>] [--mid-phase-retry]" ;;
   esac
 done
 
@@ -83,13 +85,41 @@ if [ "$_is_canonical" = "true" ]; then
     # legitimately carries its own real specification data from this run's
     # own spec pass — only PENDING stories carrying specification data are
     # a sign of prior-run contamination baked into canonical.
+    #
+    # --mid-phase-retry (found live, 2026-07-11, tier3-travel-app run):
+    # tier3-travel-app-run.sh's gate-remediation self-heal branch calls THIS
+    # script a second time, mid-phase, after Step 0 (spec-pass) has already
+    # run for real this invocation — but the step-6 status reset just above
+    # (_prd_remediate_impl.py) always sets completed=false on active
+    # stories first, so the "not completed" half of the stale-spec signal is
+    # meaningless here: a story that was never split (e.g. a single combo
+    # story with no impl/test children) legitimately carries THIS run's own
+    # specification block, looks "not completed" (just reset), and has no
+    # createdFrom (never split) — indistinguishable from genuine prior-run
+    # contamination by the two signals above. The caller already knows
+    # unambiguously that spec-pass ran this invocation, so skip this
+    # specific check when it says so.
+    if [ "$MID_PHASE_RETRY" = "1" ]; then
+        info "  (--mid-phase-retry: skipping stale-spec check — spec-pass already ran this invocation)"
+    else
+    # Excludes deprecated stories (found live, 2026-07-11, tier3-travel-app
+    # relaunch): a cross-stage split collision (openspec + speckit both
+    # splitting the same parent, see the parent-vanishing fix) leaves its
+    # rejected children archived in stories[] with status=deprecated,
+    # completed=false, and their own leftover 'specification' block from the
+    # rejected split attempt — they're permanently out of implementationOrder
+    # and will never run again, so they aren't 'stale contamination' at all,
+    # just dead archive rows. Only a PENDING, non-deprecated story carrying a
+    # pre-baked specification block is a genuine sign of prior-run
+    # contamination baked into canonical.
     _stale_spec=$(python3 -c "
 import json
 d = json.load(open('$PRD_FILE'))
-print(','.join(s['id'] for s in d.get('stories', []) if s.get('specification') and not s.get('completed')))
+print(','.join(s['id'] for s in d.get('stories', []) if s.get('specification') and not s.get('completed') and s.get('status') != 'deprecated'))
 " 2>/dev/null || echo "")
     if [ -n "$_stale_spec" ]; then
         fail "Canonical PRD has pre-baked 'specification' blocks on base stories (must be lean/unelaborated): $_stale_spec"
+    fi
     fi
     _count=$(python3 -c "import json; print(len(json.load(open('$PRD_FILE'))['stories']))" 2>/dev/null || echo "?")
     success "PRD is canonical (pre-spec-pass, $_count base user stories) — strict checks skipped until spec pass elaborates"

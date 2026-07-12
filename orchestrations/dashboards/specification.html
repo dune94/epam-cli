@@ -11,14 +11,14 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #fbfafa; --bg1: #ffffff; --bg2: #f4f4f4; --bg3: #eaeaea;
-  --surface: #ffffff; --border: #e0e0e0; --border2: #cccccc;
-  --text: #060606; --text2: #4a4a4a; --text3: #717171;
-  --teal: #0047ff; --teal2: #0047ff; --teal-dim: rgba(0,71,255,0.08);
-  --violet: #8453d2; --violet-dim: rgba(132,83,210,0.10);
-  --green: #1a8f3f; --green-dim: rgba(26,143,63,0.10);
-  --amber: #c87a00; --amber-dim: rgba(200,122,0,0.10);
-  --red: #d93025; --red-dim: rgba(217,48,37,0.08);
+  --bg: #0f172a; --bg1: #1e293b; --bg2: #263248; --bg3: #334155;
+  --surface: #1e293b; --border: #334155; --border2: #475569;
+  --text: #e2e8f0; --text2: #94a3b8; --text3: #64748b;
+  --teal: #38bdf8; --teal2: #38bdf8; --teal-dim: rgba(56,189,248,0.10);
+  --violet: #a78bfa; --violet-dim: rgba(167,139,250,0.12);
+  --green: #4ade80; --green-dim: rgba(74,222,128,0.12);
+  --amber: #fbbf24; --amber-dim: rgba(251,191,36,0.12);
+  --red: #f87171; --red-dim: rgba(248,113,113,0.10);
   --epam-gradient: linear-gradient(118.82deg, #0078c2 .5%, #0047ff 47.33%, #8453d2 76.12%);
 }
 
@@ -45,10 +45,9 @@ body {
 .header-title { font-size: 19px; font-weight: 800; color: #fff; letter-spacing: -0.3px; }
 .header-sub { color: rgba(255,255,255,0.7); font-size: 11px; margin-top: 1px; letter-spacing: 0.3px; }
 .header-meta { text-align: right; color: rgba(255,255,255,0.7); font-size: 11px; line-height: 1.8; }
-.nav-links { font-size: 11px; display: flex; gap: 10px; flex-wrap: wrap; }
-.nav-links a { color: #fff; text-decoration: none; opacity: .7; transition: opacity .15s; }
-.nav-links a:hover { opacity: 1; }
-.nav-links a.active { border-bottom: 2px solid #fff; padding-bottom: 2px; }
+.nav-links { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 18px; }
+.nav-links a { color: var(--text3); text-decoration: none; font-size: 12px; font-weight: 700; padding: 8px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); }
+.nav-links a.active { color: #fff; background: var(--teal); border-color: var(--teal); }
 
 /* ── Stats bar ── */
 .stats-bar {
@@ -228,7 +227,15 @@ body {
     <div>
       <div class="header-title">Specification Diff</div>
       <div class="header-sub">PRD Baseline vs Current — /remote Feature</div>
-      <div class="nav-links">
+    </div>
+  </div>
+  <div class="header-meta">
+    <div id="load-time"></div>
+    <div><span class="api-status api-wait" id="api-status">LOADING</span></div>
+  </div>
+</div>
+
+      <nav class="nav-links">
         <a href="monitor.html">Monitor</a>
         <a href="prd-viewer.html">PRD Viewer</a>
         <a href="specification.html" class="active">Spec Diff</a>
@@ -239,19 +246,14 @@ body {
         <a href="agent-messages.html">Messages</a>
         <a href="phase-cost-monitor.html">Costs</a>
         <a href="quality-assurance.html">QA Gates</a>
+<a href="quality-dashboard.html">Quality</a>
         <a href="agent-activity.html">Activity</a>
         <a href="cpa-details.html">Estimation</a>
       <a href="scorecard.html">Scorecard</a>
       <a href="swe-bench.html">SWE-bench</a>
+<a href="health.html">Health</a>
         <a href="epam-cli-guide.html">CLI Guide</a>
-      </div>
-    </div>
-  </div>
-  <div class="header-meta">
-    <div id="load-time"></div>
-    <div><span class="api-status api-wait" id="api-status">LOADING</span></div>
-  </div>
-</div>
+      </nav>
 
 <div class="stats-bar" id="stats-bar">
   <div style="color:var(--text3);font-size:12px"><span class="spinner"></span>Loading...</div>

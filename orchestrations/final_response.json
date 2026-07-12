@@ -1,0 +1,8 @@
+{
+  "story_id": "SKY-001",
+  "acs_added": 2,
+  "acs": [
+    "tsconfig.json must not contain the invalid compiler option 'allowEmptyInputs' - verify with: grep -q 'allowEmptyInputs' /home/bradleyjerome/projects/skyscanner-app/tsconfig.json && echo \"FAIL: Invalid option found\" || echo \"PASS: No invalid option found\"",
+    "tsconfig.json must not contain any unknown TypeScript compiler options as per rule typescript-compiler-error - verify with: node -e \"const fs = require('fs'); const config = JSON.parse(fs.readFileSync('/home/bradleyjerome/projects/skyscanner-app/tsconfig.json', 'utf8')); const validOptions = ['target', 'module', 'moduleResolution', 'lib', 'outDir', 'rootDir', 'strict', 'esModuleInterop', 'skipLibCheck', 'forceConsistentCasingInFileNames', 'resolveJsonModule', 'declaration', 'sourceMap', 'noEmit', 'allowSyntheticDefaultImports', 'allowUnreachableCode', 'allowUnusedLabels', 'alwaysStrict', 'downlevelIteration', 'exactOptionalPropertyTypes', 'noFallthroughCasesInSwitch', 'noImplicitAny', 'noImplicitReturns', 'noImplicitThis', 'noImplicitUseStrict', 'noPropertyAccessFromIndexSignature', 'noUncheckedIndexedAccess', 'noUnusedLocals', 'noUnusedParameters', 'preserveConstEnums', 'preserveSymlinks', 'removeComments', 'skipLibCheck', 'strictBindCallApply', 'strictFunctionTypes', 'strictNullChecks', 'strictPropertyInitialization', 'suppressExcessPropertyErrors', 'suppressImplicitAnyIndexErrors', 'useDefineForClassFields', 'useUnknownInCatchVariables']; const invalid = Object.keys(config.compilerOptions || {}).filter(opt => !validOptions.includes(opt)); if (invalid.length > 0) { console.log('FAIL: Invalid options found:', invalid); process.exit(1); } else { console.log('PASS: All options valid'); }\""
+  ]
+}

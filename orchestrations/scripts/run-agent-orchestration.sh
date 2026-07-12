@@ -253,6 +253,8 @@ print_step_checklist() {
     _checklist_row "1"    "Main-branch stories"      "ACTIVE"
     _checklist_row "1.5"  "Auto-commit"              "COND"  "if uncommitted changes"
     _checklist_row "1.6"  "TC writer gate"           "$([ "${SKIP_TC_WRITER:-0}" = "1" ] && echo SKIP || echo COND)" "SKIP_TC_WRITER=1 or no test stories"
+    _checklist_row "1.65" "Skills coordinator audit" "$([ "${SKIP_SKILLS_AUDIT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "SKIP_SKILLS_AUDIT=1"
+    _checklist_row "1.66" "Tools coordinator audit"  "$([ "${SKIP_TOOLS_AUDIT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "SKIP_TOOLS_AUDIT=1"
     _checklist_row "2"    "Create worktrees"         "COND"  "if parallel stories exist"
     _checklist_row "3a"   "Primary agent"            "COND"  "if primary stories"
     _checklist_row "3b"   "Independent agent"        "COND"  "if independent stories"
@@ -271,7 +273,7 @@ print_step_checklist() {
     _checklist_row "4.6"  "Browser E2E routing"     "$([ "${SKIP_BROWSER_E2E_ROUTING:-false}" = "true" ] && echo SKIP || echo COND)" "SKIP_BROWSER_E2E_ROUTING=true"
 
     local skips=0
-    for key in "0" "0.1" "0.5" "0.6" "0.7" "0.8" "0.9" "1" "1.5" "1.6" "2" "3a" "3b" "3.1" "3.2" "3.5" "3.7" "4" "4.2a" "4.2b" "4.3a" "4.3b" "4.4a" "4.4b" "4.6"; do
+    for key in "0" "0.1" "0.5" "0.6" "0.7" "0.8" "0.9" "1" "1.5" "1.6" "1.65" "1.66" "2" "3a" "3b" "3.1" "3.2" "3.5" "3.7" "4" "4.2a" "4.2b" "4.3a" "4.3b" "4.4a" "4.4b" "4.6"; do
         [ "${_STEP_STATUS[$key]:-}" = "skip" ] && skips=$((skips + 1))
     done
     echo ""
@@ -678,6 +680,157 @@ hot_swap_story_model_if_unstable() {
 # On double timeout:
 #   EPAM_PAUSE_ON_TIMEOUT=true  → pause and wait for operator (max EPAM_MAX_PAUSE_SECS)
 #   EPAM_PAUSE_ON_TIMEOUT=false → skip the story, log failure, continue (default)
+# run_story_recovery_analyst <story_id> <log_file>
+# Diagnose-then-restructure recovery for a story that hit a genuine watchdog
+# double-timeout (marked status="failed", technicalNotes.failureReason
+# starting "watchdog_timeout" -- see run_story_with_watchdog below).
+#
+# User request (2026-07-10, after SKY-002b and SKY-003-test both timed out
+# twice in the same run): "we need to determine a self heal approach a full
+# blown prd recovery perhaps" -- rejected a plain retry-with-escalated-model
+# as "not really a healing approach". This treats a double-timeout as
+# evidence the PLAN (the story's own scope/ACs) may be wrong, not just that
+# the model got unlucky: it hands the story's full PRD entry and its own
+# execution log tail to an analyst, asks whether the story's scope is
+# genuinely too large/ambiguous, and if so has it propose a narrower,
+# trimmed acceptanceCriteria list -- applied through the SAME reviewer-gated
+# mechanism already used for ac_patch changes elsewhere in this file, not a
+# new bespoke path. Deliberately scoped to watchdog-timeout failures ONLY (not
+# HealingBroken-at-max-rung or other failure shapes) -- those are a different
+# failure mode this pass doesn't attempt to cover.
+#
+# Bounded: at most ONE restructure + ONE retry per story. If the analyst finds
+# no structural issue, the reviewer rejects the proposed ACs, or the retry
+# still fails, this returns 1 and the caller counts it as a phase failure
+# exactly like today.
+run_story_recovery_analyst() {
+    local story_id="$1"
+    local log_file="$2"
+
+    local _failure_reason
+    _failure_reason=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .technicalNotes.failureReason // ""' \
+        "$PRD_FILE" 2>/dev/null || echo "")
+    case "$_failure_reason" in
+        watchdog_timeout*) ;;
+        *) return 1 ;;
+    esac
+
+    local _story_json
+    _story_json=$(jq -c --arg id "$story_id" '.stories[] | select(.id == $id)' "$PRD_FILE" 2>/dev/null)
+    [ -z "$_story_json" ] && return 1
+
+    local _log_tail
+    _log_tail=$(tail -c 4000 "$log_file" 2>/dev/null || echo "")
+
+    local _prompt="You are the story-recovery-analyst. Story ${story_id} timed out twice (watchdog) and was marked failed -- it never finished within its time budget. Diagnose whether the story's OWN scope is the root cause (too many acceptance criteria, ambiguous/contradictory requirements, an unbounded/open-ended task) as opposed to a transient model/infra hiccup.
+
+Story (full PRD entry):
+${_story_json}
+
+Tail of its execution log (what it was doing when it timed out):
+${_log_tail}
+
+If the story's scope is genuinely too large or ambiguous: respond with JSON {\"restructure\": true, \"new_acs\": [\"...\", \"...\"], \"reason\": \"...\"} -- new_acs must be a TRIMMED, CONCRETE, non-overlapping replacement for the story's current acceptanceCriteria array (same intent, narrower/clearer scope, each one independently verifiable).
+If this looks like a transient issue (model hiccup, infra flake) rather than a scope problem: respond with JSON {\"restructure\": false, \"reason\": \"...\"}.
+Respond with ONLY the JSON object, nothing else."
+
+    local _analyst_response
+    _analyst_response=$(run_orch_prompt_with_tools "$_prompt" "story_recovery" "$story_id" 2>/dev/null)
+    local _restructure
+    _restructure=$(echo "$_analyst_response" | jq -r '.restructure // false' 2>/dev/null || echo false)
+
+    if [ "$_restructure" != "true" ]; then
+        log "  [StoryRecovery] Analyst found no structural issue for $story_id — leaving as failed"
+        return 1
+    fi
+
+    local _new_acs
+    _new_acs=$(echo "$_analyst_response" | jq -c '.new_acs // []' 2>/dev/null || echo "[]")
+    if [ "$(echo "$_new_acs" | jq 'length' 2>/dev/null || echo 0)" -eq 0 ]; then
+        warning "  [StoryRecovery] Analyst said restructure=true but gave no new_acs — leaving as failed"
+        return 1
+    fi
+
+    local _before_acs
+    _before_acs=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | (.acceptanceCriteria // []) | join("; ")' \
+        "$PRD_FILE" 2>/dev/null || echo "")
+    local _candidate
+    _candidate=$(echo "$_new_acs" | jq -r 'join("; ")')
+
+    # Reviewer gate — inline call (NOT a call to run_change_with_reviewer_retry,
+    # which only exists in claude.sh's scope; this script never sources it).
+    # Root cause this fixes (found live, 2026-07-12, tier3-travel-app run):
+    # the previous call to that undefined function failed with bash's own
+    # "command not found", and since that failure's stdout is empty (the
+    # error goes to stderr), $_verdict became "" — which is NOT equal to
+    # "fail", so the `if [ "$_verdict" = "fail" ]` check below always passed
+    # and the restructured ACs were applied to the PRD with ZERO actual
+    # review, every single time this path ran. The gate failed OPEN, not
+    # closed. Fixed by inlining the same direct-LLM-call pattern already used
+    # by every other in-file reviewer gate (e.g. the pre-phase-assessment
+    # profile-change gate above) instead of referencing a function that was
+    # never available in this script.
+    local _verdict="pass"
+    if [ -n "${ORCH_GATE_PROVIDER:-}" ]; then
+        local _src_reviewer_profile
+        _src_reviewer_profile=$(jq -r '."prd-change-reviewer" // ""' "$AGENT_PROFILES_FILE" 2>/dev/null || echo "")
+        if [ -n "$_src_reviewer_profile" ]; then
+            _verdict=$(echo "${_src_reviewer_profile}
+
+STORY: ${story_id}
+CHANGE TYPE: ac_patch
+
+BEFORE:
+${_before_acs:0:1000}
+
+AFTER:
+${_candidate:0:1000}
+
+Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
+                AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
+                AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
+                EPAM_CLI="${EPAM_CLI:-epam}" \
+                "$AI_RUNNER_CMD" \
+                    --provider "${ORCH_GATE_PROVIDER}" \
+                    --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
+                2>/dev/null | \
+                python3 -c "
+import sys, json, re
+text = sys.stdin.read()
+try:
+    obj = json.loads(text.strip())
+    print(obj.get('verdict','pass'))
+    sys.exit(0)
+except Exception:
+    pass
+m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
+print(m.group(1) if m else 'pass')
+" 2>/dev/null || echo "pass")
+        fi
+    fi
+    if [ "$_verdict" = "fail" ]; then
+        warning "  [StoryRecovery] Reviewer rejected the restructured ACs for $story_id — leaving as failed"
+        return 1
+    fi
+
+    jq --arg id "$story_id" --argjson acs "$_new_acs" \
+        '(.stories[] | select(.id == $id) | .acceptanceCriteria) = $acs |
+         (.stories[] | select(.id == $id) | .status) = "pending" |
+         (.stories[] | select(.id == $id) | .completed) = false |
+         (.stories[] | select(.id == $id) | .technicalNotes.failureReason) = null |
+         (.stories[] | select(.id == $id) | .technicalNotes.recoveredFrom) = "watchdog_timeout"' \
+        "$PRD_FILE" > "${PRD_FILE}.tmp" && mv "${PRD_FILE}.tmp" "$PRD_FILE"
+
+    jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg id "$story_id" --argjson acs "$_new_acs" \
+        '{timestamp:$ts, story_id:$id, event:"story_restructured", new_acs:$acs}' \
+        >> "$LOG_DIR/story-recovery-audit.jsonl" 2>/dev/null || true
+
+    success "  [StoryRecovery] Restructured ACs for $story_id — retrying once with narrowed scope"
+    run_story_with_watchdog "$story_id" "$log_file"
+}
+
 #
 # Effort-based defaults (overridden by STORY_TIMEOUT_SECS):
 #   low    → 600s  (10 min)
@@ -749,6 +902,7 @@ print(math.ceil(${timeout_secs} * ${EPAM_WATCHDOG_RETRY_MULTIPLIER:-1.5}))
             )" > "$LOG_DIR/PAUSED"
             wait_if_paused
             # Operator resumed — continue past the timed-out story
+            return 0
         else
             error "Watchdog: $story_id timed out twice (${timeout_secs}s then ${retry_timeout_secs:-$timeout_secs}s) — skipping story and continuing"
             warning "  Set EPAM_PAUSE_ON_TIMEOUT=true to pause for operator intervention instead"
@@ -759,8 +913,22 @@ print(math.ceil(${timeout_secs} * ${EPAM_WATCHDOG_RETRY_MULTIPLIER:-1.5}))
                 --arg s   "timeout" \
                 '{phase_id:$pid, story_id:$sid, status:$s, timestamp:(now|todate)}' \
                 >> "${PHASE_COST_FILE:-$LOG_DIR/phase-cost.jsonl}" 2>/dev/null || true
+
+            # Root cause fix (found live, 2026-07-10, tier3-travel-app run): this
+            # branch used to `return 0` (success) after a double-timeout, so the
+            # PRD kept the story at "pending" forever and the phase reported
+            # success anyway — a silent deliverable loss, the same failure class
+            # as the original vanishing-stories bug this pipeline guards
+            # against elsewhere. Mark the story failed in the PRD and propagate
+            # a real failure exit code so the caller's _phase_story_failures
+            # counter (and the phase-abort gate) actually sees it.
+            jq --arg id "$story_id" \
+               '(.stories[] | select(.id == $id) | .status) = "failed" |
+                (.stories[] | select(.id == $id) | .technicalNotes.failureReason) =
+                    "watchdog_timeout: story exceeded timeout twice and was skipped"' \
+               "$PRD_FILE" > "${PRD_FILE}.tmp" && mv "${PRD_FILE}.tmp" "$PRD_FILE"
+            return 1
         fi
-        return 0
     fi
 
     return $_rc
@@ -865,6 +1033,143 @@ else:
     print("\n".join(result))
 '
     echo "$story_list" | python3 -c "$_py" "$PRD_FILE" 2>/dev/null || echo "$story_list"
+}
+
+# capture_story_ids_snapshot / assert_no_story_ids_lost — deterministic
+# invariant check against silent story deletion.
+#
+# Root cause this guards against (found live, 2026-07-09, tier3-travel-app
+# run): SKY-002/003/004 vanished ENTIRELY from prd.stories[] — not merely
+# stripped of technicalNotes.files (the already-fixed orphaned-pending-story
+# gate scenario) — sometime during the scaffold phase. A deliberate repro
+# attempt (fresh teardown + a poller watching the story-ID list every second)
+# did NOT reproduce it, meaning the defect is intermittent, most likely tied
+# to a specific LLM response shape in one of the three steps that give an
+# agent full Bash/WriteFile tool access to the PRD (Step 0.5, Step 0.9, and
+# run_phase_assessment's Step 3.5/Step 6 calls) — each of these is explicitly
+# instructed (in its own prompt) to only ADD to profiles.json or change
+# narrow fields, never restructure stories[], but that instruction is prose,
+# not enforcement. No deterministic remediation step ever removes a story
+# from stories[] either — deprecation is tracked via status field, the
+# record itself is always kept ("archive"), per _prd_remediate_impl.py's own
+# documented convention. So the story-ID SET must never shrink, anywhere in
+# this pipeline, once Step 0 (spec-pass, the one step that legitimately
+# reshapes IDs via splits) has completed for this phase.
+#
+# This does not fix the root cause (which agent turn is doing this, and why)
+# — it makes the NEXT occurrence hard-fail immediately with the exact
+# missing ID(s) and the step that just ran, instead of silently producing a
+# phase that "completes" having done zero real work.
+STORY_ID_SNAPSHOT_DIR="${STORY_ID_SNAPSHOT_DIR:-$(mktemp -d)}"
+
+# capture_story_ids_snapshot <label> — writes the current, sorted set of
+# story IDs in prd.stories[] to a snapshot file named after <label>, plus the
+# full story objects (used by assert_no_story_ids_lost to self-heal a loss
+# instead of only detecting it — see that function's docstring).
+capture_story_ids_snapshot() {
+    local label="$1"
+    jq -r '.stories[].id' "$PRD_FILE" 2>/dev/null | sort > "$STORY_ID_SNAPSHOT_DIR/ids-${label}.txt"
+    jq -c '.stories' "$PRD_FILE" 2>/dev/null > "$STORY_ID_SNAPSHOT_DIR/stories-${label}.json"
+}
+
+# assert_no_story_ids_lost <label> <step_name> — re-reads the current story
+# ID set and diffs it against the named snapshot. A GROWING set (new split
+# children) is expected and not an error.
+#
+# Self-healing (added 2026-07-11, after this fired a SECOND time live —
+# first found 2026-07-09 — on Step 0.5 wiping SKY-002/003/004 from a
+# DIFFERENT phase's implementationOrder entirely): this is an intermittent
+# LLM tool-use defect (the agent has raw Bash/jq PRD write access and its own
+# prompt already forbids exactly this), not something a prompt tweak reliably
+# prevents. Rather than hard-abort the whole pipeline every time it recurs,
+# restore the exact vanished story object(s) from the full-object snapshot
+# captured alongside the ID snapshot and continue. Only hard-fails (exit 1)
+# if a story is missing AND wasn't in the snapshot either (nothing to
+# restore from) — that shape is not self-healable and still needs a human.
+assert_no_story_ids_lost() {
+    local label="$1"
+    local step_name="$2"
+    local snapshot_file="$STORY_ID_SNAPSHOT_DIR/ids-${label}.txt"
+    [ -f "$snapshot_file" ] || return 0  # no snapshot captured yet — nothing to compare
+    local current_ids missing_ids
+    current_ids=$(jq -r '.stories[].id' "$PRD_FILE" 2>/dev/null | sort)
+    missing_ids=$(comm -23 "$snapshot_file" <(echo "$current_ids"))
+    if [ -n "$missing_ids" ]; then
+        local stories_snapshot="$STORY_ID_SNAPSHOT_DIR/stories-${label}.json"
+        if [ -s "$stories_snapshot" ]; then
+            warning "STORY-ID-LOSS after ${step_name}: restoring vanished stor(y/ies) from the pre-step snapshot instead of aborting:"
+            local missing_json tmp_prd
+            missing_json=$(echo "$missing_ids" | jq -R -s 'split("\n") | map(select(length > 0))')
+            tmp_prd=$(mktemp)
+            if jq --argjson missing "$missing_json" --slurpfile snap "$stories_snapshot" \
+                '.stories += ($snap[0] | map(select(.id as $i | $missing | index($i) != null)))' \
+                "$PRD_FILE" > "$tmp_prd" 2>/dev/null && jq empty "$tmp_prd" 2>/dev/null; then
+                mv "$tmp_prd" "$PRD_FILE"
+                while IFS= read -r _mid; do
+                    [ -n "$_mid" ] && warning "    - restored: $_mid"
+                done <<< "$missing_ids"
+                current_ids=$(jq -r '.stories[].id' "$PRD_FILE" 2>/dev/null | sort)
+                missing_ids=$(comm -23 "$snapshot_file" <(echo "$current_ids"))
+            else
+                rm -f "$tmp_prd"
+            fi
+        fi
+    fi
+    if [ -n "$missing_ids" ]; then
+        error "STORY-ID-LOSS INVARIANT VIOLATED after ${step_name}: the following stor(y/ies) vanished entirely from prd.stories[] and could not be restored:"
+        while IFS= read -r _mid; do
+            [ -n "$_mid" ] && error "    - $_mid"
+        done <<< "$missing_ids"
+        error "  This step has full tool-write access to the PRD but is only permitted to ADD"
+        error "  to profiles.json or change agentRole/model/aiProvider/reasoningEffort fields."
+        error "  Check the agent's own transcript for this step's assessment/coordinator log."
+        exit 1
+    fi
+}
+
+# assert_no_story_ids_gained <label> <step_name> — companion to
+# assert_no_story_ids_lost, for steps that must NEVER add a brand-new
+# top-level story (unlike Step 0/spec-pass, whose whole job is to grow the
+# story set via legitimate splits — that step is what the "presplit"
+# snapshot is taken AFTER, precisely so growth from spec-pass itself is
+# never flagged here).
+#
+# Root cause this guards against (found live, 2026-07-10, tier3-travel-app
+# run): 6 entirely fabricated stories (SKY-005 through SKY-010 — an HTML
+# dashboard story, three "comprehensive test suite" stories, a code-review/
+# security-audit story, a mutation-testing story) appeared in prd.stories[]
+# between the Step 0.1 CPA pre-pass snapshot and the end of Step 0.5 —  the
+# ONLY two steps that ran in that window. Step 0.5's own prompt explicitly
+# says "NEVER rewrite the PRD file with a different story structure. You may
+# only update agentRole fields and append to profiles.json" — its own text
+# summary that run claimed exactly that (agentRole updates + profile
+# enhancements only) — but the actual PRD content contradicts its own
+# summary. One of the fabricated stories even carried a `specification`
+# block mimicking real spec-pass output (same shape, same shared run ID),
+# making the forgery look legitimate at a glance; spec-pass's own
+# authoritative summary.json for that exact run ID shows it only ever
+# touched SKY-001. No deterministic guardrail existed to catch an agent
+# adding stories nobody asked for — this closes that gap the same way
+# assert_no_story_ids_lost closes the shrinkage gap.
+assert_no_story_ids_gained() {
+    local label="$1"
+    local step_name="$2"
+    local snapshot_file="$STORY_ID_SNAPSHOT_DIR/ids-${label}.txt"
+    [ -f "$snapshot_file" ] || return 0  # no snapshot captured yet — nothing to compare
+    local current_ids gained_ids
+    current_ids=$(jq -r '.stories[].id' "$PRD_FILE" 2>/dev/null | sort)
+    gained_ids=$(comm -13 "$snapshot_file" <(echo "$current_ids"))
+    if [ -n "$gained_ids" ]; then
+        error "UNAUTHORIZED STORY CREATION after ${step_name}: the following NEW stor(y/ies) appeared in prd.stories[] that were not there before this step ran:"
+        while IFS= read -r _gid; do
+            [ -n "$_gid" ] && error "    - $_gid"
+        done <<< "$gained_ids"
+        error "  This step has full tool-write access to the PRD but is only permitted to ADD"
+        error "  to profiles.json or change agentRole/model/aiProvider/reasoningEffort fields —"
+        error "  never to author brand-new top-level stories."
+        error "  Check the agent's own transcript for this step's assessment/coordinator log."
+        exit 1
+    fi
 }
 
 # Apply any pending redirect for a story.
@@ -1280,6 +1585,10 @@ else
     run_specification_pass "$PHASE"
 fi
 
+# Story-ID-loss invariant: snapshot the settled post-spec-pass story set for
+# this phase. See capture_story_ids_snapshot's own docstring above for why.
+capture_story_ids_snapshot "presplit"
+
 # ── Infra test gate ──────────────────────────────────────────────────────────
 # Block any phase that depends on infra_test (anything except infra_test itself)
 # unless all SP-T0x stories are completed.
@@ -1402,24 +1711,33 @@ echo -e "${MAGENTA}============================================${NC}"
 echo ""
 
 # Categorize stories by agent group
+# Deprecated stories (e.g. a split child rejected for a same-file coherence
+# violation) must never be selected here — found live 2026-07-10 when a
+# deprecated SKY-002-test (completed == false, since it never ran) got
+# re-queued and re-implemented on every orchestration loop restart, burning
+# cost on work that had already been correctly abandoned.
 main_stories=$(jq -r --arg phase "$PHASE" \
     '(.implementationOrder[$phase] // []) as $ids |
      .stories[] | select(.id as $id | $ids | index($id)) |
+     select(.status != "deprecated") |
      select((.agentGroup == "main" or .agentGroup == "preflight") and .completed == false) | .id' "$PRD_FILE")
 
 primary_stories=$(jq -r --arg phase "$PHASE" \
     '(.implementationOrder[$phase] // []) as $ids |
      .stories[] | select(.id as $id | $ids | index($id)) |
+     select(.status != "deprecated") |
      select(.agentGroup == "primary" and .completed == false) | .id' "$PRD_FILE")
 
 independent_stories=$(jq -r --arg phase "$PHASE" \
     '(.implementationOrder[$phase] // []) as $ids |
      .stories[] | select(.id as $id | $ids | index($id)) |
+     select(.status != "deprecated") |
      select(.agentGroup == "independent" and .completed == false) | .id' "$PRD_FILE")
 
 review_stories=$(jq -r --arg phase "$PHASE" \
     '(.implementationOrder[$phase] // []) as $ids |
      .stories[] | select(.id as $id | $ids | index($id)) |
+     select(.status != "deprecated") |
      select(.agentRole == "review-agent" and .completed == false) | .id' "$PRD_FILE")
 
 # Apply dependency-graph ordering within each group
@@ -1768,7 +2086,13 @@ Read ${PRD_REL} implementationOrder[\"${phase_id}\"] for the story list, then pr
     _pfa_profiles_before=$(cat "$profiles_file" 2>/dev/null || echo "{}")
 
     cd "$PROJECT_ROOT"
-    if run_orch_prompt "$assessment_prompt" "assessment" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"; then
+    # run_orch_prompt_with_tools (not plain run_orch_prompt): the prompt above
+    # instructs the agent to run real jq commands against the PRD, read/write
+    # profiles.json, and flock-append to JSONL files — without tool access the
+    # agent can only print what it WOULD do, and no real change ever lands
+    # (found live 2026-07-08, same class of bug already fixed for run_plan_mode
+    # and claude.sh's run_pre_phase_assessment).
+    if run_orch_prompt_with_tools "$assessment_prompt" "assessment" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"; then
         step_emit "0.5" "pass" "Step 0.5: Skill assessment"
         success "Pre-phase assessment completed for '$phase_id'"
         "$SCRIPT_DIR/update-monitor.sh" event "pre_phase_assessment" "Pre-phase assessment completed" "" "main" "team-lead-agent" 2>/dev/null || true
@@ -1864,6 +2188,8 @@ if [ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ]; then
 else
     run_pre_phase_assessment "$PHASE"
 fi
+assert_no_story_ids_lost "presplit" "Step 0.5: Skill assessment"
+assert_no_story_ids_gained "presplit" "Step 0.5: Skill assessment"
 
 # ── Mid-execution split validation ────────────────────────────────────────────
 # Speckit must review ALL splits, not only those proposed by openspec during
@@ -1979,7 +2305,10 @@ COORD_EOF
     )
 
     cd "$PROJECT_ROOT"
-    if run_orch_prompt "$coord_prompt" "spec-coordinator" "${PHASE:-unknown}" 2>&1 | tee "$coord_log"; then
+    # run_orch_prompt_with_tools (not plain run_orch_prompt): the prompt above
+    # instructs reading the PRD and flock-appending real JSONL messages — same
+    # class of bug already fixed for the assessment agents above.
+    if run_orch_prompt_with_tools "$coord_prompt" "spec-coordinator" "${PHASE:-unknown}" 2>&1 | tee "$coord_log"; then
         step_emit "0.6" "pass" "Step 0.6: Hybrid pre-coord"
         success "Hybrid pre-phase coordination completed for '$phase_id'"
         "$SCRIPT_DIR/update-monitor.sh" event "hybrid_precoord" \
@@ -2116,43 +2445,81 @@ else: print(0)
         # so the old assigned_count-gated check never even looked at the
         # file, and the rogue split was never reviewed or reverted.
         if [ "${_mc_assigned_count:-0}" -gt 0 ] || [ "$_mc_prd_before" != "$_mc_prd_after" ]; then
-            # Reviewer gate before accepting the PRD mutation
-            _mc_reviewer_profile=$(cat "$_mc_profiles_file" | \
-                python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('prd-change-reviewer',''))" 2>/dev/null || echo "")
-            _mc_verdict="pass"
-            if [ -n "${ORCH_GATE_PROVIDER:-}" ] && [ -n "$_mc_reviewer_profile" ]; then
-                _mc_verdict=$(echo "${_mc_reviewer_profile}
+            # Deterministic reviewer gate. This USED to ask an LLM to judge a
+            # BEFORE/AFTER excerpt truncated to the LAST 1000 CHARACTERS of
+            # the PRD — for any real multi-KB PRD, that is structurally
+            # blind to a change anywhere earlier in the file. Root cause of a
+            # live-run defect (2026-07-08/09): the coordinator silently
+            # stripped technicalNotes.files from SKY-002/003/004 — nowhere
+            # near the tail of the file — while the excerpt-based reviewer
+            # saw nothing wrong and approved it; a later remediation step
+            # then dropped those now-fileless stories from
+            # implementationOrder.core, and the core phase silently ran as a
+            # no-op with zero error.
+            #
+            # "A model-assignment write may only change model, aiProvider,
+            # and reasoningEffort, on stories that were actually missing
+            # them" is a 100% mechanically checkable invariant, not a
+            # judgment call — so check it in code instead of asking an LLM to
+            # eyeball a truncated excerpt. No blind spot, no token cost, no
+            # chance of an LLM missing it. Enlarging the excerpt window would
+            # only move the blind spot, never eliminate it.
+            _mc_before_file=$(mktemp)
+            _mc_after_file=$(mktemp)
+            printf '%s' "$_mc_prd_before" > "$_mc_before_file"
+            printf '%s' "$_mc_prd_after" > "$_mc_after_file"
+            _mc_verdict=$(python3 - "$_mc_before_file" "$_mc_after_file" << 'MC_REVIEW_PY'
+import json, sys
 
-STORY: ${_mc_phase}
-CHANGE TYPE: model_assignment
+ALLOWED_FIELDS = {'model', 'aiProvider', 'reasoningEffort'}
 
-BEFORE (excerpt, last 1000 chars):
-${_mc_prd_before: -1000}
-
-AFTER (excerpt, last 1000 chars):
-${_mc_prd_after: -1000}
-
-Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
-                    AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
-                    AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
-                    EPAM_CLI="${EPAM_CLI:-epam}" \
-                    "$AI_RUNNER_CMD" \
-                        --provider "${ORCH_GATE_PROVIDER:-minimax}" \
-                        --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
-                    2>/dev/null | \
-                    python3 -c "
-import sys, json, re
-text = sys.stdin.read()
+before_path, after_path = sys.argv[1], sys.argv[2]
 try:
-    obj = json.loads(text.strip())
-    print(obj.get('verdict','pass'))
+    with open(before_path) as f:
+        before = json.load(f)
+    with open(after_path) as f:
+        after = json.load(f)
+except Exception as e:
+    print('fail')
+    print(f"  [prd-model-coordinator][reviewer] VIOLATION: PRD is not valid JSON after write: {e}", file=sys.stderr)
     sys.exit(0)
-except Exception:
-    pass
-m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
-print(m.group(1) if m else 'pass')
-" 2>/dev/null || echo "pass")
-            fi
+
+before_by_id = {s['id']: s for s in before.get('stories', []) if 'id' in s}
+after_by_id = {s['id']: s for s in after.get('stories', []) if 'id' in s}
+
+violations = []
+
+if before_by_id.keys() != after_by_id.keys():
+    added = after_by_id.keys() - before_by_id.keys()
+    removed = before_by_id.keys() - after_by_id.keys()
+    if added:
+        violations.append(f"stories added: {sorted(added)}")
+    if removed:
+        violations.append(f"stories removed: {sorted(removed)}")
+
+if before.get('implementationOrder') != after.get('implementationOrder'):
+    violations.append("implementationOrder was modified")
+
+for sid, before_story in before_by_id.items():
+    after_story = after_by_id.get(sid)
+    if after_story is None:
+        continue
+    all_keys = set(before_story.keys()) | set(after_story.keys())
+    for key in all_keys:
+        if key in ALLOWED_FIELDS:
+            continue
+        if before_story.get(key) != after_story.get(key):
+            violations.append(f"{sid}.{key} changed (not an allowed model-assignment field)")
+
+if violations:
+    print('fail')
+    for v in violations[:20]:
+        print(f"  [prd-model-coordinator][reviewer] VIOLATION: {v}", file=sys.stderr)
+else:
+    print('pass')
+MC_REVIEW_PY
+)
+            rm -f "$_mc_before_file" "$_mc_after_file"
             if [ "$_mc_verdict" = "fail" ]; then
                 warning "  [prd-model-coordinator] REJECTED by reviewer — reverting PRD"
                 echo "$_mc_prd_before" > "$_mc_prd_target" 2>/dev/null || true
@@ -2168,8 +2535,9 @@ print(m.group(1) if m else 'pass')
     # the coordinator (agent unavailable, rejected, or skipped a story) falls
     # back to a fixed default so the pipeline never silently relies on a
     # provider's own hardcoded default model.
+    ( flock -w 10 200 || { error "  [prd-model-coordinator] Could not acquire lock on $_mc_prd_target"; exit 1; }
     python3 - "$_mc_prd_target" "$_mc_phase" <<'MC_FALLBACK_PY'
-import json, sys
+import json, sys, os
 prd_path, phase = sys.argv[1], sys.argv[2]
 with open(prd_path) as f:
     prd = json.load(f)
@@ -2190,15 +2558,85 @@ for s in prd.get('stories', []):
         s['reasoningEffort'] = eff if eff in ('low', 'high') else 'medium'
         changed = True
 if changed:
-    with open(prd_path, 'w') as f:
+    _tmp_prd_path = prd_path + '.tmp'
+    with open(_tmp_prd_path, 'w') as f:
         json.dump(prd, f, indent=2)
+    os.replace(_tmp_prd_path, prd_path)
 MC_FALLBACK_PY
+    ) 200>"${_mc_prd_target}.lock"
 fi
 step_emit "0.9" "pass" "Step 0.9: PRD model coordinator"
+assert_no_story_ids_lost "presplit" "Step 0.9: PRD model coordinator"
+assert_no_story_ids_gained "presplit" "Step 0.9: PRD model coordinator"
 
 # ──────────────────────────────────────────────
 # Step 1: Run main-branch stories (no dependencies, sequential)
 # ──────────────────────────────────────────────
+# Root cause fix (found live, 2026-07-11, tier3-travel-app run): main_stories
+# is a snapshot captured once at phase start (~line 1670), before Step 0.5's
+# mid-execution-split validation can run (validate_mid_execution_splits,
+# first call ~line 2198). That validation can legitimately RESTORE a parent
+# story that was deprecated-via-split at snapshot time (see spec-mode-
+# runner.js's coherence-violation parent-restoration) — the restored parent
+# is real, pending work, but the stale snapshot never re-included it, so it
+# silently never ran even though the PRD said it should. Live symptom:
+# SKY-001's 4 split children collided and were deprecated, SKY-001 itself
+# was correctly restored to pending in the PRD, but Step 1 only logged
+# skipping the 4 dead children and declared "Main-branch stories complete"
+# having run nothing — the scaffold phase never wrote a single file.
+#
+# Extended (same day, second live occurrence): a restored parent can carry
+# agentGroup=primary or independent (its original, pre-split group) — the
+# first version of this fix only refreshed the main/preflight lane, so
+# SKY-002/SKY-003 (agentGroup=primary) fell into a complete gap when
+# topology had already collapsed the primary lane into main_stories BEFORE
+# the restoration happened (topology="sequential", 11 stories): Step 2
+# (worktree creation) had already decided "no parallel stories" from the
+# pre-restoration snapshot and never reconsiders, so the restored stories
+# sat "pending" forever with literally no code path that would ever execute
+# them this phase. Route each newly-eligible story to whichever lane is
+# STILL doing work for its own agentGroup (primary_stories/
+# independent_stories, if non-empty — Step 2 hasn't run yet at this point in
+# the pipeline and will see the update); fall back to main_stories when that
+# lane is empty (already collapsed, or never had work) since main_stories is
+# the only lane guaranteed to still process further pending work this phase.
+_main_stories_current=$(jq -r --arg phase "$PHASE" \
+    '(.implementationOrder[$phase] // []) as $ids |
+     .stories[] | select(.id as $id | $ids | index($id)) |
+     select(.status != "deprecated") |
+     select(.completed == false) |
+     select(.agentRole != "review-agent") |
+     select((.agentGroup // "main") as $g | $g == "main" or $g == "preflight" or $g == "primary" or $g == "independent") |
+     [.id, (.agentGroup // "main")] | @tsv' \
+    "$PRD_FILE" 2>/dev/null || echo "")
+if [ -n "$_main_stories_current" ]; then
+    while IFS=$'\t' read -r _rid _rgroup; do
+        [ -z "$_rid" ] && continue
+        if grep -qxF "$_rid" <<< "$main_stories" \
+            || { [ -n "$primary_stories" ] && grep -qxF "$_rid" <<< "$primary_stories"; } \
+            || { [ -n "$independent_stories" ] && grep -qxF "$_rid" <<< "$independent_stories"; }; then
+            continue
+        fi
+        _dest="main"
+        case "$_rgroup" in
+            primary)     [ -n "$primary_stories" ] && _dest="primary" ;;
+            independent) [ -n "$independent_stories" ] && _dest="independent" ;;
+        esac
+        warning "  Story $_rid is newly pending for phase '$PHASE' (likely restored after a rejected split) — adding to the ${_dest} lane"
+        case "$_dest" in
+            primary)     primary_stories="${primary_stories}
+${_rid}" ;;
+            independent) independent_stories="${independent_stories}
+${_rid}" ;;
+            *)           main_stories="${main_stories}
+${_rid}" ;;
+        esac
+    done <<< "$_main_stories_current"
+    main_stories=$(topo_sort_stories "$main_stories")
+    [ -n "$primary_stories" ] && primary_stories=$(topo_sort_stories "$primary_stories")
+    [ -n "$independent_stories" ] && independent_stories=$(topo_sort_stories "$independent_stories")
+fi
+
 if [ -n "$main_stories" ]; then
     # Filter out review stories (those run at the end)
     non_review_main=$(echo "$main_stories" | while read s; do
@@ -2249,6 +2687,32 @@ if [ -n "$main_stories" ]; then
         _phase_story_failures=0
         while IFS= read -r story; do
             [ -z "$story" ] && continue
+            # Root cause fix (found live, 2026-07-10, tier3-travel-app run):
+            # non_review_main/main_stories is a SNAPSHOT captured once at
+            # phase start (~line 1512-1555, before Step 0.5 and before this
+            # loop even begins). validate_mid_execution_splits() runs AFTER
+            # Step 0.5 and again after every story completes in this same
+            # loop (line ~2535 below) — it can reject a same-file coherence
+            # violation and mark a story deprecated that was ALREADY enqueued
+            # in this stale snapshot before the violation was ever detected.
+            # The earlier fix (main_stories query filters .status !=
+            # "deprecated") only protects against a story that was ALREADY
+            # deprecated before the snapshot was taken; it can't see a
+            # deprecation that happens mid-phase, after the snapshot. Live
+            # symptom: SKY-002-impl/-impl-1 both wrote client.ts, got
+            # rejected and deprecated by the mid-execution split-gate right
+            # after Step 0.5 — yet Step 1 still ran "Implementing story:
+            # SKY-002-impl" moments later, burning real cost on a story that
+            # had already been correctly abandoned. Re-check the CURRENT
+            # status live, right before running each story, instead of
+            # trusting the stale start-of-phase snapshot.
+            _story_current_status=$(jq -r --arg id "$story" \
+                '.stories[] | select(.id == $id) | .status // "pending"' \
+                "$PRD_FILE" 2>/dev/null || echo "pending")
+            if [ "$_story_current_status" = "deprecated" ]; then
+                info "  Skipping $story — deprecated after being enqueued (mid-execution split rejected this story)"
+                continue
+            fi
             if checkpoint_already_done "$story"; then
                 info "  Skipping $story — already completed in checkpoint (run: $ORCH_RUN_ID)"
                 continue
@@ -2256,9 +2720,98 @@ if [ -n "$main_stories" ]; then
             check_cost_budget
             wait_if_paused
             apply_redirect_if_any "$story"
+
+            # Inline TC writer gate: the OLD placement (after this entire loop,
+            # even after Step 3.2 worktree merge) is structurally too late for
+            # main-branch topology — this loop runs impl AND test stories
+            # back-to-back in implementationOrder, so by the time the
+            # post-loop gate ran, every test story here had ALREADY executed
+            # without any testCriteria grounding (confirmed live, 2026-07-08:
+            # SKY-002-test started implementing while testCriteria was still
+            # null, and the gate's own log line never appeared until after
+            # the whole batch — SKY-003-test, etc. — had also already run).
+            # Fix: run the (idempotent, phase-scoped) TC writer HERE, right
+            # before a story that itself needs TCs executes, so its paired
+            # impl story (which just ran earlier in this same loop) grounds
+            # it. The later post-Step-3.2 call is kept as-is for worktree-
+            # topology test stories, which never pass through this loop.
+            #
+            # Root cause this fixes (found live, 2026-07-10, tier3-travel-app
+            # run): "any file ends in .test.ts" also matches a COMBO story
+            # that owns BOTH its own impl file(s) AND its own test file (an
+            # unsplit story implementing both together in one turn, e.g.
+            # SKY-002 when spec-pass chose not to split it this run) — this
+            # gate then assumed a paired impl story had ALREADY run and tried
+            # to generate TCs for source files that don't exist yet (the
+            # combo story hasn't even started), hard-aborting the whole
+            # pipeline. A story only needs pre-grounding from a SEPARATE impl
+            # story when ALL its declared files are test files — same
+            # "is this a pure test story" convention already used by
+            # correctSplitChildAgentRoleIfTestOnly/wireSplitSiblingDependencies
+            # in spec-mode-runner.js (all files match, not any).
+            # Root cause this fixes (found live, 2026-07-10, tier3-travel-app
+            # run): a story can legitimately become 'deprecated' AFTER this
+            # gate would otherwise match it — e.g. a mid-execution re-split
+            # rejected for a same-file coherence violation (both children
+            # write to server.test.ts) deprecates the story with no valid
+            # replacement. The TC-writer script already defensively skips
+            # deprecated stories (a stale/delegated-parent guard), so it
+            # correctly no-ops — but this gate never checked status, so it
+            # still expected TCs for a story that was CORRECTLY abandoned,
+            # tripping the post-condition check below on a false alarm.
+            _needs_tc=$(jq -r --arg id "$story" \
+                '.stories[] | select(.id == $id) | select(.status != "deprecated") |
+                 select((.technicalNotes.files // []) as $f |
+                        ($f | length > 0) and ($f | map(endswith(".test.ts")) | all)) |
+                 select((.testCriteria.facts // []) | length == 0) | .id' \
+                "$PRD_FILE" 2>/dev/null || echo "")
+            if [ -n "$_needs_tc" ]; then
+                log "  Story $story needs testCriteria — running TC writer inline before it starts..."
+                bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
+                    --prd "$PRD_FILE" \
+                    --phase "$PHASE" \
+                    --output-dir "${OUTPUT_DIR:-$PROJECT_ROOT}" \
+                    --story "$story" \
+                    2>&1 | tee -a "$LOG_DIR/tc-writer-${PHASE}.log"
+                _inline_tc_exit=${PIPESTATUS[0]}
+                if [ "$_inline_tc_exit" -ne 0 ]; then
+                    error "  Inline TC writer gate FAILED for $story — cannot proceed"
+                    error "  Fix: check $LOG_DIR/tc-writer-${PHASE}.log"
+                    error "  Bypass: SKIP_TC_WRITER=1"
+                    exit 1
+                fi
+                # Post-condition check (found live, 2026-07-09): post-impl-tc-writer.sh
+                # can exit 0 as a legitimate no-op ("No test stories need TCs in
+                # phase ... — skipping") when its OWN internal implementationOrder[phase]-
+                # scoped query doesn't (yet) see $story — e.g. right after a mid-execution
+                # split. Exit 0 alone does not mean testCriteria was actually written for
+                # THIS story — confirmed live: SKY-003-test got this exact "SUCCESS" log
+                # line while its testCriteria.facts remained empty, and it then ran its
+                # first coding attempt with zero grounding.
+                _post_tc_facts_len=$(jq -r --arg id "$story" \
+                    '.stories[] | select(.id == $id) | (.testCriteria.facts // []) | length' \
+                    "$PRD_FILE" 2>/dev/null || echo 0)
+                if [ "${_post_tc_facts_len:-0}" -eq 0 ]; then
+                    error "  Inline TC writer gate reported success but $story still has no testCriteria.facts"
+                    error "  Fix: check $LOG_DIR/tc-writer-${PHASE}.log ; confirm $story is in implementationOrder.$PHASE"
+                    error "  Bypass: SKIP_TC_WRITER=1"
+                    exit 1
+                fi
+                success "  TC writer populated testCriteria for $story"
+            fi
+
             log "  Running: $story"
             _story_exit=0
             run_story_with_watchdog "$story" "$LOG_DIR/main-${story}.log" || _story_exit=$?
+            # A genuine watchdog double-timeout gets ONE diagnose-then-restructure
+            # recovery attempt before counting as a phase failure -- see
+            # run_story_recovery_analyst's docstring for why this is scoped to
+            # watchdog timeouts only (not every kind of story failure).
+            if [ "$_story_exit" -ne 0 ]; then
+                if run_story_recovery_analyst "$story" "$LOG_DIR/main-${story}.log"; then
+                    _story_exit=0
+                fi
+            fi
             record_story_actual_cost "$story" "$LOG_DIR/main-${story}.log"
             if [ "$_story_exit" -ne 0 ]; then
                 _phase_story_failures=$((_phase_story_failures+1))
@@ -2296,10 +2849,19 @@ if [ "$_has_worktree_stories" = true ] && \
     step_emit "1.5" "running" "Step 1.5: Auto-commit"
     log "Step 1.5: Auto-committing main-branch deliverables before worktree creation..."
     git -C "$PROJECT_ROOT" add -A 2>/dev/null || true
-    git -C "$PROJECT_ROOT" commit -m "chore: auto-commit main-branch story output for phase $PHASE" \
-        2>/dev/null \
-        && { step_emit "1.5" "pass" "Step 1.5: Auto-commit"; success "Step 1.5: Committed main-branch output"; } \
-        || { step_emit "1.5" "skip" "Step 1.5: Auto-commit" "nothing to commit"; warning "Step 1.5: Nothing new to commit (working tree already clean)"; }
+    # Generic credential scan (flow-gap analysis finding #2, 2026-07-12): see
+    # orchestrations/scripts/scan-secrets.sh for rationale/patterns.
+    if [ -f "$SCRIPT_DIR/scan-secrets.sh" ] && ! _scan_output=$(bash "$SCRIPT_DIR/scan-secrets.sh" "$PROJECT_ROOT" 2>&1); then
+        warning "Step 1.5: $_scan_output"
+        step_emit "1.5" "fail" "Step 1.5: Auto-commit" "secret detected"
+        error "Step 1.5: Refusing to auto-commit — unstaging (SECRET_SCAN)"
+        git -C "$PROJECT_ROOT" reset 2>/dev/null || true
+    else
+        git -C "$PROJECT_ROOT" commit -m "chore: auto-commit main-branch story output for phase $PHASE" \
+            2>/dev/null \
+            && { step_emit "1.5" "pass" "Step 1.5: Auto-commit"; success "Step 1.5: Committed main-branch output"; } \
+            || { step_emit "1.5" "skip" "Step 1.5: Auto-commit" "nothing to commit"; warning "Step 1.5: Nothing new to commit (working tree already clean)"; }
+    fi
 else
     step_emit "1.5" "skip" "Step 1.5: Auto-commit" "already clean"
     info "Step 1.5: No uncommitted main-branch changes — skipping auto-commit"
@@ -2461,6 +3023,39 @@ if [ "$need_worktrees" = true ]; then
         # that would block the merge are cleaned here.
         git -C "$_merge_git_root" checkout -- . 2>/dev/null || true
         git -C "$_merge_git_root" clean -fd 2>/dev/null || true
+
+        # Merge-integrity guard (found live via flow-gap analysis, 2026-07-12):
+        # the real merge below uses `-X ours`, which silently resolves any
+        # GENUINELY CONFLICTING hunk in favor of $_merge_current_branch's
+        # content, discarding whatever $_wt_branch changed there — with no
+        # error, no warning, and (confirmed empirically) no "CONFLICT" text
+        # anywhere in git's own output; it exits 0 and looks identical to a
+        # clean merge. Every downstream check (build gate, lint gate, Team
+        # Lead Review, SAST) only ever sees the post-merge diff, so content
+        # -X ours drops was never part of that diff — none of them can ever
+        # catch this. `git merge-tree --write-tree` (git >= 2.38) computes
+        # the same merge WITHOUT touching the working tree or creating a
+        # commit, and exits non-zero with the conflicting file list when a
+        # real conflict would occur — a pure git-history invariant, no
+        # stack-specific logic, so refuse to silently auto-resolve instead.
+        _mt_output=$(git -C "$_merge_git_root" merge-tree --write-tree --name-only \
+            "$_merge_current_branch" "$_wt_branch" 2>&1)
+        _mt_exit=$?
+        if [ "$_mt_exit" -ne 0 ]; then
+            _mt_conflict_files=$(echo "$_mt_output" | tail -n +2 | awk '/^$/{exit} {print}')
+            error "  Merge-integrity guard: $_wt_branch conflicts with $_merge_current_branch in: ${_mt_conflict_files:-<unknown file>}"
+            error "  Proceeding with '-X ours' would SILENTLY DISCARD $_wt_branch's changes there with no trace — refusing to auto-resolve."
+            mkdir -p "${PROJECT_ROOT}/.epam/merge-conflicts"
+            jq -n --arg branch "$_wt_branch" --arg target "$_merge_current_branch" \
+                --arg files "$_mt_conflict_files" --arg phase "$PHASE" \
+                '{phase: $phase, branch: $branch, target: $target, conflictingFiles: ($files | split("\n") | map(select(length > 0))), detectedAt: (now | todate)}' \
+                > "${PROJECT_ROOT}/.epam/merge-conflicts/${PHASE}-${_wt_branch}.json" 2>/dev/null
+            "$SCRIPT_DIR/update-monitor.sh" event "merge_conflict" \
+                "Merge-integrity guard: $_wt_branch conflicts with $_merge_current_branch in ${_mt_conflict_files:-unknown file} — refusing silent -X ours resolution" "" "main" "orchestrator" 2>/dev/null || true
+            MERGE_FAILED=true
+            continue
+        fi
+
         if git -C "$_merge_git_root" merge --no-ff -X ours "$_wt_branch" \
             -m "merge: phase $PHASE ${_wt_branch#wt-} lane ($_ahead commits)" 2>&1; then
             success "  Merged $_wt_branch into $_merge_current_branch"
@@ -2507,6 +3102,14 @@ fi
 # ACs are never modified — TCs are additive only.
 # Skip with: SKIP_TC_WRITER=1
 # ──────────────────────────────────────────────
+# Unlike the INLINE gate above (Step 1 loop, pre-execution — see its own
+# comment for why combo stories must be excluded there), this gate runs
+# AFTER every Step 1 story has already completed: by now a combo story's own
+# impl+test files genuinely exist on disk, so "any file is a test file" is
+# the correct, safe classification here — this is deliberately NOT scoped to
+# "all files" like the inline gate, since combo stories legitimately benefit
+# from real TC generation once they're done (this is the original,
+# unmodified behavior this gate always had).
 _tc_writer_needed=$(jq -r --arg phase "$PHASE" \
     '(.implementationOrder[$phase] // []) as $ids |
      [.stories[] | select(.id as $id | $ids | index($id)) |
@@ -2540,6 +3143,263 @@ if [ "${_tc_writer_needed:-0}" -gt 0 ]; then
 else
     step_emit "1.6" "skip" "Step 1.6: TC writer gate" "all TCs present"
     info "Step 1.6: TC writer gate — all test stories already have TCs or no test stories in phase"
+fi
+
+# ──────────────────────────────────────────────
+# Step 1.65: Skills coordinator audit
+#
+# Root cause this addresses (found live, 2026-07-10, tier3-travel-app run): a
+# self-heal skill note ("Do not use 'as' keyword for type assertions... use
+# 'value as Type'...") was persisted TWICE, verbatim, into typescript-
+# engineer's profile during a single story's retry loop — the note is also
+# internally self-contradictory (it recommends the exact syntax it says not
+# to use). Nothing in the pipeline ever looks at the ACCUMULATED set of
+# skill notes as a whole; FailureAnalyst only ever appends. This step audits
+# profiles.json once per phase, after Step 1's healing activity has had a
+# chance to add new notes:
+#   1. Deterministic pass (run_skills_audit_scan.py): collapses exact-
+#      duplicate [Self-Heal] paragraphs within each role's profile, and
+#      flags (via a narrow regex heuristic) any note that says "do not use
+#      'X'" while also recommending "use ... 'X'" elsewhere in the same
+#      note — exactly the shape of bug that motivated this step.
+#   2. Only if step 1 flags a suspected contradiction: invoke the
+#      skills-coordinator agent (Bash+WriteFile tool access, same pattern as
+#      run_pre_phase_assessment) to rewrite JUST that flagged note into
+#      something internally coherent. The LLM is only ever invoked when the
+#      deterministic scan found something to fix — most phases will run the
+#      free, instant scan and skip the LLM call entirely.
+# Bypass: SKIP_SKILLS_AUDIT=1
+run_skills_audit_scan() {
+    local profiles_file="$1"
+    # Locked for the whole scan+conditional-write: fast, in-memory text
+    # processing only (no LLM call inside), so holding the lock this long
+    # never risks stalling a parallel worktree story on model latency.
+    ( flock -w 10 200 || { error "  [SkillsAudit] Could not acquire lock on $profiles_file"; return 1; }
+    python3 - "$profiles_file" << 'PYEOF'
+import json, re, sys, os
+
+path = sys.argv[1]
+with open(path) as f:
+    profiles = json.load(f)
+
+duplicates_removed = 0
+contradictions = []
+
+for role, text in profiles.items():
+    if not isinstance(text, str) or '[Self-Heal]' not in text:
+        continue
+    paragraphs = text.split('\n\n')
+    seen = set()
+    deduped = []
+    for para in paragraphs:
+        key = para.strip()
+        if key.startswith('[Self-Heal]'):
+            if key in seen:
+                duplicates_removed += 1
+                continue
+            seen.add(key)
+        deduped.append(para)
+    new_text = '\n\n'.join(deduped)
+    if new_text != text:
+        profiles[role] = new_text
+        text = new_text
+
+    for para in text.split('\n\n'):
+        if not para.strip().startswith('[Self-Heal]'):
+            continue
+        m = re.search(r"(?:do not|never|avoid)\s+use\s+'([^']+)'", para, re.IGNORECASE)
+        if not m:
+            continue
+        token = re.escape(m.group(1))
+        # Does the note ALSO recommend using the same token elsewhere (past
+        # the "do not use" clause itself)? The token may reappear as its own
+        # quoted string ('as') or embedded as a whole word inside a longer
+        # quoted phrase ('value as Type') -- both are the same contradiction.
+        rest = para[m.end():]
+        if re.search(r"\buse\b[^.]*'[^']*\b" + token + r"\b[^']*'", rest, re.IGNORECASE):
+            contradictions.append({'role': role, 'note': para.strip()})
+
+if duplicates_removed > 0:
+    _tmp_path = path + '.tmp'
+    with open(_tmp_path, 'w') as f:
+        json.dump(profiles, f, indent=2)
+    os.replace(_tmp_path, path)
+
+print(json.dumps({'duplicates_removed': duplicates_removed, 'contradictions': contradictions}))
+PYEOF
+    ) 200>"${profiles_file}.lock"
+}
+
+if [ "${SKIP_SKILLS_AUDIT:-0}" = "1" ]; then
+    step_emit "1.65" "skip" "Step 1.65: Skills coordinator audit" "SKIP_SKILLS_AUDIT=1"
+else
+    step_emit "1.65" "running" "Step 1.65: Skills coordinator audit"
+    _skills_audit_result=$(run_skills_audit_scan "$AGENT_PROFILES_FILE" 2>/dev/null || echo '{"duplicates_removed":0,"contradictions":[]}')
+    _skills_dupes_removed=$(echo "$_skills_audit_result" | jq -r '.duplicates_removed // 0' 2>/dev/null || echo 0)
+    _skills_contradiction_count=$(echo "$_skills_audit_result" | jq -r '.contradictions | length' 2>/dev/null || echo 0)
+
+    if [ "${_skills_dupes_removed:-0}" -gt 0 ]; then
+        success "  [SkillsAudit] Removed ${_skills_dupes_removed} duplicate skill note(s) from profiles.json"
+    fi
+
+    if [ "${_skills_contradiction_count:-0}" -gt 0 ]; then
+        warning "  [SkillsAudit] ${_skills_contradiction_count} suspected self-contradictory skill note(s) found — invoking skills-coordinator to rewrite"
+        _skills_before=$(cat "$AGENT_PROFILES_FILE" 2>/dev/null || echo "{}")
+        while IFS= read -r _sc_row; do
+            [ -z "$_sc_row" ] && continue
+            _sc_role=$(echo "$_sc_row" | jq -r '.role')
+            _sc_note=$(echo "$_sc_row" | jq -r '.note')
+            _sc_prompt="You are the skills-coordinator agent. A persisted self-heal skill note in profiles.json for the '${_sc_role}' role is suspected to be internally self-contradictory (it says not to use something, then recommends using that same thing). Read ${AGENT_PROFILES_FILE}, find the EXACT paragraph below inside the '${_sc_role}' profile string, and rewrite ONLY that paragraph so it states one clear, non-contradictory rule — keep the '[Self-Heal]' prefix and stay under 200 characters. Do not touch any other part of the profile.
+
+Flagged note:
+${_sc_note}"
+            if run_orch_prompt_with_tools "$_sc_prompt" "skills_audit" "${PHASE:-unknown}" > "$LOG_DIR/skills-coordinator-${PHASE}.log" 2>&1; then
+                if jq empty "$AGENT_PROFILES_FILE" 2>/dev/null; then
+                    success "  [SkillsAudit] Rewrote contradictory note for [${_sc_role}]"
+                else
+                    error "  [SkillsAudit] skills-coordinator corrupted profiles.json! Restoring pre-audit snapshot."
+                    echo "$_skills_before" > "$AGENT_PROFILES_FILE"
+                fi
+            else
+                warning "  [SkillsAudit] skills-coordinator failed to rewrite note for [${_sc_role}] — leaving as-is"
+            fi
+            jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg phase "${PHASE:-unknown}" \
+                --arg role "$_sc_role" --arg note "$_sc_note" \
+                '{timestamp:$ts, phase:$phase, role:$role, event:"contradiction_rewrite", flagged_note:$note}' \
+                >> "$LOG_DIR/skills-coordinator-audit.jsonl" 2>/dev/null || true
+        done < <(echo "$_skills_audit_result" | jq -c '.contradictions[]' 2>/dev/null)
+    fi
+    step_emit "1.65" "pass" "Step 1.65: Skills coordinator audit"
+fi
+
+# ──────────────────────────────────────────────
+# Step 1.66: Tools coordinator audit
+#
+# Same rationale and shape as Step 1.65, applied to the dynamic-tools
+# mechanism instead of skill notes: FailureAnalyst can write a tool script to
+# .epam/dynamic-tools/<name>.sh (target=tool), and run_dynamic_tools_in_
+# unlocked_window() (claude.sh) runs every reviewed, syntax-valid tool on
+# every retry unconditionally — but nothing ever checks whether a tool
+# actually WORKS, or whether two tools solve the same problem. Observed live
+# this session: "[dynamic-tools] mock-fetch-in-test.sh exited non-zero
+# (continuing)" — a tool got created, was broken, and the pipeline just
+# logged a warning and moved on, paying its cost on every subsequent retry
+# with no mechanism to ever fix or remove it.
+#   1. Deterministic scan (run_tools_audit_scan): for each reviewed tool,
+#      (a) a free bash -n syntax check, (b) counts "<tool>.sh exited
+#      non-zero" occurrences across this phase's main-*.log files (a REAL
+#      observed-failure signal, not a synthetic re-execution — tools aren't
+#      re-run here to avoid side effects outside their sanctioned window),
+#      (c) flags near-duplicate tools via purpose-comment similarity.
+#   2. Only when something is flagged, invoke the tools-coordinator LLM
+#      (Bash+WriteFile access) to fix the broken tool or consolidate a
+#      duplicate pair.
+# Bypass: SKIP_TOOLS_AUDIT=1
+run_tools_audit_scan() {
+    local tools_dir="$1"
+    local log_dir="$2"
+    python3 - "$tools_dir" "$log_dir" << 'PYEOF'
+import glob, json, os, re, sys
+
+tools_dir, log_dir = sys.argv[1], sys.argv[2]
+result = {"broken": [], "duplicates": []}
+
+if not os.path.isdir(tools_dir):
+    print(json.dumps(result))
+    sys.exit(0)
+
+tool_files = sorted(glob.glob(os.path.join(tools_dir, "*.sh")))
+reviewed = [t for t in tool_files if os.path.exists(t + ".reviewed")]
+
+# Combined text of this phase's per-story logs, for the failure-count check.
+log_text = ""
+for log_file in glob.glob(os.path.join(log_dir, "main-*.log")):
+    try:
+        with open(log_file, errors="ignore") as f:
+            log_text += f.read()
+    except Exception:
+        pass
+
+purposes = {}
+for tool_path in reviewed:
+    name = os.path.basename(tool_path)[:-3]
+    with open(tool_path) as f:
+        content = f.read()
+
+    syntax_rc = os.system(f"bash -n {tool_path!r} >/dev/null 2>&1")
+    if syntax_rc != 0:
+        result["broken"].append({"tool": name, "reason": "syntax"})
+        continue
+
+    fail_count = len(re.findall(re.escape(name) + r"\.sh exited non-zero", log_text))
+    if fail_count >= 2:
+        result["broken"].append({"tool": name, "reason": f"runtime ({fail_count} non-zero exits this phase)"})
+
+    # Purpose is the second line: "# <purpose>" (first line is the shebang).
+    lines = content.split("\n")
+    purpose = lines[1][2:].strip() if len(lines) > 1 and lines[1].startswith("#") else ""
+    purposes[name] = purpose
+
+names = list(purposes.keys())
+for i in range(len(names)):
+    for j in range(i + 1, len(names)):
+        a, b = names[i], names[j]
+        pa, pb = purposes[a].lower().split(), purposes[b].lower().split()
+        if not pa or not pb:
+            continue
+        overlap = len(set(pa) & set(pb)) / max(len(set(pa) | set(pb)), 1)
+        if overlap >= 0.6:
+            result["duplicates"].append({"tool_a": a, "tool_b": b})
+
+print(json.dumps(result))
+PYEOF
+}
+
+if [ "${SKIP_TOOLS_AUDIT:-0}" = "1" ]; then
+    step_emit "1.66" "skip" "Step 1.66: Tools coordinator audit" "SKIP_TOOLS_AUDIT=1"
+else
+    step_emit "1.66" "running" "Step 1.66: Tools coordinator audit"
+    _tools_audit_result=$(run_tools_audit_scan "$PROJECT_ROOT/.epam/dynamic-tools" "$LOG_DIR" 2>/dev/null || echo '{"broken":[],"duplicates":[]}')
+    _tools_broken_count=$(echo "$_tools_audit_result" | jq -r '.broken | length' 2>/dev/null || echo 0)
+    _tools_dup_count=$(echo "$_tools_audit_result" | jq -r '.duplicates | length' 2>/dev/null || echo 0)
+
+    if [ "${_tools_broken_count:-0}" -gt 0 ] || [ "${_tools_dup_count:-0}" -gt 0 ]; then
+        warning "  [ToolsAudit] ${_tools_broken_count} broken tool(s), ${_tools_dup_count} duplicate pair(s) found — invoking tools-coordinator"
+        while IFS= read -r _tc_row; do
+            [ -z "$_tc_row" ] && continue
+            _tc_tool=$(echo "$_tc_row" | jq -r '.tool')
+            _tc_reason=$(echo "$_tc_row" | jq -r '.reason')
+            _tc_path="$PROJECT_ROOT/.epam/dynamic-tools/${_tc_tool}.sh"
+            _tc_before=$(cat "$_tc_path" 2>/dev/null || echo "")
+            _tc_prompt="You are the tools-coordinator agent. A dynamic tool at ${_tc_path} is broken (${_tc_reason}). Read the file, fix it so it runs successfully and stays idempotent (safe to run multiple times), and write the corrected script back to the SAME path. Keep the '#!/usr/bin/env bash' shebang and the purpose comment on line 2. Do not touch any other file."
+            if run_orch_prompt_with_tools "$_tc_prompt" "tools_audit" "${PHASE:-unknown}" > "$LOG_DIR/tools-coordinator-${PHASE}.log" 2>&1; then
+                if bash -n "$_tc_path" 2>/dev/null; then
+                    success "  [ToolsAudit] Rewrote broken tool [${_tc_tool}]"
+                else
+                    error "  [ToolsAudit] tools-coordinator left ${_tc_tool}.sh syntactically broken! Restoring pre-audit snapshot."
+                    echo "$_tc_before" > "$_tc_path"
+                fi
+            else
+                warning "  [ToolsAudit] tools-coordinator failed to fix [${_tc_tool}] — leaving as-is"
+            fi
+            jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg phase "${PHASE:-unknown}" \
+                --arg tool "$_tc_tool" --arg reason "$_tc_reason" \
+                '{timestamp:$ts, phase:$phase, tool:$tool, reason:$reason, event:"broken_tool_rewrite"}' \
+                >> "$LOG_DIR/tools-coordinator-audit.jsonl" 2>/dev/null || true
+        done < <(echo "$_tools_audit_result" | jq -c '.broken[]' 2>/dev/null)
+
+        while IFS= read -r _tc_dup_row; do
+            [ -z "$_tc_dup_row" ] && continue
+            _tc_a=$(echo "$_tc_dup_row" | jq -r '.tool_a')
+            _tc_b=$(echo "$_tc_dup_row" | jq -r '.tool_b')
+            warning "  [ToolsAudit] Duplicate tools detected: ${_tc_a}.sh and ${_tc_b}.sh solve overlapping problems — flagged for manual review (not auto-merged)"
+            jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg phase "${PHASE:-unknown}" \
+                --arg a "$_tc_a" --arg b "$_tc_b" \
+                '{timestamp:$ts, phase:$phase, tool_a:$a, tool_b:$b, event:"duplicate_flagged"}' \
+                >> "$LOG_DIR/tools-coordinator-audit.jsonl" 2>/dev/null || true
+        done < <(echo "$_tools_audit_result" | jq -c '.duplicates[]' 2>/dev/null)
+    fi
+    step_emit "1.66" "pass" "Step 1.66: Tools coordinator audit"
 fi
 
 # ──────────────────────────────────────────────
@@ -2617,7 +3477,11 @@ PROMPT_EOF
     log "Backed up prd.json to ${PRD_FILE}.pre-assessment"
 
     cd "$PROJECT_ROOT"
-    if run_orch_prompt "$assessment_prompt" "assessment" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"; then
+    # run_orch_prompt_with_tools (not plain run_orch_prompt): this prompt
+    # instructs writing a report file, updating the PRD's agentRole fields, and
+    # flock-appending to JSONL — same class of bug already fixed above for the
+    # pre-phase (Step 0.5) assessment call.
+    if run_orch_prompt_with_tools "$assessment_prompt" "assessment" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"; then
         success "Phase assessment completed for '$phase_id'"
     else
         warning "Phase assessment failed for '$phase_id' (non-critical)"
@@ -2640,6 +3504,8 @@ else
     step_emit "3.5" "skip" "Step 3.5: Post-parallel assessment" "no cost data"
     info "Step 3.5: No cost data yet — skipping post-parallel assessment"
 fi
+assert_no_story_ids_lost "presplit" "Step 3.5: Post-parallel assessment"
+assert_no_story_ids_gained "presplit" "Step 3.5: Post-parallel assessment"
 
 # ──────────────────────────────────────────────
     "$SCRIPT_DIR/update-monitor.sh" event "phase_assessment" "Running post-phase assessment" "" "main" "team-lead-agent" 2>/dev/null || true
@@ -2881,14 +3747,32 @@ LINT_AC_EOF
                         --json - 2>>"$_lint_rem_log" || echo "")"
                 _lint_ac_tmp="$(mktemp)"
                 echo "$_lint_ac_raw" > "$_lint_ac_tmp"
-                _lint_acs_added="$(python3 - "${MAIN_PRD_FILE:-$PRD_FILE}" "$_lint_story_id" "$_lint_ac_tmp" <<'LINT_AC_PY'
-import sys,json,re
+                _lint_acs_added="$( ( flock -w 10 200 || { error "  [lint-gate:remediator] Could not acquire lock on ${MAIN_PRD_FILE:-$PRD_FILE}"; return 1; }
+                python3 - "${MAIN_PRD_FILE:-$PRD_FILE}" "$_lint_story_id" "$_lint_ac_tmp" <<'LINT_AC_PY'
+import sys,json,os
 prd_path=sys.argv[1]; story_id=sys.argv[2]; raw_file=sys.argv[3]
 raw=open(raw_file).read()
-m=re.search(r'\{[^{}]*"new_acs"[^{}]*\}', raw, re.DOTALL)
-if not m: sys.exit(0)
-try: payload=json.loads(m.group(0))
-except: sys.exit(0)
+# Robust JSON-object scan, not a brace-depth-free regex -- see the sibling
+# fix in the Step 4.2 story-ac-remediator above for why: a suggested AC's
+# own verification snippet (e.g. `node -e "...{...}..."`) can contain
+# literal braces inside a JSON string value, which a regex requiring ZERO
+# braces in the whole match can never find. json.JSONDecoder.raw_decode
+# respects real JSON nesting/escaping regardless of string contents.
+decoder=json.JSONDecoder()
+payload=None
+idx=0
+while True:
+    start=raw.find('{', idx)
+    if start==-1: break
+    try:
+        obj,end=decoder.raw_decode(raw, start)
+        if isinstance(obj, dict) and 'new_acs' in obj:
+            payload=obj
+            break
+        idx=end
+    except json.JSONDecodeError:
+        idx=start+1
+if not payload: sys.exit(0)
 new_acs=payload.get('new_acs',[])
 if not new_acs: sys.exit(0)
 with open(prd_path) as f: d=json.load(f)
@@ -2900,10 +3784,13 @@ for s in d['stories']:
             if ac and ac not in existing and len(existing)<24:
                 s.setdefault('acceptanceCriteria',[]).append({'text':ac,'status':'pending'})
                 added+=1
-with open(prd_path,'w') as f: json.dump(d,f,indent=2)
+_tmp_prd_path=prd_path+'.tmp'
+with open(_tmp_prd_path,'w') as f: json.dump(d,f,indent=2)
+os.replace(_tmp_prd_path, prd_path)
 print(added)
 LINT_AC_PY
-2>/dev/null || echo "0")"
+                2>/dev/null || echo "0"
+                ) 200>"${MAIN_PRD_FILE:-$PRD_FILE}.lock" )"
                 rm -f "$_lint_ac_tmp"
                 if [ "${_lint_acs_added:-0}" -gt 0 ]; then
                     success "  [lint-gate:remediator] ${_lint_acs_added} AC(s) added to $_lint_story_id"
@@ -2993,6 +3880,12 @@ run_testing_gates() {
     local gate_jsonl="$LOG_DIR/testing-gates.jsonl"
     local profiles_file="$AGENT_PROFILES_FILE"
     local failed=0
+    # Declared here (not down at the remediation block) because several gates'
+    # "agent ran fine, content says fail" branches need to append to these
+    # AS THEY EVALUATE — declaring them later in the same function would wipe
+    # out those earlier appends via `local`'s scope-wide (not block-wide) effect.
+    local _failing_logs=()
+    local _log_labels=()
     local force_lightpanda="${FORCE_LIGHTPANDA:-0}"
     local force_playwright="${FORCE_PLAYWRIGHT:-0}"
     local routing_decision="auto"
@@ -3188,7 +4081,13 @@ Return strict JSON only:
 
             echo "[$(date -Iseconds)] story=$story_id route=$route score=$route_score reason=$route_reason" >> "$e2e_route_log"
             set +e
-            run_orch_prompt "$prompt" "qa-gate:e2e" "${story_id:-unknown}" 2>&1 | tee "$story_log"
+            # run_orch_prompt_with_tools (not plain run_orch_prompt): the
+            # playwright-agent/lightpanda-agent profiles instruct actually
+            # running browser E2E tests — impossible without Bash tool access,
+            # so this call was guaranteed to hallucinate its verdict every time
+            # (found live 2026-07-08, same class of bug already fixed for the
+            # assessment agents above).
+            run_orch_prompt_with_tools "$prompt" "qa-gate:e2e" "${story_id:-unknown}" 2>&1 | tee "$story_log"
             rc=${PIPESTATUS[0]:-1}
             set -e
             if [ $rc -ne 0 ]; then
@@ -3398,6 +4297,79 @@ $sast_prompt"
             _tsc_out=$( cd "$PROJECT_ROOT" && "$_tsc_node_bin" ./node_modules/.bin/tsc --noEmit 2>&1 )
             local _tsc_rc=$?
             set -e
+
+            # Deterministic self-heal for TS18003 ("No inputs were found") —
+            # recurred 3x live (2026-07-08): spec-pass sometimes splits the
+            # scaffold story so that NO child story ever creates a real source
+            # file, leaving tsconfig.json's own include glob matching zero
+            # files. This is 100% mechanically diagnosable (tsc says exactly
+            # this) and mechanically fixable — no LLM judgment needed, so fix
+            # it here instead of letting it fall through to SAST/remediation,
+            # which already proved unable to ground a fix for a finding that
+            # points at a config file no story owns. Fully generic: reads
+            # tsconfig.json's OWN include patterns already on disk — no
+            # hardcoded file names, no assumption beyond "this is a tsconfig.json".
+            if [ $_tsc_rc -ne 0 ] && echo "$_tsc_out" | grep -q "error TS18003"; then
+                local _placeholder_created=""
+                _placeholder_created=$(python3 - "$PROJECT_ROOT" << 'PYEOF'
+import json, os, re, glob, sys
+
+project_root = sys.argv[1] if len(sys.argv) > 1 else "."
+tsconfig_path = os.path.join(project_root, "tsconfig.json")
+try:
+    with open(tsconfig_path) as f:
+        raw = f.read()
+    raw_nocomments = re.sub(r'^\s*//.*$', '', raw, flags=re.MULTILINE)
+    cfg = json.loads(raw_nocomments)
+except Exception:
+    print("")
+    sys.exit(0)
+
+includes = cfg.get("include") or []
+if not includes:
+    print("")
+    sys.exit(0)
+
+# Already has real inputs somewhere? Nothing to heal.
+for pattern in includes:
+    matches = [m for m in glob.glob(os.path.join(project_root, pattern), recursive=True) if os.path.isfile(m)]
+    if matches:
+        print("")
+        sys.exit(0)
+
+# Derive a placeholder path from the first include pattern's static (non-glob) prefix.
+first_pattern = includes[0]
+m = re.match(r'^([^*?{}\[\]]*)', first_pattern)
+base = m.group(1) if m else ""
+base_dir = os.path.dirname(os.path.join(project_root, base)) or project_root
+if not base_dir.startswith(project_root):
+    base_dir = project_root
+
+os.makedirs(base_dir, exist_ok=True)
+placeholder_path = os.path.join(base_dir, "index.ts")
+if not os.path.exists(placeholder_path):
+    with open(placeholder_path, "w") as f:
+        f.write("export {};\n")
+print(os.path.relpath(placeholder_path, project_root))
+PYEOF
+2>/dev/null || echo "")
+
+                if [ -n "$_placeholder_created" ]; then
+                    warning "  [scaffold-self-heal] tsconfig.json include glob matched zero files (TS18003) — created minimal placeholder: $_placeholder_created"
+                    set +e
+                    _tsc_out=$( cd "$PROJECT_ROOT" && "$_tsc_node_bin" ./node_modules/.bin/tsc --noEmit 2>&1 )
+                    _tsc_rc=$?
+                    set -e
+                    if [ $_tsc_rc -eq 0 ]; then
+                        success "  [scaffold-self-heal] tsc now passes after placeholder creation"
+                        ( cd "$PROJECT_ROOT" && git add "$_placeholder_created" 2>/dev/null && \
+                          git commit -m "chore(scaffold-self-heal): add placeholder ${_placeholder_created} so tsc has a real input" --quiet 2>/dev/null ) || true
+                    else
+                        warning "  [scaffold-self-heal] placeholder created but tsc still fails for other reasons — falling through to normal gate evaluation"
+                    fi
+                fi
+            fi
+
             if [ $_tsc_rc -eq 0 ]; then
                 local _src_count
                 _src_count=$(find "$PROJECT_ROOT/src" -name "*.ts" 2>/dev/null | wc -l || echo "?")
@@ -3620,6 +4592,8 @@ except Exception:
                 step_emit "4.2a" "fail" "Step 4.2a: SAST sentinel"
                 error "  SAST sentinel: FAIL verdict (could not parse blockerCount)"
                 failed=1
+                _failing_logs+=("$sast_log")
+                _log_labels+=("sast-sentinel")
             else
                 step_emit "4.2a" "warn" "Step 4.2a: SAST sentinel" "no parseable findings"
                 success "  SAST sentinel: PASS (no parseable findings)"
@@ -3628,6 +4602,15 @@ except Exception:
             step_emit "4.2a" "fail" "Step 4.2a: SAST sentinel"
             error "  SAST sentinel: FAIL — $_sast_blockers blocker finding(s) detected"
             failed=1
+            # sast_exit=0 here (agent exited clean) so the later exit-code check
+            # in the remediation-log collector won't pick this up — add it
+            # explicitly so the self-heal remediation pipeline actually fires
+            # (same fix already applied to perf-sentinel below; this failure mode
+            # — agent runs fine, content says fail — is the COMMON case, not the
+            # exception, so skipping remediation for it defeated self-heal for
+            # the majority of real testing-gate failures).
+            _failing_logs+=("$sast_log")
+            _log_labels+=("sast-sentinel")
         else
             step_emit "4.2a" "pass" "Step 4.2a: SAST sentinel"
             success "  SAST sentinel: PASS (blockerCount=$_sast_blockers)"
@@ -3664,17 +4647,37 @@ try:
         print('no-json')
         sys.exit(0)
 
-    # Count story-level verdict:fail lines
-    failing_count = len(re.findall(r'"verdict"\s*:\s*"fail"', text))
+    if not re.search(r'"verdict"\s*:', text):
+        print('no-data')
+        sys.exit(0)
+
+    # Grounding check (same principle already applied to fuzz-weaver/perf-sentinel):
+    # a story's "fail" verdict is only trustworthy if the agent actually verified
+    # SOMETHING about it. When every one of a story's criteria is self-reported
+    # as "untestable" (the agent had no real evidence — e.g. it never actually
+    # used its Read tool despite having access), that "fail" is a hallucinated
+    # conclusion with nothing behind it, not a real finding. Slice the text by
+    # story boundary (storyId occurrence) so each story's own verdict/criteria
+    # are only matched against its OWN slice, not the whole document.
+    story_starts = [m.start() for m in re.finditer(r'"storyId"\s*:\s*"[^"]*"', text)]
+    grounded_failing = 0
+    for i, start in enumerate(story_starts):
+        end = story_starts[i + 1] if i + 1 < len(story_starts) else len(text)
+        story_slice = text[start:end]
+        if not re.search(r'"verdict"\s*:\s*"fail"', story_slice):
+            continue
+        statuses = re.findall(r'"status"\s*:\s*"(met|partial|unmet|untestable)"', story_slice)
+        has_grounded_criterion = any(s != 'untestable' for s in statuses)
+        if has_grounded_criterion:
+            grounded_failing += 1
+        # else: every criterion is untestable — ungrounded fail, don't count it
+
     # The overallVerdict line is a top-level field — distinct from per-story verdict
     overall_m = re.search(r'"overallVerdict"\s*:\s*"(\w+)"', text)
     overall = overall_m.group(1) if overall_m else None
 
-    # If no per-story verdicts at all, the agent had no data
-    if not re.search(r'"verdict"\s*:', text):
-        print('no-data')
-    elif failing_count > 0:
-        print(failing_count)
+    if grounded_failing > 0:
+        print(grounded_failing)
     elif overall == 'warn':
         # Non-blocking partial — treat as 0 failures (warn path handled separately)
         print(0)
@@ -3691,9 +4694,16 @@ SPEC_EXTRACTOR_PY
             step_emit "4.2b" "fail" "Step 4.2b: Spec validator"
             error "  Spec validator: FAIL — $_spec_failing story/stories failed criteria"
             failed=1
+            # spec_exit=0 here (agent exited clean) — append explicitly so
+            # self-heal remediation fires; see the SAST fix above for why.
+            _failing_logs+=("$spec_log")
+            _log_labels+=("spec-validator")
         elif grep -q '"overallVerdict"[[:space:]]*:[[:space:]]*"warn"' "$spec_log" 2>/dev/null; then
             step_emit "4.2b" "warn" "Step 4.2b: Spec validator" "partial"
             warning "  Spec validator: WARN — some criteria partially met (non-blocking)"
+        elif grep -q '"overallVerdict"[[:space:]]*:[[:space:]]*"fail"' "$spec_log" 2>/dev/null; then
+            step_emit "4.2b" "warn" "Step 4.2b: Spec validator" "ungrounded findings downgraded"
+            warning "  Spec validator: FAIL verdict downgraded to WARN — every criterion in every failing story was self-reported as 'untestable' (agent had no real evidence, likely didn't use its tools; re-check manually)"
         else
             step_emit "4.2b" "pass" "Step 4.2b: Spec validator"
             success "  Spec validator: PASS"
@@ -3874,6 +4884,10 @@ $mutant_prompt"
                 step_emit "4.3a" "fail" "Step 4.3a: Review ranger"
                 error "  Review-ranger: FAIL verdict — blocker findings detected"
                 failed=1
+                # review_exit=0 here (agent exited clean) — append explicitly so
+                # self-heal remediation fires; see the SAST fix above for why.
+                _failing_logs+=("$review_log")
+                _log_labels+=("review-ranger")
             elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$review_log" 2>/dev/null; then
                 step_emit "4.3a" "warn" "Step 4.3a: Review ranger" "non-blocking findings"
                 warning "  Review-ranger: WARN — non-blocking findings (continuing)"
@@ -3892,6 +4906,10 @@ $mutant_prompt"
                 step_emit "4.3b" "fail" "Step 4.3b: Mutant hunter"
                 error "  Mutant-hunter: FAIL verdict — mutation score below threshold"
                 failed=1
+                # mutant_exit=0 here (agent exited clean) — append explicitly so
+                # self-heal remediation fires; see the SAST fix above for why.
+                _failing_logs+=("$mutant_log")
+                _log_labels+=("mutant-hunter")
             elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$mutant_log" 2>/dev/null; then
                 step_emit "4.3b" "warn" "Step 4.3b: Mutant hunter" "score 50-69%"
                 warning "  Mutant-hunter: WARN — mutation score 50-69% (non-blocking)"
@@ -3942,12 +4960,26 @@ Use git diff to identify changed source files, then for each public function:
 Focus on: config parsing, provider request construction, billing calculations,
 tool input validation (path traversal, shell metacharacters), auth token parsing.
 
+For any case with status=\"vulnerability\", you MUST also include an
+\"executableTest\" field: a complete, self-contained vitest test file (as a
+single string) that imports the REAL function from its real relative path
+and asserts the CORRECT/SAFE behavior for the specific input you claim is
+mishandled — e.g. \`expect(parseAdults('0')).toBeNull()\`. Do NOT write a
+test that asserts the bug exists; assert what SHOULD happen if the code is
+correct. This file will be written to
+\"$PROJECT_ROOT/.fuzz-verify/case-N.test.ts\" and actually executed — write
+your import path relative to that location (e.g.
+\`import { parseAdults } from '../src/server'\`). A vulnerability claim
+without a real, executable test that actually exercises the real function
+will be treated as unverified and will NOT block the pipeline — do not
+guess at file contents you have not actually read with your tools.
+
 Output format (strict JSON):
 {
   \"agent\": \"fuzz-weaver\",
   \"phase\": \"$phase_id\",
   \"summary\": { \"functionsAnalysed\": N, \"fuzzCasesProposed\": N, \"covered\": N, \"gaps\": N, \"vulnerabilities\": N },
-  \"cases\": [{ \"function\": \"...\", \"file\": \"...\", \"line\": N, \"property\": \"...\", \"generator\": \"...\", \"invariant\": \"...\", \"status\": \"covered|gap|vulnerability\", \"recommendation\": \"...\" }],
+  \"cases\": [{ \"function\": \"...\", \"file\": \"...\", \"line\": N, \"property\": \"...\", \"generator\": \"...\", \"invariant\": \"...\", \"status\": \"covered|gap|vulnerability\", \"recommendation\": \"...\", \"executableTest\": \"...(only when status=vulnerability)...\" }],
   \"verdict\": \"pass|warn|fail\"
 }"
 
@@ -4015,12 +5047,24 @@ $perf_prompt"
             failed=1
         else
             if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$fuzz_log" 2>/dev/null; then
-                # Ground-truth check: count vulnerability findings whose file exists on disk
-                _fuzz_grounded=$(python3 - "$fuzz_log" "$PROJECT_ROOT" << 'PYEOF'
-import json, sys, os, re
+                # Ground-truth check, two layers:
+                #  1. File-exists — same as before, catches claims about non-existent files.
+                #  2. Executable-evidence — a claim referencing a REAL file can still be
+                #     wrong about that file's actual behavior (e.g. misreading a regex).
+                #     Each vulnerability case must supply an "executableTest" (a real vitest
+                #     test the agent wrote asserting the SAFE/expected behavior); we actually
+                #     RUN it against the real code. If the assertion FAILS, the code really
+                #     doesn't behave safely — the vulnerability is confirmed. If it PASSES,
+                #     the code was already correct and the claim was a hallucination. Cases
+                #     with no executableTest (or where vitest isn't available) are treated
+                #     as unverified and do not block the gate — this only counts claims that
+                #     were actually demonstrated against the real source, not merely asserted.
+                local _node_bin
+                _node_bin=$(detect_node 2>/dev/null || true)
+                _fuzz_grounded=$(python3 - "$fuzz_log" "$PROJECT_ROOT" "${_node_bin:-}" << 'PYEOF'
+import json, sys, os, re, subprocess, shutil
 
-log_file    = sys.argv[1]
-project_root = sys.argv[2]
+log_file, project_root, node_bin = sys.argv[1], sys.argv[2], sys.argv[3]
 
 # Extract JSON from the log (agent may emit preamble text)
 content = open(log_file).read()
@@ -4035,30 +5079,73 @@ except Exception:
     print("0")
     sys.exit(0)
 
-grounded = 0
-for case in data.get("cases", []):
+verify_dir = os.path.join(project_root, ".fuzz-verify")
+os.makedirs(verify_dir, exist_ok=True)
+vitest_bin = os.path.join(project_root, "node_modules", ".bin", "vitest")
+can_run = bool(node_bin) and os.path.exists(vitest_bin)
+
+confirmed = 0
+for i, case in enumerate(data.get("cases", [])):
     if case.get("status") != "vulnerability":
         continue
     f = case.get("file", "")
-    # Try both absolute and relative paths
     candidates = [
         f,
         os.path.join(project_root, f),
         os.path.join(project_root, "src", os.path.basename(f)),
     ]
-    if any(os.path.exists(p) for p in candidates):
-        grounded += 1
+    if not any(os.path.exists(p) for p in candidates):
+        continue  # unverifiable file reference — likely hallucinated, skip
 
-print(str(grounded))
+    test_src = case.get("executableTest", "")
+    if not test_src or not can_run:
+        continue  # no executable evidence supplied — do not block on an unverified claim
+
+    # One file at a time in verify_dir: vitest's path argument is a filter,
+    # not a hard restriction, so a leftover file from a PREVIOUS case would
+    # get swept into THIS case's run and could contaminate the result.
+    test_path = os.path.join(verify_dir, f"case-{i}.test.ts")
+    try:
+        with open(test_path, "w") as tf:
+            tf.write(test_src)
+        result = subprocess.run(
+            [node_bin, vitest_bin, "run", test_path, "--reporter=json"],
+            cwd=project_root, capture_output=True, text=True, timeout=60,
+        )
+        # A nonzero exit code alone doesn't distinguish "assertion genuinely
+        # failed" from "syntax/transform error, zero tests ever ran" — both
+        # exit nonzero. Only a REAL assertion failure (numFailedTests > 0,
+        # meaning at least one test actually executed and failed) counts as
+        # confirmation; a test that never ran proves nothing about the code.
+        try:
+            report = json.loads(result.stdout)
+            if report.get("numFailedTests", 0) > 0:
+                confirmed += 1
+        except Exception:
+            pass  # no parseable report — unverified, don't block
+    except Exception:
+        continue  # test didn't even run (timeout, etc.) — unverified, don't block
+    finally:
+        try:
+            os.remove(test_path)
+        except OSError:
+            pass
+
+shutil.rmtree(verify_dir, ignore_errors=True)
+print(str(confirmed))
 PYEOF
 2>/dev/null || echo "0")
                 if [ "${_fuzz_grounded:-0}" -gt 0 ]; then
                     step_emit "4.4a" "fail" "Step 4.4a: Fuzz-weaver"
-                    error "  Fuzz-weaver: FAIL — ${_fuzz_grounded} confirmed vulnerability/vulnerabilities in real files"
+                    error "  Fuzz-weaver: FAIL — ${_fuzz_grounded} confirmed vulnerability/vulnerabilities (verified by actually running the agent's own test against the real code)"
                     failed=1
+                    # fuzz_exit=0 here (agent exited clean) — append explicitly so
+                    # self-heal remediation fires; see the SAST fix above for why.
+                    _failing_logs+=("$fuzz_log")
+                    _log_labels+=("fuzz-weaver")
                 else
-                    step_emit "4.4a" "warn" "Step 4.4a: Fuzz-weaver" "hallucinated findings downgraded"
-                    warning "  Fuzz-weaver: FAIL verdict downgraded to WARN — no vulnerability findings reference existing source files (likely hallucinated; re-check manually)"
+                    step_emit "4.4a" "warn" "Step 4.4a: Fuzz-weaver" "unverified findings downgraded"
+                    warning "  Fuzz-weaver: FAIL verdict downgraded to WARN — no vulnerability finding could be verified by executing a real test against the real code (likely hallucinated; re-check manually)"
                 fi
             elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$fuzz_log" 2>/dev/null; then
                 step_emit "4.4a" "warn" "Step 4.4a: Fuzz-weaver" "gaps>30%"
@@ -4156,9 +5243,13 @@ step_emit "4.4b" "skip" "Step 4.4b: Perf sentinel" "Phase A/B failed"
         # Agent 2 (story-ac-remediator):   augments the owning story's ACs in PRD
         # Agent 3 (profile-augmentor):     appends novel anti-pattern to the relevant profile
 
-        # Collect all failing gate logs for this phase
-        local _failing_logs=()
-        local _log_labels=()
+        # Collect all failing gate logs for this phase. _failing_logs/_log_labels
+        # were already declared at the top of this function (not re-declared here
+        # with `local`, which would wipe the content-based-failure appends made
+        # during each gate's own evaluation above) — this only adds the
+        # complementary case of a genuine agent-process crash (exit code != 0),
+        # which is mutually exclusive with the content-based appends since those
+        # only run in the exit-code-0 branch.
         [ "${sast_exit:-0}"   -ne 0 ] && _failing_logs+=("$sast_log")   && _log_labels+=("sast-sentinel")
         [ "${spec_exit:-0}"   -ne 0 ] && _failing_logs+=("$spec_log")   && _log_labels+=("spec-validator")
         [ "${review_exit:-0}" -ne 0 ] && _failing_logs+=("$review_log") && _log_labels+=("review-ranger")
@@ -4171,6 +5262,14 @@ step_emit "4.4b" "skip" "Step 4.4b: Perf sentinel" "Phase A/B failed"
         if [ "${SKIP_GATE_REMEDIATION:-0}" != "1" ] && [ ${#_failing_logs[@]} -gt 0 ]; then
             warning "Step 4.2: Testing gates FAILED — running self-healing remediation pipeline..."
             local _remediation_applied=0
+            # Set when profile-augmentor successfully (reviewer-approved) updates
+            # the OFFENDING story's own agentRole profile — a genuine "the agent
+            # who'll rewrite this code now has new guidance" signal, just as
+            # real as an AC addition, and must retry the same way (found live,
+            # 2026-07-09: this used to be silently dropped, so a successful
+            # profile fix — the more common outcome of this pipeline in
+            # practice — never led to a retry, only a hard stop).
+            local _profile_remediation_applied=0
             local _rem_log="$LOG_DIR/gate-remediation-${phase_id}.log"
 
             for i in "${!_failing_logs[@]}"; do
@@ -4223,13 +5322,61 @@ for m in re.finditer(r'\{[^{}]*\"story_id\"[^{}]*\}', txt, re.DOTALL):
 " 2>/dev/null || true)
 
                 if [ -z "$_story_id" ] || [ "$_story_id" = "null" ]; then
-                    warning "  [gate-finding-analyst] No grounded finding for ${_glabel} — skipping remediation for this gate"
-                    continue
+                    # Deterministic fallback (found live 2026-07-08): the analyst
+                    # can't ground a finding into a story_id when the finding's
+                    # `file` isn't listed in any story's technicalNotes.files —
+                    # e.g. shared scaffold config (tsconfig.json, package.json)
+                    # that no single story "owns" on paper. But every file that
+                    # was ever actually written IS attributable, deterministically,
+                    # via git: post-story commits always use the exact message
+                    # "story: complete <id> (N file(s))" (see claude.sh's
+                    # post-story commit step). Ask git who last touched the
+                    # finding's file instead of asking the LLM to guess.
+                    local _gf_file
+                    _gf_file=$(grep -o '"file"[[:space:]]*:[[:space:]]*"[^"]*"' "$_glog" 2>/dev/null | head -1 | sed -E 's/.*:[[:space:]]*"([^"]*)"/\1/')
+                    if [ -n "$_gf_file" ] && [ -f "$_gf_file" ]; then
+                        local _gf_commit_subject
+                        _gf_commit_subject=$(git -C "$PROJECT_ROOT" log --follow -1 --format=%s -- "$_gf_file" 2>/dev/null || echo "")
+                        _story_id=$(echo "$_gf_commit_subject" | grep -oP 'story: complete \K\S+' 2>/dev/null || echo "")
+                    fi
+                    if [ -z "$_story_id" ]; then
+                        warning "  [gate-finding-analyst] No grounded finding for ${_glabel} — skipping remediation for this gate"
+                        continue
+                    fi
+                    info "  [gate-finding-analyst] LLM could not ground the finding, but git history attributes ${_gf_file} to: ${_story_id}"
                 fi
                 info "  [gate-finding-analyst] Finding mapped to story: ${_story_id}"
 
+                # The story's OWN agentRole — ground truth for which agent
+                # actually wrote the offending code, used below by
+                # profile-augmentor instead of guessing from the gate name
+                # (found live, 2026-07-09: profile-augmentor's own prompt
+                # hardcoded a static "sast-sentinel finding -> typescript-
+                # engineer profile" table, which only happens to be right
+                # when the story's real role IS typescript-engineer — for
+                # any other role, it silently updates a profile no agent
+                # who touches this story will ever read).
+                local _story_agent_role
+                _story_agent_role=$(jq -r --arg id "$_story_id" \
+                    '.stories[] | select(.id == $id) | .agentRole // "typescript-engineer"' \
+                    "$PRD_FILE" 2>/dev/null || echo "typescript-engineer")
+
                 # ── Agent 2: story-ac-remediator ───────────────────────────────────
-                # Reads the finding JSON + PRD, appends ACs to the owning story
+                # Reads the finding JSON + PRD, proposes ACs for the owning story.
+                #
+                # Deterministic-apply, NOT agent-tool-write (fixed 2026-07-11, after
+                # a live run: the agent's own response contained a well-formed
+                # {"acs_added":2,"acs":[...]} with genuinely concrete, verifiable ACs
+                # for a real tsconfig.json typo -- but the PRD was never actually
+                # updated (confirmed directly via jq afterward), because the prior
+                # version trusted the agent's own tool call (AI_GATE_ALLOW_TOOLS=1,
+                # instructed to "write the updated PRD back to the file") instead of
+                # applying the change ourselves. An LLM narrating "I wrote the file"
+                # in its final text response is not the same as it having actually
+                # called a write tool -- same class of bug already fixed for
+                # run_plan_mode and run_pre_phase_assessment. This now mirrors the
+                # Step 3.8 lint-gate remediator just above, which already applies ACs
+                # deterministically in Python rather than trusting the agent to.
                 info "  [story-ac-remediator] Augmenting ACs for story ${_story_id}..."
                 local _ac_prompt
                 _ac_prompt=$(cat << ENDPROMPT2
@@ -4240,37 +5387,92 @@ $(cat "$_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); p
 ${_finding_json}
 \`\`\`
 
-PRD file: ${PRD_FILE}
 Story to update: ${_story_id}
 
-Augment the story's acceptanceCriteria now. Write the updated PRD back to the file, then emit the JSON summary.
+## Story's existing acceptanceCriteria
+$(jq -c --arg id "$_story_id" '.stories[] | select(.id == $id) | (.acceptanceCriteria // []) | map(if type == "object" then .text else . end)' "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "[]")
+
+Draft the new ACs now and emit ONLY the JSON summary — do not write any files yourself; the orchestrator applies your proposed ACs to the PRD deterministically.
 ENDPROMPT2
 )
                 local _ac_result
                 _ac_result=$(echo "$_ac_prompt" | \
-                    AI_GATE_ALLOW_TOOLS=1 \
                     AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
                     AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
-                    EPAM_DANGEROUS_SKIP_APPROVAL=1 \
-                    CLAUDE_CMD="$CLAUDE_CMD" \
                     EPAM_CLI="${EPAM_CLI:-epam}" \
                     "$AI_RUNNER_CMD" \
                         --provider "${ORCH_GATE_PROVIDER:-minimax}" \
                         --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
                     2>&1 | tee -a "$_rem_log")
 
+                local _ac_result_tmp
+                _ac_result_tmp=$(mktemp)
+                echo "$_ac_result" > "$_ac_result_tmp"
                 local _acs_added
-                _acs_added=$(echo "$_ac_result" | python3 -c "
-import sys, re, json
-txt = sys.stdin.read()
-for m in re.finditer(r'\{[^{}]*\"acs_added\"[^{}]*\}', txt, re.DOTALL):
-    try:
-        obj = json.loads(m.group(0))
-        print(obj.get('acs_added', 0))
+                _acs_added=$( ( flock -w 10 200 || { error "  [story-ac-remediator] Could not acquire lock on ${MAIN_PRD_FILE:-$PRD_FILE}"; return 1; }
+                python3 - "${MAIN_PRD_FILE:-$PRD_FILE}" "$_story_id" "$_ac_result_tmp" <<'AC_APPLY_PY'
+import sys, json, os
+
+prd_path, story_id, raw_file = sys.argv[1], sys.argv[2], sys.argv[3]
+txt = open(raw_file).read()
+
+# Robust JSON-object scan (NOT a brace-depth-free regex): the agent's own
+# suggested ACs frequently embed verification snippets like
+# `node -e "...{...}..."`, whose literal { } characters inside a JSON
+# string value broke the old regex (`\{[^{}]*"acs_added"[^{}]*\}` requires
+# ZERO braces anywhere in the match, including inside string content).
+# json.JSONDecoder.raw_decode respects real JSON string escaping/nesting,
+# so it finds the object regardless of what's inside its string values.
+decoder = json.JSONDecoder()
+payload = None
+idx = 0
+while True:
+    start = txt.find('{', idx)
+    if start == -1:
         break
-    except: pass
-else: print(0)
-" 2>/dev/null || echo 0)
+    try:
+        obj, end = decoder.raw_decode(txt, start)
+        if isinstance(obj, dict) and 'acs' in obj:
+            payload = obj
+            break
+        idx = end
+    except json.JSONDecodeError:
+        idx = start + 1
+
+if not payload:
+    print(0)
+    sys.exit(0)
+
+new_acs = payload.get('acs', [])
+if not new_acs:
+    print(0)
+    sys.exit(0)
+
+with open(prd_path) as f:
+    prd = json.load(f)
+
+added = 0
+for s in prd.get('stories', []):
+    if s.get('id') != story_id:
+        continue
+    existing = [a.get('text', '') if isinstance(a, dict) else str(a) for a in s.get('acceptanceCriteria', [])]
+    for ac in new_acs:
+        if ac and ac not in existing and len(existing) < 24:
+            s.setdefault('acceptanceCriteria', []).append({'text': ac, 'status': 'pending'})
+            existing.append(ac)
+            added += 1
+
+if added > 0:
+    _tmp_prd_path = prd_path + '.tmp'
+    with open(_tmp_prd_path, 'w') as f:
+        json.dump(prd, f, indent=2)
+    os.replace(_tmp_prd_path, prd_path)
+
+print(added)
+AC_APPLY_PY
+                2>/dev/null || echo 0
+                ) 200>"${MAIN_PRD_FILE:-$PRD_FILE}.lock" )
+                rm -f "$_ac_result_tmp"
 
                 if [ "${_acs_added:-0}" -gt 0 ]; then
                     success "  [story-ac-remediator] ${_acs_added} AC(s) added to ${_story_id}"
@@ -4281,6 +5483,21 @@ else: print(0)
 
                 # ── Agent 3: profile-augmentor ─────────────────────────────────────
                 # Checks if the pattern is novel; if so, appends to the relevant profile
+                #
+                # KNOWN GAP (2026-07-11, file-locking pass): unlike every other
+                # profiles.json/PRD writer in this file, this agent still has its
+                # own Bash/WriteFile tool access (AI_GATE_ALLOW_TOOLS=1 below) and
+                # writes profiles.json itself, mid-LLM-call -- that write can't be
+                # wrapped in a shell-level flock the way the deterministic
+                # story-ac-remediator/lint-gate/skills-audit writes above are,
+                # since we don't control the exact moment the agent's own tool call
+                # happens. Two parallel worktree stories both triggering this path
+                # around the same time could still race on profiles.json (the disk-
+                # verification check just below catches a NO-OP claim, but not a
+                # genuine lost-update race between two real concurrent writes).
+                # Converting this to the same deterministic-apply pattern used for
+                # story-ac-remediator would close this gap; out of scope for this
+                # pass.
                 info "  [profile-augmentor] Checking if pattern is novel for profiles..."
                 # Snapshot profiles.json before augmentor writes so reviewer can compare + revert
                 local _profiles_before
@@ -4295,6 +5512,8 @@ ${_finding_json}
 \`\`\`
 
 Profiles file: ${_profiles_file}
+Story that wrote the offending code: ${_story_id}
+That story's agentRole (target THIS profile, not a guess from the gate name): ${_story_agent_role}
 
 Check if the pattern is novel and append a rule if needed. Write the updated profiles.json back, then emit the JSON summary.
 ENDPROMPT3
@@ -4313,9 +5532,25 @@ ENDPROMPT3
                     2>&1 | tee -a "$_rem_log")
 
                 if echo "$_prof_result" | grep -q '"profile_updated"[[:space:]]*:[[:space:]]*true'; then
-                    # Reviewer gate — validate the change before accepting it
                     local _profiles_after
                     _profiles_after=$(cat "$_profiles_file" 2>/dev/null || echo "{}")
+                    # Trust the DISK STATE, not the agent's own claim (fixed
+                    # 2026-07-11, same class of defect already fixed for
+                    # story-ac-remediator): the agent has real Bash/WriteFile
+                    # tool access and is instructed to "write the updated
+                    # profiles.json back, then emit the JSON summary" — but an
+                    # LLM claiming "profile_updated": true in its text response
+                    # is not the same as it having actually called a write
+                    # tool. If profiles.json is byte-identical to before this
+                    # call despite the claim, nothing was really persisted;
+                    # proceeding to the reviewer/apply-flag logic below would
+                    # mark remediation as applied for a change that never
+                    # happened.
+                    if [ "$_profiles_after" = "$_profiles_before" ]; then
+                        warning "  [profile-augmentor] Claimed profile_updated:true but profiles.json is unchanged on disk — treating as no-op, not applied"
+                        continue
+                    fi
+                    # Reviewer gate — validate the change before accepting it
                     local _reviewer_profile
                     _reviewer_profile=$(echo "$_profiles_after" | \
                         python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('prd-change-reviewer',''))" 2>/dev/null || echo "")
@@ -4358,6 +5593,7 @@ print(m.group(1) if m else 'pass')
                         echo "$_profiles_before" > "$_profiles_file" 2>/dev/null || true
                     else
                         success "  [profile-augmentor] Profile updated with new rule for ${_glabel} pattern (reviewer approved)"
+                        _profile_remediation_applied=1
                     fi
                 else
                     info "  [profile-augmentor] No profile update (pattern already covered)"
@@ -4365,7 +5601,7 @@ print(m.group(1) if m else 'pass')
 
             done  # end per-gate loop
 
-            if [ "$_remediation_applied" = "1" ]; then
+            if [ "$_remediation_applied" = "1" ] || [ "$_profile_remediation_applied" = "1" ]; then
                 # Signal the caller (tier3 runner) to prd-remediate and retry the phase
                 warning "Step 4.2: Remediation applied — caller should reset stories and retry phase"
                 error "Step 4.2: Testing gates FAILED — remediation applied, retry required"
@@ -4467,8 +5703,24 @@ _create_bug_fix_phase() {
         seen_owners="$seen_owners $owner_story"
 
         local bug_id="BUG-${owner_story}-${bug_phase}"
-        local failure_excerpt
-        failure_excerpt=$(echo "$vitest_output" | grep -A 40 "$failing_file" | head -45)
+        # Root cause this fixes (2026-07-09 pipeline audit): a 45-line cap
+        # (grep -A 40 + head -45) on the failure excerpt fed into the bug-fix
+        # story's own description risked truncating a genuinely long test
+        # failure (multiple assertion failures for the same file, or a long
+        # stack trace) before the actual root cause ever appeared — the
+        # bug-fix story would then be given an incomplete picture of what's
+        # broken. Cap raised substantially; truncation (if it still happens)
+        # is now an explicit marker, not silent.
+        local failure_excerpt _failure_excerpt_full _failure_excerpt_lines
+        _failure_excerpt_full=$(echo "$vitest_output" | grep -A 150 "$failing_file")
+        _failure_excerpt_lines=$(printf '%s\n' "$_failure_excerpt_full" | wc -l)
+        if [ "$_failure_excerpt_lines" -gt 150 ]; then
+            failure_excerpt=$(printf '%s\n' "$_failure_excerpt_full" | head -150)
+            failure_excerpt="${failure_excerpt}
+[TRUNCATED — ${_failure_excerpt_lines} total lines, only the first 150 shown.]"
+        else
+            failure_excerpt="$_failure_excerpt_full"
+        fi
 
         local story_model story_provider
         if [ -n "$model_override" ]; then
@@ -4843,6 +6095,8 @@ if [ -s "$LOG_DIR/phase-cost.jsonl" ]; then
 else
     info "Step 6: No cost data — skipping final post-phase assessment"
 fi
+assert_no_story_ids_lost "presplit" "Step 6: Final post-phase assessment"
+assert_no_story_ids_gained "presplit" "Step 6: Final post-phase assessment"
 
 # ──────────────────────────────────────────────
 # Step 7: Load Phase Graph into Neo4j

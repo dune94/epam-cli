@@ -273,7 +273,7 @@ describe('claude.sh — reviewer wired after AC patches', () => {
     // After AC revert the patch_count must be reset so healing recorder sees 0 patches applied
     const revertMsgIdx = claudeSrc.indexOf('AC patch rejected by reviewer');
     expect(revertMsgIdx).toBeGreaterThan(-1);
-    const afterRevert = claudeSrc.slice(revertMsgIdx, revertMsgIdx + 600);
+    const afterRevert = claudeSrc.slice(revertMsgIdx, revertMsgIdx + 900);
     expect(afterRevert).toMatch(/patch_count=0/);
   });
 });

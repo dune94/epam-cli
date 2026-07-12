@@ -100,10 +100,11 @@ describe('record_story_actual_cost — orch script implementation', () => {
   });
 
   it('is called after every main-lane story completes', () => {
-    // Must appear immediately after run_story_with_watchdog in the main loop
+    // Must appear after run_story_with_watchdog in the main loop (allowing
+    // room for the watchdog-timeout recovery block in between)
     const mainLoopIdx = orchSrc.indexOf('run_story_with_watchdog "$story" "$LOG_DIR/main-${story}.log"');
     expect(mainLoopIdx).toBeGreaterThan(-1);
-    const after = orchSrc.slice(mainLoopIdx, mainLoopIdx + 200);
+    const after = orchSrc.slice(mainLoopIdx, mainLoopIdx + 900);
     expect(after).toMatch(/record_story_actual_cost "\$story"/);
   });
 

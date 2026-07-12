@@ -533,8 +533,9 @@ describe('run-agent-orchestration.sh — mid-execution split validation', () => 
     // Find the Step 1 story execution loop — after run_story_with_watchdog + tsc gate
     const step1Idx = orchSrc.indexOf('run_story_with_watchdog "$story" "$LOG_DIR/main-${story}.log"');
     expect(step1Idx).toBeGreaterThan(-1);
-    // validate_mid_execution_splits appears within ~750 chars (includes tsc gate block)
-    const postStory = orchSrc.slice(step1Idx, step1Idx + 750);
+    // validate_mid_execution_splits appears within ~1400 chars (includes the
+    // watchdog-timeout recovery block and tsc gate block)
+    const postStory = orchSrc.slice(step1Idx, step1Idx + 1400);
     expect(postStory).toContain('validate_mid_execution_splits "$PHASE"');
   });
 

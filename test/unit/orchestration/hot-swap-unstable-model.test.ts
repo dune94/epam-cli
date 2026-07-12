@@ -187,12 +187,19 @@ describe('run_story_with_watchdog — retry timeout scaling (REAL execution)', (
           opts.multiplier ? `EPAM_WATCHDOG_RETRY_MULTIPLIER="${opts.multiplier}"` : '',
           // Stub `timeout` itself: log the requested duration, fail (124) on the
           // first call, succeed on the second — simulates "timed out once, then
-          // the retry with a bigger budget completes."
-          `_timeout_call_count=0`,
+          // the retry with a bigger budget completes." Call count is tracked in
+          // a file, not a shell variable: `timeout ... | tee ...` runs this
+          // function in a pipeline subshell, so a plain variable increment
+          // never survives between invocations — every call would otherwise
+          // see count=1 and return 124 forever, silently exercising the
+          // double-timeout path this test isn't even trying to cover.
+          `_timeout_call_count_file="${dir}/timeout-call-count"`,
+          `echo 0 > "$_timeout_call_count_file"`,
           `timeout() {`,
-          `  _timeout_call_count=$((_timeout_call_count + 1))`,
+          `  local _n=$(($(cat "$_timeout_call_count_file") + 1))`,
+          `  echo "$_n" > "$_timeout_call_count_file"`,
           `  echo "$1" >> "${callLog}"`,
-          `  if [ "$_timeout_call_count" -eq 1 ]; then return 124; fi`,
+          `  if [ "$_n" -eq 1 ]; then return 124; fi`,
           `  return 0`,
           `}`,
           hotSwapBody,

@@ -201,9 +201,14 @@ describe('Three new agent profiles', () => {
     expect(profiles['profile-augmentor']).toBeTruthy();
   });
 
-  it('profile-augmentor maps gate name to target profile', () => {
-    expect(profiles['profile-augmentor']).toMatch(/sast-sentinel.*typescript-engineer/i);
-    expect(profiles['profile-augmentor']).toMatch(/fuzz-weaver.*typescript-engineer/i);
+  it('profile-augmentor targets the offending story\'s own agentRole, not a static gate-name table', () => {
+    // Root cause this fixes (found live, 2026-07-09): a static "gate name ->
+    // profile" table assumed every finding was written by a
+    // typescript-engineer — silently updating the wrong profile for any
+    // other role. The story's REAL agentRole (passed in as context) is now
+    // the only thing that selects the target profile.
+    expect(profiles['profile-augmentor']).toMatch(/story's OWN agentRole/i);
+    expect(profiles['profile-augmentor']).not.toMatch(/sast-sentinel finding.*typescript-engineer profile/i);
   });
 
   it('profile-augmentor appends under Self-Healing Addendum section', () => {

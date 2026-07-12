@@ -15,9 +15,56 @@
 // ─────────────────────────────────────────────────────────────────────────────
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { spawn, execSync } = require('node:child_process');
 let _jsonrepair;
 try { _jsonrepair = require('jsonrepair').jsonrepair; } catch { _jsonrepair = null; }
+
+// acquireFileLock/releaseFileLock — a bash-`flock`-equivalent for this file's
+// two PRD write sites (run() and validateMidExecutionSplits()). Node has no
+// built-in flock; this uses exclusive file creation (O_EXCL via the 'wx'
+// flag) as the mutual-exclusion primitive, with a stale-lock timeout so a
+// killed process's abandoned lock file doesn't block every future run
+// forever. Added 2026-07-11 alongside the equivalent bash-side flock wraps in
+// claude.sh/run-agent-orchestration.sh -- the atomic write-then-rename fix
+// from earlier the same day prevents CORRUPTION from a killed process, but
+// does not prevent a LOST UPDATE when two processes (e.g. parallel worktree
+// stories) both read-modify-write the same PRD file around the same time.
+// staleMs is intentionally a SEPARATE threshold from timeoutMs: timeoutMs is
+// how long THIS caller is willing to wait before giving up; staleMs is how
+// old an abandoned lock file must be before we assume its owner is dead and
+// steal it. Reusing one value for both would mean a caller that waits past
+// its own timeout would end up STEALING the lock from a still-live holder
+// instead of throwing -- defeating the mutual exclusion the lock exists for.
+function acquireFileLock(lockPath, timeoutMs = 30000, staleMs = 30000) {
+  const start = Date.now();
+  for (;;) {
+    try {
+      const fd = fs.openSync(lockPath, 'wx');
+      fs.writeSync(fd, String(process.pid));
+      fs.closeSync(fd);
+      return;
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err;
+      try {
+        const stat = fs.statSync(lockPath);
+        if (Date.now() - stat.mtimeMs > staleMs) {
+          fs.unlinkSync(lockPath); // stale lock from a killed process -- steal it
+          continue;
+        }
+      } catch {
+        continue; // lock file vanished between EEXIST and stat -- retry immediately
+      }
+      if (Date.now() - start > timeoutMs) {
+        throw new Error(`Timed out waiting for lock: ${lockPath}`);
+      }
+      try { execSync('sleep 0.05'); } catch { /* ignore */ }
+    }
+  }
+}
+
+function releaseFileLock(lockPath) {
+  try { fs.unlinkSync(lockPath); } catch { /* already gone */ }
+}
 
 // ─── MiniMax tool-use definitions ────────────────────────────────────────────
 // Tool-use produces API-enforced valid JSON arguments — eliminates the M3
@@ -323,6 +370,7 @@ async function run() {
   fs.mkdirSync(logDir, { recursive: true });
 
   const prd = JSON.parse(fs.readFileSync(prdPath, 'utf8'));
+  const _initialStoryIds = new Set((prd.stories || []).map((s) => s.id));
 
   // Load agent profiles — spec-coordinator-agent provides the system-level role instruction
   const profilesPath = path.join(automationDir, 'agents', 'profiles.json');
@@ -748,6 +796,20 @@ ${storiesPayload}
     if (Array.isArray(order)) {
       prd.implementationOrder[opts.phase] = order.filter((id) => !delegatedParentIds.has(id));
     }
+
+    // Wire test-child dependencies onto impl siblings from the SAME split —
+    // must run after ALL children for a parent are inserted so basename
+    // matching sees every sibling, not just the first processed.
+    const byParentForWiring = new Map();
+    for (const insert of newStories) {
+      if (!byParentForWiring.has(insert.parentId)) byParentForWiring.set(insert.parentId, []);
+      byParentForWiring.get(insert.parentId).push(insert.story);
+    }
+    const wiringOrder = prd.implementationOrder?.[opts.phase];
+    for (const siblings of byParentForWiring.values()) {
+      wireSplitSiblingDependencies(siblings, prd);
+      reorderSiblingsByDependency(siblings, wiringOrder);
+    }
   }
 
   // ── Step 4: Coordinator review pass ────────────────────────────────────
@@ -1013,7 +1075,24 @@ Use "keep-current" to accept the current (possibly rule-upgraded) model. Only pr
     summary.stats.modelUpgrades = modelChanges;
   }
 
-  fs.writeFileSync(prdPath, JSON.stringify(prd, null, 2));
+  // Story-ID-loss invariant — see assertNoStoryIdsLost's docstring.
+  assertNoStoryIdsLost(_initialStoryIds, new Set((prd.stories || []).map((s) => s.id)), 'run()');
+
+  // Atomic write (write to a temp file, then rename): writeFileSync alone
+  // truncates the target before writing, so a kill mid-write leaves the PRD
+  // empty/corrupted — the same class of incident found live 2026-07-11 (a
+  // "Bad control character in string literal" PRD corruption). Locked
+  // against concurrent writers (e.g. a parallel worktree story patching the
+  // same PRD) so two writes can't interleave at the disk-write moment.
+  const _prdLockPath = `${prdPath}.lock`;
+  acquireFileLock(_prdLockPath);
+  try {
+    const _tmpPrdPath = `${prdPath}.tmp`;
+    fs.writeFileSync(_tmpPrdPath, JSON.stringify(prd, null, 2));
+    fs.renameSync(_tmpPrdPath, prdPath);
+  } finally {
+    releaseFileLock(_prdLockPath);
+  }
   summary.completedAt = new Date().toISOString();
   summary.storyCount = summary.stories.length;
   fs.writeFileSync(path.join(specRunDir, 'summary.json'), JSON.stringify(summary, null, 2));
@@ -1378,6 +1457,117 @@ function correctSplitChildAgentRoleIfTestOnly(prd, story) {
   }
 }
 
+// wireSplitSiblingDependencies(siblings, prd)
+// Root cause this fixes (found live, 2026-07-09, tier3-travel-app run): a
+// split child's `dependencies` array comes straight from the LLM's own split
+// proposal — nothing deterministically cross-references a test-only sibling
+// to its impl sibling from the SAME split. Downstream, claude.sh's
+// dependency-contract injection (build_implementation_prompt,
+// run_failure_analyst) and are_dependencies_satisfied() gate ONLY on
+// `.dependencies`/`.technicalNotes.dependsOn` — so a test child never
+// receives its impl sibling's real (regex-extracted) exported signatures, on
+// its first attempt OR any retry. Confirmed live: SKY-003-test/-test-1 and
+// SKY-004-test all had `dependencies: []` despite an obvious impl sibling
+// (same `specification.createdFrom`), and burned 7+ healing cycles guessing
+// at shifting surface symptoms instead of ever seeing the real contract.
+//
+// Uses the SAME basename-matching convention already proven live in
+// post-impl-tc-writer.sh's peer-file search (strip a test file's suffix,
+// strip a candidate impl file's extension, match on the resulting stem) —
+// generalized to read `testFilePattern`/`sourceExtensions` from the
+// project's existing `.epam/contract-generation.json` (both keys already
+// exist in every scaffolded project's config; zero new schema) instead of
+// hardcoding '.test.ts'/'.ts', so this stays stack-agnostic like every other
+// consumer of that config file.
+function wireSplitSiblingDependencies(siblings, prd) {
+  const outputDir = prd.project?.outputDir;
+  if (!outputDir || !Array.isArray(siblings) || siblings.length < 2) return;
+  const configPath = path.join(outputDir, '.epam', 'contract-generation.json');
+  let cfg;
+  try {
+    cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } catch {
+    return;
+  }
+  if (!cfg.testFilePattern || !Array.isArray(cfg.sourceExtensions) || !cfg.sourceExtensions.length) return;
+  const testFileRe = new RegExp(cfg.testFilePattern);
+  const exts = [...cfg.sourceExtensions].sort((a, b) => b.length - a.length);
+
+  const stemOf = (filePath, isTest) => {
+    const base = filePath.split('/').pop();
+    if (isTest) return base.replace(testFileRe, '');
+    for (const ext of exts) {
+      if (base.endsWith(ext)) return base.slice(0, -ext.length);
+    }
+    return base;
+  };
+
+  for (const testSibling of siblings) {
+    const files = testSibling.technicalNotes?.files;
+    if (!Array.isArray(files) || files.length === 0) continue;
+    if (!files.every((f) => testFileRe.test(f))) continue; // not a pure test-only child
+    const testStems = new Set(files.map((f) => stemOf(f, true)));
+    const deps = new Set(Array.isArray(testSibling.dependencies) ? testSibling.dependencies : []);
+    let wired = false;
+    for (const implSibling of siblings) {
+      if (implSibling === testSibling) continue;
+      const implFiles = implSibling.technicalNotes?.files;
+      if (!Array.isArray(implFiles) || implFiles.length === 0) continue;
+      if (implFiles.some((f) => testFileRe.test(f))) continue; // skip other test siblings
+      const implStems = implFiles.map((f) => stemOf(f, false));
+      if (implStems.some((s) => testStems.has(s)) && !deps.has(implSibling.id)) {
+        deps.add(implSibling.id);
+        wired = true;
+      }
+    }
+    if (wired) {
+      testSibling.dependencies = [...deps];
+      console.log(`spec-mode: wired ${testSibling.id}.dependencies -> [${[...deps].join(', ')}] (deterministic sibling match, createdFrom=${testSibling.specification?.createdFrom})`);
+    }
+  }
+}
+
+// reorderSiblingsByDependency(siblings, order)
+// Required corollary of wireSplitSiblingDependencies: are_dependencies_satisfied()
+// (claude.sh) hard-gates a story on its dependencies' `.completed==true`, and
+// the main Step 1 loop executes strictly in implementationOrder[phase] order.
+// Newly wiring a dependency onto a sibling ordered BEFORE its dependency would
+// introduce a new hard failure that doesn't exist today — this only reorders
+// IDs already present in the same sibling group, moving a dependent story to
+// just after its dependency.
+function reorderSiblingsByDependency(siblings, order) {
+  if (!Array.isArray(order) || !Array.isArray(siblings)) return;
+  const siblingIds = new Set(siblings.map((s) => s.id));
+  for (const s of siblings) {
+    const deps = Array.isArray(s.dependencies) ? s.dependencies : [];
+    for (const depId of deps) {
+      if (!siblingIds.has(depId)) continue; // only reorder within this sibling group
+      const selfIdx = order.indexOf(s.id);
+      const depIdx = order.indexOf(depId);
+      if (selfIdx !== -1 && depIdx !== -1 && selfIdx < depIdx) {
+        order.splice(selfIdx, 1);
+        const newDepIdx = order.indexOf(depId);
+        order.splice(newDepIdx + 1, 0, s.id);
+      }
+    }
+  }
+}
+
+// assertNoStoryIdsLost(beforeIds, afterIds, contextLabel)
+// Deterministic invariant check against silent story deletion — JS-side
+// mirror of run-agent-orchestration.sh's assert_no_story_ids_lost(). See
+// that function's docstring for the live defect this guards against
+// (SKY-002/003/004 vanishing entirely from prd.stories[], 2026-07-09).
+// beforeIds/afterIds are Sets of story IDs; throws if any ID present in
+// beforeIds is absent from afterIds. A GROWING set (new split children) is
+// expected and not an error.
+function assertNoStoryIdsLost(beforeIds, afterIds, contextLabel) {
+  const lost = [...beforeIds].filter((id) => !afterIds.has(id));
+  if (lost.length > 0) {
+    throw new Error(`spec-mode-runner: STORY-ID-LOSS INVARIANT VIOLATED — story/ies vanished from prd.stories[] during ${contextLabel}: ${lost.join(', ')}`);
+  }
+}
+
 // resolveModelProvider(model, env)
 // JS port of claude.sh's resolve_model_provider() — reads EPAM_MODEL_PROVIDER_MAP
 // (pipe-separated "glob-pattern=provider" pairs) and returns the provider for a
@@ -1571,6 +1761,28 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId) {
         newStory.status = 'pending';
         newStory.completed = false;
         newStory.dependencies = Array.isArray(split.dependencies) ? split.dependencies : [];
+        // Backfill the PARENT's own external cross-story dependencies (found
+        // live, 2026-07-12, tier3-travel-app run): a split child's
+        // dependencies come ENTIRELY from the LLM's own per-child split
+        // proposal, which frequently omits a dependency the PARENT already
+        // deterministically declared. Confirmed live: SKY-003 declared
+        // dependencies: ["SKY-002"] (the real Skyscanner API client), but
+        // its split child SKY-003-impl ended up with dependencies: [] after
+        // the split — it ran immediately with no dependency gate at all,
+        // found no real client to import, and self-servingly fabricated a
+        // fake stub client via its own dynamic tool just to get ITS OWN
+        // deliverables to pass. That wrong stub then poisoned every
+        // downstream consumer (SKY-003-test, SKY-004), producing a cascade
+        // of misleading "static vs instance method" self-heal diagnoses that
+        // were never fixable, because the real problem (SKY-002 never
+        // actually succeeded) was invisible the whole time. Merge the
+        // parent's own dependencies into EVERY child unconditionally --
+        // redundant with wireSplitSiblingDependencies' test-to-impl wiring
+        // below is harmless (a dependency gate only needs every listed ID
+        // completed), but dropping a real cross-story dependency is not.
+        for (const _parentDep of Array.isArray(story.dependencies) ? story.dependencies : []) {
+          if (!newStory.dependencies.includes(_parentDep)) newStory.dependencies.push(_parentDep);
+        }
         // Root cause of "no split has ever succeeded" (found live, 2026-07-06):
         // newStory starts as a full clone of the PARENT (including its combined
         // technicalNotes.files) and this field was never overwritten with the
@@ -1580,6 +1792,29 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId) {
         // file) and was rejected below, no matter how the model partitioned it.
         if (split.technicalNotes && typeof split.technicalNotes === 'object') {
           newStory.technicalNotes = split.technicalNotes;
+        }
+        // Same backfill as newStory.dependencies above, for the ALTERNATE
+        // dependency field this project (and claude.sh's own dependency
+        // lookups: `.dependencies // .technicalNotes.dependsOn // []`,
+        // consistently a fallback UNION of both fields) actually uses.
+        // Found while auditing for other instances of the exact dependency-
+        // drop bug (2026-07-12): SKY-002 itself declares its OWN dependency
+        // on SKY-001 ONLY via technicalNotes.dependsOn, not .dependencies --
+        // so a split of SKY-002 would have been just as vulnerable as
+        // SKY-003 was, through this second field path. The technicalNotes
+        // reassignment right above can replace the whole object wholesale
+        // (e.g. a split proposal supplying only `files`), silently dropping
+        // dependsOn the same way the bare dependencies array was dropped --
+        // so this backfill must run AFTER that reassignment, not before.
+        const _parentDependsOn = Array.isArray(story.technicalNotes?.dependsOn) ? story.technicalNotes.dependsOn : [];
+        if (_parentDependsOn.length) {
+          if (!newStory.technicalNotes || typeof newStory.technicalNotes !== 'object') newStory.technicalNotes = {};
+          const _existingDependsOn = Array.isArray(newStory.technicalNotes.dependsOn) ? newStory.technicalNotes.dependsOn : [];
+          const _mergedDependsOn = [..._existingDependsOn];
+          for (const _pd of _parentDependsOn) {
+            if (!_mergedDependsOn.includes(_pd)) _mergedDependsOn.push(_pd);
+          }
+          newStory.technicalNotes.dependsOn = _mergedDependsOn;
         }
         newStory.specification = {
           createdFrom: story.id,
@@ -1951,6 +2186,7 @@ async function validateMidExecutionSplits(prdFile, storyIdsCsv) {
   }
 
   const prd = JSON.parse(fs.readFileSync(prdFile, 'utf8'));
+  const _initialStoryIds = new Set((prd.stories || []).map((s) => s.id));
   const scriptDir = path.dirname(fs.realpathSync(process.argv[1]));
   const aiRunnerCmd = process.env.AI_RUNNER_CMD || path.join(scriptDir, 'ai-run.sh');
   const promptExec = resolvePromptExec(aiRunnerCmd);
@@ -2049,12 +2285,55 @@ async function validateMidExecutionSplits(prdFile, storyIdsCsv) {
         removeFromImplementationOrder(child.id);
       }
       hardViolations++;
+
+      // Root cause this fixes (found live, 2026-07-10, tier3-travel-app run):
+      // openspec (elaboration) and speckit (verification) each independently
+      // split SKY-002 without knowing about each other, producing TWO
+      // redundant impl/test pairs that collide on client.ts/client.test.ts.
+      // Both pairs got deprecated here — correctly — but parentStory.status
+      // was ALREADY 'deprecated' (set by applySpecChanges' spec-pass path
+      // when the FIRST of the two redundant splits looked valid in
+      // isolation), and nothing here ever restored it. Result: the
+      // Skyscanner API client was never implemented at all this run — every
+      // downstream story that depended on it (SKY-003, SKY-004) failed on a
+      // missing module. If the parent has no OTHER surviving (non-deprecated,
+      // non-rejected) children from a different split attempt, it must be
+      // resurrected as a single unsplit story — otherwise its entire scope
+      // silently vanishes with no story left to implement it.
+      const parentHasSurvivingChildren = prd.stories.some(
+        (s) => s.specification?.createdFrom === parentId
+          && s.status !== 'deprecated'
+          && !s.specification?.splitRejected
+      );
+      if (!parentHasSurvivingChildren && parentStory.status === 'deprecated') {
+        const restoredACs = [...new Set(children.flatMap((c) => c.acceptanceCriteria || []))];
+        parentStory.status = 'pending';
+        parentStory.completed = false;
+        if (restoredACs.length) {
+          parentStory.acceptanceCriteria = restoredACs;
+        }
+        const orderForRestore = prd.implementationOrder?.[phase];
+        if (Array.isArray(orderForRestore) && !orderForRestore.includes(parentId)) {
+          orderForRestore.push(parentId);
+        }
+        console.warn(
+          `spec-mode: --validate-splits: ${parentId} has no surviving split children — ` +
+          `restoring as a single unsplit story so its scope isn't lost`
+        );
+      }
       continue;
     }
 
     // AC cap on each child
     for (const child of children) capSplitACs(child, parentId);
     for (const child of children) correctSplitChildAgentRoleIfTestOnly(prd, child);
+
+    // Wire test-child dependencies onto impl siblings from the SAME split —
+    // see wireSplitSiblingDependencies' docstring for the live defect this
+    // fixes. Must run after the coherence check above so a rejected sibling
+    // (already spliced out / deprecated) is never wired.
+    wireSplitSiblingDependencies(children, prd);
+    reorderSiblingsByDependency(children, prd.implementationOrder?.[phase]);
 
     // Run speckit — treat children as openspec's split proposals
     const openspecOutput = {
@@ -2118,7 +2397,20 @@ async function validateMidExecutionSplits(prdFile, storyIdsCsv) {
     }
   }
 
-  fs.writeFileSync(prdFile, JSON.stringify(prd, null, 2) + '\n');
+  // Story-ID-loss invariant — see assertNoStoryIdsLost's docstring.
+  assertNoStoryIdsLost(_initialStoryIds, new Set((prd.stories || []).map((s) => s.id)), 'validateMidExecutionSplits()');
+
+  // Atomic write, lock-protected — see the identical rationale at run()'s
+  // writeFileSync call.
+  const _prdLockPath2 = `${prdFile}.lock`;
+  acquireFileLock(_prdLockPath2);
+  try {
+    const _tmpPrdFile = `${prdFile}.tmp`;
+    fs.writeFileSync(_tmpPrdFile, JSON.stringify(prd, null, 2) + '\n');
+    fs.renameSync(_tmpPrdFile, prdFile);
+  } finally {
+    releaseFileLock(_prdLockPath2);
+  }
 
   if (hardViolations > 0) {
     console.error(`spec-mode: --validate-splits: ${hardViolations} hard violation(s) — check PRD for deprecated splits`);
@@ -2154,6 +2446,9 @@ module.exports = {
   checkSplitMandateViolation,
   isSplitDelegationAc,
   correctSplitChildAgentRoleIfTestOnly,
+  wireSplitSiblingDependencies,
+  reorderSiblingsByDependency,
+  assertNoStoryIdsLost,
   resolveModelProvider,
   isSplitDelegationOnlyChange,
   SPLIT_MANDATE_AC_THRESHOLD,

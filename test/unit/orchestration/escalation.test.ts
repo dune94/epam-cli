@@ -50,7 +50,14 @@ describe('resolve_escalation() — design constraints (static)', () => {
 
   it('prefers a split-sibling match (same specification.createdFrom) before falling back to a project-wide owner search', () => {
     expect(body).toMatch(/specification\.createdFrom == \$parent/);
-    expect(body).toMatch(/technicalNotes\.files\[\]\? == \$file/);
+    // Updated 2026-07-12 (BUG A fix): a bare exact match against
+    // technicalNotes.files can never succeed in practice -- targetFile is a
+    // RELATIVE path (from run_relative_import_check's Python-side
+    // os.path.relpath) while technicalNotes.files always stores ABSOLUTE
+    // paths. The corrected query accepts an exact match OR the stored path
+    // ending in "/" + the target file, matching the same flexible pattern
+    // already used by the write side.
+    expect(body).toMatch(/map\(\. == \$file or endswith\("\/" \+ \$file\)\) \| any/);
   });
 
   it('reuses implement_story() rather than duplicating provider-dispatch logic', () => {

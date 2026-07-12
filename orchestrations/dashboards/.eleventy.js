@@ -16,6 +16,7 @@ const DASHBOARD_FILES = [
   'agents-orchestration.html',
   'cpa-details.html',
   'epam-cli-guide.html',
+  'health.html',
   'monitor.html',
   'orchestration-plan.html',
   'phase-cost-monitor.html',

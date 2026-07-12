@@ -23,9 +23,34 @@
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
+# Run this whole script — and everything it forks (run-agent-orchestration.sh,
+# ai-run.sh, the `bash foo | tee` pipelines inside the run_phase function, phase-retry
+# re-invocations) — as the leader of its own process group, so a single
+# command can reliably kill the ENTIRE tree. Root cause of a live incident
+# (2026-07-07): killing only the top-level launched PID left several
+# orchestration-loop and ai-run.sh processes running (and billing the gate
+# model) independently, because pipeline components and re-invoked children
+# are not necessarily direct children of the PID that was signaled. `setsid`
+# makes the re-exec'd process the leader of a new session/process group; that
+# group's ID equals its own PID, and `kill -- -<pid>` (negative = process
+# group) reaches every member regardless of how deep descendants nest.
+# Idempotent: TIER3_SETSID_DONE guards against re-triggering on the re-exec.
+if [ -z "${TIER3_SETSID_DONE:-}" ] && command -v setsid >/dev/null 2>&1; then
+  export TIER3_SETSID_DONE=1
+  exec setsid bash "$0" "$@"
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 LOG_FILE="/tmp/tier3-travel-app-run-$(date +%Y%m%dT%H%M%S).log"
+
+# Record our own PID (== the process-group ID after the setsid re-exec above)
+# so orchestrations/scripts/kill-tier3-run.sh can reliably find and kill the
+# whole tree in one command, without having to hunt down orphaned children by
+# hand the way the 2026-07-07 incident required.
+TIER3_PID_FILE="${TIER3_PID_FILE:-/tmp/tier3-travel-app-run.pid}"
+echo "$$" > "$TIER3_PID_FILE"
+trap 'rm -f "$TIER3_PID_FILE"' EXIT
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 info()    { echo -e "${YELLOW}[tier3-travel]${NC} $*"; }
@@ -76,11 +101,23 @@ echo ""
 # DELETE EVERYTHING — not a git clean, not a status reset, full rm -rf.
 # Stale package.json, tsconfig, test files, and accumulated artifacts from
 # prior runs all poison the next run. The only safe state is no state.
+#
+# chmod before rm -rf (found live, 2026-07-11/12, tier3-travel-app relaunches):
+# some node_modules subdirectories/files end up non-writable (0444/0555) after
+# npm install — deletion requires WRITE permission on each containing
+# directory, not just file ownership, so a prior run's node_modules can make
+# `rm -rf` fail outright (silently leaving the teardown incomplete, since the
+# script has no `set -e` gate on this specific line) instead of tearing down
+# cleanly. Force full ownership/write access first so teardown can never be
+# blocked by leftover restrictive permissions from an earlier install.
+[ -d "$OUTPUT_DIR" ] && chmod -R u+w "$OUTPUT_DIR" 2>/dev/null || true
 info "Tearing down output directory: $OUTPUT_DIR"
 rm -rf "$OUTPUT_DIR"
 # Also remove sibling worktree dirs left by previous parallel-phase runs
 for _wt_dir in "${OUTPUT_DIR}-wt-"*; do
-  [ -e "$_wt_dir" ] && rm -rf "$_wt_dir" && info "Removed leftover worktree: $_wt_dir"
+  [ -e "$_wt_dir" ] || continue
+  chmod -R u+w "$_wt_dir" 2>/dev/null || true
+  rm -rf "$_wt_dir" && info "Removed leftover worktree: $_wt_dir"
 done
 mkdir -p "$OUTPUT_DIR"
 git -C "$OUTPUT_DIR" init --quiet
@@ -101,7 +138,8 @@ cat > "$OUTPUT_DIR/.epam/dependency-check.json" << 'DEPCHECK_EOF'
   "importPattern": "from\\s+['\"]([^./][^'\"]*)['\"]|require\\(\\s*['\"]([^./][^'\"]*)['\"]\\s*\\)",
   "installCommand": "npm install --save-dev {package}",
   "ignorePackages": ["assert","buffer","child_process","cluster","crypto","dgram","dns","domain","events","fs","http","http2","https","net","os","path","perf_hooks","process","punycode","querystring","readline","repl","stream","string_decoder","timers","tls","tty","url","util","v8","vm","worker_threads","zlib","node:assert","node:buffer","node:child_process","node:crypto","node:events","node:fs","node:http","node:https","node:net","node:os","node:path","node:process","node:stream","node:url","node:util","node:vm","node:zlib"],
-  "requiredDevDependencies": ["typescript", "@types/node", "vitest", "tsx"]
+  "requiredDevDependencies": ["typescript", "@types/node", "vitest", "tsx"],
+  "vendorDirs": ["node_modules"]
 }
 DEPCHECK_EOF
 
@@ -165,10 +203,17 @@ export EPAM_API_KEY_MINIMAX="$MINIMAX_API_KEY"
 # OpenRouter (Kimi K2, GLM-4-plus, GLM-Z1 via unified API)
 export OPENROUTER_API_KEY
 export EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY"
-# Gate/coordinator model: MiniMax-M3 (same API as story agents — no extra key needed)
-export ORCH_GATE_PROVIDER="minimax"
-export EPAM_ORCHESTRATION_PROVIDER="minimax"
-export ORCH_GATE_MODEL="MiniMax-M3"
+# Gate/coordinator model: bumped to the HIGH-tier model (2026-07-07) — found live
+# that failure-analyst (and every other gate agent sharing this assignment:
+# review-agent, spec-validator, SAST, plan-review) ran on MiniMax-M3, the
+# WEAKEST model in the whole ladder, even when diagnosing failures from stories
+# that had already escalated to the strongest model for their own
+# implementation. Directly explained a real misdiagnosis (SKY-002-test-1's
+# casing-typo import bug called a "default vs named export mismatch" —
+# wrong — burning a full 8-attempt ladder escalation on the wrong fix).
+export ORCH_GATE_PROVIDER="qwen"
+export EPAM_ORCHESTRATION_PROVIDER="qwen"
+export ORCH_GATE_MODEL="${ESCALATION_MODEL_HIGH:-z-ai/glm-5.1}"
 # Escalation model: GLM 5.2 for Rung 2/3 (reasoning model, 1M ctx; routes via OpenRouter/qwen provider)
 export ESCALATION_MODEL="${ESCALATION_MODEL:-z-ai/glm-5.2}"
 # HIGH tier: stronger/pricier model than the medium-tier ESCALATION_MODEL.
@@ -176,6 +221,22 @@ export ESCALATION_MODEL="${ESCALATION_MODEL:-z-ai/glm-5.2}"
 # story from its own recorded failure history (story-failures.jsonl) — never
 # hardcoded per story ID.
 export ESCALATION_MODEL_HIGH="${ESCALATION_MODEL_HIGH:-z-ai/glm-5.1}"
+# Temperature pin, ALL models (2026-07-10, reversing the 2026-07-07 GLM-only
+# scoping per explicit user directive). Root cause this fixes: claude.sh's
+# FailureDiversity mechanism (claude.sh:~5076-5085) detects a story retrying
+# with a DIFFERENT diagnosis each attempt — the signature of token-selection
+# variance, not a capability gap — and pins EPAM_TEMPERATURE=0 for the rest of
+# that story so it stops sampling alternative wrong answers. With
+# EPAM_TEMPERATURE_MODEL_PATTERN scoped to GLM models only, that self-
+# correction was SILENTLY DISCARDED by resolveTemperature() for every other
+# model in the ladder (MiniMax-M3, kimi-k2, gpt-5-codex, etc.) — exactly the
+# models actually doing implementation work — confirmed live 2026-07-09/10:
+# SKY-002-impl (model=MiniMax-M3) cycled through 6 different tsc/module-
+# resolution diagnoses across its retries and never converged, because its
+# temperature pin never took effect. No pattern var is set below —
+# resolveTemperature()'s own documented default ("unset = applies to all
+# models") now covers every model with zero glob-matching risk of missing one.
+export EPAM_TEMPERATURE="0"
 # Spec-mode models: openspec/speckit make MANDATORY, non-negotiable decisions
 # (AC elaboration, story splitting) with NO escalation ladder of their own —
 # unlike implementation stories, a bad spec-pass decision can't be retried at
@@ -341,7 +402,7 @@ run_phase() {
   # exit 2 = gate remediation was applied — reset stories and retry once
   if [ "$phase_exit" -eq 2 ]; then
     info "  Self-healing: gate remediation applied — resetting and retrying phase '$phase'..."
-    if ! bash "$SCRIPT_DIR/prd-remediate.sh" --prd "$PRD_FILE" --phase "$phase" 2>&1 | tee -a "$LOG_FILE"; then
+    if ! bash "$SCRIPT_DIR/prd-remediate.sh" --prd "$PRD_FILE" --phase "$phase" --mid-phase-retry 2>&1 | tee -a "$LOG_FILE"; then
       fail "PRD remediation failed during self-healing retry for phase '$phase'"
     fi
     echo ""

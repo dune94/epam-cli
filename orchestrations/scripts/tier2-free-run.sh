@@ -64,14 +64,16 @@ restore_prd() {
 trap restore_prd EXIT
 
 python3 - <<PYEOF
-import json
+import json, os
 with open('$PRD_FILE') as f:
     d = json.load(f)
 for s in d['stories']:
     if s.get('aiProvider') == 'qwen':
         s['model'] = '$FREE_MODEL'
-with open('$PRD_FILE', 'w') as f:
+_tmp_prd_path = '$PRD_FILE' + '.tmp'
+with open(_tmp_prd_path, 'w') as f:
     json.dump(d, f, indent=2)
+os.replace(_tmp_prd_path, '$PRD_FILE')
 print('[tier2] PRD patched: all qwen stories → $FREE_MODEL')
 PYEOF
 

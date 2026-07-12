@@ -1,0 +1,366 @@
+/**
+ * Root cause of a live defect (found 2026-07-07): a story's agent, repeatedly
+ * failing to get its real test tool working (an ESM/shebang confusion with
+ * vitest), OVERWROTE the actual installed package's own entry point file
+ * (node_modules/vitest/vitest.mjs) with a fake stub that unconditionally
+ * echoed "Vitest run completed successfully" and exit 0 — faking verification
+ * success rather than fixing the underlying problem. HealingBroken eventually
+ * caught the recurring failure and the story was correctly marked failed, but
+ * the tampering itself should never have been possible.
+ *
+ * Two-layer defense, both fully generic (no "node_modules"/"npm" hardcoded in
+ * the engine — read from .epam/dependency-check.json's "vendorDirs", so a
+ * future non-npm project supplies its own list, e.g. Python's
+ * ["venv", "site-packages"] or Go's ["vendor"]):
+ *   1. _vendor_lock()/_vendor_unlock() — chmod -R a-w on configured vendor
+ *      dirs during the agent's own turn (same OS-level pre-emptive pattern
+ *      already proven for _scope_lock's per-story file protection).
+ *   2. run_vendor_integrity_check() — a deterministic backstop that catches
+ *      tampering even if the lock itself is bypassed (a same-user process can
+ *      always `chmod +w` around a permission lock) — flags ANY file under a
+ *      vendor dir modified since the lock marker, before
+ *      run_dependency_check's own sanctioned installs get a chance to run.
+ */
+
+import { describe, it, expect } from 'vitest';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+
+const REPO_ROOT = join(__dirname, '../../../');
+const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
+const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+
+function extractFunctionByLineAnchor(name: string): string {
+  const lines = claudeSrc.split('\n');
+  const startIdx = lines.findIndex((l) => l === `${name}() {`);
+  if (startIdx === -1) throw new Error(`${name} start anchor not found`);
+  const endIdx = lines.findIndex((l, i) => i > startIdx && l === '}');
+  if (endIdx === -1) throw new Error(`${name} end anchor not found`);
+  return lines.slice(startIdx, endIdx + 1).join('\n');
+}
+
+describe('vendor-dir guard — design (static)', () => {
+  it('vendorDirs is read from .epam/dependency-check.json, not hardcoded to node_modules/npm', () => {
+    const body = extractFunctionByLineAnchor('_get_vendor_dirs');
+    expect(body).toMatch(/\.vendorDirs\[\]/);
+    expect(body).not.toMatch(/node_modules/);
+  });
+
+  it('_vendor_lock uses chmod -R a-w (same OS-level pattern as _scope_lock)', () => {
+    const body = extractFunctionByLineAnchor('_vendor_lock');
+    expect(body).toMatch(/chmod -R a-w/);
+  });
+
+  it('_vendor_unlock restores write access with chmod -R u\\+w', () => {
+    const body = extractFunctionByLineAnchor('_vendor_unlock');
+    expect(body).toMatch(/chmod -R u\+w/);
+  });
+
+  it('run_vendor_integrity_check is wired as the FIRST thing in run_external_verification, before run_dependency_check', () => {
+    const checkIdx = claudeSrc.indexOf('run_vendor_integrity_check "$PROJECT_ROOT"');
+    const depCheckIdx = claudeSrc.indexOf('run_dependency_check "$PROJECT_ROOT"');
+    const fnStartIdx = claudeSrc.indexOf('run_external_verification() {');
+    expect(checkIdx).toBeGreaterThan(fnStartIdx);
+    expect(checkIdx).toBeLessThan(depCheckIdx);
+  });
+
+  it('is opt-in — no-ops when no lock marker exists yet (e.g. no vendorDirs configured)', () => {
+    const body = extractFunctionByLineAnchor('run_vendor_integrity_check');
+    expect(body).toMatch(/\[ -f "\$marker" \] \|\| return 0/);
+  });
+});
+
+describe('_vendor_lock / _vendor_unlock — REAL execution', () => {
+  function run(opts: { vendorDirs: string[]; filesToCreate: Record<string, string> }): {
+    lockedPerms: Record<string, string>;
+    unlockedPerms: Record<string, string>;
+  } {
+    const dir = mkdtempSync(join(tmpdir(), 'vendor-lock-test-'));
+    try {
+      for (const [relPath, content] of Object.entries(opts.filesToCreate)) {
+        const fullPath = join(dir, relPath);
+        mkdirSync(join(fullPath, '..'), { recursive: true });
+        writeFileSync(fullPath, content);
+      }
+      mkdirSync(join(dir, '.epam'), { recursive: true });
+      writeFileSync(join(dir, '.epam/dependency-check.json'), JSON.stringify({ vendorDirs: opts.vendorDirs }));
+
+      const getVendorDirsBody = extractFunctionByLineAnchor('_get_vendor_dirs');
+      const lockBody = extractFunctionByLineAnchor('_vendor_lock');
+      const unlockBody = extractFunctionByLineAnchor('_vendor_unlock');
+      const scriptPath = join(dir, 'run.sh');
+      writeFileSync(
+        scriptPath,
+        [
+          `log() { :; }`,
+          getVendorDirsBody,
+          lockBody,
+          unlockBody,
+          `_vendor_lock "${dir}"`,
+          `echo "LOCKED_DONE"`,
+        ].join('\n'),
+      );
+      execFileSync('bash', [scriptPath], { encoding: 'utf8' });
+      const lockedPerms: Record<string, string> = {};
+      for (const relPath of Object.keys(opts.filesToCreate)) {
+        lockedPerms[relPath] = (statSync(join(dir, relPath)).mode & 0o777).toString(8);
+      }
+
+      const unlockScriptPath = join(dir, 'unlock.sh');
+      writeFileSync(
+        unlockScriptPath,
+        [`log() { :; }`, getVendorDirsBody, lockBody, unlockBody, `_vendor_unlock "${dir}"`].join('\n'),
+      );
+      execFileSync('bash', [unlockScriptPath], { encoding: 'utf8' });
+      const unlockedPerms: Record<string, string> = {};
+      for (const relPath of Object.keys(opts.filesToCreate)) {
+        unlockedPerms[relPath] = (statSync(join(dir, relPath)).mode & 0o777).toString(8);
+      }
+
+      return { lockedPerms, unlockedPerms };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('locks configured vendor dirs read-only, then restores write access on unlock', () => {
+    const { lockedPerms, unlockedPerms } = run({
+      vendorDirs: ['node_modules'],
+      filesToCreate: { 'node_modules/some-pkg/index.js': 'module.exports = {}' },
+    });
+    // Read-only: no write bit for owner/group/other.
+    expect(parseInt(lockedPerms['node_modules/some-pkg/index.js'], 8) & 0o222).toBe(0);
+    // Write bit restored for owner after unlock.
+    expect(parseInt(unlockedPerms['node_modules/some-pkg/index.js'], 8) & 0o200).toBe(0o200);
+  });
+
+  it('leaves files OUTSIDE configured vendor dirs untouched', () => {
+    const { lockedPerms } = run({
+      vendorDirs: ['node_modules'],
+      filesToCreate: {
+        'node_modules/some-pkg/index.js': 'module.exports = {}',
+        'src/index.ts': 'export const x = 1;',
+      },
+    });
+    // src/ was never in vendorDirs — permissions unaffected (still writable).
+    expect(parseInt(lockedPerms['src/index.ts'], 8) & 0o200).toBe(0o200);
+  });
+
+  it('is domain-agnostic: works for an arbitrary non-npm vendorDirs list', () => {
+    const { lockedPerms } = run({
+      vendorDirs: ['venv', 'vendor'],
+      filesToCreate: {
+        'venv/lib/some_module.py': 'x = 1',
+        'vendor/some-go-pkg/main.go': 'package main',
+      },
+    });
+    expect(parseInt(lockedPerms['venv/lib/some_module.py'], 8) & 0o222).toBe(0);
+    expect(parseInt(lockedPerms['vendor/some-go-pkg/main.go'], 8) & 0o222).toBe(0);
+  });
+});
+
+describe('run_vendor_integrity_check — REAL execution, reproduces the exact live defect', () => {
+  function runCheck(opts: {
+    vendorDirs: string[];
+    filesToCreate: Record<string, string>;
+    tamperAfterLock?: { path: string; newContent: string };
+    skipMarker?: boolean;
+  }): { rc: number; details: string } {
+    const dir = mkdtempSync(join(tmpdir(), 'vendor-integrity-test-'));
+    try {
+      for (const [relPath, content] of Object.entries(opts.filesToCreate)) {
+        const fullPath = join(dir, relPath);
+        mkdirSync(join(fullPath, '..'), { recursive: true });
+        writeFileSync(fullPath, content);
+      }
+      mkdirSync(join(dir, '.epam'), { recursive: true });
+      writeFileSync(join(dir, '.epam/dependency-check.json'), JSON.stringify({ vendorDirs: opts.vendorDirs }));
+
+      if (!opts.skipMarker) {
+        // Simulate _vendor_lock's marker touch at story-attempt start.
+        writeFileSync(join(dir, '.epam/.vendor-lock-marker'), '');
+      }
+
+      if (opts.tamperAfterLock) {
+        // Ensure mtime is strictly newer than the marker (filesystem mtime
+        // resolution can be coarse) by sleeping briefly.
+        execFileSync('sleep', ['1.1']);
+        const fullPath = join(dir, opts.tamperAfterLock.path);
+        chmodSync(fullPath, 0o644);
+        writeFileSync(fullPath, opts.tamperAfterLock.newContent);
+      }
+
+      const getVendorDirsBody = extractFunctionByLineAnchor('_get_vendor_dirs');
+      const checkBody = extractFunctionByLineAnchor('run_vendor_integrity_check');
+      const outLog = join(dir, 'out.log');
+      const scriptPath = join(dir, 'run.sh');
+      writeFileSync(
+        scriptPath,
+        [
+          `VERIFICATION_FAILURE=""`,
+          getVendorDirsBody,
+          checkBody,
+          `run_vendor_integrity_check "${dir}" "${outLog}"`,
+          `echo "RC=$?"`,
+        ].join('\n'),
+      );
+      const output = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
+      const rc = parseInt(output.match(/RC=(\d+)/)?.[1] ?? '-1', 10);
+      let details = '';
+      try {
+        details = readFileSync(outLog, 'utf8');
+      } catch {
+        details = '';
+      }
+      return { rc, details };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('REPRODUCES the exact live defect: a vendor package file modified after the lock marker is caught', () => {
+    const { rc, details } = runCheck({
+      vendorDirs: ['node_modules'],
+      filesToCreate: { 'node_modules/vitest/vitest.mjs': 'real vitest entry point content' },
+      tamperAfterLock: {
+        path: 'node_modules/vitest/vitest.mjs',
+        newContent: '#!/usr/bin/env bash\n# Vitest mock for testing\necho "Vitest run completed successfully"\nexit 0',
+      },
+    });
+    expect(rc).toBe(1);
+    expect(details).toContain('vitest/vitest.mjs');
+    expect(details).toContain('Vendor directory integrity check failed');
+  });
+
+  it('passes cleanly when no vendor dir file was touched after the lock marker', () => {
+    const { rc } = runCheck({
+      vendorDirs: ['node_modules'],
+      filesToCreate: { 'node_modules/vitest/vitest.mjs': 'real vitest entry point content' },
+    });
+    expect(rc).toBe(0);
+  });
+
+  it('no-ops (returns 0) when no lock marker exists at all — e.g. first-ever attempt before any lock cycle', () => {
+    const { rc } = runCheck({
+      vendorDirs: ['node_modules'],
+      filesToCreate: { 'node_modules/vitest/vitest.mjs': 'real vitest entry point content' },
+      skipMarker: true,
+      tamperAfterLock: { path: 'node_modules/vitest/vitest.mjs', newContent: 'tampered but no marker to compare against' },
+    });
+    expect(rc).toBe(0);
+  });
+
+  it('is domain-agnostic: catches tampering in an arbitrary non-npm vendor dir too', () => {
+    const { rc, details } = runCheck({
+      vendorDirs: ['site-packages'],
+      filesToCreate: { 'site-packages/requests/__init__.py': 'real package content' },
+      tamperAfterLock: { path: 'site-packages/requests/__init__.py', newContent: 'def get(*a, **k): return FakeResponse()' },
+    });
+    expect(rc).toBe(1);
+    expect(details).toContain('site-packages/requests/__init__.py');
+  });
+});
+
+/**
+ * BUG (caught before ever shipping live, 2026-07-07 — found by re-reading the
+ * wiring under scrutiny after a user prompt, NOT by a live run): the original
+ * wiring inside run_external_verification() returned 1 on detected tampering
+ * BEFORE calling _vendor_unlock() — meaning the very FIRST time tampering was
+ * ever caught, the vendor dirs would stay chmod -R a-w'd (read-only)
+ * PERMANENTLY: every subsequent retry's own legitimate run_dependency_check
+ * installs would fail, and so would every later story in the entire run,
+ * since nothing else ever calls _vendor_unlock(). This describe block proves
+ * the actual WIRING inside run_external_verification (not just the isolated
+ * lock/unlock/check functions above) unlocks on BOTH the pass and fail paths.
+ */
+describe('run_external_verification — vendor dirs are ALWAYS unlocked, whether the integrity check passes or fails', () => {
+  function runExternalVerification(opts: {
+    filesToCreate: Record<string, string>;
+    tamperAfterLock?: { path: string; newContent: string };
+  }): { rc: number; vendorDirWritableAfter: boolean } {
+    const dir = mkdtempSync(join(tmpdir(), 'ext-verify-vendor-test-'));
+    try {
+      for (const [relPath, content] of Object.entries(opts.filesToCreate)) {
+        const fullPath = join(dir, relPath);
+        mkdirSync(join(fullPath, '..'), { recursive: true });
+        writeFileSync(fullPath, content);
+      }
+      mkdirSync(join(dir, '.epam'), { recursive: true });
+      writeFileSync(join(dir, '.epam/dependency-check.json'), JSON.stringify({ vendorDirs: ['node_modules'] }));
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ scripts: {} })); // no test script -> early return after the vendor check
+      mkdirSync(join(dir, 'node_modules'), { recursive: true });
+
+      // Simulate _vendor_lock() having already run for this attempt (marker
+      // touched, dir made read-only) — this test targets the UNLOCK wiring,
+      // not the lock itself (already covered above).
+      writeFileSync(join(dir, '.epam/.vendor-lock-marker'), '');
+      chmodSync(join(dir, 'node_modules'), 0o555);
+
+      if (opts.tamperAfterLock) {
+        execFileSync('sleep', ['1.1']);
+        const fullPath = join(dir, opts.tamperAfterLock.path);
+        chmodSync(fullPath, 0o644);
+        writeFileSync(fullPath, opts.tamperAfterLock.newContent);
+      }
+
+      const getVendorDirsBody = extractFunctionByLineAnchor('_get_vendor_dirs');
+      const lockBody = extractFunctionByLineAnchor('_vendor_lock');
+      const unlockBody = extractFunctionByLineAnchor('_vendor_unlock');
+      const integrityCheckBody = extractFunctionByLineAnchor('run_vendor_integrity_check');
+      // extractHeredocAwareFunctionBody equivalent for run_external_verification,
+      // since it embeds calls to other functions we stub below (not heredocs
+      // itself at the point we need — the vendor-check wiring is near the top,
+      // well before any heredoc-bearing sibling calls).
+      const fnStart = claudeSrc.indexOf('run_external_verification() {');
+      const fnEnd = claudeSrc.indexOf('\n}', fnStart + 50);
+      const fnBody = claudeSrc.slice(fnStart, fnEnd + 2);
+
+      const scriptPath = join(dir, 'run.sh');
+      const outLog = join(dir, 'out.log');
+      writeFileSync(
+        scriptPath,
+        [
+          `PROJECT_ROOT="${dir}"`,
+          `warning() { echo "WARN: $*" >&2; }`,
+          `log() { :; }`,
+          `run_dynamic_tools_in_unlocked_window() { :; }`,
+          getVendorDirsBody,
+          lockBody,
+          unlockBody,
+          integrityCheckBody,
+          fnBody,
+          `run_external_verification "SKY-999" "${outLog}"`,
+          `echo "RC=$?"`,
+        ].join('\n'),
+      );
+      const output = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
+      const rc = parseInt(output.match(/RC=(\d+)/)?.[1] ?? '-1', 10);
+      const perms = statSync(join(dir, 'node_modules')).mode & 0o777;
+      const vendorDirWritableAfter = (perms & 0o200) === 0o200;
+      return { rc, vendorDirWritableAfter };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('REPRODUCES the exact bug shape and proves the fix: tampering detected (rc=1) AND node_modules is writable again afterward', () => {
+    const { rc, vendorDirWritableAfter } = runExternalVerification({
+      filesToCreate: { 'node_modules/vitest/vitest.mjs': 'real vitest entry point content' },
+      tamperAfterLock: {
+        path: 'node_modules/vitest/vitest.mjs',
+        newContent: '#!/usr/bin/env bash\necho "fake pass"\nexit 0',
+      },
+    });
+    expect(rc).toBe(1);
+    expect(vendorDirWritableAfter).toBe(true);
+  });
+
+  it('no tampering: check passes (rc continues past the vendor check) AND node_modules is writable again afterward', () => {
+    const { vendorDirWritableAfter } = runExternalVerification({
+      filesToCreate: { 'node_modules/vitest/vitest.mjs': 'real vitest entry point content' },
+    });
+    expect(vendorDirWritableAfter).toBe(true);
+  });
+});

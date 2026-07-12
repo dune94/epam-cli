@@ -48,6 +48,32 @@ export class WriteFileTool implements Tool {
           };
         }
       }
+      // JSON integrity guard: refuse a write that would leave a .json file
+      // containing invalid JSON. This catches the most common corruption mode
+      // seen in practice — an agent appending a full replacement document onto
+      // an existing one (or a partial/retry write), which silently produces
+      // multiple concatenated JSON documents in one file and crashes every
+      // downstream `json.load()`/`JSON.parse()` consumer.
+      if (resolved.endsWith('.json')) {
+        let finalContent = content;
+        if (append) {
+          const existing = await fs.readFile(resolved, 'utf-8').catch(() => '');
+          finalContent = existing + content;
+        }
+        try {
+          JSON.parse(finalContent);
+        } catch (parseErr) {
+          const hint = append
+            ? 'Appending to an existing JSON file produces invalid JSON unless the appended text is not itself a full document — write the complete merged document instead with append=false (or omitted).'
+            : 'The content is not a single, complete, valid JSON document.';
+          return {
+            toolUseId: '',
+            content: `Error: refused to write ${resolved} — resulting content is not valid JSON (${(parseErr as Error).message}). ${hint}`,
+            isError: true,
+          };
+        }
+      }
+
       await ensureDir(path.dirname(resolved));
       if (append) {
         await fs.appendFile(resolved, content, 'utf-8');

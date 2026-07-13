@@ -150,7 +150,12 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 - CLI entrypoints: `/orchestrate spec <phase>` (REPL) or `epam orchestrate spec <phase>` shell out to the same runner; `npm run specification:run -- --phase <phase>` is available for automation/CI.
 - Operators can skip the pre-pass with `EPAM_SPEC_MODE=0` or run it standalone before estimates to review diffs in dashboards.
 
-### 3.15 Self-Healing Reviewer Gates & Retry-on-Violation Guards (2026-07-13)
+### 3.15 Agent Profile Roster & Persona System
+- `orchestrations/agents/profiles.json` — flat `{role: "prompt string"}` map, ~49 specialized personas covering implementation (`typescript-engineer`, `test-engineer`, `frontend-engineer`, `ui-engineer`, `generator`), specification (`openspec-agent`, `speckit-agent`, `spec-coordinator-agent`, `spec-validator`), QA gates (`sast-sentinel`, `review-ranger`, `mutant-hunter`, `fuzz-weaver`, `perf-sentinel`), documentation (`doc-coordinator`, `doc-reviewer`, `guide-author`, `changelog-agent`, `docstring-agent`), and project/PRD management (`prd-project-manager-agent`, `grooming-coordinator`, `readiness-checker`).
+- `profiles.json.original` is the canonical floor — restored at the start of every tier-3 run so drift from a prior run's self-healing writes never persists across runs.
+- App-specific profiles are generated dynamically per project from the manifest + PRD (`INIT-001`); `INIT-002` keeps every story's `agentRole` synced to an existing profile key.
+
+### 3.16 Self-Healing Reviewer Gates & Retry-on-Violation Guards (2026-07-13)
 Several pipeline agents have tool write access to `prd.json`/`profiles.json` — Step 0.5 (pre-phase skill
 assessment), Step 0.9 (`prd-model-coordinator`), spec-pass AC/description rewrites (`spec-mode-runner.js`), and
 the post-implementation TC writer. Each is instructed (in its own prompt) to only touch a narrow set of
@@ -185,6 +190,28 @@ mandatory split), generalized to the other three. Outcomes:
 Every guarded call's final outcome (`pass`/`reverted`/`blocked`, attempt count, reason) is logged to
 `guarded-step-retries.jsonl` in the project's output directory; blocked stories are additionally recorded to
 `blocked-stories.jsonl`. See §4.2 for the dashboard that surfaces this data.
+
+### 3.17 Rung-Based Inference Ladder
+`claude.sh`'s retry loop escalates in four rungs (two attempts each, `EPAM_MAX_RETRIES` default 7 → 8 total attempts): Rung 0/1 keep the base model and raise `EPAM_REASONING_EFFORT` from low → medium; Rung 2 escalates the model itself; Rung 3 keeps the escalated model at `EPAM_REASONING_EFFORT=high`. A failed self-heal attempt can skip straight to the next rung instead of burning a second attempt on a healing strategy already known to be broken.
+
+The model-escalation lookup is **tier-aware**: `classify_ladder_tier()` picks between two configurable, pipe-separated `from=to` tables — `EPAM_MODEL_LADDER_MEDIUM` (e.g. `MiniMax-M3=z-ai/glm-5.2`) for ordinary stories, and `EPAM_MODEL_LADDER_HIGH` (e.g. `MiniMax-M3=z-ai/glm-5.1`) for stories the classifier flags as needing a stronger ceiling. Each table is a set of direct current→next mappings rather than one fixed chain — most base models jump straight to their tier's ceiling model in a single hop, plus one bridge entry lets a story already at the medium ceiling escalate one further step to the high ceiling if it's reclassified high-tier mid-run. Setting `EPAM_MODEL_LADDER` (no suffix) explicitly overrides both tiers to the same table, for projects that don't need tier-based differentiation. `EPAM_FINAL_FALLBACK_MODEL`/`_PROVIDER` guarantee Rung 3 always has an escalated model even if the tier's ladder lookup produced nothing.
+
+### 3.18 tsc Verification Inside the Retry Loop
+`run_tsc_verification()` runs `tsc --noEmit` as part of the same `invoke_success` gate chain as external test verification — *inside* the retry loop, not after it. A TypeScript compile failure sets the same `VERIFICATION_FAILURE` channel the failure analyst and retry prompt already consume, so a tsc error gets full InferenceLadder treatment (model/effort escalation) before the story is marked failed, instead of exiting the phase on the very first compile error with zero retries.
+
+### 3.19 Testing Gates & Self-Healing Remediation
+After a phase's stories are implemented, `run_testing_gates()` in `run-agent-orchestration.sh` runs a fixed sequence of quality-check agents in three dependency-ordered phases — Phase B only runs if Phase A passed, Phase C only if A and B passed:
+
+- **Phase A (4.2):** `sast-sentinel` (security/compilation, driven by pre-injected `tsc`/`npm audit` evidence) and `spec-validator` (classifies each acceptance criterion as met/partial/unmet/untestable).
+- **Phase B (4.3):** `review-ranger` (code review) and `mutant-hunter` (whether tests would actually catch introduced bugs).
+- **Phase C (4.4):** `fuzz-weaver` (edge-case/vulnerability analysis) and `perf-sentinel` (algorithmic complexity/perf hotspots).
+- **4.6:** browser E2E routing — UI stories are routed to `playwright-agent` (high-complexity flows) or `lightpanda-agent` (fast, deterministic checks) by a computed complexity score.
+
+Several gates apply a **grounding check** before treating a "fail" verdict as blocking: `fuzz-weaver`'s vulnerability claims must include an `executableTest` that is actually run against the real code (a claim only counts as confirmed if the test genuinely fails); `spec-validator`'s per-story fail only counts if at least one of that story's criteria has a status other than `untestable`. Both exist to prevent an ungrounded "the agent said fail with no real evidence" verdict from aborting a phase.
+
+On a gate failure, a 3-agent remediation pipeline attempts to fix forward rather than aborting outright: `gate-finding-analyst` extracts a grounded `{story_id, file, rule, ...}` finding from the gate log (falling back to a git-history lookup — the file's most recent `"story: complete <id>"` commit — when the LLM can't ground it to a story itself); `story-ac-remediator` augments that story's acceptance criteria with a concrete fix requirement; `profile-augmentor` appends a preventive rule to the relevant agent's profile if the anti-pattern is novel. A successful remediation signals the caller to reset and retry the phase.
+
+Each main-branch story attempt also runs inside a **scope guard** (files outside the story's declared scope, and files owned by other stories, are made read-only for the duration of the attempt) and a **vendor guard** (configured vendor directories, e.g. `node_modules`, are locked read-only during the attempt and separately checked for tampering via mtime).
 
 ---
 

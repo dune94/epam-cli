@@ -132,7 +132,12 @@ const sites: Site[] = [
   {
     label: 'Step 3.5 post-parallel assessment',
     src: 'orch',
-    callAnchor: 'run_orch_prompt_with_tools "$assessment_prompt" "assessment" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"; then\n        success "Phase assessment completed',
+    // Anchor updated (2026-07-12): the `if ... ; then success ...` wrapper
+    // was replaced with an explicit PIPESTATUS[0] capture (this script has
+    // no `set -o pipefail`, so `if cmd | tee file; then` always evaluated
+    // tee's exit status, never the real tool call's -- see the
+    // phase-assessment real-output-gate fix).
+    callAnchor: 'run_orch_prompt_with_tools "$assessment_prompt" "assessment" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"\n    local _assessment_rc=${PIPESTATUS[0]}',
     needsTools: true,
     reason: 'prompt instructs writing a report file, updating PRD agentRole fields, and flock JSONL appends (FIXED 2026-07-08)',
   },

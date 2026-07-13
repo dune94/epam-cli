@@ -3459,6 +3459,18 @@ run_phase_assessment() {
     info "Found $phase_records cost records for phase '$phase_id'"
 
     # Build assessment prompt
+    # Real, verified-to-exist absolute paths for the prompt below -- found
+    # live (2026-07-07): the prompt used to hardcode the literal relative
+    # string "orchestrations/logs/phase-cost.jsonl", but LOG_DIR (where
+    # $cost_file/$assessment_file actually live) is
+    # "${OUTPUT_DIR:-$AUTOMATION_DIR/logs}", which in the tier3 setup IS
+    # PROJECT_ROOT directly, not a nested "orchestrations/logs"
+    # subdirectory of it. After the agent `cd`s to PROJECT_ROOT below, that
+    # literal path pointed at a directory structure that doesn't exist --
+    # the agent was GUESSING because it was handed a made-up path, not a
+    # real one, and ended up asking an unanswerable interactive question
+    # instead of doing the work.
+    local improvement_report_file="${improvement_dir}/${phase_id}.md"
     local assessment_prompt
     assessment_prompt=$(cat << PROMPT_EOF
 You are the skill assessment agent. Analyze the phase cost data and produce an assessment.
@@ -3466,7 +3478,7 @@ You are the skill assessment agent. Analyze the phase cost data and produce an a
 ## Phase: $phase_id
 
 ## Task
-1. Read orchestrations/logs/phase-cost.jsonl and filter for phase_id="$phase_id"
+1. Read $cost_file and filter for phase_id="$phase_id"
    IMPORTANT: The log accumulates records across multiple runs. For each story_id, use ONLY the
    most recent record (highest started_at timestamp). Discard all earlier records for the same story_id.
 2. Cross-reference each story's status against ${PRD_REL}: if the story has "completed": true in the
@@ -3474,10 +3486,10 @@ You are the skill assessment agent. Analyze the phase cost data and produce an a
    current completion state; the cost log is used only for timing/cost figures from the latest run.
 3. For each task (using latest record only), compare elapsed_minutes vs forecast_hours (converted to minutes)
 4. Calculate phase-level totals and variance
-5. Write a single-line JSON assessment to orchestrations/logs/phase-skill-assessments.jsonl with fields:
+5. Write a single-line JSON assessment to $assessment_file with fields:
    phase_id, phase_name, actual_minutes, forecast_minutes, actual_cost_usd, forecast_cost_usd,
    variance_minutes, variance_cost_usd, over_threshold (bool), agent_recommendations (array), notes
-6. Write a human-readable improvement report to orchestrations/logs/phase-improvements/${phase_id}.md
+6. Write a human-readable improvement report to $improvement_report_file
 7. CORRECTIVE ACTION: If any task's description clearly requires a different skill domain than the assigned agentRole,
    update ${PRD_REL} to change agentRole for FUTURE phase stories that have the same mismatch.
    - Only modify stories that are status "pending" and completed false
@@ -3499,16 +3511,52 @@ PROMPT_EOF
     cp "$PRD_FILE" "${PRD_FILE}.pre-assessment"
     log "Backed up prd.json to ${PRD_FILE}.pre-assessment"
 
+    # Snapshot how many records already exist for this phase BEFORE the call
+    # -- needed to tell a genuinely NEW assessment apart from an old one left
+    # over from an earlier run (see the real-evidence check below).
+    # grep -c prints "0" (correctly) but exits 1 on zero matches; `|| true`
+    # (not `|| echo 0`) neutralizes that under this script's `set -e`
+    # without double-printing (same class of bug fixed earlier this session
+    # in compute_retry_extension_evidence).
+    local _assessment_count_before
+    _assessment_count_before=$(grep -c "\"phase_id\":\"$phase_id\"" "$assessment_file" 2>/dev/null || true)
+    _assessment_count_before="${_assessment_count_before:-0}"
+
     cd "$PROJECT_ROOT"
     # run_orch_prompt_with_tools (not plain run_orch_prompt): this prompt
     # instructs writing a report file, updating the PRD's agentRole fields, and
     # flock-appending to JSONL — same class of bug already fixed above for the
     # pre-phase (Step 0.5) assessment call.
-    if run_orch_prompt_with_tools "$assessment_prompt" "assessment" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"; then
-        success "Phase assessment completed for '$phase_id'"
-    else
+    #
+    # PIPESTATUS[0] (not the pipeline's own exit code): this script has no
+    # `set -o pipefail`, so `if cmd | tee file; then` was ALWAYS evaluating
+    # tee's exit status (virtually always 0), never run_orch_prompt_with_
+    # tools's real one -- a tool-call failure could never be detected at
+    # all. Capture the first command's real exit status explicitly instead.
+    run_orch_prompt_with_tools "$assessment_prompt" "assessment" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"
+    local _assessment_rc=${PIPESTATUS[0]}
+
+    if [ "$_assessment_rc" -ne 0 ]; then
         warning "Phase assessment failed for '$phase_id' (non-critical)"
+        return 1
     fi
+
+    # Deterministic evidence check (found live, 2026-07-07): a successful
+    # exit code alone doesn't mean the agent actually did the work -- it can
+    # exit 0 after asking an unanswerable interactive question instead of
+    # writing anything. Verify a genuinely NEW assessment record was
+    # appended for THIS phase, not just trust the exit code.
+    local _assessment_count_after
+    _assessment_count_after=$(grep -c "\"phase_id\":\"$phase_id\"" "$assessment_file" 2>/dev/null || true)
+    _assessment_count_after="${_assessment_count_after:-0}"
+
+    if [ "$_assessment_count_after" -le "$_assessment_count_before" ]; then
+        warning "Phase assessment for '$phase_id' completed but no new assessment record was written — agent may have failed to produce real output (see $assessment_log)"
+        return 1
+    fi
+
+    success "Phase assessment completed for '$phase_id'"
+    return 0
 }
 
 # Only run assessment if cost tracking data exists

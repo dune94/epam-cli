@@ -150,7 +150,16 @@ resolve_effort_settings() {
             STORY_MAX_OUTPUT_TOKENS=6144
             ;;
     esac
-    log "  Effort[$effort] -> model=$(basename $STORY_MODEL) turns=${STORY_MAX_TURNS:-unlimited} maxIter=${STORY_MAX_ITERATIONS} maxOutTok=${STORY_MAX_OUTPUT_TOKENS}"
+    # NOTE: deliberately does NOT log the model here (found live, 2026-07-10):
+    # STORY_MODEL at this point is only the effort-tier CONFIG DEFAULT
+    # (currently gpt-5-codex for every tier) -- resolve_model_from_story()
+    # runs immediately after this and overrides it from prd.json in every
+    # observed live case. Logging "model=gpt-5-codex" here was misleading:
+    # that model was never actually dispatched, and no Cost[...] line ever
+    # named it, but read at a glance mid-run it looked like a third model
+    # was in rotation and costing money. resolve_model_from_story() now
+    # always logs whichever model actually ends up used.
+    log "  Effort[$effort] -> turns=${STORY_MAX_TURNS:-unlimited} maxIter=${STORY_MAX_ITERATIONS} maxOutTok=${STORY_MAX_OUTPUT_TOKENS}"
 }
 
 # resolve_generator_settings <story_id>
@@ -228,6 +237,13 @@ resolve_model_from_story() {
     if [ -n "$story_model" ]; then
         STORY_MODEL="$story_model"
         log "  Model[prd.json] -> $STORY_MODEL (overrides effort default)"
+    else
+        # Always log the model that will actually be used, even when it's
+        # just the effort-tier default falling through unchanged -- without
+        # this, no line ever named the real model for a story with no
+        # prd.json override, since resolve_effort_settings() no longer logs
+        # it either (see that function's own comment for why).
+        log "  Model[effort-default] -> $STORY_MODEL"
     fi
 }
 

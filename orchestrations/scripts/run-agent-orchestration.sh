@@ -1195,6 +1195,77 @@ assert_no_story_ids_gained() {
     fi
 }
 
+# assert_no_illegitimate_deprecation <label> <step_name> — companion to
+# assert_no_story_ids_lost/assert_no_story_ids_gained, closing a gap those two
+# don't cover: a story whose ID survives (so ID-loss doesn't fire) but whose
+# `status` field gets silently flipped to "deprecated" by one of the
+# unrestricted-tool-write steps (Step 0.5, Step 0.9).
+#
+# Root cause this guards against (found live, 2026-07-12, tier3-travel-app
+# run): SKY-001 was legitimately split into SKY-001-impl/SKY-001-test by
+# Step 0 (spec-pass) — both created with status="pending", the correct,
+# executable state captured in the "presplit" snapshot. By the time Step 1
+# reached them, both had status="deprecated" (plus completed=true and
+# removed from implementationOrder) — the exact signature applySpecChanges
+# writes onto a PARENT story once ITS split succeeds (spec-mode-runner.js:
+# 1865-1866/2392-2397), even though neither of these two stories was ever a
+# parent of a further split (no grandchild story IDs exist anywhere in the
+# PRD). Nothing between the presplit snapshot and Step 1 legitimately
+# deprecates a scaffold-phase story — only Step 0 itself and the
+# mid-execution split-gate may do that, and the split-gate explicitly logged
+# "No unvalidated mid-execution splits" for this phase. The only steps that
+# ran in that window with the unrestricted PRD write access needed to cause
+# this are Step 0.5 and Step 0.9 (both explicitly instructed, in their own
+# prompts, to touch only agentRole/model/aiProvider/reasoningEffort fields or
+# profiles.json — same class of prompt-vs-actual-write mismatch already
+# documented for assert_no_story_ids_gained). Net effect: the two stories
+# that were actually supposed to write package.json/tsconfig.json/etc. were
+# silently skipped all run, and the phase "completed" having done zero real
+# scaffolding work.
+#
+# Scope deliberately narrow: only stories present in BOTH the snapshot and
+# the current PRD (a story ID appearing/vanishing is assert_no_story_ids_lost/
+# gained's job), and only a flip INTO "deprecated" from something else (a
+# story that was already deprecated at snapshot time — e.g. a delegated
+# parent — legitimately stays deprecated; that's not a regression).
+assert_no_illegitimate_deprecation() {
+    local label="$1"
+    local step_name="$2"
+    local snapshot_file="$STORY_ID_SNAPSHOT_DIR/stories-${label}.json"
+    [ -s "$snapshot_file" ] || return 0  # no snapshot captured yet — nothing to compare
+
+    local flipped_ids
+    flipped_ids=$(jq -r --slurpfile snap "$snapshot_file" '
+        ($snap[0] | map({(.id): (.status // "pending")}) | add) as $before |
+        [.stories[] | select(
+            ($before[.id] // null) != null and
+            ($before[.id]) != "deprecated" and
+            (.status // "pending") == "deprecated"
+        ) | .id] | .[]
+    ' "$PRD_FILE" 2>/dev/null || true)
+    [ -z "$flipped_ids" ] && return 0
+
+    warning "STATUS-CORRUPTION after ${step_name}: the following stor(y/ies) were flipped to \"deprecated\" with no legitimate split/delegation event — restoring from the pre-step snapshot:"
+    local flipped_json tmp_prd
+    flipped_json=$(echo "$flipped_ids" | jq -R -s 'split("\n") | map(select(length > 0))')
+    tmp_prd=$(mktemp)
+    if jq --argjson flipped "$flipped_json" --slurpfile snap "$snapshot_file" \
+        '.stories = (.stories | map(
+            . as $cur |
+            ($snap[0][] | select(.id == $cur.id and ($flipped | index($cur.id) != null))) // $cur
+        ))' \
+        "$PRD_FILE" > "$tmp_prd" 2>/dev/null && jq empty "$tmp_prd" 2>/dev/null; then
+        mv "$tmp_prd" "$PRD_FILE"
+        while IFS= read -r _fid; do
+            [ -n "$_fid" ] && warning "    - restored: $_fid"
+        done <<< "$flipped_ids"
+    else
+        rm -f "$tmp_prd"
+        error "STATUS-CORRUPTION after ${step_name}: could not restore — check $PRD_FILE manually"
+        exit 1
+    fi
+}
+
 # Apply any pending redirect for a story.
 # Usage: apply_redirect_if_any <story_id>
 # Prints the (possibly redirected) agent role to stdout.
@@ -2213,6 +2284,7 @@ else
 fi
 assert_no_story_ids_lost "presplit" "Step 0.5: Skill assessment"
 assert_no_story_ids_gained "presplit" "Step 0.5: Skill assessment"
+assert_no_illegitimate_deprecation "presplit" "Step 0.5: Skill assessment"
 
 # ── Mid-execution split validation ────────────────────────────────────────────
 # Speckit must review ALL splits, not only those proposed by openspec during
@@ -2591,6 +2663,7 @@ fi
 step_emit "0.9" "pass" "Step 0.9: PRD model coordinator"
 assert_no_story_ids_lost "presplit" "Step 0.9: PRD model coordinator"
 assert_no_story_ids_gained "presplit" "Step 0.9: PRD model coordinator"
+assert_no_illegitimate_deprecation "presplit" "Step 0.9: PRD model coordinator"
 
 # ──────────────────────────────────────────────
 # Step 1: Run main-branch stories (no dependencies, sequential)

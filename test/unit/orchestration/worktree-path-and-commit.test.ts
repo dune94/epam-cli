@@ -95,7 +95,10 @@ describe('verify_story_deliverables — absolute path rewriting in worktree mode
   it('function rewrites main-repo absolute paths to worktree in WORKTREE_MODE', () => {
     const fnIdx = claudeSrc.indexOf('verify_story_deliverables()');
     expect(fnIdx).toBeGreaterThan(-1);
-    const block = claudeSrc.slice(fnIdx, fnIdx + 800);
+    // Widened from 800 (2026-07-12): the vendor-dir-skip fix added a
+    // comment block + vendor-dir-reading code before the WORKTREE_MODE
+    // rewrite logic, pushing it further into the function.
+    const block = claudeSrc.slice(fnIdx, fnIdx + 2200);
     expect(block).toContain('WORKTREE_MODE');
     expect(block).toContain('MAIN_PROJECT_ROOT');
   });
@@ -103,14 +106,14 @@ describe('verify_story_deliverables — absolute path rewriting in worktree mode
   it('rewrite uses string substitution (not just PROJECT_ROOT prefix)', () => {
     // Pattern: ${PROJECT_ROOT}${file#${MAIN_PROJECT_ROOT}}
     const fnIdx = claudeSrc.indexOf('verify_story_deliverables()');
-    const block = claudeSrc.slice(fnIdx, fnIdx + 800);
+    const block = claudeSrc.slice(fnIdx, fnIdx + 2200);
     expect(block).toMatch(/PROJECT_ROOT.*MAIN_PROJECT_ROOT|MAIN_PROJECT_ROOT.*PROJECT_ROOT/);
   });
 
   it('rewrite only applies when file starts with MAIN_PROJECT_ROOT (not all absolute paths)', () => {
     // System absolute paths like /tmp/foo should not be rewritten
     const fnIdx = claudeSrc.indexOf('verify_story_deliverables()');
-    const block = claudeSrc.slice(fnIdx, fnIdx + 800);
+    const block = claudeSrc.slice(fnIdx, fnIdx + 2200);
     // Must guard with: [[ "$file" = "${MAIN_PROJECT_ROOT}"* ]]
     expect(block).toMatch(/MAIN_PROJECT_ROOT.*\*/);
   });
@@ -131,7 +134,8 @@ describe('agent write-first prompt — absolute paths rewritten in worktree mode
   it('write_first_lines path rewrite matches verify_story_deliverables pattern', () => {
     // Both must use bash parameter substitution: ${PROJECT_ROOT}${f#${MAIN_PROJECT_ROOT}}
     const verifyIdx = claudeSrc.indexOf('verify_story_deliverables()');
-    const verifyBlock = claudeSrc.slice(verifyIdx, verifyIdx + 1000); // 1000 to reach check_path= at char 778
+    // Widened from 1000 (2026-07-12): see the vendor-dir-skip fix comment above.
+    const verifyBlock = claudeSrc.slice(verifyIdx, verifyIdx + 2400);
     const promptBlock = claudeSrc.slice(promptIdx, promptIdx + 800);
 
     expect(verifyBlock).toMatch(/PROJECT_ROOT.*#.*MAIN_PROJECT_ROOT/);

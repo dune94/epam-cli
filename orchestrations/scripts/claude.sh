@@ -1340,6 +1340,28 @@ verify_story_deliverables() {
     local declared=0
     local file
 
+    # Vendor/build-output directories (node_modules for npm, vendor for Go,
+    # venv/site-packages for Python, etc.) are provisioned by dependency
+    # install (run_dependency_check), never authored by the agent -- but a
+    # spec-pass elaboration can still declare one in technicalNotes.files
+    # (found live, 2026-07-12: SKY-001B declared node_modules/ before it
+    # existed yet, costing one wasted retry). Reuse the SAME generic,
+    # project-supplied vendorDirs config _get_vendor_dirs() reads for
+    # run_dependency_check/_vendor_lock -- no new hardcoded directory list
+    # in this engine. NOTE: cannot reuse _get_vendor_dirs() itself here --
+    # it deliberately filters to dirs that ALREADY exist (right, for its own
+    # lock/integrity-check callers), but this check specifically needs to
+    # match a vendor dir that does NOT exist yet (that's the exact bug being
+    # fixed), so read the same config key directly without that filter.
+    local _vendor_dirs=""
+    local _vendor_config="${PROJECT_ROOT}/.epam/dependency-check.json"
+    if [ -f "$_vendor_config" ]; then
+        _vendor_dirs=$(jq -r '.vendorDirs[]? // empty' "$_vendor_config" 2>/dev/null | \
+            while IFS= read -r _d; do
+                [ -n "$_d" ] && echo "${PROJECT_ROOT}/${_d}"
+            done)
+    fi
+
     while IFS= read -r file; do
         [ -n "$file" ] || continue
         declared=$((declared + 1))
@@ -1357,6 +1379,16 @@ verify_story_deliverables() {
         else
             check_path="$PROJECT_ROOT/$file"
         fi
+        local _is_vendor_path=false
+        if [ -n "$_vendor_dirs" ]; then
+            while IFS= read -r _vendor_dir; do
+                [ -z "$_vendor_dir" ] && continue
+                case "$check_path" in
+                    "$_vendor_dir"|"$_vendor_dir"/*) _is_vendor_path=true; break ;;
+                esac
+            done <<< "$_vendor_dirs"
+        fi
+        [ "$_is_vendor_path" = true ] && continue
         if [ ! -e "$check_path" ]; then
             missing+=("$file")
         fi

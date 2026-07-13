@@ -89,6 +89,27 @@ describe('run_phase_assessment() prompt — real absolute paths, not guessable r
   });
 });
 
+describe('Step 6 call site — run_phase_assessment() failure must not abort the whole script (static)', () => {
+  // Live defect (found 2026-07-12, same night the real-evidence gate above
+  // shipped): Step 3.5's call site wraps run_phase_assessment in
+  // `if run_phase_assessment ...; then ... else ... fi` (safe under `set -e`
+  // regardless of return code), but Step 6's call site was a bare
+  // `run_phase_assessment "$PHASE"` with no if/else. Under this script's
+  // `set -e`, a bare call returning 1 (which the real-evidence gate now does
+  // whenever the LAST, purely informational assessment produces no new
+  // record) aborts the ENTIRE run-agent-orchestration.sh process --
+  // confirmed live: a scaffold phase that had already fully completed and
+  // received a GO phase-gate decision was killed with "Phase 'scaffold'
+  // failed (exit 1) -- aborting pipeline" by tier3-travel-app-run.sh, over
+  // nothing but Step 6's assessment call.
+  it('Step 6 wraps run_phase_assessment in an if/else, not a bare call', () => {
+    const idx = orchSrc.indexOf('Step 6: Running final post-phase assessment');
+    const block = orchSrc.slice(idx, idx + 1400);
+    expect(block).toMatch(/if run_phase_assessment "\$PHASE"; then/);
+    expect(block).not.toMatch(/\n\s*run_phase_assessment "\$PHASE"\s*\n/);
+  });
+});
+
 describe('run_phase_assessment() — REAL execution: verifies a genuine new assessment record before reporting success', () => {
   function run(opts: {
     phaseId: string;

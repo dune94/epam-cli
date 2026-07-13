@@ -6264,7 +6264,20 @@ esac
 # ──────────────────────────────────────────────
 log "Step 6: Running final post-phase assessment..."
 if [ -s "$LOG_DIR/phase-cost.jsonl" ]; then
-    run_phase_assessment "$PHASE"
+    # Non-critical, same as Step 3.5's identical call (line ~3671): under
+    # `set -e`, a bare call to a function that can `return 1` (the real-
+    # evidence gate added 2026-07-12) aborts the ENTIRE script, not just this
+    # step. Found live the same night that gate shipped: a real,
+    # already-GO-gated, fully-completed scaffold phase had its whole tier3
+    # pipeline killed (exit 1, "Phase 'scaffold' failed — aborting pipeline")
+    # over nothing but this LAST, informational assessment call producing no
+    # new record — Step 3.5's own identical call earlier in the same run
+    # correctly treated the same failure mode as a warning.
+    if run_phase_assessment "$PHASE"; then
+        step_emit "6" "pass" "Step 6: Final post-phase assessment"
+    else
+        step_emit "6" "warn" "Step 6: Final post-phase assessment" "non-critical issues"
+    fi
 else
     info "Step 6: No cost data — skipping final post-phase assessment"
 fi

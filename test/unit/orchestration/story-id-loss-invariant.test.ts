@@ -81,7 +81,11 @@ describe('capture_story_ids_snapshot / assert_no_story_ids_lost — wiring (stat
 
   it('an assertion is wired after the Step 6 run_phase_assessment call site', () => {
     const idx = orchSrc.indexOf('Step 6: Running final post-phase assessment');
-    const block = orchSrc.slice(idx, idx + 400);
+    // Widened (2026-07-12): the call site grew an explanatory comment block
+    // plus if/else step_emit wiring (see phase-assessment-real-output-gate.
+    // test.ts's "Step 6 call site" describe block for why) that pushed the
+    // assert calls further from the anchor than the old 400-char window.
+    const block = orchSrc.slice(idx, idx + 1400);
     expect(block).toMatch(/assert_no_story_ids_lost "presplit" "Step 6/);
   });
 });

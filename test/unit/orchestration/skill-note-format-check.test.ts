@@ -38,6 +38,21 @@ function extractFunctionBody(name: string): string {
   return claudeSrc.slice(start, end);
 }
 
+// Pulls the exact declaration line for a top-level global var out of
+// claude.sh, rather than duplicating its default value in this test file --
+// _skill_note_format_ok/_ensure_imperative_opener read this var as their
+// single source of truth for the accepted-imperative-word list, so the test
+// harness must use the REAL declaration, not a copy that could silently
+// drift from it.
+function extractGlobalVarLine(name: string): string {
+  const re = new RegExp(`^${name}=.*$`, 'm');
+  const match = re.exec(claudeSrc);
+  if (!match) throw new Error(`Global var ${name} not found`);
+  return match[0];
+}
+
+const IMPERATIVE_OPENERS_VAR = extractGlobalVarLine('SKILL_NOTE_IMPERATIVE_OPENERS');
+
 function checkFormat(note: string, storyId: string, existingProfileText = ''): boolean {
   const dir = mkdtempSync(join(tmpdir(), 'skill-note-format-'));
   try {
@@ -45,7 +60,7 @@ function checkFormat(note: string, storyId: string, existingProfileText = ''): b
     const scriptPath = join(dir, 'run.sh');
     writeFileSync(
       scriptPath,
-      `${fnBody}\n_skill_note_format_ok "$1" "$2" "$3"\necho "RC=$?"\n`,
+      `${IMPERATIVE_OPENERS_VAR}\n${fnBody}\n_skill_note_format_ok "$1" "$2" "$3"\necho "RC=$?"\n`,
     );
     const output = execFileSync('bash', [scriptPath, note, storyId, existingProfileText], { encoding: 'utf8' });
     return output.includes('RC=0');
@@ -107,6 +122,7 @@ describe('run_change_with_reviewer_retry — skips the LLM reviewer when format 
 
       const script = `
 TMPDIR="${dir}"
+${IMPERATIVE_OPENERS_VAR}
 ${formatCheckBody}
 run_prd_change_reviewer() {
   echo "called" >> "${reviewerCalledFile}"

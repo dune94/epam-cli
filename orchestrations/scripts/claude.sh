@@ -28,6 +28,21 @@ AGENTS_FILE="$AUTOMATION_DIR/agents/AGENTS.md"
 CLAUDE_OUTPUT_DIR="$LOG_DIR/claude_outputs"
 AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
 MONITOR_STATUS_FILE="${MONITOR_FILE:-$LOG_DIR/agent-status.json}"
+# Single source of truth for the skill_note/kb_entry imperative-opener rule
+# (the reviewer's own stated format rule -- see prd-change-reviewer's profile
+# text). Both _skill_note_format_ok (the check) and _ensure_imperative_opener
+# (the normalizer) read this SAME variable, so the two can never silently
+# drift out of sync if the accepted word list is ever tuned. Configurable via
+# env var rather than hardcoded in either function.
+SKILL_NOTE_IMPERATIVE_OPENERS="${SKILL_NOTE_IMPERATIVE_OPENERS:-do not|never|always|avoid|use|prefer}"
+# The word _ensure_imperative_opener prepends when a note doesn't already
+# open with one of the words above. Must itself be a member of that list
+# (enforced at the top of _ensure_imperative_opener, not assumed) -- "always"
+# is chosen specifically because it's semantically safe to prepend to an
+# ARBITRARY clause without inverting its meaning; "never"/"avoid"/"do not"
+# would negate whatever follows, so picking the first list entry
+# programmatically would be unsafe if the list order ever changed.
+SKILL_NOTE_NORMALIZATION_OPENER="${SKILL_NOTE_NORMALIZATION_OPENER:-Always}"
 export MONITOR_FILE="$MONITOR_STATUS_FILE"
 export ACTIVITY_FILE="${ACTIVITY_FILE:-$LOG_DIR/agent-activity.jsonl}"
 
@@ -3526,7 +3541,7 @@ _skill_note_format_ok() {
     local existing_profile_text="${3:-}"
     [ -z "$note" ] && return 1
     [ "${#note}" -le 200 ] || return 1
-    echo "$note" | grep -Eiq '^(do not|never|always|avoid|use|prefer)\b' || return 1
+    echo "$note" | grep -Eiq "^(${SKILL_NOTE_IMPERATIVE_OPENERS})\\b" || return 1
     if [ -n "$story_id" ] && echo "$note" | grep -qi "$story_id"; then
         return 1
     fi
@@ -3534,6 +3549,45 @@ _skill_note_format_ok() {
         return 1
     fi
     return 0
+}
+
+# _ensure_imperative_opener <note>
+# Deterministically normalizes a skill_note/kb_entry candidate to satisfy
+# _skill_note_format_ok's imperative-opener check, WITHOUT ever needing an
+# LLM rewrite round-trip. Closes a live gap (2026-07-12, tier3-travel-app
+# run): SKY-002-impl's FailureAnalyst produced a genuinely correct, specific
+# note -- "When converting an interface to Record<string, unknown>, ensure
+# the interface has an index signature or use 'unknown' first to avoid
+# TS2352 error." -- but it opens with a subordinate "When X, ..." clause,
+# not an imperative, so it correctly failed the deterministic format check
+# and went through the full LLM reviewer 3 times on this SAME fixable
+# wording issue, then was persisted UNREVIEWED as a fallback. The lesson
+# itself was fine; only the opening word was wrong -- a mechanically
+# fixable defect, not a judgment call. Prepending
+# SKILL_NOTE_NORMALIZATION_OPENER (a configurable var, checked against the
+# SAME SKILL_NOTE_IMPERATIVE_OPENERS list _skill_note_format_ok uses -- no
+# word list duplicated or hardcoded independently in either function) is a
+# generic, content-preserving transform (not a rewrite) that reliably
+# satisfies the imperative check for ANY note shape, so apply it BEFORE the
+# note is ever handed to run_change_with_reviewer_retry, letting an
+# otherwise-sound note skip the LLM reviewer entirely on the very first
+# attempt.
+_ensure_imperative_opener() {
+    local note="$1"
+    [ -z "$note" ] && { printf ''; return 0; }
+    if echo "$note" | grep -Eiq "^(${SKILL_NOTE_IMPERATIVE_OPENERS})\\b"; then
+        printf '%s' "$note"
+        return 0
+    fi
+    # Sanity-check the configured normalization opener is itself an accepted
+    # word (not assumed) -- if misconfigured, fall through without
+    # normalizing rather than prepend something that wouldn't pass the check
+    # anyway.
+    if ! echo "$SKILL_NOTE_NORMALIZATION_OPENER" | grep -Eiq "^(${SKILL_NOTE_IMPERATIVE_OPENERS})\\b"; then
+        printf '%s' "$note"
+        return 0
+    fi
+    printf '%s' "${SKILL_NOTE_NORMALIZATION_OPENER}: ${note}" | cut -c1-200
 }
 
 # _tool_recipe_reinvokes_test_cmd <recipe> <test_cmd>
@@ -3873,6 +3927,7 @@ for i, c in enumerate(text):
             diagnosis=$(echo "$analyst_json" | jq -r '.diagnosis // "unknown"' 2>/dev/null || echo "unknown")
             target=$(echo "$analyst_json" | jq -r '.target // "none"' 2>/dev/null || echo "none")
             skill_note=$(echo "$analyst_json" | jq -r '.skill_note // ""' 2>/dev/null || echo "")
+            [ -n "$skill_note" ] && skill_note=$(_ensure_imperative_opener "$skill_note")
             reason=$(echo "$analyst_json" | jq -r '.reason // ""' 2>/dev/null || echo "")
             local tool_name tool_purpose tool_recipe
             tool_name=$(echo "$analyst_json" | jq -r '.tool_spec.name // ""' 2>/dev/null || echo "")

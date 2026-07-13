@@ -34,6 +34,23 @@ function extractFunctionBody(name: string): string {
   return claudeSrc.slice(start, end);
 }
 
+// Pulls the exact declaration line for a top-level global var out of
+// claude.sh, rather than duplicating its default value in this test file --
+// _skill_note_format_ok reads SKILL_NOTE_IMPERATIVE_OPENERS as its single
+// source of truth for the accepted-imperative-word list; without it set,
+// the check's regex becomes `^()\b` and trivially matches everything,
+// short-circuiting run_change_with_reviewer_retry's deterministic pre-check
+// to "pass" for ANY candidate and defeating the very reviewer path these
+// tests exist to exercise.
+function extractGlobalVarLine(name: string): string {
+  const re = new RegExp(`^${name}=.*$`, 'm');
+  const match = re.exec(claudeSrc);
+  if (!match) throw new Error(`Global var ${name} not found`);
+  return match[0];
+}
+
+const IMPERATIVE_OPENERS_VAR = extractGlobalVarLine('SKILL_NOTE_IMPERATIVE_OPENERS');
+
 const FAKE_AI_RUN_FIXES_ON_RETRY = `#!/usr/bin/env bash
 prompt=$(cat)
 if echo "$prompt" | grep -q "PRD change summarizer"; then
@@ -79,6 +96,7 @@ ORCH_GATE_MODEL="fake-model"
 profiles_file=""
 warning() { :; }
 log() { :; }
+${IMPERATIVE_OPENERS_VAR}
 ${formatCheckBody}
 ${reviewerBody}
 ${summarizerBody}

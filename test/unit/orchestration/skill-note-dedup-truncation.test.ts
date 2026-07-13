@@ -40,6 +40,19 @@ function extractFunctionBody(name: string): string {
   return claudeSrc.slice(start, end);
 }
 
+// _skill_note_format_ok reads SKILL_NOTE_IMPERATIVE_OPENERS as its single
+// source of truth for the accepted-imperative-word list; without it set in
+// the harness, the check's regex becomes `^()\b` and trivially matches
+// everything. Pulled from the real file rather than duplicated here so this
+// test can never silently drift from the actual default.
+function extractGlobalVarLine(name: string): string {
+  const re = new RegExp(`^${name}=.*$`, 'm');
+  const match = re.exec(claudeSrc);
+  if (!match) throw new Error(`Global var ${name} not found`);
+  return match[0];
+}
+const IMPERATIVE_OPENERS_VAR = extractGlobalVarLine('SKILL_NOTE_IMPERATIVE_OPENERS');
+
 describe('claude.sh — skill_note before-text call site (static)', () => {
   it('no longer truncates the existing profile text with head -c 500', () => {
     const idx = claudeSrc.indexOf('_skill_review_verdict=$(run_change_with_reviewer_retry');
@@ -82,7 +95,7 @@ describe('skill_note dedup — REAL execution: reproduces the exact live defect 
     try {
       const fnBody = extractFunctionBody('_skill_note_format_ok');
       const scriptPath = join(dir, 'run.sh');
-      writeFileSync(scriptPath, `${fnBody}\n_skill_note_format_ok "$1" "SKY-003-impl" "$2"\necho "RC=$?"\n`);
+      writeFileSync(scriptPath, `${IMPERATIVE_OPENERS_VAR}\n${fnBody}\n_skill_note_format_ok "$1" "SKY-003-impl" "$2"\necho "RC=$?"\n`);
       const output = execFileSync('bash', [scriptPath, note, before], { encoding: 'utf8' });
       return output.includes('RC=0');
     } finally {

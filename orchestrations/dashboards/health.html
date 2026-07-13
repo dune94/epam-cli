@@ -37,6 +37,7 @@ th { color: var(--text3); font-size: 11px; text-transform: uppercase; letter-spa
 .badge-role { background: rgba(56,189,248,0.10); color: var(--brand); }
 .badge-target { background: rgba(74,222,128,0.12); color: var(--green); }
 .badge-broken { background: rgba(248,113,113,0.10); color: var(--red); }
+.badge-warn { background: rgba(251,191,36,0.12); color: var(--amber); }
 code { background: var(--surface2); border-radius: 4px; padding: 1px 5px; font-size: 12px; }
 .empty { color: var(--text3); font-size: 12px; padding: 10px 0; }
 .footer-note { color: var(--text3); font-size: 12px; margin-top: 14px; }
@@ -109,6 +110,31 @@ code { background: var(--surface2); border-radius: 4px; padding: 1px 5px; font-s
         <thead><tr><th>Time</th><th>Story</th><th>Retry</th><th>Target</th><th>Diagnosis</th><th>Patches</th><th>Profile Updated</th></tr></thead>
         <tbody id="cyclesTable"></tbody>
       </table>
+    </section>
+    <section class="card" style="margin-top: 16px;">
+      <div class="section-title">Prompt Evals — Retry-on-Violation Guards</div>
+      <div class="section-sub">
+        Step 0.5 (skill assessment), Step 0.9 (PRD model coordinator), AC-review (spec-pass), and TC-writer
+        (inline + batch) each have tool write access to <code>prd.json</code>/<code>profiles.json</code> and a
+        deterministic check on what they're allowed to touch. "% evaluated" is the share of calls where that
+        check actually fired a violation at least once — not just a rubber-stamped first attempt. Reads
+        <code>guarded-step-retries.jsonl</code> and <code>blocked-stories.jsonl</code>.
+      </div>
+      <section class="grid" id="promptEvalGrid" style="margin-bottom: 14px;"></section>
+      <table>
+        <thead><tr><th>Step</th><th>Calls</th><th>Evaluated</th><th>Passed</th><th>Reverted</th><th>Blocked</th></tr></thead>
+        <tbody id="promptEvalByStepTable"></tbody>
+      </table>
+      <div class="section-sub" style="margin-top: 14px;">Recent guarded-call outcomes, newest last.</div>
+      <table>
+        <thead><tr><th>Time</th><th>Step</th><th>Story</th><th>Attempts</th><th>Outcome</th><th>Reason</th></tr></thead>
+        <tbody id="promptEvalRecentTable"></tbody>
+      </table>
+      <div class="section-sub" style="margin-top: 14px;">Blocked stories — retries exhausted, skipped rather than run ungrounded.</div>
+      <table>
+        <thead><tr><th>Time</th><th>Story</th><th>Reason</th></tr></thead>
+        <tbody id="blockedStoriesTable"></tbody>
+      </table>
       <div class="footer-note" id="generatedAt"></div>
     </section>
   </main>
@@ -120,6 +146,10 @@ const toolsTable = document.getElementById('toolsTable');
 const brokenTable = document.getElementById('brokenTable');
 const cyclesTable = document.getElementById('cyclesTable');
 const generatedAt = document.getElementById('generatedAt');
+const promptEvalGrid = document.getElementById('promptEvalGrid');
+const promptEvalByStepTable = document.getElementById('promptEvalByStepTable');
+const promptEvalRecentTable = document.getElementById('promptEvalRecentTable');
+const blockedStoriesTable = document.getElementById('blockedStoriesTable');
 
 function metricCard(label, value, note) {
   return `<div class="card"><div class="metric-label">${label}</div><div class="metric-value">${value}</div><div class="metric-note">${note}</div></div>`;
@@ -176,6 +206,47 @@ function render(info) {
   cyclesTable.innerHTML = recentCycles.length
     ? [...recentCycles].reverse().map((c) => `<tr><td>${esc(c.ts)}</td><td><strong>${esc(c.story_id)}</strong></td><td>${esc(c.retry)}</td><td><span class="badge badge-target">${esc(c.target)}</span></td><td>${esc(c.diagnosis)}</td><td>${esc(c.patches_applied)}</td><td>${c.profile_updated === true || c.profile_updated === 'true' ? 'yes' : 'no'}</td></tr>`).join('')
     : `<tr><td colspan="7" class="empty">No analyst cycles recorded yet.</td></tr>`;
+
+  renderPromptEvals(info.metrics?.promptEvals);
+}
+
+function outcomeBadge(outcome) {
+  const cls = outcome === 'pass' ? 'badge-target' : outcome === 'blocked' ? 'badge-broken' : outcome === 'reverted' ? 'badge-warn' : 'badge-role';
+  return `<span class="badge ${cls}">${esc(outcome ?? 'unknown')}</span>`;
+}
+
+function renderPromptEvals(pe) {
+  if (!pe) {
+    promptEvalGrid.innerHTML = `<div class="card"><div class="metric-label">No Data</div><div class="metric-note">metrics.promptEvals missing from build-info.json — rebuild dashboards.</div></div>`;
+    promptEvalByStepTable.innerHTML = `<tr><td colspan="6" class="empty">No data.</td></tr>`;
+    promptEvalRecentTable.innerHTML = `<tr><td colspan="6" class="empty">No data.</td></tr>`;
+    blockedStoriesTable.innerHTML = `<tr><td colspan="3" class="empty">No data.</td></tr>`;
+    return;
+  }
+
+  promptEvalGrid.innerHTML = [
+    metricCard('Guarded Calls', pe.total ?? 0, 'Step 0.5 / 0.9 / AC-review / TC-writer invocations'),
+    metricCard('% Evaluated', `${pe.evaluatedPct ?? 0}%`, `${pe.evaluated ?? 0} of ${pe.total ?? 0} hit a violation on attempt 1`),
+    metricCard('Passed', pe.passed ?? 0, 'Ended clean (first try or after a corrected retry)'),
+    metricCard('Reverted', pe.reverted ?? 0, 'Exhausted 3 attempts — profiles.json/PRD reverted to pre-call state'),
+    metricCard('Blocked Stories', pe.blockedStoriesCount ?? 0, 'TC-writer exhaustion — story skipped, not run ungrounded')
+  ].join('');
+
+  const byStep = pe.byStep || {};
+  const stepRows = Object.entries(byStep);
+  promptEvalByStepTable.innerHTML = stepRows.length
+    ? stepRows.map(([step, s]) => `<tr><td><code>${esc(step)}</code></td><td>${s.total}</td><td>${s.total ? Math.round((s.evaluated / s.total) * 100) : 0}%</td><td>${s.passed}</td><td>${s.reverted}</td><td>${s.blocked}</td></tr>`).join('')
+    : `<tr><td colspan="6" class="empty">No guarded-step calls recorded yet.</td></tr>`;
+
+  const recent = pe.recent || [];
+  promptEvalRecentTable.innerHTML = recent.length
+    ? [...recent].reverse().map((r) => `<tr><td>${esc(r.timestamp)}</td><td><code>${esc(r.step)}</code></td><td>${r.storyId ? `<strong>${esc(r.storyId)}</strong>` : '<span class="empty">—</span>'}</td><td>${esc(r.attempts)}</td><td>${outcomeBadge(r.outcome)}</td><td>${esc(r.reason) || '<span class="empty">—</span>'}</td></tr>`).join('')
+    : `<tr><td colspan="6" class="empty">No guarded-step calls recorded yet.</td></tr>`;
+
+  const blockedRecent = pe.blockedStoriesRecent || [];
+  blockedStoriesTable.innerHTML = blockedRecent.length
+    ? [...blockedRecent].reverse().map((b) => `<tr><td>${esc(b.timestamp)}</td><td><strong>${esc(b.storyId)}</strong></td><td>${esc(b.reason)}</td></tr>`).join('')
+    : `<tr><td colspan="3" class="empty">No stories blocked — every TC-writer gate resolved within 3 attempts.</td></tr>`;
 }
 
 if (window.EPAMBuildInfo) {

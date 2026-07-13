@@ -364,8 +364,8 @@
         <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td>
       </tr>
       <tr>
-        <td>Reviewer-gated self-healing writes</td>
-        <td class="epam-cell"><span class="badge badge-unique">★ UNIQUE</span><span class="detail">Every automated PRD/profile write (AC patches, spec-pass rewrites, CPA estimates, profile creation, model assignment) is validated by a reviewer agent with snapshot + revert-on-fail before it's accepted</span></td>
+        <td>Reviewer-gated self-healing writes, with retry-on-violation</td>
+        <td class="epam-cell"><span class="badge badge-unique">★ UNIQUE</span><span class="detail">Every automated PRD/profile write (AC patches, spec-pass rewrites, CPA estimates, profile creation, model assignment, TC writer) is validated by a deterministic reviewer with snapshot + revert-on-fail — and now gets up to 3 attempts first, with the specific violation fed back as a corrective note, before falling back to revert (or, for TC writer, blocking just that story instead of aborting the whole phase)</span></td>
         <td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td>
       </tr>
       <tr>
@@ -563,8 +563,8 @@
       <span class="feat-desc">Hard budget check after every LLM response — not session-level tracking. Actions: warn, auto-downgrade model, or hard-pause requiring approval. Prevents runaway spend mid-orchestration.</span>
     </li>
     <li>
-      <span class="feat-name">Reviewer-Gated Self-Healing</span>
-      <span class="feat-desc">A dedicated reviewer agent (prd-change-reviewer / kb-change-reviewer) validates every automated write to prd.json or profiles.json — AC/TC patches, spec-pass rewrites, CPA estimates, skill-assessment profile creation, model assignment — with a before/after snapshot and revert-on-reject. No other framework gates its own self-modifying writes with a second agent.</span>
+      <span class="feat-name">Reviewer-Gated Self-Healing, with Retry-on-Violation</span>
+      <span class="feat-desc">A dedicated reviewer (prd-change-reviewer / kb-change-reviewer, or a deterministic field-allowlist diff for the model-coordinator and skill-assessment steps) validates every automated write to prd.json or profiles.json — AC/TC patches, spec-pass rewrites, CPA estimates, skill-assessment profile creation, model assignment. On violation, up to 3 attempts with the specific issue fed back as a corrective note before falling back to a before/after-snapshot revert — TC-writer exhaustion blocks just that one story instead of aborting the whole phase. No other framework gates its own self-modifying writes with a second agent, let alone gives it a chance to self-correct first.</span>
     </li>
     <li>
       <span class="feat-name">Rung-Based Inference Ladder</span>

@@ -29,7 +29,12 @@ const PATHS = {
   agentActivity: path.join(DASHBOARD_ROOT, 'logs', 'agent-activity.jsonl'),
   healingEvents: path.join(PROJECT_OUTPUT_DIR, 'healing-events.jsonl'),
   dynamicToolsDir: path.join(PROJECT_OUTPUT_DIR, '.epam', 'dynamic-tools'),
-  storyFailures: path.join(PROJECT_OUTPUT_DIR, 'story-failures.jsonl')
+  storyFailures: path.join(PROJECT_OUTPUT_DIR, 'story-failures.jsonl'),
+  // Prompt-eval retry guards (Step 0.5, Step 0.9, AC-review, TC-writer
+  // inline/batch) — added 2026-07-13 alongside the retry-on-violation loops
+  // themselves. One record per guarded call's final outcome.
+  guardedStepRetries: path.join(PROJECT_OUTPUT_DIR, 'guarded-step-retries.jsonl'),
+  blockedStories: path.join(PROJECT_OUTPUT_DIR, 'blocked-stories.jsonl')
 };
 
 function safeReadJson(filePath, fallback) {
@@ -180,6 +185,50 @@ function summarizeHealingEvents(events) {
   };
 }
 
+// Prompt-eval retry guards — Step 0.5/0.9/AC-review/TC-writer each log one
+// record per guarded call's FINAL outcome (pass/reverted/blocked) plus how
+// many of the 3 allowed attempts it took. "% evaluated" here means the share
+// of guarded calls that actually violated the deterministic check at least
+// once (attempts > 1) — i.e. the eval genuinely caught and acted on
+// something, not just a rubber-stamped first attempt.
+function summarizeGuardedStepRetries(events) {
+  const byStep = {};
+  let total = 0;
+  let evaluated = 0; // attempts > 1: the deterministic check fired at least once
+  let passed = 0;
+  let reverted = 0;
+  let blocked = 0;
+
+  for (const e of events) {
+    if (!e || typeof e !== 'object' || !e.step) continue;
+    total += 1;
+    const attempts = Number(e.attempts) || 1;
+    if (attempts > 1) evaluated += 1;
+    if (e.outcome === 'pass') passed += 1;
+    else if (e.outcome === 'reverted') reverted += 1;
+    else if (e.outcome === 'blocked') blocked += 1;
+
+    const step = e.step;
+    if (!byStep[step]) byStep[step] = { total: 0, evaluated: 0, passed: 0, reverted: 0, blocked: 0 };
+    byStep[step].total += 1;
+    if (attempts > 1) byStep[step].evaluated += 1;
+    if (e.outcome === 'pass') byStep[step].passed += 1;
+    else if (e.outcome === 'reverted') byStep[step].reverted += 1;
+    else if (e.outcome === 'blocked') byStep[step].blocked += 1;
+  }
+
+  return {
+    total,
+    evaluated,
+    evaluatedPct: total ? Math.round((evaluated / total) * 100) : 0,
+    passed,
+    reverted,
+    blocked,
+    byStep,
+    recent: events.slice(-15)
+  };
+}
+
 function deriveSpecCoverage(stories) {
   if (!Array.isArray(stories) || !stories.length) {
     return { total: 0, completed: 0 };
@@ -204,6 +253,9 @@ function loadSnapshot() {
   const skillNotesDiff = diffSkillNotes(profiles, profilesOriginal);
   const dynamicTools = listDynamicTools(PATHS.dynamicToolsDir);
   const storyFailures = tailJsonl(PATHS.storyFailures, 9999);
+  const guardedStepRetryEvents = tailJsonl(PATHS.guardedStepRetries, 9999);
+  const guardedStepRetries = summarizeGuardedStepRetries(guardedStepRetryEvents);
+  const blockedStories = tailJsonl(PATHS.blockedStories, 9999);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -257,6 +309,11 @@ function loadSnapshot() {
         skillNotes: skillNotesDiff,
         dynamicTools,
         storyFailureEvents: storyFailures.length
+      },
+      promptEvals: {
+        ...guardedStepRetries,
+        blockedStoriesCount: blockedStories.length,
+        blockedStoriesRecent: blockedStories.slice(-10)
       }
     }
   };

@@ -18,9 +18,11 @@
 set -euo pipefail
 
 PRD_FILE=""
+PHASE_ARG=""
 while [[ $# -gt 0 ]]; do
   case $1 in
     --prd) PRD_FILE="$2"; shift 2 ;;
+    --phase) PHASE_ARG="$2"; shift 2 ;;
     *) echo "Unknown arg: $1" >&2; exit 1 ;;
   esac
 done
@@ -33,6 +35,22 @@ python3 << PYEOF
 import json, re, sys
 
 PRD_FILE = """$PRD_FILE"""
+# Optional: scope the per-story "is this story in a clean/correct state right
+# now" checks (#9, #10, #17) to a single phase's own implementationOrder,
+# instead of the union across every phase.
+#
+# Root cause this fixes (found live, 2026-07-13, tier3-travel-app run): a
+# scaffold story that legitimately becomes status=completed once its phase
+# finishes was still counted in the ALL-PHASES active_ids union used by check
+# #10 (clean pending state) on every SUBSEQUENT phase's remediation call --
+# there was no way to say "only validate the phase I'm actually about to run."
+# That made check #10 fail FOREVER on any pipeline that completes more than
+# one phase, hard-aborting with "fix prd.json manually" on an otherwise
+# perfectly healthy PRD. Checks that must stay PRD-wide (duplicate IDs across
+# phases, phase order/structure, phantom story references) are unaffected --
+# only the three checks whose failure mode is specifically "this story
+# belongs to a different, already-finished phase" are scoped here.
+PHASE_SCOPE = """$PHASE_ARG"""
 KNOWN_PROVIDERS = {'qwen', 'minimax', 'anthropic', 'claude', 'gemini', 'opencode', 'codex', 'cursor'}
 KNOWN_MINIMAX_MODELS = {'MiniMax-M3', 'MiniMax-M2.5', 'MiniMax-M1.5', 'MiniMax-M1', 'upgrade'}
 # ui_and_review removed (2026-07-07): the pipeline is scaffold -> core only.
@@ -47,6 +65,7 @@ impl_order = d.get('implementationOrder', {})
 output_dir = d.get('project', {}).get('outputDir', '')
 by_id      = {s['id']: s for s in stories}
 active_ids = set(sid for phase in impl_order.values() for sid in phase)
+check_ids  = set(impl_order.get(PHASE_SCOPE, [])) if PHASE_SCOPE else active_ids
 
 errors = []
 warns  = []
@@ -143,7 +162,7 @@ else:
 
 # ── 9. .test.ts active stories must use qwen (not minimax) ──────────────────
 test_ts_minimax = []
-for sid in active_ids:
+for sid in check_ids:
     s = by_id.get(sid, {})
     files = s.get('technicalNotes', {}).get('files', [])
     if any(f.endswith('.test.ts') for f in files) and s.get('aiProvider') == 'minimax':
@@ -155,7 +174,7 @@ else:
 
 # ── 10. Clean slate — all active stories pending/not completed ───────────────
 not_pending = []
-for sid in active_ids:
+for sid in check_ids:
     s = by_id.get(sid, {})
     status    = s.get('status', 'pending')
     completed = s.get('completed', False)
@@ -164,7 +183,7 @@ for sid in active_ids:
 if not_pending:
     err(f"Active stories not in clean pending state: {not_pending[:5]}{'...' if len(not_pending)>5 else ''}")
 else:
-    print(f"  ✓ All {len(active_ids)} active stories are pending/clean")
+    print(f"  ✓ All {len(check_ids)} active stories are pending/clean")
 
 # ── 11. All active stories have required fields ──────────────────────────────
 missing_fields = []
@@ -245,7 +264,7 @@ else:
 # Preflight only verifies the schema field exists so the pipeline can
 # detect which stories need TC generation before test execution starts.
 test_stories_missing_tc_field = []
-for sid in active_ids:
+for sid in check_ids:
     s = by_id.get(sid, {})
     files = s.get('technicalNotes', {}).get('files', [])
     is_test_story = any(f.endswith('.test.ts') for f in files)

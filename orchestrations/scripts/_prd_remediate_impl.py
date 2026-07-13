@@ -269,6 +269,80 @@ if output_dir:
 if backfilled:
     changes.append(f"backfilled {len(backfilled)} split-sibling dependency link(s): {backfilled}")
 
+# ── 9. Repair provider/model misalignment on .test.ts stories, using the
+#      canonical PRD as source of truth (config-driven, not a hardcoded
+#      provider literal — same "canonical decides, engine has no stack
+#      opinion" convention as elsewhere in this file) ────────────────────────
+#
+# Root cause this fixes (found live, 2026-07-13, tier3-travel-app run): stale
+# core-phase data (aiProvider=minimax on SKY-002/003/004) survived multiple
+# `git checkout` restores of the runtime PRD tonight, because git checkout
+# only restores to whatever was last COMMITTED -- which was itself already
+# contaminated from an earlier (pre-tonight) run that predates the ".test.ts
+# stories must use qwen/K2" rule. preflight-prd-integrity.sh's check #9 has
+# always caught this, but nothing ever repaired it -- the phase just
+# hard-aborted with "fix prd.json manually" even though the correct value was
+# sitting right there in the canonical PRD the whole time.
+#
+# Scoped to reset_scope_ids (TARGET_PHASE when given, matching step 6 above)
+# so a prior, already-completed phase's stories are never touched here either.
+canonical_path = None
+if PRD_FILE.endswith('.json'):
+    _candidate = PRD_FILE[: -len('.json')] + '.canonical.json'
+    if os.path.isfile(_candidate):
+        canonical_path = _candidate
+
+canonical_by_id = {}
+if canonical_path:
+    try:
+        with open(canonical_path) as f:
+            canonical_by_id = {s['id']: s for s in json.load(f).get('stories', [])}
+    except (OSError, json.JSONDecodeError):
+        canonical_by_id = {}
+
+provider_repaired = []
+if canonical_by_id:
+    for sid in reset_scope_ids:
+        s = by_id.get(sid)
+        if not s or s.get('aiProvider') != 'minimax':
+            continue
+        files = s.get('technicalNotes', {}).get('files', [])
+        if not any(f.endswith('.test.ts') for f in files):
+            continue
+        canon = canonical_by_id.get(sid)
+        if not canon or not canon.get('aiProvider') or canon['aiProvider'] == 'minimax':
+            continue  # no safe, different value to repair to -- leave for a human
+        old = f"{s.get('aiProvider')}/{s.get('model')}"
+        s['aiProvider'] = canon['aiProvider']
+        if canon.get('model'):
+            s['model'] = canon['model']
+        provider_repaired.append(f"{sid}: {old} -> {s['aiProvider']}/{s.get('model')}")
+if provider_repaired:
+    changes.append(f"repaired provider/model misalignment from canonical: {provider_repaired}")
+
+# ── 10. Stub missing testCriteria on .test.ts stories (schema-presence only —
+#       real content is filled in later by the TC writer gate at runtime; see
+#       preflight-prd-integrity.sh check #17's own comment for why an empty
+#       stub is sufficient here) ─────────────────────────────────────────────
+tc_stubbed = []
+for sid in reset_scope_ids:
+    s = by_id.get(sid)
+    if not s or 'testCriteria' in s:
+        continue
+    files = s.get('technicalNotes', {}).get('files', [])
+    if not any(f.endswith('.test.ts') for f in files):
+        continue
+    s['testCriteria'] = {
+        'facts': [],
+        'sourceFiles': [],
+        'mockStrategy': '',
+        'bannedPatterns': [],
+        'implStory': None,
+    }
+    tc_stubbed.append(sid)
+if tc_stubbed:
+    changes.append(f"added testCriteria stub to {len(tc_stubbed)} stor(y/ies): {tc_stubbed}")
+
 # ── Write back (atomic: write to a temp file then rename, so a kill mid-write
 # never leaves the PRD truncated/corrupted — the real cause behind at least
 # one live "Bad control character in string literal" PRD corruption incident,

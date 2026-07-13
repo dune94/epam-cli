@@ -126,7 +126,7 @@ print(','.join(s['id'] for s in d.get('stories', []) if s.get('specification') a
     exit 0
 fi
 
-if bash "$SCRIPT_DIR/preflight-prd-integrity.sh" --prd "$PRD_FILE"; then
+if bash "$SCRIPT_DIR/preflight-prd-integrity.sh" --prd "$PRD_FILE" ${PHASE:+--phase "$PHASE"}; then
     success "PRD remediation complete — integrity OK"
     exit 0
 else

@@ -4939,7 +4939,16 @@ run_retry_extension_coordinator() {
     # amount of LLM judgment changes that, so don't spend a gate-model call
     # asking.
     if [ "$healing_broken_ever" = "true" ] || [ "${distinct_diagnoses:-0}" -lt "${total_heal_events:-0}" ] 2>/dev/null; then
-        log "  [RetryExtension] $story_id: evidence shows non-convergence (healing_broken=$healing_broken_ever distinct=$distinct_diagnoses/$total_heal_events) — not extending, no gate call made"
+        # >&2: this function's return value is captured by the caller via
+        # $(...) -- log() writes to STDOUT (see its own definition), so
+        # without this redirect the log line gets mixed INTO the captured
+        # "0" below, corrupting it into a multi-line non-numeric string.
+        # Found live (2026-07-13, SKY-003): the caller's numeric
+        # `[ "$_granted_extra_retries" -gt 0 ]` check silently failed on the
+        # corrupted capture, so a genuinely GRANTED extension (proven by
+        # retry-extension-decisions.jsonl showing extraRetriesGranted:2) was
+        # never actually applied -- the story was still marked failed.
+        log "  [RetryExtension] $story_id: evidence shows non-convergence (healing_broken=$healing_broken_ever distinct=$distinct_diagnoses/$total_heal_events) — not extending, no gate call made" >&2
         echo 0
         return 0
     fi
@@ -5029,7 +5038,10 @@ print(json.dumps({\"extend\": False, \"extraRetries\": 0, \"reason\": \"unparsea
         >> "${OUTPUT_DIR:-$LOG_DIR}/retry-extension-decisions.jsonl" 2>/dev/null || true
 
     if [ "${granted:-0}" -gt 0 ] 2>/dev/null; then
-        log "  [RetryExtension] $story_id: extending by $granted retr(y/ies) — $reason"
+        # >&2 -- see the identical rationale at this function's other log
+        # call above (the pre-gate decline path). This was the exact site
+        # where a genuinely granted extension got silently dropped live.
+        log "  [RetryExtension] $story_id: extending by $granted retr(y/ies) — $reason" >&2
     fi
     echo "${granted:-0}"
     return 0

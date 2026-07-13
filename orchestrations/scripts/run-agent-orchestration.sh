@@ -2179,6 +2179,25 @@ Read ${PRD_REL} implementationOrder[\"${phase_id}\"] for the story list, then pr
     local _pfa_profiles_before
     _pfa_profiles_before=$(cat "$profiles_file" 2>/dev/null || echo "{}")
 
+    # PRD-side snapshot for the new field-allowlist checker/revert below.
+    # Step 0.5 is only permitted to add new keys to profiles.json or change
+    # agentRole/model/aiProvider/reasoningEffort on stories in THIS phase —
+    # the same invariant already stated in assert_no_story_ids_lost's own
+    # error text. Anything else (status flips, technicalNotes/AC rewrites,
+    # story add/remove) is a violation worth retrying, not silently
+    # accepting — this is the exact class of defect (found live 2026-07-12/
+    # 13) that assert_no_story_ids_lost/assert_no_illegitimate_deprecation
+    # could only detect and self-heal AFTER the fact; this loop tries to get
+    # a correct answer from the model directly instead.
+    local _pfa_prd_before_file
+    _pfa_prd_before_file=$(mktemp)
+    cp "$PRD_FILE" "$_pfa_prd_before_file"
+
+    local _pfa_retries_log="$LOG_DIR/guarded-step-retries.jsonl"
+    local _pfa_final_outcome="violated"
+    local _pfa_attempt=0
+    local _pfa_corrective_note=""
+
     cd "$PROJECT_ROOT"
     # run_orch_prompt_with_tools (not plain run_orch_prompt): the prompt above
     # instructs the agent to run real jq commands against the PRD, read/write
@@ -2186,22 +2205,45 @@ Read ${PRD_REL} implementationOrder[\"${phase_id}\"] for the story list, then pr
     # agent can only print what it WOULD do, and no real change ever lands
     # (found live 2026-07-08, same class of bug already fixed for run_plan_mode
     # and claude.sh's run_pre_phase_assessment).
-    if run_orch_prompt_with_tools "$assessment_prompt" "assessment" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"; then
-        step_emit "0.5" "pass" "Step 0.5: Skill assessment"
-        success "Pre-phase assessment completed for '$phase_id'"
+    for _pfa_attempt in 1 2 3; do
+        local _pfa_prompt_this_attempt="$assessment_prompt"
+        if [ -n "$_pfa_corrective_note" ]; then
+            _pfa_prompt_this_attempt="${_pfa_prompt_this_attempt}
+
+CRITICAL — YOUR PREVIOUS ATTEMPT VIOLATED YOUR OWN INSTRUCTIONS: ${_pfa_corrective_note}
+Fix this and retry. Do not repeat the same mistake."
+        fi
+
+        local _pfa_call_ok=1
+        run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "assessment" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log" || _pfa_call_ok=0
+
+        if [ "$_pfa_call_ok" -eq 0 ]; then
+            _pfa_corrective_note="the tool call itself failed (non-zero exit) — check $assessment_log"
+            cp "$_pfa_prd_before_file" "$PRD_FILE"
+            echo "$_pfa_profiles_before" > "$profiles_file"
+            continue
+        fi
+
         "$SCRIPT_DIR/update-monitor.sh" event "pre_phase_assessment" "Pre-phase assessment completed" "" "main" "team-lead-agent" 2>/dev/null || true
-        # Validate profiles.json is still valid JSON
+
+        # Validate profiles.json is still valid JSON — a syntax corruption is
+        # not retry-able (the model can't fix malformed JSON by trying the
+        # exact same prompt again), so this stays an immediate hard stop.
         if ! jq empty "$profiles_file" 2>/dev/null; then
             error "Pre-phase assessment corrupted profiles.json! Restoring backup."
             cp "$profiles_backup" "$profiles_file"
+            cp "$_pfa_prd_before_file" "$PRD_FILE"
+            rm -f "$_pfa_prd_before_file"
             return 1
         fi
+
+        local _pfa_violated=0
+        local _pfa_violation_reason=""
 
         # Reviewer gate — Step 0.5 can create brand-new profiles from scratch
         # and append arbitrary skill rules to existing ones (typescript-engineer,
         # sast-sentinel, review-ranger, etc). The jq-empty check above only
-        # catches JSON syntax corruption; this catches bad CONTENT before it
-        # reaches every agent invocation for the rest of the run.
+        # catches JSON syntax corruption; this catches bad CONTENT.
         if [ -n "${ORCH_GATE_PROVIDER:-}" ]; then
             local _pfa_before_tmp
             _pfa_before_tmp=$(mktemp)
@@ -2260,17 +2302,108 @@ m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
 print(m.group(1) if m else 'pass')
 " 2>/dev/null || echo "pass")
                     if [ "$_pfa_verdict" = "fail" ]; then
-                        warning "  [pre-phase-assessment] Profile changes REJECTED by reviewer — reverting profiles.json"
-                        echo "$_pfa_profiles_before" > "$profiles_file" 2>/dev/null || true
+                        _pfa_violated=1
+                        _pfa_violation_reason="${_pfa_violation_reason}profiles.json content was rejected by the reviewer (bad/vague skill rule content); "
                     else
                         success "  [pre-phase-assessment] Profile changes approved by reviewer"
                     fi
                 fi
             fi
         fi
-    else
+
+        # NEW: deterministic PRD-side field-allowlist check. Unlike the
+        # profiles reviewer above (a content-quality judgment call), this is
+        # a 100% mechanical invariant — same "check it in code instead of
+        # asking an LLM to eyeball it" philosophy as Step 0.9's MC_REVIEW_PY.
+        local _pfa_prd_stderr_file
+        _pfa_prd_stderr_file=$(mktemp)
+        local _pfa_prd_verdict
+        _pfa_prd_verdict=$(python3 - "$_pfa_prd_before_file" "$PRD_FILE" "$phase_id" 2>"$_pfa_prd_stderr_file" <<'PFA_PRD_DIFF_PY'
+import json, sys
+
+ALLOWED_FIELDS = {'agentRole', 'model', 'aiProvider', 'reasoningEffort'}
+
+before_path, after_path, phase_id = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    with open(before_path) as f:
+        before = json.load(f)
+    with open(after_path) as f:
+        after = json.load(f)
+except Exception as e:
+    print('fail')
+    print(f"VIOLATION: PRD is not valid JSON after write: {e}", file=sys.stderr)
+    sys.exit(0)
+
+phase_ids = set(before.get('implementationOrder', {}).get(phase_id, []))
+before_by_id = {s['id']: s for s in before.get('stories', []) if 'id' in s}
+after_by_id = {s['id']: s for s in after.get('stories', []) if 'id' in s}
+
+violations = []
+if set(before_by_id) != set(after_by_id):
+    added = set(after_by_id) - set(before_by_id)
+    removed = set(before_by_id) - set(after_by_id)
+    if added:
+        violations.append(f"stories added: {sorted(added)}")
+    if removed:
+        violations.append(f"stories removed: {sorted(removed)}")
+
+for sid in phase_ids:
+    b = before_by_id.get(sid)
+    a = after_by_id.get(sid)
+    if b is None or a is None:
+        continue  # already reported above as added/removed
+    all_keys = set(b.keys()) | set(a.keys())
+    for key in all_keys:
+        if key in ALLOWED_FIELDS:
+            continue
+        if b.get(key) != a.get(key):
+            violations.append(f"{sid}.{key} changed (not an allowed field for pre-phase assessment)")
+
+if violations:
+    print('fail')
+    for v in violations[:20]:
+        print(f"VIOLATION: {v}", file=sys.stderr)
+else:
+    print('pass')
+PFA_PRD_DIFF_PY
+)
+        if [ "$_pfa_prd_verdict" = "fail" ]; then
+            _pfa_violated=1
+            _pfa_violation_reason="${_pfa_violation_reason}$(tr '\n' ' ' < "$_pfa_prd_stderr_file")"
+        fi
+        rm -f "$_pfa_prd_stderr_file"
+
+        if [ "$_pfa_violated" -eq 0 ]; then
+            _pfa_final_outcome="pass"
+            step_emit "0.5" "pass" "Step 0.5: Skill assessment"
+            success "Pre-phase assessment completed for '$phase_id'"
+            break
+        fi
+
+        # Violated (profiles content, PRD fields, or both) — revert BOTH
+        # files to this attempt's pre-call state so retries never compound
+        # on top of a partially-bad write, then either retry (attempts
+        # remain) or accept the reverted state (exhausted).
+        echo "$_pfa_profiles_before" > "$profiles_file" 2>/dev/null || true
+        cp "$_pfa_prd_before_file" "$PRD_FILE"
+        _pfa_corrective_note="$_pfa_violation_reason"
+        _pfa_final_outcome="reverted"
+        warning "  [pre-phase-assessment] Attempt ${_pfa_attempt}/3 violated scope: ${_pfa_violation_reason}"
+    done
+
+    jq -n -c \
+        --arg step "0.5" \
+        --arg phase "$phase_id" \
+        --argjson attempts "$_pfa_attempt" \
+        --arg outcome "$_pfa_final_outcome" \
+        --arg reason "$_pfa_corrective_note" \
+        '{timestamp: (now | todate), step: $step, phaseId: $phase, attempts: $attempts, outcome: $outcome, reason: $reason}' \
+        >> "$_pfa_retries_log" 2>/dev/null || true
+    rm -f "$_pfa_prd_before_file"
+
+    if [ "$_pfa_final_outcome" != "pass" ]; then
         step_emit "0.5" "warn" "Step 0.5: Skill assessment" "non-critical"
-        warning "Pre-phase assessment failed for '$phase_id' (non-critical, continuing)"
+        warning "Pre-phase assessment for '$phase_id' reverted after 3 attempts (non-critical, continuing): ${_pfa_corrective_note}"
     fi
 }
 
@@ -2496,7 +2629,16 @@ else
     else
         info "  [prd-model-coordinator] ${_mc_missing_count} pending stor(y/ies) missing model assignment — coordinating..."
         _mc_prd_before=$(cat "$_mc_prd_target" 2>/dev/null || echo "{}")
+        _mc_corrective_note=""
+        _mc_final_outcome="noop"
+        _mc_attempt=0
 
+        # Retry-on-violation (2026-07-13): MC_REVIEW_PY below already computes
+        # a clean, deterministic pass/fail signal — it just used to only ever
+        # revert-and-give-up on 'fail', never tell the model what it did
+        # wrong and let it try again. Same "detect, explain, retry" shape as
+        # checkSplitMandateViolation's existing precedent in spec-mode-runner.js.
+        for _mc_attempt in 1 2 3; do
         _mc_prompt=$(cat << ENDPROMPT_MC
 $(cat "$_mc_profiles_file" | python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('prd-model-coordinator',''))" 2>/dev/null)
 
@@ -2506,6 +2648,12 @@ Phase: ${_mc_phase}
 Assign model, aiProvider, and reasoningEffort to every pending story in this phase that is missing one or more of these fields. Write the updated PRD back to the file, then emit the JSON summary.
 ENDPROMPT_MC
 )
+        if [ -n "$_mc_corrective_note" ]; then
+            _mc_prompt="${_mc_prompt}
+
+CRITICAL — YOUR PREVIOUS ATTEMPT VIOLATED YOUR OWN INSTRUCTIONS: ${_mc_corrective_note}
+Fix this and retry. Do not repeat the same mistake."
+        fi
         _mc_result=$(echo "$_mc_prompt" | \
             AI_GATE_ALLOW_TOOLS=1 \
             AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
@@ -2561,9 +2709,10 @@ else: print(0)
             # only move the blind spot, never eliminate it.
             _mc_before_file=$(mktemp)
             _mc_after_file=$(mktemp)
+            _mc_verdict_stderr=$(mktemp)
             printf '%s' "$_mc_prd_before" > "$_mc_before_file"
             printf '%s' "$_mc_prd_after" > "$_mc_after_file"
-            _mc_verdict=$(python3 - "$_mc_before_file" "$_mc_after_file" << 'MC_REVIEW_PY'
+            _mc_verdict=$(python3 - "$_mc_before_file" "$_mc_after_file" 2>"$_mc_verdict_stderr" << 'MC_REVIEW_PY'
 import json, sys
 
 ALLOWED_FIELDS = {'model', 'aiProvider', 'reasoningEffort'}
@@ -2616,14 +2765,33 @@ MC_REVIEW_PY
 )
             rm -f "$_mc_before_file" "$_mc_after_file"
             if [ "$_mc_verdict" = "fail" ]; then
-                warning "  [prd-model-coordinator] REJECTED by reviewer — reverting PRD"
+                warning "  [prd-model-coordinator] Attempt ${_mc_attempt}/3 REJECTED by reviewer — reverting PRD"
                 echo "$_mc_prd_before" > "$_mc_prd_target" 2>/dev/null || true
+                _mc_corrective_note=$(tr '\n' ' ' < "$_mc_verdict_stderr")
+                _mc_final_outcome="reverted"
+                rm -f "$_mc_verdict_stderr"
+                continue
             else
                 success "  [prd-model-coordinator] ${_mc_assigned_count} stor(y/ies) assigned model/aiProvider/reasoningEffort (reviewer approved)"
+                _mc_final_outcome="pass"
+                rm -f "$_mc_verdict_stderr"
+                break
             fi
         else
             info "  [prd-model-coordinator] No assignments made (agent found nothing to do or failed)"
+            _mc_final_outcome="noop"
+            break
         fi
+        done
+
+        jq -n -c \
+            --arg step "0.9" \
+            --arg phase "$_mc_phase" \
+            --argjson attempts "$_mc_attempt" \
+            --arg outcome "$_mc_final_outcome" \
+            --arg reason "$_mc_corrective_note" \
+            '{timestamp: (now | todate), step: $step, phaseId: $phase, attempts: $attempts, outcome: $outcome, reason: $reason}' \
+            >> "$LOG_DIR/guarded-step-retries.jsonl" 2>/dev/null || true
     fi
 
     # Post-condition safety net: any pending story STILL missing a field after
@@ -2809,6 +2977,16 @@ if [ -n "$main_stories" ]; then
                 info "  Skipping $story — deprecated after being enqueued (mid-execution split rejected this story)"
                 continue
             fi
+            # "blocked" — set by the inline TC-writer retry gate below when 3
+            # attempts still produce no valid testCriteria for this story. A
+            # story blocked on an EARLIER iteration (or a prior run) must
+            # never be picked up here — same live-status re-check pattern as
+            # the deprecated-skip above, since implementation without real
+            # grounding is worse than not running at all.
+            if [ "$_story_current_status" = "blocked" ]; then
+                info "  Skipping $story — blocked (no valid testCriteria after 3 attempts, see blocked-stories.jsonl)"
+                continue
+            fi
             if checkpoint_already_done "$story"; then
                 info "  Skipping $story — already completed in checkpoint (run: $ORCH_RUN_ID)"
                 continue
@@ -2862,38 +3040,63 @@ if [ -n "$main_stories" ]; then
                  select((.testCriteria.facts // []) | length == 0) | .id' \
                 "$PRD_FILE" 2>/dev/null || echo "")
             if [ -n "$_needs_tc" ]; then
-                log "  Story $story needs testCriteria — running TC writer inline before it starts..."
-                bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
-                    --prd "$PRD_FILE" \
-                    --phase "$PHASE" \
-                    --output-dir "${OUTPUT_DIR:-$PROJECT_ROOT}" \
-                    --story "$story" \
-                    2>&1 | tee -a "$LOG_DIR/tc-writer-${PHASE}.log"
-                _inline_tc_exit=${PIPESTATUS[0]}
-                if [ "$_inline_tc_exit" -ne 0 ]; then
-                    error "  Inline TC writer gate FAILED for $story — cannot proceed"
-                    error "  Fix: check $LOG_DIR/tc-writer-${PHASE}.log"
-                    error "  Bypass: SKIP_TC_WRITER=1"
-                    exit 1
+                # Retry-on-empty-facts (2026-07-13): a violation here used to
+                # hard `exit 1`, aborting the ENTIRE pipeline over ONE story
+                # that never got real testCriteria — the most severe failure
+                # mode of any guarded step in this pipeline. Give the writer
+                # up to 3 attempts, and on exhaustion BLOCK just this story
+                # (status="blocked", skipped by the live-status check above
+                # on any future pass) instead of taking down every other
+                # story in the phase with it.
+                _tc_inline_attempt=0
+                _tc_inline_facts_len=0
+                for _tc_inline_attempt in 1 2 3; do
+                    log "  Story $story needs testCriteria — running TC writer inline before it starts... (attempt ${_tc_inline_attempt}/3)"
+                    bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
+                        --prd "$PRD_FILE" \
+                        --phase "$PHASE" \
+                        --output-dir "${OUTPUT_DIR:-$PROJECT_ROOT}" \
+                        --story "$story" \
+                        2>&1 | tee -a "$LOG_DIR/tc-writer-${PHASE}.log"
+                    _inline_tc_exit=${PIPESTATUS[0]}
+
+                    # Post-condition check (found live, 2026-07-09): post-impl-tc-writer.sh
+                    # can exit 0 as a legitimate no-op ("No test stories need TCs in
+                    # phase ... — skipping") when its OWN internal implementationOrder[phase]-
+                    # scoped query doesn't (yet) see $story — e.g. right after a mid-execution
+                    # split. Exit 0 alone does not mean testCriteria was actually written for
+                    # THIS story — confirmed live: SKY-003-test got this exact "SUCCESS" log
+                    # line while its testCriteria.facts remained empty, and it then ran its
+                    # first coding attempt with zero grounding.
+                    _tc_inline_facts_len=$(jq -r --arg id "$story" \
+                        '.stories[] | select(.id == $id) | (.testCriteria.facts // []) | length' \
+                        "$PRD_FILE" 2>/dev/null || echo 0)
+
+                    if [ "$_inline_tc_exit" -eq 0 ] && [ "${_tc_inline_facts_len:-0}" -gt 0 ]; then
+                        success "  TC writer populated testCriteria for $story (attempt ${_tc_inline_attempt}/3)"
+                        break
+                    fi
+                    warning "  Inline TC writer attempt ${_tc_inline_attempt}/3 for $story produced no valid testCriteria (exit=${_inline_tc_exit}, facts=${_tc_inline_facts_len:-0})"
+                done
+
+                jq -n -c \
+                    --arg step "tc-writer-inline" \
+                    --arg storyId "$story" \
+                    --argjson attempts "$_tc_inline_attempt" \
+                    --arg outcome "$([ "${_tc_inline_facts_len:-0}" -gt 0 ] && echo pass || echo blocked)" \
+                    '{timestamp: (now | todate), step: $step, storyId: $storyId, attempts: $attempts, outcome: $outcome}' \
+                    >> "$LOG_DIR/guarded-step-retries.jsonl" 2>/dev/null || true
+
+                if [ "${_tc_inline_facts_len:-0}" -eq 0 ]; then
+                    error "  Inline TC writer gate: $story still has no testCriteria.facts after 3 attempts — BLOCKING this story (not aborting the phase)"
+                    error "  Check: $LOG_DIR/tc-writer-${PHASE}.log ; confirm $story is in implementationOrder.$PHASE"
+                    jq --arg id "$story" '(.stories[] | select(.id == $id)).status = "blocked"' \
+                        "$PRD_FILE" > "${PRD_FILE}.tmp" && mv "${PRD_FILE}.tmp" "$PRD_FILE"
+                    jq -n -c --arg storyId "$story" --arg reason "no valid testCriteria after 3 attempts" \
+                        '{timestamp: (now | todate), storyId: $storyId, reason: $reason}' \
+                        >> "$LOG_DIR/blocked-stories.jsonl" 2>/dev/null || true
+                    continue
                 fi
-                # Post-condition check (found live, 2026-07-09): post-impl-tc-writer.sh
-                # can exit 0 as a legitimate no-op ("No test stories need TCs in
-                # phase ... — skipping") when its OWN internal implementationOrder[phase]-
-                # scoped query doesn't (yet) see $story — e.g. right after a mid-execution
-                # split. Exit 0 alone does not mean testCriteria was actually written for
-                # THIS story — confirmed live: SKY-003-test got this exact "SUCCESS" log
-                # line while its testCriteria.facts remained empty, and it then ran its
-                # first coding attempt with zero grounding.
-                _post_tc_facts_len=$(jq -r --arg id "$story" \
-                    '.stories[] | select(.id == $id) | (.testCriteria.facts // []) | length' \
-                    "$PRD_FILE" 2>/dev/null || echo 0)
-                if [ "${_post_tc_facts_len:-0}" -eq 0 ]; then
-                    error "  Inline TC writer gate reported success but $story still has no testCriteria.facts"
-                    error "  Fix: check $LOG_DIR/tc-writer-${PHASE}.log ; confirm $story is in implementationOrder.$PHASE"
-                    error "  Bypass: SKIP_TC_WRITER=1"
-                    exit 1
-                fi
-                success "  TC writer populated testCriteria for $story"
             fi
 
             log "  Running: $story"
@@ -3206,6 +3409,11 @@ fi
 # "all files" like the inline gate, since combo stories legitimately benefit
 # from real TC generation once they're done (this is the original,
 # unmodified behavior this gate always had).
+if [ "${SKIP_TC_WRITER:-0}" = "1" ]; then
+    step_emit "1.6" "skip" "Step 1.6: TC writer gate" "SKIP_TC_WRITER=1"
+    info "Step 1.6: TC writer gate skipped (SKIP_TC_WRITER=1)"
+    _tc_writer_needed=0
+else
 _tc_writer_needed=$(jq -r --arg phase "$PHASE" \
     '(.implementationOrder[$phase] // []) as $ids |
      [.stories[] | select(.id as $id | $ids | index($id)) |
@@ -3213,28 +3421,69 @@ _tc_writer_needed=$(jq -r --arg phase "$PHASE" \
         (.technicalNotes.files // [] | map(endswith(".test.ts")) | any) and
         ((.testCriteria.facts // []) | length == 0)
       )] | length' "$PRD_FILE" 2>/dev/null || echo 0)
+fi
 
 if [ "${_tc_writer_needed:-0}" -gt 0 ]; then
     step_emit "1.6" "running" "Step 1.6: TC writer gate"
     log "Step 1.6: TC writer gate — ${_tc_writer_needed} test story/stories need testCriteria..."
-    # `if CMD | tee file; then` checks tee's exit code, not CMD's — tee almost
-    # always exits 0, so this previously reported PASS even when the TC writer
-    # agent itself failed. Use PIPESTATUS[0] to check the real exit code.
-    bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
-        --prd "$PRD_FILE" \
-        --phase "$PHASE" \
-        --output-dir "${OUTPUT_DIR:-$PROJECT_ROOT}" \
-        2>&1 | tee "$LOG_DIR/tc-writer-${PHASE}.log"
-    _tc_writer_exit=${PIPESTATUS[0]}
-    if [ "$_tc_writer_exit" -eq 0 ]; then
-        step_emit "1.6" "pass" "Step 1.6: TC writer gate"
-        success "Step 1.6: TC writer gate PASSED — testCriteria populated"
-    else
-        step_emit "1.6" "fail" "Step 1.6: TC writer gate"
-        error "Step 1.6: TC writer gate FAILED — cannot proceed to test stories"
-        error "  Fix: check $LOG_DIR/tc-writer-${PHASE}.log"
-        error "  Bypass: SKIP_TC_WRITER=1"
-        exit 1
+    # Retry-on-violation (2026-07-13), same shape as the inline gate above:
+    # give the batch call up to 3 attempts, then BLOCK only the specific
+    # story IDs still lacking real testCriteria (not exit 1 the whole phase
+    # — a script crash bad enough to make $PRD_FILE itself unreadable is the
+    # only case that still stays a hard failure).
+    for _tc_batch_attempt in 1 2 3; do
+        # `if CMD | tee file; then` checks tee's exit code, not CMD's — tee
+        # almost always exits 0, so this previously reported PASS even when
+        # the TC writer agent itself failed. Use PIPESTATUS[0] instead.
+        bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
+            --prd "$PRD_FILE" \
+            --phase "$PHASE" \
+            --output-dir "${OUTPUT_DIR:-$PROJECT_ROOT}" \
+            2>&1 | tee "$LOG_DIR/tc-writer-${PHASE}.log"
+        _tc_writer_exit=${PIPESTATUS[0]}
+
+        if ! jq empty "$PRD_FILE" 2>/dev/null; then
+            step_emit "1.6" "fail" "Step 1.6: TC writer gate"
+            error "Step 1.6: TC writer gate FAILED — $PRD_FILE is not valid JSON after the writer ran (attempt ${_tc_batch_attempt}/3)"
+            error "  Fix: check $LOG_DIR/tc-writer-${PHASE}.log"
+            exit 1
+        fi
+
+        _tc_batch_still_missing=$(jq -r --arg phase "$PHASE" \
+            '(.implementationOrder[$phase] // []) as $ids |
+             [.stories[] | select(.id as $id | $ids | index($id)) |
+              select(
+                (.technicalNotes.files // [] | map(endswith(".test.ts")) | any) and
+                ((.testCriteria.facts // []) | length == 0)
+              ) | .id] | join(",")' "$PRD_FILE" 2>/dev/null || echo "")
+
+        if [ -z "$_tc_batch_still_missing" ]; then
+            step_emit "1.6" "pass" "Step 1.6: TC writer gate"
+            success "Step 1.6: TC writer gate PASSED — testCriteria populated (attempt ${_tc_batch_attempt}/3)"
+            break
+        fi
+        warning "  Step 1.6 attempt ${_tc_batch_attempt}/3: still missing testCriteria for: $_tc_batch_still_missing"
+    done
+
+    jq -n -c \
+        --arg step "tc-writer-batch" \
+        --arg phase "$PHASE" \
+        --argjson attempts "$_tc_batch_attempt" \
+        --arg outcome "$([ -z "$_tc_batch_still_missing" ] && echo pass || echo blocked)" \
+        '{timestamp: (now | todate), step: $step, phaseId: $phase, attempts: $attempts, outcome: $outcome}' \
+        >> "$LOG_DIR/guarded-step-retries.jsonl" 2>/dev/null || true
+
+    if [ -n "$_tc_batch_still_missing" ]; then
+        step_emit "1.6" "warn" "Step 1.6: TC writer gate" "blocked stories, see blocked-stories.jsonl"
+        warning "Step 1.6: TC writer gate — blocking $_tc_batch_still_missing after 3 attempts (not aborting the phase)"
+        IFS=',' read -ra _tc_blocked_ids <<< "$_tc_batch_still_missing"
+        for _tc_blocked_id in "${_tc_blocked_ids[@]}"; do
+            jq --arg id "$_tc_blocked_id" '(.stories[] | select(.id == $id)).status = "blocked"' \
+                "$PRD_FILE" > "${PRD_FILE}.tmp" && mv "${PRD_FILE}.tmp" "$PRD_FILE"
+            jq -n -c --arg storyId "$_tc_blocked_id" --arg reason "no valid testCriteria after 3 attempts (batch gate)" \
+                '{timestamp: (now | todate), storyId: $storyId, reason: $reason}' \
+                >> "$LOG_DIR/blocked-stories.jsonl" 2>/dev/null || true
+        done
     fi
 else
     step_emit "1.6" "skip" "Step 1.6: TC writer gate" "all TCs present"

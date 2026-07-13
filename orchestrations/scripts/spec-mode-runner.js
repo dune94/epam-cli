@@ -555,7 +555,7 @@ ${storiesPayload}
         continue;
       }
 
-      const { payload } = agentResult;
+      let { payload } = agentResult;
 
       // Track openspec output so speckit can use it
       if (agent === 'openspec') {
@@ -564,7 +564,7 @@ ${storiesPayload}
 
       payload.runId = runId;
       const newStoriesCountBefore = newStories.length;
-      const changes = applySpecChanges(story, payload, newStories, prd, opts.phase, runId);
+      let changes = applySpecChanges(story, payload, newStories, prd, opts.phase, runId);
 
       let afterSnapshot = captureStorySnapshot(story);
 
@@ -592,13 +592,62 @@ ${storiesPayload}
       if (anyFieldChanged && isSplitDelegationOnlyChange(beforeSnapshot, afterSnapshot, changes.splitCount)) {
         console.log(`spec-mode: skipping prd-change-reviewer for ${story.id} — split-only change (delegation marker is deterministic, already structurally verified)`);
       } else if (anyFieldChanged) {
-        const { verdict, issues } = await reviewPrdChange({
+        let reviewResult = await reviewPrdChange({
           aiRunnerCmd, profiles, storyId: story.id, changeType: 'spec_pass',
           before: beforeSnapshot, after: afterSnapshot, logDir,
           splitOccurred: changes.splitCount > 0
         });
-        if (verdict === 'fail') {
-          console.warn(`spec-mode: prd-change-reviewer REJECTED ${agent}'s changes to ${story.id}: ${issues.join('; ') || 'no details'} — reverting`);
+
+        // Retry-on-violation (2026-07-13): a content-quality rejection here
+        // used to just revert and move on — never tell the SAME agent what
+        // was actually wrong and let it try again. Same "detect, explain,
+        // retry" shape as checkSplitMandateViolation's existing precedent
+        // below, but an INDEPENDENT 2-attempt budget: that check catches a
+        // different violation class (a mandatory split that was skipped
+        // entirely), while this one catches rejected AC/description/title
+        // content — seeding both in the same test must show 2+1 attempts
+        // total, not one shared counter.
+        let acReviewAttempts = 1;
+        while (reviewResult.verdict === 'fail' && acReviewAttempts < 3) {
+          acReviewAttempts += 1;
+          const correctiveNote =
+            `CRITICAL — YOUR PREVIOUS OUTPUT WAS REJECTED BY REVIEW: ${reviewResult.issues.join('; ') || 'quality issues found'}. ` +
+            `Fix this and try again. Do not repeat the same mistake.`;
+          let retryResult;
+          try {
+            retryResult = agent === 'speckit'
+              ? await runSpeckitReview({ promptExec, story, openspecOutput: openspecPayload, phase: opts.phase, runId, logDir, forcedRetryNote: correctiveNote })
+              : await runSpecAgent({ promptExec, agent, story, phase: opts.phase, runId, logDir, forcedRetryNote: correctiveNote });
+          } catch (err) {
+            retryResult = null;
+          }
+          if (!retryResult || !retryResult.payload) break; // nothing to re-apply — fall through to revert below
+
+          // Undo the rejected attempt's effects before reapplying, so a
+          // retry never compounds on top of a rejected write.
+          story.acceptanceCriteria = beforeSnapshot.acceptanceCriteria;
+          story.description = beforeSnapshot.description;
+          story.title = beforeSnapshot.title;
+          story.technicalNotes = beforeSnapshot.technicalNotes;
+          if (newStories.length > newStoriesCountBefore) {
+            newStories.splice(newStoriesCountBefore, newStories.length - newStoriesCountBefore);
+          }
+
+          retryResult.payload.runId = runId;
+          payload = retryResult.payload;
+          if (agent === 'openspec') openspecPayload = payload;
+          changes = applySpecChanges(story, payload, newStories, prd, opts.phase, runId);
+          afterSnapshot = captureStorySnapshot(story);
+
+          reviewResult = await reviewPrdChange({
+            aiRunnerCmd, profiles, storyId: story.id, changeType: 'spec_pass',
+            before: beforeSnapshot, after: afterSnapshot, logDir,
+            splitOccurred: changes.splitCount > 0
+          });
+        }
+
+        if (reviewResult.verdict === 'fail') {
+          console.warn(`spec-mode: prd-change-reviewer REJECTED ${agent}'s changes to ${story.id} after ${acReviewAttempts} attempt(s): ${reviewResult.issues.join('; ') || 'no details'} — reverting`);
           story.acceptanceCriteria = beforeSnapshot.acceptanceCriteria;
           story.description = beforeSnapshot.description;
           story.title = beforeSnapshot.title;
@@ -610,6 +659,16 @@ ${storiesPayload}
           changes.splitCount = 0;
           afterSnapshot = captureStorySnapshot(story);
         }
+
+        appendJsonl(path.join(logDir, 'guarded-step-retries.jsonl'), {
+          timestamp: new Date().toISOString(),
+          step: 'ac-review',
+          storyId: story.id,
+          agent,
+          attempts: acReviewAttempts,
+          outcome: reviewResult.verdict === 'fail' ? 'reverted' : 'pass',
+          reason: (reviewResult.issues || []).join('; ')
+        });
       }
 
       // Log each agent's contribution as a separate JSONL entry
@@ -1227,8 +1286,11 @@ function stripPrescriptiveACs(acceptanceCriteria, storyId) {
 }
 
 // speckit: second-pass review of openspec's output — the collaboration point
-async function runSpeckitReview({ promptExec, story, openspecOutput, phase, runId, logDir }) {
-  const prompt = `You are the speckit specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.
+async function runSpeckitReview({ promptExec, story, openspecOutput, phase, runId, logDir, forcedRetryNote }) {
+  // Same primacy placement as runSpecAgent's forcedRetryBlock — highest-salience
+  // position in the prompt for a same-session forced retry.
+  const forcedRetryBlock = forcedRetryNote ? `${forcedRetryNote}\n\n` : '';
+  const prompt = `${forcedRetryBlock}You are the speckit specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.
 
 You are reviewing and building on the openspec agent's output for this story.
 Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:

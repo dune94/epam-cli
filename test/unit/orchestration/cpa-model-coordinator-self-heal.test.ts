@@ -101,15 +101,19 @@ describe('prd-change-reviewer — cpa_estimate change type coverage', () => {
 // ── Fix #3: Step 0.5 pre-phase skill assessment reviewer gate ────────────────
 
 describe('run-agent-orchestration.sh — Step 0.5 profile-mutation reviewer gate', () => {
+  // Windows widened 4000/5000 -> 5500 (2026-07-13): the 3-attempt
+  // retry-on-violation loop (new PRD field-allowlist checker,
+  // PFA_PRD_DIFF_PY) added ~1300 chars before the reviewer-gate section
+  // these tests anchor into, pushing it past the old fixed-size windows.
   it('snapshots profiles.json fresh at the start of run_pre_phase_assessment (not the canonical backup)', () => {
     const fnIdx = orchSrc.indexOf("_pfa_profiles_before=");
-    const block = orchSrc.slice(fnIdx, fnIdx + 4000);
+    const block = orchSrc.slice(fnIdx, fnIdx + 5500);
     expect(block).toMatch(/_pfa_profiles_before=/);
   });
 
   it('runs the reviewer gate AFTER the jq-empty syntax check (syntax check is not replaced, only supplemented)', () => {
     const fnIdx = orchSrc.indexOf("_pfa_profiles_before=");
-    const block = orchSrc.slice(fnIdx, fnIdx + 4000);
+    const block = orchSrc.slice(fnIdx, fnIdx + 5500);
     const syntaxIdx = block.indexOf('jq empty "$profiles_file"');
     const reviewerIdx = block.indexOf('CHANGE TYPE: profile_creation');
     expect(syntaxIdx).toBeGreaterThan(-1);
@@ -118,7 +122,7 @@ describe('run-agent-orchestration.sh — Step 0.5 profile-mutation reviewer gate
 
   it('computes a structural diff (new_profiles vs changed_profiles) instead of a raw text tail excerpt', () => {
     const fnIdx = orchSrc.indexOf("_pfa_profiles_before=");
-    const block = orchSrc.slice(fnIdx, fnIdx + 4000);
+    const block = orchSrc.slice(fnIdx, fnIdx + 5500);
     expect(block).toMatch(/new_profiles/);
     expect(block).toMatch(/changed_profiles/);
   });
@@ -127,7 +131,7 @@ describe('run-agent-orchestration.sh — Step 0.5 profile-mutation reviewer gate
     // The interpolation approach is fragile (unescaped quotes/backslashes in
     // profile text can break the heredoc). Must use a file-based handoff.
     const fnIdx = orchSrc.indexOf("_pfa_profiles_before=");
-    const block = orchSrc.slice(fnIdx, fnIdx + 4000);
+    const block = orchSrc.slice(fnIdx, fnIdx + 5500);
     expect(block).toMatch(/_pfa_before_tmp=\$\(mktemp\)/);
     expect(block).toMatch(/printf '%s' "\$_pfa_profiles_before" > "\$_pfa_before_tmp"/);
     expect(block).toMatch(/open\(sys\.argv\[1\]\)/);
@@ -135,7 +139,7 @@ describe('run-agent-orchestration.sh — Step 0.5 profile-mutation reviewer gate
 
   it('only calls the reviewer when the diff actually contains changes (skips the LLM call otherwise)', () => {
     const fnIdx = orchSrc.indexOf("_pfa_profiles_before=");
-    const block = orchSrc.slice(fnIdx, fnIdx + 5000);
+    const block = orchSrc.slice(fnIdx, fnIdx + 5500);
     expect(block).toMatch(/_pfa_has_changes/);
   });
 
@@ -144,21 +148,28 @@ describe('run-agent-orchestration.sh — Step 0.5 profile-mutation reviewer gate
   });
 
   it('reverts profiles.json wholesale to the pre-call snapshot on reject', () => {
-    const rejectIdx = orchSrc.indexOf('Profile changes REJECTED by reviewer');
+    // Anchor updated (2026-07-13): the reviewer's own "REJECTED by reviewer"
+    // warning was replaced by a tracked _pfa_violation_reason (the revert
+    // itself moved to a shared block after the retry loop, common to both
+    // this reviewer AND the new PRD-side checker — see the next describe
+    // block's "reverted" outcome test for the actual revert-on-exhaustion
+    // proof). This confirms the violation is still recorded when the
+    // reviewer rejects, which is what feeds that shared revert.
+    const rejectIdx = orchSrc.indexOf('profiles.json content was rejected by the reviewer');
     expect(rejectIdx).toBeGreaterThan(-1);
-    const block = orchSrc.slice(rejectIdx, rejectIdx + 200);
-    expect(block).toMatch(/echo "\$_pfa_profiles_before" > "\$profiles_file"/);
+    const block = orchSrc.slice(rejectIdx - 150, rejectIdx + 50);
+    expect(block).toMatch(/_pfa_violated=1/);
   });
 
   it('is gated by ORCH_GATE_PROVIDER (skips the whole review block when gate unconfigured)', () => {
     const fnIdx = orchSrc.indexOf("_pfa_profiles_before=");
-    const block = orchSrc.slice(fnIdx, fnIdx + 4000);
+    const block = orchSrc.slice(fnIdx, fnIdx + 5500);
     expect(block).toMatch(/if \[ -n "\$\{ORCH_GATE_PROVIDER:-\}" \]/);
   });
 
   it('cleans up the temp file after computing the diff', () => {
     const fnIdx = orchSrc.indexOf("_pfa_profiles_before=");
-    const block = orchSrc.slice(fnIdx, fnIdx + 4000);
+    const block = orchSrc.slice(fnIdx, fnIdx + 5500);
     expect(block).toMatch(/rm -f "\$_pfa_before_tmp"/);
   });
 });

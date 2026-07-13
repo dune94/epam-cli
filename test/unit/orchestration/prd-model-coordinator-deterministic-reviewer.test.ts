@@ -30,7 +30,11 @@ const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.
 const src = readFileSync(ORCH_SH, 'utf8');
 
 function extractReviewerPython(): string {
-  const startMarker = "python3 - \"$_mc_before_file\" \"$_mc_after_file\" << 'MC_REVIEW_PY'";
+  // Marker updated (2026-07-13): a `2>"$_mc_verdict_stderr"` redirect was
+  // added between the file args and the heredoc marker when Step 0.9's call
+  // was wrapped in a 3-attempt retry loop (the stderr capture feeds the
+  // corrective note text for the next retry attempt).
+  const startMarker = "python3 - \"$_mc_before_file\" \"$_mc_after_file\" 2>\"$_mc_verdict_stderr\" << 'MC_REVIEW_PY'";
   const startIdx = src.indexOf(startMarker) + startMarker.length;
   const endIdx = src.indexOf('\nMC_REVIEW_PY', startIdx);
   if (startIdx <= startMarker.length - 1 || endIdx === -1) {

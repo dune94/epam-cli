@@ -82,7 +82,7 @@ describe('post-impl-tc-writer.sh — invokes epam run without --cwd', () => {
 
 describe('run-agent-orchestration.sh — Step 1.6 no longer masks the real exit code with tee', () => {
   const idx = orchSrc.indexOf('Step 1.6: TC writer gate — ${_tc_writer_needed}');
-  const block = orchSrc.slice(idx, idx + 1200);
+  const block = orchSrc.slice(idx, idx + 3200);
 
   it('does NOT use the `if CMD | tee file; then` pattern (checks tee, not CMD)', () => {
     expect(block).not.toMatch(/if bash "\$SCRIPT_DIR\/post-impl-tc-writer\.sh"[\s\S]*?\| tee[\s\S]*?; then/);
@@ -93,14 +93,27 @@ describe('run-agent-orchestration.sh — Step 1.6 no longer masks the real exit 
     expect(block).toMatch(/_tc_writer_exit=\$\{PIPESTATUS\[0\]\}/);
   });
 
-  it('checks _tc_writer_exit -eq 0 to decide pass/fail (not tee\'s own exit code)', () => {
-    expect(block).toMatch(/if \[ "\$_tc_writer_exit" -eq 0 \]; then/);
+  // Behavior change (2026-07-13): the pass/fail decision no longer rests on
+  // _tc_writer_exit alone — it's a per-story testCriteria.facts check
+  // (_tc_batch_still_missing) after up to 3 retry attempts, since a
+  // transient writer failure shouldn't hard-abort the whole phase over one
+  // story. _tc_writer_exit is still captured (asserted above) and still
+  // used for the ONE remaining hard-failure case: the writer corrupting
+  // $PRD_FILE itself.
+  it('decides pass/fail on a per-story testCriteria check (_tc_batch_still_missing), not _tc_writer_exit alone', () => {
+    expect(block).toMatch(/_tc_batch_still_missing=\$\(jq -r --arg phase "\$PHASE"/);
+    expect(block).toMatch(/if \[ -z "\$_tc_batch_still_missing" \]; then/);
   });
 
-  it('still fails the gate and exits 1 when the writer genuinely fails', () => {
-    const failIdx = block.indexOf('else');
-    const failBlock = block.slice(failIdx, failIdx + 300);
-    expect(failBlock).toMatch(/TC writer gate FAILED/);
-    expect(failBlock).toMatch(/exit 1/);
+  it('no longer exits 1 on a genuine per-story writer failure — blocks just that story instead', () => {
+    expect(block).toMatch(/\.status = "blocked"/);
+    expect(block).toMatch(/blocked-stories\.jsonl/);
+  });
+
+  it('still hard-fails (exit 1) if the writer corrupts $PRD_FILE itself (not just a per-story miss)', () => {
+    expect(block).toMatch(/if ! jq empty "\$PRD_FILE" 2>\/dev\/null; then/);
+    const corruptIdx = block.indexOf('if ! jq empty "$PRD_FILE"');
+    const corruptBlock = block.slice(corruptIdx, corruptIdx + 350);
+    expect(corruptBlock).toMatch(/exit 1/);
   });
 });

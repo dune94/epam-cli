@@ -242,8 +242,11 @@ describe('run-agent-orchestration.sh — Step 0.9 wiring', () => {
   });
 
   it('has a post-condition Python fallback that fills any still-missing field', () => {
+    // Widened 10000 -> 11000 (2026-07-13): the 3-attempt retry loop added
+    // around the coordinator call pushed this fallback section further from
+    // the anchor.
     const idx = orchSrc.indexOf('Step 0.9: PRD model coordinator');
-    const block = orchSrc.slice(idx, idx + 10000);
+    const block = orchSrc.slice(idx, idx + 11000);
     expect(block).toMatch(/Post-condition safety net/i);
     expect(block).toMatch(/s\['model'\] = 'MiniMax-M3'/);
     expect(block).toMatch(/s\['aiProvider'\] = 'minimax'/);

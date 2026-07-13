@@ -125,7 +125,12 @@ const sites: Site[] = [
   {
     label: 'Step 0.5 pre-phase skill assessment',
     src: 'orch',
-    callAnchor: 'run_orch_prompt_with_tools "$assessment_prompt" "assessment" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"; then\n        step_emit "0.5" "pass" "Step 0.5: Skill assessment"',
+    // Anchor updated (2026-07-13): the call was wrapped in a 3-attempt
+    // retry-on-violation loop — the prompt variable is now per-attempt
+    // ($_pfa_prompt_this_attempt, rebuilt each iteration with a corrective
+    // note on retry) and the old `if ...; then step_emit "pass"` shape
+    // became `... || _pfa_call_ok=0` followed by separate violation checks.
+    callAnchor: 'run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "assessment" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log" || _pfa_call_ok=0',
     needsTools: true,
     reason: 'prompt instructs jq against the PRD, profiles.json read/write, and flock JSONL appends (FIXED 2026-07-08)',
   },
@@ -274,7 +279,16 @@ describe('agent tool-access wiring — regression guards for the specific live b
   });
 
   it('run-agent-orchestration.sh Step 0.5/3.5 assessment calls use run_orch_prompt_with_tools, not plain run_orch_prompt', () => {
-    const occurrences = [...orchSrc.matchAll(/run_orch_prompt(_with_tools)?\s*"\$assessment_prompt"\s*"assessment"/g)];
+    // Step 0.5's call site variable was renamed from $assessment_prompt to
+    // $_pfa_prompt_this_attempt (2026-07-13) when it was wrapped in a
+    // 3-attempt retry loop that appends a corrective note per attempt —
+    // still run_orch_prompt_with_tools, just a per-attempt prompt variable
+    // instead of the original single prompt. Step 3.5's own call site is
+    // unaffected and still uses $assessment_prompt directly.
+    const occurrences = [
+      ...orchSrc.matchAll(/run_orch_prompt(_with_tools)?\s*"\$assessment_prompt"\s*"assessment"/g),
+      ...orchSrc.matchAll(/run_orch_prompt(_with_tools)?\s*"\$_pfa_prompt_this_attempt"\s*"assessment"/g),
+    ];
     expect(occurrences.length).toBeGreaterThanOrEqual(2);
     for (const m of occurrences) {
       expect(m[1], 'found a plain run_orch_prompt call for the assessment agent — tool access regressed').toBe('_with_tools');

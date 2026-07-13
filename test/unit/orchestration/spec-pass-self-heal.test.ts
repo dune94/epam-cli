@@ -143,7 +143,9 @@ describe('spec-mode-runner.js — reviewPrdChange is non-blocking by design', ()
 
 describe('spec-mode-runner.js — reviewer wired into the main story loop', () => {
   it('calls reviewPrdChange after applySpecChanges, before the JSONL log entry', () => {
-    const applyIdx = src.indexOf('const changes = applySpecChanges(');
+    // `const changes` -> `let changes` (2026-07-13): needs to be reassignable
+    // for the AC-review retry loop's re-application on each retry attempt.
+    const applyIdx = src.indexOf('let changes = applySpecChanges(');
     const reviewIdx = src.indexOf('reviewPrdChange({');
     const logIdx = src.indexOf('appendJsonl(specLogPath,');
     expect(applyIdx).toBeGreaterThan(-1);
@@ -175,7 +177,12 @@ describe('spec-mode-runner.js — reviewer wired into the main story loop', () =
   });
 
   it('reverts acceptanceCriteria, description, title, and technicalNotes on reject', () => {
-    const rejectIdx = src.indexOf("verdict === 'fail'");
+    // Anchor updated (2026-07-13): a retry-on-violation loop was added
+    // between the initial reviewPrdChange call and this final revert block
+    // — its own `while (reviewResult.verdict === 'fail' ...)` condition now
+    // matches "verdict === 'fail'" FIRST. Anchor on the final `if (...) {`
+    // revert block specifically (unchanged shape, just further down).
+    const rejectIdx = src.indexOf("if (reviewResult.verdict === 'fail') {");
     const block = src.slice(rejectIdx, rejectIdx + 600);
     expect(block).toMatch(/story\.acceptanceCriteria = beforeSnapshot\.acceptanceCriteria/);
     expect(block).toMatch(/story\.description = beforeSnapshot\.description/);
@@ -184,20 +191,35 @@ describe('spec-mode-runner.js — reviewer wired into the main story loop', () =
   });
 
   it('splices split children just added by this agent call back out of newStories on reject', () => {
-    const rejectIdx = src.indexOf("verdict === 'fail'");
+    // Anchor updated (2026-07-13): a retry-on-violation loop was added
+    // between the initial reviewPrdChange call and this final revert block
+    // — its own `while (reviewResult.verdict === 'fail' ...)` condition now
+    // matches "verdict === 'fail'" FIRST. Anchor on the final `if (...) {`
+    // revert block specifically (unchanged shape, just further down).
+    const rejectIdx = src.indexOf("if (reviewResult.verdict === 'fail') {");
     const block = src.slice(rejectIdx, rejectIdx + 600);
     expect(block).toMatch(/newStories\.splice\(newStoriesCountBefore/);
   });
 
   it('resets changes.acceptanceChanged and changes.splitCount to false/0 on reject (stats stay accurate)', () => {
-    const rejectIdx = src.indexOf("verdict === 'fail'");
+    // Anchor updated (2026-07-13): a retry-on-violation loop was added
+    // between the initial reviewPrdChange call and this final revert block
+    // — its own `while (reviewResult.verdict === 'fail' ...)` condition now
+    // matches "verdict === 'fail'" FIRST. Anchor on the final `if (...) {`
+    // revert block specifically (unchanged shape, just further down).
+    const rejectIdx = src.indexOf("if (reviewResult.verdict === 'fail') {");
     const block = src.slice(rejectIdx, rejectIdx + 900);
     expect(block).toMatch(/changes\.acceptanceChanged = false/);
     expect(block).toMatch(/changes\.splitCount = 0/);
   });
 
   it('recomputes afterSnapshot post-revert so downstream logging reflects the reverted state', () => {
-    const rejectIdx = src.indexOf("verdict === 'fail'");
+    // Anchor updated (2026-07-13): a retry-on-violation loop was added
+    // between the initial reviewPrdChange call and this final revert block
+    // — its own `while (reviewResult.verdict === 'fail' ...)` condition now
+    // matches "verdict === 'fail'" FIRST. Anchor on the final `if (...) {`
+    // revert block specifically (unchanged shape, just further down).
+    const rejectIdx = src.indexOf("if (reviewResult.verdict === 'fail') {");
     const block = src.slice(rejectIdx, rejectIdx + 900);
     expect(block).toMatch(/afterSnapshot = captureStorySnapshot\(story\)/);
   });

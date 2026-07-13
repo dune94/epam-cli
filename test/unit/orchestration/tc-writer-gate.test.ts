@@ -424,14 +424,22 @@ describe('TC gate — orchestration script wiring', () => {
     expect(loopBody).toMatch(/if \[ -n "\$_needs_tc" \]/);
   });
 
-  it('the inline TC writer check aborts the phase on failure (same semantics as the post-Step-3.2 gate)', () => {
+  // Behavior change (2026-07-13): the inline gate no longer aborts the whole
+  // phase on failure. It retries up to 3 times, and on exhaustion blocks
+  // JUST that story (status="blocked", skipped by Step 1's live-status
+  // re-check) instead — a violation here used to take down every OTHER
+  // story in the phase with it, the most severe failure mode of any guarded
+  // step in the pipeline. See tc-writer-retry-block.test.ts for the full
+  // retry/block contract and a real-execution proof.
+  it('the inline TC writer check retries up to 3 attempts and BLOCKS the story on exhaustion (no longer aborts the whole phase)', () => {
     const src = readFileSync(ORCH_SCRIPT, 'utf8');
     const loopStart = src.indexOf('while IFS= read -r story; do');
     const loopBody = src.slice(loopStart, src.indexOf('done <<< "$non_review_main"', loopStart));
-    const tcIdx = loopBody.indexOf('post-impl-tc-writer.sh');
-    const block = loopBody.slice(tcIdx, tcIdx + 1400);
-    expect(block).toMatch(/exit 1/);
-    expect(block).toMatch(/SKIP_TC_WRITER=1/);
+    const needsTcIdx = loopBody.indexOf('if [ -n "$_needs_tc" ]; then');
+    const block = loopBody.slice(needsTcIdx, needsTcIdx + 3800);
+    expect(block).not.toMatch(/^\s*exit 1\s*$/m);
+    expect(block).toMatch(/for _tc_inline_attempt in 1 2 3; do/);
+    expect(block).toMatch(/\.status = "blocked"/);
   });
 });
 

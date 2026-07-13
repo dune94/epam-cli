@@ -166,8 +166,14 @@ describe('Failure paths — blocking steps emit fail', () => {
     expect(hasStepEmit('0.1', 'fail')).toBe(true);
   });
 
-  it('Step 1.6 TC writer failure → step_emit fail', () => {
-    expect(hasStepEmit('1.6', 'fail')).toBe(true);
+  // Behavior change (2026-07-13): a TC-writer miss no longer step_emits
+  // "fail" for the whole phase — it retries 3x then blocks just the
+  // specific story/stories still missing testCriteria (step_emit "warn"),
+  // since the old "fail the whole phase" semantics took down every OTHER
+  // story with it over one story's TC gap. See tc-writer-retry-block.test.ts
+  // for the full retry/block contract.
+  it('Step 1.6 TC writer exhaustion → step_emit warn (blocks affected stories, does not fail the phase)', () => {
+    expect(hasStepEmit('1.6', 'warn')).toBe(true);
   });
 
   it('Step 3.7 pre-review gate failure → step_emit fail', () => {

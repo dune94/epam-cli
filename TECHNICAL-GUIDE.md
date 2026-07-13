@@ -150,6 +150,42 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 - CLI entrypoints: `/orchestrate spec <phase>` (REPL) or `epam orchestrate spec <phase>` shell out to the same runner; `npm run specification:run -- --phase <phase>` is available for automation/CI.
 - Operators can skip the pre-pass with `EPAM_SPEC_MODE=0` or run it standalone before estimates to review diffs in dashboards.
 
+### 3.15 Self-Healing Reviewer Gates & Retry-on-Violation Guards (2026-07-13)
+Several pipeline agents have tool write access to `prd.json`/`profiles.json` — Step 0.5 (pre-phase skill
+assessment), Step 0.9 (`prd-model-coordinator`), spec-pass AC/description rewrites (`spec-mode-runner.js`), and
+the post-implementation TC writer. Each is instructed (in its own prompt) to only touch a narrow set of
+fields, but a prompt instruction is not enforcement — every one of these has, live, written something outside
+its stated scope. Each is gated by a **deterministic** check (a field-allowlist diff, not an LLM judgment call
+where one is mechanically possible) rather than trusting the agent's own summary of what it did:
+
+- **Step 0.5** — `PFA_PRD_DIFF_PY` diffs the PRD's per-story fields (only `agentRole`/`model`/`aiProvider`/
+  `reasoningEffort` may change) alongside a content reviewer for new/changed `profiles.json` entries.
+- **Step 0.9** — `MC_REVIEW_PY` diffs the full PRD by story ID, allowing only `model`/`aiProvider`/
+  `reasoningEffort` to change; any added/removed story or `implementationOrder` edit is a violation.
+- **Spec-pass AC write** — `reviewPrdChange` (an LLM content reviewer, since AC quality is a judgment call, not
+  a mechanical diff) validates every AC/description/title/split rewrite.
+- **TC writer** — a post-condition check re-reads `testCriteria.facts` for the target story rather than
+  trusting the writer script's exit code alone (exit 0 can legitimately mean "no-op," not "wrote real facts").
+
+**Retry-on-violation (2026-07-13):** each of these now gets up to **3 attempts** before falling back to its
+old behavior. On a violation, a corrective note naming the *specific* thing that was wrong is fed into the
+next attempt — the same shape `checkSplitMandateViolation` already used for one violation class (a skipped
+mandatory split), generalized to the other three. Outcomes:
+- **Step 0.5 / Step 0.9** — exhaustion reverts both `profiles.json` and the PRD's per-story fields to the
+  pre-attempt snapshot (unchanged fallback, just reached after real retries instead of immediately).
+- **AC-review** — exhaustion reverts the story to its pre-call snapshot (unchanged), with an independent
+  attempt budget from the split-mandate retry — a story that trips both violation classes in the same turn
+  gets attempts from each, not one shared counter.
+- **TC writer** — this was the most severe failure mode of the four: a miss used to hard-abort the *entire
+  pipeline* over one story. On exhaustion it now marks just that story `status="blocked"` — skipped by Step
+  1's live-status re-check (the same mechanism that already skips `"deprecated"` stories) — instead of
+  running ungrounded or taking every other story in the phase down with it. A genuine PRD-corruption crash
+  (not just an empty-facts miss) still hard-fails.
+
+Every guarded call's final outcome (`pass`/`reverted`/`blocked`, attempt count, reason) is logged to
+`guarded-step-retries.jsonl` in the project's output directory; blocked stories are additionally recorded to
+`blocked-stories.jsonl`. See §4.2 for the dashboard that surfaces this data.
+
 ---
 
 ## 4. Dashboards & Real-Time Updates
@@ -166,6 +202,7 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 ### 4.2 Runtime Overlay & Health Signal
 - `orchestrations/dashboards/runtime/build-info.js` runs in every dashboard, polling `build-info.json`, rendering a global status pill, and firing `window.EPAMBuildInfo` events for page-specific scripts.
 - Dashboards consume the shared overlay by importing the runtime script (see `monitor.html`, etc.), so all pages surface stale/offline states consistently.
+- **`health.html`** shows the pipeline's self-healing signals: `build/snapshot.js` tails `healing-events.jsonl` (analyst diagnose-and-patch cycles, skill-note growth per agent role, dynamic tools synthesized) into `metrics.selfHealing`, and — since 2026-07-13 — `guarded-step-retries.jsonl` + `blocked-stories.jsonl` (see §3.15) into `metrics.promptEvals`: total guarded calls, the % that actually hit a violation on attempt 1, pass/reverted/blocked counts overall and per gate, and the blocked-stories list. Both feeds come from the same `build-info.json` snapshot, no separate polling.
 
 ### 4.3 Coupling with Orchestration Runs
 - `run-agent-orchestration.sh` automatically launches the Eleventy watcher, ensuring BrowserSync reloads dashboards whenever PRD/logs change during a phase run.
@@ -319,6 +356,9 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 - Runtime overlay: `orchestrations/dashboards/runtime/build-info.js`
 - Specification runner: `orchestrations/scripts/spec-mode-runner.js`
 - Specification dashboard: `orchestrations/dashboards/specification.html`
+- Health / self-healing dashboard: `orchestrations/dashboards/health.html`
+- Guarded-step retry log: `guarded-step-retries.jsonl` (project output dir)
+- Blocked-stories log: `blocked-stories.jsonl` (project output dir)
 - Deployment script: `scripts/deploy-demo.sh`
 - Operational plan: `plans/orchestration-failover-plan.md`
 - Auth research: `.epam/provider-auth-research.md`

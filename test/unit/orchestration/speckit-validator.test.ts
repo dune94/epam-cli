@@ -215,9 +215,16 @@ describe('speckit prompt — describes WHAT not HOW', () => {
     expect(speckitSection).toContain('REPLACE');
   });
 
-  it('speckit prompt has split rules with mandatory heading', () => {
-    expect(speckitSection).toContain('SPLIT RULES');
-    expect(speckitSection).toContain('MANDATORY split');
+  // Behavior change (2026-07-13, following a live split-collision on SKY-002
+  // and SKY-003): speckit no longer has independent split authority.
+  // openspec is the sole split decision-maker; checkSplitMandateViolation's
+  // deterministic forced-retry on openspec (unchanged) is the real backstop
+  // if it misses a mandatory split, not speckit's own prose "independent
+  // obligation" — see speckit-no-independent-split.test.ts for the full
+  // fix and live-collision reproduction.
+  it('speckit prompt no longer claims independent split authority', () => {
+    expect(speckitSection).not.toContain('MANDATORY split conditions');
+    expect(speckitSection).toContain("Splitting is openspec's decision alone");
   });
 
   it('runtime validator function stripPrescriptiveACs is defined in spec-mode-runner.js', () => {

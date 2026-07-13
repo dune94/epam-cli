@@ -563,6 +563,27 @@ ${storiesPayload}
       }
 
       payload.runId = runId;
+
+      // Deterministic split-authority check (2026-07-13, user request):
+      // speckit no longer owns splitting — openspec is the sole authority,
+      // and checkSplitMandateViolation's forced-retry on openspec is the
+      // real backstop if it misses a mandatory split (a code-level count,
+      // not an LLM's "independent obligation" prose instruction, which is
+      // what used to grant speckit this power and is exactly the kind of
+      // unenforced instruction this pipeline replaces with deterministic
+      // checks everywhere else). This is not just a prompt update — the
+      // prompt can be ignored, so it's enforced here in code: ANY
+      // splitStories speckit emits is unconditionally dropped, regardless of
+      // whether openspec already split this story or not. This is the exact
+      // collision class (two independently-split, competing child sets for
+      // the same parent, rejected by the same-file coherence check, forcing
+      // the parent to fall back to an oversized unsplit story) that hit
+      // SKY-002 (2026-07-10) and SKY-003 (2026-07-13) live.
+      if (agent === 'speckit' && Array.isArray(payload.splitStories) && payload.splitStories.length) {
+        console.warn(`spec-mode: speckit proposed splitStories for ${story.id} — dropping (splitting is openspec's decision alone, enforced deterministically, not just by prompt instruction)`);
+        delete payload.splitStories;
+      }
+
       const newStoriesCountBefore = newStories.length;
       let changes = applySpecChanges(story, payload, newStories, prd, opts.phase, runId);
 
@@ -1297,7 +1318,11 @@ Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
 1. Review openspec's proposed acceptance criteria for testability and completeness
 2. Add missing edge-case, error-handling, security, and accessibility criteria
 3. Flag any AC that are vague, untestable, or overlapping
-4. If openspec proposed story splits, validate the decomposition and refine AC per split
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
 5. Do NOT remove or duplicate openspec's good work — build on it
 
 ━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
@@ -1305,22 +1330,6 @@ Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outsid
 NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
 mockResolvedValue, import statements, or require() calls, REPLACE it with a
 Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
-
-━━━ SPLIT RULES ━━━
-MANDATORY split conditions (your independent obligation — do not defer to openspec):
-- Count the acceptanceCriteria in openspec's output. If the parent story still has >12 ACs and openspec did NOT propose splits, you MUST propose them yourself. Target ≤8 ACs per split child.
-- If technicalNotes.files contains both *.test.ts and non-test files AND openspec did not split, you MUST split into impl/test children.
-- If openspec's splits look correct, pass them through unchanged. If they are unbalanced (one child has >12 ACs), rebalance.
-- Set "agentRole" on each split child: "typescript-engineer" for impl, "test-engineer" for test-only children.
-- Do NOT split stories that are already split children (splitDepth > 0).
-HARD LIMITS enforced in code (not just guidelines — violations are rejected automatically):
-- Each split child MUST have ≤24 ACs. Excess ACs are silently truncated at registration.
-- Each parent may have at most 4 split children total. A 5th child proposal is rejected.
-- Depth ≥2 stories cannot be split further. Proposals for depth-2+ parents are dropped.
-- No two split children may declare the same non-test file in technicalNotes.files. If they do,
-  the ENTIRE split is rejected and the parent runs as a single story. Each file must have exactly
-  one owning child. Test files (*.test.ts, *.spec.ts) are exempt — multiple test children for one
-  impl file is valid.
 
 OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
 ${JSON.stringify({
@@ -1342,7 +1351,8 @@ ${JSON.stringify({
 Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
 - "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
 - "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
-- "splitStories": Include if you refined openspec's splits, otherwise omit or pass through
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
 - "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
 - "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
 - "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention

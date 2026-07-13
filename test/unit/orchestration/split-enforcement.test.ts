@@ -599,28 +599,29 @@ describe('spec-mode-runner.js — validateMidExecutionSplits export', () => {
 
 // ── speckit prompt — hard limits referenced ───────────────────────────────────
 
-describe('speckit SPLIT RULES — hard limits documented in prompt', () => {
-  it('speckit prompt references 24-AC hard limit', () => {
-    const src = readFileSync(
-      join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'),
-      'utf8'
-    );
-    // Find the speckit prompt section
-    const promptIdx = src.indexOf('You are the speckit specification agent');
+// Behavior change (2026-07-13): speckit no longer proposes splits at all
+// (see speckit-no-independent-split.test.ts), so its own prompt no longer
+// needs to document split hard-limits (24 ACs, 4 children) — those limits
+// are still fully enforced in CODE for openspec's splits (MAX_ACS_PER_STORY/
+// MAX_CHILDREN_PER_SPLIT, unit-tested in the describe block just above this
+// one, both still passing/unchanged), independent of any prompt text.
+describe('speckit prompt — split hard-limits intentionally removed (speckit no longer splits)', () => {
+  const src = readFileSync(
+    join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'),
+    'utf8'
+  );
+  const promptIdx = src.indexOf('You are the speckit specification agent');
+  const promptBlock = src.slice(promptIdx, promptIdx + 3000);
+
+  it('speckit prompt no longer documents the 24-AC / 4-children split hard limits (it never emits splitStories)', () => {
     expect(promptIdx).toBeGreaterThan(-1);
-    const promptBlock = src.slice(promptIdx, promptIdx + 3000);
-    expect(promptBlock).toContain('24 ACs');
-    expect(promptBlock).toMatch(/HARD LIMITS|hard limits/i);
+    expect(promptBlock).not.toMatch(/HARD LIMITS/i);
+    expect(promptBlock).not.toContain('4 split children');
   });
 
-  it('speckit prompt references max 4 children', () => {
-    const src = readFileSync(
-      join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'),
-      'utf8'
-    );
-    const promptIdx = src.indexOf('You are the speckit specification agent');
-    const promptBlock = src.slice(promptIdx, promptIdx + 3000);
-    expect(promptBlock).toContain('4 split children');
+  it('the hard limits remain enforced in code regardless (MAX_ACS_PER_STORY / MAX_CHILDREN_PER_SPLIT, unaffected by this prompt change)', () => {
+    expect(MAX_ACS_PER_STORY).toBe(24);
+    expect(MAX_CHILDREN_PER_SPLIT).toBe(4);
   });
 });
 

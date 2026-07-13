@@ -3429,6 +3429,29 @@ fi
 # Sync story data to monitor from cost log
 "$SCRIPT_DIR/sync-monitor-stories.sh" 2>/dev/null || true
 
+# _build_skill_domain_guidance <project_root>
+# Generic, project-supplied mapping of tech-stack keywords to agentRole
+# names for the phase-assessment agent's skill-domain-mismatch correction
+# step (see run_phase_assessment's prompt). Never hardcoded in this engine
+# -- a project may not use TypeScript/React/Docker/Vitest at all (found
+# 2026-07-12 while fixing the Step 6 real-output-gate bug in the same
+# function: the prompt hardcoded exactly that mapping directly in the
+# engine). Reads .epam/skill-domain-map.json's "skillDomains" array:
+# [{"role":"...", "keywords":["...", ...]}, ...] -- same opt-in convention
+# as dependency-check.json's vendorDirs: no config file or no
+# "skillDomains" key means no guidance; callers must supply their own
+# generic fallback instruction.
+_build_skill_domain_guidance() {
+    local project_root="$1"
+    local config_file="${project_root}/.epam/skill-domain-map.json"
+    [ -f "$config_file" ] || return 0
+    jq -r '
+        (.skillDomains // [])
+        | map("\"" + (.keywords | join("\" / \"")) + "\" → " + .role)
+        | join(",\n     ")
+    ' "$config_file" 2>/dev/null
+}
+
 # Step 3.5: Post-Parallel Skill Assessment
 # (Runs immediately after parallel execution; captures mid-pipeline variance.
 #  Step 6 at end of pipeline performs the final post-phase assessment.)
@@ -3471,6 +3494,14 @@ run_phase_assessment() {
     # real one, and ended up asking an unanswerable interactive question
     # instead of doing the work.
     local improvement_report_file="${improvement_dir}/${phase_id}.md"
+    # Generic, project-supplied skill-domain guidance (see
+    # _build_skill_domain_guidance's own docstring) -- falls back to a
+    # conservative, non-stack-specific instruction when no
+    # .epam/skill-domain-map.json is configured, rather than ever guessing
+    # or hardcoding a keyword list here.
+    local _skill_domain_guidance
+    _skill_domain_guidance=$(_build_skill_domain_guidance "$PROJECT_ROOT")
+    [ -z "$_skill_domain_guidance" ] && _skill_domain_guidance="not configured for this project (.epam/skill-domain-map.json) — use conservative judgment; only reassign a role when the mismatch between the task description and assigned agentRole is unambiguous"
     local assessment_prompt
     assessment_prompt=$(cat << PROMPT_EOF
 You are the skill assessment agent. Analyze the phase cost data and produce an assessment.
@@ -3496,9 +3527,7 @@ You are the skill assessment agent. Analyze the phase cost data and produce an a
    - Only modify stories in phases AFTER the current phase (do NOT modify completed phase stories)
    - When changing agentRole, preserve the original value in the "originalAgentRole" field (already present)
    - Document every role change in the improvement report
-   - Skill domain indicators: "TypeScript" / "Node.js" / "CLI" → backend-engineer,
-     "React" / "UI" / "frontend" → frontend-engineer, "Docker" / "infrastructure" → devops-engineer,
-     "Vitest" / "testing" / "E2E" → qa-engineer
+   - Skill domain indicators: $_skill_domain_guidance
 
 Use flock when appending to JSONL files. If all tasks were within forecast, note "No improvements needed."
 PROMPT_EOF

@@ -76,6 +76,32 @@
         .event-card.type-tool_run::before       { background: var(--teal); }
         .event-card.type-tool_result::before    { background: var(--teal); }
         .event-card.type-error::before          { background: var(--red); }
+        /* A recoverable spec-pass parse failure (speckit/openspec retries
+           these automatically -- see spec-mode-runner.js's forced-retry
+           logic) reads as alarming in stark red when it's actually routine,
+           self-correcting behavior -- found live 2026-07-14, user directly
+           hit this on a real speckit parse error and asked for softer
+           framing. Amber, not red: still visibly a hiccup, not a crisis. */
+        .event-card.type-error.self-heal::before { background: var(--amber, #d9a441); }
+        .badge-self-heal { background: rgba(217, 164, 65, 0.16); color: var(--amber, #d9a441); }
+
+        /* Story Summary: user asked "what is running/complete?" -- this page
+           was a pure flat event timeline with no at-a-glance running-vs-done
+           view (unlike monitor.html's Activity Feed, which already paired
+           story_start/story_complete into timed rows). */
+        .story-summary { margin-bottom: 16px; }
+        .story-summary-row {
+            display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+            border-radius: 6px; background: var(--bg2, rgba(255,255,255,0.03));
+            margin-bottom: 4px; font-size: 13px;
+        }
+        .ss-story { font-family: monospace; font-weight: 700; min-width: 90px; }
+        .ss-agent { color: var(--text3); flex: 1; }
+        .ss-time { color: var(--text3); font-size: 11px; min-width: 90px; font-family: monospace; }
+        .ss-badge-running { background: rgba(59,163,247,0.16); color: var(--blue, #3ba3f7); }
+        .ss-badge-done { background: rgba(46,191,110,0.16); color: var(--green, #2ebf6e); }
+        .ss-pulse { display:inline-block; width:6px; height:6px; border-radius:50%; background: var(--blue, #3ba3f7); margin-right:5px; animation: ss-pulse 1.4s infinite; }
+        @keyframes ss-pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
         .event-card.type-phase_start::before    { background: var(--pink); }
         .event-card.type-phase_complete::before { background: var(--green); }
 
@@ -183,6 +209,10 @@
                 </div>
             </div>
         </div>
+
+        <!-- Story Summary: what's running vs done at a glance -->
+        <div class="section-title" style="font-size:13px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Story Status — Start / Finish</div>
+        <div class="story-summary" id="storySummary"></div>
 
         <!-- Filters -->
         <div class="filters">
@@ -310,6 +340,24 @@
         return synthesized;
     }
 
+    function relTime(iso) {
+        if (!iso) return '—';
+        const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+        if (diff < 5)  return 'just now';
+        if (diff < 60) return diff + 's ago';
+        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+        if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+        return Math.floor(diff / 86400) + 'd ago';
+    }
+
+    function fmtElapsed(ms) {
+        if (ms == null || ms < 0) return '—';
+        const totalSec = Math.round(ms / 1000);
+        const m = Math.floor(totalSec / 60);
+        const s = totalSec % 60;
+        return m > 0 ? `${m}m ${s}s` : `${s}s`;
+    }
+
     function populateFilterOptions(events) {
         const agents = [...new Set(events.map(e => e.agent).filter(Boolean))].sort();
         const phases = [...new Set(events.map(e => e.phase).filter(Boolean))].sort();
@@ -328,6 +376,26 @@
 
         agentSelect.value = curAgent;
         phaseSelect.value = curPhase;
+    }
+
+    // Recognizes error events the pipeline already knows how to recover from
+    // by itself (spec-mode-runner.js's own forced-retry logic covers all of
+    // these) -- speckit/openspec agent errors, or messages matching the
+    // known recoverable patterns, regardless of agent. Not exhaustive by
+    // design: a message that doesn't match reads as a real error (the safer
+    // default), rather than silently downgrading an unrecognized failure.
+    const SELF_HEALING_AGENTS = new Set(['speckit', 'openspec']);
+    const SELF_HEALING_PATTERNS = [
+        /no parsable output/i,
+        /MANDATE violation/i,
+        /forced retry/i,
+        /prompt runner timed out/i,
+    ];
+    function isSelfHealingError(evt) {
+        if (evt.type !== 'error') return false;
+        if (SELF_HEALING_AGENTS.has(evt.agent)) return true;
+        const msg = evt.detail?.message || '';
+        return SELF_HEALING_PATTERNS.some((re) => re.test(msg));
     }
 
     function updateStats(events) {
@@ -376,8 +444,15 @@
                 return d.message || 'Phase started';
             case 'phase_complete':
                 return d.message || 'Phase completed';
-            case 'error':
-                return `<span style="color:var(--red)">${d.message || 'Error'}</span>`;
+            case 'error': {
+                const msg = d.message || 'Error';
+                if (isSelfHealingError(evt)) {
+                    return `<span style="color:var(--amber, #d9a441)">${msg}</span>` +
+                        `<div style="margin-top:4px;font-size:12px;color:var(--text3);">` +
+                        `Self-healing: the pipeline retries this automatically -- not a run-blocking failure.</div>`;
+                }
+                return `<span style="color:var(--red)">${msg}</span>`;
+            }
             case 'info':
                 return d.message || '';
             default:
@@ -414,16 +489,18 @@
 
         let html = '<div class="timeline">';
         for (const evt of sorted) {
-            const typeLabel = (evt.type || 'unknown').replace(/_/g, ' ');
+            const selfHeal = isSelfHealingError(evt);
+            const typeLabel = selfHeal ? 'self-healing' : (evt.type || 'unknown').replace(/_/g, ' ');
+            const typeBadgeCls = selfHeal ? 'badge-self-heal' : 'badge-type';
             html += `
-            <div class="event-card type-${evt.type}">
+            <div class="event-card type-${evt.type}${selfHeal ? ' self-heal' : ''}">
                 <div class="event-header">
                     <div class="event-meta">
                         <span class="event-agent">${evt.agent || '?'}</span>
                         <span class="event-time">${formatTime(evt.timestamp)}</span>
                     </div>
                     <div class="event-badges">
-                        <span class="badge badge-type">${typeLabel}</span>
+                        <span class="badge ${typeBadgeCls}">${typeLabel}</span>
                         ${evt.phase ? `<span class="badge badge-phase">${evt.phase}</span>` : ''}
                         ${evt.story_id ? `<span class="badge badge-story">${evt.story_id}</span>` : ''}
                         ${extraBadges(evt)}
@@ -434,6 +511,67 @@
         }
         html += '</div>';
         container.innerHTML = html;
+    }
+
+    // Pairs story_start with the next story_complete for the same story_id
+    // (a story can re-run across self-heal retries -- pair sequentially,
+    // don't collapse to one slot, same fix already proven in monitor.html's
+    // renderActivity for the identical bug shape).
+    function renderStorySummary(events) {
+        const container = document.getElementById('storySummary');
+        const byStory = new Map();
+        const chronological = events.slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        for (const ev of chronological) {
+            const sid = ev.story_id;
+            if (!sid || !ev.agent || ev.agent === 'null') continue;
+            if (ev.type !== 'story_start' && ev.type !== 'story_complete' && ev.type !== 'story_fail') continue;
+            const rec = byStory.get(sid) || { agent: ev.agent, running: false, firstStart: null, lastEnd: null, attempts: 0 };
+            if (ev.type === 'story_start') {
+                rec.running = true;
+                rec.attempts += 1;
+                if (!rec.firstStart) rec.firstStart = ev.timestamp;
+            } else if (ev.type === 'story_complete' || ev.type === 'story_fail') {
+                rec.running = false;
+                rec.lastEnd = ev.timestamp;
+                rec.failed = ev.type === 'story_fail';
+            }
+            rec.agent = ev.agent || rec.agent;
+            byStory.set(sid, rec);
+        }
+
+        if (byStory.size === 0) {
+            container.innerHTML = '<div class="activity-empty" style="padding:10px 0;color:var(--text3);font-size:13px;">No story_start/story_complete events yet for this run.</div>';
+            return;
+        }
+
+        const rows = Array.from(byStory.entries())
+            .map(([storyId, rec]) => {
+                const attemptSuffix = rec.attempts > 1 ? ` (${rec.attempts}x)` : '';
+                const elapsedMs = (rec.firstStart && rec.lastEnd) ? (new Date(rec.lastEnd) - new Date(rec.firstStart)) : null;
+                const badge = rec.running
+                    ? `<span class="badge ss-badge-running"><span class="ss-pulse"></span>RUNNING</span>`
+                    : rec.failed
+                        ? `<span class="badge" style="background:rgba(230,80,80,0.16);color:var(--red)">FAILED</span>`
+                        : `<span class="badge ss-badge-done">&#10003; DONE</span>`;
+                const timing = `
+                    <span class="ss-time">Start: ${rec.firstStart ? relTime(rec.firstStart) : '—'}</span>
+                    <span class="ss-time">Finish: ${rec.lastEnd ? relTime(rec.lastEnd) : (rec.running ? '—' : '—')}</span>
+                    <span class="ss-time">Elapsed: ${fmtElapsed(elapsedMs)}</span>`;
+                return { running: rec.running, html: `
+                    <div class="story-summary-row">
+                        <span class="ss-story">${storyId}${attemptSuffix}</span>
+                        <span class="ss-agent">${rec.agent}</span>
+                        ${timing}
+                        ${badge}
+                    </div>` };
+            })
+            // Running stories first, so "what's happening right now" is the
+            // first thing visible without scrolling.
+            .sort((a, b) => (b.running ? 1 : 0) - (a.running ? 1 : 0))
+            .map((r) => r.html)
+            .join('');
+
+        container.innerHTML = rows;
     }
 
     function applyFilters() {
@@ -451,6 +589,7 @@
         if (severityFilter) filtered = filtered.filter(e => e.detail?.severity === severityFilter);
 
         updateStats(filtered);
+        renderStorySummary(filtered);
         renderTimeline(filtered);
     }
 

@@ -38,6 +38,13 @@ export class AgentRunner {
   private iterationCount = 0;
   private totalInputTokens = 0;
   private totalOutputTokens = 0;
+  private totalCostUsd = 0;
+  /** False the moment any turn's provider call didn't report real cost —
+   * once false, totalCostUsd is a partial/incomplete sum, not the real total
+   * for the whole run, and callers must fall back to an estimate instead of
+   * presenting it as confirmed spend. */
+  private allTurnsHadRealCost = true;
+  private anyTurnRan = false;
   private totalToolCalls = 0;
   private maxToolOutputChars: number;
   private memoryLoader?: MemoryLoader;
@@ -115,6 +122,12 @@ export class AgentRunner {
 
       this.totalInputTokens += response.usage.inputTokens;
       this.totalOutputTokens += response.usage.outputTokens;
+      this.anyTurnRan = true;
+      if (typeof response.usage.costUsd === 'number') {
+        this.totalCostUsd += response.usage.costUsd;
+      } else {
+        this.allTurnsHadRealCost = false;
+      }
 
       // Budget enforcement — check after every LLM response
       if (this.options.budgetGuard) {
@@ -332,6 +345,12 @@ export class AgentRunner {
   }
 
   private buildResult(finalResponse: string, messages: Message[]): AgentRunResult {
+    // Only expose a summed costUsd when EVERY turn reported real cost — a
+    // partial sum (some turns real, some missing) would silently understate
+    // spend if presented as the total, which is worse than admitting "not
+    // fully confirmed, fall back to an estimate" (see
+    // feedback_real_cost_tracking_critical memory).
+    const costUsd = this.anyTurnRan && this.allTurnsHadRealCost ? this.totalCostUsd : undefined;
     return {
       finalResponse,
       toolCallCount: this.totalToolCalls,
@@ -339,6 +358,7 @@ export class AgentRunner {
       usage: {
         inputTokens: this.totalInputTokens,
         outputTokens: this.totalOutputTokens,
+        ...(costUsd != null ? { costUsd } : {}),
       },
       messages,
     };

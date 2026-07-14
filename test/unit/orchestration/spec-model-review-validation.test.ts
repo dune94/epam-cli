@@ -85,6 +85,47 @@ describe('isValidModelString — real execution against the exact hallucinated d
     expect(isValidModelString('qwen/MiniMax-M3', 'MiniMax-M3', knownValidModels)).toBe(false);
     expect(isValidModelString('moonshotai/glm-5.2', 'MiniMax-M3', knownValidModels)).toBe(false);
   });
+
+  // REPRODUCES the live-run defect (2026-07-13): with ORCH_UPGRADE_MODEL unset,
+  // spec-mode-runner.js's own default fallback WAS 'anthropic/claude-sonnet-4-6'
+  // — which then got added to knownValidModels via buildKnownValidModels()'s
+  // own upgradeModel/miniModel params, so isValidModelString() accepted it as
+  // "known valid" by construction. Assigned to SKY-001, failed 8/8 attempts
+  // (wrong provider/model pairing), aborted the phase. Anthropic/Claude models
+  // are never a valid assignment in this pipeline (qwen/minimax-routed by
+  // design) — checked independently of currentModel/knownValidModels so this
+  // holds even if a story's current model was already corrupted.
+  it('rejects any anthropic/* model even when it is the (unset-default-corrupted) upgradeModel', () => {
+    const corruptedKnownValidModels = buildKnownValidModels('anthropic/claude-sonnet-4-6', 'MiniMax-M2.5');
+    expect(isValidModelString('anthropic/claude-sonnet-4-6', 'MiniMax-M3', corruptedKnownValidModels)).toBe(false);
+  });
+
+  it('rejects any anthropic/* or claude-named model regardless of allow-list contents', () => {
+    expect(isValidModelString('anthropic/claude-sonnet-4-6', 'MiniMax-M3', knownValidModels)).toBe(false);
+    expect(isValidModelString('anthropic/claude-3-5-sonnet', 'MiniMax-M3', knownValidModels)).toBe(false);
+    expect(isValidModelString('claude-sonnet-4-6', 'MiniMax-M3', knownValidModels)).toBe(false);
+  });
+
+  it('rejects an anthropic model even as a no-op (currentModel already corrupted to anthropic)', () => {
+    // Defense in depth: even if story.model was somehow already an Anthropic
+    // model before this check runs, isValidModelString must not treat
+    // "unchanged" as automatically safe for this specific disallowed family.
+    expect(isValidModelString('anthropic/claude-sonnet-4-6', 'anthropic/claude-sonnet-4-6', knownValidModels)).toBe(false);
+  });
+
+  it('does not falsely reject legitimate models that merely contain similar substrings', () => {
+    expect(isValidModelString('MiniMax-M3', 'MiniMax-M3', knownValidModels)).toBe(true);
+    expect(isValidModelString('moonshotai/kimi-k2', 'MiniMax-M3', knownValidModels)).toBe(true);
+  });
+});
+
+describe('upgradeModel default — must never fall back to an Anthropic model', () => {
+  it('spec-mode-runner.js\'s hardcoded default for upgradeModel is not an anthropic/claude model', () => {
+    const idx = src.indexOf("const upgradeModel = process.env.ORCH_UPGRADE_MODEL ||");
+    expect(idx).toBeGreaterThan(-1);
+    const line = src.slice(idx, src.indexOf('\n', idx));
+    expect(line).not.toMatch(/anthropic|claude/i);
+  });
 });
 
 describe('spec-mode-runner.js — model-review pass wired to validate before assignment', () => {

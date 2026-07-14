@@ -163,6 +163,18 @@ warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 STEP_STATUS_FILE="${LOG_DIR:-/tmp}/step-status.json"
 declare -A _STEP_LABELS=()
 declare -A _STEP_STATUS=()
+declare -A _STEP_REASON=()
+
+# Minimal JSON string escaping for step_emit's label/reason fields — both can
+# carry dynamic content (model names, story counts, gate verdict summaries)
+# that may contain a literal quote or backslash and would otherwise produce
+# malformed step-status.json.
+_json_escape_str() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    printf '%s' "$s"
+}
 
 step_emit() {
     local step_id="$1"
@@ -174,6 +186,12 @@ step_emit() {
 
     _STEP_LABELS["$step_id"]="$label"
     _STEP_STATUS["$step_id"]="$status"
+    # Only overwrite the stored reason when this call actually supplied one —
+    # many terminal-state calls (e.g. the final "pass") are emitted right
+    # after a "running" call with no reason, and would otherwise blank out
+    # a real detail a caller set moments earlier (found while wiring real
+    # per-step detail through to the dashboard, 2026-07-13).
+    [ -n "$reason" ] && _STEP_REASON["$step_id"]="$reason"
 
     local icon
     case "$status" in
@@ -197,7 +215,7 @@ step_emit() {
         echo "  \"updatedAt\": \"${ts}\","
         echo "  \"steps\": ["
         local first=true
-        local _sid _slabel _sstatus
+        local _sid _slabel _sstatus _sreason
         for _sid in \
             "0:spec" "0a:openspec" "0b:speckit" "0.1:cpa" "0.5:skill-pre" "0.6:hybrid-coord" "0.7:regression" \
             "0.8:mkdir" "0.9:model-coord" "1:main-stories" "1.5:auto-commit" "1.6:tc-writer" \
@@ -207,11 +225,12 @@ step_emit() {
             "4.3a:review-ranger" "4.3b:mutant-hunter" \
             "4.4a:fuzz-weaver" "4.4b:perf-sentinel" "4.6:e2e"; do
             local _key="${_sid%%:*}"
-            _slabel="${_STEP_LABELS[$_key]:-${_sid#*:}}"
+            _slabel="$(_json_escape_str "${_STEP_LABELS[$_key]:-${_sid#*:}}")"
             _sstatus="${_STEP_STATUS[$_key]:-pending}"
+            _sreason="$(_json_escape_str "${_STEP_REASON[$_key]:-}")"
             [ "$first" = "true" ] && first=false || echo ","
-            printf '    {"id":"%s","label":"%s","status":"%s"}' \
-                "$_key" "$_slabel" "$_sstatus"
+            printf '    {"id":"%s","label":"%s","status":"%s","detail":"%s"}' \
+                "$_key" "$_slabel" "$_sstatus" "$_sreason"
         done
         echo ""
         echo "  ]"
@@ -385,6 +404,16 @@ record_story_actual_cost() {
     if [ -f "$prd" ]; then
         local tmp
         tmp=$(mktemp)
+        # mktemp defaults to mode 0600; mv preserves that onto the final PRD
+        # file, breaking anything not running as this user (e.g. the monitor
+        # dashboard's nginx worker) -- this is the highest-FREQUENCY PRD
+        # write in the pipeline (fires after every single story completion),
+        # which is why the bug kept recurring live even after 6 other
+        # mktemp-based PRD writes were already fixed 2026-07-14. Generic
+        # $prd/$tmp variable names meant it wasn't caught by earlier greps
+        # that searched specifically for PRD_FILE/prd_target as the
+        # destination name.
+        chmod 644 "$tmp" 2>/dev/null
         jq --arg sid "$story_id" --argjson cost "$actual_cost" \
             '(.stories[] | select(.id == $sid)) |= (.actualCost = $cost)' \
             "$prd" > "$tmp" && mv "$tmp" "$prd" || rm -f "$tmp"
@@ -689,6 +718,13 @@ hot_swap_story_model_if_unstable() {
     fi
     local tmp_prd
     tmp_prd=$(mktemp)
+    # mktemp defaults to mode 0600; mv preserves that onto the final PRD file,
+    # which then becomes unreadable to anything not running as the same user
+    # (e.g. the monitor dashboard's nginx worker, which runs as an
+    # unprivileged 'nginx' user) -- found live 2026-07-14 as "Cannot load
+    # prd.json" (HTTP 403) mid-run. chmod back to the standard 644 before the
+    # rename so every atomic PRD write stays group/world-readable.
+    chmod 644 "$tmp_prd" 2>/dev/null
     if jq "${jq_args[@]}" "$jq_filter" "$prd_target" > "$tmp_prd" 2>/dev/null; then
         mv "$tmp_prd" "$prd_target"
         local _swap_reason="ladder step"
@@ -696,6 +732,74 @@ hot_swap_story_model_if_unstable() {
         warning "Watchdog: hot-swapping $story_id model after timeout ($_swap_reason): '$current_model' -> '$new_model'${new_provider:+ (provider -> $new_provider)}"
     else
         rm -f "$tmp_prd"
+    fi
+}
+
+# maybe_upgrade_model_for_tc_density <story_id> <tc_facts_count>
+# Re-assess a story's model tier once its real TC-fact density is known.
+#
+# Root cause this fixes (found live, 2026-07-13, SKY-002-test): spec-mode-
+# runner.js's modelComplexitySignals() decides low/standard tier from
+# acceptanceCriteria.length ALONE, during Step 0 — before the inline TC
+# writer (post-impl-tc-writer.sh) has ever run for this story. A story with a
+# modest AC count (e.g. 8, classified "low" effort) can still carry a much
+# higher TC-fact density (22 granular, exact-match behavioral facts: exact
+# error strings, env-var precedence, multi-key field-extraction fallbacks, a
+# large bannedPatterns list) once TCs are actually written — data the Step 0
+# classifier could not have had yet. Confirmed live: SKY-002-test (8 ACs, 22
+# TC facts, MiniMax-M3) burned its full 8-attempt escalation ladder on small
+# precision slips (wrong import name, one broken string literal) against all
+# 22 checks, then failed on a watchdog timeout at the highest rung.
+#
+# Called right after the inline TC writer succeeds, before that story's own
+# implementation attempt begins — reuses EPAM_MODEL_PROVIDER_MAP the same way
+# hot_swap_story_model_if_unstable does, so provider stays in sync with model.
+maybe_upgrade_model_for_tc_density() {
+    local story_id="$1"
+    local tc_facts_count="${2:-0}"
+    local prd_target="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
+    local threshold="${EPAM_TC_FACTS_UPGRADE_THRESHOLD:-15}"
+
+    [ -z "${ORCH_UPGRADE_MODEL:-}" ] && return 0
+    [ "$tc_facts_count" -le "$threshold" ] && return 0
+
+    local current_model
+    current_model=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .model // ""' "$prd_target" 2>/dev/null)
+    [ -z "$current_model" ] && return 0
+    [ "$current_model" = "$ORCH_UPGRADE_MODEL" ] && return 0
+
+    local new_provider="" pair from to ifs_save="$IFS"
+    if [ -n "${EPAM_MODEL_PROVIDER_MAP:-}" ]; then
+        IFS='|'
+        read -ra pairs <<< "$EPAM_MODEL_PROVIDER_MAP"
+        IFS="$ifs_save"
+        for pair in "${pairs[@]}"; do
+            from="${pair%%=*}"
+            to="${pair#*=}"
+            # shellcheck disable=SC2254 # intentional glob match against a config-supplied pattern
+            case "$ORCH_UPGRADE_MODEL" in
+                $from) new_provider="$to"; break ;;
+            esac
+        done
+    fi
+
+    local tmp_prd
+    tmp_prd=$(mktemp)
+    chmod 644 "$tmp_prd" 2>/dev/null
+    if jq --arg id "$story_id" --arg m "$ORCH_UPGRADE_MODEL" --arg p "$new_provider" \
+          --arg reason "tc-facts=${tc_facts_count} exceeds threshold=${threshold}" \
+          --arg ts "$(date -Iseconds)" --arg from_model "$current_model" \
+          '(.stories[] | select(.id == $id)) |= (
+               .model = $m
+               | .aiProvider = (if $p == "" then .aiProvider else $p end)
+               | .specification.tcDensityUpgrade = {from: $from_model, to: $m, reason: $reason, upgradedAt: $ts}
+           )' \
+          "$prd_target" > "$tmp_prd" 2>/dev/null; then
+        mv "$tmp_prd" "$prd_target"
+        warning "  [tc-density-upgrade] $story_id: ${tc_facts_count} TC facts exceeds threshold ($threshold) — upgrading model $current_model -> $ORCH_UPGRADE_MODEL${new_provider:+ (provider -> $new_provider)}"
+    else
+        rm -f "$tmp_prd"
+        warning "  [tc-density-upgrade] jq update failed for $story_id — leaving model unchanged"
     fi
 }
 
@@ -860,6 +964,31 @@ print(m.group(1) if m else 'pass')
 #   medium → 1200s (20 min)
 #   high   → 2400s (40 min)
 #   *      → 900s  (15 min)
+# The effort-derived value is then scaled by a per-agentRole multiplier
+# (EPAM_ROLE_TIMEOUT_MULTIPLIER_MAP, default "test-engineer=1.5") — role
+# names come from whatever the pipeline itself assigned to the story in
+# prd.json (Step 0.5/0.9), never hardcoded to a specific project's stack;
+# an unmatched role gets multiplier 1.0 (today's exact behavior).
+resolve_role_timeout_multiplier() {
+    local story_id="$1"
+    local role
+    role=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .agentRole // ""' \
+        "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
+    [ -z "$role" ] && { echo "1.0"; return 0; }
+    local map pair from to ifs_save="$IFS"
+    map="${EPAM_ROLE_TIMEOUT_MULTIPLIER_MAP:-test-engineer=1.5}"
+    IFS='|'; read -ra pairs <<< "$map"; IFS="$ifs_save"
+    for pair in "${pairs[@]}"; do
+        from="${pair%%=*}"; to="${pair#*=}"
+        if [ "$role" = "$from" ]; then
+            echo "$to"
+            return 0
+        fi
+    done
+    echo "1.0"
+}
+
 run_story_with_watchdog() {
     local story_id="$1"
     local log_file="$2"
@@ -880,6 +1009,12 @@ run_story_with_watchdog() {
             high)   timeout_secs=2400 ;;
             *)      timeout_secs=900  ;;
         esac
+        local role_multiplier
+        role_multiplier=$(resolve_role_timeout_multiplier "$story_id")
+        timeout_secs=$(python3 -c "
+import math
+print(math.ceil(${timeout_secs} * ${role_multiplier}))
+" 2>/dev/null || echo "$timeout_secs")
     fi
 
     set +e
@@ -1085,6 +1220,47 @@ else:
 # phase that "completes" having done zero real work.
 STORY_ID_SNAPSHOT_DIR="${STORY_ID_SNAPSHOT_DIR:-$(mktemp -d)}"
 
+# _epam_prompt_version — the epam-cli repo's own short git SHA, cached for
+# the life of this process. Since the guarded-step prompts live embedded in
+# these scripts (no separate template files), the commit hash of the script
+# IS the version proxy — a violation-rate change in the history file (below)
+# can be directly correlated to "what changed in this commit." Resolved
+# relative to SCRIPT_DIR (this repo), never CWD/PROJECT_ROOT — for a tier3
+# run PROJECT_ROOT is the EXTERNAL target project, not this repo.
+_epam_prompt_version() {
+    if [ -z "${_EPAM_PROMPT_VERSION:-}" ]; then
+        _EPAM_PROMPT_VERSION=$(git -C "$SCRIPT_DIR/.." rev-parse --short HEAD 2>/dev/null || echo "unknown")
+        export _EPAM_PROMPT_VERSION
+    fi
+    echo "$_EPAM_PROMPT_VERSION"
+}
+
+# _log_guarded_step_retry <json_line> — takes an ALREADY-BUILT JSON record
+# (each call site's own jq -n -c ... call, which knows its own step-specific
+# fields) and appends it, augmented with runId + promptVersion, to BOTH:
+#   - $LOG_DIR/guarded-step-retries.jsonl (per-run, project-local, unchanged
+#     from tonight's original retry-guard feature — useful for single-run
+#     debugging)
+#   - orchestrations/logs/guarded-step-retries-history.jsonl (persistent,
+#     ENGINE-side — survives this pipeline's own "teardown" convention,
+#     rm -rf OUTPUT_DIR, which wipes the per-run copy above before every
+#     fresh launch). Mirrors phase-cost.jsonl's identical DASHBOARD_ROOT-
+#     relative convention (see dashboards/build/snapshot.js's PATHS).
+#
+# Root cause this fixes (found live, 2026-07-13): without this, there was no
+# way to see whether a prompt's violation rate is improving or regressing
+# over time — every relaunch destroyed the only record of the previous run.
+_log_guarded_step_retry() {
+    local json_line="$1"
+    local augmented
+    augmented=$(echo "$json_line" | jq -c --arg runId "${ORCH_RUN_ID:-unknown}" --arg pv "$(_epam_prompt_version)" \
+        '. + {runId: $runId, promptVersion: $pv}' 2>/dev/null)
+    [ -z "$augmented" ] && augmented="$json_line"
+    echo "$augmented" >> "$LOG_DIR/guarded-step-retries.jsonl" 2>/dev/null || true
+    mkdir -p "$SCRIPT_DIR/../logs" 2>/dev/null || true
+    echo "$augmented" >> "$SCRIPT_DIR/../logs/guarded-step-retries-history.jsonl" 2>/dev/null || true
+}
+
 # capture_story_ids_snapshot <label> — writes the current, sorted set of
 # story IDs in prd.stories[] to a snapshot file named after <label>, plus the
 # full story objects (used by assert_no_story_ids_lost to self-heal a loss
@@ -1124,6 +1300,7 @@ assert_no_story_ids_lost() {
             local missing_json tmp_prd
             missing_json=$(echo "$missing_ids" | jq -R -s 'split("\n") | map(select(length > 0))')
             tmp_prd=$(mktemp)
+            chmod 644 "$tmp_prd" 2>/dev/null
             if jq --argjson missing "$missing_json" --slurpfile snap "$stories_snapshot" \
                 '.stories += ($snap[0] | map(select(.id as $i | $missing | index($i) != null)))' \
                 "$PRD_FILE" > "$tmp_prd" 2>/dev/null && jq empty "$tmp_prd" 2>/dev/null; then
@@ -1249,6 +1426,7 @@ assert_no_illegitimate_deprecation() {
     local flipped_json tmp_prd
     flipped_json=$(echo "$flipped_ids" | jq -R -s 'split("\n") | map(select(length > 0))')
     tmp_prd=$(mktemp)
+    chmod 644 "$tmp_prd" 2>/dev/null
     if jq --argjson flipped "$flipped_json" --slurpfile snap "$snapshot_file" \
         '.stories = (.stories | map(
             . as $cur |
@@ -1486,11 +1664,38 @@ EOF
     esac
 done
 
+# derive_sandbox_base_image <prd_file>
+# Maps a project's OWN project.stack.language/.runtime (already written by
+# the LLM-based `epam new generate` PRD pipeline for every scaffolded
+# project — see src/scaffold/ManifestAnalyzer.ts's generatePrd(), currently
+# unread by anything downstream) to a Docker base image for the sandbox.
+# Generic pattern match, same shape as resolve_model_provider()'s
+# EPAM_MODEL_PROVIDER_MAP glob convention elsewhere in this pipeline — no
+# specific PROJECT is ever named here, only a small number of well-known
+# language keywords. Falls back to node:20-slim (also correct for THIS
+# project) when project.stack is missing/unrecognized, so an older PRD
+# without stack data still gets a sane default rather than a build failure.
+derive_sandbox_base_image() {
+    local prd_file="$1"
+    local stack_text=""
+    if [ -f "$prd_file" ]; then
+        stack_text=$(jq -r '[.project.stack.language, .project.stack.runtime] | map(select(. != null)) | join(" ")' "$prd_file" 2>/dev/null | tr '[:upper:]' '[:lower:]')
+    fi
+    case "$stack_text" in
+        *python*)              echo "python:3.11-slim" ;;
+        *golang*|*"go "*|*go)  echo "golang:1.22-bookworm" ;;
+        *rust*)                echo "rust:1.75-slim" ;;
+        *node*|*typescript*|*javascript*) echo "node:20-slim" ;;
+        *)                     echo "node:20-slim" ;;
+    esac
+}
+
 # ── Sandbox bootstrap ─────────────────────────────────────────────────────────
 if [ "${EPAM_SANDBOX:-false}" = "true" ]; then
     SANDBOX_INVOKE="$SCRIPT_DIR/lib/sandbox-invoke.sh"
     SANDBOX_IMAGE="${EPAM_SANDBOX_IMAGE:-epam-cli-sandbox:latest}"
     SANDBOX_DOCKERFILE="$SCRIPT_DIR/Dockerfile.sandbox"
+    SANDBOX_BASE_IMAGE="${EPAM_SANDBOX_BASE_IMAGE:-$(derive_sandbox_base_image "$PRD_FILE")}"
     _RUNTIME=""
     for _rt in docker podman; do
         command -v "$_rt" &>/dev/null && { _RUNTIME="$_rt"; break; }
@@ -1506,8 +1711,8 @@ if [ "${EPAM_SANDBOX:-false}" = "true" ]; then
     chmod +x "$SANDBOX_INVOKE"
     # Build image if not already present
     if ! "$_RUNTIME" image inspect "$SANDBOX_IMAGE" &>/dev/null 2>&1; then
-        log "[sandbox] Building image ${SANDBOX_IMAGE} from ${SANDBOX_DOCKERFILE}..."
-        "$_RUNTIME" build -t "$SANDBOX_IMAGE" -f "$SANDBOX_DOCKERFILE" "$SCRIPT_DIR" \
+        log "[sandbox] Building image ${SANDBOX_IMAGE} from ${SANDBOX_DOCKERFILE} (base: ${SANDBOX_BASE_IMAGE})..."
+        "$_RUNTIME" build -t "$SANDBOX_IMAGE" --build-arg "BASE_IMAGE=${SANDBOX_BASE_IMAGE}" -f "$SANDBOX_DOCKERFILE" "$SCRIPT_DIR" \
             | sed 's/^/  [docker] /' || {
             error "[sandbox] Image build failed — check Dockerfile.sandbox"
             exit 1
@@ -1529,6 +1734,13 @@ fi
 if [ "${RESET_STORIES:-false}" = "true" ]; then
     log "Resetting story completed flags in $PRD_FILE..."
     local_tmp=$(mktemp)
+    # mktemp defaults to mode 0600; mv preserves that onto the final PRD file,
+    # breaking anything not running as this user (e.g. the monitor
+    # dashboard's nginx worker) -- found live 2026-07-14, this exact block
+    # (the highest-frequency PRD write in the pipeline, firing at the start
+    # of every --reset invocation) was the primary repeat offender after an
+    # earlier pass fixed 5 other mktemp-based PRD writes but missed this one.
+    chmod 644 "$local_tmp" 2>/dev/null
     if [ -n "${PHASE:-}" ]; then
         # Scoped reset: only touch stories in implementationOrder[PHASE]
         jq --arg phase "$PHASE" '
@@ -2193,7 +2405,6 @@ Read ${PRD_REL} implementationOrder[\"${phase_id}\"] for the story list, then pr
     _pfa_prd_before_file=$(mktemp)
     cp "$PRD_FILE" "$_pfa_prd_before_file"
 
-    local _pfa_retries_log="$LOG_DIR/guarded-step-retries.jsonl"
     local _pfa_final_outcome="violated"
     local _pfa_attempt=0
     local _pfa_corrective_note=""
@@ -2391,14 +2602,37 @@ PFA_PRD_DIFF_PY
         warning "  [pre-phase-assessment] Attempt ${_pfa_attempt}/3 violated scope: ${_pfa_violation_reason}"
     done
 
-    jq -n -c \
+    local _pfa_violation_types="[]"
+    if [ -n "$_pfa_corrective_note" ]; then
+        _pfa_violation_types=$(printf '%s' "$_pfa_corrective_note" | python3 -c "
+import json, sys
+reason = sys.stdin.read()
+types = []
+if 'tool call itself failed' in reason:
+    types.append('tool_call_failed')
+if 'profiles.json content was rejected' in reason:
+    types.append('profiles_content_rejected')
+if 'not valid JSON' in reason:
+    types.append('invalid_json')
+if 'stories added' in reason:
+    types.append('story_added')
+if 'stories removed' in reason:
+    types.append('story_removed')
+if 'changed (not an allowed field' in reason:
+    types.append('field_out_of_scope')
+print(json.dumps(types))
+" 2>/dev/null || echo "[]")
+    fi
+
+    _log_guarded_step_retry "$(jq -n -c \
         --arg step "0.5" \
         --arg phase "$phase_id" \
         --argjson attempts "$_pfa_attempt" \
         --arg outcome "$_pfa_final_outcome" \
         --arg reason "$_pfa_corrective_note" \
-        '{timestamp: (now | todate), step: $step, phaseId: $phase, attempts: $attempts, outcome: $outcome, reason: $reason}' \
-        >> "$_pfa_retries_log" 2>/dev/null || true
+        --argjson violationTypes "$_pfa_violation_types" \
+        '{timestamp: (now | todate), step: $step, phaseId: $phase, attempts: $attempts, outcome: $outcome, reason: $reason, violationTypes: $violationTypes}' \
+        2>/dev/null)"
     rm -f "$_pfa_prd_before_file"
 
     if [ "$_pfa_final_outcome" != "pass" ]; then
@@ -2784,14 +3018,35 @@ MC_REVIEW_PY
         fi
         done
 
-        jq -n -c \
+        _mc_violation_types="[]"
+        if [ -n "$_mc_corrective_note" ]; then
+            _mc_violation_types=$(printf '%s' "$_mc_corrective_note" | python3 -c "
+import json, sys
+reason = sys.stdin.read()
+types = []
+if 'not valid JSON' in reason:
+    types.append('invalid_json')
+if 'stories added' in reason:
+    types.append('story_added')
+if 'stories removed' in reason:
+    types.append('story_removed')
+if 'implementationOrder was modified' in reason:
+    types.append('implementation_order_modified')
+if 'changed (not an allowed model-assignment field)' in reason:
+    types.append('field_out_of_scope')
+print(json.dumps(types))
+" 2>/dev/null || echo "[]")
+        fi
+
+        _log_guarded_step_retry "$(jq -n -c \
             --arg step "0.9" \
             --arg phase "$_mc_phase" \
             --argjson attempts "$_mc_attempt" \
             --arg outcome "$_mc_final_outcome" \
             --arg reason "$_mc_corrective_note" \
-            '{timestamp: (now | todate), step: $step, phaseId: $phase, attempts: $attempts, outcome: $outcome, reason: $reason}' \
-            >> "$LOG_DIR/guarded-step-retries.jsonl" 2>/dev/null || true
+            --argjson violationTypes "$_mc_violation_types" \
+            '{timestamp: (now | todate), step: $step, phaseId: $phase, attempts: $attempts, outcome: $outcome, reason: $reason, violationTypes: $violationTypes}' \
+            2>/dev/null)"
     fi
 
     # Post-condition safety net: any pending story STILL missing a field after
@@ -3074,18 +3329,29 @@ if [ -n "$main_stories" ]; then
 
                     if [ "$_inline_tc_exit" -eq 0 ] && [ "${_tc_inline_facts_len:-0}" -gt 0 ]; then
                         success "  TC writer populated testCriteria for $story (attempt ${_tc_inline_attempt}/3)"
+                        maybe_upgrade_model_for_tc_density "$story" "${_tc_inline_facts_len:-0}"
                         break
                     fi
                     warning "  Inline TC writer attempt ${_tc_inline_attempt}/3 for $story produced no valid testCriteria (exit=${_inline_tc_exit}, facts=${_tc_inline_facts_len:-0})"
                 done
 
-                jq -n -c \
+                _tc_inline_violation_types="[]"
+                if [ "${_tc_inline_facts_len:-0}" -eq 0 ]; then
+                    if [ "${_inline_tc_exit:-0}" -ne 0 ]; then
+                        _tc_inline_violation_types='["writer_exit_nonzero","empty_facts"]'
+                    else
+                        _tc_inline_violation_types='["empty_facts"]'
+                    fi
+                fi
+
+                _log_guarded_step_retry "$(jq -n -c \
                     --arg step "tc-writer-inline" \
                     --arg storyId "$story" \
                     --argjson attempts "$_tc_inline_attempt" \
                     --arg outcome "$([ "${_tc_inline_facts_len:-0}" -gt 0 ] && echo pass || echo blocked)" \
-                    '{timestamp: (now | todate), step: $step, storyId: $storyId, attempts: $attempts, outcome: $outcome}' \
-                    >> "$LOG_DIR/guarded-step-retries.jsonl" 2>/dev/null || true
+                    --argjson violationTypes "$_tc_inline_violation_types" \
+                    '{timestamp: (now | todate), step: $step, storyId: $storyId, attempts: $attempts, outcome: $outcome, violationTypes: $violationTypes}' \
+                    2>/dev/null)"
 
                 if [ "${_tc_inline_facts_len:-0}" -eq 0 ]; then
                     error "  Inline TC writer gate: $story still has no testCriteria.facts after 3 attempts — BLOCKING this story (not aborting the phase)"
@@ -3465,13 +3731,23 @@ if [ "${_tc_writer_needed:-0}" -gt 0 ]; then
         warning "  Step 1.6 attempt ${_tc_batch_attempt}/3: still missing testCriteria for: $_tc_batch_still_missing"
     done
 
-    jq -n -c \
+    _tc_batch_violation_types="[]"
+    if [ -n "$_tc_batch_still_missing" ]; then
+        if [ "${_tc_writer_exit:-0}" -ne 0 ]; then
+            _tc_batch_violation_types='["writer_exit_nonzero","empty_facts"]'
+        else
+            _tc_batch_violation_types='["empty_facts"]'
+        fi
+    fi
+
+    _log_guarded_step_retry "$(jq -n -c \
         --arg step "tc-writer-batch" \
         --arg phase "$PHASE" \
         --argjson attempts "$_tc_batch_attempt" \
         --arg outcome "$([ -z "$_tc_batch_still_missing" ] && echo pass || echo blocked)" \
-        '{timestamp: (now | todate), step: $step, phaseId: $phase, attempts: $attempts, outcome: $outcome}' \
-        >> "$LOG_DIR/guarded-step-retries.jsonl" 2>/dev/null || true
+        --argjson violationTypes "$_tc_batch_violation_types" \
+        '{timestamp: (now | todate), step: $step, phaseId: $phase, attempts: $attempts, outcome: $outcome, violationTypes: $violationTypes}' \
+        2>/dev/null)"
 
     if [ -n "$_tc_batch_still_missing" ]; then
         step_emit "1.6" "warn" "Step 1.6: TC writer gate" "blocked stories, see blocked-stories.jsonl"
@@ -6164,6 +6440,7 @@ _create_bug_fix_phase() {
 
         local tmp_prd
         tmp_prd=$(mktemp)
+        chmod 644 "$tmp_prd" 2>/dev/null
         jq \
             --arg bid "$bug_id" \
             --arg model "$story_model" \

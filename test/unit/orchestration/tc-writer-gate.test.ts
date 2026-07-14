@@ -436,7 +436,10 @@ describe('TC gate — orchestration script wiring', () => {
     const loopStart = src.indexOf('while IFS= read -r story; do');
     const loopBody = src.slice(loopStart, src.indexOf('done <<< "$non_review_main"', loopStart));
     const needsTcIdx = loopBody.indexOf('if [ -n "$_needs_tc" ]; then');
-    const block = loopBody.slice(needsTcIdx, needsTcIdx + 3800);
+    // Widened 3800 -> 4600 (2026-07-13): the violationTypes derivation +
+    // _log_guarded_step_retry call pushed the ".status = \"blocked\"" write
+    // further from the anchor.
+    const block = loopBody.slice(needsTcIdx, needsTcIdx + 4600);
     expect(block).not.toMatch(/^\s*exit 1\s*$/m);
     expect(block).toMatch(/for _tc_inline_attempt in 1 2 3; do/);
     expect(block).toMatch(/\.status = "blocked"/);

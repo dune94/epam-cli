@@ -105,11 +105,18 @@ export function createRunCommand(): Command {
       const result = await runner.run();
 
       if (jsonMode) {
-        const cost = calculateCost(
-          config.model,
-          result.usage.inputTokens,
-          result.usage.outputTokens,
-        );
+        // Prefer the provider's own REAL, billed cost (result.usage.costUsd,
+        // populated when every turn's provider call reported it — see
+        // AgentRunner.buildResult) over the local pricing-table estimate.
+        // The estimate is fallback-only, and the output says which one this
+        // is via cost_is_estimate — silently presenting an estimate as
+        // confirmed spend is exactly the bug this field exists to prevent
+        // (see feedback_real_cost_tracking_critical memory: real cost
+        // capture is the required primary path).
+        const isEstimate = result.usage.costUsd == null;
+        const cost = isEstimate
+          ? calculateCost(config.model, result.usage.inputTokens, result.usage.outputTokens)
+          : result.usage.costUsd!;
         const output = {
           result: result.finalResponse,
           model: config.model,
@@ -120,6 +127,7 @@ export function createRunCommand(): Command {
             totalTokens: result.usage.inputTokens + result.usage.outputTokens,
           },
           cost_usd: Math.round(cost * 10000) / 10000,
+          cost_is_estimate: isEstimate,
           toolCallCount: result.toolCallCount,
           iterations: result.iterations,
         };

@@ -72,6 +72,50 @@ describe('vendor-dir guard — design (static)', () => {
   });
 });
 
+/**
+ * Root cause of a live defect (found 2026-07-13, SKY-004-test): a source/test
+ * file written by an EARLIER retry attempt can already import a package
+ * missing from package.json. Without a proactive install, the agent
+ * discovers the gap itself mid-turn and — despite its skill addendum warning
+ * it not to — tries to `chmod` node_modules writable and `npm install` the
+ * package directly. That touches many UNRELATED transitive dependency files
+ * (npm's own hoisting/dedup side effects: found live touching
+ * node_modules/merge-stream, safe-buffer, confbox — none of which the story
+ * even declares) and trips run_vendor_integrity_check's tamper detector
+ * post-turn, which hard-fails BEFORE the existing post-turn
+ * run_dependency_check call (inside run_external_verification) ever runs —
+ * so the one mechanism that would have installed the dependency safely never
+ * got the chance. SKY-004-test repeated this exact collision across 3
+ * separate retries and eventually failed the whole story (and phase) on it.
+ *
+ * Fix: call run_dependency_check BEFORE _vendor_lock in the retry loop
+ * itself (a second call site, distinct from the existing post-verification
+ * one) — the dependency is satisfied before the agent's turn even starts, so
+ * there's nothing left for the agent to (mis)fix itself.
+ */
+describe('proactive dependency install — wired before the vendor lock in the retry loop', () => {
+  it('run_dependency_check is called BEFORE _vendor_lock, inside the same retry-loop iteration as "Invoking $story_cli"', () => {
+    const invokeLogIdx = claudeSrc.indexOf('log "Invoking $story_cli (attempt $((retry_count + 1))');
+    expect(invokeLogIdx).toBeGreaterThan(-1);
+
+    const nextDepCheckIdx = claudeSrc.indexOf('run_dependency_check "$PROJECT_ROOT"', invokeLogIdx);
+    const nextLockIdx = claudeSrc.indexOf('_vendor_lock "$PROJECT_ROOT"', invokeLogIdx);
+
+    expect(nextDepCheckIdx).toBeGreaterThan(invokeLogIdx);
+    expect(nextLockIdx).toBeGreaterThan(invokeLogIdx);
+    // The proactive call must come BEFORE the lock, not after — a call after
+    // the lock would fail (node_modules read-only) and defeats the purpose.
+    expect(nextDepCheckIdx).toBeLessThan(nextLockIdx);
+  });
+
+  it('this is a SECOND, distinct call site from the existing post-verification one inside run_external_verification', () => {
+    const allDepCheckCalls = [...claudeSrc.matchAll(/run_dependency_check "\$PROJECT_ROOT"/g)];
+    // One inside run_external_verification (post-turn), one newly added
+    // before the retry loop's _vendor_lock (pre-turn) — exactly two total.
+    expect(allDepCheckCalls.length).toBe(2);
+  });
+});
+
 describe('_vendor_lock / _vendor_unlock — REAL execution', () => {
   function run(opts: { vendorDirs: string[]; filesToCreate: Record<string, string> }): {
     lockedPerms: Record<string, string>;
@@ -260,6 +304,126 @@ describe('run_vendor_integrity_check — REAL execution, reproduces the exact li
     });
     expect(rc).toBe(1);
     expect(details).toContain('site-packages/requests/__init__.py');
+  });
+});
+
+/**
+ * Root cause of a live defect (found 2026-07-13, SKY-004 and SKY-003-b): a
+ * story's agent legitimately running its own tests to self-verify — normal,
+ * encouraged behavior — causes vitest to rewrite its OWN result cache
+ * (node_modules/.vite/vitest/results.json). That's the tool's transient
+ * output, not a rewrite of its actual entry-point/source code (the exploit
+ * this check exists to catch, e.g. node_modules/vitest/vitest.mjs), but the
+ * check couldn't tell them apart — hard-failing 4 separate legitimate test
+ * runs across two stories in a single run. Fix: exclude config-supplied
+ * cache/output path patterns (.epam/dependency-check.json's
+ * "vendorCacheExcludePatterns") from the tamper scan — no tool name
+ * hardcoded in the engine, same "manifest supplies stack knowledge" pattern
+ * as vendorDirs/requiredDevDependencies.
+ */
+describe('run_vendor_integrity_check — vendorCacheExcludePatterns (fixes false-positive on tool-generated cache files)', () => {
+  function runCheckWithExcludes(opts: {
+    vendorDirs: string[];
+    excludePatterns?: string[];
+    filesToCreate: Record<string, string>;
+    tamperAfterLock: { path: string; newContent: string };
+  }): { rc: number; details: string } {
+    const dir = mkdtempSync(join(tmpdir(), 'vendor-cache-exclude-test-'));
+    try {
+      for (const [relPath, content] of Object.entries(opts.filesToCreate)) {
+        const fullPath = join(dir, relPath);
+        mkdirSync(join(fullPath, '..'), { recursive: true });
+        writeFileSync(fullPath, content);
+      }
+      mkdirSync(join(dir, '.epam'), { recursive: true });
+      writeFileSync(
+        join(dir, '.epam/dependency-check.json'),
+        JSON.stringify({ vendorDirs: opts.vendorDirs, vendorCacheExcludePatterns: opts.excludePatterns ?? [] }),
+      );
+      writeFileSync(join(dir, '.epam/.vendor-lock-marker'), '');
+
+      execFileSync('sleep', ['1.1']);
+      const fullPath = join(dir, opts.tamperAfterLock.path);
+      chmodSync(fullPath, 0o644);
+      writeFileSync(fullPath, opts.tamperAfterLock.newContent);
+
+      const getVendorDirsBody = extractFunctionByLineAnchor('_get_vendor_dirs');
+      const checkBody = extractFunctionByLineAnchor('run_vendor_integrity_check');
+      const outLog = join(dir, 'out.log');
+      const scriptPath = join(dir, 'run.sh');
+      writeFileSync(
+        scriptPath,
+        [
+          `VERIFICATION_FAILURE=""`,
+          getVendorDirsBody,
+          checkBody,
+          `run_vendor_integrity_check "${dir}" "${outLog}"`,
+          `echo "RC=$?"`,
+        ].join('\n'),
+      );
+      const output = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
+      const rc = parseInt(output.match(/RC=(\d+)/)?.[1] ?? '-1', 10);
+      let details = '';
+      try {
+        details = readFileSync(outLog, 'utf8');
+      } catch {
+        details = '';
+      }
+      return { rc, details };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('REPRODUCES the fix: a legitimate vitest result-cache rewrite (.vite/vitest/results.json) no longer trips the check', () => {
+    const { rc } = runCheckWithExcludes({
+      vendorDirs: ['node_modules'],
+      excludePatterns: ['.vite/*'],
+      filesToCreate: { 'node_modules/.vite/vitest/results.json': '{}' },
+      tamperAfterLock: { path: 'node_modules/.vite/vitest/results.json', newContent: '{"updated":true}' },
+    });
+    expect(rc).toBe(0);
+  });
+
+  it('still catches a REAL tamper of the tool entry point (vitest.mjs) even with the exclude pattern configured', () => {
+    const { rc, details } = runCheckWithExcludes({
+      vendorDirs: ['node_modules'],
+      excludePatterns: ['.vite/*'],
+      filesToCreate: { 'node_modules/vitest/vitest.mjs': 'real vitest entry point content' },
+      tamperAfterLock: { path: 'node_modules/vitest/vitest.mjs', newContent: 'echo "fake pass"; exit 0' },
+    });
+    expect(rc).toBe(1);
+    expect(details).toContain('vitest.mjs');
+  });
+
+  it('without any configured exclude pattern, the cache file is flagged (proves the exclusion is opt-in, not a blanket change)', () => {
+    const { rc, details } = runCheckWithExcludes({
+      vendorDirs: ['node_modules'],
+      filesToCreate: { 'node_modules/.vite/vitest/results.json': '{}' },
+      tamperAfterLock: { path: 'node_modules/.vite/vitest/results.json', newContent: '{"updated":true}' },
+    });
+    expect(rc).toBe(1);
+    expect(details).toContain('results.json');
+  });
+
+  it('a deeper nested cache path still matches the glob (.vite/* matches any depth under .vite)', () => {
+    const { rc } = runCheckWithExcludes({
+      vendorDirs: ['node_modules'],
+      excludePatterns: ['.vite/*'],
+      filesToCreate: { 'node_modules/.vite/deps/chunk-ABC123.js': 'cached dep chunk' },
+      tamperAfterLock: { path: 'node_modules/.vite/deps/chunk-ABC123.js', newContent: 'updated cached dep chunk' },
+    });
+    expect(rc).toBe(0);
+  });
+
+  it('is domain-agnostic: an arbitrary non-npm cache pattern (e.g. Python __pycache__) is excludable too', () => {
+    const { rc } = runCheckWithExcludes({
+      vendorDirs: ['site-packages'],
+      excludePatterns: ['__pycache__/*'],
+      filesToCreate: { 'site-packages/__pycache__/module.cpython-311.pyc': 'compiled bytecode' },
+      tamperAfterLock: { path: 'site-packages/__pycache__/module.cpython-311.pyc', newContent: 'recompiled bytecode' },
+    });
+    expect(rc).toBe(0);
   });
 });
 

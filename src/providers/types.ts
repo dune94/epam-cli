@@ -39,6 +39,14 @@ export interface ProviderRequest {
 export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
+  /** Real, provider-billed cost in USD for this call, when the provider's own
+   * API returns it (e.g. OpenRouter's `usage.cost` via `usage.include=true`).
+   * Undefined means the provider didn't report cost — callers must fall back
+   * to a local pricing-table estimate in that case, and should treat that
+   * fallback as an ESTIMATE, not confirmed spend (see
+   * feedback_real_cost_tracking_critical memory — real cost capture is the
+   * required primary path, estimation is fallback-only). */
+  costUsd?: number;
 }
 
 export interface ProviderResponse {

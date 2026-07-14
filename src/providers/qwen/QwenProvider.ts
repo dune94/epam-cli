@@ -161,6 +161,15 @@ export class QwenProvider implements LLMProvider {
         messages,
         max_tokens: request.maxTokens || 4096,
         temperature: resolveTemperature(request, 0.7),
+        // usage.include=true asks OpenRouter to return REAL, billed cost in
+        // the response's usage.cost field — the actual amount charged to
+        // this account for this exact call, not a locally-estimated price.
+        // Required per feedback_real_cost_tracking_critical: real cost
+        // capture must be the primary path, a maintained pricing table is
+        // fallback-only (found live 2026-07-13 — this field was never
+        // requested, forcing every OpenRouter-routed call through a stale,
+        // disconnected local estimate that was off by ~4.7x for this run).
+        usage: { include: true },
         ...(tools && tools.length > 0 ? { tools } : {}),
         ...this.resolveOpenRouterReasoning(request),
       }),
@@ -209,6 +218,11 @@ export class QwenProvider implements LLMProvider {
       usage: {
         inputTokens: data['usage']?.prompt_tokens || 0,
         outputTokens: data['usage']?.completion_tokens || 0,
+        // Real billed cost, requested via usage.include=true above. Only set
+        // when OpenRouter actually returns it — undefined (not 0) when
+        // absent, so callers can distinguish "confirmed $0" from "unknown,
+        // fall back to an estimate."
+        ...(typeof data['usage']?.cost === 'number' ? { costUsd: data['usage'].cost } : {}),
       },
     };
   }
@@ -235,6 +249,12 @@ export class QwenProvider implements LLMProvider {
         max_tokens: request.maxTokens || 4096,
         temperature: resolveTemperature(request, 0.7),
         stream: true,
+        // Streaming mode needs BOTH flags: stream_options.include_usage asks
+        // for a final usage-only chunk at all (off by default when
+        // streaming), and usage.include asks that chunk to include real
+        // billed cost — same rationale as completeOpenRouter above.
+        stream_options: { include_usage: true },
+        usage: { include: true },
         ...(tools && tools.length > 0 ? { tools } : {}),
         ...this.resolveOpenRouterReasoning(request),
       }),
@@ -252,6 +272,7 @@ export class QwenProvider implements LLMProvider {
     let accumulatedText = '';
     let inputTokens = 0;
     let outputTokens = 0;
+    let costUsd: number | undefined;
     let stopReason: ProviderResponse['stopReason'] = 'end_turn';
     const toolCalls: Map<number, { id: string; name: string; args: string }> = new Map();
 
@@ -288,6 +309,7 @@ export class QwenProvider implements LLMProvider {
           if (parsed.usage) {
             inputTokens = parsed.usage.prompt_tokens || 0;
             outputTokens = parsed.usage.completion_tokens || 0;
+            if (typeof parsed.usage.cost === 'number') costUsd = parsed.usage.cost;
           }
         } catch { /* skip malformed */ }
       }
@@ -320,7 +342,7 @@ export class QwenProvider implements LLMProvider {
     return {
       content: content.length > 0 ? content : [{ type: 'text', text: accumulatedText }],
       stopReason,
-      usage: { inputTokens, outputTokens },
+      usage: { inputTokens, outputTokens, ...(costUsd != null ? { costUsd } : {}) },
     };
   }
 

@@ -74,17 +74,84 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 - Scorecard dashboard (`scorecard.html`) shows separate "Avg Story Cost" and "Avg Total Cost" KPI cards with pipeline overhead percentage.
 - **Observation (first tracked run):** Assessment agents dominate pipeline overhead (~82% of pipeline cost). Full-gates hello-world run: pipeline = 7.75× story cost. The ratio calibrates via EMA and converges toward the true value over multiple runs.
 
-### 3.2 run-agent-orchestration.sh Flow
-1. **Bootstrap** — resolves directories, PRD path, provider wrapper (`claude.sh`, `copilot.sh`, `codemie-claude.sh`, etc.), ensures logs exist, and installs traps for cleanup.
-2. **Dashboards Watcher** — unless `EPAM_DASH_AUTO_SERVE=0`, starts `npm run dashboards:serve` in the background, writes its PID to `orchestrations/logs/dashboards-watch.pid`, and streams logs to `dashboards-watch.log` so BrowserSync remains live.
-3. **Specification Pre-pass** — `spec-mode-runner.js` snapshots `prd.json` into `logs/spec-runs/<run>/prd.before.json` (also copied to `logs/spec-baseline.json`), invokes the coordinator agent to assign OpenSpec/Speckit per story, runs those spec agents (in parallel), applies acceptance-criteria edits or story splits, and logs every delta to `logs/spec-phase.jsonl` + `logs/spec-summary.json`. Toggle with `EPAM_SPEC_MODE=0` when you need to skip the step.
-4. **Phase/Mode Resolution** — loads `phasesConfig` from `prd.json` to decide orchestration mode (`bash` vs `hybrid`), story subsets, and approval requirements.
-5. **CPA & Execution Plan** — runs Context/Plan Analyzer scripts to expand story templates, compute budgets, and write the plan JSON (leveraging jq + helper scripts under `orchestrations/scripts/lib`).
-6. **Token Forecast + Failover Ledger** — reads `logs/phase-cost.jsonl`, builds provider/model budgets per plan, and precomputes fallback tuples per story (as described in the failover plan).
-7. **Worktree Preparation** — clones fresh git worktrees for each lane (`claude.sh --create-worktree`), seeds environment variables, and writes lane manifests.
-8. **Parallel Execution** — launches primary and independent agents (plus optional reviewers) via `CLAUDE_SH` wrapper calls. Each invocation pipes transcripts to `logs/agent-messages.jsonl` and cost data to `phase-cost.jsonl`.
-9. **Monitoring & Cutover** — `update-monitor.sh` refreshes `agent-status.json`; when token ceilings are crossed, `provider-cutover.sh --apply` reassigns remaining stories to backup providers while logging the event for dashboards.
-10. **Reviews & Cleanup** — reviewer/QA agents validate outputs; on exit the script tears down worktrees unless `--skip-cleanup` is provided and stops the dashboards watcher.
+### 3.2 run-agent-orchestration.sh Flow — Complete Step Reference
+
+Every step below is registered in `step_emit()` (`orchestrations/scripts/run-agent-orchestration.sh`, master ID list ~L179-239) and rendered 1:1 on the `monitor.html` dashboard's Pipeline Steps table — the step IDs in this table are exactly the IDs that appear there. `print_step_checklist()` (~L242-302) prints the planned/skip preview at the start of every phase. This reference is exhaustive: every ID that can appear in `step-status.json` is listed, including the two IDs (3.2, 3.6) that are tracked in logs but never call `step_emit` themselves, and Step 6 which runs once at the very end of a phase.
+
+| ID | Label | Skip condition | What it does | Pass / fail |
+|---|---|---|---|---|
+| **0 / 0a / 0b** | Specification pass — openspec (elaboration) / speckit (verification) | `--dry-run`; `EPAM_SPEC_MODE=0`; `spec-mode-runner.js` or Node missing | `run_specification_pass()` invokes `spec-mode-runner.js --phase <phase>` (Node), using `SPEC_MODE_OPENSPEC_MODEL`/`SPEC_MODE_SPECKIT_MODEL` (default `moonshotai/kimi-k2`). See §3.5 for what the spec agents actually do (AC elaboration, story splitting). | Runner's own exit code; nonzero hard-exits the whole pipeline. |
+| **0.1** | CPA pre-pass | `SKIP_CPA=1`; `contextualize-stories.sh` missing | Runs `contextualize-stories.sh --phase $PHASE --apply`, injecting the latest `phase-handoff-*.md`. `STRICT_CPA=1` adds `--strict`. | exit 0 pass; exit 2 **warn** (elevated risk); exit 3 **fail**, hard-exits unless skipped. |
+| **0.5** | Pre-phase skill assessment | `SKIP_SKILL_ASSESSMENT=1` | `run_pre_phase_assessment()` — tool-enabled LLM prompt that assigns missing `agentRole`, splits impl/test-mixed stories, creates `profiles.json` entries for unknown roles, injects per-story skill pitfalls and QA-agent file authorizations. Up to 3 attempts, each gated by a deterministic reviewer (LLM verdict + a Python allowlist diff restricting changes to `agentRole`/`model`/`aiProvider`/`reasoningEffort`, no story add/remove). | Any violation reverts to the pre-attempt snapshot and retries; after 3 failed attempts, accepts the reverted state as `warn "non-critical"` — never hard-fails. |
+| **0.6** | Hybrid pre-coordination | Only runs when `RESOLVED_ORCH_MODE = "hybrid"`, else skip reason `ORCH_MODE=<mode>` | Tool-enabled LLM prompt flagging cross-lane dependencies / plan-mode-eligible stories (`estimatedHours>=6` or `dependencies>=2`), appends JSONL handoffs to `agent-messages.jsonl`. | Failures only log a warning — never blocks. |
+| **0.7** | Cross-phase regression guard | `SKIP_REGRESSION_GUARD=true`; node/vitest binary missing | `vitest run --root $PROJECT_ROOT` — catches a prior phase's regressions before any new-phase story runs. | Nonzero vitest exit → hard-exit. |
+| **0.8** | mkdir src/ dirs | Never (always runs) | `mkdir -p src, src/skyscanner, public, review` so the first coding agent doesn't need to create directories itself. | Always pass. |
+| **0.9** | PRD model coordinator | `SKIP_PRD_MODEL_COORDINATOR=1` | Counts pending stories missing `model`/`aiProvider`/`reasoningEffort`; if any, prompts `ORCH_GATE_MODEL` (default `MiniMax-M3`, tool-enabled) to assign them directly in the PRD, up to 3 attempts, gated the same way as 0.5. A post-condition safety net force-fills any still-missing field with `MiniMax-M3`/`minimax`/`medium`. | Always `pass` — mismatches downgrade to the fallback fill rather than failing. |
+| **1** | Main-branch stories | No non-review main-branch stories exist | Iterates each story: re-checks live status (skips `deprecated`/`blocked`), runs the **inline TC-writer gate** (see below) for pure-test stories, `run_story_with_watchdog()` (see below), on failure one `run_story_recovery_analyst()` attempt, records cost, per-story `tsc --noEmit` (`story_tsc_gate()`), checkpoints. | Any story failure → `fail`, hard-exit. |
+| **1.5** | Auto-commit | No worktree-lane stories exist; working tree already clean | `git add -A`, `scan-secrets.sh`, commits as `chore: auto-commit main-branch story output for phase $PHASE` — so worktrees created next inherit main-branch output. | Secret detected → `fail` + unstage; nothing to commit → `skip`. |
+| **2** | Create worktrees | No parallel stories (neither primary nor independent) | `"$CLAUDE_SH" --setup-worktrees`. | Nonzero → hard-exit. |
+| **3a / 3b** | Primary / Independent agent | 3b only: no independent stories | Launches `"$CLAUDE_SH" --worktree primary\|independent --phase $PHASE` as **background processes** in parallel, waits on both. | Either failing → `fail`, but the phase continues through 3.1/3.2 first (so completed stories still merge) before failing the phase overall. |
+| **3.1** | Worktree health check | No worktrees created | `worktree-health-check.sh AUTO_COMMIT=true` — auto-commits uncommitted agent output before gate assessment. | Nonzero → emitted as `warn "health issues auto-fixed"` but actually hard-exits. |
+| *3.2* | *Merge worktrees* | *(tracked in logs only — no `step_emit` calls exist for this ID)* | `git merge-tree --write-tree` as a conflict-detection guard before the real `git merge --no-ff -X ours`, to avoid silently discarding a worktree's changes on a genuine conflict. | — |
+| **1.6** | TC writer gate (batch) | `SKIP_TC_WRITER=1`; every test story in the phase already has `testCriteria.facts` | Runs **after** Step 3.2 (deliberately, so it works for both main-branch and worktree topology). Batch call to `post-impl-tc-writer.sh --prd --phase --output-dir`, up to 3 attempts. See "TC-writer gates" below for how this relates to the inline gate inside Step 1. | Invalid PRD JSON after an attempt → hard-exit. Stories still missing facts after 3 attempts are individually marked `status="blocked"` (not the whole phase) → `warn`. |
+| **1.65** | Skills coordinator audit | `SKIP_SKILLS_AUDIT=1` | Deterministic scan (no LLM) dedupes exact-duplicate `[Self-Heal]` notes in `profiles.json` and flags "do X...don't do X" self-contradictions via regex; LLM only rewrites the specific flagged paragraph. | Always `pass`; a corrupting rewrite restores the pre-audit snapshot. |
+| **1.66** | Tools coordinator audit | `SKIP_TOOLS_AUDIT=1` | Deterministic scan of every reviewed dynamic tool (`.epam/dynamic-tools/*.sh`) for `bash -n` errors, ≥2 "exited non-zero" occurrences this phase, or purpose-comment overlap ≥0.6 (near-duplicate); LLM fixes broken tools or flags duplicates (no auto-merge). | Always `pass`; a corrupting fix restores the pre-audit snapshot. |
+| **3.5** | Post-parallel assessment | `SKIP_SKILL_ASSESSMENT=1`; `phase-cost.jsonl` empty | `run_phase_assessment()` analyzes phase-cost data and profile issues; verifies a genuinely new assessment record was written (not just exit code). | Any failure/no-record → `warn "non-critical issues"`, never blocks. |
+| *3.6* | *Team Lead Code Review* | *(no `step_emit` call)* | `team-lead-review.sh` | Any story with `reviewStatus == "escalated"` (max review iterations exhausted) → hard-exits the phase. |
+| **3.7** | Pre-review build gate | `SKIP_PRE_REVIEW_GATE=true`; no `package.json` | `vitest run` (bounded by `EPAM_TEST_TIMEOUT_SECS`, default 300s), then `tsc --noEmit` (skipped if no `.ts` files yet). | Either check failing → hard-exit. |
+| **3.8** | Lint gate | `SKIP_LINT_GATE=true`; no node binary | `tsc --noEmit` + `eslint src/ --max-warnings 0` (config auto-probed via `--print-config`). Failure triggers a 3-agent self-heal chain (`gate-finding-analyst` → `story-ac-remediator` → `profile-augmentor`, on `claude-haiku-4-5-20251001`) that maps the failure to its owning story and appends corrective ACs. | If remediation applied → exit **2** (tier3 runner retries the phase); else hard-exit. |
+| **4** | Review stories | No review stories in this phase | Iterates review stories, clears stale `review/<id>-review.md`, `run_story_with_watchdog()` per story. | Any failure → `fail`. |
+| **4.2a** | SAST sentinel | (see testing-gates umbrella below) | Evidence-injected, **tool-disabled** prompt over pre-run Semgrep JSON + `npm audit` + tsc diagnostics; dev-dependency CVEs always classified "minor" regardless of CVSS. | `summary.blockerCount>0` → fail; unparseable-with-explicit-fail-string → fail; unparseable-with-no-fail-string → `warn` "no parseable findings" (treated as pass-like). |
+| **4.2b** | Spec validator | (umbrella) | Tool-enabled prompt against `.stories[]`. A Python extractor only counts a "fail" verdict as grounded if ≥1 criterion status isn't `untestable` — an all-`untestable` fail downgrades to `warn`. | Grounded failures>0 → fail; `overallVerdict:"warn"` → warn "partial"; no data → warn "no story data". |
+| **4.3a** | Review ranger | Phase B — only runs if Phase A had zero failures, else `skip "Phase A failed"` | | Literal `"verdict":"fail"` → fail; `"verdict":"warn"` → warn "non-blocking findings"; else pass. |
+| **4.3b** | Mutant hunter | (Phase B, same gate as 4.3a) | Focuses on mutation testing of critical paths (auth, billing, provider failover); explicitly instructed to `warn` with `mutationScore:100` (non-blocking) when no source changed. | Same verdict logic as 4.3a — `warn "score 50-69%"` for borderline scores. |
+| **4.4a** | Fuzz-weaver | Phase C — only runs if Phase A+B had zero failures, else `skip "Phase A/B failed"` | Grounding check: actually **executes** the agent's own proposed test against the real code and only honors a "fail" if it genuinely reproduces the bug. | Ungrounded fail → downgraded to `warn "unverified findings downgraded"`. |
+| **4.4b** | Perf sentinel | (Phase C, same gate as 4.4a) | Requires `real_blockers>0 AND filesAnalysed>0` to honor a fail. | Otherwise → `warn "hallucinated fail downgraded"`. |
+| **4.6** | Browser E2E routing | `SKIP_BROWSER_E2E_ROUTING=true`; no phase stories; "no stories matched" (title/description doesn't hit the `ui\|frontend\|screen\|page\|form\|browser\|e2e\|auth\|checkout\|payment` routing regex) | Scores each matched story 0-N by hours/priority/keywords; routes score ≥7 to `playwright-agent`, 4-6 to `lightpanda-agent` (falls back to lightpanda if playwright profile missing); `FORCE_LIGHTPANDA=1`/`FORCE_PLAYWRIGHT=1` override; capped at `MAX_BROWSER_ROUTING_STORIES` (default 3). | Routed response `"verdict":"fail"` → fail; `"warn"` → warning only; zero routed → skip. |
+| *6* | *Final post-phase assessment* | — | Terminal step, runs once at the very end of a phase (not part of the 28-ID checklist, but the last `step_emit` call in the file). | pass/warn only — no fail path. |
+
+**Umbrella for 4.2a-4.4b + 4.6**: `SKIP_TESTING_GATES=true` skips all six testing-gate steps in one block; `phase_story_count==0` skips the whole `run_testing_gates()` function silently (no `step_emit` at all — a plain early return).
+
+#### Model escalation — the inference ladder (`claude.sh`)
+Every story attempt is `rung = retry_count / 2`, 2 attempts per rung, up to `EPAM_MAX_RETRIES` (default 7 → **8 total attempts**, retries 0-7):
+- **Rung 0** (retries 0-1): base model, base effort.
+- **Rung 1** (retries 2-3): same model, effort → `medium`, `STORY_MAX_ITERATIONS += 5`.
+- **Rung 2** (retries 4-5): model escalates — priority order PRD `.retryModel` → `EPAM_RETRY_MODEL` → `classify_ladder_tier()` + `get_model_ladder_step()` (reads `EPAM_MODEL_LADDER_MEDIUM`/`_HIGH`, or `EPAM_MODEL_LADDER` to force one ladder for both tiers). Effort stays `medium`.
+- **Rung 3+** (retries ≥6): if the story never escalated yet, jumps straight to `EPAM_FINAL_FALLBACK_MODEL`/`_PROVIDER`; otherwise steps the ladder again from the Rung-2 model. Effort → `high` (maximum).
+- **Same-rung retry** (the 2nd attempt within a rung): model/effort stay fixed — the previous attempt's FailureAnalyst-injected guidance is expected to do the work instead.
+- `classify_ladder_tier()`: PRD `.ladderTier` override wins; otherwise a story that already hit `MAX_RETRIES` in a prior cycle, or has ≥6 distinct failure diagnoses, classifies as `high` tier, else `medium`.
+
+#### Self-healing — `run_failure_analyst()` diagnosis targets (`claude.sh`)
+Only runs on test-suite failures (not missing-deliverable failures) when a gate provider is configured. Six targets, each gated by a reviewer + snapshot/revert flow with a 3-round retry and an `[unreviewed-fallback]` tag if the reviewer keeps rejecting:
+- **`prd`** — patches a specific `acceptanceCriteria[idx]` entry.
+- **`tc`** — patches a specific `testCriteria.facts[idx]` entry.
+- **`skill`** — appends `[Self-Heal] <note>` to the story's role in `profiles.json` (this-retry-only guidance), exact-duplicate-guarded.
+- **`kb`** — appends to a per-role `KB-<role>.md` (permanent, cross-run lesson), same dedup pattern, entries capped at 200 chars.
+- **`tool`** — writes a new script to `.epam/dynamic-tools/<name>.sh`, guarded against a tool re-invoking the project's own test command, marked `.reviewed` before it's ever allowed to execute.
+- **`none`** — no structural fix; relies purely on the inference ladder's model/effort escalation.
+
+#### Vendor-dir protection & dependency install (`claude.sh`)
+Exact call order per story attempt:
+1. `run_dependency_check "$PROJECT_ROOT"` — pre-emptive, **before** the lock, so a dependency an earlier attempt's file already imports gets installed before the agent's own turn starts.
+2. `_scope_lock "$story_id"` — locks out-of-scope `.ts` files read-only.
+3. `_vendor_lock "$PROJECT_ROOT"` — `chmod -R a-w` on every `.epam/dependency-check.json` `vendorDirs` entry; touches `.epam/.vendor-lock-marker`.
+4. Agent turn runs (locked window).
+5. Inside `run_external_verification()`: `run_vendor_integrity_check` runs first (flags any vendor-dir file newer than the lock marker, excluding config-declared cache patterns, as tampering), then `_vendor_unlock` **always** runs regardless of the check's result.
+6. `run_dynamic_tools_in_unlocked_window` — runs every `.reviewed`, syntax-clean dynamic tool unconditionally in this sanctioned window.
+7. `run_dependency_check` runs again, post-turn, before the real test command executes.
+
+When `EPAM_SANDBOX=true` (see §3.12), the chmod-based lock above is a defense-in-depth backstop only — the real enforcement is a kernel-level read-only bind mount the agent's own process cannot override.
+
+#### Story watchdog & timeout escalation (`run_story_with_watchdog()`)
+Effort-scaled default timeouts (`STORY_TIMEOUT_SECS` overrides): low → 600s, medium → 1200s, high → 2400s, unknown → 900s. On a timeout (exit 124): `hot_swap_story_model_if_unstable()` escalates one ladder step (or falls back to `EPAM_FINAL_FALLBACK_MODEL`), then retries once at `timeout × EPAM_WATCHDOG_RETRY_MULTIPLIER` (default 1.5×). A second timeout: with `EPAM_PAUSE_ON_TIMEOUT=true`, pauses for operator resume; otherwise marks the story `status="failed"` (`technicalNotes.failureReason="watchdog_timeout..."`), which Step 1's loop routes through one `run_story_recovery_analyst()` attempt before counting it as a phase failure.
+
+#### TC-writer gates — inline vs. Step 1.6 (batch)
+Both call the same `post-impl-tc-writer.sh`, but differ in scope and trigger:
+- **Inline** (inside the Step 1 loop): per-story, triggers when **all** of a story's declared files are `.test.ts` (a pure test story whose paired impl story already ran earlier in the same loop); runs *before* that story executes; on exhaustion (3 attempts, still empty facts) blocks just that story and continues the loop.
+- **Step 1.6** (batch, phase-scoped): runs *after* Step 3.2 worktree merge so it works for both main-branch and worktree topology; triggers when **any** declared file is `.test.ts` (broader — combo stories' files genuinely exist on disk by this point); blocks individually-still-missing stories without aborting the phase.
+
+#### TC-density model upgrade (`maybe_upgrade_model_for_tc_density()`)
+Called right after the inline TC writer succeeds, with the story's real `testCriteria.facts` count. No-op unless `ORCH_UPGRADE_MODEL` is set and `facts_count > EPAM_TC_FACTS_UPGRADE_THRESHOLD` (default 15). If triggered, rewrites the story's `.model`/`.aiProvider` in the PRD directly (provider resolved via `EPAM_MODEL_PROVIDER_MAP`) and records `.specification.tcDensityUpgrade = {from, to, reason, upgradedAt}` — corrects for AC count (used at spec-pass time, Step 0) under-predicting real behavioral-check density, which TC facts only reveal once actually written.
 
 ### 3.14 CPA Calibration & Blended Forecast Improvements
 - **Model-aware calibration buckets** (June 3): `calibrate.py` now keys calibration on `effort:storyType:invokeMode:modelAlias` (haiku/sonnet/opus). Before this, Haiku and Sonnet actuals shared one bucket, causing 12× cost-per-token overestimates for Haiku stories.
@@ -110,11 +177,16 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 - Every story emits an artifact record regardless — stories without `outputSchema` emit `structuredOutput: null`. Fields: `storyId`, `phase`, `status`, `elapsedMinutes`, `costUsd`, `turns`, `outputSchema`, `structuredOutput`, `timestamp`.
 
 ### 3.12 Sandbox Isolation (GAP-P14)
-- `run-agent-orchestration.sh --sandbox` wraps each agent invocation in a Docker/Podman container. The container is built from `orchestrations/scripts/Dockerfile.sandbox` (node:20-slim + Claude CLI + git/jq/curl, non-root user uid 10000, matching host uid at runtime via `--user $(id -u):$(id -g)`).
-- `orchestrations/scripts/lib/sandbox-invoke.sh` is the `CLAUDE_CMD` replacement injected when `--sandbox` is active. It calls `docker run --rm -i` with: only `PROJECT_ROOT` bind-mounted r/w, `--security-opt no-new-privileges`, `--cap-drop ALL`, CPU and memory limits (default: 2 CPUs, 4 GB).
-- The sandbox image is auto-built on first `--sandbox` run if not present. Network access is bridge (required for Anthropic API calls).
-- Verified: writes to `PROJECT_ROOT` succeed; writes outside (e.g. `/etc/shadow`) are blocked by container isolation.
-- Configurable: `EPAM_SANDBOX_IMAGE`, `EPAM_SANDBOX_CPUS`, `EPAM_SANDBOX_MEMORY`.
+
+`run-agent-orchestration.sh --sandbox` / `EPAM_SANDBOX=true` wraps each agent invocation in a Docker/Podman container via `orchestrations/scripts/lib/sandbox-invoke.sh`, injected as the `CLAUDE_CMD` replacement. Originally built to demonstrate filesystem isolation in general; extended 2026-07-13/14 to structurally close the vendor-directory tampering class of failure (`[vendor-guard] Vendor directory tampering detected`, e.g. SKY-004/SKY-002-impl) that the pre-existing chmod-based lock (`_vendor_lock`/`_vendor_unlock`, §"Vendor-dir protection" above) could not: chmod is same-UID-bypassable — the agent's own Bash tool runs as that same user and can just `chmod +w` a "locked" dir back. A kernel-enforced read-only bind mount cannot be undone by anything running inside the container, even as its own root. `chattr +i` was evaluated and rejected as a lighter-weight alternative: it requires `CAP_LINUX_IMMUTABLE`, which neither the orchestrator nor the agent process has (both run as the same non-root host user), so the orchestrator can't even grant the protection.
+
+- **Vendor dirs mounted read-only**: for every entry in `.epam/dependency-check.json`'s `vendorDirs` (the same key `_vendor_lock` already reads — no new config), `sandbox-invoke.sh` adds a nested `-v "<dir>:<dir>:ro"` mount inside the broader `-v "${PROJECT_ROOT}:${PROJECT_ROOT}:rw"` mount; Docker lets the more-specific mount win for that subpath. Verified live: `chmod`/`touch` inside the mounted vendor dir fails with "Read-only file system," not "Permission denied" — proof it's a kernel/mount-level restriction, not a permission bit the same process could flip.
+- **Configurable target command**: `EPAM_SANDBOX_TARGET_CMD` (space-separated, default `"claude"`) selects the binary run inside the container. This let the wrapper be reused for the `copilot|openai|qwen|cursor|minimax` provider branch in `claude.sh` (~L5515-5583) — previously the ONLY branch that called `$EPAM_CLI run` directly, unsandboxed, regardless of `--sandbox` state. That branch now swaps to `_epam_run_binary="$CLAUDE_CMD"` with `EPAM_SANDBOX_TARGET_CMD="node /opt/epam-cli/dist/epam.js"` whenever `EPAM_SANDBOX_IMAGE` is set, so qwen/minimax runs (this project's actual providers) are sandboxed too, not just the `claude`/`epam` default branches.
+- **epam-cli reachable inside the container**: epam-cli's own repo root is bind-mounted read-only at `/opt/epam-cli` (not baked into the image, so it always reflects current source without an image rebuild). Combined with the target-command point above, this is what lets the sandboxed process actually invoke `epam run` regardless of what stack the *target* project uses — `epam` is always the same Node.js tool.
+- **Base image derived dynamically, not hand-authored**: `derive_sandbox_base_image()` (`run-agent-orchestration.sh`, before the sandbox bootstrap block) reads `.project.stack.language`/`.runtime` from the PRD — data the LLM-based `generatePrd()` (`src/scaffold/ManifestAnalyzer.ts`) already writes for every project, previously write-only/unused downstream. Pattern-matches `python*`→`python:3.11-slim`, `golang*|go`→`golang:1.22-bookworm`, `rust*`→`rust:1.75-slim`, `node*|typescript*|javascript*` or unrecognized/missing→`node:20-slim` (fallback, never fails the build). Passed to `docker build --build-arg BASE_IMAGE=...`. `Dockerfile.sandbox` conditionally installs Node.js only `if ! command -v node` — a no-op for the common Node-based-target case, paid only by non-Node target stacks. `EPAM_SANDBOX_BASE_IMAGE` overrides the derivation entirely if set.
+- **Env forwarding**: any host env var matching `*_API_KEY` or `EPAM_*` (excluding `EPAM_SANDBOX_*` itself, the wrapper's own control knobs) is forwarded into the container by name — no provider name hardcoded.
+- Container hardening unchanged from the original design: non-root (`--user $(id -u):$(id -g)`), `--security-opt no-new-privileges`, `--cap-drop ALL`, CPU/memory limits (`EPAM_SANDBOX_CPUS` default 2, `EPAM_SANDBOX_MEMORY` default 4g), bridge networking (required for provider API calls), image auto-built on first run if `epam-cli-sandbox:latest` isn't already present.
+- Rollout stance unchanged from the original design: strictly opt-in (`EPAM_SANDBOX=true`/`--sandbox`), not yet flipped to default-on in `tier3-travel-app-run.sh` — validated so far via direct container write-tests and the unit-test suite (`test/unit/orchestration/sandbox-isolation.test.ts`, 16 tests, real `docker`-stubbed execution), not yet against a full live tier3 run with the new mounts active.
 
 ### 3.3 Provider Wrappers & Utilities
 - Wrapper scripts (`claude.sh`, `copilot.sh`, `openai.sh`, `cursor.sh`, etc.) normalize provider CLIs to the same contract expected by `run-agent-orchestration.sh`.
@@ -149,6 +221,7 @@ Supporting directories: `src/tools` (built-in tools), `src/providers/*` (API ada
 - Outputs: `logs/spec-baseline.json` (latest baseline), `logs/spec-summary.json` (run metadata), `logs/spec-runs/<run>/` (archives), and any new split stories inserted back into `prd.json` + `implementationOrder`.
 - CLI entrypoints: `/orchestrate spec <phase>` (REPL) or `epam orchestrate spec <phase>` shell out to the same runner; `npm run specification:run -- --phase <phase>` is available for automation/CI.
 - Operators can skip the pre-pass with `EPAM_SPEC_MODE=0` or run it standalone before estimates to review diffs in dashboards.
+- **Split authority (2026-07-13):** openspec is the *sole* decision-maker for splitting an over-large story. Speckit's prompt used to grant it independent split judgment too, as a safety net for a missed mandatory split — but that safety net was redundant with the already-existing deterministic `checkSplitMandateViolation()` check (which forces *openspec* to retry a missed split), and the redundancy caused two competing, independently-generated child ID sets for the *same* parent story in one spec-pass turn (found live on SKY-002 and SKY-003) — same-file coherence correctly rejected both, and the story fell back to running unsplit and oversized. Fixed with a prompt change (speckit's schema now says `"splitStories": ALWAYS omit this field`) plus a deterministic code-level guard that unconditionally drops any `splitStories` speckit still emits, before `applySpecChanges` ever sees it.
 
 ### 3.15 Agent Profile Roster & Persona System
 - `orchestrations/agents/profiles.json` — flat `{role: "prompt string"}` map, ~49 specialized personas covering implementation (`typescript-engineer`, `test-engineer`, `frontend-engineer`, `ui-engineer`, `generator`), specification (`openspec-agent`, `speckit-agent`, `spec-coordinator-agent`, `spec-validator`), QA gates (`sast-sentinel`, `review-ranger`, `mutant-hunter`, `fuzz-weaver`, `perf-sentinel`), documentation (`doc-coordinator`, `doc-reviewer`, `guide-author`, `changelog-agent`, `docstring-agent`), and project/PRD management (`prd-project-manager-agent`, `grooming-coordinator`, `readiness-checker`).
@@ -187,9 +260,47 @@ mandatory split), generalized to the other three. Outcomes:
   running ungrounded or taking every other story in the phase down with it. A genuine PRD-corruption crash
   (not just an empty-facts miss) still hard-fails.
 
-Every guarded call's final outcome (`pass`/`reverted`/`blocked`, attempt count, reason) is logged to
-`guarded-step-retries.jsonl` in the project's output directory; blocked stories are additionally recorded to
-`blocked-stories.jsonl`. See §4.2 for the dashboard that surfaces this data.
+Every guarded call's final outcome (`pass`/`reverted`/`blocked`, attempt count, reason, and a fixed-vocabulary
+`violationTypes` array — e.g. `field_out_of_scope`, `story_added`, `invalid_json`, `content_quality`,
+`empty_facts`, depending on the step) is logged to `guarded-step-retries.jsonl` in the project's output
+directory; blocked stories are additionally recorded to `blocked-stories.jsonl`. See §4.2 for the dashboard
+that surfaces this data.
+
+**Cross-run history (2026-07-13):** the per-run file above lives in the project's own output directory, which
+teardown `rm -rf`s before every fresh launch — so on its own it can never show whether a prompt's violation
+rate is improving or regressing over time. Every guarded-step write is now a **double-write**: unchanged
+append to the per-run file, plus an append (via the shared `_log_guarded_step_retry()` bash helper and its
+`logGuardedStepRetry()` JS counterpart in `spec-mode-runner.js`) to a persistent, engine-side history file —
+`orchestrations/logs/guarded-step-retries-history.jsonl`, repo-relative to epam-cli, never inside the target
+project's output directory — that survives teardown. Each record is tagged with `runId` and `promptVersion`
+(the epam-cli repo's own short git SHA at call time, since these prompts live embedded in the scripts
+themselves rather than separate templates — the commit hash of the script *is* the version proxy).
+`build/snapshot.js`'s `summarizeGuardedStepHistory()` groups the history by `(runId, step)`, newest-first,
+capped to the most recent 20 runs, plus a `violationTypesByStep` roll-up — rendered as two additional plain
+tables in `health.html`'s Prompt Evals section (see §4.2).
+
+### 3.16.1 Retry-Extension Coordinator (Dynamic Self-Heal Budget)
+A story that exhausts `MAX_RETRIES` with genuine, converging progress (each failed attempt a *different*
+diagnosed bug, not a repeat) shouldn't necessarily be abandoned at a fixed, one-size-fits-all ceiling.
+`compute_retry_extension_evidence()` (`claude.sh`) first computes deterministic, zero-LLM-cost evidence from
+two existing JSONL logs — `healing-events.jsonl` (distinct diagnoses, whether healing itself broke) and
+`failure-diagnosis-groundedness.jsonl` (average groundedness score) — and only consults an LLM gate when that
+evidence is genuinely ambiguous, mirroring this pipeline's "trust the deterministic oracle over an LLM
+opinion" principle used elsewhere (e.g. SAST/spec-validator's blocker-count-over-self-reported-verdict trust).
+`run_retry_extension_coordinator()` prints the number of extra retries granted (0 if declining) and fails
+closed on any error, disabled state, or malformed gate response.
+
+**Bug fixed 2026-07-13 (found live on SKY-003):** the caller captures this function's return value via command
+substitution (`_granted_extra_retries=$(run_retry_extension_coordinator "$story_id")`), which captures
+*everything* the function writes to stdout — including its own internal diagnostic `log "..."` calls, since
+`log()`'s real definition (unlike `error()`) writes to stdout with no `>&2` redirect. A genuinely granted
+extension (`extraRetriesGranted:2`, correctly recorded to `retry-extension-decisions.jsonl`) was silently
+corrupted into a multi-line, non-numeric capture, so the caller's `-gt 0` numeric check failed and the story
+was abandoned anyway with zero further retries. Fixed by redirecting both internal `log` calls to stderr, so
+the function's stdout contains only the final numeric `echo`. The pre-existing test suite's stub for
+`log()`/`warning()` used a safe, stderr-only definition that never exercised this — a new test
+(`retry-extension-log-contamination.test.ts`) reproduces the exact integration bug using the *real*
+stdout-writing `log()` definition extracted from `claude.sh`.
 
 ### 3.17 Rung-Based Inference Ladder
 `claude.sh`'s retry loop escalates in four rungs (two attempts each, `EPAM_MAX_RETRIES` default 7 → 8 total attempts): Rung 0/1 keep the base model and raise `EPAM_REASONING_EFFORT` from low → medium; Rung 2 escalates the model itself; Rung 3 keeps the escalated model at `EPAM_REASONING_EFFORT=high`. A failed self-heal attempt can skip straight to the next rung instead of burning a second attempt on a healing strategy already known to be broken.
@@ -229,7 +340,8 @@ Each main-branch story attempt also runs inside a **scope guard** (files outside
 ### 4.2 Runtime Overlay & Health Signal
 - `orchestrations/dashboards/runtime/build-info.js` runs in every dashboard, polling `build-info.json`, rendering a global status pill, and firing `window.EPAMBuildInfo` events for page-specific scripts.
 - Dashboards consume the shared overlay by importing the runtime script (see `monitor.html`, etc.), so all pages surface stale/offline states consistently.
-- **`health.html`** shows the pipeline's self-healing signals: `build/snapshot.js` tails `healing-events.jsonl` (analyst diagnose-and-patch cycles, skill-note growth per agent role, dynamic tools synthesized) into `metrics.selfHealing`, and — since 2026-07-13 — `guarded-step-retries.jsonl` + `blocked-stories.jsonl` (see §3.15) into `metrics.promptEvals`: total guarded calls, the % that actually hit a violation on attempt 1, pass/reverted/blocked counts overall and per gate, and the blocked-stories list. Both feeds come from the same `build-info.json` snapshot, no separate polling.
+- **`health.html`** shows the pipeline's self-healing signals: `build/snapshot.js` tails `healing-events.jsonl` (analyst diagnose-and-patch cycles, skill-note growth per agent role, dynamic tools synthesized) into `metrics.selfHealing`, and — since 2026-07-13 — `guarded-step-retries.jsonl` + `blocked-stories.jsonl` (see §3.16) into `metrics.promptEvals`: total guarded calls, the % that actually hit a violation on attempt 1, pass/reverted/blocked counts overall and per gate, and the blocked-stories list. Both feeds come from the same `build-info.json` snapshot, no separate polling.
+- **Cross-run trend:** `snapshot.js` also tails the persistent `orchestrations/logs/guarded-step-retries-history.jsonl` (see §3.16) via `summarizeGuardedStepHistory()`, added to `metrics.promptEvals.history` — a `rows` array (one row per `runId` + step, newest-first, capped to the last 20 runs) and a `violationTypesByStep` roll-up. `health.html` renders both as two additional plain tables under the existing Prompt Evals metrics, making it possible to see whether a specific prompt (identified by `promptVersion`, the epam-cli git SHA at call time) is trending toward fewer violations release over release.
 
 ### 4.3 Coupling with Orchestration Runs
 - `run-agent-orchestration.sh` automatically launches the Eleventy watcher, ensuring BrowserSync reloads dashboards whenever PRD/logs change during a phase run.
@@ -384,7 +496,8 @@ Each main-branch story attempt also runs inside a **scope guard** (files outside
 - Specification runner: `orchestrations/scripts/spec-mode-runner.js`
 - Specification dashboard: `orchestrations/dashboards/specification.html`
 - Health / self-healing dashboard: `orchestrations/dashboards/health.html`
-- Guarded-step retry log: `guarded-step-retries.jsonl` (project output dir)
+- Guarded-step retry log: `guarded-step-retries.jsonl` (project output dir, per-run)
+- Guarded-step retry history: `orchestrations/logs/guarded-step-retries-history.jsonl` (engine-side, persistent across runs)
 - Blocked-stories log: `blocked-stories.jsonl` (project output dir)
 - Deployment script: `scripts/deploy-demo.sh`
 - Operational plan: `plans/orchestration-failover-plan.md`

@@ -681,14 +681,20 @@ ${storiesPayload}
           afterSnapshot = captureStorySnapshot(story);
         }
 
-        appendJsonl(path.join(logDir, 'guarded-step-retries.jsonl'), {
+        logGuardedStepRetry(logDir, {
           timestamp: new Date().toISOString(),
           step: 'ac-review',
           storyId: story.id,
+          runId,
           agent,
           attempts: acReviewAttempts,
           outcome: reviewResult.verdict === 'fail' ? 'reverted' : 'pass',
-          reason: (reviewResult.issues || []).join('; ')
+          reason: (reviewResult.issues || []).join('; '),
+          // content_quality is the only vocabulary entry here — reviewPrdChange's
+          // verdict is itself an LLM judgment call over free-text issues, not a
+          // mechanical diff, so it can't be reliably subdivided further without
+          // a second LLM call.
+          violationTypes: reviewResult.verdict === 'fail' ? ['content_quality'] : []
         });
       }
 
@@ -973,7 +979,17 @@ ${reviewPayload}
   // Pass B (LLM review): coordinator reviews all scores — confirms, overrides, or
   //   catches false negatives the rules missed. LLM decision is final.
   // Both passes write to story.specification.modelUpgrade for full auditability.
-  const upgradeModel = process.env.ORCH_UPGRADE_MODEL || 'anthropic/claude-sonnet-4-6';
+  // Fallback default MUST stay within this pipeline's configured model ladder
+  // (MiniMax/qwen-routed models only — Anthropic models are never permitted
+  // here). A prior default of 'anthropic/claude-sonnet-4-6' meant ANY
+  // invocation that forgot to export ORCH_UPGRADE_MODEL (e.g. a hand-rolled
+  // launcher that didn't replicate tier3-travel-app-run.sh's full env-var
+  // set) silently got an Anthropic model assigned — and because
+  // buildKnownValidModels() below includes whatever this resolves to,
+  // isValidModelString() accepted it as "known valid" by construction, so no
+  // validation ever caught it (found live 2026-07-13: SKY-001 assigned
+  // anthropic/claude-sonnet-4-6, failed 8/8 attempts, aborted the phase).
+  const upgradeModel = process.env.ORCH_UPGRADE_MODEL || 'MiniMax-M3';
   const miniModel    = process.env.ORCH_MINI_MODEL    || 'MiniMax-M2.5';
   const allPhaseStories = [...stories, ...newStories.map((ns) => ns.story)];
 
@@ -1946,6 +1962,44 @@ function appendJsonl(filePath, obj) {
   fs.appendFileSync(filePath, `${JSON.stringify(obj)}\n`);
 }
 
+// _promptVersionCache — the epam-cli repo's own short git SHA, computed once
+// per process. These prompts live embedded in the scripts themselves (no
+// separate template files), so the commit hash of the script IS the version
+// proxy for correlating a violation-rate change to "what changed in this
+// commit" — mirrors _epam_prompt_version() in run-agent-orchestration.sh.
+let _promptVersionCache = null;
+function promptVersion() {
+  if (_promptVersionCache === null) {
+    try {
+      _promptVersionCache = execSync('git rev-parse --short HEAD', {
+        cwd: path.join(__dirname, '..', '..'),
+        encoding: 'utf8',
+      }).trim();
+    } catch {
+      _promptVersionCache = 'unknown';
+    }
+  }
+  return _promptVersionCache;
+}
+
+// logGuardedStepRetry — double-write a guarded-step-retry record: unchanged
+// per-run file (logDir, wiped on next run's teardown) plus a persistent
+// engine-side history file (orchestrations/logs/, survives target-project
+// teardown) — same double-write convention as _log_guarded_step_retry() in
+// run-agent-orchestration.sh, so bash- and JS-side guarded steps land in the
+// same cross-run history for trend/versioning aggregation.
+function logGuardedStepRetry(logDir, record) {
+  const augmented = { ...record, runId: record.runId ?? 'unknown', promptVersion: promptVersion() };
+  appendJsonl(path.join(logDir, 'guarded-step-retries.jsonl'), augmented);
+  try {
+    const historyDir = path.join(__dirname, '..', 'logs');
+    fs.mkdirSync(historyDir, { recursive: true });
+    appendJsonl(path.join(historyDir, 'guarded-step-retries-history.jsonl'), augmented);
+  } catch {
+    // Persistent history is best-effort — never let it block the pipeline.
+  }
+}
+
 function extractCodeRefs(story) {
   const files = story?.technicalNotes?.files;
   if (!Array.isArray(files)) return [];
@@ -2125,8 +2179,20 @@ function buildKnownValidModels(upgradeModel, miniModel) {
   ]);
 }
 
+// Anthropic/Claude models are never permitted as a story-agent assignment in
+// this pipeline (this engine IS Claude Code — running Claude AS a story
+// agent inside its own orchestration is not a supported configuration; the
+// pipeline is qwen/minimax-routed by design). This is an absolute rule, not
+// just a preference for what the default should be — checked independently
+// of currentModel/knownValidModels so it still holds even if a story's
+// current model was somehow already corrupted to an Anthropic model by an
+// earlier bug (defense in depth, not just "fix the default").
+const DISALLOWED_MODEL_PATTERN = /^anthropic\/|claude/i;
+
 function isValidModelString(model, currentModel, knownValidModels) {
-  return typeof model === 'string' && (model === currentModel || knownValidModels.has(model));
+  if (typeof model !== 'string') return false;
+  if (DISALLOWED_MODEL_PATTERN.test(model)) return false;
+  return model === currentModel || knownValidModels.has(model);
 }
 
 // buildGateExec <aiRunnerCmd>
@@ -2538,4 +2604,6 @@ module.exports = {
   modelComplexitySignals,
   MAX_ACS_PER_STORY,
   MAX_CHILDREN_PER_SPLIT,
+  promptVersion,
+  logGuardedStepRetry,
 };

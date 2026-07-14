@@ -111,6 +111,16 @@ export class MiniMaxProvider implements LLMProvider {
       usage: {
         inputTokens: data['usage']?.prompt_tokens || 0,
         outputTokens: data['usage']?.completion_tokens || 0,
+        // MiniMax's direct API (unlike OpenRouter) does not document a
+        // real-cost field in its chat/completions response — confirmed via
+        // their public API docs, which only list prompt_tokens/
+        // completion_tokens/total_tokens under usage. This is a defensive,
+        // opportunistic read in case one is added later; it is NOT a
+        // guaranteed contract like OpenRouter's usage.include=true, so
+        // MiniMax cost stays estimate-only (via src/billing/pricing.ts)
+        // until/unless a separate MiniMax account/usage-API integration is
+        // built (see feedback_real_cost_tracking_critical memory).
+        ...(typeof data['usage']?.total_cost === 'number' ? { costUsd: data['usage'].total_cost } : {}),
       },
     };
   }
@@ -155,6 +165,7 @@ export class MiniMaxProvider implements LLMProvider {
     let accumulatedText = '';
     let inputTokens = 0;
     let outputTokens = 0;
+    let costUsd: number | undefined;
     let stopReason: ProviderResponse['stopReason'] = 'end_turn';
     const toolCalls: Map<number, { id: string; name: string; args: string }> = new Map();
 
@@ -191,6 +202,9 @@ export class MiniMaxProvider implements LLMProvider {
           if (parsed.usage) {
             inputTokens = parsed.usage.prompt_tokens || 0;
             outputTokens = parsed.usage.completion_tokens || 0;
+            // See completeOpenRouter/complete's comment: not a documented
+            // MiniMax field, opportunistic only.
+            if (typeof parsed.usage.total_cost === 'number') costUsd = parsed.usage.total_cost;
           }
         } catch { /* skip malformed chunk */ }
       }
@@ -222,7 +236,7 @@ export class MiniMaxProvider implements LLMProvider {
     return {
       content: content.length > 0 ? content : [{ type: 'text', text: accumulatedText }],
       stopReason,
-      usage: { inputTokens, outputTokens },
+      usage: { inputTokens, outputTokens, ...(costUsd != null ? { costUsd } : {}) },
     };
   }
 

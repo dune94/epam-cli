@@ -41,10 +41,23 @@ describe('Step 0.9 — static wiring', () => {
     expect(section).toMatch(/ALLOWED_FIELDS = \{'model', 'aiProvider', 'reasoningEffort'\}/);
   });
 
-  it('logs outcomes to guarded-step-retries.jsonl', () => {
-    expect(section).toMatch(/guarded-step-retries\.jsonl/);
+  it('logs outcomes via the shared _log_guarded_step_retry helper (double-write to per-run + persistent history)', () => {
+    expect(section).toMatch(/_log_guarded_step_retry "\$\(jq -n -c/);
   });
 });
+
+// _log_guarded_step_retry/_epam_prompt_version — shared helpers (2026-07-13)
+// that this call site now delegates to for the actual
+// "guarded-step-retries.jsonl" write. The REAL-execution harness below must
+// define them too, or the call site silently no-ops.
+function extractHelperFunctionBody(name: string): string {
+  const defRe = new RegExp(`^${name}\\(\\)\\s*\\{`, 'm');
+  const defMatch = defRe.exec(orchSrc);
+  if (!defMatch) throw new Error(`No function definition found for ${name}()`);
+  const start = defMatch.index;
+  const end = orchSrc.indexOf('\n}', start) + 2;
+  return orchSrc.slice(start, end);
+}
 
 describe('Step 0.9 — REAL execution', () => {
   function run(opts: { violateForAttempts: number }): { finalPrd: any; retriesLog: any[] } {
@@ -114,6 +127,14 @@ export -f AI_RUNNER_CMD 2>/dev/null || true
       'assert_no_story_ids_lost() { :; }',
       'assert_no_story_ids_gained() { :; }',
       'assert_no_illegitimate_deprecation() { :; }',
+      // History dir redirected to this test's own throwaway dir -- never
+      // touch the real orchestrations/logs/guarded-step-retries-history.jsonl.
+      extractHelperFunctionBody('_epam_prompt_version'),
+      extractHelperFunctionBody('_log_guarded_step_retry').replace(
+        /\$SCRIPT_DIR\/\.\.\/logs/g,
+        join(dir, 'history-logs'),
+      ),
+      `SCRIPT_DIR=${JSON.stringify(join(REPO_ROOT, 'orchestrations/scripts'))}`,
       block,
     ].join('\n');
     const scriptPath = join(dir, 'run.sh');

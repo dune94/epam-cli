@@ -84,10 +84,17 @@ describe('retry-extension-coordinator — static wiring', () => {
     expect(echoIdx).toBeLessThan(gateIdx + 100);
   });
 
-  it('caps extraRetries at EPAM_RETRY_EXTENSION_MAX regardless of what the LLM requests', () => {
+  it('caps extraRetries at the resolved per-role max regardless of what the LLM requests', () => {
     const fnBody = extractFunctionBody('run_retry_extension_coordinator');
-    expect(fnBody).toMatch(/EPAM_RETRY_EXTENSION_MAX/);
+    // The flat EPAM_RETRY_EXTENSION_MAX cap now lives inside
+    // resolve_role_retry_extension_max() (its role-agnostic fallback), not
+    // as a literal in this function -- see the dedicated
+    // role-based-generic-escalation.test.ts for real-execution coverage of
+    // that function's cap behavior, including the flat-default case.
+    expect(fnBody).toMatch(/_max=\$\(resolve_role_retry_extension_max "\$story_id"\)/);
     expect(fnBody).toMatch(/"\$granted" -gt "\$_max"/);
+    const roleMaxFnBody = extractFunctionBody('resolve_role_retry_extension_max');
+    expect(roleMaxFnBody).toMatch(/EPAM_RETRY_EXTENSION_MAX/);
   });
 });
 
@@ -215,6 +222,7 @@ describe('run_retry_extension_coordinator() — REAL execution', () => {
       writeFileSync(prdPath, JSON.stringify({ stories: [{ id: opts.storyId, acceptanceCriteria: ['AC1', 'AC2'] }] }));
 
       const evidenceFnBody = extractFunctionBody('compute_retry_extension_evidence');
+      const roleMaxFnBody = extractFunctionBody('resolve_role_retry_extension_max');
       const coordFnBody = extractFunctionBody('run_retry_extension_coordinator');
       const scriptPath = join(dir, 'run.sh');
       writeFileSync(
@@ -233,6 +241,7 @@ describe('run_retry_extension_coordinator() — REAL execution', () => {
           'log() { echo "LOG: $*" >&2; }',
           'warning() { echo "WARN: $*" >&2; }',
           evidenceFnBody,
+          roleMaxFnBody,
           coordFnBody,
           `run_retry_extension_coordinator ${JSON.stringify(opts.storyId)}`,
           'echo "RC=$?"',

@@ -190,6 +190,17 @@ body {
 .bl-codex    { background:rgba(196,24,110,0.08); color:#c4186e; border:1px solid rgba(196,24,110,0.25); }
 .bl-deepseek { background:rgba(0,180,160,0.10); color:#009688; border:1px solid rgba(0,180,160,0.30); }
 .bl-openai   { background:rgba(16,163,127,0.10); color:#10a37f; border:1px solid rgba(16,163,127,0.30); }
+/* Generic palette for any provider/model not in the named set above (e.g.
+   minimax, z-ai, moonshotai) — hashed to a stable slot, never a hardcoded
+   provider→color mapping. Found live 2026-07-13: every model this session's
+   actual runs used (MiniMax-M3, z-ai/glm-5.1, moonshotai/kimi-k2) fell
+   through the old code to a fake Claude-tier label (HAIKU/SONNET/OPUS). */
+.bl-p0 { background:rgba(0,71,255,0.08);   color:#0047ff;  border:1px solid rgba(0,71,255,0.2); }
+.bl-p1 { background:rgba(132,83,210,0.10); color:#8453d2;  border:1px solid rgba(132,83,210,0.25); }
+.bl-p2 { background:rgba(196,24,110,0.08); color:#c4186e;  border:1px solid rgba(196,24,110,0.25); }
+.bl-p3 { background:rgba(26,143,63,0.10);  color:#1a8f3f;  border:1px solid rgba(26,143,63,0.25); }
+.bl-p4 { background:rgba(200,122,0,0.10);  color:#c87a00;  border:1px solid rgba(200,122,0,0.25); }
+.bl-p5 { background:rgba(0,180,160,0.10);  color:#009688;  border:1px solid rgba(0,180,160,0.30); }
 .bt-unit   { background:rgba(26,143,63,0.10); color:#1a8f3f; border:1px solid rgba(26,143,63,0.25); }
 .bt-e2e    { background:rgba(132,83,210,0.10); color:#8453d2; border:1px solid rgba(132,83,210,0.25); }
 .bp-claude   { background:rgba(132,83,210,0.15); color:#6a3cb5; border:1px solid rgba(132,83,210,0.35); }
@@ -438,29 +449,38 @@ const PHASE_COLORS = [
   { border:'#f472b6', listBg:'rgba(244,114,182,0.06)', detailBg:'rgba(244,114,182,0.10)' }, // pink
 ];
 
-// Model lookup by model field (uses exact model IDs)
+// Model lookup by exact model ID — only for Claude models, where the model
+// string itself doesn't say "haiku"/"sonnet"/"opus" but the turn budget is a
+// real, meaningful per-tier fact worth showing (not decoration).
 const MODEL_INFO = {
   'claude-haiku-4-5':    { label:'HAIKU',  cls:'haiku',  turns:'10'        },
   'claude-haiku-4-5-20251001': { label:'HAIKU', cls:'haiku', turns:'10'   },
   'claude-sonnet-4-6':   { label:'SONNET', cls:'sonnet', turns:'30'        },
   'claude-opus-4-6':     { label:'OPUS',   cls:'opus',   turns:'unlimited' },
 };
-const EFFORT_INFO = {
-  low:    { label:'HAIKU',  cls:'haiku',  turns:'10'        },
-  medium: { label:'SONNET', cls:'sonnet', turns:'30'        },
-  high:   { label:'OPUS',   cls:'opus',   turns:'unlimited' },
-};
+const GENERIC_PALETTE = ['p0', 'p1', 'p2', 'p3', 'p4', 'p5'];
+function hashStr(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
 
 function modelInfo(story) {
-  // For non-Claude providers, the .model field is irrelevant — use provider as the model display
   const provider = (story.aiProvider || '').toLowerCase();
+  // For non-Claude providers, the .model field is irrelevant — use provider as the model display
   if (provider === 'opencode') return { label:'OPENCODE', cls:'opencode', turns:'—' };
   if (provider === 'codex')    return { label:'CODEX',    cls:'codex',   turns:'—' };
-  // Qwen/DeepSeek — show shortened model name
+  // Qwen-routed providers can serve any model (deepseek, kimi-k2, etc.) —
+  // show the actual model name; only color it as the named 'deepseek' CSS
+  // class when it truly is deepseek, otherwise hash to the generic palette
+  // (found live 2026-07-13: a qwen-routed kimi-k2 model was correctly
+  // LABELED "KIMI-K2" but still hardcoded to the deepseek color).
   if (provider === 'qwen') {
     const m = (story.model || 'deepseek').split('/').pop();
-    const label = m.startsWith('deepseek') ? 'DEEPSEEK' : m.toUpperCase().substring(0, 10);
-    return { label, cls:'deepseek', turns:'—' };
+    const isDeepseek = m.startsWith('deepseek');
+    const label = isDeepseek ? 'DEEPSEEK' : m.toUpperCase().substring(0, 10);
+    const cls = isDeepseek ? 'deepseek' : GENERIC_PALETTE[hashStr(m.toLowerCase()) % GENERIC_PALETTE.length];
+    return { label, cls, turns:'—' };
   }
   // OpenAI
   if (provider === 'openai') {
@@ -468,10 +488,17 @@ function modelInfo(story) {
     const label = m.includes('gpt-4o') ? 'GPT-4O' : m.toUpperCase().substring(0, 10);
     return { label, cls:'openai', turns:'—' };
   }
-  // Claude providers — look up by exact model ID, fall back to effort
+  // Claude — look up by exact model ID for the real turn-budget tier.
   if (story.model && MODEL_INFO[story.model]) return MODEL_INFO[story.model];
-  const effort = (story.effort||'medium').toLowerCase();
-  return EFFORT_INFO[effort] || EFFORT_INFO.medium;
+  // Any other provider (minimax, z-ai, moonshotai, and anything not yet
+  // added above): show the ACTUAL model/provider string, never a fake
+  // Claude-tier label — found live 2026-07-13, every model this session's
+  // real runs used was mislabeled HAIKU/SONNET/OPUS by the old effort-based
+  // fallback below, which only ever made sense for Claude models.
+  const raw = story.model || provider || 'unknown';
+  const label = raw.split('/').pop().toUpperCase().substring(0, 14);
+  const cls = GENERIC_PALETTE[hashStr(raw.toLowerCase()) % GENERIC_PALETTE.length];
+  return { label, cls, turns: '—' };
 }
 
 let prd = null, phaseOrder = [], storyMap = {}, storyPhaseMap = {};
@@ -839,6 +866,15 @@ function renderStoryDetail(s, color) {
   const dupWarnHtml = duplicateIds[s.id]
     ? `<tr><td class="mk">Duplicates</td><td class="mv" style="color:var(--red);font-weight:700">${duplicateIds[s.id]} stories share this ID</td></tr>`
     : '';
+  // Test Criteria (testCriteria) — written by post-impl-tc-writer.sh AFTER the
+  // paired impl story completes, grounding the test story's AC in verified
+  // facts from the actual source rather than prose written before the code
+  // existed. Only shown when it has real content (many non-test stories carry
+  // an all-empty stub: facts:[], sourceFiles:[], mockStrategy:'', bannedPatterns:[]).
+  const tc = s.testCriteria;
+  const tcHasContent = !!tc && (
+    (tc.facts||[]).length || (tc.sourceFiles||[]).length || tc.mockStrategy || (tc.bannedPatterns||[]).length
+  );
   const specHtml = spec ? `
     <div class="dl-t" style="margin-top:11px">Specification</div>
     <table class="meta-tbl">
@@ -896,6 +932,7 @@ function renderStoryDetail(s, color) {
   ${actualsHtml}
   <div class="dl-t">Technical Notes</div>
   <div class="tn-wrap">${renderTechNotes(s.technicalNotes)}</div>
+  ${tcHasContent ? `<div class="dl-t" style="margin-top:11px">Test Criteria</div><div class="tn-wrap">${renderTechNotes(tc)}</div>` : ''}
 </div>`;
 }
 

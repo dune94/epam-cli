@@ -139,7 +139,8 @@ cat > "$OUTPUT_DIR/.epam/dependency-check.json" << 'DEPCHECK_EOF'
   "installCommand": "npm install --save-dev {package}",
   "ignorePackages": ["assert","buffer","child_process","cluster","crypto","dgram","dns","domain","events","fs","http","http2","https","net","os","path","perf_hooks","process","punycode","querystring","readline","repl","stream","string_decoder","timers","tls","tty","url","util","v8","vm","worker_threads","zlib","node:assert","node:buffer","node:child_process","node:crypto","node:events","node:fs","node:http","node:https","node:net","node:os","node:path","node:process","node:stream","node:url","node:util","node:vm","node:zlib"],
   "requiredDevDependencies": ["typescript", "@types/node", "vitest", "tsx"],
-  "vendorDirs": ["node_modules"]
+  "vendorDirs": ["node_modules"],
+  "vendorCacheExcludePatterns": [".vite/*"]
 }
 DEPCHECK_EOF
 
@@ -275,13 +276,16 @@ export EPAM_MODEL_LADDER="${EPAM_MODEL_LADDER:-}"
 # Final fallback: used at R3 when the story model was never escalated at R2
 export EPAM_FINAL_FALLBACK_MODEL="${EPAM_FINAL_FALLBACK_MODEL:-moonshotai/kimi-k2}"
 export EPAM_FINAL_FALLBACK_PROVIDER="${EPAM_FINAL_FALLBACK_PROVIDER:-qwen}"
-# Dynamic retry-extension coordinator (2026-07-12): ships DISABLED by
-# default, same rollout discipline as the DeepEval groundedness check --
+# Dynamic retry-extension coordinator (2026-07-12): shipped disabled at
+# first, same rollout discipline as the DeepEval groundedness check --
 # prove it via fixture tests and observe it advisory-only before letting it
-# affect real run behavior. EPAM_RETRY_EXTENSION_MAX bounds how many extra
+# affect real run behavior. Now validated (22 passing tests, including a
+# regression test for a real bug already found and fixed in it) and turned
+# ON by default per explicit direction (2026-07-13): "it should always be
+# turned on for testing." EPAM_RETRY_EXTENSION_MAX bounds how many extra
 # retries a single extension can ever grant, regardless of what the
 # coordinator agent requests.
-export EPAM_RETRY_EXTENSION_ENABLED="${EPAM_RETRY_EXTENSION_ENABLED:-0}"
+export EPAM_RETRY_EXTENSION_ENABLED="${EPAM_RETRY_EXTENSION_ENABLED:-1}"
 export EPAM_RETRY_EXTENSION_MAX="${EPAM_RETRY_EXTENSION_MAX:-2}"
 # Model-to-provider routing for post-escalation model steps (consumed by
 # claude.sh's resolve_model_provider() — zero vendor names hardcoded in the
@@ -385,6 +389,18 @@ if ! bash orchestrations/scripts/preflight-check.sh \
   fail "Pre-flight checks failed — aborting run. Fix issues above first."
   exit 1
 fi
+echo ""
+
+# ── Wire the dashboard to this run's live PRD + logs ─────────────────────────
+# Found live 2026-07-13: this script never called pre-run-reset.sh at all, so
+# the dashboard's PRD/logs mounts were only ever whatever was left from
+# someone manually running it — explaining "months and months" of stale/wrong
+# dashboard data for every tier3 run. --log-dir "$OUTPUT_DIR" matters because
+# run-agent-orchestration.sh's own LOG_DIR resolves to $OUTPUT_DIR (this
+# external project's directory) for this run, not orchestrations/logs.
+info "Wiring dashboard to serve this run's live PRD + logs..."
+bash orchestrations/scripts/pre-run-reset.sh --prd "$PRD_FILE" --log-dir "$OUTPUT_DIR" || \
+  info "  pre-run-reset.sh failed or Docker unavailable — dashboard may show stale data (non-fatal, continuing)"
 echo ""
 
 run_phase() {

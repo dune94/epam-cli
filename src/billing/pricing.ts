@@ -76,6 +76,27 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   // ─── Mistral (via OpenRouter / Qwen provider) ─────────────────────────────
   'mistral/mistral-large-2411':   { inputPerMillion: 2.00,  outputPerMillion: 6.00  },
   'mistral/mistral-small-3.1':    { inputPerMillion: 0.10,  outputPerMillion: 0.30  },
+  // ─── MoonshotAI / Z-AI / MiniMax (via OpenRouter / Qwen provider, or
+  // MiniMax direct) — FALLBACK ONLY. These are consulted only when the
+  // provider's own response didn't include real cost (usage.costUsd unset);
+  // see calculateCost's callers and feedback_real_cost_tracking_critical.
+  // Found live 2026-07-13: this table previously had NO entries for these
+  // three model families at all — every call to any of them silently
+  // computed cost_usd=0 here, forcing claude.sh's own separate bash-side
+  // pricing table (orchestrations/scripts/model-pricing.json) to estimate
+  // instead, with no coordination between the two tables. z-ai/glm-5.1's
+  // rate below is verified against OpenRouter's live pricing page
+  // (2026-07-13); the rest are carried over from that same bash-side table.
+  'moonshotai/kimi-k2':           { inputPerMillion: 0.57,  outputPerMillion: 2.30  },
+  'z-ai/glm-5.2':                 { inputPerMillion: 0.93,  outputPerMillion: 3.00  },
+  'z-ai/glm-5.1':                 { inputPerMillion: 0.966, outputPerMillion: 3.036 },
+  'z-ai/glm-4.7':                 { inputPerMillion: 0.40,  outputPerMillion: 1.75  },
+  'MiniMax-M3':                   { inputPerMillion: 0.30,  outputPerMillion: 1.20  },
+  'MiniMax-M2.7':                 { inputPerMillion: 0.25,  outputPerMillion: 1.00  },
+  'MiniMax-M2.7-highspeed':       { inputPerMillion: 0.60,  outputPerMillion: 2.40  },
+  'MiniMax-M2.5':                 { inputPerMillion: 0.15,  outputPerMillion: 0.90  },
+  'MiniMax-M2.1':                 { inputPerMillion: 0.29,  outputPerMillion: 0.95  },
+  'MiniMax-M2':                   { inputPerMillion: 0.26,  outputPerMillion: 1.00  },
 };
 
 export function calculateCost(model: string, inputTokens: number, outputTokens: number): number {

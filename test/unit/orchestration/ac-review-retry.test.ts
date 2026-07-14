@@ -64,8 +64,8 @@ describe('AC-write reviewPrdChange consumer — retry-on-violation (static)', ()
     expect(block).toMatch(/newStories\.splice\(newStoriesCountBefore, newStories\.length - newStoriesCountBefore\);/);
   });
 
-  it('logs the final outcome (attempts, pass/reverted, reason) to guarded-step-retries.jsonl via the existing appendJsonl helper', () => {
-    expect(block).toMatch(/appendJsonl\(path\.join\(logDir, 'guarded-step-retries\.jsonl'\), \{/);
+  it('logs the final outcome (attempts, pass/reverted, reason) via logGuardedStepRetry (double-write to per-run + persistent history)', () => {
+    expect(block).toMatch(/logGuardedStepRetry\(logDir, \{/);
     expect(block).toMatch(/step: 'ac-review'/);
     expect(block).toMatch(/attempts: acReviewAttempts/);
   });

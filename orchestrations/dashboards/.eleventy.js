@@ -39,6 +39,23 @@ const WATCH_TARGETS = [
   '../scripts/update-monitor.sh'
 ];
 
+// Found live 2026-07-14: for an external-project run (tier3-*-run.sh), the
+// REAL live data (agent-status.json, phase-cost.jsonl, etc.) lives in the
+// target project's own directory (EPAM_PROJECT_OUTPUT_DIR), never under
+// this repo's ../logs/ -- so Eleventy's file-watcher never saw a single
+// change there, and build-info.json (the "Snapshot Xm ago" widget) only
+// regenerated on incidental unrelated triggers, sometimes minutes stale.
+// Same root cause class as snapshot.js's own EPAM_PROJECT_OUTPUT_DIR fix
+// (see that file's PATHS.agentStatus/phaseCost comments) -- opt-in, so an
+// unset env var leaves behavior unchanged for anyone not running an
+// external-project pipeline.
+if (process.env.EPAM_PROJECT_OUTPUT_DIR) {
+  WATCH_TARGETS.push(
+    path.join(process.env.EPAM_PROJECT_OUTPUT_DIR, '*.json'),
+    path.join(process.env.EPAM_PROJECT_OUTPUT_DIR, '*.jsonl')
+  );
+}
+
 const LOG_FILE_REGEX = /\.(json|jsonl|ndjson)$/i;
 
 function copyLogTree(src, dest) {

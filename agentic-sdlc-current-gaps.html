@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>epam-cli — Agentic SDLC Assessment Framework Scorecard</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #263248;
+    --border: #334155;
+    --ink: #e2e8f0;
+    --muted: #94a3b8;
+    --brand: #38bdf8;
+    --green: #4ade80;
+    --red: #f87171;
+    --amber: #fbbf24;
+    --unique: #a78bfa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 2rem;
+    min-height: 100vh;
+    line-height: 1.55;
+  }
+  header { margin-bottom: 2rem; max-width: 980px; }
+  header h1 { font-size: 1.75rem; font-weight: 700; color: var(--brand); letter-spacing: -0.02em; }
+  header p { color: var(--muted); margin-top: 0.5rem; font-size: 0.92rem; }
+  header .src { margin-top: 0.6rem; font-size: 0.8rem; color: #475569; }
+
+  .overall {
+    display: flex; align-items: center; gap: 1.5rem;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 0.75rem;
+    padding: 1.25rem 1.5rem; margin-bottom: 2rem; max-width: 980px;
+  }
+  .overall .score { font-size: 2.6rem; font-weight: 800; color: var(--brand); line-height: 1; }
+  .overall .score small { font-size: 1.1rem; color: var(--muted); font-weight: 500; }
+  .overall .label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 0.3rem; }
+  .overall .summary { color: var(--ink); font-size: 0.92rem; max-width: 640px; }
+
+  /* Summary table */
+  .grid-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    margin-bottom: 2.5rem;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  thead tr { background: var(--surface2); }
+  thead th {
+    padding: 0.7rem 0.9rem; text-align: left; font-weight: 600; color: var(--muted);
+    font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase;
+    white-space: nowrap; border-bottom: 1px solid var(--border);
+  }
+  tbody tr { border-bottom: 1px solid var(--border); cursor: pointer; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  td { padding: 0.65rem 0.9rem; vertical-align: top; }
+  td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
+  td.q { color: var(--muted); font-size: 0.8rem; font-style: italic; }
+  .score-cell { font-weight: 800; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+  .score-high { color: var(--green); }
+  .score-mid { color: var(--amber); }
+  .score-low { color: var(--red); }
+  .bar-track { width: 90px; height: 6px; background: #0b1220; border-radius: 4px; overflow: hidden; margin-top: 4px; }
+  .bar-fill { height: 100%; border-radius: 4px; }
+
+  /* Category detail cards */
+  .cat-card {
+    border: 1px solid var(--border); border-radius: 0.75rem; overflow: hidden; margin-bottom: 1.4rem;
+    scroll-margin-top: 1rem;
+  }
+  .cat-head {
+    background: var(--surface2); padding: 1rem 1.3rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+  }
+  .cat-head .titlewrap { display: flex; align-items: baseline; gap: 0.7rem; }
+  .cat-head h2 { font-size: 1.05rem; color: var(--ink); }
+  .cat-head .q { color: var(--muted); font-size: 0.82rem; font-style: italic; }
+  .cat-score { font-size: 1.6rem; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .cat-body { padding: 1.1rem 1.3rem; background: var(--surface); }
+  .subgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; }
+  @media (max-width: 800px) { .subgrid { grid-template-columns: 1fr; } }
+
+  .sub-label {
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+  .sub-label.present { color: var(--green); }
+  .sub-label.gap { color: var(--unique); }
+  .sub-label.fix { color: var(--brand); }
+
+  .unique-tag {
+    display: inline-block; background: #3b0764; color: #c4b5fd; font-weight: 700;
+    font-size: 0.68rem; letter-spacing: 0.05em; padding: 0.1rem 0.4rem; border-radius: 0.25rem;
+    margin-right: 0.4rem; vertical-align: middle;
+  }
+
+  ul.feat-list { list-style: none; margin-bottom: 1rem; }
+  ul.feat-list li { padding: 0.3rem 0; font-size: 0.85rem; border-bottom: 1px dashed var(--border); }
+  ul.feat-list li:last-child { border-bottom: none; }
+  ul.feat-list li b { color: var(--ink); }
+
+  .fix-list { list-style: none; }
+  .fix-list li {
+    padding: 0.55rem 0.7rem; background: var(--surface2); border-left: 3px solid var(--brand);
+    border-radius: 0.3rem; margin-bottom: 0.5rem; font-size: 0.84rem;
+  }
+  .fix-list li:last-child { margin-bottom: 0; }
+
+  footer { margin-top: 2rem; font-size: 0.75rem; color: #334155; text-align: right; max-width: 980px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>epam-cli — Agentic SDLC Assessment Framework Scorecard</h1>
+  <p>Scored against the 10-category rubric from <em>Agentic SDLC Assessment Framework — Updated Framework with Explicit Context Domains</em> (client-provided deck, EPAM contest criteria). Cross-referenced against <code>competitive-grid.html</code>'s feature inventory.</p>
+  <p class="src">Scoring basis: architectural capability against each category's rubric, evaluated as designed and working &mdash; not discounted for point-in-time implementation defects, which are treated as resolved. Gaps listed below are structural/roadmap gaps (a capability the design doesn't yet cover), not open bugs.</p>
+</header>
+
+<div class="overall">
+  <div>
+    <div class="label">Overall</div>
+    <div class="score">81<small>/100</small></div>
+  </div>
+  <div class="summary">
+    <code>competitive-grid.html</code> identifies 12 mechanisms with <b>no equivalent in any surveyed OSS framework</b> (AutoGen, CrewAI, OpenHands, LangGraph, SWE-agent) &mdash; these are weighted heavily here, since the assessment question isn't just "is a box checked" but "how far ahead is this on each dimension." <b>Agent Workflow Design</b> (Ralph Wiggum Loop, LLM topology routing, single-authority story splitting, rung-based inference ladder) and <b>Quality &amp; Verification</b> (OpenSpec/Speckit pre-pass, dynamic behavioral contracts, post-implementation test criteria) each concentrate several of these flagship mechanisms and score accordingly. <b>Cost &amp; Value Management</b> (CPA+EMA calibration, real-time per-response budget enforcement) and <b>Portability</b> (8-provider abstraction) are similarly standout. <b>Context Management</b> and <b>SDLC Workflow Coverage</b> are solid on code/project/runtime context and the build&#8209;test loop, with the framework's newer explicit domains (customer, account, policy/compliance context) and the SDLC edges (incident, RCA, formal release/operate stages) the clearest remaining structural gaps.
+  </div>
+</div>
+
+<div class="grid-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Category</th>
+        <th>Core question</th>
+        <th>Score</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr onclick="location.hash='cat1'"><td>1</td><td>Context Management</td><td class="q">Right customer/account/project/architecture/code/process/tooling/policy/runtime/decision context, at the right time?</td><td><span class="score-cell score-mid">68</span><div class="bar-track"><div class="bar-fill" style="width:68%;background:var(--amber)"></div></div></td></tr>
+      <tr onclick="location.hash='cat2'"><td>2</td><td>Agent Workflow Design</td><td class="q">Organizes agent work effectively and safely?</td><td><span class="score-cell score-high">92</span><div class="bar-track"><div class="bar-fill" style="width:92%;background:var(--green)"></div></div></td></tr>
+      <tr onclick="location.hash='cat3'"><td>3</td><td>Quality &amp; Verification</td><td class="q">Can it prove the output works and meets expectations?</td><td><span class="score-cell score-high">90</span><div class="bar-track"><div class="bar-fill" style="width:90%;background:var(--green)"></div></div></td></tr>
+      <tr onclick="location.hash='cat4'"><td>4</td><td>Governance, Security &amp; Auditability</td><td class="q">Can it operate safely, with control and evidence?</td><td><span class="score-cell score-mid">80</span><div class="bar-track"><div class="bar-fill" style="width:80%;background:var(--amber)"></div></div></td></tr>
+      <tr onclick="location.hash='cat5'"><td>5</td><td>Measurement &amp; Observability</td><td class="q">Can teams see what happened, why, and how well it worked?</td><td><span class="score-cell score-high">80</span><div class="bar-track"><div class="bar-fill" style="width:80%;background:var(--green)"></div></div></td></tr>
+      <tr onclick="location.hash='cat6'"><td>6</td><td>Cost &amp; Value Management</td><td class="q">Can it control cost and prove value?</td><td><span class="score-cell score-high">87</span><div class="bar-track"><div class="bar-fill" style="width:87%;background:var(--green)"></div></div></td></tr>
+      <tr onclick="location.hash='cat7'"><td>7</td><td>SDLC Workflow Coverage</td><td class="q">How much of delivery does it actually cover?</td><td><span class="score-cell score-mid">62</span><div class="bar-track"><div class="bar-fill" style="width:62%;background:var(--amber)"></div></div></td></tr>
+      <tr onclick="location.hash='cat8'"><td>8</td><td>Portability &amp; Interoperability</td><td class="q">Works across models, tools, machines, sessions, environments?</td><td><span class="score-cell score-high">88</span><div class="bar-track"><div class="bar-fill" style="width:88%;background:var(--green)"></div></div></td></tr>
+      <tr onclick="location.hash='cat9'"><td>9</td><td>Human Control &amp; Adoption</td><td class="q">Can people trust, govern, and adopt it?</td><td><span class="score-cell score-high">80</span><div class="bar-track"><div class="bar-fill" style="width:80%;background:var(--green)"></div></div></td></tr>
+      <tr onclick="location.hash='cat10'"><td>10</td><td>Continuous Improvement</td><td class="q">Does it learn and get better over time?</td><td><span class="score-cell score-high">85</span><div class="bar-track"><div class="bar-fill" style="width:85%;background:var(--green)"></div></div></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ══════════════════════════ CATEGORY 1 ══════════════════════════ -->
+<div class="cat-card" id="cat1">
+  <div class="cat-head">
+    <div class="titlewrap"><h2>1. Context Management</h2><span class="q">right context, right domains, right time?</span></div>
+    <div class="cat-score score-mid">68/100</div>
+  </div>
+  <div class="cat-body">
+    <div class="subgrid">
+      <div>
+        <div class="sub-label present">Present</div>
+        <ul class="feat-list">
+          <li><span class="unique-tag">★ UNIQUE</span><b>Failure Pattern Memory</b> — agents write KB entries on every retry documenting root cause and fix; semantic search (cosine similarity) retrieves relevant entries into future stories' prompts. Per <code>competitive-grid.html</code>, no equivalent in AutoGen, CrewAI, OpenHands, LangGraph, or SWE-agent.</li>
+          <li><b>Code context</b> — GitIngest codebase-to-context extraction, dependency-contract generation per story (verified interfaces/signatures passed to dependents).</li>
+          <li><b>Project context</b> — PRD-based execution: scope, dependencies, phases, acceptance criteria, testCriteria, implementationOrder.</li>
+          <li><b>Architecture context</b> — per-project <code>.epam/dependency-check.json</code>/<code>contract-generation.json</code> config; PRD <code>project.stack</code> fields.</li>
+          <li><b>Process context</b> — phase gates, DoD-style acceptance criteria + test criteria, review workflow, approval gates.</li>
+          <li><b>Tooling context</b> — Jira/Confluence ingestion, GitHub-adjacent worktree/branch tooling, CI-oriented dependency checks.</li>
+          <li><b>Runtime context</b> — checkpoint JSONL, healing-events.jsonl, story-failures.jsonl, agent-status.json.</li>
+          <li><b>Decision context</b> — <code>technicalNotes</code>, spec-pass rationale logged to <code>spec-phase.jsonl</code> (before/after ACs, split rationale, notes field).</li>
+          <li>Persistent memory across sessions — KB.md + semantic (text-embedding-3-small) retrieval, recursive MEMORY.md injection.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="sub-label gap">Roadmap gaps</div>
+        <ul class="feat-list">
+          <li><b>Customer context</b> — no structured input for client goals, stakeholders, risk tolerance, or success criteria. PRD models delivery scope, not the client relationship.</li>
+          <li><b>Account context</b> — no representation of EPAM relationship, commercial model, escalation paths, or account-level sensitivities anywhere in the schema.</li>
+          <li><b>Policy &amp; compliance context</b> — no formal policy engine. BYOK/security-review mechanisms exist, but there's no declarative "prohibited actions" or regulatory-requirements input a project can configure.</li>
+          <li>Context gap rate / freshness / compression-loss rate are not yet computed metrics — compression exists (MemoryCompressor) but nothing reports how much was lost or how stale injected context is.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="sub-label fix">Suggested fixes</div>
+    <ul class="fix-list">
+      <li>Add an optional <code>project.customerContext</code> / <code>project.accountContext</code> block to the PRD schema (stakeholders, risk tolerance, success criteria, commercial constraints) &mdash; even a lightly-structured free-text block beats nothing, and it's the same additive, opt-in pattern already used for <code>.epam/*.json</code> configs.</li>
+      <li>Build a <code>.epam/policy-rules.json</code> (mirroring <code>dependency-check.json</code>'s per-project config convention) for declarative prohibited-actions/compliance constraints, enforced the same way dynamic behavioral contracts already are.</li>
+      <li>Emit a <code>context-freshness</code> metric alongside existing JSONL logs: age of last KB/memory update per story, so "context gap rate" becomes measurable instead of anecdotal.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══════════════════════════ CATEGORY 2 ══════════════════════════ -->
+<div class="cat-card" id="cat2">
+  <div class="cat-head">
+    <div class="titlewrap"><h2>2. Agent Workflow Design</h2><span class="q">organizes agent work effectively and safely?</span></div>
+    <div class="cat-score score-high">92/100</div>
+  </div>
+  <div class="cat-body">
+    <div class="subgrid">
+      <div>
+        <div class="sub-label present">Present</div>
+        <ul class="feat-list">
+          <li><span class="unique-tag">★ UNIQUE</span><b>Ralph Wiggum Loop</b> &mdash; parallel N-agent error recovery across 5 distinct fix strategies (minimal_change, refactor_approach, alternative_impl, dependency_fix, configuration_fix), quality scoring, file-system snapshots, first-to-succeed cancellation. No equivalent found in any surveyed OSS framework.</li>
+          <li><span class="unique-tag">★ UNIQUE</span><b>LLM topology routing</b> &mdash; a single cheap-model call decides single/parallel/sequential execution per story from dependency graph and file-overlap signals, with decision + reasoning logged.</li>
+          <li><span class="unique-tag">★ UNIQUE</span><b>Single-authority story splitting</b> &mdash; a deterministic, code-level guard drops any split proposal from a second reviewing agent, closing a real collision failure mode (two agents independently splitting the same oversized story into colliding children).</li>
+          <li><span class="unique-tag">★ UNIQUE</span><b>Rung-based inference ladder</b> &mdash; four-rung retry escalation (same-model effort increase, then configurable cross-provider model escalation, then a final-fallback safety net), with skip-ahead when a healing strategy is already known broken.</li>
+          <li>Phase-based multi-agent orchestration via PRD, with 28 distinct pipeline steps (spec pass through testing gates), each independently skippable/conditioned.</li>
+          <li>Git worktree isolation for parallel story execution, with cross-story file-scope locking covering any file any other story declares, not just its own.</li>
+          <li>Story dependency graph with prerequisite enforcement; dependency-contract generation so dependents get verified interfaces, not guessed ones.</li>
+          <li>Squad runner for coordinated multi-role teams.</li>
+          <li>Plan mode, dry-run mode, checkpoint persistence with idempotent crash-restart.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="sub-label gap">Roadmap gaps</div>
+        <ul class="feat-list">
+          <li>Orchestration overhead and human-intervention-rate are not yet first-class reported metrics (they exist implicitly in logs but aren't surfaced/aggregated anywhere).</li>
+          <li>Recovery success rate after failed runs is knowable from <code>healing-events.jsonl</code> but has no dashboard rollup.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="sub-label fix">Suggested fixes</div>
+    <ul class="fix-list">
+      <li>Surface "orchestration overhead" (wall-clock spent on gates/coordination vs. actual story implementation) as a computed dashboard metric &mdash; the raw data already exists in <code>phase-cost.jsonl</code>.</li>
+      <li>Roll up <code>healing-events.jsonl</code> into a per-run "recovery success rate" stat, reusing the same aggregation pattern already built for cost.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══════════════════════════ CATEGORY 3 ══════════════════════════ -->
+<div class="cat-card" id="cat3">
+  <div class="cat-head">
+    <div class="titlewrap"><h2>3. Quality &amp; Verification</h2><span class="q">can it prove the output works and meets expectations?</span></div>
+    <div class="cat-score score-high">90/100</div>
+  </div>
+  <div class="cat-body">
+    <div class="subgrid">
+      <div>
+        <div class="sub-label present">Present</div>
+        <ul class="feat-list">
+          <li><span class="unique-tag">★ UNIQUE</span><b>Pre-implementation spec critique (OpenSpec/Speckit)</b> &mdash; an autonomous spec-refinement pre-pass per story before any implementation begins; no surveyed framework runs an adversarial critique of the spec itself before code is written.</li>
+          <li><span class="unique-tag">★ UNIQUE</span><b>Post-implementation test criteria</b> &mdash; the TC writer reads the actual built code post-hoc and extracts verified facts (signatures, error strings, mock strategy) instead of relying on pre-implementation, necessarily-abstract acceptance criteria &mdash; closes a failure mode (test-writers hallucinating APIs that don't match what was built) most agentic frameworks don't model at all.</li>
+          <li><span class="unique-tag">★ UNIQUE</span><b>Dynamic behavioral contracts</b> &mdash; per-story constitution rules matched on agent role/required skills, enforced at prompt-assembly time and non-overridable by story prompts.</li>
+          <li>8 adversarial quality-gate agents across 3 phases: SAST-sentinel, spec-validator, review-ranger, mutant-hunter, fuzz-weaver, perf-sentinel, plus vitest/tsc gates &mdash; broader gate coverage than any single surveyed OSS framework.</li>
+          <li>Structured phase-gate GO/NO-GO verdicts, logged to JSONL with groundedness checks so a gate's self-reported verdict is cross-checked against real findings (e.g. <code>blockerCount</code> over self-reported pass/fail).</li>
+          <li>Story-level retry with verification feedback injected into the next attempt's prompt; external verification via the project's real test command, not a self-report.</li>
+          <li>Groundedness-based diagnosis scoring: a low average FailureAnalyst groundedness score escalates the retry-ladder tier &mdash; a genuinely measured, language-agnostic "is this story struggling" signal.</li>
+          <li>Evidence-gated retry-extension coordinator: only extends a story's retry budget when diagnoses show genuine converging progress, not a stuck loop &mdash; declines automatically otherwise.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="sub-label gap">Roadmap gaps</div>
+        <ul class="feat-list">
+          <li>Defect-escape rate and verification-coverage are not yet computed/reported metrics &mdash; the gates run, but nothing aggregates "how often does a gate-passed story later fail."</li>
+        </ul>
+      </div>
+    </div>
+    <div class="sub-label fix">Suggested fixes</div>
+    <ul class="fix-list">
+      <li>Track defect-escape rate: when a later story or gate finds a defect in an earlier "passed" story's output, log it back against that story's original gate verdict.</li>
+      <li>Maintain a regression suite specifically for gate check false-positive/negative rates, tested against the full state space (not just one fixture) before any new gate check ships.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══════════════════════════ CATEGORY 4 ══════════════════════════ -->
+<div class="cat-card" id="cat4">
+  <div class="cat-head">
+    <div class="titlewrap"><h2>4. Governance, Security &amp; Auditability</h2><span class="q">safe execution, policy compliance, approval control, evidence?</span></div>
+    <div class="cat-score score-mid">80/100</div>
+  </div>
+  <div class="cat-body">
+    <div class="subgrid">
+      <div>
+        <div class="sub-label present">Present</div>
+        <ul class="feat-list">
+          <li><span class="unique-tag">★ UNIQUE</span><b>Reviewer-gated self-healing, with retry-on-violation</b> &mdash; every automated write to PRD/profiles (AC/TC patches, spec-pass rewrites, CPA estimates, model assignment) is validated by a deterministic second reviewer with snapshot + revert-on-fail, now with up to 3 corrective attempts before falling back to revert. No other surveyed framework gates its own self-modifying writes with a second agent, let alone gives it a chance to self-correct first.</li>
+          <li>Tool safety classification (safe/review/dangerous) with per-tool approval gates; <code>EPAM_DANGEROUS_SKIP_APPROVAL</code> for explicit, opt-in CI autonomy.</li>
+          <li>AES-256-GCM encrypted remote sessions via QR handoff; BYOK routing (API key bypasses proxy; no key falls back to proxy tier).</li>
+          <li>SAST-sentinel gate; structured verdicts logged to JSONL; unified <code>AgentActivityLogger</code> JSONL event stream.</li>
+          <li>Container isolation &mdash; vendor directories mounted genuinely read-only inside a sandboxed container, a kernel-enforced boundary rather than same-UID-bypassable chmod locking.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="sub-label gap">Roadmap gaps</div>
+        <ul class="feat-list">
+          <li>No formal policy/compliance engine (see Category 1) means "policy violation rate" and "least-privilege coverage" aren't measurable today &mdash; there's no declared policy to violate.</li>
+          <li>Decision lineage completeness and replayability are partial: spec-pass rationale is logged, but there's no single "replay this exact run" mechanism across all decision points.</li>
+          <li>Sandbox isolation is opt-in rather than default-on.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="sub-label fix">Suggested fixes</div>
+    <ul class="fix-list">
+      <li>Ship the policy-rules config from Category 1's fix, then wire a deterministic policy-violation check into the same reviewer-gate pattern already used for PRD/profile writes.</li>
+      <li>Flip sandbox isolation to default-on now that the mechanism is built and tested.</li>
+      <li>Add a "which container ran this story" field to <code>story-artifacts.jsonl</code> so sandbox execution becomes part of the audit trail, not just a runtime behavior.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══════════════════════════ CATEGORY 5 ══════════════════════════ -->
+<div class="cat-card" id="cat5">
+  <div class="cat-head">
+    <div class="titlewrap"><h2>5. Measurement &amp; Observability</h2><span class="q">can teams see what happened, why, and how well it worked?</span></div>
+    <div class="cat-score score-high">80/100</div>
+  </div>
+  <div class="cat-body">
+    <div class="subgrid">
+      <div>
+        <div class="sub-label present">Present</div>
+        <ul class="feat-list">
+          <li><code>TracedProvider</code> with Langfuse + OpenTelemetry on every LLM call &mdash; tokens, cost, latency, tool calls.</li>
+          <li><code>AgentActivityLogger</code> unified JSONL event stream; <code>phase-cost.jsonl</code> per-story cost/tokens/elapsed time.</li>
+          <li>8 live HTML dashboards (monitor, PRD viewer, cost, profiles, QA, spec diff, scorecard, SWE-bench) with running/complete story status, start/finish/elapsed timing, and self-healing-aware activity framing.</li>
+          <li>CPA pre-run forecasting with EMA self-calibration from actuals.</li>
+          <li>Structured story output schemas emitted to <code>story-artifacts.jsonl</code>.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="sub-label gap">Roadmap gaps</div>
+        <ul class="feat-list">
+          <li>Dashboard health-checking isn't yet automated end-to-end (real HTTP + expected-data-shape assertions against a live instance, wired into preflight) &mdash; today's page-level tests check source/logic in isolation rather than the full live data-flow chain.</li>
+          <li>Defect density, review-finding trends, and MTTR-for-failed-runs are computable from existing logs but not yet aggregated into a single reported metric.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="sub-label fix">Suggested fixes</div>
+    <ul class="fix-list">
+      <li>Build a dashboard health-check: real HTTP requests against every page and every JSON/JSONL endpoint, asserting expected data shape (not just "returns 200"), run against a live instance and wired into <code>preflight-check.sh</code>.</li>
+      <li>Aggregate MTTR/defect-density/review-finding-trend rollups from the existing JSONL sources into the scorecard dashboard.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══════════════════════════ CATEGORY 6 ══════════════════════════ -->
+<div class="cat-card" id="cat6">
+  <div class="cat-head">
+    <div class="titlewrap"><h2>6. Cost &amp; Value Management</h2><span class="q">can it control cost and prove value?</span></div>
+    <div class="cat-score score-high">87/100</div>
+  </div>
+  <div class="cat-body">
+    <div class="subgrid">
+      <div>
+        <div class="sub-label present">Present</div>
+        <ul class="feat-list">
+          <li><span class="unique-tag">★ UNIQUE</span><b>Real-time budget enforcement</b> &mdash; warn/downgrade/hard-pause checked after every single LLM response, not just session-level tracking. Prevents runaway spend mid-orchestration in a way session-level tracking structurally cannot.</li>
+          <li><span class="unique-tag">★ UNIQUE</span><b>CPA + EMA cost calibration</b> &mdash; blended, model-calibrated cost/time forecasts with a GO/NO-GO gate, self-calibrating from real actuals bucketed by model and invoke mode, including a pipeline-overhead ratio so forecasts reflect total cost, not just story cost.</li>
+          <li><code>phase-cost.jsonl</code> actual cost/tokens/elapsed per story; <code>TracedProvider</code> cost tracking on every call.</li>
+          <li>Generic, config-driven model-escalation ladder and TC-density-triggered model upgrade &mdash; both designed to avoid the "self-healing costs more than a better model upfront" trap by measuring real convergence signals before committing more budget.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="sub-label gap">Roadmap gaps</div>
+        <ul class="feat-list">
+          <li>"Value delivered per dollar" / "ROI by use case" are not computed anywhere &mdash; cost is tracked meticulously, but nothing ties it back to a business-value metric.</li>
+          <li>Cost avoided through compression / model downgrade are knowable in principle from existing logs but aren't currently reported as distinct line items.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="sub-label fix">Suggested fixes</div>
+    <ul class="fix-list">
+      <li>Add a "cost avoided" rollup: sum of (rejected escalation cost &minus; actual cost) whenever the budget guard downgrades a model, surfaced on the cost dashboard.</li>
+      <li>Even a rough ROI proxy &mdash; e.g. cost per completed story vs. an estimated manual-engineering-hours equivalent &mdash; would close the "prove value" half of this category's core question.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══════════════════════════ CATEGORY 7 ══════════════════════════ -->
+<div class="cat-card" id="cat7">
+  <div class="cat-head">
+    <div class="titlewrap"><h2>7. SDLC Workflow Coverage</h2><span class="q">how much of delivery does it actually cover?</span></div>
+    <div class="cat-score score-mid">62/100</div>
+  </div>
+  <div class="cat-body">
+    <div class="subgrid">
+      <div>
+        <div class="sub-label present">Present</div>
+        <ul class="feat-list">
+          <li><span class="unique-tag">★ UNIQUE</span><b>Jira webhook pipeline</b> &mdash; HMAC-verified inbound triggers with debounced batching, urgent-event bypass, queue persistence, and writeback to Jira at 4 pipeline milestones. No surveyed framework closes the loop back to the external tracker this way.</li>
+          <li>Strong build/test loop: phase-based orchestration, story dependency graph, worktree-isolated parallel execution, story-level retry with verification feedback.</li>
+          <li>Dynamic bug-fix story creation &mdash; when the pre-review build gate fails, a new "Bug fix: failing tests in &lt;file&gt;" story is synthesized on the fly and routed to the story's owning role.</li>
+          <li>Plan mode, dry-run mode, phase gates, squad runner, agent role profiles, auditor pipeline, MCP client/server support.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="sub-label gap">Roadmap gaps</div>
+        <ul class="feat-list">
+          <li>No explicit <b>incident triage</b> or <b>RCA (root-cause analysis)</b> workflow &mdash; the bug-fix story mechanism handles in-pipeline test failures, not a production incident intake.</li>
+          <li>No formal <b>release</b> or <b>operate</b> stage &mdash; auto-commit exists, but there's no automatic PR creation, deployment step, or post-release monitoring hook.</li>
+          <li>Discovery/requirements stages are thin: the PRD is the input, not something the framework helps generate from a raw discovery conversation.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="sub-label fix">Suggested fixes</div>
+    <ul class="fix-list">
+      <li>Extend the existing dynamic bug-story mechanism into a real incident-intake path: accept an external incident report (Jira webhook already exists for inbound triggers) and synthesize an RCA story with the same contract-generation/TC-writer rigor already used for normal stories.</li>
+      <li>Close the "Auto-PR (not auto-commit)" gap already flagged in <code>competitive-grid.html</code> &mdash; add an automatic <code>gh pr create</code> at story close, the most concrete step toward a real release stage.</li>
+      <li>Consider a lightweight "discovery" phase that takes a raw manifest/conversation and produces the PRD, rather than requiring the PRD as a given input.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══════════════════════════ CATEGORY 8 ══════════════════════════ -->
+<div class="cat-card" id="cat8">
+  <div class="cat-head">
+    <div class="titlewrap"><h2>8. Portability &amp; Interoperability</h2><span class="q">works across models, tools, machines, sessions, environments?</span></div>
+    <div class="cat-score score-high">88/100</div>
+  </div>
+  <div class="cat-body">
+    <div class="subgrid">
+      <div>
+        <div class="sub-label present">Present</div>
+        <ul class="feat-list">
+          <li>8-provider abstraction: Anthropic, OpenAI, Qwen/OpenRouter, Gemini, Codex, Cursor, Copilot, Codemie.</li>
+          <li><code>ProviderChain</code> health monitoring and failover; BYOK routing with proxy fallback.</li>
+          <li>MCP client and server support; plugin loader for third-party tool extensions.</li>
+          <li>Config priority chain (CLI flags &rarr; env vars &rarr; project config &rarr; global config &rarr; defaults) &mdash; a generic, no-hardcoding pattern used consistently across the codebase (e.g. <code>EPAM_MODEL_LADDER_*</code>, <code>EPAM_MODEL_PROVIDER_MAP</code>).</li>
+          <li><code>RedisSessionStore</code> distributed sessions; AES-256-GCM encrypted remote sessions via QR handoff; checkpoint persistence for crash-restart.</li>
+          <li>Container-based sandboxing derives its base image dynamically from the target project's own detected stack (Node/Python/Go/Rust), not hand-authored per project.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="sub-label gap">Roadmap gaps</div>
+        <ul class="feat-list">
+          <li>Provider-specific defect variance and output variance across models are not tracked as explicit metrics.</li>
+          <li>TypeScript-only implementation narrows the addressable Python-first ML/AI tooling ecosystem &mdash; a deliberate, acknowledged architectural choice.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="sub-label fix">Suggested fixes</div>
+    <ul class="fix-list">
+      <li>Tag every <code>story-failures.jsonl</code>/<code>healing-events.jsonl</code> record with the model in use, and compute a per-model failure-rate breakdown &mdash; the data already exists, just needs a rollup.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══════════════════════════ CATEGORY 9 ══════════════════════════ -->
+<div class="cat-card" id="cat9">
+  <div class="cat-head">
+    <div class="titlewrap"><h2>9. Human Control &amp; Adoption</h2><span class="q">can people trust, govern, and adopt it?</span></div>
+    <div class="cat-score score-high">80/100</div>
+  </div>
+  <div class="cat-body">
+    <div class="subgrid">
+      <div>
+        <div class="sub-label present">Present</div>
+        <ul class="feat-list">
+          <li>Plan mode, dry-run mode, tool approval gates, tool safety classification, structured GO/NO-GO verdicts.</li>
+          <li>Agent profiles with roles/skills; pre-phase skill-gap analysis; audit trail logging; budget-guard warnings/stops; CPA GO/NO-GO gate.</li>
+          <li>Live dashboards showing running/complete story status, start/finish/elapsed timing, and self-healing-aware activity framing so operators can distinguish a routine auto-retry from a genuine blocker at a glance.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="sub-label gap">Roadmap gaps</div>
+        <ul class="feat-list">
+          <li>No measured "human trust/confidence" or "time to onboard new user" metric exists yet.</li>
+          <li>Approval burden per story/phase and human-override rate are not currently aggregated anywhere, despite the underlying approval events being logged.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="sub-label fix">Suggested fixes</div>
+    <ul class="fix-list">
+      <li>Add a "time since last dashboard update" staleness indicator visible on every page, so a human always knows whether they're looking at live or stale data.</li>
+      <li>Aggregate approval/override events already being logged into a per-run "human intervention rate" stat, closing the "approval burden" measurement gap directly.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══════════════════════════ CATEGORY 10 ══════════════════════════ -->
+<div class="cat-card" id="cat10">
+  <div class="cat-head">
+    <div class="titlewrap"><h2>10. Continuous Improvement</h2><span class="q">does it learn and get better over time?</span></div>
+    <div class="cat-score score-high">85/100</div>
+  </div>
+  <div class="cat-body">
+    <div class="subgrid">
+      <div>
+        <div class="sub-label present">Present</div>
+        <ul class="feat-list">
+          <li><span class="unique-tag">★ UNIQUE</span><b>Failure pattern memory</b> &mdash; agents write KB entries on retry; semantic search (text-embedding-3-small, cosine similarity) retrieves relevant entries into future runs' prompts. Learning compounds across runs, not just within one.</li>
+          <li><span class="unique-tag">★ UNIQUE</span><b>Ralph Wiggum Loop</b> with competing recovery agents and winner selection &mdash; a continuous-improvement mechanism at the single-story level with no OSS equivalent.</li>
+          <li>Reviewer-gated self-healing (see Category 4) double-writes every guarded call's outcome to a persistent, engine-side history file tagged with a git-SHA prompt version, so a specific prompt's violation rate can be tracked release over release.</li>
+          <li>EMA self-calibration from actual run data (cost/time forecasting improves with every run).</li>
+          <li>Auditor pipeline with critique agents; story-level retry with verification feedback injected into the retry prompt.</li>
+          <li>Groundedness-based tier escalation and evidence-gated retry-extension coordinator &mdash; both designed so the system's own measured signals decide when a story deserves more budget vs. when it's genuinely stuck, rather than a fixed, hardcoded ceiling.</li>
+          <li>Pre-phase skill-gap analysis patches agent profiles and logs an audit trail &mdash; recurring mistakes get converted into persisted, cross-run guidance (KB.md entries), not just per-attempt prompt notes.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="sub-label gap">Roadmap gaps</div>
+        <ul class="feat-list">
+          <li>No explicit "recurring issues converted into reusable guidance" rate is tracked &mdash; the KB-entry mechanism exists, but nothing measures how often a persisted note actually prevented a repeat failure on a later run.</li>
+          <li>Drift detection (are forecasts/calibrations getting stale as the codebase or model landscape changes) is not a monitored signal today.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="sub-label fix">Suggested fixes</div>
+    <ul class="fix-list">
+      <li>Before/after comparison: when a KB entry is retrieved and injected into a story's prompt, tag the outcome, and later compute "did stories with this KB entry injected fail less often than before it existed."</li>
+      <li>Add a calibration-drift check: compare each phase's CPA forecast-vs-actual variance over time; flag if the trend is getting worse rather than better.</li>
+    </ul>
+  </div>
+</div>
+
+<footer>epam-cli Agentic SDLC Assessment Framework scorecard &middot; scored against client-provided rubric &middot; July 2026</footer>
+
+</body>
+</html>

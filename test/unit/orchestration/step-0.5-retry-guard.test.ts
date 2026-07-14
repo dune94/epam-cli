@@ -67,10 +67,23 @@ describe('run_pre_phase_assessment() — static wiring', () => {
     expect(fnBody).toMatch(/ALLOWED_FIELDS = \{'agentRole', 'model', 'aiProvider', 'reasoningEffort'\}/);
   });
 
-  it('logs outcomes to guarded-step-retries.jsonl', () => {
-    expect(fnBody).toMatch(/guarded-step-retries\.jsonl/);
+  it('logs outcomes via the shared _log_guarded_step_retry helper (double-write to per-run + persistent history)', () => {
+    expect(fnBody).toMatch(/_log_guarded_step_retry "\$\(jq -n -c/);
   });
 });
+
+// _log_guarded_step_retry/_epam_prompt_version — shared helpers (2026-07-13)
+// that every guarded-step call site (including this one) now delegates to
+// for the actual "guarded-step-retries.jsonl" write. The REAL-execution
+// harness below must define them too, or the call site silently no-ops.
+function extractHelperFunctionBody(name: string): string {
+  const defRe = new RegExp(`^${name}\\(\\)\\s*\\{`, 'm');
+  const defMatch = defRe.exec(orchSrc);
+  if (!defMatch) throw new Error(`No function definition found for ${name}()`);
+  const start = defMatch.index;
+  const end = orchSrc.indexOf('\n}', start) + 2;
+  return orchSrc.slice(start, end);
+}
 
 describe('run_pre_phase_assessment() — REAL execution', () => {
   function run(opts: {
@@ -133,6 +146,13 @@ run_orch_prompt_with_tools() {
       'success() { echo "SUCCESS: $*" >&2; }',
       'error() { echo "ERROR: $*" >&2; }',
       'step_emit() { echo "STEP_EMIT: $*" >&2; }',
+      // History dir redirected to this test's own throwaway dir -- never
+      // touch the real orchestrations/logs/guarded-step-retries-history.jsonl.
+      extractHelperFunctionBody('_epam_prompt_version'),
+      extractHelperFunctionBody('_log_guarded_step_retry').replace(
+        /\$SCRIPT_DIR\/\.\.\/logs/g,
+        join(dir, 'history-logs'),
+      ),
       stub,
       fnBody,
       'run_pre_phase_assessment core',

@@ -1,9 +1,27 @@
-FROM node:20-slim
+# BASE_IMAGE is derived at build time from the target project's OWN
+# project.stack.language/.runtime (see run-agent-orchestration.sh's sandbox
+# bootstrap) — never hardcoded to a specific project here. Defaults to
+# node:20-slim, which is already correct for a Node/TypeScript project and
+# needs no extra Node install step below (the common case, short-circuited).
+ARG BASE_IMAGE=node:20-slim
+FROM ${BASE_IMAGE}
 
 # System tools needed for typical agent tasks (git, jq, curl, build-essential for npm native deps)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git jq curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# Node.js is required regardless of the target project's own stack: the
+# `epam` CLI (bind-mounted read-only at runtime, see sandbox-invoke.sh) is
+# always a Node.js tool, and Claude Code CLI below is npm-installed too.
+# Skipped when BASE_IMAGE is already Node-based (the common case) — only
+# non-Node base images (e.g. a Python or Go target project's derived image)
+# pay for this extra install.
+RUN if ! command -v node >/dev/null 2>&1; then \
+        curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+        && apt-get install -y --no-install-recommends nodejs \
+        && rm -rf /var/lib/apt/lists/*; \
+    fi
 
 # Install Claude Code CLI globally
 RUN npm install -g @anthropic-ai/claude-code

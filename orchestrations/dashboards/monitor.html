@@ -99,6 +99,27 @@ body {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   Run Summary Hero
+───────────────────────────────────────────────────────────────────────────── */
+.hero-banner {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  background: var(--bg1); border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px 22px; margin-bottom: 14px;
+}
+.hero-verdict {
+  font-size: 13px; font-weight: 800; letter-spacing: 0.6px;
+  padding: 7px 16px; border-radius: 999px; white-space: nowrap;
+}
+.hero-verdict.pass    { background: var(--green-dim); color: var(--green); }
+.hero-verdict.running { background: var(--amber-dim); color: var(--amber); }
+.hero-verdict.fail     { background: var(--red-dim);   color: var(--red); }
+.hero-verdict.idle    { background: var(--bg3); color: var(--text3); }
+.hero-fact { display: flex; flex-direction: column; gap: 2px; }
+.hero-fact .hf-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px; }
+.hero-fact .hf-value { font-size: 15px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.hero-spacer { flex: 1; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
    Summary stats row
 ───────────────────────────────────────────────────────────────────────────── */
 .stats-row {
@@ -274,10 +295,17 @@ body {
 .badge-completed   { background: var(--green-dim); color: var(--green); }
 .badge-blocked     { background: var(--red-dim);   color: var(--red); }
 
-/* Provider badge */
-.badge-claude      { background: var(--violet-dim); color: var(--violet2); }
-.badge-opencode    { background: var(--green-dim);  color: var(--green); }
-.badge-codex       { background: var(--pink-dim);   color: var(--pink); }
+/* Provider badge — a fixed color PALETTE, not a hardcoded provider→color
+   mapping. providerBadge() hashes whatever provider string actually appears
+   in the run's own data to one of these 6 slots, so any provider (minimax,
+   qwen, z-ai, deepseek, claude, whatever a future run uses) gets a stable,
+   distinct color with zero enumeration. */
+.badge-p0 { background: var(--teal-dim);   color: var(--teal2); }
+.badge-p1 { background: var(--violet-dim); color: var(--violet2); }
+.badge-p2 { background: var(--pink-dim);   color: var(--pink); }
+.badge-p3 { background: var(--green-dim);  color: var(--green); }
+.badge-p4 { background: var(--amber-dim);  color: var(--amber); }
+.badge-p5 { background: var(--blue-dim);   color: var(--blue); }
 
 /* Pulsing dot for in_progress */
 .pulse-dot {
@@ -295,6 +323,12 @@ body {
   color: var(--green); margin-left: auto; white-space: nowrap;
 }
 
+.story-commit {
+  font-family: 'Courier New', monospace; font-size: 10px; color: var(--text3);
+  margin-top: 5px; padding-top: 5px; border-top: 1px dashed var(--border);
+}
+.story-commit .sc-sha { color: var(--teal2); }
+
 .lane-empty { color: var(--text3); font-size: 12px; padding: 10px 0; }
 
 /* Skeleton placeholder */
@@ -306,6 +340,55 @@ body {
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   Cost & Agents
+───────────────────────────────────────────────────────────────────────────── */
+.cost-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.cost-panel {
+  background: var(--bg1); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px 18px;
+}
+.cost-panel-title { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px; }
+.cost-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+.cost-bar-row:last-child { margin-bottom: 0; }
+.cost-bar-label {
+  font-size: 12px; color: var(--text2); width: 160px; flex-shrink: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cost-bar-track { flex: 1; height: 7px; background: var(--bg2); border-radius: 4px; overflow: hidden; }
+.cost-bar-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--teal), var(--violet)); }
+.cost-bar-val {
+  font-family: 'Courier New', monospace; font-size: 12px; color: var(--green);
+  width: 68px; text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums;
+}
+.cost-empty { color: var(--text3); font-size: 12px; padding: 8px 0; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Self-Healing & Retries
+───────────────────────────────────────────────────────────────────────────── */
+.heal-summary-row { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 14px; }
+.heal-summary-item { display: flex; flex-direction: column; gap: 2px; }
+.heal-summary-item .hs-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.6px; }
+.heal-summary-item .hs-value { font-size: 20px; font-weight: 800; color: var(--teal2); font-variant-numeric: tabular-nums; }
+.heal-summary-item.warn .hs-value { color: var(--amber); }
+
+.heal-list { display: flex; flex-direction: column; gap: 6px; }
+.heal-row {
+  background: var(--bg1); border: 1px solid var(--border); border-radius: 7px;
+  padding: 9px 14px; font-size: 12px; display: flex; align-items: center; gap: 10px;
+}
+.heal-row .heal-story { font-family: 'Courier New', monospace; color: var(--teal); font-weight: 700; font-size: 11px; flex-shrink: 0; }
+.heal-row .heal-target {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 2px 7px;
+  border-radius: 10px; background: var(--violet-dim); color: var(--violet2); flex-shrink: 0;
+}
+.heal-row .heal-diagnosis { color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+
+.guard-tbl { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
+.guard-tbl th { text-align: left; padding: 4px 12px 8px 0; font-size: 11px; color: var(--text3); font-weight: 600; border-bottom: 1px solid var(--border); }
+.guard-tbl td { padding: 6px 12px 6px 0; color: var(--text2); }
+.guard-tbl .gt-step { font-family: 'Courier New', monospace; color: var(--teal2); }
+
+/* ─────────────────────────────────────────────────────────────────────────────
    Activity Feed
 ───────────────────────────────────────────────────────────────────────────── */
 .activity-feed { display: flex; flex-direction: column; gap: 6px; }
@@ -314,24 +397,45 @@ body {
   background: var(--bg1); border: 1px solid var(--border);
   border-radius: 7px; padding: 10px 14px;
   display: grid;
-  grid-template-columns: 70px 100px 90px auto 80px 80px 80px 80px;
+  grid-template-columns: 100px 130px 90px 90px 70px 90px;
   align-items: center; gap: 10px; font-size: 12px;
   transition: border-color .2s;
 }
 .event-row:hover { border-color: var(--border2); }
 
-.event-time   { color: var(--text3); font-size: 11px; white-space: nowrap; }
-.event-story  { font-family: 'Courier New', monospace; color: var(--teal); font-weight: 700; font-size: 11px; }
-.event-phase  { color: var(--text3); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.event-model  { color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.event-cost   { font-family: 'Courier New', monospace; color: var(--green); text-align: right; white-space: nowrap; }
-.event-tokens { color: var(--text3); text-align: right; white-space: nowrap; font-size: 11px; }
-.event-dur    { color: var(--text3); text-align: right; white-space: nowrap; font-size: 11px; }
+.event-story   { font-family: 'Courier New', monospace; color: var(--teal); font-weight: 700; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.event-agent   { color: var(--text2); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.event-started,
+.event-ended   { color: var(--text3); font-size: 11px; white-space: nowrap; }
+.event-elapsed { font-family: 'Courier New', monospace; color: var(--text2); text-align: right; white-space: nowrap; font-size: 11px; }
 
 .outcome-badge { }
 .badge-success { background: var(--green-dim); color: var(--green); }
 .badge-failure { background: var(--red-dim);   color: var(--red); }
 .badge-skipped { background: var(--bg3);        color: var(--text3); }
+.badge-running { background: var(--teal-dim, rgba(0,71,255,0.12)); color: var(--teal2); }
+
+.activity-log-strip {
+  margin-top: 14px;
+}
+.activity-log-toggle {
+  background: none; border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text3); font-size: 11px; padding: 5px 10px; cursor: pointer;
+  font-family: inherit;
+}
+.activity-log-toggle:hover { border-color: var(--border2); color: var(--text2); }
+.activity-log-list {
+  margin-top: 8px; display: flex; flex-direction: column; gap: 4px;
+  font-size: 11px; max-height: 260px; overflow-y: auto;
+}
+.activity-log-list.collapsed { display: none; }
+.activity-log-line {
+  display: grid; grid-template-columns: 90px 100px 1fr; gap: 10px;
+  padding: 5px 10px; background: var(--bg1); border: 1px solid var(--border); border-radius: 5px;
+}
+.activity-log-ts    { color: var(--text3); white-space: nowrap; }
+.activity-log-agent { color: var(--teal2); font-family: 'Courier New', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.activity-log-msg   { color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .activity-empty {
   text-align: center; padding: 32px; color: var(--text3); font-size: 13px;
@@ -376,10 +480,11 @@ body {
   .phase-row    { grid-template-columns: 140px 1fr 80px; }
   .phase-row .phase-cost,
   .phase-row .phase-check { display: none; }
-  .event-row    { grid-template-columns: 70px 90px auto 80px; }
-  .event-row .event-phase,
-  .event-row .event-tokens,
-  .event-row .event-dur { display: none; }
+  .event-row    { grid-template-columns: 90px 1fr 80px; }
+  .event-row .event-started,
+  .event-row .event-ended { display: none; }
+  .activity-log-line { grid-template-columns: 70px 1fr; }
+  .activity-log-line .activity-log-agent { display: none; }
 }
 </style>
 </head>
@@ -439,8 +544,14 @@ body {
     <span>DATA OFFLINE — cannot load <code>prd.json</code>. Retrying every 3 s…</span>
   </div>
 
-  <!-- ── 1. Summary stats ───────────────────────────────────────────────── -->
+  <!-- ── 1. Overview (single summary section — verdict/elapsed as a slim
+       status line, everything else as stat cards; NOT two separate summary
+       blocks, per explicit feedback 2026-07-13) ────────────────────────── -->
   <div class="section-title">Overview</div>
+  <div class="hero-status-line" id="heroBanner">
+    <span class="hero-verdict idle" id="heroVerdict">LOADING</span>
+    <span class="hero-elapsed">Elapsed: <strong id="heroElapsed">—</strong></span>
+  </div>
   <div class="stats-row">
     <div class="stat-card amber">
       <div class="label">Active Phase</div>
@@ -460,17 +571,27 @@ body {
     <div class="stat-card violet">
       <div class="label">Total Spent</div>
       <div class="value" id="statSpent">–</div>
-      <div class="sub">USD</div>
+      <div class="sub" id="statSpentSub">USD (estimated from token pricing)</div>
     </div>
     <div class="stat-card">
-      <div class="label">Budget Remaining</div>
-      <div class="value" id="statBudget">–</div>
-      <div class="sub">of $504.60 est.</div>
+      <div class="label">vs CPA Estimate</div>
+      <div class="value" id="statVsCpa" style="font-size:20px;">–</div>
+      <div class="sub" id="statVsCpaSub">of $– estimated</div>
     </div>
     <div class="stat-card amber">
       <div class="label">In Progress</div>
       <div class="value" id="statInProgress">–</div>
       <div class="sub">stories</div>
+    </div>
+    <div class="stat-card teal">
+      <div class="label">Self-Heals</div>
+      <div class="value" id="heroHeals">–</div>
+      <div class="sub">issues auto-fixed</div>
+    </div>
+    <div class="stat-card amber">
+      <div class="label">Gate Warnings</div>
+      <div class="value" id="heroWarnings">–</div>
+      <div class="sub">QA gate steps</div>
     </div>
   </div>
 
@@ -487,6 +608,58 @@ body {
     </div>
   </div>
 
+  <!-- ── 2.5 Cost & Agents ──────────────────────────────────────────────── -->
+  <div class="section-title">Cost &amp; Agents <span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">from logs/phase-cost.jsonl — every LLM invocation this run made</span></div>
+  <div id="costProvenance" style="font-size:12px;margin-bottom:10px;"></div>
+  <div class="cost-grid">
+    <div class="cost-panel">
+      <div class="cost-panel-title">By Agent Type</div>
+      <div id="costByAgent"><div class="cost-empty">Loading…</div></div>
+    </div>
+    <div class="cost-panel">
+      <div class="cost-panel-title">By Model</div>
+      <div id="costByModel"><div class="cost-empty">Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- ── 2.6 Self-Healing & Retries ─────────────────────────────────────── -->
+  <div class="section-title">Self-Healing &amp; Retries <span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">issues the pipeline caught and fixed automatically, without human intervention</span></div>
+  <div class="heal-summary-row" id="healSummaryRow">
+    <div class="heal-summary-item">
+      <span class="hs-label">Self-Heal Cycles</span>
+      <span class="hs-value" id="healCycles">–</span>
+    </div>
+    <div class="heal-summary-item">
+      <span class="hs-label">Patches Applied</span>
+      <span class="hs-value" id="healPatches">–</span>
+    </div>
+    <div class="heal-summary-item">
+      <span class="hs-label">Profile Rules Learned</span>
+      <span class="hs-value" id="healProfiles">–</span>
+    </div>
+    <div class="heal-summary-item warn">
+      <span class="hs-label">Prompt-Guard Retries</span>
+      <span class="hs-value" id="healGuardRetries">–</span>
+    </div>
+  </div>
+  <div class="heal-list" id="healList"><div class="cost-empty">Loading…</div></div>
+  <div id="dynamicToolsBlock" style="display:none;">
+    <div class="cost-panel-title" style="margin-top:14px;">Dynamic Tools Synthesized <span style="text-transform:none;font-weight:400;">— written to fix a missing dependency mid-run, then reused</span></div>
+    <div class="heal-list" id="dynamicToolsList"></div>
+  </div>
+  <div id="profileRulesBlock" style="display:none;">
+    <div class="cost-panel-title" style="margin-top:14px;">Profile Rules Learned <span style="text-transform:none;font-weight:400;">— skill notes appended to an agent's persona so it doesn't repeat the same mistake</span></div>
+    <div class="heal-list" id="profileRulesList"></div>
+  </div>
+  <table class="guard-tbl" id="guardTbl" style="display:none;">
+    <thead><tr><th>Step</th><th>Calls</th><th>Passed</th><th>Reverted</th><th>Blocked</th></tr></thead>
+    <tbody id="guardTblBody"></tbody>
+  </table>
+  <div id="guardDetailBlock" style="display:none;">
+    <div class="cost-panel-title" style="margin-top:14px;">Prompt-Guard Violations <span style="text-transform:none;font-weight:400;">— the specific check each retry caught, and what it did about it</span></div>
+    <div class="heal-list" id="guardDetailList"></div>
+  </div>
+
   <!-- ── 3. Story Grid by Lane ─────────────────────────────────────────── -->
   <div class="section-title" style="display:flex;align-items:center;gap:14px;">
     <span>Stories by Lane</span>
@@ -500,18 +673,12 @@ body {
       <label for="providerFilter">Provider:</label>
       <select class="phase-select" id="providerFilter" onchange="onProviderFilterChange()" style="width:120px">
         <option value="">All</option>
-        <option value="claude">Claude</option>
-        <option value="opencode">OpenCode</option>
-        <option value="codex">Codex</option>
       </select>
     </div>
     <div class="model-filter">
       <label for="modelFilter">Model:</label>
-      <select class="phase-select" id="modelFilter" onchange="onModelFilterChange()" style="width:140px">
+      <select class="phase-select" id="modelFilter" onchange="onModelFilterChange()" style="width:180px">
         <option value="">All</option>
-        <option value="haiku">Haiku</option>
-        <option value="sonnet">Sonnet</option>
-        <option value="opus">Opus</option>
       </select>
     </div>
   </div>
@@ -537,7 +704,7 @@ body {
   </div>
 
   <!-- ── 4. Activity Feed ──────────────────────────────────────────────── -->
-  <div class="section-title">Activity Feed <span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">(last 20 events, newest first)</span></div>
+  <div class="section-title">Activity Feed <span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">(story timeline, newest first)</span></div>
   <div id="activityFeed">
     <div class="activity-empty">Loading activity…</div>
   </div>
@@ -571,7 +738,6 @@ body {
 <script>
 /* ─── Constants ──────────────────────────────────────────────────────────── */
 /* Data loaded from static prd.json + logs/ files */
-const BUDGET_TOTAL  = 504.60;
 const REFRESH_MS    = 3000;
 
 /* ─── State ──────────────────────────────────────────────────────────────── */
@@ -580,6 +746,7 @@ let allStories    = [];
 let selectedPhase = null;   // phase name string; null = auto-detect active
 let providerFilter = '';
 let modelFilter = '';
+let latestStoryCommits = {};  // storyId -> {sha, shortSha, timestamp, fileCount, branch}, from build-info.json
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 function fmt$(n) {
@@ -605,19 +772,26 @@ function relTime(iso) {
   return Math.floor(diff / 86400) + 'd ago';
 }
 
-/** Provider → badge class + label */
+const BADGE_PALETTE = ['badge-p0', 'badge-p1', 'badge-p2', 'badge-p3', 'badge-p4', 'badge-p5'];
+
+/** Deterministic string hash — same input always picks the same palette slot. */
+function hashStr(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+/** Provider → badge class + label. No hardcoded provider list — whatever
+ * provider string the run's own data actually contains gets a stable color
+ * from a fixed 6-slot palette via hashing, so any provider (minimax, qwen,
+ * z-ai, deepseek, claude, or one that doesn't exist yet) renders correctly
+ * with zero enumeration (found live 2026-07-13: the old hardcoded
+ * claude/opencode/codex list didn't match a single provider this run
+ * actually used). */
 function providerBadge(provider, model) {
-  const p = (provider || model || '').toLowerCase();
-  if (p.includes('claude') || p.includes('anthropic') || p.includes('opus') || p.includes('sonnet') || p.includes('haiku')) {
-    return { cls: 'badge-claude', label: 'CLAUDE' };
-  }
-  if (p.includes('opencode') || p.includes('open-code')) {
-    return { cls: 'badge-opencode', label: 'OPENCODE' };
-  }
-  if (p.includes('codex') || p.includes('o1') || p.includes('gpt')) {
-    return { cls: 'badge-codex', label: 'CODEX' };
-  }
-  return { cls: 'badge-pending', label: (provider || 'unknown').toUpperCase() };
+  const label = (provider || model || 'unknown');
+  const cls = BADGE_PALETTE[hashStr(label.toLowerCase()) % BADGE_PALETTE.length];
+  return { cls, label: label.toUpperCase() };
 }
 
 /** Status → badge html */
@@ -632,6 +806,11 @@ function statusBadgeHtml(status) {
     case 'blocked':
     case 'failed':
       return `<span class="badge badge-blocked">BLOCKED</span>`;
+    case 'deprecated':
+      // A parent superseded by its own split children (e.g. SKY-002 ->
+      // SKY-002-impl/SKY-002-test) — not outstanding work. "PENDING" here
+      // was actively misleading (found live 2026-07-13).
+      return `<span class="badge badge-pending" style="opacity:0.6;">SUPERSEDED</span>`;
     default:
       return `<span class="badge badge-pending">PENDING</span>`;
   }
@@ -677,13 +856,16 @@ function derivePhasesFromPrd(prd) {
     const totalCost = stories.reduce((sum, s) => sum + (s.actualCost || 0), 0);
     const estCost = stories.reduce((sum, s) => sum + (s.estimatedCost || 0), 0);
     const cfg = (prd.phasesConfig || {})[name] || {};
+    const inProgress = stories.filter(s => (s.status || '').toLowerCase().replace(/[_\s]/g, '') === 'inprogress');
     return {
       name: name,
       phaseName: name,
       status: completed.length === stories.length && stories.length > 0 ? 'completed' :
-              stories.some(s => s.status === 'in_progress') ? 'in_progress' : 'pending',
+              inProgress.length > 0 ? 'in_progress' : 'pending',
       storyCount: stories.length,
       completedCount: completed.length,
+      inProgressCount: inProgress.length,
+      pctComplete: stories.length > 0 ? Math.round(completed.length / stories.length * 100) : 0,
       actualCost: totalCost,
       estimatedCost: estCost,
       orchestrationMode: cfg.orchestrationMode || 'bash'
@@ -731,6 +913,211 @@ async function fetchAgentStatus() {
   }
 }
 
+async function fetchPhaseCostEvents() {
+  return fetchJsonl('logs/phase-cost.jsonl');
+}
+
+/* ─── Render: Cost & Agents ──────────────────────────────────────────────── */
+function renderCostBar(id, groups) {
+  const el = document.getElementById(id);
+  if (!groups.length) {
+    el.innerHTML = '<div class="cost-empty">No cost data yet.</div>';
+    return;
+  }
+  const maxCost = Math.max(...groups.map(g => g.cost));
+  el.innerHTML = groups.map(g => `
+    <div class="cost-bar-row">
+      <div class="cost-bar-label" title="${g.label}">${g.label} <span style="color:var(--text3)">(${g.count})</span></div>
+      <div class="cost-bar-track"><div class="cost-bar-fill" style="width:${maxCost > 0 ? (g.cost / maxCost * 100) : 0}%"></div></div>
+      <div class="cost-bar-val">${fmt$2(g.cost)}</div>
+    </div>`).join('');
+}
+
+function renderCostBreakdown(events) {
+  // phase-cost.jsonl mixes real cost records with non-cost bookkeeping
+  // events (e.g. {"event":"topology_decision",...}) that have no task_cost_usd
+  // at all — filter to real invocation records only.
+  const records = events.filter(e => e && typeof e.task_cost_usd === 'number');
+
+  const byAgent = {};
+  const byModel = {};
+  // Real-vs-estimate split — costIsEstimate is a new field (2026-07-13,
+  // feedback_real_cost_tracking_critical); records written before that fix
+  // won't have it at all (undefined), which is genuinely "unknown
+  // provenance," not the same as "confirmed estimate" — kept as a separate
+  // bucket so old and new data are never silently conflated.
+  let realCost = 0, estimateCost = 0, unknownCost = 0;
+  for (const r of records) {
+    const agent = r.agent_type || (r.story_id && r.story_id !== r.phase_id ? 'implementation' : 'unknown');
+    const model = r.resolvedModel || 'unknown';
+    byAgent[agent] = byAgent[agent] || { cost: 0, count: 0 };
+    byAgent[agent].cost += r.task_cost_usd;
+    byAgent[agent].count += 1;
+    byModel[model] = byModel[model] || { cost: 0, count: 0 };
+    byModel[model].cost += r.task_cost_usd;
+    byModel[model].count += 1;
+    if (r.costIsEstimate === true) estimateCost += r.task_cost_usd;
+    else if (r.costIsEstimate === false) realCost += r.task_cost_usd;
+    else unknownCost += r.task_cost_usd;
+  }
+
+  const toGroups = (map) => Object.entries(map)
+    .map(([label, v]) => ({ label, cost: v.cost, count: v.count }))
+    .sort((a, b) => b.cost - a.cost);
+
+  renderCostBar('costByAgent', toGroups(byAgent));
+  renderCostBar('costByModel', toGroups(byModel));
+
+  const total = records.reduce((sum, r) => sum + r.task_cost_usd, 0);
+  const provenanceEl = document.getElementById('costProvenance');
+  if (provenanceEl) {
+    if (total <= 0) {
+      provenanceEl.textContent = '';
+    } else if (unknownCost > 0 && realCost === 0 && estimateCost === 0) {
+      provenanceEl.innerHTML = `<span style="color:var(--amber);">⚠ ${fmt$2(unknownCost)} of ${fmt$2(total)} has no real/estimate provenance recorded (data from before 2026-07-13's cost-tracking fix) — treat this total as unverified.</span>`;
+    } else if (estimateCost > 0 || unknownCost > 0) {
+      const pctReal = Math.round(realCost / total * 100);
+      provenanceEl.innerHTML = `<span style="color:${pctReal === 100 ? 'var(--green)' : 'var(--amber)'};">${fmt$2(realCost)} real (${pctReal}%) · ${fmt$2(estimateCost)} estimated · ${fmt$2(unknownCost)} unverified provenance</span>`;
+    } else {
+      provenanceEl.innerHTML = `<span style="color:var(--green);">✓ 100% real, provider-billed cost — no estimation used</span>`;
+    }
+  }
+
+  return total;
+}
+
+/* ─── Render: Self-Healing & Retries (from build-info.json — reuses
+ * snapshot.js's own summarizeHealingEvents/summarizeGuardedStepRetries, no
+ * duplicate fetch/aggregation logic) ────────────────────────────────────── */
+function renderSelfHealing(info) {
+  const selfHealing = info?.metrics?.selfHealing || {};
+  const healing = selfHealing.healing || {};
+  const promptEvals = info?.metrics?.promptEvals || {};
+
+  document.getElementById('healCycles').textContent = healing.analystCycles ?? 0;
+  document.getElementById('healPatches').textContent = healing.patchesApplied ?? 0;
+  document.getElementById('healProfiles').textContent = healing.profileUpdates ?? 0;
+  document.getElementById('healGuardRetries').textContent = promptEvals.evaluated ?? 0;
+
+  // Field is `recentCycles`, not `cycles` — summarizeHealingEvents() in
+  // snapshot.js never returned a `cycles` key at all (found live 2026-07-13:
+  // this typo silently emptied the whole detail list despite analystCycles
+  // itself counting correctly, since that's a separate accumulator).
+  const cycles = healing.recentCycles || [];
+  // Cross-reference story_id -> the agent role assigned to it in the PRD, so
+  // "which agent" is answerable, not just "which story" (found live
+  // 2026-07-13 — story_id alone doesn't say WHO was working on it).
+  const storyAgentRole = (storyId) => {
+    const s = (allStories || []).find(s => (s.storyId || s.id) === storyId);
+    return s ? (s.agentRole || s.aiProvider || null) : null;
+  };
+
+  const listEl = document.getElementById('healList');
+  listEl.innerHTML = cycles.length
+    ? cycles.slice(-8).reverse().map(c => {
+        const flags = [
+          c.target && c.target !== 'none' ? `fixed via ${c.target}` : null,
+          c.profile_updated ? 'profile updated' : null,
+          Number(c.patches_applied) > 0 ? `${c.patches_applied} patch(es)` : null,
+        ].filter(Boolean).join(' · ');
+        const role = storyAgentRole(c.story_id);
+        return `
+        <div class="heal-row">
+          <span class="heal-story">${c.story_id || '—'}</span>
+          ${role ? `<span class="heal-target" style="background:var(--violet-dim);color:var(--violet2);">${role}</span>` : ''}
+          <span class="heal-target">retry ${c.retry ?? 0}</span>
+          <span class="heal-diagnosis" title="${(c.diagnosis || '').replace(/"/g, '&quot;')}">${trunc(c.diagnosis || 'no diagnosis recorded', 70)}</span>
+          <span style="color:var(--text3);font-size:11px;white-space:nowrap;">${flags || '—'}</span>
+        </div>`;
+      }).join('')
+    : '<div class="cost-empty">No self-healing cycles this run — every story passed without needing a diagnosed fix.</div>';
+
+  // Dynamic tools — a "target":"tool" healing cycle doesn't just patch code,
+  // it WRITES A NEW SHELL SCRIPT (e.g. install-typescript.sh) into the
+  // project's .epam/dynamic-tools/ to fix an environment gap (missing
+  // dependency, wrong tool version) and reuses it on subsequent stories.
+  // snapshot.js already computes this list (listDynamicTools) — it was just
+  // never wired into this section (found live 2026-07-13). Attribute each
+  // tool to whichever story/agent's healing cycle needed it (target==='tool'),
+  // so "what agent" is answerable here too.
+  const toolTriggerStories = [...new Set(cycles.filter(c => c.target === 'tool').map(c => c.story_id))];
+  const toolTriggerLabel = toolTriggerStories.length
+    ? toolTriggerStories.map(sid => `${sid}${storyAgentRole(sid) ? ' (' + storyAgentRole(sid) + ')' : ''}`).join(', ')
+    : null;
+  const tools = selfHealing.dynamicTools || [];
+  const toolsBlock = document.getElementById('dynamicToolsBlock');
+  if (tools.length) {
+    toolsBlock.style.display = '';
+    document.getElementById('dynamicToolsList').innerHTML = tools.map(t => `
+        <div class="heal-row">
+          ${toolTriggerLabel ? `<span class="heal-story" title="story/agent whose healing cycle triggered this tool">${toolTriggerLabel}</span>` : ''}
+          <span class="heal-target" style="background:var(--teal-dim);color:var(--teal2);">${t.name}</span>
+          <span class="heal-diagnosis">${trunc(t.purpose || 'no purpose comment recorded', 100)}</span>
+        </div>`).join('');
+  } else {
+    toolsBlock.style.display = 'none';
+  }
+
+  const byStep = promptEvals.byStep || {};
+  const guardTbl = document.getElementById('guardTbl');
+  const stepKeys = Object.keys(byStep);
+  if (stepKeys.length) {
+    guardTbl.style.display = '';
+    document.getElementById('guardTblBody').innerHTML = stepKeys.map(step => {
+      const s = byStep[step];
+      return `<tr><td class="gt-step">${step}</td><td>${s.total}</td><td style="color:var(--green)">${s.passed}</td><td style="color:var(--amber)">${s.reverted}</td><td style="color:var(--red)">${s.blocked}</td></tr>`;
+    }).join('');
+  } else {
+    guardTbl.style.display = 'none';
+  }
+
+  // Prompt-guard VIOLATION detail — the byStep table above only has counts;
+  // this shows the actual reason/violationTypes for calls where the
+  // deterministic check fired at least once (attempts > 1), which is what
+  // "evaluated" actually means (see summarizeGuardedStepRetries' own docstring).
+  const guardDetailBlock = document.getElementById('guardDetailBlock');
+  const evaluatedCalls = (promptEvals.recent || []).filter(e => (e.attempts || 1) > 1);
+  if (evaluatedCalls.length) {
+    guardDetailBlock.style.display = '';
+    document.getElementById('guardDetailList').innerHTML = evaluatedCalls.slice(-8).reverse().map(e => {
+      const outcomeColor = e.outcome === 'pass' ? 'var(--green)' : e.outcome === 'blocked' ? 'var(--red)' : 'var(--amber)';
+      const target = e.storyId || e.phaseId || '—';
+      const violations = (e.violationTypes || []).join(', ') || 'content_quality';
+      return `
+        <div class="heal-row">
+          <span class="heal-target" style="background:var(--violet-dim);color:var(--violet2);">${e.step}</span>
+          <span class="heal-story">${target}</span>
+          <span style="color:${outcomeColor};font-size:10px;font-weight:700;text-transform:uppercase;white-space:nowrap;">${e.outcome} (${e.attempts}x)</span>
+          <span class="heal-diagnosis" title="${(e.reason || '').replace(/"/g, '&quot;')}">${violations}</span>
+        </div>`;
+    }).join('');
+  } else {
+    guardDetailBlock.style.display = 'none';
+  }
+
+  // Profile Rules Learned — skillNotes.perRole comes from diffSkillNotes(),
+  // a before/after diff of profiles.json vs profiles.json.original. Each
+  // role's addedRules is the ACTUAL "[Self-Heal] ..." rule text extracted
+  // from the profile (snapshot.js's extractSelfHealRules), not just a count
+  // — one row per real rule, so "what did the agent actually learn" is
+  // answerable, not just "how many things changed" (found live 2026-07-13).
+  const skillNotes = selfHealing.skillNotes || {};
+  const perRole = skillNotes.perRole || [];
+  const profileRulesBlock = document.getElementById('profileRulesBlock');
+  if (perRole.length) {
+    profileRulesBlock.style.display = '';
+    document.getElementById('profileRulesList').innerHTML = perRole.flatMap(r =>
+      (r.addedRules && r.addedRules.length ? r.addedRules : [`${r.added} rule(s) added (text unavailable)`]).map(rule => `
+        <div class="heal-row">
+          <span class="heal-target" style="background:var(--green-dim);color:var(--green);">${r.role}${r.isNewRole ? ' (new)' : ''}</span>
+          <span class="heal-diagnosis" title="${rule.replace(/"/g, '&quot;')}">${trunc(rule, 100)}</span>
+        </div>`)
+    ).join('');
+  } else {
+    profileRulesBlock.style.display = 'none';
+  }
+}
+
 /* ─── Render: status header ──────────────────────────────────────────────── */
 function renderStatus(online) {
   const dot   = document.getElementById('statusDot');
@@ -753,48 +1140,102 @@ function renderStatus(online) {
 }
 
 /* ─── Render: summary stats ──────────────────────────────────────────────── */
-function renderStats(phases, stories) {
-  /* Determine active phase */
-  let activePh = phases.find(p => (p.inProgressStories || 0) > 0);
+function renderStats(phases, stories, realTotalCost) {
+  // Determine active phase — field names match derivePhasesFromPrd()'s real
+  // return shape (inProgressCount, not inProgressStories/completedStories,
+  // which don't exist on that object — found live 2026-07-13, this silently
+  // meant "Active Phase" always fell through to '—', on every run).
+  let activePh = phases.find(p => (p.inProgressCount || 0) > 0);
   if (!activePh) {
     // Fall back: last phase that has any completed stories
     for (let i = phases.length - 1; i >= 0; i--) {
-      if ((phases[i].completedStories || 0) > 0) { activePh = phases[i]; break; }
+      if ((phases[i].completedCount || 0) > 0) { activePh = phases[i]; break; }
     }
   }
+  const allPhasesDone = phases.length > 0 && phases.every(p => p.status === 'completed');
 
-  const totalStories     = stories.length;
-  const completedStories = stories.filter(s => ['completed','done'].includes((s.status||'').toLowerCase())).length;
-  const inProgressCount  = stories.filter(s => ['in_progress','inprogress'].includes((s.status||'').toLowerCase())).length;
+  // Deprecated stories are parents SUPERSEDED by their own split children
+  // (e.g. SKY-002 -> SKY-002-impl/SKY-002-test) — not outstanding work, and
+  // already excluded from phase-level counts via implementationOrder
+  // (derivePhasesFromPrd only ever sees the 8 active children, never the
+  // deprecated parents). Counting them in this total made "% Complete"
+  // inconsistent with the Phase Progress bars on the same page (found live
+  // 2026-07-13: 8 completed / 12 total = 67%, when every ACTIVE story was
+  // actually done).
+  const activeStories    = stories.filter(s => (s.status || '').toLowerCase() !== 'deprecated');
+  const totalStories     = activeStories.length;
+  const completedStories = activeStories.filter(s => ['completed','done'].includes((s.status||'').toLowerCase())).length;
+  const inProgressCount  = activeStories.filter(s => ['in_progress','inprogress'].includes((s.status||'').toLowerCase())).length;
   const pct              = totalStories > 0 ? Math.round(completedStories / totalStories * 100) : 0;
-  const totalSpent       = stories.reduce((a, s) => a + (parseFloat(s.actualCost) || 0), 0);
-  const budgetRemaining  = BUDGET_TOTAL - totalSpent;
+  // Prefer the real phase-cost.jsonl total (every LLM invocation, including
+  // QA-gate/assessment/spec-pass overhead) over summing story.actualCost —
+  // the latter only ever counts implementation-turn cost per story and
+  // silently undercounts the real spend (found live 2026-07-13: story-level
+  // sum was ~$0.11 for a run phase-cost.jsonl shows cost $4.06 for). NOTE:
+  // this itself is a locally-computed ESTIMATE (token count x a per-model
+  // pricing table), used only when a provider reports $0 cost — it is NOT
+  // confirmed billing. Cross-checked against OpenRouter's own real account-
+  // balance delta for this run ($0.86) and found significantly higher,
+  // likely a stale price entry for one specific model — flagged, not yet
+  // corrected (2026-07-13).
+  const totalSpent       = realTotalCost != null ? realTotalCost
+    : stories.reduce((a, s) => a + (parseFloat(s.actualCost) || 0), 0);
 
-  const phName = activePh ? (activePh.phaseName || activePh.name || '—') : '—';
+  // "Budget Remaining" (removed 2026-07-13) compared spend against a
+  // hardcoded/sed-patched placeholder that had no real config behind it for
+  // most runs. What's actually meaningful: comparing real spend against the
+  // CPA (Cost Predictive Analysis) estimate already computed per-story
+  // BEFORE the run — the same estimatedCost field CPA's own calibration
+  // system produces. This answers "did the run cost what CPA predicted,"
+  // not "are we under an arbitrary number."
+  const cpaEstimateTotal = activeStories.reduce((a, s) => a + (parseFloat(s.estimatedCost) || 0), 0);
+  const cpaVariancePct   = cpaEstimateTotal > 0 ? Math.round((totalSpent - cpaEstimateTotal) / cpaEstimateTotal * 100) : null;
+
   const el = id => document.getElementById(id);
-
-  el('statActivePhase').textContent = phName;
-  el('statActivePhaseSub').textContent = activePh
-    ? `${activePh.pctComplete || 0}% complete`
-    : 'no active phase';
-
-  // Color active phase card based on phase name
   const statCard = el('statActivePhase').closest('.stat-card');
-  if (phName.includes('infra')) {
-    statCard.className = 'stat-card amber';
-  } else if (phName.includes('foundation')) {
+
+  // A bare "—" when every phase is done told the reader nothing (found live
+  // 2026-07-13) — show COMPLETED instead, so a finished run reads as
+  // finished, not as missing data.
+  if (allPhasesDone) {
+    el('statActivePhase').textContent = 'COMPLETED';
+    el('statActivePhaseSub').textContent = `${phases.length} phase(s) finished`;
     statCard.className = 'stat-card green';
+    el('statActivePhase').style.color = '';
   } else {
-    statCard.className = 'stat-card';
-    el('statActivePhase').style.color = 'var(--teal)';
+    const phName = activePh ? (activePh.phaseName || activePh.name || '—') : '—';
+    el('statActivePhase').textContent = phName;
+    el('statActivePhaseSub').textContent = activePh
+      ? `${activePh.pctComplete || 0}% complete`
+      : 'no active phase';
+
+    if (phName.includes('infra')) {
+      statCard.className = 'stat-card amber';
+    } else if (phName.includes('foundation')) {
+      statCard.className = 'stat-card green';
+    } else {
+      statCard.className = 'stat-card';
+      el('statActivePhase').style.color = 'var(--teal)';
+    }
   }
 
   el('statStoriesCount').textContent = completedStories;
   el('statStoriesSub').textContent   = `completed / ${totalStories} total`;
   el('statPct').textContent          = pct + '%';
   el('statSpent').textContent        = fmt$2(totalSpent);
-  el('statBudget').textContent       = fmt$2(budgetRemaining);
   el('statInProgress').textContent   = inProgressCount;
+
+  const vsCpaCard = el('statVsCpa').closest('.stat-card');
+  if (cpaVariancePct != null) {
+    const over = cpaVariancePct > 0;
+    el('statVsCpa').textContent = (over ? '+' : '') + cpaVariancePct + '%';
+    el('statVsCpa').style.color = over ? 'var(--red)' : 'var(--green)';
+    el('statVsCpaSub').textContent = `${fmt$2(totalSpent)} actual of ${fmt$2(cpaEstimateTotal)} estimated`;
+  } else {
+    el('statVsCpa').textContent = '—';
+    el('statVsCpa').style.color = '';
+    el('statVsCpaSub').textContent = 'no CPA estimate on these stories';
+  }
 }
 
 /* ─── Render: phases ─────────────────────────────────────────────────────── */
@@ -808,9 +1249,15 @@ function renderPhases(phases) {
   // Sort: infra first, then by natural order (rely on API ordering)
   const rows = phases.map(ph => {
     const name    = ph.phaseName || ph.name || '—';
-    const total   = ph.totalStories   || 0;
-    const comp    = ph.completedStories || 0;
-    const inProg  = ph.inProgressStories || 0;
+    // Field names match derivePhasesFromPrd()'s actual return shape
+    // (storyCount/completedCount/inProgressCount/pctComplete) — this used to
+    // read totalStories/completedStories/inProgressStories, none of which
+    // that function has ever returned, so this section showed "0/0 stories"
+    // for every phase on every run (found live 2026-07-13 — a pre-existing
+    // bug, not something this session's changes introduced).
+    const total   = ph.storyCount   || 0;
+    const comp    = ph.completedCount || 0;
+    const inProg  = ph.inProgressCount || 0;
     const pct     = ph.pctComplete != null ? ph.pctComplete : (total > 0 ? Math.round(comp/total*100) : 0);
     const actual  = parseFloat(ph.actualCost   || ph.totalActualCost  || 0);
     const est     = parseFloat(ph.estimatedCost || ph.totalEstimatedCost || 0);
@@ -858,24 +1305,48 @@ function renderPhases(phases) {
 }
 
 /* ─── Story grid phase selector ──────────────────────────────────────────── */
+let _lastPhaseSelectorSignature = null;
 function populatePhaseSelector(phases, autoPhase) {
   const sel = document.getElementById('phaseSelect');
-  const prev = sel.value;
-
-  sel.innerHTML = '';
-  phases.forEach(ph => {
-    const name = ph.phaseName || ph.name || '—';
-    const opt  = document.createElement('option');
-    opt.value  = name;
-    opt.textContent = name + (ph.pctComplete >= 100 ? ' ✓' : '');
-    sel.appendChild(opt);
-  });
-
-  // Restore selection or set to auto-detected
   const names = phases.map(p => p.phaseName || p.name);
-  if (selectedPhase && names.includes(selectedPhase)) {
+
+  // Skip the full option rebuild when the phase list itself hasn't changed
+  // (the common case — a phase list almost never changes mid-run, let alone
+  // every 3s). Destroying/recreating every <option> on an unchanged list on
+  // every refresh caused visible dropdown flicker, and briefly interrupted
+  // an open/focused select (found live 2026-07-13, reported as "screen
+  // flashes"). Rebuild only when the signature (names + completion state)
+  // actually changes.
+  const signature = JSON.stringify(names.map((n, i) => [n, phases[i].pctComplete]));
+  const needsRebuild = signature !== _lastPhaseSelectorSignature;
+
+  if (needsRebuild) {
+    sel.innerHTML = '';
+    // "All" first — value '' matches renderStoryGrid's existing
+    // "falsy phaseName = no filter" behavior, so no filter-logic change needed.
+    const allOpt = document.createElement('option');
+    allOpt.value = '';
+    allOpt.textContent = `All phases (${phases.reduce((n, p) => n + (p.storyCount || 0), 0)} stories)`;
+    sel.appendChild(allOpt);
+    phases.forEach(ph => {
+      const name = ph.phaseName || ph.name || '—';
+      const opt  = document.createElement('option');
+      opt.value  = name;
+      opt.textContent = name + (ph.pctComplete >= 100 ? ' ✓' : '');
+      sel.appendChild(opt);
+    });
+    _lastPhaseSelectorSignature = signature;
+  }
+
+  // Restore selection or set to auto-detected. selectedPhase === '' means the
+  // user explicitly picked "All" — a real, sticky choice, not "unset". Same
+  // for autoPhase: '' (detectActivePhase's own "run is complete, default to
+  // All" signal) is falsy in JS, so `else if (autoPhase)` skipped it and
+  // fell through to names[0] instead (found live 2026-07-13, same bug shape
+  // as the refresh()-level selectedPhase||autoPhase fix above).
+  if (selectedPhase === '' || (selectedPhase && names.includes(selectedPhase))) {
     sel.value = selectedPhase;
-  } else if (autoPhase) {
+  } else if (autoPhase != null) {
     sel.value = autoPhase;
     selectedPhase = autoPhase;
   } else if (phases.length > 0) {
@@ -899,6 +1370,27 @@ function onModelFilterChange() {
   renderStoryGrid(allStories, selectedPhase);
 }
 
+/** Populate Provider/Model dropdowns from whatever aiProvider/model values
+ * actually appear across this run's own stories — no hardcoded enum. Options
+ * are rebuilt each refresh but the user's current selection is preserved
+ * (same "keep prior selection if still valid" pattern as populatePhaseSelector). */
+function populateProviderModelFilters(stories) {
+  const providers = [...new Set(stories.map(s => s.aiProvider || s.provider).filter(Boolean))].sort();
+  const models    = [...new Set(stories.map(s => s.model).filter(Boolean))].sort();
+
+  const fillSelect = (id, values, current) => {
+    const sel = document.getElementById(id);
+    const keep = values.includes(current) ? current : '';
+    sel.innerHTML = '<option value="">All</option>' +
+      values.map(v => `<option value="${v}">${v}</option>`).join('');
+    sel.value = keep;
+    return keep;
+  };
+
+  providerFilter = fillSelect('providerFilter', providers, providerFilter);
+  modelFilter    = fillSelect('modelFilter', models, modelFilter);
+}
+
 /* ─── Render: story grid ─────────────────────────────────────────────────── */
 function storyCard(s) {
   const st   = (s.status || 'pending').toLowerCase();
@@ -911,6 +1403,7 @@ function storyCard(s) {
 
   const pb = providerBadge(s.aiProvider || s.provider, s.model || '');
   const cost = parseFloat(s.actualCost || 0);
+  const commit = latestStoryCommits[s.storyId || s.id];
 
   return `
     <div class="${cardCls}">
@@ -922,6 +1415,7 @@ function storyCard(s) {
         ${s.model ? `<span class="badge badge-pending" style="font-size:9px">${trunc(s.model, 20)}</span>` : ''}
         ${cost > 0 ? `<span class="story-cost">${fmt$(cost)}</span>` : ''}
       </div>
+      ${commit ? `<div class="story-commit"><span class="sc-sha">${commit.shortSha}</span> · ${commit.fileCount != null ? commit.fileCount + ' file(s)' : '—'}${commit.branch ? ' · ' + commit.branch : ''}</div>` : ''}
     </div>`;
 }
 
@@ -933,9 +1427,17 @@ function renderStoryGrid(stories, phaseName) {
     return;
   }
 
-  // Filter to selected phase
-  let phStories = phaseName
-    ? stories.filter(s => (s.phaseId || s.phase || '') === phaseName)
+  // Filter to selected phase. Stories have no phaseId/phase field anywhere in
+  // this PRD schema — phase membership only ever exists via
+  // prd.implementationOrder[phaseName] (same source derivePhasesFromPrd()
+  // already uses correctly). The old s.phaseId||s.phase filter was dead code:
+  // every story always fell through to '' === phaseName, so this grid could
+  // never render anything for any run (found live 2026-07-13).
+  const phaseStoryIds = phaseName && _prdCache && _prdCache.implementationOrder
+    ? new Set(_prdCache.implementationOrder[phaseName] || [])
+    : null;
+  let phStories = phaseStoryIds
+    ? stories.filter(s => phaseStoryIds.has(s.storyId || s.id))
     : stories;
 
   // Apply provider filter
@@ -983,6 +1485,24 @@ function renderStoryGrid(stories, phaseName) {
 }
 
 /* ─── Render: activity feed ──────────────────────────────────────────────── */
+/** Format elapsed ms as "Xm Ys" / "Xs". */
+function fmtElapsed(ms) {
+  if (ms == null || ms < 0) return '—';
+  const totalSec = Math.round(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+/** Activity Feed — rebuilt against the REAL agent-activity.jsonl schema
+ * ({timestamp, agent, story_id, phase, type, detail:{message,...}}), which
+ * has no costUsd/model/durationSeconds/aiProvider/outcome fields at all.
+ * The old version read those non-existent fields and rendered "UNKNOWN"/"—"
+ * for nearly every cell (found live 2026-07-13). Real signal here is the
+ * story_start/story_complete pair per story_id, which gives a genuine
+ * started/ended/elapsed timeline with zero schema changes; everything else
+ * (spec_update/info/phase_complete) becomes a secondary chronological log
+ * strip since those don't pair up the same way. */
 function renderActivity(events) {
   const container = document.getElementById('activityFeed');
 
@@ -994,49 +1514,174 @@ function renderActivity(events) {
     return;
   }
 
-  // Newest first, cap at 20
-  const rows = events.slice(0, 20).map(ev => {
-    const pb = providerBadge(ev.aiProvider || ev.provider, ev.model || '');
-    const tokens = ev.totalTokens || ev.tokens
-      ? ((ev.totalTokens || ev.tokens) / 1000).toFixed(1) + 'k'
-      : '—';
-    const dur = ev.durationSeconds != null
-      ? ev.durationSeconds.toFixed(1) + 's'
-      : (ev.duration ? ev.duration + 's' : '—');
+  const byStory = new Map(); // story_id -> {agent, intervals: [{start,end}], pendingStart}
+  const logEvents = [];
+  const chronological = events.slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-    return `
-      <div class="event-row">
-        <div class="event-time">${relTime(ev.createdAt || ev.timestamp)}</div>
-        <div class="event-story">${ev.storyId || ev.story_id || '—'}</div>
-        <div class="event-phase">${trunc(ev.phaseId || ev.phase || '—', 14)}</div>
-        <div class="event-model">
-          <span class="badge ${pb.cls}">${pb.label}</span>
-          <span style="color:var(--text3);font-size:11px;margin-left:4px;">${trunc(ev.model || '', 20)}</span>
-        </div>
-        <div class="event-cost">${fmt$(ev.costUsd || ev.cost || ev.actualCost)}</div>
-        <div class="event-tokens">${tokens}</div>
-        <div class="event-dur">${dur}</div>
-        <div>${outcomeBadgeHtml(ev.outcome || ev.status)}</div>
-      </div>`;
-  }).join('');
+  for (const ev of chronological) {
+    const type = ev.type || ev.rawType;
+    const sid = ev.story_id || ev.storyId;
+    // Some emitted story_start/story_complete pairs carry the literal string
+    // "null" for agent (a phase-boundary bookkeeping placeholder, not a real
+    // per-story event — found live 2026-07-13: story_id is set to the phase
+    // name itself in these, e.g. story_id="scaffold", agent="null"). Those
+    // aren't real story work; route them to the log strip instead of
+    // fabricating a fake story row for them.
+    const isRealStoryEvent = (type === 'story_start' || type === 'story_complete')
+      && sid && ev.agent && ev.agent !== 'null';
+    if (isRealStoryEvent) {
+      const rec = byStory.get(sid) || { agent: ev.agent, intervals: [], pendingStart: null };
+      // A story can run multiple times (self-heal retries re-invoke the same
+      // story) — pair each start with its next complete sequentially rather
+      // than collapsing to one slot, which previously overwrote a real ~2min
+      // first attempt with a later near-instant retry pair (found live
+      // 2026-07-13, elapsed showed 0s for every story).
+      if (type === 'story_start') {
+        rec.pendingStart = ev.timestamp;
+      } else if (rec.pendingStart) {
+        rec.intervals.push({ start: rec.pendingStart, end: ev.timestamp });
+        rec.pendingStart = null;
+      }
+      rec.agent = ev.agent || rec.agent;
+      byStory.set(sid, rec);
+    } else {
+      logEvents.push(ev);
+    }
+  }
 
-  container.innerHTML = `<div class="activity-feed">${rows}</div>`;
+  const storyRows = Array.from(byStory.entries())
+    .map(([storyId, rec]) => {
+      // Span first start -> last completion (covers all self-heal retries),
+      // not just the latest interval — a story's final retry pass is often
+      // a fast no-op re-check, which showed a misleading "0s" for stories
+      // that actually took minutes across their real first attempt.
+      const first = rec.intervals[0] || null;
+      const last = rec.intervals[rec.intervals.length - 1] || null;
+      const start = first ? first.start : rec.pendingStart;
+      const end = last ? last.end : null;
+      const elapsedMs = (start && end) ? (new Date(end) - new Date(start)) : null;
+      const attempts = rec.intervals.length;
+      const attemptSuffix = attempts > 1 ? ` <span style="color:var(--text3);">(${attempts}x)</span>` : '';
+      const status = end
+        ? `<span class="badge badge-success outcome-badge">&#10003; DONE</span>`
+        : `<span class="badge badge-running outcome-badge"><span class="pulse-dot"></span>RUNNING</span>`;
+      return { sortKey: new Date(start || end || 0), html: `
+        <div class="event-row">
+          <div class="event-story">${storyId}${attemptSuffix}</div>
+          <div class="event-agent">${trunc(rec.agent || '—', 22)}</div>
+          <div class="event-started">${start ? relTime(start) : '—'}</div>
+          <div class="event-ended">${end ? relTime(end) : '—'}</div>
+          <div class="event-elapsed">${fmtElapsed(elapsedMs)}</div>
+          <div>${status}</div>
+        </div>` };
+    })
+    .sort((a, b) => b.sortKey - a.sortKey)
+    .map(r => r.html)
+    .join('');
+
+  logEvents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  const logRows = logEvents.slice(0, 40).map(ev => `
+    <div class="activity-log-line">
+      <span class="activity-log-ts">${relTime(ev.timestamp)}</span>
+      <span class="activity-log-agent">${trunc(ev.agent || '—', 16)}</span>
+      <span class="activity-log-msg">${trunc((ev.detail && ev.detail.message) || ev.type || '—', 110)}</span>
+    </div>`).join('');
+
+  container.innerHTML = `
+    <div class="activity-feed">${storyRows || '<div class="activity-empty">No story timing events yet</div>'}</div>
+    <div class="activity-log-strip">
+      <button class="activity-log-toggle" onclick="this.nextElementSibling.classList.toggle('collapsed')">
+        Show pipeline log (${logEvents.length} events: scaffold/spec/phase milestones)
+      </button>
+      <div class="activity-log-list collapsed">${logRows || '<div class="activity-empty">No log events</div>'}</div>
+    </div>`;
 }
 
 /* ─── Render: live state panel ───────────────────────────────────────────── */
-function renderLivePanel(status) {
+// Found live 2026-07-14 (user: "no idea what is happening in pipeline" --
+// the monitor showed "No Active Execution" the entire time a run was
+// actively executing stories): agent-status.json never populates a
+// top-level `currentStory` field at all (only nested, always-null
+// `lanes.<lane>.currentStory`) -- but its `events` array DOES reliably
+// record `story_start`/`story_complete`/`story_failed` with real
+// story/lane/role/provider/model data every time. Derive "what's running,
+// by which agent" from the most recent story_start that has no matching
+// later story_complete/story_failed for the same lane+story, instead of
+// trusting a field the writer never sets.
+function deriveActiveStoryFromEvents(status) {
+  if (!status || !Array.isArray(status.events)) return null;
+  const finished = new Set();
+  for (const e of status.events) {
+    if (e.type === 'story_complete' || e.type === 'story_failed') {
+      finished.add(`${e.lane || ''}:${e.story || ''}`);
+    }
+  }
+  for (let i = status.events.length - 1; i >= 0; i--) {
+    const e = status.events[i];
+    if (e.type === 'story_start' && e.story) {
+      const key = `${e.lane || ''}:${e.story}`;
+      if (!finished.has(key)) {
+        return {
+          currentStory: e.story,
+          lane: e.lane || '—',
+          role: e.role || '—',
+          provider: e.provider || '—',
+          model: e.model || '',
+          startedAt: e.timestamp,
+        };
+      }
+    }
+  }
+  // Found live 2026-07-14: Step 0 (specification pass -- openspec/speckit
+  // splitting and reviewing stories) emits real, ongoing work as
+  // `spec_update` events, not `story_start`/`story_complete` -- so the
+  // check above alone leaves the panel showing "No Active Execution" for
+  // the ENTIRE duration of Step 0, sometimes several minutes, despite real
+  // activity happening the whole time. Fall back to the most recent
+  // spec_update (or any other recent event at all) so SOMETHING shows
+  // rather than a dead panel during any phase/step this event vocabulary
+  // doesn't explicitly model.
+  const last = status.events[status.events.length - 1];
+  if (last && last.timestamp) {
+    const ageMs = Date.now() - Date.parse(last.timestamp);
+    // Treat as "still active" only if the last event is recent (10 min) --
+    // an old stale event from a finished/killed run shouldn't show as live.
+    if (ageMs >= 0 && ageMs < 10 * 60 * 1000) {
+      return {
+        currentStory: last.story || `[${last.type || 'activity'}]`,
+        lane: last.lane || '—',
+        role: last.role || last.agent || '—',
+        provider: last.provider || '—',
+        model: last.model || '',
+        startedAt: last.timestamp,
+      };
+    }
+  }
+  return null;
+}
+
+function renderLivePanel(rawStatus) {
   const panel = document.getElementById('livePanel');
   const dot   = document.getElementById('lpDot');
   const title = document.getElementById('lpTitle');
   const sub   = document.getElementById('lpSub');
   const body  = document.getElementById('lpBody');
 
-  if (!status) {
+  const derived = deriveActiveStoryFromEvents(rawStatus);
+  const status = (rawStatus && rawStatus.currentStory)
+    ? rawStatus
+    : (rawStatus && derived ? { ...rawStatus, ...derived } : rawStatus);
+
+  if (!status || !status.currentStory) {
+    // A big "No Active Execution" box is redundant noise once the run is
+    // over — the verdict banner at the top of the page already says
+    // COMPLETED. Collapse this to a single line instead of a full panel
+    // (found live 2026-07-13, called out as "useless view").
     panel.className = 'live-panel lp-inactive';
     dot.className   = 'status-dot paused';
     title.textContent = 'No Active Execution';
     sub.textContent   = '';
-    body.innerHTML    = '<span class="lp-inactive-msg">Run a phase to see live state here. Reads from <code>logs/agent-status.json</code>.</span>';
+    body.innerHTML    = '<span class="lp-inactive-msg">Nothing running right now — see the Pipeline Timeline and Stories &amp; Deliverables above for what this run did.</span>';
     return;
   }
 
@@ -1048,7 +1693,7 @@ function renderLivePanel(status) {
   // Build info grid
   const elapsed = status.elapsedSeconds != null
     ? status.elapsedSeconds.toFixed(0) + 's'
-    : (status.elapsed || '—');
+    : (status.elapsed || (status.startedAt ? Math.max(0, (Date.now() - Date.parse(status.startedAt)) / 1000).toFixed(0) + 's' : '—'));
   const lane = status.lane || status.agentGroup || '—';
   const provider = status.aiProvider || status.provider || '—';
 
@@ -1088,11 +1733,23 @@ function renderLivePanel(status) {
 
 /* ─── Detect active phase for story grid default ─────────────────────────── */
 function detectActivePhase(phases) {
-  let ph = phases.find(p => (p.inProgressStories || 0) > 0);
+  // Same real field names as derivePhasesFromPrd() actually returns
+  // (inProgressCount/completedCount, not inProgressStories/completedStories
+  // — a THIRD copy of the identical field-name bug already found and fixed
+  // in renderStats()/renderPhases(), 2026-07-13). This one always fell
+  // through to phases[0] ("scaffold"), hiding every later phase's stories
+  // by default on first page load.
+  let ph = phases.find(p => (p.inProgressCount || 0) > 0);
   if (!ph) {
     for (let i = phases.length - 1; i >= 0; i--) {
-      if ((phases[i].completedStories || 0) > 0) { ph = phases[i]; break; }
+      if ((phases[i].completedCount || 0) > 0) { ph = phases[i]; break; }
     }
+  }
+  // When every phase is fully done (a completed run) and none is "active" in
+  // any meaningful sense, default the story grid to "All" so first-glance
+  // viewing shows every story instead of silently hiding all but one phase.
+  if (phases.length > 0 && phases.every(p => p.status === 'completed')) {
+    return '';
   }
   return ph ? (ph.phaseName || ph.name) : (phases[0] ? (phases[0].phaseName || phases[0].name) : null);
 }
@@ -1158,7 +1815,14 @@ function renderPipelineSteps(stepData) {
     const live = statusMap[step.id];
     const st = live ? (live.status || 'pending') : 'pending';
     const style = statusStyle[st] || statusStyle.pending;
-    const reason = live && live.status === 'skip' && step.bypassVar ? step.bypassVar : '';
+    // Prefer the real, live per-step detail (model used, story count, gate
+    // verdict summary, e.g. "score 50-69%", "moonshotai/kimi-k2, 4 stories")
+    // now emitted by step_emit itself — added 2026-07-13, replacing a
+    // hardcoded bypassVar guess that only ever covered the skip case and
+    // told you nothing about what a step actually did or delivered.
+    const detail = (live && live.detail) ? live.detail
+      : (live && live.status === 'skip' && step.bypassVar) ? step.bypassVar
+      : '';
     return `<tr>
       <td style="padding:5px 12px 5px 0;color:var(--text3);font-size:11px;font-family:monospace;white-space:nowrap;">${step.id}</td>
       <td style="padding:5px 12px 5px 0;">${step.label}</td>
@@ -1167,7 +1831,7 @@ function renderPipelineSteps(stepData) {
           ${style.icon} ${style.label}
         </span>
       </td>
-      <td style="padding:5px 0;color:var(--text3);font-size:11px;">${reason ? `<code style="font-size:10px;">${reason}</code>` : ''}</td>
+      <td style="padding:5px 0;color:var(--text3);font-size:11px;">${detail ? `<code style="font-size:10px;">${trunc(detail, 60)}</code>` : ''}</td>
     </tr>`;
   }).join('');
 
@@ -1179,7 +1843,7 @@ function renderPipelineSteps(stepData) {
         <th style="text-align:left;padding:4px 12px 8px 0;font-size:11px;color:var(--text3);font-weight:600;">Step</th>
         <th style="text-align:left;padding:4px 12px 8px 0;font-size:11px;color:var(--text3);font-weight:600;">Name</th>
         <th style="text-align:left;padding:4px 8px 8px;font-size:11px;color:var(--text3);font-weight:600;">Status</th>
-        <th style="text-align:left;padding:4px 0 8px;font-size:11px;color:var(--text3);font-weight:600;">Bypass</th>
+        <th style="text-align:left;padding:4px 0 8px;font-size:11px;color:var(--text3);font-weight:600;">Detail</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
@@ -1187,15 +1851,47 @@ function renderPipelineSteps(stepData) {
 }
 
 /* ─── Main refresh loop ──────────────────────────────────────────────────── */
+function renderHero(stepData, liveStatus, phaseCostEvents) {
+  const el = id => document.getElementById(id);
+  const steps = stepData?.steps || [];
+  let verdict = 'idle', label = 'IDLE';
+  if (steps.length) {
+    if (steps.some(s => s.status === 'fail')) { verdict = 'fail'; label = 'FAILED'; }
+    else if (steps.some(s => s.status === 'running')) { verdict = 'running'; label = 'RUNNING'; }
+    else { verdict = 'pass'; label = 'PASSED'; }
+  }
+  el('heroVerdict').className = 'hero-verdict ' + verdict;
+  el('heroVerdict').textContent = label;
+
+  // Elapsed: prefer agent-status.json's startedAt -> step-status.json's
+  // updatedAt; fall back to the earliest/latest phase-cost.jsonl timestamps
+  // when startedAt isn't set (agent-status.json is reset to null between runs).
+  let startMs = liveStatus?.startedAt ? Date.parse(liveStatus.startedAt) : null;
+  const endMs = stepData?.updatedAt ? Date.parse(stepData.updatedAt) : Date.now();
+  if (!startMs && phaseCostEvents.length) {
+    const times = phaseCostEvents.map(e => Date.parse(e.started_at)).filter(t => !isNaN(t));
+    if (times.length) startMs = Math.min(...times);
+  }
+  if (startMs && !isNaN(endMs)) {
+    const mins = Math.max(0, Math.round((endMs - startMs) / 60000));
+    el('heroElapsed').textContent = mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
+  } else {
+    el('heroElapsed').textContent = '—';
+  }
+
+  el('heroWarnings').textContent = steps.filter(s => s.status === 'warn').length;
+}
+
 async function refresh() {
   // Fetch all data sources in parallel
   await loadPrd();
-  const [phases, stories, events, liveStatus, stepData] = await Promise.all([
+  const [phases, stories, events, liveStatus, stepData, phaseCostEvents] = await Promise.all([
     fetchPhasesFromPrd(),
     fetchStoriesFromPrd(),
     fetchActivityEvents(),
     fetchAgentStatus(),
-    fetchStepStatus()
+    fetchStepStatus(),
+    fetchPhaseCostEvents()
   ]);
 
   const apiOnline = phases !== null || stories !== null;
@@ -1206,8 +1902,11 @@ async function refresh() {
 
   const evList = events ? (Array.isArray(events) ? events : (events.data || [])) : [];
 
+  // Cost & Agents (computed first — its real total feeds the Overview stats below)
+  const realTotalCost = renderCostBreakdown(phaseCostEvents);
+
   // Stats
-  renderStats(allPhases, allStories);
+  renderStats(allPhases, allStories, realTotalCost);
 
   // Phase list
   renderPhases(allPhases);
@@ -1215,7 +1914,14 @@ async function refresh() {
   // Phase selector + story grid
   const autoPhase = detectActivePhase(allPhases);
   populatePhaseSelector(allPhases, autoPhase);
-  renderStoryGrid(allStories, selectedPhase || autoPhase);
+  populateProviderModelFilters(allStories);
+  // `selectedPhase || autoPhase` was a real bug: '' (the explicit "All"
+  // choice) is falsy in JS, so `||` silently fell through to autoPhase every
+  // 3-second refresh — the dropdown kept showing "All" while the grid
+  // beneath it reverted to a single phase, which is exactly what read as
+  // "All doesn't work" / flashing (found live 2026-07-13). null (never
+  // chosen yet) must still fall through to autoPhase; '' must not.
+  renderStoryGrid(allStories, selectedPhase != null ? selectedPhase : autoPhase);
 
   // Activity feed
   renderActivity(evList);
@@ -1225,7 +1931,24 @@ async function refresh() {
 
   // Live state panel
   renderLivePanel(liveStatus);
+
+  // Run Summary Hero
+  renderHero(stepData, liveStatus, phaseCostEvents);
 }
+
+/* ─── Self-Healing & Retries + Story Commits: sourced from build-info.json
+ * (runtime/build-info.js, loaded via a deferred <script> — listen for its
+ * update event rather than reading window.EPAMBuildInfo synchronously here,
+ * since deferred scripts run after this inline block on first page load). */
+window.addEventListener('buildinfo:update', (e) => {
+  const info = e.detail?.info;
+  if (!info) return;
+  renderSelfHealing(info);
+  const heals = info.metrics?.selfHealing?.healing?.analystCycles;
+  if (heals != null) document.getElementById('heroHeals').textContent = heals;
+  latestStoryCommits = info.metrics?.storyCommits || {};
+  renderStoryGrid(allStories, selectedPhase);
+});
 
 /* ─── Bootstrap ──────────────────────────────────────────────────────────── */
 refresh();

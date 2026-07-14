@@ -23,11 +23,31 @@ while IFS= read -r line; do
   [ -z "$line" ] && continue
 
   STORY_ID=$(echo "$line" | jq -r '.story_id')
-  STORY_TITLE=$(echo "$line" | jq -r '.story_title')
-  AGENT_ROLE=$(echo "$line" | jq -r '.agent_name')
   STARTED_AT=$(echo "$line" | jq -r '.started_at')
   ENDED_AT=$(echo "$line" | jq -r '.ended_at')
   RESOLVED_MODEL=$(echo "$line" | jq -r '.resolvedModel // ""')
+
+  # phase-cost.jsonl also carries phase-level pipeline records (agent_type
+  # spec-pass/assessment/qa-gate:*, story_id set to the phase name itself,
+  # e.g. "scaffold"/"core" — see append_pipeline_cost_record in
+  # run-agent-orchestration.sh) alongside real per-story records (see
+  # append_cost_record in claude.sh). Those phase-level records were never
+  # stories and have no PRD entry — treating them as one produced fake
+  # "story_start"/"story_complete" events with story_id="scaffold" (found
+  # live 2026-07-13). Skip any story_id that isn't a real PRD story.
+  if ! jq -e --arg id "$STORY_ID" '.stories[] | select(.id == $id)' "$PRD_FILE" >/dev/null 2>&1; then
+    continue
+  fi
+
+  # story_title/agent_name were never fields on phase-cost.jsonl records (the
+  # real schema has no such keys on either record type) — jq -r on a missing
+  # key returns the JSON null token stringified as the literal text "null",
+  # which is exactly what showed up as agent="null"/"Starting null" in the
+  # dashboard (found live 2026-07-13). The real source of truth for a
+  # story's title/role is prd.json, same as claude.sh's own
+  # update_monitor_status looks it up — not the cost-log line itself.
+  STORY_TITLE=$(jq -r --arg id "$STORY_ID" '.stories[] | select(.id == $id) | .title // $id' "$PRD_FILE")
+  AGENT_ROLE=$(jq -r --arg id "$STORY_ID" '.stories[] | select(.id == $id) | .agentRole // ""' "$PRD_FILE")
 
   # Determine lane from prd.json
   LANE=$(jq -r --arg id "$STORY_ID" '.stories[] | select(.id == $id) | .agentGroup // "main"' "$PRD_FILE")

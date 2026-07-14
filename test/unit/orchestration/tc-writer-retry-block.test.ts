@@ -21,6 +21,19 @@ const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 const orchSrc = readFileSync(ORCH_SH, 'utf8');
 
+// _log_guarded_step_retry/_epam_prompt_version — shared helpers (2026-07-13)
+// that this call site now delegates to for the actual
+// "guarded-step-retries.jsonl" write. Any REAL-execution harness below must
+// define them too, or the call site silently no-ops.
+function extractHelperFunctionBody(name: string): string {
+  const defRe = new RegExp(`^${name}\\(\\)\\s*\\{`, 'm');
+  const defMatch = defRe.exec(orchSrc);
+  if (!defMatch) throw new Error(`No function definition found for ${name}()`);
+  const start = defMatch.index;
+  const end = orchSrc.indexOf('\n}', start) + 2;
+  return orchSrc.slice(start, end);
+}
+
 describe('Inline TC writer gate (Step 1 loop) — static wiring', () => {
   const startIdx = orchSrc.indexOf('if [ -n "$_needs_tc" ]; then');
   const endIdx = orchSrc.indexOf('log "  Running: $story"', startIdx);
@@ -42,8 +55,8 @@ describe('Inline TC writer gate (Step 1 loop) — static wiring', () => {
     expect(block).toMatch(/blocked-stories\.jsonl/);
   });
 
-  it('logs the outcome to guarded-step-retries.jsonl', () => {
-    expect(block).toMatch(/guarded-step-retries\.jsonl/);
+  it('logs the outcome via the shared _log_guarded_step_retry helper (double-write to per-run + persistent history)', () => {
+    expect(block).toMatch(/_log_guarded_step_retry "\$\(jq -n -c/);
   });
 
   it('continues the loop (skips this story) rather than aborting', () => {
@@ -62,7 +75,10 @@ describe('Step 1 loop — live-status re-check now also skips "blocked" stories 
 
 describe('Batch TC writer gate (Step 1.6) — static wiring', () => {
   const idx = orchSrc.indexOf('for _tc_batch_attempt in 1 2 3; do');
-  const block = orchSrc.slice(idx - 200, idx + 2600);
+  // Widened 2600 -> 3400 (2026-07-13): the violationTypes derivation +
+  // _log_guarded_step_retry call added between the retry loop and the
+  // "blocks only the specific IDs" section pushed it further from the anchor.
+  const block = orchSrc.slice(idx - 200, idx + 3400);
 
   it('retries up to 3 attempts', () => {
     expect(block).toMatch(/for _tc_batch_attempt in 1 2 3; do/);
@@ -143,6 +159,13 @@ describe('Inline TC writer gate — REAL execution', () => {
       'warning() { echo "WARN: $*" >&2; }',
       'success() { echo "SUCCESS: $*" >&2; }',
       'error() { echo "ERROR: $*" >&2; }',
+      // History dir redirected to this test's own throwaway dir -- never
+      // touch the real orchestrations/logs/guarded-step-retries-history.jsonl.
+      extractHelperFunctionBody('_epam_prompt_version'),
+      extractHelperFunctionBody('_log_guarded_step_retry').replace(
+        /\$SCRIPT_DIR\/\.\.\/logs/g,
+        join(dir, 'history-logs'),
+      ),
       `_needs_tc="SKY-002-test"`,
       block,
       'echo "REACHED_END rc=$?"',

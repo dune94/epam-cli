@@ -157,10 +157,21 @@ services:
     volumes:
       - ./orchestrations/dashboards/nginx.conf:/etc/nginx/conf.d/default.conf
       - ./orchestrations/dashboards/live:/usr/share/nginx/html
-      - ./orchestrations/logs:/usr/share/nginx/html/logs
-      - ./orchestrations/prd.json:/usr/share/nginx/html/prd.json
-      - ./orchestrations/agents/profiles.json:/usr/share/nginx/html/profiles.json
-      - ./orchestrations/logs:/usr/share/nginx/html/spec-logs
+      # ./orchestrations/prd.json and the two logs/spec-logs mounts below were
+      # removed (2026-07-13): all dead or actively wrong. nginx.conf's
+      # `location = /prd.json { alias ...; }` exact-match always won over the
+      # PRD file mount regardless, and `spec-logs` was never referenced by any
+      # dashboard. The `logs` mount was actively wrong for external-project
+      # runs (tier3-*-run.sh): it always pointed at orchestrations/logs, but
+      # run-agent-orchestration.sh's own LOG_DIR resolves to the target
+      # project's own directory for such runs — the dashboard was silently
+      # reading an unrelated, empty directory. pre-run-reset.sh now mounts the
+      # real active PRD's directory at /prd-dir and the real active run's
+      # LOG_DIR at /logs-dir via the compose override (both directory mounts,
+      # not file mounts — a single-FILE bind mount goes stale the instant that
+      # file is rewritten via atomic tmp+rename, this pipeline's normal,
+      # correct write pattern).
+      - ./orchestrations/agents:/profiles-dir:ro
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/"]
       interval: 10s

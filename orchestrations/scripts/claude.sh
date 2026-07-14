@@ -1622,6 +1622,21 @@ run_dynamic_tools_in_unlocked_window() {
 # run_dependency_check's sanctioned install step handles AFTER this check
 # runs. Any hit here is treated as a hard, deterministic failure — no LLM
 # diagnosis needed, the fact itself is certain.
+#
+# Excludes tool-generated cache/output paths, config-supplied via
+# .epam/dependency-check.json's "vendorCacheExcludePatterns" (bash glob
+# patterns matched against each file's path relative to the vendor dir — e.g.
+# ".vite/*" for Vitest's own results cache). No test-runner/tool name is
+# hardcoded in this engine, same "manifest supplies stack knowledge" pattern
+# as vendorDirs/requiredDevDependencies above. Root cause this fixes (found
+# live, 2026-07-13, SKY-004 and SKY-003-b): a story's agent legitimately runs
+# its own tests to self-verify — completely normal, encouraged behavior — and
+# vitest rewrites its OWN result cache (node_modules/.vite/vitest/results.json)
+# as a side effect. That's the tool's own transient output, not a rewrite of
+# its actual entry-point/source code (the exploit this check exists to catch,
+# e.g. node_modules/vitest/vitest.mjs) — but the check couldn't tell them
+# apart, hard-failing 4 separate legitimate test runs across two stories in a
+# single run.
 # Returns 0 if clean (or no vendor dirs configured / no marker yet). Returns 1
 # and sets VERIFICATION_FAILURE otherwise.
 run_vendor_integrity_check() {
@@ -1630,12 +1645,30 @@ run_vendor_integrity_check() {
     local marker="$project_root/.epam/.vendor-lock-marker"
     [ -f "$marker" ] || return 0
 
+    local -a exclude_patterns=()
+    local _config_file="$project_root/.epam/dependency-check.json"
+    if [ -f "$_config_file" ]; then
+        while IFS= read -r _pat; do
+            [ -n "$_pat" ] && exclude_patterns+=("$_pat")
+        done < <(jq -r '.vendorCacheExcludePatterns[]? // empty' "$_config_file" 2>/dev/null)
+    fi
+
     local tampered=()
     local _vendor_dir
     while IFS= read -r _vendor_dir; do
         [ -z "$_vendor_dir" ] && continue
         while IFS= read -r _f; do
-            [ -n "$_f" ] && tampered+=("$_f")
+            [ -z "$_f" ] && continue
+            local _rel="${_f#"$_vendor_dir"/}"
+            local _excluded=false
+            local _pat
+            for _pat in "${exclude_patterns[@]}"; do
+                # shellcheck disable=SC2254 # intentional glob match against a config-supplied pattern
+                case "$_rel" in
+                    $_pat) _excluded=true; break ;;
+                esac
+            done
+            [ "$_excluded" = true ] || tampered+=("$_f")
         done < <(find "$_vendor_dir" -type f -newer "$marker" 2>/dev/null)
     done < <(_get_vendor_dirs "$project_root")
 
@@ -3188,28 +3221,59 @@ classify_ladder_tier() {
     esac
 
     local _failures_file="${LOG_DIR}/story-failures.jsonl"
-    [ -f "$_failures_file" ] || { echo "medium"; return; }
+    if [ -f "$_failures_file" ]; then
+        local _max_attempt _cycle_count
+        _max_attempt=$(jq -s -r --arg sid "$story_id" \
+            '[.[] | select(.storyId == $sid) | .attempt] | max // -1' \
+            "$_failures_file" 2>/dev/null || echo -1)
+        # A prior cycle reaching MAX_RETRIES means it was fully exhausted once
+        # already — the next cycle should not repeat the same cheap-first ramp.
+        if [ "${_max_attempt:-0}" -ge "${MAX_RETRIES:-7}" ]; then
+            echo "high"
+            return
+        fi
 
-    local _max_attempt _cycle_count
-    _max_attempt=$(jq -s -r --arg sid "$story_id" \
-        '[.[] | select(.storyId == $sid) | .attempt] | max // -1' \
-        "$_failures_file" 2>/dev/null || echo -1)
-    # A prior cycle reaching MAX_RETRIES means it was fully exhausted once
-    # already — the next cycle should not repeat the same cheap-first ramp.
-    if [ "${_max_attempt:-0}" -ge "${MAX_RETRIES:-7}" ]; then
-        echo "high"
-        return
+        # Distinct failure timestamps far apart (different watchdog/run
+        # cycles) also indicate a genuinely hard story, even if no single
+        # cycle hit MAX_RETRIES (e.g. it kept timing out before exhausting
+        # attempts).
+        _cycle_count=$(jq -r --arg sid "$story_id" \
+            'select(.storyId == $sid) | .attempt' \
+            "$_failures_file" 2>/dev/null | sort -u | wc -l | tr -d ' ')
+        if [ "${_cycle_count:-0}" -ge 6 ]; then
+            echo "high"
+            return
+        fi
     fi
 
-    # Distinct failure timestamps far apart (different watchdog/run cycles)
-    # also indicate a genuinely hard story, even if no single cycle hit
-    # MAX_RETRIES (e.g. it kept timing out before exhausting attempts).
-    _cycle_count=$(jq -r --arg sid "$story_id" \
-        'select(.storyId == $sid) | .attempt' \
-        "$_failures_file" 2>/dev/null | sort -u | wc -l | tr -d ' ')
-    if [ "${_cycle_count:-0}" -ge 6 ]; then
-        echo "high"
-        return
+    # Low average diagnosis groundedness is a third, purely measured signal:
+    # it means the FailureAnalyst itself keeps having to guess rather than
+    # cite verifiable evidence for this story's failures -- a language- and
+    # bug-content-agnostic proxy for "this is a genuinely hard story",
+    # computed identically for any stack from the DiagnosisGroundedness step
+    # every project already runs. Threshold and minimum sample size are both
+    # configurable so a low-sample-count story isn't misclassified on noise.
+    local _groundedness_file="${OUTPUT_DIR:-$LOG_DIR}/failure-diagnosis-groundedness.jsonl"
+    if [ -f "$_groundedness_file" ]; then
+        local _min_samples="${EPAM_LADDER_GROUNDEDNESS_MIN_SAMPLES:-2}"
+        local _threshold="${EPAM_LADDER_GROUNDEDNESS_ESCALATION_THRESHOLD:-0.6}"
+        local _avg_and_count
+        _avg_and_count=$(jq -s -r --arg sid "$story_id" '
+            [.[] | select(.storyId == $sid) | select(.score != null) | .score] as $scores
+            | if ($scores | length) > 0
+              then "\(($scores | add) / ($scores | length)) \($scores | length)"
+              else "1 0"
+              end
+        ' "$_groundedness_file" 2>/dev/null || echo "1 0")
+        local _avg_score _sample_count
+        _avg_score=$(echo "$_avg_and_count" | awk '{print $1}')
+        _sample_count=$(echo "$_avg_and_count" | awk '{print $2}')
+        if [ "${_sample_count:-0}" -ge "$_min_samples" ] 2>/dev/null; then
+            if python3 -c "exit(0 if float('${_avg_score:-1}') < float('${_threshold}') else 1)" 2>/dev/null; then
+                echo "high"
+                return
+            fi
+        fi
     fi
     echo "medium"
 }
@@ -4898,6 +4962,34 @@ print(sum(scores)/len(scores) if scores else 0)
         '{total_heal_events:$total, distinct_diagnoses:$distinct, healing_broken_ever:$broken, avg_groundedness:$avg, groundedness_sample_count:$samples}'
 }
 
+# resolve_role_retry_extension_max <story_id>
+# Reads EPAM_ROLE_RETRY_EXTENSION_MAP (pipe-separated "agentRole=max" pairs,
+# same convention as EPAM_MODEL_LADDER_*/EPAM_MODEL_PROVIDER_MAP) and returns
+# the extension cap for the story's agentRole, falling back to
+# EPAM_RETRY_EXTENSION_MAX (default 2) when the role has no entry. agentRole
+# is whatever the pipeline itself assigned in prd.json (Step 0.5/0.9) --
+# never a hardcoded project-specific value here.
+resolve_role_retry_extension_max() {
+    local story_id="$1"
+    local default_max="${EPAM_RETRY_EXTENSION_MAX:-2}"
+    local role
+    role=$(jq -r --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .agentRole // ""' \
+        "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
+    [ -z "$role" ] && { echo "$default_max"; return 0; }
+    local map pair from to ifs_save="$IFS"
+    map="${EPAM_ROLE_RETRY_EXTENSION_MAP:-test-engineer=4}"
+    IFS='|'; read -ra pairs <<< "$map"; IFS="$ifs_save"
+    for pair in "${pairs[@]}"; do
+        from="${pair%%=*}"; to="${pair#*=}"
+        if [ "$role" = "$from" ]; then
+            echo "$to"
+            return 0
+        fi
+    done
+    echo "$default_max"
+}
+
 # run_retry_extension_coordinator <story_id>
 # Dynamic self-heal augmentation (2026-07-12, user request): a story that
 # exhausted MAX_RETRIES with genuine, converging progress (each failure a
@@ -5021,7 +5113,8 @@ print(json.dumps({\"extend\": False, \"extraRetries\": 0, \"reason\": \"unparsea
 
     local granted=0
     if [ "$extend" = "true" ]; then
-        local _max="${EPAM_RETRY_EXTENSION_MAX:-2}"
+        local _max
+        _max=$(resolve_role_retry_extension_max "$story_id")
         granted="$extra_retries"
         [ "$granted" -gt "$_max" ] 2>/dev/null && granted="$_max"
         [ "$granted" -lt 0 ] 2>/dev/null && granted=0
@@ -5393,6 +5486,23 @@ ${_trimmed_amendment}"
 
         log "Invoking $story_cli (attempt $((retry_count + 1))/$((MAX_RETRIES + 1)))..."
 
+        # Proactive dependency install, BEFORE the vendor lock is applied for
+        # this attempt (found live, 2026-07-13, SKY-004-test): a source/test
+        # file written by an EARLIER attempt can already import a package
+        # missing from package.json. Without this, the agent discovers the
+        # gap itself mid-turn and — despite the skill addendum warning it not
+        # to — tries to `chmod` node_modules writable and `npm install` the
+        # package directly, which touches many UNRELATED transitive
+        # dependency files (npm's own hoisting/dedup side effects) and trips
+        # run_vendor_integrity_check's tamper detector post-turn. That check
+        # then hard-fails BEFORE the existing post-turn run_dependency_check
+        # call (further below in run_external_verification) ever runs — so
+        # the one mechanism that would have installed the dependency safely
+        # never got the chance. Running it here, before the lock, means the
+        # dependency is already satisfied by the time the agent's turn
+        # starts, so there's nothing left for the agent to (mis)fix itself.
+        run_dependency_check "$PROJECT_ROOT"
+
         # Scope guard: lock .ts files outside this story's declared scope read-only.
         # Any write attempt — Bash, WriteFile, or otherwise — gets EACCES.
         _scope_lock "$story_id"
@@ -5469,6 +5579,22 @@ ${_trimmed_amendment}"
                 local raw_file="${json_result_file%.json}_raw.json"
                 local epam_model_flag=()
                 [ -n "${STORY_MODEL:-}" ] && epam_model_flag=(--model "$STORY_MODEL")
+                # When EPAM_SANDBOX is active (EPAM_SANDBOX_IMAGE is set by
+                # run-agent-orchestration.sh's sandbox bootstrap), route
+                # through $CLAUDE_CMD (the sandbox wrapper) instead of
+                # calling $EPAM_CLI directly — this is what makes vendor-dir
+                # tampering structurally impossible for THIS provider branch
+                # too (previously only the claude/epam default branches
+                # respected --sandbox at all). EPAM_SANDBOX_TARGET_CMD tells
+                # sandbox-invoke.sh to run epam-cli's own bind-mounted CLI
+                # (see that script's docstring) instead of its `claude`
+                # default; left empty (harmless) when not sandboxed.
+                local _epam_run_binary="$EPAM_CLI"
+                local _epam_sandbox_target=""
+                if [ -n "${EPAM_SANDBOX_IMAGE:-}" ]; then
+                    _epam_run_binary="$CLAUDE_CMD"
+                    _epam_sandbox_target="node /opt/epam-cli/dist/epam.js"
+                fi
                 # Scope guard: build EPAM_ALLOWED_WRITE_PATHS from the story's declared files.
                 # WriteFile.ts uses this to block TS writes outside the story's scope.
                 local _allowed_write_paths
@@ -5504,7 +5630,8 @@ ${_trimmed_amendment}"
                         EPAM_RALPH_WIGGUM_ENABLED="${EPAM_RALPH_WIGGUM_ENABLED:-}" \
                         EPAM_RALPH_WIGGUM_AGENTS="${EPAM_RALPH_WIGGUM_AGENTS:-}" \
                         EPAM_RALPH_WIGGUM_TIMEOUT_MS="${EPAM_RALPH_WIGGUM_TIMEOUT_MS:-}" \
-                        "${_timeout_prefix[@]}" "$EPAM_CLI" run \
+                        EPAM_SANDBOX_TARGET_CMD="${_epam_sandbox_target}" \
+                        "${_timeout_prefix[@]}" "$_epam_run_binary" run \
                         --provider "$STORY_PROVIDER" \
                         "${epam_model_flag[@]}" \
                         --json - \
@@ -5931,10 +6058,16 @@ append_cost_record() {
     # Parse cost/token/turn usage from JSON result file.
     # Handles two output shapes:
     #   Claude CLI (--output-format json): total_cost_usd, usage.input_tokens, usage.output_tokens
-    #   epam run --json (AgentRunner):     cost_usd,        usage.inputTokens,  usage.outputTokens
-    local tokens_in=0 tokens_out=0 cost_usd=0 task_turns=0
+    #   epam run --json (AgentRunner):     cost_usd,        usage.inputTokens,  usage.outputTokens,
+    #                                      cost_is_estimate (explicit real-vs-estimate flag)
+    local tokens_in=0 tokens_out=0 cost_usd=0 task_turns=0 cost_is_estimate=""
     if [ -n "$json_result_file" ] && [ -f "$json_result_file" ]; then
         cost_usd=$(jq -r '.total_cost_usd // .cost_usd // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
+        # Claude CLI's total_cost_usd has no equivalent flag (it's always
+        # real, Anthropic bills it directly) — cost_is_estimate only exists
+        # on epam run --json output. Empty here means "not applicable" for
+        # Claude CLI, resolved to a concrete true/false below.
+        cost_is_estimate=$(jq -r 'if has("cost_is_estimate") then (.cost_is_estimate | tostring) else "" end' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo "")
         tokens_in=$(jq -r '.usage.input_tokens // .usage.inputTokens // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
         tokens_out=$(jq -r '.usage.output_tokens // .usage.outputTokens // 0' "$json_result_file" 2>/dev/null | tr -d '[:space:]' || echo 0)
         # Turn count: Claude CLI reports num_turns/turns; AgentRunner reports iterations
@@ -5949,14 +6082,22 @@ append_cost_record() {
     [ -z "$cost_usd" ] && cost_usd=0
     [ -z "$task_turns" ] && task_turns=0
 
-    # If provider returned no cost (e.g. OpenRouter/qwen), compute from pricing table
-    if [ "${cost_usd}" = "0" ] || [ "${cost_usd}" = "0.0" ] || [ -z "${cost_usd}" ]; then
+    # If the JSON result explicitly said this cost is real (cost_is_estimate
+    # = "false"), trust it even if it happens to be a genuine $0 call — don't
+    # run it through the local pricing-table fallback below. Otherwise
+    # (cost_is_estimate missing/true, or cost_usd is 0/empty), compute from
+    # the pricing table as a last-resort ESTIMATE, and record that fact.
+    if [ "$cost_is_estimate" != "false" ] && { [ "${cost_usd}" = "0" ] || [ "${cost_usd}" = "0.0" ] || [ -z "${cost_usd}" ]; }; then
         if [ "${tokens_in:-0}" -gt 0 ] || [ "${tokens_out:-0}" -gt 0 ]; then
             local computed_cost
             computed_cost=$(compute_token_cost "${resolved_model:-}" "$tokens_in" "$tokens_out")
-            [ -n "$computed_cost" ] && [ "$computed_cost" != "0" ] && cost_usd="$computed_cost"
+            if [ -n "$computed_cost" ] && [ "$computed_cost" != "0" ]; then
+                cost_usd="$computed_cost"
+                cost_is_estimate="true"
+            fi
         fi
     fi
+    [ -z "$cost_is_estimate" ] && cost_is_estimate="false"
 
     # Atomic JSONL append with flock
     (
@@ -5977,6 +6118,7 @@ append_cost_record() {
             --arg pm "${planner_model:-}" \
             --argjson ptm "${prompt_tokens_measured:-0}" \
             --arg im "${invoke_mode}" \
+            --argjson cie "$cost_is_estimate" \
             '{phase_id:$pid, phase_name:$pn, story_id:$sid, story_title:$st,
               agent_id:$aid, agent_name:$an, forecast_hours:$fh, forecast_cost_usd:$fc,
               started_at:$sa, ended_at:$ea, elapsed_minutes:$em,
@@ -5985,7 +6127,8 @@ append_cost_record() {
               status:$s, notes:$n,
               effort:$ef, storyType:$stype, resolvedModel:$rm,
               plannerModel:$pm,
-              prompt_tokens_measured:$ptm, invokeMode:$im}' >> "$cost_file"
+              prompt_tokens_measured:$ptm, invokeMode:$im,
+              costIsEstimate:$cie}' >> "$cost_file"
     ) 200>"$lock_file"
 
     # Emit human-readable cost summary to the run log so it appears in pipeline output.

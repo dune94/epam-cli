@@ -82,7 +82,10 @@ describe('post-impl-tc-writer.sh — invokes epam run without --cwd', () => {
 
 describe('run-agent-orchestration.sh — Step 1.6 no longer masks the real exit code with tee', () => {
   const idx = orchSrc.indexOf('Step 1.6: TC writer gate — ${_tc_writer_needed}');
-  const block = orchSrc.slice(idx, idx + 3200);
+  // Widened 3200 -> 4000 (2026-07-13): the violationTypes derivation +
+  // _log_guarded_step_retry call added before the blocked-story handling
+  // pushed it further from the anchor.
+  const block = orchSrc.slice(idx, idx + 4000);
 
   it('does NOT use the `if CMD | tee file; then` pattern (checks tee, not CMD)', () => {
     expect(block).not.toMatch(/if bash "\$SCRIPT_DIR\/post-impl-tc-writer\.sh"[\s\S]*?\| tee[\s\S]*?; then/);

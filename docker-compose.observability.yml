@@ -111,10 +111,19 @@ services:
     volumes:
       - ./orchestrations/dashboards/nginx.conf:/etc/nginx/conf.d/default.conf
       - ./orchestrations/dashboards/live:/usr/share/nginx/html
-      - ./orchestrations/logs:/usr/share/nginx/html/logs
-      # live/prd.json is synced by pre-run-reset.sh before each run — no app-specific mount needed
-      - ./orchestrations/agents/profiles.json:/usr/share/nginx/html/profiles.json
-      - ./orchestrations/logs:/usr/share/nginx/html/spec-logs
+      # /prd-dir and /logs-dir are set by pre-run-reset.sh's compose OVERRIDE
+      # (docker-compose.observability.override.yml), mounting the active PRD's
+      # PARENT DIRECTORY and the active run's LOG_DIR respectively — NOT the
+      # files themselves (see pre-run-reset.sh for why a directory mount is
+      # required, not optional; found live 2026-07-13 both for the PRD, which
+      # goes stale the instant it's rewritten via atomic tmp+rename, and for
+      # logs, which for external-project runs live in the target project's own
+      # directory, never here). No default here, same as /prd-dir: until
+      # pre-run-reset.sh runs at least once, /prd.json and /logs/* both 404.
+      # /profiles-dir is a directory mount for the same reason: profiles.json
+      # is rewritten via atomic tmp+rename by the pipeline, which orphans a
+      # single-file bind mount the instant it happens (found live 2026-07-13).
+      - ./orchestrations/agents:/profiles-dir:ro
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/"]
       interval: 10s

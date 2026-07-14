@@ -81,7 +81,8 @@ Parallel multi-agent execution with phase gates and cost tracking:
 - **Budget guardrails** — Cost thresholds, model downgrade, session tracking
 - **Session handoff** — Automatic context preservation on failover
 - **QA Testing Gates** — 7 QA gate agents in 3 cascading phases (SAST, spec compliance, code review, mutation testing, fuzz analysis, performance)
-- **Self-Healing Reviewer Gates with Retry-on-Violation** — every automated write to `prd.json`/`profiles.json` (skill assessment, model assignment, spec-pass rewrites, TC writer) is validated by a deterministic or LLM reviewer; a violation gets up to 3 attempts with the specific issue fed back as a corrective note before falling back to a snapshot revert (or, for the TC writer, blocking just that one story instead of aborting the whole phase)
+- **Self-Healing Reviewer Gates with Retry-on-Violation** — every automated write to `prd.json`/`profiles.json` (skill assessment, model assignment, spec-pass rewrites, TC writer) is validated by a deterministic or LLM reviewer; a violation gets up to 3 attempts with the specific issue fed back as a corrective note before falling back to a snapshot revert (or, for the TC writer, blocking just that one story instead of aborting the whole phase). Every outcome double-writes to a persistent, git-SHA-tagged history file so a prompt's violation rate can be tracked across runs, not just within one
+- **Single-Authority Story Splitting** — openspec is the sole decision-maker on splitting oversized stories; a deterministic code-level guard drops any competing split proposal a second agent still emits, closing a real live collision (two agents independently splitting the same story into different children)
 - **LLM Observability (Langfuse)** — Every LLM call traced with tokens, cost, latency, and tool calls via self-hosted Langfuse at `http://localhost:3100`
 - **GitIngest** — Codebase-to-LLM-context extraction for documentation pipelines
 
@@ -114,7 +115,7 @@ Live monitoring at `http://localhost:8092`:
 - **quality-assurance.html** — QA testing gate verdicts per phase
 - **agents-orchestration.html** — Pipeline flow with gate steps
 - **specification.html** — Spec diff (openspec/speckit collaboration)
-- **health.html** — Self-healing signals (analyst cycles, skill-note growth, dynamic tools) plus prompt-eval retry/revert/block outcomes for the reviewer-gated writes above
+- **health.html** — Self-healing signals (analyst cycles, skill-note growth, dynamic tools) plus prompt-eval retry/revert/block outcomes for the reviewer-gated writes above, including a cross-run trend table and violation-type breakdown per step
 
 ### LLM Observability (Langfuse)
 

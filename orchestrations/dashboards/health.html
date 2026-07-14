@@ -135,6 +135,21 @@ code { background: var(--surface2); border-radius: 4px; padding: 1px 5px; font-s
         <thead><tr><th>Time</th><th>Story</th><th>Reason</th></tr></thead>
         <tbody id="blockedStoriesTable"></tbody>
       </table>
+      <div class="section-sub" style="margin-top: 14px;">
+        Cross-run trend — one row per (run, step), newest run first. Unlike the tables above (scoped to the
+        current run only, wiped by the next teardown), this reads a persistent engine-side history file, so a
+        prompt's violation rate can be tracked across runs and correlated to the prompt-version commit that
+        was active.
+      </div>
+      <table>
+        <thead><tr><th>Run</th><th>Prompt Version</th><th>Step</th><th>Calls</th><th>Violation Rate</th><th>Passed</th><th>Reverted</th><th>Blocked</th></tr></thead>
+        <tbody id="promptEvalHistoryTable"></tbody>
+      </table>
+      <div class="section-sub" style="margin-top: 14px;">Most common violations per step, across all tracked history.</div>
+      <table>
+        <thead><tr><th>Step</th><th>Violation Type</th><th>Count</th></tr></thead>
+        <tbody id="promptEvalViolationsTable"></tbody>
+      </table>
       <div class="footer-note" id="generatedAt"></div>
     </section>
   </main>
@@ -150,6 +165,8 @@ const promptEvalGrid = document.getElementById('promptEvalGrid');
 const promptEvalByStepTable = document.getElementById('promptEvalByStepTable');
 const promptEvalRecentTable = document.getElementById('promptEvalRecentTable');
 const blockedStoriesTable = document.getElementById('blockedStoriesTable');
+const promptEvalHistoryTable = document.getElementById('promptEvalHistoryTable');
+const promptEvalViolationsTable = document.getElementById('promptEvalViolationsTable');
 
 function metricCard(label, value, note) {
   return `<div class="card"><div class="metric-label">${label}</div><div class="metric-value">${value}</div><div class="metric-note">${note}</div></div>`;
@@ -247,6 +264,24 @@ function renderPromptEvals(pe) {
   blockedStoriesTable.innerHTML = blockedRecent.length
     ? [...blockedRecent].reverse().map((b) => `<tr><td>${esc(b.timestamp)}</td><td><strong>${esc(b.storyId)}</strong></td><td>${esc(b.reason)}</td></tr>`).join('')
     : `<tr><td colspan="3" class="empty">No stories blocked — every TC-writer gate resolved within 3 attempts.</td></tr>`;
+
+  const history = pe.history || { rows: [], violationTypesByStep: {} };
+  const historyRows = history.rows || [];
+  promptEvalHistoryTable.innerHTML = historyRows.length
+    ? historyRows.map((r) => `<tr><td><code>${esc(r.runId)}</code></td><td><code>${esc(r.promptVersion)}</code></td><td><code>${esc(r.step)}</code></td><td>${r.total}</td><td>${r.total ? Math.round((r.evaluated / r.total) * 100) : 0}%</td><td>${r.passed}</td><td>${r.reverted}</td><td>${r.blocked}</td></tr>`).join('')
+    : `<tr><td colspan="8" class="empty">No cross-run history yet — this fills in once guarded-step-retries-history.jsonl has records from more than one run.</td></tr>`;
+
+  const violationsByStep = history.violationTypesByStep || {};
+  const violationRows = [];
+  for (const [step, counts] of Object.entries(violationsByStep)) {
+    for (const [vt, count] of Object.entries(counts)) {
+      violationRows.push({ step, vt, count });
+    }
+  }
+  violationRows.sort((a, b) => b.count - a.count);
+  promptEvalViolationsTable.innerHTML = violationRows.length
+    ? violationRows.map((r) => `<tr><td><code>${esc(r.step)}</code></td><td>${esc(r.vt)}</td><td>${r.count}</td></tr>`).join('')
+    : `<tr><td colspan="3" class="empty">No violations recorded yet.</td></tr>`;
 }
 
 if (window.EPAMBuildInfo) {

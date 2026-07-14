@@ -361,6 +361,18 @@
           <code>/orchestrate spec</code>) and <code>npm run specification:run -- --phase &lt;phase&gt;</code>.</li>
         <li>Toggle with <code>EPAM_SPEC_MODE</code> when you need to replay phases without rerunning
           spec agents.</li>
+        <li><strong>Split authority (2026-07-13):</strong> openspec is the <em>sole</em> decision-maker for
+          splitting an over-large story. Speckit's prompt used to grant it independent split judgment too, "as a
+          safety net in case openspec misses a mandatory split" — but that safety net was redundant with the
+          already-existing deterministic <code>checkSplitMandateViolation()</code> check (which forces
+          <em>openspec</em> to retry a missed split, not an LLM's own "independent obligation"), and the redundancy
+          caused two competing, independently-generated child ID sets for the <em>same</em> parent story to be
+          produced in the same spec-pass turn (found live on SKY-002 and SKY-003) — the same-file coherence
+          checker correctly rejected both, and the story fell back to running unsplit and oversized. Fixed with a
+          prompt change (speckit's schema now says <code>"splitStories": ALWAYS omit this field</code>) plus a
+          deterministic, code-level guard in <code>spec-mode-runner.js</code>'s per-story loop that unconditionally
+          drops any <code>splitStories</code> speckit still emits, before <code>applySpecChanges</code> ever sees
+          it.</li>
       </ul>
 
       <h3>3.15 Agent Profile Roster &amp; Persona System</h3>
@@ -503,10 +515,58 @@
       </ul>
       <p>
         Every guarded call's final outcome (<code>pass</code>/<code>reverted</code>/<code>blocked</code>, attempt
-        count, reason) is logged to <code>guarded-step-retries.jsonl</code> in the project's output directory;
-        blocked stories are additionally recorded to <code>blocked-stories.jsonl</code>. See
+        count, reason, and a fixed-vocabulary <code>violationTypes</code> array — e.g. <code>field_out_of_scope</code>,
+        <code>story_added</code>, <code>invalid_json</code>, <code>content_quality</code>, <code>empty_facts</code>,
+        depending on the step) is logged to <code>guarded-step-retries.jsonl</code> in the project's output
+        directory; blocked stories are additionally recorded to <code>blocked-stories.jsonl</code>. See
         <a href="orchestrations/dashboards/health.html">health.html</a>'s Prompt Evals section (4.2.1) for the
         aggregated view.
+      </p>
+      <p>
+        <strong>Cross-run history (2026-07-13):</strong> the per-run file above lives in the project's own output
+        directory, which this pipeline's teardown convention <code>rm -rf</code>s before every fresh launch — so on
+        its own it can never show whether a prompt's violation rate is improving or regressing over time. Every
+        guarded-step write is now a <strong>double-write</strong>: unchanged append to the per-run file, plus an
+        append (via the shared <code>_log_guarded_step_retry()</code> bash helper and its
+        <code>logGuardedStepRetry()</code> JS counterpart in <code>spec-mode-runner.js</code>) to a persistent,
+        engine-side history file — <code>orchestrations/logs/guarded-step-retries-history.jsonl</code>, repo-relative
+        to epam-cli, never inside the target project's output directory — that survives teardown. Each record is
+        tagged with <code>runId</code> and <code>promptVersion</code> (the epam-cli repo's own short git SHA at call
+        time, since these prompts live embedded in the scripts themselves rather than separate template files — the
+        commit hash of the script <em>is</em> the version proxy). <code>build/snapshot.js</code>'s
+        <code>summarizeGuardedStepHistory()</code> groups the history by <code>(runId, step)</code>, newest-first,
+        capped to the most recent 20 runs, plus a <code>violationTypesByStep</code> roll-up — rendered as two new
+        plain tables in <code>health.html</code>'s Prompt Evals section (4.2.1): a per-run trend table and a
+        most-common-violations breakdown per step.
+      </p>
+
+      <h3>3.21 Retry-Extension Coordinator (Dynamic Self-Heal Budget)</h3>
+      <p>
+        A story that exhausts <code>MAX_RETRIES</code> with genuine, converging progress (each failed attempt a
+        <em>different</em> diagnosed bug, not a repeat of the last one) shouldn't necessarily be abandoned at a
+        fixed, one-size-fits-all ceiling. <code>compute_retry_extension_evidence()</code> (claude.sh) first computes
+        deterministic, zero-LLM-cost evidence from two existing JSONL logs — <code>healing-events.jsonl</code>
+        (distinct diagnoses, whether healing itself broke) and <code>failure-diagnosis-groundedness.jsonl</code>
+        (average groundedness score) — and only consults an LLM gate when that evidence is genuinely ambiguous,
+        mirroring this pipeline's "trust the deterministic oracle over an LLM opinion" principle used elsewhere
+        (e.g. SAST/spec-validator's blocker-count-over-self-reported-verdict trust). <code>run_retry_extension_coordinator()</code>
+        prints the number of extra retries granted (0 if declining) and fails closed on any error, disabled state,
+        or malformed gate response.
+      </p>
+      <p>
+        <strong>Bug fixed 2026-07-13 (found live on SKY-003):</strong> the caller captures this function's return
+        value via command substitution (<code>_granted_extra_retries=$(run_retry_extension_coordinator "$story_id")</code>),
+        which captures <em>everything</em> the function writes to stdout — including its own internal diagnostic
+        <code>log "..."</code> calls, since <code>log()</code>'s real definition (unlike <code>error()</code>) writes
+        to stdout with no <code>&gt;&amp;2</code> redirect. A genuinely granted extension
+        (<code>extraRetriesGranted:2</code>, correctly recorded to <code>retry-extension-decisions.jsonl</code>) was
+        silently corrupted into a multi-line, non-numeric capture, so the caller's <code>-gt 0</code> numeric check
+        failed and the story was abandoned anyway with zero further retries. Fixed by redirecting both internal
+        <code>log</code> calls to stderr, so the function's stdout contains only the final numeric
+        <code>echo</code>. The pre-existing test suite's stub for <code>log()</code>/<code>warning()</code> used a
+        safe, stderr-only definition that never exercised this — a new test
+        (<code>retry-extension-log-contamination.test.ts</code>) reproduces the exact integration bug using the
+        <em>real</em> stdout-writing <code>log()</code> definition extracted from claude.sh.
       </p>
 
       <h2>4. Dashboards & Real-Time Updates</h2>
@@ -541,6 +601,19 @@
         both overall and per step, and the blocked-stories list. <code>health.html</code>'s Prompt Evals section
         renders this alongside the existing self-healing metrics (skill notes, dynamic tools, analyst cycles) —
         both read from the same <code>build-info.json</code> snapshot, no separate polling.
+      </p>
+      <p>
+        <strong>Cross-run trend (2026-07-13):</strong> <code>snapshot.js</code> also tails the persistent
+        <code>orchestrations/logs/guarded-step-retries-history.jsonl</code> (see 3.20) via
+        <code>summarizeGuardedStepHistory()</code>, added to <code>metrics.promptEvals.history</code>: a
+        <code>rows</code> array (one row per <code>runId</code> + step, newest-first, capped to the last 20 runs —
+        <code>Run | Prompt Version | Step | Calls | Violation Rate | Passed | Reverted | Blocked</code>) and a
+        <code>violationTypesByStep</code> roll-up (<code>Step | Violation Type | Count</code>). <code>health.html</code>
+        renders both as two additional plain tables under the existing Prompt Evals metrics — the same
+        table-per-metric style as the rest of the page, no charting library. This is what makes it possible to see
+        whether a specific prompt (identified by <code>promptVersion</code>, the epam-cli git SHA at call time) is
+        trending toward fewer violations release over release, since the per-run file alone is destroyed by
+        teardown before every fresh launch.
       </p>
       <h3>4.3 Integration with Orchestration</h3>
       <p>

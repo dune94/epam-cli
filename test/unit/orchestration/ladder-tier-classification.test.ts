@@ -77,8 +77,19 @@ describe('claude.sh — classify_ladder_tier() is dynamic, not hardcoded per sto
     expect(overrideIdx).toBeLessThan(historyIdx);
   });
 
-  it('defaults to "medium" when no failure file and no PRD override exist', () => {
-    expect(body).toMatch(/echo "medium"; return/);
+  it('defaults to "medium" when no failure file, no PRD override, and no groundedness signal exist', () => {
+    // The failures-file-missing case now falls through the same if-block
+    // as the history checks (folded in so a third, groundedness-based
+    // signal can also run even when story-failures.jsonl doesn't exist
+    // yet -- see role-based-generic-escalation.test.ts for real-execution
+    // coverage) rather than an early "echo medium; return" -- the fallback
+    // "medium" is now the function's single final statement.
+    expect(body.trim().endsWith('echo "medium"')).toBe(true);
+  });
+
+  it('also considers average FailureAnalyst diagnosis groundedness as a third, purely measured escalation signal', () => {
+    expect(body).toMatch(/failure-diagnosis-groundedness\.jsonl/);
+    expect(body).toMatch(/EPAM_LADDER_GROUNDEDNESS_ESCALATION_THRESHOLD/);
   });
 });
 

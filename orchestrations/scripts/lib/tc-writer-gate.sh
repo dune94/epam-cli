@@ -47,7 +47,8 @@ run_inline_tc_writer_gate() {
     local _tc_gate_attempt=0
     local _tc_gate_facts_len=0
     local _tc_gate_exit=0
-    "$SCRIPT_DIR/update-monitor.sh" story_start "tc-writer-agent" "main" "tc-writer-agent" "TC Writer: $story_id" 2>/dev/null || true
+    "$SCRIPT_DIR/update-monitor.sh" story_start "tc-writer-agent" "main" "tc-writer-agent" "TC Writer: $story_id" \
+        "${ORCH_GATE_PROVIDER:-}" "${ORCH_GATE_MODEL:-MiniMax-M3}" 2>/dev/null || true
     for _tc_gate_attempt in 1 2 3; do
         log "  Story $story_id needs testCriteria — running TC writer inline before it starts... (attempt ${_tc_gate_attempt}/3)"
         bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
@@ -128,6 +129,27 @@ run_inline_tc_writer_gate() {
             >> "$LOG_DIR/blocked-stories.jsonl" 2>/dev/null || true
         return 1
     fi
+    # Emit cost_snapshot with model info (cost not tracked since post-impl-tc-writer
+    # uses `epam run` directly without ORCH_JSON_RESULT support)
+    local _tc_phase
+    _tc_phase=$(jq -r '.phase // empty' "${MONITOR_FILE:-$SCRIPT_DIR/../logs/agent-status.json}" 2>/dev/null || true)
+    jq -cn \
+        --arg ts "$(date -Iseconds)" \
+        --arg story "$story_id" \
+        --arg phase "${_tc_phase:-}" \
+        --arg model "${TC_WRITER_MODEL:-moonshotai/kimi-k2}" \
+        --arg provider "${TC_WRITER_PROVIDER:-qwen}" \
+        '{
+          event_id: ("evt-cost-" + ($ts | gsub("[^0-9]";""))),
+          timestamp: $ts,
+          agent: "tc-writer-agent",
+          story_id: (if $story == "" then null else $story end),
+          phase: (if $phase == "" then null else $phase end),
+          type: "cost_snapshot",
+          model: $model,
+          provider: $provider,
+          detail: {costUsd: 0, tokensIn: 0, tokensOut: 0, turns: 0, source: "tc-writer-gate"}
+        }' >> "${ACTIVITY_FILE:-$SCRIPT_DIR/../logs/agent-activity.jsonl}" 2>/dev/null || true
     "$SCRIPT_DIR/update-monitor.sh" story_complete "tc-writer-agent" "main" "TC writer done: $story_id" 2>/dev/null || true
     return 0
 }

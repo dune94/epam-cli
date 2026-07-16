@@ -2855,7 +2855,8 @@ update_monitor_status() {
     [ ! -x "$update_script" ] && return 0
     case "$event" in
         start)
-            "$update_script" story_start "$story_id" "$lane" "$role" "$title" 2>/dev/null || true
+            "$update_script" story_start "$story_id" "$lane" "$role" "$title" \
+                "${STORY_PROVIDER:-}" "${STORY_MODEL:-}" 2>/dev/null || true
             ;;
         complete)
             "$update_script" story_complete "$story_id" "$lane" "$title" 2>/dev/null || true
@@ -3922,7 +3923,8 @@ run_failure_analyst() {
     fi
 
     log "  [FailureAnalyst] Analyzing test failure for $story_id (gate=$gate_model)..."
-    "$SCRIPT_DIR/update-monitor.sh" story_start "failure-analyst" "main" "failure-analyst" "Failure Analyst: $story_id" 2>/dev/null || true
+    "$SCRIPT_DIR/update-monitor.sh" story_start "failure-analyst" "main" "failure-analyst" "Failure Analyst: $story_id" \
+        "${STORY_PROVIDER:-}" "${STORY_MODEL:-}" 2>/dev/null || true
 
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
 
@@ -4034,11 +4036,14 @@ ANALYST_PROMPT_END
 
     local analyst_raw="" analyst_json="" _analyst_call_ok="false"
     local _analyst_max_attempts=3 _analyst_attempt=1
+    local _analyst_json_result
+    _analyst_json_result=$(mktemp /tmp/analyst-result-XXXXXX.json)
     while [ "$_analyst_attempt" -le "$_analyst_max_attempts" ]; do
         if analyst_raw=$(echo "$analyst_prompt" | \
                 AI_PROVIDER="$gate_provider" \
                 AI_MODEL="$gate_model" \
                 EPAM_CLI="$EPAM_CLI" \
+                ORCH_JSON_RESULT="$_analyst_json_result" \
                 bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \
                 ${gate_model:+--model "$gate_model"} \
                 2>>"$output_file"); then
@@ -4501,6 +4506,37 @@ ${_analyst_guidance}"
         fi
     else
         warning "  [FailureAnalyst] Gate model call failed — proceeding with retry as-is"
+    fi
+    # Emit cost_snapshot for failure-analyst (accumulated across its retry loop)
+    if [ -f "$_analyst_json_result" ] && [ -s "$_analyst_json_result" ]; then
+        local _fa_cost _fa_tin _fa_tout _fa_turns _fa_phase
+        _fa_cost=$(jq -r '.total_cost_usd // .cost_usd // 0'                       "$_analyst_json_result" 2>/dev/null || echo 0)
+        _fa_tin=$(jq -r '.usage.input_tokens // .usage.inputTokens // 0'            "$_analyst_json_result" 2>/dev/null || echo 0)
+        _fa_tout=$(jq -r '.usage.output_tokens // .usage.outputTokens // 0'         "$_analyst_json_result" 2>/dev/null || echo 0)
+        _fa_turns=$(jq -r '.num_turns // .turns // .iterations // 1'                "$_analyst_json_result" 2>/dev/null || echo 1)
+        _fa_phase="${CURRENT_PHASE:-}"
+        jq -cn \
+            --arg ts "$(date -Iseconds)" \
+            --arg story "$story_id" \
+            --arg phase "${_fa_phase:-}" \
+            --arg model "${gate_model:-}" \
+            --arg provider "${gate_provider:-}" \
+            --argjson cost "${_fa_cost:-0}" \
+            --argjson tin "${_fa_tin:-0}" \
+            --argjson tout "${_fa_tout:-0}" \
+            --argjson turns "${_fa_turns:-1}" \
+            '{
+              event_id: ("evt-cost-" + ($ts | gsub("[^0-9]";""))),
+              timestamp: $ts,
+              agent: "failure-analyst",
+              story_id: (if $story == "" then null else $story end),
+              phase: (if $phase == "" then null else $phase end),
+              type: "cost_snapshot",
+              model: (if $model == "" then null else $model end),
+              provider: (if $provider == "" then null else $provider end),
+              detail: {costUsd: $cost, tokensIn: $tin, tokensOut: $tout, turns: $turns, source: "run_failure_analyst"}
+            }' >> "${ACTIVITY_FILE:-$LOG_DIR/agent-activity.jsonl}" 2>/dev/null || true
+        rm -f "$_analyst_json_result"
     fi
     "$SCRIPT_DIR/update-monitor.sh" story_complete "failure-analyst" "main" "Analysis complete: $story_id" 2>/dev/null || true
 }
@@ -6278,6 +6314,36 @@ append_cost_record() {
 
     # Emit human-readable cost summary to the run log so it appears in pipeline output.
     log "  Cost[$story_id] model=${resolved_model:-unknown} in=${tokens_in} out=${tokens_out} cost=\$${cost_usd} elapsed=${elapsed_minutes}min status=${status}"
+
+    # Emit cost_snapshot event so agent-activity dashboard shows tokens/cost/model per story
+    jq -cn \
+        --arg ts "$(date -Iseconds)" \
+        --arg agent "${agent_id:-orchestrator}" \
+        --arg story "$story_id" \
+        --arg phase "$phase_id" \
+        --arg model "${resolved_model:-}" \
+        --arg provider "${STORY_PROVIDER:-}" \
+        --argjson cost "${cost_usd:-0}" \
+        --argjson tin "${tokens_in:-0}" \
+        --argjson tout "${tokens_out:-0}" \
+        --argjson turns "${task_turns:-1}" \
+        '{
+          event_id: ("evt-cost-" + ($ts | gsub("[^0-9]";""))),
+          timestamp: $ts,
+          agent: $agent,
+          story_id: (if $story == "" then null else $story end),
+          phase: (if $phase == "" then null else $phase end),
+          type: "cost_snapshot",
+          model: (if $model == "" then null else $model end),
+          provider: (if $provider == "" then null else $provider end),
+          detail: {
+            costUsd: $cost,
+            tokensIn: $tin,
+            tokensOut: $tout,
+            turns: $turns,
+            source: "append_cost_record"
+          }
+        }' >> "${ACTIVITY_FILE:-$LOG_DIR/agent-activity.jsonl}" 2>/dev/null || true
 
     # GAP-P17: emit StoryArtifact record to story-artifacts.jsonl
     emit_story_artifact "$story_id" "$status" "$phase_id" "$elapsed_minutes" "$cost_usd" "$task_turns" "$json_result_file"

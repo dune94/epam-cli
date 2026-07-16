@@ -55,12 +55,49 @@ run_review_prompt() {
         echo '{"verdict":"approved","issues":[],"note":"ai-run.sh unavailable"}'
         return 0
     fi
-    echo "$prompt_text" | \
+    local _review_json_result
+    _review_json_result=$(mktemp /tmp/review-result-XXXXXX.json)
+    local _review_out
+    _review_out=$(echo "$prompt_text" | \
         AI_MODEL="$ORCH_GATE_MODEL" \
         CLAUDE_CMD="${CLAUDE_CMD:-claude}" \
         EPAM_CLI="${EPAM_CLI:-epam}" \
+        ORCH_JSON_RESULT="$_review_json_result" \
         "$AI_RUNNER_CMD" --provider "${EPAM_ORCHESTRATION_PROVIDER:-claude}" \
-            --model "$ORCH_GATE_MODEL" 2>&1
+            --model "$ORCH_GATE_MODEL" 2>&1)
+    local _review_rc=$?
+    # Emit cost_snapshot so agent-activity dashboard shows review-agent cost
+    if [ -f "$_review_json_result" ] && [ -s "$_review_json_result" ]; then
+        local _rc _tin _tout _cost _turns _phase_id
+        _cost=$(jq -r '.total_cost_usd // .cost_usd // 0'                     "$_review_json_result" 2>/dev/null || echo 0)
+        _tin=$(jq -r '.usage.input_tokens // .usage.inputTokens // 0'          "$_review_json_result" 2>/dev/null || echo 0)
+        _tout=$(jq -r '.usage.output_tokens // .usage.outputTokens // 0'       "$_review_json_result" 2>/dev/null || echo 0)
+        _turns=$(jq -r '.num_turns // .turns // .iterations // 1'              "$_review_json_result" 2>/dev/null || echo 1)
+        _phase_id=$(jq -r '.phase // empty' "${MONITOR_FILE:-$SCRIPT_DIR/../logs/agent-status.json}" 2>/dev/null || true)
+        jq -cn \
+            --arg ts "$(date -Iseconds)" \
+            --arg phase "${_phase_id:-}" \
+            --arg model "${ORCH_GATE_MODEL:-}" \
+            --arg provider "${EPAM_ORCHESTRATION_PROVIDER:-}" \
+            --argjson cost "${_cost:-0}" \
+            --argjson tin "${_tin:-0}" \
+            --argjson tout "${_tout:-0}" \
+            --argjson turns "${_turns:-1}" \
+            '{
+              event_id: ("evt-cost-" + ($ts | gsub("[^0-9]";""))),
+              timestamp: $ts,
+              agent: "review-agent",
+              story_id: null,
+              phase: (if $phase == "" then null else $phase end),
+              type: "cost_snapshot",
+              model: (if $model == "" then null else $model end),
+              provider: (if $provider == "" then null else $provider end),
+              detail: {costUsd: $cost, tokensIn: $tin, tokensOut: $tout, turns: $turns, source: "team-lead-review"}
+            }' >> "${ACTIVITY_FILE:-$SCRIPT_DIR/../logs/agent-activity.jsonl}" 2>/dev/null || true
+        rm -f "$_review_json_result"
+    fi
+    echo "$_review_out"
+    return $_review_rc
 }
 
 log "Team Lead Code Review for Phase: $PHASE_ID"

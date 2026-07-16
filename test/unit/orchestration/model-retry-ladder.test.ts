@@ -155,8 +155,9 @@ describe('MiniMax + Qwen providers — EPAM_REASONING_EFFORT passed as native AP
 // map for THIS project), with zero vendor names in the engine itself.
 describe('claude.sh — Rung2 provider routing is config-driven via resolve_model_provider()', () => {
   it('Rung2 calls resolve_model_provider() instead of a hardcoded vendor case statement', () => {
-    const rung2Idx = src.indexOf('Rung 2: model escalation');
-    const rung2Block = src.slice(rung2Idx, rung2Idx + 1700);
+    const rung2Idx  = src.indexOf('Rung 2: model escalation');
+    const rung2End  = src.indexOf(';;', rung2Idx);
+    const rung2Block = src.slice(rung2Idx, rung2End);
     expect(rung2Block).toMatch(/resolve_model_provider "\$escalated_model_r2"/);
     expect(rung2Block).not.toMatch(/zhipuai\/\*|z-ai\/\*|moonshotai\/\*/);
   });

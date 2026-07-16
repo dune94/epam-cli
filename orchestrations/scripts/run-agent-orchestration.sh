@@ -425,7 +425,12 @@ run_orch_prompt() {
     local json_result_file
     json_result_file=$(mktemp /tmp/orch-prompt-XXXXXX.json)
 
-    # Run with JSON output so we can capture cost/token data
+    # Run with JSON output so we can capture cost/token data.
+    # Hard timeout guards against API hangs that block indefinitely (observed
+    # live: spec-validator stalled 55 min with zero output on two consecutive
+    # runs). EPAM_GATE_TIMEOUT_SECS defaults to 600 (10 min) — enough for any
+    # real gate response; exit 124 from timeout is treated as a failure.
+    local _gate_timeout="${EPAM_GATE_TIMEOUT_SECS:-600}"
     local _rc=0
     echo "$prompt_text" | \
         AI_PROVIDER="$gate_provider" \
@@ -433,7 +438,11 @@ run_orch_prompt() {
         CLAUDE_CMD="$CLAUDE_CMD" \
         EPAM_CLI="${EPAM_CLI:-epam}" \
         ORCH_JSON_RESULT="$json_result_file" \
+        timeout "${_gate_timeout}" \
         "$AI_RUNNER_CMD" --provider "$gate_provider" "${model_args[@]}" || _rc=$?
+    if [ "$_rc" -eq 124 ]; then
+        warning "run_orch_prompt: gate agent timed out after ${_gate_timeout}s (${agent_type}/${story_id}) — treating as failure"
+    fi
 
     # Extract cost/token data and emit pipeline cost record
     if [ -f "$json_result_file" ] && [ -s "$json_result_file" ]; then

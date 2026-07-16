@@ -5417,19 +5417,14 @@ implement_story() {
             local _rung=$(( retry_count / 2 ))
             local _entering_rung=$(( retry_count % 2 == 0 ))   # 1 = first attempt of rung
 
-            # skipLadder (2026-07-15, user directive — VERY HIGH complexity
-            # stories only): set by spec-mode-runner.js's modelComplexitySignals
-            # veryHighComplexity classification (AC-count based, spec-pass
-            # time) or lib/tc-writer-gate.sh's
-            # _tc_writer_gate_maybe_mark_very_high_complexity (TC-fact-density
-            # based, for test stories). Both already assign the ceiling model
-            # directly BEFORE the story's first attempt — reassigning models
-            # rung-by-rung here would be pointless (there's nowhere higher to
-            # escalate to) and would burn several guaranteed-failing attempts
-            # exactly like the ladder normally does for a story that's known
-            # in advance to need the ceiling. Effort/iteration-budget
-            # escalation still applies normally; only the MODEL reassignment
-            # is skipped.
+            # skipLadder: set by spec-mode-runner.js (veryHighComplexity AC-count)
+            # or lib/tc-writer-gate.sh (TC-fact-density). Both pre-assign the
+            # ceiling model before the first attempt. skipLadder=true means
+            # DOWNGRADE PREVENTION ONLY — if a higher ladder step exists above the
+            # current model, escalation proceeds normally. Only when the ladder has
+            # no higher step (get_model_ladder_step returns same or empty) does the
+            # story stay at its current ceiling. Effort/iteration-budget escalation
+            # always applies regardless of skipLadder.
             local _skip_ladder
             _skip_ladder=$(jq -r --arg id "$story_id" \
                 '.stories[] | select(.id == $id) | .skipLadder // false' \
@@ -5445,9 +5440,11 @@ implement_story() {
                         ;;
                     2)
                         # Rung 2: model escalation, effort → medium
-                        if [ "$_skip_ladder" = "true" ]; then
-                            log "  InferenceLadder[Rung2/R${retry_count}]: skipLadder=true — keeping ceiling model '${STORY_MODEL:-default}', effort → medium"
-                        else
+                        # skipLadder=true means the story was pre-assigned a ceiling model by
+                        # tc-writer-gate or spec-mode (very-high-complexity). We still compute the
+                        # next ladder step — if one exists ABOVE the current model we apply it
+                        # (upward escalation is always allowed). We only stay put when the ladder
+                        # has nowhere higher to go (same model returned or no step found).
                         local retry_model_prd ladder_step_r2
                         retry_model_prd=$(jq -r --arg id "$story_id" \
                             '.stories[] | select(.id == $id) | .retryModel // ""' \
@@ -5467,8 +5464,11 @@ implement_story() {
                             _resolved_provider_r2=$(resolve_model_provider "$escalated_model_r2")
                             [ -n "$_resolved_provider_r2" ] && STORY_PROVIDER="$_resolved_provider_r2"
                         else
-                            log "  InferenceLadder[Rung2/R${retry_count}]: no ladder step — keeping model, effort → medium"
-                        fi
+                            if [ "$_skip_ladder" = "true" ]; then
+                                log "  InferenceLadder[Rung2/R${retry_count}]: skipLadder=true, already at ceiling '${STORY_MODEL:-default}' — effort → medium"
+                            else
+                                log "  InferenceLadder[Rung2/R${retry_count}]: no ladder step — keeping model, effort → medium"
+                            fi
                         fi
                         export EPAM_REASONING_EFFORT="medium"
                         STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
@@ -5495,9 +5495,8 @@ implement_story() {
                         # contextualize-stories.sh) says this story needs. Fixed: call
                         # classify_ladder_tier() here too, same as Rung 2 — the PRD's classified
                         # tier is the ceiling all the way through the ladder, not just at Rung 2.
-                        if [ "$_skip_ladder" = "true" ]; then
-                            log "  InferenceLadder[Rung3/R${retry_count}]: skipLadder=true — keeping ceiling model '${STORY_MODEL:-default}', effort → high (maximum)"
-                        else
+                        # skipLadder=true: same as Rung 2 — only prevents downgrade,
+                        # upward escalation still applies if a higher step exists.
                         local _ffm="${EPAM_FINAL_FALLBACK_MODEL:-}" _ffp="${EPAM_FINAL_FALLBACK_PROVIDER:-}"
                         if [ -n "$_ffm" ] && [ "${STORY_MODEL:-}" = "${STORY_MODEL_ORIGINAL:-}" ]; then
                             log "  InferenceLadder[Rung3/R${retry_count}]: no prior escalation — routing to fallback '$_ffm'"
@@ -5515,8 +5514,11 @@ implement_story() {
                                 local _resolved_provider_r3
                                 _resolved_provider_r3=$(resolve_model_provider "$ladder_step_r3")
                                 [ -n "$_resolved_provider_r3" ] && STORY_PROVIDER="$_resolved_provider_r3"
+                            else
+                                if [ "$_skip_ladder" = "true" ]; then
+                                    log "  InferenceLadder[Rung3/R${retry_count}]: skipLadder=true, already at ceiling '${STORY_MODEL:-default}' — effort → high (maximum)"
+                                fi
                             fi
-                        fi
                         fi
                         export EPAM_REASONING_EFFORT="high"
                         STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))

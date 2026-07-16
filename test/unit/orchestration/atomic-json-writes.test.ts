@@ -107,12 +107,16 @@ describe('atomic JSON writes — profiles.json / PRD write sites (static)', () =
     expect(text).toMatch(/os\.replace\(_tmp_prd_file, PRD_FILE\)/);
   });
 
-  it('spec-mode-runner.js: both PRD write sites (run() and validateMidExecutionSplits()) use fs.renameSync', () => {
+  it('spec-mode-runner.js: all 3 PRD write sites (run(), validateMidExecutionSplits(), splitTestStoryCli()) use fs.renameSync', () => {
+    // 2026-07-15: splitTestStoryCli() (--split-test-story CLI dispatch, the
+    // TC-fact-density split mandate's shell entry point) is a THIRD PRD
+    // write site, added alongside run()'s and validateMidExecutionSplits()'
+    // pre-existing ones — same atomic tmp-write-then-rename pattern.
     const text = src('orchestrations/scripts/spec-mode-runner.js');
     const tmpWrites = (text.match(/fs\.writeFileSync\(_tmpPrd(Path|File),/g) || []).length;
     const renames = (text.match(/fs\.renameSync\(_tmpPrd(Path|File), prd(Path|File)\)/g) || []).length;
-    expect(tmpWrites).toBe(2);
-    expect(renames).toBe(2);
+    expect(tmpWrites).toBe(3);
+    expect(renames).toBe(3);
   });
 });
 

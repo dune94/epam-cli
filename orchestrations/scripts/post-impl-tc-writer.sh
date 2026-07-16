@@ -96,11 +96,25 @@ for sid in phase_ids:
     # that was split delegates its ENTIRE implementation to child stories —
     # its own technicalNotes.files still lists the original (now-delegated)
     # files, so it can look like a "test story with no TC yet" even though
-    # the real work (and TC) belongs to a child. spec-mode-runner now removes
-    # a delegated parent from implementationOrder and marks it deprecated/
-    # completed at split time, so this should be redundant — kept as a second
-    # line of defense in case some other path leaves a stale parent behind.
-    if s.get('status') == 'deprecated' or s.get('completed') is True:
+    # the real work (and TC) belongs to a child. spec-mode-runner marks a
+    # delegated parent 'deprecated' at split time (and removes it from
+    # implementationOrder), which is the actual, specific signal for this
+    # case — checked below.
+    #
+    # Root cause fixed (found live, 2026-07-14, tier3-travel-app run): this
+    # used to ALSO skip any story with completed == True, on the theory that
+    # a delegated parent gets marked completed too. But EVERY story this
+    # BATCH gate (Step 1.6, called post-Step-3.2) examines is, by
+    # construction, already completed by the time it runs — that's the
+    # entire reason the gate exists post-execution. The completed-exclusion
+    # therefore silently no-op'd this script for every genuinely-finished
+    # combo story (impl+test files together, e.g. SKY-004) and every
+    # worktree-lane pure-test story once it completed, causing the CALLER
+    # (Step 1.6 in run-agent-orchestration.sh, whose own "needs TC" query has
+    # no such completed-exclusion) to retry 3 times against a script that
+    # always no-ops, then permanently BLOCK a story with real, already-
+    # verified (tsc + external tests passed) work over a bookkeeping mismatch.
+    if s.get('status') == 'deprecated':
         continue
     files = s.get('technicalNotes', {}).get('files', [])
     is_test_story = any(f.endswith('.test.ts') for f in files)

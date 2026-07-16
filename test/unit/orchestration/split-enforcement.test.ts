@@ -43,6 +43,12 @@ const SPEC_MODE_RUNNER_SRC = readFileSync(
 
 const ORCH_SCRIPT = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
 const orchSrc = readFileSync(ORCH_SCRIPT, 'utf8');
+// story_tsc_gate and validate_mid_execution_splits now live in
+// lib/story-guards.sh (2026-07-14) — a single shared implementation sourced
+// by both run-agent-orchestration.sh (main lane) and claude.sh (worktree
+// lanes), so every lane runs the identical gate.
+const GUARDS_LIB = join(__dirname, '../../../orchestrations/scripts/lib/story-guards.sh');
+const guardsSrc = readFileSync(GUARDS_LIB, 'utf8');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -457,39 +463,45 @@ describe('applySpecChanges — same-file split rejection', () => {
 
 // ── Per-story tsc gate ────────────────────────────────────────────────────────
 
-describe('run-agent-orchestration.sh — per-story tsc gate (permanent fix for recurring TS errors)', () => {
-  it('story_tsc_gate function is defined in orch script', () => {
-    expect(orchSrc).toContain('story_tsc_gate()');
+describe('story_tsc_gate — shared implementation (lib/story-guards.sh), called identically by every lane', () => {
+  it('story_tsc_gate function is defined in the shared lib', () => {
+    expect(guardsSrc).toContain('story_tsc_gate()');
+  });
+
+  it('run-agent-orchestration.sh and claude.sh both source the shared lib', () => {
+    expect(orchSrc).toContain('source "$SCRIPT_DIR/lib/story-guards.sh"');
+    const claudeSrc = readFileSync(join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8');
+    expect(claudeSrc).toContain('source "$SCRIPT_DIR/lib/story-guards.sh"');
   });
 
   it('tsc gate runs tsc --noEmit with PIPESTATUS[0] exit capture', () => {
-    const fnIdx = orchSrc.indexOf('story_tsc_gate()');
-    const block = orchSrc.slice(fnIdx, fnIdx + 1200);
+    const fnIdx = guardsSrc.indexOf('story_tsc_gate()');
+    const block = guardsSrc.slice(fnIdx, fnIdx + 1200);
     expect(block).toContain('tsc --noEmit');
     expect(block).toContain('PIPESTATUS[0]');
   });
 
   it('tsc gate is skipped when tsconfig.json does not exist', () => {
-    const fnIdx = orchSrc.indexOf('story_tsc_gate()');
-    const block = orchSrc.slice(fnIdx, fnIdx + 1200);
+    const fnIdx = guardsSrc.indexOf('story_tsc_gate()');
+    const block = guardsSrc.slice(fnIdx, fnIdx + 1200);
     expect(block).toContain('tsconfig.json');
     expect(block).toMatch(/return 0/);
   });
 
   it('tsc gate is skipped for test-engineer role stories', () => {
-    const fnIdx = orchSrc.indexOf('story_tsc_gate()');
-    const block = orchSrc.slice(fnIdx, fnIdx + 1200);
+    const fnIdx = guardsSrc.indexOf('story_tsc_gate()');
+    const block = guardsSrc.slice(fnIdx, fnIdx + 1200);
     expect(block).toContain('test-engineer');
     expect(block).toContain('agentRole');
   });
 
   it('tsc gate has SKIP_STORY_TSC_GATE bypass', () => {
-    const fnIdx = orchSrc.indexOf('story_tsc_gate()');
-    const block = orchSrc.slice(fnIdx, fnIdx + 1200);
+    const fnIdx = guardsSrc.indexOf('story_tsc_gate()');
+    const block = guardsSrc.slice(fnIdx, fnIdx + 1200);
     expect(block).toContain('SKIP_STORY_TSC_GATE');
   });
 
-  it('tsc gate is called in Step 1 loop only after story succeeds (not on failure)', () => {
+  it('tsc gate is called in the main lane (Step 1) only after story succeeds (not on failure)', () => {
     // Gate must be inside the else branch of the _story_exit check — not unconditional
     const step1Idx = orchSrc.indexOf('story_tsc_gate "$story"');
     expect(step1Idx).toBeGreaterThan(-1);
@@ -499,25 +511,34 @@ describe('run-agent-orchestration.sh — per-story tsc gate (permanent fix for r
     expect(preGate).toContain('_story_exit');
   });
 
-  it('story failure from tsc gate increments _phase_story_failures', () => {
+  it('story failure from tsc gate increments _phase_story_failures (main lane)', () => {
     const step1Idx = orchSrc.indexOf('story_tsc_gate "$story"');
     const gateLine = orchSrc.slice(step1Idx, step1Idx + 80);
     expect(gateLine).toContain('_phase_story_failures');
   });
 
+  it('tsc gate is also called in worktree lanes, only after implement_story succeeds (parity fix, 2026-07-14)', () => {
+    const claudeSrc = readFileSync(join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8');
+    const wtIdx = claudeSrc.indexOf('story_tsc_gate "$story_id"');
+    expect(wtIdx).toBeGreaterThan(-1);
+    const implIdx = claudeSrc.indexOf('if implement_story "$story_id"; then');
+    expect(implIdx).toBeGreaterThan(-1);
+    expect(wtIdx).toBeGreaterThan(implIdx);
+  });
+
   it('tsc gate logs output to a per-story log file', () => {
-    const fnIdx = orchSrc.indexOf('story_tsc_gate()');
-    const block = orchSrc.slice(fnIdx, fnIdx + 1200);
+    const fnIdx = guardsSrc.indexOf('story_tsc_gate()');
+    const block = guardsSrc.slice(fnIdx, fnIdx + 1200);
     expect(block).toContain('tsc-gate-');
     expect(block).toContain('_tsc_log');
   });
 });
 
-// ── Orch script — mid-execution split validation wiring ──────────────────────
+// ── Mid-execution split validation wiring ─────────────────────────────────────
 
-describe('run-agent-orchestration.sh — mid-execution split validation', () => {
-  it('validate_mid_execution_splits function is defined in orch script', () => {
-    expect(orchSrc).toContain('validate_mid_execution_splits()');
+describe('validate_mid_execution_splits — shared implementation (lib/story-guards.sh), called identically by every lane', () => {
+  it('validate_mid_execution_splits function is defined in the shared lib', () => {
+    expect(guardsSrc).toContain('validate_mid_execution_splits()');
   });
 
   it('validate_mid_execution_splits is called after Step 0.5 (skill assessment)', () => {
@@ -529,35 +550,42 @@ describe('run-agent-orchestration.sh — mid-execution split validation', () => 
     expect(callIdx, 'validate_mid_execution_splits must be called after Step 0.5').toBeGreaterThan(-1);
   });
 
-  it('validate_mid_execution_splits is called after each story in Step 1 execution loop', () => {
-    // Find the Step 1 story execution loop — after run_story_with_watchdog + tsc gate
+  it('validate_mid_execution_splits is called after each story in the main-lane (Step 1) execution loop', () => {
+    // Find the Step 1 story execution loop — after run_story_with_watchdog
     const step1Idx = orchSrc.indexOf('run_story_with_watchdog "$story" "$LOG_DIR/main-${story}.log"');
     expect(step1Idx).toBeGreaterThan(-1);
-    // validate_mid_execution_splits appears within ~1400 chars (includes the
-    // watchdog-timeout recovery block and tsc gate block)
     const postStory = orchSrc.slice(step1Idx, step1Idx + 1400);
     expect(postStory).toContain('validate_mid_execution_splits "$PHASE"');
   });
 
+  it('validate_mid_execution_splits is also called after each worktree-lane story (parity fix, 2026-07-14)', () => {
+    const claudeSrc = readFileSync(join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8');
+    const implIdx = claudeSrc.indexOf('if implement_story "$story_id"; then');
+    const elseIdx = claudeSrc.indexOf('\n        else\n', implIdx);
+    expect(implIdx).toBeGreaterThan(-1);
+    expect(elseIdx).toBeGreaterThan(implIdx);
+    const postStory = claudeSrc.slice(implIdx, elseIdx);
+    expect(postStory).toContain('validate_mid_execution_splits "$PHASE"');
+  });
+
   it('validate_mid_execution_splits calls spec-mode-runner with --validate-splits', () => {
-    const fnIdx = orchSrc.indexOf('validate_mid_execution_splits()');
-    const fnBlock = orchSrc.slice(fnIdx, fnIdx + 2000);
+    const fnIdx = guardsSrc.indexOf('validate_mid_execution_splits()');
+    const fnBlock = guardsSrc.slice(fnIdx, fnIdx + 2000);
     expect(fnBlock).toContain('--validate-splits');
     expect(fnBlock).toContain('spec-mode-runner.js');
   });
 
   it('validate_mid_execution_splits queries PRD for unvalidated split children (speckitValidated != true)', () => {
-    const fnIdx = orchSrc.indexOf('validate_mid_execution_splits()');
-    const fnBlock = orchSrc.slice(fnIdx, fnIdx + 2000);
+    const fnIdx = guardsSrc.indexOf('validate_mid_execution_splits()');
+    const fnBlock = guardsSrc.slice(fnIdx, fnIdx + 2000);
     expect(fnBlock).toContain('speckitValidated');
     expect(fnBlock).toContain('createdFrom');
   });
 
-  it('check_ac_invariant is called after mid-execution validation', () => {
-    // The call to check_ac_invariant appears after validate_mid_execution_splits + its function def
+  it('check_ac_invariant is called after mid-execution validation (main lane)', () => {
+    // The call to check_ac_invariant appears after validate_mid_execution_splits's call
     const validateCallIdx = orchSrc.indexOf('validate_mid_execution_splits "$PHASE"\n');
     expect(validateCallIdx).toBeGreaterThan(-1);
-    // check_ac_invariant() function def + call follow; use 3000 chars to clear the function body
     const afterValidate = orchSrc.slice(validateCallIdx, validateCallIdx + 3000);
     expect(afterValidate).toContain('check_ac_invariant "$PHASE"');
   });
@@ -863,7 +891,7 @@ describe('runSpecAgent / applySpecChanges wiring — split-mandate check runs af
 
   it('a detected violation is persisted as a coordinatorReview flag (reuses the existing priorGapsBlock retry channel, not a new mechanism)', () => {
     const idx = src.indexOf('let mandateCheck = checkSplitMandateViolation(');
-    const block = src.slice(idx, idx + 4200);
+    const block = src.slice(idx, idx + 5000);
     expect(block).toMatch(/coordinatorReview/);
     expect(block).toMatch(/flags/);
   });
@@ -910,7 +938,7 @@ describe('split-MANDATE reject-and-retry — immediate same-run enforcement', ()
   it('the retry result is applied via applySpecChanges (goes through the SAME file-coherence check as a normal split, not a bypass)', () => {
     const retryIdx = src.indexOf("retryResult = await runSpecAgent({ promptExec, agent: 'openspec'");
     const block = src.slice(retryIdx, retryIdx + 600);
-    expect(block).toMatch(/applySpecChanges\(story, retryResult\.payload, newStories, prd, opts\.phase, runId\)/);
+    expect(block).toMatch(/applySpecChanges\(story, retryResult\.payload, newStories, prd, opts\.phase, runId(?:, logDir)?\)/);
   });
 
   it('mandateCheck is recomputed after the forced retry (does not blindly trust the retry succeeded)', () => {
@@ -921,7 +949,7 @@ describe('split-MANDATE reject-and-retry — immediate same-run enforcement', ()
 
   it('still falls back to the coordinatorReview flag mechanism if the forced retry ALSO fails to resolve the violation (bounded — no infinite retry loop)', () => {
     const retryIdx = src.indexOf("retryResult = await runSpecAgent({ promptExec, agent: 'openspec'");
-    const block = src.slice(retryIdx, retryIdx + 2700);
+    const block = src.slice(retryIdx, retryIdx + 3200);
     expect(block).toMatch(/did NOT resolve the split MANDATE violation/);
     // Only ONE forced retry attempt exists in the source — no retry-of-retry loop.
     const retryOccurrences = (src.match(/agent: 'openspec', story, phase: opts\.phase, runId, logDir, forcedRetryNote/g) ?? []).length;
@@ -930,7 +958,7 @@ describe('split-MANDATE reject-and-retry — immediate same-run enforcement', ()
 
   it('a failed/unparsable forced retry is counted as an agent failure (visible in summary stats, not silently swallowed)', () => {
     const retryIdx = src.indexOf("retryResult = await runSpecAgent({ promptExec, agent: 'openspec'");
-    const block = src.slice(retryIdx, retryIdx + 3000);
+    const block = src.slice(retryIdx, retryIdx + 3400);
     expect(block).toMatch(/summary\.stats\.agentFailures \+= 1/);
   });
 });

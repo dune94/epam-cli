@@ -81,7 +81,7 @@ describe('claude.sh — each rung escalates correctly', () => {
 
   it('Rung 3 sets EPAM_REASONING_EFFORT=high', () => {
     const rung3Start = src.indexOf('# Rung 3+:');
-    const rung3Block = src.slice(rung3Start, rung3Start + 3600);
+    const rung3Block = src.slice(rung3Start, rung3Start + 4200);
     expect(rung3Block).toMatch(/EPAM_REASONING_EFFORT.*high/);
   });
 

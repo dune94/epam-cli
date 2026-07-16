@@ -102,6 +102,12 @@
         .ss-badge-done { background: rgba(46,191,110,0.16); color: var(--green, #2ebf6e); }
         .ss-pulse { display:inline-block; width:6px; height:6px; border-radius:50%; background: var(--blue, #3ba3f7); margin-right:5px; animation: ss-pulse 1.4s infinite; }
         @keyframes ss-pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+        .event-card.type-spec_pass_decision::before                      { background: var(--violet); }
+        .event-card.type-spec_pass_decision.decision-rejected::before    { background: var(--red); }
+        .event-card.type-spec_pass_decision.decision-accepted::before    { background: var(--green); }
+        .event-card.type-spec_pass_decision.decision-resolved::before    { background: var(--green); }
+        .event-card.type-spec_pass_decision.decision-unresolved::before  { background: var(--amber); }
+        .event-card.type-spec_pass_decision.decision-pending_retry::before { background: var(--amber); }
         .event-card.type-phase_start::before    { background: var(--pink); }
         .event-card.type-phase_complete::before { background: var(--green); }
 
@@ -232,6 +238,7 @@
                     <option value="gate_decision">Gate Decision</option>
                     <option value="cost_snapshot">Cost Snapshot</option>
                     <option value="spec_update">Spec Update</option>
+                    <option value="spec_pass_decision">Spec Pass Decision</option>
                     <option value="phase_start">Phase Start</option>
                     <option value="phase_complete">Phase Complete</option>
                     <option value="error">Error</option>
@@ -391,11 +398,37 @@
         /forced retry/i,
         /prompt runner timed out/i,
     ];
+    // Fixed 2026-07-15 (found live: SKY-003-test's tsc-verify/FailureAnalyst
+    // error cards rendered as plain red "ERROR" even though
+    // healing-events.jsonl showed 4 real target=skill healing responses for
+    // that exact story across its attempts). SELF_HEALING_PATTERNS is a
+    // fixed phrase list built for one failure class (speckit/openspec agent
+    // errors) -- it will never cover every diagnosis wording the
+    // FailureAnalyst can produce (widespread syntax corruption, garbled
+    // code generation, etc.), and growing it phrase-by-phrase is a losing
+    // game. Cross-referencing against healing-events.jsonl instead answers
+    // the actual question directly: did the pipeline record a real healing
+    // response (a target-bearing entry -- skill/tool/kb/none -- as opposed
+    // to a bare HEALING_BROKEN detection marker, which carries no 'target'
+    // key) for THIS story? If so, every error card for that story is framed
+    // as self-healing, regardless of its message text.
+    let selfHealStoryIds = new Set();
+    async function fetchSelfHealStoryIds() {
+        const rows = await fetchJsonl('logs/healing-events.jsonl');
+        const ids = new Set();
+        for (const r of rows) {
+            if (!r || !r.story_id) continue;
+            if (!('target' in r)) continue; // HEALING_BROKEN markers carry no 'target' key
+            ids.add(r.story_id);
+        }
+        return ids;
+    }
     function isSelfHealingError(evt) {
         if (evt.type !== 'error') return false;
         if (SELF_HEALING_AGENTS.has(evt.agent)) return true;
         const msg = evt.detail?.message || '';
-        return SELF_HEALING_PATTERNS.some((re) => re.test(msg));
+        if (SELF_HEALING_PATTERNS.some((re) => re.test(msg))) return true;
+        return !!(evt.story_id && selfHealStoryIds.has(evt.story_id));
     }
 
     function updateStats(events) {
@@ -440,6 +473,24 @@
                 return `$${(d.costUsd || 0).toFixed(4)} — ${d.tokensIn || 0} in / ${d.tokensOut || 0} out`;
             case 'spec_update':
                 return d.summary || 'Specification updated';
+            case 'spec_pass_decision': {
+                const icons = {
+                    reviewer_rejected: '✗ Reviewer rejected',
+                    reviewer_accepted: '✓ Reviewer accepted',
+                    coherence_violation: '⚠ Coherence violation',
+                    mandate_violation: '⚠ Mandate violation',
+                    story_delegated: '→ Delegated to children',
+                    story_restored: '↩ Parent story restored',
+                };
+                const label = icons[d.event] ?? d.event;
+                const parts = [label];
+                if (d.reasons?.length)  parts.push(d.reasons.join('; '));
+                if (d.childIds)         parts.push(`children: ${Array.isArray(d.childIds) ? d.childIds.join(', ') : d.childIds}`);
+                if (d.file)             parts.push(`file: ${d.file}`);
+                if (d.reason)           parts.push(d.reason);
+                if (d.source === 'mid_execution') parts.push('(mid-execution)');
+                return parts.join(' — ');
+            }
             case 'phase_start':
                 return d.message || 'Phase started';
             case 'phase_complete':
@@ -492,8 +543,9 @@
             const selfHeal = isSelfHealingError(evt);
             const typeLabel = selfHeal ? 'self-healing' : (evt.type || 'unknown').replace(/_/g, ' ');
             const typeBadgeCls = selfHeal ? 'badge-self-heal' : 'badge-type';
+            const decisionClass = evt.detail?.decision ? ` decision-${evt.detail.decision}` : '';
             html += `
-            <div class="event-card type-${evt.type}${selfHeal ? ' self-heal' : ''}">
+            <div class="event-card type-${evt.type}${selfHeal ? ' self-heal' : ''}${decisionClass}">
                 <div class="event-header">
                     <div class="event-meta">
                         <span class="event-agent">${evt.agent || '?'}</span>
@@ -595,7 +647,9 @@
 
     async function refresh() {
         try {
-            allEvents = await fetchEvents();
+            const [events, healIds] = await Promise.all([fetchEvents(), fetchSelfHealStoryIds()]);
+            allEvents = events;
+            selfHealStoryIds = healIds;
             populateFilterOptions(allEvents);
             applyFilters();
         } catch (e) { console.error('Error refreshing activity:', e); }

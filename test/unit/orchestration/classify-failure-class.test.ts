@@ -73,7 +73,7 @@ describe('classify_failure_class — REAL execution', () => {
     curlBehavior?: 'valid' | 'invalid' | 'unreachable' | 'no-key';
     storyFailures?: Array<{ storyId: string; failureClass: string }>;
     kbFileExists?: boolean;
-  }): { failureClass: string; escalate: string; stderr: string; kbContent: string } {
+  }): { failureClass: string; escalate: string; amendment: string; stderr: string; kbContent: string } {
     const dir = mkdtempSync(join(tmpdir(), 'classify-failure-test-'));
     try {
       const rawFile = join(dir, 'raw.json');
@@ -137,6 +137,7 @@ describe('classify_failure_class — REAL execution', () => {
           `classify_failure_class "${opts.rawContent !== undefined ? rawFile : join(dir, 'nonexistent-raw.json')}" "${opts.resultJson !== undefined ? resultFile : join(dir, 'nonexistent-result.json')}" "${opts.exitCode}"`,
           `echo "CLASS=$COORDINATOR_FAILURE_CLASS"`,
           `echo "ESCALATE=$COORDINATOR_ESCALATE"`,
+          'echo "AMENDMENT=${COORDINATOR_PROMPT_AMENDMENT:-}"',
         ]
           .filter(Boolean)
           .join('\n'),
@@ -144,13 +145,14 @@ describe('classify_failure_class — REAL execution', () => {
       const result = execFileSync('bash', [scriptPath], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
       const failureClass = result.match(/CLASS=(\S*)/)?.[1] ?? 'MISSING';
       const escalate = result.match(/ESCALATE=(\S*)/)?.[1] ?? 'MISSING';
+      const amendment = result.match(/AMENDMENT=(.*)/)?.[1]?.trim() ?? '';
       let kbContent = '';
       try {
         kbContent = readFileSync(kbFile, 'utf8');
       } catch {
         kbContent = '';
       }
-      return { failureClass, escalate, stderr: result, kbContent };
+      return { failureClass, escalate, amendment, stderr: result, kbContent };
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -222,6 +224,28 @@ describe('classify_failure_class — REAL execution', () => {
       });
       expect(failureClass).toBe('capability');
       expect(escalate).toBe('yes');
+    });
+
+    it('max-iterations sets COORDINATOR_PROMPT_AMENDMENT with a write-first directive', () => {
+      const { failureClass, amendment } = run({
+        rawContent: 'some output',
+        exitCode: 1,
+        resultJson: { result: 'Error: reached maximum iterations without completing the task' },
+      });
+      expect(failureClass).toBe('capability');
+      expect(amendment).toMatch(/WriteFile/);
+      expect(amendment).toMatch(/FIRST action/i);
+      expect(amendment).toMatch(/Files to Create\/Modify/);
+    });
+
+    it('empty-output capability failure does NOT set COORDINATOR_PROMPT_AMENDMENT (different code path)', () => {
+      const { failureClass, amendment } = run({
+        rawContent: 'some output',
+        exitCode: 1,
+        resultJson: { result: '', usage: { outputTokens: 500 } },
+      });
+      expect(failureClass).toBe('capability');
+      expect(amendment).toBe('');
     });
 
     it('tokens consumed but no result text at all: capability (empty-output variant)', () => {

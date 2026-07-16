@@ -182,7 +182,7 @@ const TOOL_MODEL_REVIEW = {
 
 // Call MiniMax API directly with a tool definition — arguments are API-enforced JSON.
 // itemsKey: if set, extracts result[itemsKey] (for array-returning tools); otherwise returns full args.
-const MINIMAX_TOOL_TIMEOUT_MS = parseInt(process.env.MINIMAX_TOOL_TIMEOUT_MS || '120000', 10);
+const MINIMAX_TOOL_TIMEOUT_MS = parseInt(process.env.MINIMAX_TOOL_TIMEOUT_MS || '180000', 10);
 
 async function callMiniMaxWithTool(prompt, toolDef, logPath, itemsKey) {
   const apiKey = process.env.MINIMAX_API_KEY || process.env.EPAM_API_KEY_MINIMAX;
@@ -535,7 +535,38 @@ ${storiesPayload}
         });
       }
 
+      // Retry on transient failure (timeout, provider outage) — one retry by default.
+      // The forced-retry mechanism for split-mandate violations is a separate, later gate;
+      // this one covers the initial call only, before the failure path is entered.
+      const _specMaxRetries = parseInt(process.env.SPEC_AGENT_MAX_RETRIES || '1', 10);
+      let _specRetry = 0;
+      while (!agentResult && _specRetry < _specMaxRetries) {
+        _specRetry++;
+        console.warn(
+          `spec-mode: ${agent} returned null for ${story.id} (attempt ${_specRetry + 1}/${_specMaxRetries + 1}) — retrying transient failure`
+        );
+        summary.stats.agentAttempts += 1;
+        try {
+          agentResult = agent === 'speckit' && openspecPayload
+            ? await runSpeckitReview({ promptExec, story, openspecOutput: openspecPayload, phase: opts.phase, runId, logDir })
+            : await runSpecAgent({ promptExec, agent, story, phase: opts.phase, runId, logDir });
+        } catch (err) { agentResult = null; }
+      }
+
       if (!agentResult || !agentResult.payload) {
+        // Mark story as spec-pass-failed when it still needs a split — the orchestrator
+        // can read this flag to block execution on untuned PRDs (SPEC_PASS_BLOCK_ON_TIMEOUT).
+        const _splitReq = storyRequiresSplit(captureStorySnapshot(story));
+        if (_splitReq.required) {
+          story.specification = {
+            ...(story.specification || {}),
+            specPassFailed: true,
+            specPassFailedReason: `${agent} returned null after ${_specRetry + 1} attempt(s)`
+          };
+          console.error(
+            `[WARN] Spec pass FAILED for ${story.id} — PRD untuned (${_splitReq.reason}), execution proceeding at risk`
+          );
+        }
         summary.stats.agentFailures += 1;
         await emitMonitorEvent({
           monitorScript,
@@ -585,7 +616,7 @@ ${storiesPayload}
       }
 
       const newStoriesCountBefore = newStories.length;
-      let changes = applySpecChanges(story, payload, newStories, prd, opts.phase, runId);
+      let changes = applySpecChanges(story, payload, newStories, prd, opts.phase, runId, logDir);
 
       let afterSnapshot = captureStorySnapshot(story);
 
@@ -657,7 +688,7 @@ ${storiesPayload}
           retryResult.payload.runId = runId;
           payload = retryResult.payload;
           if (agent === 'openspec') openspecPayload = payload;
-          changes = applySpecChanges(story, payload, newStories, prd, opts.phase, runId);
+          changes = applySpecChanges(story, payload, newStories, prd, opts.phase, runId, logDir);
           afterSnapshot = captureStorySnapshot(story);
 
           reviewResult = await reviewPrdChange({
@@ -679,6 +710,9 @@ ${storiesPayload}
           changes.acceptanceChanged = false;
           changes.splitCount = 0;
           afterSnapshot = captureStorySnapshot(story);
+          appendSpecPassEvent(logDir, { storyId: story.id, phase: opts.phase, event: 'reviewer_rejected', decision: 'rejected', details: { agent, attempts: acReviewAttempts, reasons: reviewResult.issues } });
+        } else {
+          appendSpecPassEvent(logDir, { storyId: story.id, phase: opts.phase, event: 'reviewer_accepted', decision: 'accepted', details: { agent, attempts: acReviewAttempts } });
         }
 
         logGuardedStepRetry(logDir, {
@@ -768,6 +802,7 @@ ${storiesPayload}
         `spec-mode: split MANDATE violation for ${story.id}: ${mandateCheck.reason} ` +
         `— openspec was instructed to split but did not; forcing an immediate retry`
       );
+      appendSpecPassEvent(logDir, { storyId: story.id, phase: opts.phase, event: 'mandate_violation', decision: 'pending_retry', details: { reason: mandateCheck.reason } });
       const forcedRetryNote =
         `CRITICAL — YOUR PREVIOUS OUTPUT VIOLATED A MANDATORY RULE. This story ${mandateCheck.reason}, ` +
         `which REQUIRES a split, and you did not produce one. This is NOT optional and NOT a suggestion. ` +
@@ -782,7 +817,7 @@ ${storiesPayload}
       if (retryResult && retryResult.payload) {
         retryResult.payload.runId = runId;
         const childrenCountBefore = newStories.length;
-        const retryChanges = applySpecChanges(story, retryResult.payload, newStories, prd, opts.phase, runId);
+        const retryChanges = applySpecChanges(story, retryResult.payload, newStories, prd, opts.phase, runId, logDir);
         summary.stats.splits += retryChanges.splitCount;
         totalSplitCountForStory += retryChanges.splitCount;
 
@@ -811,15 +846,18 @@ ${storiesPayload}
         }
         if (!mandateCheck.violated) {
           console.log(`spec-mode: forced retry resolved the split MANDATE violation for ${story.id}`);
+          appendSpecPassEvent(logDir, { storyId: story.id, phase: opts.phase, event: 'mandate_violation', decision: 'resolved', details: { reason: mandateCheck.reason } });
         } else {
           console.warn(
             `spec-mode: forced retry did NOT resolve the split MANDATE violation for ${story.id} ` +
             `— flagging for the next specification pass`
           );
+          appendSpecPassEvent(logDir, { storyId: story.id, phase: opts.phase, event: 'mandate_violation', decision: 'unresolved', details: { reason: mandateCheck.reason } });
         }
       } else {
         summary.stats.agentFailures += 1;
         console.warn(`spec-mode: forced split-mandate retry produced no parsable output for ${story.id} — flagging for the next specification pass`);
+        appendSpecPassEvent(logDir, { storyId: story.id, phase: opts.phase, event: 'mandate_violation', decision: 'unresolved', details: { reason: mandateCheck.reason } });
       }
     }
 
@@ -854,6 +892,52 @@ ${storiesPayload}
       status: specStatus,
       agentContributions
     });
+
+    // Token-budget pass: check each split child created this story iteration.
+    // If a child's estimated baseline prompt exceeds the budget, request a
+    // further split via a fresh openspec call — same forced-retry shape as the
+    // split-mandate gate above, but triggered by token count rather than AC count.
+    // Respects the global SPEC_MAX_SPLIT_DEPTH cap (no infinite re-split chains).
+    const _tokenBudget = parseInt(process.env.EPAM_TOKEN_BUDGET_PER_STORY || '100000', 10);
+    const _contractDir = path.join(path.dirname(prdPath), '.contracts');
+    const _tokenSplitMax = parseInt(process.env.SPEC_MAX_SPLIT_DEPTH || '2', 10);
+    const _childrenThisStory = newStories.filter((ns) => ns.parentId === story.id);
+    for (const { story: child } of _childrenThisStory) {
+      const _est = estimateStoryTokens(child, _contractDir);
+      if (_est <= _tokenBudget) continue;
+      if (splitDepth(child, prd) >= _tokenSplitMax) {
+        console.warn(
+          `spec-mode: token-budget: ${child.id} ~${Math.round(_est / 1000)}K tokens but at max split depth — proceeding at risk`
+        );
+        continue;
+      }
+      console.warn(
+        `spec-mode: token-budget: ${child.id} ~${Math.round(_est / 1000)}K tokens (budget ${Math.round(_tokenBudget / 1000)}K) — requesting further split`
+      );
+      const _tokenNote =
+        `IMPORTANT — Story ${child.id} is estimated at ~${Math.round(_est / 1000)}K tokens, ` +
+        `exceeding the ${Math.round(_tokenBudget / 1000)}K token budget. ` +
+        `It has ${(child.acceptanceCriteria || []).length} ACs. ` +
+        `YOU MUST split it further, separating distinct concerns (e.g. frontend/template ` +
+        `work from build/configuration work), targeting ≤8 ACs and ≤${Math.round(_tokenBudget / 1000)}K tokens per child.`;
+      summary.stats.agentAttempts += 1;
+      let _tokenRetry = null;
+      try {
+        _tokenRetry = await runSpecAgent({
+          promptExec, agent: 'openspec', story: child,
+          phase: opts.phase, runId, logDir, forcedRetryNote: _tokenNote
+        });
+      } catch (err) { _tokenRetry = null; }
+      if (_tokenRetry?.payload?.splitStories?.length) {
+        _tokenRetry.payload.runId = runId;
+        const _trc = applySpecChanges(child, _tokenRetry.payload, newStories, prd, opts.phase, runId, logDir);
+        summary.stats.splits += _trc.splitCount;
+        totalSplitCountForStory += _trc.splitCount;
+        if (_trc.splitCount > 0) {
+          console.log(`spec-mode: token-budget retry split ${child.id} into ${_trc.splitCount} child/children`);
+        }
+      }
+    }
   }
 
   // ── Step 3: Insert split stories into PRD ──────────────────────────────
@@ -991,6 +1075,15 @@ ${reviewPayload}
   // anthropic/claude-sonnet-4-6, failed 8/8 attempts, aborted the phase).
   const upgradeModel = process.env.ORCH_UPGRADE_MODEL || 'MiniMax-M3';
   const miniModel    = process.env.ORCH_MINI_MODEL    || 'MiniMax-M2.5';
+  // Ceiling model for veryHighComplexity stories — "the most appropriate
+  // high model," reusing the SAME strongest-configured-model concept the
+  // Rung3+ watchdog fallback already uses (EPAM_FINAL_FALLBACK_MODEL), so
+  // there's one source of truth for "what is our ceiling model" rather than
+  // two independently-configured ceilings that could drift apart. A
+  // dedicated EPAM_VERY_HIGH_COMPLEXITY_MODEL override exists for projects
+  // that want a different ceiling here than the watchdog-timeout fallback.
+  const veryHighModel    = process.env.EPAM_VERY_HIGH_COMPLEXITY_MODEL    || process.env.EPAM_FINAL_FALLBACK_MODEL    || upgradeModel;
+  const veryHighProvider = process.env.EPAM_VERY_HIGH_COMPLEXITY_PROVIDER || process.env.EPAM_FINAL_FALLBACK_PROVIDER || '';
   const allPhaseStories = [...stories, ...newStories.map((ns) => ns.story)];
 
   // Pass A — rule-based signals for every story that has a model assigned
@@ -1002,9 +1095,11 @@ ${reviewPayload}
       storyId: story.id,
       currentModel: story.model,
       isMini: isMiniTierModel(story.model),
-      ruleRecommendation: signals.needsUpgrade ? upgradeModel : story.model,
+      ruleRecommendation: signals.veryHighComplexity ? veryHighModel : (signals.needsUpgrade ? upgradeModel : story.model),
       ruleUpgrade: signals.needsUpgrade,
       ruleReason: signals.reason || 'no upgrade signal detected',
+      veryHighComplexity: signals.veryHighComplexity,
+      veryHighReason: signals.veryHighReason,
       signals: {
         acCount: signals.acCount,
         singleFile: signals.isSingleFile,
@@ -1104,6 +1199,14 @@ Use "keep-current" to accept the current (possibly rule-upgraded) model. Only pr
       const decisionMap = new Map();
       llmDecisions.forEach((d) => { if (d && d.storyId) decisionMap.set(d.storyId, d); });
       finalAssessments = finalAssessments.map((fa) => {
+        // veryHighComplexity is a deterministic, code-level classification —
+        // the LLM coordinator has no concept of "ceiling model, skip the
+        // ladder" and could talk itself into downgrading a story that
+        // genuinely needs it (same "code-level checks > LLM persuasion"
+        // principle already applied elsewhere in this pipeline). Bypass
+        // Pass B entirely for these stories; the rule-based ceiling
+        // assignment from Pass A is final.
+        if (fa.veryHighComplexity) return fa;
         const decision = decisionMap.get(fa.storyId);
         if (!decision) return fa;
         const rawModel = decision.finalModel && decision.finalModel !== 'keep-current'
@@ -1138,13 +1241,22 @@ Use "keep-current" to accept the current (possibly rule-upgraded) model. Only pr
   for (const fa of finalAssessments) {
     const story = allPhaseStories.find((s) => s.id === fa.storyId);
     if (!story) continue;
+    // veryHighComplexity: mark skipLadder regardless of whether the model
+    // string itself changed (e.g. it was already assigned the ceiling
+    // model by an earlier pass) — the flag is what tells claude.sh's
+    // InferenceLadder to stop reassigning models on retry, not the model
+    // value alone.
+    if (fa.veryHighComplexity && !story.skipLadder) {
+      story.skipLadder = true;
+      console.log(`spec-mode: ${story.id} marked skipLadder=true (${fa.veryHighReason})`);
+    }
     if (fa.finalModel !== story.model) {
       const prev = story.model;
       story.model = fa.finalModel;
       // Keep aiProvider in sync with the new model — see resolveModelProvider's
       // docstring for the live bug this fixes (stale provider + new model
       // silently misrouting requests, causing an indefinite hang).
-      const newProvider = resolveModelProvider(fa.finalModel);
+      const newProvider = resolveModelProvider(fa.finalModel) || (fa.veryHighComplexity ? veryHighProvider : '');
       if (newProvider && newProvider !== story.aiProvider) {
         const prevProvider = story.aiProvider;
         story.aiProvider = newProvider;
@@ -1161,10 +1273,12 @@ Use "keep-current" to accept the current (possibly rule-upgraded) model. Only pr
         llmOverride: fa.llmOverride,
         llmReason: fa.llmReason,
         llmConfidence: fa.llmConfidence || null,
+        veryHighComplexity: fa.veryHighComplexity || false,
+        veryHighReason: fa.veryHighReason || '',
         upgradedAt: new Date().toISOString()
       };
-      modelChanges.push({ storyId: story.id, from: prev, to: fa.finalModel, llmOverride: fa.llmOverride });
-      console.log(`spec-mode: model set ${story.id}: ${prev} → ${fa.finalModel}${fa.llmOverride ? ' [LLM override]' : ''}`);
+      modelChanges.push({ storyId: story.id, from: prev, to: fa.finalModel, llmOverride: fa.llmOverride, veryHighComplexity: fa.veryHighComplexity || false });
+      console.log(`spec-mode: model set ${story.id}: ${prev} → ${fa.finalModel}${fa.llmOverride ? ' [LLM override]' : ''}${fa.veryHighComplexity ? ' [VERY HIGH COMPLEXITY — ceiling model, skipLadder]' : ''}`);
     }
   }
   if (modelChanges.length > 0) {
@@ -1275,6 +1389,8 @@ SPLIT RULES (mandatory, not optional — enforce these before refining AC):
 2. Both implementation files AND test files in technicalNotes.files → split into one impl child (non-test files) and one test child (*.test.ts files). Assign agentRole "typescript-engineer" to impl, "test-engineer" to test.
 3. 3+ independent deliverable modules with no shared exports (e.g. client.ts, server.ts, cli.ts all in same story) → split per concern. Each split gets the files it owns.
 4. External API discovery + implementation in same story → split: first child discovers/documents the API contract, second child implements against that contract.
+5. technicalNotes.files contains BOTH frontend/template files (*.html, *.css, *.scss, *.jsx, *.tsx, *.vue, *.svelte) AND build/tooling files (vite.config.*, webpack.config.*, rollup.config.*, package.json, Makefile, Dockerfile, *.sh) → split: one child owns the frontend/template files, one child owns the build/tooling files. These have different runtime roles and different owners — bundling them causes token bloat and diffuse responsibility.
+6. Story covers multiple independent runtime roles in the same deliverable (e.g. HTTP server AND CLI binary AND HTML dashboard) → split by runtime role, one child per runtime target. Each child's agentRole should match what it produces (typescript-engineer for application code, test-engineer for test-only files).
 These rules apply only when splitDepth === 0. Never split a story that is already a split child.
 
 Story context:
@@ -1462,6 +1578,35 @@ function splitDepth(story, prd) {
   return depth;
 }
 
+// Lightweight token-budget estimate for a story before it enters the executor.
+// Measures the baseline prompt footprint (ACs × density + file entries + contract
+// sizes) without running the executor. Intentionally conservative — accumulated
+// context from tool calls is unknowable pre-execution, but the baseline is the
+// dominant factor for over-budget stories.
+const ESTIMATE_BASE = 2000;
+const ESTIMATE_PER_AC = 150;
+const ESTIMATE_PER_TC = 300;    // ~2 TCs per AC × 150 tokens each
+const ESTIMATE_PER_FILE = 100;
+const ESTIMATE_BYTES_PER_TOKEN = 4;
+
+function estimateStoryTokens(story, contractDir) {
+  const acCount = (story.acceptanceCriteria || []).length;
+  const fileCount = (story.technicalNotes?.files || []).length;
+  let contractTokens = 0;
+  for (const depId of (story.dependencies || [])) {
+    try {
+      contractTokens += Math.ceil(
+        fs.statSync(path.join(contractDir, `${depId}.md`)).size / ESTIMATE_BYTES_PER_TOKEN
+      );
+    } catch { /* contract not yet written — skip */ }
+  }
+  return ESTIMATE_BASE
+    + (acCount * ESTIMATE_PER_AC)
+    + (acCount * ESTIMATE_PER_TC)
+    + (fileCount * ESTIMATE_PER_FILE)
+    + contractTokens;
+}
+
 // Split MANDATE thresholds — shared by the prompt warning (runSpecAgent) and the
 // deterministic post-hoc check below (checkSplitMandateViolation), so the two
 // can never drift apart. Fully generic: no project/domain names, just AC count
@@ -1504,6 +1649,117 @@ function checkSplitMandateViolation(beforeSnapshot, splitCountAfter) {
     return { violated: false, reason: '' };
   }
   return { violated: true, reason };
+}
+
+// ── TC-fact-density split mandate (test stories) ────────────────────────────
+//
+// Root cause this fixes (found live, 2026-07-14, tier3-travel-app run):
+// storyRequiresSplit()/checkSplitMandateViolation() above only ever see AC
+// count and impl/test file shape — both known at SPEC-PASS time (Step 0),
+// before any implementation has run. But a pure test story's REAL
+// generation load comes from testCriteria.facts — exact-match behavioral
+// facts the TC writer only discovers post-impl, right before the test
+// story itself executes (see lib/tc-writer-gate.sh). SKY-003-test had a
+// modest 8 ACs (well under SPLIT_MANDATE_AC_THRESHOLD) but 20 TC facts + 19
+// bannedPatterns crammed into ONE test file — every model at every
+// escalation rung, up to the ceiling, produced widespread syntax
+// corruption (30+ tsc errors) on it, 8/8 attempts. The AC-count mandate
+// structurally cannot see this; it needs its own, TC-fact-density-based
+// mandate, checked at the one point density is actually known.
+//
+// EPAM_TC_FACTS_SPLIT_THRESHOLD (default 30): facts count alone, since
+// that's what makes ONE file too large to write correctly, independent of
+// how many bannedPatterns rules also apply (those are global constraints
+// copied to every split child unchanged, not something to partition).
+const TC_FACTS_SPLIT_THRESHOLD = parseInt(process.env.EPAM_TC_FACTS_SPLIT_THRESHOLD || '30', 10);
+
+function checkTcFactDensityMandate(factsCount, threshold = TC_FACTS_SPLIT_THRESHOLD) {
+  const count = Number(factsCount) || 0;
+  if (count > threshold) {
+    return { violated: true, reason: `${count} testCriteria.facts (> ${threshold}) on a single test file — split into multiple test stories` };
+  }
+  return { violated: false, reason: '' };
+}
+
+// splitTestStoryByFacts <story> <prd> <phase> [maxFactsPerChild]
+// Partitions a pure-test story's testCriteria.facts into N children, each
+// owning a distinct test file covering its own subset of facts. Unlike
+// applySpecChanges()'s AC-based split (which needs an LLM to decide WHERE
+// the split boundary goes, since AC semantics require judgment), a facts
+// array has no such ambiguity — each fact is an independent, already-atomic
+// assertion, so a purely mechanical even partition is safe and requires no
+// LLM involvement (same "deterministic code-level action, not LLM
+// persuasion" principle as the rest of this pipeline's self-heal layer).
+//
+// Mutates `prd` in place: marks the parent deprecated+completed (delegated,
+// same convention as applySpecChanges' AC-split parent handling) and
+// splices the new child IDs into prd.implementationOrder[phase] at the
+// parent's former position. Returns { splitCount, childIds } — {0, []} if
+// the story isn't eligible (not a pure test story, or already split/
+// deprecated).
+function splitTestStoryByFacts(story, prd, phase, maxFactsPerChild = TC_FACTS_SPLIT_THRESHOLD) {
+  if (!story || story.status === 'deprecated') return { splitCount: 0, childIds: [] };
+  const files = story.technicalNotes?.files || [];
+  const isPureTestStory = files.length > 0 && files.every((f) => f.endsWith('.test.ts') || f.endsWith('.spec.ts'));
+  if (!isPureTestStory || files.length !== 1) return { splitCount: 0, childIds: [] };
+
+  const facts = Array.isArray(story.testCriteria?.facts) ? story.testCriteria.facts : [];
+  if (facts.length === 0) return { splitCount: 0, childIds: [] };
+
+  const perChild = Math.max(1, Number(maxFactsPerChild) || TC_FACTS_SPLIT_THRESHOLD);
+  const childCount = Math.ceil(facts.length / perChild);
+  if (childCount <= 1) return { splitCount: 0, childIds: [] };
+
+  const testFile = files[0];
+  const dotIdx = testFile.lastIndexOf('.test.');
+  const isSpec = dotIdx === -1;
+  const splitPoint = isSpec ? testFile.lastIndexOf('.spec.') : dotIdx;
+  const ext = isSpec ? '.spec.ts' : '.test.ts';
+  const base = testFile.slice(0, splitPoint);
+
+  const childIds = [];
+  const newChildren = [];
+  for (let i = 0; i < childCount; i++) {
+    const childId = `${story.id}-tc${i + 1}`;
+    const factSlice = facts.slice(i * perChild, (i + 1) * perChild);
+    const child = JSON.parse(JSON.stringify(story));
+    child.id = childId;
+    child.title = `${story.title} (part ${i + 1}/${childCount})`;
+    child.status = 'pending';
+    child.completed = false;
+    child.technicalNotes = { ...story.technicalNotes, files: [`${base}.tc${i + 1}${ext}`] };
+    child.testCriteria = {
+      ...story.testCriteria,
+      facts: factSlice,
+    };
+    child.specification = {
+      ...(story.specification || {}),
+      createdFrom: story.id,
+      createdAt: new Date().toISOString(),
+      splitOrigin: 'tc-density-split',
+      splitDepth: ((story.specification && story.specification.splitDepth) || 0) + 1,
+    };
+    childIds.push(childId);
+    newChildren.push(child);
+  }
+
+  prd.stories.push(...newChildren);
+  story.acceptanceCriteria = [`Delegated to TC-density split children: ${childIds.join(', ')}`];
+  story.status = 'deprecated';
+  story.completed = true;
+
+  const order = prd.implementationOrder?.[phase];
+  if (Array.isArray(order)) {
+    const idx = order.indexOf(story.id);
+    if (idx !== -1) {
+      order.splice(idx, 1, ...childIds);
+    } else {
+      order.push(...childIds);
+    }
+  }
+
+  console.log(`spec-mode: TC-fact-density split — ${story.id} (${facts.length} facts) → ${childIds.join(', ')} (${perChild} facts/child max)`);
+  return { splitCount: childIds.length, childIds };
 }
 
 // Root cause this fixes (found live, 2026-07-06, tier3-full-run-18): a split
@@ -1785,7 +2041,7 @@ function capSplitACs(story, parentId) {
   }
 }
 
-function applySpecChanges(story, payload, newStories, prd, phaseId, runId) {
+function applySpecChanges(story, payload, newStories, prd, phaseId, runId, logDir = null) {
   const result = { acceptanceChanged: false, splitCount: 0 };
   if (Array.isArray(payload.acceptanceCriteria) && payload.acceptanceCriteria.length) {
     const capped = payload.acceptanceCriteria.slice(0, MAX_ACS_PER_STORY);
@@ -1929,6 +2185,7 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId) {
             `children [${childIds.join(', ')}] all write to ${path.basename(file)} — ` +
             `rejecting split (last writer wins = silent data loss)`
           );
+          if (logDir) appendSpecPassEvent(logDir, { storyId: story.id, phase: phaseId, event: 'coherence_violation', decision: 'rejected', details: { file: path.basename(file), childIds } });
         }
         // Roll back all children added during this forEach
         newStories.splice(newStories.length - addedChildren.length, addedChildren.length);
@@ -1938,6 +2195,7 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId) {
         const childIds = addedChildren.map(ns => ns.story.id).join(', ');
         story.acceptanceCriteria = [`Delegated to split children: ${childIds}`];
         console.log(`spec-mode: parent ${story.id} ACs redistributed → delegated to ${childIds}`);
+        if (logDir) appendSpecPassEvent(logDir, { storyId: story.id, phase: phaseId, event: 'story_delegated', decision: 'delegated', details: { childIds: addedChildren.map(ns => ns.story.id) } });
         // Root cause of a real bug (found live, 2026-07-06, tier3-full-run-15):
         // a delegated parent's technicalNotes.files still lists its ORIGINAL
         // files (including any .test.ts), and it stayed in
@@ -1960,6 +2218,20 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId) {
 
 function appendJsonl(filePath, obj) {
   fs.appendFileSync(filePath, `${JSON.stringify(obj)}\n`);
+}
+
+function appendSpecPassEvent(logDir, { storyId, phase, event, decision, details = {} }) {
+  const ts = new Date().toISOString();
+  const id = `evt-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  appendJsonl(path.join(logDir, 'agent-activity.jsonl'), {
+    event_id: id,
+    timestamp: ts,
+    agent: 'spec-mode',
+    story_id: storyId ?? null,
+    phase: phase ?? null,
+    type: 'spec_pass_decision',
+    detail: { event, decision, ...details },
+  });
 }
 
 // _promptVersionCache — the epam-cli repo's own short git SHA, computed once
@@ -2081,7 +2353,7 @@ function extractTaggedJson(text, tag) {
   return null;
 }
 
-const RUNCLAUDE_TIMEOUT_MS = parseInt(process.env.RUNCLAUDE_TIMEOUT_MS || '120000', 10);
+const RUNCLAUDE_TIMEOUT_MS = parseInt(process.env.RUNCLAUDE_TIMEOUT_MS || '180000', 10);
 
 function runClaude(execSpec, prompt, logPath, envOverrides = {}) {
   return new Promise((resolve, reject) => {
@@ -2280,6 +2552,20 @@ function isMiniTierModel(model) {
       || m.startsWith('minimax-m2') || m.startsWith('minimax/minimax-m2');
 }
 
+// VERY_HIGH_AC_THRESHOLD (2026-07-15): a story this far past the normal
+// upgrade signals (acCount > 15) isn't just "needs a stronger model" — it's
+// extreme enough that climbing the retry ladder rung-by-rung (mini -> mid ->
+// high, 2 attempts each) burns several guaranteed-failing attempts before
+// ever reaching a model with a real chance. Root cause this addresses
+// (found live, 2026-07-14, tier3-travel-app run): SKY-003-test (a test
+// story assessed via the equivalent TC-fact-density signal, not this
+// AC-count one, but the same underlying problem) failed 8/8 attempts across
+// every rung, producing widespread syntax corruption at every tier below
+// the ceiling. Configurable via VERY_HIGH_AC_THRESHOLD; default picked
+// meaningfully above the existing acCount>15 upgrade trigger so this is a
+// distinct, rarer classification, not a redundant re-trigger of it.
+const VERY_HIGH_AC_THRESHOLD = parseInt(process.env.EPAM_VERY_HIGH_AC_THRESHOLD || '20', 10);
+
 // Compute story complexity signals and decide whether the assigned model needs upgrading.
 function modelComplexitySignals(story) {
   const acCount = Array.isArray(story.acceptanceCriteria) ? story.acceptanceCriteria.length : 0;
@@ -2306,7 +2592,22 @@ function modelComplexitySignals(story) {
     reason = `self-contained single-file story with ${acCount} ACs needs reliable large output`;
   }
 
-  return { acCount, isSingleFile, hasHtmlOutput, hasSelfContainedKeyword, needsUpgrade, reason };
+  // veryHighComplexity: a SEPARATE, stricter classification (only true for
+  // the most extreme cases) — see VERY_HIGH_AC_THRESHOLD's docstring above.
+  // Independent of needsUpgrade so it can be checked even when the normal
+  // upgrade rules didn't fire (e.g. multi-file stories the isSingleFile
+  // gate above would otherwise miss).
+  let veryHighComplexity = false;
+  let veryHighReason = '';
+  if (acCount > VERY_HIGH_AC_THRESHOLD) {
+    veryHighComplexity = true;
+    veryHighReason = `${acCount} acceptance criteria (> ${VERY_HIGH_AC_THRESHOLD}) — extreme complexity, assign ceiling model directly instead of climbing the retry ladder`;
+  }
+
+  return {
+    acCount, isSingleFile, hasHtmlOutput, hasSelfContainedKeyword, needsUpgrade, reason,
+    veryHighComplexity, veryHighReason,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2415,6 +2716,7 @@ async function validateMidExecutionSplits(prdFile, storyIdsCsv) {
           `spec-mode: --validate-splits: coherence violation for ${parentId}: ` +
           `children [${childIds.join(', ')}] all write to ${path.basename(file)} — rejecting split`
         );
+        appendSpecPassEvent(logDir, { storyId: parentId, phase, event: 'coherence_violation', decision: 'rejected', details: { file: path.basename(file), childIds, source: 'mid_execution' } });
       }
       for (const child of children) {
         child.specification.splitRejected = true;
@@ -2458,6 +2760,7 @@ async function validateMidExecutionSplits(prdFile, storyIdsCsv) {
           `spec-mode: --validate-splits: ${parentId} has no surviving split children — ` +
           `restoring as a single unsplit story so its scope isn't lost`
         );
+        appendSpecPassEvent(logDir, { storyId: parentId, phase, event: 'story_restored', decision: 'restored', details: {} });
       }
       continue;
     }
@@ -2558,12 +2861,64 @@ async function validateMidExecutionSplits(prdFile, storyIdsCsv) {
   console.log('spec-mode: --validate-splits: complete');
 }
 
+// splitTestStoryCli <prdFile> <storyId> — shell entry point for
+// lib/tc-writer-gate.sh's TC-fact-density split mandate. Loads the PRD,
+// locates the story's phase (whichever implementationOrder[phase] array
+// contains it), delegates to splitTestStoryByFacts(), and writes the PRD
+// back atomically (same lock pattern as validateMidExecutionSplits above).
+// Exits 0 with splitCount>0 printed to stdout on success, exits 1 if the
+// story wasn't found or wasn't eligible to split (so the caller can treat
+// that as "nothing to do" rather than a real error).
+function splitTestStoryCli(prdFile, storyId) {
+  if (!prdFile || !storyId) {
+    console.error('spec-mode: --split-test-story: usage: --split-test-story <prdFile> <storyId>');
+    process.exit(1);
+  }
+  const prd = JSON.parse(fs.readFileSync(prdFile, 'utf8'));
+  const _initialStoryIds = new Set((prd.stories || []).map((s) => s.id));
+  const story = prd.stories.find((s) => s.id === storyId);
+  if (!story) {
+    console.error(`spec-mode: --split-test-story: story ${storyId} not found`);
+    process.exit(1);
+  }
+  const phase = Object.keys(prd.implementationOrder || {})
+    .find((p) => (prd.implementationOrder[p] || []).includes(storyId)) || process.env.PHASE || 'unknown';
+
+  const maxFactsPerChild = parseInt(process.env.EPAM_TC_FACTS_SPLIT_THRESHOLD || String(TC_FACTS_SPLIT_THRESHOLD), 10);
+  const { splitCount, childIds } = splitTestStoryByFacts(story, prd, phase, maxFactsPerChild);
+  if (splitCount === 0) {
+    console.log(`spec-mode: --split-test-story: ${storyId} not eligible to split (not a pure single-test-file story, or facts <= threshold)`);
+    process.exit(1);
+  }
+
+  assertNoStoryIdsLost(_initialStoryIds, new Set((prd.stories || []).map((s) => s.id)), 'splitTestStoryCli()');
+
+  const _prdLockPath = `${prdFile}.lock`;
+  acquireFileLock(_prdLockPath);
+  try {
+    const _tmpPrdFile = `${prdFile}.tmp`;
+    fs.writeFileSync(_tmpPrdFile, JSON.stringify(prd, null, 2) + '\n');
+    fs.renameSync(_tmpPrdFile, prdFile);
+  } finally {
+    releaseFileLock(_prdLockPath);
+  }
+
+  console.log(`spec-mode: --split-test-story: ${storyId} → ${childIds.join(', ')} (splitCount=${splitCount})`);
+}
+
 if (require.main === module) {
   if (process.argv[2] === '--validate-splits') {
     validateMidExecutionSplits(process.argv[3], process.argv[4]).catch((err) => {
       console.error('spec-mode-runner --validate-splits failed:', err);
       process.exit(1);
     });
+  } else if (process.argv[2] === '--split-test-story') {
+    try {
+      splitTestStoryCli(process.argv[3], process.argv[4]);
+    } catch (err) {
+      console.error('spec-mode-runner --split-test-story failed:', err);
+      process.exit(1);
+    }
   } else {
     run().catch((err) => {
       console.error('spec-mode-runner failed:', err);
@@ -2606,4 +2961,8 @@ module.exports = {
   MAX_CHILDREN_PER_SPLIT,
   promptVersion,
   logGuardedStepRetry,
+  checkTcFactDensityMandate,
+  splitTestStoryByFacts,
+  TC_FACTS_SPLIT_THRESHOLD,
+  VERY_HIGH_AC_THRESHOLD,
 };

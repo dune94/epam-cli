@@ -28,17 +28,22 @@ import { tmpdir } from 'node:os';
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 const orchSrc = readFileSync(ORCH_SH, 'utf8');
+// record_story_actual_cost now lives in lib/story-guards.sh (2026-07-14) —
+// a single shared implementation sourced by both run-agent-orchestration.sh
+// (main lane) and claude.sh (worktree lanes).
+const GUARDS_LIB = join(REPO_ROOT, 'orchestrations/scripts/lib/story-guards.sh');
+const guardsSrc = readFileSync(GUARDS_LIB, 'utf8');
 
-function extractFunctionBodyBraceCounted(name: string): string {
-  const start = orchSrc.indexOf(`${name}()`);
+function extractFunctionBodyBraceCounted(name: string, src: string = orchSrc): string {
+  const start = src.indexOf(`${name}()`);
   if (start === -1) throw new Error(`Function ${name} not found`);
-  const braceStart = orchSrc.indexOf('{', start);
+  const braceStart = src.indexOf('{', start);
   let depth = 0;
-  for (let i = braceStart; i < orchSrc.length; i++) {
-    if (orchSrc[i] === '{') depth++;
-    else if (orchSrc[i] === '}') {
+  for (let i = braceStart; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}') {
       depth--;
-      if (depth === 0) return orchSrc.slice(start, i + 1);
+      if (depth === 0) return src.slice(start, i + 1);
     }
   }
   throw new Error(`Could not find end of function ${name}`);
@@ -167,7 +172,7 @@ describe('PRD atomic-write permission regression — REAL execution', () => {
       chmodSync(prdFile, 0o644);
       const logFile = join(dir, 'story.log');
       writeFileSync(logFile, JSON.stringify({ cost_usd: 0.0123 }) + '\n');
-      const fnBody = extractFunctionBodyBraceCounted('record_story_actual_cost');
+      const fnBody = extractFunctionBodyBraceCounted('record_story_actual_cost', guardsSrc);
       const scriptPath = join(dir, 'run.sh');
       writeFileSync(
         scriptPath,

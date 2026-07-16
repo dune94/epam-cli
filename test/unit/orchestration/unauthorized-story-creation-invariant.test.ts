@@ -52,19 +52,34 @@ describe('assert_no_story_ids_gained — wiring (static)', () => {
     expect(gainedIdx).toBeGreaterThan(lostIdx);
   });
 
-  for (const step of [
-    'Step 0.5: Skill assessment',
-    'Step 0.9: PRD model coordinator',
-    'Step 3.5: Post-parallel assessment',
-    'Step 6: Final post-phase assessment',
-  ]) {
-    it(`is called alongside assert_no_story_ids_lost for ${step}`, () => {
+  // Steps 0.5 and 0.9 run BEFORE the parallel Step 1 loop — "presplit" snapshot
+  // is current for them. Steps 3.5 and 6 run AFTER the loop (after TC-writer-gate
+  // splits may have added new child stories) — use "post-parallel" so those
+  // legitimately-added split children don't trip a false-positive.
+  const GAINED_LABEL: Record<string, string> = {
+    'Step 0.5: Skill assessment':        'presplit',
+    'Step 0.9: PRD model coordinator':   'presplit',
+    'Step 3.5: Post-parallel assessment':'post-parallel',
+    'Step 6: Final post-phase assessment':'post-parallel',
+  };
+  for (const [step, label] of Object.entries(GAINED_LABEL)) {
+    it(`is called alongside assert_no_story_ids_lost for ${step} (gained-label: "${label}")`, () => {
       const idx = orchSrc.indexOf(`assert_no_story_ids_lost "presplit" "${step}"`);
       expect(idx).toBeGreaterThan(-1);
       const block = orchSrc.slice(idx, idx + 200);
-      expect(block).toMatch(new RegExp(`assert_no_story_ids_gained "presplit" "${step.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}"`));
+      expect(block).toMatch(new RegExp(`assert_no_story_ids_gained "${label}" "${step.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}"`));
     });
   }
+
+  it('post-parallel snapshot is captured immediately before Step 3.5 (after all Step 1 splits)', () => {
+    // The capture must come AFTER the parallel loop closes and BEFORE the
+    // Step 3.5 if-block, so split children created during Step 1 are already
+    // present when we snapshot.
+    const captureIdx = orchSrc.lastIndexOf('capture_story_ids_snapshot "post-parallel"');
+    const step35Idx  = orchSrc.indexOf('assert_no_story_ids_gained "post-parallel" "Step 3.5');
+    expect(captureIdx).toBeGreaterThan(-1);
+    expect(step35Idx).toBeGreaterThan(captureIdx);
+  });
 });
 
 describe('assert_no_story_ids_gained — REAL execution', () => {

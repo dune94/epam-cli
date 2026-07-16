@@ -17,6 +17,11 @@ PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
 # Always resolve to absolute path — relative paths break when CWD changes in worktrees
 PRD_FILE="$(cd "$(dirname "$PRD_FILE")" && pwd)/$(basename "$PRD_FILE")"
 
+# shellcheck source=lib/tc-writer-gate.sh
+source "$SCRIPT_DIR/lib/tc-writer-gate.sh"
+# shellcheck source=lib/story-guards.sh
+source "$SCRIPT_DIR/lib/story-guards.sh"
+
 # Load project .env so API keys are available to all subprocesses (worktrees, epam-run, etc.)
 # Preserve caller-set gate overrides so tier scripts can override .env defaults.
 _pre_gate_provider="${ORCH_GATE_PROVIDER:-}"
@@ -377,48 +382,10 @@ append_pipeline_cost_record() {
     ) 200>"$lock_file"
 }
 
-# record_story_actual_cost <story_id> <log_file>
-# Extracts cost_usd from the story's JSONL log output and writes it back to
-# prd.json as .actualCost so estimates-vs-actuals can be compared per story.
-record_story_actual_cost() {
-    local story_id="$1"
-    local log_file="$2"
-    [ -f "$log_file" ] || return 0
-    # Extract cost from JSONL lines: epam run --json emits lines with cost_usd field
-    local actual_cost
-    actual_cost=$(grep -o '"cost_usd":[0-9.]*\|"total_cost_usd":[0-9.]*' "$log_file" 2>/dev/null \
-        | tail -1 | grep -o '[0-9.]*$' || echo "")
-    # Fallback: sum all task_cost_usd records for this story from phase-cost.jsonl
-    if [ -z "$actual_cost" ] || [ "$actual_cost" = "0" ]; then
-        local cost_file="${PHASE_COST_FILE:-$LOG_DIR/phase-cost.jsonl}"
-        if [ -f "$cost_file" ]; then
-            actual_cost=$(jq -rs --arg sid "$story_id" \
-                '[.[] | select(.story_id == $sid) | .task_cost_usd // 0] | add // 0' \
-                "$cost_file" 2>/dev/null || echo "")
-        fi
-    fi
-    [ -z "$actual_cost" ] && return 0
-    [ "$actual_cost" = "0" ] && [ -z "$(grep -c 'cost_usd' "$log_file" 2>/dev/null)" ] && return 0
-    # Write actualCost back to prd.json for this story
-    local prd="${MAIN_PRD_FILE:-$PRD_FILE}"
-    if [ -f "$prd" ]; then
-        local tmp
-        tmp=$(mktemp)
-        # mktemp defaults to mode 0600; mv preserves that onto the final PRD
-        # file, breaking anything not running as this user (e.g. the monitor
-        # dashboard's nginx worker) -- this is the highest-FREQUENCY PRD
-        # write in the pipeline (fires after every single story completion),
-        # which is why the bug kept recurring live even after 6 other
-        # mktemp-based PRD writes were already fixed 2026-07-14. Generic
-        # $prd/$tmp variable names meant it wasn't caught by earlier greps
-        # that searched specifically for PRD_FILE/prd_target as the
-        # destination name.
-        chmod 644 "$tmp" 2>/dev/null
-        jq --arg sid "$story_id" --argjson cost "$actual_cost" \
-            '(.stories[] | select(.id == $sid)) |= (.actualCost = $cost)' \
-            "$prd" > "$tmp" && mv "$tmp" "$prd" || rm -f "$tmp"
-    fi
-}
+# record_story_actual_cost, check_cost_budget, wait_if_paused,
+# apply_redirect_if_any, validate_mid_execution_splits, story_tsc_gate — now
+# defined once in lib/story-guards.sh (sourced above) so every lane (main
+# and worktree) runs the identical guard. See that file's docstring.
 
 # run_orch_prompt <prompt> [agent_type] [story_id]
 # Runs a pipeline agent prompt, tracks cost to phase-cost.jsonl (GAP-P22),
@@ -571,49 +538,6 @@ stop_control_plane() {
         wait "$CONTROL_PLANE_PID" 2>/dev/null || true
     fi
     CONTROL_PLANE_PID=""
-}
-
-# Check actual phase spend against prd.json budget.
-# If exceeded, writes a JSON PAUSED sentinel so wait_if_paused() blocks and
-# the dashboard can display the reason. Operator resumes via dashboard Resume button.
-# Bypass: SKIP_COST_GUARD=true
-check_cost_budget() {
-    [ "${SKIP_COST_GUARD:-false}" = "true" ] && return
-    local cost_file="$LOG_DIR/phase-cost.jsonl"
-    [ -f "$cost_file" ] || return
-    local budget
-    budget=$(jq -r '.budget // empty' "$PRD_FILE" 2>/dev/null || true)
-    [ -z "$budget" ] || [ "$budget" = "null" ] && return
-    local actual
-    local _cost_py='
-import sys, json
-cost_file, phase = sys.argv[1], sys.argv[2]
-total = 0.0
-with open(cost_file) as f:
-    for line in f:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            rec = json.loads(line)
-            if rec.get("phase_id") == phase or rec.get("phase") == phase:
-                total += float(rec.get("actual_cost_usd", rec.get("cost_usd", 0)) or 0)
-        except Exception:
-            pass
-print(f"{total:.4f}")
-'
-    actual=$(echo "$_cost_py" | python3 - "$cost_file" "$PHASE" 2>/dev/null || echo "0")
-    if python3 -c "import sys; sys.exit(0 if float('${actual}') >= float('${budget}') else 1)" 2>/dev/null; then
-        warning "Cost circuit breaker: actual=\$${actual} >= budget=\$${budget} for phase '$PHASE'"
-        warning "Orchestration paused — resume from dashboard after reviewing spend"
-        printf '%s' "$(jq -n \
-            --arg reason "budget_exceeded" \
-            --arg phase "$PHASE" \
-            --argjson actual "$actual" \
-            --argjson budget "$budget" \
-            '{reason:$reason, phase:$phase, actualCost:$actual, budget:$budget, pausedAt:(now|todate)}'
-        )" > "$LOG_DIR/PAUSED"
-    fi
 }
 
 # hot_swap_story_model_if_unstable <story_id>
@@ -1121,32 +1045,7 @@ checkpoint_clear() {
     rm -f "$CHECKPOINT_FILE" 2>/dev/null || true
 }
 
-# Block until the PAUSED sentinel is removed (operator resumes via dashboard).
-# Checks every 5 seconds; logs a reminder every 60 seconds.
-wait_if_paused() {
-    if [ ! -f "$LOG_DIR/PAUSED" ]; then
-        return
-    fi
-    local _waited=0
-    local _max="${EPAM_MAX_PAUSE_SECS:-300}"
-    warning "Orchestration PAUSED — waiting for resume signal (auto-resume in ${_max}s)..."
-    warning "  Resume: POST http://localhost:${CONTROL_PLANE_PORT}/resume"
-    warning "  Abort:  DELETE $LOG_DIR/PAUSED then kill the orchestration process"
-    while [ -f "$LOG_DIR/PAUSED" ]; do
-        sleep 5
-        _waited=$(( _waited + 5 ))
-        if (( _waited % 60 == 0 )); then
-            warning "Still paused (${_waited}s / ${_max}s max). POST http://localhost:${CONTROL_PLANE_PORT}/resume to continue."
-        fi
-        # Hard ceiling — auto-resume after EPAM_MAX_PAUSE_SECS to prevent indefinite hangs
-        if [ "$_waited" -ge "$_max" ]; then
-            warning "Auto-resuming after ${_max}s pause ceiling — continuing past paused story."
-            rm -f "$LOG_DIR/PAUSED" 2>/dev/null || true
-            break
-        fi
-    done
-    success "Orchestration RESUMED after ${_waited}s pause."
-}
+# wait_if_paused — now in lib/story-guards.sh (sourced above).
 
 # Topologically sort a newline-separated list of story IDs by prd.json
 # dependencies, preserving declaration order within the same tier.
@@ -1168,10 +1067,25 @@ except Exception:
     print("\n".join(story_ids)); sys.exit(0)
 story_map = {s["id"]: s for s in prd.get("stories", [])}
 id_set    = set(story_ids)
+# When a story depends on a deprecated parent (not in id_set), substitute its
+# active split children — identified by specification.createdFrom pointing to
+# the parent. This ensures stories depending on a deprecated parent run AFTER
+# its replacement children without hardcoding any IDs.
+split_children = {}
+for s in prd.get("stories", []):
+    parent_id = (s.get("specification") or {}).get("createdFrom")
+    if parent_id and parent_id not in id_set and s["id"] in id_set:
+        split_children.setdefault(parent_id, []).append(s["id"])
 in_degree = {s: 0 for s in story_ids}
 graph     = {s: [] for s in story_ids}
 for sid in story_ids:
-    deps = [d for d in (story_map.get(sid, {}).get("dependencies") or []) if d in id_set]
+    raw_deps = story_map.get(sid, {}).get("dependencies") or []
+    deps = []
+    for d in raw_deps:
+        if d in id_set:
+            deps.append(d)
+        elif d in split_children:
+            deps.extend(split_children[d])
     for dep in deps:
         graph[dep].append(sid)
         in_degree[sid] += 1
@@ -1444,28 +1358,7 @@ assert_no_illegitimate_deprecation() {
     fi
 }
 
-# Apply any pending redirect for a story.
-# Usage: apply_redirect_if_any <story_id>
-# Prints the (possibly redirected) agent role to stdout.
-apply_redirect_if_any() {
-    local story_id="$1"
-    local redirect_file="$LOG_DIR/redirect-${story_id}.json"
-    if [ -f "$redirect_file" ]; then
-        local target_agent
-        target_agent=$(jq -r '.targetAgent // empty' "$redirect_file" 2>/dev/null || true)
-        if [ -n "$target_agent" ]; then
-            warning "REDIRECT: story $story_id → $target_agent (operator override)"
-            rm -f "$redirect_file"
-            # Update prd.json agentRole for this story
-            local _tmp
-            _tmp="${PRD_FILE}.redirect.$$"
-            jq --arg id "$story_id" --arg role "$target_agent" \
-                '(.stories[] | select(.id == $id)).agentRole = $role' \
-                "$PRD_FILE" > "$_tmp" && mv "$_tmp" "$PRD_FILE"
-            info "prd.json updated: $story_id.agentRole = $target_agent"
-        fi
-    fi
-}
+# apply_redirect_if_any — now in lib/story-guards.sh (sourced above).
 
 start_dashboards_watch() {
     local dashboards_dir="$AUTOMATION_DIR/dashboards"
@@ -1866,6 +1759,21 @@ run_specification_pass() {
         success "Step 0: Specification pass completed for '$phase_id'"
         "$SCRIPT_DIR/update-monitor.sh" event "specification_pass" \
             "Specification agents completed (OpenSpec/Speckit)" "" "main" "spec-coordinator" 2>/dev/null || true
+        # Block execution when spec-pass failed on stories that still need splitting
+        # and the caller has opted in to hard blocking (SPEC_PASS_BLOCK_ON_TIMEOUT=true).
+        if [ "${SPEC_PASS_BLOCK_ON_TIMEOUT:-false}" = "true" ]; then
+            _failed_untuned=$(jq -r \
+                '[.stories[] | select(.specification.specPassFailed == true)] | length' \
+                "$PRD_FILE" 2>/dev/null || echo 0)
+            if [ "${_failed_untuned:-0}" -gt 0 ]; then
+                _failed_ids=$(jq -r \
+                    '[.stories[] | select(.specification.specPassFailed == true) | .id] | join(", ")' \
+                    "$PRD_FILE" 2>/dev/null || echo "unknown")
+                error "Spec pass FAILED for untuned stories: $_failed_ids"
+                error "  Execution blocked (SPEC_PASS_BLOCK_ON_TIMEOUT=true). Set to false to override."
+                exit 1
+            fi
+        fi
     else
         step_emit "0" "fail" "Step 0: Specification pass"
         step_emit "0a" "fail" "  openspec (elaboration)" "${_openspec_model}"
@@ -2657,55 +2565,7 @@ assert_no_illegitimate_deprecation "presplit" "Step 0.5: Skill assessment"
 # Speckit must review ALL splits, not only those proposed by openspec during
 # the spec pass (Step 0). The pre-phase assessment agent (Step 0.5) may write
 # new stories directly to the PRD. Validate those before execution begins.
-validate_mid_execution_splits() {
-    local _phase_id="$1"
-    local _spec_runner="$SCRIPT_DIR/spec-mode-runner.js"
-    local _node_cmd="${NODE_CMD:-${HOME}/.nvm/versions/node/v20.20.0/bin/node}"
-    [ ! -x "$_node_cmd" ] && _node_cmd="$(command -v node 2>/dev/null || echo 'node')"
-
-    if [ ! -f "$_spec_runner" ] || ! command -v "$_node_cmd" >/dev/null 2>&1; then
-        return 0
-    fi
-
-    # Find stories in implementationOrder for this phase that have createdFrom set
-    # but have NOT been speckit-validated (i.e., mid-execution splits)
-    local _new_split_ids
-    _new_split_ids=$(jq -r \
-        --arg phase "$_phase_id" \
-        '(.implementationOrder[$phase] // []) as $order |
-         .stories[] |
-         select(
-           (.id as $id | $order | index($id) != null) and
-           (.specification.createdFrom != null) and
-           (.specification.speckitValidated != true) and
-           (.specification.splitRejected != true)
-         ) | .id' \
-        "$PRD_FILE" 2>/dev/null | tr '\n' ',' | sed 's/,$//')
-
-    if [ -z "$_new_split_ids" ]; then
-        log "  [split-gate] No unvalidated mid-execution splits for phase '$_phase_id'"
-        return 0
-    fi
-
-    log "  [split-gate] Running speckit on mid-execution splits: $_new_split_ids"
-    set +e
-    PRD_FILE="$PRD_FILE" OUTPUT_DIR="$LOG_DIR" \
-        AI_RUNNER_CMD="$AI_RUNNER_CMD" \
-        EPAM_ORCHESTRATION_PROVIDER="${ORCH_GATE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-}}" \
-        SPEC_MODE_PROVIDER="${SPEC_MODE_PROVIDER:-}" \
-        SPEC_MODE_SPECKIT_MODEL="${SPEC_MODE_SPECKIT_MODEL:-}" \
-        PHASE="$_phase_id" ORCH_RUN_ID="$ORCH_RUN_ID" \
-        "$_node_cmd" "$_spec_runner" --validate-splits "$PRD_FILE" "$_new_split_ids" \
-        2>&1 | tee "$LOG_DIR/split-validate-${_phase_id}.log"
-    local _sv_exit=${PIPESTATUS[0]}
-    set -e
-    if [ "$_sv_exit" -ne 0 ]; then
-        warning "  [split-gate] Split validation found hard violations — check $LOG_DIR/split-validate-${_phase_id}.log"
-    else
-        success "  [split-gate] Mid-execution splits validated for phase '$_phase_id'"
-    fi
-}
-
+# validate_mid_execution_splits — now in lib/story-guards.sh (sourced above).
 validate_mid_execution_splits "$PHASE"
 
 # ── Post-assessment AC invariant check ────────────────────────────────────────
@@ -3166,41 +3026,17 @@ if [ -n "$main_stories" ]; then
         fi
     done)
 
-    # Per-story TypeScript compile gate — runs tsc --noEmit after each story succeeds.
-    # Catches TS errors at the responsible story rather than at phase level (step 3.7).
-    # Bypassed when: tsconfig.json not yet present, SKIP_STORY_TSC_GATE=1, or test-only stories.
-    story_tsc_gate() {
-        local _sid="$1"
-        [ "${SKIP_STORY_TSC_GATE:-0}" = "1" ] && return 0
-        [ ! -f "$PROJECT_ROOT/tsconfig.json" ] && return 0
-        # Skip when no .ts source files exist yet (scaffold phase creates structure but no source)
-        local _ts_count
-        _ts_count=$(find "$PROJECT_ROOT/src" -name "*.ts" 2>/dev/null | grep -v node_modules | wc -l)
-        [ "$_ts_count" -eq 0 ] && return 0
-        # Skip tsc gate for test-only stories (they extend existing files, not create TS modules)
-        local _role
-        _role=$(jq -r --arg id "$_sid" '.stories[] | select(.id==$id) | .agentRole // ""' "$PRD_FILE" 2>/dev/null)
-        [ "$_role" = "test-engineer" ] && return 0
-
-        local _node_cmd="${NODE_CMD:-${HOME}/.nvm/versions/node/v20.20.0/bin/node}"
-        [ ! -x "$_node_cmd" ] && _node_cmd="$(command -v node 2>/dev/null || echo 'node')"
-        local _tsc_log="$LOG_DIR/tsc-gate-${_sid}.log"
-
-        set +e
-        cd "$PROJECT_ROOT" && "$_node_cmd" ./node_modules/.bin/tsc --noEmit 2>&1 | tee "$_tsc_log"
-        local _tsc_exit=${PIPESTATUS[0]}
-        set -e
-
-        if [ "$_tsc_exit" -ne 0 ]; then
-            error "  [tsc-gate] $story: TypeScript errors after story completed — story marked failed"
-            error "  [tsc-gate] Fix required before next story runs. Log: ${_tsc_log##*/}"
-            return 1
-        fi
-        success "  [tsc-gate] $story: tsc --noEmit passed"
-        return 0
-    }
+    # Per-story TypeScript compile gate — story_tsc_gate, now in
+    # lib/story-guards.sh (sourced above) so every lane runs the identical
+    # gate.
 
     if [ -n "$non_review_main" ]; then
+        _ckpt_total=$(jq '[.stories[] | select(.status != "deprecated")] | length' "$PRD_FILE" 2>/dev/null || echo 0)
+        _ckpt_done=$(jq '[.stories[] | select(.status == "completed")] | length' "$PRD_FILE" 2>/dev/null || echo 0)
+        if [ "${_ckpt_total:-0}" -gt 0 ] && [ "${_ckpt_done:-0}" -ge "${_ckpt_total:-0}" ]; then
+            info "[CHECKPOINT] All $_ckpt_total stories already completed — skipping Step 1 for phase '${PHASE:-main}'"
+            step_emit "1" "pass" "Step 1: Main-branch stories (all checkpointed)"
+        else
         step_emit "1" "running" "Step 1: Main-branch stories"
     log "Step 1: Running main-branch stories..."
         _phase_story_failures=0
@@ -3242,6 +3078,10 @@ if [ -n "$main_stories" ]; then
                 info "  Skipping $story — blocked (no valid testCriteria after 3 attempts, see blocked-stories.jsonl)"
                 continue
             fi
+            if [ "$_story_current_status" = "completed" ]; then
+                info "  [CHECKPOINT] Skipping $story — already completed in prd.json"
+                continue
+            fi
             if checkpoint_already_done "$story"; then
                 info "  Skipping $story — already completed in checkpoint (run: $ORCH_RUN_ID)"
                 continue
@@ -3250,119 +3090,17 @@ if [ -n "$main_stories" ]; then
             wait_if_paused
             apply_redirect_if_any "$story"
 
-            # Inline TC writer gate: the OLD placement (after this entire loop,
-            # even after Step 3.2 worktree merge) is structurally too late for
-            # main-branch topology — this loop runs impl AND test stories
-            # back-to-back in implementationOrder, so by the time the
-            # post-loop gate ran, every test story here had ALREADY executed
-            # without any testCriteria grounding (confirmed live, 2026-07-08:
-            # SKY-002-test started implementing while testCriteria was still
-            # null, and the gate's own log line never appeared until after
-            # the whole batch — SKY-003-test, etc. — had also already run).
-            # Fix: run the (idempotent, phase-scoped) TC writer HERE, right
-            # before a story that itself needs TCs executes, so its paired
-            # impl story (which just ran earlier in this same loop) grounds
-            # it. The later post-Step-3.2 call is kept as-is for worktree-
-            # topology test stories, which never pass through this loop.
-            #
-            # Root cause this fixes (found live, 2026-07-10, tier3-travel-app
-            # run): "any file ends in .test.ts" also matches a COMBO story
-            # that owns BOTH its own impl file(s) AND its own test file (an
-            # unsplit story implementing both together in one turn, e.g.
-            # SKY-002 when spec-pass chose not to split it this run) — this
-            # gate then assumed a paired impl story had ALREADY run and tried
-            # to generate TCs for source files that don't exist yet (the
-            # combo story hasn't even started), hard-aborting the whole
-            # pipeline. A story only needs pre-grounding from a SEPARATE impl
-            # story when ALL its declared files are test files — same
-            # "is this a pure test story" convention already used by
-            # correctSplitChildAgentRoleIfTestOnly/wireSplitSiblingDependencies
-            # in spec-mode-runner.js (all files match, not any).
-            # Root cause this fixes (found live, 2026-07-10, tier3-travel-app
-            # run): a story can legitimately become 'deprecated' AFTER this
-            # gate would otherwise match it — e.g. a mid-execution re-split
-            # rejected for a same-file coherence violation (both children
-            # write to server.test.ts) deprecates the story with no valid
-            # replacement. The TC-writer script already defensively skips
-            # deprecated stories (a stale/delegated-parent guard), so it
-            # correctly no-ops — but this gate never checked status, so it
-            # still expected TCs for a story that was CORRECTLY abandoned,
-            # tripping the post-condition check below on a false alarm.
-            _needs_tc=$(jq -r --arg id "$story" \
-                '.stories[] | select(.id == $id) | select(.status != "deprecated") |
-                 select((.technicalNotes.files // []) as $f |
-                        ($f | length > 0) and ($f | map(endswith(".test.ts")) | all)) |
-                 select((.testCriteria.facts // []) | length == 0) | .id' \
-                "$PRD_FILE" 2>/dev/null || echo "")
-            if [ -n "$_needs_tc" ]; then
-                # Retry-on-empty-facts (2026-07-13): a violation here used to
-                # hard `exit 1`, aborting the ENTIRE pipeline over ONE story
-                # that never got real testCriteria — the most severe failure
-                # mode of any guarded step in this pipeline. Give the writer
-                # up to 3 attempts, and on exhaustion BLOCK just this story
-                # (status="blocked", skipped by the live-status check above
-                # on any future pass) instead of taking down every other
-                # story in the phase with it.
-                _tc_inline_attempt=0
-                _tc_inline_facts_len=0
-                for _tc_inline_attempt in 1 2 3; do
-                    log "  Story $story needs testCriteria — running TC writer inline before it starts... (attempt ${_tc_inline_attempt}/3)"
-                    bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
-                        --prd "$PRD_FILE" \
-                        --phase "$PHASE" \
-                        --output-dir "${OUTPUT_DIR:-$PROJECT_ROOT}" \
-                        --story "$story" \
-                        2>&1 | tee -a "$LOG_DIR/tc-writer-${PHASE}.log"
-                    _inline_tc_exit=${PIPESTATUS[0]}
-
-                    # Post-condition check (found live, 2026-07-09): post-impl-tc-writer.sh
-                    # can exit 0 as a legitimate no-op ("No test stories need TCs in
-                    # phase ... — skipping") when its OWN internal implementationOrder[phase]-
-                    # scoped query doesn't (yet) see $story — e.g. right after a mid-execution
-                    # split. Exit 0 alone does not mean testCriteria was actually written for
-                    # THIS story — confirmed live: SKY-003-test got this exact "SUCCESS" log
-                    # line while its testCriteria.facts remained empty, and it then ran its
-                    # first coding attempt with zero grounding.
-                    _tc_inline_facts_len=$(jq -r --arg id "$story" \
-                        '.stories[] | select(.id == $id) | (.testCriteria.facts // []) | length' \
-                        "$PRD_FILE" 2>/dev/null || echo 0)
-
-                    if [ "$_inline_tc_exit" -eq 0 ] && [ "${_tc_inline_facts_len:-0}" -gt 0 ]; then
-                        success "  TC writer populated testCriteria for $story (attempt ${_tc_inline_attempt}/3)"
-                        maybe_upgrade_model_for_tc_density "$story" "${_tc_inline_facts_len:-0}"
-                        break
-                    fi
-                    warning "  Inline TC writer attempt ${_tc_inline_attempt}/3 for $story produced no valid testCriteria (exit=${_inline_tc_exit}, facts=${_tc_inline_facts_len:-0})"
-                done
-
-                _tc_inline_violation_types="[]"
-                if [ "${_tc_inline_facts_len:-0}" -eq 0 ]; then
-                    if [ "${_inline_tc_exit:-0}" -ne 0 ]; then
-                        _tc_inline_violation_types='["writer_exit_nonzero","empty_facts"]'
-                    else
-                        _tc_inline_violation_types='["empty_facts"]'
-                    fi
-                fi
-
-                _log_guarded_step_retry "$(jq -n -c \
-                    --arg step "tc-writer-inline" \
-                    --arg storyId "$story" \
-                    --argjson attempts "$_tc_inline_attempt" \
-                    --arg outcome "$([ "${_tc_inline_facts_len:-0}" -gt 0 ] && echo pass || echo blocked)" \
-                    --argjson violationTypes "$_tc_inline_violation_types" \
-                    '{timestamp: (now | todate), step: $step, storyId: $storyId, attempts: $attempts, outcome: $outcome, violationTypes: $violationTypes}' \
-                    2>/dev/null)"
-
-                if [ "${_tc_inline_facts_len:-0}" -eq 0 ]; then
-                    error "  Inline TC writer gate: $story still has no testCriteria.facts after 3 attempts — BLOCKING this story (not aborting the phase)"
-                    error "  Check: $LOG_DIR/tc-writer-${PHASE}.log ; confirm $story is in implementationOrder.$PHASE"
-                    jq --arg id "$story" '(.stories[] | select(.id == $id)).status = "blocked"' \
-                        "$PRD_FILE" > "${PRD_FILE}.tmp" && mv "${PRD_FILE}.tmp" "$PRD_FILE"
-                    jq -n -c --arg storyId "$story" --arg reason "no valid testCriteria after 3 attempts" \
-                        '{timestamp: (now | todate), storyId: $storyId, reason: $reason}' \
-                        >> "$LOG_DIR/blocked-stories.jsonl" 2>/dev/null || true
-                    continue
-                fi
+            # Inline TC writer gate — single shared implementation (see
+            # lib/tc-writer-gate.sh docstring for the full history/rationale;
+            # this used to be duplicated inline here and was the reason
+            # worktree lanes never got the same check). Runs right before a
+            # pure-test story that still has zero testCriteria.facts
+            # executes, so its paired impl story (which just ran earlier in
+            # this same loop) grounds it. Returns 1 (BLOCKING this story,
+            # not aborting the phase) if no valid testCriteria after 3
+            # attempts.
+            if ! run_inline_tc_writer_gate "$story" "$PHASE"; then
+                continue
             fi
 
             log "  Running: $story"
@@ -3395,6 +3133,7 @@ if [ -n "$main_stories" ]; then
         fi
         step_emit "1" "pass" "Step 1: Main-branch stories"
         success "Main-branch stories complete"
+        fi  # end checkpoint else
     fi
 else
     step_emit "1" "skip" "Step 1: Main-branch stories" "no stories in lane"
@@ -4186,6 +3925,15 @@ PROMPT_EOF
     return 0
 }
 
+# Snapshot taken AFTER the parallel Step 1 loop (and any TC-writer-gate splits
+# that ran inside it) but BEFORE Step 3.5's assessment agent runs. Used for
+# assert_no_story_ids_gained at Step 3.5 and Step 6 — the "presplit" snapshot
+# predates the parallel loop, so any stories added by the legitimate
+# TC-fact-density split mechanism during Step 1 would appear as false-positive
+# "unauthorized creations" if we used it here. "post-parallel" sees the
+# already-split PRD and only flags stories added by the assessment agent itself.
+capture_story_ids_snapshot "post-parallel"
+
 # Only run assessment if cost tracking data exists
 if [ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ]; then
     step_emit "3.5" "skip" "Step 3.5: Post-parallel assessment" "SKIP_SKILL_ASSESSMENT=1"
@@ -4203,7 +3951,7 @@ else
     info "Step 3.5: No cost data yet — skipping post-parallel assessment"
 fi
 assert_no_story_ids_lost "presplit" "Step 3.5: Post-parallel assessment"
-assert_no_story_ids_gained "presplit" "Step 3.5: Post-parallel assessment"
+assert_no_story_ids_gained "post-parallel" "Step 3.5: Post-parallel assessment"
 
 # ──────────────────────────────────────────────
     "$SCRIPT_DIR/update-monitor.sh" event "phase_assessment" "Running post-phase assessment" "" "main" "team-lead-agent" 2>/dev/null || true
@@ -6808,7 +6556,7 @@ else
     info "Step 6: No cost data — skipping final post-phase assessment"
 fi
 assert_no_story_ids_lost "presplit" "Step 6: Final post-phase assessment"
-assert_no_story_ids_gained "presplit" "Step 6: Final post-phase assessment"
+assert_no_story_ids_gained "post-parallel" "Step 6: Final post-phase assessment"
 
 # ──────────────────────────────────────────────
 # Step 7: Load Phase Graph into Neo4j

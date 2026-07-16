@@ -1,8 +1,10 @@
 /**
- * The Step 1 INLINE TC-writer gate (run-agent-orchestration.sh, runs right
- * before a story starts, inside the main-branch sequential loop) must NOT
- * treat a combo story (owns BOTH impl and test files, implementing both in
- * one turn) as "needs testCriteria before it starts."
+ * The INLINE TC-writer gate (run_inline_tc_writer_gate() in
+ * orchestrations/scripts/lib/tc-writer-gate.sh — the single shared
+ * implementation used by every lane: main-branch Step 1 AND worktree Step
+ * 3a/3b, runs right before a story starts) must NOT treat a combo story
+ * (owns BOTH impl and test files, implementing both in one turn) as "needs
+ * testCriteria before it starts."
  *
  * Root cause this fixes (found live, 2026-07-10, tier3-travel-app run): the
  * inline gate classified "is this a test story" as "ANY declared file ends
@@ -37,21 +39,23 @@ import { tmpdir } from 'node:os';
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 const orchSrc = readFileSync(ORCH_SH, 'utf8');
+const GATE_LIB = join(REPO_ROOT, 'orchestrations/scripts/lib/tc-writer-gate.sh');
+const gateSrc = readFileSync(GATE_LIB, 'utf8');
 const TC_WRITER_SH = join(REPO_ROOT, 'orchestrations/scripts/post-impl-tc-writer.sh');
 const tcWriterSrc = readFileSync(TC_WRITER_SH, 'utf8');
 
 describe('TC-writer gating — combo-story scoping (static)', () => {
-  it('the Step 1 INLINE gate requires ALL files to be test files, not any', () => {
-    const idx = orchSrc.indexOf('_needs_tc=$(jq -r --arg id "$story"');
-    const block = orchSrc.slice(idx, idx + 700);
+  it('the shared INLINE gate requires ALL files to be test files, not any', () => {
+    const idx = gateSrc.indexOf('_needs_tc=$(jq -r --arg id "$story_id"');
+    const block = gateSrc.slice(idx, idx + 700);
     expect(block).toMatch(/\| map\(endswith\(".test.ts"\)\) \| all\)/);
     expect(block).not.toMatch(/\| map\(endswith\(".test.ts"\)\) \| any\)/);
     expect(block).toMatch(/length > 0/);
   });
 
-  it('the Step 1 INLINE gate also skips deprecated stories (a legitimately-abandoned rejected split child)', () => {
-    const idx = orchSrc.indexOf('_needs_tc=$(jq -r --arg id "$story"');
-    const block = orchSrc.slice(idx, idx + 700);
+  it('the shared INLINE gate also skips deprecated stories (a legitimately-abandoned rejected split child)', () => {
+    const idx = gateSrc.indexOf('_needs_tc=$(jq -r --arg id "$story_id"');
+    const block = gateSrc.slice(idx, idx + 700);
     expect(block).toMatch(/select\(\.status != "deprecated"\)/);
   });
 
@@ -73,9 +77,9 @@ describe('TC-writer gating — combo-story scoping (static)', () => {
 
 describe('TC-writer gating — REAL execution: combo story is no longer force-gated by the INLINE (pre-execution) check', () => {
   function extractInlineGateQuery(): string {
-    const idx = orchSrc.indexOf('_needs_tc=$(jq -r --arg id "$story"');
-    const endIdx = orchSrc.indexOf(')', orchSrc.indexOf("2>/dev/null || echo \"\")", idx));
-    return orchSrc.slice(idx, endIdx + 1);
+    const idx = gateSrc.indexOf('_needs_tc=$(jq -r --arg id "$story_id"');
+    const endIdx = gateSrc.indexOf(')', gateSrc.indexOf("2>/dev/null || echo \"\")", idx));
+    return gateSrc.slice(idx, endIdx + 1);
   }
 
   function checkNeedsTC(storyFiles: string[], facts: unknown[] = [], status = 'pending'): boolean {
@@ -87,7 +91,7 @@ describe('TC-writer gating — REAL execution: combo story is no longer force-ga
     const query = extractInlineGateQuery();
     const script = [
       `PRD_FILE=${JSON.stringify(prdPath)}`,
-      `story="SKY-002"`,
+      `story_id="SKY-002"`,
       query,
       'echo "RESULT=[$_needs_tc]"',
     ].join('\n');

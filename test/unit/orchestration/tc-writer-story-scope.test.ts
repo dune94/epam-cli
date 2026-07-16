@@ -66,14 +66,19 @@ describe('post-impl-tc-writer.sh — --story flag wiring (static)', () => {
   });
 });
 
-describe('run-agent-orchestration.sh — inline TC writer call passes --story', () => {
-  it('the Step 1 loop inline call includes --story "$story"', () => {
+describe('inline TC writer gate (shared lib) — call passes --story', () => {
+  it('run_inline_tc_writer_gate scopes post-impl-tc-writer.sh to --story "$story_id"', () => {
+    const gateSrc = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/lib/tc-writer-gate.sh'), 'utf8');
+    const tcIdx = gateSrc.indexOf('post-impl-tc-writer.sh');
+    const block = gateSrc.slice(tcIdx, tcIdx + 600);
+    expect(block).toMatch(/--story "\$story_id"/);
+  });
+
+  it('every lane (main-branch Step 1, worktree Step 3a/3b) calls the same shared gate function', () => {
     const orchSrc = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
-    const loopStart = orchSrc.indexOf('while IFS= read -r story; do');
-    const loopBody = orchSrc.slice(loopStart, orchSrc.indexOf('done <<< "$non_review_main"', loopStart));
-    const tcIdx = loopBody.indexOf('post-impl-tc-writer.sh');
-    const block = loopBody.slice(tcIdx, tcIdx + 600);
-    expect(block).toMatch(/--story "\$story"/);
+    const claudeSrc = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
+    expect(orchSrc).toContain('run_inline_tc_writer_gate "$story" "$PHASE"');
+    expect(claudeSrc).toContain('run_inline_tc_writer_gate "$story_id" "$_wt_tc_phase"');
   });
 });
 

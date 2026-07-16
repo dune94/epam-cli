@@ -12,11 +12,17 @@ import * as path from 'path';
 const REPO_ROOT  = path.resolve(__dirname, '../../../');
 const PRD_FILE   = path.join(REPO_ROOT, 'orchestrations/travel-app-prd.json');
 const ORCH_SCRIPT = path.join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
+const GATE_LIB   = path.join(REPO_ROOT, 'orchestrations/scripts/lib/story-guards.sh');
 const REMEDIATE  = path.join(REPO_ROOT, 'orchestrations/scripts/_prd_remediate_impl.py');
 const TIER3      = path.join(REPO_ROOT, 'orchestrations/scripts/tier3-travel-app-run.sh');
 
 const prd        = JSON.parse(fs.readFileSync(PRD_FILE, 'utf8'));
 const orchSrc    = fs.readFileSync(ORCH_SCRIPT, 'utf8');
+// record_story_actual_cost now lives in lib/story-guards.sh (2026-07-14) —
+// a single shared implementation sourced by both run-agent-orchestration.sh
+// (main lane) and claude.sh (worktree lanes), so every lane's actualCost
+// write-back is identical.
+const guardsSrc  = fs.readFileSync(GATE_LIB, 'utf8');
 const remSrc     = fs.readFileSync(REMEDIATE, 'utf8');
 
 const implOrder  = prd.implementationOrder as Record<string, string[]>;
@@ -78,25 +84,31 @@ describe('Per-phase estimated cost', () => {
 
 // ── record_story_actual_cost mechanism ───────────────────────────────────────
 
-describe('record_story_actual_cost — orch script implementation', () => {
-  it('function record_story_actual_cost exists in orch script', () => {
-    expect(orchSrc).toMatch(/^record_story_actual_cost\(\)/m);
+describe('record_story_actual_cost — shared lib implementation (lib/story-guards.sh)', () => {
+  it('function record_story_actual_cost exists in the shared lib', () => {
+    expect(guardsSrc).toMatch(/^record_story_actual_cost\(\)/m);
+  });
+
+  it('run-agent-orchestration.sh and claude.sh both source the shared lib', () => {
+    expect(orchSrc).toContain('source "$SCRIPT_DIR/lib/story-guards.sh"');
+    const claudeSrc = fs.readFileSync(path.join(REPO_ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
+    expect(claudeSrc).toContain('source "$SCRIPT_DIR/lib/story-guards.sh"');
   });
 
   it('extracts cost_usd from story log file', () => {
-    expect(orchSrc).toMatch(/cost_usd.*log_file|grep.*cost_usd.*log/);
+    expect(guardsSrc).toMatch(/cost_usd.*log_file|grep.*cost_usd.*log/);
   });
 
   it('falls back to phase-cost.jsonl when log has no cost', () => {
-    expect(orchSrc).toMatch(/PHASE_COST_FILE.*phase-cost\.jsonl|phase-cost\.jsonl.*PHASE_COST_FILE/);
+    expect(guardsSrc).toMatch(/PHASE_COST_FILE.*phase-cost\.jsonl|phase-cost\.jsonl.*PHASE_COST_FILE/);
     // The function must sum task_cost_usd records for the story from the cost file
-    expect(orchSrc).toMatch(/task_cost_usd.*story_id|story_id.*task_cost_usd/);
+    expect(guardsSrc).toMatch(/task_cost_usd.*story_id|story_id.*task_cost_usd/);
   });
 
   it('writes actualCost back to prd.json via jq', () => {
-    expect(orchSrc).toMatch(/\.actualCost\s*=\s*\$cost/);
+    expect(guardsSrc).toMatch(/\.actualCost\s*=\s*\$cost/);
     // Must target the specific story by id
-    expect(orchSrc).toMatch(/select\(\.id\s*==\s*\$sid\)/);
+    expect(guardsSrc).toMatch(/select\(\.id\s*==\s*\$sid\)/);
   });
 
   it('is called after every main-lane story completes', () => {
@@ -115,19 +127,29 @@ describe('record_story_actual_cost — orch script implementation', () => {
     expect(after).toMatch(/record_story_actual_cost "\$story"/);
   });
 
+  it('is called after every worktree-lane story completes too (parity fix, 2026-07-14)', () => {
+    const claudeSrc = fs.readFileSync(path.join(REPO_ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
+    expect(claudeSrc).toContain('record_story_actual_cost "$story_id"');
+  });
+
   it('uses atomic write (tmp + mv) to avoid partial-write corruption of prd.json', () => {
-    const fnStart = orchSrc.indexOf('record_story_actual_cost()');
-    const fnEnd   = orchSrc.indexOf('\n}', fnStart) + 2;
-    const fnBody  = orchSrc.slice(fnStart, fnEnd);
+    const fnStart = guardsSrc.indexOf('record_story_actual_cost()');
+    const fnEnd   = guardsSrc.indexOf('\n}', fnStart) + 2;
+    const fnBody  = guardsSrc.slice(fnStart, fnEnd);
     expect(fnBody).toMatch(/mktemp/);
     expect(fnBody).toMatch(/mv "\$tmp"/);
   });
 
-  it('is a no-op when the log file does not exist (no crash)', () => {
-    const fnStart = orchSrc.indexOf('record_story_actual_cost()');
-    const fnEnd   = orchSrc.indexOf('\n}', fnStart) + 2;
-    const fnBody  = orchSrc.slice(fnStart, fnEnd);
-    expect(fnBody).toMatch(/\[ -f "\$log_file" \].*return 0/);
+  it('is a no-op when no log file is given/exists (no crash) — falls back to phase-cost.jsonl instead of early-returning', () => {
+    // Relocated (2026-07-14): log_file is now OPTIONAL (worktree lanes run
+    // implement_story in-process, with no per-story log file to grep) — the
+    // function no longer hard-requires [ -f "$log_file" ] and instead falls
+    // through to the phase-cost.jsonl aggregation. See the lib's docstring.
+    const fnStart = guardsSrc.indexOf('record_story_actual_cost()');
+    const fnEnd   = guardsSrc.indexOf('\n}', fnStart) + 2;
+    const fnBody  = guardsSrc.slice(fnStart, fnEnd);
+    expect(fnBody).toMatch(/local log_file="\$\{2:-\}"/);
+    expect(fnBody).toMatch(/if \[ -n "\$log_file" \] && \[ -f "\$log_file" \]; then/);
   });
 });
 

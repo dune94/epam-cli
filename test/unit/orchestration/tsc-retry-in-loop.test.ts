@@ -124,15 +124,31 @@ describe('claude.sh — run_tsc_verification is wired into the invoke_success ga
   });
 });
 
-describe('run-agent-orchestration.sh — external story_tsc_gate remains as a defensive last-resort only', () => {
+describe('external story_tsc_gate remains as a defensive last-resort only, now shared by every lane', () => {
+  // Relocated (2026-07-14): story_tsc_gate() now lives in
+  // lib/story-guards.sh, a single shared implementation sourced by both
+  // run-agent-orchestration.sh (main lane) and claude.sh (worktree lanes) —
+  // this outer safety net used to only cover the main lane.
+  const GUARDS_LIB = join(__dirname, '../../../orchestrations/scripts/lib/story-guards.sh');
+  const guardsSrc = readFileSync(GUARDS_LIB, 'utf8');
+
   it('story_tsc_gate() still exists (kept as outer safety net)', () => {
-    expect(orchSrc).toMatch(/story_tsc_gate\s*\(\)/);
+    expect(guardsSrc).toMatch(/story_tsc_gate\s*\(\)/);
+  });
+
+  it('run-agent-orchestration.sh sources the shared lib', () => {
+    expect(orchSrc).toContain('source "$SCRIPT_DIR/lib/story-guards.sh"');
+  });
+
+  it('claude.sh also sources it and calls it for worktree lanes (parity fix)', () => {
+    expect(claudeSrc).toContain('source "$SCRIPT_DIR/lib/story-guards.sh"');
+    expect(claudeSrc).toContain('story_tsc_gate "$story_id"');
   });
 
   it('by design, a real tsc failure should already be caught inside claude.sh before reaching here', () => {
     // Structural marker: no code change needed here, this test just documents
     // that the external gate is now a secondary check, not the primary one.
-    const fnIdx = orchSrc.indexOf('story_tsc_gate()');
+    const fnIdx = guardsSrc.indexOf('story_tsc_gate()');
     expect(fnIdx).toBeGreaterThan(-1);
   });
 });

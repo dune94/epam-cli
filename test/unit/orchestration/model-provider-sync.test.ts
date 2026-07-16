@@ -58,7 +58,7 @@ describe('spec-mode model-override path keeps aiProvider in sync (source inspect
   it('calls resolveModelProvider immediately after mutating story.model', () => {
     const idx = src.indexOf('story.model = fa.finalModel;');
     expect(idx).toBeGreaterThan(-1);
-    const nextLines = src.slice(idx, idx + 500);
+    const nextLines = src.slice(idx, idx + 700);
     expect(nextLines).toMatch(/resolveModelProvider\(fa\.finalModel\)/);
     expect(nextLines).toMatch(/story\.aiProvider = newProvider;/);
   });

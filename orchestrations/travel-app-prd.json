@@ -30,9 +30,10 @@
       "SKY-001"
     ],
     "core": [
-      "SKY-003-impl",
-      "SKY-003-test",
-      "SKY-002",
+      "SKY-002-impl",
+      "SKY-002-test",
+      "SKY-003-A",
+      "SKY-003-B",
       "SKY-004"
     ]
   },
@@ -53,12 +54,12 @@
   "stories": [
     {
       "id": "SKY-001",
-      "title": "Scaffold TypeScript project with Vitest and Express - Part 1",
+      "title": "Scaffold TypeScript project with Vitest and Express",
       "agentRole": "typescript-engineer",
       "agentGroup": "main",
       "status": "completed",
       "completed": true,
-      "description": "Create the project skeleton at /home/bradleyjerome/projects/skyscanner-app. Initialize a TypeScript Node.js project with: package.json (name: skyscanner-app, main: 'dist/server.js', scripts: build='tsc', test='vitest run', start='node dist/server.js', dev='tsx src/server.ts' — src/server.ts is the app's real entry point, built later by the REST API story; do NOT create a src/index.ts or reference dist/index.js anywhere), tsconfig.json (strict mode, target ES2022, module CommonJS, outDir dist/), vitest.config.ts, .gitignore, and a src/ directory. Install runtime dependency express and devDependencies typescript, tsx, vitest, @types/express, @types/node. Do NOT install Skyscanner SDKs — RapidAPI is called directly via fetch. The project must compile cleanly.",
+      "description": "Create the project skeleton at /home/bradleyjerome/projects/skyscanner-app. Initialize a TypeScript Node.js project with: package.json (name: skyscanner-app, main: 'dist/server.js', scripts: build='tsc', test='vitest run', start='node dist/server.js', dev='tsx src/server.ts' — src/server.ts is the app's real entry point, built later by the REST API story; do NOT create a src/index.ts or reference dist/index.js anywhere), tsconfig.json (strict mode, target ES2022, module CommonJS, outDir dist/), vitest.config.ts, .gitignore, and a src/ directory. Install runtime dependency express and devDependencies typescript, tsx, vitest, @types/express, @types/node. Do NOT install Skyscanner SDKs — RapidAPI is called directly via fetch. The project must compile cleanly and vitest must exit 0 with no test files present.",
       "acceptanceCriteria": [
         "/home/bradleyjerome/projects/skyscanner-app/package.json exists and the 'name' field equals exactly 'skyscanner-app'",
         "package.json 'scripts' object contains exactly: build='tsc', test='vitest run', start='node dist/server.js', dev='tsx src/server.ts' — and 'main' equals 'dist/server.js'",
@@ -69,7 +70,10 @@
         "/home/bradleyjerome/projects/skyscanner-app/vitest.config.ts exists, imports defineConfig from 'vitest/config', exports a default config object, and sets test.globals to true (so test files can use describe/it/expect/vi/beforeEach/afterEach without importing them explicitly)",
         "/home/bradleyjerome/projects/skyscanner-app/.gitignore exists and contains entries for both 'node_modules' and 'dist'",
         "/home/bradleyjerome/projects/skyscanner-app/src/ directory exists",
-        "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 and produces no output"
+        "/home/bradleyjerome/projects/skyscanner-app/node_modules/ directory exists (npm install completed successfully)",
+        "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 and produces no output",
+        "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 (no test files is an acceptable passing state)",
+        "package.json contains no reference anywhere to 'index.ts' or 'index.js' (the real entry point is src/server.ts, built by a later story)"
       ],
       "technicalNotes": {
         "workingDir": "/home/bradleyjerome/projects/skyscanner-app",
@@ -82,142 +86,50 @@
       "estimate": 10,
       "estimatedAiMinutes": 3.8402,
       "estimatedCost": 0.1204,
-      "estimatedTokens": 461380,
+      "estimatedTokens": 463819,
       "estimatedTurns": 14,
       "estimatedHours": 0.064,
       "effort": "low",
       "cpaConfidence": 0.95,
       "cpaGate": "review",
-      "aiProvider": "qwen",
-      "model": "z-ai/glm-5.1",
-      "specification": {
-        "runId": "20260712T131258Z",
-        "assignedAgents": [
-          "openspec",
-          "speckit"
-        ],
-        "coordinatorNotes": "This is a complex scaffolding story that requires both requirement elaboration and rigorous testability/security hardening. The story has multiple file creation requirements, dependency management, and strict acceptance criteria that need careful attention to ensure completeness and correctness.",
-        "status": "completed",
-        "updatedAt": "2026-07-12T13:15:54.613Z",
-        "appliedAgents": [
-          "openspec"
-        ],
-        "agentContributions": [
-          {
-            "agent": "openspec",
-            "applied": true,
-            "notes": "Initial story has 13 acceptance criteria which exceeds the limit of 12. According to SPLIT RULES, it must be split. The story includes both implementation files and test files in technicalNotes.files, triggering rule #2. It also contains multiple independent deliverables that can be separated.",
-            "acceptanceChanged": true,
-            "splitCount": 0,
-            "timestamp": "2026-07-12T13:13:45.182Z",
-            "acBefore": [
-              "/home/bradleyjerome/projects/skyscanner-app/package.json exists and the 'name' field equals exactly 'skyscanner-app'",
-              "package.json 'scripts' object contains exactly: build='tsc', test='vitest run', start='node dist/server.js', dev='tsx src/server.ts' — and 'main' equals 'dist/server.js'",
-              "package.json 'dependencies' includes 'express'",
-              "package.json 'devDependencies' includes all of: typescript, tsx, vitest, @types/express, @types/node",
-              "package.json contains no dependency whose name includes 'skyscanner', 'rapidapi', or any Skyscanner SDK",
-              "/home/bradleyjerome/projects/skyscanner-app/tsconfig.json exists with compilerOptions: strict=true, target='ES2022', module='CommonJS', outDir='dist/'",
-              "/home/bradleyjerome/projects/skyscanner-app/vitest.config.ts exists, imports defineConfig from 'vitest/config', exports a default config object, and sets test.globals to true (so test files can use describe/it/expect/vi/beforeEach/afterEach without importing them explicitly)",
-              "/home/bradleyjerome/projects/skyscanner-app/.gitignore exists and contains entries for both 'node_modules' and 'dist'",
-              "/home/bradleyjerome/projects/skyscanner-app/src/ directory exists",
-              "/home/bradleyjerome/projects/skyscanner-app/node_modules/ directory exists (npm install completed successfully)",
-              "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 and produces no output",
-              "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 (no test files is an acceptable passing state)",
-              "package.json contains no reference anywhere to 'index.ts' or 'index.js' (the real entry point is src/server.ts, built by a later story)"
-            ],
-            "acAfter": [
-              "/home/bradleyjerome/projects/skyscanner-app/package.json exists and the 'name' field equals exactly 'skyscanner-app'",
-              "package.json 'scripts' object contains exactly: build='tsc', test='vitest run', start='node dist/server.js', dev='tsx src/server.ts' — and 'main' equals 'dist/server.js'",
-              "package.json 'dependencies' includes 'express'",
-              "package.json 'devDependencies' includes all of: typescript, tsx, vitest, @types/express, @types/node",
-              "package.json contains no dependency whose name includes 'skyscanner', 'rapidapi', or any Skyscanner SDK",
-              "/home/bradleyjerome/projects/skyscanner-app/tsconfig.json exists with compilerOptions: strict=true, target='ES2022', module='CommonJS', outDir='dist/'",
-              "/home/bradleyjerome/projects/skyscanner-app/vitest.config.ts exists, imports defineConfig from 'vitest/config', exports a default config object, and sets test.globals to true (so test files can use describe/it/expect/vi/beforeEach/afterEach without importing them explicitly)",
-              "/home/bradleyjerome/projects/skyscanner-app/.gitignore exists and contains entries for both 'node_modules' and 'dist'",
-              "/home/bradleyjerome/projects/skyscanner-app/src/ directory exists",
-              "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 and produces no output"
-            ],
-            "acAdded": [],
-            "acRemoved": [
-              "/home/bradleyjerome/projects/skyscanner-app/node_modules/ directory exists (npm install completed successfully)",
-              "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 (no test files is an acceptable passing state)",
-              "package.json contains no reference anywhere to 'index.ts' or 'index.js' (the real entry point is src/server.ts, built by a later story)"
-            ]
-          },
-          {
-            "agent": "speckit",
-            "applied": false,
-            "notes": "Agent output could not be parsed",
-            "acceptanceChanged": false,
-            "splitCount": 0,
-            "timestamp": "2026-07-12T13:15:45.230Z"
-          }
-        ],
-        "coordinatorReview": {
-          "verdict": "needs_review",
-          "reviewNotes": "Story requires mandatory splitting due to 13 acceptance criteria exceeding the 12 limit. The openspec agent identified this but did not perform the split. The speckit agent failed to parse and contribute. Both agents should have been involved in the splitting process. The acceptance criteria are comprehensive but need to be broken into logical components. The story is too complex for a single implementation and needs to be split into multiple smaller, testable stories.",
-          "qualityScore": 0.6,
-          "flags": [
-            "MANDATORY split was required (13 acceptance criteria (> 12)) but was not performed",
-            "Speckit agent failed to contribute",
-            "Story is overly complex with multiple independent deliverables"
-          ],
-          "reviewedAt": "2026-07-12T13:15:57.954Z"
-        }
-      },
+      "aiProvider": "minimax",
+      "model": "MiniMax-M3",
       "ladderTier": "high",
       "reasoningEffort": "low",
-      "completedAt": "2026-07-12T09:28:33-04:00",
-      "actualCost": 0.024956
+      "completedAt": "2026-07-16T05:32:51-04:00",
+      "actualCost": 0.0114
     },
     {
       "id": "SKY-002",
       "title": "Implement typed Skyscanner API client",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
-      "status": "completed",
+      "status": "deprecated",
       "completed": true,
       "description": "Create src/skyscanner/client.ts that wraps the Skyscanner RapidAPI. The client must: (1) export a SkyscannerClient class whose constructor accepts { apiKey: string }; if apiKey is omitted, fall back to the RAPIDAPI_KEY environment variable — throw a descriptive Error if neither is present; (2) implement searchFlights(params: SearchParams): Promise<FlightResult[]> using the Node.js 18+ global fetch (no third-party HTTP library); (3) export TypeScript interfaces SearchParams { origin: string; destination: string; date: string; adults?: number } and FlightResult { price: number; currency: string; airline: string; departure: string; arrival: string; duration: number; stops: number }; (4) throw on HTTP 4xx/5xx responses, including the status code in the message; (5) throw a descriptive parse error when the response body does not match the expected shape. Also create src/skyscanner/client.test.ts with vitest tests that mock the global fetch — no real network calls. (6) Support an explicit mock mode: when the environment variable MOCK_SKYSCANNER_API is set to the exact string 'true', searchFlights must return deterministic fixture FlightResult[] data WITHOUT making any network call (no fetch invocation at all) — this is an opt-in-only behavior; when MOCK_SKYSCANNER_API is unset, empty, or any value other than 'true', searchFlights must behave exactly as it does today (real fetch call, real failures surfaced, no silent fallback to mock data on real-call failure).",
       "acceptanceCriteria": [
-        "src/skyscanner/client.ts exports a SkyscannerClient class whose constructor signature is constructor({ apiKey }: { apiKey?: string })",
+        "SkyscannerClient class is exported from src/skyscanner/client.ts with constructor signature constructor({ apiKey }: { apiKey?: string })",
         "SearchParams interface is exported with exactly: origin: string, destination: string, date: string, adults?: number",
         "FlightResult interface is exported with exactly: price: number, currency: string, airline: string, departure: string, arrival: string, duration: number, stops: number",
-        "searchFlights uses the Node.js global fetch exclusively — no axios, node-fetch, or other HTTP dependency imported",
+        "searchFlights is exported as a public method on SkyscannerClient with the signature searchFlights(params: SearchParams): Promise<FlightResult[]>",
+        "searchFlights makes HTTP requests using only the Node.js 18+ built-in global fetch API — no third-party HTTP library is a runtime dependency of the module",
+        "searchFlights sends requests to the Skyscanner RapidAPI endpoint with the X-RapidAPI-Key header set to the resolved API key value and the X-RapidAPI-Host header set to the correct RapidAPI host",
         "When no apiKey is passed to the constructor and RAPIDAPI_KEY env var is unset, constructing SkyscannerClient throws an Error whose message references the missing key",
-        "When the API returns a 4xx or 5xx status, searchFlights rejects with an Error that includes the HTTP status code",
-        "When the API response body is malformed or missing expected fields, searchFlights rejects with a descriptive parse/validation Error",
-        "The apiKey is stored as a private field (private or # prefix) on the SkyscannerClient instance and is not publicly readable",
         "When apiKey is passed as an empty string ('') to the constructor, SkyscannerClient throws the same missing-key Error as when apiKey is omitted entirely",
         "When RAPIDAPI_KEY is set to an empty string in the environment and no apiKey is provided to the constructor, SkyscannerClient throws the missing-key Error",
         "When an apiKey is provided to the constructor and RAPIDAPI_KEY is also set in the environment, the constructor-provided apiKey takes precedence",
+        "The resolved API key is not accessible through any public property or method on the SkyscannerClient instance, including via property access, Object.keys(), Object.values(), Object.entries(), or object spread/destructuring",
+        "When the API returns a 4xx or 5xx status, searchFlights rejects with an Error that includes the HTTP status code",
         "The Error thrown by searchFlights on HTTP 4xx/5xx does not include the apiKey value anywhere in its message string",
-        "tsc --noEmit exits 0 with no type errors",
-        "client.test.ts contains at least 5 vitest tests, each using a mocked fetch (vi.stubGlobal or equivalent) with afterEach fetch restoration, covering: (a) correct RapidAPI URL and header construction, (b) successful response parsed into FlightResult[], (c) HTTP 4xx rejection with status code in error message, (d) missing API key constructor error, (e) malformed/missing-fields response body rejects with a parse/validation error",
-        "vitest run exits 0 with all tests passing",
-        "When MOCK_SKYSCANNER_API env var equals exactly 'true', searchFlights resolves with a deterministic, non-empty FlightResult[] fixture (at least 2 results, valid shape matching the FlightResult interface, varying price so cheapest-selection logic in SKY-004 is exercisable) and does not call fetch — verified in a test that stubs/spies on global fetch and asserts it was never invoked",
+        "When the API response body is malformed or missing expected fields, searchFlights rejects with a descriptive parse/validation Error",
+        "When fetch throws a network-level error (e.g., DNS resolution failure, connection refused), searchFlights rejects with an Error — this is distinct from HTTP status-code error handling and does not produce a FlightResult[]",
+        "When MOCK_SKYSCANNER_API env var equals exactly 'true', searchFlights resolves with a deterministic, non-empty FlightResult[] fixture (at least 2 results, valid shape matching the FlightResult interface, varying price so cheapest-selection logic in SKY-004 is exercisable) and does not invoke fetch",
+        "When MOCK_SKYSCANNER_API='true', calling searchFlights multiple times with the same parameters returns identical fixture data — the mock output is deterministic and stable across invocations",
         "When MOCK_SKYSCANNER_API is unset, empty string, or any value other than the exact string 'true' (e.g. 'false', '1', 'TRUE'), searchFlights performs the real fetch call exactly as when the env var did not exist — mock mode is strict opt-in, not a fuzzy truthy check",
         "A real HTTP/API failure (4xx, 5xx, network error, malformed body) is NEVER silently replaced with mock/fixture data — mock mode only ever activates via the explicit MOCK_SKYSCANNER_API='true' env var, never as an automatic fallback",
-        "All API responses from fetch must be properly awaited and handled to prevent unhandled promise rejections",
-        "The SkyscannerClient class must be fully serializable and deserializable without loss of functionality or data",
-        "The client must support secure HTTPS connections only to the Skyscanner RapidAPI endpoint",
-        "All error messages thrown by searchFlights must be descriptive and actionable for debugging purposes",
-        "When providing invalid or unexpected input types to searchFlights, the client must reject with a clear TypeError",
-        "All environment variable access must be done through a consistent abstraction layer (not direct process.env access)",
-        "The client must gracefully handle network timeouts and connection failures by rejecting with a clear timeout error message",
-        "When API rate limits are exceeded (HTTP 429), the client must reject with a descriptive error message containing the rate limit information",
-        "The client must not expose any sensitive information (such as API keys) in logs or console output",
-        "When the API returns a successful response with a non-JSON body, the client must reject with a clear parse error",
-        "SearchParams should support optional fields like adults with default values when not provided",
-        "All test scenarios must cover edge cases including empty results, null values, malformed JSON responses, and various error conditions",
-        "Test suite must validate that error messages are consistent and informative across all error conditions",
-        "All mocked fetch scenarios must reset properly between tests to prevent test pollution",
-        "Test suite must verify that the client correctly handles invalid input parameters for searchFlights",
-        "Test suite must verify that API keys are not exposed in logs or console output during tests",
-        "Test suite must include performance tests to ensure fetch calls are completed within expected time limits",
-        "Test suite must cover serialization/deserialization scenarios for the SkyscannerClient",
-        "Test suite must verify that environment variable access uses the proper abstraction layer",
-        "Test suite must validate that the mock mode does not interfere with real API calls when the env var is not set",
-        "Test suite must validate that API rate limit responses are handled correctly with appropriate error messages"
+        "client.test.ts contains at least 5 vitest tests covering: (a) searchFlights sends requests to the correct RapidAPI URL with required RapidAPI headers including the resolved API key, (b) a successful API response is parsed into a FlightResult[] array, (c) HTTP 4xx/5xx responses cause searchFlights to reject with an Error containing the status code, (d) constructing SkyscannerClient without a valid API key throws an Error, (e) a malformed or missing-fields response body causes searchFlights to reject with a parse/validation error; all tests run without making real network calls",
+        "tsc --noEmit exits 0 with no type errors",
+        "vitest run exits 0 with all tests passing"
       ],
       "technicalNotes": {
         "workingDir": "/home/bradleyjerome/projects/skyscanner-app",
@@ -239,17 +151,24 @@
       "cpaConfidence": 0.52,
       "cpaGate": "review",
       "aiProvider": "qwen",
-      "model": "z-ai/glm-5.2",
+      "model": "moonshotai/kimi-k2",
+      "testCriteria": {
+        "facts": [],
+        "sourceFiles": [],
+        "mockStrategy": "",
+        "bannedPatterns": [],
+        "implStory": null
+      },
       "reasoningEffort": "low",
       "specification": {
-        "runId": "20260712T134207Z",
+        "runId": "20260716T094508Z",
         "assignedAgents": [
           "openspec",
           "speckit"
         ],
-        "coordinatorNotes": "Complex implementation with multiple technical requirements including API client, TypeScript interfaces, error handling, mocking, and testing. Requires both elaboration and hardening.",
+        "coordinatorNotes": "Foundation story with 18 ACs covering nuanced mock-mode semantics (strict opt-in, exact 'true' string, no fuzzy truthy, no silent fallback), apiKey security (private field, no leakage in error messages), env var precedence, and empty-string edge cases. openspec elaborates mock-mode behavioral contract and constructor edge-case matrix; speckit hardens security (apiKey exposure paths), testability (fetch mock isolation), and validates parse-error specificity.",
         "status": "completed",
-        "updatedAt": "2026-07-12T13:44:27.184Z",
+        "updatedAt": "2026-07-16T09:53:50.833Z",
         "appliedAgents": [
           "openspec",
           "speckit"
@@ -258,10 +177,10 @@
           {
             "agent": "openspec",
             "applied": true,
-            "notes": "Story SKY-002 has 18 acceptance criteria which exceeds the limit of 12. It contains implementation code and tests in the same story, and has multiple distinct concerns: client implementation, API interaction, error handling, mocking behavior, and testing. Following SPLIT RULES, this story must be split into at least two parts: one for implementation and one for testing.",
+            "notes": "18 ACs exceeds the 12-AC threshold. Per SPLIT RULE 2, both implementation and test files are present — splitting into one impl child (client.ts) and one test child (client.test.ts). ACs redistributed to stay ≤8 per child, with mock-mode behavior ACs assigned to impl and mock-mode verification ACs assigned to test.",
             "acceptanceChanged": false,
             "splitCount": 2,
-            "timestamp": "2026-07-12T13:42:57.969Z",
+            "timestamp": "2026-07-16T09:46:39.757Z",
             "splitIds": [
               "SKY-002-impl",
               "SKY-002-test"
@@ -270,52 +189,88 @@
           {
             "agent": "speckit",
             "applied": true,
-            "notes": "Added comprehensive edge-case, error-handling, security, and accessibility criteria to address missing aspects. Specifically improved error handling coverage with timeouts, rate limits, and data type validation. Added security considerations around API keys and network connections. Also included requirements for serialization, logging, and data integrity to improve robustness. The original criteria were mostly solid but lacked depth in these areas.",
+            "notes": "Reviewed all 18 of openspec's ACs. Kept 14 unchanged. Modified 4 to remove implementation instructions per the what-not-how rule: (1) openspec's test-coverage AC named 'vi.stubGlobal' and 'afterEach fetch restoration' — replaced with the original story's behavioral wording 'all tests run without making real network calls'; (2) openspec's private-key AC named 'private or # prefix' — restored the original story's detailed enumeration checks (Object.keys, Object.values, Object.entries, spread/destructuring) which are observable outcomes rather than implementation directives; (3) openspec's mock-mode AC appended 'verified in a test that stubs/spies on global fetch' — removed this test-implementation instruction, keeping only the observable outcome 'does not invoke fetch'; (4) openspec's fetch AC named 'axios, node-fetch' specifically — restored the original story's more outcome-focused wording 'no third-party HTTP library is a runtime dependency'. Added 4 ACs that were in the original story context but dropped by openspec: searchFlights public method signature, X-RapidAPI-Key/X-RapidAPI-Host header construction, network-level error handling (distinct from HTTP status errors), and deterministic mock output across multiple invocations. Flagged the 'descriptive parse/validation Error' AC for vagueness — 'descriptive' has no verifiable threshold.",
             "acceptanceChanged": true,
-            "splitCount": 2,
-            "timestamp": "2026-07-12T13:44:27.184Z",
+            "splitCount": 0,
+            "timestamp": "2026-07-16T09:53:50.833Z",
             "acBefore": [
               "Delegated to split children: SKY-002-impl, SKY-002-test"
             ],
             "acAfter": [
-              "Delegated to split children: SKY-002-impl-1, SKY-002-test-1"
+              "SkyscannerClient class is exported from src/skyscanner/client.ts with constructor signature constructor({ apiKey }: { apiKey?: string })",
+              "SearchParams interface is exported with exactly: origin: string, destination: string, date: string, adults?: number",
+              "FlightResult interface is exported with exactly: price: number, currency: string, airline: string, departure: string, arrival: string, duration: number, stops: number",
+              "searchFlights is exported as a public method on SkyscannerClient with the signature searchFlights(params: SearchParams): Promise<FlightResult[]>",
+              "searchFlights makes HTTP requests using only the Node.js 18+ built-in global fetch API — no third-party HTTP library is a runtime dependency of the module",
+              "searchFlights sends requests to the Skyscanner RapidAPI endpoint with the X-RapidAPI-Key header set to the resolved API key value and the X-RapidAPI-Host header set to the correct RapidAPI host",
+              "When no apiKey is passed to the constructor and RAPIDAPI_KEY env var is unset, constructing SkyscannerClient throws an Error whose message references the missing key",
+              "When apiKey is passed as an empty string ('') to the constructor, SkyscannerClient throws the same missing-key Error as when apiKey is omitted entirely",
+              "When RAPIDAPI_KEY is set to an empty string in the environment and no apiKey is provided to the constructor, SkyscannerClient throws the missing-key Error",
+              "When an apiKey is provided to the constructor and RAPIDAPI_KEY is also set in the environment, the constructor-provided apiKey takes precedence",
+              "The resolved API key is not accessible through any public property or method on the SkyscannerClient instance, including via property access, Object.keys(), Object.values(), Object.entries(), or object spread/destructuring",
+              "When the API returns a 4xx or 5xx status, searchFlights rejects with an Error that includes the HTTP status code",
+              "The Error thrown by searchFlights on HTTP 4xx/5xx does not include the apiKey value anywhere in its message string",
+              "When the API response body is malformed or missing expected fields, searchFlights rejects with a descriptive parse/validation Error",
+              "When fetch throws a network-level error (e.g., DNS resolution failure, connection refused), searchFlights rejects with an Error — this is distinct from HTTP status-code error handling and does not produce a FlightResult[]",
+              "When MOCK_SKYSCANNER_API env var equals exactly 'true', searchFlights resolves with a deterministic, non-empty FlightResult[] fixture (at least 2 results, valid shape matching the FlightResult interface, varying price so cheapest-selection logic in SKY-004 is exercisable) and does not invoke fetch",
+              "When MOCK_SKYSCANNER_API='true', calling searchFlights multiple times with the same parameters returns identical fixture data — the mock output is deterministic and stable across invocations",
+              "When MOCK_SKYSCANNER_API is unset, empty string, or any value other than the exact string 'true' (e.g. 'false', '1', 'TRUE'), searchFlights performs the real fetch call exactly as when the env var did not exist — mock mode is strict opt-in, not a fuzzy truthy check",
+              "A real HTTP/API failure (4xx, 5xx, network error, malformed body) is NEVER silently replaced with mock/fixture data — mock mode only ever activates via the explicit MOCK_SKYSCANNER_API='true' env var, never as an automatic fallback",
+              "client.test.ts contains at least 5 vitest tests covering: (a) searchFlights sends requests to the correct RapidAPI URL with required RapidAPI headers including the resolved API key, (b) a successful API response is parsed into a FlightResult[] array, (c) HTTP 4xx/5xx responses cause searchFlights to reject with an Error containing the status code, (d) constructing SkyscannerClient without a valid API key throws an Error, (e) a malformed or missing-fields response body causes searchFlights to reject with a parse/validation error; all tests run without making real network calls",
+              "tsc --noEmit exits 0 with no type errors",
+              "vitest run exits 0 with all tests passing"
             ],
             "acAdded": [
-              "Delegated to split children: SKY-002-impl-1, SKY-002-test-1"
+              "SkyscannerClient class is exported from src/skyscanner/client.ts with constructor signature constructor({ apiKey }: { apiKey?: string })",
+              "SearchParams interface is exported with exactly: origin: string, destination: string, date: string, adults?: number",
+              "FlightResult interface is exported with exactly: price: number, currency: string, airline: string, departure: string, arrival: string, duration: number, stops: number",
+              "searchFlights is exported as a public method on SkyscannerClient with the signature searchFlights(params: SearchParams): Promise<FlightResult[]>",
+              "searchFlights makes HTTP requests using only the Node.js 18+ built-in global fetch API — no third-party HTTP library is a runtime dependency of the module",
+              "searchFlights sends requests to the Skyscanner RapidAPI endpoint with the X-RapidAPI-Key header set to the resolved API key value and the X-RapidAPI-Host header set to the correct RapidAPI host",
+              "When no apiKey is passed to the constructor and RAPIDAPI_KEY env var is unset, constructing SkyscannerClient throws an Error whose message references the missing key",
+              "When apiKey is passed as an empty string ('') to the constructor, SkyscannerClient throws the same missing-key Error as when apiKey is omitted entirely",
+              "When RAPIDAPI_KEY is set to an empty string in the environment and no apiKey is provided to the constructor, SkyscannerClient throws the missing-key Error",
+              "When an apiKey is provided to the constructor and RAPIDAPI_KEY is also set in the environment, the constructor-provided apiKey takes precedence",
+              "The resolved API key is not accessible through any public property or method on the SkyscannerClient instance, including via property access, Object.keys(), Object.values(), Object.entries(), or object spread/destructuring",
+              "When the API returns a 4xx or 5xx status, searchFlights rejects with an Error that includes the HTTP status code",
+              "The Error thrown by searchFlights on HTTP 4xx/5xx does not include the apiKey value anywhere in its message string",
+              "When the API response body is malformed or missing expected fields, searchFlights rejects with a descriptive parse/validation Error",
+              "When fetch throws a network-level error (e.g., DNS resolution failure, connection refused), searchFlights rejects with an Error — this is distinct from HTTP status-code error handling and does not produce a FlightResult[]",
+              "When MOCK_SKYSCANNER_API env var equals exactly 'true', searchFlights resolves with a deterministic, non-empty FlightResult[] fixture (at least 2 results, valid shape matching the FlightResult interface, varying price so cheapest-selection logic in SKY-004 is exercisable) and does not invoke fetch",
+              "When MOCK_SKYSCANNER_API='true', calling searchFlights multiple times with the same parameters returns identical fixture data — the mock output is deterministic and stable across invocations",
+              "When MOCK_SKYSCANNER_API is unset, empty string, or any value other than the exact string 'true' (e.g. 'false', '1', 'TRUE'), searchFlights performs the real fetch call exactly as when the env var did not exist — mock mode is strict opt-in, not a fuzzy truthy check",
+              "A real HTTP/API failure (4xx, 5xx, network error, malformed body) is NEVER silently replaced with mock/fixture data — mock mode only ever activates via the explicit MOCK_SKYSCANNER_API='true' env var, never as an automatic fallback",
+              "client.test.ts contains at least 5 vitest tests covering: (a) searchFlights sends requests to the correct RapidAPI URL with required RapidAPI headers including the resolved API key, (b) a successful API response is parsed into a FlightResult[] array, (c) HTTP 4xx/5xx responses cause searchFlights to reject with an Error containing the status code, (d) constructing SkyscannerClient without a valid API key throws an Error, (e) a malformed or missing-fields response body causes searchFlights to reject with a parse/validation error; all tests run without making real network calls",
+              "tsc --noEmit exits 0 with no type errors",
+              "vitest run exits 0 with all tests passing"
             ],
             "acRemoved": [
               "Delegated to split children: SKY-002-impl, SKY-002-test"
-            ],
-            "splitIds": [
-              "SKY-002-impl",
-              "SKY-002-test"
             ]
           }
         ],
         "coordinatorReview": {
           "verdict": "approved",
-          "reviewNotes": "Both openspec and speckit contributed meaningfully. Openspec properly identified the need for splitting and addressed the excessive acceptance criteria. Speckit enhanced the specification with comprehensive edge-case, error-handling, security, and accessibility criteria. The split children (SKY-002-impl-1 and SKY-002-test-1) are well-scoped and cover all aspects of the original story. Acceptance criteria are complete, testable, and non-overlapping.",
-          "qualityScore": 0.95,
-          "flags": [],
-          "reviewedAt": "2026-07-12T13:47:57.988Z"
+          "reviewNotes": "Both agents delivered meaningful, non-overlapping value. openspec correctly triggered the >12 AC split rule and produced well-scoped impl/test children (SKY-002-impl, SKY-002-test). speckit then restored behavioral wording over implementation directives (e.g. 'vi.stubGlobal' → 'without making real network calls', 'private or # prefix' → detailed enumeration checks), added 4 missing ACs (method signature, RapidAPI headers, network-level error distinctness, deterministic mock across invocations), and flagged the vague 'descriptive parse/validation Error' AC. The 22 final ACs are complete, testable, non-overlapping, and properly delegated to children. Minor note: the 'descriptive' qualifier on the parse error AC remains subjective — implementer should interpret as 'message identifies which field(s) are missing or malformed'.",
+          "qualityScore": 0.92,
+          "flags": [
+            "vague_qualifier: 'descriptive parse/validation Error' has no verifiable threshold — consider specifying 'message includes the field name or path that failed validation'"
+          ],
+          "reviewedAt": "2026-07-16T10:04:59.235Z"
         }
       },
-      "testCriteria": {
-        "facts": []
-      },
-      "completedAt": "2026-07-12T10:06:16-04:00",
-      "actualCost": 0.051707
+      "skipLadder": true
     },
     {
       "id": "SKY-003",
-      "title": "Implement flight search CLI entry point with formatted table output - Core Implementation",
+      "title": "Implement flight search CLI entry point with formatted table output",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
       "status": "deprecated",
       "completed": true,
-      "description": "Create `src/cli.ts` — a standalone Node entry point that accepts flight search arguments via `process.argv` and prints results as an aligned table. Parse flags manually (no commander, no yargs, zero new runtime deps). Require `RAPIDAPI_KEY` env var; exit 1 with a human-readable message if absent. Instantiate `SkyscannerClient` from `src/skyscanner/client.ts` (SKY-002), call `searchFlights` forwarding all parsed arguments including adults count, and render results in a dynamically-padded table with columns: Airline | Price | Departure | Arrival | Duration | Stops. Column widths are determined by the widest value in each column (including the header). A separator row of hyphen characters must appear between the header and data rows. Price is right-aligned and prefixed with the currency symbol returned by the API (default £ if absent); all other columns are left-aligned. If no flights are returned print `No flights found.` and exit 0. On any thrown error print the message to stderr and exit 1.",
+      "description": "Create `src/cli.ts` — a standalone Node entry point that accepts flight search arguments via `process.argv` and prints results as an aligned table. Parse flags manually (no commander, no yargs, zero new runtime deps). Require `RAPIDAPI_KEY` env var; exit 1 with a human-readable message if absent. Instantiate `SkyscannerClient` from `src/skyscanner/client.ts` (SKY-002), call `searchFlights` forwarding all parsed arguments including adults count, and render results in a dynamically-padded table with columns: Airline | Price | Departure | Arrival | Duration | Stops. Column widths are determined by the widest value in each column (including the header). A separator row of hyphen characters must appear between the header and data rows. Price is right-aligned and prefixed with the currency symbol returned by the API (default £ if absent); all other columns are left-aligned. If no flights are returned print `No flights found.` and exit 0. On any thrown error print the message to stderr and exit 1. Create `src/cli.test.ts` covering argument validation, successful render, empty-result render, missing env var, and error handling using vitest with `SkyscannerClient` mocked at the module boundary. The compiled output must be invokable as `node dist/cli.js ...` after `tsc`; `tsconfig.json` must have `outDir` set to `dist` and emit CommonJS-compatible output.",
       "acceptanceCriteria": [
-        "Delegated to split children: SKY-003-impl, SKY-003-test"
+        "Delegated to split children: SKY-003-A, SKY-003-B"
       ],
       "technicalNotes": {
         "workingDir": "/home/bradleyjerome/projects/skyscanner-app",
@@ -336,93 +291,65 @@
       "effort": "low",
       "cpaConfidence": 0.58,
       "cpaGate": "review",
-      "aiProvider": "qwen",
-      "model": "moonshotai/kimi-k2",
+      "aiProvider": "minimax",
+      "model": "MiniMax-M2.5",
       "dependencies": [
         "SKY-002"
       ],
+      "testCriteria": {
+        "facts": [],
+        "sourceFiles": [],
+        "mockStrategy": "",
+        "bannedPatterns": [],
+        "implStory": null
+      },
       "reasoningEffort": "low",
       "specification": {
-        "runId": "20260712T134207Z",
+        "runId": "20260716T094508Z",
         "assignedAgents": [
-          "openspec",
           "speckit"
         ],
-        "coordinatorNotes": "CLI implementation with argument parsing, formatting, error handling, and testing requirements. Complex due to manual flag parsing and table rendering logic.",
+        "coordinatorNotes": "Requirements are already well-elaborated with 14 clear ACs. Primary risks are testability (table alignment verification strategy, process.exit mocking in vitest) and edge-case hardening (currency symbol fallback, separator-row width exactness, stderr/stdout isolation in error paths). speckit reviews for security (env var not leaked in output) and test coverage gaps; openspec not needed — no ambiguity in requirements.",
         "status": "completed",
-        "updatedAt": "2026-07-12T13:45:27.056Z",
+        "updatedAt": "2026-07-16T09:55:58.061Z",
         "appliedAgents": [
-          "openspec",
           "speckit"
         ],
         "agentContributions": [
           {
-            "agent": "openspec",
-            "applied": true,
-            "notes": "Story has 15 acceptance criteria which exceeds the limit of 12. Based on SPLIT RULES, this story must be split into multiple child stories. The technical notes show both implementation and test files are present, meeting rule 2 for splitting into implementation and test children.",
-            "acceptanceChanged": true,
-            "splitCount": 2,
-            "timestamp": "2026-07-12T13:45:11.627Z",
-            "acBefore": [
-              "`src/cli.ts` exists and `tsc --noEmit` reports zero errors",
-              "`tsconfig.json` sets `outDir` to `dist` and emits a module format compatible with `node dist/cli.js` invocation (CommonJS or ESM with .mjs extension consistently applied)",
-              "Flags `--from`, `--to`, and `--date` are all required; if any is absent the CLI prints a usage hint to stderr (showing correct flag names) and exits with code 2",
-              "The `--date` flag value must match the pattern `YYYY-MM-DD`; a value that does not match this format causes exit code 2 with a human-readable message written to stderr before any network call is made",
-              "Optional `--adults` flag defaults to 1 when omitted; a non-integer value, a value ≤ 0, or a non-numeric string causes exit code 2 with a human-readable message to stderr",
-              "The parsed `adults` value is forwarded as an argument to `SkyscannerClient.searchFlights` — the flag is not silently dropped",
-              "If `RAPIDAPI_KEY` env var is unset or empty, CLI prints 'Error: RAPIDAPI_KEY environment variable is required' to stderr and exits 1 before making any network call",
-              "When `searchFlights` resolves with one or more results, stdout contains: (a) a header row with columns Airline, Price, Departure, Arrival, Duration, Stops; (b) a separator row of hyphen characters whose width matches each column exactly; (c) one data row per result; all columns padded to the width of the widest value in that column (including the header label)",
-              "All columns except Price are left-aligned within their padded width; the Price column is right-aligned within its padded width",
-              "Price column values are prefixed with the currency symbol from the API response; if the API response omits a currency symbol, £ is used as the fallback",
-              "When `searchFlights` resolves with an empty array, stdout contains exactly the line `No flights found.` and process exits 0",
-              "When `searchFlights` rejects, the error message is written to stderr and process exits 1; stdout is empty",
-              "`src/cli.test.ts` contains at least 8 passing vitest tests covering: missing --from, missing --to, missing --date, invalid --adults value, missing RAPIDAPI_KEY env var, table rendered correctly for valid multi-row results (verify separator row present and column alignment), empty-array result renders 'No flights found.', and error path (client throws)",
-              "`vitest run` exits 0 with all tests green",
-              "No runtime dependency other than Node built-ins and packages already in `package.json` (from SKY-001/SKY-002) is added"
-            ],
-            "acAfter": [
-              "Delegated to split children: SKY-003-impl, SKY-003-test"
-            ],
-            "acAdded": [
-              "Delegated to split children: SKY-003-impl, SKY-003-test"
-            ],
-            "acRemoved": [
-              "`src/cli.ts` exists and `tsc --noEmit` reports zero errors",
-              "`tsconfig.json` sets `outDir` to `dist` and emits a module format compatible with `node dist/cli.js` invocation (CommonJS or ESM with .mjs extension consistently applied)",
-              "Flags `--from`, `--to`, and `--date` are all required; if any is absent the CLI prints a usage hint to stderr (showing correct flag names) and exits with code 2",
-              "The `--date` flag value must match the pattern `YYYY-MM-DD`; a value that does not match this format causes exit code 2 with a human-readable message written to stderr before any network call is made",
-              "Optional `--adults` flag defaults to 1 when omitted; a non-integer value, a value ≤ 0, or a non-numeric string causes exit code 2 with a human-readable message to stderr",
-              "The parsed `adults` value is forwarded as an argument to `SkyscannerClient.searchFlights` — the flag is not silently dropped",
-              "If `RAPIDAPI_KEY` env var is unset or empty, CLI prints 'Error: RAPIDAPI_KEY environment variable is required' to stderr and exits 1 before making any network call",
-              "When `searchFlights` resolves with one or more results, stdout contains: (a) a header row with columns Airline, Price, Departure, Arrival, Duration, Stops; (b) a separator row of hyphen characters whose width matches each column exactly; (c) one data row per result; all columns padded to the width of the widest value in that column (including the header label)",
-              "All columns except Price are left-aligned within their padded width; the Price column is right-aligned within its padded width",
-              "Price column values are prefixed with the currency symbol from the API response; if the API response omits a currency symbol, £ is used as the fallback",
-              "When `searchFlights` resolves with an empty array, stdout contains exactly the line `No flights found.` and process exits 0",
-              "When `searchFlights` rejects, the error message is written to stderr and process exits 1; stdout is empty",
-              "`src/cli.test.ts` contains at least 8 passing vitest tests covering: missing --from, missing --to, missing --date, invalid --adults value, missing RAPIDAPI_KEY env var, table rendered correctly for valid multi-row results (verify separator row present and column alignment), empty-array result renders 'No flights found.', and error path (client throws)",
-              "`vitest run` exits 0 with all tests green",
-              "No runtime dependency other than Node built-ins and packages already in `package.json` (from SKY-001/SKY-002) is added"
-            ],
-            "splitIds": [
-              "SKY-003-impl",
-              "SKY-003-test"
-            ]
-          },
-          {
             "agent": "speckit",
             "applied": true,
-            "notes": "Added 8 new acceptance criteria to address missing edge cases, error handling, security, and accessibility concerns. Specifically: added criteria for table formatting (alignment, padding, currency handling), error handling consistency, internationalization support, security (sensitive data exposure), input sanitization, network error handling, and additional date format validation. These additions ensure comprehensive coverage of the CLI's behavior under various conditions.",
+            "notes": "15 ACs > 12 triggers mandatory split. Rule 1 (AC count) and Rule 2 (impl + test files in same story) both apply. Split into impl child (src/cli.ts) with 8 ACs and test child (src/cli.test.ts) with 8 ACs. Related ACs merged to stay within limits while preserving all requirements.",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-07-12T13:45:27.056Z"
+            "timestamp": "2026-07-16T09:54:56.606Z"
           }
         ],
         "coordinatorReview": {
           "verdict": "approved",
-          "reviewNotes": "Openspec correctly identified the need to split this story due to exceeding 12 acceptance criteria and containing both implementation and test requirements. Speckit validated the split and ensured no gaps in coverage. The split children (SKY-003-impl and SKY-003-test) are logically separated and cover all requirements. The acceptance criteria are well-defined and testable.",
-          "qualityScore": 0.92,
-          "flags": [],
-          "reviewedAt": "2026-07-12T13:47:57.988Z"
+          "reviewNotes": "speckit-only assignment was correct per coordinator (requirements already well-elaborated, no ambiguity needing openspec). Split into SKY-003-A (8 ACs, impl) and SKY-003-B (8 ACs, test) is logical and properly scoped. ACs cover all critical paths: missing flags, invalid adults, missing RAPIDAPI_KEY, multi-row table formatting (alignment, padding, separator), empty results, error paths, stderr/stdout isolation. Minor metadata inconsistency: speckit's contribution record shows splitCount=0 and acceptanceChanged=false despite the split being performed and parent AC delegating to children — appears to be a recording artifact, not a functional issue.",
+          "qualityScore": 0.88,
+          "flags": [
+            "metadata_inconsistency: speckit contribution splitCount=0 contradicts actual split performed"
+          ],
+          "reviewedAt": "2026-07-16T10:04:59.235Z"
+        },
+        "modelUpgrade": {
+          "from": "moonshotai/kimi-k2",
+          "to": "MiniMax-M2.5",
+          "ruleSignals": {
+            "acCount": 1,
+            "singleFile": true,
+            "htmlOutput": false,
+            "selfContained": false
+          },
+          "ruleReason": "no upgrade signal detected",
+          "llmOverride": false,
+          "llmReason": "Only 1 AC with narrow scope; mini-tier is sufficient for this small output.",
+          "llmConfidence": "high",
+          "veryHighComplexity": false,
+          "veryHighReason": "",
+          "upgradedAt": "2026-07-16T10:05:54.841Z"
         }
       }
     },
@@ -431,38 +358,34 @@
       "title": "Build Express REST API with /health, /search, /cheapest, and static dashboard endpoints",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
-      "status": "failed",
+      "status": "pending",
       "completed": false,
       "description": "Create src/server.ts — an Express HTTP server that exposes: (1) GET /health → { status: 'ok', uptime: number }, (2) GET /search?from=LHR&to=JFK&date=2026-08-01&adults=1 → { flights: FlightResult[], count: number, searchedAt: string }, (3) GET /cheapest?from=LHR&to=JFK&date=2026-08-01 → the single cheapest FlightResult or 404 JSON { error: string } if none found, (4) GET / → serves src/public/index.html by reading the file at runtime (e.g. fs.readFileSync) — the handler must NOT hardcode a separate inline HTML string that merely happens to match; content and implementation must not be able to diverge. Server reads PORT from env (default 3000); reads RAPIDAPI_KEY from env and passes to SkyscannerClient. If RAPIDAPI_KEY is absent at startup all API routes (/search, /cheapest) return 503 { error: 'RAPIDAPI_KEY not configured' }; /health and / are never gated. The listen() call must be guarded so importing `app` in tests does not bind a port. Add 'start' script in package.json pointing to 'node dist/server.js'. Install supertest and @types/supertest. Create src/server.test.ts using vitest + supertest with at least 8 tests covering the scenarios in acceptance criteria. Depends on SKY-002 (SkyscannerClient and FlightResult type must exist before this story is started). The build script must copy src/public/ (or equivalent static assets) into dist/public/ as part of `npm run build`, since tsc alone does not copy non-.ts files — the file path used by the /  route handler must resolve correctly both under `tsx src/server.ts` (dev) and `node dist/server.js` (built).",
       "acceptanceCriteria": [
-        "src/server.ts exports a named `app` (Express instance) separately from the `listen()` call so supertest can import it without binding a port",
-        "The `listen()` call in src/server.ts is guarded by `import { pathToFileURL } from 'url'` and the condition `if (import.meta.url === pathToFileURL(process.argv[1]).href)` (ESM output) or `if (require.main === module)` (CJS output) — the guard form must match the tsup output format so that `vitest run` never binds a port",
-        "GET /health returns HTTP 200 with Content-Type application/json and body matching { status: 'ok', uptime: <positive number> }",
-        "GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent — the health endpoint is never gated by API key presence",
-        "GET / returns HTTP 200 with Content-Type matching text/html and response body equal to the contents of src/public/index.html, READ FROM THAT FILE AT RUNTIME (e.g. fs.readFileSync) — a hardcoded/duplicated inline HTML string in server.ts that happens to match is NOT acceptable; this route is never gated by RAPIDAPI_KEY",
-        "src/public/index.html exists and is a real, styled single-page dashboard (not a placeholder) matching this concrete layout: (1) a full-width solid-color header bar (e.g. blue #1a73e8) containing a bold white title 'Skyscanner Dashboard' and a smaller subtitle line below it ('Search flights via the Skyscanner API' or equivalent); (2) below the header, a centered white card (max-width ~700px, rounded corners, light border, padding) containing a search form laid out as a 2-column grid: 'From (IATA)' and 'To (IATA)' text inputs on row 1, 'Date' (native date input) and 'Adults' (number input, default 1) on row 2, each with a label above the input; (3) a full-width solid-color button below the grid, same color as the header, labeled 'Search Flights'; (4) a status/message area below the button that shows a light-red/pink banner with red text for errors (e.g. 'Failed to fetch flights'), a muted-gray line for empty results ('No flights found'), and a result count on success; (5) client-side JavaScript that submits the form via GET /search (no full page reload), disables the button while the request is in flight, and renders returned flights into a results table (or the appropriate status message) in the same page",
-        "GET /search with valid query params (from, to, date, adults) returns HTTP 200 with body { flights: FlightResult[], count: number, searchedAt: ISO-8601 string } where count strictly equals flights.length",
-        "GET /search missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }",
-        "When the `adults` query param is absent on GET /search, the request succeeds (HTTP 200) with a default value of 1 passed to SkyscannerClient — `adults` is optional, not required",
-        "When the `adults` query param is present but non-numeric (e.g. 'abc', ''), GET /search returns HTTP 400 with Content-Type application/json and body { error: string }",
-        "GET /cheapest with valid required query params (from, to, date) returns HTTP 200 with a single FlightResult whose `price` field is less than or equal to the `price` field of every FlightResult returned by SkyscannerClient for the same route/date (validated against a mocked client response); if `adults` is supplied it is forwarded, if absent it defaults to 1",
-        "GET /cheapest returns HTTP 404 with Content-Type application/json and body { error: string } when SkyscannerClient returns an empty array for the given route/date",
-        "GET /cheapest missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }",
-        "When RAPIDAPI_KEY env var is absent at server initialisation, a single middleware (or equivalent) short-circuits GET /search and GET /cheapest with HTTP 503 Content-Type application/json body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected and return their normal responses",
-        "When SkyscannerClient throws an error during a /search or /cheapest request (e.g. network failure, upstream 5xx), the server returns HTTP 500 with Content-Type application/json and body { error: string } and does not crash or emit an unhandled promise rejection",
-        "The `searchedAt` field in the GET /search response is an ISO-8601 datetime string reflecting the time of the request (not a hardcoded value); successive requests separated by at least 1 ms return distinct values",
-        "The FlightResult type used in src/server.ts is imported from the SKY-002 type export (e.g. src/skyscanner/client.ts) and not redeclared inline — type definitions must not diverge between the client and server layers",
-        "src/server.test.ts contains at least 8 vitest tests, each covering a distinct scenario from the criteria above, with SkyscannerClient mocked (vi.mock or equivalent) so no real HTTP calls are made during `vitest run`",
-        "`npx tsc --noEmit` exits 0 with no type errors",
-        "`vitest run` exits 0 with all tests passing",
-        "The server handles the case where `src/public/index.html` is missing or unreadable in a graceful way, returning an HTTP 500 error with proper error message",
-        "The server sets appropriate CORS headers (Access-Control-Allow-Origin: *, Access-Control-Allow-Methods: GET, POST, OPTIONS) for all routes except /health",
-        "All string literals in the server's response body are sanitized to prevent XSS vulnerabilities in the HTML response",
-        "The server sanitizes user-provided inputs to GET /search and GET /cheapest to prevent injection attacks, especially in the 'from' and 'to' IATA code fields",
-        "GET /search and GET /cheapest handle invalid 'date' values gracefully, by returning HTTP 400 with { error: string } that explains the invalid format",
-        "The server does not expose sensitive environment variables in error responses or logs",
-        "The server implements rate limiting for GET /search and GET /cheapest to prevent abuse (e.g. 10 requests per minute per IP)",
-        "GET /cheapest response includes a `cheapestPrice` field in the FlightResult which matches the lowest price among all returned flights"
+        "Given the server module is imported in a test file, When no HTTP request is made, Then no port is bound and no EADDRINUSE error occurs; the named `app` export is an Express instance usable with supertest",
+        "Given any RAPIDAPI_KEY state, When GET /health is requested, Then the response is HTTP 200 with JSON body containing `status: 'ok'` and `uptime` as a positive number",
+        "Given any RAPIDAPI_KEY state, When GET / is requested, Then the response is HTTP 200 with Content-Type text/html and the body contains the contents of src/public/index.html served at runtime",
+        "Given RAPIDAPI_KEY is configured and valid params (from, to, date), When GET /search?from=LHR&to=JFK&date=2026-08-01&adults=1 is requested, Then the response is HTTP 200 with JSON body containing `flights` (array), `count` (number), and `searchedAt` (ISO 8601 string)",
+        "Given RAPIDAPI_KEY is configured, When GET /search is requested without `from`, `to`, or `date` query params, Then the response is HTTP 400 with JSON body containing an `error` field describing the missing required parameters",
+        "Given RAPIDAPI_KEY is configured, When GET /search is requested with a non-numeric `adults` param (e.g. adults=abc), Then the response is HTTP 400 with JSON body containing an `error` field",
+        "Given RAPIDAPI_KEY is configured, When GET /search is requested without an `adults` param, Then `adults` defaults to 1 in the search request and the response is HTTP 200",
+        "Given RAPIDAPI_KEY is configured and valid params, When GET /cheapest?from=LHR&to=JFK&date=2026-08-01 is requested, Then the response is HTTP 200 with a single FlightResult object that has the lowest price among all results",
+        "Given RAPIDAPI_KEY is configured and valid params but SkyscannerClient returns zero results, When GET /cheapest is requested, Then the response is HTTP 404 with JSON body `{ error: string }`",
+        "Given RAPIDAPI_KEY is configured, When GET /cheapest is requested without `from`, `to`, or `date` query params, Then the response is HTTP 400 with JSON body containing an `error` field",
+        "Given RAPIDAPI_KEY is configured, When GET /cheapest is requested without an `adults` param, Then `adults` defaults to 1 and the response is HTTP 200 (if results exist)",
+        "Given RAPIDAPI_KEY is absent at server startup, When GET /search or GET /cheapest is requested, Then the response is HTTP 503 with JSON body `{ error: 'RAPIDAPI_KEY not configured' }`",
+        "Given RAPIDAPI_KEY is absent at server startup, When GET /health or GET / is requested, Then the response is unaffected (200 as normal)",
+        "Given RAPIDAPI_KEY is configured, When SkyscannerClient throws an error during /search or /cheapest, Then the response is HTTP 500 with JSON body `{ error: string }` and the server remains running and responsive to subsequent requests",
+        "Given the FlightResult type from SKY-002, When the server returns flight data on /search or /cheapest, Then each flight object conforms to the FlightResult type structure defined in SKY-002 (not a locally redeclared type)",
+        "Given GET /search or GET /cheapest is requested with query params containing HTML or script tags (e.g. from=<script>alert(1)</script>), Then the response does not reflect unsanitized input and no unescaped script content appears in the JSON response body",
+        "Given GET /search or GET /cheapest is requested with `adults` set to 0 or a negative number, Then the response is HTTP 400 with an `error` field",
+        "Given GET /search or GET /cheapest is requested with a `date` in an invalid format (e.g. date=not-a-date), Then the response is HTTP 400 with an `error` field",
+        "Given src/public/index.html, When rendered in a browser, Then it contains a header, a search form with from/to/date/adults inputs, a results area, and client-side JavaScript that calls GET /search without page reload",
+        "Given src/public/index.html, When rendered in a browser, Then the page includes a lang attribute on the html element, labels associated with form inputs, and meaningful heading hierarchy for accessibility",
+        "Given `npm run build` is executed, Then dist/server.js is produced and src/public/ is copied into dist/public/; `npm run build && npm run start` starts a working server on the configured port",
+        "Given the package.json start script, When `npm run start` is executed, Then it runs `node dist/server.js`",
+        "Given the test suite, When `vitest run` is executed, Then at least 8 tests pass covering: /health 200, / 200 with HTML, /search 200 with valid params, /search 400 with missing params, /cheapest 200, /cheapest 404 with no results, /search 503 without RAPIDAPI_KEY, /cheapest 500 on SkyscannerClient error",
+        "Given the project, When `npx tsc --noEmit` is executed, Then it exits 0 with no type errors"
       ],
       "technicalNotes": {
         "workingDir": "/home/bradleyjerome/projects/skyscanner-app",
@@ -475,278 +398,196 @@
         ]
       },
       "estimate": 25,
-      "estimatedAiMinutes": 2.4838,
-      "estimatedCost": 0.4872,
-      "estimatedTokens": 337509,
-      "estimatedTurns": 9,
-      "estimatedHours": 0.0413,
+      "estimatedAiMinutes": 2.9806,
+      "estimatedCost": 0.5846,
+      "estimatedTokens": 405011,
+      "estimatedTurns": 10,
+      "estimatedHours": 0.0496,
       "effort": "high",
-      "cpaConfidence": 0.52,
+      "cpaConfidence": 0.75,
       "cpaGate": "review",
       "aiProvider": "qwen",
       "model": "moonshotai/kimi-k2",
       "dependencies": [
         "SKY-002"
       ],
+      "testCriteria": {
+        "facts": [],
+        "sourceFiles": [],
+        "mockStrategy": "",
+        "bannedPatterns": [],
+        "implStory": null
+      },
       "reasoningEffort": "high",
       "specification": {
-        "runId": "20260712T134207Z",
+        "specPassFailed": true,
+        "specPassFailedReason": "openspec returned null after 2 attempt(s)",
+        "runId": "20260716T094508Z",
         "assignedAgents": [
           "openspec",
           "speckit"
         ],
-        "coordinatorNotes": "Express server with multiple endpoints, static file serving, environment variable handling, and comprehensive test coverage required. High complexity due to API design and error handling.",
+        "coordinatorNotes": "Most complex story with 23 ACs spanning Express routing, static file serving with runtime file read (no hardcoded HTML), build pipeline (public/ copy to dist/), listen() guard patterns (ESM vs CJS), dashboard SPA with client-side fetch, and 503 key-gating middleware. openspec elaborates build pipeline contract, listen guard implementation, and dashboard JS behavior; speckit hardens security (503 gating bypass, error message leakage, unhandled rejection paths), testability (supertest + vi.mock patterns), and flags gaps in static-file error handling (missing index.html at runtime).",
         "status": "completed",
-        "updatedAt": "2026-07-12T13:47:45.821Z",
+        "updatedAt": "2026-07-16T10:04:15.697Z",
         "appliedAgents": [
-          "openspec",
           "speckit"
         ],
         "agentContributions": [
           {
             "agent": "openspec",
-            "applied": true,
-            "notes": "Split required: 24 ACs > 12, and contains both implementation and test files. Split into: 1) Implementation (server.ts), 2) Tests (server.test.ts)",
-            "acceptanceChanged": true,
-            "splitCount": 2,
-            "timestamp": "2026-07-12T13:46:58.279Z",
-            "acBefore": [
-              "src/server.ts exports a named `app` (Express instance) separately from the `listen()` call so supertest can import it without binding a port",
-              "The `listen()` call in src/server.ts is guarded by `import { pathToFileURL } from 'url'` and the condition `if (import.meta.url === pathToFileURL(process.argv[1]).href)` (ESM output) or `if (require.main === module)` (CJS output) — the guard form must match the tsup output format so that `vitest run` never binds a port",
-              "GET /health returns HTTP 200 with Content-Type application/json and body matching { status: 'ok', uptime: <positive number> }",
-              "GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent — the health endpoint is never gated by API key presence",
-              "GET / returns HTTP 200 with Content-Type matching text/html and response body equal to the contents of src/public/index.html, READ FROM THAT FILE AT RUNTIME (e.g. fs.readFileSync) — a hardcoded/duplicated inline HTML string in server.ts that happens to match is NOT acceptable; this route is never gated by RAPIDAPI_KEY",
-              "src/public/index.html exists and is a real, styled single-page dashboard (not a placeholder) matching this concrete layout: (1) a full-width solid-color header bar (e.g. blue #1a73e8) containing a bold white title 'Skyscanner Dashboard' and a smaller subtitle line below it ('Search flights via the Skyscanner API' or equivalent); (2) below the header, a centered white card (max-width ~700px, rounded corners, light border, padding) containing a search form laid out as a 2-column grid: 'From (IATA)' and 'To (IATA)' text inputs on row 1, 'Date' (native date input) and 'Adults' (number input, default 1) on row 2, each with a label above the input; (3) a full-width solid-color button below the grid, same color as the header, labeled 'Search Flights'; (4) a status/message area below the button that shows a light-red/pink banner with red text for errors (e.g. 'Failed to fetch flights'), a muted-gray line for empty results ('No flights found'), and a result count on success; (5) client-side JavaScript that submits the form via GET /search (no full page reload), disables the button while the request is in flight, and renders returned flights into a results table (or the appropriate status message) in the same page",
-              "GET /search with valid query params (from, to, date, adults) returns HTTP 200 with body { flights: FlightResult[], count: number, searchedAt: ISO-8601 string } where count strictly equals flights.length",
-              "GET /search missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }",
-              "When the `adults` query param is absent on GET /search, the request succeeds (HTTP 200) with a default value of 1 passed to SkyscannerClient — `adults` is optional, not required",
-              "When the `adults` query param is present but non-numeric (e.g. 'abc', ''), GET /search returns HTTP 400 with Content-Type application/json and body { error: string }",
-              "GET /cheapest with valid required query params (from, to, date) returns HTTP 200 with a single FlightResult whose `price` field is less than or equal to the `price` field of every FlightResult returned by SkyscannerClient for the same route/date (validated against a mocked client response); if `adults` is supplied it is forwarded, if absent it defaults to 1",
-              "GET /cheapest returns HTTP 404 with Content-Type application/json and body { error: string } when SkyscannerClient returns an empty array for the given route/date",
-              "GET /cheapest missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }",
-              "When RAPIDAPI_KEY env var is absent at server initialisation, a single middleware (or equivalent) short-circuits GET /search and GET /cheapest with HTTP 503 Content-Type application/json body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected and return their normal responses",
-              "When SkyscannerClient throws an error during a /search or /cheapest request (e.g. network failure, upstream 5xx), the server returns HTTP 500 with Content-Type application/json and body { error: string } and does not crash or emit an unhandled promise rejection",
-              "The `searchedAt` field in the GET /search response is an ISO-8601 datetime string reflecting the time of the request (not a hardcoded value); successive requests separated by at least 1 ms return distinct values",
-              "The FlightResult type used in src/server.ts is imported from the SKY-002 type export (e.g. src/skyscanner/client.ts) and not redeclared inline — type definitions must not diverge between the client and server layers",
-              "package.json contains a 'start' script with value 'node dist/server.js'",
-              "package.json contains a 'build' script (tsup or equivalent) that produces dist/server.js such that `npm run build && npm run start` successfully starts the server and GET /health returns HTTP 200",
-              "package.json 'build' script copies src/public/ (or equivalent) into dist/public/ as part of the build — after `npm run build`, dist/public/index.html exists and `npm run build && npm run start` serves the real dashboard file (not a 404 or a stale/hardcoded fallback) from GET /",
-              "supertest and @types/supertest are listed in package.json devDependencies",
-              "src/server.test.ts contains at least 8 vitest tests, each covering a distinct scenario from the criteria above, with SkyscannerClient mocked (vi.mock or equivalent) so no real HTTP calls are made during `vitest run`",
-              "`npx tsc --noEmit` exits 0 with no type errors",
-              "`vitest run` exits 0 with all tests passing"
-            ],
-            "acAfter": [
-              "Delegated to split children: SKY-004-impl, SKY-004-test"
-            ],
-            "acAdded": [
-              "Delegated to split children: SKY-004-impl, SKY-004-test"
-            ],
-            "acRemoved": [
-              "src/server.ts exports a named `app` (Express instance) separately from the `listen()` call so supertest can import it without binding a port",
-              "The `listen()` call in src/server.ts is guarded by `import { pathToFileURL } from 'url'` and the condition `if (import.meta.url === pathToFileURL(process.argv[1]).href)` (ESM output) or `if (require.main === module)` (CJS output) — the guard form must match the tsup output format so that `vitest run` never binds a port",
-              "GET /health returns HTTP 200 with Content-Type application/json and body matching { status: 'ok', uptime: <positive number> }",
-              "GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent — the health endpoint is never gated by API key presence",
-              "GET / returns HTTP 200 with Content-Type matching text/html and response body equal to the contents of src/public/index.html, READ FROM THAT FILE AT RUNTIME (e.g. fs.readFileSync) — a hardcoded/duplicated inline HTML string in server.ts that happens to match is NOT acceptable; this route is never gated by RAPIDAPI_KEY",
-              "src/public/index.html exists and is a real, styled single-page dashboard (not a placeholder) matching this concrete layout: (1) a full-width solid-color header bar (e.g. blue #1a73e8) containing a bold white title 'Skyscanner Dashboard' and a smaller subtitle line below it ('Search flights via the Skyscanner API' or equivalent); (2) below the header, a centered white card (max-width ~700px, rounded corners, light border, padding) containing a search form laid out as a 2-column grid: 'From (IATA)' and 'To (IATA)' text inputs on row 1, 'Date' (native date input) and 'Adults' (number input, default 1) on row 2, each with a label above the input; (3) a full-width solid-color button below the grid, same color as the header, labeled 'Search Flights'; (4) a status/message area below the button that shows a light-red/pink banner with red text for errors (e.g. 'Failed to fetch flights'), a muted-gray line for empty results ('No flights found'), and a result count on success; (5) client-side JavaScript that submits the form via GET /search (no full page reload), disables the button while the request is in flight, and renders returned flights into a results table (or the appropriate status message) in the same page",
-              "GET /search with valid query params (from, to, date, adults) returns HTTP 200 with body { flights: FlightResult[], count: number, searchedAt: ISO-8601 string } where count strictly equals flights.length",
-              "GET /search missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }",
-              "When the `adults` query param is absent on GET /search, the request succeeds (HTTP 200) with a default value of 1 passed to SkyscannerClient — `adults` is optional, not required",
-              "When the `adults` query param is present but non-numeric (e.g. 'abc', ''), GET /search returns HTTP 400 with Content-Type application/json and body { error: string }",
-              "GET /cheapest with valid required query params (from, to, date) returns HTTP 200 with a single FlightResult whose `price` field is less than or equal to the `price` field of every FlightResult returned by SkyscannerClient for the same route/date (validated against a mocked client response); if `adults` is supplied it is forwarded, if absent it defaults to 1",
-              "GET /cheapest returns HTTP 404 with Content-Type application/json and body { error: string } when SkyscannerClient returns an empty array for the given route/date",
-              "GET /cheapest missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }",
-              "When RAPIDAPI_KEY env var is absent at server initialisation, a single middleware (or equivalent) short-circuits GET /search and GET /cheapest with HTTP 503 Content-Type application/json body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected and return their normal responses",
-              "When SkyscannerClient throws an error during a /search or /cheapest request (e.g. network failure, upstream 5xx), the server returns HTTP 500 with Content-Type application/json and body { error: string } and does not crash or emit an unhandled promise rejection",
-              "The `searchedAt` field in the GET /search response is an ISO-8601 datetime string reflecting the time of the request (not a hardcoded value); successive requests separated by at least 1 ms return distinct values",
-              "The FlightResult type used in src/server.ts is imported from the SKY-002 type export (e.g. src/skyscanner/client.ts) and not redeclared inline — type definitions must not diverge between the client and server layers",
-              "package.json contains a 'start' script with value 'node dist/server.js'",
-              "package.json contains a 'build' script (tsup or equivalent) that produces dist/server.js such that `npm run build && npm run start` successfully starts the server and GET /health returns HTTP 200",
-              "package.json 'build' script copies src/public/ (or equivalent) into dist/public/ as part of the build — after `npm run build`, dist/public/index.html exists and `npm run build && npm run start` serves the real dashboard file (not a 404 or a stale/hardcoded fallback) from GET /",
-              "supertest and @types/supertest are listed in package.json devDependencies",
-              "src/server.test.ts contains at least 8 vitest tests, each covering a distinct scenario from the criteria above, with SkyscannerClient mocked (vi.mock or equivalent) so no real HTTP calls are made during `vitest run`",
-              "`npx tsc --noEmit` exits 0 with no type errors",
-              "`vitest run` exits 0 with all tests passing"
-            ],
-            "splitIds": [
-              "SKY-004-impl",
-              "SKY-004-test"
-            ]
+            "applied": false,
+            "notes": "Agent output could not be parsed",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-07-16T10:00:55.003Z"
           },
           {
             "agent": "speckit",
             "applied": true,
-            "notes": "Added comprehensive edge-case, error-handling, security, and accessibility criteria. Split story structure validated and preserved. Criteria 16-23 added to cover XSS, rate-limiting, error handling, input validation, logging, headers, and security considerations. Criteria 17-22 originally in openspec's test story were moved to the implementation story to ensure proper coverage in both areas.",
+            "notes": "Openspec provided empty acceptance criteria, so I built the full list from the original story's criteria with the following refinements: (1) AC1 reworded from 'guarded by a main-module check' to observable outcome 'no port is bound when imported in tests'. (2) AC3 removed implementation detail 'fs.readFileSync'. (3) AC7 (original) mentioned 'imported from SKY-002, not redeclared' — reworded to observable outcome about type conformance. (4) AC10 (original) mentioned 'vitest' and 'mocked' — reworded to behavioral test descriptions. Added criteria: AC16 for XSS/input sanitization, AC17 for adults≤0 edge case, AC18 for invalid date format, AC20 for accessibility requirements on the dashboard HTML.",
             "acceptanceChanged": true,
-            "splitCount": 2,
-            "timestamp": "2026-07-12T13:47:45.821Z",
+            "splitCount": 0,
+            "timestamp": "2026-07-16T10:03:26.486Z",
             "acBefore": [
-              "Delegated to split children: SKY-004-impl, SKY-004-test"
+              "src/server.ts exports a named `app` (Express instance) separately from the `listen()` call so supertest can import it without binding a port",
+              "The `listen()` call in src/server.ts is guarded by `import { pathToFileURL } from 'url'` and the condition `if (import.meta.url === pathToFileURL(process.argv[1]).href)` (ESM output) or `if (require.main === module)` (CJS output) — the guard form must match the tsup output format so that `vitest run` never binds a port",
+              "GET /health returns HTTP 200 with Content-Type application/json and body matching { status: 'ok', uptime: <positive number> }",
+              "GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent — the health endpoint is never gated by API key presence",
+              "GET / returns HTTP 200 with Content-Type matching text/html and response body equal to the contents of src/public/index.html, READ FROM THAT FILE AT RUNTIME (e.g. fs.readFileSync) — a hardcoded/duplicated inline HTML string in server.ts that happens to match is NOT acceptable; this route is never gated by RAPIDAPI_KEY",
+              "src/public/index.html exists and is a real, styled single-page dashboard (not a placeholder) matching this concrete layout: (1) a full-width solid-color header bar (e.g. blue #1a73e8) containing a bold white title 'Skyscanner Dashboard' and a smaller subtitle line below it ('Search flights via the Skyscanner API' or equivalent); (2) below the header, a centered white card (max-width ~700px, rounded corners, light border, padding) containing a search form laid out as a 2-column grid: 'From (IATA)' and 'To (IATA)' text inputs on row 1, 'Date' (native date input) and 'Adults' (number input, default 1) on row 2, each with a label above the input; (3) a full-width solid-color button below the grid, same color as the header, labeled 'Search Flights'; (4) a status/message area below the button that shows a light-red/pink banner with red text for errors (e.g. 'Failed to fetch flights'), a muted-gray line for empty results ('No flights found'), and a result count on success; (5) client-side JavaScript that submits the form via GET /search (no full page reload), disables the button while the request is in flight, and renders returned flights into a results table (or the appropriate status message) in the same page",
+              "GET /search with valid query params (from, to, date, adults) returns HTTP 200 with body { flights: FlightResult[], count: number, searchedAt: ISO-8601 string } where count strictly equals flights.length",
+              "GET /search missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }",
+              "When the `adults` query param is absent on GET /search, the request succeeds (HTTP 200) with a default value of 1 passed to SkyscannerClient — `adults` is optional, not required",
+              "When the `adults` query param is present but non-numeric (e.g. 'abc', ''), GET /search returns HTTP 400 with Content-Type application/json and body { error: string }",
+              "GET /cheapest with valid required query params (from, to, date) returns HTTP 200 with a single FlightResult whose `price` field is less than or equal to the `price` field of every FlightResult returned by SkyscannerClient for the same route/date (validated against a mocked client response); if `adults` is supplied it is forwarded, if absent it defaults to 1",
+              "GET /cheapest returns HTTP 404 with Content-Type application/json and body { error: string } when SkyscannerClient returns an empty array for the given route/date",
+              "GET /cheapest missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }",
+              "When RAPIDAPI_KEY env var is absent at server initialisation, a single middleware (or equivalent) short-circuits GET /search and GET /cheapest with HTTP 503 Content-Type application/json body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected and return their normal responses",
+              "When SkyscannerClient throws an error during a /search or /cheapest request (e.g. network failure, upstream 5xx), the server returns HTTP 500 with Content-Type application/json and body { error: string } and does not crash or emit an unhandled promise rejection",
+              "The `searchedAt` field in the GET /search response is an ISO-8601 datetime string reflecting the time of the request (not a hardcoded value); successive requests separated by at least 1 ms return distinct values",
+              "The FlightResult type used in src/server.ts is imported from the SKY-002 type export (e.g. src/skyscanner/client.ts) and not redeclared inline — type definitions must not diverge between the client and server layers",
+              "package.json contains a 'start' script with value 'node dist/server.js'",
+              "package.json contains a 'build' script (tsup or equivalent) that produces dist/server.js such that `npm run build && npm run start` successfully starts the server and GET /health returns HTTP 200",
+              "package.json 'build' script copies src/public/ (or equivalent) into dist/public/ as part of the build — after `npm run build`, dist/public/index.html exists and `npm run build && npm run start` serves the real dashboard file (not a 404 or a stale/hardcoded fallback) from GET /",
+              "supertest and @types/supertest are listed in package.json devDependencies",
+              "src/server.test.ts contains at least 8 vitest tests, each covering a distinct scenario from the criteria above, with SkyscannerClient mocked (vi.mock or equivalent) so no real HTTP calls are made during `vitest run`",
+              "`npx tsc --noEmit` exits 0 with no type errors",
+              "`vitest run` exits 0 with all tests passing"
             ],
             "acAfter": [
-              "Delegated to split children: SKY-004-impl-1, SKY-004-test-1"
+              "Given the server module is imported in a test file, When no HTTP request is made, Then no port is bound and no EADDRINUSE error occurs; the named `app` export is an Express instance usable with supertest",
+              "Given any RAPIDAPI_KEY state, When GET /health is requested, Then the response is HTTP 200 with JSON body containing `status: 'ok'` and `uptime` as a positive number",
+              "Given any RAPIDAPI_KEY state, When GET / is requested, Then the response is HTTP 200 with Content-Type text/html and the body contains the contents of src/public/index.html served at runtime",
+              "Given RAPIDAPI_KEY is configured and valid params (from, to, date), When GET /search?from=LHR&to=JFK&date=2026-08-01&adults=1 is requested, Then the response is HTTP 200 with JSON body containing `flights` (array), `count` (number), and `searchedAt` (ISO 8601 string)",
+              "Given RAPIDAPI_KEY is configured, When GET /search is requested without `from`, `to`, or `date` query params, Then the response is HTTP 400 with JSON body containing an `error` field describing the missing required parameters",
+              "Given RAPIDAPI_KEY is configured, When GET /search is requested with a non-numeric `adults` param (e.g. adults=abc), Then the response is HTTP 400 with JSON body containing an `error` field",
+              "Given RAPIDAPI_KEY is configured, When GET /search is requested without an `adults` param, Then `adults` defaults to 1 in the search request and the response is HTTP 200",
+              "Given RAPIDAPI_KEY is configured and valid params, When GET /cheapest?from=LHR&to=JFK&date=2026-08-01 is requested, Then the response is HTTP 200 with a single FlightResult object that has the lowest price among all results",
+              "Given RAPIDAPI_KEY is configured and valid params but SkyscannerClient returns zero results, When GET /cheapest is requested, Then the response is HTTP 404 with JSON body `{ error: string }`",
+              "Given RAPIDAPI_KEY is configured, When GET /cheapest is requested without `from`, `to`, or `date` query params, Then the response is HTTP 400 with JSON body containing an `error` field",
+              "Given RAPIDAPI_KEY is configured, When GET /cheapest is requested without an `adults` param, Then `adults` defaults to 1 and the response is HTTP 200 (if results exist)",
+              "Given RAPIDAPI_KEY is absent at server startup, When GET /search or GET /cheapest is requested, Then the response is HTTP 503 with JSON body `{ error: 'RAPIDAPI_KEY not configured' }`",
+              "Given RAPIDAPI_KEY is absent at server startup, When GET /health or GET / is requested, Then the response is unaffected (200 as normal)",
+              "Given RAPIDAPI_KEY is configured, When SkyscannerClient throws an error during /search or /cheapest, Then the response is HTTP 500 with JSON body `{ error: string }` and the server remains running and responsive to subsequent requests",
+              "Given the FlightResult type from SKY-002, When the server returns flight data on /search or /cheapest, Then each flight object conforms to the FlightResult type structure defined in SKY-002 (not a locally redeclared type)",
+              "Given GET /search or GET /cheapest is requested with query params containing HTML or script tags (e.g. from=<script>alert(1)</script>), Then the response does not reflect unsanitized input and no unescaped script content appears in the JSON response body",
+              "Given GET /search or GET /cheapest is requested with `adults` set to 0 or a negative number, Then the response is HTTP 400 with an `error` field",
+              "Given GET /search or GET /cheapest is requested with a `date` in an invalid format (e.g. date=not-a-date), Then the response is HTTP 400 with an `error` field",
+              "Given src/public/index.html, When rendered in a browser, Then it contains a header, a search form with from/to/date/adults inputs, a results area, and client-side JavaScript that calls GET /search without page reload",
+              "Given src/public/index.html, When rendered in a browser, Then the page includes a lang attribute on the html element, labels associated with form inputs, and meaningful heading hierarchy for accessibility",
+              "Given `npm run build` is executed, Then dist/server.js is produced and src/public/ is copied into dist/public/; `npm run build && npm run start` starts a working server on the configured port",
+              "Given the package.json start script, When `npm run start` is executed, Then it runs `node dist/server.js`",
+              "Given the test suite, When `vitest run` is executed, Then at least 8 tests pass covering: /health 200, / 200 with HTML, /search 200 with valid params, /search 400 with missing params, /cheapest 200, /cheapest 404 with no results, /search 503 without RAPIDAPI_KEY, /cheapest 500 on SkyscannerClient error",
+              "Given the project, When `npx tsc --noEmit` is executed, Then it exits 0 with no type errors"
             ],
             "acAdded": [
-              "Delegated to split children: SKY-004-impl-1, SKY-004-test-1"
+              "Given the server module is imported in a test file, When no HTTP request is made, Then no port is bound and no EADDRINUSE error occurs; the named `app` export is an Express instance usable with supertest",
+              "Given any RAPIDAPI_KEY state, When GET /health is requested, Then the response is HTTP 200 with JSON body containing `status: 'ok'` and `uptime` as a positive number",
+              "Given any RAPIDAPI_KEY state, When GET / is requested, Then the response is HTTP 200 with Content-Type text/html and the body contains the contents of src/public/index.html served at runtime",
+              "Given RAPIDAPI_KEY is configured and valid params (from, to, date), When GET /search?from=LHR&to=JFK&date=2026-08-01&adults=1 is requested, Then the response is HTTP 200 with JSON body containing `flights` (array), `count` (number), and `searchedAt` (ISO 8601 string)",
+              "Given RAPIDAPI_KEY is configured, When GET /search is requested without `from`, `to`, or `date` query params, Then the response is HTTP 400 with JSON body containing an `error` field describing the missing required parameters",
+              "Given RAPIDAPI_KEY is configured, When GET /search is requested with a non-numeric `adults` param (e.g. adults=abc), Then the response is HTTP 400 with JSON body containing an `error` field",
+              "Given RAPIDAPI_KEY is configured, When GET /search is requested without an `adults` param, Then `adults` defaults to 1 in the search request and the response is HTTP 200",
+              "Given RAPIDAPI_KEY is configured and valid params, When GET /cheapest?from=LHR&to=JFK&date=2026-08-01 is requested, Then the response is HTTP 200 with a single FlightResult object that has the lowest price among all results",
+              "Given RAPIDAPI_KEY is configured and valid params but SkyscannerClient returns zero results, When GET /cheapest is requested, Then the response is HTTP 404 with JSON body `{ error: string }`",
+              "Given RAPIDAPI_KEY is configured, When GET /cheapest is requested without `from`, `to`, or `date` query params, Then the response is HTTP 400 with JSON body containing an `error` field",
+              "Given RAPIDAPI_KEY is configured, When GET /cheapest is requested without an `adults` param, Then `adults` defaults to 1 and the response is HTTP 200 (if results exist)",
+              "Given RAPIDAPI_KEY is absent at server startup, When GET /search or GET /cheapest is requested, Then the response is HTTP 503 with JSON body `{ error: 'RAPIDAPI_KEY not configured' }`",
+              "Given RAPIDAPI_KEY is absent at server startup, When GET /health or GET / is requested, Then the response is unaffected (200 as normal)",
+              "Given RAPIDAPI_KEY is configured, When SkyscannerClient throws an error during /search or /cheapest, Then the response is HTTP 500 with JSON body `{ error: string }` and the server remains running and responsive to subsequent requests",
+              "Given the FlightResult type from SKY-002, When the server returns flight data on /search or /cheapest, Then each flight object conforms to the FlightResult type structure defined in SKY-002 (not a locally redeclared type)",
+              "Given GET /search or GET /cheapest is requested with query params containing HTML or script tags (e.g. from=<script>alert(1)</script>), Then the response does not reflect unsanitized input and no unescaped script content appears in the JSON response body",
+              "Given GET /search or GET /cheapest is requested with `adults` set to 0 or a negative number, Then the response is HTTP 400 with an `error` field",
+              "Given GET /search or GET /cheapest is requested with a `date` in an invalid format (e.g. date=not-a-date), Then the response is HTTP 400 with an `error` field",
+              "Given src/public/index.html, When rendered in a browser, Then it contains a header, a search form with from/to/date/adults inputs, a results area, and client-side JavaScript that calls GET /search without page reload",
+              "Given src/public/index.html, When rendered in a browser, Then the page includes a lang attribute on the html element, labels associated with form inputs, and meaningful heading hierarchy for accessibility",
+              "Given `npm run build` is executed, Then dist/server.js is produced and src/public/ is copied into dist/public/; `npm run build && npm run start` starts a working server on the configured port",
+              "Given the package.json start script, When `npm run start` is executed, Then it runs `node dist/server.js`",
+              "Given the test suite, When `vitest run` is executed, Then at least 8 tests pass covering: /health 200, / 200 with HTML, /search 200 with valid params, /search 400 with missing params, /cheapest 200, /cheapest 404 with no results, /search 503 without RAPIDAPI_KEY, /cheapest 500 on SkyscannerClient error",
+              "Given the project, When `npx tsc --noEmit` is executed, Then it exits 0 with no type errors"
             ],
             "acRemoved": [
-              "Delegated to split children: SKY-004-impl, SKY-004-test"
-            ],
-            "splitIds": [
-              "SKY-004-impl",
-              "SKY-004-test"
+              "src/server.ts exports a named `app` (Express instance) separately from the `listen()` call so supertest can import it without binding a port",
+              "The `listen()` call in src/server.ts is guarded by `import { pathToFileURL } from 'url'` and the condition `if (import.meta.url === pathToFileURL(process.argv[1]).href)` (ESM output) or `if (require.main === module)` (CJS output) — the guard form must match the tsup output format so that `vitest run` never binds a port",
+              "GET /health returns HTTP 200 with Content-Type application/json and body matching { status: 'ok', uptime: <positive number> }",
+              "GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent — the health endpoint is never gated by API key presence",
+              "GET / returns HTTP 200 with Content-Type matching text/html and response body equal to the contents of src/public/index.html, READ FROM THAT FILE AT RUNTIME (e.g. fs.readFileSync) — a hardcoded/duplicated inline HTML string in server.ts that happens to match is NOT acceptable; this route is never gated by RAPIDAPI_KEY",
+              "src/public/index.html exists and is a real, styled single-page dashboard (not a placeholder) matching this concrete layout: (1) a full-width solid-color header bar (e.g. blue #1a73e8) containing a bold white title 'Skyscanner Dashboard' and a smaller subtitle line below it ('Search flights via the Skyscanner API' or equivalent); (2) below the header, a centered white card (max-width ~700px, rounded corners, light border, padding) containing a search form laid out as a 2-column grid: 'From (IATA)' and 'To (IATA)' text inputs on row 1, 'Date' (native date input) and 'Adults' (number input, default 1) on row 2, each with a label above the input; (3) a full-width solid-color button below the grid, same color as the header, labeled 'Search Flights'; (4) a status/message area below the button that shows a light-red/pink banner with red text for errors (e.g. 'Failed to fetch flights'), a muted-gray line for empty results ('No flights found'), and a result count on success; (5) client-side JavaScript that submits the form via GET /search (no full page reload), disables the button while the request is in flight, and renders returned flights into a results table (or the appropriate status message) in the same page",
+              "GET /search with valid query params (from, to, date, adults) returns HTTP 200 with body { flights: FlightResult[], count: number, searchedAt: ISO-8601 string } where count strictly equals flights.length",
+              "GET /search missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }",
+              "When the `adults` query param is absent on GET /search, the request succeeds (HTTP 200) with a default value of 1 passed to SkyscannerClient — `adults` is optional, not required",
+              "When the `adults` query param is present but non-numeric (e.g. 'abc', ''), GET /search returns HTTP 400 with Content-Type application/json and body { error: string }",
+              "GET /cheapest with valid required query params (from, to, date) returns HTTP 200 with a single FlightResult whose `price` field is less than or equal to the `price` field of every FlightResult returned by SkyscannerClient for the same route/date (validated against a mocked client response); if `adults` is supplied it is forwarded, if absent it defaults to 1",
+              "GET /cheapest returns HTTP 404 with Content-Type application/json and body { error: string } when SkyscannerClient returns an empty array for the given route/date",
+              "GET /cheapest missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }",
+              "When RAPIDAPI_KEY env var is absent at server initialisation, a single middleware (or equivalent) short-circuits GET /search and GET /cheapest with HTTP 503 Content-Type application/json body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected and return their normal responses",
+              "When SkyscannerClient throws an error during a /search or /cheapest request (e.g. network failure, upstream 5xx), the server returns HTTP 500 with Content-Type application/json and body { error: string } and does not crash or emit an unhandled promise rejection",
+              "The `searchedAt` field in the GET /search response is an ISO-8601 datetime string reflecting the time of the request (not a hardcoded value); successive requests separated by at least 1 ms return distinct values",
+              "The FlightResult type used in src/server.ts is imported from the SKY-002 type export (e.g. src/skyscanner/client.ts) and not redeclared inline — type definitions must not diverge between the client and server layers",
+              "package.json contains a 'start' script with value 'node dist/server.js'",
+              "package.json contains a 'build' script (tsup or equivalent) that produces dist/server.js such that `npm run build && npm run start` successfully starts the server and GET /health returns HTTP 200",
+              "package.json 'build' script copies src/public/ (or equivalent) into dist/public/ as part of the build — after `npm run build`, dist/public/index.html exists and `npm run build && npm run start` serves the real dashboard file (not a 404 or a stale/hardcoded fallback) from GET /",
+              "supertest and @types/supertest are listed in package.json devDependencies",
+              "src/server.test.ts contains at least 8 vitest tests, each covering a distinct scenario from the criteria above, with SkyscannerClient mocked (vi.mock or equivalent) so no real HTTP calls are made during `vitest run`",
+              "`npx tsc --noEmit` exits 0 with no type errors",
+              "`vitest run` exits 0 with all tests passing"
             ]
           }
         ],
         "coordinatorReview": {
-          "verdict": "approved",
-          "reviewNotes": "Both agents worked effectively to split and enhance this complex story. Openspec properly identified the need for splitting and coordinated the split into implementation and test components. Speckit added comprehensive security, error handling, and accessibility criteria. The final split into SKY-004-impl-1 and SKY-004-test-1 provides excellent coverage. The acceptance criteria are complete and address all critical aspects of the API implementation.",
-          "qualityScore": 0.94,
-          "flags": [],
-          "reviewedAt": "2026-07-12T13:47:57.988Z"
+          "verdict": "needs_review",
+          "reviewNotes": "Critical issues: (1) openspec FAILED (returned null after 2 attempts) — the elaboration/split pass was entirely missing, leaving speckit to reconstruct ACs from the original story without openspec's structural analysis. (2) 24 ACs far exceeds the 12-AC mandatory split threshold, yet NO split was performed — this is the most complex story in the phase and must be decomposed. (3) speckit removed the detailed dashboard HTML layout specification (concrete color values, grid layout, button styling, status area behavior) and replaced it with a vague 'contains a header, a search form… and client-side JavaScript' — this loses critical design intent that implementers need. (4) The Given/When/Then reformatting by speckit is clean and testable, and security additions (XSS, adults≤0, invalid date) are valuable, but they cannot compensate for the missing split and lost dashboard detail. This story requires human review to: (a) perform the mandatory split into impl/test/dashboard sub-stories, (b) restore or refine the dashboard HTML layout ACs with appropriate specificity, (c) verify no requirements were lost in the openspec failure gap.",
+          "qualityScore": 0.55,
+          "flags": [
+            "openspec_failure: agent returned null — elaboration pass missing entirely",
+            "mandatory_split_missing: 24 ACs exceeds 12-AC threshold, no split performed",
+            "dashboard_detail_lost: concrete HTML layout spec (colors, grid, button, status area) replaced with vague summary",
+            "needs_resplit: decompose into at minimum server-impl, server-test, and dashboard children"
+          ],
+          "reviewedAt": "2026-07-16T10:04:59.235Z"
         }
       },
-      "lastAttempt": "2026-07-12T10:46:17-04:00",
-      "actualCost": 0.211243
+      "skipLadder": true,
+      "ladderTier": "high"
     },
     {
       "id": "SKY-002-impl",
-      "title": "Implement Skyscanner API client class and interfaces",
+      "title": "Implement SkyscannerClient class and TypeScript interfaces",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
-      "status": "deprecated",
+      "status": "pending",
       "completed": false,
-      "description": "Implement the SkyscannerClient class with constructor validation, API interaction using global fetch, and proper error handling. Export required TypeScript interfaces.",
+      "description": "Create src/skyscanner/client.ts with the SkyscannerClient class, SearchParams/FlightResult interfaces, global-fetch-based searchFlights method, constructor key resolution with env-var fallback, error handling for HTTP errors and malformed responses, private apiKey field, and explicit MOCK_SKYSCANNER_API='true' mock mode that returns deterministic fixture data without calling fetch.",
       "acceptanceCriteria": [
-        "src/skyscanner/client.ts exports a SkyscannerClient class whose constructor signature is constructor({ apiKey }: { apiKey?: string })",
+        "SkyscannerClient class is exported with constructor signature constructor({ apiKey }: { apiKey?: string })",
         "SearchParams interface is exported with exactly: origin: string, destination: string, date: string, adults?: number",
         "FlightResult interface is exported with exactly: price: number, currency: string, airline: string, departure: string, arrival: string, duration: number, stops: number",
-        "searchFlights uses the Node.js global fetch exclusively — no axios, node-fetch, or other HTTP dependency imported",
-        "When no apiKey is passed to the constructor and RAPIDAPI_KEY env var is unset, constructing SkyscannerClient throws an Error whose message references the missing key",
-        "When the API returns a 4xx or 5xx status, searchFlights rejects with an Error that includes the HTTP status code",
-        "When the API response body is malformed or missing expected fields, searchFlights rejects with a descriptive parse/validation Error",
-        "The apiKey is stored as a private field (private or # prefix) on the SkyscannerClient instance and is not publicly readable",
-        "When apiKey is passed as an empty string ('') to the constructor, SkyscannerClient throws the same missing-key Error as when apiKey is omitted entirely",
-        "When RAPIDAPI_KEY is set to an empty string in the environment and no apiKey is provided to the constructor, SkyscannerClient throws the missing-key Error",
-        "When an apiKey is provided to the constructor and RAPIDAPI_KEY is also set in the environment, the constructor-provided apiKey takes precedence",
-        "The Error thrown by searchFlights on HTTP 4xx/5xx does not include the apiKey value anywhere in its message string",
-        "tsc --noEmit exits 0 with no type errors"
-      ],
-      "technicalNotes": {
-        "files": [
-          "/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts"
-        ],
-        "dependsOn": [
-          "SKY-001"
-        ]
-      },
-      "estimate": 20,
-      "estimatedAiMinutes": 5.42,
-      "estimatedCost": 0.1685,
-      "estimatedTokens": 654804,
-      "estimatedTurns": 18,
-      "estimatedHours": 0.0903,
-      "effort": "low",
-      "cpaConfidence": 0.75,
-      "cpaGate": "review",
-      "aiProvider": "qwen",
-      "model": "moonshotai/kimi-k2",
-      "reasoningEffort": "low",
-      "dependencies": [],
-      "specification": {
-        "createdFrom": "SKY-002",
-        "createdAt": "2026-07-12T13:42:57.944Z",
-        "runId": "20260712T134207Z",
-        "splitDepth": 1,
-        "splitOrigin": "spec-pass",
-        "splitRejected": true,
-        "splitRejectionReason": "same-file coherence violation: multiple children write to the same file"
-      },
-      "ladderTier": "high"
-    },
-    {
-      "id": "SKY-002-test",
-      "title": "Implement tests for Skyscanner API client",
-      "agentRole": "test-engineer",
-      "agentGroup": "primary",
-      "status": "deprecated",
-      "completed": false,
-      "description": "Create comprehensive vitest tests for the Skyscanner API client including mocking global fetch and testing various scenarios.",
-      "acceptanceCriteria": [
-        "client.test.ts contains at least 5 vitest tests, each using a mocked fetch (vi.stubGlobal or equivalent) with afterEach fetch restoration, covering: (a) correct RapidAPI URL and header construction, (b) successful response parsed into FlightResult[], (c) HTTP 4xx rejection with status code in error message, (d) missing API key constructor error, (e) malformed/missing-fields response body rejects with a parse/validation error",
-        "vitest run exits 0 with all tests passing",
-        "When MOCK_SKYSCANNER_API env var equals exactly 'true', searchFlights resolves with a deterministic, non-empty FlightResult[] fixture (at least 2 results, valid shape matching the FlightResult interface, varying price so cheapest-selection logic in SKY-004 is exercisable) and does not call fetch — verified in a test that stubs/spies on global fetch and asserts it was never invoked",
-        "When MOCK_SKYSCANNER_API is unset, empty string, or any value other than the exact string 'true' (e.g. 'false', '1', 'TRUE'), searchFlights performs the real fetch call exactly as when the env var did not exist — mock mode is strict opt-in, not a fuzzy truthy check",
-        "A real HTTP/API failure (4xx, 5xx, network error, malformed body) is NEVER silently replaced with mock/fixture data — mock mode only ever activates via the explicit MOCK_SKYSCANNER_API='true' env var, never as an automatic fallback"
-      ],
-      "technicalNotes": {
-        "files": [
-          "/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts"
-        ],
-        "dependsOn": [
-          "SKY-001"
-        ]
-      },
-      "estimate": 20,
-      "estimatedAiMinutes": 5.4214,
-      "estimatedCost": 0.1693,
-      "estimatedTokens": 654804,
-      "estimatedTurns": 18,
-      "estimatedHours": 0.0903,
-      "effort": "low",
-      "cpaConfidence": 0.75,
-      "cpaGate": "review",
-      "aiProvider": "qwen",
-      "model": "moonshotai/kimi-k2",
-      "reasoningEffort": "low",
-      "dependencies": [
-        "SKY-002-impl",
-        "SKY-002-impl-1"
-      ],
-      "specification": {
-        "createdFrom": "SKY-002",
-        "createdAt": "2026-07-12T13:42:57.944Z",
-        "runId": "20260712T134207Z",
-        "splitDepth": 1,
-        "splitOrigin": "spec-pass",
-        "splitRejected": true,
-        "splitRejectionReason": "same-file coherence violation: multiple children write to the same file"
-      },
-      "ladderTier": "high"
-    },
-    {
-      "id": "SKY-002-impl-1",
-      "title": "Implement Skyscanner API client class and interfaces",
-      "agentRole": "typescript-engineer",
-      "agentGroup": "primary",
-      "status": "deprecated",
-      "completed": false,
-      "description": "Implement the SkyscannerClient class with constructor validation, API interaction using global fetch, and proper error handling. Export required TypeScript interfaces.",
-      "acceptanceCriteria": [
-        "src/skyscanner/client.ts exports a SkyscannerClient class whose constructor signature is constructor({ apiKey }: { apiKey?: string })",
-        "SearchParams interface is exported with exactly: origin: string, destination: string, date: string, adults?: number",
-        "FlightResult interface is exported with exactly: price: number, currency: string, airline: string, departure: string, arrival: string, duration: number, stops: number",
-        "searchFlights uses the Node.js global fetch exclusively — no axios, node-fetch, or other HTTP dependency imported",
-        "When no apiKey is passed to the constructor and RAPIDAPI_KEY env var is unset, constructing SkyscannerClient throws an Error whose message references the missing key",
-        "When the API returns a 4xx or 5xx status, searchFlights rejects with an Error that includes the HTTP status code",
-        "When the API response body is malformed or missing expected fields, searchFlights rejects with a descriptive parse/validation Error",
-        "The apiKey is stored as a private field (private or # prefix) on the SkyscannerClient instance and is not publicly readable",
-        "When apiKey is passed as an empty string ('') to the constructor, SkyscannerClient throws the same missing-key Error as when apiKey is omitted entirely",
-        "When RAPIDAPI_KEY is set to an empty string in the environment and no apiKey is provided to the constructor, SkyscannerClient throws the missing-key Error",
-        "When an apiKey is provided to the constructor and RAPIDAPI_KEY is also set in the environment, the constructor-provided apiKey takes precedence",
-        "The Error thrown by searchFlights on HTTP 4xx/5xx does not include the apiKey value anywhere in its message string",
-        "tsc --noEmit exits 0 with no type errors",
-        "All API responses from fetch must be properly awaited and handled to prevent unhandled promise rejections",
-        "The SkyscannerClient class must be fully serializable and deserializable without loss of functionality or data",
-        "The client must support secure HTTPS connections only to the Skyscanner RapidAPI endpoint",
-        "All error messages thrown by searchFlights must be descriptive and actionable for debugging purposes",
-        "When providing invalid or unexpected input types to searchFlights, the client must reject with a clear TypeError",
-        "All environment variable access must be done through a consistent abstraction layer (not direct process.env access)",
-        "The client must gracefully handle network timeouts and connection failures by rejecting with a clear timeout error message",
-        "When API rate limits are exceeded (HTTP 429), the client must reject with a descriptive error message containing the rate limit information",
-        "The client must not expose any sensitive information (such as API keys) in logs or console output",
-        "When the API returns a successful response with a non-JSON body, the client must reject with a clear parse error",
-        "SearchParams should support optional fields like adults with default values when not provided"
+        "searchFlights uses the Node.js 18+ global fetch exclusively — no axios, node-fetch, or other HTTP dependency imported",
+        "apiKey is stored as a private field (private or # prefix) on the SkyscannerClient instance and is not publicly readable; constructor-provided apiKey takes precedence over RAPIDAPI_KEY env var",
+        "When apiKey is omitted or empty string and RAPIDAPI_KEY is unset or empty string, constructor throws an Error whose message references the missing key",
+        "HTTP 4xx/5xx → searchFlights rejects with an Error that includes the status code in its message; the error message does not contain the apiKey value anywhere",
+        "Malformed/missing-fields response → searchFlights rejects with a descriptive parse/validation Error; MOCK_SKYSCANNER_API='true' → returns deterministic FlightResult[] fixture (≥2 results, valid shape, varying prices) without calling fetch; any other value → real fetch; real failures are never silently replaced with mock data"
       ],
       "technicalNotes": {
         "files": [
@@ -759,7 +600,7 @@
       "estimate": 20,
       "estimatedAiMinutes": 5.4214,
       "estimatedCost": 0.1693,
-      "estimatedTokens": 654204,
+      "estimatedTokens": 654804,
       "estimatedTurns": 18,
       "estimatedHours": 0.0903,
       "effort": "low",
@@ -767,58 +608,56 @@
       "cpaGate": "review",
       "aiProvider": "minimax",
       "model": "MiniMax-M3",
+      "testCriteria": {
+        "facts": [],
+        "sourceFiles": [],
+        "mockStrategy": "",
+        "bannedPatterns": [],
+        "implStory": null
+      },
       "reasoningEffort": "low",
       "dependencies": [],
       "specification": {
         "createdFrom": "SKY-002",
-        "createdAt": "2026-07-12T13:44:27.167Z",
-        "runId": "20260712T134207Z",
+        "createdAt": "2026-07-16T09:46:39.736Z",
+        "runId": "20260716T094508Z",
         "splitDepth": 1,
         "splitOrigin": "spec-pass",
         "modelUpgrade": {
           "from": "moonshotai/kimi-k2",
           "to": "MiniMax-M3",
           "ruleSignals": {
-            "acCount": 24,
+            "acCount": 8,
             "singleFile": true,
             "htmlOutput": false,
             "selfContained": false
           },
-          "ruleReason": "24 ACs on a single output file exceeds mini-tier generation capacity",
+          "ruleReason": "no upgrade signal detected",
           "llmOverride": true,
-          "llmReason": "24 ACs on a single output file exceeds mini-tier generation capacity, requiring standard-tier for reliable completion.",
-          "llmConfidence": "high",
-          "upgradedAt": "2026-07-12T13:48:11.776Z"
-        },
-        "splitRejected": true,
-        "splitRejectionReason": "same-file coherence violation: multiple children write to the same file"
+          "llmReason": "Rule missed a false negative: 8 ACs generating a complete self-contained module (class, interfaces, fetch method, error handling, mock fixtures) from scratch likely exceeds 1000 output tokens; borderline case errs toward upgrade.",
+          "llmConfidence": "medium",
+          "veryHighComplexity": false,
+          "veryHighReason": "",
+          "upgradedAt": "2026-07-16T10:05:54.841Z"
+        }
       },
       "ladderTier": "high"
     },
     {
-      "id": "SKY-002-test-1",
-      "title": "Implement tests for Skyscanner API client",
+      "id": "SKY-002-test",
+      "title": "Test SkyscannerClient with mocked fetch and mock-mode verification",
       "agentRole": "test-engineer",
       "agentGroup": "primary",
-      "status": "deprecated",
+      "status": "pending",
       "completed": false,
-      "description": "Create comprehensive vitest tests for the Skyscanner API client including mocking global fetch and testing various scenarios.",
+      "description": "Create src/skyscanner/client.test.ts with vitest tests that mock the global fetch (no real network calls). Tests must cover: correct RapidAPI URL and header construction, successful response parsing, HTTP 4xx rejection, missing/empty API key constructor errors, malformed response handling, private apiKey field verification, apiKey precedence over env var, error message not leaking apiKey, and MOCK_SKYSCANNER_API mock-mode behavior (strict opt-in, no silent fallback).",
       "acceptanceCriteria": [
-        "client.test.ts contains at least 5 vitest tests, each using a mocked fetch (vi.stubGlobal or equivalent) with afterEach fetch restoration, covering: (a) correct RapidAPI URL and header construction, (b) successful response parsed into FlightResult[], (c) HTTP 4xx rejection with status code in error message, (d) missing API key constructor error, (e) malformed/missing-fields response body rejects with a parse/validation error",
-        "vitest run exits 0 with all tests passing",
-        "When MOCK_SKYSCANNER_API env var equals exactly 'true', searchFlights resolves with a deterministic, non-empty FlightResult[] fixture (at least 2 results, valid shape matching the FlightResult interface, varying price so cheapest-selection logic in SKY-004 is exercisable) and does not call fetch — verified in a test that stubs/spies on global fetch and asserts it was never invoked",
-        "When MOCK_SKYSCANNER_API is unset, empty string, or any value other than the exact string 'true' (e.g. 'false', '1', 'TRUE'), searchFlights performs the real fetch call exactly as when the env var did not exist — mock mode is strict opt-in, not a fuzzy truthy check",
-        "A real HTTP/API failure (4xx, 5xx, network error, malformed body) is NEVER silently replaced with mock/fixture data — mock mode only ever activates via the explicit MOCK_SKYSCANNER_API='true' env var, never as an automatic fallback",
-        "All test scenarios must cover edge cases including empty results, null values, malformed JSON responses, and various error conditions",
-        "Test suite must validate that error messages are consistent and informative across all error conditions",
-        "All mocked fetch scenarios must reset properly between tests to prevent test pollution",
-        "Test suite must verify that the client correctly handles invalid input parameters for searchFlights",
-        "Test suite must verify that API keys are not exposed in logs or console output during tests",
-        "Test suite must include performance tests to ensure fetch calls are completed within expected time limits",
-        "Test suite must cover serialization/deserialization scenarios for the SkyscannerClient",
-        "Test suite must verify that environment variable access uses the proper abstraction layer",
-        "Test suite must validate that the mock mode does not interfere with real API calls when the env var is not set",
-        "Test suite must validate that API rate limit responses are handled correctly with appropriate error messages"
+        "client.test.ts contains at least 5 vitest tests using mocked fetch (vi.stubGlobal or equivalent) with afterEach fetch restoration, covering: (a) correct RapidAPI URL and header construction, (b) successful response parsed into FlightResult[], (c) HTTP 4xx rejection with status code in error message, (d) missing API key constructor error, (e) malformed/missing-fields response body rejects with parse/validation error",
+        "Test verifies apiKey is stored as a private field and not publicly readable on the SkyscannerClient instance",
+        "Test verifies empty-string apiKey and empty-string RAPIDAPI_KEY each throw the missing-key Error; test verifies constructor-provided apiKey takes precedence over RAPIDAPI_KEY env var",
+        "Test verifies the Error thrown on HTTP 4xx/5xx does not include the apiKey value in its message string",
+        "Test verifies MOCK_SKYSCANNER_API='true' returns deterministic fixture without invoking fetch (spy asserts zero calls); MOCK_SKYSCANNER_API unset/empty/'false'/'1'/'TRUE' performs real fetch; real failures are never silently replaced with mock data",
+        "tsc --noEmit exits 0 with no type errors; vitest run exits 0 with all tests passing"
       ],
       "technicalNotes": {
         "files": [
@@ -829,48 +668,70 @@
         ]
       },
       "estimate": 20,
-      "estimatedAiMinutes": 4.8189,
-      "estimatedCost": 0.15,
-      "estimatedTokens": 580653,
-      "estimatedTurns": 16,
-      "estimatedHours": 0.0803,
+      "estimatedAiMinutes": 4.9696,
+      "estimatedCost": 0.1553,
+      "estimatedTokens": 601230,
+      "estimatedTurns": 17,
+      "estimatedHours": 0.0828,
       "effort": "low",
-      "cpaConfidence": 0.65,
+      "cpaConfidence": 0.85,
       "cpaGate": "review",
-      "aiProvider": "qwen",
-      "model": "moonshotai/kimi-k2",
+      "aiProvider": "minimax",
+      "model": "MiniMax-M2.5",
+      "testCriteria": {
+        "facts": [],
+        "sourceFiles": [],
+        "mockStrategy": "",
+        "bannedPatterns": [],
+        "implStory": null
+      },
       "reasoningEffort": "low",
       "dependencies": [
-        "SKY-002-impl",
-        "SKY-002-impl-1"
+        "SKY-002-impl"
       ],
       "specification": {
         "createdFrom": "SKY-002",
-        "createdAt": "2026-07-12T13:44:27.167Z",
-        "runId": "20260712T134207Z",
+        "createdAt": "2026-07-16T09:46:39.737Z",
+        "runId": "20260716T094508Z",
         "splitDepth": 1,
         "splitOrigin": "spec-pass",
-        "splitRejected": true,
-        "splitRejectionReason": "same-file coherence violation: multiple children write to the same file"
+        "modelUpgrade": {
+          "from": "moonshotai/kimi-k2",
+          "to": "MiniMax-M2.5",
+          "ruleSignals": {
+            "acCount": 6,
+            "singleFile": false,
+            "htmlOutput": false,
+            "selfContained": false
+          },
+          "ruleReason": "no upgrade signal detected",
+          "llmOverride": false,
+          "llmReason": "6 ACs writing tests against already-specified contracts; small, well-scoped output fits mini-tier.",
+          "llmConfidence": "high",
+          "veryHighComplexity": false,
+          "veryHighReason": "",
+          "upgradedAt": "2026-07-16T10:05:54.841Z"
+        }
       },
       "ladderTier": "high"
     },
     {
-      "id": "SKY-003-impl",
-      "title": "Implement flight search CLI entry point core logic",
+      "id": "SKY-003-A",
+      "title": "Implement flight search CLI entry point (src/cli.ts)",
       "agentRole": "typescript-engineer",
       "agentGroup": "primary",
-      "status": "completed",
-      "completed": true,
-      "description": "Create `src/cli.ts` — a standalone Node entry point that accepts flight search arguments via `process.argv` and prints results as an aligned table. Parse flags manually (no commander, no yargs, zero new runtime deps). Require `RAPIDAPI_KEY` env var; exit 1 with a human-readable message if absent. Instantiate `SkyscannerClient` from `src/skyscanner/client.ts` (SKY-002), call `searchFlights` forwarding all parsed arguments including adults count, and render results in a dynamically-padded table with columns: Airline | Price | Departure | Arrival | Duration | Stops. Column widths are determined by the widest value in each column (including the header). A separator row of hyphen characters must appear between the header and data rows. Price is right-aligned and prefixed with the currency symbol returned by the API (default £ if absent); all other columns are left-aligned. If no flights are returned print `No flights found.` and exit 0. On any thrown error print the message to stderr and exit 1.",
+      "status": "pending",
+      "completed": false,
+      "description": "Create `src/cli.ts` — a standalone Node entry point that accepts flight search arguments via `process.argv` and prints results as an aligned table. Parse flags manually (no commander, no yargs, zero new runtime deps). Require `RAPIDAPI_KEY` env var; exit 1 with a human-readable message if absent. Instantiate `SkyscannerClient` from `src/skyscanner/client.ts` (SKY-002), call `searchFlights` forwarding all parsed arguments including adults count, and render results in a dynamically-padded table. The compiled output must be invokable as `node dist/cli.js ...` after `tsc`.",
       "acceptanceCriteria": [
-        "`src/cli.ts` exists and `tsc --noEmit` reports zero errors",
-        "`tsconfig.json` sets `outDir` to `dist` and emits a module format compatible with `node dist/cli.js` invocation (CommonJS or ESM with .mjs extension consistently applied)",
-        "Flags `--from`, `--to`, and `--date` are all required; if any is absent the CLI prints a usage hint to stderr (showing correct flag names) and exits with code 2",
-        "The `--date` flag value must match the pattern `YYYY-MM-DD`; a value that does not match this format causes exit code 2 with a human-readable message written to stderr before any network call is made",
-        "Optional `--adults` flag defaults to 1 when omitted; a non-integer value, a value ≤ 0, or a non-numeric string causes exit code 2 with a human-readable message to stderr",
+        "`src/cli.ts` exists and `tsc --noEmit` reports zero errors; `tsconfig.json` sets `outDir` to `dist` and emits CommonJS-compatible output invocable as `node dist/cli.js`",
+        "Flags `--from`, `--to`, `--date` are required; if any is absent the CLI prints a usage hint to stderr (showing correct flag names) and exits code 2; `--date` must match `YYYY-MM-DD` or exits 2 with a human-readable message to stderr before any network call",
+        "Optional `--adults` flag defaults to 1 when omitted; a non-integer, ≤0, or non-numeric value causes exit code 2 with a human-readable message to stderr",
         "The parsed `adults` value is forwarded as an argument to `SkyscannerClient.searchFlights` — the flag is not silently dropped",
-        "If `RAPIDAPI_KEY` env var is unset or empty, CLI prints 'Error: RAPIDAPI_KEY environment variable is required' to stderr and exits 1 before making any network call"
+        "If `RAPIDAPI_KEY` env var is unset or empty, CLI prints 'Error: RAPIDAPI_KEY environment variable is required' to stderr and exits 1 before making any network call",
+        "When `searchFlights` resolves with one or more results, stdout contains: a header row (Airline, Price, Departure, Arrival, Duration, Stops), a separator row of hyphens matching each column width, and one data row per result; all columns padded to the widest value in that column (including header); all columns left-aligned except Price which is right-aligned",
+        "Price column values are prefixed with the currency symbol from the API response; if the API response omits a currency symbol, £ is used as the fallback",
+        "When `searchFlights` resolves with an empty array, stdout contains exactly the line `No flights found.` and process exits 0; when `searchFlights` rejects, the error message is written to stderr, stdout is empty, and process exits 1"
       ],
       "technicalNotes": {
         "files": [
@@ -889,42 +750,62 @@
       "effort": "low",
       "cpaConfidence": 0.85,
       "cpaGate": "review",
-      "aiProvider": "qwen",
-      "model": "moonshotai/kimi-k2",
+      "aiProvider": "minimax",
+      "model": "MiniMax-M2.5",
       "dependencies": [
         "SKY-002"
       ],
+      "testCriteria": {
+        "facts": [],
+        "sourceFiles": [],
+        "mockStrategy": "",
+        "bannedPatterns": [],
+        "implStory": null
+      },
       "reasoningEffort": "low",
       "specification": {
         "createdFrom": "SKY-003",
-        "createdAt": "2026-07-12T13:45:09.516Z",
-        "runId": "20260712T134207Z",
+        "createdAt": "2026-07-16T09:55:58.060Z",
+        "runId": "20260716T094508Z",
         "splitDepth": 1,
-        "splitOrigin": "mid-execution",
-        "speckitValidated": true,
-        "speckitValidatedAt": "2026-07-12T13:51:07.703Z"
+        "splitOrigin": "spec-pass",
+        "modelUpgrade": {
+          "from": "moonshotai/kimi-k2",
+          "to": "MiniMax-M2.5",
+          "ruleSignals": {
+            "acCount": 8,
+            "singleFile": true,
+            "htmlOutput": false,
+            "selfContained": false
+          },
+          "ruleReason": "no upgrade signal detected",
+          "llmOverride": false,
+          "llmReason": "8 ACs on a CLI entry point with moderate output (~500-600 tokens estimated); under the 1000-token threshold, mini-tier sufficient.",
+          "llmConfidence": "high",
+          "veryHighComplexity": false,
+          "veryHighReason": "",
+          "upgradedAt": "2026-07-16T10:05:54.841Z"
+        }
       },
-      "ladderTier": "high",
-      "completedAt": "2026-07-12T10:07:37-04:00",
-      "actualCost": 0.022641
+      "ladderTier": "high"
     },
     {
-      "id": "SKY-003-test",
-      "title": "Test flight search CLI entry point implementation",
+      "id": "SKY-003-B",
+      "title": "Test flight search CLI entry point (src/cli.test.ts)",
       "agentRole": "test-engineer",
       "agentGroup": "primary",
-      "status": "failed",
+      "status": "pending",
       "completed": false,
-      "description": "Create `src/cli.test.ts` covering argument validation, successful render, empty-result render, missing env var, and error handling using vitest with `SkyscannerClient` mocked at the module boundary. The compiled output must be invokable as `node dist/cli.js ...` after `tsc`; `tsconfig.json` must have `outDir` set to `dist` and emit CommonJS-compatible output.",
+      "description": "Create `src/cli.test.ts` covering argument validation, successful render, empty-result render, missing env var, and error handling using vitest with `SkyscannerClient` mocked at the module boundary. Tests must verify table formatting details including separator row presence and column alignment.",
       "acceptanceCriteria": [
-        "When `searchFlights` resolves with one or more results, stdout contains: (a) a header row with columns Airline, Price, Departure, Arrival, Duration, Stops; (b) a separator row of hyphen characters whose width matches each column exactly; (c) one data row per result; all columns padded to the width of the widest value in that column (including the header label)",
-        "All columns except Price are left-aligned within their padded width; the Price column is right-aligned within its padded width",
-        "Price column values are prefixed with the currency symbol from the API response; if the API response omits a currency symbol, £ is used as the fallback",
-        "When `searchFlights` resolves with an empty array, stdout contains exactly the line `No flights found.` and process exits 0",
-        "When `searchFlights` rejects, the error message is written to stderr and process exits 1; stdout is empty",
-        "`src/cli.test.ts` contains at least 8 passing vitest tests covering: missing --from, missing --to, missing --date, invalid --adults value, missing RAPIDAPI_KEY env var, table rendered correctly for valid multi-row results (verify separator row present and column alignment), empty-array result renders 'No flights found.', and error path (client throws)",
-        "`vitest run` exits 0 with all tests green",
-        "No runtime dependency other than Node built-ins and packages already in `package.json` (from SKY-001/SKY-002) is added"
+        "`src/cli.test.ts` exists and uses vitest with `SkyscannerClient` mocked at the module boundary",
+        "Test covers missing `--from` flag: CLI prints usage hint to stderr and exits code 2",
+        "Test covers missing `--to` flag: CLI prints usage hint to stderr and exits code 2",
+        "Test covers missing `--date` flag: CLI prints usage hint to stderr and exits code 2",
+        "Test covers invalid `--adults` value (non-integer, ≤0, or non-numeric): exits code 2 with message to stderr",
+        "Test covers missing `RAPIDAPI_KEY` env var: prints 'Error: RAPIDAPI_KEY environment variable is required' to stderr and exits 1",
+        "Test covers valid multi-row results: verifies header row, separator row of hyphens, data rows, column padding, left-alignment (all columns except Price), and right-alignment (Price column)",
+        "Test covers empty-array result: stdout contains exactly 'No flights found.' and exits 0; test covers error path (client throws): error message on stderr, stdout empty, exits 1; `vitest run` exits 0 with all tests green"
       ],
       "technicalNotes": {
         "files": [
@@ -937,333 +818,52 @@
       "estimate": 15,
       "estimatedAiMinutes": 5.4214,
       "estimatedCost": 0.1693,
-      "estimatedTokens": 654230,
+      "estimatedTokens": 654204,
       "estimatedTurns": 18,
       "estimatedHours": 0.0903,
       "effort": "low",
       "cpaConfidence": 0.75,
       "cpaGate": "review",
-      "aiProvider": "qwen",
-      "model": "z-ai/glm-5.1",
+      "aiProvider": "minimax",
+      "model": "MiniMax-M2.5",
       "dependencies": [
         "SKY-002",
-        "SKY-003-impl"
+        "SKY-003-A"
       ],
+      "testCriteria": {
+        "facts": [],
+        "sourceFiles": [],
+        "mockStrategy": "",
+        "bannedPatterns": [],
+        "implStory": null
+      },
       "reasoningEffort": "low",
       "specification": {
         "createdFrom": "SKY-003",
-        "createdAt": "2026-07-12T13:45:09.516Z",
-        "runId": "20260712T134207Z",
-        "splitDepth": 1,
-        "splitOrigin": "mid-execution",
-        "speckitValidated": true,
-        "speckitValidatedAt": "2026-07-12T13:51:07.704Z"
-      },
-      "ladderTier": "high",
-      "testCriteria": {
-        "verifiedAt": "2025-01-23T20:45:00Z",
-        "sourceFiles": [
-          "src/cli.ts",
-          "src/skyscanner/client.ts"
-        ],
-        "facts": [
-          "CLI entry point is at src/cli.ts with shebang #!/usr/bin/env node",
-          "CLI imports SkyscannerClient from './skyscanner/client.js' (note .js extension)",
-          "parseArgs function extracts --from, --to, --date, --adults from process.argv",
-          "Missing --from, --to, or --date triggers printUsage() and process.exit(2)",
-          "printUsage outputs: 'Usage: node dist/cli.js --from <origin> --to <destination> --date <YYYY-MM-DD> [--adults <number>]' to stderr via console.error",
-          "Date validation uses regex /^\\d{4}-\\d{2}-\\d{2}$/ and new Date() instanceof check",
-          "Invalid date format triggers: console.error('Error: --date must be in YYYY-MM-DD format') and process.exit(2)",
-          "Adults validation: !isNaN(adults) && adults > 0 && Number.isInteger(adults) — adults=0 is INVALID, negative is INVALID",
-          "Invalid adults value triggers: console.error('Error: --adults must be a positive integer') and process.exit(2)",
-          "Missing RAPIDAPI_KEY env var triggers: console.error('Error: RAPIDAPI_KEY environment variable is required') and process.exit(1)",
-          "SkyscannerClient constructor accepts { apiKey } object parameter",
-          "client.searchFlights() is called with params: { origin: args.from, destination: args.to, date: args.date, adults } — note 'origin' not 'from', 'destination' not 'to'",
-          "Empty results array triggers: console.log('No flights found.') and process.exit(0)",
-          "Error catch block: const message = error instanceof Error ? error.message : String(error); console.error(message); process.exit(1)",
-          "renderTable headers are: ['Airline', 'Price', 'Departure', 'Arrival', 'Duration', 'Stops']",
-          "renderTable uses padRight for all columns except Price (index 1) which uses padLeft",
-          "padRight uses str.padEnd(width, ' ')",
-          "padLeft uses str.padStart(width, ' ')",
-          "Price formatting: `${r.currency || '£'}${r.price.toFixed(2)}` — fallback to £ symbol when currency is falsy",
-          "Duration formatting: `${hours}h ${mins}m` where hours = Math.floor(minutes / 60), mins = minutes % 60",
-          "Separator row: widths.map(w => '-'.repeat(w)).join(' | ')",
-          "Table row join uses ' | ' delimiter",
-          "Column widths calculated as: Math.max(header.length, max data width in column)",
-          "No --cheapest flag exists in parseArgs switch statement",
-          "No validation for adults upper bound — very large numbers accepted",
-          "No validation that from/to are IATA codes or non-empty strings",
-          "process.exit codes: 2 for validation errors, 1 for API errors, 0 for success/empty results"
-        ],
-        "mockStrategy": "Use vi.mock('./skyscanner/client.js', () => ({ SkyscannerClient: vi.fn() })) with vi.hoisted to define mock class that returns { searchFlights: vi.fn() }, and use beforeEach(() => { vi.clearAllMocks(); }) to reset between tests",
-        "bannedPatterns": [
-          "import { SkyscannerClient } from './skyscanner/client'",
-          "import { SkyscannerClient } from './client'",
-          "origin",
-          "destination",
-          "--cheapest",
-          "searchFlights({ from:",
-          "searchFlights({ to:",
-          "process.exit(2)",
-          "jest",
-          "@jest/globals",
-          "mockResolvedValue",
-          "mockRejectedValue",
-          "toHaveBeenCalled",
-          "toHaveBeenCalledWith",
-          "table.toContain('Airline | Price')",
-          "table.toContain('Airline|Price')",
-          "align.*right.*Airline",
-          "align.*left.*Price",
-          "currency.*fallback.*$",
-          "currency.*default.*USD"
-        ]
-      },
-      "lastAttempt": "2026-07-12T11:11:07-04:00",
-      "actualCost": 0.285382
-    },
-    {
-      "id": "SKY-004-impl",
-      "title": "Implement Express REST API server with health, search, cheapest, and dashboard endpoints",
-      "agentRole": "typescript-engineer",
-      "agentGroup": "primary",
-      "status": "deprecated",
-      "completed": false,
-      "description": "Implement src/server.ts — an Express HTTP server that exposes GET /health, GET /search, GET /cheapest, and GET / endpoints with proper routing, middleware, and file serving logic",
-      "acceptanceCriteria": [
-        "src/server.ts exports a named `app` (Express instance) separately from the `listen()` call so supertest can import it without binding a port",
-        "The `listen()` call in src/server.ts is guarded by `import { pathToFileURL } from 'url'` and the condition `if (import.meta.url === pathToFileURL(process.argv[1]).href)` (ESM output) or `if (require.main === module)` (CJS output) — the guard form must match the tsup output format so that `vitest run` never binds a port",
-        "GET /health returns HTTP 200 with Content-Type application/json and body matching { status: 'ok', uptime: <positive number> }",
-        "GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent — the health endpoint is never gated by API key presence",
-        "GET / returns HTTP 200 with Content-Type matching text/html and response body equal to the contents of src/public/index.html, READ FROM THAT FILE AT RUNTIME (e.g. fs.readFileSync) — a hardcoded/duplicated inline HTML string in server.ts that happens to match is NOT acceptable; this route is never gated by RAPIDAPI_KEY",
-        "src/public/index.html exists and is a real, styled single-page dashboard (not a placeholder) matching this concrete layout: (1) a full-width solid-color header bar (e.g. blue #1a73e8) containing a bold white title 'Skyscanner Dashboard' and a smaller subtitle line below it ('Search flights via the Skyscanner API' or equivalent); (2) below the header, a centered white card (max-width ~700px, rounded corners, light border, padding) containing a search form laid out as a 2-column grid: 'From (IATA)' and 'To (IATA)' text inputs on row 1, 'Date' (native date input) and 'Adults' (number input, default 1) on row 2, each with a label above the input; (3) a full-width solid-color button below the grid, same color as the header, labeled 'Search Flights'; (4) a status/message area below the button that shows a light-red/pink banner with red text for errors (e.g. 'Failed to fetch flights'), a muted-gray line for empty results ('No flights found'), and a result count on success; (5) client-side JavaScript that submits the form via GET /search (no full page reload), disables the button while the request is in flight, and renders returned flights into a results table (or the appropriate status message) in the same page",
-        "GET /search with valid query params (from, to, date, adults) returns HTTP 200 with body { flights: FlightResult[], count: number, searchedAt: ISO-8601 string } where count strictly equals flights.length",
-        "GET /search missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }",
-        "When the `adults` query param is absent on GET /search, the request succeeds (HTTP 200) with a default value of 1 passed to SkyscannerClient — `adults` is optional, not required",
-        "When the `adults` query param is present but non-numeric (e.g. 'abc', ''), GET /search returns HTTP 400 with Content-Type application/json and body { error: string }"
-      ],
-      "technicalNotes": {
-        "files": [
-          "/home/bradleyjerome/projects/skyscanner-app/src/server.ts"
-        ],
-        "dependsOn": [
-          "SKY-002"
-        ]
-      },
-      "estimate": 25,
-      "estimatedAiMinutes": 2.7321,
-      "estimatedCost": 0.5351,
-      "estimatedTokens": 371296,
-      "estimatedTurns": 9,
-      "estimatedHours": 0.0455,
-      "effort": "high",
-      "cpaConfidence": 0.65,
-      "cpaGate": "review",
-      "aiProvider": "qwen",
-      "model": "moonshotai/kimi-k2",
-      "dependencies": [
-        "SKY-002"
-      ],
-      "reasoningEffort": "high",
-      "specification": {
-        "createdFrom": "SKY-004",
-        "createdAt": "2026-07-12T13:46:58.259Z",
-        "runId": "20260712T134207Z",
-        "splitDepth": 1,
-        "splitOrigin": "spec-pass",
-        "splitRejected": true,
-        "splitRejectionReason": "same-file coherence violation: multiple children write to the same file"
-      },
-      "ladderTier": "high"
-    },
-    {
-      "id": "SKY-004-test",
-      "title": "Implement tests for Express REST API server with health, search, cheapest, and dashboard endpoints",
-      "agentRole": "test-engineer",
-      "agentGroup": "primary",
-      "status": "deprecated",
-      "completed": false,
-      "description": "Create src/server.test.ts using vitest + supertest with at least 8 tests covering the scenarios in acceptance criteria for the server implementation",
-      "acceptanceCriteria": [
-        "GET /cheapest with valid required query params (from, to, date) returns HTTP 200 with a single FlightResult whose `price` field is less than or equal to the `price` field of every FlightResult returned by SkyscannerClient for the same route/date (validated against a mocked client response); if `adults` is supplied it is forwarded, if absent it defaults to 1",
-        "GET /cheapest returns HTTP 404 with Content-Type application/json and body { error: string } when SkyscannerClient returns an empty array for the given route/date",
-        "GET /cheapest missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }",
-        "When RAPIDAPI_KEY env var is absent at server initialisation, a single middleware (or equivalent) short-circuits GET /search and GET /cheapest with HTTP 503 Content-Type application/json body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected and return their normal responses",
-        "When SkyscannerClient throws an error during a /search or /cheapest request (e.g. network failure, upstream 5xx), the server returns HTTP 500 with Content-Type application/json and body { error: string } and does not crash or emit an unhandled promise rejection",
-        "The `searchedAt` field in the GET /search response is an ISO-8601 datetime string reflecting the time of the request (not a hardcoded value); successive requests separated by at least 1 ms return distinct values",
-        "The FlightResult type used in src/server.ts is imported from the SKY-002 type export (e.g. src/skyscanner/client.ts) and not redeclared inline — type definitions must not diverge between the client and server layers",
-        "src/server.test.ts contains at least 8 vitest tests, each covering a distinct scenario from the criteria above, with SkyscannerClient mocked (vi.mock or equivalent) so no real HTTP calls are made during `vitest run`",
-        "`npx tsc --noEmit` exits 0 with no type errors",
-        "`vitest run` exits 0 with all tests passing"
-      ],
-      "technicalNotes": {
-        "files": [
-          "/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts"
-        ],
-        "dependsOn": [
-          "SKY-002"
-        ]
-      },
-      "estimate": 25,
-      "estimatedAiMinutes": 2.7321,
-      "estimatedCost": 0.5351,
-      "estimatedTokens": 371202,
-      "estimatedTurns": 9,
-      "estimatedHours": 0.0455,
-      "effort": "high",
-      "cpaConfidence": 0.65,
-      "cpaGate": "pass",
-      "aiProvider": "qwen",
-      "model": "moonshotai/kimi-k2",
-      "dependencies": [
-        "SKY-002",
-        "SKY-004-impl",
-        "SKY-004-impl-1"
-      ],
-      "reasoningEffort": "high",
-      "specification": {
-        "createdFrom": "SKY-004",
-        "createdAt": "2026-07-12T13:46:58.259Z",
-        "runId": "20260712T134207Z",
-        "splitDepth": 1,
-        "splitOrigin": "spec-pass",
-        "splitRejected": true,
-        "splitRejectionReason": "same-file coherence violation: multiple children write to the same file"
-      },
-      "ladderTier": "high"
-    },
-    {
-      "id": "SKY-004-impl-1",
-      "title": "Implement Express REST API server with health, search, cheapest, and dashboard endpoints",
-      "agentRole": "typescript-engineer",
-      "agentGroup": "primary",
-      "status": "deprecated",
-      "completed": false,
-      "description": "Implement src/server.ts — an Express HTTP server that exposes GET /health, GET /search, GET /cheapest, and GET / endpoints with proper routing, middleware, and file serving logic",
-      "acceptanceCriteria": [
-        "src/server.ts exports a named `app` (Express instance) separately from the `listen()` call so supertest can import it without binding a port",
-        "GET /health returns HTTP 200 with Content-Type application/json and body matching { status: 'ok', uptime: <positive number> }",
-        "GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent — the health endpoint is never gated by API key presence",
-        "GET / returns HTTP 200 with Content-Type matching text/html and response body equal to the contents of src/public/index.html, READ FROM THAT FILE AT RUNTIME (e.g. fs.readFileSync) — a hardcoded/duplicated inline HTML string in server.ts that happens to match is NOT acceptable; this route is never gated by RAPIDAPI_KEY",
-        "src/public/index.html exists and is a real, styled single-page dashboard (not a placeholder) matching this concrete layout: (1) a full-width solid-color header bar (e.g. blue #1a73e8) containing a bold white title 'Skyscanner Dashboard' and a smaller subtitle line below it ('Search flights via the Skyscanner API' or equivalent); (2) below the header, a centered white card (max-width ~700px, rounded corners, light border, padding) containing a search form laid out as a 2-column grid: 'From (IATA)' and 'To (IATA)' text inputs on row 1, 'Date' (native date input) and 'Adults' (number input, default 1) on row 2, each with a label above the input; (3) a full-width solid-color button below the grid, same color as the header, labeled 'Search Flights'; (4) a status/message area below the button that shows a light-red/pink banner with red text for errors (e.g. 'Failed to fetch flights'), a muted-gray line for empty results ('No flights found'), and a result count on success; (5) client-side JavaScript that submits the form via GET /search (no full page reload), disables the button while the request is in flight, and renders returned flights into a results table (or the appropriate status message) in the same page",
-        "GET /search with valid query params (from, to, date, adults) returns HTTP 200 with body { flights: FlightResult[], count: number, searchedAt: ISO-8601 string } where count strictly equals flights.length",
-        "GET /search missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }",
-        "When the `adults` query param is absent on GET /search, the request succeeds (HTTP 200) with a default value of 1 passed to SkyscannerClient — `adults` is optional, not required",
-        "When the `adults` query param is present but non-numeric (e.g. 'abc', ''), GET /search returns HTTP 400 with Content-Type application/json and body { error: string }",
-        "GET /cheapest with valid required query params (from, to, date) returns HTTP 200 with a single FlightResult whose `price` field is less than or equal to the `price` field of every FlightResult returned by SkyscannerClient for the same route/date (validated against a mocked client response); if `adults` is supplied it is forwarded, if absent it defaults to 1",
-        "GET /cheapest returns HTTP 404 with Content-Type application/json and body { error: string } when SkyscannerClient returns an empty array for the given route/date",
-        "GET /cheapest missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }",
-        "When RAPIDAPI_KEY env var is absent at server initialisation, a single middleware (or equivalent) short-circuits GET /search and GET /cheapest with HTTP 503 Content-Type application/json body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected and return their normal responses",
-        "When SkyscannerClient throws an error during a /search or /cheapest request (e.g. network failure, upstream 5xx), the server returns HTTP 500 with Content-Type application/json and body { error: string } and does not crash or emit an unhandled promise rejection",
-        "The `searchedAt` field in the GET /search response is an ISO-8601 datetime string reflecting the time of the request (not a hardcoded value); successive requests separated by at least 1 ms return distinct values",
-        "The FlightResult type used in src/server.ts is imported from the SKY-002 type export (e.g. src/skyscanner/client.ts) and not redeclared inline — type definitions must not diverge between the client and server layers",
-        "The server handles the case where `src/public/index.html` is missing or unreadable in a graceful way, returning an HTTP 500 error with proper error message",
-        "The server sets appropriate CORS headers (Access-Control-Allow-Origin: *, Access-Control-Allow-Methods: GET, POST, OPTIONS) for all routes except /health",
-        "All string literals in the server's response body are sanitized to prevent XSS vulnerabilities in the HTML response",
-        "The server sanitizes user-provided inputs to GET /search and GET /cheapest to prevent injection attacks, especially in the 'from' and 'to' IATA code fields",
-        "GET /search and GET /cheapest handle invalid 'date' values gracefully, by returning HTTP 400 with { error: string } that explains the invalid format",
-        "The server does not expose sensitive environment variables in error responses or logs",
-        "The server implements rate limiting for GET /search and GET /cheapest to prevent abuse (e.g. 10 requests per minute per IP)",
-        "GET /cheapest response includes a `cheapestPrice` field in the FlightResult which matches the lowest price among all returned flights"
-      ],
-      "technicalNotes": {
-        "files": [
-          "/home/bradleyjerome/projects/skyscanner-app/src/server.ts"
-        ],
-        "dependsOn": [
-          "SKY-002"
-        ]
-      },
-      "estimate": 25,
-      "estimatedAiMinutes": 2.7321,
-      "estimatedCost": 0.5352,
-      "estimatedTokens": 371256,
-      "estimatedTurns": 9,
-      "estimatedHours": 0.0455,
-      "effort": "high",
-      "cpaConfidence": 0.65,
-      "cpaGate": "review",
-      "aiProvider": "minimax",
-      "model": "MiniMax-M3",
-      "dependencies": [
-        "SKY-002"
-      ],
-      "reasoningEffort": "high",
-      "specification": {
-        "createdFrom": "SKY-004",
-        "createdAt": "2026-07-12T13:47:45.804Z",
-        "runId": "20260712T134207Z",
+        "createdAt": "2026-07-16T09:55:58.060Z",
+        "runId": "20260716T094508Z",
         "splitDepth": 1,
         "splitOrigin": "spec-pass",
         "modelUpgrade": {
           "from": "moonshotai/kimi-k2",
-          "to": "MiniMax-M3",
+          "to": "MiniMax-M2.5",
           "ruleSignals": {
-            "acCount": 24,
-            "singleFile": true,
+            "acCount": 8,
+            "singleFile": false,
             "htmlOutput": false,
             "selfContained": false
           },
-          "ruleReason": "24 ACs on a single output file exceeds mini-tier generation capacity",
-          "llmOverride": true,
-          "llmReason": "24 ACs on a single output file exceed mini-tier capabilities, requiring standard-tier for reliable completion.",
+          "ruleReason": "no upgrade signal detected",
+          "llmOverride": false,
+          "llmReason": "8 ACs writing tests against existing contracts; no large generation needed, mini-tier appropriate.",
           "llmConfidence": "high",
-          "upgradedAt": "2026-07-12T13:48:11.776Z"
-        },
-        "splitRejected": true,
-        "splitRejectionReason": "same-file coherence violation: multiple children write to the same file"
-      },
-      "ladderTier": "high"
-    },
-    {
-      "id": "SKY-004-test-1",
-      "title": "Implement tests for Express REST API server with health, search, cheapest, and dashboard endpoints",
-      "agentRole": "test-engineer",
-      "agentGroup": "primary",
-      "status": "deprecated",
-      "completed": false,
-      "description": "Create src/server.test.ts using vitest + supertest with at least 8 tests covering the scenarios in acceptance criteria for the server implementation",
-      "acceptanceCriteria": [
-        "src/server.test.ts contains at least 8 vitest tests, each covering a distinct scenario from the criteria above, with SkyscannerClient mocked (vi.mock or equivalent) so no real HTTP calls are made during `vitest run`",
-        "`npx tsc --noEmit` exits 0 with no type errors",
-        "`vitest run` exits 0 with all tests passing"
-      ],
-      "technicalNotes": {
-        "files": [
-          "/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts"
-        ],
-        "dependsOn": [
-          "SKY-002"
-        ]
-      },
-      "estimate": 25,
-      "estimatedAiMinutes": 2.7321,
-      "estimatedCost": 0.5354,
-      "estimatedTokens": 371502,
-      "estimatedTurns": 9,
-      "estimatedHours": 0.0455,
-      "effort": "high",
-      "cpaConfidence": 0.65,
-      "cpaGate": "review",
-      "aiProvider": "qwen",
-      "model": "moonshotai/kimi-k2",
-      "dependencies": [
-        "SKY-002",
-        "SKY-004-impl",
-        "SKY-004-impl-1"
-      ],
-      "reasoningEffort": "high",
-      "specification": {
-        "createdFrom": "SKY-004",
-        "createdAt": "2026-07-12T13:47:45.804Z",
-        "runId": "20260712T134207Z",
-        "splitDepth": 1,
-        "splitOrigin": "spec-pass",
-        "splitRejected": true,
-        "splitRejectionReason": "same-file coherence violation: multiple children write to the same file"
+          "veryHighComplexity": false,
+          "veryHighReason": "",
+          "upgradedAt": "2026-07-16T10:05:54.841Z"
+        }
       },
       "ladderTier": "high"
     }
   ],
-  "currentIteration": 11
+  "currentIteration": 7
 }

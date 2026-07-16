@@ -53,7 +53,7 @@ describe('AC-write reviewPrdChange consumer — retry-on-violation (static)', ()
   });
 
   it('re-applies applySpecChanges and re-reviews inside the retry loop (in addition to the initial application before this block)', () => {
-    const occurrences = [...block.matchAll(/changes = applySpecChanges\(story, payload, newStories, prd, opts\.phase, runId\)/g)];
+    const occurrences = [...block.matchAll(/changes = applySpecChanges\(story, payload, newStories, prd, opts\.phase, runId(?:, logDir)?\)/g)];
     expect(occurrences.length).toBeGreaterThanOrEqual(1);
     const reviewOccurrences = [...block.matchAll(/await reviewPrdChange\(\{/g)];
     expect(reviewOccurrences.length).toBeGreaterThanOrEqual(2); // initial call + at least one retry re-review

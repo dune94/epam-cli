@@ -11,11 +11,27 @@
  * 'SKY-004', 'SKY-002']" — all three were delegated parents, not real test
  * stories.
  *
- * spec-mode-runner.js now marks a delegated parent status='deprecated',
- * completed=true, and removes it from implementationOrder at split time (see
- * split-enforcement.test.ts) — this is the second line of defense directly
- * in the TC writer's own scan, for any story that slips through with those
- * fields still set despite being present in implementationOrder.
+ * spec-mode-runner.js marks a delegated parent status='deprecated' and
+ * removes it from implementationOrder at split time (see
+ * split-enforcement.test.ts) — status='deprecated' is the actual, specific
+ * signal for this case, checked directly in the TC writer's own scan below.
+ *
+ * REMOVED (found live, 2026-07-14, tier3-travel-app run — SKY-004): the skip
+ * used to ALSO fire on any story with completed == True, on the theory that
+ * a delegated parent gets marked completed too ("belt-and-suspenders"). But
+ * this BATCH gate (Step 1.6) only ever runs AFTER Step 1/3.2, by which point
+ * EVERY story it examines is, by construction, already completed — that's
+ * the entire premise of running it post-execution. The completed-exclusion
+ * therefore silently no-op'd this script for every genuinely-finished combo
+ * story (impl+test files together, e.g. SKY-004: src/server.ts +
+ * src/server.test.ts) and every worktree-lane pure-test story once it
+ * completed. The CALLER's own "needs TC" query (Step 1.6 in
+ * run-agent-orchestration.sh) has no such completed-exclusion, so it kept
+ * seeing SKY-004 as needing a TC, retried 3 times against a script that
+ * always no-op'd, then permanently BLOCKED a story with real, already-
+ * verified (tsc + external tests passed) work over this bookkeeping
+ * mismatch. status='deprecated' alone is now the only skip signal — it is
+ * both necessary and sufficient for the delegated-parent case.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -37,9 +53,12 @@ function extractTcNeededBlock(): string {
 describe('post-impl-tc-writer.sh — delegated-parent skip (static)', () => {
   const block = extractTcNeededBlock();
 
-  it("checks status == 'deprecated' or completed is True before treating a story as needing a TC", () => {
+  it("checks status == 'deprecated' before treating a story as needing a TC", () => {
     expect(block).toMatch(/s\.get\('status'\) == 'deprecated'/);
-    expect(block).toMatch(/s\.get\('completed'\) is True/);
+  });
+
+  it("does NOT also skip on completed is True (removed 2026-07-14 — see file docstring)", () => {
+    expect(block).not.toMatch(/s\.get\('completed'\) is True/);
   });
 
   it('the skip check runs before the test-story/already-has-TC logic (short-circuits early)', () => {
@@ -101,14 +120,39 @@ describe('post-impl-tc-writer.sh — delegated-parent skip REAL execution', () =
     expect(result).toContain('SKY-002-test');
   });
 
-  it('skips a story marked completed=true even without status=deprecated (belt-and-suspenders)', () => {
-    const completedOnly = {
+  // REPRODUCES the exact live defect (SKY-004, 2026-07-14, tier3-travel-app
+  // run) and proves the fix: a genuinely-completed COMBO story (owns both
+  // src/server.ts and src/server.test.ts, real work, not a delegated split
+  // parent) must still be flagged as needing a TC. Before the fix, this
+  // silently no-op'd because the writer only checks completed==True for
+  // EVERY story it examines here (this batch gate always runs post-Step-1) —
+  // the caller's own "needs TC" query then retried 3 times against a script
+  // that always no-op'd, and permanently BLOCKED a story with real,
+  // already-verified work over this bookkeeping mismatch.
+  it('does NOT skip a genuinely-completed combo story (real work, not a delegated parent) — this used to be the SKY-004 live defect', () => {
+    const completedComboStory = {
+      id: 'SKY-004',
+      status: 'completed',
+      completed: true,
+      technicalNotes: { files: ['src/server.ts', 'src/server.test.ts'] },
+      testCriteria: { facts: [] },
+    };
+    const result = runTcNeededScan({
+      stories: [completedComboStory],
+      implementationOrder: { core: ['SKY-004'] },
+    });
+    expect(result).toContain('SKY-004');
+  });
+
+  it('a completed story is still correctly skipped when it IS a delegated parent (status=deprecated, the real signal)', () => {
+    const delegatedParent = {
       id: 'SKY-003',
+      status: 'deprecated',
       completed: true,
       technicalNotes: { files: ['src/cli.ts', 'src/cli.test.ts'] },
     };
     const result = runTcNeededScan({
-      stories: [completedOnly],
+      stories: [delegatedParent],
       implementationOrder: { core: ['SKY-003'] },
     });
     expect(result).not.toContain('SKY-003');

@@ -48,11 +48,25 @@ describe('run-agent-orchestration.sh — TC-density model upgrade wiring', () =>
     expect(orchSrc).toMatch(/maybe_upgrade_model_for_tc_density\s*\(\)/);
   });
 
-  it('is called right after the inline TC writer succeeds, before the story runs', () => {
-    const idx = orchSrc.indexOf('success "  TC writer populated testCriteria for $story');
+  // Relocated (2026-07-14): the inline TC writer gate itself now lives in
+  // the shared lib/tc-writer-gate.sh, applied identically to every lane
+  // (see tc-writer-retry-block.test.ts). It calls its own standalone
+  // upgrade helper (_tc_writer_gate_maybe_upgrade_model — same logic,
+  // duplicated so the lib has no cross-script dependency) right after a
+  // successful write, before the story runs, in every lane.
+  it('the shared inline TC writer gate calls its own upgrade helper right after success, before the story runs', () => {
+    // 2026-07-15: the TC-fact-density split mandate and VERY HIGH
+    // complexity checks (_tc_writer_gate_maybe_split_test_story,
+    // _tc_writer_gate_maybe_mark_very_high_complexity) now run BETWEEN the
+    // success log line and the upgrade-model call (split > very-high >
+    // mild upgrade priority — see tc-fact-density-split-and-very-high-
+    // complexity.test.ts for that ordering's own dedicated test) — widened
+    // window to clear them.
+    const gateSrc = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/lib/tc-writer-gate.sh'), 'utf8');
+    const idx = gateSrc.indexOf('success "  TC writer populated testCriteria for $story_id');
     expect(idx).toBeGreaterThan(-1);
-    const nextLines = orchSrc.slice(idx, idx + 300);
-    expect(nextLines).toMatch(/maybe_upgrade_model_for_tc_density "\$story" "\$\{_tc_inline_facts_len:-0\}"/);
+    const nextLines = gateSrc.slice(idx, idx + 2500);
+    expect(nextLines).toMatch(/_tc_writer_gate_maybe_upgrade_model "\$story_id" "\$\{_tc_gate_facts_len:-0\}"/);
   });
 });
 

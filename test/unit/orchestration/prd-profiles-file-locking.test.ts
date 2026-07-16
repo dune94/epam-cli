@@ -75,13 +75,17 @@ describe('file locking — wiring (static)', () => {
     expect(block.replace(/\n\s*#\s?/g, ' ')).toMatch(/can't be wrapped in a shell-level flock/);
   });
 
-  it('spec-mode-runner.js: both PRD write sites acquire/release the JS-side lock', () => {
+  it('spec-mode-runner.js: all 3 PRD write sites acquire/release the JS-side lock', () => {
+    // 2026-07-15: splitTestStoryCli() (--split-test-story) is a third PRD
+    // write site — reuses the SAME _prdLockPath variable name as run()'s
+    // (they're in different, non-overlapping functions), hence the plain
+    // (no "2" suffix) match also picking it up.
     expect(specRunnerSrc).toMatch(/function acquireFileLock/);
     expect(specRunnerSrc).toMatch(/function releaseFileLock/);
     const acquireCalls = (specRunnerSrc.match(/acquireFileLock\(_prdLockPath2?\)/g) || []).length;
     const releaseCalls = (specRunnerSrc.match(/releaseFileLock\(_prdLockPath2?\)/g) || []).length;
-    expect(acquireCalls).toBe(2);
-    expect(releaseCalls).toBe(2);
+    expect(acquireCalls).toBe(3);
+    expect(releaseCalls).toBe(3);
   });
 });
 

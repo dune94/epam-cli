@@ -20,6 +20,7 @@ export type ActivityEventType =
   | 'message_sent'     // inter-agent message
   | 'message_received'
   | 'spec_update'      // acceptance criteria change
+  | 'spec_pass_decision' // spec-mode-runner.js writes this directly
   | 'phase_start'
   | 'phase_complete'
   | 'error'

@@ -24,6 +24,11 @@ import { tmpdir } from 'node:os';
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SCRIPT = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 const orchSrc = readFileSync(ORCH_SCRIPT, 'utf8');
+// story_tsc_gate() now lives in lib/story-guards.sh (2026-07-14) — a single
+// shared implementation sourced by both run-agent-orchestration.sh (main
+// lane) and claude.sh (worktree lanes).
+const GUARDS_LIB = join(REPO_ROOT, 'orchestrations/scripts/lib/story-guards.sh');
+const guardsSrc = readFileSync(GUARDS_LIB, 'utf8');
 
 // Node binary that supports tsc (must be v18+)
 const NODE_BIN = (() => {
@@ -193,8 +198,8 @@ describe('B. Orch script — all 3 tsc gates have empty-src guard', () => {
   // ── Gate 1: story_tsc_gate() ──────────────────────────────────────────────
 
   describe('Gate 1: story_tsc_gate()', () => {
-    const fnIdx = orchSrc.indexOf('story_tsc_gate()');
-    const block = orchSrc.slice(fnIdx, fnIdx + 1600);
+    const fnIdx = guardsSrc.indexOf('story_tsc_gate()');
+    const block = guardsSrc.slice(fnIdx, fnIdx + 1600);
 
     it('story_tsc_gate() function exists', () => {
       expect(fnIdx).toBeGreaterThan(-1);
@@ -313,8 +318,8 @@ describe('B. Orch script — all 3 tsc gates have empty-src guard', () => {
   describe('Cross-gate consistency', () => {
     it('all 3 gates use find + grep -v node_modules + wc -l pattern', () => {
       const pattern = /find.*src.*-name.*\.ts.*grep.*node_modules.*wc -l/s;
-      const storyFnIdx = orchSrc.indexOf('story_tsc_gate()');
-      const storyBlock = orchSrc.slice(storyFnIdx, storyFnIdx + 1200);
+      const storyFnIdx = guardsSrc.indexOf('story_tsc_gate()');
+      const storyBlock = guardsSrc.slice(storyFnIdx, storyFnIdx + 1200);
       const preReviewIdx = orchSrc.indexOf('Running tsc --noEmit');
       const preReviewBlock = orchSrc.slice(preReviewIdx, preReviewIdx + 1000);
       const lintIdx = orchSrc.indexOf('step_emit "3.8" "running"');
@@ -326,8 +331,8 @@ describe('B. Orch script — all 3 tsc gates have empty-src guard', () => {
     });
 
     it('all 3 gates check -eq 0 (not -gt 0) so the guard is "skip when empty"', () => {
-      const storyFnIdx = orchSrc.indexOf('story_tsc_gate()');
-      const storyBlock = orchSrc.slice(storyFnIdx, storyFnIdx + 1200);
+      const storyFnIdx = guardsSrc.indexOf('story_tsc_gate()');
+      const storyBlock = guardsSrc.slice(storyFnIdx, storyFnIdx + 1200);
       const preReviewIdx = orchSrc.indexOf('Running tsc --noEmit');
       const preReviewBlock = orchSrc.slice(preReviewIdx, preReviewIdx + 1000);
       const lintIdx = orchSrc.indexOf('step_emit "3.8" "running"');
@@ -341,6 +346,7 @@ describe('B. Orch script — all 3 tsc gates have empty-src guard', () => {
     it('no gate uses bare `tsc --noEmit` inside an `if` condition (tee masks exit code)', () => {
       const brokenPattern = /if\s+[^;]*tsc\s+--noEmit[^;]*\|\s*tee/;
       expect(brokenPattern.test(orchSrc)).toBe(false);
+      expect(brokenPattern.test(guardsSrc)).toBe(false);
     });
   });
 });

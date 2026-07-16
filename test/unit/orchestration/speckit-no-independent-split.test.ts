@@ -88,14 +88,14 @@ describe('per-story loop — deterministic guard drops any splitStories speckit 
   });
 
   it('the guard runs BEFORE applySpecChanges is called, so a dropped splitStories can never reach it', () => {
-    const applyIdx = src.indexOf('let changes = applySpecChanges(story, payload, newStories, prd, opts.phase, runId);');
+    const applyIdx = src.indexOf('let changes = applySpecChanges(story, payload, newStories, prd, opts.phase, runId, logDir);');
     expect(applyIdx).toBeGreaterThan(guardIdx);
   });
 
   it('checkSplitMandateViolation\'s forced-retry (the real backstop) is untouched and still targets openspec only', () => {
     const mandateIdx = src.indexOf('let mandateCheck = checkSplitMandateViolation');
     expect(mandateIdx).toBeGreaterThan(-1);
-    const mandateBlock = src.slice(mandateIdx, mandateIdx + 900);
+    const mandateBlock = src.slice(mandateIdx, mandateIdx + 1100);
     expect(mandateBlock).toMatch(/agent:\s*'openspec'/);
   });
 });

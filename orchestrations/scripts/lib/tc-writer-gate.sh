@@ -47,6 +47,7 @@ run_inline_tc_writer_gate() {
     local _tc_gate_attempt=0
     local _tc_gate_facts_len=0
     local _tc_gate_exit=0
+    "$SCRIPT_DIR/update-monitor.sh" story_start "tc-writer-agent" "main" "tc-writer-agent" "TC Writer: $story_id" 2>/dev/null || true
     for _tc_gate_attempt in 1 2 3; do
         log "  Story $story_id needs testCriteria — running TC writer inline before it starts... (attempt ${_tc_gate_attempt}/3)"
         bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
@@ -116,6 +117,7 @@ run_inline_tc_writer_gate() {
     if [ "${_tc_gate_facts_len:-0}" -eq 0 ]; then
         error "  Inline TC writer gate: $story_id still has no testCriteria.facts after 3 attempts — BLOCKING this story (not aborting the phase)"
         error "  Check: $LOG_DIR/tc-writer-${phase}.log ; confirm $story_id is in implementationOrder.$phase"
+        "$SCRIPT_DIR/update-monitor.sh" story_fail "tc-writer-agent" "main" "no testCriteria after 3 attempts: $story_id" 2>/dev/null || true
         local _tc_gate_tmp
         _tc_gate_tmp=$(mktemp)
         chmod 644 "$_tc_gate_tmp" 2>/dev/null
@@ -126,6 +128,7 @@ run_inline_tc_writer_gate() {
             >> "$LOG_DIR/blocked-stories.jsonl" 2>/dev/null || true
         return 1
     fi
+    "$SCRIPT_DIR/update-monitor.sh" story_complete "tc-writer-agent" "main" "TC writer done: $story_id" 2>/dev/null || true
     return 0
 }
 
@@ -259,6 +262,12 @@ _tc_writer_gate_maybe_upgrade_model() {
 
     [ -z "${ORCH_UPGRADE_MODEL:-}" ] && return 0
     [ "$tc_facts_count" -le "$threshold" ] && return 0
+
+    # Skip if very-high-complexity already fired (skipLadder=true means we're at
+    # the ceiling model — ORCH_UPGRADE_MODEL is a mid-tier step and would downgrade it)
+    local _skip_ladder
+    _skip_ladder=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .skipLadder // false' "$prd_target" 2>/dev/null || echo "false")
+    [ "$_skip_ladder" = "true" ] && return 0
 
     local current_model
     current_model=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .model // ""' "$prd_target" 2>/dev/null || echo "")

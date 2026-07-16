@@ -8,12 +8,12 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #0f172a;  --bg1: #1e293b;  --bg2: #263248;  --bg3: #334155;
-  --surface: #1e293b;  --surface2: #263248;  --surface3: #334155;
-  --border: #334155;  --border2: #475569;
-  --text: #e2e8f0;  --text2: #94a3b8;  --text3: #64748b;  --text-muted: #94a3b8;
-  --teal: #38bdf8;  --teal2: #38bdf8;  --teal-dim: rgba(56,189,248,0.10);
-  --accent: #38bdf8;  --teal-glow: rgba(56,189,248,0.22);
+  --bg: #080808;  --bg1: #101010;  --bg2: #181818;  --bg3: #222222;
+  --surface: #101010;  --surface2: #181818;  --surface3: #222222;
+  --border: #2a2a2a;  --border2: #383838;
+  --text: #f0f0f0;  --text2: #a0a0a0;  --text3: #606060;  --text-muted: #a0a0a0;
+  --teal: #84cc16;  --teal2: #84cc16;  --teal-dim: rgba(132,204,22,.12);
+  --accent: #84cc16;  --teal-glow: rgba(132,204,22,.22);
   --violet: #a78bfa;  --violet2: #a78bfa;  --violet-dim: rgba(167,139,250,0.12);
   --green: #4ade80;  --green-dim: rgba(74,222,128,0.12);
   --amber: #fbbf24;  --amber-dim: rgba(251,191,36,0.12);
@@ -21,8 +21,8 @@
   --pink: #f472b6;  --pink-dim: rgba(244,114,182,0.10);
   --blue: #60a5fa;  --blue-dim: rgba(96,165,250,0.10);
   --orange: #fb923c;  --orange-dim: rgba(251,146,60,0.10);
-  --epam-gradient: linear-gradient(118.82deg, #0078c2 .5%, #0047ff 47.33%, #8453d2 76.12%);
-  --epam-cyan: #22d3ee;
+  --epam-gradient: linear-gradient(135deg, #a3e635 0%, #84cc16 100%);
+  --epam-cyan: #84cc16;
 }
 
 body {
@@ -36,8 +36,8 @@ body {
 
 /* ── Header ── */
 .header {
-  background: var(--epam-gradient);
-  border-bottom: 1px solid var(--border);
+  background: var(--bg1);
+  border-bottom: 1px solid rgba(132,204,22,.25);
   padding: 14px 28px;
   display: flex; align-items: center; justify-content: space-between;
   position: sticky; top: 0; z-index: 200;
@@ -46,21 +46,21 @@ body {
 .header-left { display: flex; align-items: center; gap: 12px; }
 .header-icon {
   width: 34px; height: 34px;
-  background: rgba(255,255,255,0.2);
+  background: rgba(132,204,22,.12);
   border-radius: 7px;
   display: flex; align-items: center; justify-content: center;
   font-size: 16px; flex-shrink: 0;
 }
 .header-title {
   font-size: 18px; font-weight: 800;
-  color: #ffffff;
+  color: var(--teal);
   letter-spacing: -0.3px;
 }
-.header-sub { color: rgba(255,255,255,0.7); font-size: 10px; margin-top: 1px; letter-spacing: 0.3px; }
+.header-sub { color: var(--text2); font-size: 10px; margin-top: 1px; letter-spacing: 0.3px; }
 .header-right { text-align: right; }
 .header-meta {
   display: flex; align-items: center; gap: 8px;
-  color: rgba(255,255,255,0.7); font-size: 11px; margin-bottom: 5px;
+  color: var(--text2); font-size: 11px; margin-bottom: 5px;
 }
 .live-dot {
   width: 7px; height: 7px; border-radius: 50%;
@@ -75,7 +75,7 @@ body {
 }
 .nav-links { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 24px 4px; }
 .nav-links a { color: var(--text3); text-decoration: none; font-size: 12px; font-weight: 700; padding: 8px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); }
-.nav-links a.active { color: #fff; background: var(--teal); border-color: var(--teal); }
+.nav-links a.active { color: #080808; background: var(--teal); border-color: var(--teal); }
 
 /* ── Layout ── */
 .container { padding: 20px 28px; max-width: 1500px; margin: 0 auto; }
@@ -154,7 +154,7 @@ body {
   font-size: 9px; font-weight: 800; letter-spacing: 0.5px;
   padding: 2px 7px; border-radius: 3px; white-space: nowrap;
 }
-.badge-teal   { background: rgba(0,71,255,0.15); color: var(--teal);   border: 1px solid rgba(0,71,255,0.3); }
+.badge-teal   { background: rgba(96,165,250,0.15); color: var(--teal);   border: 1px solid rgba(96,165,250,0.3); }
 .badge-violet { background: rgba(132,83,210,0.15); color: var(--violet2); border: 1px solid rgba(132,83,210,0.3); }
 .badge-green  { background: rgba(74,222,128,0.12); color: var(--green);  border: 1px solid rgba(74,222,128,0.25); }
 .badge-amber  { background: rgba(251,191,36,0.15); color: var(--amber);  border: 1px solid rgba(251,191,36,0.3); }
@@ -186,10 +186,11 @@ body {
   transition: border-color .2s, box-shadow .2s;
   position: relative;
 }
-.profile-card:hover { border-color: var(--border); box-shadow: 0 0 18px rgba(0,71,255,0.06); }
+.profile-card:hover { border-color: var(--border); box-shadow: 0 0 18px rgba(96,165,250,0.06); }
 .profile-card.lane-main        { border-left: 2px solid rgba(132,83,210,0.5); }
 .profile-card.lane-primary     { border-left: 2px solid rgba(0,71,255,0.5); }
 .profile-card.lane-independent { border-left: 2px solid rgba(74,222,128,0.5); }
+.profile-card--unassigned { opacity: 0.55; }
 
 .card-role {
   font-family: 'Courier New', monospace;
@@ -218,7 +219,7 @@ body {
   white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;
 }
 /* By category */
-.skill-chip.cat-ts-node     { background: var(--teal-dim);       color: var(--teal);    border: 1px solid rgba(0,71,255,0.2); }
+.skill-chip.cat-ts-node     { background: var(--teal-dim);       color: var(--teal);    border: 1px solid rgba(96,165,250,0.2); }
 .skill-chip.cat-agent       { background: var(--violet-dim);     color: var(--violet2); border: 1px solid rgba(132,83,210,0.2); }
 .skill-chip.cat-ai-llm      { background: var(--amber-dim);      color: var(--amber);   border: 1px solid rgba(200,122,0,0.2); }
 .skill-chip.cat-testing     { background: var(--green-dim);      color: var(--green);   border: 1px solid rgba(26,143,63,0.2); }
@@ -312,7 +313,7 @@ tbody tr:hover td { background: var(--bg2); }
 }
 .src-kb         { background: rgba(251,191,36,0.15); color: var(--amber);   border: 1px solid rgba(251,191,36,0.3); }
 .src-assessment { background: rgba(132,83,210,0.15); color: var(--violet2); border: 1px solid rgba(132,83,210,0.3); }
-.src-manual     { background: rgba(0,71,255,0.12);  color: var(--teal);    border: 1px solid rgba(0,71,255,0.25); }
+.src-manual     { background: rgba(0,71,255,0.12);  color: var(--teal);    border: 1px solid rgba(96,165,250,0.25); }
 
 /* Empty / offline states */
 .empty-state {
@@ -329,6 +330,7 @@ tbody tr:hover td { background: var(--bg2); }
   text-align: center; font-size: 10px; color: var(--text3);
   padding: 20px 0 32px;
 }
+.header .nav-links, .header-right .nav-links { margin: 0; }
 </style>
 </head>
 <body>
@@ -379,9 +381,9 @@ tbody tr:hover td { background: var(--bg2); }
   <div class="section-heading">Overview</div>
   <div class="summary-row">
     <div class="summary-card">
-      <div class="s-label">Total Roles</div>
-      <div class="s-value" id="stat-total-roles">–</div>
-      <div class="s-sub">from /api/profiles</div>
+      <div class="s-label">Run Utilisation</div>
+      <div class="s-value" id="stat-total-roles" style="font-size:1rem">–</div>
+      <div class="s-sub" id="stat-active-roles" style="font-size:0.78rem;color:var(--text-muted)">loading…</div>
     </div>
     <div class="summary-card">
       <div class="s-label">Roles w/ Skill Updates</div>
@@ -512,6 +514,7 @@ const SKILL_KEYS = Object.keys(SKILL_CATEGORIES);
 let apiProfiles = [];   // from profiles.json
 let apiStories  = [];   // from prd.json stories
 let auditLog    = [];   // from logs/profiles-audit.jsonl
+let activeAgents = new Set(); // roles that emitted events in agent-activity.jsonl this run
 let apiPhaseOrder = [];
 let filterRole  = '';
 let filterPhase = '';
@@ -724,7 +727,13 @@ async function fetchJSONL(url) {
 
 // ── Render: Summary cards ──────────────────────────────────────────────────
 function renderSummary() {
-  document.getElementById('stat-total-roles').textContent = apiProfiles.length;
+  const assignedRoles = new Set(apiStories.map(s => s.agentRole).filter(Boolean));
+  const activeCount   = apiProfiles.filter(p => activeAgents.has(p.roleId)).length;
+  const assignedCount = apiProfiles.filter(p => assignedRoles.has(p.roleId)).length;
+  const el = document.getElementById('stat-total-roles');
+  if (el) el.textContent = apiProfiles.length;
+  const elActive = document.getElementById('stat-active-roles');
+  if (elActive) elActive.textContent = activeCount + ' active / ' + assignedCount + ' assigned / ' + apiProfiles.length + ' total';
 
   const augRoles = new Set(auditLog.map(e => e.role).filter(Boolean));
   document.getElementById('stat-augmented-roles').textContent = augRoles.size;
@@ -910,12 +919,24 @@ function renderProfileCard(profile) {
 
   const cardId = 'pt-' + roleId.replace(/[^a-zA-Z0-9]/g, '_');
 
-  return '<div class="profile-card ' + lc + '">'
-    + '<div class="card-role ' + lc + '">' + esc(roleId) + '</div>'
+  // Utilisation status
+  const isActive     = activeAgents.has(roleId);
+  const isAssigned   = totalCount > 0;
+  let utilBadge = '';
+  if (isActive) {
+    utilBadge = '<span style="font-size:10px;font-weight:800;letter-spacing:.6px;padding:2px 7px;border-radius:4px;background:rgba(74,222,128,.15);color:#4ade80;border:1px solid #4ade80;text-transform:uppercase">active</span>';
+  } else if (isAssigned) {
+    utilBadge = '<span style="font-size:10px;font-weight:800;letter-spacing:.6px;padding:2px 7px;border-radius:4px;background:rgba(251,191,36,.12);color:#fbbf24;border:1px solid #fbbf24;text-transform:uppercase">assigned — not yet run</span>';
+  } else {
+    utilBadge = '<span style="font-size:10px;font-weight:800;letter-spacing:.6px;padding:2px 7px;border-radius:4px;background:rgba(96,96,96,.15);color:#606060;border:1px solid #404040;text-transform:uppercase">not assigned this run</span>';
+  }
+
+  return '<div class="profile-card ' + lc + (isActive ? '' : (isAssigned ? '' : ' profile-card--unassigned')) + '">'
+    + '<div class="card-role ' + lc + '">' + esc(roleId) + ' ' + utilBadge + '</div>'
     + '<div class="card-meta">' + metaHtml + '</div>'
     + (totalCount > 0
       ? '<div class="card-story-count"><strong>' + doneCount + '</strong> / ' + totalCount + ' stories completed</div>'
-      : '')
+      : '<div class="card-story-count" style="color:var(--text3);font-size:0.78rem">No stories assigned in current PRD</div>')
     + (updatedStr
       ? '<div class="card-updated' + (isRecent ? ' recent' : '') + '">Updated ' + esc(updatedStr) + '</div>'
       : '')
@@ -1009,6 +1030,12 @@ async function refresh() {
 
   // Audit log is optional — graceful fail returns []
   auditLog = await fetchJSONL(AUDIT_LOG_PATH);
+
+  // Activity log — which roles have emitted events this run
+  try {
+    const activityEvents = await fetchJSONL('logs/agent-activity.jsonl');
+    activeAgents = new Set(activityEvents.map(e => e.agent).filter(Boolean));
+  } catch { activeAgents = new Set(); }
 
   document.getElementById('hdr-refresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
 

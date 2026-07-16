@@ -3922,6 +3922,7 @@ run_failure_analyst() {
     fi
 
     log "  [FailureAnalyst] Analyzing test failure for $story_id (gate=$gate_model)..."
+    "$SCRIPT_DIR/update-monitor.sh" story_start "failure-analyst" "main" "failure-analyst" "Failure Analyst: $story_id" 2>/dev/null || true
 
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
 
@@ -4501,6 +4502,7 @@ ${_analyst_guidance}"
     else
         warning "  [FailureAnalyst] Gate model call failed — proceeding with retry as-is"
     fi
+    "$SCRIPT_DIR/update-monitor.sh" story_complete "failure-analyst" "main" "Analysis complete: $story_id" 2>/dev/null || true
 }
 
 # run_healing_recorder <story_id> <retry_num> <target> <diagnosis> <patches_applied> <profile_updated>
@@ -4513,6 +4515,8 @@ run_healing_recorder() {
     local diagnosis="${4:-unknown}"
     local patches_applied="${5:-0}"
     local profile_updated="${6:-false}"
+    local rung
+    rung=$(( retry_num / 2 ))
     local ts
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "unknown")
     local heal_log="${OUTPUT_DIR:-$LOG_DIR}/healing-events.jsonl"
@@ -4520,11 +4524,11 @@ run_healing_recorder() {
     # Safe JSON serialisation — escape quotes and backslashes in diagnosis
     local safe_diagnosis
     safe_diagnosis=$(printf '%s' "$diagnosis" | sed 's/\\/\\\\/g; s/"/\\"/g')
-    printf '{"ts":"%s","story_id":"%s","retry":%s,"target":"%s","diagnosis":"%s","patches_applied":%s,"profile_updated":%s}\n' \
-        "$ts" "$story_id" "$retry_num" "$target" "$safe_diagnosis" \
+    printf '{"ts":"%s","story_id":"%s","retry":%s,"rung":%s,"target":"%s","diagnosis":"%s","patches_applied":%s,"profile_updated":%s}\n' \
+        "$ts" "$story_id" "$retry_num" "$rung" "$target" "$safe_diagnosis" \
         "$patches_applied" "$profile_updated" \
         >> "$heal_log"
-    log "  [HealingRecorder] Event written (story=$story_id retry=$retry_num target=$target)"
+    log "  [HealingRecorder] Event written (story=$story_id retry=$retry_num rung=$rung target=$target)"
 }
 
 # apply_known_fix <project_root> <diagnosis>

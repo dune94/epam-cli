@@ -387,6 +387,17 @@ append_pipeline_cost_record() {
 # defined once in lib/story-guards.sh (sourced above) so every lane (main
 # and worktree) runs the identical guard. See that file's docstring.
 
+# _emit_agent <start|complete|fail> <role> [message]
+# Thin wrapper so QA/system agents appear in agent-activity.jsonl.
+_emit_agent() {
+    local _action="$1" _role="$2" _msg="${3:-$2}"
+    case "$_action" in
+        start)    "$SCRIPT_DIR/update-monitor.sh" story_start    "$_role" "main" "$_role" "$_msg" 2>/dev/null || true ;;
+        complete) "$SCRIPT_DIR/update-monitor.sh" story_complete "$_role" "main" "$_msg"          2>/dev/null || true ;;
+        fail)     "$SCRIPT_DIR/update-monitor.sh" story_fail     "$_role" "main" "$_msg"          2>/dev/null || true ;;
+    esac
+}
+
 # run_orch_prompt <prompt> [agent_type] [story_id]
 # Runs a pipeline agent prompt, tracks cost to phase-cost.jsonl (GAP-P22),
 # and returns the text output.
@@ -2703,8 +2714,10 @@ step_emit "0.8" "pass" "Step 0.8: mkdir src/ dirs"
 # the single source of truth for per-story model assignment.
 # ──────────────────────────────────────────────
 step_emit "0.9" "running" "Step 0.9: PRD model coordinator"
+_emit_agent start "prd-model-coordinator" "PRD Model Coordinator"
 if [ "${SKIP_PRD_MODEL_COORDINATOR:-0}" = "1" ]; then
     info "  [prd-model-coordinator] Skipped (SKIP_PRD_MODEL_COORDINATOR=1)"
+    _emit_agent complete "prd-model-coordinator" "skipped"
     step_emit "0.9" "skip" "Step 0.9: PRD model coordinator" "SKIP_PRD_MODEL_COORDINATOR=1"
 else
     _mc_phase="${CURRENT_PHASE:-${PHASE:-unknown}}"
@@ -2943,6 +2956,7 @@ if changed:
 MC_FALLBACK_PY
     ) 200>"${_mc_prd_target}.lock"
 fi
+_emit_agent complete "prd-model-coordinator" "PRD model assignments done"
 step_emit "0.9" "pass" "Step 0.9: PRD model coordinator"
 assert_no_story_ids_lost "presplit" "Step 0.9: PRD model coordinator"
 assert_no_story_ids_gained "presplit" "Step 0.9: PRD model coordinator"
@@ -3104,6 +3118,10 @@ if [ -n "$main_stories" ]; then
             fi
 
             log "  Running: $story"
+            _story_monitor_role=$(jq -r --arg id "$story" \
+                '.stories[] | select(.id == $id) | .agentRole // "typescript-engineer"' \
+                "$PRD_FILE" 2>/dev/null || echo "typescript-engineer")
+            "$SCRIPT_DIR/update-monitor.sh" story_start "$story" "main" "$_story_monitor_role" 2>/dev/null || true
             _story_exit=0
             run_story_with_watchdog "$story" "$LOG_DIR/main-${story}.log" || _story_exit=$?
             # A genuine watchdog double-timeout gets ONE diagnose-then-restructure
@@ -3118,9 +3136,11 @@ if [ -n "$main_stories" ]; then
             record_story_actual_cost "$story" "$LOG_DIR/main-${story}.log"
             if [ "$_story_exit" -ne 0 ]; then
                 _phase_story_failures=$((_phase_story_failures+1))
+                "$SCRIPT_DIR/update-monitor.sh" story_fail "$story" "main" "exit $_story_exit" 2>/dev/null || true
             else
                 # Story reported success — verify TypeScript still compiles before moving on
                 story_tsc_gate "$story" || _phase_story_failures=$((_phase_story_failures+1))
+                "$SCRIPT_DIR/update-monitor.sh" story_complete "$story" "main" 2>/dev/null || true
             fi
             checkpoint_complete "$story"
             # Validate any splits the agent registered mid-execution before the next story runs
@@ -3958,10 +3978,13 @@ assert_no_story_ids_gained "post-parallel" "Step 3.5: Post-parallel assessment"
 # Step 3.6: Team Lead Code Review
 # ──────────────────────────────────────────────
 log "Step 3.6: Running Team Lead code review for phase..."
+_emit_agent start "review-agent" "Team Lead Code Review"
 if "$SCRIPT_DIR/team-lead-review.sh" "$PHASE"; then
     success "Team Lead code review completed for phase '$PHASE'"
+    _emit_agent complete "review-agent" "Code review done"
 else
     warning "Team Lead code review had issues (check logs)"
+    _emit_agent complete "review-agent" "Code review completed with issues"
 fi
 
 # Hard-block if any story was escalated (max iterations exhausted without approval)
@@ -4840,6 +4863,7 @@ $sast_prompt"
         run_orch_prompt_with_tools "$sast_prompt" "qa-gate:sast" "${PHASE:-unknown}" 2>&1 | tee "$sast_log"
     } &
     local sast_pid=$!
+    _emit_agent start "sast-sentinel" "SAST Sentinel"
 
     # ── Spec Validator ──
     step_emit "4.2b" "running" "Step 4.2b: Spec validator"
@@ -4976,10 +5000,13 @@ $spec_prompt"
         run_orch_prompt_with_tools "$spec_prompt" "qa-gate:spec-validator" "${PHASE:-unknown}" 2>&1 | tee "$spec_log"
     } &
     local spec_pid=$!
+    _emit_agent start "spec-validator" "Spec Validator"
 
     # Wait for both agents
     wait $sast_pid || sast_exit=$?
+    { [ $sast_exit -eq 0 ] && _emit_agent complete "sast-sentinel"; } || _emit_agent fail "sast-sentinel" "exit $sast_exit"
     wait $spec_pid || spec_exit=$?
+    { [ $spec_exit -eq 0 ] && _emit_agent complete "spec-validator"; } || _emit_agent fail "spec-validator" "exit $spec_exit"
 
     local end_ts
     end_ts=$(date +%s%3N 2>/dev/null || date +%s)
@@ -5237,6 +5264,7 @@ $review_prompt"
             run_orch_prompt_with_tools "$review_prompt" "qa-gate:review-ranger" "${PHASE:-unknown}" 2>&1 | tee "$review_log"
         } &
         local review_pid=$!
+        _emit_agent start "review-ranger" "Review Ranger"
 
         # ── Mutant Hunter ──
         step_emit "4.3b" "running" "Step 4.3b: Mutant hunter"
@@ -5315,10 +5343,13 @@ $mutant_prompt"
             run_orch_prompt_with_tools "$mutant_prompt" "qa-gate:mutant-hunter" "${PHASE:-unknown}" 2>&1 | tee "$mutant_log"
         } &
         local mutant_pid=$!
+        _emit_agent start "mutant-hunter" "Mutant Hunter"
 
         # Wait for both Phase B agents
         wait $review_pid || review_exit=$?
+        { [ $review_exit -eq 0 ] && _emit_agent complete "review-ranger"; } || _emit_agent fail "review-ranger" "exit $review_exit"
         wait $mutant_pid || mutant_exit=$?
+        { [ $mutant_exit -eq 0 ] && _emit_agent complete "mutant-hunter"; } || _emit_agent fail "mutant-hunter" "exit $mutant_exit"
 
         # Evaluate Phase B results
         if [ $review_exit -ne 0 ]; then
@@ -5438,6 +5469,7 @@ $fuzz_prompt"
             run_orch_prompt_with_tools "$fuzz_prompt" "qa-gate:fuzz-weaver" "${PHASE:-unknown}" 2>&1 | tee "$fuzz_log"
         } &
         local fuzz_pid=$!
+        _emit_agent start "fuzz-weaver" "Fuzz Weaver"
 
         # ── Perf Sentinel ──
         step_emit "4.4b" "running" "Step 4.4b: Perf sentinel"
@@ -5478,10 +5510,13 @@ $perf_prompt"
             run_orch_prompt_with_tools "$perf_prompt" "qa-gate:perf-sentinel" "${PHASE:-unknown}" 2>&1 | tee "$perf_log"
         } &
         local perf_pid=$!
+        _emit_agent start "perf-sentinel" "Perf Sentinel"
 
         # Wait for both Phase C agents
         wait $fuzz_pid || fuzz_exit=$?
+        { [ $fuzz_exit -eq 0 ] && _emit_agent complete "fuzz-weaver"; } || _emit_agent fail "fuzz-weaver" "exit $fuzz_exit"
         wait $perf_pid || perf_exit=$?
+        { [ $perf_exit -eq 0 ] && _emit_agent complete "perf-sentinel"; } || _emit_agent fail "perf-sentinel" "exit $perf_exit"
 
         # Evaluate Phase C results
         # Fuzz-weaver: validate that any "fail" verdict is grounded in real files.

@@ -6,12 +6,12 @@
     <title>EPAM CLI — Hybrid Orchestration Plan</title>
     <style>
         :root {
-            --bg: #0f172a;  --bg1: #1e293b;  --bg2: #263248;  --bg3: #334155;
-            --surface: #1e293b;  --surface2: #263248;  --surface3: #334155;
-            --border: #334155;  --border2: #475569;
-            --text: #e2e8f0;  --text2: #94a3b8;  --text3: #64748b;  --text-muted: #94a3b8;
-            --teal: #38bdf8;  --teal2: #38bdf8;  --teal-dim: rgba(56,189,248,0.10);
-            --accent: #38bdf8;  --teal-glow: rgba(56,189,248,0.22);
+            --bg: #080808;  --bg1: #101010;  --bg2: #181818;  --bg3: #222222;
+            --surface: #101010;  --surface2: #181818;  --surface3: #222222;
+            --border: #2a2a2a;  --border2: #383838;
+            --text: #f0f0f0;  --text2: #a0a0a0;  --text3: #606060;  --text-muted: #a0a0a0;
+            --teal: #84cc16;  --teal2: #84cc16;  --teal-dim: rgba(132,204,22,.12);
+            --accent: #84cc16;  --teal-glow: rgba(132,204,22,.22);
             --violet: #a78bfa;  --violet2: #a78bfa;  --violet-dim: rgba(167,139,250,0.12);
             --green: #4ade80;  --green-dim: rgba(74,222,128,0.12);
             --amber: #fbbf24;  --amber-dim: rgba(251,191,36,0.12);
@@ -19,8 +19,8 @@
             --pink: #f472b6;  --pink-dim: rgba(244,114,182,0.10);
             --blue: #60a5fa;  --blue-dim: rgba(96,165,250,0.10);
             --orange: #fb923c;  --orange-dim: rgba(251,146,60,0.10);
-            --epam-gradient: linear-gradient(118.82deg, #0078c2 .5%, #0047ff 47.33%, #8453d2 76.12%);
-            --epam-cyan: #00f6ff;
+            --epam-gradient: linear-gradient(135deg, #a3e635 0%, #84cc16 100%);
+            --epam-cyan: #84cc16;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -82,7 +82,7 @@
         .badge-claude   { background: var(--violet-dim); color: var(--violet2); border:1px solid var(--violet); }
 
         .alert { padding: 1rem 1.25rem; border-radius: 8px; margin: 1rem 0; font-size: 0.9rem; }
-        .alert-teal    { background: var(--teal-dim);   border: 1px solid rgba(0,71,255,0.3);  color: var(--teal); }
+        .alert-teal    { background: var(--teal-dim);   border: 1px solid rgba(96,165,250,0.3);  color: var(--teal); }
         .alert-violet  { background: var(--violet-dim); border: 1px solid rgba(132,83,210,0.3); color: var(--violet); }
         .alert-warning { background: var(--amber-dim);  border: 1px solid rgba(251,191,36,0.3); color: var(--amber); }
         .alert-info    { background: var(--blue-dim);   border: 1px solid rgba(96,165,250,0.3); color: var(--blue); }
@@ -191,7 +191,7 @@
             margin-bottom: 0.75rem; text-align: center;
         }
         .wt-lane-header.main-lane        { background: rgba(132,83,210,0.10); color: #8453d2; }
-        .wt-lane-header.primary-lane     { background: rgba(0,71,255,0.08); color: #0047ff; }
+        .wt-lane-header.primary-lane     { background: rgba(96,165,250,0.08); color: #60a5fa; }
         .wt-lane-header.independent-lane { background: rgba(26,143,63,0.10); color: #1a8f3f; }
 
         .wt-step {
@@ -235,7 +235,7 @@
             overflow: hidden; white-space: nowrap;
         }
         .gantt-bar.main-bar        { background: rgba(132,83,210,0.20); color: #6a3cb5; border: 1px solid rgba(132,83,210,0.4); }
-        .gantt-bar.primary-bar     { background: rgba(0,71,255,0.15); color: #0047ff; border: 1px solid rgba(0,71,255,0.35); }
+        .gantt-bar.primary-bar     { background: rgba(96,165,250,0.15); color: #60a5fa; border: 1px solid rgba(96,165,250,0.35); }
         .gantt-bar.independent-bar { background: rgba(26,143,63,0.15); color: #1a8f3f; border: 1px solid rgba(26,143,63,0.35); }
         .gantt-bar.plan-bar        { background: rgba(200,122,0,0.15); color: #c87a00; border: 1px solid rgba(200,122,0,0.35); }
         .gantt-bar.integration-bar { background: rgba(217,48,37,0.12); color: #d93025; border: 1px solid rgba(217,48,37,0.3); }
@@ -275,16 +275,17 @@
         .matrix-table .lane-cell  { font-family: monospace; font-size: 0.78rem; color: var(--text-muted); }
     .nav-links { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 18px; }
 .nav-links a { color: var(--text3); text-decoration: none; font-size: 12px; font-weight: 700; padding: 8px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); }
-.nav-links a.active { color: #fff; background: var(--teal); border-color: var(--teal); }
+.nav-links a.active { color: #080808; background: var(--teal); border-color: var(--teal); }
+.header .nav-links, .header-right .nav-links { margin: 0; }
 </style>
 </head>
 <body>
-<header style="background:var(--epam-gradient);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
+<header style="background:var(--bg1);border-bottom:1px solid rgba(132,204,22,.25);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
   <div style="display:flex;align-items:center;gap:12px">
-    <div style="width:34px;height:34px;background:rgba(255,255,255,0.2);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#fff">&#9671;</div>
+    <div style="width:34px;height:34px;background:rgba(132,204,22,.12);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--teal)">&#9671;</div>
     <div>
-      <div style="font-size:18px;font-weight:800;color:#fff">EPAM CLI — Orchestration Plan</div>
-      <div style="font-size:11px;color:rgba(255,255,255,0.7)">Hybrid orchestration overview</div>
+      <div style="font-size:18px;font-weight:800;color:var(--text)">EPAM CLI — Orchestration Plan</div>
+      <div style="font-size:11px;color:var(--text2)">Hybrid orchestration overview</div>
     </div>
   </div>
 </header>
@@ -309,252 +310,68 @@
 </nav>
 <div class="container">
 
-    <h1>EPAM CLI — Hybrid Orchestration Plan</h1>
-    <p class="subtitle">
-        7 phases · <strong>24 stories</strong> · TypeScript/Node.js stack · bash + hybrid orchestration
-    </p>
+    <h1 id="page-title">EPAM CLI — Orchestration Plan</h1>
+    <p class="subtitle" id="page-subtitle">Loading plan from prd.json…</p>
 
     <div class="alert alert-teal">
         <strong>Human-Scale Estimates:</strong> Story hours are human developer effort estimates from the PRD. AI execution time, cost, tokens, and turns are derived via the complexity-weighted estimation model documented in <code>orchestrations/estimation.md</code>. Forecasts refine automatically as actuals accumulate in <code>phase-cost.jsonl</code>.
     </div>
 
-    <!-- Summary -->
+    <!-- Summary — populated dynamically from prd.json -->
     <div class="summary-cards" id="summary-cards">
-        <div class="summary-card">
-            <div class="sc-value sc-teal">24</div>
-            <div class="sc-label">Total Stories</div>
-        </div>
-        <div class="summary-card">
-            <div class="sc-value sc-violet">7</div>
-            <div class="sc-label">Phases</div>
-        </div>
-        <div class="summary-card">
-            <div class="sc-value sc-green">~119h</div>
-            <div class="sc-label">Est. Human Hours</div>
-        </div>
-        <div class="summary-card">
-            <div class="sc-value sc-amber">$540</div>
-            <div class="sc-label">Est. Total Cost</div>
-        </div>
-        <div class="summary-card">
-            <div class="sc-value sc-teal">9.6M</div>
-            <div class="sc-label">Est. Tokens</div>
-        </div>
-        <div class="summary-card">
-            <div class="sc-value sc-violet">3</div>
-            <div class="sc-label">Claude Opus</div>
-        </div>
-        <div class="summary-card">
-            <div class="sc-value sc-green">21</div>
-            <div class="sc-label">Sonnet / OpenCode / Codex</div>
-        </div>
-        <div class="summary-card">
-            <div class="sc-value sc-orange">2</div>
-            <div class="sc-label">Hybrid Phases</div>
-        </div>
+        <div class="summary-card"><div class="sc-value sc-teal">—</div><div class="sc-label">Total Stories</div></div>
+        <div class="summary-card"><div class="sc-value sc-violet">—</div><div class="sc-label">Phases</div></div>
+        <div class="summary-card"><div class="sc-value sc-green">—</div><div class="sc-label">Est. Human Hours</div></div>
+        <div class="summary-card"><div class="sc-value sc-amber">—</div><div class="sc-label">Est. Total Cost</div></div>
+        <div class="summary-card"><div class="sc-value sc-teal">—</div><div class="sc-label">Est. Tokens</div></div>
+        <div class="summary-card"><div class="sc-value sc-violet">—</div><div class="sc-label">Agent Roles</div></div>
+        <div class="summary-card"><div class="sc-value sc-green">—</div><div class="sc-label">Project Roles</div></div>
+        <div class="summary-card"><div class="sc-value sc-orange">—</div><div class="sc-label">Orchestration Mix</div></div>
     </div>
 
     <div class="alert alert-violet">
-        <strong>Skill Assessment + KB.md:</strong> Both mechanisms are active for the 2 hybrid phases (multi_agent, enterprise). Step 0.5 runs pre-phase skill gap analysis against <code>orchestrations/agents/profiles.json</code>. KB.md learnings accumulate in <code>orchestrations/agents/KB.md</code> and are injected per agent role on each story run.
-        EPAM CLI agent profiles are loaded from <code>orchestrations/agents/profiles.json</code> before running phases (see Run Commands below).
+        <strong>Skill Assessment + KB.md:</strong> Step 0.5 runs pre-phase skill gap analysis against <code>orchestrations/agents/profiles.json</code>. KB.md learnings accumulate in <code>orchestrations/agents/KB.md</code> and are injected per agent role on each story run. Agent profiles are loaded before each phase (see Run Commands below).
     </div>
 
-    <!-- Phase Structure -->
+    <!-- Phase Structure — populated dynamically from prd.json -->
     <h2>Phase Structure</h2>
     <div class="phase-cards" id="phase-cards">
-        <div class="phase-card p-bash">
-            <div class="phase-num">Phase 1</div>
-            <div class="phase-name">health_check</div>
-            <div class="phase-meta">
-                Mode: <span>bash</span><br>
-                Stories: <span>EPAM-HC-001 – HC-004</span><br>
-                Lane: <span>main (sequential)</span><br>
-                Wall clock: <span>~4h</span><br>
-                Cost: <span>$10</span>
-            </div>
-        </div>
-        <div class="phase-card p-bash">
-            <div class="phase-num">Phase 2</div>
-            <div class="phase-name">finops</div>
-            <div class="phase-meta">
-                Mode: <span>bash</span><br>
-                Stories: <span>EPAM-001 – EPAM-003</span><br>
-                Lane: <span>main (sequential)</span><br>
-                Wall clock: <span>~13h</span><br>
-                Cost: <span>$34</span>
-            </div>
-        </div>
-        <div class="phase-card p-bash">
-            <div class="phase-num">Phase 3</div>
-            <div class="phase-name">agent_intelligence</div>
-            <div class="phase-meta">
-                Mode: <span>bash</span><br>
-                Stories: <span>EPAM-004 – EPAM-008</span><br>
-                Lane: <span>main (sequential)</span><br>
-                Wall clock: <span>~34h</span><br>
-                Cost: <span>$166</span>
-            </div>
-        </div>
-        <div class="phase-card p-bash">
-            <div class="phase-num">Phase 4</div>
-            <div class="phase-name">team_features</div>
-            <div class="phase-meta">
-                Mode: <span>bash</span><br>
-                Stories: <span>EPAM-009 – EPAM-011</span><br>
-                Lane: <span>main (sequential)</span><br>
-                Wall clock: <span>~15h</span><br>
-                Cost: <span>$32</span>
-            </div>
-        </div>
-        <div class="phase-card p-hybrid">
-            <div class="phase-num">Phase 5</div>
-            <div class="phase-name">multi_agent</div>
-            <div class="phase-meta">
-                Mode: <span>hybrid</span><br>
-                Stories: <span>EPAM-012 – EPAM-014</span><br>
-                Lanes: <span>WT1 + WT2 parallel</span><br>
-                Wall clock: <span>~25h</span><br>
-                Cost: <span>$229</span>
-            </div>
-        </div>
-        <div class="phase-card p-hybrid">
-            <div class="phase-num">Phase 6</div>
-            <div class="phase-name">enterprise</div>
-            <div class="phase-meta">
-                Mode: <span>hybrid</span><br>
-                Stories: <span>EPAM-015 – EPAM-018</span><br>
-                Lanes: <span>WT1 + WT2 parallel</span><br>
-                Wall clock: <span>~24h</span><br>
-                Cost: <span>$40</span>
-            </div>
-        </div>
-        <div class="phase-card p-bash">
-            <div class="phase-num">Phase 7</div>
-            <div class="phase-name">rag_poc</div>
-            <div class="phase-meta">
-                Mode: <span>bash</span><br>
-                Stories: <span>EPAM-019 – EPAM-020</span><br>
-                Lane: <span>main (sequential)</span><br>
-                Wall clock: <span>~8h</span><br>
-                Cost: <span>$9</span>
-            </div>
-        </div>
+        <div style="color:var(--text-muted);padding:1rem;font-size:0.85rem">Loading phases from prd.json…</div>
     </div>
 
     <div class="alert alert-teal" id="spec-spotlight" style="margin-top:1rem">
         <strong>Specification Mode</strong><br>
-        <span style="font-size:0.85rem;color:#0f172a">Waiting for latest specification run…</span>
+        <span style="font-size:0.85rem;color:#080808">Waiting for latest specification run…</span>
     </div>
 
     <div class="alert alert-info" id="run-commands">
-        <strong>Run each phase:</strong><br>
-        <span style="color:var(--green);font-size:0.8rem;font-weight:700">Bash phases (1–4, 7) — run sequentially:</span><br>
-        <code style="font-size:0.82rem">PRD_FILE=$(pwd)/orchestrations/prd.json bash orchestrations/scripts/run-agent-orchestration.sh --phase health_check</code><br>
-        <code style="font-size:0.82rem">PRD_FILE=$(pwd)/orchestrations/prd.json bash orchestrations/scripts/run-agent-orchestration.sh --phase finops</code><br>
-        <code style="font-size:0.82rem">PRD_FILE=$(pwd)/orchestrations/prd.json bash orchestrations/scripts/run-agent-orchestration.sh --phase agent_intelligence</code><br>
-        <code style="font-size:0.82rem">PRD_FILE=$(pwd)/orchestrations/prd.json bash orchestrations/scripts/run-agent-orchestration.sh --phase team_features</code><br>
-        <br>
-        <span style="color:var(--orange);font-size:0.8rem;font-weight:700">Hybrid phases (5–6) — require ORCH_MODE=hybrid:</span><br>
-        <code style="font-size:0.82rem">ORCH_MODE=hybrid PRD_FILE=$(pwd)/orchestrations/prd.json bash orchestrations/scripts/run-agent-orchestration.sh --phase multi_agent</code><br>
-        <code style="font-size:0.82rem">ORCH_MODE=hybrid PRD_FILE=$(pwd)/orchestrations/prd.json bash orchestrations/scripts/run-agent-orchestration.sh --phase enterprise</code><br>
-        <br>
-        <span style="color:var(--green);font-size:0.8rem;font-weight:700">Final bash phase:</span><br>
-        <code style="font-size:0.82rem">PRD_FILE=$(pwd)/orchestrations/prd.json bash orchestrations/scripts/run-agent-orchestration.sh --phase rag_poc</code>
+        <strong>Run commands</strong><br>
+        <span style="color:var(--text-muted);font-size:0.82rem">Loading from prd.json…</span>
     </div>
 
-    <div class="alert alert-warning">
-        <strong>Profiles Setup:</strong> Ensure project profiles exist at <code>orchestrations/agents/profiles.json</code> (generated by <code>epam new generate</code>):
-        <code style="font-size:0.82rem">ls orchestrations/agents/profiles.json</code>
-    </div>
-
-    <!-- Architectural Decisions -->
+    <!-- Architectural Decisions — populated dynamically from prd.json -->
     <h2>Architectural Decisions</h2>
-    <div class="decisions">
-        <div class="decision-card">
-            <div class="label">Phases 1–4, 7 Mode</div>
-            <div class="value">bash</div>
-            <div class="detail">Health checks, FinOps, agent intelligence, team features, and RAG POC — sequential execution, no coordination needed</div>
-        </div>
-        <div class="decision-card">
-            <div class="label">Phases 5–6 Mode</div>
-            <div class="value">hybrid</div>
-            <div class="detail">Multi-agent and enterprise phases benefit from parallel worktree execution, skill assessment, KB.md feedback, and coordination bus</div>
-        </div>
-        <div class="decision-card">
-            <div class="label">Language</div>
-            <div class="value">TypeScript strict</div>
-            <div class="detail">Strict mode TypeScript with EpamError hierarchy, Commander.js CLI, chalk formatting, REPL slash commands</div>
-        </div>
-        <div class="decision-card">
-            <div class="label">Runtime</div>
-            <div class="value">Node.js 20</div>
-            <div class="detail">Node 20 LTS — required for ESM compatibility, native fetch, and modern APIs. Ubuntu WSL2 + Docker Compose</div>
-        </div>
-        <div class="decision-card">
-            <div class="label">Bundler</div>
-            <div class="value">tsup (CJS)</div>
-            <div class="detail">tsup bundles to CommonJS for maximum compatibility. Output at dist/epam.js with shebang entry point</div>
-        </div>
-        <div class="decision-card">
-            <div class="label">Testing</div>
-            <div class="value">vitest</div>
-            <div class="detail">vitest for unit + integration tests. 42/42 tests passing. Coverage tracked per phase gate</div>
-        </div>
-        <div class="decision-card">
-            <div class="label">Multi-LLM</div>
-            <div class="value">Claude + OpenCode + Codex + Codemie</div>
-            <div class="detail">Provider failover chain with circuit breaker health. Claude (Opus/Sonnet), OpenCode (GPT-4o), Codex (o3), Codemie-Claude</div>
-        </div>
-        <div class="decision-card">
-            <div class="label">Skill Assessment</div>
-            <div class="value">Step 0.5 enabled</div>
-            <div class="detail">Pre-phase agent profile gap analysis for hybrid phases (5–6). Required skills in technicalNotes.requiredSkills per story</div>
-        </div>
-        <div class="decision-card">
-            <div class="label">Knowledge Base</div>
-            <div class="value">KB.md enabled</div>
-            <div class="detail">Learnings written on first-success and retries; injected per agent role. Shared across all phases via orchestrations/agents/KB.md</div>
-        </div>
+    <div class="decisions" id="architectural-decisions">
+        <div style="color:var(--text-muted);font-size:0.85rem;padding:1rem">Loading from prd.json…</div>
     </div>
 
-    <!-- Hybrid Pipeline Steps -->
+    <!-- Pipeline Steps -->
     <h2>Pipeline Steps (All Phases)</h2>
-    <div class="alert alert-warning" style="margin-bottom:1rem">
-        Phases 1–4 and 7 (health_check, finops, agent_intelligence, team_features, rag_poc) use bash mode — implementation stories run sequentially in main lane. Hybrid phases (5–6) enable parallel worktree execution + coordination bus.
-    </div>
     <div class="pipeline-steps">
         <div class="pipeline-step">
             <div class="step-num" style="color:var(--violet)">Step 0</div>
             <div class="step-name">Pre-flight</div>
             <div class="step-desc">Prerequisites check, worktree setup, prd.json validation, agent-status.json init</div>
         </div>
-        <div class="pipeline-step hybrid-only">
-            <div class="hybrid-tag">Hybrid</div>
-            <div class="step-num" style="color:var(--orange)">Step 0.5</div>
-            <div class="step-name">Skill Assessment</div>
-            <div class="step-desc">Reads prd.json + profiles.json, detects role skill gaps, augments profiles, writes pre-phase assessment MD</div>
-        </div>
-        <div class="pipeline-step hybrid-only">
-            <div class="hybrid-tag">Hybrid</div>
-            <div class="step-num" style="color:var(--orange)">Step 0.6</div>
-            <div class="step-name">Coordination</div>
-            <div class="step-desc">Coordination agent posts plan_summary to agent-messages.jsonl MCP bus for WT awareness</div>
-        </div>
         <div class="pipeline-step">
             <div class="step-num" style="color:var(--teal)">Step 1–2</div>
             <div class="step-name">Execution</div>
-            <div class="step-desc">Bash: sequential in main lane. Hybrid: WT1 + WT2 run concurrently with parallel worktree execution</div>
-        </div>
-        <div class="pipeline-step hybrid-only">
-            <div class="hybrid-tag">Hybrid</div>
-            <div class="step-num" style="color:var(--orange)">Plan Mode</div>
-            <div class="step-name">Plan Mode</div>
-            <div class="step-desc">Opus stories trigger plan mode: planning pass before implementation. 3 Opus stories flagged across phases 5–6</div>
+            <div class="step-desc">Stories run sequentially in main lane. High-complexity stories trigger plan mode: planning pass before implementation.</div>
         </div>
         <div class="pipeline-step">
             <div class="step-num" style="color:var(--teal)">Step 3</div>
             <div class="step-name">Team Lead Review</div>
-            <div class="step-desc">Domain engineer (typescript-engineer, agent-systems-engineer, billing-engineer) validates output against acceptance criteria post-implementation</div>
+            <div class="step-desc">Domain engineer validates output against acceptance criteria post-implementation</div>
         </div>
         <div class="pipeline-step">
             <div class="step-num" style="color:var(--red)">Steps 4.2–4.4</div>
@@ -568,254 +385,17 @@
         </div>
     </div>
 
-    <!-- Phase 5 Worktree Architecture -->
-    <h2>Phase 5 — multi_agent Worktree Architecture</h2>
-    <div class="worktree-diagram">
-        <div class="wt-lanes">
-            <div class="wt-lane">
-                <div class="wt-lane-header main-lane">Main Lane (Orchestrator)</div>
-                <div class="wt-step hybrid-step"><div class="step-label">Step 0.5 — Skill Assessment</div><div class="step-detail">agent-systems-engineer profiled · KB read</div></div>
-                <div class="wt-arrow">↓</div>
-                <div class="wt-step hybrid-step"><div class="step-label">Step 0.6 — Coordination</div><div class="step-detail">Posts plan_summary to bus</div></div>
-                <div class="wt-arrow">↓</div>
-                <div class="wt-step"><div class="step-label">Launches WT1 + WT2</div><div class="step-detail">Parallel worktree execution</div></div>
-                <div class="wt-arrow">↓</div>
-                <div class="wt-step hybrid-step"><div class="step-label">Step 4 — Phase Gate</div><div class="step-detail">Cost gate. Unblocks Phase 6.</div></div>
-            </div>
-            <div class="wt-lane">
-                <div class="wt-lane-header primary-lane">WT1 — Ralph Wiggum Loop</div>
-                <div class="wt-step"><div class="step-label">EPAM-012 ★ Plan Mode</div><div class="step-detail">Ralph Wiggum Loop · Opus · 10h · $100</div></div>
-            </div>
-            <div class="wt-lane">
-                <div class="wt-lane-header independent-lane">WT2 — Squad Execution</div>
-                <div class="wt-step"><div class="step-label">EPAM-013 ★ Plan Mode</div><div class="step-detail">Multi-Agent Squad Execution · Opus · 12h · $120</div></div>
-            </div>
-        </div>
-    </div>
-    <p style="color:var(--text-muted); font-size:0.82rem; margin-top:0.5rem">
-        After WT1+WT2 complete, EPAM-014 (Review — Multi-Agent Phase) runs in main lane as Sonnet review (3h, $9).
-    </p>
-
-    <!-- Phase 6 — enterprise -->
-    <h2>Phase 6 — enterprise Worktree Architecture (~24h)</h2>
-    <p style="color:var(--text-muted); font-size:0.87rem; margin-bottom:1rem">
-        Enterprise features phase. 4 stories — EPAM-015 and EPAM-017 chain sequentially in WT1 (EPAM-017 depends on EPAM-004). EPAM-016 runs independently in WT2.
-        EPAM-018 review runs after both worktrees complete.
-    </p>
-    <div class="worktree-diagram">
-        <div class="wt-lanes">
-            <div class="wt-lane">
-                <div class="wt-lane-header main-lane">Main Lane</div>
-                <div class="wt-step hybrid-step"><div class="step-label">Step 0.5 + 0.6</div><div class="step-detail">Skill assessment + coordination</div></div>
-                <div class="wt-arrow">↓</div>
-                <div class="wt-step"><div class="step-label">Launch WT1 + WT2</div></div>
-                <div class="wt-arrow">↓</div>
-                <div class="wt-step hybrid-step"><div class="step-label">Phase Gate (after WTs)</div></div>
-            </div>
-            <div class="wt-lane">
-                <div class="wt-lane-header primary-lane">WT1 — Constraints + Marketplace</div>
-                <div class="wt-step"><div class="step-label">EPAM-015</div><div class="step-detail">Remote Constraint Injection · OpenCode · 6h · $12</div></div>
-                <div class="wt-arrow">↓</div>
-                <div class="wt-step"><div class="step-label">EPAM-017</div><div class="step-detail">Expertise Marketplace · OpenCode · 5h · $10</div></div>
-            </div>
-            <div class="wt-lane">
-                <div class="wt-lane-header independent-lane">WT2 — Signature Auditors</div>
-                <div class="wt-step"><div class="step-label">EPAM-016</div><div class="step-detail">Signature Auditor Agents · OpenCode · 10h · $20</div></div>
-            </div>
-        </div>
-    </div>
-    <p style="color:var(--text-muted); font-size:0.82rem; margin-top:0.5rem">
-        After WT1+WT2 complete, EPAM-018 (Review — Enterprise Phase) runs in main lane as Sonnet review (3h, $9).
-    </p>
-
-    <!-- Dependency Graph -->
+    <!-- Dependency Graph — populated dynamically from prd.json -->
     <h2>Dependency Chain (Key Paths)</h2>
-    <div class="dep-graph">
-<span class="phase-sep">▸ PHASE 1: health_check (bash — sequential)</span>
-<span class="node">EPAM-HC-001</span>  <span class="comment">// Health Check: Claude CLI (Sonnet)</span>
-<span class="node">EPAM-HC-002</span>  <span class="comment">// Health Check: OpenCode CLI (GPT-4o)</span>
-<span class="node">EPAM-HC-003</span>  <span class="comment">// Health Check: Codex CLI (o3)</span>
-<span class="node">EPAM-HC-004</span>  <span class="comment">// Health Check: Codemie-Claude CLI (Sonnet)</span>
-
-<span class="phase-sep">▸ PHASE 2: finops (bash — sequential)</span>
-<span class="node">EPAM-001</span>  <span class="comment">// Budget Guardrails [high, Sonnet]</span>
-<span class="node">EPAM-002</span>  <span class="comment">// Burn-up Reports [OpenCode]</span>
-<span class="node">EPAM-001</span> + <span class="node">EPAM-002</span> <span class="arrow">→</span> <span class="node">EPAM-003</span>  <span class="comment">// Infra Test — FinOps Phase [review, Sonnet]</span>
-
-<span class="phase-sep">▸ PHASE 3: agent_intelligence (bash — sequential)</span>
-<span class="node">EPAM-004</span>  <span class="comment">// Agent Gold Profiles [high, Sonnet]</span>
-<span class="node">EPAM-005</span>  <span class="comment">// /plan Mode [high, Sonnet]</span>
-<span class="node">EPAM-006</span>  <span class="comment">// Decision Records / Architectural DNA [OpenCode]</span>
-<span class="node">EPAM-007</span>  <span class="comment">// MCP Server Mode [high, ★ Opus]</span>
-<span class="node">EPAM-004</span> + <span class="node">EPAM-005</span> + <span class="node">EPAM-006</span> + <span class="node">EPAM-007</span> <span class="arrow">→</span> <span class="node">EPAM-008</span>  <span class="comment">// Review — Agent Intelligence Phase [Sonnet]</span>
-
-<span class="phase-sep">▸ PHASE 4: team_features (bash — sequential)</span>
-<span class="node">EPAM-009</span>  <span class="comment">// /replay Command [OpenCode]</span>
-<span class="node">EPAM-010</span>  <span class="comment">// Shared Team Memory [OpenCode]</span>
-<span class="node">EPAM-009</span> + <span class="node">EPAM-010</span> <span class="arrow">→</span> <span class="node">EPAM-011</span>  <span class="comment">// Review — Team Features Phase [Sonnet]</span>
-
-<span class="phase-sep">▸ PHASE 5: multi_agent (hybrid — WT1/WT2 parallel)</span>
-<span class="node">EPAM-012</span>  <span class="comment">// Ralph Wiggum Loop (WT1) [high, ★ Opus, 10h]</span>
-<span class="node">EPAM-013</span>  <span class="comment">// Multi-Agent Squad Execution (WT2) [high, ★ Opus, 12h]</span>
-<span class="node">EPAM-012</span> + <span class="node">EPAM-013</span> <span class="arrow">→</span> <span class="node">EPAM-014</span>  <span class="comment">// Review — Multi-Agent Phase [Sonnet]</span>
-
-<span class="phase-sep">▸ PHASE 6: enterprise (hybrid — WT1/WT2 parallel)</span>
-<span class="node">EPAM-015</span>  <span class="comment">// Remote Constraint Injection (WT1) [OpenCode, 6h]</span>
-<span class="node">EPAM-016</span>  <span class="comment">// Signature Auditor Agents (WT2) [OpenCode, 10h]</span>
-<span class="node">EPAM-004</span> <span class="arrow">→</span> <span class="node">EPAM-017</span>  <span class="comment">// Expertise Marketplace (WT1, after 015) [depends on EPAM-004, OpenCode, 5h]</span>
-<span class="node">EPAM-015</span> + <span class="node">EPAM-016</span> + <span class="node">EPAM-017</span> <span class="arrow">→</span> <span class="node">EPAM-018</span>  <span class="comment">// Review — Enterprise Phase [Sonnet]</span>
-
-<span class="phase-sep">▸ PHASE 7: rag_poc (bash — sequential)</span>
-<span class="node">EPAM-019</span>  <span class="comment">// RAG Asset Discovery POC [low, OpenCode, 6h]</span>
-<span class="node">EPAM-019</span> <span class="arrow">→</span> <span class="node">EPAM-020</span>  <span class="comment">// Review — RAG POC Phase [Sonnet]</span>
+    <div class="dep-graph" id="dep-graph-content">
+      <span style="color:var(--text-muted);font-size:0.85rem">Loading from prd.json…</span>
     </div>
 
-    <!-- Gantt Chart — 110h scale -->
-    <h2>Estimated Timeline (~103h Wall Clock)</h2>
-    <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1rem">
-        Scale: 110h total. Phases 1–4, 7 run sequentially (bash). Phases 5–6 show WT1 + WT2 parallel tracks. ~123h total work, ~103h wall clock due to parallel execution.
-    </p>
-    <div class="gantt">
-        <div class="gantt-header">
-            <div></div>
-            <div class="gantt-hours">
-                <div class="gantt-hour-mark">0h</div>
-                <div class="gantt-hour-mark">10h</div>
-                <div class="gantt-hour-mark">20h</div>
-                <div class="gantt-hour-mark">30h</div>
-                <div class="gantt-hour-mark">40h</div>
-                <div class="gantt-hour-mark">50h</div>
-                <div class="gantt-hour-mark">60h</div>
-                <div class="gantt-hour-mark">70h</div>
-                <div class="gantt-hour-mark">80h</div>
-                <div class="gantt-hour-mark">90h</div>
-                <div class="gantt-hour-mark">100h</div>
-                <div class="gantt-hour-mark">110h</div>
-            </div>
-        </div>
-
-        <div class="gantt-phase-label"><span style="color:var(--green);font-family:monospace">Phase 1</span> <span style="color:var(--text-muted);font-weight:400">health_check (bash) — 4h</span></div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">HC-001</span> Claude CLI · Sonnet</div>
-            <div class="gantt-track"><div class="gantt-bar main-bar" style="left:0%;width:0.91%">HC-001</div></div>
-        </div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">HC-002</span> OpenCode CLI</div>
-            <div class="gantt-track"><div class="gantt-bar independent-bar" style="left:0.91%;width:0.91%">HC-002</div></div>
-        </div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">HC-003</span> Codex CLI</div>
-            <div class="gantt-track"><div class="gantt-bar" style="left:1.82%;width:0.91%;background:rgba(196,24,110,0.15);color:var(--pink);border:1px solid rgba(196,24,110,0.35)">HC-003</div></div>
-        </div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">HC-004</span> Codemie-Claude CLI</div>
-            <div class="gantt-track"><div class="gantt-bar main-bar" style="left:2.73%;width:0.91%">HC-004</div></div>
-        </div>
-
-        <div class="gantt-phase-label"><span style="color:var(--green);font-family:monospace">Phase 2</span> <span style="color:var(--text-muted);font-weight:400">finops (bash) — 13h</span></div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">EPAM-001</span> Budget Guardrails</div>
-            <div class="gantt-track"><div class="gantt-bar main-bar" style="left:3.64%;width:5.45%">001</div></div>
-        </div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">EPAM-002</span> Burn-up Reports</div>
-            <div class="gantt-track"><div class="gantt-bar independent-bar" style="left:9.09%;width:4.55%">002</div></div>
-        </div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">EPAM-003</span> Infra Test FinOps</div>
-            <div class="gantt-track"><div class="gantt-bar integration-bar" style="left:13.64%;width:1.82%">003</div></div>
-        </div>
-
-        <div class="gantt-phase-label"><span style="color:var(--green);font-family:monospace">Phase 3</span> <span style="color:var(--text-muted);font-weight:400">agent_intelligence (bash) — 34h</span></div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">EPAM-004</span> Agent Gold Profiles</div>
-            <div class="gantt-track"><div class="gantt-bar main-bar" style="left:15.45%;width:7.27%">004</div></div>
-        </div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">EPAM-005</span> /plan Mode</div>
-            <div class="gantt-track"><div class="gantt-bar main-bar" style="left:22.73%;width:6.36%">005</div></div>
-        </div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">EPAM-006</span> Decision Records</div>
-            <div class="gantt-track"><div class="gantt-bar independent-bar" style="left:29.09%;width:5.45%">006</div></div>
-        </div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">EPAM-007</span> MCP Server Mode ★Opus</div>
-            <div class="gantt-track">
-                <div class="gantt-bar plan-bar" style="left:34.55%;width:1%">plan</div>
-                <div class="gantt-bar primary-bar" style="left:35.55%;width:9.09%">007 ★</div>
-            </div>
-        </div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">EPAM-008</span> Review Agent Intel</div>
-            <div class="gantt-track"><div class="gantt-bar integration-bar" style="left:44.64%;width:2.73%">008</div></div>
-        </div>
-
-        <div class="gantt-phase-label"><span style="color:var(--green);font-family:monospace">Phase 4</span> <span style="color:var(--text-muted);font-weight:400">team_features (bash) — 15h</span></div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">EPAM-009</span> /replay Command</div>
-            <div class="gantt-track"><div class="gantt-bar independent-bar" style="left:46.36%;width:4.55%">009</div></div>
-        </div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">EPAM-010</span> Shared Team Memory</div>
-            <div class="gantt-track"><div class="gantt-bar independent-bar" style="left:50.91%;width:7.27%">010</div></div>
-        </div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">EPAM-011</span> Review Team Features</div>
-            <div class="gantt-track"><div class="gantt-bar integration-bar" style="left:58.18%;width:1.82%">011</div></div>
-        </div>
-
-        <div class="gantt-phase-label"><span style="color:var(--teal);font-family:monospace">Phase 5</span> <span style="color:var(--text-muted);font-weight:400">multi_agent (hybrid) — 25h work, ~15h wall clock</span></div>
-        <div class="gantt-section-label" style="padding-left:212px">▸ WT1 — Ralph Wiggum Loop (primary)</div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">EPAM-012</span> Ralph Wiggum Loop ★Opus</div>
-            <div class="gantt-track">
-                <div class="gantt-bar plan-bar" style="left:60%;width:0.91%">plan</div>
-                <div class="gantt-bar primary-bar" style="left:60.91%;width:9.09%">012 ★</div>
-            </div>
-        </div>
-        <div class="gantt-section-label" style="padding-left:212px">▸ WT2 — Squad Execution (independent, parallel)</div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">EPAM-013</span> Multi-Agent Squad ★Opus</div>
-            <div class="gantt-track">
-                <div class="gantt-bar plan-bar" style="left:60%;width:0.91%">plan</div>
-                <div class="gantt-bar independent-bar" style="left:60.91%;width:10.91%">013 ★</div>
-            </div>
-        </div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">EPAM-014</span> Review Multi-Agent</div>
-            <div class="gantt-track"><div class="gantt-bar integration-bar" style="left:71.82%;width:2.73%">014</div></div>
-        </div>
-
-        <div class="gantt-phase-label"><span style="color:var(--teal);font-family:monospace">Phase 6</span> <span style="color:var(--text-muted);font-weight:400">enterprise (hybrid) — 24h work, ~14h wall clock</span></div>
-        <div class="gantt-section-label" style="padding-left:212px">▸ WT1 — Constraints + Marketplace (primary)</div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">EPAM-015</span> Remote Constraints</div>
-            <div class="gantt-track"><div class="gantt-bar primary-bar" style="left:74.55%;width:5.45%">015</div></div>
-        </div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">EPAM-017</span> Expertise Marketplace</div>
-            <div class="gantt-track"><div class="gantt-bar primary-bar" style="left:80%;width:4.55%">017</div></div>
-        </div>
-        <div class="gantt-section-label" style="padding-left:212px">▸ WT2 — Signature Auditors (independent, parallel)</div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">EPAM-016</span> Signature Auditor Agents</div>
-            <div class="gantt-track"><div class="gantt-bar independent-bar" style="left:74.55%;width:9.09%">016</div></div>
-        </div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">EPAM-018</span> Review Enterprise</div>
-            <div class="gantt-track"><div class="gantt-bar integration-bar" style="left:84.55%;width:2.73%">018</div></div>
-        </div>
-
-        <div class="gantt-phase-label"><span style="color:var(--green);font-family:monospace">Phase 7</span> <span style="color:var(--text-muted);font-weight:400">rag_poc (bash) — 8h</span></div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">EPAM-019</span> RAG Asset Discovery</div>
-            <div class="gantt-track"><div class="gantt-bar independent-bar" style="left:87.27%;width:5.45%">019</div></div>
-        </div>
-        <div class="gantt-row">
-            <div class="gantt-label"><span class="story-id">EPAM-020</span> Review RAG POC</div>
-            <div class="gantt-track"><div class="gantt-bar integration-bar" style="left:92.73%;width:1.82%">020</div></div>
-        </div>
+    <!-- Gantt Chart — populated dynamically from prd.json -->
+    <h2 id="gantt-title">Estimated Timeline</h2>
+    <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1rem" id="gantt-subtitle">Loading from prd.json…</p>
+    <div class="gantt" id="gantt-content">
+      <div style="color:var(--text-muted);padding:1rem;font-size:0.85rem">Loading from prd.json…</div>
     </div>
 
     <!-- Agent Matrix -->
@@ -831,63 +411,8 @@
                 <th>Est. Cost</th>
             </tr>
         </thead>
-        <tbody>
-            <tr>
-                <td><code>typescript-engineer</code></td>
-                <td class="lane-cell">main</td>
-                <td><span class="badge badge-bash">bash</span> <span class="badge badge-hybrid">hybrid</span></td>
-                <td class="count-cell">4</td>
-                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-sonnet">Sonnet 4.6</span> <span class="badge badge-opencode">OpenCode</span> <span class="badge badge-opencode">GPT-4o</span></td>
-                <td class="cost-cell">$60</td>
-            </tr>
-            <tr>
-                <td><code>agent-systems-engineer</code></td>
-                <td class="lane-cell">main / WT1 / WT2</td>
-                <td><span class="badge badge-bash">bash</span> <span class="badge badge-hybrid">hybrid</span></td>
-                <td class="count-cell">4</td>
-                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-opus">Opus 4.6</span> <span class="badge badge-opencode">OpenCode</span> <span class="badge badge-opencode">GPT-4o</span></td>
-                <td class="cost-cell">$260</td>
-            </tr>
-            <tr>
-                <td><code>billing-engineer</code></td>
-                <td class="lane-cell">main</td>
-                <td><span class="badge badge-bash">bash</span></td>
-                <td class="count-cell">1</td>
-                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-sonnet">Sonnet 4.6</span></td>
-                <td class="cost-cell">$18</td>
-            </tr>
-            <tr>
-                <td><code>cli-ux-engineer</code></td>
-                <td class="lane-cell">main</td>
-                <td><span class="badge badge-bash">bash</span></td>
-                <td class="count-cell">3</td>
-                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-sonnet">Sonnet 4.6</span> <span class="badge badge-opencode">OpenCode</span> <span class="badge badge-opencode">GPT-4o</span></td>
-                <td class="cost-cell">$41</td>
-            </tr>
-            <tr>
-                <td><code>test-engineer</code></td>
-                <td class="lane-cell">main</td>
-                <td><span class="badge badge-bash">bash</span></td>
-                <td class="count-cell">5</td>
-                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-sonnet">Sonnet 4.6</span> <span class="badge badge-opencode">OpenCode</span> <span class="badge badge-opencode">GPT-4o</span> <span class="badge badge-codex">Codex</span> <span class="badge badge-codex">o3</span></td>
-                <td class="cost-cell">$16</td>
-            </tr>
-            <tr>
-                <td><code>team-lead-agent</code></td>
-                <td class="lane-cell">main</td>
-                <td><span class="badge badge-bash">bash</span> <span class="badge badge-hybrid">hybrid</span></td>
-                <td class="count-cell">0</td>
-                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-sonnet">Sonnet 4.6</span></td>
-                <td class="cost-cell">$0</td>
-            </tr>
-            <tr>
-                <td><code>review-agent</code></td>
-                <td class="lane-cell">main</td>
-                <td><span class="badge badge-bash">bash</span> <span class="badge badge-hybrid">hybrid</span></td>
-                <td class="count-cell">7</td>
-                <td style="white-space:nowrap"><span class="badge badge-claude">Claude</span> <span class="badge badge-sonnet">Sonnet 4.6</span></td>
-                <td class="cost-cell">$45</td>
-            </tr>
+        <tbody id="agent-role-matrix-tbody">
+            <tr><td colspan="6" style="color:var(--text-muted);padding:1rem;font-size:0.85rem">Loading from prd.json…</td></tr>
         </tbody>
     </table>
 
@@ -980,168 +505,10 @@
     </div>
 
     <!-- ── Cost Breakdown Section ──────────────────────────────────────────── -->
-    <div style="margin-top:3rem">
-      <div style="font-size:0.7rem;font-weight:800;letter-spacing:1.5px;color:var(--teal);text-transform:uppercase;margin-bottom:1rem;opacity:.7">
-        Cost Breakdown — 24 Stories · $540 est. · ~123h total work
-      </div>
+    <div id="cost-breakdown" style="margin-top:3rem">
+      <div style="color:var(--text-muted);padding:1rem;font-size:0.85rem">Loading cost breakdown from prd.json…</div>
+    </div>
 
-      <!-- Two-column: By Provider + By LLM -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
-
-        <!-- By Provider -->
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem;border-left:3px solid var(--violet)">
-          <div style="font-size:0.65rem;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--violet);margin-bottom:1rem">By Provider Platform</div>
-
-          <!-- CLAUDE -->
-          <div style="margin-bottom:1.1rem">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
-              <div style="display:flex;align-items:center;gap:0.5rem">
-                <span style="background:var(--violet-dim);color:var(--violet);border:1px solid var(--violet);border-radius:4px;font-size:0.65rem;font-weight:800;padding:2px 7px;letter-spacing:0.5px">CLAUDE</span>
-                <span style="font-size:0.78rem;color:var(--text)">Opus + Sonnet</span>
-              </div>
-              <div style="text-align:right">
-                <span style="font-size:0.95rem;font-weight:800;color:var(--violet)">$434</span>
-                <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">14 stories · 80.4%</span>
-              </div>
-            </div>
-            <div style="background:var(--bg);border-radius:4px;height:7px;overflow:hidden">
-              <div style="width:80.4%;height:100%;background:linear-gradient(90deg,var(--violet),var(--violet2));border-radius:4px"></div>
-            </div>
-          </div>
-
-          <!-- OPENCODE -->
-          <div style="margin-bottom:1.1rem">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
-              <div style="display:flex;align-items:center;gap:0.5rem">
-                <span style="background:var(--green-dim);color:var(--green);border:1px solid var(--green);border-radius:4px;font-size:0.65rem;font-weight:800;padding:2px 7px;letter-spacing:0.5px">OPENCODE</span>
-                <span style="font-size:0.78rem;color:var(--text)">TypeScript impl + medium stories</span>
-              </div>
-              <div style="text-align:right">
-                <span style="font-size:0.95rem;font-weight:800;color:var(--green)">$104</span>
-                <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">9 stories · 19.3%</span>
-              </div>
-            </div>
-            <div style="background:var(--bg);border-radius:4px;height:7px;overflow:hidden">
-              <div style="width:19.3%;height:100%;background:linear-gradient(90deg,var(--green),var(--green));border-radius:4px"></div>
-            </div>
-          </div>
-
-          <!-- CODEX -->
-          <div style="margin-bottom:0.5rem">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
-              <div style="display:flex;align-items:center;gap:0.5rem">
-                <span style="background:var(--pink-dim);color:var(--pink);border:1px solid var(--pink);border-radius:4px;font-size:0.65rem;font-weight:800;padding:2px 7px;letter-spacing:0.5px">CODEX</span>
-                <span style="font-size:0.78rem;color:var(--text)">Health check validation</span>
-              </div>
-              <div style="text-align:right">
-                <span style="font-size:0.95rem;font-weight:800;color:var(--pink)">$2</span>
-                <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">1 story · 0.4%</span>
-              </div>
-            </div>
-            <div style="background:var(--bg);border-radius:4px;height:7px;overflow:hidden">
-              <div style="width:0.4%;height:100%;background:linear-gradient(90deg,var(--pink),var(--pink));border-radius:4px;min-width:6px"></div>
-            </div>
-          </div>
-
-          <!-- Total -->
-          <div style="border-top:1px solid var(--border);margin-top:1rem;padding-top:0.8rem;display:flex;justify-content:space-between;align-items:center">
-            <span style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px">Total</span>
-            <div>
-              <span style="font-size:1.05rem;font-weight:800;color:var(--teal)">$540</span>
-              <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">24 stories · ~123h</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- By LLM / Model -->
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem;border-left:3px solid var(--teal)">
-          <div style="font-size:0.65rem;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--teal);margin-bottom:1rem">By LLM · Model-Level Breakdown</div>
-
-          <!-- Claude Opus 4.6 -->
-          <div style="margin-bottom:1.1rem">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
-              <div>
-                <span style="font-size:0.8rem;font-weight:700;color:var(--violet)">Claude Opus 4.6</span>
-                <span style="font-size:0.7rem;color:var(--text-muted);margin-left:5px">MCP, Multi-Agent, Squad</span>
-              </div>
-              <div style="text-align:right">
-                <span style="font-size:0.95rem;font-weight:800;color:var(--violet)">$320</span>
-                <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">3 stories · 59.3%</span>
-              </div>
-            </div>
-            <div style="background:var(--bg);border-radius:4px;height:6px;overflow:hidden">
-              <div style="width:59.3%;height:100%;background:linear-gradient(90deg,var(--violet),var(--violet2));border-radius:4px"></div>
-            </div>
-          </div>
-
-          <!-- Claude Sonnet 4.6 -->
-          <div style="margin-bottom:1.1rem">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
-              <div>
-                <span style="font-size:0.8rem;font-weight:700;color:var(--violet)">Claude Sonnet 4.6</span>
-                <span style="font-size:0.7rem;color:var(--text-muted);margin-left:5px">Reviews, FinOps, profiles</span>
-              </div>
-              <div style="text-align:right">
-                <span style="font-size:0.95rem;font-weight:800;color:var(--violet)">$114</span>
-                <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">11 stories · 21.1%</span>
-              </div>
-            </div>
-            <div style="background:var(--bg);border-radius:4px;height:6px;overflow:hidden">
-              <div style="width:21.1%;height:100%;background:linear-gradient(90deg,var(--violet),var(--violet2));border-radius:4px;min-width:8px"></div>
-            </div>
-          </div>
-
-          <!-- OpenCode -->
-          <div style="margin-bottom:1.1rem">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
-              <div>
-                <span style="font-size:0.8rem;font-weight:700;color:var(--green)">OpenCode (GPT-4o)</span>
-                <span style="font-size:0.7rem;color:var(--text-muted);margin-left:5px">TypeScript impl, medium stories</span>
-              </div>
-              <div style="text-align:right">
-                <span style="font-size:0.95rem;font-weight:800;color:var(--green)">$104</span>
-                <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">9 stories · 19.3%</span>
-              </div>
-            </div>
-            <div style="background:var(--bg);border-radius:4px;height:6px;overflow:hidden">
-              <div style="width:19.3%;height:100%;background:linear-gradient(90deg,var(--green),var(--green));border-radius:4px"></div>
-            </div>
-          </div>
-
-          <!-- Codex -->
-          <div style="margin-bottom:0.5rem">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
-              <div>
-                <span style="font-size:0.8rem;font-weight:700;color:var(--pink)">Codex (o3)</span>
-                <span style="font-size:0.7rem;color:var(--text-muted);margin-left:5px">Health check validation</span>
-              </div>
-              <div style="text-align:right">
-                <span style="font-size:0.95rem;font-weight:800;color:var(--pink)">$2</span>
-                <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">1 story · 0.4%</span>
-              </div>
-            </div>
-            <div style="background:var(--bg);border-radius:4px;height:6px;overflow:hidden">
-              <div style="width:0.4%;height:100%;background:linear-gradient(90deg,var(--pink),var(--pink));border-radius:4px;min-width:6px"></div>
-            </div>
-          </div>
-
-          <!-- Non-Claude callout -->
-          <div style="border-top:1px solid var(--border);margin-top:1rem;padding-top:0.8rem">
-            <div style="display:flex;justify-content:space-between;align-items:center">
-              <span style="font-size:0.7rem;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.8px">Non-Claude (OpenCode + Codex)</span>
-              <div>
-                <span style="font-size:1.05rem;font-weight:800;color:var(--green)">$106</span>
-                <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">10 stories · 19.6%</span>
-              </div>
-            </div>
-            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px">
-              Orchestration + coordination remains exclusively on Claude Code
-            </div>
-          </div>
-        </div>
-
-      </div><!-- end grid -->
-    </div><!-- end cost breakdown -->
 
     <div style="margin-top:3rem; padding:1.5rem; background:var(--surface); border:1px solid var(--border); border-radius:8px; font-size:0.82rem; color:var(--text-muted)">
         <div style="color:var(--teal); font-weight:700; margin-bottom:0.5rem">EPAM CLI PRD Viewer</div>
@@ -1338,11 +705,6 @@
       <div class="summary-card"><div class="sc-value sc-orange">${hasHybrid ? 'Mixed' : 'Bash'}</div><div class="sc-label">Orchestration Mix</div></div>
     `;
 
-    const subtitle = document.querySelector('.subtitle');
-    if (subtitle) {
-      const title = prd?.projectMetadata?.project?.name || prd?.project?.name || prd?.title || 'Project';
-      subtitle.innerHTML = `${phases.length} phases · <strong>${stories.length} stories</strong> · ${esc(title)}`;
-    }
   }
 
   function renderPhaseCards(stories, implementationOrder, phasesConfig) {
@@ -1407,7 +769,7 @@
             <td>${esc(phase)}</td>
             <td>${esc(laneLabel(s.agentGroup))}</td>
             <td><code>${esc(s.agentRole || '—')}</code></td>
-            <td>${esc(s.defaultModel || phasesConfig?.[phase]?.defaultModel || '—')}</td>
+            <td>${esc(s.model || s.defaultModel || phasesConfig?.[phase]?.defaultModel || '—')}</td>
             <td>${esc(s.aiProvider || 'epam')}</td>
             <td>${fmtHours(s.estimatedHours)}</td>
             <td class="cost-cell">${fmtCost(s.estimatedCost)}</td>
@@ -1419,30 +781,246 @@
     tbody.innerHTML = html;
   }
 
+  function renderArchitecturalDecisions(prd) {
+    const el = document.getElementById('architectural-decisions');
+    if (!el) return;
+    const stack = prd?.project?.stack || prd?.projectMetadata?.stack || {};
+    const config = prd?.configuration || {};
+    const phases = Object.keys(prd?.implementationOrder || {});
+    const cards = [];
+    if (stack.language) cards.push({ label: 'Language', value: stack.language, detail: stack.language });
+    if (stack.runtime) cards.push({ label: 'Runtime', value: stack.runtime, detail: stack.devEnvironment ? `${stack.runtime} — ${stack.devEnvironment}` : stack.runtime });
+    if (stack.framework) cards.push({ label: 'Framework', value: stack.framework, detail: stack.framework });
+    if (stack.testing) cards.push({ label: 'Testing', value: stack.testing, detail: `${stack.testing} — unit + integration tests, coverage tracked per phase gate` });
+    if (phases.length) cards.push({ label: 'Phases', value: `${phases.length} phase${phases.length !== 1 ? 's' : ''}`, detail: phases.join(' → ') });
+    const model = config.defaultModel || config.model || '';
+    if (model) cards.push({ label: 'Default Model', value: model, detail: `Primary LLM for story execution` });
+    const effortModel = config.highEffortModel || config.planModel || '';
+    if (effortModel && effortModel !== model) cards.push({ label: 'High-Effort Model', value: effortModel, detail: 'Used for plan-mode and complex stories' });
+    cards.push({ label: 'Skill Assessment', value: 'Step 0.5 enabled', detail: 'Pre-phase agent profile gap analysis — required skills in technicalNotes.requiredSkills per story' });
+    cards.push({ label: 'Knowledge Base', value: 'KB.md enabled', detail: 'Learnings written on first-success and retries; injected per agent role via orchestrations/agents/KB.md' });
+    if (!cards.length) { el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;padding:1rem">No stack configuration found in prd.json</div>'; return; }
+    el.innerHTML = cards.map(c => `<div class="decision-card">
+      <div class="label">${esc(c.label)}</div>
+      <div class="value">${esc(c.value)}</div>
+      <div class="detail">${esc(c.detail)}</div>
+    </div>`).join('');
+  }
+
+  function renderDependencyGraph(stories, implementationOrder) {
+    const el = document.getElementById('dep-graph-content');
+    if (!el) return;
+    if (!stories.length) { el.innerHTML = '<span style="color:var(--text-muted)">No stories found in prd.json</span>'; return; }
+    const storyById = {};
+    for (const s of stories) if (s.id) storyById[s.id] = s;
+    const phaseNames = Object.keys(implementationOrder);
+    let html = '';
+    let phaseIdx = 0;
+    for (const phaseName of phaseNames) {
+      const phaseStories = (implementationOrder[phaseName] || []).map(id => storyById[id]).filter(Boolean);
+      if (!phaseStories.length) continue;
+      const totalH = phaseStories.reduce((s, st) => s + (Number(st.estimatedHours) || 0), 0);
+      const hLabel = totalH > 0 ? ` — ${fmtHours(totalH)}` : '';
+      html += `<span class="phase-sep">▸ PHASE ${phaseIdx + 1}: ${esc(phaseName)}${esc(hLabel)}</span>\n`;
+      for (const s of phaseStories) {
+        const role = s.agentRole ? ` [${s.agentRole}]` : '';
+        const model = s.model || s.defaultModel ? `, ${s.model || s.defaultModel}` : '';
+        const h = s.estimatedHours ? `, ${fmtHours(s.estimatedHours)}` : '';
+        html += `<span class="node">${esc(s.id)}</span>  <span class="comment">// ${esc(s.title)}${esc(role)}${esc(model)}${esc(h)}</span>\n`;
+      }
+      html += '\n';
+      phaseIdx++;
+    }
+    el.innerHTML = html || '<span style="color:var(--text-muted)">No phases found</span>';
+  }
+
+  function renderGanttChart(stories, implementationOrder) {
+    const titleEl = document.getElementById('gantt-title');
+    const subEl = document.getElementById('gantt-subtitle');
+    const contentEl = document.getElementById('gantt-content');
+    if (!contentEl) return;
+    if (!stories.length) { contentEl.innerHTML = '<div style="color:var(--text-muted);padding:1rem;font-size:0.85rem">No stories found in prd.json</div>'; return; }
+    const storyById = {};
+    for (const s of stories) if (s.id) storyById[s.id] = s;
+    const phaseNames = Object.keys(implementationOrder);
+    const allOrdered = phaseNames.flatMap(p => (implementationOrder[p] || []).map(id => storyById[id]).filter(Boolean));
+    const totalH = allOrdered.reduce((s, st) => s + (Number(st.estimatedHours) || 0), 0);
+    if (totalH === 0) { contentEl.innerHTML = '<div style="color:var(--text-muted);padding:1rem;font-size:0.85rem">No hour estimates available</div>'; return; }
+    const scale = totalH * 1.05;
+    const tickCount = Math.min(12, Math.ceil(totalH / 5) + 1);
+    const tickStep = Math.ceil(totalH / (tickCount - 1));
+    const ticks = Array.from({ length: tickCount }, (_, i) => i * tickStep);
+    if (titleEl) titleEl.textContent = `Estimated Timeline (~${fmtHours(totalH)} Wall Clock)`;
+    if (subEl) subEl.textContent = `${stories.length} stories across ${phaseNames.length} phase${phaseNames.length !== 1 ? 's' : ''} · sequential execution · ${fmtHours(totalH)} total`;
+    let html = `<div class="gantt-header"><div></div><div class="gantt-hours">${ticks.map(t => `<div class="gantt-hour-mark">${t}h</div>`).join('')}</div></div>\n`;
+    let cursor = 0;
+    let phaseIdx = 0;
+    for (const phaseName of phaseNames) {
+      const phaseStories = (implementationOrder[phaseName] || []).map(id => storyById[id]).filter(Boolean);
+      if (!phaseStories.length) continue;
+      const phaseH = phaseStories.reduce((s, st) => s + (Number(st.estimatedHours) || 0), 0);
+      html += `<div class="gantt-phase-label"><span style="color:var(--green);font-family:monospace">Phase ${phaseIdx + 1}</span> <span style="color:var(--text-muted);font-weight:400">${esc(phaseName)} — ${fmtHours(phaseH)}</span></div>\n`;
+      for (const s of phaseStories) {
+        const h = Number(s.estimatedHours) || 0;
+        const left = (cursor / scale * 100).toFixed(2);
+        const width = Math.max((h / scale * 100), 0.5).toFixed(2);
+        const barClass = s.agentGroup === 'primary' ? 'primary-bar' : s.agentGroup === 'independent' ? 'independent-bar' : s.id?.toLowerCase().includes('review') ? 'integration-bar' : 'main-bar';
+        const shortId = (s.id || '').replace(/^[A-Z]+-/, '');
+        html += `<div class="gantt-row">
+          <div class="gantt-label"><span class="story-id">${esc(s.id)}</span> ${esc((s.title || '').substring(0, 40))}</div>
+          <div class="gantt-track"><div class="gantt-bar ${barClass}" style="left:${left}%;width:${width}%">${esc(shortId)}</div></div>
+        </div>\n`;
+        cursor += h;
+      }
+      phaseIdx++;
+    }
+    contentEl.innerHTML = html;
+  }
+
+  function renderAgentRoleMatrix(normalizedProfiles, stories) {
+    const tbody = document.getElementById('agent-role-matrix-tbody');
+    if (!tbody) return;
+    if (!normalizedProfiles.length && !stories.length) return;
+    const storyByRole = {};
+    for (const s of stories) {
+      const role = s.agentRole || '—';
+      if (!storyByRole[role]) storyByRole[role] = [];
+      storyByRole[role].push(s);
+    }
+    const roles = normalizedProfiles.length
+      ? normalizedProfiles.map(p => p.roleId).filter(Boolean)
+      : Object.keys(storyByRole);
+    if (!roles.length) { tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-muted)">No agent roles found in profiles</td></tr>'; return; }
+    tbody.innerHTML = roles.map(roleId => {
+      const roleStories = storyByRole[roleId] || [];
+      const totalCost = roleStories.reduce((sum, s) => sum + (Number(s.estimatedCost) || 0), 0);
+      const lanes = [...new Set(roleStories.map(s => laneLabel(s.agentGroup)))].join(' / ') || '—';
+      const models = [...new Set(roleStories.map(s => s.model || s.defaultModel).filter(Boolean))];
+      return `<tr>
+        <td><code>${esc(roleId)}</code></td>
+        <td class="lane-cell">${esc(lanes)}</td>
+        <td><span class="badge badge-bash">bash</span></td>
+        <td class="count-cell">${roleStories.length}</td>
+        <td style="white-space:nowrap;font-size:0.78rem">${models.map(m => `<code>${esc(m)}</code>`).join(' ') || '—'}</td>
+        <td class="cost-cell">${totalCost > 0 ? fmtCost(totalCost) : '—'}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function renderCostBreakdown(stories) {
+    const el = document.getElementById('cost-breakdown');
+    if (!el) return;
+    if (!stories.length) { el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem">No stories found in prd.json</div>'; return; }
+    const totalCost = stories.reduce((sum, s) => sum + (Number(s.estimatedCost) || 0), 0);
+    const totalHours = stories.reduce((sum, s) => sum + (Number(s.estimatedHours) || 0), 0);
+    const byModel = {};
+    for (const s of stories) {
+      const model = s.model || s.defaultModel || 'unknown';
+      if (!byModel[model]) byModel[model] = { count: 0, cost: 0 };
+      byModel[model].count++;
+      byModel[model].cost += Number(s.estimatedCost) || 0;
+    }
+    const byProvider = {};
+    for (const s of stories) {
+      const prov = (s.aiProvider || 'epam').toUpperCase();
+      if (!byProvider[prov]) byProvider[prov] = { count: 0, cost: 0 };
+      byProvider[prov].count++;
+      byProvider[prov].cost += Number(s.estimatedCost) || 0;
+    }
+    const modelRows = Object.entries(byModel).sort((a, b) => b[1].cost - a[1].cost).map(([model, { count, cost }]) => {
+      const pct = totalCost > 0 ? (cost / totalCost * 100).toFixed(1) : '0.0';
+      return `<div style="margin-bottom:1.1rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
+          <div><span style="font-size:0.8rem;font-weight:700;color:var(--teal)">${esc(model)}</span></div>
+          <div style="text-align:right">
+            <span style="font-size:0.95rem;font-weight:800;color:var(--teal)">${fmtCost(cost)}</span>
+            <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">${count} ${count === 1 ? 'story' : 'stories'} · ${pct}%</span>
+          </div>
+        </div>
+        <div style="background:var(--bg);border-radius:4px;height:6px;overflow:hidden">
+          <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--teal),var(--teal2));border-radius:4px;min-width:4px"></div>
+        </div>
+      </div>`;
+    }).join('');
+    const provRows = Object.entries(byProvider).sort((a, b) => b[1].cost - a[1].cost).map(([prov, { count, cost }]) => {
+      const pct = totalCost > 0 ? (cost / totalCost * 100).toFixed(1) : '0.0';
+      return `<div style="margin-bottom:1.1rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
+          <div><span style="background:var(--violet-dim);color:var(--violet);border:1px solid var(--violet);border-radius:4px;font-size:0.65rem;font-weight:800;padding:2px 7px;letter-spacing:0.5px">${esc(prov)}</span></div>
+          <div style="text-align:right">
+            <span style="font-size:0.95rem;font-weight:800;color:var(--violet)">${fmtCost(cost)}</span>
+            <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">${count} ${count === 1 ? 'story' : 'stories'} · ${pct}%</span>
+          </div>
+        </div>
+        <div style="background:var(--bg);border-radius:4px;height:7px;overflow:hidden">
+          <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--violet),var(--violet2));border-radius:4px;min-width:4px"></div>
+        </div>
+      </div>`;
+    }).join('');
+    el.innerHTML = `
+      <div style="font-size:0.7rem;font-weight:800;letter-spacing:1.5px;color:var(--teal);text-transform:uppercase;margin-bottom:1rem;opacity:.7">
+        Cost Breakdown — ${stories.length} ${stories.length === 1 ? 'Story' : 'Stories'} · ${fmtCost(totalCost)} est. · ${fmtHours(totalHours)} total work
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem;border-left:3px solid var(--violet)">
+          <div style="font-size:0.65rem;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--violet);margin-bottom:1rem">By Provider Platform</div>
+          ${provRows}
+          <div style="border-top:1px solid var(--border);margin-top:1rem;padding-top:0.8rem;display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px">Total</span>
+            <div>
+              <span style="font-size:1.05rem;font-weight:800;color:var(--teal)">${fmtCost(totalCost)}</span>
+              <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px">${stories.length} stories · ${fmtHours(totalHours)}</span>
+            </div>
+          </div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem;border-left:3px solid var(--teal)">
+          <div style="font-size:0.65rem;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--teal);margin-bottom:1rem">By LLM · Model-Level Breakdown</div>
+          ${modelRows}
+        </div>
+      </div>
+    `;
+  }
+
   async function hydrateProjectPlan() {
     try {
       const prd = await loadJson('prd.json');
       let profiles = {};
       try {
-        const profilesText = await loadText('profiles.json');
+        const profilesText = await loadText('logs/profiles.json');
         profiles = parseLooseRoleMap(profilesText);
       } catch {
-        profiles = {};
+        try {
+          const profilesText = await loadText('profiles.json');
+          profiles = parseLooseRoleMap(profilesText);
+        } catch {
+          profiles = {};
+        }
       }
       const stories = getStories(prd);
       const implementationOrder = buildImplementationOrder(prd, stories);
       const phasesConfig = buildPhasesConfig(prd, implementationOrder, stories);
       const normalizedProfiles = normalizeProfiles(profiles);
+      const title = prd?.projectMetadata?.project?.name || prd?.project?.name || prd?.title || '';
+      const h1 = document.getElementById('page-title');
+      if (h1 && title) h1.textContent = title + ' — Orchestration Plan';
+      const subtitle = document.getElementById('page-subtitle');
+      if (subtitle) subtitle.innerHTML = `${Object.keys(implementationOrder).length} phases · <strong>${stories.length} stories</strong>${title ? ' · ' + esc(title) : ''}`;
       renderSummary(prd, normalizedProfiles, implementationOrder, phasesConfig, stories);
       renderPhaseCards(stories, implementationOrder, phasesConfig);
       renderRunCommands(implementationOrder, phasesConfig);
       renderStoryTable(stories, implementationOrder, phasesConfig);
+      renderAgentRoleMatrix(normalizedProfiles, stories);
+      renderCostBreakdown(stories);
+      renderArchitecturalDecisions(prd);
+      renderDependencyGraph(stories, implementationOrder);
+      renderGanttChart(stories, implementationOrder);
     } catch {
       // Keep static fallback sections if data files are unavailable.
     }
   }
 
   hydrateProjectPlan();
+  setInterval(hydrateProjectPlan, 30_000);
 })();
 </script>
 <script>
@@ -1469,8 +1047,8 @@
       el.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:10px">
           <div>
-            <span style="font-size:0.85rem;color:#0f172a;letter-spacing:0.3px">Latest Specification Run</span><br>
-            <span style="font-size:1.1rem;font-weight:700;color:#0047ff">${summary.runId || '—'}</span>
+            <span style="font-size:0.85rem;color:#080808;letter-spacing:0.3px">Latest Specification Run</span><br>
+            <span style="font-size:1.1rem;font-weight:700;color:#60a5fa">${summary.runId || '—'}</span>
             <span style="font-size:0.85rem;color:#475569;margin-left:10px">Phase ${summary.phase || '—'}</span>
           </div>
           <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:0.85rem">

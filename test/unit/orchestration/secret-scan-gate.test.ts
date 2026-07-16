@@ -148,6 +148,10 @@ describe('commit_completed_story() (claude.sh) — gated by scan-secrets.sh befo
     expect(body).toMatch(/git -C "\$_commit_root" reset/);
     expect(body).toMatch(/SECRET_SCAN|secret/i);
   });
+
+  it('SKIP_SECRET_SCAN defaults to true — scan is skipped unless explicitly set to false', () => {
+    expect(body).toContain('SKIP_SECRET_SCAN:-true');
+  });
 });
 
 describe('Step 1.5 auto-commit (run-agent-orchestration.sh) — gated by scan-secrets.sh', () => {
@@ -164,6 +168,58 @@ describe('Step 1.5 auto-commit (run-agent-orchestration.sh) — gated by scan-se
 });
 
 describe('commit_completed_story() — REAL execution proves a planted secret blocks the commit', () => {
+  // callSite mirrors the ACTUAL call site in run_implementation()
+  // (claude.sh): `commit_completed_story "$story_id" || true`. Root cause
+  // this models (found live, 2026-07-14, tier3-travel-app run): a bare,
+  // unguarded call to a function that legitimately returns 1 is ITSELF a
+  // set -e trigger at the call site — this is true no matter how gracefully
+  // the function itself fails internally, so the real fix has two parts:
+  // (1) the function's own internal statements must not ALSO die before
+  // reaching its intended `return 1` (see the git-add / scan-secrets fixes
+  // below), and (2) the call site must not be bare. This harness always
+  // includes part (2) via `callSite`, matching production usage.
+  function runCommitCompletedStory(
+    dir: string,
+    opts: { setE: boolean; callSite: string; skipSecretScan?: boolean },
+  ): { output: string; exitedGracefully: boolean } {
+    const _fnStart = claudeSrc.indexOf('commit_completed_story() {');
+    const _fnEnd = claudeSrc.indexOf('\n}', _fnStart);
+    const fnBody = claudeSrc.slice(_fnStart, _fnEnd + 2);
+    const scriptPath = join(dir, 'run.sh');
+    writeFileSync(
+      scriptPath,
+      [
+        '#!/usr/bin/env bash',
+        // claude.sh itself runs under `set -e` (line 18) — the real
+        // environment this function always executes in. The harness must
+        // replicate that, or a set-e-unsafe statement inside the function
+        // (found live, 2026-07-14: two of them, in the git-add and
+        // scan-secrets blocks) silently passes here while still being able
+        // to kill the real script.
+        opts.setE ? 'set -e' : '',
+        `GIT_WORK_ROOT=${JSON.stringify(dir)}`,
+        `SCRIPT_DIR=${JSON.stringify(join(REPO_ROOT, 'orchestrations', 'scripts'))}`,
+        'EPAM_COMMIT_TIMEOUT_SECS=10',
+        // Scan defaults to SKIP_SECRET_SCAN=true; execution tests that need
+        // the scan to run must explicitly opt in with skipSecretScan: false.
+        `SKIP_SECRET_SCAN=${opts.skipSecretScan === false ? 'false' : 'true'}`,
+        'log() { echo "LOG: $*"; }',
+        'warning() { echo "WARN: $*"; }',
+        'error() { echo "ERROR: $*"; }',
+        fnBody,
+        opts.callSite,
+        'echo "REACHED_END rc=$?"',
+      ].filter(Boolean).join('\n'),
+    );
+    let output = '';
+    try {
+      output = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
+    } catch (e: any) {
+      output = ((e.stdout ?? '').toString()) + ((e.stderr ?? '').toString());
+    }
+    return { output, exitedGracefully: output.includes('REACHED_END') };
+  }
+
   it('a story that wrote a real-looking AWS key does not get committed', () => {
     const dir = mkdtempSync(join(tmpdir(), 'commit-secret-block-'));
     try {
@@ -175,34 +231,110 @@ describe('commit_completed_story() — REAL execution proves a planted secret bl
       git(dir, 'commit', '-qm', 'base');
       writeFileSync(join(dir, 'src.js'), "const key = 'AKIAABCDEFGHIJKLMNOP';\n");
 
-      const _fnStart = claudeSrc.indexOf('commit_completed_story() {');
-      const _fnEnd = claudeSrc.indexOf('\n}', _fnStart);
-      const fnBody = claudeSrc.slice(_fnStart, _fnEnd + 2);
-      const scriptPath = join(dir, 'run.sh');
-      writeFileSync(
-        scriptPath,
-        [
-          '#!/usr/bin/env bash',
-          `GIT_WORK_ROOT=${JSON.stringify(dir)}`,
-          `SCRIPT_DIR=${JSON.stringify(join(REPO_ROOT, 'orchestrations', 'scripts'))}`,
-          'EPAM_COMMIT_TIMEOUT_SECS=10',
-          'log() { echo "LOG: $*"; }',
-          'warning() { echo "WARN: $*"; }',
-          'error() { echo "ERROR: $*"; }',
-          fnBody,
-          'commit_completed_story "SKY-TEST"',
-          'echo "EXIT:$?"',
-        ].join('\n'),
-      );
-      let output = '';
-      try {
-        output = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
-      } catch (e: any) {
-        output = ((e.stdout ?? '').toString()) + ((e.stderr ?? '').toString());
-      }
+      const { output } = runCommitCompletedStory(dir, {
+        setE: false,
+        callSite: 'commit_completed_story "SKY-TEST"',
+        skipSecretScan: false,
+      });
       const log = git(dir, 'log', '--oneline');
       expect(log).not.toMatch(/story: complete SKY-TEST/);
       expect(output).toMatch(/SECRET_SCAN|secret/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('the real call site in run_implementation() (claude.sh) protects the call with || true, not a bare invocation', () => {
+    const loopStart = claudeSrc.indexOf('for story_id in "${stories[@]}"; do');
+    const loopBody = claudeSrc.slice(loopStart, claudeSrc.indexOf('# Setup git worktrees for parallel execution', loopStart));
+    expect(loopBody).toMatch(/commit_completed_story "\$story_id" \|\| true/);
+  });
+
+  // REPRODUCES the exact live defect (found live, 2026-07-14, tier3-travel-app
+  // run) and proves the fix: under `set -e` (claude.sh's real environment),
+  // a secret-scan rejection used to silently kill the ENTIRE worktree-lane
+  // script — TWO compounding bugs: (1) `_scan_output=$(bash "$_scan_sh" ...)`
+  // as a bare assignment is itself a set -e trigger when the command
+  // substitution's command exits non-zero (which scan-secrets.sh does
+  // intentionally on a hit) — this died one statement before the function's
+  // OWN "Refusing to commit" warning ever printed; (2) even after fixing
+  // that, a bare call to a function that legitimately returns 1 is ALSO a
+  // set -e trigger at the CALL SITE. Every remaining story in that worktree
+  // lane was silently abandoned, with worktree-health-check.sh later
+  // finding uncommitted files and reporting "the agent did not commit its
+  // own changes" — no indication a secret scan was ever involved.
+  it('REPRODUCES the live defect and proves the fix: under set -e, with the real || true call site, a secret-scan rejection is handled gracefully instead of killing the whole script', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'commit-secret-sete-'));
+    try {
+      git(dir, 'init', '-q');
+      git(dir, 'config', 'user.email', 't@t.com');
+      git(dir, 'config', 'user.name', 't');
+      writeFileSync(join(dir, 'README.md'), 'base\n');
+      git(dir, 'add', 'README.md');
+      git(dir, 'commit', '-qm', 'base');
+      writeFileSync(join(dir, 'src.js'), "const key = 'AKIAABCDEFGHIJKLMNOP';\n");
+
+      const { output, exitedGracefully } = runCommitCompletedStory(dir, {
+        setE: true,
+        callSite: 'commit_completed_story "SKY-TEST" || true',
+        skipSecretScan: false,
+      });
+      expect(exitedGracefully).toBe(true);
+      expect(output).toMatch(/REACHED_END rc=0/);
+      expect(output).toMatch(/SECRET_SCAN|secret/i);
+      const log = git(dir, 'log', '--oneline');
+      expect(log).not.toMatch(/story: complete SKY-TEST/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('the function itself, called bare under set -e (no caller protection), still dies at the call site — proving || true at the call site is load-bearing, not redundant', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'commit-secret-bare-sete-'));
+    try {
+      git(dir, 'init', '-q');
+      git(dir, 'config', 'user.email', 't@t.com');
+      git(dir, 'config', 'user.name', 't');
+      writeFileSync(join(dir, 'README.md'), 'base\n');
+      git(dir, 'add', 'README.md');
+      git(dir, 'commit', '-qm', 'base');
+      writeFileSync(join(dir, 'src.js'), "const key = 'AKIAABCDEFGHIJKLMNOP';\n");
+
+      const { output, exitedGracefully } = runCommitCompletedStory(dir, {
+        setE: true,
+        callSite: 'commit_completed_story "SKY-TEST"',
+        skipSecretScan: false,
+      });
+      // Its own warning DOES print now (the internal git-add/scan-secrets
+      // fixes work) but the script still dies right after, at the bare
+      // call site itself -- REACHED_END is never reached.
+      expect(output).toMatch(/SECRET_SCAN|secret/i);
+      expect(exitedGracefully).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('under set -e, a clean commit (no secret) still succeeds and reaches the end', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'commit-clean-sete-'));
+    try {
+      git(dir, 'init', '-q');
+      git(dir, 'config', 'user.email', 't@t.com');
+      git(dir, 'config', 'user.name', 't');
+      writeFileSync(join(dir, 'README.md'), 'base\n');
+      git(dir, 'add', 'README.md');
+      git(dir, 'commit', '-qm', 'base');
+      writeFileSync(join(dir, 'src.js'), "export const greet = () => 'hello';\n");
+
+      const { output, exitedGracefully } = runCommitCompletedStory(dir, {
+        setE: true,
+        callSite: 'commit_completed_story "SKY-TEST" || true',
+        skipSecretScan: false,
+      });
+      expect(exitedGracefully).toBe(true);
+      expect(output).toMatch(/REACHED_END rc=0/);
+      const log = git(dir, 'log', '--oneline');
+      expect(log).toMatch(/story: complete SKY-TEST/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -153,3 +153,65 @@ describe('verify_story_deliverables — vendor-dir skip (REAL execution)', () =>
     expect(rc).toBe(0);
   });
 });
+
+describe('verify_story_deliverables — 0-byte file check (REAL execution)', () => {
+  // Root cause of SKY-003-impl empty cli.ts (found live 2026-07-15, run #2):
+  // The old check used -e (file exists) — a 0-byte file satisfied it. tsc
+  // also passes on an empty .ts file. The story was marked completed with no
+  // implementation written at all. Fix: -s (exists AND non-empty) so an
+  // empty declared deliverable is treated the same as a missing one.
+  function runWithEmptyFile(opts: { declaredFiles: string[]; createEmptyFiles?: string[]; createNonEmptyFiles?: string[] }): { rc: number; output: string } {
+    const dir = mkdtempSync(join(tmpdir(), 'verify-empty-'));
+    try {
+      const prdPath = join(dir, 'prd.json');
+      writeFileSync(
+        prdPath,
+        JSON.stringify({ stories: [{ id: 'SKY-TEST', technicalNotes: { files: opts.declaredFiles.map((f) => `${dir}/${f}`) } }] }),
+      );
+      for (const f of opts.createEmptyFiles ?? []) {
+        const full = join(dir, f);
+        mkdirSync(join(full, '..'), { recursive: true });
+        writeFileSync(full, '');
+      }
+      for (const f of opts.createNonEmptyFiles ?? []) {
+        const full = join(dir, f);
+        mkdirSync(join(full, '..'), { recursive: true });
+        writeFileSync(full, 'content');
+      }
+      const fnBody = extractFunctionBody('verify_story_deliverables');
+      const vendorDirsFn = extractFunctionBody('_get_vendor_dirs');
+      const scriptPath = join(dir, 'run.sh');
+      writeFileSync(
+        scriptPath,
+        ['#!/usr/bin/env bash', `PROJECT_ROOT=${JSON.stringify(dir)}`, `PRD_FILE=${JSON.stringify(prdPath)}`, `MAIN_PRD_FILE=${JSON.stringify(prdPath)}`, 'error() { echo "ERROR: $*" >&2; }', 'success() { echo "SUCCESS: $*" >&2; }', vendorDirsFn, fnBody, 'verify_story_deliverables "SKY-TEST"', 'echo "RC=$?"'].join('\n'),
+      );
+      const stderrPath = join(dir, 'stderr.log');
+      const wrapperPath = join(dir, 'run-wrapper.sh');
+      writeFileSync(wrapperPath, `bash ${JSON.stringify(scriptPath)} 2> ${JSON.stringify(stderrPath)}`);
+      let stdout = '';
+      try { stdout = execFileSync('bash', [wrapperPath], { encoding: 'utf8' }); } catch (e: any) { stdout = (e.stdout ?? '').toString(); }
+      const combined = stdout + readFileSync(stderrPath, 'utf8');
+      const rc = parseInt(combined.match(/RC=(\d+)/)?.[1] ?? '-1', 10);
+      return { rc, output: combined };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('REPRODUCES the live gap: a 0-byte declared deliverable is flagged as missing', () => {
+    const { rc, output } = runWithEmptyFile({ declaredFiles: ['src/cli.ts'], createEmptyFiles: ['src/cli.ts'] });
+    expect(rc).toBe(1);
+    expect(output).toMatch(/missing 1 declared deliverable/);
+  });
+
+  it('a non-empty declared deliverable passes (regression: existing behavior preserved)', () => {
+    const { rc } = runWithEmptyFile({ declaredFiles: ['src/cli.ts'], createNonEmptyFiles: ['src/cli.ts'] });
+    expect(rc).toBe(0);
+  });
+
+  it('a missing declared deliverable still fails (regression: pre-existing behavior preserved)', () => {
+    const { rc, output } = runWithEmptyFile({ declaredFiles: ['src/cli.ts'] });
+    expect(rc).toBe(1);
+    expect(output).toMatch(/missing 1 declared deliverable/);
+  });
+});

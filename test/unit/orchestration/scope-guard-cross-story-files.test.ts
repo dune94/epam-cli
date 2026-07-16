@@ -65,9 +65,17 @@ describe('_scope_lock() / _scope_unlock() — design (static)', () => {
     expect(unlockBody).toMatch(/select\(\.id != \$id\)/);
   });
 
-  it('the call site passes $story_id to _scope_unlock (not called bare)', () => {
-    const idx = claudeSrc.indexOf('_scope_unlock "$story_id"');
-    expect(idx).toBeGreaterThan(-1);
+  it('_scope_lock and _scope_unlock are NOT invoked from the implementation loop (scope-guard removed — worktrees provide OS-level isolation)', () => {
+    // Worktrees give each story its own filesystem checkout; chmod-based locking
+    // is redundant there, and caused a split-lineage bug (parent story still
+    // claimed a child's deliverable → child's own file got locked).
+    const implLoopMarker = 'run_implementation()';
+    const implStart = claudeSrc.indexOf(implLoopMarker);
+    expect(implStart).toBeGreaterThan(-1);
+    const implEnd = claudeSrc.indexOf('\n}\n', implStart);
+    const implBody = claudeSrc.slice(implStart, implEnd);
+    expect(implBody).not.toContain('_scope_lock ');
+    expect(implBody).not.toContain('_scope_unlock ');
   });
 });
 

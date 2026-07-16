@@ -55,6 +55,8 @@ append_activity_event() {
   local role="${4:-}"
   local lane="${5:-main}"
   local message="${6:-}"
+  local model="${7:-}"
+  local provider="${8:-}"
   local effective_type
   effective_type="$(normalize_activity_type "$raw_type")"
   local ts
@@ -73,6 +75,8 @@ append_activity_event() {
     --arg message "$message" \
     --arg rawType "$raw_type" \
     --arg eventId "$event_id" \
+    --arg model "$model" \
+    --arg provider "$provider" \
     '{
       event_id: $eventId,
       timestamp: $ts,
@@ -80,6 +84,8 @@ append_activity_event() {
       story_id: (if $story == "" then null else $story end),
       phase: (if $phase == "" then null else $phase end),
       type: $type,
+      model: (if $model == "" then null else $model end),
+      provider: (if $provider == "" then null else $provider end),
       detail: {
         lane: $lane,
         message: $message,
@@ -156,7 +162,7 @@ EOF
       ')
     echo "$MONITOR_DATA" > "$MONITOR_FILE"
     PHASE_ID="$(resolve_phase)"
-    append_activity_event "story_start" "$STORY_ID" "$PHASE_ID" "$ROLE" "$LANE" "Starting $TITLE"
+    append_activity_event "story_start" "$STORY_ID" "$PHASE_ID" "$ROLE" "$LANE" "Starting $TITLE" "$MODEL" "$PROVIDER"
     ;;
 
   story_complete)

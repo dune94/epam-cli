@@ -6,12 +6,12 @@
     <title>Agent Activity Dashboard</title>
     <style>
         :root {
-          --bg: #0f172a;  --bg1: #1e293b;  --bg2: #263248;  --bg3: #334155;
-          --surface: #1e293b;  --surface2: #263248;  --surface3: #334155;
-          --border: #334155;  --border2: #475569;
-          --text: #e2e8f0;  --text2: #94a3b8;  --text3: #64748b;  --text-muted: #94a3b8;
-          --teal: #38bdf8;  --teal2: #38bdf8;  --teal-dim: rgba(56,189,248,0.10);
-          --accent: #38bdf8;  --teal-glow: rgba(56,189,248,0.22);
+          --bg: #080808;  --bg1: #101010;  --bg2: #181818;  --bg3: #222222;
+          --surface: #101010;  --surface2: #181818;  --surface3: #222222;
+          --border: #2a2a2a;  --border2: #383838;
+          --text: #f0f0f0;  --text2: #a0a0a0;  --text3: #606060;  --text-muted: #a0a0a0;
+          --teal: #84cc16;  --teal2: #84cc16;  --teal-dim: rgba(132,204,22,.12);
+          --accent: #84cc16;  --teal-glow: rgba(132,204,22,.22);
           --violet: #a78bfa;  --violet2: #a78bfa;  --violet-dim: rgba(167,139,250,0.12);
           --green: #4ade80;  --green-dim: rgba(74,222,128,0.12);
           --amber: #fbbf24;  --amber-dim: rgba(251,191,36,0.12);
@@ -19,15 +19,15 @@
           --pink: #f472b6;  --pink-dim: rgba(244,114,182,0.10);
           --blue: #60a5fa;  --blue-dim: rgba(96,165,250,0.10);
           --orange: #fb923c;  --orange-dim: rgba(251,146,60,0.10);
-          --epam-gradient: linear-gradient(118.82deg, #0078c2 .5%, #0047ff 47.33%, #8453d2 76.12%);
-          --epam-cyan: #00f6ff;
+          --epam-gradient: linear-gradient(135deg, #a3e635 0%, #84cc16 100%);
+          --epam-cyan: #84cc16;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
         header {
-            background: var(--epam-gradient); border-bottom: 1px solid transparent;
-            padding: 14px 24px; display: flex; align-items: center; justify-content: space-between;
+            background: var(--bg1); border-bottom: 1px solid rgba(132,204,22,.25);
+            padding: 14px 28px; display: flex; align-items: center; justify-content: space-between;
             position: sticky; top: 0; z-index: 200; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
         .container { padding: 24px; max-width: 1400px; margin: 0 auto; }
@@ -123,7 +123,7 @@
         }
         .badge-type { background: var(--teal-dim); color: var(--teal); }
         .badge-phase { background: var(--violet-dim); color: var(--violet); }
-        .badge-story { background: var(--blue-dim); color: var(--blue); font-family: monospace; font-size: 10px; }
+        .badge-story { background: var(--teal-dim); color: var(--accent); font-family: monospace; font-size: 10px; }
 
         .badge-finding-blocker { background: var(--red-dim); color: var(--red); }
         .badge-finding-error   { background: var(--red-dim); color: var(--red); }
@@ -150,22 +150,37 @@
         .empty-state p { color: var(--text3); font-size: 15px; }
 
         .auto-refresh { text-align: center; margin-top: 20px; color: var(--text3); font-size: 14px; }
+
+        /* Self-heal retry panel */
+        .heal-panel { background: var(--bg1); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }
+        .heal-panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .heal-panel-title { font-size: 12px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
+        .heal-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12px; min-width: 0; }
+        .heal-row:last-child { border-bottom: none; }
+        .heal-story { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: var(--teal-dim); color: var(--teal); border: 1px solid rgba(132,204,22,.2); white-space: nowrap; flex-shrink: 0; }
+        .heal-retry-num { font-size: 10px; font-weight: 700; color: var(--text3); white-space: nowrap; flex-shrink: 0; min-width: 42px; }
+        .heal-target { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
+        .heal-target.none { background: rgba(251,191,36,.1); color: var(--amber); }
+        .heal-target.skill { background: rgba(74,222,128,.1); color: var(--green); }
+        .heal-target.patch { background: rgba(167,139,250,.1); color: var(--violet); }
+        .heal-rung { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(96,165,250,.1); color: var(--blue); font-weight: 700; white-space: nowrap; flex-shrink: 0; }
+        .heal-diagnosis { color: var(--text2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
     .nav-links { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 18px; }
 .nav-links a { color: var(--text3); text-decoration: none; font-size: 12px; font-weight: 700; padding: 8px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); }
-.nav-links a.active { color: #fff; background: var(--teal); border-color: var(--teal); }
+.nav-links a.active { color: #080808; background: var(--teal); border-color: var(--teal); }
+.header .nav-links, .header-right .nav-links { margin: 0; }
 </style>
 </head>
 <body>
-    <header>
+    <header class="header">
         <div style="display:flex;align-items:center;gap:12px">
-            <div style="width:34px;height:34px;background:rgba(255,255,255,0.2);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:17px">&#9881;</div>
+            <div style="width:34px;height:34px;background:rgba(132,204,22,.12);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:17px">&#9881;</div>
             <div>
-                <div style="font-size:18px;font-weight:800;color:#fff">EPAM CLI — Agent Activity</div>
-                <div style="font-size:11px;color:rgba(255,255,255,0.7)">Unified Timeline &middot; All Agents &middot; All Phases</div>
+                <div style="font-size:18px;font-weight:800;color:var(--teal)">EPAM CLI — Agent Activity</div>
+                <div style="font-size:11px;color:var(--text2)">Unified Timeline &middot; All Agents &middot; All Phases</div>
             </div>
         </div>
-    </header>
-<nav class="nav-links">
+      <nav class="nav-links" style="margin:0">
   <a href="monitor.html">Monitor</a>
   <a href="prd-viewer.html">PRD Viewer</a>
   <a href="specification.html">Spec Diff</a>
@@ -183,7 +198,8 @@
   <a href="swe-bench.html">SWE-bench</a>
   <a href="health.html">Health</a>
   <a href="epam-cli-guide.html">CLI Guide</a>
-</nav>
+  </nav>
+</header>
 
     <div class="container">
         <!-- Stats -->
@@ -219,6 +235,15 @@
         <!-- Story Summary: what's running vs done at a glance -->
         <div class="section-title" style="font-size:13px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Story Status — Start / Finish</div>
         <div class="story-summary" id="storySummary"></div>
+
+        <!-- Self-Heal Retry Panel -->
+        <div class="heal-panel" id="healPanel" style="display:none">
+            <div class="heal-panel-header">
+                <div class="heal-panel-title">Self-Heal Activity</div>
+                <span id="healPanelCount" style="font-size:11px;color:var(--text3)"></span>
+            </div>
+            <div id="healPanelBody"></div>
+        </div>
 
         <!-- Filters -->
         <div class="filters">
@@ -447,8 +472,12 @@
     function formatDetail(evt) {
         const d = evt.detail || {};
         switch (evt.type) {
-            case 'story_start':
-                return d.title ? `Started: <strong>${d.title}</strong>` : 'Story started';
+            case 'story_start': {
+                let out = d.title ? `Started: <strong>${d.title}</strong>` : 'Story started';
+                const mdl = evt.model || d.model;
+                if (mdl) out += ` <span style="color:var(--text2);font-size:11px">· ${mdl}</span>`;
+                return out;
+            }
             case 'story_complete':
                 return d.summary || 'Story completed';
             case 'story_fail':
@@ -469,8 +498,14 @@
             }
             case 'gate_decision':
                 return `Decision: <strong>${d.decision}</strong> (${d.issueCount || 0} issues)`;
-            case 'cost_snapshot':
-                return `$${(d.costUsd || 0).toFixed(4)} — ${d.tokensIn || 0} in / ${d.tokensOut || 0} out`;
+            case 'cost_snapshot': {
+                const mdl = evt.model || d.model;
+                const parts = [`<strong>$${(d.costUsd || 0).toFixed(4)}</strong>`];
+                parts.push(`${(d.tokensIn || 0).toLocaleString()} in / ${(d.tokensOut || 0).toLocaleString()} out`);
+                if (d.turns && d.turns > 1) parts.push(`${d.turns} turns`);
+                if (mdl) parts.push(`<span style="color:var(--text2)">${mdl}</span>`);
+                return parts.join(' · ');
+            }
             case 'spec_update':
                 return d.summary || 'Specification updated';
             case 'spec_pass_decision': {
@@ -513,6 +548,9 @@
 
     function extraBadges(evt) {
         let html = '';
+        if (evt.model) {
+            html += `<span class="badge" style="background:var(--bg3);color:var(--text2);font-family:monospace;font-size:10px" title="${evt.provider || ''}">${evt.model}</span>`;
+        }
         if (evt.type === 'finding' && evt.detail?.severity) {
             const sev = String(evt.detail.severity).toLowerCase().replace(/[^a-z]/g, '');
             html += `<span class="badge badge-finding-${sev}">${sev}</span>`;
@@ -645,6 +683,31 @@
         renderTimeline(filtered);
     }
 
+    async function fetchAndRenderHealPanel() {
+        const rows = await fetchJsonl('logs/healing-events.jsonl').catch(() => []);
+        const panel = document.getElementById('healPanel');
+        const body = document.getElementById('healPanelBody');
+        const count = document.getElementById('healPanelCount');
+        if (!rows.length) { panel.style.display = 'none'; return; }
+        panel.style.display = '';
+        count.textContent = `${rows.length} event${rows.length !== 1 ? 's' : ''}`;
+        const recent = [...rows].reverse().slice(0, 30);
+        body.innerHTML = recent.map(r => {
+            const targetKey = r.target || 'none';
+            const targetLabel = targetKey === 'none' ? 'transient' : targetKey;
+            const rungHtml = r.rung != null ? `<span class="heal-rung">Rung ${r.rung}</span>` : '';
+            const diagRaw = r.diagnosis || '';
+            const diag = diagRaw.length > 110 ? diagRaw.substring(0, 110) + '…' : diagRaw;
+            return `<div class="heal-row">
+              <span class="heal-story">${r.story_id || '?'}</span>
+              <span class="heal-retry-num">retry ${r.retry ?? '?'}</span>
+              <span class="heal-target ${targetKey}">${targetLabel}</span>
+              ${rungHtml}
+              <span class="heal-diagnosis" title="${diagRaw.replace(/"/g, '&quot;')}">${diag}</span>
+            </div>`;
+        }).join('');
+    }
+
     async function refresh() {
         try {
             const [events, healIds] = await Promise.all([fetchEvents(), fetchSelfHealStoryIds()]);
@@ -652,6 +715,7 @@
             selfHealStoryIds = healIds;
             populateFilterOptions(allEvents);
             applyFilters();
+            fetchAndRenderHealPanel();
         } catch (e) { console.error('Error refreshing activity:', e); }
     }
 

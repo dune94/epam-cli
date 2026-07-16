@@ -389,12 +389,17 @@ append_pipeline_cost_record() {
 
 # _emit_agent <start|complete|fail> <role> [message]
 # Thin wrapper so QA/system agents appear in agent-activity.jsonl.
+# story_id is intentionally left empty (these are pipeline-level agents, not
+# bound to a specific story) so the agent badge and story badge don't repeat.
 _emit_agent() {
-    local _action="$1" _role="$2" _msg="${3:-$2}"
+    local _action="$1" _role="$2" _msg="${3:-}"
+    local _gate_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
+    local _gate_provider="${ORCH_GATE_PROVIDER:-}"
     case "$_action" in
-        start)    "$SCRIPT_DIR/update-monitor.sh" story_start    "$_role" "main" "$_role" "$_msg" 2>/dev/null || true ;;
-        complete) "$SCRIPT_DIR/update-monitor.sh" story_complete "$_role" "main" "$_msg"          2>/dev/null || true ;;
-        fail)     "$SCRIPT_DIR/update-monitor.sh" story_fail     "$_role" "main" "$_msg"          2>/dev/null || true ;;
+        # story_start: <story_id> <lane> <role> [title] [provider] [model]
+        start)    "$SCRIPT_DIR/update-monitor.sh" story_start    "" "main" "$_role" "$_msg" "${_gate_provider}" "${_gate_model}" 2>/dev/null || true ;;
+        complete) "$SCRIPT_DIR/update-monitor.sh" story_complete "" "main" "$_msg"                                               2>/dev/null || true ;;
+        fail)     "$SCRIPT_DIR/update-monitor.sh" story_fail     "" "main" "$_msg"                                               2>/dev/null || true ;;
     esac
 }
 
@@ -480,6 +485,37 @@ PYEOF
         append_pipeline_cost_record \
             "$agent_type" "$story_id" "$gate_model" "$started_at" \
             "${cost:-0}" "${tokens_in:-0}" "${tokens_out:-0}" "${turns:-1}"
+        # Emit cost_snapshot so agent-activity dashboard shows tokens + cost per gate call
+        local _phase_id
+        _phase_id=$(jq -r '.phase // empty' "${MONITOR_FILE:-$SCRIPT_DIR/../logs/agent-status.json}" 2>/dev/null || true)
+        jq -cn \
+            --arg ts "$(date -Iseconds)" \
+            --arg agent "$agent_type" \
+            --arg story "${story_id:-}" \
+            --arg phase "${_phase_id:-}" \
+            --arg model "$gate_model" \
+            --arg provider "$gate_provider" \
+            --argjson cost "${cost:-0}" \
+            --argjson tin "${tokens_in:-0}" \
+            --argjson tout "${tokens_out:-0}" \
+            --argjson turns "${turns:-1}" \
+            '{
+              event_id: ("evt-cost-" + ($ts | gsub("[^0-9]";""))) ,
+              timestamp: $ts,
+              agent: $agent,
+              story_id: (if $story == "" then null else $story end),
+              phase: (if $phase == "" then null else $phase end),
+              type: "cost_snapshot",
+              model: $model,
+              provider: $provider,
+              detail: {
+                costUsd: $cost,
+                tokensIn: $tin,
+                tokensOut: $tout,
+                turns: $turns,
+                source: "run_orch_prompt"
+              }
+            }' >> "${ACTIVITY_FILE:-$SCRIPT_DIR/../logs/agent-activity.jsonl}" 2>/dev/null || true
         rm -f "$json_result_file"
     fi
 
@@ -3130,7 +3166,14 @@ if [ -n "$main_stories" ]; then
             _story_monitor_role=$(jq -r --arg id "$story" \
                 '.stories[] | select(.id == $id) | .agentRole // "typescript-engineer"' \
                 "$PRD_FILE" 2>/dev/null || echo "typescript-engineer")
-            "$SCRIPT_DIR/update-monitor.sh" story_start "$story" "main" "$_story_monitor_role" 2>/dev/null || true
+            _story_model_hint=$(jq -r --arg id "$story" \
+                '.stories[] | select(.id == $id) | .model // ""' \
+                "$PRD_FILE" 2>/dev/null || echo "")
+            _story_provider_hint=$(jq -r --arg id "$story" \
+                '.stories[] | select(.id == $id) | .provider // ""' \
+                "$PRD_FILE" 2>/dev/null || echo "")
+            "$SCRIPT_DIR/update-monitor.sh" story_start "$story" "main" "$_story_monitor_role" "" \
+                "$_story_provider_hint" "$_story_model_hint" 2>/dev/null || true
             _story_exit=0
             run_story_with_watchdog "$story" "$LOG_DIR/main-${story}.log" || _story_exit=$?
             # A genuine watchdog double-timeout gets ONE diagnose-then-restructure

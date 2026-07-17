@@ -11360,3 +11360,201 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/SKY-001_*.log
 
+## SKY-001: Scaffold TypeScript project with Vitest and Express
+- **Date**: 2026-07-16 06:39:17
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001_*.log
+
+## SKY-002-impl: Implement SkyscannerClient class, interfaces, and searchFlights method
+- **Date**: 2026-07-16 07:14:48
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-002-impl_*.log
+
+## SKY-002-test: Test SkyscannerClient with vitest and mocked fetch
+- **Date**: 2026-07-16 07:26:52
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-002-test_*.log
+
+## SKY-003-impl: Implement flight search CLI entry point (src/cli.ts)
+- **Date**: 2026-07-16 07:30:03
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003-impl_*.log
+
+## SKY-004a: Implement Express REST API server (src/server.ts)
+- **Date**: 2026-07-16 07:33:34
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-004a_*.log
+
+## SKY-004b: Create styled dashboard HTML and configure build/start scripts
+- **Date**: 2026-07-16 07:39:14
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-004b_*.log
+
+## SKY-003-test: Write vitest tests for CLI entry point (src/cli.test.ts)
+- **Date**: 2026-07-16 08:12:33
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/SKY-003-test_*.log
+
+## SKY-001: Scaffold TypeScript project with Vitest and Express
+- **Date**: 2026-07-16 10:12:50
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001_*.log
+
+## SKY-002-a: Implement SkyscannerClient class and typed interfaces
+- **Date**: 2026-07-16 10:48:46
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-002-a_*.log
+
+## SKY-002-b: Vitest tests for SkyscannerClient with mocked fetch
+- **Date**: 2026-07-16 11:05:44
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-002-b_*.log
+
+## SKY-003-a: Implement flight search CLI entry point with argument parsing and table rendering
+- **Date**: 2026-07-16 11:07:28
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003-a_*.log
+
+## SKY-001: Scaffold TypeScript project with Vitest and Express
+- **Date**: 2026-07-16 11:14:18
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001_*.log
+
+## SKY-002-A: Implement SkyscannerClient class with typed interfaces and mock mode
+- **Date**: 2026-07-16 11:45:53
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-002-A_*.log
+
+## SKY-002-B: Test suite for SkyscannerClient with mocked fetch and mock mode coverage
+- **Date**: 2026-07-16 12:09:50
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-002-B_*.log
+
+## SKY-003-impl: Implement flight search CLI entry point with formatted table output
+- **Date**: 2026-07-16 12:11:54
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003-impl_*.log
+
+## SKY-004-impl: Implement Express REST API server with /health, /search, /cheapest, and static dashboard
+- **Date**: 2026-07-16 12:13:39
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-004-impl_*.log
+
+## SKY-004-test: Test Express REST API server endpoints and error handling
+- **Date**: 2026-07-16 12:30:05
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-004-test_*.log
+
+## SKY-001: Scaffold TypeScript project with Vitest and Express
+- **Date**: 2026-07-16 13:55:22
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001_*.log
+
+## SKY-002-a: Implement SkyscannerClient class and interfaces
+- **Date**: 2026-07-16 14:42:45
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-002-a_*.log
+
+## SKY-002-b: Test suite for SkyscannerClient
+- **Date**: 2026-07-16 14:46:56
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-002-b_*.log
+
+## SKY-003-a: Implement flight search CLI entry point with formatted table output
+- **Date**: 2026-07-16 14:49:54
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003-a_*.log
+
+## SKY-004-impl: Implement Express REST API server with /health, /search, /cheapest, and static dashboard
+- **Date**: 2026-07-16 14:53:57
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-004-impl_*.log
+
+## SKY-003-b: Test flight search CLI entry point
+- **Date**: 2026-07-16 15:18:27
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003-b_*.log
+
+## SKY-001: Scaffold TypeScript project with Vitest and Express
+- **Date**: 2026-07-16 15:45:07
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001_*.log
+
+## SKY-001: Scaffold TypeScript project with Vitest and Express
+- **Date**: 2026-07-16 17:27:51
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001_*.log
+
+## SKY-002-a: Implement Skyscanner API client (production code)
+- **Date**: 2026-07-16 18:01:42
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-002-a_*.log
+
+## SKY-002-b: Test Skyscanner API client (vitest suite)
+- **Date**: 2026-07-16 18:04:44
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-002-b_*.log
+
+## SKY-003-impl: Implement flight search CLI entry point with formatted table output
+- **Date**: 2026-07-16 18:08:31
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003-impl_*.log
+
+## SKY-004-a: Express server routes, middleware, and error handling
+- **Date**: 2026-07-16 18:09:43
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-004-a_*.log
+
+## SKY-004-b: Static dashboard HTML and build configuration
+- **Date**: 2026-07-16 18:17:13
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-004-b_*.log
+
+## SKY-003-test: Test flight search CLI entry point — argument parsing, table output, and error handling
+- **Date**: 2026-07-16 18:36:39
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-003-test_*.log
+
+## SKY-001: Scaffold TypeScript project with Vitest and Express
+- **Date**: 2026-07-16 20:12:46
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001_*.log
+
+## SKY-001: Scaffold TypeScript project with Vitest and Express
+- **Date**: 2026-07-16 21:21:15
+- **Phase**: scaffold
+- **Status**: completed
+- **Log**: logs/claude_outputs/SKY-001_*.log
+

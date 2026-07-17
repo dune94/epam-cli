@@ -554,7 +554,7 @@ describe('validate_mid_execution_splits — shared implementation (lib/story-gua
     // Find the Step 1 story execution loop — after run_story_with_watchdog
     const step1Idx = orchSrc.indexOf('run_story_with_watchdog "$story" "$LOG_DIR/main-${story}.log"');
     expect(step1Idx).toBeGreaterThan(-1);
-    const postStory = orchSrc.slice(step1Idx, step1Idx + 1400);
+    const postStory = orchSrc.slice(step1Idx, step1Idx + 1800);
     expect(postStory).toContain('validate_mid_execution_splits "$PHASE"');
   });
 

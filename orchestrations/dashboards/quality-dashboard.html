@@ -7,19 +7,19 @@
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --bg: #0f172a; --surface: #1e293b; --border: #334155;
-  --text: #e2e8f0; --text3: #64748b;
-  --brand: #38bdf8; --green: #4ade80; --amber: #fbbf24; --red: #f87171;
-  --epam-gradient: linear-gradient(118.82deg, #0078c2 .5%, #0047ff 47.33%, #8453d2 76.12%);
+  --bg: #080808; --surface: #101010; --border: #2a2a2a;
+  --text: #f0f0f0; --text3: #606060;
+  --brand: #84cc16; --green: #4ade80; --amber: #fbbf24; --red: #f87171;
+  --epam-gradient: linear-gradient(135deg, #a3e635 0%, #84cc16 100%);
 }
 body { background: var(--bg); color: var(--text); font-family: "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 14px; line-height: 1.45; }
-.header { background: var(--epam-gradient); color: #fff; padding: 16px 28px; }
+.header { background: var(--bg1); border-bottom: 1px solid rgba(132,204,22,.25); color: var(--text); padding: 14px 28px; }
 .header h1 { font-size: 20px; font-weight: 800; }
 .header p { color: rgba(255,255,255,0.76); margin-top: 4px; font-size: 12px; }
 .page { max-width: 1360px; margin: 0 auto; padding: 18px 28px 40px; }
 .nav-links { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 18px; }
 .nav-links a { color: var(--text3); text-decoration: none; font-size: 12px; font-weight: 700; padding: 8px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); }
-.nav-links a.active { color: #fff; background: var(--brand); border-color: var(--brand); }
+.nav-links a.active { color: #080808; background: var(--brand); border-color: var(--brand); }
 .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 .link { color: var(--brand); text-decoration: none; font-weight: 600; }
 .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 18px; }
@@ -36,18 +36,18 @@ th { color: var(--text3); font-size: 11px; text-transform: uppercase; letter-spa
 .passed { background: rgba(26,143,63,0.1); color: var(--green); }
 .partial { background: rgba(200,122,0,0.1); color: var(--amber); }
 .failed { background: rgba(217,48,37,0.08); color: var(--red); }
-.not_tested { background: rgba(0,71,255,0.08); color: var(--brand); }
+.not_tested { background: rgba(96,165,250,0.08); color: var(--brand); }
 .footer-note { color: var(--text3); font-size: 12px; margin-top: 14px; }
 @media (max-width: 1100px) { .grid { grid-template-columns: 1fr 1fr; } .layout { grid-template-columns: 1fr; } }
+.header-title { font-size: 17px; font-weight: 800; color: var(--teal); letter-spacing: -0.3px; }
+.header-sub { font-size: 11px; color: var(--text2); margin-top: 2px; }
+.header .nav-links, .header-right .nav-links { margin: 0; }
 </style>
 </head>
 <body>
   <header class="header">
-    <h1>EPAM CLI Quality Dashboard</h1>
-    <p>POC coverage, bug traceability, and dashboard-ready quality rollups sourced from `prd.json`.</p>
-  </header>
-  <main class="page">
-    <nav class="nav-links">
+  <div><div class="header-title">EPAM CLI — Quality Dashboard</div><div class="header-sub">POC coverage · bug traceability · quality rollups</div></div>
+  <nav class="nav-links" style="margin:0">
       <a href="monitor.html">Monitor</a>
       <a href="prd-viewer.html">PRD Viewer</a>
 <a href="specification.html">Spec Diff</a>
@@ -65,7 +65,9 @@ th { color: var(--text3); font-size: 11px; text-transform: uppercase; letter-spa
       <a href="swe-bench.html">SWE-bench</a>
 <a href="health.html">Health</a>
       <a href="epam-cli-guide.html">CLI Guide</a>
-    </nav>
+  </nav>
+</header>
+  <main class="page">
     <div class="topbar">
       <a class="link" href="../logs/quality-summary.json">Open quality-summary.json</a>
       <a class="link" href="../../POC-TEST-REPORT.html">Open stakeholder POC summary</a>

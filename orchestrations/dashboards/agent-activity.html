@@ -135,6 +135,18 @@
         .badge-gate-fail   { background: var(--red-dim); color: var(--red); }
         .badge-gate-review { background: var(--amber-dim); color: var(--amber); }
 
+        /* Light blue pill for model — user request: "a nice light blue pill" */
+        .badge-model { background: rgba(96,165,250,0.14); color: #7dd3fc; font-family: monospace; font-size: 10px; border: 1px solid rgba(96,165,250,0.25); }
+        /* Story context: story pill (teal) or "RUN RELATED" label (amber) */
+        .badge-run-related { background: rgba(251,191,36,0.10); color: var(--amber); font-size: 10px; }
+        /* Ladder escalation event */
+        .event-card.type-ladder_rung::before { background: #7dd3fc; }
+        .event-card.type-retry::before { background: var(--amber); }
+        /* Gate decision card — prominent border when decision=fail */
+        .event-card.type-gate_decision { border-left: 3px solid var(--violet); }
+        .event-card.type-gate_decision.gate-fail { border-left-color: var(--red); }
+        .event-card.type-gate_decision.gate-pass { border-left-color: var(--green); }
+
         .event-detail { font-size: 14px; color: var(--text2); line-height: 1.6; }
         .event-detail code {
             background: var(--bg2); padding: 1px 5px; border-radius: 3px;
@@ -213,17 +225,17 @@
                     <div class="stat-value" id="stat-agents">0</div>
                     <div class="stat-label">Active Agents</div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" title="Code/security findings from review and sast-sentinel agents — blocker/error/warning/info/suggestion severities">
                     <div class="stat-value" id="stat-findings">0</div>
-                    <div class="stat-label">Findings</div>
+                    <div class="stat-label">Review Findings</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value" id="stat-stories">0</div>
                     <div class="stat-label">Stories Touched</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value" id="stat-tools">0</div>
-                    <div class="stat-label">Tool Runs</div>
+                    <div class="stat-value" id="stat-cost" style="font-size:20px">$0.0000</div>
+                    <div class="stat-label">LLM Cost (visible)</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value" id="stat-gates">0</div>
@@ -243,6 +255,11 @@
                 <span id="healPanelCount" style="font-size:11px;color:var(--text3)"></span>
             </div>
             <div id="healPanelBody"></div>
+            <!-- Skill Update Summary (target=skill entries) -->
+            <div id="skillSummaryWrap" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+                <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Agent Skill Updates</div>
+                <div id="skillSummaryBody"></div>
+            </div>
         </div>
 
         <!-- Filters -->
@@ -266,6 +283,8 @@
                     <option value="spec_pass_decision">Spec Pass Decision</option>
                     <option value="phase_start">Phase Start</option>
                     <option value="phase_complete">Phase Complete</option>
+                    <option value="ladder_rung">Ladder Escalation</option>
+                    <option value="retry">Retry</option>
                     <option value="error">Error</option>
                     <option value="info">Info</option>
                 </select>
@@ -277,7 +296,7 @@
                 <input id="filter-story" type="text" placeholder="Story ID..."
                     style="width:130px" oninput="applyFilters()" />
 
-                <label>Severity:</label>
+                <label title="Applies to Review Findings only — blocker/error/warning/info/suggestion">Finding Severity:</label>
                 <select id="filter-severity">
                     <option value="">All</option>
                     <option value="blocker">Blocker</option>
@@ -461,7 +480,8 @@
         document.getElementById('stat-agents').textContent = new Set(events.map(e => e.agent)).size;
         document.getElementById('stat-findings').textContent = events.filter(e => e.type === 'finding').length;
         document.getElementById('stat-stories').textContent = new Set(events.map(e => e.story_id).filter(Boolean)).size;
-        document.getElementById('stat-tools').textContent = events.filter(e => e.type === 'tool_run').length;
+        const totalCost = events.filter(e => e.type === 'cost_snapshot').reduce((sum, e) => sum + (e.detail?.costUsd || 0), 0);
+        document.getElementById('stat-cost').textContent = '$' + totalCost.toFixed(4);
         document.getElementById('stat-gates').textContent = events.filter(e => e.type === 'gate_decision').length;
     }
 
@@ -496,15 +516,31 @@
                 if (d.rule) html += ` <code>${d.rule}</code>`;
                 return html;
             }
-            case 'gate_decision':
-                return `Decision: <strong>${d.decision}</strong> (${d.issueCount || 0} issues)`;
+            case 'gate_decision': {
+                const gate = d.gate || d.source || '';
+                const decision = d.decision || 'unknown';
+                const color = decision === 'pass' ? 'var(--green)' : decision === 'fail' ? 'var(--red)' : 'var(--amber)';
+                const parts = [`<strong style="color:${color}">${decision.toUpperCase()}</strong>`];
+                if (gate) parts.push(`<span style="color:var(--text3);font-size:12px">${gate}</span>`);
+                if (d.issueCount) parts.push(`${d.issueCount} issue${d.issueCount !== 1 ? 's' : ''}`);
+                if (d.message) parts.push(d.message);
+                return parts.join(' · ');
+            }
             case 'cost_snapshot': {
                 const mdl = evt.model || d.model;
-                const parts = [`<strong>$${(d.costUsd || 0).toFixed(4)}</strong>`];
+                const parts = [`<strong style="color:var(--teal)">$${(d.costUsd || 0).toFixed(4)}</strong>`];
                 parts.push(`${(d.tokensIn || 0).toLocaleString()} in / ${(d.tokensOut || 0).toLocaleString()} out`);
                 if (d.turns && d.turns > 1) parts.push(`${d.turns} turns`);
-                if (mdl) parts.push(`<span style="color:var(--text2)">${mdl}</span>`);
+                if (mdl) parts.push(`<span class="badge badge-model" style="display:inline">${mdl}</span>`);
                 return parts.join(' · ');
+            }
+            case 'ladder_rung': {
+                const msg = d.message || '';
+                return `<span style="color:#7dd3fc">&#8593; Escalation</span> · ${msg}`;
+            }
+            case 'retry': {
+                const msg = d.message || '';
+                return `<span style="color:var(--amber)">&#x21BA; Retry</span> · ${msg}`;
             }
             case 'spec_update':
                 return d.summary || 'Specification updated';
@@ -546,10 +582,17 @@
         }
     }
 
+    // Returns true for event types that represent actual LLM calls (have cost/model)
+    function isLlmEvent(evt) {
+        return ['cost_snapshot','story_start','story_complete','story_fail','ladder_rung','retry'].includes(evt.type);
+    }
+
     function extraBadges(evt) {
         let html = '';
-        if (evt.model) {
-            html += `<span class="badge" style="background:var(--bg3);color:var(--text2);font-family:monospace;font-size:10px" title="${evt.provider || ''}">${evt.model}</span>`;
+        // Model: light blue pill — shown on ALL events that have a model field
+        const mdl = evt.model || evt.detail?.model;
+        if (mdl) {
+            html += `<span class="badge badge-model" title="${evt.provider || evt.detail?.provider || ''}">${mdl}</span>`;
         }
         if (evt.type === 'finding' && evt.detail?.severity) {
             const sev = String(evt.detail.severity).toLowerCase().replace(/[^a-z]/g, '');
@@ -582,8 +625,19 @@
             const typeLabel = selfHeal ? 'self-healing' : (evt.type || 'unknown').replace(/_/g, ' ');
             const typeBadgeCls = selfHeal ? 'badge-self-heal' : 'badge-type';
             const decisionClass = evt.detail?.decision ? ` decision-${evt.detail.decision}` : '';
+            const gateClass = evt.type === 'gate_decision' && evt.detail?.decision ? ` gate-${evt.detail.decision}` : '';
+
+            // Story context: always shown — real story ID pill, or "RUN RELATED" for LLM
+            // calls without a linked story, or nothing for pure infra events.
+            let storyBadge = '';
+            if (evt.story_id) {
+                storyBadge = `<span class="badge badge-story">${evt.story_id}</span>`;
+            } else {
+                storyBadge = `<span class="badge badge-run-related">RUN RELATED</span>`;
+            }
+
             html += `
-            <div class="event-card type-${evt.type}${selfHeal ? ' self-heal' : ''}${decisionClass}">
+            <div class="event-card type-${evt.type}${selfHeal ? ' self-heal' : ''}${decisionClass}${gateClass}">
                 <div class="event-header">
                     <div class="event-meta">
                         <span class="event-agent">${evt.agent || '?'}</span>
@@ -592,7 +646,7 @@
                     <div class="event-badges">
                         <span class="badge ${typeBadgeCls}">${typeLabel}</span>
                         ${evt.phase ? `<span class="badge badge-phase">${evt.phase}</span>` : ''}
-                        ${evt.story_id ? `<span class="badge badge-story">${evt.story_id}</span>` : ''}
+                        ${storyBadge}
                         ${extraBadges(evt)}
                     </div>
                 </div>
@@ -695,17 +749,47 @@
         body.innerHTML = recent.map(r => {
             const targetKey = r.target || 'none';
             const targetLabel = targetKey === 'none' ? 'transient' : targetKey;
-            const rungHtml = r.rung != null ? `<span class="heal-rung">Rung ${r.rung}</span>` : '';
+            const rungHtml = r.rung != null ? `<span class="heal-rung">Rung ${r.rung}</span>` : '';
             const diagRaw = r.diagnosis || '';
-            const diag = diagRaw.length > 110 ? diagRaw.substring(0, 110) + '…' : diagRaw;
+            const diag = diagRaw.length > 110 ? diagRaw.substring(0, 110) + '...' : diagRaw;
             return `<div class="heal-row">
               <span class="heal-story">${r.story_id || '?'}</span>
-              <span class="heal-retry-num">retry ${r.retry ?? '?'}</span>
+              <span class="heal-retry-num">retry ${r.retry ?? '?'}</span>
               <span class="heal-target ${targetKey}">${targetLabel}</span>
               ${rungHtml}
               <span class="heal-diagnosis" title="${diagRaw.replace(/"/g, '&quot;')}">${diag}</span>
             </div>`;
         }).join('');
+
+        // Skill update summary — group target=skill entries by story and summarize
+        const skillRows = rows.filter(r => r.target === 'skill');
+        const skillWrap = document.getElementById('skillSummaryWrap');
+        const skillBody = document.getElementById('skillSummaryBody');
+        if (skillRows.length === 0) {
+            skillWrap.style.display = 'none';
+        } else {
+            skillWrap.style.display = '';
+            const byStory = new Map();
+            for (const r of skillRows) {
+                const sid = r.story_id || '(run-level)';
+                if (!byStory.has(sid)) byStory.set(sid, []);
+                byStory.get(sid).push(r);
+            }
+            skillBody.innerHTML = Array.from(byStory.entries()).map(([sid, evts]) => {
+                const entries = evts.map(r => {
+                    const kb = r.kb_id || r.kb || '';
+                    const diagRaw = r.diagnosis || r.skill_summary || '';
+                    const diag = diagRaw.length > 120 ? diagRaw.substring(0, 120) + '...' : diagRaw;
+                    return '<div class="skill-entry">' +
+                        '<span class="skill-agent">' + (r.agent || 'agent') + '</span>' +
+                        (kb ? '<span class="skill-kb">' + kb + '</span>' : '') +
+                        '<span class="skill-diag">' + diag + '</span></div>';
+                }).join('');
+                return '<div class="skill-story-group">' +
+                    '<div class="skill-story-header">' + sid + ' (' + evts.length + ' update' + (evts.length !== 1 ? 's' : '') + ')</div>' +
+                    entries + '</div>';
+            }).join('');
+        }
     }
 
     async function refresh() {

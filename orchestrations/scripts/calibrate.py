@@ -31,38 +31,46 @@ SCRIPT_DIR = Path(__file__).parent
 LOG_DIR = SCRIPT_DIR.parent / "logs"
 
 # ---------------------------------------------------------------------------
-# Model pricing table (USD per 1K tokens, as of 2025)
-# Used to compute cost when total_cost_usd is 0 (SDK path doesn't expose cost)
+# Model pricing — loaded from model-pricing.json (data-driven, no hardcoding)
+# Rates are USD per 1M tokens (input/output keys).
 # ---------------------------------------------------------------------------
-MODEL_PRICING = {
-    # Haiku 4.5
-    "claude-haiku-4-5":            {"in": 0.00025,  "out": 0.00125},
-    "claude-haiku-4-5-20251001":   {"in": 0.00025,  "out": 0.00125},
-    # Sonnet 4.5 / 4.6
-    "claude-sonnet-4-5":           {"in": 0.003,    "out": 0.015},
-    "claude-sonnet-4-5-20250929":  {"in": 0.003,    "out": 0.015},
-    "claude-sonnet-4-6":           {"in": 0.003,    "out": 0.015},
-    # Opus 4.6
-    "claude-opus-4-6":             {"in": 0.015,    "out": 0.075},
-    # Qwen via OpenRouter (June 2026 rates)
-    "qwen/qwen3.7-max":            {"in": 0.00125,   "out": 0.00375},
-    "qwen/qwen3.7-plus":           {"in": 0.0004,    "out": 0.0016},
-    "qwen/qwen3.6-flash":          {"in": 0.0001875, "out": 0.001125},
-    "qwen/qwen3-coder":            {"in": 0.00022,   "out": 0.0018},
-    # OpenAI via OpenRouter (June 2026 rates)
-    "openai/gpt-4o-mini":          {"in": 0.00015,   "out": 0.0006},
-    "openai/gpt-4o":               {"in": 0.0025,    "out": 0.01},
-    "openai/gpt-4.1":              {"in": 0.002,     "out": 0.008},
-    "openai/gpt-4.1-mini":         {"in": 0.0004,    "out": 0.0016},
-}
+_PRICING_TABLE: dict = {}
+
+
+def _load_model_pricing() -> dict:
+    """Load per-million-token rates from model-pricing.json adjacent to this script."""
+    pricing_path = SCRIPT_DIR / "model-pricing.json"
+    try:
+        with open(pricing_path) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
 
 def compute_cost(tokens_in: int, tokens_out: int, model: str) -> float:
-    """Return estimated cost in USD from token counts and model pricing."""
-    pricing = MODEL_PRICING.get(model)
-    if not pricing:
-        # Fallback: sonnet pricing for unknown models
-        pricing = {"in": 0.003, "out": 0.015}
-    return (tokens_in / 1000) * pricing["in"] + (tokens_out / 1000) * pricing["out"]
+    """Return estimated cost in USD using rates from model-pricing.json.
+
+    Returns 0.0 for unknown models — callers should handle this as "cost unknown"
+    rather than substituting a potentially wrong rate.
+    """
+    global _PRICING_TABLE
+    if not _PRICING_TABLE:
+        _PRICING_TABLE = _load_model_pricing()
+
+    prices = _PRICING_TABLE.get(model)
+    if not prices:
+        ml = model.lower()
+        for k, v in _PRICING_TABLE.items():
+            kl = k.lower()
+            if kl == ml or ml.startswith(kl) or kl.startswith(ml):
+                prices = v
+                break
+    if not prices:
+        return 0.0
+
+    inp = float(prices.get("input", 0))
+    out = float(prices.get("output", 0))
+    return (tokens_in * inp + tokens_out * out) / 1_000_000
 
 
 def parse_args():

@@ -130,7 +130,7 @@ const sites: Site[] = [
     // ($_pfa_prompt_this_attempt, rebuilt each iteration with a corrective
     // note on retry) and the old `if ...; then step_emit "pass"` shape
     // became `... || _pfa_call_ok=0` followed by separate violation checks.
-    callAnchor: 'run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "assessment" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log" || _pfa_call_ok=0',
+    callAnchor: 'run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "team-lead-agent" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log" || _pfa_call_ok=0',
     needsTools: true,
     reason: 'prompt instructs jq against the PRD, profiles.json read/write, and flock JSONL appends (FIXED 2026-07-08)',
   },
@@ -142,7 +142,7 @@ const sites: Site[] = [
     // no `set -o pipefail`, so `if cmd | tee file; then` always evaluated
     // tee's exit status, never the real tool call's -- see the
     // phase-assessment real-output-gate fix).
-    callAnchor: 'run_orch_prompt_with_tools "$assessment_prompt" "assessment" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"\n    local _assessment_rc=${PIPESTATUS[0]}',
+    callAnchor: 'run_orch_prompt_with_tools "$assessment_prompt" "team-lead-agent" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"\n    local _assessment_rc=${PIPESTATUS[0]}',
     needsTools: true,
     reason: 'prompt instructs writing a report file, updating PRD agentRole fields, and flock JSONL appends (FIXED 2026-07-08)',
   },
@@ -286,8 +286,8 @@ describe('agent tool-access wiring — regression guards for the specific live b
     // instead of the original single prompt. Step 3.5's own call site is
     // unaffected and still uses $assessment_prompt directly.
     const occurrences = [
-      ...orchSrc.matchAll(/run_orch_prompt(_with_tools)?\s*"\$assessment_prompt"\s*"assessment"/g),
-      ...orchSrc.matchAll(/run_orch_prompt(_with_tools)?\s*"\$_pfa_prompt_this_attempt"\s*"assessment"/g),
+      ...orchSrc.matchAll(/run_orch_prompt(_with_tools)?\s*"\$assessment_prompt"\s*"team-lead-agent"/g),
+      ...orchSrc.matchAll(/run_orch_prompt(_with_tools)?\s*"\$_pfa_prompt_this_attempt"\s*"team-lead-agent"/g),
     ];
     expect(occurrences.length).toBeGreaterThanOrEqual(2);
     for (const m of occurrences) {
@@ -307,7 +307,7 @@ describe('agent tool-access wiring — regression guards for the specific live b
   it('no invocation site anywhere calls plain run_orch_prompt for a prompt that requires it (no other agent_type is missed)', () => {
     // Every remaining plain run_orch_prompt call (not _with_tools) must be one
     // of the confirmed no-tools-needed agent types from the table above.
-    const knownNoToolsAgentTypes = ['spec-coordinator', 'assessment'];
+    const knownNoToolsAgentTypes = ['spec-coordinator', 'team-lead-agent'];
     const plainCalls = [...orchSrc.matchAll(/(?<!_with_tools\s)run_orch_prompt\s+"\$[a-zA-Z_]+"\s+"([a-zA-Z0-9_:-]+)"/g)];
     for (const m of plainCalls) {
       // "assessment" and "spec-coordinator" now only appear via _with_tools

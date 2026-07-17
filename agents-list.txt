@@ -1,0 +1,297 @@
+epam-cli Agent Profiles — 51 total (51 core, 0 dynamic)
+Source: orchestrations/agents/profiles.json (diffed against profiles.json.original)
+CORE = present in the generic, stack-agnostic baseline (profiles.json.original)
+DYNAMIC = added at runtime for this specific project, not in the baseline
+Descriptions are genuine summaries of each profile's actual instructions, not extracted sentences.
+
+MODEL/LADDER — verified against actual invocation code, not assumed:
+  [GATE]   Runs via run_orch_prompt()/run_orch_prompt_with_tools() (run-agent-orchestration.sh)
+           or claude.sh's equivalent gate call — always uses ORCH_GATE_MODEL/ORCH_GATE_PROVIDER.
+           Current run's value: z-ai/glm-5.1 via qwen (fixed, does not escalate).
+  [SPEC]   Runs via spec-mode-runner.js — uses SPEC_MODE_OPENSPEC_MODEL/SPEC_MODE_SPECKIT_MODEL.
+           Current run's value: z-ai/glm-5.1 via qwen (same value as GATE this run, different
+           env var / invocation path — set independently).
+  [LADDER] A real PRD story assigned to this role. Starts at the story's assigned model
+           (defaults to ORCH_MINI_MODEL=MiniMax-M2.5 if unset) and escalates on retry via
+           the 4-rung ladder up to EPAM_FINAL_FALLBACK_MODEL=moonshotai/kimi-k2. See the
+           "LLM ladders" answer earlier in this session for the full rung/model table.
+  [UNWIRED] Profile exists but is never invoked by any phase-loop code today (confirmed via
+           prior investigation this session) — no live model assignment exists.
+  [ADHOC]  Deep-knowledge persona for interactive /agent switching in `epam chat`, not
+           pipeline-driven — whatever model the user has selected via /model applies.
+==============================================================================
+
+[CORE][GATE] agent-skills-agent
+    Runs as SKILLS-001 after spec elaboration and before execution begins. Diffs each story's
+    elaborated acceptance criteria against its assigned agent's current profile, and appends a
+    targeted "Post-Spec Skill Addendum" only where a concrete, story-grounded skill gap exists.
+
+[CORE][ADHOC] agent-systems-engineer
+    Deep-knowledge engineer for epam-cli's own agent runtime: the ReAct loop, ProviderChain
+    failover, AgentHandoff delegation, tool registry, MemoryCompressor, and MCP protocol —
+    designs parallel-agent execution patterns and leak-free async cancellation.
+
+[CORE][UNWIRED] api-doc-generator
+    Stage 6 doc agent. Runs TypeDoc + ast-grep over src/ to extract the full TypeScript public
+    API surface and generates structured HTML reference pages grouped by domain module.
+
+[CORE][UNWIRED] architecture-doc-agent
+    Stage 6 doc agent. Generates module dependency diagrams (Madge), sequence diagrams (ReAct
+    loop, failover, auth flow), and C4 model views as Mermaid/D2-embedded HTML.
+
+[CORE][ADHOC] billing-engineer
+    Deep-knowledge engineer for epam-cli's own cost/billing internals: the pricing table,
+    calculateCost, ProviderChain cost accumulators, budget guardrail hooking, and BYOK/tier
+    routing logic.
+
+[CORE][UNWIRED] changelog-agent
+    Stage 6 doc agent. Parses Conventional Commits via git-cliff, enriches entries with PRD
+    story metadata, and generates a Keep-a-Changelog-format CHANGELOG.md plus per-phase release
+    notes, flagging breaking changes.
+
+[CORE][ADHOC] cli-ux-engineer
+    Deep-knowledge engineer for epam-cli's own terminal UX: Commander.js command factories,
+    the REPL input/render loop, the SlashCommand registry pattern, and graceful-degradation
+    design (piped output, narrow terminals, no-color mode).
+
+[CORE][LADDER] dashboard-orchestrator-agent
+    Runs as DASH-001, the first task of every scaffolded project. Populates a fixed Chart.js
+    dashboard template with project-specific data (never builds from scratch), then reviews
+    DASH-002/DASH-003 reports before marking infrastructure complete.
+
+[CORE][LADDER] dashboard-test-agent
+    Runs as DASH-002, read-only validator immediately after DASH-001. Checks the generated
+    dashboard for structural HTML validity, populated Chart.js bindings, required control-plane
+    elements, and PRD cross-reference consistency.
+
+[CORE][LADDER] dashboard-update-agent
+    Runs as DASH-003, after DASH-001/002 pass. End-to-end validates the live JSONL update
+    pipeline: script executability, stale lock detection, a real write/read round-trip, schema
+    checks, and write-latency measurement — cleans up its own test writes afterward.
+
+[CORE][GATE] dedup-detector
+    Pre-spec stage. Computes semantic similarity across all backlog stories to cluster and
+    classify duplicates/overlaps/conflicts (exact-duplicate through conflicting), and flags
+    story-to-code drift against existing src/ implementations. Read-only.
+
+[CORE][UNWIRED] doc-coordinator
+    Stage 6 orchestrator. Scans src/ for undocumented/stale public API surface, assigns work to
+    the specialist doc agents, and runs an iterative (max 3-cycle) revision loop against
+    doc-reviewer's findings before allowing the docs to proceed to indexing.
+
+[CORE][UNWIRED] doc-index-builder
+    Stage 6 doc agent. Walks the generated docs/ tree to build navigation/search
+    infrastructure: hierarchical index, table of contents, cross-reference link validation, and
+    llms.txt/llms-full.txt output for LLM-consumable docs.
+
+[CORE][UNWIRED] doc-reviewer
+    Stage 6 doc agent. Two-pass review: automated prose/grammar/markdown linting (Vale,
+    textlint, markdownlint), then an LLM accuracy pass checking API docs against real
+    TypeScript signatures, code-example validity, and diagram accuracy.
+
+[CORE][UNWIRED] doc-search-agent
+    Stage 6 doc agent. Builds a RAG search index over generated docs via Markprompt, and wires
+    in a Context7 MCP server so cross-references to external library docs resolve to
+    current, version-specific content.
+
+[CORE][UNWIRED] doc-site-builder
+    Stage 6 doc agent. Compiles all generated documentation into a deployable static site
+    (Docusaurus or Fumadocs), applying EPAM-branded theming and a zero-error/zero-warning
+    build requirement.
+
+[CORE][UNWIRED] docstring-agent
+    Stage 6 doc agent. Batch-injects JSDoc/TSDoc comments onto every undocumented exported
+    symbol in src/ (params, returns, throws, example), validated by a post-injection
+    tsc --noEmit pass — never touches logic or function bodies.
+
+[CORE][GATE] failure-analyst
+    Self-healing diagnostician for a failed TypeScript/Node.js story. Diagnoses the root cause
+    of a test failure and picks a remediation target (prd/tc/skill/kb/none) via strict decision
+    rules, outputting a single compact JSON diagnosis. (Confirmed live this session: runs on
+    gate=z-ai/glm-5.1.)
+
+[CORE][LADDER] frontend-engineer
+    Vanilla HTML/CSS/JS engineer (no build step, no frameworks) for self-contained, dark-mode,
+    accessible single-file dashboards — no external CDN dependencies, explicit
+    loading/error/empty states.
+
+[CORE][GATE] fuzz-weaver
+    QA testing gate (Phase C). Derives fuzz-test input domains from TypeScript parameter types
+    for functions changed in the current diff, classifies gaps as covered/gap/vulnerability,
+    and enforces strict grounding rules (a "fail" verdict requires a confirmed, file-read-
+    verified vulnerability — never an assumption).
+
+[CORE][GATE] gate-finding-analyst
+    Extracts a single grounded, structured finding from a failed QA gate's log and maps it to
+    the PRD story that owns the affected file — must paste the exact verbatim proving log line
+    or emit "no grounded finding" rather than invent one.
+
+[CORE][LADDER] generator
+    Pure file-generation agent: writes one complete new file in a single WriteFile call from
+    the spec already in its prompt, with an explicit contract against reading any existing
+    files first (treats the prompt as fully authoritative).
+
+[CORE][GATE] grooming-coordinator
+    Pre-spec stage, runs before openspec/speckit. Routes stories through readiness-checker and
+    dedup-detector, aggregates a Definition-of-Ready grooming report, and gates
+    low-readiness-score stories out of the spec pass unless force-overridden.
+
+[CORE][UNWIRED] guide-author
+    Stage 6 doc agent. Writes user-facing docs (getting-started, CLI reference, config guide,
+    provider setup, troubleshooting, slash-command reference) with runnable, source-verified
+    code examples — never invents an API that doesn't exist.
+
+[CORE][GATE] kb-change-reviewer
+    Gatekeeper called before every write to a KB-{role}.md file. Rejects any proposed
+    permanent-rule entry that's too long, not a concrete imperative, story-specific,
+    duplicative, off-stack, or a one-time workaround rather than a universal rule.
+
+[CORE][LADDER] lightpanda-agent
+    Browser E2E agent for low/medium-complexity UI stories. Runs fast, deterministic
+    Lightpanda checks (page load, form interactions, validation, happy paths) and returns a
+    strict pass/warn/fail JSON verdict.
+
+[CORE][GATE] mutant-hunter
+    QA testing gate (Phase B). Proposes source-code mutations (operator swaps, boundary shifts,
+    removed null checks) for files changed in the phase and determines whether existing vitest
+    tests would actually catch each one — computes a mutation score and pass/warn/fail verdict.
+
+[CORE][SPEC] openspec-agent
+    Spec-refinement agent. Given one story, produces a refined, complete, testable acceptance-
+    criteria set (and optional story splits) in strict JSON — enforces that split children whose
+    files are all *.test.ts get agentRole "test-engineer", never the impl role. Sole authority
+    on splitting (speckit's competing split proposals are code-level dropped).
+
+[CORE][GATE] perf-sentinel
+    QA testing gate (Phase C). Reviews changed TypeScript files for algorithmic-complexity,
+    memory-allocation, async-safety, and startup-time regressions specific to a CLI tool's
+    latency-sensitive UX — grounding rules require a confirmed readable file before any
+    blocker verdict.
+
+[CORE][LADDER] playwright-agent
+    Browser E2E agent for high-complexity/risky user journeys (auth, checkout, payments,
+    multi-step flows). Uses robust selectors and full diagnostics (trace/screenshot/log) and
+    returns a strict pass/warn/fail JSON verdict.
+
+[CORE][GATE] prd-change-reviewer
+    Universal gatekeeper called after every automated write to prd.json or profiles.json (AC/TC
+    patches, skill notes, profile addenda, model assignment, spec-pass rewrites, CPA estimates,
+    profile creation, tool creation) — each change type has its own explicit rejection rules;
+    outputs a single pass/fail verdict JSON.
+
+[CORE][GATE] prd-model-coordinator
+    Runs once per phase after spec elaboration, before execution. Guarantees every pending
+    story has explicit model/aiProvider/reasoningEffort set (inheriting from a parent for split
+    children, otherwise defaulting) so the pipeline never silently falls back to a hardcoded
+    default model. (This is the agent that ASSIGNS the ladder starting point for every other
+    LADDER-tagged role above.)
+
+[CORE][LADDER] prd-project-manager-agent
+    Runs as INIT-002. The authority on prd.json's structural correctness — validates
+    implementationOrder coverage, agentRole references, AC quality, estimation sanity, and
+    phase config, auto-fixing what it safely can and escalating true blockers. Enforces a
+    "zero-value story" rule: parents must retire the moment they're split, stale retries must
+    be removed.
+
+[CORE][GATE] profile-augmentor
+    Receives a structured gate finding and appends a preventive rule to the finding story's OWN
+    agentRole profile (never guessed from the gate name) under a "Self-Healing Addendum" section
+    — skips silently if the same pattern is already covered.
+
+[CORE][LADDER] project-initiator-agent
+    Runs as INIT-001, the very first story of every project. Reads manifest.md + prd.json and
+    rewrites thin, scaffold-time agent-profile stubs into rich, project-specific system prompts
+    (400-800 words each) — never touches fixed infrastructure roles.
+
+[CORE][GATE] readiness-checker
+    Pre-spec stage. Scores each story against INVEST criteria and a Definition-of-Ready
+    checklist (0-100), classifies ready/needs-work/blocked, and emits specific actionable
+    deficiencies. Read-only.
+
+[CORE][GATE] retry-extension-coordinator
+    Called only after a story has exhausted MAX_RETRIES and only when deterministic evidence
+    already shows distinct (non-repeating) diagnoses. Decides, from injected groundedness/AC-
+    count evidence alone, whether one more bounded retry batch is pragmatic or the story should
+    fail now.
+
+[CORE][GATE] review-agent
+    Structured code reviewer for epam-cli itself: TypeScript strict compliance, test-coverage
+    non-regression, SlashCommand pattern conformance, LLMProvider interface conformance,
+    3-layer config consistency, no hardcoded constants, atomic JSONL writes — plus a dedicated
+    security pass for the Skyscanner mini-app project (API-key handling, path traversal, input
+    validation).
+
+[CORE][GATE] review-ranger
+    QA testing gate (Phase B), deep diff-level PR review beyond review-agent's structural
+    checks: complexity hotspots, duplication, API-contract drift, silently-swallowed errors,
+    test-coverage gaps, naming conventions — every "untested function" claim must be
+    grep-verified against real exports, never assumed.
+
+[CORE][GATE] sast-sentinel
+    QA testing gate (Phase A). Combines tsc diagnostics with pattern-based security scanning
+    (command injection, path traversal, prototype pollution, hardcoded secrets, unsafe eval).
+    Every finding requires grep-verified evidence; dev-dependency CVEs are always "minor"
+    regardless of CVSS; includes two named hard-blocker rules (top-level .listen(), Promise
+    executors missing reject()).
+
+[CORE][GATE] spec-coordinator-agent
+    Pre-phase specification coordinator. Reads the PRD, evaluates risk/dependencies/readiness
+    per story, and assigns which spec runners (OpenSpec, Speckit, both, or none) should process
+    each one — delegates only, never mutates acceptance criteria directly.
+
+[CORE][GATE] spec-validator
+    QA testing gate (Phase A). Cross-references each story's real acceptance criteria against
+    its actual implementation files and test files, classifying every criterion as
+    met/partial/unmet/untestable, with an overall compliance percentage and verdict. Read-only.
+
+[CORE][SPEC] speckit-agent
+    Spec-refinement agent, runs alongside/after openspec-agent. Converts requirements into
+    executable specs, flags missing ACs, and recommends story decompositions — explicitly
+    complements rather than conflicts with OpenSpec's output; same test/impl role-split
+    enforcement rule.
+
+[CORE][LADDER] spike-agent
+    Runs only on storyType "spike" stories. Time-boxed technical discovery only — never writes
+    implementation code or installs packages. Must produce its output artifact (with
+    "INCOMPLETE" markers for missing sections) before its timebox expires, no matter what.
+    Includes dedicated RapidAPI-style gateway-probing skills.
+
+[CORE][GATE] story-ac-remediator
+    Receives a mapped gate finding and drafts 1-2 new, machine-verifiable acceptance criteria
+    (with a grep/node one-liner proving compliance) that would have prevented the defect —
+    output-only, never writes files itself.
+
+[CORE][GATE] tc-writer-agent
+    Reads real implementation source files post-hoc and extracts verified, ground-truth test
+    facts (exact signatures, error strings, route paths, absent validations) into structured
+    testCriteria JSON for the paired test story — never writes tests or touches source itself.
+
+[CORE][GATE] team-lead-agent
+    Tri-modal phase governor: PRE-PHASE (validates dependencies/profiles before a phase starts),
+    POST-PHASE (runs tsc + vitest + completion checks, approves or retries/escalates the phase),
+    and TEAM-LEAD (cross-story dependency validation, cost-variance flagging, merge
+    coordination).
+
+[CORE][GATE] test-coordinator-agent
+    Governs the 3-phase QA testing-gate cascade (SAST+spec-validator, then review-ranger+
+    mutant-hunter, then fuzz-weaver+perf-sentinel) and routes browser E2E work to lightpanda vs
+    playwright by a computed story-complexity score; any single blocker from any gate blocks
+    the whole phase.
+
+[CORE][LADDER] test-engineer
+    Vitest testing engineer. Mandatory dependency-install-before-import check, "read the real
+    implementation before writing a single assertion" mandate, TC-facts-win-over-ACs rule, and
+    a mandatory contract-file read step for cross-story mock accuracy — never writes
+    implementation source, only test files.
+
+[CORE][LADDER] typescript-engineer
+    General TypeScript/Node.js implementation engineer. Same "read the real dependency contract
+    before writing code" discipline as test-engineer, plus project-specific conventions
+    (module system, build tooling) picked up from the project's own package.json/tsconfig —
+    the default role for non-test implementation stories.
+
+[CORE][LADDER] ui-engineer
+    Vanilla HTML/CSS/JS engineer (no build step, no frameworks) for self-contained, dark-mode,
+    accessible single-file UI — identical brief to frontend-engineer, with the same
+    project-specific accessibility/security addendum (ARIA live regions, safe DOM rendering,
+    XSS-safe API-data display, in-flight form-state locking).

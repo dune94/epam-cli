@@ -1,0 +1,93 @@
+{
+  "agent": "spec-validator",
+  "phase": "scaffold",
+  "stories": [
+    {
+      "storyId": "SKY-001",
+      "title": "Scaffold TypeScript project with Vitest and Express",
+      "criteria": [
+        {
+          "text": "package.json exists and the 'name' field equals exactly 'skyscanner-app'",
+          "status": "met",
+          "evidence": "package.json read; name field is \"skyscanner-app\"",
+          "gaps": ""
+        },
+        {
+          "text": "package.json 'scripts' object contains exactly: build='tsc', test='vitest run', start='node dist/server.js', dev='tsx src/server.ts' — and 'main' equals 'dist/server.js'",
+          "status": "met",
+          "evidence": "scripts: { build: 'tsc', test: 'vitest run', start: 'node dist/server.js', dev: 'tsx src/server.ts' }; main: 'dist/server.js' — all match exactly",
+          "gaps": ""
+        },
+        {
+          "text": "package.json 'dependencies' includes 'express'",
+          "status": "met",
+          "evidence": "dependencies.express = '^4.18.2'",
+          "gaps": ""
+        },
+        {
+          "text": "package.json 'devDependencies' includes all of: typescript, tsx, vitest, @types/express, @types/node",
+          "status": "met",
+          "evidence": "devDependencies contains typescript ^5.3.0, tsx ^4.7.0, vitest ^1.2.0, @types/express ^4.17.21, @types/node ^20.11.0",
+          "gaps": ""
+        },
+        {
+          "text": "package.json contains no dependency whose name includes 'skyscanner', 'rapidapi', or any Skyscanner SDK",
+          "status": "met",
+          "evidence": "grep for skyscanner/rapidapi in package.json only matched the description string ('backed by RapidAPI'), not any dependency name; dependencies and devDependencies keys contain no such references",
+          "gaps": ""
+        },
+        {
+          "text": "tsconfig.json exists with compilerOptions: strict=true, target='ES2022', module='CommonJS', outDir='dist/'",
+          "status": "met",
+          "evidence": "tsconfig.json read; compilerOptions: strict=true, target='ES2022', module='CommonJS', outDir='dist/' — all present and correct",
+          "gaps": ""
+        },
+        {
+          "text": "vitest.config.ts exists, imports defineConfig from 'vitest/config', exports a default config object, and sets test.globals to true",
+          "status": "met",
+          "evidence": "vitest.config.ts imports { defineConfig } from 'vitest/config', exports default defineConfig({ test: { globals: true, passWithNoTests: true } })",
+          "gaps": ""
+        },
+        {
+          "text": ".gitignore exists and contains entries for both 'node_modules' and 'dist'",
+          "status": "met",
+          "evidence": ".gitignore contains 'node_modules/' and 'dist/'",
+          "gaps": ""
+        },
+        {
+          "text": "src/ directory exists",
+          "status": "met",
+          "evidence": "ls -d confirmed /home/bradleyjerome/projects/skyscanner-app/src/ exists",
+          "gaps": ""
+        },
+        {
+          "text": "node_modules/ directory exists (npm install completed successfully)",
+          "status": "met",
+          "evidence": "ls -d confirmed /home/bradleyjerome/projects/skyscanner-app/node_modules/ exists",
+          "gaps": ""
+        },
+        {
+          "text": "Running tsc --noEmit exits with code 0 and produces no output",
+          "status": "met",
+          "evidence": "tsc --noEmit exited with code 0 and produced no output",
+          "gaps": ""
+        },
+        {
+          "text": "Running vitest run exits with code 0 (no test files is an acceptable passing state)",
+          "status": "met",
+          "evidence": "vitest run exited with code 0; output: 'No test files found, exiting with code 0'",
+          "gaps": ""
+        },
+        {
+          "text": "package.json contains no reference anywhere to 'index.ts' or 'index.js'",
+          "status": "met",
+          "evidence": "grep for 'index.ts' and 'index.js' in package.json returned no matches (exit code 1)",
+          "gaps": ""
+        }
+      ],
+      "overallCompliance": 100,
+      "verdict": "pass"
+    }
+  ],
+  "overallVerdict": "pass"
+}

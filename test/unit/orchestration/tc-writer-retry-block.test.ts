@@ -82,8 +82,9 @@ describe('Inline TC writer gate — single shared implementation (lib/tc-writer-
 describe('Inline TC writer gate — sourced and called identically by every lane', () => {
   it('run-agent-orchestration.sh (main lane, Step 1) sources the shared lib and calls the gate', () => {
     expect(orchSrc).toContain('source "$SCRIPT_DIR/lib/tc-writer-gate.sh"');
-    const loopStart = orchSrc.indexOf('while IFS= read -r story; do');
-    const loopBody = orchSrc.slice(loopStart, orchSrc.indexOf('done <<< "$non_review_main"', loopStart));
+    // Gate call and run_story_with_watchdog now live inside _run_one_main_story()
+    const fnStart = orchSrc.indexOf('_run_one_main_story() {');
+    const loopBody = orchSrc.slice(fnStart, orchSrc.indexOf('done <<< "$non_review_main"', fnStart));
     expect(loopBody).toMatch(/if ! run_inline_tc_writer_gate "\$story" "\$PHASE"; then/);
     const gateIdx = loopBody.indexOf('run_inline_tc_writer_gate');
     const runIdx = loopBody.indexOf('run_story_with_watchdog');
@@ -91,12 +92,14 @@ describe('Inline TC writer gate — sourced and called identically by every lane
     expect(runIdx).toBeGreaterThan(gateIdx);
   });
 
-  it('the main-lane call site continues the loop (skips this story) when the gate blocks it', () => {
-    const loopStart = orchSrc.indexOf('while IFS= read -r story; do');
-    const loopBody = orchSrc.slice(loopStart, orchSrc.indexOf('done <<< "$non_review_main"', loopStart));
+  it('the main-lane call site skips this story (returns early) when the gate blocks it', () => {
+    // The loop body is now a function; skip is implemented as `return 0` (not
+    // `continue`) so the outer while-loop moves to the next story.
+    const fnStart = orchSrc.indexOf('_run_one_main_story() {');
+    const loopBody = orchSrc.slice(fnStart, orchSrc.indexOf('done <<< "$non_review_main"', fnStart));
     const idx = loopBody.indexOf('if ! run_inline_tc_writer_gate');
     const snippet = loopBody.slice(idx, idx + 120);
-    expect(snippet).toMatch(/continue/);
+    expect(snippet).toMatch(/return 0/);
   });
 
   it('claude.sh (worktree lanes, run_implementation()) sources the shared lib and calls the SAME gate', () => {

@@ -411,8 +411,9 @@ describe('TC gate — orchestration script wiring', () => {
   // shared-implementation and cross-lane-parity contract.
   it('Step 1 loop calls the shared inline TC writer gate, before run_story_with_watchdog', () => {
     const src = readFileSync(ORCH_SCRIPT, 'utf8');
-    const loopStart = src.indexOf('while IFS= read -r story; do');
-    const loopBody = src.slice(loopStart, src.indexOf('done <<< "$non_review_main"', loopStart));
+    // Both calls now live inside _run_one_main_story() — use it as the anchor
+    const fnStart = src.indexOf('_run_one_main_story() {');
+    const loopBody = src.slice(fnStart, src.indexOf('done <<< "$non_review_main"', fnStart));
     expect(loopBody).toContain('run_inline_tc_writer_gate');
     const tcIdx = loopBody.indexOf('run_inline_tc_writer_gate');
     const runIdx = loopBody.indexOf('run_story_with_watchdog');

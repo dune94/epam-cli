@@ -78,7 +78,9 @@ case "${EPAM_ORCHESTRATION_PROVIDER:-${CLAUDE_CMD}}" in
         exit 1
         ;;
 esac
-LOG_DIR="${OUTPUT_DIR:-$AUTOMATION_DIR/logs}"
+# Run logs always go to orchestrations/logs/ so the nginx-served dashboard
+# can see them. OUTPUT_DIR is for generated app code, not run telemetry.
+LOG_DIR="$AUTOMATION_DIR/logs"
 MONITOR_STATUS_FILE="$LOG_DIR/agent-status.json"
 MESSAGES_JSONL="$LOG_DIR/agent-messages.jsonl"
 # Export so all subprocesses (claude.sh, update-monitor.sh, invoke.py) write to the same files
@@ -2390,7 +2392,7 @@ Fix this and retry. Do not repeat the same mistake."
         fi
 
         local _pfa_call_ok=1
-        run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "assessment" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log" || _pfa_call_ok=0
+        run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "team-lead-agent" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log" || _pfa_call_ok=0
 
         if [ "$_pfa_call_ok" -eq 0 ]; then
             _pfa_corrective_note="the tool call itself failed (non-zero exit) — check $assessment_log"
@@ -3098,9 +3100,13 @@ if [ -n "$main_stories" ]; then
         else
         step_emit "1" "running" "Step 1: Main-branch stories"
     log "Step 1: Running main-branch stories..."
-        _phase_story_failures=0
-        while IFS= read -r story; do
-            [ -z "$story" ] && continue
+        # _run_one_main_story: single-story execution body shared between the
+        # main loop (fixed snapshot) and the tail-sweep pass (split children).
+        # All required variables (PRD_FILE, PHASE, LOG_DIR, SCRIPT_DIR,
+        # _phase_story_failures, ORCH_RUN_ID) are script-level so the function
+        # reads/writes them directly without needing explicit arguments.
+        _run_one_main_story() {
+            local story="$1"
             # Root cause fix (found live, 2026-07-10, tier3-travel-app run):
             # non_review_main/main_stories is a SNAPSHOT captured once at
             # phase start (~line 1512-1555, before Step 0.5 and before this
@@ -3120,12 +3126,13 @@ if [ -n "$main_stories" ]; then
             # had already been correctly abandoned. Re-check the CURRENT
             # status live, right before running each story, instead of
             # trusting the stale start-of-phase snapshot.
+            local _story_current_status
             _story_current_status=$(jq -r --arg id "$story" \
                 '.stories[] | select(.id == $id) | .status // "pending"' \
                 "$PRD_FILE" 2>/dev/null || echo "pending")
             if [ "$_story_current_status" = "deprecated" ]; then
                 info "  Skipping $story — deprecated after being enqueued (mid-execution split rejected this story)"
-                continue
+                return 0
             fi
             # "blocked" — set by the inline TC-writer retry gate below when 3
             # attempts still produce no valid testCriteria for this story. A
@@ -3135,15 +3142,15 @@ if [ -n "$main_stories" ]; then
             # grounding is worse than not running at all.
             if [ "$_story_current_status" = "blocked" ]; then
                 info "  Skipping $story — blocked (no valid testCriteria after 3 attempts, see blocked-stories.jsonl)"
-                continue
+                return 0
             fi
             if [ "$_story_current_status" = "completed" ]; then
                 info "  [CHECKPOINT] Skipping $story — already completed in prd.json"
-                continue
+                return 0
             fi
             if checkpoint_already_done "$story"; then
                 info "  Skipping $story — already completed in checkpoint (run: $ORCH_RUN_ID)"
-                continue
+                return 0
             fi
             check_cost_budget
             wait_if_paused
@@ -3159,10 +3166,11 @@ if [ -n "$main_stories" ]; then
             # not aborting the phase) if no valid testCriteria after 3
             # attempts.
             if ! run_inline_tc_writer_gate "$story" "$PHASE"; then
-                continue
+                return 0
             fi
 
             log "  Running: $story"
+            local _story_monitor_role _story_model_hint _story_provider_hint
             _story_monitor_role=$(jq -r --arg id "$story" \
                 '.stories[] | select(.id == $id) | .agentRole // "typescript-engineer"' \
                 "$PRD_FILE" 2>/dev/null || echo "typescript-engineer")
@@ -3172,10 +3180,18 @@ if [ -n "$main_stories" ]; then
             _story_provider_hint=$(jq -r --arg id "$story" \
                 '.stories[] | select(.id == $id) | .provider // ""' \
                 "$PRD_FILE" 2>/dev/null || echo "")
+            # Export model/provider so claude.sh subprocess has them for its own
+            # update_monitor_status calls (story_complete, error events, etc.).
+            # ORCH_STORY_START_EMITTED suppresses claude.sh's redundant story_start
+            # since we already emitted one here with the correct model.
+            export STORY_MODEL="$_story_model_hint"
+            export STORY_PROVIDER="$_story_provider_hint"
+            export ORCH_STORY_START_EMITTED=1
             "$SCRIPT_DIR/update-monitor.sh" story_start "$story" "main" "$_story_monitor_role" "" \
                 "$_story_provider_hint" "$_story_model_hint" 2>/dev/null || true
-            _story_exit=0
+            local _story_exit=0
             run_story_with_watchdog "$story" "$LOG_DIR/main-${story}.log" || _story_exit=$?
+            export ORCH_STORY_START_EMITTED=0
             # A genuine watchdog double-timeout gets ONE diagnose-then-restructure
             # recovery attempt before counting as a phase failure -- see
             # run_story_recovery_analyst's docstring for why this is scoped to
@@ -3192,12 +3208,50 @@ if [ -n "$main_stories" ]; then
             else
                 # Story reported success — verify TypeScript still compiles before moving on
                 story_tsc_gate "$story" || _phase_story_failures=$((_phase_story_failures+1))
-                "$SCRIPT_DIR/update-monitor.sh" story_complete "$story" "main" 2>/dev/null || true
+                "$SCRIPT_DIR/update-monitor.sh" story_complete "$story" "main" "" "${STORY_MODEL:-}" "${STORY_PROVIDER:-}" 2>/dev/null || true
             fi
             checkpoint_complete "$story"
             # Validate any splits the agent registered mid-execution before the next story runs
             validate_mid_execution_splits "$PHASE"
+        }
+        _phase_story_failures=0
+        while IFS= read -r story; do
+            [ -z "$story" ] && continue
+            _run_one_main_story "$story"
         done <<< "$non_review_main"
+        # ── Tail sweep: pick up TC-density split children ─────────────────────
+        # When run_inline_tc_writer_gate splits the LAST story in non_review_main
+        # (facts exceed EPAM_TC_FACTS_SPLIT_THRESHOLD), the resulting children
+        # are written to implementationOrder[$PHASE] in prd.json AFTER the
+        # fixed-snapshot iterator is exhausted — they would otherwise be silently
+        # dropped and never executed in the same phase pass.
+        # Re-read prd.json for any pending stories not present in the original
+        # snapshot and run them through the same per-story logic.
+        _tail_sweep_candidates=$(jq -r --arg phase "$PHASE" \
+            '(.implementationOrder[$phase] // []) as $ids |
+             .stories[] |
+             select(
+               (.id as $id | $ids | index($id) != null) and
+               .status != "deprecated" and
+               .status != "completed" and
+               .status != "blocked"
+             ) | .id' \
+            "$PRD_FILE" 2>/dev/null || true)
+        _tail_sweep_new=""
+        while IFS= read -r _ts; do
+            [ -z "$_ts" ] && continue
+            case $'\n'"$non_review_main"$'\n' in
+                *$'\n'"$_ts"$'\n'*) ;; # already in original snapshot
+                *) _tail_sweep_new="${_tail_sweep_new}${_ts}"$'\n' ;;
+            esac
+        done <<< "$_tail_sweep_candidates"
+        if [ -n "$_tail_sweep_new" ]; then
+            log "  [tail-sweep] Picking up $(printf '%s' "$_tail_sweep_new" | grep -c .) split children: $(printf '%s' "$_tail_sweep_new" | tr '\n' ' ')"
+            while IFS= read -r story; do
+                [ -z "$story" ] && continue
+                _run_one_main_story "$story"
+            done <<< "$_tail_sweep_new"
+        fi
         if [ "$_phase_story_failures" -gt 0 ]; then
             step_emit "1" "fail" "Step 1: Main-branch stories"
             error "Phase '$PHASE': $_phase_story_failures story/stories failed — aborting phase"
@@ -3971,7 +4025,7 @@ PROMPT_EOF
     # tee's exit status (virtually always 0), never run_orch_prompt_with_
     # tools's real one -- a tool-call failure could never be detected at
     # all. Capture the first command's real exit status explicitly instead.
-    run_orch_prompt_with_tools "$assessment_prompt" "assessment" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"
+    run_orch_prompt_with_tools "$assessment_prompt" "team-lead-agent" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"
     local _assessment_rc=${PIPESTATUS[0]}
 
     if [ "$_assessment_rc" -ne 0 ]; then

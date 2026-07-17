@@ -47,6 +47,7 @@ AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
 COST_LOG="${COST_LOG:-$AUTOMATION_DIR/logs/phase-cost.jsonl}"
+MODEL_PRICING_FILE="${MODEL_PRICING_FILE:-$SCRIPT_DIR/model-pricing.json}"
 
 # ────────────────────────────────────────────
 # Defaults
@@ -163,16 +164,50 @@ CACHE_POS_3=0.55
 CACHE_POS_4PLUS=0.65
 CACHE_SAME_ROLE_BONUS=0.10
 
-# Pricing table (USD per 1M tokens) — Claude tiers: Opus 4.6 / Sonnet 4.6 / Haiku 4.5
+# Effort-tier fallback pricing (USD per 1M tokens) — used only when a story has no .model
+# or when the .model is not found in model-pricing.json.
+# Primary pricing is data-driven: see lookup_model_pricing() below.
 declare -A PRICING_INPUT=( [high]=15.00 [medium]=3.00 [low]=0.80 )
 declare -A PRICING_CACHED=( [high]=1.50 [medium]=0.30 [low]=0.08 )
 declare -A PRICING_OUTPUT=( [high]=75.00 [medium]=15.00 [low]=4.00 )
 
-# Qwen via OpenRouter tiers: Qwen3.7 Max / Qwen3.7 Plus / Qwen3.6 Flash
-# Cache-read is 20% of input (OpenRouter rate for 3.7-max/plus; flash estimated at same ratio)
+# Qwen effort-tier fallback (only used when model not in model-pricing.json)
 declare -A QWEN_PRICING_INPUT=( [high]=1.25 [medium]=0.40 [low]=0.1875 )
 declare -A QWEN_PRICING_CACHED=( [high]=0.25 [medium]=0.08 [low]=0.0375 )
 declare -A QWEN_PRICING_OUTPUT=( [high]=3.75 [medium]=1.60 [low]=1.125 )
+
+# lookup_model_pricing <model-name>
+# Returns "input_per_M|cached_per_M|output_per_M" reading from model-pricing.json.
+# Prints empty string when model is unknown (caller falls back to tier arrays).
+lookup_model_pricing() {
+    local model="$1"
+    [ -z "$model" ] && { printf ''; return; }
+    [ -f "$MODEL_PRICING_FILE" ] || { printf ''; return; }
+    python3 - "$MODEL_PRICING_FILE" "$model" <<'PYEOF'
+import sys, json
+pricing_file, model = sys.argv[1], sys.argv[2]
+try:
+    with open(pricing_file) as f:
+        table = json.load(f)
+    prices = table.get(model)
+    if not prices:
+        ml = model.lower()
+        for k, v in table.items():
+            kl = k.lower()
+            if kl == ml or ml.startswith(kl) or kl.startswith(ml):
+                prices = v
+                break
+    if prices:
+        inp = float(prices.get("input", 0))
+        out = float(prices.get("output", 0))
+        cached = round(inp * 0.10, 6)
+        print(f"{inp}|{cached}|{out}")
+    else:
+        print("")
+except Exception:
+    print("")
+PYEOF
+}
 
 # ────────────────────────────────────────────
 # Refinement from Historical Data
@@ -464,6 +499,7 @@ while IFS= read -r sid; do
     ' "$PRD_FILE")
 
     IFS='|' read -r s_id s_title s_hours s_priority s_type s_role s_deps s_skills s_files s_provider s_skill_csv <<< "$story_data"
+    s_model=$(jq -r --arg id "$sid" '.stories[] | select(.id == $id) | .model // ""' "$PRD_FILE")
 
     # Effort tier
     effort=$(get_effort_tier "$s_hours")
@@ -568,18 +604,25 @@ while IFS= read -r sid; do
     cache_tokens=$(echo "scale=0; ($input_tokens * $cache_ratio) / 1" | bc)
     uncached_input=$(echo "scale=0; ($input_tokens - $cache_tokens) / 1" | bc)
 
-    case "$s_provider" in
-        qwen)
-            price_input="${QWEN_PRICING_INPUT[$effort]}"
-            price_cached="${QWEN_PRICING_CACHED[$effort]}"
-            price_output="${QWEN_PRICING_OUTPUT[$effort]}"
-            ;;
-        *)
-            price_input="${PRICING_INPUT[$effort]}"
-            price_cached="${PRICING_CACHED[$effort]}"
-            price_output="${PRICING_OUTPUT[$effort]}"
-            ;;
-    esac
+    # Primary: model-specific pricing from model-pricing.json (data-driven)
+    _model_prices=$(lookup_model_pricing "${s_model:-}")
+    if [ -n "$_model_prices" ]; then
+        IFS='|' read -r price_input price_cached price_output <<< "$_model_prices"
+    else
+        # Fallback: effort-tier pricing keyed by provider
+        case "$s_provider" in
+            qwen)
+                price_input="${QWEN_PRICING_INPUT[$effort]}"
+                price_cached="${QWEN_PRICING_CACHED[$effort]}"
+                price_output="${QWEN_PRICING_OUTPUT[$effort]}"
+                ;;
+            *)
+                price_input="${PRICING_INPUT[$effort]}"
+                price_cached="${PRICING_CACHED[$effort]}"
+                price_output="${PRICING_OUTPUT[$effort]}"
+                ;;
+        esac
+    fi
 
     cost=$(echo "scale=4; ($uncached_input / 1000000) * $price_input + ($cache_tokens / 1000000) * $price_cached + ($output_tokens / 1000000) * $price_output" | bc)
 

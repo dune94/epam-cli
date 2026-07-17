@@ -22,7 +22,7 @@ AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 # Respect PROJECT_ROOT from environment (set by run-agent-orchestration.sh when PRD_FILE is external)
 PROJECT_ROOT="${PROJECT_ROOT:-$(dirname "$AUTOMATION_DIR")}"
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
-LOG_DIR="${OUTPUT_DIR:-$AUTOMATION_DIR/logs}"
+LOG_DIR="$AUTOMATION_DIR/logs"
 
 # shellcheck source=lib/tc-writer-gate.sh
 source "$SCRIPT_DIR/lib/tc-writer-gate.sh"
@@ -2855,11 +2855,21 @@ update_monitor_status() {
     [ ! -x "$update_script" ] && return 0
     case "$event" in
         start)
-            "$update_script" story_start "$story_id" "$lane" "$role" "$title" \
-                "${STORY_PROVIDER:-}" "${STORY_MODEL:-}" 2>/dev/null || true
+            # Orchestration already emitted story_start with the correct model when it
+            # launched this subprocess via run_story_with_watchdog. Skip the duplicate.
+            if [ "${ORCH_STORY_START_EMITTED:-0}" != "1" ]; then
+                "$update_script" story_start "$story_id" "$lane" "$role" "$title" \
+                    "${STORY_PROVIDER:-}" "${STORY_MODEL:-}" 2>/dev/null || true
+            fi
             ;;
         complete)
-            "$update_script" story_complete "$story_id" "$lane" "$title" 2>/dev/null || true
+            # Orchestration emits story_complete after the TSC gate (the authoritative
+            # "story is done and types pass" signal). Skip the duplicate from claude.sh
+            # for main-lane stories managed by orchestration.
+            if [ "${ORCH_STORY_START_EMITTED:-0}" != "1" ]; then
+                "$update_script" story_complete "$story_id" "$lane" "$title" \
+                    "${STORY_MODEL:-}" "${STORY_PROVIDER:-}" 2>/dev/null || true
+            fi
             ;;
         fail)
             "$update_script" story_fail "$story_id" "$lane" "$message" 2>/dev/null || true
@@ -5561,8 +5571,25 @@ implement_story() {
                         log "  InferenceLadder[Rung3/R${retry_count}]: model='${STORY_MODEL:-default}' — effort → high (maximum)"
                         ;;
                 esac
+                # Emit ladder_rung event so agent-activity dashboard shows every escalation
+                local _ladder_event_script="$SCRIPT_DIR/update-monitor.sh"
+                if [ -x "$_ladder_event_script" ]; then
+                    local _ladder_role
+                    _ladder_role=$(jq -r --arg id "$story_id" '.stories[] | select(.id==$id) | .agentRole // ""' "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
+                    "$_ladder_event_script" event "ladder_rung" \
+                        "InferenceLadder Rung${_rung}/R${retry_count}: model=${STORY_MODEL:-default} effort=${EPAM_REASONING_EFFORT:-low}" \
+                        "$story_id" "main" "${_ladder_role:-}" "${STORY_MODEL:-}" "${STORY_PROVIDER:-}" 2>/dev/null || true
+                fi
             else
                 log "  InferenceLadder[Rung${_rung}/R${retry_count}]: same rung — no escalation, self-heal guidance active"
+                local _retry_event_script="$SCRIPT_DIR/update-monitor.sh"
+                if [ -x "$_retry_event_script" ]; then
+                    local _retry_role
+                    _retry_role=$(jq -r --arg id "$story_id" '.stories[] | select(.id==$id) | .agentRole // ""' "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
+                    "$_retry_event_script" event "retry" \
+                        "Retry R${retry_count} Rung${_rung}: model=${STORY_MODEL:-default} (self-heal active)" \
+                        "$story_id" "main" "${_retry_role:-}" "${STORY_MODEL:-}" "${STORY_PROVIDER:-}" 2>/dev/null || true
+                fi
             fi
         fi
         # Rebuild prompt each attempt: retry_count and KB ID must reflect current state

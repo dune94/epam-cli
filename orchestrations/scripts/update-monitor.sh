@@ -169,6 +169,8 @@ EOF
     STORY_ID="$1"
     LANE="$2"
     TITLE="${3:-}"
+    COMPLETE_MODEL="${4:-}"
+    COMPLETE_PROVIDER="${5:-}"
 
     MONITOR_DATA=$(echo "$MONITOR_DATA" | jq \
       --arg story "$STORY_ID" \
@@ -192,7 +194,7 @@ EOF
     echo "$MONITOR_DATA" > "$MONITOR_FILE"
     PHASE_ID="$(resolve_phase)"
     ROLE="$(echo "$MONITOR_DATA" | jq -r --arg story "$STORY_ID" '.stories[$story].role // "orchestrator"')"
-    append_activity_event "story_complete" "$STORY_ID" "$PHASE_ID" "$ROLE" "$LANE" "Completed $TITLE"
+    append_activity_event "story_complete" "$STORY_ID" "$PHASE_ID" "$ROLE" "$LANE" "Completed $TITLE" "$COMPLETE_MODEL" "$COMPLETE_PROVIDER"
     ;;
 
   story_fail)
@@ -231,6 +233,8 @@ EOF
     STORY="${3:-}"
     LANE="${4:-main}"
     ROLE="${5:-}"
+    EVENT_MODEL="${6:-}"
+    EVENT_PROVIDER="${7:-}"
 
     MONITOR_DATA=$(echo "$MONITOR_DATA" | jq \
       --arg type "$TYPE" \
@@ -251,7 +255,7 @@ EOF
       ')
     echo "$MONITOR_DATA" > "$MONITOR_FILE"
     PHASE_ID="$(resolve_phase)"
-    append_activity_event "$TYPE" "$STORY" "$PHASE_ID" "$ROLE" "$LANE" "$MESSAGE"
+    append_activity_event "$TYPE" "$STORY" "$PHASE_ID" "$ROLE" "$LANE" "$MESSAGE" "$EVENT_MODEL" "$EVENT_PROVIDER"
     ;;
 
   finalize)

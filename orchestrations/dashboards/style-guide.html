@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Style Guide — Lime-on-Black Theme</title>
+  <style>
+    /* ── New palette (live preview, updated by lime picker) ── */
+    :root {
+      --bg:       #080808;
+      --bg1:      #101010;
+      --bg2:      #181818;
+      --bg3:      #222222;
+      --surface:  #101010;
+      --surface2: #181818;
+      --surface3: #222222;
+      --border:   #2a2a2a;
+      --border2:  #383838;
+      --text:     #f0f0f0;
+      --text2:    #a0a0a0;
+      --text3:    #606060;
+      --text-muted: #a0a0a0;
+
+      /* Lime accent — default; changed by picker */
+      --accent:    #84cc16;
+      --teal:      #84cc16;
+      --teal-dim:  rgba(163,230,53,.12);
+      --teal-glow: rgba(163,230,53,.22);
+
+      /* Semantic */
+      --green:     #4ade80;  --green-dim:  rgba(74,222,128,.12);
+      --amber:     #fbbf24;  --amber-dim:  rgba(251,191,36,.12);
+      --red:       #f87171;  --red-dim:    rgba(248,113,113,.10);
+      --violet:    #a78bfa;  --violet-dim: rgba(167,139,250,.12);
+      --pink:      #f472b6;  --pink-dim:   rgba(244,114,182,.10);
+      --blue:      #60a5fa;  --blue-dim:   rgba(96,165,250,.10);
+      --orange:    #fb923c;  --orange-dim: rgba(251,146,60,.10);
+    }
+
+    /* ── Old palette (before comparison only) ── */
+    .before-panel {
+      --bg:    #0f172a; --bg1: #1e293b; --bg2: #263248; --bg3: #334155;
+      --surface: #1e293b; --surface2: #263248; --surface3: #334155;
+      --border: #334155; --border2: #475569;
+      --text: #e2e8f0; --text2: #94a3b8; --text3: #64748b;
+      --accent: #38bdf8; --teal: #38bdf8; --teal-dim: rgba(56,189,248,.10);
+      --teal-glow: rgba(56,189,248,.22);
+      --green: #4ade80; --green-dim: rgba(74,222,128,.12);
+      --amber: #fbbf24; --amber-dim: rgba(251,191,36,.12);
+      --red:   #f87171; --red-dim:   rgba(248,113,113,.10);
+      --violet: #a78bfa; --violet-dim: rgba(167,139,250,.12);
+      --blue:  #60a5fa; --blue-dim:  rgba(96,165,250,.10);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.5;
+    }
+
+    /* ── Page header ── */
+    .page-header {
+      padding: 24px 32px; border-bottom: 1px solid var(--border);
+      background: var(--bg1);
+    }
+    .page-header h1 { font-size: 22px; font-weight: 700; color: var(--accent); letter-spacing: -0.3px; }
+    .page-header p  { font-size: 13px; color: var(--text2); margin-top: 4px; }
+
+    /* ── Sections ── */
+    .container { max-width: 1200px; margin: 0 auto; padding: 32px; }
+    .section { margin-bottom: 48px; }
+    .section-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px;
+      color: var(--text3); margin-bottom: 16px; padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* ── Lime picker ── */
+    .lime-picker {
+      display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px;
+    }
+    .lime-opt {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      cursor: pointer; padding: 10px 14px; border-radius: 8px;
+      border: 2px solid transparent; background: var(--bg2);
+      transition: border-color 0.15s;
+    }
+    .lime-opt:hover { border-color: var(--border2); }
+    .lime-opt.active { border-color: var(--accent); }
+    .lime-opt .swatch {
+      width: 56px; height: 40px; border-radius: 6px;
+    }
+    .lime-opt .hex { font-family: monospace; font-size: 12px; color: var(--text2); }
+    .lime-opt .name { font-size: 11px; color: var(--text3); }
+    .picker-note { font-size: 12px; color: var(--text3); margin-top: 4px; }
+
+    /* ── Palette swatches ── */
+    .swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+    .swatch-block {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      min-width: 80px;
+    }
+    .swatch-color {
+      width: 80px; height: 52px; border-radius: 6px; border: 1px solid var(--border2);
+    }
+    .swatch-var  { font-size: 11px; color: var(--text3); font-family: monospace; text-align: center; }
+    .swatch-hex  { font-size: 10px; color: var(--text3); font-family: monospace; }
+
+    /* ── Typography ── */
+    .type-scale > * + * { margin-top: 12px; }
+    .type-h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; }
+    .type-h2 { font-size: 22px; font-weight: 700; color: var(--text2); }
+    .type-h3 { font-size: 16px; font-weight: 600; }
+    .type-h4 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); }
+    .type-body { font-size: 14px; color: var(--text); }
+    .type-muted { font-size: 13px; color: var(--text2); }
+    .type-code { font-family: monospace; font-size: 13px; background: var(--bg2); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); color: var(--accent); }
+    .type-link { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.15s; }
+    .type-link:hover { border-color: var(--accent); }
+
+    /* ── Badges ── */
+    .badge-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 9px; border-radius: 12px; font-size: 11px; font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+    .badge-pass    { background: var(--green-dim);  color: var(--green); }
+    .badge-fail    { background: var(--red-dim);    color: var(--red); }
+    .badge-pending { background: var(--border);     color: var(--text3); }
+    .badge-skip    { background: var(--amber-dim);  color: var(--amber); }
+    .badge-accent  { background: var(--teal-dim);   color: var(--accent); }
+    .badge-violet  { background: var(--violet-dim); color: var(--violet); }
+    .badge-blue    { background: var(--blue-dim);   color: var(--blue); }
+
+    /* ── Step status rows ── */
+    .step-rows > * + * { margin-top: 4px; }
+    .step-row {
+      display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+      border-radius: 6px; background: var(--bg2); font-size: 13px;
+    }
+    .step-icon { font-size: 14px; width: 18px; text-align: center; }
+    .step-icon-pass   { color: var(--green); }
+    .step-icon-fail   { color: var(--red); }
+    .step-icon-active { color: var(--accent); animation: pulse 1.4s infinite; }
+    .step-icon-skip   { color: var(--text3); }
+    .step-id   { font-family: monospace; color: var(--text3); font-size: 12px; width: 36px; }
+    .step-name { flex: 1; }
+    .step-note { font-size: 11px; color: var(--text3); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+    /* ── Event cards ── */
+    .timeline { position: relative; padding-left: 28px; }
+    .timeline::before {
+      content: ''; position: absolute; left: 10px; top: 0; bottom: 0;
+      width: 2px; background: var(--border);
+    }
+    .event-card {
+      position: relative; background: var(--bg1); border: 1px solid var(--border);
+      border-radius: 8px; padding: 14px 16px; margin-bottom: 10px;
+      transition: border-color 0.2s;
+    }
+    .event-card:hover { border-color: var(--accent); }
+    .event-card::before {
+      content: ''; position: absolute; left: -22px; top: 18px;
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--border2); border: 2px solid var(--bg);
+    }
+    .ec-complete::before { background: var(--green); }
+    .ec-fail::before     { background: var(--red); }
+    .ec-running::before  { background: var(--accent); }
+    .ec-decision-pass::before   { background: var(--green); }
+    .ec-decision-fail::before   { background: var(--red); }
+    .ec-decision-amber::before  { background: var(--amber); }
+    .ec-gate::before     { background: var(--violet); }
+    .ec-spec::before     { background: var(--pink); }
+    .event-agent { font-weight: 700; color: var(--accent); font-size: 14px; }
+    .event-time  { font-size: 12px; color: var(--text3); font-family: monospace; }
+    .event-detail { font-size: 13px; color: var(--text2); margin-top: 6px; }
+    .event-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 6px; }
+
+    /* ── Stat cards ── */
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr)); gap: 10px; }
+    .stat-card {
+      background: var(--bg2); border: 1px solid var(--border); padding: 14px 12px;
+      border-radius: 8px; text-align: center;
+    }
+    .stat-value { font-size: 28px; font-weight: 700; color: var(--accent); }
+    .stat-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+
+    /* ── Table ── */
+    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .data-table th {
+      text-align: left; padding: 10px 14px; font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3);
+      border-bottom: 1px solid var(--border); background: var(--bg2);
+    }
+    .data-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text2); }
+    .data-table tr:hover td { background: var(--bg2); color: var(--text); }
+    .data-table .mono { font-family: monospace; color: var(--accent); }
+    .data-table .cost { color: var(--green); font-family: monospace; }
+
+    /* ── Before/After comparison ── */
+    .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .compare-panel { border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+    .compare-label {
+      padding: 10px 16px; font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 1px;
+    }
+    .compare-label.old  { background: #1e293b; color: #64748b; }
+    .compare-label.new  { background: var(--bg2); color: var(--accent); }
+    .compare-body { padding: 16px; }
+
+    /* Before panel uses old palette inline */
+    .before-panel { background: #0f172a; }
+    .before-panel .event-card {
+      background: #1e293b; border-color: #334155; color: #e2e8f0;
+    }
+    .before-panel .event-agent { color: #38bdf8; }
+    .before-panel .event-detail { color: #94a3b8; }
+    .before-panel .badge-pass    { background: rgba(74,222,128,.12);  color: #4ade80; }
+    .before-panel .badge-fail    { background: rgba(248,113,113,.10); color: #f87171; }
+    .before-panel .badge-accent  { background: rgba(56,189,248,.10);  color: #38bdf8; }
+    .before-panel .ec-complete::before { background: #4ade80; }
+    .before-panel .event-time { color: #64748b; }
+    .before-panel .stat-card { background: #263248; border-color: #334155; }
+    .before-panel .stat-value { color: #38bdf8; }
+    .before-panel .stat-label { color: #64748b; }
+
+    /* ── Header preview ── */
+    .header-preview {
+      padding: 14px 24px; display: flex; align-items: center; justify-content: space-between;
+      background: var(--bg1); border-bottom: 1px solid var(--border);
+      border-radius: 8px; margin-bottom: 12px;
+    }
+    .header-preview .logo { font-weight: 800; font-size: 16px; color: var(--accent); letter-spacing: 0.5px; }
+    .header-preview nav { display: flex; gap: 20px; }
+    .header-preview nav a { font-size: 13px; color: var(--text2); text-decoration: none; }
+    .header-preview nav a:hover { color: var(--accent); }
+    .header-preview nav a.active { color: var(--accent); }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .compare { grid-template-columns: 1fr; }
+      .container { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>Dashboard Style Guide — Lime-on-Black</h1>
+  <p>Pick a lime shade below, review each component, then confirm to apply across all 17 dashboards.</p>
+</div>
+
+<div class="container">
+
+  <!-- ── LIME PICKER ────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">1 — Pick a lime shade (click to preview)</div>
+    <div class="lime-picker" id="limePicker">
+      <div class="lime-opt" data-hex="#c8f135" data-r="200" data-g="241" data-b="53" onclick="setLime(this)">
+        <div class="swatch" style="background:#c8f135;"></div>
+        <div class="hex">#c8f135</div>
+        <div class="name">Bright chartreuse</div>
+      </div>
+      <div class="lime-opt" data-hex="#a3e635" data-r="163" data-g="230" data-b="53" onclick="setLime(this)">
+        <div class="swatch" style="background:#a3e635;"></div>
+        <div class="hex">#a3e635</div>
+        <div class="name">Lime-400</div>
+      </div>
+      <div class="lime-opt" data-hex="#bef264" data-r="190" data-g="242" data-b="100" onclick="setLime(this)">
+        <div class="swatch" style="background:#bef264;"></div>
+        <div class="hex">#bef264</div>
+        <div class="name">Lime-300 (softer)</div>
+      </div>
+      <div class="lime-opt active" data-hex="#84cc16" data-r="132" data-g="204" data-b="22" onclick="setLime(this)">
+        <div class="swatch" style="background:#84cc16;"></div>
+        <div class="hex">#84cc16</div>
+        <div class="name">Lime-500 (deeper)</div>
+      </div>
+    </div>
+    <p class="picker-note">Selected shade is used live across all preview sections below. Confirm which matches merakinarrative.com.</p>
+  </div>
+
+  <!-- ── PALETTE SWATCHES ──────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">2 — Full palette</div>
+    <div class="swatches">
+      <div class="swatch-block">
+        <div class="swatch-color" style="background:var(--bg)"></div>
+        <div class="swatch-var">--bg</div>
+        <div class="swatch-hex">#080808</div>
+      </div>
+      <div class="swatch-block">
+        <div class="swatch-color" style="background:var(--bg1)"></div>
+        <div class="swatch-var">--bg1</div>
+        <div class="swatch-hex">#101010</div>
+      </div>
+      <div class="swatch-block">
+        <div class="swatch-color" style="background:var(--bg2)"></div>
+        <div class="swatch-var">--bg2</div>
+        <div class="swatch-hex">#181818</div>
+      </div>
+      <div class="swatch-block">
+        <div class="swatch-color" style="background:var(--bg3)"></div>
+        <div class="swatch-var">--bg3</div>
+        <div class="swatch-hex">#222222</div>
+      </div>
+      <div class="swatch-block">
+        <div class="swatch-color" style="background:var(--border)"></div>
+        <div class="swatch-var">--border</div>
+        <div class="swatch-hex">#2a2a2a</div>
+      </div>
+      <div class="swatch-block">
+        <div class="swatch-color" style="background:var(--text); border:1px solid var(--border)"></div>
+        <div class="swatch-var">--text</div>
+        <div class="swatch-hex">#f0f0f0</div>
+      </div>
+      <div class="swatch-block">
+        <div class="swatch-color" style="background:var(--text2); border:1px solid var(--border)"></div>
+        <div class="swatch-var">--text2</div>
+        <div class="swatch-hex">#a0a0a0</div>
+      </div>
+      <div class="swatch-block">
+        <div class="swatch-color" id="swatchAccent" style="background:var(--accent)"></div>
+        <div class="swatch-var">--accent</div>
+        <div class="swatch-hex" id="accentHex">#84cc16</div>
+      </div>
+      <div class="swatch-block">
+        <div class="swatch-color" style="background:var(--green)"></div>
+        <div class="swatch-var">--green</div>
+        <div class="swatch-hex">#4ade80</div>
+      </div>
+      <div class="swatch-block">
+        <div class="swatch-color" style="background:var(--amber)"></div>
+        <div class="swatch-var">--amber</div>
+        <div class="swatch-hex">#fbbf24</div>
+      </div>
+      <div class="swatch-block">
+        <div class="swatch-color" style="background:var(--red)"></div>
+        <div class="swatch-var">--red</div>
+        <div class="swatch-hex">#f87171</div>
+      </div>
+      <div class="swatch-block">
+        <div class="swatch-color" style="background:var(--violet)"></div>
+        <div class="swatch-var">--violet</div>
+        <div class="swatch-hex">#a78bfa</div>
+      </div>
+      <div class="swatch-block">
+        <div class="swatch-color" style="background:var(--blue)"></div>
+        <div class="swatch-var">--blue</div>
+        <div class="swatch-hex">#60a5fa</div>
+      </div>
+      <div class="swatch-block">
+        <div class="swatch-color" style="background:var(--pink)"></div>
+        <div class="swatch-var">--pink</div>
+        <div class="swatch-hex">#f472b6</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TYPOGRAPHY ────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">3 — Typography</div>
+    <div class="type-scale">
+      <div class="type-h1">Dashboard Heading H1 <span style="color:var(--accent)">Accent</span></div>
+      <div class="type-h2">Section title H2 — Phase: core</div>
+      <div class="type-h3">Card heading H3 — SKY-002 Implementation</div>
+      <div class="type-h4">Label / eyebrow — Step Status</div>
+      <div class="type-body">Body text — SKY-001 completed in 0.70 min vs 3.84 min forecast, costing $0.0097 vs $0.1404 forecast.</div>
+      <div class="type-muted">Muted text — Last updated 06:39:17 · 34 files committed</div>
+      <span class="type-code">SKY-002-impl</span> &nbsp;
+      <a class="type-link" href="#">agent-activity.html →</a>
+    </div>
+  </div>
+
+  <!-- ── STATUS BADGES ─────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">4 — Status badges</div>
+    <div class="badge-row">
+      <span class="badge badge-pass">✓ pass</span>
+      <span class="badge badge-fail">✗ fail</span>
+      <span class="badge badge-pending">○ pending</span>
+      <span class="badge badge-skip">⊘ skipped</span>
+      <span class="badge badge-accent">spec_pass_decision</span>
+      <span class="badge badge-violet">gate_decision</span>
+      <span class="badge badge-blue">SKY-002-impl</span>
+      <span class="badge badge-pass">completed</span>
+      <span class="badge badge-fail">timed out</span>
+      <span class="badge" style="background:var(--amber-dim);color:var(--amber)">⚠ warning</span>
+    </div>
+  </div>
+
+  <!-- ── STEP STATUS ROWS ───────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">5 — Step status rows (pipeline checklist)</div>
+    <div class="step-rows">
+      <div class="step-row">
+        <span class="step-icon step-icon-pass">✓</span>
+        <span class="step-id">0</span>
+        <span class="step-name">Step 0: Specification pass</span>
+      </div>
+      <div class="step-row">
+        <span class="step-icon step-icon-pass">✓</span>
+        <span class="step-id">0a</span>
+        <span class="step-name">openspec (elaboration)</span>
+        <span class="step-note">[z-ai/glm-5.1, 0 stories]</span>
+      </div>
+      <div class="step-row">
+        <span class="step-icon step-icon-active">▶</span>
+        <span class="step-id">1</span>
+        <span class="step-name">Step 1: Main-branch stories</span>
+        <span class="step-note">Running SKY-002…</span>
+      </div>
+      <div class="step-row">
+        <span class="step-icon step-icon-skip">⊘</span>
+        <span class="step-id">0.6</span>
+        <span class="step-name">Step 0.6: Hybrid pre-coord</span>
+        <span class="step-note">ORCH_MODE=bash</span>
+      </div>
+      <div class="step-row">
+        <span class="step-icon step-icon-fail">✗</span>
+        <span class="step-id">4.3b</span>
+        <span class="step-name">Step 4.3b: Mutant hunter</span>
+        <span class="step-note">score 50–69%</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STAT CARDS ────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">6 — Stat cards</div>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value">4</div>
+        <div class="stat-label">Stories</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--green)">$0.01</div>
+        <div class="stat-label">Cost so far</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--amber)">0.7m</div>
+        <div class="stat-label">Elapsed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--violet)">12</div>
+        <div class="stat-label">Events</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--red)">0</div>
+        <div class="stat-label">Failures</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── EVENT CARDS (TIMELINE) ────────────────────────── -->
+  <div class="section">
+    <div class="section-title">7 — Event cards (agent-activity timeline)</div>
+    <div class="timeline">
+      <div class="event-card ec-running">
+        <div class="event-header">
+          <div>
+            <span class="event-agent">spec-mode</span>
+            <span class="badge badge-accent" style="margin-left:8px">spec_pass_decision</span>
+            <span class="badge badge-blue" style="margin-left:4px">SKY-002</span>
+          </div>
+          <span class="event-time">06:46:52</span>
+        </div>
+        <div class="event-detail">⚠ Coherence violation — children [SKY-002-A, SKY-002-B] both write to client.ts — split rejected</div>
+      </div>
+
+      <div class="event-card ec-decision-pass">
+        <div class="event-header">
+          <div>
+            <span class="event-agent">spec-mode</span>
+            <span class="badge badge-pass" style="margin-left:8px">accepted</span>
+            <span class="badge badge-blue" style="margin-left:4px">SKY-002</span>
+          </div>
+          <span class="event-time">06:46:58</span>
+        </div>
+        <div class="event-detail">✓ Reviewer accepted — openspec · 1 attempt</div>
+      </div>
+
+      <div class="event-card ec-decision-fail">
+        <div class="event-header">
+          <div>
+            <span class="event-agent">prd-change-reviewer</span>
+            <span class="badge badge-fail" style="margin-left:8px">rejected</span>
+            <span class="badge badge-blue" style="margin-left:4px">SKY-002</span>
+          </div>
+          <span class="event-time">06:47:10</span>
+        </div>
+        <div class="event-detail">✗ Reviewer rejected speckit's changes after 3 attempts — reverting</div>
+      </div>
+
+      <div class="event-card ec-complete">
+        <div class="event-header">
+          <div>
+            <span class="event-agent">typescript-engineer</span>
+            <span class="badge badge-pass" style="margin-left:8px">story_complete</span>
+            <span class="badge badge-blue" style="margin-left:4px">SKY-001</span>
+          </div>
+          <span class="event-time">06:39:17</span>
+        </div>
+        <div class="event-detail">Completed in 0.70 min · $0.0097 · 34 files committed</div>
+      </div>
+
+      <div class="event-card ec-gate">
+        <div class="event-header">
+          <div>
+            <span class="event-agent">phase-gate</span>
+            <span class="badge badge-pass" style="margin-left:8px">GO</span>
+          </div>
+          <span class="event-time">06:42:30</span>
+        </div>
+        <div class="event-detail">Phase gate: GO — all criteria passed (scaffold)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── DATA TABLE ────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">8 — Data table</div>
+    <div style="background:var(--bg1);border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Story</th>
+            <th>Model</th>
+            <th>Status</th>
+            <th>Attempts</th>
+            <th>Cost</th>
+            <th>Elapsed</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono">SKY-001</td>
+            <td>MiniMax-M3</td>
+            <td><span class="badge badge-pass">completed</span></td>
+            <td>1</td>
+            <td class="cost">$0.0097</td>
+            <td>0.70 min</td>
+          </tr>
+          <tr>
+            <td class="mono">SKY-002</td>
+            <td>moonshotai/kimi-k2</td>
+            <td><span class="badge" style="background:rgba(59,130,246,.12);color:#60a5fa">running</span></td>
+            <td>1</td>
+            <td class="cost">—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td class="mono">SKY-003</td>
+            <td>moonshotai/kimi-k2</td>
+            <td><span class="badge badge-pending">pending</span></td>
+            <td>—</td>
+            <td class="cost">—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td class="mono">SKY-004</td>
+            <td>moonshotai/kimi-k2</td>
+            <td><span class="badge badge-pending">pending</span></td>
+            <td>—</td>
+            <td class="cost">—</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── HEADER PREVIEW ────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">9 — Page header / nav</div>
+    <div class="header-preview">
+      <div class="logo">EPAM CLI</div>
+      <nav>
+        <a href="#" class="active">Monitor</a>
+        <a href="#">Agent Activity</a>
+        <a href="#">Health</a>
+        <a href="#">PRD Viewer</a>
+        <a href="#">Scorecard</a>
+      </nav>
+    </div>
+    <p style="font-size:12px;color:var(--text3);margin-top:6px;">Current dashboards use the EPAM brand gradient as a header — this preview shows a minimal black header as an alternative. The gradient can be kept if preferred.</p>
+  </div>
+
+  <!-- ── BEFORE / AFTER ────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">10 — Before / After comparison</div>
+    <div class="compare">
+      <!-- BEFORE -->
+      <div class="compare-panel before-panel">
+        <div class="compare-label old">BEFORE — Navy/sky-blue (current)</div>
+        <div class="compare-body">
+          <div class="stat-grid" style="margin-bottom:12px">
+            <div class="stat-card">
+              <div class="stat-value">4</div>
+              <div class="stat-label">Stories</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">$0.01</div>
+              <div class="stat-label">Cost</div>
+            </div>
+          </div>
+          <div style="position:relative;padding-left:22px;border-left:2px solid #334155;">
+            <div class="event-card ec-complete" style="margin-bottom:8px;">
+              <div class="event-header">
+                <span class="event-agent">typescript-engineer</span>
+                <span class="event-time">06:39</span>
+              </div>
+              <div class="event-detail">SKY-001 completed · $0.0097</div>
+            </div>
+            <div class="event-card" style="border-color:#334155;background:#1e293b;">
+              <div class="event-header">
+                <span class="event-agent">spec-mode</span>
+                <span class="badge badge-accent" style="margin-left:8px">spec_pass</span>
+              </div>
+              <div class="event-detail">Coherence violation — split rejected</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AFTER -->
+      <div class="compare-panel">
+        <div class="compare-label new">AFTER — Black/lime (new)</div>
+        <div class="compare-body">
+          <div class="stat-grid" style="margin-bottom:12px">
+            <div class="stat-card">
+              <div class="stat-value">4</div>
+              <div class="stat-label">Stories</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" style="color:var(--green)">$0.01</div>
+              <div class="stat-label">Cost</div>
+            </div>
+          </div>
+          <div class="timeline" style="padding-top:4px;">
+            <div class="event-card ec-complete" style="margin-bottom:8px;">
+              <div class="event-header">
+                <span class="event-agent">typescript-engineer</span>
+                <span class="event-time">06:39</span>
+              </div>
+              <div class="event-detail">SKY-001 completed · $0.0097</div>
+            </div>
+            <div class="event-card ec-running">
+              <div class="event-header">
+                <span class="event-agent">spec-mode</span>
+                <span class="badge badge-accent" style="margin-left:8px">spec_pass</span>
+              </div>
+              <div class="event-detail">Coherence violation — split rejected</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+  // Lime picker — updates CSS custom properties live
+  function setLime(el) {
+    const hex = el.dataset.hex;
+    const r = el.dataset.r, g = el.dataset.g, b = el.dataset.b;
+    document.documentElement.style.setProperty('--accent', hex);
+    document.documentElement.style.setProperty('--teal', hex);
+    document.documentElement.style.setProperty('--teal-dim', `rgba(${r},${g},${b},.12)`);
+    document.documentElement.style.setProperty('--teal-glow', `rgba(${r},${g},${b},.22)`);
+    document.getElementById('accentHex').textContent = hex;
+    document.querySelectorAll('.lime-opt').forEach(o => o.classList.remove('active'));
+    el.classList.add('active');
+  }
+  // Default to first option on load
+  setLime(document.querySelector('.lime-opt[data-hex="#84cc16"]'));
+</script>
+</body>
+</html>

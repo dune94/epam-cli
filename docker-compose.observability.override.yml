@@ -2,4 +2,4 @@ services:
   agent-monitor:
     volumes:
       - /home/bradleyjerome/projects/ai/epam-cli/orchestrations:/prd-dir:ro
-      - /home/bradleyjerome/projects/skyscanner-app:/logs-dir:ro
+      - /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs:/logs-dir:ro

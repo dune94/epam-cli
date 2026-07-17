@@ -34,22 +34,25 @@ const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.
 const orchSrc = readFileSync(ORCH_SH, 'utf8');
 
 describe('Step 1 loop — live status re-check (static)', () => {
+  // The per-story status checks now live inside _run_one_main_story(), the
+  // shared function extracted from the old inline loop body.  Use it as the
+  // anchor so the window always covers the function's guard clauses.
   it('re-checks the story status from the PRD file at the top of each loop iteration', () => {
-    const idx = orchSrc.indexOf('while IFS= read -r story; do');
+    const idx = orchSrc.indexOf('_run_one_main_story() {');
     const block = orchSrc.slice(idx, idx + 2600);
     expect(block).toMatch(/_story_current_status=\$\(jq -r --arg id "\$story"/);
     expect(block).toMatch(/select\(\.id == \$id\) \| \.status \/\/ "pending"/);
   });
 
   it('skips (does not run) a story whose live status is deprecated', () => {
-    const idx = orchSrc.indexOf('while IFS= read -r story; do');
+    const idx = orchSrc.indexOf('_run_one_main_story() {');
     const block = orchSrc.slice(idx, idx + 2600);
     expect(block).toMatch(/if \[ "\$_story_current_status" = "deprecated" \]; then/);
     expect(block).toMatch(/Skipping \$story — deprecated after being enqueued/);
   });
 
   it('the live re-check happens BEFORE checkpoint_already_done, so a deprecated story is never even checkpointed', () => {
-    const idx = orchSrc.indexOf('while IFS= read -r story; do');
+    const idx = orchSrc.indexOf('_run_one_main_story() {');
     const statusCheckIdx = orchSrc.indexOf('_story_current_status=', idx);
     const checkpointIdx = orchSrc.indexOf('if checkpoint_already_done "$story"; then', idx);
     expect(statusCheckIdx).toBeGreaterThan(-1);
@@ -59,13 +62,13 @@ describe('Step 1 loop — live status re-check (static)', () => {
 });
 
 describe('Step 1 loop — REAL execution: reproduces the exact live defect and proves the fix', () => {
-  function extractLoopTopCheck(): string {
-    const start = orchSrc.indexOf('while IFS= read -r story; do');
-    // Just the first ~30 lines of the loop body -- enough to cover the new
-    // check plus checkpoint_already_done, not the whole (huge) loop body.
-    const end = orchSrc.indexOf('if checkpoint_already_done "$story"; then', start);
-    const afterCheckpointBlock = orchSrc.indexOf('fi', end) + 2;
-    return orchSrc.slice(start, afterCheckpointBlock);
+  // Extract just the _run_one_main_story function definition — from its
+  // opening line to the line before `_phase_story_failures=0`.
+  function extractRunOneMainStoryFn(): string {
+    const fnStart = orchSrc.indexOf('_run_one_main_story() {');
+    const fnEnd   = orchSrc.indexOf('        _phase_story_failures=0', fnStart);
+    if (fnStart === -1) throw new Error('_run_one_main_story not found');
+    return orchSrc.slice(fnStart, fnEnd);
   }
 
   function checkStorySkipped(storyId: string, status: string): { skipped: boolean; output: string } {
@@ -75,25 +78,40 @@ describe('Step 1 loop — REAL execution: reproduces the exact live defect and p
       stories: [{ id: storyId, status }],
     }));
     try {
-      const loopTop = extractLoopTopCheck();
+      const fnDef = extractRunOneMainStoryFn();
       const script = [
         `PRD_FILE=${JSON.stringify(prdPath)}`,
-        'info() { echo "INFO: $*"; }',
-        'checkpoint_already_done() { return 1; }', // never already-done, isolates the new check
-        `story=${JSON.stringify(storyId)}`,
-        // Replace the real `while read` construct with a single pass over
-        // our one synthetic story, reusing the exact same body text.
-        loopTop.replace('while IFS= read -r story; do', 'for _once in 1; do').replace(/^\s*\[ -z "\$story" \] && continue\n/m, ''),
-        'done',
-        'echo "REACHED_CHECKPOINT_CHECK"',
+        'PHASE=core',
+        'ORCH_RUN_ID=test-run',
+        'LOG_DIR=/tmp',
+        'SCRIPT_DIR=/bin',
+        '_phase_story_failures=0',
+        'info()     { echo "INFO: $*"; }',
+        'log()      { :; }',
+        'warning()  { :; }',
+        'checkpoint_already_done()    { return 1; }',
+        'check_cost_budget()          { :; }',
+        'wait_if_paused()             { :; }',
+        'apply_redirect_if_any()      { :; }',
+        'run_inline_tc_writer_gate()  { return 0; }',
+        'run_story_with_watchdog()    { echo "RAN:$1"; return 0; }',
+        'run_story_recovery_analyst() { return 1; }',
+        'record_story_actual_cost()   { :; }',
+        'story_tsc_gate()             { return 0; }',
+        'checkpoint_complete()        { :; }',
+        'validate_mid_execution_splits() { :; }',
+        fnDef,
+        `_run_one_main_story ${JSON.stringify(storyId)}`,
+        'echo "REACHED_END"',
       ].join('\n');
       const scriptPath = join(dir, 'run.sh');
       writeFileSync(scriptPath, script);
-      const output = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
-      // If the deprecated-skip fired, the loop `continue`s and never reaches
-      // the trailing echo inside the same iteration -- but the top-level
-      // "echo REACHED_CHECKPOINT_CHECK" after `done` always prints regardless,
-      // so instead check whether the "Skipping" info line appeared.
+      let output = '';
+      try {
+        output = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
+      } catch (e: any) {
+        output = (e.stdout ?? '').toString();
+      }
       return { skipped: output.includes('deprecated after being enqueued'), output };
     } finally {
       rmSync(dir, { recursive: true, force: true });

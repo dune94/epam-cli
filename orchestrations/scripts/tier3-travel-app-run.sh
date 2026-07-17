@@ -395,11 +395,13 @@ echo ""
 # Found live 2026-07-13: this script never called pre-run-reset.sh at all, so
 # the dashboard's PRD/logs mounts were only ever whatever was left from
 # someone manually running it — explaining "months and months" of stale/wrong
-# dashboard data for every tier3 run. --log-dir "$OUTPUT_DIR" matters because
-# run-agent-orchestration.sh's own LOG_DIR resolves to $OUTPUT_DIR (this
-# external project's directory) for this run, not orchestrations/logs.
+# dashboard data for every tier3 run.
+# Note: --log-dir is intentionally omitted. run-agent-orchestration.sh always
+# writes logs to $AUTOMATION_DIR/logs (orchestrations/logs/), regardless of
+# OUTPUT_DIR. pre-run-reset.sh defaults to that same path so the docker
+# /logs-dir mount is always correct.
 info "Wiring dashboard to serve this run's live PRD + logs..."
-bash orchestrations/scripts/pre-run-reset.sh --prd "$PRD_FILE" --log-dir "$OUTPUT_DIR" || \
+bash orchestrations/scripts/pre-run-reset.sh --prd "$PRD_FILE" || \
   info "  pre-run-reset.sh failed or Docker unavailable — dashboard may show stale data (non-fatal, continuing)"
 echo ""
 

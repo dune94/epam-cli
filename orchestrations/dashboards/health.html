@@ -7,27 +7,27 @@
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --bg: #0f172a; --surface: #1e293b; --surface2: #263248; --border: #334155;
-  --text: #e2e8f0; --text2: #94a3b8; --text3: #64748b;
-  --brand: #38bdf8; --violet: #a78bfa; --green: #4ade80; --amber: #fbbf24; --red: #f87171;
-  --epam-gradient: linear-gradient(118.82deg, #0078c2 .5%, #0047ff 47.33%, #8453d2 76.12%);
+  --bg: #080808; --bg1: #101010; --surface: #101010; --surface2: #181818; --border: #2a2a2a;
+  --text: #f0f0f0; --text2: #a0a0a0; --text3: #606060;
+  --teal: #a3e635; --brand: #84cc16; --violet: #a78bfa; --green: #4ade80; --amber: #fbbf24; --red: #f87171;
+  --epam-gradient: linear-gradient(135deg, #a3e635 0%, #84cc16 100%);
 }
 body { background: var(--bg); color: var(--text); font-family: "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 14px; line-height: 1.45; }
-.header { background: var(--epam-gradient); color: #fff; padding: 16px 28px; }
-.header h1 { font-size: 20px; font-weight: 800; }
-.header p { color: rgba(255,255,255,0.76); margin-top: 4px; font-size: 12px; }
+.header { background: var(--bg1); border-bottom: 1px solid rgba(132,204,22,.25); color: var(--text); padding: 14px 28px; }
+.header h1 { font-size: 20px; font-weight: 800; color: var(--teal); }
+.header p { color: var(--text2); margin-top: 4px; font-size: 12px; }
 .page { max-width: 1360px; margin: 0 auto; padding: 18px 28px 40px; }
 .nav-links { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 18px; }
 .nav-links a { color: var(--text3); text-decoration: none; font-size: 12px; font-weight: 700; padding: 8px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); }
-.nav-links a.active { color: #fff; background: var(--brand); border-color: var(--brand); }
+.nav-links a.active { color: #080808; background: var(--brand); border-color: var(--brand); }
 .intro { color: var(--text2); font-size: 13px; margin-bottom: 16px; max-width: 900px; }
 .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
 .metric-label { color: var(--text3); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-.metric-value { margin-top: 8px; font-size: 28px; font-weight: 800; }
+.metric-value { margin-top: 8px; font-size: 28px; font-weight: 800; color: var(--teal); }
 .metric-note { margin-top: 4px; color: var(--text3); font-size: 12px; }
 .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-.section-title { font-size: 16px; font-weight: 800; margin-bottom: 10px; }
+.section-title { font-size: 16px; font-weight: 800; margin-bottom: 10px; color: var(--teal); }
 .section-sub { color: var(--text3); font-size: 12px; margin: -6px 0 10px; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
@@ -42,15 +42,15 @@ code { background: var(--surface2); border-radius: 4px; padding: 1px 5px; font-s
 .empty { color: var(--text3); font-size: 12px; padding: 10px 0; }
 .footer-note { color: var(--text3); font-size: 12px; margin-top: 14px; }
 @media (max-width: 1100px) { .grid { grid-template-columns: 1fr 1fr; } .layout { grid-template-columns: 1fr; } }
+.header-title { font-size: 17px; font-weight: 800; color: var(--teal); letter-spacing: -0.3px; }
+.header-sub { font-size: 11px; color: var(--text2); margin-top: 2px; }
+.header .nav-links, .header-right .nav-links { margin: 0; }
 </style>
 </head>
 <body>
   <header class="header">
-    <h1>EPAM CLI — Pipeline Health &amp; Self-Healing</h1>
-    <p>Where the pipeline diagnosed its own failures, patched skills or tools, and got better without a human editing the PRD.</p>
-  </header>
-  <main class="page">
-    <nav class="nav-links">
+  <div><div class="header-title">EPAM CLI — Pipeline Health</div><div class="header-sub">Self-healing events · failure analyst · skill upgrades</div></div>
+  <nav class="nav-links" style="margin:0">
       <a href="monitor.html">Monitor</a>
       <a href="prd-viewer.html">PRD Viewer</a>
       <a href="specification.html">Spec Diff</a>
@@ -68,7 +68,9 @@ code { background: var(--surface2); border-radius: 4px; padding: 1px 5px; font-s
       <a href="swe-bench.html">SWE-bench</a>
       <a href="health.html" class="active">Health</a>
       <a href="epam-cli-guide.html">CLI Guide</a>
-    </nav>
+  </nav>
+</header>
+  <main class="page">
     <p class="intro">
       When a story fails a gate, the failure-analyst diagnoses it and routes a fix to one of three targets:
       a <strong>skill</strong> note appended to the responsible agent's profile, a brand-new <strong>tool</strong>

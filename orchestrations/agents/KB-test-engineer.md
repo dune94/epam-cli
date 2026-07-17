@@ -10,3 +10,5 @@
 - [2026-07-15T03:53:06Z] NEVER modify files inside node_modules/ — if a dependency is missing or has wrong types, add it to package.json devDependencies/dependencies and run npm install. If a type mismatch exists, use declara
 
 - [2026-07-15T04:03:31Z] Never modify any file inside node_modules/ — only edit source files under src/ or config files like package.json/tsconfig.json. If a dependency is missing, add it to package.json devDependencies and r
+
+- [2026-07-16T16:27:50Z] Never use top-level await in test files — the project uses CommonJS modules which forbid it. Wrap any async setup in an async function called from the test body or inside beforeAll/beforeEach.

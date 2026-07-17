@@ -71,6 +71,7 @@ else
   LOG_DIR="$REPO_ROOT/orchestrations/logs"
 fi
 success "Log dir: $LOG_DIR"
+export EPAM_PROJECT_OUTPUT_DIR="$LOG_DIR"
 
 # ── Step 1: Wire agent-monitor to serve the live PRD ─────────────────────────
 # Generate a compose override that mounts the PRD's PARENT DIRECTORY (not the

@@ -28,7 +28,7 @@
 check_cost_budget() {
     [ "${SKIP_COST_GUARD:-false}" = "true" ] && return
     local cost_file="$LOG_DIR/phase-cost.jsonl"
-    [ -f "$cost_file" ] || return
+    [ -f "$cost_file" ] || return 0
     local budget
     budget=$(jq -r '.budget // empty' "$PRD_FILE" 2>/dev/null || true)
     [ -z "$budget" ] || [ "$budget" = "null" ] && return

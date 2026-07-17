@@ -6,17 +6,17 @@
 <title>EPAM CLI — Estimation &amp; CPA System</title>
 <style>
 :root {
-  --bg: #0f172a; --bg1: #1e293b; --bg2: #263248; --bg3: #334155;
-  --surface: #1e293b; --surface2: #263248; --surface3: #334155;
-  --border: #334155; --border2: #475569;
-  --text: #e2e8f0; --text2: #94a3b8; --text3: #64748b; --text-muted: #94a3b8;
-  --teal: #38bdf8; --accent: #38bdf8;
+  --bg: #080808; --bg1: #101010; --bg2: #181818; --bg3: #222222;
+  --surface: #101010; --surface2: #181818; --surface3: #222222;
+  --border: #2a2a2a; --border2: #383838;
+  --text: #f0f0f0; --text2: #a0a0a0; --text3: #606060; --text-muted: #a0a0a0;
+  --teal: #84cc16; --accent: #84cc16;
   --violet: #a78bfa; --violet-dim: rgba(167,139,250,0.12);
   --green: #4ade80; --green-dim: rgba(74,222,128,0.12);
   --amber: #fbbf24; --amber-dim: rgba(251,191,36,0.12);
   --red: #f87171; --red-dim: rgba(248,113,113,0.10);
   --blue: #60a5fa; --blue-dim: rgba(96,165,250,0.10);
-  --epam-gradient: linear-gradient(118.82deg, #0078c2 .5%, #0047ff 47.33%, #8453d2 76.12%);
+  --epam-gradient: linear-gradient(135deg, #a3e635 0%, #84cc16 100%);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -25,8 +25,7 @@ body {
   font-size: 14px; line-height: 1.6; min-height: 100vh;
 }
 .header {
-  background: var(--epam-gradient);
-  padding: 14px 28px;
+  background: var(--bg1); border-bottom: 1px solid rgba(132,204,22,.25); padding: 14px 28px;
   display: flex; align-items: center; justify-content: space-between;
   position: sticky; top: 0; z-index: 200;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
@@ -34,15 +33,15 @@ body {
 }
 .header-left { display: flex; align-items: center; gap: 12px; }
 .header-icon {
-  width: 34px; height: 34px; background: rgba(255,255,255,0.2);
+  width: 34px; height: 34px; background: rgba(132,204,22,.12);
   border-radius: 7px; display: flex; align-items: center; justify-content: center;
   font-size: 17px;
 }
-.header-title { font-size: 18px; font-weight: 800; color: #fff; letter-spacing: -0.3px; }
-.header-sub { color: rgba(255,255,255,0.7); font-size: 11px; margin-top: 1px; letter-spacing: 0.3px; }
+.header-title { font-size: 18px; font-weight: 800; color: var(--teal); letter-spacing: -0.3px; }
+.header-sub { color: var(--text2); font-size: 11px; margin-top: 1px; letter-spacing: 0.3px; }
 .nav-links { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 18px; }
 .nav-links a { color: var(--text3); text-decoration: none; font-size: 12px; font-weight: 700; padding: 8px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); }
-.nav-links a.active { color: #fff; background: var(--teal); border-color: var(--teal); }
+.nav-links a.active { color: #080808; background: var(--teal); border-color: var(--teal); }
 
 .page { max-width: 960px; margin: 0 auto; padding: 32px 28px 80px; }
 
@@ -176,6 +175,7 @@ pre code { background: none; color: inherit; padding: 0; }
   display: flex; align-items: center; justify-content: center; margin-top: 2px;
 }
 .step-content { flex: 1; color: var(--text2); }
+.header .nav-links, .header-right .nav-links { margin: 0; }
 </style>
 </head>
 <body>

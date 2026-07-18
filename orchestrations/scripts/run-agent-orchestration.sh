@@ -1444,6 +1444,15 @@ start_dashboards_watch() {
         fi
     fi
 
+    # NOTE: EPAM_PROJECT_OUTPUT_DIR is intentionally NOT exported to the Eleventy
+    # subprocess here. snapshot.js's agentActivity/agentStatus/phaseCost paths use
+    # process.env.EPAM_PROJECT_OUTPUT_DIR directly (not via resolveProjectOutputDir),
+    # and those files live in orchestrations/logs — which the dashboard's logs/ symlink
+    # already resolves correctly. Exporting EPAM_PROJECT_OUTPUT_DIR=OUTPUT_DIR would
+    # redirect those reads to the project output dir (wrong place). The .active-output-dir
+    # pointer written by pre-run-reset.sh is sufficient for resolveProjectOutputDir(),
+    # which only feeds healingEvents/storyFailures/guardedStepRetries (files in OUTPUT_DIR).
+
     if [ -x "$local_eleventy_bin" ]; then
         info "Starting Eleventy dashboards watcher (local binary)..."
         (
@@ -3100,6 +3109,11 @@ if [ -n "$main_stories" ]; then
         else
         step_emit "1" "running" "Step 1: Main-branch stories"
     log "Step 1: Running main-branch stories..."
+        # Capture baseline SHA before any story commits so the testing-gates
+        # git diff oracle can diff the full run's changes (not just HEAD~1).
+        if [ -d "$PROJECT_ROOT/.git" ]; then
+            git -C "$PROJECT_ROOT" rev-parse HEAD 2>/dev/null > "$LOG_DIR/phase-baseline-sha.txt" || true
+        fi
         # _run_one_main_story: single-story execution body shared between the
         # main loop (fixed snapshot) and the tail-sweep pass (split children).
         # All required variables (PRD_FILE, PHASE, LOG_DIR, SCRIPT_DIR,
@@ -5313,15 +5327,24 @@ SPEC_EXTRACTOR_PY
             _git_bin=$(command -v git 2>/dev/null || true)
             if [ -n "$_git_bin" ] && [ -d "$PROJECT_ROOT/.git" ]; then
                 set +e
+                # Use the pre-story-loop baseline SHA when available so the diff
+                # covers ALL commits from this run, not just the last one.
+                local _baseline_sha=""
+                if [ -f "$LOG_DIR/phase-baseline-sha.txt" ]; then
+                    _baseline_sha=$(cat "$LOG_DIR/phase-baseline-sha.txt" 2>/dev/null | tr -d '[:space:]')
+                fi
+                local _diff_ref
+                if [ -n "$_baseline_sha" ]; then
+                    _diff_ref="${_baseline_sha}..HEAD"
+                else
+                    _diff_ref="HEAD~1"
+                fi
                 local _diff_files
-                _diff_files=$(cd "$PROJECT_ROOT" && "$_git_bin" diff --name-only HEAD 2>/dev/null || \
-                              "$_git_bin" diff --name-only HEAD~1 2>/dev/null || echo "")
+                _diff_files=$(cd "$PROJECT_ROOT" && "$_git_bin" diff --name-only "$_diff_ref" 2>/dev/null || echo "")
                 local _diff_stat
-                _diff_stat=$(cd "$PROJECT_ROOT" && "$_git_bin" diff --stat HEAD 2>/dev/null || \
-                             "$_git_bin" diff --stat HEAD~1 2>/dev/null || echo "(no diff available)")
+                _diff_stat=$(cd "$PROJECT_ROOT" && "$_git_bin" diff --stat "$_diff_ref" 2>/dev/null || echo "(no diff available)")
                 local _diff_patch
-                _diff_patch=$(cd "$PROJECT_ROOT" && "$_git_bin" diff -U3 HEAD -- '*.ts' 2>/dev/null | head -300 || \
-                              "$_git_bin" diff -U3 HEAD~1 -- '*.ts' 2>/dev/null | head -300 || echo "")
+                _diff_patch=$(cd "$PROJECT_ROOT" && "$_git_bin" diff -U3 "$_diff_ref" -- '*.ts' 2>/dev/null | head -300 || echo "")
                 set -e
                 review_diff_summary="Files changed:
 $_diff_stat
@@ -5382,8 +5405,19 @@ $review_prompt"
             _git_bin2=$(command -v git 2>/dev/null || true)
             if [ -n "$_git_bin2" ] && [ -d "$PROJECT_ROOT/.git" ]; then
                 set +e
+                # Use the same pre-story baseline SHA as review-ranger for consistency.
+                local _mut_baseline_sha=""
+                if [ -f "$LOG_DIR/phase-baseline-sha.txt" ]; then
+                    _mut_baseline_sha=$(cat "$LOG_DIR/phase-baseline-sha.txt" 2>/dev/null | tr -d '[:space:]')
+                fi
+                local _mut_diff_ref
+                if [ -n "$_mut_baseline_sha" ]; then
+                    _mut_diff_ref="${_mut_baseline_sha}..HEAD"
+                else
+                    _mut_diff_ref="HEAD~1"
+                fi
                 local _changed_src
-                _changed_src=$(cd "$PROJECT_ROOT" && "$_git_bin2" diff --name-only HEAD -- '*.ts' 2>/dev/null | \
+                _changed_src=$(cd "$PROJECT_ROOT" && "$_git_bin2" diff --name-only "$_mut_diff_ref" -- '*.ts' 2>/dev/null | \
                                grep -v '\.test\.ts$' | head -10 || echo "")
                 set -e
                 local _src_content=""

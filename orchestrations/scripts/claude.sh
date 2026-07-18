@@ -522,8 +522,10 @@ normalize_provider_json() {
             ;;
         epam-run)
             # epam run --json output: {result, cost_usd, usage:{inputTokens,outputTokens}}
-            # Pick the last JSON object with a non-empty result (guards against pino log lines).
-            jq -s '[.[] | select(.result != null and .result != "")] | last // {result:"",cost_usd:0,usage:{inputTokens:0,outputTokens:0}} | {
+            # Pick the last JSON object that has a "result" field (guards against pino log lines,
+            # which never carry a "result" key). Do NOT filter on result != "" — agents that only
+            # write files produce result:"" legitimately, and excluding them drops real cost data.
+            jq -s '[.[] | select(has("result"))] | last // {result:"",cost_usd:0,usage:{inputTokens:0,outputTokens:0}} | {
                 result:          (.result // ""),
                 total_cost_usd:  (.cost_usd // 0),
                 usage: {
@@ -2093,6 +2095,12 @@ def resolves(base_dir, spec):
             return True
         if os.path.isfile(os.path.join(candidate, 'index' + ext)):
             return True
+    # TypeScript ESM: `import './foo.js'` is valid TS and resolves to `foo.ts`
+    if spec.endswith('.js'):
+        ts_base = os.path.normpath(os.path.join(base_dir, spec[:-3]))
+        for ts_ext in ('.ts', '.tsx'):
+            if os.path.isfile(ts_base + ts_ext):
+                return True
     return False
 
 def tokenize(path):
@@ -2354,7 +2362,7 @@ SOURCE_EXTS = ('.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs')
 
 IMPORT_RE = re.compile(r"import\s+(?:type\s+)?\{([^}]*)\}\s+from\s+['\"](\.[^'\"]*)['\"]")
 EXPORT_DECL_RE = re.compile(
-    r"export\s+(?:default\s+)?(?:abstract\s+)?(?:class|function|const|let|var|interface|type|enum)\s+([A-Za-z_$][\w$]*)"
+    r"export\s+(?:default\s+)?(?:async\s+)?(?:abstract\s+)?(?:class|function|const|let|var|interface|type|enum)\s+([A-Za-z_$][\w$]*)"
 )
 EXPORT_LIST_RE = re.compile(r"export\s*\{([^}]*)\}(?!\s*from)")
 
@@ -2554,7 +2562,9 @@ run_external_verification() {
     # whole run, since nothing else ever unlocks it. Fixed: unlock ALWAYS runs
     # regardless of the check's result; only the return code differs.
     local _vendor_check_rc=0
-    run_vendor_integrity_check "$PROJECT_ROOT" "$output_file" || _vendor_check_rc=1
+    if [ "${EPAM_VENDOR_GUARD_ENABLED:-0}" = "1" ]; then
+        run_vendor_integrity_check "$PROJECT_ROOT" "$output_file" || _vendor_check_rc=1
+    fi
     _vendor_unlock "$PROJECT_ROOT"
     if [ "$_vendor_check_rc" -ne 0 ]; then
         warning "  [vendor-guard] Vendor directory tampering detected — skipping test run"
@@ -3313,7 +3323,7 @@ classify_ladder_tier() {
     # computed identically for any stack from the DiagnosisGroundedness step
     # every project already runs. Threshold and minimum sample size are both
     # configurable so a low-sample-count story isn't misclassified on noise.
-    local _groundedness_file="${OUTPUT_DIR:-$LOG_DIR}/failure-diagnosis-groundedness.jsonl"
+    local _groundedness_file="${LOG_DIR}/failure-diagnosis-groundedness.jsonl"
     if [ -f "$_groundedness_file" ]; then
         local _min_samples="${EPAM_LADDER_GROUNDEDNESS_MIN_SAMPLES:-2}"
         local _threshold="${EPAM_LADDER_GROUNDEDNESS_ESCALATION_THRESHOLD:-0.6}"
@@ -3935,6 +3945,9 @@ run_failure_analyst() {
     log "  [FailureAnalyst] Analyzing test failure for $story_id (gate=$gate_model)..."
     "$SCRIPT_DIR/update-monitor.sh" story_start "failure-analyst" "main" "failure-analyst" "Failure Analyst: $story_id" \
         "${STORY_PROVIDER:-}" "${STORY_MODEL:-}" 2>/dev/null || true
+    "$SCRIPT_DIR/update-monitor.sh" event "self_heal_start" \
+        "Self-heal started for $story_id (attempt $retry_num, gate=$gate_model)" \
+        "$story_id" "main" "failure-analyst" "$gate_model" "$gate_provider" 2>/dev/null || true
 
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
 
@@ -4487,12 +4500,16 @@ PYEOF
             esac
             # Record the healing event for observability and post-run audit
             run_healing_recorder "$story_id" "$retry_num" "$target" "$diagnosis" "$patch_count" "$_profile_updated"
+            # Emit self_heal_result so agent-activity dashboard shows target, diagnosis, and outcome
+            "$SCRIPT_DIR/update-monitor.sh" event "self_heal_result" \
+                "Self-heal result for $story_id: target=$target patches=$patch_count profile=$_profile_updated — $diagnosis" \
+                "$story_id" "main" "failure-analyst" "$gate_model" "$gate_provider" 2>/dev/null || true
             # A pure syntax error escalates immediately (see check_syntax_class_error's
             # docstring) — check this BEFORE the repeat-based check below, which would
             # otherwise wait for the same syntax error to recur once more first.
             check_syntax_class_error "$story_id" "$diagnosis"
             # Detect repeat failures — same diagnosis 2+ times means healing is broken
-            check_healing_effectiveness "$story_id" "$diagnosis"
+            check_healing_effectiveness "$story_id" "$diagnosis" "$retry_num"
             # Detect diverse failures — a DIFFERENT diagnosis each attempt while still
             # on the base model means the model can't converge on this story at all
             check_failure_diversity "$story_id" "$retry_num" "$diagnosis"
@@ -4565,7 +4582,10 @@ run_healing_recorder() {
     rung=$(( retry_num / 2 ))
     local ts
     ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "unknown")
-    local heal_log="${OUTPUT_DIR:-$LOG_DIR}/healing-events.jsonl"
+    # Always write to LOG_DIR (orchestrations/logs) — healing-events is pipeline
+    # monitoring data, not project output. Writing to OUTPUT_DIR breaks the dashboard
+    # which reads from logs/healing-events.jsonl via nginx /logs-dir mount.
+    local heal_log="${LOG_DIR}/healing-events.jsonl"
     mkdir -p "$(dirname "$heal_log")"
     # Safe JSON serialisation — escape quotes and backslashes in diagnosis
     local safe_diagnosis
@@ -4866,14 +4886,15 @@ check_syntax_class_error() {
     fi
 }
 
-# check_healing_effectiveness <story_id> <current_diagnosis>
+# check_healing_effectiveness <story_id> <current_diagnosis> [retry_num]
 # Reads healing-events.jsonl and checks if the same diagnosis has appeared 2+ times
 # for this story without a different diagnosis in between. If so, self-healing is
 # not working — log a CRITICAL alert and set HEALING_BROKEN=1 to abort retries.
 check_healing_effectiveness() {
     local story_id="$1"
     local current_diagnosis="$2"
-    local heal_log="${OUTPUT_DIR:-$LOG_DIR}/healing-events.jsonl"
+    local retry_num="${3:-0}"
+    local heal_log="${LOG_DIR}/healing-events.jsonl"
     [ -f "$heal_log" ] || return 0
     # Count consecutive same-root-cause events for this story (most recent N events).
     # A naive 20-char exact-prefix match was live-confirmed to miss real repeats: the
@@ -4950,13 +4971,17 @@ PYEOF
         fi
         error "  [HealingBroken] CRITICAL: '${current_diagnosis}' has recurred ${repeat_count}+ times for $story_id without a different fix — self-healing is NOT working."
         error "  [HealingBroken] Check: (1) gate model is reachable (2) failure analyst is diagnosing correctly (3) patches are being applied"
-        # Write a HEALING_BROKEN sentinel record so the run summary captures this
+        # Write a HEALING_BROKEN sentinel record so the run summary captures this.
+        # Include all standard healing-events fields so the dashboard renders it
+        # correctly (retry, rung, target, diagnosis must be non-null).
         local ts
         ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "unknown")
         local safe_diag
         safe_diag=$(printf '%s' "$current_diagnosis" | sed 's/\\/\\\\/g; s/"/\\"/g')
-        printf '{"ts":"%s","story_id":"%s","event":"HEALING_BROKEN","repeated_diagnosis":"%s","count":%s}\n' \
-            "$ts" "$story_id" "$safe_diag" "$repeat_count" >> "$heal_log"
+        local _broken_rung
+        _broken_rung=$(( retry_num / 2 ))
+        printf '{"ts":"%s","story_id":"%s","retry":%s,"rung":%s,"target":"none","diagnosis":"%s","patches_applied":0,"profile_updated":false,"event":"HEALING_BROKEN","repeated_diagnosis":"%s","count":%s}\n' \
+            "$ts" "$story_id" "$retry_num" "$_broken_rung" "$safe_diag" "$safe_diag" "$repeat_count" >> "$heal_log"
         HEALING_BROKEN=1
         export HEALING_BROKEN
     fi
@@ -4983,7 +5008,7 @@ check_failure_diversity() {
     local _rung=$(( retry_num / 2 ))
     [ "$_rung" -ge 2 ] && return 0
 
-    local heal_log="${OUTPUT_DIR:-$LOG_DIR}/healing-events.jsonl"
+    local heal_log="${LOG_DIR}/healing-events.jsonl"
     [ -f "$heal_log" ] || return 0
 
     local is_different
@@ -5090,8 +5115,8 @@ PYEOF
 #    "avg_groundedness":N,"groundedness_sample_count":N}
 compute_retry_extension_evidence() {
     local story_id="$1"
-    local heal_log="${OUTPUT_DIR:-$LOG_DIR}/healing-events.jsonl"
-    local grounded_log="${OUTPUT_DIR:-$LOG_DIR}/failure-diagnosis-groundedness.jsonl"
+    local heal_log="${LOG_DIR}/healing-events.jsonl"
+    local grounded_log="${LOG_DIR}/failure-diagnosis-groundedness.jsonl"
 
     local total_heal_events=0 distinct_diagnoses=0 healing_broken_ever="false"
     if [ -f "$heal_log" ]; then
@@ -5476,6 +5501,7 @@ implement_story() {
                 '.stories[] | select(.id == $id) | .skipLadder // false' \
                 "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo false)
 
+            local _prev_model="${STORY_MODEL:-}"
             if [ "$_entering_rung" -eq 1 ]; then
                 case "$_rung" in
                     1)
@@ -5571,14 +5597,15 @@ implement_story() {
                         log "  InferenceLadder[Rung3/R${retry_count}]: model='${STORY_MODEL:-default}' — effort → high (maximum)"
                         ;;
                 esac
-                # Emit ladder_rung event so agent-activity dashboard shows every escalation
+                # Emit ladder_rung event so agent-activity dashboard shows every escalation,
+                # including prev→new model transition for observability.
                 local _ladder_event_script="$SCRIPT_DIR/update-monitor.sh"
                 if [ -x "$_ladder_event_script" ]; then
                     local _ladder_role
                     _ladder_role=$(jq -r --arg id "$story_id" '.stories[] | select(.id==$id) | .agentRole // ""' "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
                     "$_ladder_event_script" event "ladder_rung" \
-                        "InferenceLadder Rung${_rung}/R${retry_count}: model=${STORY_MODEL:-default} effort=${EPAM_REASONING_EFFORT:-low}" \
-                        "$story_id" "main" "${_ladder_role:-}" "${STORY_MODEL:-}" "${STORY_PROVIDER:-}" 2>/dev/null || true
+                        "InferenceLadder Rung${_rung}/R${retry_count}: ${_prev_model:-default}→${STORY_MODEL:-default} effort=${EPAM_REASONING_EFFORT:-low}" \
+                        "$story_id" "main" "${_ladder_role:-}" "${STORY_MODEL:-}" "${STORY_PROVIDER:-}" "${_prev_model:-}" 2>/dev/null || true
                 fi
             else
                 log "  InferenceLadder[Rung${_rung}/R${retry_count}]: same rung — no escalation, self-heal guidance active"
@@ -5721,7 +5748,13 @@ ${_trimmed_amendment}"
         # (e.g. node_modules) read-only — no story ever legitimately writes
         # inside an already-installed third-party package. No-op if
         # .epam/dependency-check.json has no vendorDirs configured.
-        _vendor_lock "$PROJECT_ROOT"
+        # EPAM_VENDOR_GUARD_ENABLED defaults to 0 (off): on a local machine the
+        # risk of fake-test injection is low and the lock blocks legitimate
+        # dependency installs (e.g. cors) causing unnecessary story failures.
+        # Set EPAM_VENDOR_GUARD_ENABLED=1 in CI/multi-tenant environments.
+        if [ "${EPAM_VENDOR_GUARD_ENABLED:-0}" = "1" ]; then
+            _vendor_lock "$PROJECT_ROOT"
+        fi
 
         # Change to project root for the CLI to have correct context
         cd "$PROJECT_ROOT"

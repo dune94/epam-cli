@@ -278,4 +278,30 @@ describe('run_named_import_check — REAL execution against the exact live defec
     expect(rc).toBe(1);
     expect(fileContents['src/cli.ts']).toContain('Foobar');
   });
+
+  it('REPRODUCES SKY-003-b root cause: export async function is recognised as a valid export', () => {
+    // `export async function main(...)` was invisible to EXPORT_DECL_RE before
+    // the (?:async\s+)? addition — triggering a false positive that burned 2
+    // orchestration blocks and a kimi-k3 escalation ($0.293) on run-20260717.
+    const { rc } = runCheck({
+      files: {
+        'src/cli.ts': 'export async function main(args: string[]): Promise<void> { return; }',
+        'src/cli.test.ts': "import { main } from './cli';\nawait main([]);",
+      },
+      ownedFiles: ['src/cli.test.ts'],
+    });
+    expect(rc).toBe(0);
+  });
+
+  it('export async function with wrong name still triggers the check', () => {
+    const { rc, output } = runCheck({
+      files: {
+        'src/cli.ts': 'export async function main(): Promise<void> {}',
+        'src/cli.test.ts': "import { Main } from './cli';",
+      },
+      ownedFiles: ['src/cli.test.ts'],
+    });
+    expect(rc).toBe(1);
+    expect(output).toContain("Did you mean 'main'?");
+  });
 });

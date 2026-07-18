@@ -42,6 +42,21 @@ export class MiniMaxProvider implements LLMProvider {
     return request.reasoningEffort ?? process.env.EPAM_REASONING_EFFORT as string | undefined;
   }
 
+  /** Rough token count from raw text (1 token ≈ 4 chars for English/code).
+   *  Used as a fallback when the MiniMax API doesn't return usage data. */
+  private estimateTokens(text: string): number {
+    return Math.max(1, Math.ceil(text.length / 4));
+  }
+
+  private estimateInputTokens(request: ProviderRequest): number {
+    const parts: string[] = [];
+    if (request.systemPrompt) parts.push(request.systemPrompt);
+    for (const m of request.messages) {
+      parts.push(typeof m.content === 'string' ? m.content : JSON.stringify(m.content));
+    }
+    return this.estimateTokens(parts.join(' '));
+  }
+
   async complete(request: ProviderRequest): Promise<ProviderResponse> {
     const model = this.resolveModel(request.model);
     const messages = this.formatMessages(request.messages, request.systemPrompt);
@@ -105,12 +120,20 @@ export class MiniMaxProvider implements LLMProvider {
     }
 
     const hasToolUse = content.some(p => p.type === 'tool_use');
+    const rawIn  = data['usage']?.prompt_tokens     || 0;
+    const rawOut = data['usage']?.completion_tokens || 0;
+    // When MiniMax returns no token counts (prompt_tokens/completion_tokens both 0)
+    // despite a real response, fall back to character-count estimates so the
+    // pricing-table fallback in append_cost_record has non-zero input to work from.
+    const outputText = content.filter(p => p.type === 'text').map(p => p.text ?? '').join('');
+    const inputTokens  = rawIn  > 0 ? rawIn  : this.estimateInputTokens(request);
+    const outputTokens = rawOut > 0 ? rawOut : (outputText.length > 0 || hasToolUse ? this.estimateTokens(outputText || JSON.stringify(content)) : 0);
     return {
       content: content.length > 0 ? content : [{ type: 'text', text: '' }],
       stopReason: hasToolUse ? 'tool_use' : this.mapStopReason(choice.finish_reason),
       usage: {
-        inputTokens: data['usage']?.prompt_tokens || 0,
-        outputTokens: data['usage']?.completion_tokens || 0,
+        inputTokens,
+        outputTokens,
         // MiniMax's direct API (unlike OpenRouter) does not document a
         // real-cost field in its chat/completions response — confirmed via
         // their public API docs, which only list prompt_tokens/
@@ -233,10 +256,16 @@ export class MiniMaxProvider implements LLMProvider {
       }
     }
 
+    // MiniMax streaming may not honour stream_options.include_usage, leaving both
+    // counts at 0. Fall back to character-count estimates so the pricing-table
+    // fallback in append_cost_record has non-zero input to work from.
+    const finalIn  = inputTokens  > 0 ? inputTokens  : (accumulatedText || toolCalls.size > 0 ? this.estimateInputTokens(request) : 0);
+    const finalOut = outputTokens > 0 ? outputTokens : (accumulatedText.length > 0 ? this.estimateTokens(accumulatedText) : (toolCalls.size > 0 ? this.estimateTokens(JSON.stringify([...toolCalls.values()])) : 0));
+
     return {
       content: content.length > 0 ? content : [{ type: 'text', text: accumulatedText }],
       stopReason,
-      usage: { inputTokens, outputTokens, ...(costUsd != null ? { costUsd } : {}) },
+      usage: { inputTokens: finalIn, outputTokens: finalOut, ...(costUsd != null ? { costUsd } : {}) },
     };
   }
 

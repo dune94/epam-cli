@@ -82,3 +82,4 @@ orchestrations/logs/spec-baseline.json
 orchestrations/logs/spec-run-latest.json
 orchestrations/logs/spec-summary.json
 orchestrations/logs/spec-runs/
+session.md

@@ -159,13 +159,14 @@ describe('run_healing_recorder — bash integration with mock data', () => {
     return rest.slice(0, end);
   }
 
-  function runScript(tmpDir: string, calls: string): void {
+  function runScript(dir: string, calls: string, logDir?: string): void {
     const funcDef    = extractRecorder();
-    const scriptPath = join(tmpDir, 'run.sh');
+    const scriptPath = join(dir, 'run.sh');
+    const ld = logDir ?? dir;
     writeFileSync(scriptPath, `#!/bin/bash
 ${funcDef}
 log() { :; }
-OUTPUT_DIR="${tmpDir}"
+LOG_DIR="${ld}"
 ${calls}
 `);
     execSync(`bash "${scriptPath}"`);
@@ -211,11 +212,10 @@ ${calls}
   it('handles diagnosis containing double-quotes safely (valid JSON output)', () => {
     const scriptPath = join(tmpDir, 'run.sh');
     const funcDef    = extractRecorder();
-    // Use single-quoted arg to preserve the double-quotes inside the diagnosis
     writeFileSync(scriptPath, `#!/bin/bash
 ${funcDef}
 log() { :; }
-OUTPUT_DIR="${tmpDir}"
+LOG_DIR="${tmpDir}"
 run_healing_recorder "MOCK-001" "1" "none" 'used "backtick" template incorrectly' "0" "false"
 `);
     execSync(`bash "${scriptPath}"`);

@@ -402,6 +402,112 @@ get_calibrated_baseline() {
 
 load_calibration
 
+# compute_escalation_profile <effort> <base_cost> <mean_tokens> <base_model>
+# Returns a JSON object with expected escalation cost, self-heal cost, model
+# profile per rung, and expected retries — all as probability-weighted values.
+# Reads escalationRates from calibration.json and pricing from model-pricing.json.
+# Falls back to conservative defaults when calibration data is absent.
+compute_escalation_profile() {
+  local effort="$1" base_cost="$2" mean_tokens="$3" base_model="${4:-MiniMax-M3}"
+  python3 - <<PYEOF
+import json, os, sys
+
+effort      = "$effort"
+base_cost   = float("$base_cost" or 0)
+mean_tokens = int(float("$mean_tokens" or 0))
+base_model  = "$base_model"
+
+# ── Escalation rate priors (from calibration.json) ───────────────────────────
+try:
+    cal = json.load(open("$CAL_FILE"))
+    r = cal.get("escalationRates", {}).get(effort, {})
+except Exception:
+    r = {}
+
+p_r2       = r.get("p_rung2",  0.10)
+p_r3       = r.get("p_rung3",  0.030)
+p_k3       = r.get("p_k3",     0.005)
+self_heal_p= r.get("selfHealP",0.25)
+
+# ── Ladder models from env ────────────────────────────────────────────────────
+rung2_model = os.environ.get("ESCALATION_MODEL",      "z-ai/glm-5.2")
+rung3_model = os.environ.get("ESCALATION_MODEL_HIGH", "z-ai/glm-5.1")
+gate_model  = os.environ.get("ORCH_GATE_MODEL",       "z-ai/glm-5.2")
+
+# kimi-k3 rung: top entry in HIGH ladder (from=rung3_model)
+k3_model = "moonshotai/kimi-k3"
+ladder_high = os.environ.get("EPAM_MODEL_LADDER_HIGH", "")
+for pair in ladder_high.split("|"):
+    if "=" in pair:
+        f, t = pair.split("=", 1)
+        if f == rung3_model:
+            k3_model = t
+            break
+
+# ── Model pricing ─────────────────────────────────────────────────────────────
+try:
+    pricing = json.load(open("$SCRIPT_DIR/model-pricing.json"))
+except Exception:
+    pricing = {}
+
+def get_price(model):
+    p = pricing.get(model, {})
+    if not p:
+        ml = model.lower()
+        for k, v in pricing.items():
+            if k.lower() == ml or k.lower() in ml or ml in k.lower():
+                p = v; break
+    return float(p.get("input", 0)), float(p.get("output", 0))
+
+def rung_cost(model, tok_in, tok_out):
+    inp, out = get_price(model)
+    return (tok_in * inp + tok_out * out) / 1_000_000
+
+# Token estimate: assume 80/20 in/out split
+tok_in  = int(mean_tokens * 0.80) if mean_tokens > 0 else 40_000
+tok_out = int(mean_tokens * 0.20) if mean_tokens > 0 else 10_000
+
+cost_r2_attempt  = rung_cost(rung2_model, tok_in, tok_out)
+cost_r3_attempt  = rung_cost(rung3_model, tok_in, tok_out)
+cost_k3_attempt  = rung_cost(k3_model,    tok_in, tok_out)
+
+# Analyst/self-heal: gate model on ~150K in / 5K out (typical failure analysis)
+cost_per_heal = rung_cost(gate_model, 150_000, 5_000)
+
+# Expected attempts per rung before escalating (empirical: ~1.5 at each mid-rung)
+avg_r2 = 1.5; avg_r3 = 1.5; avg_k3 = 2.0
+
+exp_r2_cost   = p_r2 * avg_r2 * cost_r2_attempt
+exp_r3_cost   = p_r3 * avg_r3 * cost_r3_attempt
+exp_k3_cost   = p_k3 * avg_k3 * cost_k3_attempt
+exp_heal_cost = self_heal_p * cost_per_heal
+esc_cost      = exp_r2_cost + exp_r3_cost + exp_k3_cost
+exp_retries   = p_r2 * avg_r2 + p_r3 * avg_r3 + p_k3 * avg_k3
+
+out = {
+    "modelProfile": {
+        "rung1": {"model": base_model,  "p_resolves": round(1 - p_r2, 3),
+                  "expectedCost": round(base_cost, 4)},
+        "rung2": {"model": rung2_model, "p_reached": round(p_r2, 3),
+                  "costPerAttempt": round(cost_r2_attempt, 4),
+                  "expectedCost":   round(exp_r2_cost, 4)},
+        "rung3": {"model": rung3_model, "p_reached": round(p_r3, 3),
+                  "costPerAttempt": round(cost_r3_attempt, 4),
+                  "expectedCost":   round(exp_r3_cost, 4)},
+        "k3":    {"model": k3_model,    "p_reached": round(p_k3, 3),
+                  "costPerAttempt": round(cost_k3_attempt, 4),
+                  "expectedCost":   round(exp_k3_cost, 4)}
+    },
+    "expectedRetries":  round(exp_retries,   2),
+    "selfHealP":        round(self_heal_p,   2),
+    "selfHealCost":     round(exp_heal_cost, 4),
+    "escalationCost":   round(esc_cost,      4),
+    "totalStoryCost":   round(base_cost + esc_cost + exp_heal_cost, 4)
+}
+print(json.dumps(out))
+PYEOF
+}
+
 bc_eval() { echo "scale=4; $1" | bc | xargs printf "%.4f"; }
 
 # ── Codebase signals ──────────────────────────────────────────────────────────
@@ -776,6 +882,20 @@ while IFS= read -r sid; do
 
   IFS='|' read -r b_min b_cost b_tok b_turns b_mhrs <<< "$blended_data"
 
+  # ── Escalation profile (probability-weighted model composition) ───────────────
+  # Token basis: prefer calibrated mean_tokens; fall back to blended token estimate
+  _esc_tok="${cal_tok:-${b_tok:-0}}"
+  _esc_profile=$(compute_escalation_profile "$f_effort" "$b_cost" "$_esc_tok" "${_story_model:-MiniMax-M3}" 2>/dev/null || echo "{}")
+  esc_cost=$(echo "$_esc_profile"    | jq -r '.escalationCost // 0')
+  esc_heal_cost=$(echo "$_esc_profile" | jq -r '.selfHealCost // 0')
+  esc_retries=$(echo "$_esc_profile"   | jq -r '.expectedRetries // 0')
+  esc_heal_p=$(echo "$_esc_profile"    | jq -r '.selfHealP // 0')
+  esc_model_profile=$(echo "$_esc_profile" | jq -c '.modelProfile // {}')
+  esc_total=$(echo "$_esc_profile"     | jq -r '.totalStoryCost // 0')
+  esc_cost=$(ensure_leading_zero "$esc_cost")
+  esc_heal_cost=$(ensure_leading_zero "$esc_heal_cost")
+  esc_total=$(ensure_leading_zero "$esc_total")
+
   # ── Gate decision ─────────────────────────────────────────────────────────────
   # When inference was skipped (no API key), default to pass — don't penalise missing key
   if [ "$inference_skipped" = "true" ]; then
@@ -809,12 +929,29 @@ while IFS= read -r sid; do
     echo -e "${BOLD}${sid}${NC}  ${s_title}  ${gate_color}[${gate^^}]${NC}" >&2
     printf "  %-22s %8.2f min  →  %8.2f min  (conf: %.2f, adj: %.2fx)\n" \
       "Machine time:" "$f_min" "$b_min" "$confidence" "$complexity_adj" >&2
-    printf "  %-22s \$%-9.2f  →  \$%-9.2f\n" "Cost:" "$f_cost" "$b_cost" >&2
-    # Show total cost including pipeline overhead when ratio is calibrated
+    printf "  %-22s \$%-9.4f  →  \$%-9.4f\n" "Cost (story):" "$f_cost" "$b_cost" >&2
+    # Escalation and self-heal breakdown
+    if [ "$_esc_profile" != "{}" ]; then
+      _r2_p=$(echo "$_esc_profile" | jq -r '.modelProfile.rung2.p_reached // 0')
+      _r2_c=$(echo "$_esc_profile" | jq -r '.modelProfile.rung2.expectedCost // 0')
+      _r3_p=$(echo "$_esc_profile" | jq -r '.modelProfile.rung3.p_reached // 0')
+      _r3_c=$(echo "$_esc_profile" | jq -r '.modelProfile.rung3.expectedCost // 0')
+      _k3_p=$(echo "$_esc_profile" | jq -r '.modelProfile.k3.p_reached // 0')
+      _k3_c=$(echo "$_esc_profile" | jq -r '.modelProfile.k3.expectedCost // 0')
+      printf "  %-22s +\$%-8.4f    (r2@%.0f%%=+\$%.4f r3@%.0f%%=+\$%.4f k3@%.1f%%=+\$%.4f)\n" \
+        "Escalation:" "$esc_cost" \
+        "$(echo "$_r2_p * 100" | bc -l | xargs printf '%.0f')" "$_r2_c" \
+        "$(echo "$_r3_p * 100" | bc -l | xargs printf '%.0f')" "$_r3_c" \
+        "$(echo "$_k3_p * 100" | bc -l | xargs printf '%.1f')" "$_k3_c" >&2
+      printf "  %-22s +\$%-8.4f    (p=%.0f%%)\n" \
+        "Self-heal:" "$esc_heal_cost" \
+        "$(echo "$esc_heal_p * 100" | bc -l | xargs printf '%.0f')" >&2
+      printf "  %-22s  %-6.2f\n" "Retries (exp):" "$esc_retries" >&2
+    fi
     if (( $(echo "$PIPELINE_OVERHEAD_RATIO > 1.01" | bc -l) )); then
-      total_cost=$(bc_eval "$b_cost * $PIPELINE_OVERHEAD_RATIO")
-      printf "  %-22s \$%-9.2f      (incl. pipeline ×%.2f)\n" \
-        "Total (est):" "$total_cost" "$PIPELINE_OVERHEAD_RATIO" >&2
+      total_cost=$(bc_eval "($esc_total) * $PIPELINE_OVERHEAD_RATIO")
+      printf "  %-22s \$%-9.4f      (story+esc+heal=\$%.4f × pipeline %.2fx)\n" \
+        "Total (est):" "$total_cost" "$esc_total" "$PIPELINE_OVERHEAD_RATIO" >&2
     fi
     printf "  %-22s %-5d chunks retrieved   %-5d cited   cov: %.0f%%\n" \
       "KB coverage:" "$candidate_count" "$cited_count" \
@@ -866,6 +1003,12 @@ while IFS= read -r sid; do
     --argjson tokEff "$token_eff" \
     --argjson latMs "$infer_ms" \
     --arg por "${PIPELINE_OVERHEAD_RATIO:-1.0}" \
+    --argjson escCost "$esc_cost" \
+    --argjson escHealCost "$esc_heal_cost" \
+    --argjson escRetries "$esc_retries" \
+    --argjson escHealP "$esc_heal_p" \
+    --argjson escTotal "$esc_total" \
+    --argjson modelProfile "$esc_model_profile" \
     '. + [{
       schema: "cpa-review-v1",
       runId: $runId,
@@ -877,7 +1020,22 @@ while IFS= read -r sid; do
       humanHours: $humanHours,
       formulaEstimate: {aiMinutes: $formulaMin, cost: $formulaCost, tokens: $formulaTok, turns: $formulaTurns},
       adjustedEstimate: {aiMinutes: $adjMin, cost: $adjCost, tokens: $adjTok, turns: $adjTurns},
-      blendedEstimate: {aiMinutes: $bMin, cost: $bCost, tokens: $bTok, turns: $bTurns, machineHours: $bMhrs, totalCost: ($bCost * ($por | tonumber))},
+      blendedEstimate: {
+        aiMinutes: $bMin, cost: $bCost, tokens: $bTok, turns: $bTurns, machineHours: $bMhrs,
+        escalationCost: $escCost,
+        selfHealCost: $escHealCost,
+        totalStoryCost: $escTotal,
+        totalCost: ($escTotal * ($por | tonumber))
+      },
+      escalation: {
+        modelProfile: $modelProfile,
+        expectedRetries: $escRetries,
+        selfHealP: $escHealP,
+        selfHealCost: $escHealCost,
+        escalationCost: $escCost,
+        pipelineOverheadRatio: ($por | tonumber),
+        totalEstimate: ($escTotal * ($por | tonumber))
+      },
       confidence: $confidence,
       complexityAdjustment: $complexityAdj,
       gate: $gate,

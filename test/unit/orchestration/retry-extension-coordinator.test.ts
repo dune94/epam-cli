@@ -113,7 +113,7 @@ describe('compute_retry_extension_evidence() — REAL execution', () => {
         scriptPath,
         [
           '#!/usr/bin/env bash',
-          `OUTPUT_DIR=${JSON.stringify(dir)}`,
+          `LOG_DIR=${JSON.stringify(dir)}`,
           fnBody,
           `compute_retry_extension_evidence ${JSON.stringify(opts.storyId)}`,
         ].join('\n'),
@@ -229,7 +229,7 @@ describe('run_retry_extension_coordinator() — REAL execution', () => {
         scriptPath,
         [
           '#!/usr/bin/env bash',
-          `OUTPUT_DIR=${JSON.stringify(dir)}`,
+          `LOG_DIR=${JSON.stringify(dir)}`,
           `SCRIPT_DIR=${JSON.stringify(scriptDir)}`,
           `PRD_FILE=${JSON.stringify(prdPath)}`,
           `MAIN_PRD_FILE=${JSON.stringify(prdPath)}`,

@@ -180,6 +180,63 @@ describe('run_relative_import_check — REAL execution against the exact live de
     expect(output).toContain("Did you mean './skyscanner/client'?");
     expect(output).not.toContain('client.test');
   });
+  // ── resolves() — TypeScript ESM .js→.ts remapping ────────────────────────
+  // TypeScript with "moduleResolution": "node16"/"bundler" requires `.js`
+  // extensions in import specifiers even though the file on disk is `.ts`.
+  // The checker must NOT flag these as broken (they'd have caused an infinite
+  // escalation loop where the agent produced correct ESM imports but the
+  // checker kept reporting them as unresolved — live bug 2026-07-17).
+
+  it('resolves a .js import whose corresponding .ts file exists (TypeScript ESM pattern)', () => {
+    const { rc } = runCheck({
+      'src/skyscanner/client.ts': 'export class SkyscannerClient {}',
+      'src/cli.ts': "import { SkyscannerClient } from './skyscanner/client.js';",
+    });
+    expect(rc).toBe(0);
+  });
+
+  it('resolves a .js import whose corresponding .tsx file exists', () => {
+    const { rc } = runCheck({
+      'src/components/Button.tsx': 'export const Button = () => null;',
+      'src/App.ts': "import { Button } from './components/Button.js';",
+    });
+    expect(rc).toBe(0);
+  });
+
+  it('still flags a .js import when neither .js nor .ts nor .tsx file exists at that path', () => {
+    const { rc, output } = runCheck({
+      'src/skyscanner/client.ts': 'export class SkyscannerClient {}',
+      'src/cli.ts': "import { SkyscannerClient } from './nonexistent.js';",
+    });
+    expect(rc).toBe(1);
+    expect(output).toContain("imports './nonexistent.js' which does not exist");
+  });
+
+  it('still flags a wrong-directory .js import even when a .ts file exists elsewhere', () => {
+    // ./skyscanner-client.js is wrong dir — no skyscanner-client.ts exists at src/
+    const { rc, output } = runCheck({
+      'src/skyscanner/client.ts': 'export class SkyscannerClient {}',
+      'src/cli.ts': "import { SkyscannerClient } from './skyscanner-client.js';",
+    });
+    expect(rc).toBe(1);
+    expect(output).toContain("Did you mean './skyscanner/client'?");
+  });
+
+  it('resolves a .js import for a nested path (not just top-level)', () => {
+    const { rc } = runCheck({
+      'src/utils/format.ts': 'export const fmt = (s: string) => s;',
+      'src/index.ts': "import { fmt } from './utils/format.js';",
+    });
+    expect(rc).toBe(0);
+  });
+
+  it('resolves a .js import to an actual .js file on disk (not just remapped .ts)', () => {
+    const { rc } = runCheck({
+      'src/legacy.js': 'module.exports = {};',
+      'src/index.ts': "import legacy from './legacy.js';",
+    });
+    expect(rc).toBe(0);
+  });
 });
 
 /**
@@ -245,44 +302,45 @@ describe('run_relative_import_check — auto-fix (REAL execution)', () => {
   }
 
   it('opt-in disabled (default): does NOT rewrite the file, still reports broken', () => {
+    // ./skyscanner-client.js is wrong directory — no skyscanner-client.ts at src/ root
     const { rc, fileContents } = runCheckWithAutoFix({
       files: {
         'src/skyscanner/client.ts': 'export class SkyscannerClient {}',
-        'src/cli.ts': "import { SkyscannerClient } from './skyscanner/client.js';",
+        'src/cli.ts': "import { SkyscannerClient } from './skyscanner-client.js';",
       },
       ownedFiles: ['src/cli.ts'],
       autoFix: false,
     });
     expect(rc).toBe(1);
-    expect(fileContents['src/cli.ts']).toContain("'./skyscanner/client.js'");
+    expect(fileContents['src/cli.ts']).toContain("'./skyscanner-client.js'");
   });
 
   it('opt-in enabled + high confidence + owned file: rewrites the import in place and reports success', () => {
     const { rc, output, fileContents } = runCheckWithAutoFix({
       files: {
         'src/skyscanner/client.ts': 'export class SkyscannerClient {}',
-        'src/cli.ts': "import { SkyscannerClient } from './skyscanner/client.js';",
+        'src/cli.ts': "import { SkyscannerClient } from './skyscanner-client.js';",
       },
       ownedFiles: ['src/cli.ts'],
       autoFix: true,
     });
     expect(rc).toBe(0);
     expect(fileContents['src/cli.ts']).toContain("'./skyscanner/client'");
-    expect(fileContents['src/cli.ts']).not.toContain('client.js');
-    expect(output).toContain("[relative-import-check] Auto-corrected src/cli.ts: './skyscanner/client.js' -> './skyscanner/client'");
+    expect(fileContents['src/cli.ts']).not.toContain('skyscanner-client.js');
+    expect(output).toContain("[relative-import-check] Auto-corrected src/cli.ts: './skyscanner-client.js' -> './skyscanner/client'");
   });
 
   it('opt-in enabled but the importing file is NOT in the story\'s owned files: does NOT rewrite, stays flagged', () => {
     const { rc, fileContents } = runCheckWithAutoFix({
       files: {
         'src/skyscanner/client.ts': 'export class SkyscannerClient {}',
-        'src/cli.ts': "import { SkyscannerClient } from './skyscanner/client.js';",
+        'src/cli.ts': "import { SkyscannerClient } from './skyscanner-client.js';",
       },
       ownedFiles: ['src/some-other-file.ts'], // cli.ts NOT owned by this story
       autoFix: true,
     });
     expect(rc).toBe(1);
-    expect(fileContents['src/cli.ts']).toContain('client.js');
+    expect(fileContents['src/cli.ts']).toContain('skyscanner-client.js');
   });
 
   it('opt-in enabled but confidence too low (score < 2, ambiguous single-token match): does NOT rewrite, stays flagged', () => {
@@ -305,7 +363,7 @@ describe('run_relative_import_check — auto-fix (REAL execution)', () => {
     const { fileContents } = runCheckWithAutoFix({
       files: {
         'src/skyscanner/client.ts': 'export class SkyscannerClient {}',
-        'src/cli.ts': "import { SkyscannerClient } from './skyscanner/client.js';",
+        'src/cli.ts': "import { SkyscannerClient } from './skyscanner-client.js';",
       },
       ownedFiles: ['src/cli.ts'],
       autoFix: true,

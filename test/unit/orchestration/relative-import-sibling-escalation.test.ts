@@ -109,7 +109,7 @@ describe('run_relative_import_check — REAL execution: sibling escalation', () 
     const { rc, escalation } = runCheck({
       files: {
         'src/skyscanner/client.ts': 'export class SkyscannerClient {}',
-        'src/cli.ts': "import { SkyscannerClient } from './skyscanner/client.js';",
+        'src/cli.ts': "import { SkyscannerClient } from './skyscanner-client.js';",
       },
       storyId: 'SKY-003-test',
       prdStories: [
@@ -120,7 +120,7 @@ describe('run_relative_import_check — REAL execution: sibling escalation', () 
     expect(rc).toBe(1);
     expect(escalation).not.toBeNull();
     expect(escalation.targetFile).toBe('src/cli.ts');
-    expect(escalation.requiredFix).toContain("imports './skyscanner/client.js' which does not exist");
+    expect(escalation.requiredFix).toContain("imports './skyscanner-client.js' which does not exist");
     expect(escalation.diagnosis).toContain('SKY-003-test');
   });
 
@@ -128,7 +128,7 @@ describe('run_relative_import_check — REAL execution: sibling escalation', () 
     const { rc, escalation } = runCheck({
       files: {
         'src/skyscanner/client.ts': 'export class SkyscannerClient {}',
-        'src/cli.ts': "import { SkyscannerClient } from './skyscanner/client.js';",
+        'src/cli.ts': "import { SkyscannerClient } from './skyscanner-client.js';",
       },
       storyId: 'SKY-003-impl',
       prdStories: [
@@ -157,7 +157,7 @@ describe('run_relative_import_check — REAL execution: sibling escalation', () 
     try {
       const files = {
         'src/skyscanner/client.ts': 'export class SkyscannerClient {}',
-        'src/cli.ts': "import { SkyscannerClient } from './skyscanner/client.js';",
+        'src/cli.ts': "import { SkyscannerClient } from './skyscanner-client.js';",
       };
       for (const [relPath, content] of Object.entries(files)) {
         const fullPath = join(dir, relPath);

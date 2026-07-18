@@ -61,7 +61,7 @@ function runResolveEscalation(opts: {
       {
         targetFile: opts.targetFileRelative,
         diagnosis: `Relative import in ${opts.targetFileRelative} does not resolve to a real file.`,
-        requiredFix: `${opts.targetFileRelative}: imports './skyscanner/client.js' which does not exist.`,
+        requiredFix: `${opts.targetFileRelative}: imports './skyscanner-client.js' which does not exist.`,
       };
     writeFileSync(join(dir, '.epam/escalations', `${opts.escalatingStoryId}.json`), JSON.stringify(escalationBody));
     const fnBody = extractFunctionBody('resolve_escalation');
@@ -102,7 +102,9 @@ function runCheck(opts: {
   try {
     const files = opts.files ?? {
       'src/skyscanner/client.ts': 'export class SkyscannerClient {}',
-      'src/cli.ts': "import { SkyscannerClient } from './skyscanner/client.js';",
+      // Wrong directory — ./skyscanner-client.js has no matching .ts at src/ root.
+      // ./skyscanner/client.js would resolve via ESM .js→.ts remapping and pass cleanly.
+      'src/cli.ts': "import { SkyscannerClient } from './skyscanner-client.js';",
     };
     for (const [rel, content] of Object.entries(files)) {
       const full = join(dir, rel);

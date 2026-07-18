@@ -203,17 +203,16 @@ export EPAM_API_KEY_MINIMAX="$MINIMAX_API_KEY"
 # OpenRouter (Kimi K2, GLM-4-plus, GLM-Z1 via unified API)
 export OPENROUTER_API_KEY
 export EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY"
-# Gate/coordinator model: bumped to the HIGH-tier model (2026-07-07) — found live
-# that failure-analyst (and every other gate agent sharing this assignment:
-# review-agent, spec-validator, SAST, plan-review) ran on MiniMax-M3, the
-# WEAKEST model in the whole ladder, even when diagnosing failures from stories
-# that had already escalated to the strongest model for their own
-# implementation. Directly explained a real misdiagnosis (SKY-002-test-1's
-# casing-typo import bug called a "default vs named export mismatch" —
-# wrong — burning a full 8-attempt ladder escalation on the wrong fix).
+# Gate/coordinator model: set to glm-5.2 (2026-07-17) — glm-5.2 has 1M context
+# vs glm-5.1's 202K; 4 of 7 coordinator calls in the last clean run exceeded
+# glm-5.1's limit (worst: spec-validator at 503K tokens, 148% over). glm-5.2
+# is also slightly cheaper ($0.91 vs $0.97/M input). ESCALATION_MODEL_HIGH stays
+# as glm-5.1 — spec-mode and the HIGH ladder ceiling are unaffected.
+# History: was bumped to glm-5.1 (HIGH-tier) on 2026-07-07 after finding
+# failure-analyst ran on MiniMax-M3 and misdiagnosed SKY-002-test-1's casing bug.
 export ORCH_GATE_PROVIDER="qwen"
 export EPAM_ORCHESTRATION_PROVIDER="qwen"
-export ORCH_GATE_MODEL="${ESCALATION_MODEL_HIGH:-z-ai/glm-5.1}"
+export ORCH_GATE_MODEL="z-ai/glm-5.2"
 # Escalation model: GLM 5.2 for Rung 2/3 (reasoning model, 1M ctx; routes via OpenRouter/qwen provider)
 export ESCALATION_MODEL="${ESCALATION_MODEL:-z-ai/glm-5.2}"
 # HIGH tier: stronger/pricier model than the medium-tier ESCALATION_MODEL.
@@ -251,8 +250,15 @@ export EPAM_TEMPERATURE="0"
 # for implementation.
 export SPEC_MODE_PROVIDER="qwen"
 export SPEC_MODE_OPENSPEC_MODEL="${SPEC_MODE_OPENSPEC_MODEL:-${ESCALATION_MODEL_HIGH}}"
+export SPEC_MODE_OPENSPEC_MODEL_HIGH="${SPEC_MODE_OPENSPEC_MODEL_HIGH:-${ESCALATION_MODEL_HIGH}}"
 export SPEC_MODE_SPECKIT_MODEL="${SPEC_MODE_SPECKIT_MODEL:-${ESCALATION_MODEL_HIGH}}"
 export SPEC_MODE_MODEL="${SPEC_MODE_MODEL:-${ESCALATION_MODEL_HIGH}}"
+# Block execution if openspec fails for a story that mandates a split — splitting
+# is critical for correctness (oversized stories hit token limits and produce
+# partial implementations). The HIGH ladder retries (SPEC_AGENT_MAX_RETRIES=3)
+# already give openspec 4 attempts; a hard block here prevents running a known-bad
+# PRD through expensive implementation passes.
+export SPEC_PASS_BLOCK_ON_TIMEOUT="${SPEC_PASS_BLOCK_ON_TIMEOUT:-true}"
 # Model escalation ladder: pipe-separated "from=to" pairs consumed by get_model_ladder_step().
 # R2: MiniMax-M3 → deepseek-r1 (reasoning escalation). Legacy GLM entries kept for story-level retryModel compat.
 # Override individual entries by re-exporting EPAM_MODEL_LADDER before invoking this script.
@@ -267,7 +273,10 @@ export SPEC_MODE_MODEL="${SPEC_MODE_MODEL:-${ESCALATION_MODEL_HIGH}}"
 # attempts still on kimi-k2, then aborted — a mechanical, easily-fixed mistake
 # that likely would have resolved in 1-2 attempts on a stronger model.
 export EPAM_MODEL_LADDER_MEDIUM="${EPAM_MODEL_LADDER_MEDIUM:-MiniMax-M2.5=MiniMax-M3|MiniMax-M3=${ESCALATION_MODEL}|zhipuai/glm-z1-32b=${ESCALATION_MODEL}|zhipuai/glm-z1-9b=${ESCALATION_MODEL}|moonshotai/kimi-k2=${ESCALATION_MODEL}}"
-export EPAM_MODEL_LADDER_HIGH="${EPAM_MODEL_LADDER_HIGH:-MiniMax-M2.5=MiniMax-M3|MiniMax-M3=${ESCALATION_MODEL_HIGH}|zhipuai/glm-z1-32b=${ESCALATION_MODEL_HIGH}|zhipuai/glm-z1-9b=${ESCALATION_MODEL_HIGH}|${ESCALATION_MODEL}=${ESCALATION_MODEL_HIGH}|moonshotai/kimi-k2=${ESCALATION_MODEL_HIGH}}"
+export EPAM_MODEL_LADDER_HIGH="${EPAM_MODEL_LADDER_HIGH:-MiniMax-M2.5=MiniMax-M3|MiniMax-M3=${ESCALATION_MODEL_HIGH}|zhipuai/glm-z1-32b=${ESCALATION_MODEL_HIGH}|zhipuai/glm-z1-9b=${ESCALATION_MODEL_HIGH}|${ESCALATION_MODEL}=${ESCALATION_MODEL_HIGH}|moonshotai/kimi-k2=${ESCALATION_MODEL_HIGH}|${ESCALATION_MODEL_HIGH}=moonshotai/kimi-k3}"
+# kimi-k3 rung (2026-07-17): new HIGH-tier ceiling above glm-5.1. Only reached
+# when a story exhausts all glm-5.1 retries (Rung3 max-effort). 1M ctx, highest
+# reasoning — $3/M input / $15/M output, so 2 retries max before HEALING_BROKEN.
 # Back-compat: EPAM_MODEL_LADDER (no suffix) still works as an override that
 # forces BOTH tiers to the same ladder — set it explicitly to opt out of the
 # medium/high split.
@@ -388,15 +397,23 @@ fi
 echo ""
 
 # ── Wire the dashboard to this run's live PRD + logs ─────────────────────────
-# Found live 2026-07-13: this script never called pre-run-reset.sh at all, so
-# the dashboard's PRD/logs mounts were only ever whatever was left from
-# someone manually running it — explaining "months and months" of stale/wrong
-# dashboard data for every tier3 run. --log-dir "$OUTPUT_DIR" matters because
-# run-agent-orchestration.sh's own LOG_DIR resolves to $OUTPUT_DIR (this
-# external project's directory) for this run, not orchestrations/logs.
+# pre-run-reset.sh is called WITHOUT --log-dir so docker mounts orchestrations/logs
+# at /logs-dir. That is where run-agent-orchestration.sh writes ALL orchestration
+# logs (agent-activity.jsonl, agent-status.json, phase-cost.jsonl, etc.) — nginx
+# can then serve them. OUTPUT_DIR is the project code directory; writing logs there
+# would misdirect the dashboard since nginx only knows about /logs-dir.
+#
+# .active-output-dir is written separately (below) so snapshot.js's
+# resolveProjectOutputDir() can find OUTPUT_DIR for healing-events.jsonl,
+# storyFailures, and guardedStepRetries — which claude.sh DOES write to OUTPUT_DIR.
+# These are read by Eleventy (server-side), not nginx, so they don't need /logs-dir.
 info "Wiring dashboard to serve this run's live PRD + logs..."
-bash orchestrations/scripts/pre-run-reset.sh --prd "$PRD_FILE" --log-dir "$OUTPUT_DIR" || \
+bash orchestrations/scripts/pre-run-reset.sh --prd "$PRD_FILE" || \
   info "  pre-run-reset.sh failed or Docker unavailable — dashboard may show stale data (non-fatal, continuing)"
+# Point snapshot.js at OUTPUT_DIR so it finds healing-events and story artefacts.
+# pre-run-reset.sh writes .active-output-dir = its LOG_DIR (orchestrations/logs),
+# which is wrong for these OUTPUT_DIR-written files — overwrite it here.
+echo -n "$OUTPUT_DIR" > "orchestrations/dashboards/.active-output-dir"
 echo ""
 
 run_phase() {

@@ -92,7 +92,7 @@ describe('BUG A — resolve_escalation() cannot consume a relative targetFile ag
         JSON.stringify({
           targetFile: opts.targetFileRelative,
           diagnosis: `Relative import in ${opts.targetFileRelative} does not resolve to a real file.`,
-          requiredFix: `${opts.targetFileRelative}: imports './skyscanner/client.js' which does not exist.`,
+          requiredFix: `${opts.targetFileRelative}: imports './skyscanner-client.js' which does not exist.`,
         }),
       );
 
@@ -197,7 +197,7 @@ describe('BUG B — the initial owner lookup in run_relative_import_check() misa
     try {
       mkdirSync(join(dir, 'src/skyscanner'), { recursive: true });
       writeFileSync(join(dir, 'src/skyscanner/client.ts'), 'export class SkyscannerClient {}');
-      writeFileSync(join(dir, 'src/cli.ts'), "import { SkyscannerClient } from './skyscanner/client.js';");
+      writeFileSync(join(dir, 'src/cli.ts'), "import { SkyscannerClient } from './skyscanner-client.js';");
 
       const prdPath = join(dir, 'prd.json');
       writeFileSync(prdPath, JSON.stringify({ stories: opts.prdStories }, null, 2));

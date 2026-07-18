@@ -215,6 +215,89 @@ else
   fail "Dashboard not responding — run pre-run-reset.sh first"
 fi
 
+# ── 6. Self-heal observability routing ───────────────────────────────────────
+# Verifies the full chain: claude.sh writes healing-events.jsonl to LOG_DIR
+# (orchestrations/logs), docker mounts orchestrations/logs at /logs-dir, and
+# nginx serves /logs/healing-events.jsonl so agent-activity.html and health.html
+# both read real data — not stale events from a previous run.
+echo "[ Self-heal observability ]"
+
+# 6a. LOG_DIR write path is writable
+LOG_DIR_DEFAULT="$(cd "$(dirname "$0")/../logs" 2>/dev/null && pwd || echo '')"
+if [[ -d "$LOG_DIR_DEFAULT" ]] && touch "$LOG_DIR_DEFAULT/.preflight-write-test" 2>/dev/null; then
+  rm -f "$LOG_DIR_DEFAULT/.preflight-write-test"
+  ok "LOG_DIR ($LOG_DIR_DEFAULT) is writable — healing-events.jsonl will land here"
+else
+  fail "LOG_DIR ($LOG_DIR_DEFAULT) is not writable — self-heal events will be lost"
+fi
+
+# 6b. healing-events.jsonl at LOG_DIR is NOT stale from a prior run
+# (pre-run-reset.sh should have cleared it; non-empty means it was not reset)
+HEAL_LOG="$LOG_DIR_DEFAULT/healing-events.jsonl"
+if [[ -s "$HEAL_LOG" ]]; then
+  fail "healing-events.jsonl is non-empty from a prior run — run pre-run-reset.sh to clear it (stale data pollutes health.html)"
+else
+  ok "healing-events.jsonl is empty/absent — clean slate for this run"
+fi
+
+# 6c. Dashboard /logs/healing-events.jsonl is served by nginx (routing sanity)
+if curl -sf http://localhost:8092/logs/healing-events.jsonl >/dev/null 2>&1; then
+  ok "nginx serves /logs/healing-events.jsonl — agent-activity.html and health.html will read it"
+else
+  fail "nginx /logs/healing-events.jsonl not reachable — docker /logs-dir mount may be wrong; run pre-run-reset.sh"
+fi
+
+# 6d. build-info.json is fresh and contains selfHealing (health.html depends on it)
+if curl -sf "http://localhost:8092/build-info.json" 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); assert 'selfHealing' in d.get('metrics',{}), 'selfHealing missing'" 2>/dev/null; then
+  ok "build-info.json has metrics.selfHealing — health.html will render correctly"
+else
+  fail "build-info.json missing or lacks metrics.selfHealing — health.html will show nothing; check snapshot-watch.js process"
+fi
+
+# 6e. Snapshot watcher (snapshot-watch.js) is running — health.html OOMs when
+# Eleventy's full watcher runs; snapshot-watch.js is the lightweight replacement.
+# If the PID file is missing or the process is dead, build-info.json will never
+# update during the run, leaving health.html permanently stale.
+SNAP_PID_FILE="$LOG_DIR_DEFAULT/dashboards-watch.pid"
+_snap_ok=false
+if [[ -f "$SNAP_PID_FILE" ]]; then
+  _snap_pid="$(cat "$SNAP_PID_FILE" 2>/dev/null || echo '')"
+  if [[ -n "$_snap_pid" ]] && ps -p "$_snap_pid" > /dev/null 2>&1; then
+    _snap_ok=true
+  else
+    # PID file exists but process gone — check if node child is still running
+    if pgrep -f 'snapshot-watch.js' > /dev/null 2>&1; then _snap_ok=true; fi
+  fi
+fi
+if [[ "$_snap_ok" == "true" ]]; then
+  ok "snapshot-watch.js is running — build-info.json will refresh every 10s"
+else
+  fail "snapshot-watch.js is NOT running — health.html will stay permanently stale during the run; start it with: node orchestrations/scripts/snapshot-watch.js 10 &"
+fi
+
+# 6f. build-info.json was generated recently (within 120s) — proves the watcher
+# is actively refreshing, not just present-but-stalled.
+_generated_at=$(curl -sf "http://localhost:8092/build-info.json" 2>/dev/null \
+  | python3 -c "import json,sys; print(json.load(sys.stdin).get('generatedAt',''))" 2>/dev/null || echo '')
+if [[ -n "$_generated_at" ]]; then
+  _age_s=$(python3 -c "
+import datetime, sys
+try:
+    ts = datetime.datetime.fromisoformat('$_generated_at'.replace('Z','+00:00'))
+    now = datetime.datetime.now(datetime.timezone.utc)
+    print(int((now-ts).total_seconds()))
+except Exception as e:
+    print(9999)
+" 2>/dev/null || echo 9999)
+  if [[ "$_age_s" -lt 120 ]]; then
+    ok "build-info.json is ${_age_s}s old — snapshot watcher is actively refreshing"
+  else
+    fail "build-info.json is ${_age_s}s old (> 120s) — snapshot watcher may be stalled; kill and restart snapshot-watch.js"
+  fi
+else
+  fail "build-info.json missing generatedAt field — snapshot watcher may be writing corrupted output"
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 if [[ $FAIL -eq 0 ]]; then

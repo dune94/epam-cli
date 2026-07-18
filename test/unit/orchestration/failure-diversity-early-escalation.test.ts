@@ -150,7 +150,7 @@ echo "retry=${i} EARLY_ESCALATION_NEEDED=\${EARLY_ESCALATION_NEEDED:-0}"
 
       writeFileSync(
         scriptPath,
-        `OUTPUT_DIR="${dir}"\nwarning() { :; }\n${fnBody}\n${steps}`,
+        `LOG_DIR="${dir}"\nwarning() { :; }\n${fnBody}\n${steps}`,
       );
       const output = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
       return output.trim().split('\n');

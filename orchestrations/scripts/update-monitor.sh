@@ -39,7 +39,7 @@ resolve_phase() {
 
 normalize_activity_type() {
   case "${1:-}" in
-    story_start|story_complete|story_fail|tool_run|tool_result|finding|gate_decision|cost_snapshot|message_sent|message_received|spec_update|phase_start|phase_complete|error|info)
+    story_start|story_complete|story_fail|tool_run|tool_result|finding|gate_decision|cost_snapshot|message_sent|message_received|spec_update|phase_start|phase_complete|error|info|ladder_rung|retry|self_heal_start|self_heal_result)
       echo "$1"
       ;;
     *)
@@ -57,6 +57,7 @@ append_activity_event() {
   local message="${6:-}"
   local model="${7:-}"
   local provider="${8:-}"
+  local prev_model="${9:-}"
   local effective_type
   effective_type="$(normalize_activity_type "$raw_type")"
   local ts
@@ -77,6 +78,7 @@ append_activity_event() {
     --arg eventId "$event_id" \
     --arg model "$model" \
     --arg provider "$provider" \
+    --arg prevModel "$prev_model" \
     '{
       event_id: $eventId,
       timestamp: $ts,
@@ -90,7 +92,8 @@ append_activity_event() {
         lane: $lane,
         message: $message,
         source: "update-monitor.sh",
-        rawType: $rawType
+        rawType: $rawType,
+        prevModel: (if $prevModel == "" then null else $prevModel end)
       }
     }' >> "$ACTIVITY_FILE" || true
 }
@@ -235,6 +238,7 @@ EOF
     ROLE="${5:-}"
     EVENT_MODEL="${6:-}"
     EVENT_PROVIDER="${7:-}"
+    EVENT_PREV_MODEL="${8:-}"
 
     MONITOR_DATA=$(echo "$MONITOR_DATA" | jq \
       --arg type "$TYPE" \
@@ -255,7 +259,7 @@ EOF
       ')
     echo "$MONITOR_DATA" > "$MONITOR_FILE"
     PHASE_ID="$(resolve_phase)"
-    append_activity_event "$TYPE" "$STORY" "$PHASE_ID" "$ROLE" "$LANE" "$MESSAGE" "$EVENT_MODEL" "$EVENT_PROVIDER"
+    append_activity_event "$TYPE" "$STORY" "$PHASE_ID" "$ROLE" "$LANE" "$MESSAGE" "$EVENT_MODEL" "$EVENT_PROVIDER" "$EVENT_PREV_MODEL"
     ;;
 
   finalize)

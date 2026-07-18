@@ -35,8 +35,8 @@ describe('appendSpecPassEvent — helper definition', () => {
     expect(SPEC_MODE_SRC).toContain('timestamp:');
   });
 
-  it('appendSpecPassEvent sets agent to spec-mode', () => {
-    expect(SPEC_MODE_SRC).toContain("agent: 'spec-mode'");
+  it('appendSpecPassEvent sets agent to spec-coordinator-agent', () => {
+    expect(SPEC_MODE_SRC).toContain("agent: 'spec-coordinator-agent'");
   });
 });
 
@@ -143,7 +143,7 @@ describe('appendSpecPassEvent — REAL execution, JSONL shape', () => {
 
       const record = JSON.parse(lines[0]);
       expect(record.type).toBe('spec_pass_decision');
-      expect(record.agent).toBe('spec-mode');
+      expect(record.agent).toBe('spec-coordinator-agent');
       expect(record.story_id).toBe('SKY-TEST');
       expect(record.phase).toBe('core');
       expect(record.detail.event).toBe('mandate_violation');

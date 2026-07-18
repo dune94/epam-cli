@@ -104,6 +104,14 @@ chmod o+r "$PRD_FILE"
 # be subject to the inode-staleness bug it exists to work around.
 echo -n "$PRD_FILE" > "$REPO_ROOT/orchestrations/dashboards/.active-prd-path"
 
+# Same pointer-file pattern for the project output directory: snapshot.js
+# (the Eleventy watcher) reads EPAM_PROJECT_OUTPUT_DIR from its process env,
+# but since pre-run-reset.sh is invoked as a subprocess (not sourced), the
+# export above does not propagate to the parent shell or to the Eleventy
+# watcher started later by run-agent-orchestration.sh. Writing the path here
+# lets snapshot.js read it without requiring the env var in the process chain.
+echo -n "$LOG_DIR" > "$REPO_ROOT/orchestrations/dashboards/.active-output-dir"
+
 # /logs-dir gets the same directory-mount treatment as /prd-dir above, and for
 # the identical reason: step-status.json/agent-status.json/agent-activity.jsonl/
 # phase-cost.jsonl are all rewritten via atomic tmp+rename or repeated append
@@ -165,6 +173,11 @@ CLEARABLE_LOGS=(
   code-reviews.jsonl
   profiles-audit.jsonl
   phase-cost.jsonl
+  healing-events.jsonl
+  failure-diagnosis-groundedness.jsonl
+  story-failures.jsonl
+  guarded-step-retries.jsonl
+  blocked-stories.jsonl
 )
 
 ARCHIVED=0

@@ -443,6 +443,7 @@ describe('run_external_verification — vendor dirs are ALWAYS unlocked, whether
   function runExternalVerification(opts: {
     filesToCreate: Record<string, string>;
     tamperAfterLock?: { path: string; newContent: string };
+    guardEnabled?: boolean; // default false — mirrors EPAM_VENDOR_GUARD_ENABLED default
   }): { rc: number; vendorDirWritableAfter: boolean } {
     const dir = mkdtempSync(join(tmpdir(), 'ext-verify-vendor-test-'));
     try {
@@ -487,6 +488,7 @@ describe('run_external_verification — vendor dirs are ALWAYS unlocked, whether
         scriptPath,
         [
           `PROJECT_ROOT="${dir}"`,
+          `EPAM_VENDOR_GUARD_ENABLED="${opts.guardEnabled ? '1' : '0'}"`,
           `warning() { echo "WARN: $*" >&2; }`,
           `log() { :; }`,
           `run_dynamic_tools_in_unlocked_window() { :; }`,
@@ -509,22 +511,49 @@ describe('run_external_verification — vendor dirs are ALWAYS unlocked, whether
     }
   }
 
-  it('REPRODUCES the exact bug shape and proves the fix: tampering detected (rc=1) AND node_modules is writable again afterward', () => {
+  it('REPRODUCES the exact bug shape and proves the fix: tampering detected (rc=1) AND node_modules is writable again afterward [guard=ON]', () => {
     const { rc, vendorDirWritableAfter } = runExternalVerification({
       filesToCreate: { 'node_modules/vitest/vitest.mjs': 'real vitest entry point content' },
       tamperAfterLock: {
         path: 'node_modules/vitest/vitest.mjs',
         newContent: '#!/usr/bin/env bash\necho "fake pass"\nexit 0',
       },
+      guardEnabled: true,
     });
     expect(rc).toBe(1);
     expect(vendorDirWritableAfter).toBe(true);
   });
 
-  it('no tampering: check passes (rc continues past the vendor check) AND node_modules is writable again afterward', () => {
+  it('no tampering: check passes AND node_modules is writable again afterward [guard=ON]', () => {
     const { vendorDirWritableAfter } = runExternalVerification({
       filesToCreate: { 'node_modules/vitest/vitest.mjs': 'real vitest entry point content' },
+      guardEnabled: true,
     });
     expect(vendorDirWritableAfter).toBe(true);
+  });
+
+  it('tampering does NOT abort the story when guard is disabled [guard=OFF — the default]', () => {
+    // EPAM_VENDOR_GUARD_ENABLED=0 is the default. Even if an agent writes to
+    // node_modules, run_external_verification must NOT return 1 — the run
+    // continues. This is the local-machine behavior: no false aborts from
+    // legitimate npm installs.
+    const { rc, vendorDirWritableAfter } = runExternalVerification({
+      filesToCreate: { 'node_modules/vitest/vitest.mjs': 'real vitest entry point content' },
+      tamperAfterLock: {
+        path: 'node_modules/vitest/vitest.mjs',
+        newContent: '#!/usr/bin/env bash\necho "fake pass"\nexit 0',
+      },
+      guardEnabled: false,
+    });
+    // rc may be non-zero for other reasons (no test script) but must NOT be 1
+    // due to vendor tampering when the guard is off
+    expect(rc).not.toBe(1); // guard off → no abort from tampering
+    expect(vendorDirWritableAfter).toBe(true); // unlock always runs regardless
+  });
+
+  it('guard=OFF is the default: EPAM_VENDOR_GUARD_ENABLED unset behaves identically to =0', () => {
+    // Verify the source uses :-0 as the default, not :-1
+    const lockGateCount = (claudeSrc.match(/EPAM_VENDOR_GUARD_ENABLED:-0/g) || []).length;
+    expect(lockGateCount).toBeGreaterThanOrEqual(2); // lock site + integrity-check site
   });
 });

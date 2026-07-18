@@ -331,7 +331,7 @@ describe('check_healing_effectiveness — bash integration with mock data', () =
     return `#!/bin/bash
 ${funcDef}
 error() { echo "ERROR: $*" >&2; }
-OUTPUT_DIR="${tmpDir}"
+LOG_DIR="${tmpDir}"
 
 # Write pre-existing healing events
 cat > "${healLog}" << 'EVEOF'
@@ -340,7 +340,7 @@ EVEOF
 
 # Call the function
 HEALING_BROKEN=""
-check_healing_effectiveness "${storyId}" "${diagnosis}"
+check_healing_effectiveness "${storyId}" "${diagnosis}" "2"
 echo "HEALING_BROKEN_VALUE=\${HEALING_BROKEN:-}"
 `;
   }
@@ -444,9 +444,9 @@ echo "HEALING_BROKEN_VALUE=\${HEALING_BROKEN:-}"
     writeFileSync(scriptPath, `#!/bin/bash
 ${funcDef}
 error() { echo "ERROR: $*" >&2; }
-OUTPUT_DIR="${tmpDir}"
+LOG_DIR="${tmpDir}"
 HEALING_BROKEN=""
-check_healing_effectiveness "MOCK-001" "some diagnosis"
+check_healing_effectiveness "MOCK-001" "some diagnosis" "0"
 echo "HEALING_BROKEN_VALUE=\${HEALING_BROKEN:-}"
 echo "exit_ok=1"
 `);
@@ -632,12 +632,12 @@ describe('regression: HEALING_BROKEN fires on paraphrased repeats (token-overlap
     writeFileSync(scriptPath, `#!/bin/bash
 ${funcDef}
 error() { echo "ERROR: \$*" >&2; }
-OUTPUT_DIR="${tmpDir}"
+LOG_DIR="${tmpDir}"
 cat > "${healLog}" << 'EVEOF'
 ${events}
 EVEOF
 HEALING_BROKEN=""
-check_healing_effectiveness "MOCK-001" "${current}"
+check_healing_effectiveness "MOCK-001" "${current}" "2"
 echo "HEALING_BROKEN_VALUE=\${HEALING_BROKEN:-}"
 `);
     const result = execSync(`bash "${scriptPath}"`).toString();
@@ -660,12 +660,12 @@ echo "HEALING_BROKEN_VALUE=\${HEALING_BROKEN:-}"
     writeFileSync(scriptPath, `#!/bin/bash
 ${funcDef}
 error() { echo "ERROR: \$*" >&2; }
-OUTPUT_DIR="${tmpDir}"
+LOG_DIR="${tmpDir}"
 cat > "${healLog}" << 'EVEOF'
 ${events}
 EVEOF
 HEALING_BROKEN=""
-check_healing_effectiveness "MOCK-001" "${current}"
+check_healing_effectiveness "MOCK-001" "${current}" "2"
 echo "HEALING_BROKEN_VALUE=\${HEALING_BROKEN:-}"
 `);
     const result = execSync(`bash "${scriptPath}"`).toString();

@@ -748,12 +748,12 @@ function renderSummary() {
       if (!mostRecent || d > mostRecent) mostRecent = d;
     }
   }
-  const el = document.getElementById('stat-last-updated');
+  const elLastUpdated = document.getElementById('stat-last-updated');
   if (mostRecent && !isNaN(mostRecent)) {
     const rt = relativeTime(mostRecent);
-    el.textContent = rt || mostRecent.toLocaleTimeString();
+    elLastUpdated.textContent = rt || mostRecent.toLocaleTimeString();
   } else {
-    el.textContent = '–';
+    elLastUpdated.textContent = '–';
   }
 }
 

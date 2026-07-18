@@ -535,21 +535,54 @@ ${storiesPayload}
         });
       }
 
-      // Retry on transient failure (timeout, provider outage) — one retry by default.
-      // The forced-retry mechanism for split-mandate violations is a separate, later gate;
-      // this one covers the initial call only, before the failure path is entered.
-      const _specMaxRetries = parseInt(process.env.SPEC_AGENT_MAX_RETRIES || '1', 10);
+      // Retry on transient failure (timeout, provider outage).
+      // For openspec (the sole split authority), use a HIGH ladder:
+      //   retry 1  — same model (transient-timeout recovery)
+      //   retry 2+ — escalate to SPEC_MODE_OPENSPEC_MODEL_HIGH if configured
+      // SPEC_AGENT_MAX_RETRIES defaults to 3 for openspec, 1 for other agents.
+      const _isOpenspec = agent === 'openspec';
+      const _specMaxRetries = parseInt(
+        process.env.SPEC_AGENT_MAX_RETRIES || (_isOpenspec ? '3' : '1'), 10
+      );
+      const _openspecHighModel = process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH || process.env.SPEC_MODE_OPENSPEC_MODEL || '';
+      const _openspecBaseModel = process.env.SPEC_MODE_OPENSPEC_MODEL || '';
       let _specRetry = 0;
       while (!agentResult && _specRetry < _specMaxRetries) {
         _specRetry++;
-        console.warn(
-          `spec-mode: ${agent} returned null for ${story.id} (attempt ${_specRetry + 1}/${_specMaxRetries + 1}) — retrying transient failure`
-        );
+        // For openspec retry 2+, escalate to the HIGH model if it differs from base.
+        const _escalate = _isOpenspec && _specRetry >= 2 && _openspecHighModel && _openspecHighModel !== _openspecBaseModel;
+        if (_escalate) {
+          console.warn(
+            `spec-mode: ${agent} ladder escalation for ${story.id} (attempt ${_specRetry + 1}/${_specMaxRetries + 1}) — model ${_openspecBaseModel} → ${_openspecHighModel}`
+          );
+          appendSpecPassEvent(logDir, {
+            storyId: story.id,
+            phase: opts.phase,
+            event: 'spec_timeout_escalation',
+            decision: 'escalating',
+            details: { prevModel: _openspecBaseModel, newModel: _openspecHighModel, retry: _specRetry }
+          });
+        } else {
+          console.warn(
+            `spec-mode: ${agent} returned null for ${story.id} (attempt ${_specRetry + 1}/${_specMaxRetries + 1}) — retrying transient failure`
+          );
+        }
         summary.stats.agentAttempts += 1;
         try {
-          agentResult = agent === 'speckit' && openspecPayload
-            ? await runSpeckitReview({ promptExec, story, openspecOutput: openspecPayload, phase: opts.phase, runId, logDir })
-            : await runSpecAgent({ promptExec, agent, story, phase: opts.phase, runId, logDir });
+          if (_escalate) {
+            const _savedModel = process.env.SPEC_MODE_OPENSPEC_MODEL;
+            process.env.SPEC_MODE_OPENSPEC_MODEL = _openspecHighModel;
+            try {
+              agentResult = await runSpecAgent({ promptExec, agent, story, phase: opts.phase, runId, logDir });
+            } finally {
+              if (_savedModel !== undefined) process.env.SPEC_MODE_OPENSPEC_MODEL = _savedModel;
+              else delete process.env.SPEC_MODE_OPENSPEC_MODEL;
+            }
+          } else {
+            agentResult = agent === 'speckit' && openspecPayload
+              ? await runSpeckitReview({ promptExec, story, openspecOutput: openspecPayload, phase: opts.phase, runId, logDir })
+              : await runSpecAgent({ promptExec, agent, story, phase: opts.phase, runId, logDir });
+          }
         } catch (err) { agentResult = null; }
       }
 
@@ -2226,7 +2259,7 @@ function appendSpecPassEvent(logDir, { storyId, phase, event, decision, details 
   appendJsonl(path.join(logDir, 'agent-activity.jsonl'), {
     event_id: id,
     timestamp: ts,
-    agent: 'spec-mode',
+    agent: 'spec-coordinator-agent',
     story_id: storyId ?? null,
     phase: phase ?? null,
     type: 'spec_pass_decision',

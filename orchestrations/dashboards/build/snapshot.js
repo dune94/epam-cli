@@ -11,9 +11,25 @@ const DASHBOARD_ROOT = path.join(__dirname, '..');
 // hardcoded to this repo (profiles.json/profiles.json.original are genuinely
 // repo-relative — the canonical floor restored at the start of every run),
 // but the project-specific signals need a separate, config-driven root:
-// EPAM_PROJECT_OUTPUT_DIR. Falls back to DASHBOARD_ROOT when unset so
-// behavior for anyone not setting it is unchanged.
-const PROJECT_OUTPUT_DIR = process.env.EPAM_PROJECT_OUTPUT_DIR || DASHBOARD_ROOT;
+// EPAM_PROJECT_OUTPUT_DIR. Falls back to the .active-output-dir pointer file
+// written by pre-run-reset.sh (same pattern as ACTIVE_PRD_POINTER below), then
+// to DASHBOARD_ROOT when neither is set. The pointer-file fallback exists because
+// pre-run-reset.sh is called as a subprocess (not sourced), so its `export
+// EPAM_PROJECT_OUTPUT_DIR` does not propagate to the Eleventy watcher — without
+// this fallback, healing-events.jsonl, story-failures.jsonl, and guarded-step-
+// retries.jsonl are silently read from the wrong directory every run.
+const ACTIVE_OUTPUT_DIR_POINTER = path.join(DASHBOARD_ROOT, '.active-output-dir');
+function resolveProjectOutputDir() {
+  if (process.env.EPAM_PROJECT_OUTPUT_DIR) return process.env.EPAM_PROJECT_OUTPUT_DIR;
+  try {
+    const pointed = fs.readFileSync(ACTIVE_OUTPUT_DIR_POINTER, 'utf8').trim();
+    if (pointed) return pointed;
+  } catch {
+    // Pointer not written yet (pre-run-reset.sh hasn't run) — fall through.
+  }
+  return DASHBOARD_ROOT;
+}
+const PROJECT_OUTPUT_DIR = resolveProjectOutputDir();
 
 // Active PRD path — resolved the same way pre-run-reset.sh's compose override
 // resolves /prd-dir, but for THIS Node process (the Eleventy watcher), which
@@ -61,7 +77,11 @@ const PATHS = {
   specSummary: path.join(DASHBOARD_ROOT, 'logs', 'spec-summary.json'),
   specLedger: path.join(DASHBOARD_ROOT, 'logs', 'spec-phase.jsonl'),
   agentActivity: path.join(process.env.EPAM_PROJECT_OUTPUT_DIR || path.join(DASHBOARD_ROOT, 'logs'), 'agent-activity.jsonl'),
-  healingEvents: path.join(PROJECT_OUTPUT_DIR, 'healing-events.jsonl'),
+  // healingEvents always lives in orchestrations/logs (LOG_DIR) — it's pipeline
+  // monitoring data, not project output. claude.sh was changed 2026-07-17 to
+  // always write here so agent-activity.html's logs/healing-events.jsonl fetch
+  // (served by nginx /logs-dir) and this snapshot path both agree on the same file.
+  healingEvents: path.join(DASHBOARD_ROOT, 'logs', 'healing-events.jsonl'),
   dynamicToolsDir: path.join(PROJECT_OUTPUT_DIR, '.epam', 'dynamic-tools'),
   storyFailures: path.join(PROJECT_OUTPUT_DIR, 'story-failures.jsonl'),
   // Prompt-eval retry guards (Step 0.5, Step 0.9, AC-review, TC-writer

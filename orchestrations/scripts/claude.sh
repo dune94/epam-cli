@@ -1789,8 +1789,20 @@ pattern = re.compile(cfg['importPattern'])
 # languages/stacks rather than hardcoding '.ts'/'.js'.
 scan_extensions = tuple(cfg.get('scanFileExtensions', []))
 imported = set()
+# Monorepos can nest an independent sub-project (its own package.json/requirements.txt/
+# etc.) inside project_root — e.g. a standalone React tool under scripts/. Its imports
+# are declared in ITS OWN manifest, not the root's, so scanning into it here would find
+# "missing" packages that are actually just undeclared at the wrong scope and try to
+# install them at project_root. Stop descending once a directory (other than
+# project_root itself) contains the same manifestFile — that subtree manages its own
+# dependencies independently.
+manifest_file = cfg['manifestFile']
 for root, dirs, files in os.walk(project_root):
-    dirs[:] = [d for d in dirs if d not in ('node_modules', 'dist', '.git', '__pycache__', '.venv')]
+    dirs[:] = [
+        d for d in dirs
+        if d not in ('node_modules', 'dist', '.git', '__pycache__', '.venv')
+        and not os.path.isfile(os.path.join(root, d, manifest_file))
+    ]
     for fname in files:
         if scan_extensions and not fname.endswith(scan_extensions):
             continue

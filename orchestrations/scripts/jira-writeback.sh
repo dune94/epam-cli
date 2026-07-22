@@ -45,6 +45,11 @@ if [ -z "$MILESTONE" ] || [ -z "$JIRA_KEY" ]; then
   exit 0
 fi
 
+if [ "${AC_GATE_SKIP_JIRA_COMMENTS:-0}" = "1" ]; then
+  echo "[jira-writeback] AC_GATE_SKIP_JIRA_COMMENTS=1 — writeback suppressed for $JIRA_KEY (milestone: $MILESTONE)" >&2
+  exit 0
+fi
+
 if [ ! -f "$JIRA_CLIENT_JS" ]; then
   echo "[jira-writeback] jira-client.js not found: $JIRA_CLIENT_JS" >&2
   exit 0

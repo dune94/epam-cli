@@ -35,8 +35,22 @@ if (!CONFIGURED) {
 
 // ── HTTP helper ────────────────────────────────────────────────────────────
 
+// HARD BLOCK — no script in this project may write to any client system.
+// Every write-capable Jira call (addComment, transitionIssue, updateField,
+// createIssue) routes through this function. Blocking every non-GET method
+// here, unconditionally, makes writes structurally impossible regardless of
+// env flags, call-site bugs, or future code added anywhere else in the
+// pipeline — a per-caller flag already failed to prevent a live write once.
+const READ_ONLY_METHODS = new Set(['GET']);
+
 function request(method, path, body) {
   return new Promise((resolve, reject) => {
+    if (!READ_ONLY_METHODS.has(String(method).toUpperCase())) {
+      reject(new Error(
+        `[jira-client] BLOCKED: write method ${method} to ${path} — this project never writes to client systems.`
+      ));
+      return;
+    }
     if (!CONFIGURED) { resolve({}); return; }
 
     const parsed  = url.parse(`${JIRA_URL}${path}`);

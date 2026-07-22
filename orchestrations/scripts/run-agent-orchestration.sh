@@ -6991,24 +6991,6 @@ AC_APPLY_PY
                 if [ "${_acs_added:-0}" -gt 0 ]; then
                     success "  [story-ac-remediator] ${_acs_added} AC(s) added to ${_story_id}"
                     _remediation_applied=1
-                    # Write ACs back to Jira so they survive re-ingest on the next run.
-                    # Jira is the canonical source; ingest reads [EPAM-AC-ADDITION] comments.
-                    if [ -n "${JIRA_URL:-}" ]; then
-                        local _jira_key _jira_wb_tmp
-                        _jira_key=$(jq -r --arg id "$_story_id" \
-                          '.stories[] | select(.id == $id) | .jiraKey // ""' \
-                          "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
-                        if [ -n "$_jira_key" ]; then
-                            _jira_wb_tmp=$(mktemp)
-                            jq -c --arg id "$_story_id" --argjson n "${_acs_added}" \
-                              '.stories[] | select(.id == $id) | .acceptanceCriteria // [] | .[-($n|tonumber):] | map(if type=="object" then .text else . end) | {"acs": .}' \
-                              "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null > "$_jira_wb_tmp" || echo '{"acs":[]}' > "$_jira_wb_tmp"
-                            "$NODE_BIN" "$SCRIPT_DIR/lib/jira-writeback-acs.js" \
-                              "$_jira_key" "$_story_id" "$_jira_wb_tmp" \
-                              2>&1 | head -2 || true
-                            rm -f "$_jira_wb_tmp"
-                        fi
-                    fi
                 else
                     info "  [story-ac-remediator] No new ACs added (already covered or agent skipped)"
                 fi

@@ -448,6 +448,82 @@ describe('tier3-travel-app-run.sh — declares requiredDevDependencies for this 
 // Template literal fix: the scanner also picked up `${currentPayment.state.value}`
 // as an "import path" — any import string containing `${` is dynamic code, not
 // an installable package.
+// ── Nested package.json boundary (live bug, 2026-07-22) ────────────────────
+// Root cause: Metrolinx azure.commerce.cdts is a monorepo containing an
+// independent sub-project (scripts/integration-subscription-generator/) with
+// its OWN package.json declaring react/@mui/@vitejs deps. run_dependency_check
+// walked the whole project_root with no awareness of nested manifest
+// boundaries, found the sub-project's imports, checked them against the ROOT
+// package.json (where they are correctly absent — they belong to a different
+// manifest), and tried to `npm install` them at project_root. This surfaced
+// live as the pipeline attempting `npm install eslint-plugin-react-refresh`,
+// `@vitejs/plugin-react`, `react-dom` etc. for an Azure Functions backend
+// story that has nothing to do with React.
+// Fix: os.walk's dirs[:] pruning now also excludes any subdirectory that
+// itself contains a file matching manifestFile — that subtree manages its
+// own dependencies independently and must not be scanned into.
+describe('run_dependency_check — nested package.json boundary (live bug, 2026-07-22)', () => {
+  it('does NOT descend into a subdirectory with its own package.json', () => {
+    const output = runDependencyCheck(
+      {
+        'package.json': JSON.stringify({ dependencies: { express: '^4.0.0' } }),
+        'src/server.ts': "import express from 'express';",
+        // Independent nested sub-project — its own manifest, own deps
+        'tools/widget-app/package.json': JSON.stringify({
+          dependencies: { react: '^18.0.0' },
+        }),
+        'tools/widget-app/src/App.tsx': "import React from 'react';\nimport ReactDOM from 'react-dom';",
+      },
+      NPM_CONFIG
+    );
+    // Neither react nor react-dom should ever be flagged — they belong to
+    // the nested sub-project's own manifest, not the root's.
+    expect(output).not.toContain('WOULD_INSTALL:react');
+    expect(output).not.toContain('WOULD_INSTALL:react-dom');
+  });
+
+  it('still scans a sibling directory that does NOT contain its own package.json', () => {
+    const output = runDependencyCheck(
+      {
+        'package.json': JSON.stringify({ dependencies: {} }),
+        // No nested package.json here — must still be scanned normally
+        'src/utils/helper.ts': "import lodash from 'lodash';",
+      },
+      NPM_CONFIG
+    );
+    expect(output).toContain('WOULD_INSTALL:lodash');
+  });
+
+  it('correctly flags a MISSING import at the root level even when a nested sub-project exists elsewhere', () => {
+    const output = runDependencyCheck(
+      {
+        'package.json': JSON.stringify({ dependencies: {} }),
+        'src/server.ts': "import express from 'express';", // missing at root — must still be caught
+        'tools/widget-app/package.json': JSON.stringify({ dependencies: { react: '^18.0.0' } }),
+        'tools/widget-app/src/App.tsx': "import React from 'react';",
+      },
+      NPM_CONFIG
+    );
+    expect(output).toContain('WOULD_INSTALL:express'); // real root-level gap still caught
+    expect(output).not.toContain('WOULD_INSTALL:react'); // nested sub-project's dep not leaked
+  });
+
+  it('handles multiple independent nested sub-projects, each excluded from the root scan', () => {
+    const output = runDependencyCheck(
+      {
+        'package.json': JSON.stringify({ dependencies: {} }),
+        'apps/frontend/package.json': JSON.stringify({ dependencies: { vue: '^3.0.0' } }),
+        'apps/frontend/src/main.ts': "import Vue from 'vue';",
+        'apps/backend-service/package.json': JSON.stringify({ dependencies: { fastify: '^4.0.0' } }),
+        'apps/backend-service/src/index.ts': "import fastify from 'fastify';",
+      },
+      NPM_CONFIG
+    );
+    expect(output).not.toContain('WOULD_INSTALL:vue');
+    expect(output).not.toContain('WOULD_INSTALL:fastify');
+  });
+});
+
 describe('run_dependency_check — tsconfig path alias filter (live bug, 2026-07-21)', () => {
   it('REPRODUCES the live defect: does not try to install a tsconfig path alias (@background/core)', () => {
     const output = runDependencyCheck(

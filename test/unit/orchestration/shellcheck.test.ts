@@ -38,10 +38,22 @@ describe('shellcheck — orchestrations/scripts/', () => {
 
   for (const script of scripts) {
     it(`${script.replace(REPO_ROOT + '/', '')} has no shellcheck errors`, () => {
+      // 45s, not 10s: under full-suite concurrent load, shellcheck against a
+      // large script (run-agent-orchestration.sh is 7000+ lines) can take
+      // longer than 10s just from CPU contention — a killed-by-timeout
+      // process (status: null, empty output) was previously misreported as
+      // a shellcheck error with no detail, causing intermittent full-suite
+      // flakes that never reproduced when the file was checked in isolation.
       const result = spawnSync(SHELLCHECK, ['--severity=error', script], {
         encoding: 'utf8',
-        timeout: 10_000,
+        timeout: 45_000,
       });
+
+      if (result.signal === 'SIGTERM' && result.status === null) {
+        throw new Error(
+          `shellcheck TIMED OUT on ${script.replace(REPO_ROOT + '/', '')} — this is a timeout, not a real shellcheck error. Re-run in isolation to confirm; if it reproduces, the script itself may be too large or the machine is under heavy load.`
+        );
+      }
 
       if (result.status !== 0) {
         const output = (result.stdout ?? '') + (result.stderr ?? '');

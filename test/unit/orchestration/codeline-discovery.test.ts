@@ -202,6 +202,38 @@ describe('codeline-discovery.js — scoring and fallback', () => {
     const { exitCode } = runDiscovery(['--issues', ISSUES_PATH]);
     expect(exitCode).not.toBe(0);
   });
+
+  it('docs.* repos are excluded from the manifest (not in maintenance scope)', () => {
+    const docsRoot = mkdtempSync(join(tmpdir(), 'codeline-docs-test-'));
+    try {
+      // docs.anything — should be excluded
+      const docsRepo = join(docsRoot, 'docs.tools.com');
+      mkdirSync(join(docsRepo, '.git'), { recursive: true });
+      mkdirSync(join(docsRepo, 'src'), { recursive: true });
+      writeFileSync(join(docsRepo, 'src', 'promo.ts'), 'export const promoDiscount = () => {}');
+
+      // Normal repo — should be included
+      const realRepo = join(docsRoot, 'azure.commerce.cdts');
+      mkdirSync(join(realRepo, '.git'), { recursive: true });
+      writeFileSync(join(realRepo, 'package.json'), JSON.stringify({ name: 'cdts', description: 'commerce service' }));
+
+      const issuesPath = makeIssuesJson(docsRoot, AMSD_LIKE_ISSUE);
+      const outPath = join(docsRoot, 'out.json');
+
+      const { stdout, exitCode } = runDiscovery([
+        '--issues', issuesPath,
+        '--root',   docsRoot,
+        '--out',    outPath,
+        '--dry-run',
+      ]);
+      expect(exitCode, stdout).toBe(0);
+      const out = JSON.parse(require('fs').readFileSync(outPath, 'utf8'));
+      // Must select azure.commerce.cdts, not docs.tools.com
+      expect(out.codelines[0].path).toBe(realRepo);
+    } finally {
+      rmSync(docsRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 // ── Source-text invariants ────────────────────────────────────────────────────
@@ -265,5 +297,18 @@ describe('codeline-discovery.js — source invariants', () => {
 
   it('getLlm/ai-run.sh call still present for non-dry-run path', () => {
     expect(src).toMatch(/callLlm|AI_RUN_SH/);
+  });
+
+  it('docs.* repos are excluded in buildRepoManifest', () => {
+    expect(src).toMatch(/docs\.\*/);
+    expect(src).toMatch(/not in maintenance scope|docs repo/);
+  });
+
+  it('Semble query uses action-verb prefix for code-handler targeting', () => {
+    expect(src).toMatch(/applies handles processes resolves/);
+  });
+
+  it('Semble score multiplier is 1000 to match keyword tier scale', () => {
+    expect(src).toMatch(/sembleScore \* 1000/);
   });
 });

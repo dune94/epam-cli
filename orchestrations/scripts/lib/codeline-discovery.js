@@ -87,6 +87,14 @@ function buildRepoManifest(rootDir) {
     const isGit = fs.existsSync(path.join(full, '.git'));
     if (!isGit) continue;
 
+    // Exclude docs.* repos — documentation projects are never in scope for
+    // brownfield code changes and add Semble noise (they match ticket keywords
+    // via documentation content rather than implementation code).
+    if (/^docs\./i.test(name)) {
+      log(`Skipping docs repo (not in maintenance scope): ${name}`);
+      continue;
+    }
+
     // Stack detection from manifest files
     let stack = 'unknown';
     let packageName = name;
@@ -126,15 +134,16 @@ function buildRepoManifest(rootDir) {
 }
 
 // ── Repo scoring ───────────────────────────────────────────────────────────
-// Extracts meaningful terms from ticket content, then scores each repo using:
-//   1. Name/description/readme keyword match (fast, zero I/O)
-//   2. Semble semantic search inside each repo's source (when SEMBLE_ENABLED=1)
+// Two-tier scoring. All repos go through both tiers so Semble can surface
+// the correct repo even when its name contains no ticket keywords.
 //
-// Semble replaces the old grep approach: grep scanned all source files and
-// consumed O(repo-size) tokens; Semble returns a small ranked snippet set via
-// vector search with a 60 s timeout cap, regardless of repo size.
+//   Tier 1 — name/description/readme keyword match (fast, zero I/O, always)
+//   Tier 2 — Semble semantic search inside repo source (SEMBLE_ENABLED=1)
+//            Runs against EVERY repo, not just tier-1 winners, because the
+//            target repo's directory name often has no keyword overlap with
+//            the ticket (e.g. "azure.commerce.cdts" vs "promo discount mozio").
 //
-// Returns repos sorted descending by score, sliced to topN.
+// Returns repos sorted descending by combined score, sliced to topN.
 
 function scoreRepos(issues, manifest, topN = 8) {
   const text = issues.map(i => `${i.title || ''} ${(i.description || '').slice(0, 500)}`).join(' ');
@@ -149,7 +158,10 @@ function scoreRepos(issues, manifest, topN = 8) {
   const sembleEnabled = process.env.SEMBLE_ENABLED === '1';
   const semble        = sembleEnabled ? getSemble() : null;
   const sembleBin     = semble ? semble.resolveSembleBin() : null;
-  const sembleQuery   = words.slice(0, 20).join(' ');
+  // Prepend action verbs so Semble targets the SERVICE that HANDLES this domain
+  // (e.g. "applies discount" beats a docs repo that MENTIONS discount).
+  // Same technique used in spec-mode-runner.js's brownfield pathQuery.
+  const sembleQuery   = `applies handles processes resolves ${words.slice(0, 15).join(' ')}`.slice(0, 300);
 
   const scored = manifest.map(repo => {
     let score = 0;
@@ -160,12 +172,17 @@ function scoreRepos(issues, manifest, topN = 8) {
       if (repoText.includes(word)) score += 3;
     }
 
-    // Tier 2 — Semble semantic search inside repo source (when available)
+    // Tier 2 — Semble semantic search inside repo source.
+    // Runs against ALL repos (not just tier-1 winners) so the correct repo
+    // is found even when its directory name has zero keyword overlap with the
+    // ticket content (common in monorepos / internal naming conventions).
     if (sembleEnabled && sembleBin && sembleQuery) {
       try {
         const result = semble.sembleSearch(sembleQuery, repo.path, 3, 10);
         const sembleScore = (result.results || []).reduce((s, r) => s + (r.score || 0), 0);
-        score += Math.round(sembleScore * 10);
+        // Semble cosine-similarity scores are in ~0.01–0.10 range; multiply by 1000
+        // to bring them into the same integer scale as the keyword tier (3 pts/hit).
+        score += Math.round(sembleScore * 1000);
       } catch { /* semble unavailable for this repo — skip */ }
     }
 

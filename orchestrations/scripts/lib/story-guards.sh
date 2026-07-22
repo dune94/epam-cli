@@ -242,6 +242,49 @@ story_tsc_gate() {
     set -e
 
     if [ "$_tsc_exit" -ne 0 ]; then
+        # Brownfield: this is the SAME whole-project-scope bug fixed in
+        # claude.sh's run_tsc_verification() (live, AMSD-1820, 2026-07-22) —
+        # a large brownfield repo can have pre-existing tsc errors in files no
+        # story ever touches. Without the baseline diff, this OUTER gate
+        # flipped a genuinely-completed story back to failed on the exact same
+        # pre-existing Redis/Stripe/OTel/jwt errors, AFTER run_tsc_verification
+        # had already correctly passed it inside the retry loop — the run
+        # showed "Story AMSD-1820 marked as completed" immediately followed by
+        # "Story AMSD-1820 marked as failed" a few lines later. Same fix:
+        # diff against JIRA_BASELINE_BRANCH via a git worktree (symlinking
+        # node_modules in, since worktree checkouts don't include gitignored
+        # dirs), only failing on errors the story's own commit introduced.
+        local _new_errors
+        _new_errors="$(cat "$_tsc_log")"
+        local _baseline_sha_file="$LOG_DIR/phase-baseline-sha.txt"
+        if [ -f "$_baseline_sha_file" ]; then
+            local _baseline_sha
+            _baseline_sha=$(tr -d '[:space:]' < "$_baseline_sha_file")
+            if [ -n "$_baseline_sha" ]; then
+                local _baseline_cache="$LOG_DIR/tsc-baseline-errors-${_baseline_sha:0:12}.txt"
+                if [ ! -f "$_baseline_cache" ]; then
+                    local _wt_dir
+                    _wt_dir=$(mktemp -d)
+                    if git -C "$PROJECT_ROOT" worktree add --detach "$_wt_dir" "$_baseline_sha" >/dev/null 2>&1; then
+                        ln -s "$PROJECT_ROOT/node_modules" "$_wt_dir/node_modules" 2>/dev/null || true
+                        ( cd "$_wt_dir" && "$_node_cmd" ./node_modules/.bin/tsc --noEmit 2>&1 \
+                            | grep -oE '^[^(]+\([0-9]+,[0-9]+\): error [A-Z0-9]+' ) > "$_baseline_cache" 2>/dev/null || true
+                        git -C "$PROJECT_ROOT" worktree remove --force "$_wt_dir" >/dev/null 2>&1 || true
+                    fi
+                    rm -rf "$_wt_dir" 2>/dev/null || true
+                fi
+                if [ -f "$_baseline_cache" ]; then
+                    _new_errors=$(grep -oE '^[^(]+\([0-9]+,[0-9]+\): error [A-Z0-9]+.*$' "$_tsc_log" \
+                        | grep -vFf "$_baseline_cache" || true)
+                fi
+            fi
+        fi
+
+        if [ -z "$(echo "$_new_errors" | tr -d '[:space:]')" ]; then
+            success "  [tsc-gate] $_sid: tsc --noEmit has only pre-existing baseline errors — none introduced by this story"
+            return 0
+        fi
+
         error "  [tsc-gate] $_sid: TypeScript errors after story completed — story marked failed"
         error "  [tsc-gate] Fix required before next story runs. Log: ${_tsc_log##*/}"
         return 1

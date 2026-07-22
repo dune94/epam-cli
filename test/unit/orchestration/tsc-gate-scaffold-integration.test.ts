@@ -199,7 +199,7 @@ describe('B. Orch script — all 3 tsc gates have empty-src guard', () => {
 
   describe('Gate 1: story_tsc_gate()', () => {
     const fnIdx = guardsSrc.indexOf('story_tsc_gate()');
-    const block = guardsSrc.slice(fnIdx, fnIdx + 1600);
+    const block = guardsSrc.slice(fnIdx, fnIdx + 4200);
 
     it('story_tsc_gate() function exists', () => {
       expect(fnIdx).toBeGreaterThan(-1);

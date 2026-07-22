@@ -78,8 +78,32 @@ describe('spec-mode-runner.js — openspec brownfield archaeology block (Change 
   });
 
   it('archaeology block instructs openspec to identify the existing fix site', () => {
-    expect(specSrc).toMatch(/BROWNFIELD INVESTIGATION/);
+    expect(specSrc).toMatch(/BROWNFIELD MODE/);
     expect(specSrc).toMatch(/locationHint/);
+  });
+
+  it('archaeology block explicitly forbids tool use and requires JSON-only output', () => {
+    // GLM-5.1 emitted <search_fi...> XML on the first live run when given
+    // "you MUST identify the existing code path" without a no-tools constraint.
+    // The block must say both "no tools" and "JSON only" to prevent tool-call XML.
+    const archaeologyIdx = specSrc.indexOf('brownfieldArchaeologyBlock');
+    const region = specSrc.slice(archaeologyIdx, archaeologyIdx + 1000);
+    expect(region).toMatch(/no tools|no tool/i);
+    expect(region).toMatch(/JSON only|output JSON/i);
+  });
+
+  it('archaeology block constrains locationHint derivation to the Semble context already in the prompt', () => {
+    // Must tell the model to use ONLY what Semble injected — not to search externally.
+    const archaeologyIdx = specSrc.indexOf('brownfieldArchaeologyBlock');
+    const region = specSrc.slice(archaeologyIdx, archaeologyIdx + 1000);
+    expect(region).toMatch(/ONLY.*EXISTING CODE|already present in this prompt|Semble/i);
+  });
+
+  it('archaeology block instructs model to set locationHint to [] when no Semble context is available', () => {
+    // Prevents the model searching externally when Semble returns nothing.
+    const archaeologyIdx = specSrc.indexOf('brownfieldArchaeologyBlock');
+    const region = specSrc.slice(archaeologyIdx, archaeologyIdx + 1000);
+    expect(region).toMatch(/locationHint.*\[\]|\[\].*locationHint/s);
   });
 
   it('locationHint schema line is only added for brownfield openspec', () => {
@@ -100,7 +124,7 @@ describe('spec-mode-runner.js — openspec brownfield archaeology block (Change 
     // There must be no separate speckit brownfield archaeology injection
     const speckitBlockIdx = specSrc.indexOf('runSpeckitReview');
     const speckitSrc = specSrc.slice(speckitBlockIdx, speckitBlockIdx + 2000);
-    expect(speckitSrc).not.toMatch(/BROWNFIELD INVESTIGATION/);
+    expect(speckitSrc).not.toMatch(/BROWNFIELD MODE/);
   });
 
   it('brownfieldArchaeologyBlock is empty string when EPAM_BROWNFIELD is not 1', () => {

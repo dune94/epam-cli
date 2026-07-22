@@ -1488,7 +1488,7 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
   // locationHint feeds directly into the story agent's context so it opens the right file.
   const isBrownfieldOpenspec = process.env.EPAM_BROWNFIELD === '1' && agent === 'openspec';
   const brownfieldArchaeologyBlock = isBrownfieldOpenspec
-    ? `\n\nBROWNFIELD INVESTIGATION (mandatory — complete before writing any AC):\nThis is an existing codebase. Identify the specific file(s) and function(s) that currently handle the behavior described in this story. Set the "locationHint" field in your output to: [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this is the fix site>"}]. ACs must describe changes to those specific locations — do not propose new files, services, or abstractions.\n`
+    ? `\n\nBROWNFIELD MODE — output JSON only, no tools, no search.\nUsing ONLY the EXISTING CODE block already present in this prompt (injected above via Semble), identify which file(s) and function(s) currently handle the behavior described in this story. Set the "locationHint" field in your JSON output to: [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this is the fix site>"}]. If no relevant code appears in the Semble context above, set locationHint to []. ACs must describe changes to those existing locations — do not propose new files, services, or abstractions.\n`
     : '';
   const locationHintSchemaLine = isBrownfieldOpenspec
     ? `\n  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this is the fix site"}],`

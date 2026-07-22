@@ -30,7 +30,7 @@ const fs           = require('fs');
 const path         = require('path');
 const { execSync } = require('child_process');
 
-// Lazy-load semble-context so the module still works when semble is absent.
+// Lazy-load semble-context and codegraph-context; both fail gracefully when absent.
 let _semble = null;
 function getSemble() {
   if (_semble) return _semble;
@@ -40,6 +40,17 @@ function getSemble() {
     _semble = { sembleSearch: () => ({ results: [] }), resolveSembleBin: () => null };
   }
   return _semble;
+}
+
+let _codegraph = null;
+function getCodeGraph() {
+  if (_codegraph) return _codegraph;
+  try {
+    _codegraph = require('./codegraph-context');
+  } catch {
+    _codegraph = { isCodeGraphIndexed: () => false, queryCodeGraph: () => [] };
+  }
+  return _codegraph;
 }
 
 // ── Arg parsing ────────────────────────────────────────────────────────────
@@ -134,14 +145,18 @@ function buildRepoManifest(rootDir) {
 }
 
 // ── Repo scoring ───────────────────────────────────────────────────────────
-// Two-tier scoring. All repos go through both tiers so Semble can surface
-// the correct repo even when its name contains no ticket keywords.
+// Three-tier scoring. Runs every tier that is available so the highest-signal
+// method always wins regardless of which tools are installed.
 //
-//   Tier 1 — name/description/readme keyword match (fast, zero I/O, always)
-//   Tier 2 — Semble semantic search inside repo source (SEMBLE_ENABLED=1)
-//            Runs against EVERY repo, not just tier-1 winners, because the
-//            target repo's directory name often has no keyword overlap with
-//            the ticket (e.g. "azure.commerce.cdts" vs "promo discount mozio").
+//   Tier 1 — name/description/readme keyword match   (fast, zero I/O, always)
+//   Tier 2 — CodeGraph FTS5 symbol-name query        (CODEGRAPH_ENABLED=1, indexed repos only)
+//             Deterministic: finds functions literally named "applyReportDiscounts";
+//             5 pts per symbol hit, maximum 100 pts. Decisive when the target repo
+//             is indexed — an indexed repo wins by 50-100 pts over unindexed ones.
+//   Tier 3 — Semble semantic search                  (SEMBLE_ENABLED=1, all repos)
+//             Probabilistic: cosine similarity over embeddings. Kept as a fallback
+//             for repos that are not yet indexed in CodeGraph. Brittle (1-point
+//             margins), hence demoted to Tier 3.
 //
 // Returns repos sorted descending by combined score, sliced to topN.
 
@@ -155,12 +170,14 @@ function scoreRepos(issues, manifest, topN = 8) {
       .filter(w => !['with','that','this','from','have','will','when','then','also','been','were','they','them'].includes(w))
   )];
 
+  const cgEnabled   = process.env.CODEGRAPH_ENABLED === '1';
+  const cg          = cgEnabled ? getCodeGraph() : null;
+  const cgQuery     = words.slice(0, 10).join(' ');
+
   const sembleEnabled = process.env.SEMBLE_ENABLED === '1';
   const semble        = sembleEnabled ? getSemble() : null;
   const sembleBin     = semble ? semble.resolveSembleBin() : null;
-  // Prepend action verbs so Semble targets the SERVICE that HANDLES this domain
-  // (e.g. "applies discount" beats a docs repo that MENTIONS discount).
-  // Same technique used in spec-mode-runner.js's brownfield pathQuery.
+  // Action-verb prefix targets the SERVICE that HANDLES this domain (not docs that MENTION it).
   const sembleQuery   = `applies handles processes resolves ${words.slice(0, 15).join(' ')}`.slice(0, 300);
 
   const scored = manifest.map(repo => {
@@ -172,16 +189,23 @@ function scoreRepos(issues, manifest, topN = 8) {
       if (repoText.includes(word)) score += 3;
     }
 
-    // Tier 2 — Semble semantic search inside repo source.
-    // Runs against ALL repos (not just tier-1 winners) so the correct repo
-    // is found even when its directory name has zero keyword overlap with the
-    // ticket content (common in monorepos / internal naming conventions).
+    // Tier 2 — CodeGraph FTS5 symbol-name query (indexed repos only).
+    // BM25 scores are 70-100 per match. We count results (capped at 20) × 5 pts
+    // so an indexed repo with 10 symbol hits scores +50, far ahead of Tier 3.
+    if (cgEnabled && cg && cgQuery && cg.isCodeGraphIndexed(repo.path)) {
+      try {
+        const results = cg.queryCodeGraph(cgQuery, repo.path, 20);
+        score += Math.min((results || []).length, 20) * 5;
+      } catch { /* codegraph unavailable for this repo — skip */ }
+    }
+
+    // Tier 3 — Semble semantic search (all repos, probabilistic fallback).
+    // Runs only when CodeGraph didn't already score this repo decisively.
     if (sembleEnabled && sembleBin && sembleQuery) {
       try {
         const result = semble.sembleSearch(sembleQuery, repo.path, 3, 10);
         const sembleScore = (result.results || []).reduce((s, r) => s + (r.score || 0), 0);
-        // Semble cosine-similarity scores are in ~0.01–0.10 range; multiply by 1000
-        // to bring them into the same integer scale as the keyword tier (3 pts/hit).
+        // Semble cosine-similarity scores are ~0.01–0.10; multiply by 1000 to integer scale.
         score += Math.round(sembleScore * 1000);
       } catch { /* semble unavailable for this repo — skip */ }
     }

@@ -245,7 +245,7 @@ describe('codeline-discovery.js — source invariants', () => {
 
   it('scoreRepos uses Semble when SEMBLE_ENABLED=1, not grep', () => {
     const scoreIdx = src.indexOf('function scoreRepos');
-    const scoreFn  = src.slice(scoreIdx, scoreIdx + 2000);
+    const scoreFn  = src.slice(scoreIdx, scoreIdx + 3000);
     expect(scoreFn).toMatch(/SEMBLE_ENABLED.*=.*'1'|semble.*Enabled/i);
     expect(scoreFn).toMatch(/sembleSearch|semble\.sembleSearch/);
     // Must NOT contain the old grep pattern that scanned all source files

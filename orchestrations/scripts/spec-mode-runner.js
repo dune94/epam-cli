@@ -20,7 +20,32 @@ const { spawn, execSync } = require('node:child_process');
 // Semble code-context retrieval — loaded lazily so the module is optional.
 // When SEMBLE_ENABLED=1 and the binary is present, fetchSembleContext() returns
 // a formatted block of existing-code snippets to inject into the spec prompt.
+// ── Code context injection ─────────────────────────────────────────────────
+// Brownfield: CodeGraph (deterministic AST graph — exact symbols + callers +
+//   blast radius).  Falls back to Semble if CodeGraph is unavailable/unindexed.
+// Greenfield: Semble only (no graph needed; semantic similarity finds analogues).
+
 let _semble;
+let _codegraph;
+
+function fetchCodeGraphContext(story) {
+  if (process.env.CODEGRAPH_ENABLED !== '1') return null;
+  try {
+    if (!_codegraph) _codegraph = require('./lib/codegraph-context');
+    const repoPath = resolveCodelinePath(story);
+    if (!repoPath || !fs.existsSync(repoPath)) return null;
+    if (!_codegraph.isCodeGraphIndexed(repoPath)) return null;
+
+    const domainTerms = story.title
+      .replace(/\b(the|a|an|is|not|for|in|of|and|or|to|as|at|by|be|was|are|it|its|that|this|with)\b/gi, '')
+      .trim()
+      .slice(0, 200);
+    const query = `applies handles processes resolves ${domainTerms}`.slice(0, 300);
+    const output = _codegraph.exploreCodeGraph(query, repoPath, { maxFiles: 4, maxChars: 12000 });
+    return output || null;
+  } catch { return null; }
+}
+
 function fetchSembleContext(story) {
   if (process.env.SEMBLE_ENABLED !== '1') return '';
   try {
@@ -40,9 +65,7 @@ function fetchSembleContext(story) {
       return `\nEXISTING CODE CONTEXT (from semble semantic search — use this to write precise, grounded ACs):\n${block}\n`;
     }
 
-    // Brownfield: second query targets the service/handler boundary rather than the symptom.
-    // Strips stop-words and prefixes with action verbs to find the code path that *implements*
-    // the domain behavior, not just code that mentions the same keywords.
+    // Brownfield Semble fallback: two queries (symptom + service-boundary).
     const domainTerms = story.title
       .replace(/\b(the|a|an|is|not|for|in|of|and|or|to|as|at|by|be|was|are|it|its|that|this|with)\b/gi, '')
       .trim()
@@ -50,7 +73,6 @@ function fetchSembleContext(story) {
     const pathQuery = `applies handles processes calculates resolves ${domainTerms}`.slice(0, 400);
     const pathResult = _semble.sembleSearch(pathQuery, repoPath, 5, 30);
 
-    // Combine and deduplicate by file+line
     const seen = new Set();
     const combined = [];
     for (const r of [...(symptomResult.results || []), ...(pathResult.results || [])]) {
@@ -59,10 +81,23 @@ function fetchSembleContext(story) {
     }
     if (combined.length === 0) return '';
     const block = _semble.formatAsText({ results: combined });
-    return `\nEXISTING CODE (brownfield — identify the code path that handles this behavior, then specify how to fix it; do not propose new abstractions):\n${block}\n`;
-  } catch (e) {
-    return '';
+    return `\nEXISTING CODE (brownfield fallback via Semble — identify the code path that handles this behavior, then specify how to fix it; do not propose new abstractions):\n${block}\n`;
+  } catch { return ''; }
+}
+
+// Returns the code context block to inject into the spec prompt.
+// Brownfield: tries CodeGraph first (exact), falls back to Semble.
+// Greenfield: Semble only.
+function fetchExistingCodeContext(story) {
+  const isBrownfield = process.env.EPAM_BROWNFIELD === '1';
+  if (isBrownfield) {
+    const cgOutput = fetchCodeGraphContext(story);
+    if (cgOutput) {
+      return `\nEXISTING CODE (CodeGraph static analysis — exact symbols, callers, blast radius):\n${cgOutput}\n`;
+    }
+    // Fall through to Semble
   }
+  return fetchSembleContext(story);
 }
 
 function resolveCodelinePath(story) {
@@ -1481,14 +1516,14 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
   // maximum prominence, not just a repeat of the same mid-prompt phrasing.
   const forcedRetryBlock = forcedRetryNote ? `${forcedRetryNote}\n\n` : '';
 
-  const sembleContext = fetchSembleContext(story);
+  const sembleContext = fetchExistingCodeContext(story);
 
   // Brownfield archaeology block — injected for openspec only when EPAM_BROWNFIELD=1.
   // openspec must identify the existing change site before writing any AC.
   // locationHint feeds directly into the story agent's context so it opens the right file.
   const isBrownfieldOpenspec = process.env.EPAM_BROWNFIELD === '1' && agent === 'openspec';
   const brownfieldArchaeologyBlock = isBrownfieldOpenspec
-    ? `\n\nBROWNFIELD MODE — output JSON only, no tools, no search.\nUsing ONLY the EXISTING CODE block already present in this prompt (injected above via Semble), identify which file(s) and function(s) currently handle the behavior described in this story. Set the "locationHint" field in your JSON output to: [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this is the fix site>"}]. If no relevant code appears in the Semble context above, set locationHint to []. ACs must describe changes to those existing locations — do not propose new files, services, or abstractions.\n`
+    ? `\n\nBROWNFIELD MODE — output JSON only, no tools, no search.\nUsing ONLY the EXISTING CODE block already present in this prompt (injected above via CodeGraph or Semble), identify which file(s) and function(s) currently handle the behavior described in this story. Set the "locationHint" field in your JSON output to: [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this is the fix site>"}]. If no relevant code appears in the existing code block above, set locationHint to []. ACs must describe changes to those existing locations — do not propose new files, services, or abstractions.\n`
     : '';
   const locationHintSchemaLine = isBrownfieldOpenspec
     ? `\n  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this is the fix site"}],`

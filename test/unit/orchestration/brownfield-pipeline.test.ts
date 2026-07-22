@@ -346,38 +346,54 @@ describe('BF13: codeline-discovery.js exists and has correct interface', () => {
   });
 });
 
-// ─── BF14: dry-run returns first git repo ────────────────────────────────────
+// ─── BF14: dry-run uses scored selection, not alphabetical-first ─────────────
+// Bug: old dryRunDiscovery() picked manifest[0] (alphabetically first). When the
+// LLM timed out and fell back to dry-run, it selected cx-shared instead of
+// azure.commerce.cdts. Fix: scoreRepos() always runs first; selectBestCandidate()
+// picks the highest-scored repo. The reason must contain "scored-fallback".
 
-describe('BF14: codeline-discovery.js dry-run returns first git repo found', () => {
-  it('REAL: dry-run picks the first valid git repo and derives a codeline name', () => {
+describe('BF14: codeline-discovery.js dry-run uses scored selection', () => {
+  it('REAL: dry-run picks highest-scored repo (not first alphabetically)', () => {
     const dir  = mkdtempSync(join(tmpdir(), 'bf-disc-dry-'));
     try {
-      // Create two fake git repos under a root dir
       const root = join(dir, 'repos');
       mkdirSync(root);
-      for (const name of ['azure.commerce.cdts', 'next.gotransit.com']) {
-        const rp = join(root, name);
-        mkdirSync(join(rp, '.git'), { recursive: true });
-        writeFileSync(join(rp, 'package.json'), JSON.stringify({ name, description: `${name} service` }));
-      }
-      // Write a minimal issues file
+
+      // z-gotransit (last alphabetically, but with no domain signal)
+      const irrelevant = join(root, 'z-gotransit');
+      mkdirSync(join(irrelevant, '.git'), { recursive: true });
+      writeFileSync(join(irrelevant, 'package.json'), JSON.stringify({ name: 'z-gotransit', description: 'generic transit service' }));
+
+      // azure.commerce.cdts (alphabetically first, has domain signal via description)
+      const relevant = join(root, 'azure.commerce.cdts');
+      mkdirSync(join(relevant, '.git'), { recursive: true });
+      writeFileSync(join(relevant, 'package.json'), JSON.stringify({ name: 'azure.commerce.cdts', description: 'Mozio promo discount commerce service' }));
+
       const issuesPath = join(dir, 'issues.json');
-      writeFileSync(issuesPath, JSON.stringify([{ jiraKey: 'AMSD-1820', title: 'Test ticket', description: '' }]));
+      writeFileSync(issuesPath, JSON.stringify([{
+        jiraKey: 'AMSD-1820',
+        title: '[Mozio] The Promo code discount is not shown in email confirmation',
+        description: 'Mozio promo discount missing from email.'
+      }]));
       const outPath = join(dir, 'discovery.json');
 
       execFileSync(NODE_BIN, [
+        '--require', 'module',
         DISCOVERY_JS,
         '--issues', issuesPath,
         '--root',   root,
         '--out',    outPath,
         '--dry-run',
-      ], { encoding: 'utf8' });
+      ], { encoding: 'utf8', env: { ...process.env, SEMBLE_ENABLED: '0' } });
 
       const result = JSON.parse(readFileSync(outPath, 'utf8'));
       expect(result.codelines).toHaveLength(1);
+      // azure.commerce.cdts has domain signal (mozio/promo/discount); must win
       expect(result.codelines[0].path).toContain('azure.commerce.cdts');
       expect(result.codelines[0].name).toBeTruthy();
-      expect(result.codelines[0].reason).toMatch(/dry-run/i);
+      // Reason must say scored-fallback, not "First git repo"
+      expect(result.codelines[0].reason).toMatch(/scored-fallback/i);
+      expect(result.codelines[0].reason).not.toMatch(/first git repo/i);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -54,27 +54,35 @@ describe('semble-context.js: module API', () => {
   });
 });
 
-// ── codeline-discovery.js: keyword grep scoring (semble NOT used here) ───
+// ── codeline-discovery.js: Semble-based scoring (replaces grep) ───────────
+// grep -ril was removed: it scanned all source files, consuming O(repo-size)
+// time and effectively consumed too many tokens on large repos like the
+// Metrolinx codebase. Semble semantic search replaces it — targeted snippets
+// via vector index, 60 s timeout, SEMBLE_ENABLED=1 guard.
 
-describe('codeline-discovery.js: discovery scoring uses keyword grep, not semble', () => {
-  it('defines scoreRepos() using keyword grep', () => {
+describe('codeline-discovery.js: discovery scoring uses Semble, not grep', () => {
+  it('defines scoreRepos() with Semble tier', () => {
     expect(DISCOVERY_SRC).toMatch(/function scoreRepos\s*\(/);
-    expect(DISCOVERY_SRC).toContain('grep -ril');
+    expect(DISCOVERY_SRC).toMatch(/semble.*search|sembleSearch/i);
   });
 
-  it('calls scoreRepos(issues, manifest) in the main flow', () => {
-    expect(DISCOVERY_SRC).toContain('scoreRepos(issues, manifest)');
+  it('does NOT use grep -ril for source scanning', () => {
+    expect(DISCOVERY_SRC).not.toContain('grep -ril');
   });
 
-  it('does NOT import semble-context — semble belongs in spec, not discovery', () => {
-    // Semble scoring against repo names/metadata is low-signal for discovery:
-    // "azure.commerce.cdts" doesn't mention "promo" so it scores below generic
-    // gotransit API repos. Grep searches INSIDE src/ giving the correct signal.
-    expect(DISCOVERY_SRC).not.toContain("require('./semble-context')");
+  it('calls scoreRepos before DRY_RUN branch', () => {
+    const scoringCallIdx  = DISCOVERY_SRC.indexOf('const candidates = scoreRepos');
+    const dryRunBranchIdx = DISCOVERY_SRC.indexOf('if (DRY_RUN)');
+    expect(scoringCallIdx).toBeGreaterThan(-1);
+    expect(scoringCallIdx).toBeLessThan(dryRunBranchIdx);
   });
 
-  it('logs pre-filter results with scores', () => {
-    expect(DISCOVERY_SRC).toContain('Keyword pre-filter: top');
+  it('imports semble-context lazily for Semble scoring', () => {
+    expect(DISCOVERY_SRC).toContain("require('./semble-context')");
+  });
+
+  it('logs repo scoring results', () => {
+    expect(DISCOVERY_SRC).toContain('Repo scoring: top');
   });
 });
 

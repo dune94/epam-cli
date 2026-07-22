@@ -30,6 +30,18 @@ const fs           = require('fs');
 const path         = require('path');
 const { execSync } = require('child_process');
 
+// Lazy-load semble-context so the module still works when semble is absent.
+let _semble = null;
+function getSemble() {
+  if (_semble) return _semble;
+  try {
+    _semble = require('./semble-context');
+  } catch {
+    _semble = { sembleSearch: () => ({ results: [] }), resolveSembleBin: () => null };
+  }
+  return _semble;
+}
+
 // ── Arg parsing ────────────────────────────────────────────────────────────
 const argv    = process.argv.slice(2);
 const getArg  = (flag, def = '') => { const i = argv.indexOf(flag); return i !== -1 ? argv[i + 1] : def; };
@@ -113,18 +125,16 @@ function buildRepoManifest(rootDir) {
   return entries;
 }
 
-// ── Keyword pre-filter ─────────────────────────────────────────────────────
-// Extract meaningful terms from ticket titles/descriptions, grep each repo,
-// score by hit count, and return the top N candidates.  This shrinks the
-// LLM prompt dramatically when there are many repos (e.g. 27) — the model
-// only needs to reason over the most plausible candidates, not the full manifest.
-// Discovery remains fully agentic: the LLM makes the final decision.
+// ── Repo scoring ───────────────────────────────────────────────────────────
+// Extracts meaningful terms from ticket content, then scores each repo using:
+//   1. Name/description/readme keyword match (fast, zero I/O)
+//   2. Semble semantic search inside each repo's source (when SEMBLE_ENABLED=1)
 //
-// NOTE: semble is NOT used here. Semble's semantic scoring is applied to repo
-// names/metadata which is low-signal for discovery (e.g. "azure.commerce.cdts"
-// doesn't mention "promo" or "Mozio").  Grep searches INSIDE src/ which gives
-// the correct signal.  Semble is used downstream in spec-mode-runner.js where
-// the codeline is already known and we want targeted snippets for the prompt.
+// Semble replaces the old grep approach: grep scanned all source files and
+// consumed O(repo-size) tokens; Semble returns a small ranked snippet set via
+// vector search with a 60 s timeout cap, regardless of repo size.
+//
+// Returns repos sorted descending by score, sliced to topN.
 
 function scoreRepos(issues, manifest, topN = 8) {
   const text = issues.map(i => `${i.title || ''} ${(i.description || '').slice(0, 500)}`).join(' ');
@@ -136,44 +146,50 @@ function scoreRepos(issues, manifest, topN = 8) {
       .filter(w => !['with','that','this','from','have','will','when','then','also','been','were','they','them'].includes(w))
   )];
 
+  const sembleEnabled = process.env.SEMBLE_ENABLED === '1';
+  const semble        = sembleEnabled ? getSemble() : null;
+  const sembleBin     = semble ? semble.resolveSembleBin() : null;
+  const sembleQuery   = words.slice(0, 20).join(' ');
+
   const scored = manifest.map(repo => {
     let score = 0;
-    // Name/description match (high signal — no file I/O needed)
+
+    // Tier 1 — name/description keyword match (no I/O, always runs)
     const repoText = `${repo.name} ${repo.packageName} ${repo.description} ${repo.readmeExcerpt}`.toLowerCase();
     for (const word of words) {
       if (repoText.includes(word)) score += 3;
     }
-    // Grep src files for keyword hits (capped to avoid slow scans on large repos)
-    if (words.length > 0 && score < 20) {
+
+    // Tier 2 — Semble semantic search inside repo source (when available)
+    if (sembleEnabled && sembleBin && sembleQuery) {
       try {
-        const pattern = words.slice(0, 10).join('|');
-        const result = execSync(
-          `grep -ril --include="*.ts" --include="*.js" -E "${pattern}" "${repo.path}/src" 2>/dev/null | head -5`,
-          { encoding: 'utf8', timeout: 8000 }
-        ).trim();
-        score += result ? result.split('\n').filter(Boolean).length * 2 : 0;
-      } catch { /* grep failed or timed out — skip */ }
+        const result = semble.sembleSearch(sembleQuery, repo.path, 3, 10);
+        const sembleScore = (result.results || []).reduce((s, r) => s + (r.score || 0), 0);
+        score += Math.round(sembleScore * 10);
+      } catch { /* semble unavailable for this repo — skip */ }
     }
+
     return { ...repo, score };
   });
 
   scored.sort((a, b) => b.score - a.score);
   const top = scored.slice(0, topN);
-  log(`Keyword pre-filter: top ${top.length} candidate(s) from ${manifest.length} repos (scores: ${top.map(r => `${r.name}=${r.score}`).join(', ')})`);
+  log(`Repo scoring: top ${top.length} candidate(s) from ${manifest.length} repos (scores: ${top.map(r => `${r.name}=${r.score}`).join(', ')})`);
   return top;
 }
 
-// ── Dry-run fallback ───────────────────────────────────────────────────────
-// Returns the first git repo found — used for testing without LLM calls.
+// ── Best-candidate selection (used by dry-run and LLM-failure fallback) ───
+// Picks the highest-scored repo from a pre-scored (sorted descending) list.
+// Never selects by alphabetical position — that was the bug that caused wrong
+// codeline selection when the LLM timed out.
 
-function dryRunDiscovery(issues, manifest) {
-  warn('DRY-RUN mode — skipping LLM call, selecting first git repo in manifest.');
-  if (manifest.length === 0) {
+function selectBestCandidate(scored) {
+  if (scored.length === 0) {
     throw new Error('No git repositories found under JIRA_CODELINE_ROOT — cannot discover codelines.');
   }
-  const repo = manifest[0];
+  const repo = scored[0]; // already sorted descending by scoreRepos()
   const name = deriveCodelineName(repo.name);
-  return { codelines: [{ name, path: repo.path, reason: '[dry-run] First git repo in manifest' }] };
+  return { codelines: [{ name, path: repo.path, reason: `[scored-fallback] Highest candidate (score: ${repo.score})` }] };
 }
 
 // ── Codeline name derivation ───────────────────────────────────────────────
@@ -268,20 +284,22 @@ function callLlm(prompt) {
     process.exit(1);
   }
 
+  // Score + rank repos (always — used for both the LLM candidate list and fallback selection).
+  const candidates = scoreRepos(issues, manifest);
+
   let result;
   if (DRY_RUN) {
-    result = dryRunDiscovery(issues, manifest);
+    // Dry-run: use the highest-scored candidate, never the first alphabetically.
+    warn('DRY-RUN mode — skipping LLM call, selecting highest-scored repo.');
+    result = selectBestCandidate(candidates);
   } else {
-    // Pre-filter to top candidates before building the LLM prompt.
-    // Keeps the prompt small enough to avoid timeouts on large codeline roots.
-    const candidates = manifest.length > 5 ? scoreRepos(issues, manifest) : manifest;
     log(`Calling LLM (${MODEL}) to match ${issues.length} ticket(s) to ${candidates.length} candidate repo(s)...`);
     const prompt = buildDiscoveryPrompt(issues, candidates);
     try {
       result = callLlm(prompt);
     } catch (e) {
-      warn(`LLM call failed: ${e.message}. Falling back to dry-run selection.`);
-      result = dryRunDiscovery(issues, candidates);
+      warn(`LLM call failed: ${e.message}. Using highest-scored candidate as fallback.`);
+      result = selectBestCandidate(candidates);
     }
   }
 

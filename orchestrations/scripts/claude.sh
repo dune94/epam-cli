@@ -2968,13 +2968,62 @@ run_tsc_verification() {
     _tsc_output=$(cd "$PROJECT_ROOT" && "$_node_cmd" ./node_modules/.bin/tsc --noEmit 2>&1) || _tsc_exit=$?
 
     if [ "$_tsc_exit" -ne 0 ]; then
+        # Brownfield: a large existing repo can have pre-existing tsc errors in
+        # files no story ever touches (live, 2026-07-22 — Redis/Stripe/OTel type
+        # declarations, a jsonwebtoken signature mismatch, unrelated to AMSD-1820's
+        # Mozio/promo-discount work). Whole-project `tsc --noEmit` fails identically
+        # for every story regardless of what it changed, and no amount of model
+        # escalation can fix errors in files the story never touches — confirmed by
+        # HealingBroken firing 4+ times on the exact same unrelated diagnosis before
+        # exhausting all 8 retries. Fix: diff against a baseline error set captured
+        # from JIRA_BASELINE_BRANCH (the same baseline review-ranger/mutant-hunter
+        # already use) — only fail on errors NEW relative to that baseline, i.e.
+        # errors this story's own changes actually introduced.
+        local _new_errors="$_tsc_output"
+        local _baseline_sha_file="$LOG_DIR/phase-baseline-sha.txt"
+        if [ -f "$_baseline_sha_file" ]; then
+            local _baseline_sha
+            _baseline_sha=$(tr -d '[:space:]' < "$_baseline_sha_file")
+            if [ -n "$_baseline_sha" ]; then
+                local _baseline_cache="$LOG_DIR/tsc-baseline-errors-${_baseline_sha:0:12}.txt"
+                if [ ! -f "$_baseline_cache" ]; then
+                    local _wt_dir
+                    _wt_dir=$(mktemp -d)
+                    if git -C "$PROJECT_ROOT" worktree add --detach "$_wt_dir" "$_baseline_sha" >/dev/null 2>&1; then
+                        # node_modules is gitignored — `worktree add` only checks out
+                        # tracked files, so it's absent in the new worktree. Without
+                        # it, tsc silently fails to run (module not found) and the
+                        # baseline cache ends up empty, making every current-state
+                        # error look "new" — the exact opposite of this fix's intent.
+                        ln -s "$PROJECT_ROOT/node_modules" "$_wt_dir/node_modules" 2>/dev/null || true
+                        ( cd "$_wt_dir" && "$_node_cmd" ./node_modules/.bin/tsc --noEmit 2>&1 \
+                            | grep -oE '^[^(]+\([0-9]+,[0-9]+\): error [A-Z0-9]+' ) > "$_baseline_cache" 2>/dev/null || true
+                        git -C "$PROJECT_ROOT" worktree remove --force "$_wt_dir" >/dev/null 2>&1 || true
+                    fi
+                    rm -rf "$_wt_dir" 2>/dev/null || true
+                fi
+                if [ -f "$_baseline_cache" ]; then
+                    # Extract the same "<file>(<line>,<col>): error <CODE>" key from
+                    # the current output, then keep only lines whose key is absent
+                    # from the baseline set — genuinely new errors this story introduced.
+                    _new_errors=$(echo "$_tsc_output" | grep -oE '^[^(]+\([0-9]+,[0-9]+\): error [A-Z0-9]+.*$' \
+                        | grep -vFf "$_baseline_cache" || true)
+                fi
+            fi
+        fi
+
+        if [ -z "$(echo "$_new_errors" | tr -d '[:space:]')" ]; then
+            success "  [tsc-verify] $story_id: tsc --noEmit has only pre-existing baseline errors — none introduced by this story"
+            return 0
+        fi
+
         warning "  [tsc-verify] $story_id: TypeScript errors — feeding into retry loop"
         VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe orchestrator ran `tsc --noEmit` after your files were written and it failed (exit code %d). Fix the type errors so tsc exits 0.\n\n```\n%s\n```\n' \
-            "$_tsc_exit" "${_tsc_output:0:4000}")
+            "$_tsc_exit" "${_new_errors:0:4000}")
         {
             echo ""
-            echo "=== tsc --noEmit failed (exit $_tsc_exit) ==="
-            echo "$_tsc_output" | head -60
+            echo "=== tsc --noEmit failed (exit $_tsc_exit) — new errors introduced by this story ==="
+            echo "$_new_errors" | head -60
         } >> "$output_file"
         return 1
     fi

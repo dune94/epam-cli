@@ -34,7 +34,7 @@ describe('claude.sh — run_tsc_verification exists and mirrors the external gat
   });
 
   const fnIdx = claudeSrc.indexOf('run_tsc_verification()');
-  const fnBlock = claudeSrc.slice(fnIdx, fnIdx + 2200);
+  const fnBlock = claudeSrc.slice(fnIdx, fnIdx + 6000);
 
   it('respects SKIP_STORY_TSC_GATE (same skip flag as the external gate)', () => {
     expect(fnBlock).toMatch(/SKIP_STORY_TSC_GATE/);
@@ -54,7 +54,12 @@ describe('claude.sh — run_tsc_verification exists and mirrors the external gat
     // .ts file; a live run showed every syntax-class error observed was in a
     // .test.ts file written by a test-engineer story — precisely the case
     // this skip used to disable the check for.
-    expect(fnBlock).not.toMatch(/test-engineer.*return 0/is);
+    // Narrow window: the full fnBlock (widened for the 2026-07-22 baseline-diff
+    // fix) now contains unrelated `return 0` statements further down (the
+    // baseline-diff success path), which would false-positive-match this dotall
+    // regex against the test-engineer comment near the top of the function.
+    const preTscRunBlock = claudeSrc.slice(fnIdx, claudeSrc.indexOf('local _tsc_output', fnIdx));
+    expect(preTscRunBlock).not.toMatch(/test-engineer.*return 0/is);
   });
 
   it('runs tsc --noEmit against PROJECT_ROOT', () => {
@@ -68,14 +73,16 @@ describe('claude.sh — run_tsc_verification exists and mirrors the external gat
 
 describe('claude.sh — tsc verification sets VERIFICATION_FAILURE (same channel as run_external_verification)', () => {
   const fnIdx = claudeSrc.indexOf('run_tsc_verification()');
-  const fnBlock = claudeSrc.slice(fnIdx, fnIdx + 2200);
+  const fnBlock = claudeSrc.slice(fnIdx, fnIdx + 6000);
 
   it('sets VERIFICATION_FAILURE on tsc failure', () => {
     expect(fnBlock).toMatch(/VERIFICATION_FAILURE=\$\(printf/);
   });
 
   it('includes the tsc output in the VERIFICATION_FAILURE message (bounded to 4000 chars)', () => {
-    expect(fnBlock).toMatch(/_tsc_output:0:4000/);
+    // 2026-07-22: the message now carries _new_errors (post baseline-diff),
+    // not the raw _tsc_output — only errors this story actually introduced.
+    expect(fnBlock).toMatch(/_new_errors:0:4000/);
   });
 
   it('appends the failure section to output_file (same as external verification)', () => {

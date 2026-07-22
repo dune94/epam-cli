@@ -130,7 +130,11 @@ const sites: Site[] = [
     // ($_pfa_prompt_this_attempt, rebuilt each iteration with a corrective
     // note on retry) and the old `if ...; then step_emit "pass"` shape
     // became `... || _pfa_call_ok=0` followed by separate violation checks.
-    callAnchor: 'run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "team-lead-agent" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log" || _pfa_call_ok=0',
+    // Anchor updated (2026-07-22): the story_id argument ("${PHASE:-unknown}")
+    // was removed — passing the phase name as story_id polluted agent-activity's
+    // story_id field, breaking "stories touched" counts (a 1-story PRD showed 2
+    // distinct story_id values). This call has no story_id now — it's phase-level.
+    callAnchor: 'run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "team-lead-agent" 2>&1 | tee "$assessment_log" || _pfa_call_ok=0',
     needsTools: true,
     reason: 'prompt instructs jq against the PRD, profiles.json read/write, and flock JSONL appends (FIXED 2026-07-08)',
   },
@@ -142,14 +146,18 @@ const sites: Site[] = [
     // no `set -o pipefail`, so `if cmd | tee file; then` always evaluated
     // tee's exit status, never the real tool call's -- see the
     // phase-assessment real-output-gate fix).
-    callAnchor: 'run_orch_prompt_with_tools "$_pa_prompt" "team-lead-agent" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"',
+    // Anchor updated (2026-07-22): story_id argument removed — see the matching
+    // note at Step 0.5 above.
+    callAnchor: 'run_orch_prompt_with_tools "$_pa_prompt" "team-lead-agent" 2>&1 | tee "$assessment_log"',
     needsTools: true,
     reason: 'prompt instructs writing a report file, updating PRD agentRole fields, and flock JSONL appends (FIXED 2026-07-08)',
   },
   {
     label: 'Step 0.6 hybrid pre-coordination',
     src: 'orch',
-    callAnchor: 'run_orch_prompt_with_tools "$_hpc_prompt" "spec-coordinator" "${PHASE:-unknown}" 2>&1 | tee "$coord_log"',
+    // Anchor updated (2026-07-22): story_id argument removed — see the matching
+    // note at Step 0.5 above.
+    callAnchor: 'run_orch_prompt_with_tools "$_hpc_prompt" "spec-coordinator" 2>&1 | tee "$coord_log"',
     needsTools: true,
     reason: 'prompt instructs reading the PRD and flock-appending real JSONL messages (FIXED 2026-07-08)',
   },

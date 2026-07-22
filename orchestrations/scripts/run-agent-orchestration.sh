@@ -3062,7 +3062,11 @@ Fix this and retry. Do not repeat the same mistake."
         fi
 
         local _pfa_call_ok=1
-        run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "team-lead-agent" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log" || _pfa_call_ok=0
+        # No story_id — this is a phase-level assessment, not tied to any single
+        # story. Passing "${PHASE:-unknown}" here previously polluted agent-activity's
+        # story_id field with the phase name ("core"), making "stories touched" counts
+        # wrong (a 1-story PRD showed 2 distinct story_id values: the real story + "core").
+        run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "team-lead-agent" 2>&1 | tee "$assessment_log" || _pfa_call_ok=0
 
         if [ "$_pfa_call_ok" -eq 0 ]; then
             _pfa_corrective_note="the tool call itself failed (non-zero exit) — check $assessment_log"
@@ -3364,7 +3368,8 @@ COORD_EOF
         [ "$_hpc_attempt" -ge 1 ] && _hpc_prompt="RETRY (attempt 2): The previous invocation produced no output. Use your tools to read the PRD, write coordination messages to agent-messages.jsonl, and write the summary log now.
 
 $coord_prompt"
-        run_orch_prompt_with_tools "$_hpc_prompt" "spec-coordinator" "${PHASE:-unknown}" 2>&1 | tee "$coord_log"
+        # No story_id — phase-level coordination call, not tied to a single story.
+        run_orch_prompt_with_tools "$_hpc_prompt" "spec-coordinator" 2>&1 | tee "$coord_log"
         if [ -s "$coord_log" ]; then
             _hpc_ok=1
         else
@@ -4447,7 +4452,8 @@ ${_sc_note}"
                 [ "$_sc_attempt" -ge 1 ] && _sc_run_prompt="RETRY (attempt 2): Previous attempt did not update profiles.json. Read ${AGENT_PROFILES_FILE}, find the exact flagged note, and rewrite it now.
 
 $_sc_prompt"
-                if run_orch_prompt_with_tools "$_sc_run_prompt" "skills_audit" "${PHASE:-unknown}" > "$LOG_DIR/skills-coordinator-${PHASE}.log" 2>&1; then
+                # No story_id — phase-level audit, not tied to a single story.
+                if run_orch_prompt_with_tools "$_sc_run_prompt" "skills_audit" > "$LOG_DIR/skills-coordinator-${PHASE}.log" 2>&1; then
                     if jq empty "$AGENT_PROFILES_FILE" 2>/dev/null; then
                         success "  [SkillsAudit] Rewrote contradictory note for [${_sc_role}]"
                         break
@@ -4579,7 +4585,8 @@ else
 
 $_tc_prompt"
                 fi
-                if run_orch_prompt_with_tools "$_tc_run_prompt" "tools_audit" "${PHASE:-unknown}" > "$LOG_DIR/tools-coordinator-${PHASE}.log" 2>&1; then
+                # No story_id — phase-level audit, not tied to a single story.
+                if run_orch_prompt_with_tools "$_tc_run_prompt" "tools_audit" > "$LOG_DIR/tools-coordinator-${PHASE}.log" 2>&1; then
                     if bash -n "$_tc_path" 2>/dev/null; then
                         success "  [ToolsAudit] Rewrote broken tool [${_tc_tool}]"
                         break
@@ -4763,7 +4770,9 @@ PROMPT_EOF
 
 $assessment_prompt"
         fi
-        run_orch_prompt_with_tools "$_pa_prompt" "team-lead-agent" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"
+        # No story_id — phase-level assessment, not tied to any single story
+        # (see the matching comment at the pre-phase assessment call site).
+        run_orch_prompt_with_tools "$_pa_prompt" "team-lead-agent" 2>&1 | tee "$assessment_log"
         local _assessment_rc=${PIPESTATUS[0]}
 
         if [ "$_assessment_rc" -ne 0 ]; then

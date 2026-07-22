@@ -1,6 +1,11 @@
 'use strict';
 /**
- * jira-client.js — Minimal Jira REST API v2/v3 client for writeback and ingestion.
+ * jira-client.js — Read-only Jira REST API v2/v3 client for ingestion.
+ *
+ * This project NEVER writes to Jira. There is no addComment, transitionIssue,
+ * updateField, or createIssue function in this file — not gated behind a flag,
+ * removed entirely. request() only ever issues GET requests; there is no
+ * method parameter, so a write call cannot even be constructed here.
  *
  * Reads credentials from environment:
  *   JIRA_URL    — https://your-org.atlassian.net or http://localhost:8080 (no trailing slash)
@@ -12,10 +17,7 @@
  *
  * Usage:
  *   const jira = require('./lib/jira-client');
- *   await jira.addComment('PROJ-123', 'CPA estimate: 2.1 min / $0.48');
- *   await jira.transitionIssue('PROJ-123', 'In Review');
  *   const issue = await jira.getIssue('PROJ-123');
- *   const created = await jira.createIssue('PROJ', 'Story title', 'Description text', 'Story');
  *   const { issues } = await jira.searchIssues('project = PROJ AND status = "To Do"');
  */
 
@@ -33,41 +35,24 @@ if (!CONFIGURED) {
   process.stderr.write('[jira-client] JIRA_URL / JIRA_EMAIL / JIRA_TOKEN not set — running in no-op mode\n');
 }
 
-// ── HTTP helper ────────────────────────────────────────────────────────────
+// ── HTTP helper (GET only — no method parameter exists) ────────────────────
 
-// HARD BLOCK — no script in this project may write to any client system.
-// Every write-capable Jira call (addComment, transitionIssue, updateField,
-// createIssue) routes through this function. Blocking every non-GET method
-// here, unconditionally, makes writes structurally impossible regardless of
-// env flags, call-site bugs, or future code added anywhere else in the
-// pipeline — a per-caller flag already failed to prevent a live write once.
-const READ_ONLY_METHODS = new Set(['GET']);
-
-function request(method, path, body) {
+function request(path) {
   return new Promise((resolve, reject) => {
-    if (!READ_ONLY_METHODS.has(String(method).toUpperCase())) {
-      reject(new Error(
-        `[jira-client] BLOCKED: write method ${method} to ${path} — this project never writes to client systems.`
-      ));
-      return;
-    }
     if (!CONFIGURED) { resolve({}); return; }
 
-    const parsed  = url.parse(`${JIRA_URL}${path}`);
-    const proto   = parsed.protocol === 'https:' ? https : http;
-    const auth    = Buffer.from(`${JIRA_EMAIL}:${JIRA_TOKEN}`).toString('base64');
-    const payload = body ? JSON.stringify(body) : null;
+    const parsed = url.parse(`${JIRA_URL}${path}`);
+    const proto  = parsed.protocol === 'https:' ? https : http;
+    const auth   = Buffer.from(`${JIRA_EMAIL}:${JIRA_TOKEN}`).toString('base64');
 
     const options = {
       hostname: parsed.hostname,
       port:     parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
       path:     parsed.path,
-      method,
+      method:   'GET',
       headers: {
-        'Authorization':  `Basic ${auth}`,
-        'Accept':         'application/json',
-        'Content-Type':   'application/json',
-        ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
+        'Authorization': `Basic ${auth}`,
+        'Accept':        'application/json',
       },
     };
 
@@ -85,95 +70,18 @@ function request(method, path, body) {
     });
 
     req.on('error', reject);
-    if (payload) req.write(payload);
     req.end();
   });
 }
 
-// ── Public API ─────────────────────────────────────────────────────────────
+// ── Public API — reads only ─────────────────────────────────────────────────
 
 /**
  * Fetch full issue data.
  */
 async function getIssue(issueKey) {
   if (!CONFIGURED) return {};
-  return request('GET', `/rest/api/3/issue/${issueKey}`);
-}
-
-/**
- * Post a plain-text comment to an issue.
- */
-async function addComment(issueKey, text) {
-  if (!CONFIGURED) return {};
-  const body = {
-    body: {
-      type:    'doc',
-      version: 1,
-      content: [{
-        type:    'paragraph',
-        content: [{ type: 'text', text }],
-      }],
-    },
-  };
-  return request('POST', `/rest/api/3/issue/${issueKey}/comment`, body);
-}
-
-/**
- * Transition an issue by transition name (case-insensitive match).
- * Fetches available transitions first, then picks the matching one.
- */
-async function transitionIssue(issueKey, transitionName) {
-  if (!CONFIGURED) return {};
-
-  const { transitions = [] } = await request('GET',
-    `/rest/api/3/issue/${issueKey}/transitions`);
-
-  const match = transitions.find(t =>
-    (t.name || '').toLowerCase() === transitionName.toLowerCase()
-  );
-
-  if (!match) {
-    const names = transitions.map(t => t.name).join(', ');
-    process.stderr.write(`[jira-client] transition "${transitionName}" not found on ${issueKey}. Available: ${names}\n`);
-    return {};
-  }
-
-  return request('POST', `/rest/api/3/issue/${issueKey}/transitions`, {
-    transition: { id: match.id },
-  });
-}
-
-/**
- * Update a field on an issue (e.g. description with elaborated ACs).
- */
-async function updateField(issueKey, fieldKey, value) {
-  if (!CONFIGURED) return {};
-  return request('PUT', `/rest/api/3/issue/${issueKey}`, {
-    fields: { [fieldKey]: value },
-  });
-}
-
-/**
- * Create a new issue. Returns { id, key, self }.
- * issueType defaults to 'Story'. description is plain text; formatted as ADF paragraph.
- */
-async function createIssue(projectKey, summary, description, issueType = 'Story', extra = {}) {
-  if (!CONFIGURED) return {};
-  const body = {
-    fields: {
-      project:     { key: projectKey },
-      summary,
-      description: {
-        type: 'doc', version: 1,
-        content: description
-          ? [{ type: 'paragraph', content: [{ type: 'text', text: description }] }]
-          : [],
-      },
-      issuetype: { name: issueType },
-      ...extra,
-    },
-  };
-  return request('POST', '/rest/api/3/issue', body);
+  return request(`/rest/api/3/issue/${issueKey}`);
 }
 
 /**
@@ -188,7 +96,7 @@ async function searchIssues(jql, maxResults = 50, fields = []) {
   ].join(',');
   const f = fields.length > 0 ? fields.join(',') : defaultFields;
   const qs = `jql=${encodeURIComponent(jql)}&maxResults=${maxResults}&fields=${encodeURIComponent(f)}`;
-  return request('GET', `/rest/api/3/search/jql?${qs}`);
+  return request(`/rest/api/3/search/jql?${qs}`);
 }
 
 /**
@@ -200,7 +108,7 @@ async function getBoardIssues(boardId, status = null) {
   if (!CONFIGURED) return [];
   let path = `/rest/agile/1.0/board/${boardId}/issue?maxResults=100&fields=summary,description,status,labels,issuetype,assignee,priority,customfield_10016`;
   if (status) path += `&jql=${encodeURIComponent(`status = "${status}"`)}`;
-  const result = await request('GET', path);
+  const result = await request(path);
   return (result.issues || []).map(normalizeIssue);
 }
 
@@ -220,9 +128,9 @@ function normalizeIssue(issue) {
   const storyIdLabel = labels.find(l => l.startsWith('storyId:'));
   const acceptanceCriteria = extractAcFromText(descText);
 
-  // Merge ACs from [EPAM-AC-ADDITION] comments posted by the pipeline remediator.
-  // These survive Jira re-ingestion so gate remediations are durable without a
-  // separate canonical store.
+  // Merge ACs from [EPAM-AC-ADDITION] comments a HUMAN or another tool posted
+  // to the ticket. This project never posts these itself, but still reads
+  // them if a human chooses to add one — the marker is just a parse target.
   const comments = f.comment && Array.isArray(f.comment.comments) ? f.comment.comments : [];
   for (const comment of comments) {
     const ctext = typeof comment.body === 'string'
@@ -303,7 +211,6 @@ function pointsToEffort(points) {
 }
 
 module.exports = {
-  getIssue, addComment, transitionIssue, updateField,
-  createIssue, searchIssues, getProjectIssues,
+  getIssue, searchIssues, getBoardIssues, getProjectIssues,
   CONFIGURED,
 };

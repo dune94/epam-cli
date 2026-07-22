@@ -130,21 +130,29 @@ describe('resolveCodelines: env-driven codeline resolution', () => {
   });
 });
 
-// ── AC_GATE_SKIP_JIRA_COMMENTS + AC_GATE_AUTO_ELABORATE ──────────────────────
+// ── No Jira write capability at all (2026-07-22) ────────────────────────────
+// AC_GATE_SKIP_JIRA_COMMENTS previously gated a comment-posting block behind
+// a runtime flag. After an unauthorized comment reached a live Jira ticket
+// anyway, the write capability was removed entirely rather than re-gated —
+// no addComment call, no comment-builder functions, no jira-client require,
+// unconditionally. There is no flag left to test because there is nothing
+// left to suppress.
 
-describe('ac-gate.js: SKIP_JIRA_COMMENTS suppresses all Jira writes', () => {
-  it('reads AC_GATE_SKIP_JIRA_COMMENTS from process.env', () => {
-    expect(AC_GATE_SRC).toContain('AC_GATE_SKIP_JIRA_COMMENTS');
+describe('ac-gate.js: no Jira write capability exists at all', () => {
+  it('does not require jira-client', () => {
+    expect(AC_GATE_SRC).not.toContain("require('./jira-client')");
   });
 
-  it('gates addComment behind !SKIP_JIRA_COMMENTS check', () => {
-    // The comment-posting block must check SKIP_JIRA_COMMENTS so no Jira calls
-    // happen when the flag is set — even for sufficient/enrichable verdicts.
-    expect(AC_GATE_SRC).toMatch(/SKIP_JIRA_COMMENTS.*addComment|addComment.*SKIP_JIRA_COMMENTS/s);
+  it('has no addComment call anywhere', () => {
+    expect(AC_GATE_SRC).not.toMatch(/addComment/);
   });
 
-  it('logs suppression message when SKIP_JIRA_COMMENTS=1 and not DRY_RUN', () => {
-    expect(AC_GATE_SRC).toContain('SKIP_JIRA_COMMENTS=1 — Jira comment suppressed');
+  it('has no comment-builder functions', () => {
+    expect(AC_GATE_SRC).not.toMatch(/buildSufficientComment|buildEnrichableComment|buildInsufficientComment/);
+  });
+
+  it('AC_GATE_SKIP_JIRA_COMMENTS is not referenced — nothing left to gate', () => {
+    expect(AC_GATE_SRC).not.toContain('AC_GATE_SKIP_JIRA_COMMENTS');
   });
 });
 
@@ -197,30 +205,25 @@ describe('metrolinx/config.env: AC gate flags set for brownfield project', () =>
     join(REPO_ROOT, 'orchestrations/projects/metrolinx/config.env'), 'utf8'
   );
 
-  it('sets AC_GATE_SKIP_JIRA_COMMENTS=1', () => {
-    expect(metrolinxEnv).toMatch(/^AC_GATE_SKIP_JIRA_COMMENTS=1$/m);
-  });
-
   it('sets AC_GATE_AUTO_ELABORATE=1', () => {
     expect(metrolinxEnv).toMatch(/^AC_GATE_AUTO_ELABORATE=1$/m);
+  });
+
+  it('does NOT set AC_GATE_SKIP_JIRA_COMMENTS — there is no Jira write to skip', () => {
+    expect(metrolinxEnv).not.toMatch(/^AC_GATE_SKIP_JIRA_COMMENTS=/m);
   });
 });
 
 describe('greenfield flow: AC gate Jira-write flags must NOT appear in greenfield config', () => {
-  // These flags are metrolinx-only. Setting them in the shared jira/.env or
-  // travel-app config would silently suppress Jira comments for all projects.
+  // AC_GATE_AUTO_ELABORATE is metrolinx-only. Setting it in the shared jira/.env
+  // or travel-app config would silently auto-elaborate ACs for all projects.
   const jiraEnv = readFileSync(join(REPO_ROOT, 'orchestrations/jira/.env'), 'utf8');
-
-  it('orchestrations/jira/.env does not set AC_GATE_SKIP_JIRA_COMMENTS', () => {
-    expect(jiraEnv).not.toMatch(/^AC_GATE_SKIP_JIRA_COMMENTS=/m);
-  });
 
   it('orchestrations/jira/.env does not set AC_GATE_AUTO_ELABORATE', () => {
     expect(jiraEnv).not.toMatch(/^AC_GATE_AUTO_ELABORATE=/m);
   });
 
-  it('ac-gate.js defaults both flags to OFF (only active when env var === "1")', () => {
-    expect(AC_GATE_SRC).toContain("AC_GATE_SKIP_JIRA_COMMENTS === '1'");
+  it('ac-gate.js defaults AUTO_ELABORATE to OFF (only active when env var === "1")', () => {
     expect(AC_GATE_SRC).toContain("AC_GATE_AUTO_ELABORATE === '1'");
   });
 });

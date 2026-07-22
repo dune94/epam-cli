@@ -86,7 +86,6 @@ log "Found ${ISSUE_COUNT} issues."
 
 if [ "$ISSUE_COUNT" = "0" ]; then
   err "No issues found in project ${PROJECT_KEY} with status '${JIRA_STATUS}'."
-  err "Run the seed script first: node orchestrations/jira/seed-from-prd.js"
   exit 1
 fi
 

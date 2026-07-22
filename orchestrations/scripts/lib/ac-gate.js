@@ -34,14 +34,14 @@ const fs           = require('fs');
 const path         = require('path');
 const { execSync } = require('child_process');
 
-const jira = require('./jira-client');
-
 // ── Config ─────────────────────────────────────────────────────────────────
+// This project never writes to Jira — ac-gate.js only reads issue data
+// (passed in by the caller) and classifies it. No jira-client require, no
+// comment-posting code path, unconditionally — not a flag to leave off.
 
 const argv    = process.argv.slice(2);
 const getArg  = (flag, def = '') => { const i = argv.indexOf(flag); return i !== -1 ? argv[i + 1] : def; };
 const DRY_RUN           = argv.includes('--dry-run') || process.env.AC_GATE_DRY_RUN === '1';
-const SKIP_JIRA_COMMENTS = process.env.AC_GATE_SKIP_JIRA_COMMENTS === '1';
 const AUTO_ELABORATE     = process.env.AC_GATE_AUTO_ELABORATE === '1';
 const MODEL   = getArg('--model', process.env.ORCH_GATE_MODEL || process.env.EPAM_MODEL || 'claude-haiku-4-5-20251001');
 
@@ -256,51 +256,6 @@ Respond with JSON only — no markdown, no preamble:
   }
 }
 
-// ── Jira comment templates ─────────────────────────────────────────────────
-
-function buildSufficientComment(issue, result) {
-  return [
-    '✅ epam-cli AC Gate: SUFFICIENT',
-    '',
-    `This story's acceptance criteria have been assessed as sufficient for autonomous implementation.`,
-    result.reason,
-    '',
-    'The story will proceed into the automated development pipeline.',
-  ].join('\n');
-}
-
-function buildEnrichableComment(issue, result) {
-  const expandedAcs = result.enrichedAcs && result.enrichedAcs.length > 0
-    ? '\nExpanded ACs:\n' + result.enrichedAcs.map((ac, i) => `${i + 1}. ${ac}`).join('\n')
-    : '';
-  return [
-    '🔶 epam-cli AC Gate: ENRICHABLE',
-    '',
-    result.reason,
-    expandedAcs,
-    '',
-    'The pipeline will use the expanded ACs above for implementation. Original ACs are preserved.',
-  ].join('\n');
-}
-
-function buildInsufficientComment(issue, result) {
-  const gaps = result.gaps && result.gaps.length > 0
-    ? '\nIdentified gaps:\n' + result.gaps.map(g => `• ${g}`).join('\n')
-    : '';
-  return [
-    '🛑 epam-cli AC Gate: INSUFFICIENT — Human approval required',
-    '',
-    result.reason,
-    gaps,
-    '',
-    'The automated pipeline has been paused for this story. To approve elaboration and continue:',
-    '  Reply to this comment with: /approve-elaboration',
-    '  Then re-trigger the pipeline run.',
-    '',
-    'The pipeline will not proceed with any stories until this is resolved.',
-  ].join('\n');
-}
-
 // ── Main ───────────────────────────────────────────────────────────────────
 
 (async () => {
@@ -345,29 +300,9 @@ function buildInsufficientComment(issue, result) {
       process.stderr.write(`[ac-gate]     elaborated ${generated.length} AC(s) → enrichable, pipeline continues\n`);
     }
 
-    // Post Jira comment — suppressed when SKIP_JIRA_COMMENTS=1 or DRY_RUN
-    if (!DRY_RUN && !SKIP_JIRA_COMMENTS) {
-      try {
-        let comment;
-        if (verdict === 'sufficient') {
-          comment = buildSufficientComment(issue, classification);
-        } else if (verdict === 'enrichable') {
-          comment = buildEnrichableComment(issue, classification);
-        } else {
-          comment = buildInsufficientComment(issue, classification);
-          hasInsufficient = true;
-        }
-        await jira.addComment(issue.jiraKey, comment);
-        process.stderr.write(`[ac-gate]     comment posted to ${issue.jiraKey}\n`);
-      } catch (e) {
-        process.stderr.write(`[ac-gate]     WARNING: failed to post comment to ${issue.jiraKey}: ${e.message}\n`);
-      }
-    } else {
-      if (verdict === 'insufficient') hasInsufficient = true;
-      if (SKIP_JIRA_COMMENTS && !DRY_RUN) {
-        process.stderr.write(`[ac-gate]     SKIP_JIRA_COMMENTS=1 — Jira comment suppressed for ${issue.jiraKey}\n`);
-      }
-    }
+    // This project never writes to Jira, unconditionally — no flag, no
+    // DRY_RUN branch. Only track whether the story needs human attention.
+    if (verdict === 'insufficient') hasInsufficient = true;
 
     // LLM codeline overrides the Jira label when present (LLM has richer context).
     // Fall back to the issue's own label, then JIRA_DEFAULT_CODELINE — never a

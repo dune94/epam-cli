@@ -211,22 +211,18 @@ Orchestration runs are currently triggered manually (`run-agent-orchestration.sh
 ### Approach
 Add an inbound webhook route to `control-plane.js`. Jira webhook payloads (Epic created/updated, Sprint started) are normalised into PRD shape by a Jira adapter and queued. A debounced batch aggregator holds events for a 45-second window before firing the orchestration — batching rapid Jira updates (field edits, AC refinements) into a single run rather than spawning one per event. Urgent-label events bypass the window and fire immediately.
 
-Writeback closes the loop: at each pipeline milestone, the Jira client transitions the ticket and posts a comment with the relevant output (elaborated ACs at spec pass, cost estimate at CPA, PR link at story complete, review result at review done).
+**Writeback is explicitly OUT OF SCOPE and must never be built.** This project never
+writes to any client system (Jira, Confluence, or otherwise) — `jira-client.js` is
+read-only by design (no method parameter on its `request()` function; a write call
+cannot even be constructed). An unauthorized writeback path was added and removed
+once already (2026-07-22) after it posted a live comment to a real Jira ticket
+without permission. Any future work in this area must stay strictly inbound
+(reading Jira to trigger a run) — never outbound (posting status back to Jira).
 
 ### Files to change
 - `control-plane.js` — add `POST /webhook/jira` and `POST /webhook/slack` routes
 - `lib/webhook-queue.js` — new: debounced batch aggregator; 45s window; urgent-label bypass; persistent queue file at `.epam/webhook-queue.json`
-- `lib/jira-adapter.js` — new: normalise Jira webhook payload → PRD `phases[].stories[]` shape
-- `lib/jira-client.js` — new: Jira REST API client for writeback (transition, comment)
-- `orchestrations/scripts/jira-writeback.sh` — new: called at spec pass, CPA complete, story complete, review done
-
-### Writeback events
-| Milestone | Jira action |
-|---|---|
-| Spec pass (AC elaboration) | Update story description with elaborated ACs |
-| CPA complete | Post comment with cost estimate and effort breakdown |
-| Story complete | Transition to In Review; post PR link |
-| Review done | Transition to Done or Reopened based on review result |
+- `lib/jira-adapter.js` — new: normalise Jira webhook payload → PRD `phases[].stories[]` shape (read-only; uses the existing read-only `lib/jira-client.js`)
 
 ### Acceptance criteria
 - When `JIRA_WEBHOOK_SECRET` is unset, `control-plane.js` starts normally with no webhook routes registered
@@ -552,7 +548,7 @@ Worktree-based parallelism works within a single git repository. Enterprise proj
 ### Approach
 Phase 1 (medium effort): add `"repos"` array to PRD project config. Stories can declare `repo: <alias>` to indicate which repository they modify. `run-agent-orchestration.sh` checks out each repo's worktree independently and merges independently. Phase handoff artifacts record cross-repo commit SHAs.
 
-Phase 2 (high effort): add a `POST /webhook/github` route to `control-plane.js` (mirroring the Jira webhook). On PR merge events, the control plane can trigger downstream phases or writeback to GitHub (PR comments, status checks). Wire `jira-writeback.sh` equivalents for GitHub via the existing `lib/jira-client.js` pattern.
+Phase 2 (high effort): add a `POST /webhook/github` route to `control-plane.js` (mirroring the Jira webhook). On PR merge events, the control plane can trigger downstream phases. Writeback to GitHub (PR comments, status checks) is OUT OF SCOPE — this project never writes to any client system; see GAP-P2's note on why writeback must never be built.
 
 ### Acceptance criteria
 - PRD `project.repos` array allows per-story `repo` field routing to different checkouts

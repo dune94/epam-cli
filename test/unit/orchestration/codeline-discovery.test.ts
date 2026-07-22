@@ -243,12 +243,14 @@ describe('codeline-discovery.js — scoring and fallback', () => {
 describe('codeline-discovery.js — source invariants', () => {
   const src = require('fs').readFileSync(DISCOVERY_JS, 'utf8');
 
-  it('scoreRepos uses Semble when SEMBLE_ENABLED=1, not grep', () => {
+  it('scoreRepos uses CodeGraph FTS5, not grep or Semble', () => {
     const scoreIdx = src.indexOf('function scoreRepos');
-    const scoreFn  = src.slice(scoreIdx, scoreIdx + 3000);
-    expect(scoreFn).toMatch(/SEMBLE_ENABLED.*=.*'1'|semble.*Enabled/i);
-    expect(scoreFn).toMatch(/sembleSearch|semble\.sembleSearch/);
-    // Must NOT contain the old grep pattern that scanned all source files
+    const scoreFn  = src.slice(scoreIdx, scoreIdx + 2000);
+    expect(scoreFn).toMatch(/CODEGRAPH_ENABLED.*=.*'1'/);
+    expect(scoreFn).toMatch(/queryCodeGraph/);
+    // Semble removed from scoring — all repos are indexed
+    expect(scoreFn).not.toMatch(/sembleSearch|SEMBLE_ENABLED/);
+    // Old grep must also be gone
     expect(scoreFn).not.toMatch(/grep -ril/);
   });
 
@@ -304,11 +306,9 @@ describe('codeline-discovery.js — source invariants', () => {
     expect(src).toMatch(/not in maintenance scope|docs repo/);
   });
 
-  it('Semble query uses action-verb prefix for code-handler targeting', () => {
-    expect(src).toMatch(/applies handles processes resolves/);
-  });
-
-  it('Semble score multiplier is 1000 to match keyword tier scale', () => {
-    expect(src).toMatch(/sembleScore \* 1000/);
+  it('Semble is not used in scoring (all repos indexed; removed as noise source)', () => {
+    const scoreIdx = src.indexOf('function scoreRepos');
+    const scoreFn  = src.slice(scoreIdx, scoreIdx + 2000);
+    expect(scoreFn).not.toMatch(/sembleScore|sembleSearch|SEMBLE_ENABLED/);
   });
 });

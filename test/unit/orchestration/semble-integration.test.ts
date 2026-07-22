@@ -54,20 +54,26 @@ describe('semble-context.js: module API', () => {
   });
 });
 
-// ── codeline-discovery.js: Semble-based scoring (replaces grep) ───────────
-// grep -ril was removed: it scanned all source files, consuming O(repo-size)
-// time and effectively consumed too many tokens on large repos like the
-// Metrolinx codebase. Semble semantic search replaces it — targeted snippets
-// via vector index, 60 s timeout, SEMBLE_ENABLED=1 guard.
+// ── codeline-discovery.js: CodeGraph scoring (Semble removed from discovery) ──
+// grep -ril removed first (O(repo-size), ETIMEDOUT on large repos).
+// Semble semantic search replaced grep but was brittle (1-pt cosine margins).
+// All 31 Metrolinx repos are now CodeGraph-indexed — Semble removed from scoring.
+// Semble remains in spec-mode-runner.js as brownfield context fallback only.
 
-describe('codeline-discovery.js: discovery scoring uses Semble, not grep', () => {
-  it('defines scoreRepos() with Semble tier', () => {
+describe('codeline-discovery.js: discovery scoring uses CodeGraph, not grep or Semble', () => {
+  it('defines scoreRepos() with CodeGraph tier', () => {
     expect(DISCOVERY_SRC).toMatch(/function scoreRepos\s*\(/);
-    expect(DISCOVERY_SRC).toMatch(/semble.*search|sembleSearch/i);
+    expect(DISCOVERY_SRC).toMatch(/queryCodeGraph/);
   });
 
   it('does NOT use grep -ril for source scanning', () => {
     expect(DISCOVERY_SRC).not.toContain('grep -ril');
+  });
+
+  it('does NOT use Semble in scoring (all repos indexed; removed as noise)', () => {
+    const scoreIdx = DISCOVERY_SRC.indexOf('function scoreRepos');
+    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 2000);
+    expect(scoreFn).not.toMatch(/sembleSearch|SEMBLE_ENABLED/);
   });
 
   it('calls scoreRepos before DRY_RUN branch', () => {
@@ -77,8 +83,8 @@ describe('codeline-discovery.js: discovery scoring uses Semble, not grep', () =>
     expect(scoringCallIdx).toBeLessThan(dryRunBranchIdx);
   });
 
-  it('imports semble-context lazily for Semble scoring', () => {
-    expect(DISCOVERY_SRC).toContain("require('./semble-context')");
+  it('does NOT import semble-context (removed from discovery)', () => {
+    expect(DISCOVERY_SRC).not.toContain("require('./semble-context')");
   });
 
   it('logs repo scoring results', () => {

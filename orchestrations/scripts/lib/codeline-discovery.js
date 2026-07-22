@@ -30,17 +30,9 @@ const fs           = require('fs');
 const path         = require('path');
 const { execSync } = require('child_process');
 
-// Lazy-load semble-context and codegraph-context; both fail gracefully when absent.
-let _semble = null;
-function getSemble() {
-  if (_semble) return _semble;
-  try {
-    _semble = require('./semble-context');
-  } catch {
-    _semble = { sembleSearch: () => ({ results: [] }), resolveSembleBin: () => null };
-  }
-  return _semble;
-}
+// Semble removed from codeline scoring — all repos are CodeGraph-indexed,
+// making Tier 3 probabilistic scoring redundant and a source of re-ranking noise.
+// SEMBLE_ENABLED is kept for spec-mode-runner.js (brownfield context fallback only).
 
 let _codegraph = null;
 function getCodeGraph() {
@@ -151,12 +143,8 @@ function buildRepoManifest(rootDir) {
 //   Tier 1 — name/description/readme keyword match   (fast, zero I/O, always)
 //   Tier 2 — CodeGraph FTS5 symbol-name query        (CODEGRAPH_ENABLED=1, indexed repos only)
 //             Deterministic: finds functions literally named "applyReportDiscounts";
-//             5 pts per symbol hit, maximum 100 pts. Decisive when the target repo
-//             is indexed — an indexed repo wins by 50-100 pts over unindexed ones.
-//   Tier 3 — Semble semantic search                  (SEMBLE_ENABLED=1, all repos)
-//             Probabilistic: cosine similarity over embeddings. Kept as a fallback
-//             for repos that are not yet indexed in CodeGraph. Brittle (1-point
-//             margins), hence demoted to Tier 3.
+//             5 pts per symbol hit, maximum 100 pts. All 31 Metrolinx repos are
+//             indexed — this tier fires for every repo, giving decisive separation.
 //
 // Returns repos sorted descending by combined score, sliced to topN.
 
@@ -170,15 +158,9 @@ function scoreRepos(issues, manifest, topN = 8) {
       .filter(w => !['with','that','this','from','have','will','when','then','also','been','were','they','them'].includes(w))
   )];
 
-  const cgEnabled   = process.env.CODEGRAPH_ENABLED === '1';
-  const cg          = cgEnabled ? getCodeGraph() : null;
-  const cgQuery     = words.slice(0, 10).join(' ');
-
-  const sembleEnabled = process.env.SEMBLE_ENABLED === '1';
-  const semble        = sembleEnabled ? getSemble() : null;
-  const sembleBin     = semble ? semble.resolveSembleBin() : null;
-  // Action-verb prefix targets the SERVICE that HANDLES this domain (not docs that MENTION it).
-  const sembleQuery   = `applies handles processes resolves ${words.slice(0, 15).join(' ')}`.slice(0, 300);
+  const cgEnabled = process.env.CODEGRAPH_ENABLED === '1';
+  const cg        = cgEnabled ? getCodeGraph() : null;
+  const cgQuery   = words.slice(0, 10).join(' ');
 
   const scored = manifest.map(repo => {
     let score = 0;
@@ -190,24 +172,13 @@ function scoreRepos(issues, manifest, topN = 8) {
     }
 
     // Tier 2 — CodeGraph FTS5 symbol-name query (indexed repos only).
-    // BM25 scores are 70-100 per match. We count results (capped at 20) × 5 pts
-    // so an indexed repo with 10 symbol hits scores +50, far ahead of Tier 3.
+    // All 31 Metrolinx repos are indexed — this fires for every repo.
+    // Count results (capped at 20) × 5 pts; 10 hits = +50, decisively ahead of Tier 1.
     if (cgEnabled && cg && cgQuery && cg.isCodeGraphIndexed(repo.path)) {
       try {
         const results = cg.queryCodeGraph(cgQuery, repo.path, 20);
         score += Math.min((results || []).length, 20) * 5;
       } catch { /* codegraph unavailable for this repo — skip */ }
-    }
-
-    // Tier 3 — Semble semantic search (all repos, probabilistic fallback).
-    // Runs only when CodeGraph didn't already score this repo decisively.
-    if (sembleEnabled && sembleBin && sembleQuery) {
-      try {
-        const result = semble.sembleSearch(sembleQuery, repo.path, 3, 10);
-        const sembleScore = (result.results || []).reduce((s, r) => s + (r.score || 0), 0);
-        // Semble cosine-similarity scores are ~0.01–0.10; multiply by 1000 to integer scale.
-        score += Math.round(sembleScore * 1000);
-      } catch { /* semble unavailable for this repo — skip */ }
     }
 
     return { ...repo, score };

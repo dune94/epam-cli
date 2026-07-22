@@ -180,20 +180,17 @@ describe('codeline-discovery.js: CodeGraph Tier 2 in scoreRepos', () => {
     expect(scoreFn).toMatch(/isCodeGraphIndexed/);
   });
 
-  it('CodeGraph is Tier 2 — appears before Semble Tier 3 in scoreRepos', () => {
-    const scoreIdx   = DISCOVERY_SRC.indexOf('function scoreRepos');
-    const scoreFn    = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 3000);
-    const cgIdx      = scoreFn.indexOf('Tier 2');
-    const sembleIdx  = scoreFn.indexOf('Tier 3');
-    expect(cgIdx).toBeGreaterThan(-1);
-    expect(sembleIdx).toBeGreaterThan(-1);
-    expect(cgIdx).toBeLessThan(sembleIdx);
+  it('CodeGraph is the sole scoring tier (Tier 2 comment present, no Tier 3)', () => {
+    const scoreIdx = DISCOVERY_SRC.indexOf('function scoreRepos');
+    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 2000);
+    expect(scoreFn).toMatch(/Tier 2/);
+    expect(scoreFn).not.toMatch(/Tier 3/);
   });
 
-  it('Semble demoted to Tier 3 comment in scoreRepos', () => {
+  it('Semble is not present in scoreRepos (removed — all repos indexed, no fallback needed)', () => {
     const scoreIdx = DISCOVERY_SRC.indexOf('function scoreRepos');
-    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 3000);
-    expect(scoreFn).toMatch(/Tier 3.*Semble|Semble.*Tier 3/i);
+    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 2000);
+    expect(scoreFn).not.toMatch(/sembleSearch|SEMBLE_ENABLED/);
   });
 
   it('CodeGraph scoring uses queryCodeGraph with result count, not raw BM25 scores', () => {

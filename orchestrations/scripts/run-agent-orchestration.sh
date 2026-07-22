@@ -2591,10 +2591,16 @@ if [ "${SKIP_CPA:-0}" != "1" ] && [ -f "$CPA_SCRIPT" ]; then
     [ -f "${_prev_handoff:-}" ] && info "Step 2: Injecting prior-phase context from: ${_prev_handoff##*/}"
 
     cpa_exit=0
+    # IMPORTANT: do NOT use `|| cpa_exit=$?` here.
+    # Without pipefail, the pipeline exit code is tee's exit code (almost always 0),
+    # so BLOCK (exit 3) and REVIEW (exit 2) from $CPA_SCRIPT were silently discarded
+    # and the case statement below always took the "0) pass" branch.
+    # PIPESTATUS[0] captures $CPA_SCRIPT's real exit code regardless of tee's success.
     # shellcheck disable=SC2086
     CLAUDE_CMD="$CLAUDE_CMD" AI_RUNNER_CMD="$AI_RUNNER_CMD" EPAM_CLI="${EPAM_CLI:-epam}" \
         PREV_PHASE_HANDOFF_FILE="${_prev_handoff:-}" \
-        bash "$CPA_SCRIPT" $cpa_flags 2>&1 | tee "$LOG_DIR/cpa-${PHASE}.log" || cpa_exit=$?
+        bash "$CPA_SCRIPT" $cpa_flags 2>&1 | tee "$LOG_DIR/cpa-${PHASE}.log"
+    cpa_exit="${PIPESTATUS[0]}"
 
     case $cpa_exit in
         0)

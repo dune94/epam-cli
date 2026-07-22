@@ -282,13 +282,100 @@ story_tsc_gate() {
 
         if [ -z "$(echo "$_new_errors" | tr -d '[:space:]')" ]; then
             success "  [tsc-gate] $_sid: tsc --noEmit has only pre-existing baseline errors — none introduced by this story"
+            record_brownfield_verified_baseline
             return 0
         fi
 
         error "  [tsc-gate] $_sid: TypeScript errors after story completed — story marked failed"
         error "  [tsc-gate] Fix required before next story runs. Log: ${_tsc_log##*/}"
+        reset_brownfield_story_commit "$_sid"
         return 1
     fi
     success "  [tsc-gate] $_sid: tsc --noEmit passed"
+    record_brownfield_verified_baseline
     return 0
+}
+
+# record_brownfield_verified_baseline
+#
+# Durable (cross-run) half of the predictable-teardown mandate. Writes the
+# current HEAD SHA to a marker OUTSIDE the codeline entirely — never inside
+# $PROJECT_ROOT itself, so it can never be swept into a `git add -A` /
+# committed, and modifying it is never a surprising change to the client's
+# own repo (no .gitignore edits, no stray files in their tree). Keyed by an
+# md5 of the absolute PROJECT_ROOT path so multiple codelines never collide.
+#
+# Survives a `git reset --hard` unconditionally (it isn't part of the git
+# working tree at all) and persists across runs regardless of how the
+# previous run ended (clean success, clean failure via
+# reset_brownfield_story_commit, or a hard kill/crash mid-story).
+#
+# This is the run-START backstop's source of truth: a run that gets killed
+# before story_tsc_gate ever runs leaves no updated marker, so the NEXT run's
+# start-of-run check (see run-brownfield-preflight-reset.sh) knows to reset
+# back to the last point a story was ACTUALLY verified complete — not just
+# "the last commit whose message happened to say complete."
+#
+# Brownfield-only; a no-op elsewhere (the file simply never gets created).
+record_brownfield_verified_baseline() {
+    [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
+    [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
+    local _sha
+    _sha=$(git -C "$PROJECT_ROOT" rev-parse HEAD 2>/dev/null) || return 0
+    local _state_dir="${EPAM_BROWNFIELD_STATE_DIR:-$HOME/.epam/brownfield-baselines}"
+    mkdir -p "$_state_dir" 2>/dev/null || true
+    local _key
+    _key=$(printf '%s' "$PROJECT_ROOT" | md5sum 2>/dev/null | cut -d' ' -f1)
+    [ -n "$_key" ] || return 0
+    echo "$_sha" > "$_state_dir/${_key}.sha" 2>/dev/null || true
+}
+
+# reset_brownfield_story_commit <story_id>
+#
+# Standing mandate (6+ months, not new): the pipeline must be able to tear
+# down to a predictable pre-run state every time — a run may be repeated
+# 200+ times until it succeeds, and contamination from a failed attempt must
+# never persist into the next one. Brownfield's own semantics for this
+# (confirmed 2026-07-22, not the same as reset-to-baseline.sh's greenfield
+# "last story:complete commit" model): hard-reset the codeline to
+# phase-baseline-sha.txt — the SHA captured once, at the very start of this
+# run's phase, BEFORE any story in it touched anything (see
+# run-agent-orchestration.sh Step 8's capture just before the main-story
+# loop). Every commit made during this run is provisional until a story
+# passes ALL of its gates; a story failing story_tsc_gate has NOT done so.
+#
+# Live bug this closes (AMSD-1820, 2026-07-22): commit_completed_story()
+# commits BEFORE story_tsc_gate runs. When the gate then failed, the commit
+# ("story: complete AMSD-1820 (7 file(s))") was left sitting on develop
+# permanently — nothing ever reverted it. It went on to actively poison
+# later Semble semantic-search results (its prose matched the bug title
+# better than the real fix file, outranking the actual code needing the fix)
+# for every subsequent run, compounding the damage rather than staying inert.
+#
+# Brownfield-only (EPAM_BROWNFIELD=1) — greenfield worktree lanes have their
+# own, different teardown model and are unaffected.
+# No-op (not an error) when: not brownfield, no phase-baseline-sha.txt yet
+# (can't reset to an unknown target), or the working tree isn't a git repo.
+reset_brownfield_story_commit() {
+    local _sid="$1"
+    [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
+    [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
+    local _baseline_file="${LOG_DIR:-}/phase-baseline-sha.txt"
+    [ -f "$_baseline_file" ] || return 0
+    local _baseline_sha
+    _baseline_sha=$(tr -d '[:space:]' < "$_baseline_file")
+    [ -n "$_baseline_sha" ] || return 0
+
+    local _current_sha
+    _current_sha=$(git -C "$PROJECT_ROOT" rev-parse HEAD 2>/dev/null || echo "")
+    if [ "$_current_sha" = "$_baseline_sha" ]; then
+        # Nothing was ever committed for this story (or it's already clean) —
+        # no reset needed, and resetting to HEAD would be a harmless no-op
+        # anyway, but skip it entirely to avoid an unnecessary git operation.
+        return 0
+    fi
+
+    warning "  [teardown] $_sid: resetting $PROJECT_ROOT to pre-run baseline $_baseline_sha — discarding this story's failed commit(s)"
+    git -C "$PROJECT_ROOT" reset --hard "$_baseline_sha" >/dev/null 2>&1 \
+        && success "  [teardown] $_sid: reset complete — repo is back to the exact state before this run started"
 }

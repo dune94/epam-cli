@@ -137,6 +137,24 @@ else
 fi
 echo ""
 
+# ── Predictable teardown to pre-run state (standing mandate, not new) ────────
+# A run may be repeated 200+ times until it succeeds. Any commit made during
+# a previous run that got KILLED before its own gate-failure self-heal could
+# run (reset_brownfield_story_commit in story-guards.sh, the in-run half of
+# this mandate) may still be sitting on a codeline as unverified work. Reset
+# every codeline under JIRA_CODELINE_ROOT to its last verified-gate-passed
+# baseline before codeline discovery even runs — codeline-discovery.js picks
+# the target dynamically, so every candidate must already be clean rather
+# than trying to reset just the one that ends up selected. Cheap: a no-op
+# for any codeline with no marker yet (nothing known-good to reset to) or
+# already at its verified baseline.
+info "Predictable teardown: resetting codelines to last verified baseline..."
+for _cl_dir in "$JIRA_CODELINE_ROOT"/*/; do
+  [ -d "${_cl_dir}.git" ] || continue
+  bash "$SCRIPT_DIR/brownfield-preflight-reset.sh" "${_cl_dir%/}" || true
+done
+echo ""
+
 # ── Wire the dashboard to this run's live PRD + logs ─────────────────────────
 info "Wiring dashboard to serve this run's live PRD + logs..."
 bash orchestrations/scripts/pre-run-reset.sh --prd "$PRD_FILE" || \

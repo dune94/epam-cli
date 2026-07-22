@@ -18,10 +18,10 @@
  */
 
 import { describe, it, expect, afterAll } from 'vitest';
-import { execFileSync }                   from 'node:child_process';
+import { spawnSync }                      from 'node:child_process';
 import { mkdtempSync, mkdirSync,
-         writeFileSync, rmSync,
-         existsSync }                     from 'node:fs';
+         writeFileSync, readFileSync,
+         rmSync, existsSync }             from 'node:fs';
 import { join }                           from 'node:path';
 import { tmpdir }                         from 'node:os';
 
@@ -49,16 +49,16 @@ function makeIssuesJson(tmpDir: string, issues: object[]): string {
 }
 
 function runDiscovery(args: string[], env: NodeJS.ProcessEnv = {}): { stdout: string; stderr: string; exitCode: number } {
-  try {
-    const stdout = execFileSync(NODE, [DISCOVERY_JS, ...args], {
-      encoding: 'utf8',
-      env: { ...process.env, ...env, SEMBLE_ENABLED: '0' },
-      timeout: 15000,
-    });
-    return { stdout, stderr: '', exitCode: 0 };
-  } catch (e: any) {
-    return { stdout: e.stdout || '', stderr: e.stderr || '', exitCode: e.status ?? 1 };
-  }
+  const result = spawnSync(NODE, [DISCOVERY_JS, ...args], {
+    encoding: 'utf8',
+    env: { ...process.env, ...env, SEMBLE_ENABLED: '0' },
+    timeout: 60000,
+  });
+  return {
+    stdout:   result.stdout || '',
+    stderr:   result.stderr || '',
+    exitCode: result.status ?? 1,
+  };
 }
 
 // ── Test fixtures ─────────────────────────────────────────────────────────────
@@ -245,7 +245,7 @@ describe('codeline-discovery.js — source invariants', () => {
 
   it('scoreRepos uses CodeGraph FTS5, not grep or Semble', () => {
     const scoreIdx = src.indexOf('function scoreRepos');
-    const scoreFn  = src.slice(scoreIdx, scoreIdx + 2000);
+    const scoreFn  = src.slice(scoreIdx, scoreIdx + 4000);
     expect(scoreFn).toMatch(/CODEGRAPH_ENABLED.*=.*'1'/);
     expect(scoreFn).toMatch(/queryCodeGraph/);
     // Semble removed from scoring — all repos are indexed
@@ -310,5 +310,90 @@ describe('codeline-discovery.js — source invariants', () => {
     const scoreIdx = src.indexOf('function scoreRepos');
     const scoreFn  = src.slice(scoreIdx, scoreIdx + 2000);
     expect(scoreFn).not.toMatch(/sembleScore|sembleSearch|SEMBLE_ENABLED/);
+  });
+
+  it('CodeGraph scoring uses BM25 score sum, not result count', () => {
+    // Counting results saturates at the 20-result cap for every repo (common words
+    // like "email" exist in every codebase). BM25 sum rewards rare symbol names
+    // (e.g. "mozio" = 70-100 pts) and penalises common terms (e.g. "email" = 3-5).
+    const scoreIdx = src.indexOf('function scoreRepos');
+    const scoreFn  = src.slice(scoreIdx, scoreIdx + 3000);
+    expect(scoreFn).toMatch(/bm25Sum|bm25|\.score/);
+    expect(scoreFn).toMatch(/reduce.*score|score.*reduce/);
+    // Must NOT use length × fixed multiplier (the old count-based approach)
+    expect(scoreFn).not.toMatch(/\.length.*\*.*5|5.*\*.*\.length/);
+  });
+
+  it('CodeGraph query filters domain stopwords before querying FTS5', () => {
+    // Generic transit words ("trip","ticket","return","schedule") flood every repo
+    // equally and collapse score separation. They must be stripped from the cgQuery.
+    const scoreIdx = src.indexOf('function scoreRepos');
+    const scoreFn  = src.slice(scoreIdx, scoreIdx + 3000);
+    expect(scoreFn).toMatch(/DOMAIN_STOPWORDS/);
+    expect(scoreFn).toMatch(/cgSpecificWords/);
+    expect(scoreFn).toMatch(/cgSpecificWords.*slice|cgQuery.*cgSpecificWords/);
+  });
+
+  it('DOMAIN_STOPWORDS contains common transit terms that would flood all repos', () => {
+    expect(src).toMatch(/'trip'/);
+    expect(src).toMatch(/'ticket'|'tickets'/);
+    expect(src).toMatch(/'schedule'|'schedules'/);
+    expect(src).toMatch(/'station'|'stations'/);
+  });
+});
+
+// ── Live scoring: azure.commerce.cdts must rank in top 8 for AMSD-1820 ────────
+// Verifies the domain-stopword filter actually works against the real 31-repo root.
+// Skipped when JIRA_CODELINE_ROOT is not present (CI / other machines).
+
+const METRO_ROOT = '/home/bradleyjerome/projects/metrolinx';
+const CDTS_PATH  = `${METRO_ROOT}/azure.commerce.cdts`;
+const METRO_PRESENT = existsSync(CDTS_PATH);
+
+describe('codeline-discovery.js — live scoring: AMSD-1820 repo rank', () => {
+  it('azure.commerce.cdts appears in top 8 candidates after domain-stopword filtering', () => {
+    if (!METRO_PRESENT) return;
+
+    const issuesPath = join(tmpdir(), 'amsd1820-live-test.json');
+    const outPath    = join(tmpdir(), 'amsd1820-live-out.json');
+    writeFileSync(issuesPath, JSON.stringify([{
+      jiraKey: 'AMSD-1820',
+      title: '[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation',
+      description: 'Promo discount not shown in Mozio email for return dispatch tickets.',
+    }]));
+
+    const { stderr, exitCode } = runDiscovery([
+      '--issues', issuesPath,
+      '--root',   METRO_ROOT,
+      '--out',    outPath,
+      '--dry-run',
+    ], { CODEGRAPH_ENABLED: '1', SEMBLE_ENABLED: '0' });
+
+    expect(exitCode, `discovery failed:\n${stderr}`).toBe(0);
+
+    // Scoring log goes to stderr — top 8 candidates must include azure.commerce.cdts
+    expect(stderr).toMatch(/azure\.commerce\.cdts/);
+  });
+
+  it('azure.commerce.cdts is the top-1 dry-run winner for AMSD-1820', () => {
+    if (!METRO_PRESENT) return;
+
+    const issuesPath = join(tmpdir(), 'amsd1820-live2-test.json');
+    const outPath    = join(tmpdir(), 'amsd1820-live2-out.json');
+    writeFileSync(issuesPath, JSON.stringify([{
+      jiraKey: 'AMSD-1820',
+      title: '[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation',
+      description: 'Promo discount not shown in Mozio email for return dispatch tickets.',
+    }]));
+
+    runDiscovery([
+      '--issues', issuesPath,
+      '--root',   METRO_ROOT,
+      '--out',    outPath,
+      '--dry-run',
+    ], { CODEGRAPH_ENABLED: '1', SEMBLE_ENABLED: '0' });
+
+    const result = JSON.parse(readFileSync(outPath, 'utf8'));
+    expect(result.codelines[0].path).toBe(CDTS_PATH);
   });
 });

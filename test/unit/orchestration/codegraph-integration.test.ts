@@ -170,19 +170,19 @@ describe('codeline-discovery.js: CodeGraph Tier 2 in scoreRepos', () => {
 
   it('CodeGraph scoring is gated on CODEGRAPH_ENABLED=1', () => {
     const scoreIdx = DISCOVERY_SRC.indexOf('function scoreRepos');
-    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 2500);
+    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 4000);
     expect(scoreFn).toMatch(/CODEGRAPH_ENABLED.*=.*'1'/);
   });
 
   it('CodeGraph scoring only runs for indexed repos (isCodeGraphIndexed check)', () => {
     const scoreIdx = DISCOVERY_SRC.indexOf('function scoreRepos');
-    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 2500);
+    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 4000);
     expect(scoreFn).toMatch(/isCodeGraphIndexed/);
   });
 
   it('CodeGraph is the sole scoring tier (Tier 2 comment present, no Tier 3)', () => {
     const scoreIdx = DISCOVERY_SRC.indexOf('function scoreRepos');
-    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 2000);
+    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 4000);
     expect(scoreFn).toMatch(/Tier 2/);
     expect(scoreFn).not.toMatch(/Tier 3/);
   });
@@ -193,12 +193,13 @@ describe('codeline-discovery.js: CodeGraph Tier 2 in scoreRepos', () => {
     expect(scoreFn).not.toMatch(/sembleSearch|SEMBLE_ENABLED/);
   });
 
-  it('CodeGraph scoring uses queryCodeGraph with result count, not raw BM25 scores', () => {
+  it('CodeGraph scoring uses BM25 score sum from queryCodeGraph results', () => {
     const scoreIdx = DISCOVERY_SRC.indexOf('function scoreRepos');
-    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 2500);
+    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 3000);
     expect(scoreFn).toMatch(/queryCodeGraph/);
-    // Must count results (length), not sum scores
-    expect(scoreFn).toMatch(/\.length.*\*.*5|5.*\*.*\.length/);
+    // Must sum BM25 scores — NOT count results (count saturates cap for all repos)
+    expect(scoreFn).toMatch(/reduce.*score|bm25Sum/);
+    expect(scoreFn).not.toMatch(/\.length.*\*.*5|5.*\*.*\.length/);
   });
 });
 

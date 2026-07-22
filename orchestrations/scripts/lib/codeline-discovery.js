@@ -160,7 +160,25 @@ function scoreRepos(issues, manifest, topN = 8) {
 
   const cgEnabled = process.env.CODEGRAPH_ENABLED === '1';
   const cg        = cgEnabled ? getCodeGraph() : null;
-  const cgQuery   = words.slice(0, 10).join(' ');
+
+  // CodeGraph query uses ONLY high-specificity terms — words that are rare in the
+  // transit domain and therefore discriminate between repos. Generic transit nouns
+  // ("trip", "ticket", "return", "schedule", "route", "station", "fare", "service",
+  // "booking", "departure", "arrival") appear in every repo and flood FTS5 results
+  // equally, collapsing score separation. Stripping them forces the query to match
+  // on product names (mozio, promo), business concepts (discount, confirmation), and
+  // integration specifics (email, dispatch, amount) that only the right repo handles.
+  const DOMAIN_STOPWORDS = new Set([
+    'trip','trips','ticket','tickets','return','schedule','schedules','route','routes',
+    'station','stations','fare','fares','service','services','booking','bookings',
+    'departure','departures','arrival','arrivals','transit','passenger','passengers',
+    'platform','journey','journeys','stop','stops','line','lines','train','trains',
+    'bus','buses','payment','payments','order','orders','account','accounts',
+    'user','users','status','request','response','data','item','items','list',
+    'number','code','type','name','time','date','from','path','info',
+  ]);
+  const cgSpecificWords = words.filter(w => !DOMAIN_STOPWORDS.has(w));
+  const cgQuery = cgSpecificWords.slice(0, 10).join(' ');
 
   const scored = manifest.map(repo => {
     let score = 0;
@@ -172,12 +190,17 @@ function scoreRepos(issues, manifest, topN = 8) {
     }
 
     // Tier 2 — CodeGraph FTS5 symbol-name query (indexed repos only).
-    // All 31 Metrolinx repos are indexed — this fires for every repo.
-    // Count results (capped at 20) × 5 pts; 10 hits = +50, decisively ahead of Tier 1.
+    // Use the SUM of BM25 scores, not result count. BM25 rewards rare/specific
+    // terms (e.g. "mozio" in a symbol name scores 70-100) and penalises common
+    // words (e.g. "email" in comments scores 3-5). Simple result counting
+    // saturated at the 20-result cap for every repo because common words like
+    // "email" and "amount" appear in every codebase, collapsing score separation.
     if (cgEnabled && cg && cgQuery && cg.isCodeGraphIndexed(repo.path)) {
       try {
         const results = cg.queryCodeGraph(cgQuery, repo.path, 20);
-        score += Math.min((results || []).length, 20) * 5;
+        const bm25Sum = (results || []).reduce((s, r) => s + (r.score || 0), 0);
+        // Divide by 10 to bring BM25 totals (~200-2000) into the same scale as Tier 1 (~9-30)
+        score += Math.round(bm25Sum / 10);
       } catch { /* codegraph unavailable for this repo — skip */ }
     }
 

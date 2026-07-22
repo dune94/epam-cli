@@ -740,7 +740,9 @@ function runSetupDeps(
       mkdirSync(join(full, '..'), { recursive: true });
       writeFileSync(full, content);
     }
-    // Write .epam/setup-deps.sh — copy from the canonical source in the codeline
+    // Write .epam/setup-deps.sh + its sourced lib — copy from the canonical
+    // source in the codeline. setup-deps.sh sources lib-strip-private-scope.sh
+    // from its own SCRIPT_DIR, so both files must be present together.
     mkdirSync(join(dir, '.epam'), { recursive: true });
     const scriptPath = join(dir, '.epam', 'setup-deps.sh');
     writeFileSync(
@@ -748,6 +750,12 @@ function runSetupDeps(
       readFileSync('/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/.epam/setup-deps.sh', 'utf8')
     );
     execFileSync('chmod', ['+x', scriptPath]);
+    const libPath = join(dir, '.epam', 'lib-strip-private-scope.sh');
+    writeFileSync(
+      libPath,
+      readFileSync('/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/.epam/lib-strip-private-scope.sh', 'utf8')
+    );
+    execFileSync('chmod', ['+x', libPath]);
 
     // Write fake binaries into a bin/ dir and prepend to PATH
     const binDir = join(dir, 'bin');

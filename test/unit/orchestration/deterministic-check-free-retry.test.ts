@@ -90,7 +90,10 @@ describe('claude.sh — DETERMINISTIC_CHECK_FAILURE design', () => {
   it('the retry loop skips run_failure_analyst when DETERMINISTIC_CHECK_FAILURE is set, injecting VERIFICATION_FAILURE directly instead', () => {
     const idx = claudeSrc.indexOf('Skipping failure-analyst — violation already precisely known');
     expect(idx).toBeGreaterThan(-1);
-    const block = claudeSrc.slice(idx - 100, idx + 400);
+    // Window expanded (was 400): the healing-events.jsonl re-injection block added
+    // between the log line and the COORDINATOR_PROMPT_AMENDMENT assignment requires
+    // a larger window to see both the re-injection and the final assignment.
+    const block = claudeSrc.slice(idx - 100, idx + 1500);
     expect(block).toMatch(/COORDINATOR_PROMPT_AMENDMENT="\$\{_existing_amendment\}/);
     expect(block).toContain('${VERIFICATION_FAILURE}');
   });

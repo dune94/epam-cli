@@ -154,11 +154,11 @@ describe('gate log file handling', () => {
   });
 });
 
-// ─── Step 3.8: Lint gate ─────────────────────────────────────────────────────
+// ─── Step 20: Lint gate ─────────────────────────────────────────────────────
 
 describe('step 3.8 lint gate', () => {
   it('lint gate step 3.8 is declared in the pipeline checklist', () => {
-    expect(orchSrc).toContain('"3.8"');
+    expect(orchSrc).toContain('"20"');
     expect(orchSrc).toContain('Lint gate');
   });
 
@@ -168,7 +168,7 @@ describe('step 3.8 lint gate', () => {
 
   it('lint gate runs tsc --noEmit with PIPESTATUS[0] exit capture', () => {
     // Anchor on the running step_emit which appears in the actual gate code block
-    const lintIdx = orchSrc.indexOf('step_emit "3.8" "running"');
+    const lintIdx = orchSrc.indexOf('step_emit "20" "running"');
     expect(lintIdx).toBeGreaterThan(-1);
     const block = orchSrc.slice(lintIdx, lintIdx + 2500);
     expect(block).toContain('tsc --noEmit');
@@ -176,24 +176,24 @@ describe('step 3.8 lint gate', () => {
   });
 
   it('lint gate skips tsc when src/ has no .ts files (avoids TS18003 on scaffold-only phase)', () => {
-    const lintIdx = orchSrc.indexOf('step_emit "3.8" "running"');
+    const lintIdx = orchSrc.indexOf('step_emit "20" "running"');
     const block = orchSrc.slice(lintIdx, lintIdx + 2500);
     expect(block).toMatch(/find.*src.*\.ts.*wc -l|_lint_ts_count/);
     expect(block).toMatch(/\[ "\$_lint_ts_count" -eq 0 \]|\[ \$_lint_ts_count -eq 0 \]/);
   });
 
   it('lint gate remediation uses AUTOMATION_DIR not SCRIPT_DIR for profiles path', () => {
-    const lintIdx = orchSrc.indexOf('step_emit "3.8" "running"');
+    const lintIdx = orchSrc.indexOf('step_emit "20" "running"');
     const block = orchSrc.slice(lintIdx, lintIdx + 10000);
     expect(block).not.toContain('"${SCRIPT_DIR}/agents/profiles.json"');
     expect(block).toContain('AUTOMATION_DIR');
   });
 
   it('lint gate fails the phase on non-zero tsc exit', () => {
-    const lintIdx = orchSrc.indexOf('step_emit "3.8" "running"');
+    const lintIdx = orchSrc.indexOf('step_emit "20" "running"');
     // Gate includes self-healing remediation before the exit — measure with:
     // node -e "src=require('fs').readFileSync('orchestrations/scripts/run-agent-orchestration.sh','utf8'); s=src.indexOf('step_emit \"3.8\" \"running\"'); console.log(src.indexOf('exit 1',s)-s)"
-    const block = orchSrc.slice(lintIdx, lintIdx + 10600);
+    const block = orchSrc.slice(lintIdx, lintIdx + 13500);
     expect(block).toContain('_lint_failed=1');
     // exit 2 = remediation applied (retry); exit 1 = fallback (hard abort). Both must be present.
     expect(block).toContain('exit 2');
@@ -201,7 +201,7 @@ describe('step 3.8 lint gate', () => {
   });
 
   it('lint gate runs eslint when binary is available', () => {
-    const lintIdx = orchSrc.indexOf('step_emit "3.8" "running"');
+    const lintIdx = orchSrc.indexOf('step_emit "20" "running"');
     const block = orchSrc.slice(lintIdx, lintIdx + 2500);
     expect(block).toContain('eslint');
     expect(block).toContain('--max-warnings 0');
@@ -212,7 +212,7 @@ describe('step 3.8 lint gate', () => {
     // Bug (second fix): file-existence check found .eslintrc.cjs but ESLint 6.x doesn't support .cjs format.
     // Root fix: use `eslint --print-config <file>` as a dry-run probe — if eslint itself can't resolve
     // its config, skip it. This works regardless of eslint version or config file format.
-    const lintIdx = orchSrc.indexOf('step_emit "3.8" "running"');
+    const lintIdx = orchSrc.indexOf('step_emit "20" "running"');
     const block = orchSrc.slice(lintIdx, lintIdx + 2500);
 
     // eslint invocation must be present
@@ -228,16 +228,16 @@ describe('step 3.8 lint gate', () => {
   });
 
   it('lint gate is positioned after step 3.7 and before step 4', () => {
-    const idx37 = orchSrc.indexOf('Step 3.7: Pre-review gate PASSED');
-    const idx38 = orchSrc.indexOf('Step 3.8: Lint gate');
-    const idx4  = orchSrc.indexOf('Step 4: Run review stories');
+    const idx37 = orchSrc.indexOf('Step 19: Pre-review gate PASSED');
+    const idx38 = orchSrc.indexOf('Step 20: Lint gate');
+    const idx4  = orchSrc.indexOf('Step 21: Running review stories');
     expect(idx37).toBeGreaterThan(-1);
     expect(idx38).toBeGreaterThan(idx37);
     expect(idx4).toBeGreaterThan(idx38);
   });
 });
 
-// ─── Step 3.7: Pre-review gate tsc exit code ─────────────────────────────────
+// ─── Step 19: Pre-review gate tsc exit code ─────────────────────────────────
 // The pre-review gate runs `tsc --noEmit 2>&1 | tee logfile`.
 // In bash, `if cmd | tee file; then` tests tee's exit code, not cmd's.
 // tee always exits 0, so tsc errors are silently swallowed unless PIPESTATUS[0] is used.
@@ -279,5 +279,98 @@ describe('step 3.7 pre-review gate tsc exit code handling', () => {
     const block = orchSrc.slice(preReviewIdx, preReviewIdx + 900);
     expect(block).toMatch(/find.*src.*\.ts.*wc -l|_pre_review_ts_count/);
     expect(block).toMatch(/\[ "\$_pre_review_ts_count" -eq 0 \]|\[ \$_pre_review_ts_count -eq 0 \]/);
+  });
+});
+
+// ─── Spec validator: oracle injection (max-iterations fix) ────────────────────
+// Root cause (2026-07-20): spec validator called tools to read files for each
+// story in the phase. With 7 stories × ~3 reads = 21+ iterations, the 20-iter
+// agent cap triggered before the JSON verdict was written. Fix: pre-inject git
+// diff + key file excerpts so the agent concludes without any tool calls.
+
+describe('spec validator — oracle injection (prevents max-iteration exhaustion)', () => {
+  it('injects implementation evidence (git diff + file excerpts) before calling the gate', () => {
+    // The impl evidence block must be built BEFORE _run_qa_gate_with_retry
+    const specIdx = orchSrc.indexOf('_run_qa_gate_with_retry "$spec_prompt" "qa-gate:spec-validator"');
+    expect(specIdx).toBeGreaterThan(-1);
+    const before = orchSrc.slice(Math.max(0, specIdx - 9000), specIdx);
+    expect(before).toContain('_spec_impl_evidence');
+    expect(before).toContain('phase-baseline-sha.txt');
+    expect(before).toContain('technicalNotes');
+  });
+
+  it('spec validator prompt tells the agent NOT to call tools', () => {
+    const specIdx = orchSrc.indexOf('_run_qa_gate_with_retry "$spec_prompt" "qa-gate:spec-validator"');
+    const before = orchSrc.slice(Math.max(0, specIdx - 6000), specIdx);
+    expect(before).toMatch(/Do NOT call any tools|Do NOT attempt to call any/);
+  });
+
+  it('implementation evidence is injected into spec_prompt before gate call', () => {
+    // $_spec_impl_evidence must appear in the spec_prompt assignment that
+    // precedes _run_qa_gate_with_retry — proving it reaches the agent.
+    const specIdx = orchSrc.indexOf('_run_qa_gate_with_retry "$spec_prompt" "qa-gate:spec-validator"');
+    const before = orchSrc.slice(Math.max(0, specIdx - 1500), specIdx);
+    expect(before).toContain('$_spec_impl_evidence');
+  });
+
+  it('spec validator prompt instructs untestable classification when evidence insufficient', () => {
+    const specIdx = orchSrc.indexOf('_run_qa_gate_with_retry "$spec_prompt" "qa-gate:spec-validator"');
+    const before = orchSrc.slice(Math.max(0, specIdx - 6000), specIdx);
+    expect(before).toContain('untestable');
+  });
+});
+
+// ─── Gate retry: oracle-aware prefix (mutant-hunter no-output fix) ────────────
+// Root cause (2026-07-20): _run_qa_gate_with_retry retry prefix told the model
+// "Use ReadFile and Bash tools" even when the gate prompt already contained
+// pre-injected oracle evidence and a "Do NOT attempt to call any shell commands"
+// instruction. The contradiction caused the model to produce no structured output
+// on both attempts. Fix: detect the no-tools contract from the prompt itself and
+// emit a retry prefix that stays consistent — "re-analyze the pre-injected
+// evidence" instead of "use tools now".
+
+describe('_run_qa_gate_with_retry — oracle-aware retry prefix', () => {
+  // Extract the full function body rather than a fixed character slice,
+  // so the tests don't silently break when the function grows.
+  function extractRetryFn(): string {
+    const retryIdx = orchSrc.indexOf('_run_qa_gate_with_retry()');
+    expect(retryIdx).toBeGreaterThan(-1);
+    // Function ends at the first top-level closing brace after the opening
+    const bodyStart = orchSrc.indexOf('{', retryIdx);
+    // Find the matching closing brace by counting depth
+    let depth = 0;
+    let i = bodyStart;
+    while (i < orchSrc.length) {
+      if (orchSrc[i] === '{') depth++;
+      else if (orchSrc[i] === '}') { depth--; if (depth === 0) break; }
+      i++;
+    }
+    return orchSrc.slice(retryIdx, i + 1);
+  }
+
+  it('retry function detects no-tools contract via prompt content, not hardcoded gate name', () => {
+    const block = extractRetryFn();
+    expect(block).toContain('Do NOT attempt to call any shell commands');
+    expect(block).not.toMatch(/mutant-hunter|spec-validator|sast/);
+  });
+
+  it('oracle-injected prompts get a retry prefix that does NOT say "Use ReadFile and Bash tools"', () => {
+    const block = extractRetryFn();
+    const oracleBranchIdx = block.indexOf('Re-analyze the pre-injected evidence');
+    expect(oracleBranchIdx).toBeGreaterThan(-1);
+    const oracleBranch = block.slice(oracleBranchIdx, oracleBranchIdx + 250);
+    expect(oracleBranch).not.toContain('Use ReadFile and Bash tools');
+  });
+
+  it('non-oracle prompts still get the tool-using retry prefix', () => {
+    const block = extractRetryFn();
+    expect(block).toContain('Use ReadFile and Bash tools to read the relevant source files now');
+  });
+
+  it('oracle branch retry prefix still instructs the model not to call tools', () => {
+    const block = extractRetryFn();
+    const oracleBranchIdx = block.indexOf('Re-analyze the pre-injected evidence');
+    const oracleBranch = block.slice(oracleBranchIdx, oracleBranchIdx + 250);
+    expect(oracleBranch).toMatch(/Do NOT call any tools/);
   });
 });

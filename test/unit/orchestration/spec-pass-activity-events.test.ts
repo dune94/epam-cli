@@ -157,3 +157,35 @@ describe('appendSpecPassEvent — REAL execution, JSONL shape', () => {
     }
   });
 });
+
+describe('spec-mode-runner.js — all agent calls guarded against thrown exceptions', () => {
+  it('initial runSpeckitReview/runSpecAgent call (per-story loop) is wrapped in try/catch so thrown errors enter the retry loop', () => {
+    const agentResultIdx = SPEC_MODE_SRC.indexOf('let agentResult;');
+    expect(agentResultIdx).toBeGreaterThan(-1);
+    const loopBody = SPEC_MODE_SRC.slice(agentResultIdx, agentResultIdx + 2000);
+
+    const tryCatchIdx = loopBody.indexOf('try {');
+    const speckitCallIdx = loopBody.indexOf('runSpeckitReview({');
+    expect(tryCatchIdx).toBeGreaterThan(-1);
+    expect(speckitCallIdx).toBeGreaterThan(tryCatchIdx);
+    expect(loopBody).toContain('} catch (err) { agentResult = null; }');
+    const whileLoopIdx = loopBody.indexOf('while (!agentResult');
+    expect(whileLoopIdx).toBeGreaterThan(tryCatchIdx);
+  });
+
+  it('model-review runAgentForJson call is wrapped in try/catch (non-critical, null = skip model reassignment)', () => {
+    const modelReviewIdx = SPEC_MODE_SRC.indexOf('spec-model-review-');
+    expect(modelReviewIdx).toBeGreaterThan(-1);
+    const block = SPEC_MODE_SRC.slice(Math.max(0, modelReviewIdx - 400), modelReviewIdx + 200);
+    expect(block).toContain('try {');
+    expect(block).toContain('} catch (err) { llmDecisions = null; }');
+  });
+
+  it('mid-execution split runSpeckitReview call is wrapped in try/catch (non-critical, null = skip refinements)', () => {
+    const midSplitIdx = SPEC_MODE_SRC.indexOf('Mid-execution split registered by agent');
+    expect(midSplitIdx).toBeGreaterThan(-1);
+    const block = SPEC_MODE_SRC.slice(midSplitIdx, midSplitIdx + 700);
+    expect(block).toContain('try {');
+    expect(block).toContain('} catch (err) { speckitResult = null; }');
+  });
+});

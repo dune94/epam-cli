@@ -616,8 +616,14 @@
             return;
         }
 
-        // Sort newest first
-        const sorted = [...events].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        // Sort newest first; suppress zero-cost snapshots (no LLM call was made)
+        const sorted = [...events]
+            .filter(evt => {
+                if (evt.type !== 'cost_snapshot') return true;
+                const d = evt.detail || {};
+                return (d.costUsd || 0) > 0 || (d.tokensIn || 0) > 0 || (d.tokensOut || 0) > 0;
+            })
+            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
         let html = '<div class="timeline">';
         for (const evt of sorted) {

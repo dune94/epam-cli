@@ -103,7 +103,7 @@ describe('Step 6 call site — run_phase_assessment() failure must not abort the
   // failed (exit 1) -- aborting pipeline" by tier3-travel-app-run.sh, over
   // nothing but Step 6's assessment call.
   it('Step 6 wraps run_phase_assessment in an if/else, not a bare call', () => {
-    const idx = orchSrc.indexOf('Step 6: Running final post-phase assessment');
+    const idx = orchSrc.indexOf('Step 24: Running final post-phase assessment');
     const block = orchSrc.slice(idx, idx + 1400);
     expect(block).toMatch(/if run_phase_assessment "\$PHASE"; then/);
     expect(block).not.toMatch(/\n\s*run_phase_assessment "\$PHASE"\s*\n/);

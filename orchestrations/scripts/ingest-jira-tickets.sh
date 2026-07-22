@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+# ingest-jira-tickets.sh — Stage 0+1 of the Jira-first brownfield pipeline.
+#
+# Pulls tickets from Jira → runs AC gate → synthesizes PRD.
+# On success, writes the synthesized PRD path to stdout.
+# On insufficient ACs, exits 2 (caller must halt the run).
+#
+# Usage:
+#   source .env
+#   bash ingest-jira-tickets.sh \
+#     --project SKY \
+#    [--status "To Do"] \
+#    [--out-prd /path/to/prd.json] \
+#    [--dry-run]
+#
+# Env vars required:
+#   JIRA_URL, JIRA_EMAIL, JIRA_TOKEN, JIRA_PROJECT_KEY
+#   NODE_BIN (default: node from PATH)
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ORCH_DIR="$(dirname "$SCRIPT_DIR")"
+NODE_BIN="${NODE_BIN:-$(command -v node 2>/dev/null || echo 'node')}"
+# Prefer Node 20 when available
+[ -x "/home/bradleyjerome/.nvm/versions/node/v20.20.0/bin/node" ] && \
+  NODE_BIN="/home/bradleyjerome/.nvm/versions/node/v20.20.0/bin/node"
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
+log()  { echo -e "${GREEN}[ingest]${NC} $*"; }
+warn() { echo -e "${YELLOW}[ingest]${NC} $*"; }
+err()  { echo -e "${RED}[ingest]${NC} $*" >&2; }
+
+# ── Arg parsing ───────────────────────────────────────────────────────────
+PROJECT_KEY="${JIRA_PROJECT_KEY:-SKY}"
+JIRA_STATUS="To Do"
+OUT_PRD="${ORCH_DIR}/travel-app-prd.json"
+DRY_RUN=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --project)   PROJECT_KEY="$2"; shift 2 ;;
+    --status)    JIRA_STATUS="$2"; shift 2 ;;
+    --out-prd)   OUT_PRD="$2"; shift 2 ;;
+    --dry-run)   DRY_RUN=1; shift ;;
+    *) err "Unknown arg: $1"; exit 1 ;;
+  esac
+done
+
+# Source main project .env so API keys reach ac-gate subprocess
+REPO_ROOT_INGEST="$(cd "$SCRIPT_DIR/../.." && pwd)"
+[ -f "$REPO_ROOT_INGEST/.env" ] && { set -a; source "$REPO_ROOT_INGEST/.env"; set +a; }
+
+TMPDIR_INGEST="$(mktemp -d /tmp/ingest-XXXXXX)"
+ISSUES_JSON="$TMPDIR_INGEST/issues.json"
+GATE_JSON="$TMPDIR_INGEST/ac-gate.json"
+DRY_FLAG=""
+[ "$DRY_RUN" = "1" ] && DRY_FLAG="--dry-run"
+
+cleanup() { rm -rf "$TMPDIR_INGEST"; }
+trap cleanup EXIT
+
+# ── Validate Jira config ──────────────────────────────────────────────────
+if [ -z "${JIRA_URL:-}" ] || [ -z "${JIRA_EMAIL:-}" ] || [ -z "${JIRA_TOKEN:-}" ]; then
+  err "JIRA_URL, JIRA_EMAIL, and JIRA_TOKEN must be set."
+  err "Run: source orchestrations/jira/.env"
+  exit 1
+fi
+
+log "Pulling tickets from ${JIRA_URL} — project: ${PROJECT_KEY}, status: '${JIRA_STATUS}'"
+
+# ── Step 1: Pull issues from Jira via jira-client.js ─────────────────────
+"$NODE_BIN" - <<EOF > "$ISSUES_JSON"
+const jira = require('${SCRIPT_DIR}/lib/jira-client');
+jira.getProjectIssues('${PROJECT_KEY}', '${JIRA_STATUS}').then(issues => {
+  process.stdout.write(JSON.stringify(issues, null, 2));
+}).catch(e => {
+  process.stderr.write('[ingest] Failed to fetch issues: ' + e.message + '\n');
+  process.stdout.write('[]');
+  process.exit(1);
+});
+EOF
+
+ISSUE_COUNT=$("$NODE_BIN" -e "console.log(JSON.parse(require('fs').readFileSync('$ISSUES_JSON','utf8')).length)")
+log "Found ${ISSUE_COUNT} issues."
+
+if [ "$ISSUE_COUNT" = "0" ]; then
+  err "No issues found in project ${PROJECT_KEY} with status '${JIRA_STATUS}'."
+  err "Run the seed script first: node orchestrations/jira/seed-from-prd.js"
+  exit 1
+fi
+
+# ── Step 1.5 [BROWNFIELD]: Codeline discovery ─────────────────────────────
+# Greenfield path: JIRA_CODELINES is already declared in the project env file —
+# this block is a complete no-op and the greenfield flow is unchanged.
+#
+# Brownfield path: EPAM_BROWNFIELD=1 + JIRA_CODELINE_ROOT set.  An LLM reads
+# the pulled tickets and a filesystem manifest of local repos under
+# JIRA_CODELINE_ROOT, then returns which repo(s) the tickets belong to.
+# The result is exported as JIRA_CODELINES + JIRA_WORKTREE_<NAME> so the
+# downstream synthesize-prd-from-jira.js step can build outputDirs without
+# any hardcoded worktree paths in the project env file.
+if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -z "${JIRA_CODELINES:-}" ]; then
+  if [ -z "${JIRA_CODELINE_ROOT:-}" ]; then
+    err "EPAM_BROWNFIELD=1 requires JIRA_CODELINE_ROOT to point to the root of local repos."
+    exit 1
+  fi
+  if [ ! -d "${JIRA_CODELINE_ROOT}" ]; then
+    err "JIRA_CODELINE_ROOT does not exist: ${JIRA_CODELINE_ROOT}"
+    exit 1
+  fi
+  log "Brownfield: running codeline discovery against ${JIRA_CODELINE_ROOT}..."
+  DISCOVERY_JSON="$TMPDIR_INGEST/codeline-discovery.json"
+  DISCOVERY_EXIT=0
+  "$NODE_BIN" "${SCRIPT_DIR}/lib/codeline-discovery.js" \
+    --issues "$ISSUES_JSON" \
+    --root   "${JIRA_CODELINE_ROOT}" \
+    --out    "$DISCOVERY_JSON" \
+    $DRY_FLAG \
+    2>&1 || DISCOVERY_EXIT=$?
+  if [ "$DISCOVERY_EXIT" != "0" ]; then
+    err "Codeline discovery failed (exit ${DISCOVERY_EXIT}). Cannot synthesize PRD."
+    exit 1
+  fi
+  # Export discovered codelines into the current shell so synthesize-prd-from-jira.js
+  # inherits JIRA_CODELINES and JIRA_WORKTREE_<NAME> without any hardcoded env vars.
+  _discovery_exports=$("$NODE_BIN" - "$DISCOVERY_JSON" <<'NODE_EXPORT_EOF'
+const fs   = require('fs');
+const disc = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+const names = (disc.codelines || []).map(c => c.name).join(',');
+let out = `JIRA_CODELINES="${names}"\n`;
+for (const cl of (disc.codelines || [])) {
+  out += `JIRA_WORKTREE_${cl.name.toUpperCase().replace(/[^A-Z0-9]/g,'_')}="${cl.path}"\n`;
+}
+// Also export JIRA_DEFAULT_CODELINE when there is exactly one codeline so the
+// orch script's codeline-setup function can pair it with project.outputDir.
+if (disc.codelines && disc.codelines.length === 1) {
+  out += `JIRA_DEFAULT_CODELINE="${disc.codelines[0].name}"\n`;
+}
+process.stdout.write(out);
+NODE_EXPORT_EOF
+  )
+  while IFS='=' read -r _key _val; do
+    [ -z "$_key" ] && continue
+    export "${_key}=${_val//\"/}"
+  done <<< "$_discovery_exports"
+  log "Codeline discovery complete: JIRA_CODELINES=${JIRA_CODELINES:-}"
+fi
+
+# ── Step 2: AC sufficiency gate ───────────────────────────────────────────
+log "Running AC sufficiency gate..."
+GATE_EXIT=0
+# Use --out so JSON goes cleanly to file; all logs go to stderr (visible on terminal)
+AC_GATE_DRY_RUN="${DRY_RUN}" \
+  "$NODE_BIN" "${SCRIPT_DIR}/lib/ac-gate.js" \
+    --issues "$ISSUES_JSON" \
+    --out    "$GATE_JSON" \
+    $DRY_FLAG \
+    2>&1 || GATE_EXIT=$?
+
+if [ "$GATE_EXIT" != "0" ] && [ "$GATE_EXIT" != "2" ]; then
+  err "AC gate failed unexpectedly (exit ${GATE_EXIT})"
+  exit 1
+fi
+
+# Show per-story verdicts
+"$NODE_BIN" -e "
+  const r = JSON.parse(require('fs').readFileSync('$GATE_JSON','utf8'));
+  r.forEach(s => {
+    const icon = s.verdict === 'sufficient' ? '✅' : s.verdict === 'enrichable' ? '🔶' : '🛑';
+    console.log('  ' + icon + ' ' + s.jiraKey + ' — ' + s.verdict + ': ' + s.reason);
+  });
+" 2>/dev/null || true
+
+INSUFFICIENT_COUNT=$("$NODE_BIN" -e "
+  const r = JSON.parse(require('fs').readFileSync('$GATE_JSON','utf8'));
+  console.log(r.filter(x=>x.verdict==='insufficient').length);
+" 2>/dev/null || echo "0")
+
+if [ "$GATE_EXIT" = "2" ] || [ "$INSUFFICIENT_COUNT" -gt "0" ]; then
+  warn "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  warn "  AC Gate: ${INSUFFICIENT_COUNT} story/stories have INSUFFICIENT ACs."
+  warn "  Pipeline halted. Human approval required."
+  warn ""
+  warn "  Permission-request comments have been posted to Jira."
+  warn "  Once a human approves (replies /approve-elaboration),"
+  warn "  re-trigger this run."
+  warn "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  exit 2
+fi
+
+# ── Step 3: Synthesize PRD ────────────────────────────────────────────────
+log "Synthesizing PRD from classified tickets..."
+# Worktree paths are read from JIRA_WORKTREE_<CODELINE_UPPER> env vars by convention.
+# No --be-dir/--fe-dir flags: synthesize-prd-from-jira.js discovers codelines from data.
+"$NODE_BIN" "${SCRIPT_DIR}/synthesize-prd-from-jira.js" \
+  --classifications "$GATE_JSON" \
+  --out "$OUT_PRD" \
+  2>&1 | grep '^\[synthesize-prd\]' | sed 's/\[synthesize-prd\]/[ingest]/' >&2
+
+log "PRD ready: ${OUT_PRD}"
+echo "$OUT_PRD"

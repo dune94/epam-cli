@@ -232,6 +232,8 @@ phantom_types = []
 for sid in active_ids:
     s = by_id.get(sid, {})
     for ac in s.get('acceptanceCriteria', []):
+        if not isinstance(ac, str):
+            continue
         if "./types'" in ac or './types"' in ac:
             phantom_types.append(sid)
             break
@@ -249,6 +251,8 @@ for sid in active_ids:
     # Build set of basenames declared by this story
     basenames = {f.split('/')[-1].replace('.ts', '').replace('.js', '') for f in files}
     for ac in s.get('acceptanceCriteria', []):
+        if not isinstance(ac, str):
+            continue
         for imp in import_re.findall(ac):
             imp_base = imp.lstrip('./').replace('.ts', '').replace('.js', '')
             if imp_base not in basenames and imp != './types':
@@ -334,6 +338,8 @@ for sid in active_ids:
         if m:
             declared_rel.add(m.group(1))
     for ac in s.get('acceptanceCriteria', []):
+        if not isinstance(ac, str):
+            continue
         for mentioned in path_re.findall(ac):
             if mentioned not in declared_rel:
                 scope_violations.append(f"{sid}: AC references '{mentioned}' — not in this story's technicalNotes.files")

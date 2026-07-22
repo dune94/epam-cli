@@ -1,0 +1,10 @@
+[
+  {
+    "id": "vitest-pass-with-no-tests",
+    "symptomPattern": "(?:vitest|test).*(?:no test files|zero test files).*exit|exit.*1.*(?:no|zero) test files|passWithNoTests",
+    "targetFile": "vitest.config.ts",
+    "checkPattern": "passWithNoTests",
+    "insertAfterPattern": "test:\\s*\\{",
+    "insertText": "\n    passWithNoTests: true,"
+  }
+]

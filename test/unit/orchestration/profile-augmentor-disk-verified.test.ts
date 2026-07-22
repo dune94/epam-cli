@@ -36,8 +36,11 @@ describe('profile-augmentor disk-state verification — wiring (static)', () => 
   it('compares profiles.json before/after and detects a no-op claim', () => {
     const idx = orchSrc.indexOf('grep -q \'"profile_updated"[[:space:]]*:[[:space:]]*true\'');
     const block = orchSrc.slice(idx, idx + 1400);
-    expect(block).toMatch(/if \[ "\$_profiles_after" = "\$_profiles_before" \]; then/);
-    expect(block).toMatch(/unchanged on disk — treating as no-op, not applied/);
+    // L3 retry fix (2026-07-19): disk check is now inside a 2-attempt retry loop;
+    // the affirmative form checks _profiles_after != _profiles_before (sets disk_changed=1),
+    // and the guard outside the loop uses _pfa3_disk_changed = 0 to trigger continue.
+    expect(block).toMatch(/_pfa3_disk_changed=1/);
+    expect(block).toMatch(/unchanged on disk.*treating as no-op, not applied/);
     expect(block).toMatch(/continue/);
   });
 
@@ -148,7 +151,7 @@ describe('profile-augmentor disk-state verification — REAL execution', () => {
       agentClaimsUpdate: true,
       agentActuallyWrites: false, // the exact live defect: claims success, writes nothing
     });
-    expect(log).toMatch(/unchanged on disk — treating as no-op/);
+    expect(log).toMatch(/unchanged on disk.*treating as no-op/);
     expect(appliedFlagSet).toBe(false);
   });
 

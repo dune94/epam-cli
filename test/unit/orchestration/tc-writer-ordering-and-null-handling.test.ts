@@ -40,13 +40,13 @@ describe('BUG 1 — Step 1.6 ordering relative to worktree topology', () => {
   it('the old Step 1.6 location (before Step 2/worktree creation) is now just a comment, no gate logic', () => {
     const iNeedWorktrees = orchSrc.indexOf('need_worktrees=false');
     const before = orchSrc.slice(Math.max(0, iNeedWorktrees - 600), iNeedWorktrees);
-    expect(before).toMatch(/has moved — see after Step 3\.2 below/);
+    expect(before).toMatch(/has moved — see after Step 17 below/);
     expect(before).not.toMatch(/post-impl-tc-writer\.sh/);
     expect(before).not.toMatch(/_tc_writer_needed=/);
   });
 
-  it('Step 1.6 gate logic executes after "Step 3.2: All worktree branches merged back successfully"', () => {
-    const iMerge = orchSrc.indexOf('Step 3.2: All worktree branches merged back successfully');
+  it('Step 1.6 gate logic executes after "Step 17: All worktree branches merged back successfully"', () => {
+    const iMerge = orchSrc.indexOf('Step 17: All worktree branches merged back successfully');
     const iGate = orchSrc.indexOf('_tc_writer_needed=', iMerge);
     expect(iMerge).toBeGreaterThan(-1);
     expect(iGate).toBeGreaterThan(iMerge);
@@ -54,7 +54,7 @@ describe('BUG 1 — Step 1.6 ordering relative to worktree topology', () => {
 
   it('Step 1.6 gate logic executes before the Step 3.5 post-parallel skill assessment', () => {
     const iGate = orchSrc.indexOf('_tc_writer_needed=');
-    const iStep35 = orchSrc.indexOf('Step 3.5: Post-Parallel Skill Assessment');
+    const iStep35 = orchSrc.indexOf('Step 18: Post-Parallel Skill Assessment');
     expect(iStep35).toBeGreaterThan(iGate);
   });
 
@@ -62,7 +62,7 @@ describe('BUG 1 — Step 1.6 ordering relative to worktree topology', () => {
     // Structural guarantee: the merge-back block runs unconditionally (even
     // the "else" no-worktrees branch), and the TC gate is placed
     // unconditionally after both branches close.
-    const iElse = orchSrc.indexOf('Step 3.2: No worktrees — skipping merge-back');
+    const iElse = orchSrc.indexOf('Step 17: No worktrees — skipping merge-back');
     const iGate = orchSrc.indexOf('_tc_writer_needed=');
     expect(iGate).toBeGreaterThan(iElse);
   });

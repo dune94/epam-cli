@@ -30,8 +30,8 @@ const orchSrc = readFileSync(ORCH_SH, 'utf8');
 
 describe('Step 1.66 wiring (static)', () => {
   it('runs after Step 1.65 (skills coordinator audit), before the monitor sync', () => {
-    const skillsIdx = orchSrc.indexOf('step_emit "1.65" "pass" "Step 1.65: Skills coordinator audit"');
-    const toolsIdx = orchSrc.indexOf('Step 1.66: Tools coordinator audit');
+    const skillsIdx = orchSrc.indexOf('step_emit "11" "pass" "Step 11: Skills coordinator audit"');
+    const toolsIdx = orchSrc.indexOf('Step 12: Tools coordinator audit');
     const syncIdx = orchSrc.indexOf('Sync story data to monitor from cost log');
     expect(skillsIdx).toBeGreaterThan(-1);
     expect(toolsIdx).toBeGreaterThan(skillsIdx);
@@ -42,14 +42,14 @@ describe('Step 1.66 wiring (static)', () => {
     expect(orchSrc).toMatch(/if \[ "\$\{SKIP_TOOLS_AUDIT:-0\}" = "1" \]; then/);
   });
 
-  it('appends the "1.66" checklist row', () => {
-    expect(orchSrc).toMatch(/_checklist_row "1\.66"\s+"Tools coordinator audit"/);
+  it('appends the "12" checklist row', () => {
+    expect(orchSrc).toMatch(/_checklist_row "12"\s+"Tools coordinator audit"/);
   });
 
-  it('includes "1.66" in the skip-counting key list', () => {
-    const idx = orchSrc.indexOf('for key in "0" "0.1"');
+  it('includes "12" in the skip-counting key list', () => {
+    const idx = orchSrc.indexOf('for key in "1" "2"');
     const line = orchSrc.slice(idx, orchSrc.indexOf('\n', idx));
-    expect(line).toMatch(/"1\.65" "1\.66" "2"/);
+    expect(line).toMatch(/"11" "12"/);
   });
 
   it('duplicates are flagged, not auto-merged', () => {
@@ -61,7 +61,7 @@ describe('Step 1.66 wiring (static)', () => {
   it('restores the pre-audit tool snapshot if the rewrite leaves it syntactically broken', () => {
     const idx = orchSrc.indexOf('_tc_before=$(cat "$_tc_path"');
     expect(idx).toBeGreaterThan(-1);
-    const block = orchSrc.slice(idx, idx + 1400);
+    const block = orchSrc.slice(idx, idx + 1700);
     expect(block).toMatch(/bash -n "\$_tc_path"/);
     expect(block).toMatch(/echo "\$_tc_before" > "\$_tc_path"/);
   });
@@ -196,7 +196,7 @@ describe('Step 1.66 — REAL execution: LLM only invoked when the scan flags a b
   function extractStepBlock(): string {
     const startMarker = 'if [ "${SKIP_TOOLS_AUDIT:-0}" = "1" ]; then';
     const start = orchSrc.indexOf(startMarker);
-    const endMarker = 'step_emit "1.66" "pass" "Step 1.66: Tools coordinator audit"\nfi';
+    const endMarker = 'step_emit "12" "pass" "Step 12: Tools coordinator audit"\nfi';
     const end = orchSrc.indexOf(endMarker, start) + endMarker.length;
     if (start === -1 || end === -1) throw new Error('Could not locate Step 1.66 block');
     return orchSrc.slice(start, end);
@@ -341,7 +341,8 @@ describe('Step 1.66 — REAL execution: LLM only invoked when the scan flags a b
       },
       { stubMode: 'llm-fails' },
     );
-    expect(llmCallCount).toBe(1);
+    // Retry fix (2026-07-19): retries once on failure → 2 calls before giving up
+    expect(llmCallCount).toBe(2);
     expect(stdout).toMatch(/failed to fix.*leaving as-is/);
     expect(toolContent).toContain('exit 1');
     rmSync(dir, { recursive: true, force: true });
@@ -356,7 +357,8 @@ describe('Step 1.66 — REAL execution: LLM only invoked when the scan flags a b
       },
       { stubMode: 'leaves-broken-syntax' },
     );
-    expect(llmCallCount).toBe(1);
+    // Retry fix (2026-07-19): attempt 1 warns+retries; attempt 2 restores → 2 calls
+    expect(llmCallCount).toBe(2);
     expect(stdout).toMatch(/left mock-fetch-in-test\.sh syntactically broken.*[Rr]estoring/);
     // Restored to the original (still broken-at-runtime, but syntactically valid) tool.
     expect(toolContent).toContain('exit 1');

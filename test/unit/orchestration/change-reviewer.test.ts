@@ -394,3 +394,109 @@ describe('run-agent-orchestration.sh — reviewer wired after profile-augmentor'
     expect(orchSrc).toMatch(/reviewer approved/i);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// H1: story-recovery reviewer gate — fail-safe (no longer fails open on
+// transient model error or unparseable response).
+//
+// Root cause fixed: the old Python fallback was print(obj.get('verdict','pass'))
+// and print(m.group(1) if m else 'pass'), plus `|| echo "pass"` on the shell
+// pipeline — meaning any provider timeout, empty response, or malformed JSON
+// produced _verdict="pass", silently accepting restructured ACs with zero review.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('run-agent-orchestration.sh — story-recovery reviewer gate is fail-safe (H1)', () => {
+  const h1Start = orchSrc.indexOf('local _rev_raw="" _rev_attempt=0');
+  const h1Block = h1Start >= 0 ? orchSrc.slice(h1Start, h1Start + 2500) : '';
+
+  it('block is present in script (guard against future regressions)', () => {
+    expect(h1Start).toBeGreaterThan(-1);
+  });
+
+  it('retry loop exists — up to 2 attempts before giving up', () => {
+    expect(h1Block).toMatch(/_rev_attempt/);
+    expect(h1Block).toMatch(/-lt 2/);
+  });
+
+  it('corrective re-prompt is injected on retry naming the exact failure', () => {
+    expect(h1Block).toMatch(/CORRECTION.*previous response did not contain parseable JSON/s);
+  });
+
+  it('escalates to ESCALATION_MODEL_HIGH on attempt 1 (second call)', () => {
+    expect(h1Block).toMatch(/ESCALATION_MODEL_HIGH/);
+    expect(h1Block).toMatch(/_rev_attempt.*-ge 1.*ESCALATION_MODEL_HIGH|ESCALATION_MODEL_HIGH.*_rev_attempt/s);
+  });
+
+  it('python parser no longer defaults to pass — exits without printing on unparseable input', () => {
+    const pyBlock = h1Block.slice(h1Block.indexOf('python3 -c'));
+    expect(pyBlock).not.toMatch(/get\('verdict','pass'\)/);
+    expect(pyBlock).not.toMatch(/if m else 'pass'/);
+    expect(pyBlock).toMatch(/if v in \('pass','fail'\)/);
+  });
+
+  it('shell pipeline fallback is `|| true` (empty capture) not `|| echo "pass"`', () => {
+    const afterPy = h1Block.slice(h1Block.indexOf('python3 -c'));
+    expect(afterPy).not.toMatch(/\|\| echo "pass"/);
+    expect(afterPy).toMatch(/\|\| true\)/);
+  });
+
+  it('defaults _verdict to "fail" (not "pass") when all retries exhaust without a parseable verdict', () => {
+    expect(h1Block).toMatch(/defaulting to fail \(fail-safe\)/);
+    const exhaustIdx = h1Block.indexOf('defaulting to fail (fail-safe)');
+    const afterExhaust = h1Block.slice(exhaustIdx);
+    expect(afterExhaust).toMatch(/_verdict="fail"/);
+    expect(afterExhaust).not.toMatch(/_verdict="pass"/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// H2: profile-augmentor reviewer gate — fail-safe (same root cause as H1).
+//
+// Identical fail-open pattern existed in the profile-augmentor reviewer call:
+// any transient model failure produced _review_verdict="pass", meaning an
+// unauthorized or malformed profile write was accepted with zero review.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('run-agent-orchestration.sh — profile-augmentor reviewer gate is fail-safe (H2)', () => {
+  const h2Start = orchSrc.indexOf('local _pa_rev_raw="" _pa_rev_attempt=0');
+  const h2Block = h2Start >= 0 ? orchSrc.slice(h2Start, h2Start + 2500) : '';
+
+  it('block is present in script (guard against future regressions)', () => {
+    expect(h2Start).toBeGreaterThan(-1);
+  });
+
+  it('retry loop exists — up to 2 attempts before giving up', () => {
+    expect(h2Block).toMatch(/_pa_rev_attempt/);
+    expect(h2Block).toMatch(/-lt 2/);
+  });
+
+  it('corrective re-prompt is injected on retry naming the exact failure', () => {
+    expect(h2Block).toMatch(/CORRECTION.*previous response did not contain parseable JSON/s);
+  });
+
+  it('escalates to ESCALATION_MODEL_HIGH on attempt 1 (second call)', () => {
+    expect(h2Block).toMatch(/ESCALATION_MODEL_HIGH/);
+    expect(h2Block).toMatch(/_pa_rev_attempt.*-ge 1.*ESCALATION_MODEL_HIGH|ESCALATION_MODEL_HIGH.*_pa_rev_attempt/s);
+  });
+
+  it('python parser no longer defaults to pass — exits without printing on unparseable input', () => {
+    const pyBlock = h2Block.slice(h2Block.indexOf('python3 -c'));
+    expect(pyBlock).not.toMatch(/get\('verdict','pass'\)/);
+    expect(pyBlock).not.toMatch(/if m else 'pass'/);
+    expect(pyBlock).toMatch(/if v in \('pass','fail'\)/);
+  });
+
+  it('shell pipeline fallback is `|| true` (empty capture) not `|| echo "pass"`', () => {
+    const afterPy = h2Block.slice(h2Block.indexOf('python3 -c'));
+    expect(afterPy).not.toMatch(/\|\| echo "pass"/);
+    expect(afterPy).toMatch(/\|\| true\)/);
+  });
+
+  it('defaults _review_verdict to "fail" (not "pass") when all retries exhaust without a parseable verdict', () => {
+    expect(h2Block).toMatch(/defaulting to fail \(fail-safe\)/);
+    const exhaustIdx = h2Block.indexOf('defaulting to fail (fail-safe)');
+    const afterExhaust = h2Block.slice(exhaustIdx);
+    expect(afterExhaust).toMatch(/_review_verdict="fail"/);
+    expect(afterExhaust).not.toMatch(/_review_verdict="pass"/);
+  });
+});

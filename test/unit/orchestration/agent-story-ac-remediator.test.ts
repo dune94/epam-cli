@@ -167,7 +167,7 @@ describe('story-ac-remediator — orch script wiring', () => {
     // Widened window (2026-07-11): the deterministic AC-apply script (a full
     // Python heredoc that scans for and applies the agent's proposed ACs)
     // now sits between the agent call and the _remediation_applied check.
-    const a2Block = orchSrc.slice(a2Idx, a2Idx + 4200);
+    const a2Block = orchSrc.slice(a2Idx, a2Idx + 5500);
     expect(a2Block).toMatch(/_acs_added/);
     expect(a2Block).toMatch(/_acs_added.*-gt 0|\[ "\${_acs_added:-0}" -gt 0/);
     expect(a2Block).toMatch(/_remediation_applied=1/);

@@ -270,7 +270,7 @@ describe('B. Orch script — all 3 tsc gates have empty-src guard', () => {
   // ── Gate 3: Step 3.8 lint gate ────────────────────────────────────────────
 
   describe('Gate 3: Step 3.8 lint gate', () => {
-    const lintRunningIdx = orchSrc.indexOf('step_emit "3.8" "running"');
+    const lintRunningIdx = orchSrc.indexOf('step_emit "20" "running"');
     const block = orchSrc.slice(lintRunningIdx, lintRunningIdx + 2500);
 
     it('Step 3.8 lint gate block exists', () => {
@@ -322,7 +322,7 @@ describe('B. Orch script — all 3 tsc gates have empty-src guard', () => {
       const storyBlock = guardsSrc.slice(storyFnIdx, storyFnIdx + 1200);
       const preReviewIdx = orchSrc.indexOf('Running tsc --noEmit');
       const preReviewBlock = orchSrc.slice(preReviewIdx, preReviewIdx + 1000);
-      const lintIdx = orchSrc.indexOf('step_emit "3.8" "running"');
+      const lintIdx = orchSrc.indexOf('step_emit "20" "running"');
       const lintBlock = orchSrc.slice(lintIdx, lintIdx + 2500);
 
       expect(storyBlock).toMatch(pattern);
@@ -335,7 +335,7 @@ describe('B. Orch script — all 3 tsc gates have empty-src guard', () => {
       const storyBlock = guardsSrc.slice(storyFnIdx, storyFnIdx + 1200);
       const preReviewIdx = orchSrc.indexOf('Running tsc --noEmit');
       const preReviewBlock = orchSrc.slice(preReviewIdx, preReviewIdx + 1000);
-      const lintIdx = orchSrc.indexOf('step_emit "3.8" "running"');
+      const lintIdx = orchSrc.indexOf('step_emit "20" "running"');
       const lintBlock = orchSrc.slice(lintIdx, lintIdx + 2500);
 
       expect(storyBlock).toMatch(/-eq 0/);

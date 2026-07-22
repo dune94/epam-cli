@@ -87,7 +87,7 @@
       "estimatedTokens": 11360,
       "estimatedTurns": 3,
       "estimatedHours": 0.0236,
-      "effort": "low",
+      "effort": "medium",
       "cpaConfidence": 0.78,
       "cpaGate": "pass",
       "completedAt": "2026-05-30T18:30:32-04:00",
@@ -138,7 +138,7 @@
       "estimatedTokens": 123500,
       "estimatedTurns": 6,
       "estimatedHours": 0.0386,
-      "effort": "low",
+      "effort": "medium",
       "cpaConfidence": 0.52,
       "cpaGate": "review",
       "completedAt": "2026-05-31T07:26:29-04:00",
@@ -178,7 +178,8 @@
         ],
         "dependsOn": [
           "SKY-002"
-        ]
+        ],
+        "implementationNotes": "CRITICAL \u2014 argument parsing pitfall: use Number() not parseInt() to parse --adults. parseInt('1.5', 10) silently truncates to 1 (a valid integer), making the non-integer validation impossible \u2014 Number.isInteger(1) is true so exit code 2 is never triggered. Number('1.5') returns 1.5, which correctly fails Number.isInteger() and triggers exit 2. The adults validation must reject: non-integer values (e.g. 1.5), zero, negative numbers, and non-numeric strings. All must exit with code 2.\n\nCRITICAL \u2014 separator row format: the table renders one hyphen-segment per column, padded to that column's width, separated by the same whitespace used between column values. The separator is NOT a single run of unbroken hyphens. A regex checking the separator must allow spaces: /^[-\\s]+$/ not /^-[-]+$/.\n\nCRITICAL \u2014 main() must be exported and guarded. Export the function: `export async function main()`. Guard execution: `if (require.main === module) { main(); }` or use the VITEST env var pattern. Unexported main cannot be tested via require('./cli').main."
       },
       "estimate": 15,
       "estimatedAiMinutes": 2.1083,
@@ -186,7 +187,7 @@
       "estimatedTokens": 117257,
       "estimatedTurns": 6,
       "estimatedHours": 0.0351,
-      "effort": "low",
+      "effort": "medium",
       "cpaConfidence": 0.58,
       "cpaGate": "review",
       "completedAt": "2026-05-31T07:29:46-04:00",

@@ -25,6 +25,23 @@ const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 const orchSrc = readFileSync(ORCH_SH, 'utf8');
 
+describe('run-agent-orchestration.sh — spec-validator output emission instruction', () => {
+  it('prompt instructs agent NOT to write to a file (must emit to stdout)', () => {
+    // In the shell script, the JSON template uses backslash-escaped quotes: \"agent\": \"spec-validator\"
+    const specIdx = orchSrc.indexOf('\\"agent\\": \\"spec-validator\\"');
+    expect(specIdx).toBeGreaterThan(-1);
+    const block   = orchSrc.slice(Math.max(0, specIdx - 500), specIdx + 200);
+    expect(block).toContain('do NOT write to a file');
+  });
+
+  it('prompt includes no-markdown-fences + no-preamble qualifiers (prevents file-write pattern)', () => {
+    const specIdx = orchSrc.indexOf('\\"agent\\": \\"spec-validator\\"');
+    const block   = orchSrc.slice(Math.max(0, specIdx - 500), specIdx + 200);
+    expect(block).toContain('no markdown fences');
+    expect(block).toContain('no preamble');
+  });
+});
+
 describe('run-agent-orchestration.sh — spec-validator log path quoting', () => {
   it('does NOT single-quote $spec_log (the exact live bug — bash never expands single quotes)', () => {
     expect(orchSrc).not.toMatch(/python3 - '\$spec_log'/);

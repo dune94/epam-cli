@@ -49,15 +49,15 @@ describe('assert_no_illegitimate_deprecation — wiring (static)', () => {
   it('is called after Step 0.5 (pre-phase skill assessment), alongside the ID-loss/gain checks', () => {
     const idx = orchSrc.indexOf('run_pre_phase_assessment "$PHASE"');
     const block = orchSrc.slice(idx, idx + 300);
-    expect(block).toMatch(/assert_no_story_ids_lost "presplit" "Step 0\.5/);
-    expect(block).toMatch(/assert_no_illegitimate_deprecation "presplit" "Step 0\.5/);
+    expect(block).toMatch(/assert_no_story_ids_lost "presplit" "Step 3/);
+    expect(block).toMatch(/assert_no_illegitimate_deprecation "presplit" "Step 3/);
   });
 
   it('is called after Step 0.9 (PRD model coordinator), alongside the ID-loss/gain checks', () => {
-    const idx = orchSrc.indexOf('step_emit "0.9" "pass" "Step 0.9: PRD model coordinator"');
+    const idx = orchSrc.indexOf('step_emit "7" "pass" "Step 7: PRD model coordinator"');
     const block = orchSrc.slice(idx, idx + 300);
-    expect(block).toMatch(/assert_no_story_ids_lost "presplit" "Step 0\.9/);
-    expect(block).toMatch(/assert_no_illegitimate_deprecation "presplit" "Step 0\.9/);
+    expect(block).toMatch(/assert_no_story_ids_lost "presplit" "Step 7/);
+    expect(block).toMatch(/assert_no_illegitimate_deprecation "presplit" "Step 7/);
   });
 });
 

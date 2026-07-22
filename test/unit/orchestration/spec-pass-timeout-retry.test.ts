@@ -25,9 +25,9 @@ function extractFunctionBodyBraceCounted(src: string, name: string): string {
   throw new Error(`Could not find end of ${name}`);
 }
 
-describe('spec-pass timeout — default timeout raised to 180s', () => {
-  it('RUNCLAUDE_TIMEOUT_MS defaults to 180000', () => {
-    expect(specSrc).toContain("RUNCLAUDE_TIMEOUT_MS || '180000'");
+describe('spec-pass timeout — default timeout raised to 360s', () => {
+  it('RUNCLAUDE_TIMEOUT_MS defaults to 360000', () => {
+    expect(specSrc).toContain("RUNCLAUDE_TIMEOUT_MS || '360000'");
   });
 
   it('MINIMAX_TOOL_TIMEOUT_MS defaults to 180000', () => {
@@ -50,22 +50,47 @@ describe('spec-pass timeout — retry wrapper on null agent result', () => {
   });
 });
 
-describe('spec-pass timeout — specPassFailed flag written on exhausted retries', () => {
-  it('specPassFailed is written to story.specification', () => {
-    expect(specSrc).toContain('specPassFailed: true');
-    expect(specSrc).toContain('specPassFailedReason');
+describe('jira/.env — SPEC_AGENT_MAX_RETRIES=0 (fail-fast: kill run on first openspec failure)', () => {
+  const JIRA_ENV = join(REPO_ROOT, 'orchestrations/jira/.env');
+  const jiraEnvSrc = readFileSync(JIRA_ENV, 'utf8');
+
+  it('SPEC_AGENT_MAX_RETRIES=0 is set in jira/.env (no retries — first failure kills run)', () => {
+    expect(jiraEnvSrc).toMatch(/^SPEC_AGENT_MAX_RETRIES=0$/m);
   });
 
-  it('hard WARN is emitted when spec pass fails and split is required', () => {
-    expect(specSrc).toContain('[WARN] Spec pass FAILED for');
-    expect(specSrc).toContain('execution proceeding at risk');
+  it('SPEC_MODE_MAX_OUTPUT_TOKENS is ≤6000 (prevents slow reasoning-model generation)', () => {
+    const match = jiraEnvSrc.match(/^SPEC_MODE_MAX_OUTPUT_TOKENS=(\d+)$/m);
+    expect(match).not.toBeNull();
+    expect(parseInt(match![1], 10)).toBeLessThanOrEqual(6000);
   });
 
-  it('specPassFailed is only set when the story requires a split (not for fast-path stories)', () => {
-    const flagIdx = specSrc.indexOf('specPassFailed: true');
-    const splitReqIdx = specSrc.lastIndexOf('_splitReq.required', flagIdx);
-    expect(splitReqIdx).toBeGreaterThan(0);
-    expect(flagIdx - splitReqIdx).toBeLessThan(500);
+  it('SPEC_MODE_OPENSPEC_MODEL is not the slow reasoning model (z-ai/glm-5.1)', () => {
+    const match = jiraEnvSrc.match(/^SPEC_MODE_OPENSPEC_MODEL=(.+)$/m);
+    expect(match).not.toBeNull();
+    // glm-5.1 is the reasoning/slow model — openspec must use the faster glm-5.2
+    expect(match![1].trim()).not.toBe('z-ai/glm-5.1');
+  });
+});
+
+describe('spec-pass timeout — hard abort on exhausted retries (failures not permitted)', () => {
+  it('process.exit(1) is called when all retries are exhausted', () => {
+    // openspec/speckit failures are not permitted — hard abort, never continue silently
+    expect(specSrc).toContain('process.exit(1)');
+    expect(specSrc).toContain('openspec/speckit failures are not permitted');
+  });
+
+  it('FATAL message names the agent and attempt count on failure', () => {
+    expect(specSrc).toContain('FATAL —');
+    expect(specSrc).toContain('Aborting pipeline');
+  });
+
+  it('hard abort fires unconditionally regardless of split-required status', () => {
+    // The old specPassFailed path was conditional on _splitReq.required — the new one is not.
+    const exitIdx = specSrc.indexOf('openspec/speckit failures are not permitted');
+    expect(exitIdx).toBeGreaterThan(0);
+    // No _splitReq.required check immediately before the exit — exit is unconditional.
+    const nearby = specSrc.slice(Math.max(0, exitIdx - 300), exitIdx);
+    expect(nearby).not.toContain('_splitReq.required');
   });
 });
 

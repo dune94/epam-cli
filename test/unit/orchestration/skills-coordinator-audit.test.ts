@@ -27,8 +27,8 @@ const orchSrc = readFileSync(ORCH_SH, 'utf8');
 
 describe('Step 1.65 wiring (static)', () => {
   it('runs after Step 1.6 (TC writer gate), before the monitor sync', () => {
-    const tcGateIdx = orchSrc.indexOf('step_emit "1.6" "skip" "Step 1.6: TC writer gate"');
-    const auditIdx = orchSrc.indexOf('Step 1.65: Skills coordinator audit');
+    const tcGateIdx = orchSrc.indexOf('step_emit "10" "skip" "Step 10: TC writer gate"');
+    const auditIdx = orchSrc.indexOf('Step 11: Skills coordinator audit');
     const syncIdx = orchSrc.indexOf('Sync story data to monitor from cost log');
     expect(tcGateIdx).toBeGreaterThan(-1);
     expect(auditIdx).toBeGreaterThan(tcGateIdx);
@@ -41,21 +41,22 @@ describe('Step 1.65 wiring (static)', () => {
   });
 
   it('the LLM call is only reached inside the contradiction-count branch, not unconditionally', () => {
-    const idx = orchSrc.indexOf('run_orch_prompt_with_tools "$_sc_prompt"');
+    // Updated (2026-07-19): prompt var renamed _sc_run_prompt after retry loop added
+    const idx = orchSrc.indexOf('run_orch_prompt_with_tools "$_sc_run_prompt"');
     const contradictionIfIdx = orchSrc.lastIndexOf('if [ "${_skills_contradiction_count:-0}" -gt 0 ]; then', idx);
     expect(idx).toBeGreaterThan(-1);
     expect(contradictionIfIdx).toBeGreaterThan(-1);
     expect(contradictionIfIdx).toBeLessThan(idx);
   });
 
-  it('appends the "1.65" checklist row to the step-status board', () => {
-    expect(orchSrc).toMatch(/_checklist_row "1\.65"\s+"Skills coordinator audit"/);
+  it('appends the "11" checklist row to the step-status board', () => {
+    expect(orchSrc).toMatch(/_checklist_row "11"\s+"Skills coordinator audit"/);
   });
 
-  it('includes "1.65" in the skip-counting key list alongside the other steps', () => {
-    const idx = orchSrc.indexOf('for key in "0" "0.1"');
+  it('includes "11" in the skip-counting key list alongside the other steps', () => {
+    const idx = orchSrc.indexOf('for key in "1" "2"');
     const line = orchSrc.slice(idx, orchSrc.indexOf('\n', idx));
-    expect(line).toMatch(/"1\.6" "1\.65"/);
+    expect(line).toMatch(/"10" "11"/);
   });
 
   it('restores the pre-audit profiles.json snapshot if the LLM rewrite corrupts the JSON', () => {
@@ -74,7 +75,7 @@ describe('Step 1.65 wiring (static)', () => {
 
   it('writes one JSONL audit record per flagged contradiction, regardless of rewrite outcome', () => {
     const idx = orchSrc.indexOf('_skills_before=$(cat "$AGENT_PROFILES_FILE"');
-    const block = orchSrc.slice(idx, idx + 2000);
+    const block = orchSrc.slice(idx, idx + 3000);
     // The jq -cn append call must be OUTSIDE (after) the if/else that branches
     // on rewrite success/failure/corruption -- i.e. it always runs once per
     // contradiction, not just on the success path.
@@ -159,7 +160,7 @@ describe('Step 1.65 — REAL execution: LLM only invoked when the deterministic 
   function extractStepBlock(): string {
     const startMarker = 'if [ "${SKIP_SKILLS_AUDIT:-0}" = "1" ]; then';
     const start = orchSrc.indexOf(startMarker);
-    const endMarker = 'step_emit "1.65" "pass" "Step 1.65: Skills coordinator audit"\nfi';
+    const endMarker = 'step_emit "11" "pass" "Step 11: Skills coordinator audit"\nfi';
     const end = orchSrc.indexOf(endMarker, start) + endMarker.length;
     if (start === -1 || end === -1) throw new Error('Could not locate Step 1.65 block');
     return orchSrc.slice(start, end);
@@ -338,7 +339,8 @@ describe('Step 1.65 — REAL execution: LLM only invoked when the deterministic 
       { 'typescript-engineer': `Base profile text.\n\n${contradictoryNote}` },
       { stubMode: 'llm-fails' },
     );
-    expect(llmCallCount).toBe(1);
+    // Retry fix (2026-07-19): now retries once on failure before giving up → 2 calls
+    expect(llmCallCount).toBe(2);
     expect(stdout).toMatch(/failed to rewrite note.*leaving as-is/);
     // Note is unchanged since the rewrite attempt failed.
     expect(finalProfiles['typescript-engineer']).toContain("Do not use 'as' keyword");

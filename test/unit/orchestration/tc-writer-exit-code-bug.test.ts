@@ -81,7 +81,7 @@ describe('post-impl-tc-writer.sh — invokes epam run without --cwd', () => {
 });
 
 describe('run-agent-orchestration.sh — Step 1.6 no longer masks the real exit code with tee', () => {
-  const idx = orchSrc.indexOf('Step 1.6: TC writer gate — ${_tc_writer_needed}');
+  const idx = orchSrc.indexOf('Step 10: TC writer gate — ${_tc_writer_needed}');
   // Widened 3200 -> 4000 (2026-07-13): the violationTypes derivation +
   // _log_guarded_step_retry call added before the blocked-story handling
   // pushed it further from the anchor.

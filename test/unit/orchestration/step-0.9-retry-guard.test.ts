@@ -29,8 +29,8 @@ function extractSectionByAnchors(startAnchor: string, endAnchor: string): string
 
 describe('Step 0.9 — static wiring', () => {
   const section = extractSectionByAnchors(
-    'step_emit "0.9" "running"',
-    'step_emit "0.9" "pass" "Step 0.9: PRD model coordinator"'
+    'step_emit "7" "running"',
+    'step_emit "7" "pass" "Step 7: PRD model coordinator"'
   );
 
   it('wraps the coordinator call in a 3-attempt retry loop', () => {
@@ -78,7 +78,7 @@ describe('Step 0.9 — REAL execution', () => {
     // top-level code, not a function) — from its header comment through the
     // final assert calls, then swap the asserts for no-ops in the harness.
     const startAnchor = '# Step 0.9: PRD model coordinator';
-    const endAnchor = 'assert_no_illegitimate_deprecation "presplit" "Step 0.9: PRD model coordinator"';
+    const endAnchor = 'assert_no_illegitimate_deprecation "presplit" "Step 7: PRD model coordinator"';
     const startIdx = orchSrc.indexOf(startAnchor);
     const endIdx = orchSrc.indexOf(endAnchor) + endAnchor.length;
     const block = orchSrc.slice(startIdx, endIdx);

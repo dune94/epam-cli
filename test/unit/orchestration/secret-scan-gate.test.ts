@@ -156,7 +156,7 @@ describe('commit_completed_story() (claude.sh) — gated by scan-secrets.sh befo
 
 describe('Step 1.5 auto-commit (run-agent-orchestration.sh) — gated by scan-secrets.sh', () => {
   it('calls scan-secrets.sh after `git add -A` and before the commit', () => {
-    const stepIdx = orchSrc.indexOf('Step 1.5: Auto-committing main-branch deliverables');
+    const stepIdx = orchSrc.indexOf('Step 9: Auto-committing main-branch deliverables');
     const block = orchSrc.slice(stepIdx, stepIdx + 1200);
     const addIdx = block.indexOf('git -C "$PROJECT_ROOT" add -A');
     const scanIdx = block.indexOf('scan-secrets.sh');

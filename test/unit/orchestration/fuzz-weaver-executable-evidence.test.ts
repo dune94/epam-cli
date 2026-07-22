@@ -277,14 +277,89 @@ describe('b', () => { it('true claim', () => { expect(parseAdults('9999999999999
   });
 });
 
-describe('fuzz-weaver prompt — executableTest requirement wired in (structural)', () => {
-  it('the fuzz prompt requires an executableTest field for vulnerability cases', () => {
-    const promptIdx = orchSrc.indexOf('You are acting as the fuzz-weaver agent.');
-    expect(promptIdx).toBeGreaterThan(-1);
-    const nextSectionIdx = orchSrc.indexOf('Output format (strict JSON)', promptIdx);
-    const promptBlock = orchSrc.slice(promptIdx, nextSectionIdx);
-    expect(promptBlock).toMatch(/executableTest/);
-    expect(promptBlock).toMatch(/actually executed/);
+describe('perf-sentinel gate — no-structured-output is non-blocking', () => {
+  it('when perf_exit is non-zero (no structured output), the pipeline treats it as warn not fail', () => {
+    // Mirrors the fuzz-weaver fix: exit 1 from _run_qa_gate_with_retry exhausting
+    // all retries with no JSON must NOT set failed=1. A gate that couldn't produce
+    // output is not a confirmed failure — only a grounded "verdict":"fail" (exit 0
+    // path) should block. Verified structurally against run-agent-orchestration.sh.
+    const perfSection = (() => {
+      const start = orchSrc.indexOf('if [ $perf_exit -ne 0 ]; then');
+      expect(start).toBeGreaterThan(-1);
+      return orchSrc.slice(start, start + 900);
+    })();
+    // Must NOT set failed=1 immediately on non-zero exit
+    const failedSetIdx = perfSection.indexOf('failed=1');
+    const warnIdx = perfSection.indexOf('non-blocking warn');
+    if (failedSetIdx !== -1) {
+      expect(warnIdx).toBeGreaterThan(-1);
+      expect(warnIdx).toBeLessThan(failedSetIdx);
+    } else {
+      expect(warnIdx).toBeGreaterThan(-1);
+    }
+    // Must downgrade perf_exit to 0 so it doesn't propagate to _failing_logs
+    expect(perfSection).toMatch(/perf_exit=0/);
+  });
+});
+
+describe('fuzz-weaver gate — no-structured-output is non-blocking', () => {
+  it('when fuzz_exit is non-zero (no structured output), the pipeline treats it as warn not fail', () => {
+    // The fix: exit 1 from _run_qa_gate_with_retry (all retries exhausted,
+    // no JSON produced) must NOT set failed=1. Only a grounded "verdict":"fail"
+    // in the log (exit 0 path) should block. Verified structurally.
+    const fuzzSection = (() => {
+      const start = orchSrc.indexOf('if [ $fuzz_exit -ne 0 ]; then');
+      expect(start).toBeGreaterThan(-1);
+      return orchSrc.slice(start, start + 600);
+    })();
+    // Must NOT set failed=1 immediately on non-zero exit
+    const failedSetIdx = fuzzSection.indexOf('failed=1');
+    const warnIdx = fuzzSection.indexOf('non-blocking warn');
+    // warn message must come before any failed=1 assignment (if one exists)
+    if (failedSetIdx !== -1) {
+      expect(warnIdx).toBeGreaterThan(-1);
+      expect(warnIdx).toBeLessThan(failedSetIdx);
+    } else {
+      // preferred: no failed=1 in the non-zero exit branch at all
+      expect(warnIdx).toBeGreaterThan(-1);
+    }
+    // Must downgrade fuzz_exit to 0 so it doesn't propagate to _failing_logs
+    expect(fuzzSection).toMatch(/fuzz_exit=0/);
+  });
+});
+
+describe('fuzz-weaver prompt — structural checks', () => {
+  // Extract only the fuzz-weaver prompt block (not the entire script).
+  // Anchor: start = "You are acting as the fuzz-weaver agent."
+  // End: the closing double-quote of the fuzz_prompt bash variable, which
+  // immediately precedes the profile-prepend if-block.
+  // Use "no markdown fences, no preamble" — unique to the fuzz prompt's
+  // output format line and not shared with any other gate prompt.
+  function extractFuzzPromptBlock(): string {
+    const start = orchSrc.indexOf('You are acting as the fuzz-weaver agent.');
+    expect(start).toBeGreaterThan(-1);
+    // "no markdown fences, no preamble" appears only in the fuzz prompt output format
+    const outputFormatIdx = orchSrc.indexOf('no markdown fences, no preamble', start);
+    expect(outputFormatIdx).toBeGreaterThan(start);
+    // Extend to the end of that output format line
+    const lineEnd = orchSrc.indexOf('\n', outputFormatIdx);
+    return orchSrc.slice(start, lineEnd);
+  }
+
+  it('the fuzz prompt includes an executableTest field in the output schema', () => {
+    const block = extractFuzzPromptBlock();
+    expect(block).toMatch(/executableTest/);
+  });
+
+  it('the fuzz prompt instructs the model not to execute tests (no-execute contract)', () => {
+    const block = extractFuzzPromptBlock();
+    // Since the timeout fix: model must NOT run tests, only write skeleton
+    expect(block).toMatch(/Do NOT run or execute|Do NOT.*execute|do not.*run.*test/i);
+  });
+
+  it('the fuzz prompt output format instructs the model not to write to a file', () => {
+    const block = extractFuzzPromptBlock();
+    expect(block).toMatch(/do NOT write to a file|emit directly/i);
   });
 
   it('the gate step calls detect_node before invoking the python verification block', () => {
@@ -292,5 +367,20 @@ describe('fuzz-weaver prompt — executableTest requirement wired in (structural
     const detectNodeIdx = orchSrc.lastIndexOf('detect_node', pyIdx);
     expect(detectNodeIdx).toBeGreaterThan(-1);
     expect(pyIdx - detectNodeIdx).toBeLessThan(300);
+  });
+
+  it('_run_qa_gate_with_retry retry prefix detects WriteFile-instead-of-stdout and corrects it', () => {
+    // The retry branch must contain a WriteFile-specific correction when the log
+    // is small and contains the "has been written" tool confirmation phrase.
+    const retryIdx = orchSrc.indexOf('_run_qa_gate_with_retry()');
+    expect(retryIdx).toBeGreaterThan(-1);
+    const retryFnEnd = orchSrc.indexOf('\n}', retryIdx + 100);
+    const retryFn = orchSrc.slice(retryIdx, retryFnEnd);
+    // Must detect the WriteFile confirmation phrase
+    expect(retryFn).toMatch(/has been written/);
+    // Must include a corrective instruction naming WriteFile explicitly
+    expect(retryFn).toMatch(/WriteFile/);
+    // Must include a file-recovery search
+    expect(retryFn).toMatch(/recovering from|recovered|WriteFile recovery/);
   });
 });

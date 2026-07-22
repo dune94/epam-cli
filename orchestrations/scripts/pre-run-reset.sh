@@ -199,7 +199,20 @@ done
   && success "Archived $ARCHIVED log files → $ARCHIVE_DIR" \
   || info "  No non-empty logs to archive (already clean)"
 
-# ── Step 3: Reset agent-status.json ──────────────────────────────────────────
+# ── Step 3: Clear KB scratchpad (per-run attempt files — stale notes from failed
+# runs contaminate future attempts with wrong diagnoses; reset before every run)
+KB_DIR="$LOG_DIR/kb-scratchpad"
+if [ -d "$KB_DIR" ]; then
+  KB_COUNT=$(find "$KB_DIR" -name "*.md" | wc -l)
+  if [ "$KB_COUNT" -gt 0 ]; then
+    find "$KB_DIR" -name "*.md" -delete
+    success "Cleared $KB_COUNT KB scratchpad file(s) from $KB_DIR"
+  else
+    info "  KB scratchpad already empty"
+  fi
+fi
+
+# ── Step 4: Reset agent-status.json ──────────────────────────────────────────
 info "Resetting agent-status.json..."
 echo '{"startedAt":null,"phase":null,"orchMode":null,"lanes":{},"events":[],"stories":{},"completedAt":null}' \
   > "$LOG_DIR/agent-status.json"

@@ -252,6 +252,7 @@ export SPEC_MODE_PROVIDER="qwen"
 export SPEC_MODE_OPENSPEC_MODEL="${SPEC_MODE_OPENSPEC_MODEL:-${ESCALATION_MODEL_HIGH}}"
 export SPEC_MODE_OPENSPEC_MODEL_HIGH="${SPEC_MODE_OPENSPEC_MODEL_HIGH:-${ESCALATION_MODEL_HIGH}}"
 export SPEC_MODE_SPECKIT_MODEL="${SPEC_MODE_SPECKIT_MODEL:-${ESCALATION_MODEL_HIGH}}"
+export SPEC_MODE_SPECKIT_MODEL_HIGH="${SPEC_MODE_SPECKIT_MODEL_HIGH:-${ESCALATION_MODEL_HIGH}}"
 export SPEC_MODE_MODEL="${SPEC_MODE_MODEL:-${ESCALATION_MODEL_HIGH}}"
 # Block execution if openspec fails for a story that mandates a split — splitting
 # is critical for correctness (oversized stories hit token limits and produce
@@ -259,6 +260,8 @@ export SPEC_MODE_MODEL="${SPEC_MODE_MODEL:-${ESCALATION_MODEL_HIGH}}"
 # already give openspec 4 attempts; a hard block here prevents running a known-bad
 # PRD through expensive implementation passes.
 export SPEC_PASS_BLOCK_ON_TIMEOUT="${SPEC_PASS_BLOCK_ON_TIMEOUT:-true}"
+export RUNCLAUDE_TIMEOUT_MS="${RUNCLAUDE_TIMEOUT_MS:-360000}"
+export SPEC_MODE_MAX_OUTPUT_TOKENS="${SPEC_MODE_MAX_OUTPUT_TOKENS:-16384}"
 # Model escalation ladder: pipe-separated "from=to" pairs consumed by get_model_ladder_step().
 # R2: MiniMax-M3 → deepseek-r1 (reasoning escalation). Legacy GLM entries kept for story-level retryModel compat.
 # Override individual entries by re-exporting EPAM_MODEL_LADDER before invoking this script.
@@ -385,6 +388,32 @@ if [ $? -ne 0 ]; then
   fail "PRD integrity check failed — canonical file is corrupt. Repair travel-app-prd.canonical.json before running."
   exit 1
 fi
+echo ""
+
+# ── Secondary codeline worktree teardown (multi-codeline canonical PRDs) ───────
+# When project.outputDirs declares more than one codeline, the tier3 launcher must
+# also tear down and re-initialise every secondary worktree so each run starts
+# from a clean state — not just the primary OUTPUT_DIR (already done above).
+# For single-codeline PRDs this section is a no-op.
+_sec_wts=$("${NODE_BIN:-node}" -e "
+  const p = JSON.parse(require('fs').readFileSync('$PRD_FILE','utf8'));
+  const dirs = p.project && p.project.outputDirs ? p.project.outputDirs : [];
+  dirs.filter(d => d.path !== '$OUTPUT_DIR').forEach(d => process.stdout.write(d.path+'\n'));
+" 2>/dev/null || true)
+
+if [ -n "$_sec_wts" ]; then
+  info "Multi-codeline canonical PRD — tearing down secondary worktrees..."
+  while IFS= read -r _sec_wt; do
+    [ -z "$_sec_wt" ] && continue
+    [ -d "$_sec_wt" ] && chmod -R u+w "$_sec_wt" 2>/dev/null || true
+    rm -rf "$_sec_wt"
+    mkdir -p "$_sec_wt"
+    git -C "$_sec_wt" init --quiet
+    git -C "$_sec_wt" commit --allow-empty -m "init: secondary-codeline-worktree" --quiet
+    info "  Secondary worktree torn down and re-initialised: $_sec_wt"
+  done <<< "$_sec_wts"
+fi
+unset _sec_wts _sec_wt
 echo ""
 
 # ── Pre-flight validation ─────────────────────────────────────────────────────

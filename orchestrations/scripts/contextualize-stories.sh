@@ -822,7 +822,7 @@ while IFS= read -r sid; do
   cpa_raw=$(echo "$inference_input" | \
     CLAUDE_CMD="${CLAUDE_CMD:-claude}" \
     AI_PROVIDER="${CPA_PROVIDER:-${AI_PROVIDER:-qwen}}" \
-    AI_MODEL="${CPA_MODEL:-${AI_MODEL:-qwen/qwen3-coder-flash}}" \
+    AI_MODEL="${CPA_MODEL:-${AI_MODEL:-z-ai/glm-5.2}}" \
     "$NODE_CMD" "$LIB_DIR/cpa-inference.js" 2>/dev/null || echo "")
   t_end=$(date +%s%3N)
   infer_ms=$(( t_end - t_start ))

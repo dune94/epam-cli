@@ -360,6 +360,11 @@ def main():
         "pipeline_overhead_ratio": round(blended_ratio, 4),
         "categories": merged,
     }
+    # Preserve hand-tuned fields that calibrate.py never computes.
+    # escalationRates is maintained by humans and must survive every CPA pass.
+    for preserved_key in ("escalationRates",):
+        if preserved_key in existing:
+            output[preserved_key] = existing[preserved_key]
 
     write_atomic(args.cal_file, output)
     print(f"calibrate.py: wrote {len(merged)} categories to {args.cal_file}", file=sys.stderr)

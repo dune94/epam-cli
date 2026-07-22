@@ -157,16 +157,16 @@ describe('run-agent-orchestration.sh — Step 0.9 wiring', () => {
   });
 
   it('Step 0.9 is registered in the step-status JSON emitter key list', () => {
-    expect(orchSrc).toMatch(/"0\.9:model-coord"/);
+    expect(orchSrc).toMatch(/"7:model-coord"/);
   });
 
   it('Step 0.9 appears in the checklist printer', () => {
-    expect(orchSrc).toMatch(/_checklist_row "0\.9"\s+"PRD model coordinator"/);
+    expect(orchSrc).toMatch(/_checklist_row "7"\s+"PRD model coordinator"/);
   });
 
   it('Step 0.9 runs after Step 0.8 (mkdir) and before Step 1 (main-branch stories) in file order', () => {
-    const idx08 = orchSrc.indexOf('step_emit "0.8" "pass"');
-    const idx09 = orchSrc.indexOf('step_emit "0.9" "running"');
+    const idx08 = orchSrc.indexOf('step_emit "6" "pass"');
+    const idx09 = orchSrc.indexOf('step_emit "7" "running"');
     const idx1 = orchSrc.indexOf('Step 1: Run main-branch stories');
     expect(idx08).toBeGreaterThan(-1);
     expect(idx09).toBeGreaterThan(idx08);

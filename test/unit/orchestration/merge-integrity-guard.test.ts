@@ -40,7 +40,7 @@ function extractStep32Block(): string {
   const startMarker = '# Step 3.2: Merge worktree branches back to main branch';
   const start = orchSrc.indexOf(startMarker);
   if (start === -1) throw new Error('Step 3.2 marker not found');
-  const endMarker = 'info "Step 3.2: No worktrees — skipping merge-back"';
+  const endMarker = 'info "Step 17: No worktrees — skipping merge-back"';
   const endMarkerIdx = orchSrc.indexOf(endMarker, start);
   if (endMarkerIdx === -1) throw new Error('Step 3.2 end marker not found');
   const end = orchSrc.indexOf('\n', endMarkerIdx) + 1;

@@ -64,29 +64,29 @@ describe('capture_story_ids_snapshot / assert_no_story_ids_lost — wiring (stat
   it('an assertion is wired after Step 0.5 (pre-phase skill assessment)', () => {
     const idx = orchSrc.indexOf('run_pre_phase_assessment "$PHASE"');
     const block = orchSrc.slice(idx, idx + 200);
-    expect(block).toMatch(/assert_no_story_ids_lost "presplit" "Step 0\.5/);
+    expect(block).toMatch(/assert_no_story_ids_lost "presplit" "Step 3/);
   });
 
   it('an assertion is wired after Step 0.9 (PRD model coordinator)', () => {
-    const idx = orchSrc.indexOf('step_emit "0.9" "pass" "Step 0.9: PRD model coordinator"');
+    const idx = orchSrc.indexOf('step_emit "7" "pass" "Step 7: PRD model coordinator"');
     const block = orchSrc.slice(idx, idx + 200);
-    expect(block).toMatch(/assert_no_story_ids_lost "presplit" "Step 0\.9/);
+    expect(block).toMatch(/assert_no_story_ids_lost "presplit" "Step 7/);
   });
 
   it('an assertion is wired after the Step 3.5 run_phase_assessment call site', () => {
-    const idx = orchSrc.indexOf('step_emit "3.5" "skip" "Step 3.5: Post-parallel assessment" "no cost data"');
+    const idx = orchSrc.indexOf('step_emit "18" "skip" "Step 18: Post-parallel assessment" "no cost data"');
     const block = orchSrc.slice(idx, idx + 300);
-    expect(block).toMatch(/assert_no_story_ids_lost "presplit" "Step 3\.5/);
+    expect(block).toMatch(/assert_no_story_ids_lost "presplit" "Step 18/);
   });
 
   it('an assertion is wired after the Step 6 run_phase_assessment call site', () => {
-    const idx = orchSrc.indexOf('Step 6: Running final post-phase assessment');
+    const idx = orchSrc.indexOf('Step 24: Running final post-phase assessment');
     // Widened (2026-07-12): the call site grew an explanatory comment block
     // plus if/else step_emit wiring (see phase-assessment-real-output-gate.
     // test.ts's "Step 6 call site" describe block for why) that pushed the
     // assert calls further from the anchor than the old 400-char window.
     const block = orchSrc.slice(idx, idx + 1400);
-    expect(block).toMatch(/assert_no_story_ids_lost "presplit" "Step 6/);
+    expect(block).toMatch(/assert_no_story_ids_lost "presplit" "Step 24/);
   });
 });
 
@@ -129,9 +129,9 @@ describe('capture_story_ids_snapshot / assert_no_story_ids_lost — REAL executi
   it('REPRODUCES the exact live defect and proves the SELF-HEALING fix: a story vanishing entirely from stories[] is restored from the pre-step snapshot instead of aborting', () => {
     const before = { stories: [{ id: 'SKY-002' }, { id: 'SKY-003' }, { id: 'SKY-004' }] };
     const after = { stories: [{ id: 'SKY-002' }, { id: 'SKY-004' }] }; // SKY-003 vanished
-    const { exitCode, stdout } = run(before, after, 'Step 0.9: PRD model coordinator');
+    const { exitCode, stdout } = run(before, after, 'Step 7: PRD model coordinator');
     expect(exitCode).toBe(0);
-    expect(stdout).toMatch(/STORY-ID-LOSS after Step 0\.9: PRD model coordinator/);
+    expect(stdout).toMatch(/STORY-ID-LOSS after Step 7: PRD model coordinator/);
     expect(stdout).toMatch(/restored: SKY-003/);
     expect(stdout).toMatch(/ASSERT_PASSED/);
   });
@@ -156,7 +156,7 @@ describe('capture_story_ids_snapshot / assert_no_story_ids_lost — REAL executi
       `cat > ${JSON.stringify(prdPath)} << 'PRDEOF'`,
       JSON.stringify({ stories: [{ id: 'SKY-002' }, { id: 'SKY-004' }] }),
       'PRDEOF',
-      'assert_no_story_ids_lost "presplit" "Step 0.5: Skill assessment"',
+      'assert_no_story_ids_lost "presplit" "Step 3: Skill assessment"',
     ].join('\n');
     execFileSync('bash', ['-c', script], { encoding: 'utf8' });
     const restored = JSON.parse(readFileSync(prdPath, 'utf8'));
@@ -189,7 +189,7 @@ describe('capture_story_ids_snapshot / assert_no_story_ids_lost — REAL executi
       `cat > ${JSON.stringify(prdPath)} << 'PRDEOF'`,
       JSON.stringify({ stories: [{ id: 'SKY-002' }] }),
       'PRDEOF',
-      'assert_no_story_ids_lost "presplit" "Step 0.5: Skill assessment"',
+      'assert_no_story_ids_lost "presplit" "Step 3: Skill assessment"',
       'echo ASSERT_PASSED',
     ].join('\n');
     try {
@@ -198,7 +198,7 @@ describe('capture_story_ids_snapshot / assert_no_story_ids_lost — REAL executi
     } catch (e: any) {
       expect(e.status).not.toBe(0);
       const out = (e.stdout ?? '').toString() + (e.stderr ?? '').toString();
-      expect(out).toMatch(/STORY-ID-LOSS INVARIANT VIOLATED after Step 0\.5: Skill assessment/);
+      expect(out).toMatch(/STORY-ID-LOSS INVARIANT VIOLATED after Step 3: Skill assessment/);
       expect(out).toMatch(/- SKY-003/);
       expect(out).not.toMatch(/ASSERT_PASSED/);
     } finally {
@@ -209,7 +209,7 @@ describe('capture_story_ids_snapshot / assert_no_story_ids_lost — REAL executi
   it('does NOT trip when a legitimate split ADDS new story IDs', () => {
     const before = { stories: [{ id: 'SKY-002' }] };
     const after = { stories: [{ id: 'SKY-002' }, { id: 'SKY-002-impl' }, { id: 'SKY-002-test' }] };
-    const { exitCode, stdout } = run(before, after, 'Step 0.5: Skill assessment');
+    const { exitCode, stdout } = run(before, after, 'Step 3: Skill assessment');
     expect(exitCode).toBe(0);
     expect(stdout).toMatch(/ASSERT_PASSED/);
   });
@@ -217,7 +217,7 @@ describe('capture_story_ids_snapshot / assert_no_story_ids_lost — REAL executi
   it('does NOT trip when a story is only marked deprecated (legitimate archival, record stays in the array)', () => {
     const before = { stories: [{ id: 'SKY-001', status: 'pending' }] };
     const after = { stories: [{ id: 'SKY-001', status: 'deprecated', completed: true }] };
-    const { exitCode, stdout } = run(before, after, 'Step 3.5: Post-parallel assessment');
+    const { exitCode, stdout } = run(before, after, 'Step 18: Post-parallel assessment');
     expect(exitCode).toBe(0);
     expect(stdout).toMatch(/ASSERT_PASSED/);
   });
@@ -225,7 +225,7 @@ describe('capture_story_ids_snapshot / assert_no_story_ids_lost — REAL executi
   it('restores MULTIPLE missing IDs when more than one story vanishes', () => {
     const before = { stories: [{ id: 'SKY-002' }, { id: 'SKY-003' }, { id: 'SKY-004' }] };
     const after = { stories: [{ id: 'SKY-002' }] };
-    const { exitCode, stdout } = run(before, after, 'Step 6: Final post-phase assessment');
+    const { exitCode, stdout } = run(before, after, 'Step 24: Final post-phase assessment');
     expect(exitCode).toBe(0);
     expect(stdout).toMatch(/restored: SKY-003/);
     expect(stdout).toMatch(/restored: SKY-004/);

@@ -59,29 +59,29 @@ function stepLabel(stepId: string): string {
 // ─── Step manifest ────────────────────────────────────────────────────────────
 
 const STEPS = [
-  { id: '0',    name: 'Specification pass',         bypassVar: 'EPAM_SPEC_MODE', bypassVal: '0' },
-  { id: '0.1',  name: 'CPA pre-pass',               bypassVar: 'SKIP_CPA',       bypassVal: '1' },
-  { id: '0.5',  name: 'Pre-phase skill assessment',  bypassVar: 'SKIP_SKILL_ASSESSMENT', bypassVal: '1' },
-  { id: '0.6',  name: 'Hybrid pre-coord',            bypassVar: null },
-  { id: '0.7',  name: 'Regression guard',            bypassVar: 'SKIP_REGRESSION_GUARD', bypassVal: 'true' },
-  { id: '0.8',  name: 'mkdir src/ dirs',             bypassVar: null },
-  { id: '1',    name: 'Main-branch stories',         bypassVar: null },
-  { id: '1.5',  name: 'Auto-commit',                 bypassVar: null },
-  { id: '1.6',  name: 'TC writer gate',              bypassVar: 'SKIP_TC_WRITER', bypassVal: '1' },
-  { id: '2',    name: 'Create worktrees',            bypassVar: null },
-  { id: '3a',   name: 'Primary agent',              bypassVar: null },
-  { id: '3b',   name: 'Independent agent',          bypassVar: null },
-  { id: '3.1',  name: 'Worktree health',             bypassVar: null },
-  { id: '3.5',  name: 'Post-parallel assessment',    bypassVar: 'SKIP_SKILL_ASSESSMENT', bypassVal: '1' },
-  { id: '3.7',  name: 'Pre-review gate',             bypassVar: 'SKIP_PRE_REVIEW_GATE', bypassVal: 'true' },
-  { id: '4',    name: 'Review stories',              bypassVar: null },
-  { id: '4.2a', name: 'SAST sentinel',               bypassVar: 'SKIP_TESTING_GATES', bypassVal: 'true' },
-  { id: '4.2b', name: 'Spec validator',              bypassVar: 'SKIP_TESTING_GATES', bypassVal: 'true' },
-  { id: '4.3a', name: 'Review ranger',               bypassVar: 'SKIP_TESTING_GATES', bypassVal: 'true' },
-  { id: '4.3b', name: 'Mutant hunter',               bypassVar: 'SKIP_TESTING_GATES', bypassVal: 'true' },
-  { id: '4.4a', name: 'Fuzz-weaver',                 bypassVar: 'SKIP_TESTING_GATES', bypassVal: 'true' },
-  { id: '4.4b', name: 'Perf sentinel',               bypassVar: 'SKIP_TESTING_GATES', bypassVal: 'true' },
-  { id: '4.6',  name: 'Browser E2E',                 bypassVar: 'SKIP_BROWSER_E2E_ROUTING', bypassVal: 'true' },
+  { id: '1',    name: 'Specification pass',         bypassVar: 'EPAM_SPEC_MODE', bypassVal: '1' },
+  { id: '2',  name: 'CPA pre-pass',               bypassVar: 'SKIP_CPA',       bypassVal: '8' },
+  { id: '3',  name: 'Pre-phase skill assessment',  bypassVar: 'SKIP_SKILL_ASSESSMENT', bypassVal: '8' },
+  { id: '4',  name: 'Hybrid pre-coord',            bypassVar: null },
+  { id: '5',  name: 'Regression guard',            bypassVar: 'SKIP_REGRESSION_GUARD', bypassVal: 'true' },
+  { id: '6',  name: 'mkdir src/ dirs',             bypassVar: null },
+  { id: '8',    name: 'Main-branch stories',         bypassVar: null },
+  { id: '9',  name: 'Auto-commit',                 bypassVar: null },
+  { id: '10',  name: 'TC writer gate',              bypassVar: 'SKIP_TC_WRITER', bypassVal: '8' },
+  { id: '13',    name: 'Create worktrees',            bypassVar: null },
+  { id: '14',   name: 'Primary agent',              bypassVar: null },
+  { id: '15',   name: 'Independent agent',          bypassVar: null },
+  { id: '16',  name: 'Worktree health',             bypassVar: null },
+  { id: '18',  name: 'Post-parallel assessment',    bypassVar: 'SKIP_SKILL_ASSESSMENT', bypassVal: '8' },
+  { id: '19',  name: 'Pre-review gate',             bypassVar: 'SKIP_PRE_REVIEW_GATE', bypassVal: 'true' },
+  { id: '21',    name: 'Review stories',              bypassVar: null },
+  { id: '22a', name: 'SAST sentinel',               bypassVar: 'SKIP_TESTING_GATES', bypassVal: 'true' },
+  { id: '22b', name: 'Spec validator',              bypassVar: 'SKIP_TESTING_GATES', bypassVal: 'true' },
+  { id: '22c', name: 'Review ranger',               bypassVar: 'SKIP_TESTING_GATES', bypassVal: 'true' },
+  { id: '22d', name: 'Mutant hunter',               bypassVar: 'SKIP_TESTING_GATES', bypassVal: 'true' },
+  { id: '22e', name: 'Fuzz-weaver',                 bypassVar: 'SKIP_TESTING_GATES', bypassVal: 'true' },
+  { id: '22f', name: 'Perf sentinel',               bypassVar: 'SKIP_TESTING_GATES', bypassVal: 'true' },
+  { id: '23',  name: 'Browser E2E',                 bypassVar: 'SKIP_BROWSER_E2E_ROUTING', bypassVal: 'true' },
 ] as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -122,34 +122,34 @@ describe('Bypass contract — skip paths are always visible', () => {
   }
 
   it('SKIP_TESTING_GATES=true covers all 7 gate steps', () => {
-    const gateSteps = ['4.2a', '4.2b', '4.3a', '4.3b', '4.4a', '4.4b', '4.6'];
+    const gateSteps = ['22a', '22b', '22c', '22d', '22e', '22f', '23'];
     for (const id of gateSteps) {
       expect(hasStepEmit(id, 'skip')).toBe(true);
     }
   });
 
   it('SKIP_REGRESSION_GUARD=true causes Step 0.7 to skip', () => {
-    expect(orchSrc).toMatch(/SKIP_REGRESSION_GUARD[\s\S]{0,200}step_emit.*0\.7.*skip|step_emit.*0\.7.*skip[\s\S]{0,200}SKIP_REGRESSION_GUARD/);
+    expect(orchSrc).toMatch(/SKIP_REGRESSION_GUARD[\s\S]{0,200}step_emit.*5.*skip|step_emit.*5.*skip[\s\S]{0,200}SKIP_REGRESSION_GUARD/);
   });
 
   it('SKIP_CPA=1 causes Step 0.1 to skip', () => {
-    expect(orchSrc).toMatch(/SKIP_CPA[\s\S]{0,200}step_emit.*0\.1.*skip|step_emit.*0\.1.*skip[\s\S]{0,200}SKIP_CPA/);
+    expect(orchSrc).toMatch(/SKIP_CPA[\s\S]{0,200}step_emit.*2.*skip|step_emit.*2.*skip[\s\S]{0,200}SKIP_CPA/);
   });
 
   it('SKIP_SKILL_ASSESSMENT=1 causes Step 0.5 to skip', () => {
-    expect(orchSrc).toMatch(/SKIP_SKILL_ASSESSMENT[\s\S]{0,200}step_emit.*0\.5.*skip|step_emit.*0\.5.*skip[\s\S]{0,200}SKIP_SKILL_ASSESSMENT/);
+    expect(orchSrc).toMatch(/SKIP_SKILL_ASSESSMENT[\s\S]{0,200}step_emit.*3.*skip|step_emit.*3.*skip[\s\S]{0,200}SKIP_SKILL_ASSESSMENT/);
   });
 
   it('SKIP_SKILL_ASSESSMENT=1 causes Step 3.5 to skip', () => {
-    expect(orchSrc).toMatch(/SKIP_SKILL_ASSESSMENT[\s\S]{0,200}step_emit.*3\.5.*skip|step_emit.*3\.5.*skip[\s\S]{0,200}SKIP_SKILL_ASSESSMENT/);
+    expect(orchSrc).toMatch(/SKIP_SKILL_ASSESSMENT[\s\S]{0,200}step_emit.*18.*skip|step_emit.*18.*skip[\s\S]{0,200}SKIP_SKILL_ASSESSMENT/);
   });
 
   it('SKIP_BROWSER_E2E_ROUTING=true causes Step 4.6 to skip', () => {
-    expect(orchSrc).toMatch(/SKIP_BROWSER_E2E_ROUTING[\s\S]{0,200}step_emit.*4\.6.*skip|step_emit.*4\.6.*skip[\s\S]{0,200}SKIP_BROWSER_E2E_ROUTING/);
+    expect(orchSrc).toMatch(/SKIP_BROWSER_E2E_ROUTING[\s\S]{0,200}step_emit.*23.*skip|step_emit.*23.*skip[\s\S]{0,200}SKIP_BROWSER_E2E_ROUTING/);
   });
 
   it('SKIP_TC_WRITER=1 causes Step 1.6 to skip', () => {
-    expect(orchSrc).toMatch(/SKIP_TC_WRITER[\s\S]{0,200}step_emit.*1\.6.*skip|step_emit.*1\.6.*skip[\s\S]{0,200}SKIP_TC_WRITER/);
+    expect(orchSrc).toMatch(/SKIP_TC_WRITER[\s\S]{0,200}step_emit.*10.*skip|step_emit.*10.*skip[\s\S]{0,200}SKIP_TC_WRITER/);
   });
 });
 
@@ -159,11 +159,11 @@ describe('Bypass contract — skip paths are always visible', () => {
 
 describe('Failure paths — blocking steps emit fail', () => {
   it('Step 0 spec pass failure → step_emit fail', () => {
-    expect(hasStepEmit('0', 'fail')).toBe(true);
+    expect(hasStepEmit('1', 'fail')).toBe(true);
   });
 
   it('Step 0.1 CPA BLOCKED → step_emit fail', () => {
-    expect(hasStepEmit('0.1', 'fail')).toBe(true);
+    expect(hasStepEmit('2', 'fail')).toBe(true);
   });
 
   // Behavior change (2026-07-13): a TC-writer miss no longer step_emits
@@ -173,48 +173,48 @@ describe('Failure paths — blocking steps emit fail', () => {
   // story with it over one story's TC gap. See tc-writer-retry-block.test.ts
   // for the full retry/block contract.
   it('Step 1.6 TC writer exhaustion → step_emit warn (blocks affected stories, does not fail the phase)', () => {
-    expect(hasStepEmit('1.6', 'warn')).toBe(true);
+    expect(hasStepEmit('10', 'warn')).toBe(true);
   });
 
   it('Step 3.7 pre-review gate failure → step_emit fail', () => {
-    expect(hasStepEmit('3.7', 'fail')).toBe(true);
+    expect(hasStepEmit('19', 'fail')).toBe(true);
   });
 
   it('Step 3a primary agent failure → step_emit fail', () => {
-    expect(hasStepEmit('3a', 'fail')).toBe(true);
+    expect(hasStepEmit('14', 'fail')).toBe(true);
   });
 
   it('Step 3b independent agent failure → step_emit fail', () => {
-    expect(hasStepEmit('3b', 'fail')).toBe(true);
+    expect(hasStepEmit('15', 'fail')).toBe(true);
   });
 
   it('Step 4.2a SAST blocker → step_emit fail', () => {
-    expect(hasStepEmit('4.2a', 'fail')).toBe(true);
+    expect(hasStepEmit('22a', 'fail')).toBe(true);
   });
 
   it('Step 4.2b spec validator fail → step_emit fail', () => {
-    expect(hasStepEmit('4.2b', 'fail')).toBe(true);
+    expect(hasStepEmit('22b', 'fail')).toBe(true);
   });
 
   it('Step 4.3a review-ranger blocker → step_emit fail', () => {
-    expect(hasStepEmit('4.3a', 'fail')).toBe(true);
+    expect(hasStepEmit('22c', 'fail')).toBe(true);
   });
 
   it('Step 4.3b mutant-hunter fail → step_emit fail', () => {
-    expect(hasStepEmit('4.3b', 'fail')).toBe(true);
+    expect(hasStepEmit('22d', 'fail')).toBe(true);
   });
 
   it('Step 4.4a fuzz-weaver grounded fail → step_emit fail', () => {
-    expect(hasStepEmit('4.4a', 'fail')).toBe(true);
+    expect(hasStepEmit('22e', 'fail')).toBe(true);
   });
 
   it('Step 4.4b perf-sentinel grounded fail → step_emit fail', () => {
-    expect(hasStepEmit('4.4b', 'fail')).toBe(true);
+    expect(hasStepEmit('22f', 'fail')).toBe(true);
   });
 
   it('SAST sentinel blockerCount > 0 sets failed=1 (pipeline abort)', () => {
     // step_emit fail then failed=1 must both appear in close proximity
-    expect(orchSrc).toMatch(/step_emit "4\.2a" "fail"[\s\S]{0,300}failed=1|failed=1[\s\S]{0,300}step_emit "4\.2a" "fail"/);
+    expect(orchSrc).toMatch(/step_emit "22a" "fail"[\s\S]{0,300}failed=1|failed=1[\s\S]{0,300}step_emit "22a" "fail"/);
   });
 
   it('Phase A failure sets failed variable before Phase B evaluation', () => {
@@ -232,7 +232,7 @@ describe('Failure paths — blocking steps emit fail', () => {
 
 describe('Warn paths — grounding downgrades hallucinated fails', () => {
   it('Step 4.2b spec validator warn → step_emit warn (no story data)', () => {
-    expect(hasStepEmit('4.2b', 'warn')).toBe(true);
+    expect(hasStepEmit('22b', 'warn')).toBe(true);
   });
 
   it('spec validator extractor uses line-level regex not json.loads (run 84 regression)', () => {
@@ -259,11 +259,11 @@ describe('Warn paths — grounding downgrades hallucinated fails', () => {
   });
 
   it('Step 4.4a fuzz-weaver ungrounded fail → step_emit warn', () => {
-    expect(orchSrc).toMatch(/step_emit "4\.4a" "warn" "Step 4\.4a: Fuzz-weaver" "unverified findings downgraded"/);
+    expect(orchSrc).toMatch(/step_emit "22e" "warn" "Step 22e: Fuzz-weaver" "unverified findings downgraded"/);
   });
 
   it('Step 4.4b perf-sentinel ungrounded fail → step_emit warn', () => {
-    expect(orchSrc).toMatch(/step_emit "4\.4b" "warn" "Step 4\.4b: Perf sentinel" "hallucinated fail downgraded"/);
+    expect(orchSrc).toMatch(/step_emit "22f" "warn" "Step 22f: Perf sentinel" "hallucinated fail downgraded"/);
   });
 
   it('fuzz-weaver grounding uses python3 file-existence check', () => {
@@ -301,21 +301,21 @@ describe('Warn paths — grounding downgrades hallucinated fails', () => {
 
 describe('Phase gate sequencing', () => {
   it('Phase A failure causes 4.3a/4.3b to emit skip, not pending', () => {
-    expect(hasStepEmit('4.3a', 'skip')).toBe(true);
-    expect(hasStepEmit('4.3b', 'skip')).toBe(true);
+    expect(hasStepEmit('22c', 'skip')).toBe(true);
+    expect(hasStepEmit('22d', 'skip')).toBe(true);
   });
 
   it('Phase A failure skip includes reason string', () => {
-    expect(orchSrc).toMatch(/step_emit.*4\.3a.*skip.*Phase A/);
+    expect(orchSrc).toMatch(/step_emit.*22c.*skip.*Phase A/);
   });
 
   it('Phase A/B failure causes 4.4a/4.4b to emit skip, not pending', () => {
-    expect(hasStepEmit('4.4a', 'skip')).toBe(true);
-    expect(hasStepEmit('4.4b', 'skip')).toBe(true);
+    expect(hasStepEmit('22e', 'skip')).toBe(true);
+    expect(hasStepEmit('22f', 'skip')).toBe(true);
   });
 
   it('Phase A/B failure skip includes reason string', () => {
-    expect(orchSrc).toMatch(/step_emit.*4\.4a.*skip.*Phase A/);
+    expect(orchSrc).toMatch(/step_emit.*22e.*skip.*Phase A/);
   });
 
   it('review-ranger and mutant-hunter run inside [ $failed -eq 0 ] guard', () => {
@@ -327,14 +327,14 @@ describe('Phase gate sequencing', () => {
 
   it('fuzz-weaver and perf-sentinel run inside [ $failed -eq 0 ] guard', () => {
     const phaseCStart = orchSrc.indexOf('Phase C: fuzz-weaver + perf-sentinel');
-    const phaseCEnd   = orchSrc.indexOf('Step 4.6: Browser E2E routing', phaseCStart);
+    const phaseCEnd   = orchSrc.indexOf('Step 23: Browser E2E routing', phaseCStart);
     const phaseCBlock = orchSrc.slice(phaseCStart, phaseCEnd === -1 ? phaseCStart + 2000 : phaseCEnd);
     expect(phaseCBlock).toMatch(/if \[ \$failed -eq 0 \]/);
   });
 
   it('Phase B skip path (4.3a/4.3b) is in the else-branch of the Phase A guard', () => {
     // The else block for [ $failed -eq 0 ] must contain the Phase B skip emits
-    const skip43aIdx = orchSrc.indexOf('step_emit "4.3a" "skip" "Step 4.3a: Review ranger" "Phase A failed"');
+    const skip43aIdx = orchSrc.indexOf('step_emit "22c" "skip" "Step 22c: Review ranger" "Phase A failed"');
     expect(skip43aIdx).toBeGreaterThan(-1);
     const elseBeforeSkip = orchSrc.lastIndexOf('\n    else\n', skip43aIdx);
     expect(elseBeforeSkip).toBeGreaterThan(-1);
@@ -343,7 +343,7 @@ describe('Phase gate sequencing', () => {
 
   it('Phase C skip path (4.4a/4.4b) is in the else-branch of the Phase A+B guard', () => {
     // Target the specific Phase A/B skip, not the SKIP_TESTING_GATES skip
-    const skip44aIdx = orchSrc.indexOf('step_emit "4.4a" "skip" "Step 4.4a: Fuzz-weaver" "Phase A/B failed"');
+    const skip44aIdx = orchSrc.indexOf('step_emit "22e" "skip" "Step 22e: Fuzz-weaver" "Phase A/B failed"');
     expect(skip44aIdx).toBeGreaterThan(-1);
     // There must be an else within 200 chars before the skip
     const region = orchSrc.slice(Math.max(0, skip44aIdx - 200), skip44aIdx);
@@ -355,25 +355,25 @@ describe('Phase gate sequencing', () => {
 // STEP 0: Specification pass
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 0: Specification pass', () => {
+describe('Step 1: Specification pass', () => {
   it('emits running before spec pass starts', () => {
-    expect(hasStepEmit('0', 'running')).toBe(true);
+    expect(hasStepEmit('1', 'running')).toBe(true);
   });
 
   it('emits pass on spec pass success', () => {
-    expect(hasStepEmit('0', 'pass')).toBe(true);
+    expect(hasStepEmit('1', 'pass')).toBe(true);
   });
 
   it('emits fail on spec pass failure', () => {
-    expect(hasStepEmit('0', 'fail')).toBe(true);
+    expect(hasStepEmit('1', 'fail')).toBe(true);
   });
 
   it('emits skip when EPAM_SPEC_MODE is disabled', () => {
-    expect(hasStepEmit('0', 'skip')).toBe(true);
+    expect(hasStepEmit('1', 'skip')).toBe(true);
   });
 
   it('label contains "Specification" or "spec"', () => {
-    expect(stepLabel('0').toLowerCase()).toMatch(/spec/);
+    expect(stepLabel('1').toLowerCase()).toMatch(/spec/);
   });
 });
 
@@ -381,29 +381,29 @@ describe('Step 0: Specification pass', () => {
 // STEP 0.1: CPA pre-pass
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 0.1: CPA pre-pass', () => {
+describe('Step 2: CPA pre-pass', () => {
   it('emits running when CPA starts', () => {
-    expect(hasStepEmit('0.1', 'running')).toBe(true);
+    expect(hasStepEmit('2', 'running')).toBe(true);
   });
 
   it('emits pass when CPA passes', () => {
-    expect(hasStepEmit('0.1', 'pass')).toBe(true);
+    expect(hasStepEmit('2', 'pass')).toBe(true);
   });
 
   it('emits fail when CPA blocks', () => {
-    expect(hasStepEmit('0.1', 'fail')).toBe(true);
+    expect(hasStepEmit('2', 'fail')).toBe(true);
   });
 
   it('emits skip when SKIP_CPA=1', () => {
-    expect(hasStepEmit('0.1', 'skip')).toBe(true);
+    expect(hasStepEmit('2', 'skip')).toBe(true);
   });
 
   it('emits warn for non-blocking CPA issues', () => {
-    expect(hasStepEmit('0.1', 'warn')).toBe(true);
+    expect(hasStepEmit('2', 'warn')).toBe(true);
   });
 
   it('label references CPA', () => {
-    expect(stepLabel('0.1').toLowerCase()).toMatch(/cpa/);
+    expect(stepLabel('2').toLowerCase()).toMatch(/cpa/);
   });
 });
 
@@ -411,25 +411,25 @@ describe('Step 0.1: CPA pre-pass', () => {
 // STEP 0.5: Pre-phase skill assessment
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 0.5: Pre-phase skill assessment', () => {
+describe('Step 3: Pre-phase skill assessment', () => {
   it('emits running when assessment starts', () => {
-    expect(hasStepEmit('0.5', 'running')).toBe(true);
+    expect(hasStepEmit('3', 'running')).toBe(true);
   });
 
   it('emits pass when assessment completes', () => {
-    expect(hasStepEmit('0.5', 'pass')).toBe(true);
+    expect(hasStepEmit('3', 'pass')).toBe(true);
   });
 
   it('emits skip when SKIP_SKILL_ASSESSMENT=1', () => {
-    expect(hasStepEmit('0.5', 'skip')).toBe(true);
+    expect(hasStepEmit('3', 'skip')).toBe(true);
   });
 
   it('emits warn when assessment has issues', () => {
-    expect(hasStepEmit('0.5', 'warn')).toBe(true);
+    expect(hasStepEmit('3', 'warn')).toBe(true);
   });
 
   it('label references "assessment" or "skill"', () => {
-    expect(stepLabel('0.5').toLowerCase()).toMatch(/assess|skill/);
+    expect(stepLabel('3').toLowerCase()).toMatch(/assess|skill/);
   });
 });
 
@@ -437,17 +437,17 @@ describe('Step 0.5: Pre-phase skill assessment', () => {
 // STEP 0.6: Hybrid pre-coord
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 0.6: Hybrid pre-coord', () => {
+describe('Step 4: Hybrid pre-coord', () => {
   it('emits pass when coord runs', () => {
-    expect(hasStepEmit('0.6', 'pass')).toBe(true);
+    expect(hasStepEmit('4', 'pass')).toBe(true);
   });
 
   it('emits skip when orch mode is not hybrid', () => {
-    expect(hasStepEmit('0.6', 'skip')).toBe(true);
+    expect(hasStepEmit('4', 'skip')).toBe(true);
   });
 
   it('label references "coord" or "hybrid"', () => {
-    expect(stepLabel('0.6').toLowerCase()).toMatch(/coord|hybrid/);
+    expect(stepLabel('4').toLowerCase()).toMatch(/coord|hybrid/);
   });
 });
 
@@ -455,25 +455,25 @@ describe('Step 0.6: Hybrid pre-coord', () => {
 // STEP 0.7: Regression guard
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 0.7: Regression guard', () => {
+describe('Step 5: Regression guard', () => {
   it('emits running when guard starts', () => {
-    expect(hasStepEmit('0.7', 'running')).toBe(true);
+    expect(hasStepEmit('5', 'running')).toBe(true);
   });
 
   it('emits pass when no regressions found', () => {
-    expect(hasStepEmit('0.7', 'pass')).toBe(true);
+    expect(hasStepEmit('5', 'pass')).toBe(true);
   });
 
   it('emits fail when regressions block', () => {
-    expect(hasStepEmit('0.7', 'fail')).toBe(true);
+    expect(hasStepEmit('5', 'fail')).toBe(true);
   });
 
   it('emits skip when SKIP_REGRESSION_GUARD=true', () => {
-    expect(hasStepEmit('0.7', 'skip')).toBe(true);
+    expect(hasStepEmit('5', 'skip')).toBe(true);
   });
 
   it('label references "regression"', () => {
-    expect(stepLabel('0.7').toLowerCase()).toMatch(/regression/);
+    expect(stepLabel('5').toLowerCase()).toMatch(/regression/);
   });
 });
 
@@ -481,13 +481,13 @@ describe('Step 0.7: Regression guard', () => {
 // STEP 0.8: mkdir src/ dirs
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 0.8: mkdir src/ dirs', () => {
+describe('Step 6: mkdir src/ dirs', () => {
   it('emits pass after dirs created', () => {
-    expect(hasStepEmit('0.8', 'pass')).toBe(true);
+    expect(hasStepEmit('6', 'pass')).toBe(true);
   });
 
   it('label references "mkdir" or "dir"', () => {
-    expect(stepLabel('0.8').toLowerCase()).toMatch(/mkdir|dir/);
+    expect(stepLabel('6').toLowerCase()).toMatch(/mkdir|dir/);
   });
 
   it('mkdir -p command creates src/ tree', () => {
@@ -499,25 +499,25 @@ describe('Step 0.8: mkdir src/ dirs', () => {
 // STEP 1: Main-branch stories
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 1: Main-branch stories', () => {
+describe('Step 8: Main-branch stories', () => {
   it('emits running when stories start', () => {
-    expect(hasStepEmit('1', 'running')).toBe(true);
+    expect(hasStepEmit('8', 'running')).toBe(true);
   });
 
   it('emits pass when all stories complete', () => {
-    expect(hasStepEmit('1', 'pass')).toBe(true);
+    expect(hasStepEmit('8', 'pass')).toBe(true);
   });
 
   it('emits fail when a story fails', () => {
-    expect(hasStepEmit('1', 'fail')).toBe(true);
+    expect(hasStepEmit('8', 'fail')).toBe(true);
   });
 
   it('emits skip when no main-branch stories exist', () => {
-    expect(hasStepEmit('1', 'skip')).toBe(true);
+    expect(hasStepEmit('8', 'skip')).toBe(true);
   });
 
   it('label references "branch" or "stories"', () => {
-    expect(stepLabel('1').toLowerCase()).toMatch(/branch|stories|story/);
+    expect(stepLabel('8').toLowerCase()).toMatch(/branch|stories|story/);
   });
 });
 
@@ -525,17 +525,17 @@ describe('Step 1: Main-branch stories', () => {
 // STEP 1.5: Auto-commit
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 1.5: Auto-commit', () => {
+describe('Step 9: Auto-commit', () => {
   it('emits pass after commit', () => {
-    expect(hasStepEmit('1.5', 'pass')).toBe(true);
+    expect(hasStepEmit('9', 'pass')).toBe(true);
   });
 
   it('emits skip when nothing to commit', () => {
-    expect(hasStepEmit('1.5', 'skip')).toBe(true);
+    expect(hasStepEmit('9', 'skip')).toBe(true);
   });
 
   it('label references "commit"', () => {
-    expect(stepLabel('1.5').toLowerCase()).toMatch(/commit/);
+    expect(stepLabel('9').toLowerCase()).toMatch(/commit/);
   });
 
   it('git commit command exists in the auto-commit block', () => {
@@ -547,34 +547,34 @@ describe('Step 1.5: Auto-commit', () => {
 // STEP 1.6: TC writer gate
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 1.6: TC writer gate', () => {
+describe('Step 10: TC writer gate', () => {
   it('emits running when TC writer starts', () => {
-    expect(hasStepEmit('1.6', 'running')).toBe(true);
+    expect(hasStepEmit('10', 'running')).toBe(true);
   });
 
   it('emits pass when TCs are written', () => {
-    expect(hasStepEmit('1.6', 'pass')).toBe(true);
+    expect(hasStepEmit('10', 'pass')).toBe(true);
   });
 
   it('emits fail when TC writer exits non-zero', () => {
-    expect(hasStepEmit('1.6', 'fail')).toBe(true);
+    expect(hasStepEmit('10', 'fail')).toBe(true);
   });
 
   it('emits skip when SKIP_TC_WRITER=1', () => {
-    expect(hasStepEmit('1.6', 'skip')).toBe(true);
+    expect(hasStepEmit('10', 'skip')).toBe(true);
   });
 
   it('emits skip when no test stories need TCs', () => {
     // At least 2 skip paths: SKIP_TC_WRITER=1 and "no TC needed"
-    expect(stepEmitCount('1.6', 'skip')).toBeGreaterThanOrEqual(1);
+    expect(stepEmitCount('10', 'skip')).toBeGreaterThanOrEqual(1);
   });
 
   it('no duplicate step_emit skip calls (max 2)', () => {
-    expect(stepEmitCount('1.6', 'skip')).toBeLessThanOrEqual(2);
+    expect(stepEmitCount('10', 'skip')).toBeLessThanOrEqual(2);
   });
 
   it('label references "TC" or "writer"', () => {
-    expect(stepLabel('1.6').toLowerCase()).toMatch(/tc|writer/);
+    expect(stepLabel('10').toLowerCase()).toMatch(/tc|writer/);
   });
 
   it('TC writer script checks agent exit BEFORE file existence', () => {
@@ -603,21 +603,21 @@ describe('Step 1.6: TC writer gate', () => {
 // STEP 2: Create worktrees
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 2: Create worktrees', () => {
+describe('Step 13: Create worktrees', () => {
   it('emits running when worktree creation starts', () => {
-    expect(hasStepEmit('2', 'running')).toBe(true);
+    expect(hasStepEmit('13', 'running')).toBe(true);
   });
 
   it('emits pass when worktrees are created', () => {
-    expect(hasStepEmit('2', 'pass')).toBe(true);
+    expect(hasStepEmit('13', 'pass')).toBe(true);
   });
 
   it('emits skip when orch mode is single-agent', () => {
-    expect(hasStepEmit('2', 'skip')).toBe(true);
+    expect(hasStepEmit('13', 'skip')).toBe(true);
   });
 
   it('label references "worktree"', () => {
-    expect(stepLabel('2').toLowerCase()).toMatch(/worktree/);
+    expect(stepLabel('13').toLowerCase()).toMatch(/worktree/);
   });
 
   it('worktrees are created via CLAUDE_SH --setup-worktrees', () => {
@@ -629,21 +629,21 @@ describe('Step 2: Create worktrees', () => {
 // STEP 3a: Primary agent
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 3a: Primary agent', () => {
+describe('Step 14: Primary agent', () => {
   it('emits running when primary agent launches', () => {
-    expect(hasStepEmit('3a', 'running')).toBe(true);
+    expect(hasStepEmit('14', 'running')).toBe(true);
   });
 
   it('emits pass when primary agent succeeds', () => {
-    expect(hasStepEmit('3a', 'pass')).toBe(true);
+    expect(hasStepEmit('14', 'pass')).toBe(true);
   });
 
   it('emits fail when primary agent fails', () => {
-    expect(hasStepEmit('3a', 'fail')).toBe(true);
+    expect(hasStepEmit('14', 'fail')).toBe(true);
   });
 
   it('label references "Primary" or "primary"', () => {
-    expect(stepLabel('3a').toLowerCase()).toMatch(/primary|agent/);
+    expect(stepLabel('14').toLowerCase()).toMatch(/primary|agent/);
   });
 
   it('primary agent PID is waited on', () => {
@@ -659,25 +659,25 @@ describe('Step 3a: Primary agent', () => {
 // STEP 3b: Independent agent
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 3b: Independent agent', () => {
+describe('Step 15: Independent agent', () => {
   it('emits running when independent agent launches', () => {
-    expect(hasStepEmit('3b', 'running')).toBe(true);
+    expect(hasStepEmit('15', 'running')).toBe(true);
   });
 
   it('emits pass when independent agent succeeds', () => {
-    expect(hasStepEmit('3b', 'pass')).toBe(true);
+    expect(hasStepEmit('15', 'pass')).toBe(true);
   });
 
   it('emits fail when independent agent fails', () => {
-    expect(hasStepEmit('3b', 'fail')).toBe(true);
+    expect(hasStepEmit('15', 'fail')).toBe(true);
   });
 
   it('emits skip when orch mode is single-agent', () => {
-    expect(hasStepEmit('3b', 'skip')).toBe(true);
+    expect(hasStepEmit('15', 'skip')).toBe(true);
   });
 
   it('label references "Independent" or "independent"', () => {
-    expect(stepLabel('3b').toLowerCase()).toMatch(/independent|agent/);
+    expect(stepLabel('15').toLowerCase()).toMatch(/independent|agent/);
   });
 
   it('independent agent PID is waited on', () => {
@@ -689,25 +689,25 @@ describe('Step 3b: Independent agent', () => {
 // STEP 3.1: Worktree health
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 3.1: Worktree health', () => {
+describe('Step 16: Worktree health', () => {
   it('emits running when health check starts', () => {
-    expect(hasStepEmit('3.1', 'running')).toBe(true);
+    expect(hasStepEmit('16', 'running')).toBe(true);
   });
 
   it('emits pass when worktrees are healthy', () => {
-    expect(hasStepEmit('3.1', 'pass')).toBe(true);
+    expect(hasStepEmit('16', 'pass')).toBe(true);
   });
 
   it('emits warn when health check has issues', () => {
-    expect(hasStepEmit('3.1', 'warn')).toBe(true);
+    expect(hasStepEmit('16', 'warn')).toBe(true);
   });
 
   it('emits skip when orch mode is single-agent', () => {
-    expect(hasStepEmit('3.1', 'skip')).toBe(true);
+    expect(hasStepEmit('16', 'skip')).toBe(true);
   });
 
   it('label references "health" or "worktree"', () => {
-    expect(stepLabel('3.1').toLowerCase()).toMatch(/health|worktree/);
+    expect(stepLabel('16').toLowerCase()).toMatch(/health|worktree/);
   });
 });
 
@@ -715,25 +715,25 @@ describe('Step 3.1: Worktree health', () => {
 // STEP 3.5: Post-parallel assessment
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 3.5: Post-parallel assessment', () => {
+describe('Step 18: Post-parallel assessment', () => {
   it('emits running when assessment starts', () => {
-    expect(hasStepEmit('3.5', 'running')).toBe(true);
+    expect(hasStepEmit('18', 'running')).toBe(true);
   });
 
   it('emits pass when assessment completes', () => {
-    expect(hasStepEmit('3.5', 'pass')).toBe(true);
+    expect(hasStepEmit('18', 'pass')).toBe(true);
   });
 
   it('emits skip when SKIP_SKILL_ASSESSMENT=1', () => {
-    expect(hasStepEmit('3.5', 'skip')).toBe(true);
+    expect(hasStepEmit('18', 'skip')).toBe(true);
   });
 
   it('emits warn when assessment finds issues', () => {
-    expect(hasStepEmit('3.5', 'warn')).toBe(true);
+    expect(hasStepEmit('18', 'warn')).toBe(true);
   });
 
   it('label references "assessment" or "parallel"', () => {
-    expect(stepLabel('3.5').toLowerCase()).toMatch(/assess|parallel|skill/);
+    expect(stepLabel('18').toLowerCase()).toMatch(/assess|parallel|skill/);
   });
 });
 
@@ -741,25 +741,25 @@ describe('Step 3.5: Post-parallel assessment', () => {
 // STEP 3.7: Pre-review gate
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 3.7: Pre-review gate', () => {
+describe('Step 19: Pre-review gate', () => {
   it('emits running when gate runs', () => {
-    expect(hasStepEmit('3.7', 'running')).toBe(true);
+    expect(hasStepEmit('19', 'running')).toBe(true);
   });
 
   it('emits pass when gate passes', () => {
-    expect(hasStepEmit('3.7', 'pass')).toBe(true);
+    expect(hasStepEmit('19', 'pass')).toBe(true);
   });
 
   it('emits fail when gate blocks', () => {
-    expect(hasStepEmit('3.7', 'fail')).toBe(true);
+    expect(hasStepEmit('19', 'fail')).toBe(true);
   });
 
   it('emits skip when SKIP_PRE_REVIEW_GATE=true', () => {
-    expect(hasStepEmit('3.7', 'skip')).toBe(true);
+    expect(hasStepEmit('19', 'skip')).toBe(true);
   });
 
   it('label references "review" or "gate"', () => {
-    expect(stepLabel('3.7').toLowerCase()).toMatch(/review|gate/);
+    expect(stepLabel('19').toLowerCase()).toMatch(/review|gate/);
   });
 });
 
@@ -767,25 +767,25 @@ describe('Step 3.7: Pre-review gate', () => {
 // STEP 4: Review stories
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 4: Review stories', () => {
+describe('Step 21: Review stories', () => {
   it('emits running when review starts', () => {
-    expect(hasStepEmit('4', 'running')).toBe(true);
+    expect(hasStepEmit('21', 'running')).toBe(true);
   });
 
   it('emits pass when all reviews complete', () => {
-    expect(hasStepEmit('4', 'pass')).toBe(true);
+    expect(hasStepEmit('21', 'pass')).toBe(true);
   });
 
   it('emits fail when review fails', () => {
-    expect(hasStepEmit('4', 'fail')).toBe(true);
+    expect(hasStepEmit('21', 'fail')).toBe(true);
   });
 
   it('emits skip when no review stories exist', () => {
-    expect(hasStepEmit('4', 'skip')).toBe(true);
+    expect(hasStepEmit('21', 'skip')).toBe(true);
   });
 
   it('label references "review"', () => {
-    expect(stepLabel('4').toLowerCase()).toMatch(/review/);
+    expect(stepLabel('21').toLowerCase()).toMatch(/review/);
   });
 });
 
@@ -793,25 +793,25 @@ describe('Step 4: Review stories', () => {
 // STEP 4.2a: SAST sentinel
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 4.2a: SAST sentinel', () => {
+describe('Step 22a: SAST sentinel', () => {
   it('emits running when SAST starts', () => {
-    expect(hasStepEmit('4.2a', 'running')).toBe(true);
+    expect(hasStepEmit('22a', 'running')).toBe(true);
   });
 
   it('emits pass when blockerCount=0', () => {
-    expect(hasStepEmit('4.2a', 'pass')).toBe(true);
+    expect(hasStepEmit('22a', 'pass')).toBe(true);
   });
 
   it('emits fail when blockerCount > 0', () => {
-    expect(hasStepEmit('4.2a', 'fail')).toBe(true);
+    expect(hasStepEmit('22a', 'fail')).toBe(true);
   });
 
   it('emits warn when SAST has non-blocking findings', () => {
-    expect(hasStepEmit('4.2a', 'warn')).toBe(true);
+    expect(hasStepEmit('22a', 'warn')).toBe(true);
   });
 
   it('emits skip when SKIP_TESTING_GATES=true', () => {
-    expect(hasStepEmit('4.2a', 'skip')).toBe(true);
+    expect(hasStepEmit('22a', 'skip')).toBe(true);
   });
 
   it('uses blockerCount from summary, not raw verdict:fail', () => {
@@ -820,7 +820,7 @@ describe('Step 4.2a: SAST sentinel', () => {
   });
 
   it('blockerCount=0 path calls step_emit pass with count annotation', () => {
-    expect(orchSrc).toMatch(/step_emit "4\.2a" "pass".*blockerCount=\$_sast_blockers/s);
+    expect(orchSrc).toMatch(/step_emit "22a" "pass".*blockerCount=\$_sast_blockers/s);
   });
 
   it('verdict:fail with no JSON falls back safely', () => {
@@ -831,12 +831,12 @@ describe('Step 4.2a: SAST sentinel', () => {
     expect(orchSrc).toMatch(/TypeScript Compiler Results.*hard evidence/s);
   });
 
-  it('SAST uses run_orch_prompt_with_tools for file access', () => {
-    expect(orchSrc).toMatch(/run_orch_prompt_with_tools "\$sast_prompt"/);
+  it('SAST uses _run_qa_gate_with_retry for file access (retry-enabled, AI_GATE_ALLOW_TOOLS=1 inside helper)', () => {
+    expect(orchSrc).toMatch(/_run_qa_gate_with_retry "\$sast_prompt"/);
   });
 
   it('label references "SAST" or "sentinel"', () => {
-    expect(stepLabel('4.2a').toLowerCase()).toMatch(/sast|sentinel/);
+    expect(stepLabel('22a').toLowerCase()).toMatch(/sast|sentinel/);
   });
 });
 
@@ -844,37 +844,37 @@ describe('Step 4.2a: SAST sentinel', () => {
 // STEP 4.2b: Spec validator
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 4.2b: Spec validator', () => {
+describe('Step 22b: Spec validator', () => {
   it('emits running when validator starts', () => {
-    expect(hasStepEmit('4.2b', 'running')).toBe(true);
+    expect(hasStepEmit('22b', 'running')).toBe(true);
   });
 
   it('emits pass when spec is fully compliant', () => {
-    expect(hasStepEmit('4.2b', 'pass')).toBe(true);
+    expect(hasStepEmit('22b', 'pass')).toBe(true);
   });
 
   it('emits fail when spec has failing criteria', () => {
-    expect(hasStepEmit('4.2b', 'fail')).toBe(true);
+    expect(hasStepEmit('22b', 'fail')).toBe(true);
   });
 
   it('emits warn when no story data available', () => {
-    expect(hasStepEmit('4.2b', 'warn')).toBe(true);
+    expect(hasStepEmit('22b', 'warn')).toBe(true);
   });
 
   it('emits skip when SKIP_TESTING_GATES=true', () => {
-    expect(hasStepEmit('4.2b', 'skip')).toBe(true);
+    expect(hasStepEmit('22b', 'skip')).toBe(true);
   });
 
   it('vitest oracle is injected before spec prompt', () => {
     expect(orchSrc).toMatch(/vitest.*oracle|oracle.*vitest/i);
   });
 
-  it('spec validator uses run_orch_prompt_with_tools for file access', () => {
-    expect(orchSrc).toMatch(/run_orch_prompt_with_tools "\$spec_prompt"/);
+  it('spec validator uses _run_qa_gate_with_retry for file access', () => {
+    expect(orchSrc).toMatch(/_run_qa_gate_with_retry "\$spec_prompt"/);
   });
 
   it('label references "Spec" or "validator"', () => {
-    expect(stepLabel('4.2b').toLowerCase()).toMatch(/spec|validator/);
+    expect(stepLabel('22b').toLowerCase()).toMatch(/spec|validator/);
   });
 });
 
@@ -882,37 +882,37 @@ describe('Step 4.2b: Spec validator', () => {
 // STEP 4.3a: Review ranger
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 4.3a: Review ranger', () => {
+describe('Step 22c: Review ranger', () => {
   it('emits running when ranger starts', () => {
-    expect(hasStepEmit('4.3a', 'running')).toBe(true);
+    expect(hasStepEmit('22c', 'running')).toBe(true);
   });
 
   it('emits pass when ranger finds no blockers', () => {
-    expect(hasStepEmit('4.3a', 'pass')).toBe(true);
+    expect(hasStepEmit('22c', 'pass')).toBe(true);
   });
 
   it('emits fail when ranger finds blockers', () => {
-    expect(hasStepEmit('4.3a', 'fail')).toBe(true);
+    expect(hasStepEmit('22c', 'fail')).toBe(true);
   });
 
   it('emits warn for non-blocking ranger findings', () => {
-    expect(hasStepEmit('4.3a', 'warn')).toBe(true);
+    expect(hasStepEmit('22c', 'warn')).toBe(true);
   });
 
   it('emits skip when SKIP_TESTING_GATES=true', () => {
-    expect(hasStepEmit('4.3a', 'skip')).toBe(true);
+    expect(hasStepEmit('22c', 'skip')).toBe(true);
   });
 
   it('emits skip when Phase A failed (not pending)', () => {
-    expect(orchSrc).toMatch(/step_emit.*4\.3a.*skip.*Phase A/);
+    expect(orchSrc).toMatch(/step_emit.*22c.*skip.*Phase A/);
   });
 
-  it('review ranger uses run_orch_prompt_with_tools for file access', () => {
-    expect(orchSrc).toMatch(/run_orch_prompt_with_tools "\$review_prompt"/);
+  it('review ranger uses _run_qa_gate_with_retry for file access', () => {
+    expect(orchSrc).toMatch(/_run_qa_gate_with_retry "\$review_prompt"/);
   });
 
   it('label references "ranger" or "review"', () => {
-    expect(stepLabel('4.3a').toLowerCase()).toMatch(/ranger|review/);
+    expect(stepLabel('22c').toLowerCase()).toMatch(/ranger|review/);
   });
 });
 
@@ -920,37 +920,37 @@ describe('Step 4.3a: Review ranger', () => {
 // STEP 4.3b: Mutant hunter
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 4.3b: Mutant hunter', () => {
+describe('Step 22d: Mutant hunter', () => {
   it('emits running when hunter starts', () => {
-    expect(hasStepEmit('4.3b', 'running')).toBe(true);
+    expect(hasStepEmit('22d', 'running')).toBe(true);
   });
 
   it('emits pass when mutation score is acceptable', () => {
-    expect(hasStepEmit('4.3b', 'pass')).toBe(true);
+    expect(hasStepEmit('22d', 'pass')).toBe(true);
   });
 
   it('emits fail when mutation score fails', () => {
-    expect(hasStepEmit('4.3b', 'fail')).toBe(true);
+    expect(hasStepEmit('22d', 'fail')).toBe(true);
   });
 
   it('emits warn for borderline mutation score', () => {
-    expect(hasStepEmit('4.3b', 'warn')).toBe(true);
+    expect(hasStepEmit('22d', 'warn')).toBe(true);
   });
 
   it('emits skip when SKIP_TESTING_GATES=true', () => {
-    expect(hasStepEmit('4.3b', 'skip')).toBe(true);
+    expect(hasStepEmit('22d', 'skip')).toBe(true);
   });
 
   it('emits skip when Phase A failed', () => {
-    expect(orchSrc).toMatch(/step_emit.*4\.3b.*skip.*Phase A/);
+    expect(orchSrc).toMatch(/step_emit.*22d.*skip.*Phase A/);
   });
 
-  it('mutant hunter uses run_orch_prompt_with_tools for file access', () => {
-    expect(orchSrc).toMatch(/run_orch_prompt_with_tools "\$mutant_prompt"/);
+  it('mutant hunter uses _run_qa_gate_with_retry for file access', () => {
+    expect(orchSrc).toMatch(/_run_qa_gate_with_retry "\$mutant_prompt"/);
   });
 
   it('label references "hunter" or "mutant"', () => {
-    expect(stepLabel('4.3b').toLowerCase()).toMatch(/hunter|mutant/);
+    expect(stepLabel('22d').toLowerCase()).toMatch(/hunter|mutant/);
   });
 });
 
@@ -958,39 +958,38 @@ describe('Step 4.3b: Mutant hunter', () => {
 // STEP 4.4a: Fuzz-weaver
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 4.4a: Fuzz-weaver', () => {
+describe('Step 22e: Fuzz-weaver', () => {
   it('emits running when fuzz-weaver starts', () => {
-    expect(hasStepEmit('4.4a', 'running')).toBe(true);
+    expect(hasStepEmit('22e', 'running')).toBe(true);
   });
 
   it('emits pass when no vulnerabilities found', () => {
-    expect(hasStepEmit('4.4a', 'pass')).toBe(true);
+    expect(hasStepEmit('22e', 'pass')).toBe(true);
   });
 
   it('emits fail when grounded vulnerabilities found', () => {
-    expect(hasStepEmit('4.4a', 'fail')).toBe(true);
+    expect(hasStepEmit('22e', 'fail')).toBe(true);
   });
 
   it('emits warn when verdict=fail but findings are ungrounded', () => {
-    expect(orchSrc).toMatch(/step_emit "4\.4a" "warn" "Step 4\.4a: Fuzz-weaver" "unverified findings downgraded"/);
+    expect(orchSrc).toMatch(/step_emit "22e" "warn" "Step 22e: Fuzz-weaver" "unverified findings downgraded"/);
   });
 
   it('emits skip when SKIP_TESTING_GATES=true', () => {
-    expect(hasStepEmit('4.4a', 'skip')).toBe(true);
+    expect(hasStepEmit('22e', 'skip')).toBe(true);
   });
 
   it('emits skip when Phase A/B failed', () => {
-    expect(orchSrc).toMatch(/step_emit.*4\.4a.*skip.*Phase/);
+    expect(orchSrc).toMatch(/step_emit.*22e.*skip.*Phase/);
   });
 
-  it('uses run_orch_prompt_with_tools — not bare run_orch_prompt', () => {
-    expect(orchSrc).toMatch(/run_orch_prompt_with_tools "\$fuzz_prompt"/);
-    // The fuzz invocation line must start with run_orch_prompt_with_tools
-    expect(orchSrc).toMatch(/run_orch_prompt_with_tools "\$fuzz_prompt" "qa-gate:fuzz-weaver"/);
+  it('uses _run_qa_gate_with_retry — not bare run_orch_prompt (tool access preserved inside helper)', () => {
+    expect(orchSrc).toMatch(/_run_qa_gate_with_retry "\$fuzz_prompt"/);
+    expect(orchSrc).toMatch(/_run_qa_gate_with_retry "\$fuzz_prompt" "qa-gate:fuzz-weaver"/);
   });
 
   it('label references "Fuzz" or "weaver"', () => {
-    expect(stepLabel('4.4a').toLowerCase()).toMatch(/fuzz|weaver/);
+    expect(stepLabel('22e').toLowerCase()).toMatch(/fuzz|weaver/);
   });
 
   it('grounding check returns 0 for tool-less agent (no src files)', () => {
@@ -1002,33 +1001,33 @@ describe('Step 4.4a: Fuzz-weaver', () => {
 // STEP 4.4b: Perf sentinel
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 4.4b: Perf sentinel', () => {
+describe('Step 22f: Perf sentinel', () => {
   it('emits running when sentinel starts', () => {
-    expect(hasStepEmit('4.4b', 'running')).toBe(true);
+    expect(hasStepEmit('22f', 'running')).toBe(true);
   });
 
   it('emits pass when no performance blockers found', () => {
-    expect(hasStepEmit('4.4b', 'pass')).toBe(true);
+    expect(hasStepEmit('22f', 'pass')).toBe(true);
   });
 
   it('emits fail when grounded performance blockers found', () => {
-    expect(hasStepEmit('4.4b', 'fail')).toBe(true);
+    expect(hasStepEmit('22f', 'fail')).toBe(true);
   });
 
   it('emits warn when verdict=fail but summary is null (ungrounded)', () => {
-    expect(orchSrc).toMatch(/step_emit "4\.4b" "warn" "Step 4\.4b: Perf sentinel" "hallucinated fail downgraded"/);
+    expect(orchSrc).toMatch(/step_emit "22f" "warn" "Step 22f: Perf sentinel" "hallucinated fail downgraded"/);
   });
 
   it('emits skip when SKIP_TESTING_GATES=true', () => {
-    expect(hasStepEmit('4.4b', 'skip')).toBe(true);
+    expect(hasStepEmit('22f', 'skip')).toBe(true);
   });
 
   it('emits skip when Phase A/B failed', () => {
-    expect(orchSrc).toMatch(/step_emit.*4\.4b.*skip.*Phase/);
+    expect(orchSrc).toMatch(/step_emit.*22f.*skip.*Phase/);
   });
 
-  it('uses run_orch_prompt_with_tools — not bare run_orch_prompt', () => {
-    expect(orchSrc).toMatch(/run_orch_prompt_with_tools "\$perf_prompt"/);
+  it('uses _run_qa_gate_with_retry — not bare run_orch_prompt (tool access preserved inside helper)', () => {
+    expect(orchSrc).toMatch(/_run_qa_gate_with_retry "\$perf_prompt"/);
   });
 
   it('grounding check uses _perf_grounded variable', () => {
@@ -1041,7 +1040,7 @@ describe('Step 4.4b: Perf sentinel', () => {
   });
 
   it('label references "Perf" or "sentinel"', () => {
-    expect(stepLabel('4.4b').toLowerCase()).toMatch(/perf|sentinel/);
+    expect(stepLabel('22f').toLowerCase()).toMatch(/perf|sentinel/);
   });
 });
 
@@ -1049,25 +1048,25 @@ describe('Step 4.4b: Perf sentinel', () => {
 // STEP 4.6: Browser E2E
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Step 4.6: Browser E2E', () => {
+describe('Step 23: Browser E2E', () => {
   it('emits running when E2E starts', () => {
-    expect(hasStepEmit('4.6', 'running')).toBe(true);
+    expect(hasStepEmit('23', 'running')).toBe(true);
   });
 
   it('emits pass when E2E tests pass', () => {
-    expect(hasStepEmit('4.6', 'pass')).toBe(true);
+    expect(hasStepEmit('23', 'pass')).toBe(true);
   });
 
   it('emits fail when E2E tests fail', () => {
-    expect(hasStepEmit('4.6', 'fail')).toBe(true);
+    expect(hasStepEmit('23', 'fail')).toBe(true);
   });
 
   it('emits skip when SKIP_BROWSER_E2E_ROUTING=true', () => {
-    expect(hasStepEmit('4.6', 'skip')).toBe(true);
+    expect(hasStepEmit('23', 'skip')).toBe(true);
   });
 
   it('label references "E2E" or "browser"', () => {
-    expect(stepLabel('4.6').toLowerCase()).toMatch(/e2e|browser/);
+    expect(stepLabel('23').toLowerCase()).toMatch(/e2e|browser/);
   });
 });
 
@@ -1100,31 +1099,31 @@ describe('Tool access contract — QA gate agents have file access', () => {
     expect(orchSrc).toMatch(/AI_GATE_ALLOW_TOOLS=1 run_orch_prompt/);
   });
 
-  it('all 6 QA gate agents use run_orch_prompt_with_tools', () => {
-    expect(orchSrc).toMatch(/run_orch_prompt_with_tools "\$sast_prompt"/);
-    expect(orchSrc).toMatch(/run_orch_prompt_with_tools "\$spec_prompt"/);
-    expect(orchSrc).toMatch(/run_orch_prompt_with_tools "\$review_prompt"/);
-    expect(orchSrc).toMatch(/run_orch_prompt_with_tools "\$mutant_prompt"/);
-    expect(orchSrc).toMatch(/run_orch_prompt_with_tools "\$fuzz_prompt"/);
-    expect(orchSrc).toMatch(/run_orch_prompt_with_tools "\$perf_prompt"/);
+  it('all 6 QA gate agents use _run_qa_gate_with_retry (which sets AI_GATE_ALLOW_TOOLS=1 internally)', () => {
+    expect(orchSrc).toMatch(/_run_qa_gate_with_retry "\$sast_prompt"/);
+    expect(orchSrc).toMatch(/_run_qa_gate_with_retry "\$spec_prompt"/);
+    expect(orchSrc).toMatch(/_run_qa_gate_with_retry "\$review_prompt"/);
+    expect(orchSrc).toMatch(/_run_qa_gate_with_retry "\$mutant_prompt"/);
+    expect(orchSrc).toMatch(/_run_qa_gate_with_retry "\$fuzz_prompt"/);
+    expect(orchSrc).toMatch(/_run_qa_gate_with_retry "\$perf_prompt"/);
   });
 
   it('no non-e2e QA gate agent uses bare run_orch_prompt (wrong — no tool access)', () => {
-    // Collect all run_orch_prompt invocations for specific qa-gate types
+    // Each call site must use _run_qa_gate_with_retry (which sets AI_GATE_ALLOW_TOOLS=1
+    // internally) or run_orch_prompt_with_tools — never a bare run_orch_prompt call.
     const gateTypes = ['qa-gate:sast', 'qa-gate:spec-validator', 'qa-gate:review-ranger',
                        'qa-gate:mutant-hunter', 'qa-gate:fuzz-weaver', 'qa-gate:perf-sentinel'];
     for (const gate of gateTypes) {
-      // The invocation must be via run_orch_prompt_with_tools, not bare run_orch_prompt
       const gateIdx = orchSrc.indexOf(`"${gate}"`);
       expect(gateIdx).toBeGreaterThan(-1);
       const invokeRegion = orchSrc.slice(Math.max(0, gateIdx - 100), gateIdx + 10);
-      expect(invokeRegion).toMatch(/run_orch_prompt_with_tools/);
+      expect(invokeRegion).toMatch(/run_orch_prompt_with_tools|_run_qa_gate_with_retry/);
     }
   });
 
-  it('run_orch_prompt_with_tools is defined before it is first used', () => {
-    const defIdx  = orchSrc.indexOf('run_orch_prompt_with_tools()');
-    const useIdx  = orchSrc.indexOf('run_orch_prompt_with_tools "$sast_prompt"');
+  it('_run_qa_gate_with_retry is defined before it is first used (at the sast call site)', () => {
+    const defIdx = orchSrc.indexOf('_run_qa_gate_with_retry()');
+    const useIdx = orchSrc.indexOf('_run_qa_gate_with_retry "$sast_prompt"');
     expect(defIdx).toBeGreaterThan(-1);
     expect(useIdx).toBeGreaterThan(-1);
     expect(defIdx).toBeLessThan(useIdx);
@@ -1198,18 +1197,18 @@ describe('Pipeline step checklist — ordering and heartbeat', () => {
   // lines, not in the checklist at all).
   it('print_step_checklist function lists all 27 step IDs (25 pipeline steps + 2 spec-mode sub-steps)', () => {
     const fn = orchSrc.match(/print_step_checklist\(\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const ids = ['0', '0a', '0b', '0.1', '0.5', '0.6', '0.7', '0.8', '0.9', '1', '1.5', '1.6',
-                 '2', '3a', '3b', '3.1', '3.2', '3.5', '3.7', '3.8',
-                 '4', '4.2a', '4.2b', '4.3a', '4.3b', '4.4a', '4.4b', '4.6'];
+    const ids = ['1', '1a', '1b', '2', '3', '4', '5', '6', '7', '8', '9', '10',
+                 '13', '14', '15', '16', '17', '18', '19', '20',
+                 '21', '22a', '22b', '22c', '22d', '22e', '22f', '23'];
     for (const id of ids) {
       expect(fn).toMatch(new RegExp(`"${id.replace('.', '\\.')}"`));
     }
   });
 
-  it('openspec/speckit sub-steps (0a/0b) show the actual configured model, not a hardcoded one', () => {
+  it('openspec/speckit sub-steps (1a/1b) show the actual configured model, not a hardcoded one', () => {
     const fn = orchSrc.match(/print_step_checklist\(\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
-    expect(fn).toMatch(/0a.*SPEC_MODE_OPENSPEC_MODEL/);
-    expect(fn).toMatch(/0b.*SPEC_MODE_SPECKIT_MODEL/);
+    expect(fn).toMatch(/1a.*SPEC_MODE_OPENSPEC_MODEL/);
+    expect(fn).toMatch(/1b.*SPEC_MODE_SPECKIT_MODEL/);
   });
 
   it('run_specification_pass emits live step_emit calls for 0a/0b (not just the pre-scan row) with model + story count parsed from spec-summary.json', () => {
@@ -1217,8 +1216,8 @@ describe('Pipeline step checklist — ordering and heartbeat', () => {
     const fnEnd = orchSrc.indexOf('\n}', fnStart);
     const fnBody = orchSrc.slice(fnStart, fnEnd);
     expect(fnBody).toMatch(/spec-summary\.json/);
-    expect(fnBody).toMatch(/step_emit "0a"/);
-    expect(fnBody).toMatch(/step_emit "0b"/);
+    expect(fnBody).toMatch(/step_emit "1a"/);
+    expect(fnBody).toMatch(/step_emit "1b"/);
     expect(fnBody).toMatch(/\.stats\.agents\.openspec/);
     expect(fnBody).toMatch(/\.stats\.agents\.speckit/);
   });
@@ -1400,9 +1399,9 @@ describe('monitor.html — pipeline steps panel', () => {
 
   it('STEP_MANIFEST covers all 23 step IDs', () => {
     const manifest = monitorSrc.match(/const STEP_MANIFEST = \[([\s\S]*?)\];/)?.[1] ?? '';
-    const ids = ['0', '0.1', '0.5', '0.6', '0.7', '0.8', '1', '1.5', '1.6',
-                 '2', '3a', '3b', '3.1', '3.5', '3.7',
-                 '4', '4.2a', '4.2b', '4.3a', '4.3b', '4.4a', '4.4b', '4.6'];
+    const ids = ['1', '2', '3', '4', '5', '6', '8', '9', '10',
+                 '13', '14', '15', '16', '18', '19',
+                 '21', '22a', '22b', '22c', '22d', '22e', '22f', '23'];
     for (const id of ids) {
       expect(manifest).toMatch(new RegExp(`id:'${id.replace('.', '\\.')}'`));
     }

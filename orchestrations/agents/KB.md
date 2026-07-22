@@ -120,3 +120,43 @@ When implementing memory file loaders that inject content into agent system prom
 **StoryRef:** EPAM-043
 
 Provider authentication architecture for AI coding CLIs falls into four patterns: (1) browser login with auto-provisioned keys (Anthropic Claude Code with Claude.ai, OpenAI Codex with ChatGPT SSO), (2) pure BYOK manual entry (OpenCode), (3) hybrid browser + custom keys with team management (Cursor), (4) workspace-scoped API keys (Anthropic Console). Of these, ONLY manual API key entry and generic OAuth PKCE are directly implementable without provider-specific backend cooperation. Claude.ai subscription login and ChatGPT SSO auto-keys are not available to third-party CLIs. Therefore, EPAM CLI v1 adopts the BYOK bridge model (manual entry + PKCE where available) while preserving DEC-003 long-term direction toward EPAM-brokered central provisioning. Key architectural insight: provider-native browser logins require provider cooperation that is typically CLI-specific (Claude Code, Codex) and not exposed to third parties.
+
+## KB-008 -- 2026-07-19
+
+**Category:** testing
+**AgentRole:** backend-engineer
+**Tags:** typescript, vitest, supertest, express, mocking
+**Trigger:** retry
+**StoryRef:** SKY-004-be-2
+
+When testing Express servers with supertest and vitest, if the server module captures `process.env` values at module load time (e.g., `const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY`), using `vi.stubEnv()` or modifying `process.env` after the import will NOT affect the already-loaded module. To test environment-dependent behavior, use `vi.resetModules()` to clear the module cache and re-import the server module after setting the desired environment variables. Structure tests with separate describe blocks for different environment states, using dynamic imports (`await import('./server')`) inside `beforeEach` hooks to ensure fresh module instances per test context.
+
+## KB-009 -- 2026-07-19
+
+**Category:** testing
+**AgentRole:** backend-engineer
+**Tags:** typescript, vitest, module-mocking, hoisting
+**Trigger:** retry
+**StoryRef:** SKY-004-be-2
+
+When using `vi.mock()` with vitest for module mocking, place the mock declaration at the top level before any imports, and use `vi.hoisted()` for any shared mock state that needs to be accessible across the test file. The hoisted factory runs in a separate context and allows creating mock functions that can be referenced by both the mock factory and the test code. Without hoisting, mock state may not be properly shared or the mock may not intercept the module before it's loaded by the test.
+
+## KB-010 -- 2026-07-21
+
+**Category:** testing
+**AgentRole:** backend-engineer
+**Tags:** typescript, vitest, supertest, express, environment-variables, module-reloading
+**Trigger:** retry
+**StoryRef:** SKY-004-c
+
+When testing Express routes that depend on environment variables captured at module load time (e.g., `const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY` at the top of server.ts), `vi.stubEnv()` and `process.env` modifications after import have no effect because the module has already evaluated the expression. To properly test environment-dependent route behavior (like 503 responses when API keys are missing), use `vi.resetModules()` to clear the module cache, then dynamically re-import the server module inside `beforeEach` after setting the desired environment state. Structure tests with separate describe blocks for different environment configurations, ensuring each block gets a fresh app instance with the correct environment setup.
+
+## KB-011 -- 2026-07-21
+
+**Category:** testing
+**AgentRole:** qa-engineer
+**Tags:** typescript, vitest, cli, process.exit, mocking
+**Trigger:** retry
+**StoryRef:** SKY-003-test
+
+When testing CLI code that calls `process.exit()` inside a try/catch block, mocking `process.exit` to throw an error will cause the catch block to catch that error and potentially re-exit with a different code. This is particularly problematic when testing argument validation that should exit with code 2, but the catch block re-exits with code 1. The solution is to accept the actual behavior in tests (documenting the bug) or fix the implementation by moving argument parsing outside the try block. When mocking `process.exit`, always capture the exit code in the mock implementation and throw a distinguishable error to stop execution, then assert on the captured exit code in the test.

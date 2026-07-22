@@ -254,14 +254,14 @@ describe('Step 3.2 merge — branch must have commits ahead of main', () => {
   );
 
   it('Step 3.2 checks _ahead count before merging', () => {
-    const mergeIdx = orchSrc.indexOf('Step 3.2: Merging');
+    const mergeIdx = orchSrc.indexOf('Step 17: Merging');
     expect(mergeIdx).toBeGreaterThan(-1);
     const block = orchSrc.slice(mergeIdx, mergeIdx + 1000);
     expect(block).toMatch(/_ahead|rev-list.*count/);
   });
 
   it('Step 3.2 errors if branch has no new commits (not silently skips)', () => {
-    const mergeIdx = orchSrc.indexOf('Step 3.2: Merging');
+    const mergeIdx = orchSrc.indexOf('Step 17: Merging');
     const block = orchSrc.slice(mergeIdx, mergeIdx + 1000);
     expect(block).toMatch(/no new commits|ahead.*0|_ahead.*-eq 0/);
     expect(block).toMatch(/error|ERROR|MERGE_FAILED/);
@@ -269,7 +269,7 @@ describe('Step 3.2 merge — branch must have commits ahead of main', () => {
 
   it('worktrees left in place after merge failure so developer can inspect them', () => {
     // Worktrees must NOT be auto-deleted on merge failure — developer needs them to debug
-    const mergeIdx = orchSrc.indexOf('Step 3.2: Merging');
+    const mergeIdx = orchSrc.indexOf('Step 17: Merging');
     // Widened from 3200 (2026-07-12): the merge-integrity guard added ahead
     // of the real `-X ours` merge call pushed this text further away.
     const block = orchSrc.slice(mergeIdx, mergeIdx + 6000);

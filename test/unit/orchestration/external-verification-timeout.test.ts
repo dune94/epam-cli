@@ -102,7 +102,9 @@ describe('run_external_verification() — bounded test-command timeout (static)'
     const timeoutBlock = body.slice(timeoutIdx, timeoutIdx + 400);
     expect(timeoutBlock).toMatch(/VERIFICATION_FAILURE=/);
     const genericIdx = body.indexOf('"$test_exit" -ne 0');
-    const genericBlock = body.slice(genericIdx, genericIdx + 400);
+    // Window must be large enough to skip past the warning + comment block + local
+    // var declarations that precede the VERIFICATION_FAILURE= assignment (~650 chars).
+    const genericBlock = body.slice(genericIdx, genericIdx + 1200);
     expect(genericBlock).toMatch(/VERIFICATION_FAILURE=/);
   });
 });

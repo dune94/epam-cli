@@ -345,9 +345,9 @@ with open('${tmpTcFile}') as f: json.load(f)
 
 // ─── 6. Orchestration script: Step 1.6 is wired ─────────────────────────────
 describe('TC gate — orchestration script wiring', () => {
-  it('run-agent-orchestration.sh contains Step 1.6 TC writer gate', () => {
+  it('run-agent-orchestration.sh contains Step 10 TC writer gate', () => {
     const src = readFileSync(ORCH_SCRIPT, 'utf8');
-    expect(src).toContain('Step 1.6');
+    expect(src).toContain('Step 10');
     expect(src).toContain('post-impl-tc-writer.sh');
   });
 
@@ -359,11 +359,9 @@ describe('TC gate — orchestration script wiring', () => {
 
   it('Step 1.6 passes --prd, --phase, and --output-dir to the gate script', () => {
     const src = readFileSync(ORCH_SCRIPT, 'utf8');
-    // Step 1.6 now executes after Step 3.2 (see ordering test below) — find
-    // the SECOND "Step 1.6" occurrence, which is the real execution block
-    // (the first is the moved-comment marker left at the old location).
-    const firstIdx = src.indexOf('Step 1.6');
-    const secondIdx = src.indexOf('Step 1.6', firstIdx + 1);
+    // Step 10 (formerly 1.6) now executes after Step 17 — find the execution
+    // block by anchoring on the running step_emit.
+    const secondIdx = src.indexOf('step_emit "10" "running"');
     const step16 = src.slice(secondIdx, src.indexOf('sync-monitor-stories.sh', secondIdx));
     expect(step16).toContain('--prd');
     expect(step16).toContain('--phase');
@@ -379,8 +377,8 @@ describe('TC gate — orchestration script wiring', () => {
     // run after worktree merge-back so both topologies (main-branch and
     // worktree) are guaranteed to have real implementation on the branch.
     const src = readFileSync(ORCH_SCRIPT, 'utf8');
-    const iMergeSuccess = src.indexOf('Step 3.2: All worktree branches merged back successfully');
-    const i16 = src.indexOf('Step 1.6', iMergeSuccess);
+    const iMergeSuccess = src.indexOf('Step 17: All worktree branches merged back successfully');
+    const i16 = src.indexOf('step_emit "10"', iMergeSuccess);
     const iSyncMonitor = src.indexOf('sync-monitor-stories.sh', i16);
     expect(iMergeSuccess).toBeGreaterThan(-1);
     expect(i16).toBeGreaterThan(iMergeSuccess);
@@ -392,7 +390,7 @@ describe('TC gate — orchestration script wiring', () => {
     const iNeedWorktrees = src.indexOf('need_worktrees=false');
     const before = src.slice(Math.max(0, iNeedWorktrees - 600), iNeedWorktrees);
     // The old location only has an explanatory comment now, not the gate logic
-    expect(before).toMatch(/has moved — see after Step 3\.2 below/);
+    expect(before).toMatch(/has moved — see after Step 17 below/);
     expect(before).not.toMatch(/post-impl-tc-writer\.sh/);
   });
 

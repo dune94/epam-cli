@@ -142,14 +142,14 @@ const sites: Site[] = [
     // no `set -o pipefail`, so `if cmd | tee file; then` always evaluated
     // tee's exit status, never the real tool call's -- see the
     // phase-assessment real-output-gate fix).
-    callAnchor: 'run_orch_prompt_with_tools "$assessment_prompt" "team-lead-agent" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"\n    local _assessment_rc=${PIPESTATUS[0]}',
+    callAnchor: 'run_orch_prompt_with_tools "$_pa_prompt" "team-lead-agent" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"',
     needsTools: true,
     reason: 'prompt instructs writing a report file, updating PRD agentRole fields, and flock JSONL appends (FIXED 2026-07-08)',
   },
   {
     label: 'Step 0.6 hybrid pre-coordination',
     src: 'orch',
-    callAnchor: 'run_orch_prompt_with_tools "$coord_prompt" "spec-coordinator" "${PHASE:-unknown}" 2>&1 | tee "$coord_log"; then\n        step_emit "0.6" "pass" "Step 0.6: Hybrid pre-coord"',
+    callAnchor: 'run_orch_prompt_with_tools "$_hpc_prompt" "spec-coordinator" "${PHASE:-unknown}" 2>&1 | tee "$coord_log"',
     needsTools: true,
     reason: 'prompt instructs reading the PRD and flock-appending real JSONL messages (FIXED 2026-07-08)',
   },
@@ -163,70 +163,72 @@ const sites: Site[] = [
   {
     label: 'Step 4.2a SAST sentinel',
     src: 'orch',
-    callAnchor: 'run_orch_prompt_with_tools "$sast_prompt" "qa-gate:sast"',
+    // Call site migrated to _run_qa_gate_with_retry (H3–H9 retry fix); tool
+    // access is preserved — the helper uses AI_GATE_ALLOW_TOOLS=1 internally.
+    callAnchor: '_run_qa_gate_with_retry "$sast_prompt" "qa-gate:sast"',
     needsTools: true,
     reason: 'must read changed source files to analyse them (tsc output is also injected as a bonus, but source reading still needs tools)',
   },
   {
     label: 'Step 4.2b spec-validator',
     src: 'orch',
-    callAnchor: 'run_orch_prompt_with_tools "$spec_prompt" "qa-gate:spec-validator"',
+    callAnchor: '_run_qa_gate_with_retry "$spec_prompt" "qa-gate:spec-validator"',
     needsTools: true,
     reason: 'must read package.json/tsconfig.json/etc. content to verify file-level criteria (vitest results + story ACs are injected, but file CONTENT checks still need Read)',
   },
   {
     label: 'Step 4.3a review-ranger',
     src: 'orch',
-    callAnchor: 'run_orch_prompt_with_tools "$review_prompt" "qa-gate:review-ranger"',
+    callAnchor: '_run_qa_gate_with_retry "$review_prompt" "qa-gate:review-ranger"',
     needsTools: true,
     reason: 'must read changed source files to perform code review',
   },
   {
     label: 'Step 4.3b mutant-hunter',
     src: 'orch',
-    callAnchor: 'run_orch_prompt_with_tools "$mutant_prompt" "qa-gate:mutant-hunter"',
+    callAnchor: '_run_qa_gate_with_retry "$mutant_prompt" "qa-gate:mutant-hunter"',
     needsTools: true,
     reason: 'must read test files and source to reason about mutation coverage',
   },
   {
     label: 'Step 4.4a fuzz-weaver',
     src: 'orch',
-    callAnchor: 'run_orch_prompt_with_tools "$fuzz_prompt" "qa-gate:fuzz-weaver"',
+    callAnchor: '_run_qa_gate_with_retry "$fuzz_prompt" "qa-gate:fuzz-weaver"',
     needsTools: true,
     reason: 'must run `git diff` and read changed source files to propose fuzz cases',
   },
   {
     label: 'Step 4.4b perf-sentinel',
     src: 'orch',
-    callAnchor: 'run_orch_prompt_with_tools "$perf_prompt" "qa-gate:perf-sentinel"',
+    callAnchor: '_run_qa_gate_with_retry "$perf_prompt" "qa-gate:perf-sentinel"',
     needsTools: true,
     reason: 'must read changed source files to analyse algorithmic complexity/perf hotspots',
   },
   {
     label: 'Step 4.6 browser E2E routing (playwright-agent/lightpanda-agent)',
     src: 'orch',
-    callAnchor: 'run_orch_prompt_with_tools "$prompt" "qa-gate:e2e"',
+    callAnchor: '_run_qa_gate_with_retry "$prompt" "qa-gate:e2e"',
     needsTools: true,
     reason: 'profile explicitly instructs RUNNING real Playwright/Lightpanda browser tests — impossible without Bash tool access (FIXED 2026-07-08)',
   },
   {
     label: 'gate-finding-analyst (self-heal remediation, agent 1/3)',
     src: 'orch',
-    callAnchor: '_finding_json=$(echo "$_finding_prompt" | \\\n                    AI_GATE_ALLOW_TOOLS=1',
+    callAnchor: '_gfa_raw=$(echo "$_gfa_prompt" | \\\n                        AI_GATE_ALLOW_TOOLS=1',
     needsTools: true,
     reason: 'must re-read the gate log and PRD to ground its finding',
   },
   {
     label: 'story-ac-remediator (self-heal remediation, agent 2/3)',
     src: 'orch',
-    callAnchor: '_ac_result=$(echo "$_ac_prompt" | \\\n                    AI_PROVIDER=',
+    callAnchor: '_acr_raw=$(echo "$_acr_prompt" | \\\n                        AI_PROVIDER=',
     needsTools: false,
     reason: 'FIXED 2026-07-11: previously had tool access and was instructed to write the PRD itself, but the agent narrating "I wrote the file" was never actually persisted (confirmed live) — the orchestrator now applies the agent\'s proposed ACs to the PRD deterministically from its JSON output, so no tool access is needed or granted',
   },
   {
     label: 'profile-augmentor (self-heal remediation, agent 3/3)',
     src: 'orch',
-    callAnchor: '_prof_result=$(echo "$_prof_prompt" | \\\n                    AI_GATE_ALLOW_TOOLS=1',
+    callAnchor: '_prof_result=$(echo "$_pfa3_prompt" | \\\n                        AI_GATE_ALLOW_TOOLS=1',
     needsTools: true,
     reason: 'prompt instructs writing the updated profiles.json back to the file',
   },
@@ -249,7 +251,9 @@ describe('agent tool-access wiring — every invocation site (structural)', () =
     // or a run_orch_prompt_with_tools call wrapping this invocation.
     const windowStart = Math.max(0, idx - 900);
     const window = source.slice(windowStart, idx + callAnchor.length);
-    const hasToolAccess = /AI_GATE_ALLOW_TOOLS=1|run_orch_prompt_with_tools/.test(window);
+    // _run_qa_gate_with_retry is the retry-wrapping successor to run_orch_prompt_with_tools
+    // for QA gate agents; it internally uses AI_GATE_ALLOW_TOOLS=1.
+    const hasToolAccess = /AI_GATE_ALLOW_TOOLS=1|run_orch_prompt_with_tools|_run_qa_gate_with_retry/.test(window);
 
     if (needsTools) {
       expect(hasToolAccess, `"${label}" needs tool access (${reason}) but no AI_GATE_ALLOW_TOOLS=1/run_orch_prompt_with_tools found nearby`).toBe(
@@ -285,9 +289,12 @@ describe('agent tool-access wiring — regression guards for the specific live b
     // still run_orch_prompt_with_tools, just a per-attempt prompt variable
     // instead of the original single prompt. Step 3.5's own call site is
     // unaffected and still uses $assessment_prompt directly.
+    // M5 retry fix (2026-07-19): Step 3.5 prompt var renamed from $assessment_prompt
+    // to $_pa_prompt when wrapped in a 2-attempt retry loop.
     const occurrences = [
       ...orchSrc.matchAll(/run_orch_prompt(_with_tools)?\s*"\$assessment_prompt"\s*"team-lead-agent"/g),
       ...orchSrc.matchAll(/run_orch_prompt(_with_tools)?\s*"\$_pfa_prompt_this_attempt"\s*"team-lead-agent"/g),
+      ...orchSrc.matchAll(/run_orch_prompt(_with_tools)?\s*"\$_pa_prompt"\s*"team-lead-agent"/g),
     ];
     expect(occurrences.length).toBeGreaterThanOrEqual(2);
     for (const m of occurrences) {
@@ -296,12 +303,15 @@ describe('agent tool-access wiring — regression guards for the specific live b
   });
 
   it('run-agent-orchestration.sh hybrid pre-coordination uses run_orch_prompt_with_tools', () => {
-    expect(orchSrc).toMatch(/run_orch_prompt_with_tools "\$coord_prompt" "spec-coordinator"/);
-    expect(orchSrc).not.toMatch(/(?<!_with_tools\s)run_orch_prompt "\$coord_prompt" "spec-coordinator"/);
+    // M1 retry fix (2026-07-19): prompt var renamed from $coord_prompt to $_hpc_prompt
+    expect(orchSrc).toMatch(/run_orch_prompt_with_tools "\$_hpc_prompt" "spec-coordinator"/);
+    expect(orchSrc).not.toMatch(/run_orch_prompt "\$_hpc_prompt" "spec-coordinator"/);
   });
 
-  it('run-agent-orchestration.sh browser E2E routing uses run_orch_prompt_with_tools', () => {
-    expect(orchSrc).toMatch(/run_orch_prompt_with_tools "\$prompt" "qa-gate:e2e"/);
+  it('run-agent-orchestration.sh browser E2E routing uses _run_qa_gate_with_retry (tool access preserved via AI_GATE_ALLOW_TOOLS=1 inside helper)', () => {
+    expect(orchSrc).toMatch(/_run_qa_gate_with_retry "\$prompt" "qa-gate:e2e"/);
+    // Old bare call must be gone (the helper replaced it)
+    expect(orchSrc).not.toMatch(/run_orch_prompt_with_tools "\$prompt" "qa-gate:e2e"/);
   });
 
   it('no invocation site anywhere calls plain run_orch_prompt for a prompt that requires it (no other agent_type is missed)', () => {

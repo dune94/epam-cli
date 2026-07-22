@@ -313,6 +313,91 @@ else:
   });
 });
 
+// ── H3–H9: QA gate retry helper — all 7 gates use _run_qa_gate_with_retry ────
+describe('_run_qa_gate_with_retry — helper definition and wiring (H3–H9)', () => {
+  const orchSrc = readFileSync(ORCH_SCRIPT, 'utf8');
+
+  it('_run_qa_gate_with_retry function is defined in the script', () => {
+    expect(orchSrc).toContain('_run_qa_gate_with_retry()');
+  });
+
+  it('retry loop is bounded by QA_GATE_MAX_RETRIES (default 2)', () => {
+    const fnStart = orchSrc.indexOf('_run_qa_gate_with_retry()');
+    const fnEnd   = orchSrc.indexOf('\n}', fnStart + 50);
+    const body    = orchSrc.slice(fnStart, fnEnd);
+    expect(body).toContain('QA_GATE_MAX_RETRIES');
+    expect(body).toMatch(/-lt.*_qg_max|_qg_max.*-lt/);
+  });
+
+  it('corrective re-prompt is injected on the second attempt', () => {
+    const fnStart = orchSrc.indexOf('_run_qa_gate_with_retry()');
+    const fnEnd   = orchSrc.indexOf('\n}', fnStart + 50);
+    const body    = orchSrc.slice(fnStart, fnEnd);
+    expect(body).toMatch(/RETRY.*attempt.*previous invocation/s);
+  });
+
+  it('escalates to ESCALATION_MODEL_HIGH on retry', () => {
+    const fnStart = orchSrc.indexOf('_run_qa_gate_with_retry()');
+    const fnEnd   = orchSrc.indexOf('\n}', fnStart + 50);
+    const body    = orchSrc.slice(fnStart, fnEnd);
+    expect(body).toContain('ESCALATION_MODEL_HIGH');
+    expect(body).toMatch(/_qg_attempt.*-ge 1.*ESCALATION_MODEL_HIGH|ESCALATION_MODEL_HIGH.*_qg_attempt/s);
+  });
+
+  it('validates output by grepping for JSON structural keys (verdict/findings/agent/summary)', () => {
+    const fnStart = orchSrc.indexOf('_run_qa_gate_with_retry()');
+    const fnEnd   = orchSrc.indexOf('\n}', fnStart + 50);
+    const body    = orchSrc.slice(fnStart, fnEnd);
+    expect(body).toMatch(/grep.*verdict.*findings.*agent.*summary/);
+  });
+
+  it('returns 1 when all retries are exhausted with no structured output', () => {
+    const fnStart = orchSrc.indexOf('_run_qa_gate_with_retry()');
+    const fnEnd   = orchSrc.indexOf('\n}', fnStart + 50);
+    const body    = orchSrc.slice(fnStart, fnEnd);
+    expect(body).toContain('return 1');
+    expect(body).toContain('attempt(s) exhausted');
+  });
+
+  it('restores ORCH_GATE_MODEL after both success and failure paths', () => {
+    const fnStart = orchSrc.indexOf('_run_qa_gate_with_retry()');
+    const fnEnd   = orchSrc.indexOf('\n}', fnStart + 50);
+    const body    = orchSrc.slice(fnStart, fnEnd);
+    expect(body).toContain('_saved_gate_model');
+    // Both return paths must restore the model
+    const successRestoreIdx = body.indexOf('ORCH_GATE_MODEL="$_saved_gate_model"');
+    const failureRestoreIdx = body.lastIndexOf('ORCH_GATE_MODEL="$_saved_gate_model"');
+    expect(successRestoreIdx).toBeGreaterThan(-1);
+    expect(failureRestoreIdx).toBeGreaterThan(successRestoreIdx);
+  });
+
+  const qaAgents = [
+    { name: 'sast',          prompt: 'sast_prompt',   log: 'sast_log'   },
+    { name: 'spec-validator', prompt: 'spec_prompt',   log: 'spec_log'   },
+    { name: 'review-ranger', prompt: 'review_prompt', log: 'review_log' },
+    { name: 'mutant-hunter', prompt: 'mutant_prompt', log: 'mutant_log' },
+    { name: 'fuzz-weaver',   prompt: 'fuzz_prompt',   log: 'fuzz_log'   },
+    { name: 'perf-sentinel', prompt: 'perf_prompt',   log: 'perf_log'   },
+    { name: 'e2e',           prompt: 'prompt',        log: 'story_log'  },
+  ];
+
+  for (const { name, prompt, log } of qaAgents) {
+    it(`qa-gate:${name} call site uses _run_qa_gate_with_retry (not bare run_orch_prompt_with_tools | tee)`, () => {
+      expect(orchSrc).toContain(`_run_qa_gate_with_retry "$${prompt}" "qa-gate:${name}"`);
+      // Old pattern must be absent for this specific agent
+      expect(orchSrc).not.toContain(`run_orch_prompt_with_tools "$${prompt}" "qa-gate:${name}"`);
+    });
+  }
+
+  it('e2e gate now uses rc=$? (not PIPESTATUS) since _run_qa_gate_with_retry returns directly', () => {
+    // After the e2e helper call, rc must come from $? not from PIPESTATUS
+    const e2eIdx = orchSrc.indexOf('_run_qa_gate_with_retry "$prompt" "qa-gate:e2e"');
+    const afterCall = orchSrc.slice(e2eIdx, e2eIdx + 200);
+    expect(afterCall).toContain('rc=$?');
+    expect(afterCall).not.toContain('PIPESTATUS');
+  });
+});
+
 // ── 6. Run 81 regression: exact hallucination scenario ───────────────────────
 describe('run 81 regression — fuzz-weaver hallucination scenario', () => {
   it('the exact run-81 fuzz log produces 0 grounded vulnerabilities', () => {

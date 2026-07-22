@@ -57,10 +57,10 @@ describe('assert_no_story_ids_gained — wiring (static)', () => {
   // splits may have added new child stories) — use "post-parallel" so those
   // legitimately-added split children don't trip a false-positive.
   const GAINED_LABEL: Record<string, string> = {
-    'Step 0.5: Skill assessment':        'presplit',
-    'Step 0.9: PRD model coordinator':   'presplit',
-    'Step 3.5: Post-parallel assessment':'post-parallel',
-    'Step 6: Final post-phase assessment':'post-parallel',
+    'Step 3: Skill assessment':        'presplit',
+    'Step 7: PRD model coordinator':   'presplit',
+    'Step 18: Post-parallel assessment':'post-parallel',
+    'Step 24: Final post-phase assessment':'post-parallel',
   };
   for (const [step, label] of Object.entries(GAINED_LABEL)) {
     it(`is called alongside assert_no_story_ids_lost for ${step} (gained-label: "${label}")`, () => {
@@ -76,7 +76,7 @@ describe('assert_no_story_ids_gained — wiring (static)', () => {
     // Step 3.5 if-block, so split children created during Step 1 are already
     // present when we snapshot.
     const captureIdx = orchSrc.lastIndexOf('capture_story_ids_snapshot "post-parallel"');
-    const step35Idx  = orchSrc.indexOf('assert_no_story_ids_gained "post-parallel" "Step 3.5');
+    const step35Idx  = orchSrc.indexOf('assert_no_story_ids_gained "post-parallel" "Step 18');
     expect(captureIdx).toBeGreaterThan(-1);
     expect(step35Idx).toBeGreaterThan(captureIdx);
   });
@@ -125,9 +125,9 @@ describe('assert_no_story_ids_gained — REAL execution', () => {
         { id: 'SKY-008' }, { id: 'SKY-009' }, { id: 'SKY-010' },
       ],
     };
-    const { exitCode, stdout } = run(before, after, 'Step 0.5: Skill assessment');
+    const { exitCode, stdout } = run(before, after, 'Step 3: Skill assessment');
     expect(exitCode).not.toBe(0);
-    expect(stdout).toMatch(/UNAUTHORIZED STORY CREATION after Step 0\.5: Skill assessment/);
+    expect(stdout).toMatch(/UNAUTHORIZED STORY CREATION after Step 3: Skill assessment/);
     expect(stdout).toMatch(/- SKY-005/);
     expect(stdout).toMatch(/- SKY-010/);
     expect(stdout).not.toMatch(/ASSERT_PASSED/);
@@ -135,7 +135,7 @@ describe('assert_no_story_ids_gained — REAL execution', () => {
 
   it('does NOT trip when the story set is unchanged', () => {
     const stories = { stories: [{ id: 'SKY-001' }, { id: 'SKY-002' }] };
-    const { exitCode, stdout } = run(stories, stories, 'Step 0.9: PRD model coordinator');
+    const { exitCode, stdout } = run(stories, stories, 'Step 7: PRD model coordinator');
     expect(exitCode).toBe(0);
     expect(stdout).toMatch(/ASSERT_PASSED/);
   });
@@ -143,7 +143,7 @@ describe('assert_no_story_ids_gained — REAL execution', () => {
   it('does NOT trip when stories are only removed (shrinkage is assert_no_story_ids_lost\'s job, not this one\'s)', () => {
     const before = { stories: [{ id: 'SKY-001' }, { id: 'SKY-002' }] };
     const after = { stories: [{ id: 'SKY-001' }] };
-    const { exitCode, stdout } = run(before, after, 'Step 3.5: Post-parallel assessment');
+    const { exitCode, stdout } = run(before, after, 'Step 18: Post-parallel assessment');
     expect(exitCode).toBe(0);
     expect(stdout).toMatch(/ASSERT_PASSED/);
   });

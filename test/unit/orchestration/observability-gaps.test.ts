@@ -33,10 +33,9 @@ const TIER3_SKY_SRC   = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/tie
 // ── Gap 1: openspec HIGH ladder ───────────────────────────────────────────────
 
 describe('Gap 1 — openspec HIGH ladder', () => {
-  it('defaults SPEC_AGENT_MAX_RETRIES to 3 for openspec (4 total attempts)', () => {
-    // The retry loop now uses a higher default for openspec so splitting failures
-    // get more attempts before blocking.
-    expect(SPEC_MODE_SRC).toContain("_isOpenspec ? '3' : '1'");
+  it('defaults SPEC_AGENT_MAX_RETRIES to 3 for all spec agents (4 total attempts)', () => {
+    // Both openspec and speckit get 3 retries — neither may fail silently.
+    expect(SPEC_MODE_SRC).toContain("SPEC_AGENT_MAX_RETRIES || '3'");
   });
 
   it('detects openspec via _isOpenspec flag', () => {
@@ -56,9 +55,11 @@ describe('Gap 1 — openspec HIGH ladder', () => {
     expect(SPEC_MODE_SRC).toContain("event: 'spec_timeout_escalation'");
   });
 
-  it('includes prevModel and newModel in escalation event detail', () => {
-    expect(SPEC_MODE_SRC).toContain('prevModel: _openspecBaseModel');
-    expect(SPEC_MODE_SRC).toContain('newModel: _openspecHighModel');
+  it('includes prevModel and newModel in escalation event detail (generic — covers both openspec and speckit)', () => {
+    // Generic _prevModel/_nextModel used so both openspec and speckit escalation
+    // events share the same appendSpecPassEvent call shape.
+    expect(SPEC_MODE_SRC).toContain('prevModel: _prevModel');
+    expect(SPEC_MODE_SRC).toContain('newModel: _nextModel');
   });
 
   it('restores SPEC_MODE_OPENSPEC_MODEL after escalation attempt (env safety)', () => {
@@ -249,8 +250,11 @@ describe('Gap 4 — SPEC_PASS_BLOCK_ON_TIMEOUT', () => {
     expect(orchSrc).toContain('specPassFailed');
   });
 
-  it('spec-mode-runner.js sets specPassFailed=true when openspec returns null for a split-required story', () => {
-    expect(SPEC_MODE_SRC).toContain('specPassFailed: true');
-    expect(SPEC_MODE_SRC).toContain('specPassFailedReason:');
+  it('spec-mode-runner.js aborts pipeline (process.exit(1)) when an agent returns null after all retries', () => {
+    // New policy: openspec/speckit failures are not permitted — hard exit instead of
+    // setting specPassFailed and continuing. The orch.sh block gate for specPassFailed
+    // is kept as a backstop but spec-mode-runner no longer relies on it.
+    expect(SPEC_MODE_SRC).toContain('openspec/speckit failures are not permitted');
+    expect(SPEC_MODE_SRC).toContain('process.exit(1)');
   });
 });

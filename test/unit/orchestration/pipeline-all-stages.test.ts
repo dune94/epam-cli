@@ -807,6 +807,19 @@ describe('run-agent-orchestration.sh — flow invariants', () => {
     expect(src).toMatch(/SKIP_REGRESSION_GUARD/);
   });
 
+  it('brownfield regression guard runs in the codeline dir, not PROJECT_ROOT', () => {
+    // When EPAM_BROWNFIELD=1 the codeline has its own node_modules/vitest —
+    // the guard must cd into the codeline path, not check PROJECT_ROOT.
+    expect(src).toContain('EPAM_BROWNFIELD');
+    expect(src).toContain('JIRA_DEFAULT_CODELINE');
+    expect(src).toContain('JIRA_WORKTREE_');
+    expect(src).toMatch(/cd.*_rg_root.*\$.*_rg_node.*_rg_bin.*run|cd.*rg_root/s);
+  });
+
+  it('brownfield regression guard falls back to jest when vitest absent', () => {
+    expect(src).toContain('node_modules/.bin/jest');
+  });
+
   it('phase abort propagates: orch script exits non-zero on story failure', () => {
     expect(src).toMatch(/exit 1/);
   });

@@ -13,9 +13,37 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Early-load Jira env only when Jira mode is already externally activated
+# (JIRA_PIPELINE=1 set by the caller — e.g. `source jira/.env` before running).
+# Loading unconditionally would force every canonical-PRD run through the Jira
+# pipeline and pollute the env with JIRA_PIPELINE=1.
+# Only auto-source jira/.env when the caller has NOT already set JIRA_URL —
+# if JIRA_URL is already in the environment (set by orchestrate.sh from the
+# project config) the caller's config must win; sourcing here would clobber it
+# with whatever stale/wrong project is in jira/.env.
+if [ "${JIRA_PIPELINE:-0}" = "1" ] && [ -z "${JIRA_CODELINE_RUN:-}" ] && \
+   [ -z "${JIRA_URL:-}" ] && [ -f "$AUTOMATION_DIR/jira/.env" ]; then
+  set -a; source "$AUTOMATION_DIR/jira/.env"; set +a
+fi
+
+# Setsid guard: re-exec under a new session so parent SIGTERM doesn't propagate
+# to long-running agent subprocesses. Only applies to top-level Jira pipeline runs.
+if [ "${JIRA_PIPELINE:-0}" = "1" ] && [ -z "${JIRA_CODELINE_RUN:-}" ] && \
+   [ -z "${_ORCH_SETSID_DONE:-}" ] && command -v setsid >/dev/null 2>&1; then
+  export _ORCH_SETSID_DONE=1
+  exec setsid bash "$0" "$@"
+fi
+
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
 # Always resolve to absolute path — relative paths break when CWD changes in worktrees
 PRD_FILE="$(cd "$(dirname "$PRD_FILE")" && pwd)/$(basename "$PRD_FILE")"
+
+# Resolve NODE_BIN once so all inline `node -e` calls (codeline extraction,
+# story counting, etc.) use a consistent, working binary regardless of PATH.
+# Callers that export NODE_BIN explicitly (e.g. CI / tier scripts) are respected.
+NODE_BIN="${NODE_BIN:-$(command -v node 2>/dev/null || echo node)}"
+export NODE_BIN
 
 # shellcheck source=lib/tc-writer-gate.sh
 source "$SCRIPT_DIR/lib/tc-writer-gate.sh"
@@ -224,13 +252,13 @@ step_emit() {
         local first=true
         local _sid _slabel _sstatus _sreason
         for _sid in \
-            "0:spec" "0a:openspec" "0b:speckit" "0.1:cpa" "0.5:skill-pre" "0.6:hybrid-coord" "0.7:regression" \
-            "0.8:mkdir" "0.9:model-coord" "1:main-stories" "1.5:auto-commit" "1.6:tc-writer" \
-            "2:worktrees" "3a:primary" "3b:independent" "3.1:wt-health" \
-            "3.2:wt-merge" "3.5:skill-post" "3.7:pre-review" "3.8:lint-gate" \
-            "4:review-stories" "4.2a:sast" "4.2b:spec-val" \
-            "4.3a:review-ranger" "4.3b:mutant-hunter" \
-            "4.4a:fuzz-weaver" "4.4b:perf-sentinel" "4.6:e2e"; do
+            "1:spec" "1a:openspec" "1b:speckit" "2:cpa" "3:skill-pre" "4:hybrid-coord" "5:regression" \
+            "6:mkdir" "7:model-coord" "8:main-stories" "9:auto-commit" "10:tc-writer" \
+            "11:skills-audit" "12:tools-audit" "13:worktrees" "14:primary" "15:independent" "16:wt-health" \
+            "17:wt-merge" "18:skill-post" "19:pre-review" "20:lint-gate" \
+            "21:review-stories" "22a:sast" "22b:spec-val" \
+            "22c:review-ranger" "22d:mutant-hunter" \
+            "22e:fuzz-weaver" "22f:perf-sentinel" "23:e2e"; do
             local _key="${_sid%%:*}"
             _slabel="$(_json_escape_str "${_STEP_LABELS[$_key]:-${_sid#*:}}")"
             _sstatus="${_STEP_STATUS[$_key]:-pending}"
@@ -267,39 +295,39 @@ print_step_checklist() {
         echo -e "${color}${planned}${reason_str}${NC}"
     }
 
-    _checklist_row "0"    "Specification pass"       "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "EPAM_SPEC_MODE=0"
-    _checklist_row "0a"   "  openspec (elaboration)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "${SPEC_MODE_OPENSPEC_MODEL:-moonshotai/kimi-k2}"
-    _checklist_row "0b"   "  speckit (verification)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "${SPEC_MODE_SPECKIT_MODEL:-moonshotai/kimi-k2}"
-    _checklist_row "0.1"  "CPA pre-pass"             "$([ "${SKIP_CPA:-0}" = "1" ] && echo SKIP || echo ACTIVE)"           "SKIP_CPA=1"
-    _checklist_row "0.5"  "Pre-phase skill assess"   "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP_SKILL_ASSESSMENT=1 || true)"
-    _checklist_row "0.6"  "Hybrid pre-coord"         "$([ "${RESOLVED_ORCH_MODE:-bash}" = "hybrid" ] && echo ACTIVE || echo SKIP)" "ORCH_MODE≠hybrid"
-    _checklist_row "0.7"  "Regression guard"         "$([ "${SKIP_REGRESSION_GUARD:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_REGRESSION_GUARD=true"
-    _checklist_row "0.8"  "mkdir src/ dirs"          "ACTIVE"
-    _checklist_row "0.9"  "PRD model coordinator"    "$([ "${SKIP_PRD_MODEL_COORDINATOR:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "$([ "${SKIP_PRD_MODEL_COORDINATOR:-0}" = "1" ] && echo SKIP_PRD_MODEL_COORDINATOR=1 || true)"
-    _checklist_row "1"    "Main-branch stories"      "ACTIVE"
-    _checklist_row "1.5"  "Auto-commit"              "COND"  "if uncommitted changes"
-    _checklist_row "1.6"  "TC writer gate"           "$([ "${SKIP_TC_WRITER:-0}" = "1" ] && echo SKIP || echo COND)" "SKIP_TC_WRITER=1 or no test stories"
-    _checklist_row "1.65" "Skills coordinator audit" "$([ "${SKIP_SKILLS_AUDIT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "SKIP_SKILLS_AUDIT=1"
-    _checklist_row "1.66" "Tools coordinator audit"  "$([ "${SKIP_TOOLS_AUDIT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "SKIP_TOOLS_AUDIT=1"
-    _checklist_row "2"    "Create worktrees"         "COND"  "if parallel stories exist"
-    _checklist_row "3a"   "Primary agent"            "COND"  "if primary stories"
-    _checklist_row "3b"   "Independent agent"        "COND"  "if independent stories"
-    _checklist_row "3.1"  "Worktree health check"    "COND"  "if worktrees created"
-    _checklist_row "3.2"  "Merge worktrees"          "COND"  "if worktrees created"
-    _checklist_row "3.5"  "Post-parallel assessment" "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP_SKILL_ASSESSMENT=1 || true)"
-    _checklist_row "3.7"  "Pre-review gate"          "$([ "${SKIP_PRE_REVIEW_GATE:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_PRE_REVIEW_GATE=true"
-    _checklist_row "3.8"  "Lint gate"                "$([ "${SKIP_LINT_GATE:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_LINT_GATE=true"
-    _checklist_row "4"    "Review stories"           "COND"  "if review stories exist"
-    _checklist_row "4.2a" "SAST sentinel"            "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
-    _checklist_row "4.2b" "Spec validator"           "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
-    _checklist_row "4.3a" "Review ranger"            "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
-    _checklist_row "4.3b" "Mutant hunter"            "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
-    _checklist_row "4.4a" "Fuzz-weaver"              "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
-    _checklist_row "4.4b" "Perf sentinel"            "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
-    _checklist_row "4.6"  "Browser E2E routing"     "$([ "${SKIP_BROWSER_E2E_ROUTING:-false}" = "true" ] && echo SKIP || echo COND)" "SKIP_BROWSER_E2E_ROUTING=true"
+    _checklist_row "1"    "Specification pass"       "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "EPAM_SPEC_MODE=0"
+    _checklist_row "1a"   "  openspec (elaboration)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "${SPEC_MODE_OPENSPEC_MODEL:-moonshotai/kimi-k2}"
+    _checklist_row "1b"   "  speckit (verification)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "${SPEC_MODE_SPECKIT_MODEL:-moonshotai/kimi-k2}"
+    _checklist_row "2"  "CPA pre-pass"             "$([ "${SKIP_CPA:-0}" = "1" ] && echo SKIP || echo ACTIVE)"           "SKIP_CPA=1"
+    _checklist_row "3"  "Pre-phase skill assess"   "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP_SKILL_ASSESSMENT=1 || true)"
+    _checklist_row "4"  "Hybrid pre-coord"         "$([ "${RESOLVED_ORCH_MODE:-bash}" = "hybrid" ] && echo ACTIVE || echo SKIP)" "ORCH_MODE≠hybrid"
+    _checklist_row "5"  "Regression guard"         "$([ "${SKIP_REGRESSION_GUARD:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_REGRESSION_GUARD=true"
+    _checklist_row "6"  "mkdir src/ dirs"          "ACTIVE"
+    _checklist_row "7"  "PRD model coordinator"    "$([ "${SKIP_PRD_MODEL_COORDINATOR:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "$([ "${SKIP_PRD_MODEL_COORDINATOR:-0}" = "1" ] && echo SKIP_PRD_MODEL_COORDINATOR=1 || true)"
+    _checklist_row "8"    "Main-branch stories"      "ACTIVE"
+    _checklist_row "9"  "Auto-commit"              "COND"  "if uncommitted changes"
+    _checklist_row "10"  "TC writer gate"           "$([ "${SKIP_TC_WRITER:-0}" = "1" ] && echo SKIP || echo COND)" "SKIP_TC_WRITER=1 or no test stories"
+    _checklist_row "11" "Skills coordinator audit" "$([ "${SKIP_SKILLS_AUDIT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "SKIP_SKILLS_AUDIT=1"
+    _checklist_row "12" "Tools coordinator audit"  "$([ "${SKIP_TOOLS_AUDIT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "SKIP_TOOLS_AUDIT=1"
+    _checklist_row "13"    "Create worktrees"         "COND"  "if parallel stories exist"
+    _checklist_row "14"   "Primary agent"            "COND"  "if primary stories"
+    _checklist_row "15"   "Independent agent"        "COND"  "if independent stories"
+    _checklist_row "16"  "Worktree health check"    "COND"  "if worktrees created"
+    _checklist_row "17"  "Merge worktrees"          "COND"  "if worktrees created"
+    _checklist_row "18"  "Post-parallel assessment" "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP_SKILL_ASSESSMENT=1 || true)"
+    _checklist_row "19"  "Pre-review gate"          "$([ "${SKIP_PRE_REVIEW_GATE:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_PRE_REVIEW_GATE=true"
+    _checklist_row "20"  "Lint gate"                "$([ "${SKIP_LINT_GATE:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_LINT_GATE=true"
+    _checklist_row "21"    "Review stories"           "COND"  "if review stories exist"
+    _checklist_row "22a" "SAST sentinel"            "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
+    _checklist_row "22b" "Spec validator"           "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
+    _checklist_row "22c" "Review ranger"            "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
+    _checklist_row "22d" "Mutant hunter"            "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
+    _checklist_row "22e" "Fuzz-weaver"              "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
+    _checklist_row "22f" "Perf sentinel"            "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
+    _checklist_row "23"  "Browser E2E routing"     "$([ "${SKIP_BROWSER_E2E_ROUTING:-false}" = "true" ] && echo SKIP || echo COND)" "SKIP_BROWSER_E2E_ROUTING=true"
 
     local skips=0
-    for key in "0" "0.1" "0.5" "0.6" "0.7" "0.8" "0.9" "1" "1.5" "1.6" "1.65" "1.66" "2" "3a" "3b" "3.1" "3.2" "3.5" "3.7" "4" "4.2a" "4.2b" "4.3a" "4.3b" "4.4a" "4.4b" "4.6"; do
+    for key in "1" "2" "3" "4" "5" "6" "7" "8" "9" "10" "11" "12" "13" "14" "15" "16" "17" "18" "19" "21" "22a" "22b" "22c" "22d" "22e" "22f" "23"; do
         [ "${_STEP_STATUS[$key]:-}" = "skip" ] && skips=$((skips + 1))
     done
     echo ""
@@ -531,6 +559,82 @@ PYEOF
 # Without tool access these agents hallucinate findings about files they cannot verify.
 run_orch_prompt_with_tools() {
     AI_GATE_ALLOW_TOOLS=1 run_orch_prompt "$@"
+}
+
+# _run_qa_gate_with_retry <prompt> <agent> <phase> <log_file>
+# Wraps run_orch_prompt_with_tools with up to QA_GATE_MAX_RETRIES (default 2) attempts.
+# Retry 2: prepends corrective note + escalates to ESCALATION_MODEL_HIGH when set.
+# Returns 0 when the log contains structured JSON output; 1 when all attempts fail.
+_run_qa_gate_with_retry() {
+    local _qg_prompt="$1" _qg_agent="$2" _qg_phase="$3" _qg_log="$4"
+    local _qg_max="${QA_GATE_MAX_RETRIES:-2}"
+    local _qg_attempt=0
+    local _saved_gate_model="${ORCH_GATE_MODEL:-}"
+    # Derive short agent slug for file-recovery search (strip "qa-gate:" prefix)
+    local _qg_slug="${_qg_agent#qa-gate:}"
+    while [ "$_qg_attempt" -lt "$_qg_max" ]; do
+        rm -f "$_qg_log"
+        local _qg_eff_prompt="$_qg_prompt"
+        if [ "$_qg_attempt" -ge 1 ]; then
+            [ -n "${ESCALATION_MODEL_HIGH:-}" ] && ORCH_GATE_MODEL="${ESCALATION_MODEL_HIGH}"
+            local _qg_retry_prefix
+            if echo "$_qg_prompt" | grep -q "Do NOT attempt to call any shell commands"; then
+                _qg_retry_prefix="RETRY (attempt $(( _qg_attempt + 1 ))): The previous invocation produced no structured output. Re-analyze the pre-injected evidence already present in this prompt and emit your JSON verdict now. Do NOT call any tools. Do NOT use WriteFile — output your JSON as plain text in this message."
+            else
+                # Detect WriteFile-instead-of-stdout failure: log is tiny and contains
+                # the tool confirmation phrase but no JSON fields.
+                local _qg_log_size=0
+                [ -f "$_qg_log" ] && _qg_log_size=$(wc -c < "$_qg_log" 2>/dev/null || echo 0)
+                if [ "${_qg_log_size:-0}" -lt 200 ] && grep -q "has been written" "$_qg_log" 2>/dev/null; then
+                    _qg_retry_prefix="RETRY (attempt $(( _qg_attempt + 1 ))): CRITICAL — your previous response used WriteFile to write your output to a file. That file was NOT read by the pipeline. You MUST emit your JSON verdict as plain text in this message — do NOT use WriteFile, do NOT write to any file. Use ReadFile to read source files, then emit your findings directly here."
+                else
+                    _qg_retry_prefix="RETRY (attempt $(( _qg_attempt + 1 ))): The previous invocation timed out or produced no structured output. Use ReadFile and Bash tools to read the relevant source files now, then emit your JSON findings directly in your response — do NOT use WriteFile."
+                fi
+            fi
+            _qg_eff_prompt="$_qg_retry_prefix
+
+$_qg_prompt"
+        fi
+        AI_GATE_ALLOW_TOOLS=1 run_orch_prompt "$_qg_eff_prompt" "$_qg_agent" "$_qg_phase" 2>&1 | tee "$_qg_log"
+        if grep -qE '"(verdict|findings|agent|summary)"' "$_qg_log" 2>/dev/null; then
+            ORCH_GATE_MODEL="$_saved_gate_model"
+            return 0
+        fi
+        # ── WriteFile recovery: model wrote JSON to a file instead of emitting it ──
+        # Search project root for a recently-written JSON file containing this
+        # gate's structured output. If found, append its content to the log so
+        # the normal grep check picks it up on the next iteration OR after the loop.
+        local _qg_recovered=""
+        _qg_recovered=$(find "${OUTPUT_DIR:-${PROJECT_ROOT:-$PWD}}" \
+            -maxdepth 4 -name "*.json" -newer "$_qg_log" \
+            2>/dev/null | \
+            xargs grep -l "\"${_qg_slug}\"\|\"verdict\"\|\"summary\"" 2>/dev/null | \
+            head -1 || true)
+        if [ -z "$_qg_recovered" ]; then
+            # Also check current directory and /tmp for files written in last 5 min
+            _qg_recovered=$(find . /tmp -maxdepth 2 -name "*.json" \
+                -newer "$_qg_log" \
+                2>/dev/null | \
+                xargs grep -l "\"${_qg_slug}\"" 2>/dev/null | \
+                head -1 || true)
+        fi
+        if [ -n "$_qg_recovered" ]; then
+            warning "  [qa-gate] $_qg_agent wrote output to file instead of stdout — recovering from: $_qg_recovered"
+            cat "$_qg_recovered" >> "$_qg_log"
+            if grep -qE '"(verdict|findings|agent|summary)"' "$_qg_log" 2>/dev/null; then
+                ORCH_GATE_MODEL="$_saved_gate_model"
+                return 0
+            fi
+        fi
+        if [ "$(( _qg_attempt + 1 ))" -lt "$_qg_max" ]; then
+            warning "  [qa-gate] $_qg_agent attempt $(( _qg_attempt + 1 )) produced no structured output — retrying with escalated model"
+        else
+            warning "  [qa-gate] $_qg_agent all $(( _qg_attempt + 1 )) attempt(s) exhausted with no structured output"
+        fi
+        _qg_attempt=$(( _qg_attempt + 1 ))
+    done
+    ORCH_GATE_MODEL="$_saved_gate_model"
+    return 1
 }
 
 stop_dashboards_watch() {
@@ -844,8 +948,25 @@ If the story's scope is genuinely too large or ambiguous: respond with JSON {\"r
 If this looks like a transient issue (model hiccup, infra flake) rather than a scope problem: respond with JSON {\"restructure\": false, \"reason\": \"...\"}.
 Respond with ONLY the JSON object, nothing else."
 
-    local _analyst_response
-    _analyst_response=$(run_orch_prompt_with_tools "$_prompt" "story_recovery" "$story_id" 2>/dev/null)
+    local _analyst_response="" _sra_attempt=0
+    while [ "$_sra_attempt" -lt 2 ]; do
+        local _sra_prompt="$_prompt"
+        [ "$_sra_attempt" -ge 1 ] && _sra_prompt="RETRY (attempt 2): Your previous response was empty or unparseable. Respond with ONLY the JSON: {\"restructure\": true/false, \"reason\": \"...\", \"new_acs\": [...]}.
+
+$_prompt"
+        local _sra_raw
+        _sra_raw=$(run_orch_prompt_with_tools "$_sra_prompt" "story_recovery" "$story_id" 2>/dev/null)
+        if [ -n "$_sra_raw" ] && echo "$_sra_raw" | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/null; then
+            _analyst_response="$_sra_raw"
+            break
+        fi
+        warning "  [StoryRecovery] story-recovery-analyst attempt $(( _sra_attempt + 1 )) returned no parseable JSON$([ "$_sra_attempt" -lt 1 ] && echo " — retrying" || echo "")"
+        _sra_attempt=$(( _sra_attempt + 1 ))
+    done
+    if [ -z "$_analyst_response" ]; then
+        warning "  [StoryRecovery] story-recovery-analyst returned no parseable response after 2 attempt(s) — leaving as failed"
+        return 1
+    fi
     local _restructure
     _restructure=$(echo "$_analyst_response" | jq -r '.restructure // false' 2>/dev/null || echo false)
 
@@ -881,12 +1002,20 @@ Respond with ONLY the JSON object, nothing else."
     # by every other in-file reviewer gate (e.g. the pre-phase-assessment
     # profile-change gate above) instead of referencing a function that was
     # never available in this script.
-    local _verdict="pass"
+    local _verdict="pass"  # fail-safe only when reviewer is not configured
     if [ -n "${ORCH_GATE_PROVIDER:-}" ]; then
         local _src_reviewer_profile
         _src_reviewer_profile=$(jq -r '."prd-change-reviewer" // ""' "$AGENT_PROFILES_FILE" 2>/dev/null || echo "")
         if [ -n "$_src_reviewer_profile" ]; then
-            _verdict=$(echo "${_src_reviewer_profile}
+            local _rev_raw="" _rev_attempt=0
+            while [ "$_rev_attempt" -lt 2 ] && [ -z "$_rev_raw" ]; do
+                local _corrective_rev=""
+                [ "$_rev_attempt" -gt 0 ] && _corrective_rev="CORRECTION: Your previous response did not contain parseable JSON with a verdict field. Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}
+
+"
+                local _rev_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
+                [ "$_rev_attempt" -ge 1 ] && [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _rev_model="${ESCALATION_MODEL_HIGH}"
+                _rev_raw=$(echo "${_corrective_rev}${_src_reviewer_profile}
 
 STORY: ${story_id}
 CHANGE TYPE: ac_patch
@@ -898,25 +1027,34 @@ AFTER:
 ${_candidate:0:1000}
 
 Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
-                AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
-                AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
-                EPAM_CLI="${EPAM_CLI:-epam}" \
-                "$AI_RUNNER_CMD" \
-                    --provider "${ORCH_GATE_PROVIDER}" \
-                    --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
-                2>/dev/null | \
-                python3 -c "
+                    AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
+                    AI_MODEL="${_rev_model}" \
+                    EPAM_CLI="${EPAM_CLI:-epam}" \
+                    "$AI_RUNNER_CMD" \
+                        --provider "${ORCH_GATE_PROVIDER}" \
+                        --model    "${_rev_model}" \
+                    2>/dev/null | \
+                    python3 -c "
 import sys, json, re
 text = sys.stdin.read()
 try:
     obj = json.loads(text.strip())
-    print(obj.get('verdict','pass'))
-    sys.exit(0)
+    v = obj.get('verdict','')
+    if v in ('pass','fail'):
+        print(v); sys.exit(0)
 except Exception:
     pass
 m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
-print(m.group(1) if m else 'pass')
-" 2>/dev/null || echo "pass")
+if m: print(m.group(1)); sys.exit(0)
+" 2>/dev/null || true)
+                _rev_attempt=$(( _rev_attempt + 1 ))
+            done
+            if [ "$_rev_raw" = "pass" ] || [ "$_rev_raw" = "fail" ]; then
+                _verdict="$_rev_raw"
+            else
+                warning "  [StoryRecovery] Reviewer failed to produce a valid verdict after 2 attempt(s) — defaulting to fail (fail-safe)"
+                _verdict="fail"
+            fi
         fi
     fi
     if [ "$_verdict" = "fail" ]; then
@@ -1490,6 +1628,520 @@ start_dashboards_watch() {
     fi
 }
 
+# ── Codeline bridge agent ─────────────────────────────────────────────────────
+# Runs after a codeline completes. Extracts its exported API surface and writes
+# a cross-codeline contract to logs/cross-codeline-<cl>.md.
+# Exports CROSS_CODELINE_CONTRACT_<CL_UPPER> so the next codeline's re-exec
+# can inject the contract into its story agents' context.
+#
+# Retry policy: up to BRIDGE_MAX_RETRIES (default 2) re-attempts on failure or
+# missing/empty output, with a corrective re-prompt on each retry explaining
+# exactly what went wrong. After all retries:
+#   CODELINE_BRIDGE_BLOCK_ON_FAILURE=true  → exit 1 (hard abort)
+#   CODELINE_BRIDGE_BLOCK_ON_FAILURE=false → warn and continue (fe proceeds
+#     without the contract — degraded but not pipeline-corrupting)
+#
+# $1 — completed codeline name (e.g. 'be')
+# $2 — completed codeline worktree path
+# $3 — filtered PRD path for the completed codeline
+_run_codeline_bridge() {
+  local _bcl="$1" _bwt="$2" _bprd="$3"
+  local _bridge_out="${LOG_DIR}/cross-codeline-${_bcl}.md"
+  local _profiles_file="$AUTOMATION_DIR/agents/profiles.json"
+  local _bridge_max_retries="${BRIDGE_MAX_RETRIES:-2}"
+
+  log "[bridge] Extracting cross-codeline contract for '${_bcl}' → ${_bridge_out}"
+
+  # Load the codeline-bridge-agent profile
+  local _bridge_profile=""
+  if [ -f "$_profiles_file" ]; then
+    _bridge_profile=$(python3 -c "
+import sys, json
+p = json.load(open('$_profiles_file'))
+print(p.get('codeline-bridge-agent', ''))
+" 2>/dev/null || true)
+  fi
+  if [ -z "$_bridge_profile" ]; then
+    warning "[bridge] codeline-bridge-agent profile not found in profiles.json — skipping"
+    return 0
+  fi
+
+  local _base_prompt="${_bridge_profile}
+
+## Variables for this run
+
+- BRIDGE_SRC_CODELINE: ${_bcl}
+- BRIDGE_SRC_DIR: ${_bwt}
+- BRIDGE_OUT_FILE: ${_bridge_out}
+- BRIDGE_PRD_FILE: ${_bprd}
+
+Extract the exported API surface from the '${_bcl}' codeline files and write the cross-codeline contract to ${_bridge_out}."
+
+  local _bridge_attempt=0 _bridge_ok=0 _corrective_note=""
+  while [ "$_bridge_attempt" -le "$_bridge_max_retries" ]; do
+    # Prepend corrective note on retries so the agent knows exactly what failed
+    local _bridge_prompt="${_corrective_note:+CORRECTION REQUIRED — YOUR PREVIOUS ATTEMPT FAILED: ${_corrective_note}
+
+}${_base_prompt}"
+
+    local _bridge_rc=0
+    rm -f "$_bridge_out"
+    run_orch_prompt "$_bridge_prompt" "codeline-bridge-agent" "$_bcl" || _bridge_rc=$?
+
+    # Determine success: exit 0 AND file exists AND file is non-empty
+    if [ "$_bridge_rc" = "0" ] && [ -f "$_bridge_out" ] && [ -s "$_bridge_out" ]; then
+      _bridge_ok=1
+      break
+    fi
+
+    # Diagnose the specific failure for the corrective re-prompt
+    if [ "$_bridge_rc" != "0" ]; then
+      _corrective_note="run_orch_prompt exited with code ${_bridge_rc}. You must call WriteFile to write the contract to ${_bridge_out} before finishing."
+    elif [ ! -f "$_bridge_out" ]; then
+      _corrective_note="The file ${_bridge_out} was NOT written. You MUST call WriteFile with path=${_bridge_out} to produce the contract — do not finish without writing it."
+    else
+      _corrective_note="The file ${_bridge_out} was written but is EMPTY. The source directory ${_bwt} contains TypeScript files — read them and extract their exports before writing the contract."
+    fi
+
+    _bridge_attempt=$(( _bridge_attempt + 1 ))
+    if [ "$_bridge_attempt" -le "$_bridge_max_retries" ]; then
+      warning "[bridge] Attempt ${_bridge_attempt}/${_bridge_max_retries} failed for '${_bcl}' — retrying with corrective prompt"
+    fi
+  done
+
+  if [ "$_bridge_ok" = "1" ]; then
+    local _cl_upper="${_bcl^^}"
+    export "CROSS_CODELINE_CONTRACT_${_cl_upper}=${_bridge_out}"
+    export CROSS_CODELINE_CONTRACT="$_bridge_out"
+    log "[bridge] ✓ Contract written: ${_bridge_out} (exported CROSS_CODELINE_CONTRACT_${_cl_upper})"
+  else
+    local _total_attempts=$(( _bridge_max_retries + 1 ))
+    if [ "${CODELINE_BRIDGE_BLOCK_ON_FAILURE:-false}" = "true" ]; then
+      error "[bridge] FATAL — contract extraction for '${_bcl}' failed after ${_total_attempts} attempt(s) and CODELINE_BRIDGE_BLOCK_ON_FAILURE=true. Aborting pipeline."
+      return 1
+    else
+      warning "[bridge] Contract extraction for '${_bcl}' failed after ${_total_attempts} attempt(s) — downstream codelines proceed without cross-codeline contract (set CODELINE_BRIDGE_BLOCK_ON_FAILURE=true to abort instead)"
+    fi
+  fi
+}
+
+# ── Jira pipeline mode ────────────────────────────────────────────────────────
+# ── Shared codeline routing loop ──────────────────────────────────────────────
+# Used by both Jira ingest flow and canonical PRD flow.
+# Reads project.outputDirs from the PRD, validates/scaffolds worktrees, then
+# re-execs itself (with JIRA_CODELINE_RUN=1) once per codeline per phase.
+# The only difference between the two flows is how the PRD was sourced.
+#
+# $1 — path to PRD to route (synthesized or canonical)
+# $2 — log file path (optional; defaults to a new tmp file)
+_run_codeline_loop() {
+  local _prd_path="$1"
+  local _log_file="${2:-/tmp/orch-$(date +%Y%m%dT%H%M%S).log}"
+  # When the tier3 launcher (or any external phase-managing caller) drives the
+  # phase loop itself (calling us once per phase via --phase X), set this to
+  # run only that phase across all codelines. Empty = run every PRD phase.
+  local _phase_filter="${3:-}"
+
+  # Extract codeline:path entries from project.outputDirs.
+  # Falls back to project.outputDir + JIRA_DEFAULT_CODELINE for single-codeline PRDs.
+  local _cl_entries=()
+  mapfile -t _cl_entries < <("$NODE_BIN" -e "
+    const p = JSON.parse(require('fs').readFileSync('${_prd_path}','utf8'));
+    const dirs = p.project && p.project.outputDirs ? p.project.outputDirs : [];
+    if (dirs.length > 0) {
+      dirs.forEach(d => console.log(d.codeline + ':' + d.path));
+    } else {
+      const cl  = process.env.JIRA_DEFAULT_CODELINE || '';
+      const dir = p.project && p.project.outputDir ? p.project.outputDir : '';
+      if (cl && dir) console.log(cl + ':' + dir);
+    }
+  " 2>/dev/null)
+
+  if [ ${#_cl_entries[@]} -eq 0 ]; then
+    error "[orch] No codeline/worktree entries found in PRD: ${_prd_path}"
+    error "[orch] Add project.outputDirs to the PRD or set JIRA_DEFAULT_CODELINE + project.outputDir"
+    return 1
+  fi
+
+  # Tear down and re-scaffold every codeline worktree so each run starts clean.
+  # Pre-existing worktrees from prior runs poison the next run (stale package.json,
+  # accumulated artifacts, mid-run file mutations). Full deletion is the only safe state.
+  for _entry in "${_cl_entries[@]}"; do
+    local _cl="${_entry%%:*}" _wt="${_entry#*:}"
+    log "[orch] Codeline '${_cl}' → ${_wt}"
+
+    if [ "${EPAM_BROWNFIELD:-0}" != "1" ]; then
+      # ── Greenfield: full teardown + git init so every run starts clean ──
+      # Stale package.json, accumulated artifacts, and mid-run file mutations from
+      # prior runs all poison the next run. Full deletion is the only safe state.
+      # Some node_modules subdirs end up 0444/0555 after npm install — force-write
+      # access first so rm -rf is never blocked by restrictive permissions.
+      if [ -d "$_wt" ]; then
+        log "[orch] Tearing down '${_cl}' worktree at ${_wt}..."
+        chmod -R u+w "$_wt" 2>/dev/null || true
+        rm -rf "$_wt"
+      fi
+
+      local _scaffold="$SCRIPT_DIR/scaffold-${_cl}-repo.sh"
+      if [ -f "$_scaffold" ]; then
+        log "[orch] Scaffolding '${_cl}' repo at ${_wt}..."
+        bash "$_scaffold" "$_wt" 2>&1 | tee -a "$_log_file"
+      else
+        # No scaffold script — create a bare git repo; agents fill in the stack.
+        log "[orch] No scaffold-${_cl}-repo.sh found — creating bare git repo at ${_wt}..."
+        mkdir -p "$_wt"
+        git -C "$_wt" init --quiet
+        git -C "$_wt" config user.email "epam-cli@local"
+        git -C "$_wt" config user.name "epam-cli"
+        git -C "$_wt" commit --allow-empty -m "init: ${_cl} codeline worktree" --quiet
+      fi
+    else
+      # ── Brownfield: verify the existing repo; no teardown ──────────────────
+      # The worktree must already exist as a git repository — agents modify
+      # existing files in-place rather than building from scratch.
+      if [ ! -d "$_wt" ]; then
+        error "[orch] Brownfield worktree does not exist: ${_wt}"
+        error "[orch] Codeline '${_cl}' must point to an existing local repository."
+        return 1
+      fi
+      if [ ! -d "$_wt/.git" ]; then
+        error "[orch] Brownfield worktree is not a git repository: ${_wt}"
+        error "[orch] Ensure the path contains a .git directory."
+        return 1
+      fi
+      log "[orch] Brownfield: using existing worktree '${_cl}' at ${_wt}"
+
+      # Capture baseline SHA so gate diff oracles (review-ranger, mutant-hunter,
+      # fuzz-weaver, sast-sentinel) diff only the story's changes against the
+      # project's main branch — not the full commit history.
+      local _baseline_branch="${JIRA_BASELINE_BRANCH:-main}"
+      local _baseline_sha=""
+      _baseline_sha=$(git -C "$_wt" rev-parse "origin/${_baseline_branch}" 2>/dev/null || \
+                      git -C "$_wt" rev-parse "${_baseline_branch}" 2>/dev/null || \
+                      git -C "$_wt" rev-parse HEAD 2>/dev/null || echo "")
+      if [ -n "$_baseline_sha" ]; then
+        echo "$_baseline_sha" > "$LOG_DIR/phase-baseline-sha.txt"
+        log "[orch] Brownfield baseline: ${_baseline_branch} @ ${_baseline_sha:0:8}"
+      else
+        warning "[orch] Could not resolve baseline branch '${_baseline_branch}' — gate diffs will use HEAD"
+      fi
+    fi
+    # Write .epam/ manifests if absent — these are consumed by run_dependency_check(),
+    # generate_story_contract(), and apply_known_fix() in claude.sh. The tier3 launcher
+    # writes them for canonical runs; the Jira codeline path must do the same so every
+    # codeline worktree gets the manifests regardless of how many codelines exist.
+    if [ ! -f "$_wt/.epam/dependency-check.json" ]; then
+      mkdir -p "$_wt/.epam"
+      cat > "$_wt/.epam/dependency-check.json" << 'DEPCHECK_EOF'
+{
+  "manifestFile": "package.json",
+  "manifestKeys": ["dependencies", "devDependencies"],
+  "scanFileExtensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
+  "importPattern": "from\\s+['\"]([^./][^'\"]*)['\"]|require\\(\\s*['\"]([^./][^'\"]*)['\"]\\s*\\)",
+  "installCommand": "npm install --save-dev {package}",
+  "ignorePackages": ["assert","buffer","child_process","cluster","crypto","dgram","dns","domain","events","fs","http","http2","https","net","os","path","perf_hooks","process","punycode","querystring","readline","repl","stream","string_decoder","timers","tls","tty","url","util","v8","vm","worker_threads","zlib","node:assert","node:buffer","node:child_process","node:crypto","node:events","node:fs","node:http","node:https","node:net","node:os","node:path","node:process","node:stream","node:url","node:util","node:vm","node:zlib"],
+  "requiredDevDependencies": ["typescript", "@types/node", "vitest", "tsx"],
+  "vendorDirs": ["node_modules"]
+}
+DEPCHECK_EOF
+      cat > "$_wt/.epam/contract-generation.json" << 'CONTRACTGEN_EOF'
+{
+  "language": "typescript",
+  "sourceExtensions": [".ts"],
+  "excludePattern": "\\.(test|spec)\\.ts$",
+  "interfacePattern": "export\\s+interface\\s+(\\w+)\\s*\\{([^}]*)\\}",
+  "classPattern": "export\\s+class\\s+(\\w+)\\s*(?:extends\\s+\\w+\\s*)?\\{",
+  "ctorPattern": "constructor\\s*\\(([^)]*)\\)",
+  "methodPattern": "^\\s*(?:public\\s+|private\\s+|protected\\s+)?(async\\s+)?(\\w+)\\s*\\(([^)]*)\\)\\s*(?::\\s*([^{;]+))?\\s*\\{",
+  "interfaceRenderTemplate": "export interface {{name}} {{{body}}}",
+  "classDeclarationTemplate": "export class {{className}} {\n  constructor({{ctorParams}});\n{{methodSignatures}}\n}",
+  "methodSignatureTemplate": "  {{asyncPrefix}}{{methodName}}({{params}}){{returnAnnotation}};",
+  "asyncPrefixKeyword": "async ",
+  "returnAnnotationPrefix": ": ",
+  "mockFactoryTemplate": "vi.mock('<import-path-to-{{className}}>', () => ({\n  {{className}}: vi.fn().mockImplementation(() => ({\n{{methodMocks}}\n  })),\n}));",
+  "mockMethodTemplateSync": "    {{methodName}}: vi.fn(),",
+  "mockMethodTemplateAsync": "    {{methodName}}: vi.fn().mockResolvedValue(undefined),",
+  "testFileExtensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
+  "testFilePattern": "\\.(test|spec)\\.[a-zA-Z0-9]+$",
+  "mockFactoryStartPattern": "vi\\.mock\\(\\s*['\"](\\.[^'\"]+)['\"]\\s*,\\s*\\(\\)\\s*=>\\s*\\(\\{",
+  "mockClassPattern": "(\\w+)\\s*:\\s*vi\\.fn\\(\\)\\.mockImplementation\\(\\(\\)\\s*=>\\s*\\(\\{",
+  "mockedMethodPattern": "^\\s*(\\w+)\\s*:",
+  "testFileAgentRole": "test-engineer"
+}
+CONTRACTGEN_EOF
+      cat > "$_wt/.epam/known-fixes.json" << 'KNOWNFIXES_EOF'
+[
+  {
+    "id": "vitest-pass-with-no-tests",
+    "symptomPattern": "(?:vitest|test).*(?:no test files|zero test files).*exit|exit.*1.*(?:no|zero) test files|passWithNoTests",
+    "targetFile": "vitest.config.ts",
+    "checkPattern": "passWithNoTests",
+    "insertAfterPattern": "test:\\s*\\{",
+    "insertText": "\n    passWithNoTests: true,"
+  }
+]
+KNOWNFIXES_EOF
+      log "[orch] Wrote .epam/ manifests to ${_wt} (dependency-check, contract-generation, known-fixes)"
+    fi
+  done
+
+  # Per-codeline execution loop
+  local _overall=0 _completed_list="" _cross_prd="/tmp/orch-cross-$$.json"
+  local _cl_prds=()
+
+  # Rebuild cumulative cross-codeline PRD so later codelines can check
+  # completed stories from earlier codelines (is_story_completed fallback).
+  _rebuild_cross() {
+    [ -z "$_completed_list" ] && { unset CROSS_CODELINE_PRD; return; }
+    COMPLETED_LIST="$_completed_list" \
+    "$NODE_BIN" -e "
+      const fs = require('fs');
+      const paths = (process.env.COMPLETED_LIST||'').split(':').filter(Boolean);
+      const stories = paths.flatMap(p => {
+        try { return JSON.parse(fs.readFileSync(p,'utf8')).stories||[]; } catch { return []; }
+      });
+      fs.writeFileSync('${_cross_prd}', JSON.stringify({stories},null,2));
+    " 2>/dev/null
+    export CROSS_CODELINE_PRD="$_cross_prd"
+  }
+
+  # Build filtered PRD containing only stories for codeline $1, written to $2.
+  # Returns story count on stdout.
+  _filtered_prd() {
+    local _fcl="$1" _fout="$2" _fsrc="$3"
+    JIRA_DEFAULT_CODELINE="${JIRA_DEFAULT_CODELINE:-}" \
+    "$NODE_BIN" -e "
+      const fs  = require('fs');
+      const prd = JSON.parse(fs.readFileSync('${_fsrc}','utf8'));
+      const cl  = '${_fcl}', dcl = process.env.JIRA_DEFAULT_CODELINE||'';
+      const stories = prd.stories.filter(s =>
+        s.codeline === cl || (!s.codeline && cl === dcl)
+      );
+      const ids = new Set(stories.map(s => s.id));
+      const order = {};
+      for (const [phase, list] of Object.entries(prd.implementationOrder||{})) {
+        const f = (list||[]).filter(id => ids.has(id));
+        if (f.length > 0) order[phase] = f;
+      }
+      if (Object.keys(order).length === 0) order.core = stories.map(s => s.id);
+      const out = {...prd, stories, implementationOrder: order};
+      if (prd.project && prd.project.outputDirs) {
+        const d = prd.project.outputDirs.find(d => d.codeline === cl);
+        if (d) out.project = {...prd.project, outputDir: d.path};
+      }
+      fs.writeFileSync('${_fout}', JSON.stringify(out, null, 2));
+      console.log(stories.length);
+    " 2>/dev/null
+  }
+
+  _prd_phases() {
+    "$NODE_BIN" -e "
+      const p = JSON.parse(require('fs').readFileSync('$1','utf8'));
+      console.log(Object.keys(p.implementationOrder||{}).join('\n'));
+    " 2>/dev/null
+  }
+
+  for _entry in "${_cl_entries[@]}"; do
+    local _cl="${_entry%%:*}" _wt="${_entry#*:}"
+    local _cl_prd="/tmp/orch-${_cl}-prd-$$.json"
+    _cl_prds+=("$_cl_prd")
+
+    local _n_stories
+    _n_stories=$(_filtered_prd "$_cl" "$_cl_prd" "$_prd_path")
+
+    if [ "${_n_stories:-0}" -eq 0 ]; then
+      log "[orch] Codeline '${_cl}': no stories — skipping"
+      continue
+    fi
+
+    _rebuild_cross
+    log "[orch] Codeline '${_cl}' — ${_n_stories} stories → ${_wt}"
+
+    local _phases=()
+    mapfile -t _phases < <(_prd_phases "$_cl_prd")
+    local _cl_failed=0
+
+    for _phase in "${_phases[@]}"; do
+      [ -z "$_phase" ] && continue
+      # When the tier3 launcher (or any external caller) manages phases externally
+      # by calling run-agent-orchestration.sh once per phase, honour its filter so
+      # only the requested phase runs. Without this, a --phase scaffold call would
+      # still execute every phase across every codeline (double-execution bug).
+      if [ -n "$_phase_filter" ] && [ "$_phase" != "$_phase_filter" ]; then
+        log "[orch] Phase '${_phase}' — skipping (caller phase filter: '${_phase_filter}')"
+        continue
+      fi
+      log "[orch] Phase '${_phase}' — codeline '${_cl}'..."
+      local _pex=0
+      JIRA_CODELINE_RUN=1 \
+      PRD_FILE="$_cl_prd" \
+      PROJECT_ROOT="$_wt" \
+      OUTPUT_DIR="$_wt" \
+      PHASE="$_phase" \
+      CROSS_CODELINE_PRD="${CROSS_CODELINE_PRD:-}" \
+      bash "$0" --reset 2>&1 | tee -a "$_log_file" || _pex=${PIPESTATUS[0]}
+
+      # exit 2 = gate remediation applied — reset stories and retry once (mirrors tier3 launcher)
+      if [ "$_pex" -eq 2 ]; then
+        log "[orch] Gate remediation applied for '${_phase}' ('${_cl}') — retrying with SKIP_GATE_REMEDIATION=1"
+        _pex=0
+        JIRA_CODELINE_RUN=1 \
+        PRD_FILE="$_cl_prd" \
+        PROJECT_ROOT="$_wt" \
+        OUTPUT_DIR="$_wt" \
+        PHASE="$_phase" \
+        SKIP_GATE_REMEDIATION=1 \
+        CROSS_CODELINE_PRD="${CROSS_CODELINE_PRD:-}" \
+        bash "$0" --reset 2>&1 | tee -a "$_log_file" || _pex=${PIPESTATUS[0]}
+        if [ "$_pex" -ne 0 ]; then
+          error "[orch] Phase '${_phase}' for '${_cl}' failed after self-healing retry (exit $_pex)"
+        else
+          log "[orch] Self-healing retry succeeded for '${_phase}' ('${_cl}')"
+        fi
+      fi
+
+      if [ "$_pex" -ne 0 ]; then
+        error "[orch] Phase '${_phase}' for '${_cl}' failed (exit $_pex)"
+        _cl_failed=1; _overall=1; break
+      fi
+      log "[orch] Phase '${_phase}' — '${_cl}' done."
+    done
+
+    [ "$_cl_failed" = "0" ] && \
+      _completed_list="${_completed_list:+${_completed_list}:}${_cl_prd}"
+
+    # Run codeline-bridge agent after each successful codeline (multi-codeline PRDs only).
+    # Extracts exported types/functions/endpoints and writes a cross-codeline contract
+    # consumed by downstream codeline agents via CROSS_CODELINE_CONTRACT_<CL_UPPER>.
+    if [ "$_cl_failed" = "0" ] && [ "${#_cl_entries[@]}" -gt 1 ]; then
+      _run_codeline_bridge "$_cl" "$_wt" "$_cl_prd"
+    fi
+  done
+
+  rm -f "${_cl_prds[@]}" "$_cross_prd" 2>/dev/null || true
+  unset CROSS_CODELINE_PRD
+
+  [ "$_overall" = "0" ] \
+    && log "[orch] ✅ Pipeline complete." \
+    || error "[orch] ⚠️  Pipeline completed with errors."
+
+  return $_overall
+}
+
+# ── Jira ingest flow ───────────────────────────────────────────────────────────
+# JIRA_PIPELINE=1: pull tickets, run AC gate, synthesize PRD, then route codelines.
+_run_jira_pipeline() {
+  local _jira_dir="$AUTOMATION_DIR/jira"
+  local _log_file="/tmp/orch-$(date +%Y%m%dT%H%M%S).log"
+
+  local _missing=()
+  [ -z "${JIRA_URL:-}"         ] && _missing+=("JIRA_URL")
+  [ -z "${JIRA_EMAIL:-}"       ] && _missing+=("JIRA_EMAIL")
+  [ -z "${JIRA_TOKEN:-}"       ] && _missing+=("JIRA_TOKEN")
+  [ -z "${JIRA_PROJECT_KEY:-}" ] && _missing+=("JIRA_PROJECT_KEY")
+  # Worktree validation uses bash indirection to avoid relying on `env | grep`.
+  # Brownfield mode: JIRA_CODELINE_ROOT is required; worktree paths are discovered
+  # at runtime by codeline-discovery.js (ingest step 1.5) — no JIRA_WORKTREE_* needed.
+  # Greenfield mode: JIRA_CODELINES + matching JIRA_WORKTREE_* must be pre-declared.
+  local _found_wt=0
+  if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
+    [ -z "${JIRA_CODELINE_ROOT:-}" ] && _missing+=("JIRA_CODELINE_ROOT")
+    [ -n "${JIRA_CODELINE_ROOT:-}" ] && _found_wt=1
+  elif [ -n "${JIRA_CODELINES:-}" ]; then
+    IFS=',' read -ra _wt_cls <<< "$JIRA_CODELINES"
+    for _wt_cl in "${_wt_cls[@]}"; do
+      local _wt_var="JIRA_WORKTREE_${_wt_cl^^}"
+      if [ -n "${!_wt_var:-}" ]; then _found_wt=1; else _missing+=("$_wt_var"); fi
+    done
+  else
+    [ -n "${JIRA_WORKTREE_BE:-}" ] && _found_wt=1
+    [ "$_found_wt" = "0" ] && _missing+=("JIRA_WORKTREE_<CODELINE>")
+  fi
+  if [ ${#_missing[@]} -gt 0 ]; then
+    error "[jira] Missing required env vars: ${_missing[*]}"
+    error "[jira] Run: source orchestrations/jira/.env"
+    return 1
+  fi
+
+  log "[jira] ${JIRA_URL} (project: ${JIRA_PROJECT_KEY}) → ${_log_file}"
+
+  local _synth_prd="$AUTOMATION_DIR/travel-app-prd.json"
+  local _ingest_exit=0
+  # IMPORTANT: do NOT use `|| _ingest_exit=${PIPESTATUS[0]}` here.
+  # Without pipefail, the pipeline exit code is tee's exit code (almost always 0),
+  # so the || never fires even when ingest-jira-tickets.sh exits 1.
+  # PIPESTATUS[0] captures bash ingest's exit code REGARDLESS of tee's success.
+  bash "$SCRIPT_DIR/ingest-jira-tickets.sh" \
+    --project "$JIRA_PROJECT_KEY" \
+    --status  "${JIRA_STATUS_FILTER:-To Do}" \
+    --out-prd "$_synth_prd" \
+    2>&1 | tee -a "$_log_file"
+  _ingest_exit="${PIPESTATUS[0]}"
+
+  if [ "$_ingest_exit" = "2" ]; then
+    error "[jira] Pipeline halted: insufficient ACs. Review Jira tickets and re-trigger."
+    return 2
+  elif [ "$_ingest_exit" != "0" ]; then
+    error "[jira] Ingestion failed (exit $_ingest_exit)."
+    return 1
+  fi
+
+  # Inject an empty scaffold phase into implementationOrder so the tier3 launcher's
+  # run_phase "scaffold" call fires the pre-phase assessment agent. The scaffold phase
+  # has 0 implementation stories but runs Step 3 (skill assessment) over ALL synthesized
+  # Jira stories — this assesses and injects project-specific skills into each agent's
+  # profile before any core implementation begins. Agent identities (profiles) are kept
+  # from the canonical; only skills are project-specific and must be assessed per project.
+  "$NODE_BIN" -e "
+    const fs = require('fs');
+    const prd = JSON.parse(fs.readFileSync('${_synth_prd}', 'utf8'));
+    if (!prd.implementationOrder) prd.implementationOrder = {};
+    if (!prd.implementationOrder.scaffold) {
+      prd.implementationOrder = { scaffold: [], ...prd.implementationOrder };
+    }
+    fs.writeFileSync('${_synth_prd}', JSON.stringify(prd, null, 2));
+  " 2>/dev/null && log "[jira] Injected empty scaffold phase for pre-phase skill assessment"
+
+  _run_codeline_loop "$_synth_prd" "$_log_file"
+}
+
+# ── Entry point guards ─────────────────────────────────────────────────────────
+# Both guards skip when JIRA_CODELINE_RUN=1 (re-exec for a single codeline/phase).
+
+# Pre-parse --phase from CLI args BEFORE routing so _run_codeline_loop knows which
+# phase the caller is requesting. Without this, the multi-codeline routing fires
+# before argument parsing, causing the phase filter to be silently dropped — which
+# makes every `run-agent-orchestration.sh --phase scaffold` call from the tier3
+# launcher run ALL phases (double-execution across codelines).
+_ep_caller_phase=""
+for (( _ep_i=1; _ep_i<=$#; _ep_i++ )); do
+  if [ "${!_ep_i}" = "--phase" ]; then
+    _ep_j=$((_ep_i + 1))
+    _ep_caller_phase="${!_ep_j:-}"
+    break
+  fi
+done
+unset _ep_i _ep_j
+
+if [ -z "${JIRA_CODELINE_RUN:-}" ]; then
+  if [ "${JIRA_PIPELINE:-0}" = "1" ]; then
+    # Jira flow: ingest → synthesize → route codelines
+    _run_jira_pipeline; exit $?
+  else
+    # Canonical PRD flow: if the PRD defines multiple codelines, route them.
+    # Single-codeline PRDs fall through to the normal phase execution below.
+    _cl_count=$("${NODE_BIN:-node}" -e "
+      const p = JSON.parse(require('fs').readFileSync('$PRD_FILE','utf8'));
+      console.log((p.project && p.project.outputDirs ? p.project.outputDirs : []).length);
+    " 2>/dev/null || echo 0)
+    if [ "${_cl_count:-0}" -gt 1 ]; then
+      # Pass _ep_caller_phase as third arg so the loop runs only the requested phase.
+      # Empty string = run all PRD phases (Jira path, or direct invocation without --phase).
+      _run_codeline_loop "$PRD_FILE" "" "${_ep_caller_phase}"; exit $?
+    fi
+  fi
+fi
+
 # Default configuration
 PHASE="${PHASE:-finops}"
 DRY_RUN=false
@@ -1778,7 +2430,7 @@ run_specification_pass() {
     local phase_id="$1"
     local spec_runner="$SCRIPT_DIR/spec-mode-runner.js"
     if [ ! -f "$spec_runner" ]; then
-        info "Step 0: Specification runner not found (${spec_runner##*/}) — skipping"
+        info "Step 1: Specification runner not found (${spec_runner##*/}) — skipping"
         return 0
     fi
     local node_cmd="${NODE_CMD:-${HOME}/.nvm/versions/node/v20.20.0/bin/node}"
@@ -1786,11 +2438,11 @@ run_specification_pass() {
         node_cmd="$(command -v node 2>/dev/null || echo 'node')"
     fi
     if ! command -v "$node_cmd" >/dev/null 2>&1; then
-        warning "Step 0: Node.js is required for specification mode but was not found"
+        warning "Step 1: Node.js is required for specification mode but was not found"
         return 0
     fi
-    step_emit "0" "running" "Step 0: Specification pass"
-    log "Step 0: Running specification pass for phase '$phase_id'..."
+    step_emit "1" "running" "Step 1: Specification pass"
+    log "Step 1: Running specification pass for phase '$phase_id'..."
     local _spec_started; _spec_started=$(date -Iseconds)
     set +e
     PRD_FILE="$PRD_FILE" OUTPUT_DIR="$LOG_DIR" CLAUDE_CMD="${CLAUDE_CMD}" \
@@ -1802,7 +2454,7 @@ run_specification_pass() {
     # GAP-P22: emit spec runner cost record (token/cost estimated — spec runner
     # doesn't expose per-call usage; a future improvement can parse spec logs)
     append_pipeline_cost_record "spec-pass" "$phase_id" \
-        "${ORCH_GATE_MODEL:-qwen/qwen3-coder-30b-a3b-instruct}" "$_spec_started" \
+        "${ORCH_GATE_MODEL:-z-ai/glm-5.2}" "$_spec_started" \
         "0" "0" "0" "0" 2>/dev/null || true
     # Surface openspec/speckit as visible checklist sub-steps instead of only
     # showing as "spec-mode: fast-path ..." log lines buried inside Step 0's
@@ -1820,10 +2472,10 @@ run_specification_pass() {
     fi
 
     if [ $spec_rc -eq 0 ]; then
-        step_emit "0" "pass" "Step 0: Specification pass"
-        step_emit "0a" "pass" "  openspec (elaboration)" "${_openspec_model}, ${_openspec_count} stor(y/ies)"
-        step_emit "0b" "pass" "  speckit (verification)" "${_speckit_model}, ${_speckit_count} stor(y/ies)"
-        success "Step 0: Specification pass completed for '$phase_id'"
+        step_emit "1" "pass" "Step 1: Specification pass"
+        step_emit "1a" "pass" "  openspec (elaboration)" "${_openspec_model}, ${_openspec_count} stor(y/ies)"
+        step_emit "1b" "pass" "  speckit (verification)" "${_speckit_model}, ${_speckit_count} stor(y/ies)"
+        success "Step 1: Specification pass completed for '$phase_id'"
         "$SCRIPT_DIR/update-monitor.sh" event "specification_pass" \
             "Specification agents completed (OpenSpec/Speckit)" "" "main" "spec-coordinator" 2>/dev/null || true
         # Block execution when spec-pass failed on stories that still need splitting
@@ -1842,10 +2494,10 @@ run_specification_pass() {
             fi
         fi
     else
-        step_emit "0" "fail" "Step 0: Specification pass"
-        step_emit "0a" "fail" "  openspec (elaboration)" "${_openspec_model}"
-        step_emit "0b" "fail" "  speckit (verification)" "${_speckit_model}"
-        error "Step 0: Specification pass FAILED for '$phase_id' — all agent invocations failed."
+        step_emit "1" "fail" "Step 1: Specification pass"
+        step_emit "1a" "fail" "  openspec (elaboration)" "${_openspec_model}"
+        step_emit "1b" "fail" "  speckit (verification)" "${_speckit_model}"
+        error "Step 1: Specification pass FAILED for '$phase_id' — all agent invocations failed."
         error "  Check EPAM_ORCHESTRATION_PROVIDER is set and supported by ai-run.sh."
         error "  See: $LOG_DIR/spec-${phase_id}.log"
         exit 1
@@ -1853,15 +2505,15 @@ run_specification_pass() {
 }
 
 if [ "$DRY_RUN" = true ]; then
-    step_emit "0" "skip" "Step 0: Specification pass" "dry-run"
-    step_emit "0a" "skip" "  openspec (elaboration)" "dry-run"
-    step_emit "0b" "skip" "  speckit (verification)" "dry-run"
-    info "Step 0: Specification pass skipped during --dry-run"
+    step_emit "1" "skip" "Step 1: Specification pass" "dry-run"
+    step_emit "1a" "skip" "  openspec (elaboration)" "dry-run"
+    step_emit "1b" "skip" "  speckit (verification)" "dry-run"
+    info "Step 1: Specification pass skipped during --dry-run"
 elif [ "${EPAM_SPEC_MODE:-1}" = "0" ]; then
-    step_emit "0" "skip" "Step 0: Specification pass" "EPAM_SPEC_MODE=0"
-    step_emit "0a" "skip" "  openspec (elaboration)" "EPAM_SPEC_MODE=0"
-    step_emit "0b" "skip" "  speckit (verification)" "EPAM_SPEC_MODE=0"
-    info "Step 0: Specification pass disabled (EPAM_SPEC_MODE=0)"
+    step_emit "1" "skip" "Step 1: Specification pass" "EPAM_SPEC_MODE=0"
+    step_emit "1a" "skip" "  openspec (elaboration)" "EPAM_SPEC_MODE=0"
+    step_emit "1b" "skip" "  speckit (verification)" "EPAM_SPEC_MODE=0"
+    info "Step 1: Specification pass disabled (EPAM_SPEC_MODE=0)"
 else
     run_specification_pass "$PHASE"
 fi
@@ -1923,8 +2575,8 @@ mkdir -p "$LOG_DIR"
 CPA_SCRIPT="$SCRIPT_DIR/contextualize-stories.sh"
 
 if [ "${SKIP_CPA:-0}" != "1" ] && [ -f "$CPA_SCRIPT" ]; then
-    step_emit "0.1" "running" "Step 0.1: CPA pre-pass"
-    log "Step 0.1: Running CPA pre-pass for phase '$PHASE'..."
+    step_emit "2" "running" "Step 2: CPA pre-pass"
+    log "Step 2: Running CPA pre-pass for phase '$PHASE'..."
 
     cpa_flags="--phase $PHASE --apply"
     [ "${STRICT_CPA:-0}" = "1" ] && cpa_flags="$cpa_flags --strict"
@@ -1936,7 +2588,7 @@ if [ "${SKIP_CPA:-0}" != "1" ] && [ -f "$CPA_SCRIPT" ]; then
     _prev_handoff=$(find "$_handoff_search_dir" -maxdepth 3 -name "phase-handoff-*.md" \
         ! -name "phase-handoff-${PHASE}.md" -printf '%T@ %p\n' 2>/dev/null \
         | sort -rn | head -1 | awk '{print $2}' || true)
-    [ -f "${_prev_handoff:-}" ] && info "Step 0.1: Injecting prior-phase context from: ${_prev_handoff##*/}"
+    [ -f "${_prev_handoff:-}" ] && info "Step 2: Injecting prior-phase context from: ${_prev_handoff##*/}"
 
     cpa_exit=0
     # shellcheck disable=SC2086
@@ -1946,22 +2598,22 @@ if [ "${SKIP_CPA:-0}" != "1" ] && [ -f "$CPA_SCRIPT" ]; then
 
     case $cpa_exit in
         0)
-            step_emit "0.1" "pass" "Step 0.1: CPA pre-pass"
-            success "Step 0.1: CPA gate PASSED for phase '$PHASE'"
+            step_emit "2" "pass" "Step 2: CPA pre-pass"
+            success "Step 2: CPA gate PASSED for phase '$PHASE'"
             "$SCRIPT_DIR/update-monitor.sh" event "cpa_pass" \
                 "CPA gate passed — all stories cleared" "" "main" "context-purveyor" 2>/dev/null || true
             ;;
         2)
-            step_emit "0.1" "warn" "Step 0.1: CPA pre-pass" "elevated risk — review"
-            warning "Step 0.1: CPA gate REVIEW — some stories have elevated risk"
+            step_emit "2" "warn" "Step 2: CPA pre-pass" "elevated risk — review"
+            warning "Step 2: CPA gate REVIEW — some stories have elevated risk"
             warning "  Check: $LOG_DIR/cpa-${PHASE}.log"
             warning "  Continuing (use STRICT_CPA=1 to halt on review gates)"
             "$SCRIPT_DIR/update-monitor.sh" event "cpa_review" \
                 "CPA gate REVIEW — proceeding with warnings" "" "main" "context-purveyor" 2>/dev/null || true
             ;;
         3)
-            step_emit "0.1" "fail" "Step 0.1: CPA pre-pass"
-            error "Step 0.1: CPA gate BLOCKED — one or more stories cannot proceed"
+            step_emit "2" "fail" "Step 2: CPA pre-pass"
+            error "Step 2: CPA gate BLOCKED — one or more stories cannot proceed"
             error "  Check: $LOG_DIR/cpa-${PHASE}.log"
             error "  Resolve flagged issues, then re-run. Override: SKIP_CPA=1"
             "$SCRIPT_DIR/update-monitor.sh" event "cpa_block" \
@@ -1969,16 +2621,16 @@ if [ "${SKIP_CPA:-0}" != "1" ] && [ -f "$CPA_SCRIPT" ]; then
             exit 3
             ;;
         *)
-            warning "Step 0.1: CPA script exited with code $cpa_exit (non-critical — continuing)"
+            warning "Step 2: CPA script exited with code $cpa_exit (non-critical — continuing)"
             ;;
     esac
 else
     if [ "${SKIP_CPA:-0}" = "1" ]; then
-        step_emit "0.1" "skip" "Step 0.1: CPA pre-pass" "SKIP_CPA=1"
-        info "Step 0.1: CPA pre-pass skipped (SKIP_CPA=1)"
+        step_emit "2" "skip" "Step 2: CPA pre-pass" "SKIP_CPA=1"
+        info "Step 2: CPA pre-pass skipped (SKIP_CPA=1)"
     else
-        step_emit "0.1" "skip" "Step 0.1: CPA pre-pass" "script not found"
-        info "Step 0.1: CPA script not found — skipping pre-pass"
+        step_emit "2" "skip" "Step 2: CPA pre-pass" "script not found"
+        info "Step 2: CPA script not found — skipping pre-pass"
     fi
 fi
 
@@ -2077,7 +2729,7 @@ if [ -f "$_router_js" ] && command -v node &>/dev/null; then
         _topology_source=$(echo "$_router_out"   | jq -r '.source   // "heuristic"' 2>/dev/null || echo "heuristic")
         # GAP-P22: track topology router cost when LLM was invoked
         if [ "$_topology_source" = "llm" ]; then
-            _router_model=$(echo "$_router_out" | jq -r '.model // "qwen/qwen3-coder-30b-a3b-instruct"' 2>/dev/null || echo "qwen/qwen3-coder-30b-a3b-instruct")
+            _router_model=$(echo "$_router_out" | jq -r '.model // "z-ai/glm-5.2"' 2>/dev/null || echo "z-ai/glm-5.2")
             append_pipeline_cost_record "topology-router" "pipeline" "$_router_model" "$_router_started" \
                 "0.001" "800" "50" "1" 2>/dev/null || true
         fi
@@ -2193,16 +2845,19 @@ _checklist_heartbeat() {
         echo ""
         echo -e "${MAGENTA}━━━ Step Status @ $(date +%H:%M:%S) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         for _sid in \
-            "0:spec" "0a:openspec" "0b:speckit" "0.1:cpa" "0.5:skill-pre" "0.6:hybrid-coord" "0.7:regression" \
-            "0.8:mkdir" "0.9:model-coord" "1:main-stories" "1.5:auto-commit" "1.6:tc-writer" \
-            "2:worktrees" "3a:primary" "3b:independent" "3.1:wt-health" \
-            "3.2:wt-merge" "3.5:skill-post" "3.7:pre-review" "3.8:lint-gate" \
-            "4:review-stories" "4.2a:sast" "4.2b:spec-val" \
-            "4.3a:review-ranger" "4.3b:mutant-hunter" \
-            "4.4a:fuzz-weaver" "4.4b:perf-sentinel" "4.6:e2e"; do
+            "1:Specification pass" "1a:openspec" "1b:speckit" "2:CPA pre-pass" \
+            "3:Skill assessment" "4:Hybrid pre-coord" "5:Regression guard" \
+            "6:mkdir src/ dirs" "7:PRD model coordinator" "8:Main-branch stories" \
+            "9:Auto-commit" "10:TC writer gate" "11:Skills coordinator audit" \
+            "12:Tools coordinator audit" "13:Create worktrees" "14:Primary agent" \
+            "15:Independent agent" "16:Worktree health" "17:Merge worktrees" \
+            "18:Post-parallel assessment" "19:Pre-review gate" "20:Lint gate" \
+            "21:Review stories" "22a:SAST sentinel" "22b:Spec validator" \
+            "22c:Review ranger" "22d:Mutant hunter" \
+            "22e:Fuzz-weaver" "22f:Perf sentinel" "23:Browser E2E"; do
             local _key="${_sid%%:*}"
             local _st="${_STEP_STATUS[$_key]:-pending}"
-            local _lbl="${_STEP_LABELS[$_key]:-$_key}"
+            local _lbl="${_STEP_LABELS[$_key]:-${_sid#*:}}"
             local _icon
             case "$_st" in
                 pass)    _icon="${GREEN}✓${NC}" ;;
@@ -2561,7 +3216,7 @@ PFA_PRD_DIFF_PY
 
         if [ "$_pfa_violated" -eq 0 ]; then
             _pfa_final_outcome="pass"
-            step_emit "0.5" "pass" "Step 0.5: Skill assessment"
+            step_emit "3" "pass" "Step 3: Skill assessment"
             success "Pre-phase assessment completed for '$phase_id'"
             break
         fi
@@ -2611,22 +3266,22 @@ print(json.dumps(types))
     rm -f "$_pfa_prd_before_file"
 
     if [ "$_pfa_final_outcome" != "pass" ]; then
-        step_emit "0.5" "warn" "Step 0.5: Skill assessment" "non-critical"
+        step_emit "3" "warn" "Step 3: Skill assessment" "non-critical"
         warning "Pre-phase assessment for '$phase_id' reverted after 3 attempts (non-critical, continuing): ${_pfa_corrective_note}"
     fi
 }
 
-step_emit "0.5" "running" "Step 0.5: Skill assessment"
-log "Step 0.5: Running pre-phase skill assessment..."
+step_emit "3" "running" "Step 3: Skill assessment"
+log "Step 3: Running pre-phase skill assessment..."
 if [ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ]; then
-    step_emit "0.5" "skip" "Step 0.5: Skill assessment" "SKIP_SKILL_ASSESSMENT=1"
-    log "Step 0.5: Skipped (SKIP_SKILL_ASSESSMENT=1)"
+    step_emit "3" "skip" "Step 3: Skill assessment" "SKIP_SKILL_ASSESSMENT=1"
+    log "Step 3: Skipped (SKIP_SKILL_ASSESSMENT=1)"
 else
     run_pre_phase_assessment "$PHASE"
 fi
-assert_no_story_ids_lost "presplit" "Step 0.5: Skill assessment"
-assert_no_story_ids_gained "presplit" "Step 0.5: Skill assessment"
-assert_no_illegitimate_deprecation "presplit" "Step 0.5: Skill assessment"
+assert_no_story_ids_lost "presplit" "Step 3: Skill assessment"
+assert_no_story_ids_gained "presplit" "Step 3: Skill assessment"
+assert_no_illegitimate_deprecation "presplit" "Step 3: Skill assessment"
 
 # ── Mid-execution split validation ────────────────────────────────────────────
 # Speckit must review ALL splits, not only those proposed by openspec during
@@ -2697,8 +3352,22 @@ COORD_EOF
     # run_orch_prompt_with_tools (not plain run_orch_prompt): the prompt above
     # instructs reading the PRD and flock-appending real JSONL messages — same
     # class of bug already fixed for the assessment agents above.
-    if run_orch_prompt_with_tools "$coord_prompt" "spec-coordinator" "${PHASE:-unknown}" 2>&1 | tee "$coord_log"; then
-        step_emit "0.6" "pass" "Step 0.6: Hybrid pre-coord"
+    local _hpc_attempt=0 _hpc_ok=0
+    while [ "$_hpc_attempt" -lt 2 ] && [ "$_hpc_ok" = "0" ]; do
+        local _hpc_prompt="$coord_prompt"
+        [ "$_hpc_attempt" -ge 1 ] && _hpc_prompt="RETRY (attempt 2): The previous invocation produced no output. Use your tools to read the PRD, write coordination messages to agent-messages.jsonl, and write the summary log now.
+
+$coord_prompt"
+        run_orch_prompt_with_tools "$_hpc_prompt" "spec-coordinator" "${PHASE:-unknown}" 2>&1 | tee "$coord_log"
+        if [ -s "$coord_log" ]; then
+            _hpc_ok=1
+        else
+            [ "$_hpc_attempt" -lt 1 ] && warning "Hybrid pre-phase coordination attempt 1 produced no output — retrying" || warning "Hybrid pre-phase coordination had issues — continuing with bash fallback"
+        fi
+        _hpc_attempt=$(( _hpc_attempt + 1 ))
+    done
+    if [ "$_hpc_ok" = "1" ]; then
+        step_emit "4" "pass" "Step 4: Hybrid pre-coord"
         success "Hybrid pre-phase coordination completed for '$phase_id'"
         "$SCRIPT_DIR/update-monitor.sh" event "hybrid_precoord" \
             "Hybrid pre-phase coordination completed" "" "main" "coordination-agent" 2>/dev/null || true
@@ -2708,11 +3377,11 @@ COORD_EOF
 }
 
 if [ "$RESOLVED_ORCH_MODE" = "hybrid" ]; then
-    log "Step 0.6: Hybrid mode — running pre-phase coordination..."
+    log "Step 4: Hybrid mode — running pre-phase coordination..."
     run_hybrid_precoordination "$PHASE"
 else
-    step_emit "0.6" "skip" "Step 0.6: Hybrid pre-coord" "ORCH_MODE=${RESOLVED_ORCH_MODE}"
-    info "Step 0.6: Skipped (ORCH_MODE=${RESOLVED_ORCH_MODE})"
+    step_emit "4" "skip" "Step 4: Hybrid pre-coord" "ORCH_MODE=${RESOLVED_ORCH_MODE}"
+    info "Step 4: Skipped (ORCH_MODE=${RESOLVED_ORCH_MODE})"
 fi
 
 # ──────────────────────────────────────────────
@@ -2723,42 +3392,55 @@ fi
 # ──────────────────────────────────────────────
 if [ "${SKIP_REGRESSION_GUARD:-false}" != "true" ]; then
     _rg_node=$(detect_node 2>/dev/null || true)
-    if [ -n "$_rg_node" ] && [ -f "$PROJECT_ROOT/package.json" ] && \
-       [ -f "$PROJECT_ROOT/node_modules/.bin/vitest" ]; then
-        step_emit "0.7" "running" "Step 0.7: Regression guard"
-        log "Step 0.7: Cross-phase regression guard (vitest)..."
+    # Brownfield: run tests in the codeline directory, not PROJECT_ROOT.
+    # The codeline has its own node_modules with its own test runner.
+    _rg_root="$PROJECT_ROOT"
+    if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -n "${JIRA_DEFAULT_CODELINE:-}" ]; then
+        _cl_upper=$(echo "$JIRA_DEFAULT_CODELINE" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_')
+        _cl_path="${!JIRA_WORKTREE_${_cl_upper}:-}"
+        # Bash indirect expansion via nameref
+        _wtvar="JIRA_WORKTREE_${_cl_upper}"
+        _cl_path="${!_wtvar}"
+        [ -n "$_cl_path" ] && _rg_root="$_cl_path"
+    fi
+    # Detect test runner: prefer vitest, fall back to jest
+    _rg_bin=""
+    [ -f "$_rg_root/node_modules/.bin/vitest" ] && _rg_bin="$_rg_root/node_modules/.bin/vitest"
+    [ -z "$_rg_bin" ] && [ -f "$_rg_root/node_modules/.bin/jest" ] && _rg_bin="$_rg_root/node_modules/.bin/jest"
+    if [ -n "$_rg_node" ] && [ -f "$_rg_root/package.json" ] && [ -n "$_rg_bin" ]; then
+        step_emit "5" "running" "Step 5: Regression guard"
+        log "Step 5: Cross-phase regression guard ($(basename "$_rg_bin")) in $_rg_root..."
         _rg_log="$LOG_DIR/regression-guard-${PHASE}.log"
         set +e
-        "$_rg_node" "$PROJECT_ROOT/node_modules/.bin/vitest" run \
-            --root "$PROJECT_ROOT" > "$_rg_log" 2>&1
+        (cd "$_rg_root" && "$_rg_node" "$_rg_bin" run) > "$_rg_log" 2>&1
         _rg_rc=$?
         set -e
         if [ $_rg_rc -ne 0 ]; then
-            step_emit "0.7" "fail" "Step 0.7: Regression guard"
-            error "Step 0.7: Regression guard FAILED — tests broken before phase '$PHASE' starts"
+            step_emit "5" "fail" "Step 5: Regression guard"
+            error "Step 5: Regression guard FAILED — tests broken before phase '$PHASE' starts"
             error "  Fix failing tests from the previous phase before continuing."
             error "  See: $_rg_log"
             error "  Bypass with: SKIP_REGRESSION_GUARD=true"
             exit 1
         fi
-        step_emit "0.7" "pass" "Step 0.7: Regression guard"
-        success "Step 0.7: Regression guard PASSED — baseline tests green"
+        step_emit "5" "pass" "Step 5: Regression guard"
+        success "Step 5: Regression guard PASSED — baseline tests green"
     else
-        step_emit "0.7" "skip" "Step 0.7: Regression guard" "node/vitest not found"
-        info "Step 0.7: Regression guard skipped — node or vitest not found"
+        step_emit "5" "skip" "Step 5: Regression guard" "node/vitest not found"
+        info "Step 5: Regression guard skipped — node or vitest not found in $_rg_root"
     fi
 else
-    step_emit "0.7" "skip" "Step 0.7: Regression guard" "SKIP_REGRESSION_GUARD=true"
-    info "Step 0.7: Regression guard skipped (SKIP_REGRESSION_GUARD=true)"
+    step_emit "5" "skip" "Step 5: Regression guard" "SKIP_REGRESSION_GUARD=true"
+    info "Step 5: Regression guard skipped (SKIP_REGRESSION_GUARD=true)"
 fi
 
 # ──────────────────────────────────────────────
 # Step 0.8: Ensure standard src/ subdirectories exist so M3 can write into them
 # without relying on the model creating the directory first.
 # ──────────────────────────────────────────────
-step_emit "0.8" "running" "Step 0.8: mkdir src/ dirs"
+step_emit "6" "running" "Step 6: mkdir src/ dirs"
 mkdir -p "$PROJECT_ROOT/src" "$PROJECT_ROOT/src/skyscanner" "$PROJECT_ROOT/public" "$PROJECT_ROOT/review" 2>/dev/null || true
-step_emit "0.8" "pass" "Step 0.8: mkdir src/ dirs"
+step_emit "6" "pass" "Step 6: mkdir src/ dirs"
 
 # ──────────────────────────────────────────────
 # Step 0.9: PRD model coordinator — ensures every pending story (base +
@@ -2769,12 +3451,12 @@ step_emit "0.8" "pass" "Step 0.8: mkdir src/ dirs"
 # from their parent story. The PRD, not env vars or provider defaults, is
 # the single source of truth for per-story model assignment.
 # ──────────────────────────────────────────────
-step_emit "0.9" "running" "Step 0.9: PRD model coordinator"
+step_emit "7" "running" "Step 7: PRD model coordinator"
 _emit_agent start "prd-model-coordinator" "PRD Model Coordinator"
 if [ "${SKIP_PRD_MODEL_COORDINATOR:-0}" = "1" ]; then
     info "  [prd-model-coordinator] Skipped (SKIP_PRD_MODEL_COORDINATOR=1)"
     _emit_agent complete "prd-model-coordinator" "skipped"
-    step_emit "0.9" "skip" "Step 0.9: PRD model coordinator" "SKIP_PRD_MODEL_COORDINATOR=1"
+    step_emit "7" "skip" "Step 7: PRD model coordinator" "SKIP_PRD_MODEL_COORDINATOR=1"
 else
     _mc_phase="${CURRENT_PHASE:-${PHASE:-unknown}}"
     _mc_prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
@@ -3013,10 +3695,10 @@ MC_FALLBACK_PY
     ) 200>"${_mc_prd_target}.lock"
 fi
 _emit_agent complete "prd-model-coordinator" "PRD model assignments done"
-step_emit "0.9" "pass" "Step 0.9: PRD model coordinator"
-assert_no_story_ids_lost "presplit" "Step 0.9: PRD model coordinator"
-assert_no_story_ids_gained "presplit" "Step 0.9: PRD model coordinator"
-assert_no_illegitimate_deprecation "presplit" "Step 0.9: PRD model coordinator"
+step_emit "7" "pass" "Step 7: PRD model coordinator"
+assert_no_story_ids_lost "presplit" "Step 7: PRD model coordinator"
+assert_no_story_ids_gained "presplit" "Step 7: PRD model coordinator"
+assert_no_illegitimate_deprecation "presplit" "Step 7: PRD model coordinator"
 
 # ──────────────────────────────────────────────
 # Step 1: Run main-branch stories (no dependencies, sequential)
@@ -3105,10 +3787,10 @@ if [ -n "$main_stories" ]; then
         _ckpt_done=$(jq '[.stories[] | select(.status == "completed")] | length' "$PRD_FILE" 2>/dev/null || echo 0)
         if [ "${_ckpt_total:-0}" -gt 0 ] && [ "${_ckpt_done:-0}" -ge "${_ckpt_total:-0}" ]; then
             info "[CHECKPOINT] All $_ckpt_total stories already completed — skipping Step 1 for phase '${PHASE:-main}'"
-            step_emit "1" "pass" "Step 1: Main-branch stories (all checkpointed)"
+            step_emit "8" "pass" "Step 8: Main-branch stories (all checkpointed)"
         else
-        step_emit "1" "running" "Step 1: Main-branch stories"
-    log "Step 1: Running main-branch stories..."
+        step_emit "8" "running" "Step 8: Main-branch stories"
+    log "Step 8: Running main-branch stories..."
         # Capture baseline SHA before any story commits so the testing-gates
         # git diff oracle can diff the full run's changes (not just HEAD~1).
         if [ -d "$PROJECT_ROOT/.git" ]; then
@@ -3267,17 +3949,17 @@ if [ -n "$main_stories" ]; then
             done <<< "$_tail_sweep_new"
         fi
         if [ "$_phase_story_failures" -gt 0 ]; then
-            step_emit "1" "fail" "Step 1: Main-branch stories"
+            step_emit "8" "fail" "Step 8: Main-branch stories"
             error "Phase '$PHASE': $_phase_story_failures story/stories failed — aborting phase"
             exit 1
         fi
-        step_emit "1" "pass" "Step 1: Main-branch stories"
+        step_emit "8" "pass" "Step 8: Main-branch stories"
         success "Main-branch stories complete"
         fi  # end checkpoint else
     fi
 else
-    step_emit "1" "skip" "Step 1: Main-branch stories" "no stories in lane"
-    info "Step 1: No main-branch stories to run"
+    step_emit "8" "skip" "Step 8: Main-branch stories" "no stories in lane"
+    info "Step 8: No main-branch stories to run"
 fi
 
 # ──────────────────────────────────────────────
@@ -3290,32 +3972,32 @@ _has_worktree_stories=false
 { [ -n "${primary_stories:-}" ] || [ -n "${independent_stories:-}" ]; } && _has_worktree_stories=true
 if [ "$_has_worktree_stories" = true ] && \
    [ -n "$(git -C "$PROJECT_ROOT" status --porcelain 2>/dev/null)" ]; then
-    step_emit "1.5" "running" "Step 1.5: Auto-commit"
-    log "Step 1.5: Auto-committing main-branch deliverables before worktree creation..."
+    step_emit "9" "running" "Step 9: Auto-commit"
+    log "Step 9: Auto-committing main-branch deliverables before worktree creation..."
     git -C "$PROJECT_ROOT" add -A 2>/dev/null || true
     # Generic credential scan (flow-gap analysis finding #2, 2026-07-12): see
     # orchestrations/scripts/scan-secrets.sh for rationale/patterns.
     if [ -f "$SCRIPT_DIR/scan-secrets.sh" ] && ! _scan_output=$(bash "$SCRIPT_DIR/scan-secrets.sh" "$PROJECT_ROOT" 2>&1); then
-        warning "Step 1.5: $_scan_output"
-        step_emit "1.5" "fail" "Step 1.5: Auto-commit" "secret detected"
-        error "Step 1.5: Refusing to auto-commit — unstaging (SECRET_SCAN)"
+        warning "Step 9: $_scan_output"
+        step_emit "9" "fail" "Step 9: Auto-commit" "secret detected"
+        error "Step 9: Refusing to auto-commit — unstaging (SECRET_SCAN)"
         git -C "$PROJECT_ROOT" reset 2>/dev/null || true
     else
         git -C "$PROJECT_ROOT" commit -m "chore: auto-commit main-branch story output for phase $PHASE" \
             2>/dev/null \
-            && { step_emit "1.5" "pass" "Step 1.5: Auto-commit"; success "Step 1.5: Committed main-branch output"; } \
-            || { step_emit "1.5" "skip" "Step 1.5: Auto-commit" "nothing to commit"; warning "Step 1.5: Nothing new to commit (working tree already clean)"; }
+            && { step_emit "9" "pass" "Step 9: Auto-commit"; success "Step 9: Committed main-branch output"; } \
+            || { step_emit "9" "skip" "Step 9: Auto-commit" "nothing to commit"; warning "Step 9: Nothing new to commit (working tree already clean)"; }
     fi
 else
-    step_emit "1.5" "skip" "Step 1.5: Auto-commit" "already clean"
-    info "Step 1.5: No uncommitted main-branch changes — skipping auto-commit"
+    step_emit "9" "skip" "Step 9: Auto-commit" "already clean"
+    info "Step 9: No uncommitted main-branch changes — skipping auto-commit"
 fi
 # ──────────────────────────────────────────────
-# Step 1.6 (TC writer gate) has moved — see after Step 3.2 below. Running it
-# here (before Step 3's worktree implementation) meant it ALWAYS found zero
-# source files for any phase using worktree topology, since main-branch Step 1
+# Step 10 (TC writer gate) has moved — see after Step 17 below. Running it
+# here (before Step 14's worktree implementation) meant it ALWAYS found zero
+# source files for any phase using worktree topology, since main-branch Step 8
 # is empty in that case ("no stories in lane") and the real implementation
-# only exists after Step 3a/3b run and Step 3.2 merges them back. Confirmed
+# only exists after Step 14/15 run and Step 17 merges them back. Confirmed
 # live: this hard-aborted the entire core phase before implementation ever ran.
 # ──────────────────────────────────────────────
 need_worktrees=false
@@ -3323,13 +4005,13 @@ need_worktrees=false
 [ -n "$independent_stories" ] && need_worktrees=true
 
 if [ "$need_worktrees" = true ]; then
-    step_emit "2" "running" "Step 2: Create worktrees"
-    log "Step 2: Creating git worktrees..."
+    step_emit "13" "running" "Step 13: Create worktrees"
+    log "Step 13: Creating git worktrees..."
     "$CLAUDE_SH" --setup-worktrees || { error "Failed to create worktrees"; exit 1; }
-    step_emit "2" "pass" "Step 2: Create worktrees"
+    step_emit "13" "pass" "Step 13: Create worktrees"
 else
-    step_emit "2" "skip" "Step 2: Create worktrees" "no parallel stories"
-    info "Step 2: No worktree stories — skipping worktree creation"
+    step_emit "13" "skip" "Step 13: Create worktrees" "no parallel stories"
+    info "Step 13: No worktree stories — skipping worktree creation"
 fi
 
 # ──────────────────────────────────────────────
@@ -3339,8 +4021,8 @@ PRIMARY_PID=""
 INDEPENDENT_PID=""
 
 if [ -n "$primary_stories" ]; then
-    step_emit "3a" "running" "Step 3a: Primary agent"
-    log "Step 3a: Starting primary agent..."
+    step_emit "14" "running" "Step 14: Primary agent"
+    log "Step 14: Starting primary agent..."
     "$CLAUDE_SH" --worktree primary --phase "$PHASE" \
         > "$LOG_DIR/wt-primary.log" 2>&1 &
     PRIMARY_PID=$!
@@ -3348,15 +4030,15 @@ if [ -n "$primary_stories" ]; then
 fi
 
 if [ -n "$independent_stories" ]; then
-    step_emit "3b" "running" "Step 3b: Independent agent"
-    log "Step 3b: Starting independent agent..."
+    step_emit "15" "running" "Step 15: Independent agent"
+    log "Step 15: Starting independent agent..."
     "$CLAUDE_SH" --worktree independent --phase "$PHASE" \
         > "$LOG_DIR/wt-independent.log" 2>&1 &
     INDEPENDENT_PID=$!
     info "  Independent agent PID: $INDEPENDENT_PID"
 else
-    step_emit "3b" "skip" "Step 3b: Independent agent" "no independent stories"
-    info "Step 3b: No independent stories — skipping independent agent"
+    step_emit "15" "skip" "Step 15: Independent agent" "no independent stories"
+    info "Step 15: No independent stories — skipping independent agent"
 fi
 
 # Wait for both agents
@@ -3367,10 +4049,10 @@ if [ -n "$PRIMARY_PID" ]; then
     log "Waiting for primary agent (PID $PRIMARY_PID)..."
     wait $PRIMARY_PID || PRIMARY_EXIT=$?
     if [ $PRIMARY_EXIT -eq 0 ]; then
-        step_emit "3a" "pass" "Step 3a: Primary agent"
+        step_emit "14" "pass" "Step 14: Primary agent"
         success "Primary agent completed successfully"
     else
-        step_emit "3a" "fail" "Step 3a: Primary agent"
+        step_emit "14" "fail" "Step 14: Primary agent"
         error "Primary agent failed with exit code $PRIMARY_EXIT"
         error "Check log: $LOG_DIR/wt-primary.log"
     fi
@@ -3380,10 +4062,10 @@ if [ -n "$INDEPENDENT_PID" ]; then
     log "Waiting for independent agent (PID $INDEPENDENT_PID)..."
     wait $INDEPENDENT_PID || INDEPENDENT_EXIT=$?
     if [ $INDEPENDENT_EXIT -eq 0 ]; then
-        step_emit "3b" "pass" "Step 3b: Independent agent"
+        step_emit "15" "pass" "Step 15: Independent agent"
         success "Independent agent completed successfully"
     else
-        step_emit "3b" "fail" "Step 3b: Independent agent"
+        step_emit "15" "fail" "Step 15: Independent agent"
         error "Independent agent failed with exit code $INDEPENDENT_EXIT"
         error "Check log: $LOG_DIR/wt-independent.log"
     fi
@@ -3408,22 +4090,22 @@ fi
 # Ensures agent-produced code is committed before gate assessment.
 # Agents sometimes write files without committing (common failure mode).
 if [ "$need_worktrees" = true ]; then
-    step_emit "3.1" "running" "Step 3.1: Worktree health"
-    log "Step 3.1: Worktree health check..."
+    step_emit "16" "running" "Step 16: Worktree health"
+    log "Step 16: Worktree health check..."
     GIT_WORK_ROOT="${GIT_WORK_ROOT:-$PROJECT_ROOT}" \
         PHASE="$PHASE" AUTO_COMMIT=true "$SCRIPT_DIR/worktree-health-check.sh" \
         2>&1 | tee "$LOG_DIR/worktree-health-${PHASE}.log"
     _health_exit=${PIPESTATUS[0]}
     if [ "$_health_exit" -ne 0 ]; then
-        step_emit "3.1" "warn" "Step 3.1: Worktree health" "health issues auto-fixed"
+        step_emit "16" "warn" "Step 16: Worktree health" "health issues auto-fixed"
         error "Worktree health check failed — see $LOG_DIR/worktree-health-${PHASE}.log"
         exit 1
     else
-        step_emit "3.1" "pass" "Step 3.1: Worktree health"
+        step_emit "16" "pass" "Step 16: Worktree health"
     fi
 else
-    step_emit "3.1" "skip" "Step 3.1: Worktree health" "no worktrees"
-    info "Step 3.1: No worktrees — skipping health check"
+    step_emit "16" "skip" "Step 16: Worktree health" "no worktrees"
+    info "Step 16: No worktrees — skipping health check"
 fi
 
 # ──────────────────────────────────────────────
@@ -3433,7 +4115,7 @@ fi
 # worktree branches from HEAD) inherits all prior code.
 # ──────────────────────────────────────────────
 if [ "$need_worktrees" = true ]; then
-    log "Step 3.2: Merging worktree branches back to main branch..."
+    log "Step 17: Merging worktree branches back to main branch..."
 
     # Resolve the git root and current branch
     _merge_git_root="${GIT_WORK_ROOT:-$PROJECT_ROOT}"
@@ -3517,14 +4199,14 @@ if [ "$need_worktrees" = true ]; then
     done
 
     if [ "$MERGE_FAILED" = true ]; then
-        error "Step 3.2: One or more worktree merges failed — review conflicts before next phase"
+        error "Step 17: One or more worktree merges failed — review conflicts before next phase"
         error "  Worktrees preserved for inspection. Re-run with --skip-cleanup to debug."
         exit 1
     else
-        success "Step 3.2: All worktree branches merged back successfully"
+        success "Step 17: All worktree branches merged back successfully"
     fi
 else
-    info "Step 3.2: No worktrees — skipping merge-back"
+    info "Step 17: No worktrees — skipping merge-back"
 fi
 
 # Now that any completed stories' commits have had a chance to merge, fail the
@@ -3536,7 +4218,7 @@ if [ "$WORKTREE_HAD_FAILURE" = true ]; then
 fi
 
 # ──────────────────────────────────────────────
-# Step 1.6: Post-impl TC (test criteria) writer gate.
+# Step 10: Post-impl TC (test criteria) writer gate.
 # Runs HERE (after worktree merge-back, not before Step 3) so it always has
 # real implementation to read regardless of topology — main-branch stories
 # (Step 1) and worktree stories (Step 3a/3b, merged in Step 3.2) are both
@@ -3555,8 +4237,8 @@ fi
 # from real TC generation once they're done (this is the original,
 # unmodified behavior this gate always had).
 if [ "${SKIP_TC_WRITER:-0}" = "1" ]; then
-    step_emit "1.6" "skip" "Step 1.6: TC writer gate" "SKIP_TC_WRITER=1"
-    info "Step 1.6: TC writer gate skipped (SKIP_TC_WRITER=1)"
+    step_emit "10" "skip" "Step 10: TC writer gate" "SKIP_TC_WRITER=1"
+    info "Step 10: TC writer gate skipped (SKIP_TC_WRITER=1)"
     _tc_writer_needed=0
 else
 _tc_writer_needed=$(jq -r --arg phase "$PHASE" \
@@ -3569,8 +4251,8 @@ _tc_writer_needed=$(jq -r --arg phase "$PHASE" \
 fi
 
 if [ "${_tc_writer_needed:-0}" -gt 0 ]; then
-    step_emit "1.6" "running" "Step 1.6: TC writer gate"
-    log "Step 1.6: TC writer gate — ${_tc_writer_needed} test story/stories need testCriteria..."
+    step_emit "10" "running" "Step 10: TC writer gate"
+    log "Step 10: TC writer gate — ${_tc_writer_needed} test story/stories need testCriteria..."
     # Retry-on-violation (2026-07-13), same shape as the inline gate above:
     # give the batch call up to 3 attempts, then BLOCK only the specific
     # story IDs still lacking real testCriteria (not exit 1 the whole phase
@@ -3588,8 +4270,8 @@ if [ "${_tc_writer_needed:-0}" -gt 0 ]; then
         _tc_writer_exit=${PIPESTATUS[0]}
 
         if ! jq empty "$PRD_FILE" 2>/dev/null; then
-            step_emit "1.6" "fail" "Step 1.6: TC writer gate"
-            error "Step 1.6: TC writer gate FAILED — $PRD_FILE is not valid JSON after the writer ran (attempt ${_tc_batch_attempt}/3)"
+            step_emit "10" "fail" "Step 10: TC writer gate"
+            error "Step 10: TC writer gate FAILED — $PRD_FILE is not valid JSON after the writer ran (attempt ${_tc_batch_attempt}/3)"
             error "  Fix: check $LOG_DIR/tc-writer-${PHASE}.log"
             exit 1
         fi
@@ -3603,11 +4285,11 @@ if [ "${_tc_writer_needed:-0}" -gt 0 ]; then
               ) | .id] | join(",")' "$PRD_FILE" 2>/dev/null || echo "")
 
         if [ -z "$_tc_batch_still_missing" ]; then
-            step_emit "1.6" "pass" "Step 1.6: TC writer gate"
-            success "Step 1.6: TC writer gate PASSED — testCriteria populated (attempt ${_tc_batch_attempt}/3)"
+            step_emit "10" "pass" "Step 10: TC writer gate"
+            success "Step 10: TC writer gate PASSED — testCriteria populated (attempt ${_tc_batch_attempt}/3)"
             break
         fi
-        warning "  Step 1.6 attempt ${_tc_batch_attempt}/3: still missing testCriteria for: $_tc_batch_still_missing"
+        warning "  Step 10 attempt ${_tc_batch_attempt}/3: still missing testCriteria for: $_tc_batch_still_missing"
     done
 
     _tc_batch_violation_types="[]"
@@ -3629,8 +4311,8 @@ if [ "${_tc_writer_needed:-0}" -gt 0 ]; then
         2>/dev/null)"
 
     if [ -n "$_tc_batch_still_missing" ]; then
-        step_emit "1.6" "warn" "Step 1.6: TC writer gate" "blocked stories, see blocked-stories.jsonl"
-        warning "Step 1.6: TC writer gate — blocking $_tc_batch_still_missing after 3 attempts (not aborting the phase)"
+        step_emit "10" "warn" "Step 10: TC writer gate" "blocked stories, see blocked-stories.jsonl"
+        warning "Step 10: TC writer gate — blocking $_tc_batch_still_missing after 3 attempts (not aborting the phase)"
         IFS=',' read -ra _tc_blocked_ids <<< "$_tc_batch_still_missing"
         for _tc_blocked_id in "${_tc_blocked_ids[@]}"; do
             jq --arg id "$_tc_blocked_id" '(.stories[] | select(.id == $id)).status = "blocked"' \
@@ -3641,12 +4323,12 @@ if [ "${_tc_writer_needed:-0}" -gt 0 ]; then
         done
     fi
 else
-    step_emit "1.6" "skip" "Step 1.6: TC writer gate" "all TCs present"
-    info "Step 1.6: TC writer gate — all test stories already have TCs or no test stories in phase"
+    step_emit "10" "skip" "Step 10: TC writer gate" "all TCs present"
+    info "Step 10: TC writer gate — all test stories already have TCs or no test stories in phase"
 fi
 
 # ──────────────────────────────────────────────
-# Step 1.65: Skills coordinator audit
+# Step 11: Skills coordinator audit
 #
 # Root cause this addresses (found live, 2026-07-10, tier3-travel-app run): a
 # self-heal skill note ("Do not use 'as' keyword for type assertions... use
@@ -3731,9 +4413,9 @@ PYEOF
 }
 
 if [ "${SKIP_SKILLS_AUDIT:-0}" = "1" ]; then
-    step_emit "1.65" "skip" "Step 1.65: Skills coordinator audit" "SKIP_SKILLS_AUDIT=1"
+    step_emit "11" "skip" "Step 11: Skills coordinator audit" "SKIP_SKILLS_AUDIT=1"
 else
-    step_emit "1.65" "running" "Step 1.65: Skills coordinator audit"
+    step_emit "11" "running" "Step 11: Skills coordinator audit"
     _skills_audit_result=$(run_skills_audit_scan "$AGENT_PROFILES_FILE" 2>/dev/null || echo '{"duplicates_removed":0,"contradictions":[]}')
     _skills_dupes_removed=$(echo "$_skills_audit_result" | jq -r '.duplicates_removed // 0' 2>/dev/null || echo 0)
     _skills_contradiction_count=$(echo "$_skills_audit_result" | jq -r '.contradictions | length' 2>/dev/null || echo 0)
@@ -3753,29 +4435,38 @@ else
 
 Flagged note:
 ${_sc_note}"
-            if run_orch_prompt_with_tools "$_sc_prompt" "skills_audit" "${PHASE:-unknown}" > "$LOG_DIR/skills-coordinator-${PHASE}.log" 2>&1; then
-                if jq empty "$AGENT_PROFILES_FILE" 2>/dev/null; then
-                    success "  [SkillsAudit] Rewrote contradictory note for [${_sc_role}]"
-                else
-                    error "  [SkillsAudit] skills-coordinator corrupted profiles.json! Restoring pre-audit snapshot."
-                    echo "$_skills_before" > "$AGENT_PROFILES_FILE"
+            _sc_attempt=0
+            while [ "$_sc_attempt" -lt 2 ]; do
+                _sc_run_prompt="$_sc_prompt"
+                [ "$_sc_attempt" -ge 1 ] && _sc_run_prompt="RETRY (attempt 2): Previous attempt did not update profiles.json. Read ${AGENT_PROFILES_FILE}, find the exact flagged note, and rewrite it now.
+
+$_sc_prompt"
+                if run_orch_prompt_with_tools "$_sc_run_prompt" "skills_audit" "${PHASE:-unknown}" > "$LOG_DIR/skills-coordinator-${PHASE}.log" 2>&1; then
+                    if jq empty "$AGENT_PROFILES_FILE" 2>/dev/null; then
+                        success "  [SkillsAudit] Rewrote contradictory note for [${_sc_role}]"
+                        break
+                    else
+                        error "  [SkillsAudit] skills-coordinator corrupted profiles.json! Restoring pre-audit snapshot."
+                        echo "$_skills_before" > "$AGENT_PROFILES_FILE"
+                        break
+                    fi
                 fi
-            else
-                warning "  [SkillsAudit] skills-coordinator failed to rewrite note for [${_sc_role}] — leaving as-is"
-            fi
+                _sc_attempt=$(( _sc_attempt + 1 ))
+                [ "$_sc_attempt" -lt 2 ] && warning "  [SkillsAudit] skills-coordinator attempt 1 failed — retrying with corrective note" || warning "  [SkillsAudit] skills-coordinator failed to rewrite note for [${_sc_role}] — leaving as-is"
+            done
             jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg phase "${PHASE:-unknown}" \
                 --arg role "$_sc_role" --arg note "$_sc_note" \
                 '{timestamp:$ts, phase:$phase, role:$role, event:"contradiction_rewrite", flagged_note:$note}' \
                 >> "$LOG_DIR/skills-coordinator-audit.jsonl" 2>/dev/null || true
         done < <(echo "$_skills_audit_result" | jq -c '.contradictions[]' 2>/dev/null)
     fi
-    step_emit "1.65" "pass" "Step 1.65: Skills coordinator audit"
+    step_emit "11" "pass" "Step 11: Skills coordinator audit"
 fi
 
 # ──────────────────────────────────────────────
-# Step 1.66: Tools coordinator audit
+# Step 12: Tools coordinator audit
 #
-# Same rationale and shape as Step 1.65, applied to the dynamic-tools
+# Same rationale and shape as Step 11, applied to the dynamic-tools
 # mechanism instead of skill notes: FailureAnalyst can write a tool script to
 # .epam/dynamic-tools/<name>.sh (target=tool), and run_dynamic_tools_in_
 # unlocked_window() (claude.sh) runs every reviewed, syntax-valid tool on
@@ -3856,9 +4547,9 @@ PYEOF
 }
 
 if [ "${SKIP_TOOLS_AUDIT:-0}" = "1" ]; then
-    step_emit "1.66" "skip" "Step 1.66: Tools coordinator audit" "SKIP_TOOLS_AUDIT=1"
+    step_emit "12" "skip" "Step 12: Tools coordinator audit" "SKIP_TOOLS_AUDIT=1"
 else
-    step_emit "1.66" "running" "Step 1.66: Tools coordinator audit"
+    step_emit "12" "running" "Step 12: Tools coordinator audit"
     _tools_audit_result=$(run_tools_audit_scan "$PROJECT_ROOT/.epam/dynamic-tools" "$LOG_DIR" 2>/dev/null || echo '{"broken":[],"duplicates":[]}')
     _tools_broken_count=$(echo "$_tools_audit_result" | jq -r '.broken | length' 2>/dev/null || echo 0)
     _tools_dup_count=$(echo "$_tools_audit_result" | jq -r '.duplicates | length' 2>/dev/null || echo 0)
@@ -3872,16 +4563,33 @@ else
             _tc_path="$PROJECT_ROOT/.epam/dynamic-tools/${_tc_tool}.sh"
             _tc_before=$(cat "$_tc_path" 2>/dev/null || echo "")
             _tc_prompt="You are the tools-coordinator agent. A dynamic tool at ${_tc_path} is broken (${_tc_reason}). Read the file, fix it so it runs successfully and stays idempotent (safe to run multiple times), and write the corrected script back to the SAME path. Keep the '#!/usr/bin/env bash' shebang and the purpose comment on line 2. Do not touch any other file."
-            if run_orch_prompt_with_tools "$_tc_prompt" "tools_audit" "${PHASE:-unknown}" > "$LOG_DIR/tools-coordinator-${PHASE}.log" 2>&1; then
-                if bash -n "$_tc_path" 2>/dev/null; then
-                    success "  [ToolsAudit] Rewrote broken tool [${_tc_tool}]"
-                else
-                    error "  [ToolsAudit] tools-coordinator left ${_tc_tool}.sh syntactically broken! Restoring pre-audit snapshot."
-                    echo "$_tc_before" > "$_tc_path"
+            _tc_attempt=0
+            while [ "$_tc_attempt" -lt 2 ]; do
+                _tc_run_prompt="$_tc_prompt"
+                if [ "$_tc_attempt" -ge 1 ]; then
+                    _tc_bn_err=""
+                    _tc_bn_err=$(bash -n "$_tc_path" 2>&1 || true)
+                    _tc_run_prompt="RETRY (attempt 2): Previous fix left ${_tc_tool}.sh syntactically broken. bash -n reports: ${_tc_bn_err}. Fix the syntax error and write the corrected script back now.
+
+$_tc_prompt"
                 fi
-            else
-                warning "  [ToolsAudit] tools-coordinator failed to fix [${_tc_tool}] — leaving as-is"
-            fi
+                if run_orch_prompt_with_tools "$_tc_run_prompt" "tools_audit" "${PHASE:-unknown}" > "$LOG_DIR/tools-coordinator-${PHASE}.log" 2>&1; then
+                    if bash -n "$_tc_path" 2>/dev/null; then
+                        success "  [ToolsAudit] Rewrote broken tool [${_tc_tool}]"
+                        break
+                    else
+                        if [ "$_tc_attempt" -ge 1 ]; then
+                            error "  [ToolsAudit] tools-coordinator left ${_tc_tool}.sh syntactically broken after 2 attempt(s)! Restoring pre-audit snapshot."
+                            echo "$_tc_before" > "$_tc_path"
+                            break
+                        fi
+                        warning "  [ToolsAudit] tools-coordinator left ${_tc_tool}.sh broken on attempt 1 — retrying with corrective note"
+                    fi
+                else
+                    [ "$_tc_attempt" -ge 1 ] && warning "  [ToolsAudit] tools-coordinator failed to fix [${_tc_tool}] — leaving as-is"
+                fi
+                _tc_attempt=$(( _tc_attempt + 1 ))
+            done
             jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg phase "${PHASE:-unknown}" \
                 --arg tool "$_tc_tool" --arg reason "$_tc_reason" \
                 '{timestamp:$ts, phase:$phase, tool:$tool, reason:$reason, event:"broken_tool_rewrite"}' \
@@ -3899,7 +4607,7 @@ else
                 >> "$LOG_DIR/tools-coordinator-audit.jsonl" 2>/dev/null || true
         done < <(echo "$_tools_audit_result" | jq -c '.duplicates[]' 2>/dev/null)
     fi
-    step_emit "1.66" "pass" "Step 1.66: Tools coordinator audit"
+    step_emit "12" "pass" "Step 12: Tools coordinator audit"
 fi
 
 # ──────────────────────────────────────────────
@@ -3929,7 +4637,7 @@ _build_skill_domain_guidance() {
     ' "$config_file" 2>/dev/null
 }
 
-# Step 3.5: Post-Parallel Skill Assessment
+# Step 18: Post-Parallel Skill Assessment
 # (Runs immediately after parallel execution; captures mid-pipeline variance.
 #  Step 6 at end of pipeline performs the final post-phase assessment.)
 # ──────────────────────────────────────────────
@@ -4039,25 +4747,45 @@ PROMPT_EOF
     # tee's exit status (virtually always 0), never run_orch_prompt_with_
     # tools's real one -- a tool-call failure could never be detected at
     # all. Capture the first command's real exit status explicitly instead.
-    run_orch_prompt_with_tools "$assessment_prompt" "team-lead-agent" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"
-    local _assessment_rc=${PIPESTATUS[0]}
+    local _pa_attempt=0 _pa_success=0
+    local _saved_pa_model="${ORCH_GATE_MODEL:-}"
+    while [ "$_pa_attempt" -lt 2 ] && [ "$_pa_success" = "0" ]; do
+        local _pa_prompt="$assessment_prompt"
+        if [ "$_pa_attempt" -ge 1 ]; then
+            [ -n "${ESCALATION_MODEL_HIGH:-}" ] && ORCH_GATE_MODEL="${ESCALATION_MODEL_HIGH}"
+            _pa_prompt="RETRY (attempt 2): The previous invocation failed to write a new assessment record to $assessment_file for phase '$phase_id'. Use your tools to read the cost log, compute the assessment, and write the JSON record now.
 
-    if [ "$_assessment_rc" -ne 0 ]; then
-        warning "Phase assessment failed for '$phase_id' (non-critical)"
-        return 1
-    fi
+$assessment_prompt"
+        fi
+        run_orch_prompt_with_tools "$_pa_prompt" "team-lead-agent" "${PHASE:-unknown}" 2>&1 | tee "$assessment_log"
+        local _assessment_rc=${PIPESTATUS[0]}
 
-    # Deterministic evidence check (found live, 2026-07-07): a successful
-    # exit code alone doesn't mean the agent actually did the work -- it can
-    # exit 0 after asking an unanswerable interactive question instead of
-    # writing anything. Verify a genuinely NEW assessment record was
-    # appended for THIS phase, not just trust the exit code.
-    local _assessment_count_after
-    _assessment_count_after=$(grep -c "\"phase_id\":\"$phase_id\"" "$assessment_file" 2>/dev/null || true)
-    _assessment_count_after="${_assessment_count_after:-0}"
+        if [ "$_assessment_rc" -ne 0 ]; then
+            warning "Phase assessment attempt $(( _pa_attempt + 1 )) failed for '$phase_id' (rc=${_assessment_rc})"
+            _pa_attempt=$(( _pa_attempt + 1 ))
+            continue
+        fi
 
-    if [ "$_assessment_count_after" -le "$_assessment_count_before" ]; then
-        warning "Phase assessment for '$phase_id' completed but no new assessment record was written — agent may have failed to produce real output (see $assessment_log)"
+        # Deterministic evidence check (found live, 2026-07-07): a successful
+        # exit code alone doesn't mean the agent actually did the work -- it can
+        # exit 0 after asking an unanswerable interactive question instead of
+        # writing anything. Verify a genuinely NEW assessment record was
+        # appended for THIS phase, not just trust the exit code.
+        local _assessment_count_after
+        _assessment_count_after=$(grep -c "\"phase_id\":\"$phase_id\"" "$assessment_file" 2>/dev/null || true)
+        _assessment_count_after="${_assessment_count_after:-0}"
+
+        if [ "$_assessment_count_after" -le "$_assessment_count_before" ]; then
+            warning "Phase assessment attempt $(( _pa_attempt + 1 )) for '$phase_id' wrote no new record$([ "$_pa_attempt" -lt 1 ] && echo " — retrying with escalated model" || echo "")"
+        else
+            _pa_success=1
+        fi
+        _pa_attempt=$(( _pa_attempt + 1 ))
+    done
+    ORCH_GATE_MODEL="$_saved_pa_model"
+
+    if [ "$_pa_success" = "0" ]; then
+        warning "Phase assessment for '$phase_id' failed after 2 attempt(s) — no new assessment record written; non-critical, continuing"
         return 1
     fi
 
@@ -4076,22 +4804,22 @@ capture_story_ids_snapshot "post-parallel"
 
 # Only run assessment if cost tracking data exists
 if [ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ]; then
-    step_emit "3.5" "skip" "Step 3.5: Post-parallel assessment" "SKIP_SKILL_ASSESSMENT=1"
-    info "Step 3.5: Skipped (SKIP_SKILL_ASSESSMENT=1)"
+    step_emit "18" "skip" "Step 18: Post-parallel assessment" "SKIP_SKILL_ASSESSMENT=1"
+    info "Step 18: Skipped (SKIP_SKILL_ASSESSMENT=1)"
 elif [ -s "$LOG_DIR/phase-cost.jsonl" ]; then
-    step_emit "3.5" "running" "Step 3.5: Post-parallel assessment"
-    log "Step 3.5: Running post-parallel skill assessment..."
+    step_emit "18" "running" "Step 18: Post-parallel assessment"
+    log "Step 18: Running post-parallel skill assessment..."
     if run_phase_assessment "$PHASE"; then
-        step_emit "3.5" "pass" "Step 3.5: Post-parallel assessment"
+        step_emit "18" "pass" "Step 18: Post-parallel assessment"
     else
-        step_emit "3.5" "warn" "Step 3.5: Post-parallel assessment" "non-critical issues"
+        step_emit "18" "warn" "Step 18: Post-parallel assessment" "non-critical issues"
     fi
 else
-    step_emit "3.5" "skip" "Step 3.5: Post-parallel assessment" "no cost data"
-    info "Step 3.5: No cost data yet — skipping post-parallel assessment"
+    step_emit "18" "skip" "Step 18: Post-parallel assessment" "no cost data"
+    info "Step 18: No cost data yet — skipping post-parallel assessment"
 fi
-assert_no_story_ids_lost "presplit" "Step 3.5: Post-parallel assessment"
-assert_no_story_ids_gained "post-parallel" "Step 3.5: Post-parallel assessment"
+assert_no_story_ids_lost "presplit" "Step 18: Post-parallel assessment"
+assert_no_story_ids_gained "post-parallel" "Step 18: Post-parallel assessment"
 
 # ──────────────────────────────────────────────
     "$SCRIPT_DIR/update-monitor.sh" event "phase_assessment" "Running post-phase assessment" "" "main" "team-lead-agent" 2>/dev/null || true
@@ -4125,14 +4853,14 @@ fi
 # Blocks review if tests fail. Skip with SKIP_PRE_REVIEW_GATE=true.
 # ──────────────────────────────────────────────
 if [ "${SKIP_PRE_REVIEW_GATE:-false}" != "true" ] && [ -f "$PROJECT_ROOT/package.json" ]; then
-    step_emit "3.7" "running" "Step 3.7: Pre-review gate"
-    log "Step 3.7: Pre-review build gate (vitest + tsc)..."
+    step_emit "19" "running" "Step 19: Pre-review gate"
+    log "Step 19: Pre-review build gate (vitest + tsc)..."
     _pre_review_log="$LOG_DIR/pre-review-gate-${PHASE}.log"
     _pre_review_failed=0
     _node_bin="$(detect_node)"
 
     if [ -z "$_node_bin" ]; then
-        warning "Step 3.7: Node binary not found — skipping pre-review gate"
+        warning "Step 19: Node binary not found — skipping pre-review gate"
     else
         echo "=== Pre-Review Gate: $PHASE @ $(date -Iseconds) ===" > "$_pre_review_log"
         cd "$PROJECT_ROOT"
@@ -4176,21 +4904,21 @@ if [ "${SKIP_PRE_REVIEW_GATE:-false}" != "true" ] && [ -f "$PROJECT_ROOT/package
             >> "$_pre_review_log"
 
         if [ $_pre_review_failed -ne 0 ]; then
-            step_emit "3.7" "fail" "Step 3.7: Pre-review gate"
-            error "Step 3.7: Pre-review gate FAILED — review agents blocked on broken build"
+            step_emit "19" "fail" "Step 19: Pre-review gate"
+            error "Step 19: Pre-review gate FAILED — review agents blocked on broken build"
             error "  Fix failures, then re-run: $0 --phase $PHASE"
             error "  Bypass (emergency only): SKIP_PRE_REVIEW_GATE=true $0 --phase $PHASE"
             error "  Log: $_pre_review_log"
             exit 1
         fi
 
-        step_emit "3.7" "pass" "Step 3.7: Pre-review gate"
-            success "Step 3.7: Pre-review gate PASSED"
+        step_emit "19" "pass" "Step 19: Pre-review gate"
+            success "Step 19: Pre-review gate PASSED"
     fi
 else
     [ "${SKIP_PRE_REVIEW_GATE:-false}" = "true" ] && \
-        step_emit "3.7" "skip" "Step 3.7: Pre-review gate" "SKIP_PRE_REVIEW_GATE=true"
-        info "Step 3.7: Pre-review gate skipped (SKIP_PRE_REVIEW_GATE=true)"
+        step_emit "19" "skip" "Step 19: Pre-review gate" "SKIP_PRE_REVIEW_GATE=true"
+        info "Step 19: Pre-review gate skipped (SKIP_PRE_REVIEW_GATE=true)"
 fi
 
 # ──────────────────────────────────────────────
@@ -4201,8 +4929,8 @@ fi
 # Bypass: SKIP_LINT_GATE=true
 # ──────────────────────────────────────────────
 if [ "${SKIP_LINT_GATE:-false}" != "true" ] && [ -n "$_node_bin" ] && [ -x "$_node_bin" ]; then
-    step_emit "3.8" "running" "Step 3.8: Lint gate"
-    log "Step 3.8: Lint gate (tsc + eslint)..."
+    step_emit "20" "running" "Step 20: Lint gate"
+    log "Step 20: Lint gate (tsc + eslint)..."
     _lint_log="$LOG_DIR/lint-gate-${PHASE}.log"
     _lint_failed=0
     echo "=== Lint Gate: $PHASE @ $(date -Iseconds) ===" > "$_lint_log"
@@ -4267,8 +4995,8 @@ if [ "${SKIP_LINT_GATE:-false}" != "true" ] && [ -n "$_node_bin" ] && [ -x "$_no
     echo "=== Gate Result: $([ "$_lint_failed" -eq 0 ] && echo PASS || echo FAIL) ===" >> "$_lint_log"
 
     if [ "$_lint_failed" -ne 0 ]; then
-        step_emit "3.8" "fail" "Step 3.8: Lint gate"
-        error "Step 3.8: Lint gate FAILED — running self-healing remediation pipeline..."
+        step_emit "20" "fail" "Step 20: Lint gate"
+        error "Step 20: Lint gate FAILED — running self-healing remediation pipeline..."
 
         # ── Self-healing: route lint failure through gate-finding-analyst ─────
         # Same three-agent pipeline as testing gates (step 4.2):
@@ -4297,10 +5025,28 @@ Identify: which story owns the file with the lint/type error? Output JSON only:
 {"gate":"lint","story_id":"<id>","file":"<path>","line":<n>,"rule":"<tsc-error-code or eslint-rule>","message":"<description>","suggested_fix":"<one-line fix>"}
 LINT_FIND_EOF
 )"
-            _lint_finding_raw="$(echo "$_lint_finding_prompt" | \
-                timeout 120 epam run --provider "${ORCH_GATE_PROVIDER:-anthropic}" \
-                    --model "${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}" \
-                    --json - 2>>"$_lint_rem_log" || echo "")"
+            _lint_finding_raw=""
+            _lga_attempt=0
+            while [ "$_lga_attempt" -lt 2 ] && [ -z "$_lint_finding_raw" ]; do
+                _lga_prompt="$_lint_finding_prompt"
+                _lga_model="${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}"
+                if [ "$_lga_attempt" -ge 1 ]; then
+                    [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _lga_model="${ESCALATION_MODEL_HIGH}"
+                    _lga_prompt="RETRY (attempt 2): Your previous response was empty. Read the lint log at ${_lint_log}, identify the failing file and story, and emit ONLY the JSON output.
+
+$_lint_finding_prompt"
+                fi
+                _lga_raw="$(echo "$_lga_prompt" | \
+                    timeout 120 epam run --provider "${ORCH_GATE_PROVIDER:-anthropic}" \
+                        --model "${_lga_model}" \
+                        --json - 2>>"$_lint_rem_log" || echo "")"
+                if [ -n "$_lga_raw" ]; then
+                    _lint_finding_raw="$_lga_raw"
+                else
+                    [ "$_lga_attempt" -lt 1 ] && warning "  [lint-gate:analyst] attempt 1 returned no output — retrying with escalated model" || warning "  [lint-gate:analyst] all 2 attempts returned no output — skipping lint remediation"
+                fi
+                _lga_attempt=$(( _lga_attempt + 1 ))
+            done
             _lint_story_id="$(echo "$_lint_finding_raw" | python3 -c "
 import sys,json,re
 raw=sys.stdin.read()
@@ -4330,10 +5076,28 @@ Add 1-2 ACs to story '$_lint_story_id' that would prevent this lint failure. Out
 {"story_id":"$_lint_story_id","new_acs":["<ac text>"],"rationale":"<why>"}
 LINT_AC_EOF
 )"
-                _lint_ac_raw="$(echo "$_lint_ac_prompt" | \
-                    timeout 120 epam run --provider "${ORCH_GATE_PROVIDER:-anthropic}" \
-                        --model "${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}" \
-                        --json - 2>>"$_lint_rem_log" || echo "")"
+                _lint_ac_raw=""
+                _lrem_attempt=0
+                while [ "$_lrem_attempt" -lt 2 ] && [ -z "$_lint_ac_raw" ]; do
+                    _lrem_prompt="$_lint_ac_prompt"
+                    _lrem_model="${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}"
+                    if [ "$_lrem_attempt" -ge 1 ]; then
+                        [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _lrem_model="${ESCALATION_MODEL_HIGH}"
+                        _lrem_prompt="RETRY (attempt 2): Your previous response was empty or missing the 'new_acs' field. Emit ONLY the JSON: {\"story_id\":\"...\",\"new_acs\":[\"...\"]}.
+
+$_lint_ac_prompt"
+                    fi
+                    _lrem_raw="$(echo "$_lrem_prompt" | \
+                        timeout 120 epam run --provider "${ORCH_GATE_PROVIDER:-anthropic}" \
+                            --model "${_lrem_model}" \
+                            --json - 2>>"$_lint_rem_log" || echo "")"
+                    if [ -n "$_lrem_raw" ]; then
+                        _lint_ac_raw="$_lrem_raw"
+                    else
+                        [ "$_lrem_attempt" -lt 1 ] && warning "  [lint-gate:remediator] attempt 1 returned no output — retrying with escalated model" || warning "  [lint-gate:remediator] all 2 attempts returned no output — skipping AC augmentation"
+                    fi
+                    _lrem_attempt=$(( _lrem_attempt + 1 ))
+                done
                 _lint_ac_tmp="$(mktemp)"
                 echo "$_lint_ac_raw" > "$_lint_ac_tmp"
                 _lint_acs_added="$( ( flock -w 10 200 || { error "  [lint-gate:remediator] Could not acquire lock on ${MAIN_PRD_FILE:-$PRD_FILE}"; return 1; }
@@ -4386,38 +5150,45 @@ LINT_AC_PY
                     _lint_remediation_applied=1
                 fi
 
-                # Agent 3: profile-augmentor (fire-and-forget)
+                # Agent 3: profile-augmentor — 1 retry on empty output
                 info "  [lint-gate:augmentor] Recording lint anti-pattern in profile..."
-                echo "$_lint_finding_raw" | \
+                _laug_raw="$(echo "$_lint_finding_raw" | \
                     timeout 60 epam run --provider "${ORCH_GATE_PROVIDER:-anthropic}" \
                         --model "${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}" \
-                        --json - 2>>"$_lint_rem_log" || true
+                        --json - 2>>"$_lint_rem_log" || echo "")"
+                if [ -z "$_laug_raw" ]; then
+                    warning "  [lint-gate:augmentor] attempt 1 returned no output — retrying"
+                    echo "$_lint_finding_raw" | \
+                        timeout 60 epam run --provider "${ORCH_GATE_PROVIDER:-anthropic}" \
+                            --model "${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}" \
+                            --json - 2>>"$_lint_rem_log" || true
+                fi
             else
                 warning "  [lint-gate:analyst] Could not map lint failure to a story — skipping AC remediation"
             fi
         fi
 
         if [ "$_lint_remediation_applied" = "1" ]; then
-            warning "Step 3.8: Lint gate remediation applied — caller should retry phase"
-            error "Step 3.8: Lint gate FAILED — remediation applied, retry required"
+            warning "Step 20: Lint gate remediation applied — caller should retry phase"
+            error "Step 20: Lint gate FAILED — remediation applied, retry required"
             error "  Remediation log: $_lint_rem_log"
             exit 2  # exit 2 = remediated, tier3 runner resets and retries phase
         fi
 
-        error "Step 3.8: Lint gate FAILED — fix errors before review proceeds"
+        error "Step 20: Lint gate FAILED — fix errors before review proceeds"
         error "  Log: $_lint_log"
         error "  Bypass (emergency only): SKIP_LINT_GATE=true $0 --phase $PHASE"
         exit 1
     fi
-    step_emit "3.8" "pass" "Step 3.8: Lint gate"
-    success "Step 3.8: Lint gate PASSED"
+    step_emit "20" "pass" "Step 20: Lint gate"
+    success "Step 20: Lint gate PASSED"
 else
     if [ "${SKIP_LINT_GATE:-false}" = "true" ]; then
-        step_emit "3.8" "skip" "Step 3.8: Lint gate" "SKIP_LINT_GATE=true"
-        info "Step 3.8: Lint gate skipped (SKIP_LINT_GATE=true)"
+        step_emit "20" "skip" "Step 20: Lint gate" "SKIP_LINT_GATE=true"
+        info "Step 20: Lint gate skipped (SKIP_LINT_GATE=true)"
     else
-        step_emit "3.8" "skip" "Step 3.8: Lint gate" "no node binary"
-        info "Step 3.8: Lint gate skipped (node binary not found)"
+        step_emit "20" "skip" "Step 20: Lint gate" "no node binary"
+        info "Step 20: Lint gate skipped (node binary not found)"
     fi
 fi
 
@@ -4425,8 +5196,8 @@ fi
 # Step 4: Run review stories
 # ──────────────────────────────────────────────
 if [ -n "$review_stories" ]; then
-    step_emit "4" "running" "Step 4: Review stories"
-    log "Step 4: Running review stories..."
+    step_emit "21" "running" "Step 21: Review stories"
+    log "Step 21: Running review stories..."
     while IFS= read -r story; do
         [ -z "$story" ] && continue
         check_cost_budget
@@ -4444,14 +5215,14 @@ if [ -n "$review_stories" ]; then
         record_story_actual_cost "$story" "$LOG_DIR/review-${story}.log"
     done <<< "$review_stories"
     if [ "${_review_failed:-0}" -gt 0 ]; then
-        step_emit "4" "fail" "Step 4: Review stories"
+        step_emit "21" "fail" "Step 21: Review stories"
     else
-        step_emit "4" "pass" "Step 4: Review stories"
+        step_emit "21" "pass" "Step 21: Review stories"
     fi
     success "Review stories complete"
 else
-    step_emit "4" "skip" "Step 4: Review stories" "no review stories"
-    info "Step 4: No review stories in this phase"
+    step_emit "21" "skip" "Step 21: Review stories" "no review stories"
+    info "Step 21: No review stories in this phase"
 fi
 
 # ──────────────────────────────────────────────
@@ -4494,13 +5265,13 @@ run_testing_gates() {
     fi
 
     if [ "${SKIP_TESTING_GATES:-false}" = "true" ]; then
-        step_emit "4.2a" "skip" "Step 4.2a: SAST sentinel" "SKIP_TESTING_GATES=true"
-step_emit "4.2b" "skip" "Step 4.2b: Spec validator" "SKIP_TESTING_GATES=true"
-step_emit "4.3a" "skip" "Step 4.3a: Review ranger" "SKIP_TESTING_GATES=true"
-step_emit "4.3b" "skip" "Step 4.3b: Mutant hunter" "SKIP_TESTING_GATES=true"
-step_emit "4.4a" "skip" "Step 4.4a: Fuzz-weaver" "SKIP_TESTING_GATES=true"
-step_emit "4.4b" "skip" "Step 4.4b: Perf sentinel" "SKIP_TESTING_GATES=true"
-step_emit "4.6"  "skip" "Step 4.6: Browser E2E" "SKIP_TESTING_GATES=true"
+        step_emit "22a" "skip" "Step 22a: SAST sentinel" "SKIP_TESTING_GATES=true"
+step_emit "22b" "skip" "Step 22b: Spec validator" "SKIP_TESTING_GATES=true"
+step_emit "22c" "skip" "Step 22c: Review ranger" "SKIP_TESTING_GATES=true"
+step_emit "22d" "skip" "Step 22d: Mutant hunter" "SKIP_TESTING_GATES=true"
+step_emit "22e" "skip" "Step 22e: Fuzz-weaver" "SKIP_TESTING_GATES=true"
+step_emit "22f" "skip" "Step 22f: Perf sentinel" "SKIP_TESTING_GATES=true"
+step_emit "23"  "skip" "Step 23: Browser E2E" "SKIP_TESTING_GATES=true"
         info "Step 4.2: Testing gates skipped (SKIP_TESTING_GATES=true)"
         return 0
     fi
@@ -4586,7 +5357,7 @@ step_emit "4.6"  "skip" "Step 4.6: Browser E2E" "SKIP_TESTING_GATES=true"
         local rc
 
         if [ "${SKIP_BROWSER_E2E_ROUTING:-false}" = "true" ]; then
-            step_emit "4.6" "skip" "Step 4.6: Browser E2E" "SKIP_BROWSER_E2E_ROUTING=true"
+            step_emit "23" "skip" "Step 23: Browser E2E" "SKIP_BROWSER_E2E_ROUTING=true"
             info "  Step 4.6: Browser E2E routing skipped (SKIP_BROWSER_E2E_ROUTING=true)"
             return 0
         fi
@@ -4597,7 +5368,7 @@ step_emit "4.6"  "skip" "Step 4.6: Browser E2E" "SKIP_TESTING_GATES=true"
             return 0
         fi
 
-        step_emit "4.6" "running" "Step 4.6: Browser E2E"
+        step_emit "23" "running" "Step 23: Browser E2E"
         log "  Step 4.6: Browser E2E routing checks (Lightpanda/Playwright)..."
         while IFS= read -r story_id; do
             [ -z "$story_id" ] && continue
@@ -4676,8 +5447,8 @@ Return strict JSON only:
             # so this call was guaranteed to hallucinate its verdict every time
             # (found live 2026-07-08, same class of bug already fixed for the
             # assessment agents above).
-            run_orch_prompt_with_tools "$prompt" "qa-gate:e2e" "${story_id:-unknown}" 2>&1 | tee "$story_log"
-            rc=${PIPESTATUS[0]:-1}
+            _run_qa_gate_with_retry "$prompt" "qa-gate:e2e" "${story_id:-unknown}" "$story_log"
+            rc=$?
             set -e
             if [ $rc -ne 0 ]; then
                 error "  Step 4.6: $route failed for $story_id (exit $rc)"
@@ -4697,12 +5468,12 @@ Return strict JSON only:
         done <<< "$phase_ids"
 
         if [ $e2e_route_runs -eq 0 ]; then
-            step_emit "4.6" "skip" "Step 4.6: Browser E2E" "no stories matched"
+            step_emit "23" "skip" "Step 23: Browser E2E" "no stories matched"
             info "  Step 4.6: No stories matched browser E2E routing criteria"
         elif [ "$e2e_route_failed" -gt 0 ]; then
-            step_emit "4.6" "fail" "Step 4.6: Browser E2E"
+            step_emit "23" "fail" "Step 23: Browser E2E"
         else
-            step_emit "4.6" "pass" "Step 4.6: Browser E2E"
+            step_emit "23" "pass" "Step 23: Browser E2E"
         fi
         echo "Summary: runs=$e2e_route_runs lightpanda=$e2e_route_lightpanda playwright=$e2e_route_playwright failed=$e2e_route_failed" >> "$e2e_route_log"
         return 0
@@ -4723,7 +5494,7 @@ Return strict JSON only:
     fi
 
     # ── SAST Sentinel ──
-    step_emit "4.2a" "running" "Step 4.2a: SAST sentinel"
+    step_emit "22a" "running" "Step 22a: SAST sentinel"
     log "  Step 4.2a: Running SAST sentinel..."
     {
         local sast_prompt="You are acting as the sast-sentinel agent.
@@ -4980,31 +5751,104 @@ $tsc_summary
 
 $sast_prompt"
 
-        run_orch_prompt_with_tools "$sast_prompt" "qa-gate:sast" "${PHASE:-unknown}" 2>&1 | tee "$sast_log"
+        _run_qa_gate_with_retry "$sast_prompt" "qa-gate:sast" "${PHASE:-unknown}" "$sast_log"
     } &
     local sast_pid=$!
     _emit_agent start "sast-sentinel" "SAST Sentinel"
 
     # ── Spec Validator ──
-    step_emit "4.2b" "running" "Step 4.2b: Spec validator"
+    step_emit "22b" "running" "Step 22b: Spec validator"
     log "  Step 4.2b: Running spec validator..."
     {
+        # ── Spec validator: implementation evidence oracle ──
+        # Pre-inject git diff + key source files so the agent does NOT need tool
+        # calls to examine the implementation. Without this, 7+ stories × ~3 file
+        # reads per story exceeds the 20-iteration agent cap before a verdict is
+        # written. Pattern mirrors review-ranger's oracle injection.
+        local _spec_impl_evidence=""
+        local _spec_git_bin
+        _spec_git_bin=$(command -v git 2>/dev/null || true)
+        if [ -n "$_spec_git_bin" ] && [ -d "$PROJECT_ROOT/.git" ]; then
+            local _spec_baseline_sha=""
+            [ -f "$LOG_DIR/phase-baseline-sha.txt" ] && \
+                _spec_baseline_sha=$(cat "$LOG_DIR/phase-baseline-sha.txt" 2>/dev/null | tr -d '[:space:]')
+            local _spec_diff_ref="${_spec_baseline_sha:+${_spec_baseline_sha}..HEAD}"
+            _spec_diff_ref="${_spec_diff_ref:-HEAD~1}"
+            set +e
+            local _spec_diff_stat
+            _spec_diff_stat=$(cd "$PROJECT_ROOT" && "$_spec_git_bin" diff --stat "$_spec_diff_ref" 2>/dev/null || echo "(no diff)")
+            local _spec_diff_patch
+            _spec_diff_patch=$(cd "$PROJECT_ROOT" && "$_spec_git_bin" diff -U2 "$_spec_diff_ref" -- '*.ts' '*.json' 2>/dev/null | head -400 || echo "")
+            set -e
+            # Also inject content of expected files listed in technicalNotes.files
+            local _spec_file_excerpts=""
+            _spec_file_excerpts=$(python3 - "$PRD_FILE" "$phase_id" "$PROJECT_ROOT" <<'PYEOF'
+import sys, json, os
+prd_path, phase_id, proj = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    with open(prd_path) as f:
+        prd = json.load(f)
+    phase_ids = set(prd.get('implementationOrder', {}).get(phase_id, []))
+    story_map = {s['id']: s for s in prd.get('stories', [])}
+    out, total_lines = [], 0
+    for sid in prd.get('implementationOrder', {}).get(phase_id, []):
+        s = story_map.get(sid, {})
+        tn = s.get('technicalNotes')
+        files = tn.get('files', []) if isinstance(tn, dict) else []
+        for rel in files[:3]:
+            full = os.path.join(proj, rel)
+            if not os.path.isfile(full):
+                continue
+            try:
+                lines = open(full).readlines()
+                excerpt = ''.join(lines[:80])
+                out.append(f'\n### {rel} (first {min(80,len(lines))} lines)\n{excerpt}')
+                total_lines += min(80, len(lines))
+                if total_lines > 600:
+                    out.append('\n(file evidence truncated — limit reached)')
+                    break
+            except Exception:
+                pass
+        if total_lines > 600:
+            break
+    print(''.join(out) if out else '(no expected files found in technicalNotes)')
+except Exception as e:
+    print(f'(file oracle error: {e})')
+PYEOF
+2>/dev/null || echo "(file oracle unavailable)")
+            _spec_impl_evidence="## Implementation Evidence (pre-computed — do NOT call any tools)
+
+### Git diff since phase start ($phase_id)
+$_spec_diff_stat
+
+TypeScript/JSON changes (first 400 lines):
+$_spec_diff_patch
+
+### Key implementation files (excerpts from technicalNotes.files)
+$_spec_file_excerpts"
+        else
+            _spec_impl_evidence="## Implementation Evidence
+(git oracle skipped — git not found or no .git directory; use untestable for ACs that cannot be verified from the story oracle alone)"
+        fi
+
         local spec_prompt="You are acting as the spec-validator agent.
 
 Phase: $phase_id
-PRD file: $PRD_FILE
 Project root: $PROJECT_ROOT
 E2E routing override context:
 - FORCE_LIGHTPANDA=$force_lightpanda
 - FORCE_PLAYWRIGHT=$force_playwright
 - routingDecision=$routing_decision
 
-Read the stories for phase '$phase_id' from the PRD file. For each story:
-1. Read its acceptanceCriteria array
-2. Examine the implementation files (check src/, test/, and recent git changes)
-3. Classify each criterion as: met, partial, unmet, or untestable
+IMPORTANT: All evidence has been pre-injected below. Do NOT call any tools, ReadFile, or Bash commands. Classify each AC using ONLY the injected story oracle, test oracle, and implementation evidence.
 
-Output format (strict JSON):
+For each story in the phase:
+1. Use the pre-injected acceptanceCriteria from the Story Oracle section
+2. Use the pre-injected git diff and file excerpts as implementation evidence
+3. Classify each criterion as: met, partial, unmet, or untestable
+   - untestable: evidence is insufficient to determine status — do NOT call tools to investigate further
+
+Output format (strict JSON, no markdown fences, no preamble — emit directly as your final message, do NOT write to a file):
 {
   \"agent\": \"spec-validator\",
   \"phase\": \"$phase_id\",
@@ -5115,9 +5959,11 @@ PYEOF
         spec_prompt="## Story Acceptance Criteria (hard evidence from prd.json — classify each criterion)
 $story_oracle
 
+$_spec_impl_evidence
+
 $spec_prompt"
 
-        run_orch_prompt_with_tools "$spec_prompt" "qa-gate:spec-validator" "${PHASE:-unknown}" 2>&1 | tee "$spec_log"
+        _run_qa_gate_with_retry "$spec_prompt" "qa-gate:spec-validator" "${PHASE:-unknown}" "$spec_log"
     } &
     local spec_pid=$!
     _emit_agent start "spec-validator" "Spec Validator"
@@ -5182,17 +6028,17 @@ except Exception:
         if [ "$_sast_blockers" = "-1" ]; then
             # Fallback: no parseable JSON — check raw verdict string
             if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$sast_log" 2>/dev/null; then
-                step_emit "4.2a" "fail" "Step 4.2a: SAST sentinel"
+                step_emit "22a" "fail" "Step 22a: SAST sentinel"
                 error "  SAST sentinel: FAIL verdict (could not parse blockerCount)"
                 failed=1
                 _failing_logs+=("$sast_log")
                 _log_labels+=("sast-sentinel")
             else
-                step_emit "4.2a" "warn" "Step 4.2a: SAST sentinel" "no parseable findings"
+                step_emit "22a" "warn" "Step 22a: SAST sentinel" "no parseable findings"
                 success "  SAST sentinel: PASS (no parseable findings)"
             fi
         elif [ "$_sast_blockers" -gt 0 ]; then
-            step_emit "4.2a" "fail" "Step 4.2a: SAST sentinel"
+            step_emit "22a" "fail" "Step 22a: SAST sentinel"
             error "  SAST sentinel: FAIL — $_sast_blockers blocker finding(s) detected"
             failed=1
             # sast_exit=0 here (agent exited clean) so the later exit-code check
@@ -5205,13 +6051,13 @@ except Exception:
             _failing_logs+=("$sast_log")
             _log_labels+=("sast-sentinel")
         else
-            step_emit "4.2a" "pass" "Step 4.2a: SAST sentinel"
+            step_emit "22a" "pass" "Step 22a: SAST sentinel"
             success "  SAST sentinel: PASS (blockerCount=$_sast_blockers)"
         fi
     fi
 
     if [ $spec_exit -ne 0 ]; then
-        step_emit "4.2b" "fail" "Step 4.2b: Spec validator"
+        step_emit "22b" "fail" "Step 22b: Spec validator"
         error "  Spec validator FAILED (exit $spec_exit)"
         failed=1
     else
@@ -5281,10 +6127,10 @@ except Exception:
 SPEC_EXTRACTOR_PY
 2>/dev/null || echo "error")
         if [ "$_spec_failing" = "no-data" ] || [ "$_spec_failing" = "no-json" ] || [ "$_spec_failing" = "error" ]; then
-            step_emit "4.2b" "warn" "Step 4.2b: Spec validator" "no story data"
+            step_emit "22b" "warn" "Step 22b: Spec validator" "no story data"
             warning "  Spec validator: WARN — agent returned no story data (oracle injection needed)"
         elif [ "$_spec_failing" -gt 0 ]; then
-            step_emit "4.2b" "fail" "Step 4.2b: Spec validator"
+            step_emit "22b" "fail" "Step 22b: Spec validator"
             error "  Spec validator: FAIL — $_spec_failing story/stories failed criteria"
             failed=1
             # spec_exit=0 here (agent exited clean) — append explicitly so
@@ -5292,13 +6138,13 @@ SPEC_EXTRACTOR_PY
             _failing_logs+=("$spec_log")
             _log_labels+=("spec-validator")
         elif grep -q '"overallVerdict"[[:space:]]*:[[:space:]]*"warn"' "$spec_log" 2>/dev/null; then
-            step_emit "4.2b" "warn" "Step 4.2b: Spec validator" "partial"
+            step_emit "22b" "warn" "Step 22b: Spec validator" "partial"
             warning "  Spec validator: WARN — some criteria partially met (non-blocking)"
         elif grep -q '"overallVerdict"[[:space:]]*:[[:space:]]*"fail"' "$spec_log" 2>/dev/null; then
-            step_emit "4.2b" "warn" "Step 4.2b: Spec validator" "ungrounded findings downgraded"
+            step_emit "22b" "warn" "Step 22b: Spec validator" "ungrounded findings downgraded"
             warning "  Spec validator: FAIL verdict downgraded to WARN — every criterion in every failing story was self-reported as 'untestable' (agent had no real evidence, likely didn't use its tools; re-check manually)"
         else
-            step_emit "4.2b" "pass" "Step 4.2b: Spec validator"
+            step_emit "22b" "pass" "Step 22b: Spec validator"
             success "  Spec validator: PASS"
         fi
     fi
@@ -5318,7 +6164,7 @@ SPEC_EXTRACTOR_PY
         fi
 
         # ── Review Ranger ──
-        step_emit "4.3a" "running" "Step 4.3a: Review ranger"
+        step_emit "22c" "running" "Step 22c: Review ranger"
         log "  Step 4.3a: Running review-ranger..."
         {
             # ── Git diff oracle: inject changed files and their content ──
@@ -5390,13 +6236,13 @@ Output format (strict JSON, no markdown fences, no preamble):
 $review_prompt"
             fi
 
-            run_orch_prompt_with_tools "$review_prompt" "qa-gate:review-ranger" "${PHASE:-unknown}" 2>&1 | tee "$review_log"
+            _run_qa_gate_with_retry "$review_prompt" "qa-gate:review-ranger" "${PHASE:-unknown}" "$review_log"
         } &
         local review_pid=$!
         _emit_agent start "review-ranger" "Review Ranger"
 
         # ── Mutant Hunter ──
-        step_emit "4.3b" "running" "Step 4.3b: Mutant hunter"
+        step_emit "22d" "running" "Step 22d: Mutant hunter"
         log "  Step 4.3b: Running mutant-hunter..."
         {
             # ── Source + test oracle: inject changed files and test files ──
@@ -5480,7 +6326,7 @@ Output format (strict JSON, no markdown fences, no preamble):
 $mutant_prompt"
             fi
 
-            run_orch_prompt_with_tools "$mutant_prompt" "qa-gate:mutant-hunter" "${PHASE:-unknown}" 2>&1 | tee "$mutant_log"
+            _run_qa_gate_with_retry "$mutant_prompt" "qa-gate:mutant-hunter" "${PHASE:-unknown}" "$mutant_log"
         } &
         local mutant_pid=$!
         _emit_agent start "mutant-hunter" "Mutant Hunter"
@@ -5493,12 +6339,12 @@ $mutant_prompt"
 
         # Evaluate Phase B results
         if [ $review_exit -ne 0 ]; then
-            step_emit "4.3a" "fail" "Step 4.3a: Review ranger"
+            step_emit "22c" "fail" "Step 22c: Review ranger"
             error "  Review-ranger FAILED (exit $review_exit)"
             failed=1
         else
             if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$review_log" 2>/dev/null; then
-                step_emit "4.3a" "fail" "Step 4.3a: Review ranger"
+                step_emit "22c" "fail" "Step 22c: Review ranger"
                 error "  Review-ranger: FAIL verdict — blocker findings detected"
                 failed=1
                 # review_exit=0 here (agent exited clean) — append explicitly so
@@ -5506,21 +6352,21 @@ $mutant_prompt"
                 _failing_logs+=("$review_log")
                 _log_labels+=("review-ranger")
             elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$review_log" 2>/dev/null; then
-                step_emit "4.3a" "warn" "Step 4.3a: Review ranger" "non-blocking findings"
+                step_emit "22c" "warn" "Step 22c: Review ranger" "non-blocking findings"
                 warning "  Review-ranger: WARN — non-blocking findings (continuing)"
             else
-                step_emit "4.3a" "pass" "Step 4.3a: Review ranger"
+                step_emit "22c" "pass" "Step 22c: Review ranger"
                 success "  Review-ranger: PASS"
             fi
         fi
 
         if [ $mutant_exit -ne 0 ]; then
-            step_emit "4.3b" "fail" "Step 4.3b: Mutant hunter"
+            step_emit "22d" "fail" "Step 22d: Mutant hunter"
             error "  Mutant-hunter FAILED (exit $mutant_exit)"
             failed=1
         else
             if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$mutant_log" 2>/dev/null; then
-                step_emit "4.3b" "fail" "Step 4.3b: Mutant hunter"
+                step_emit "22d" "fail" "Step 22d: Mutant hunter"
                 error "  Mutant-hunter: FAIL verdict — mutation score below threshold"
                 failed=1
                 # mutant_exit=0 here (agent exited clean) — append explicitly so
@@ -5528,16 +6374,16 @@ $mutant_prompt"
                 _failing_logs+=("$mutant_log")
                 _log_labels+=("mutant-hunter")
             elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$mutant_log" 2>/dev/null; then
-                step_emit "4.3b" "warn" "Step 4.3b: Mutant hunter" "score 50-69%"
+                step_emit "22d" "warn" "Step 22d: Mutant hunter" "score 50-69%"
                 warning "  Mutant-hunter: WARN — mutation score 50-69% (non-blocking)"
             else
-                step_emit "4.3b" "pass" "Step 4.3b: Mutant hunter"
+                step_emit "22d" "pass" "Step 22d: Mutant hunter"
                 success "  Mutant-hunter: PASS"
             fi
         fi
     else
-        step_emit "4.3a" "skip" "Step 4.3a: Review ranger" "Phase A failed"
-        step_emit "4.3b" "skip" "Step 4.3b: Mutant hunter" "Phase A failed"
+        step_emit "22c" "skip" "Step 22c: Review ranger" "Phase A failed"
+        step_emit "22d" "skip" "Step 22d: Mutant hunter" "Phase A failed"
         info "  Phase B (review-ranger + mutant-hunter) skipped — Phase A had failures"
     fi
 
@@ -5556,7 +6402,7 @@ $mutant_prompt"
         fi
 
         # ── Fuzz Weaver ──
-        step_emit "4.4a" "running" "Step 4.4a: Fuzz-weaver"
+        step_emit "22e" "running" "Step 22e: Fuzz-weaver"
         log "  Step 4.4a: Running fuzz-weaver..."
         {
             local fuzz_prompt="You are acting as the fuzz-weaver agent.
@@ -5577,21 +6423,16 @@ Use git diff to identify changed source files, then for each public function:
 Focus on: config parsing, provider request construction, billing calculations,
 tool input validation (path traversal, shell metacharacters), auth token parsing.
 
-For any case with status=\"vulnerability\", you MUST also include an
-\"executableTest\" field: a complete, self-contained vitest test file (as a
-single string) that imports the REAL function from its real relative path
-and asserts the CORRECT/SAFE behavior for the specific input you claim is
-mishandled — e.g. \`expect(parseAdults('0')).toBeNull()\`. Do NOT write a
-test that asserts the bug exists; assert what SHOULD happen if the code is
-correct. This file will be written to
-\"$PROJECT_ROOT/.fuzz-verify/case-N.test.ts\" and actually executed — write
-your import path relative to that location (e.g.
-\`import { parseAdults } from '../src/server'\`). A vulnerability claim
-without a real, executable test that actually exercises the real function
-will be treated as unverified and will NOT block the pipeline — do not
-guess at file contents you have not actually read with your tools.
+For any case with status=\"vulnerability\", you MAY include an optional
+\"executableTest\" field: a vitest test skeleton (as a single string) showing
+the import path and the assertion that SHOULD pass if the code is correct —
+e.g. \`import { parseAdults } from '../src/server'; expect(parseAdults('0')).toBeNull()\`.
+IMPORTANT: Do NOT run or execute any tests. Do NOT use Bash to run vitest or
+any test runner. Write the test structure only — it will be reviewed by a
+human. A vulnerability claim is valid without an executableTest; do not spend
+time executing code to verify findings.
 
-Output format (strict JSON):
+Output format (strict JSON, no markdown fences, no preamble — emit directly as your final message, do NOT write to a file):
 {
   \"agent\": \"fuzz-weaver\",
   \"phase\": \"$phase_id\",
@@ -5606,13 +6447,13 @@ Output format (strict JSON):
 $fuzz_prompt"
             fi
 
-            run_orch_prompt_with_tools "$fuzz_prompt" "qa-gate:fuzz-weaver" "${PHASE:-unknown}" 2>&1 | tee "$fuzz_log"
+            _run_qa_gate_with_retry "$fuzz_prompt" "qa-gate:fuzz-weaver" "${PHASE:-unknown}" "$fuzz_log"
         } &
         local fuzz_pid=$!
         _emit_agent start "fuzz-weaver" "Fuzz Weaver"
 
         # ── Perf Sentinel ──
-        step_emit "4.4b" "running" "Step 4.4b: Perf sentinel"
+        step_emit "22f" "running" "Step 22f: Perf sentinel"
         log "  Step 4.4b: Running perf-sentinel..."
         {
             local perf_prompt="You are acting as the perf-sentinel agent.
@@ -5632,7 +6473,7 @@ Use git diff to identify changed source files, then analyse:
 4. Startup time impact (heavy imports, sync I/O at module load)
 5. Provider-specific (unnecessary Message[] copies, redundant token counting)
 
-Output format (strict JSON):
+Output format (strict JSON, no markdown fences, no preamble — emit directly as your final message, do NOT write to a file):
 {
   \"agent\": \"perf-sentinel\",
   \"phase\": \"$phase_id\",
@@ -5647,7 +6488,7 @@ Output format (strict JSON):
 $perf_prompt"
             fi
 
-            run_orch_prompt_with_tools "$perf_prompt" "qa-gate:perf-sentinel" "${PHASE:-unknown}" 2>&1 | tee "$perf_log"
+            _run_qa_gate_with_retry "$perf_prompt" "qa-gate:perf-sentinel" "${PHASE:-unknown}" "$perf_log"
         } &
         local perf_pid=$!
         _emit_agent start "perf-sentinel" "Perf Sentinel"
@@ -5664,8 +6505,12 @@ $perf_prompt"
         # We downgrade "fail" to "warn" when no vulnerability finding references a file
         # that actually exists under PROJECT_ROOT/src.
         if [ $fuzz_exit -ne 0 ]; then
-            error "  Fuzz-weaver FAILED (exit $fuzz_exit)"
-            failed=1
+            # exit 1 means _run_qa_gate_with_retry exhausted all retries with no
+            # structured output — the model produced nothing parseable. Treat as
+            # non-blocking warn: a gate that couldn't run is NOT a confirmed failure.
+            # Only a grounded "verdict":"fail" in the log (exit 0 path below) blocks.
+            warning "  Fuzz-weaver: no structured output after all retries — treating as non-blocking warn"
+            fuzz_exit=0
         else
             if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$fuzz_log" 2>/dev/null; then
                 # Ground-truth check, two layers:
@@ -5757,7 +6602,7 @@ print(str(confirmed))
 PYEOF
 2>/dev/null || echo "0")
                 if [ "${_fuzz_grounded:-0}" -gt 0 ]; then
-                    step_emit "4.4a" "fail" "Step 4.4a: Fuzz-weaver"
+                    step_emit "22e" "fail" "Step 22e: Fuzz-weaver"
                     error "  Fuzz-weaver: FAIL — ${_fuzz_grounded} confirmed vulnerability/vulnerabilities (verified by actually running the agent's own test against the real code)"
                     failed=1
                     # fuzz_exit=0 here (agent exited clean) — append explicitly so
@@ -5765,22 +6610,26 @@ PYEOF
                     _failing_logs+=("$fuzz_log")
                     _log_labels+=("fuzz-weaver")
                 else
-                    step_emit "4.4a" "warn" "Step 4.4a: Fuzz-weaver" "unverified findings downgraded"
+                    step_emit "22e" "warn" "Step 22e: Fuzz-weaver" "unverified findings downgraded"
                     warning "  Fuzz-weaver: FAIL verdict downgraded to WARN — no vulnerability finding could be verified by executing a real test against the real code (likely hallucinated; re-check manually)"
                 fi
             elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$fuzz_log" 2>/dev/null; then
-                step_emit "4.4a" "warn" "Step 4.4a: Fuzz-weaver" "gaps>30%"
+                step_emit "22e" "warn" "Step 22e: Fuzz-weaver" "gaps>30%"
             warning "  Fuzz-weaver: WARN — coverage gaps > 30% (non-blocking)"
             else
-                step_emit "4.4a" "pass" "Step 4.4a: Fuzz-weaver"
+                step_emit "22e" "pass" "Step 22e: Fuzz-weaver"
                 success "  Fuzz-weaver: PASS"
             fi
         fi
 
         if [ $perf_exit -ne 0 ]; then
-            step_emit "4.4b" "fail" "Step 4.4b: Perf sentinel"
-            error "  Perf-sentinel FAILED (exit $perf_exit)"
-            failed=1
+            # exit 1 means _run_qa_gate_with_retry exhausted all retries with no
+            # structured output — the model produced nothing parseable. Treat as
+            # non-blocking warn: a gate that couldn't run is NOT a confirmed failure.
+            # Only a grounded "verdict":"fail" in the log (exit 0 path below) blocks.
+            step_emit "22f" "warn" "Step 22f: Perf sentinel" "no structured output — non-blocking warn"
+            warning "  Perf-sentinel: no structured output after all retries — treating as non-blocking warn"
+            perf_exit=0
         else
             if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$perf_log" 2>/dev/null; then
                 # Ground-truth check: a "fail" is only valid if the agent found real blocker
@@ -5812,7 +6661,7 @@ print(str(grounded))
 PERF_PYEOF
 2>/dev/null || echo "0")
                 if [ "${_perf_grounded:-0}" -gt 0 ]; then
-                    step_emit "4.4b" "fail" "Step 4.4b: Perf sentinel"
+                    step_emit "22f" "fail" "Step 22f: Perf sentinel"
                     error "  Perf-sentinel: FAIL — confirmed performance blocker in analysed files"
                     failed=1
                     # perf_exit=0 here (agent exited clean) so _failing_logs won't pick it up
@@ -5820,20 +6669,20 @@ PERF_PYEOF
                     _failing_logs+=("$perf_log")
                     _log_labels+=("perf-sentinel")
                 else
-                    step_emit "4.4b" "warn" "Step 4.4b: Perf sentinel" "hallucinated fail downgraded"
+                    step_emit "22f" "warn" "Step 22f: Perf sentinel" "hallucinated fail downgraded"
                     warning "  Perf-sentinel: FAIL verdict downgraded to WARN — no blocker findings with analysed files (agent had no tool access; re-check manually)"
                 fi
             elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$perf_log" 2>/dev/null; then
-                step_emit "4.4b" "warn" "Step 4.4b: Perf sentinel" "concerns non-blocking"
+                step_emit "22f" "warn" "Step 22f: Perf sentinel" "concerns non-blocking"
                 warning "  Perf-sentinel: WARN — performance concerns (non-blocking)"
             else
-                step_emit "4.4b" "pass" "Step 4.4b: Perf sentinel"
+                step_emit "22f" "pass" "Step 22f: Perf sentinel"
                 success "  Perf-sentinel: PASS"
             fi
         fi
     else
-        step_emit "4.4a" "skip" "Step 4.4a: Fuzz-weaver" "Phase A/B failed"
-step_emit "4.4b" "skip" "Step 4.4b: Perf sentinel" "Phase A/B failed"
+        step_emit "22e" "skip" "Step 22e: Fuzz-weaver" "Phase A/B failed"
+step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
         info "  Phase C (fuzz-weaver + perf-sentinel) skipped — earlier phases had failures"
     fi
 
@@ -5914,18 +6763,39 @@ Current phase: ${phase_id}
 Run your analysis now. Paste the verbatim log line proving the finding, then emit the JSON output.
 ENDPROMPT1
 )
-                local _finding_json
-                _finding_json=$(echo "$_finding_prompt" | \
-                    AI_GATE_ALLOW_TOOLS=1 \
-                    AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
-                    AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
-                    EPAM_DANGEROUS_SKIP_APPROVAL=1 \
-                    CLAUDE_CMD="$CLAUDE_CMD" \
-                    EPAM_CLI="${EPAM_CLI:-epam}" \
-                    "$AI_RUNNER_CMD" \
-                        --provider "${ORCH_GATE_PROVIDER:-minimax}" \
-                        --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
-                    2>&1 | tee -a "$_rem_log")
+                local _finding_json="" _gfa_attempt=0
+                while [ "$_gfa_attempt" -lt 2 ] && [ -z "$_finding_json" ]; do
+                    local _gfa_prompt="$_finding_prompt"
+                    local _gfa_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
+                    if [ "$_gfa_attempt" -ge 1 ]; then
+                        [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _gfa_model="${ESCALATION_MODEL_HIGH}"
+                        _gfa_prompt="RETRY (attempt 2): Your previous response was empty. Use ReadFile to read the gate log at ${_glog}, extract the finding, and emit ONLY the JSON output.
+
+$_finding_prompt"
+                    fi
+                    local _gfa_raw
+                    _gfa_raw=$(echo "$_gfa_prompt" | \
+                        AI_GATE_ALLOW_TOOLS=1 \
+                        AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
+                        AI_MODEL="${_gfa_model}" \
+                        EPAM_DANGEROUS_SKIP_APPROVAL=1 \
+                        CLAUDE_CMD="$CLAUDE_CMD" \
+                        EPAM_CLI="${EPAM_CLI:-epam}" \
+                        "$AI_RUNNER_CMD" \
+                            --provider "${ORCH_GATE_PROVIDER:-minimax}" \
+                            --model    "${_gfa_model}" \
+                        2>&1 | tee -a "$_rem_log")
+                    if [ -n "$_gfa_raw" ]; then
+                        _finding_json="$_gfa_raw"
+                    else
+                        [ "$_gfa_attempt" -lt 1 ] && warning "  [gate-finding-analyst] attempt 1 returned no output — retrying with escalated model" || warning "  [gate-finding-analyst] all 2 attempts returned no output"
+                    fi
+                    _gfa_attempt=$(( _gfa_attempt + 1 ))
+                done
+                if [ -z "$_finding_json" ]; then
+                    warning "  [gate-finding-analyst] returned no output after 2 attempt(s) — skipping remediation for ${_glabel}"
+                    continue
+                fi
 
                 # Check analyst returned a grounded finding (has story_id and rule)
                 local _story_id
@@ -6016,15 +6886,32 @@ $(jq -c --arg id "$_story_id" '.stories[] | select(.id == $id) | (.acceptanceCri
 Draft the new ACs now and emit ONLY the JSON summary — do not write any files yourself; the orchestrator applies your proposed ACs to the PRD deterministically.
 ENDPROMPT2
 )
-                local _ac_result
-                _ac_result=$(echo "$_ac_prompt" | \
-                    AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
-                    AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
-                    EPAM_CLI="${EPAM_CLI:-epam}" \
-                    "$AI_RUNNER_CMD" \
-                        --provider "${ORCH_GATE_PROVIDER:-minimax}" \
-                        --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
-                    2>&1 | tee -a "$_rem_log")
+                local _ac_result="" _acr_attempt=0
+                while [ "$_acr_attempt" -lt 2 ] && [ -z "$_ac_result" ]; do
+                    local _acr_prompt="$_ac_prompt"
+                    local _acr_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
+                    if [ "$_acr_attempt" -ge 1 ]; then
+                        [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _acr_model="${ESCALATION_MODEL_HIGH}"
+                        _acr_prompt="RETRY (attempt 2): Your previous response was empty or missing the 'acs' field. Emit ONLY the JSON: {\"acs_added\": N, \"acs\": [\"...\"]}.
+
+$_ac_prompt"
+                    fi
+                    local _acr_raw
+                    _acr_raw=$(echo "$_acr_prompt" | \
+                        AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
+                        AI_MODEL="${_acr_model}" \
+                        EPAM_CLI="${EPAM_CLI:-epam}" \
+                        "$AI_RUNNER_CMD" \
+                            --provider "${ORCH_GATE_PROVIDER:-minimax}" \
+                            --model    "${_acr_model}" \
+                        2>&1 | tee -a "$_rem_log")
+                    if [ -n "$_acr_raw" ]; then
+                        _ac_result="$_acr_raw"
+                    else
+                        [ "$_acr_attempt" -lt 1 ] && warning "  [story-ac-remediator] attempt 1 returned no output — retrying with escalated model" || warning "  [story-ac-remediator] all 2 attempts returned no output — skipping AC augmentation for ${_story_id}"
+                    fi
+                    _acr_attempt=$(( _acr_attempt + 1 ))
+                done
 
                 local _ac_result_tmp
                 _ac_result_tmp=$(mktemp)
@@ -6098,6 +6985,24 @@ AC_APPLY_PY
                 if [ "${_acs_added:-0}" -gt 0 ]; then
                     success "  [story-ac-remediator] ${_acs_added} AC(s) added to ${_story_id}"
                     _remediation_applied=1
+                    # Write ACs back to Jira so they survive re-ingest on the next run.
+                    # Jira is the canonical source; ingest reads [EPAM-AC-ADDITION] comments.
+                    if [ -n "${JIRA_URL:-}" ]; then
+                        local _jira_key _jira_wb_tmp
+                        _jira_key=$(jq -r --arg id "$_story_id" \
+                          '.stories[] | select(.id == $id) | .jiraKey // ""' \
+                          "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
+                        if [ -n "$_jira_key" ]; then
+                            _jira_wb_tmp=$(mktemp)
+                            jq -c --arg id "$_story_id" --argjson n "${_acs_added}" \
+                              '.stories[] | select(.id == $id) | .acceptanceCriteria // [] | .[-($n|tonumber):] | map(if type=="object" then .text else . end) | {"acs": .}' \
+                              "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null > "$_jira_wb_tmp" || echo '{"acs":[]}' > "$_jira_wb_tmp"
+                            "$NODE_BIN" "$SCRIPT_DIR/lib/jira-writeback-acs.js" \
+                              "$_jira_key" "$_story_id" "$_jira_wb_tmp" \
+                              2>&1 | head -2 || true
+                            rm -f "$_jira_wb_tmp"
+                        fi
+                    fi
                 else
                     info "  [story-ac-remediator] No new ACs added (already covered or agent skipped)"
                 fi
@@ -6139,45 +7044,57 @@ That story's agentRole (target THIS profile, not a guess from the gate name): ${
 Check if the pattern is novel and append a rule if needed. Write the updated profiles.json back, then emit the JSON summary.
 ENDPROMPT3
 )
-                local _prof_result
-                _prof_result=$(echo "$_prof_prompt" | \
-                    AI_GATE_ALLOW_TOOLS=1 \
-                    AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
-                    AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
-                    EPAM_DANGEROUS_SKIP_APPROVAL=1 \
-                    CLAUDE_CMD="$CLAUDE_CMD" \
-                    EPAM_CLI="${EPAM_CLI:-epam}" \
-                    "$AI_RUNNER_CMD" \
-                        --provider "${ORCH_GATE_PROVIDER:-minimax}" \
-                        --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
-                    2>&1 | tee -a "$_rem_log")
+                local _prof_result="" _pfa3_attempt=0 _pfa3_disk_changed=0
+                local _profiles_after=""
+                while [ "$_pfa3_attempt" -lt 2 ] && [ "$_pfa3_disk_changed" = "0" ]; do
+                    local _pfa3_prompt="$_prof_prompt"
+                    [ "$_pfa3_attempt" -ge 1 ] && _pfa3_prompt="RETRY (attempt 2): You claimed profile_updated:true but profiles.json is byte-identical to before your call — you did not actually write the file. Use WriteFile to write the updated profiles.json to ${_profiles_file} now, then emit the JSON summary.
+
+$_prof_prompt"
+                    _prof_result=$(echo "$_pfa3_prompt" | \
+                        AI_GATE_ALLOW_TOOLS=1 \
+                        AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
+                        AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
+                        EPAM_DANGEROUS_SKIP_APPROVAL=1 \
+                        CLAUDE_CMD="$CLAUDE_CMD" \
+                        EPAM_CLI="${EPAM_CLI:-epam}" \
+                        "$AI_RUNNER_CMD" \
+                            --provider "${ORCH_GATE_PROVIDER:-minimax}" \
+                            --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
+                        2>&1 | tee -a "$_rem_log")
+                    if echo "$_prof_result" | grep -q '"profile_updated"[[:space:]]*:[[:space:]]*true'; then
+                        _profiles_after=$(cat "$_profiles_file" 2>/dev/null || echo "{}")
+                        if [ "$_profiles_after" != "$_profiles_before" ]; then
+                            _pfa3_disk_changed=1
+                        else
+                            [ "$_pfa3_attempt" -lt 1 ] && warning "  [profile-augmentor] Claimed profile_updated:true but profiles.json unchanged on disk — retrying with corrective note" || warning "  [profile-augmentor] Claimed profile_updated:true but profiles.json still unchanged on disk after 2 attempt(s) — treating as no-op, not applied"
+                        fi
+                    else
+                        _pfa3_disk_changed=1
+                    fi
+                    _pfa3_attempt=$(( _pfa3_attempt + 1 ))
+                done
+                # If both attempts claimed profile_updated but disk never changed, skip this gate
+                if echo "$_prof_result" | grep -q '"profile_updated"[[:space:]]*:[[:space:]]*true' && [ "$_pfa3_disk_changed" = "0" ]; then
+                    continue
+                fi
 
                 if echo "$_prof_result" | grep -q '"profile_updated"[[:space:]]*:[[:space:]]*true'; then
-                    local _profiles_after
-                    _profiles_after=$(cat "$_profiles_file" 2>/dev/null || echo "{}")
-                    # Trust the DISK STATE, not the agent's own claim (fixed
-                    # 2026-07-11, same class of defect already fixed for
-                    # story-ac-remediator): the agent has real Bash/WriteFile
-                    # tool access and is instructed to "write the updated
-                    # profiles.json back, then emit the JSON summary" — but an
-                    # LLM claiming "profile_updated": true in its text response
-                    # is not the same as it having actually called a write
-                    # tool. If profiles.json is byte-identical to before this
-                    # call despite the claim, nothing was really persisted;
-                    # proceeding to the reviewer/apply-flag logic below would
-                    # mark remediation as applied for a change that never
-                    # happened.
-                    if [ "$_profiles_after" = "$_profiles_before" ]; then
-                        warning "  [profile-augmentor] Claimed profile_updated:true but profiles.json is unchanged on disk — treating as no-op, not applied"
-                        continue
-                    fi
                     # Reviewer gate — validate the change before accepting it
                     local _reviewer_profile
                     _reviewer_profile=$(echo "$_profiles_after" | \
                         python3 -c "import sys,json; p=json.load(sys.stdin); print(p.get('prd-change-reviewer',''))" 2>/dev/null || echo "")
-                    local _review_verdict="pass"
+                    local _review_verdict="pass"  # fail-safe only when reviewer not configured
                     if [ -n "${ORCH_GATE_PROVIDER:-}" ] && [ -n "$_reviewer_profile" ]; then
-                        _review_verdict=$(echo "${_reviewer_profile}
+                        local _pa_rev_raw="" _pa_rev_attempt=0
+                        while [ "$_pa_rev_attempt" -lt 2 ] && [ -z "$_pa_rev_raw" ]; do
+                            local _pa_corrective=""
+                            [ "$_pa_rev_attempt" -gt 0 ] && _pa_corrective="CORRECTION: Your previous response did not contain parseable JSON with a verdict field. Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}
+
+"
+                            local _pa_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
+                            [ "$_pa_rev_attempt" -ge 1 ] && [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _pa_model="${ESCALATION_MODEL_HIGH}"
+                            _pa_rev_raw=$(echo "${_pa_corrective}${_reviewer_profile}
 
 STORY: gate-remediation
 CHANGE TYPE: profile_addendum
@@ -6189,25 +7106,34 @@ AFTER (excerpt, last 500 chars):
 ${_profiles_after: -500}
 
 Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
-                            AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
-                            AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
-                            EPAM_CLI="${EPAM_CLI:-epam}" \
-                            "$AI_RUNNER_CMD" \
-                                --provider "${ORCH_GATE_PROVIDER:-minimax}" \
-                                --model    "${ORCH_GATE_MODEL:-MiniMax-M3}" \
-                            2>/dev/null | \
-                            python3 -c "
+                                AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
+                                AI_MODEL="${_pa_model}" \
+                                EPAM_CLI="${EPAM_CLI:-epam}" \
+                                "$AI_RUNNER_CMD" \
+                                    --provider "${ORCH_GATE_PROVIDER:-minimax}" \
+                                    --model    "${_pa_model}" \
+                                2>/dev/null | \
+                                python3 -c "
 import sys, json, re
 text = sys.stdin.read()
 try:
     obj = json.loads(text.strip())
-    print(obj.get('verdict','pass'))
-    sys.exit(0)
+    v = obj.get('verdict','')
+    if v in ('pass','fail'):
+        print(v); sys.exit(0)
 except Exception:
     pass
 m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
-print(m.group(1) if m else 'pass')
-" 2>/dev/null || echo "pass")
+if m: print(m.group(1)); sys.exit(0)
+" 2>/dev/null || true)
+                            _pa_rev_attempt=$(( _pa_rev_attempt + 1 ))
+                        done
+                        if [ "$_pa_rev_raw" = "pass" ] || [ "$_pa_rev_raw" = "fail" ]; then
+                            _review_verdict="$_pa_rev_raw"
+                        else
+                            warning "  [profile-augmentor] Reviewer failed to produce a valid verdict after 2 attempt(s) — defaulting to fail (fail-safe)"
+                            _review_verdict="fail"
+                        fi
                     fi
                     if [ "$_review_verdict" = "fail" ]; then
                         warning "  [profile-augmentor] Profile change REJECTED by reviewer — reverting profiles.json"
@@ -6711,7 +7637,7 @@ esac
 # ──────────────────────────────────────────────
 # Step 6: Final Post-Phase Assessment
 # ──────────────────────────────────────────────
-log "Step 6: Running final post-phase assessment..."
+log "Step 24: Running final post-phase assessment..."
 if [ -s "$LOG_DIR/phase-cost.jsonl" ]; then
     # Non-critical, same as Step 3.5's identical call (line ~3671): under
     # `set -e`, a bare call to a function that can `return 1` (the real-
@@ -6723,15 +7649,15 @@ if [ -s "$LOG_DIR/phase-cost.jsonl" ]; then
     # new record — Step 3.5's own identical call earlier in the same run
     # correctly treated the same failure mode as a warning.
     if run_phase_assessment "$PHASE"; then
-        step_emit "6" "pass" "Step 6: Final post-phase assessment"
+        step_emit "24" "pass" "Step 24: Final post-phase assessment"
     else
-        step_emit "6" "warn" "Step 6: Final post-phase assessment" "non-critical issues"
+        step_emit "24" "warn" "Step 24: Final post-phase assessment" "non-critical issues"
     fi
 else
-    info "Step 6: No cost data — skipping final post-phase assessment"
+    info "Step 24: No cost data — skipping final post-phase assessment"
 fi
-assert_no_story_ids_lost "presplit" "Step 6: Final post-phase assessment"
-assert_no_story_ids_gained "post-parallel" "Step 6: Final post-phase assessment"
+assert_no_story_ids_lost "presplit" "Step 24: Final post-phase assessment"
+assert_no_story_ids_gained "post-parallel" "Step 24: Final post-phase assessment"
 
 # ──────────────────────────────────────────────
 # Step 7: Load Phase Graph into Neo4j

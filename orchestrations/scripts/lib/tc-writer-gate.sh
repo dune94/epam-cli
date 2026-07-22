@@ -47,7 +47,7 @@ run_inline_tc_writer_gate() {
     local _tc_gate_attempt=0
     local _tc_gate_facts_len=0
     local _tc_gate_exit=0
-    "$SCRIPT_DIR/update-monitor.sh" story_start "tc-writer-agent" "main" "tc-writer-agent" "TC Writer: $story_id" \
+    "$SCRIPT_DIR/update-monitor.sh" story_start "$story_id" "main" "tc-writer-agent" "TC Writer: $story_id" \
         "${ORCH_GATE_PROVIDER:-}" "${ORCH_GATE_MODEL:-MiniMax-M3}" 2>/dev/null || true
     for _tc_gate_attempt in 1 2 3; do
         log "  Story $story_id needs testCriteria — running TC writer inline before it starts... (attempt ${_tc_gate_attempt}/3)"
@@ -150,7 +150,7 @@ run_inline_tc_writer_gate() {
           provider: $provider,
           detail: {costUsd: 0, tokensIn: 0, tokensOut: 0, turns: 0, source: "tc-writer-gate"}
         }' >> "${ACTIVITY_FILE:-$SCRIPT_DIR/../logs/agent-activity.jsonl}" 2>/dev/null || true
-    "$SCRIPT_DIR/update-monitor.sh" story_complete "tc-writer-agent" "main" "TC writer done: $story_id" 2>/dev/null || true
+    "$SCRIPT_DIR/update-monitor.sh" story_complete "$story_id" "main" "TC writer done: $story_id" 2>/dev/null || true
     return 0
 }
 

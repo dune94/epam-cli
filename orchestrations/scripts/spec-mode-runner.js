@@ -86,16 +86,33 @@ function fetchSembleContext(story) {
 }
 
 // Returns the code context block to inject into the spec prompt.
-// Brownfield: tries CodeGraph first (exact), falls back to Semble.
-// Greenfield: Semble only.
+// Brownfield: runs BOTH CodeGraph and Semble and includes whatever each
+// finds — NOT CodeGraph-with-Semble-as-fallback. Live bug (AMSD-1820,
+// 2026-07-22): CodeGraph's FTS5/BM25 keyword search matches on symbol names,
+// so a natural-language bug title ("promo code amount NOT displayed...")
+// reliably surfaces generic files sharing common terms ("mozio", "email")
+// but not the actual fix site (apply-report-discounts.service.ts, whose
+// relevant symbols are named applyReportDiscountsService/getDiscountName —
+// none of which appear in the bug title). CodeGraph still returned SOME
+// output (16 symbols across other files), so the old "fall through to
+// Semble only when CodeGraph found nothing" logic never gave Semble a
+// chance — even though Semble's embedding search correctly ranked the real
+// fix file 3rd. Confirmed live: the agent never saw apply-report-discounts.
+// service.ts existed and wrote a brand-new, disconnected module instead.
+// Greenfield: Semble only (no existing code to search).
 function fetchExistingCodeContext(story) {
   const isBrownfield = process.env.EPAM_BROWNFIELD === '1';
   if (isBrownfield) {
     const cgOutput = fetchCodeGraphContext(story);
+    const sembleOutput = fetchSembleContext(story);
+    const blocks = [];
     if (cgOutput) {
-      return `\nEXISTING CODE (CodeGraph static analysis — exact symbols, callers, blast radius):\n${cgOutput}\n`;
+      blocks.push(`\nEXISTING CODE — CodeGraph static analysis (exact symbols, callers, blast radius):\n${cgOutput}\n`);
     }
-    // Fall through to Semble
+    if (sembleOutput) {
+      blocks.push(sembleOutput);
+    }
+    return blocks.join('\n');
   }
   return fetchSembleContext(story);
 }
@@ -111,6 +128,17 @@ function resolveCodelinePath(story) {
   for (const [k, v] of Object.entries(process.env)) {
     if (k.startsWith('JIRA_WORKTREE_') && v) return v;
   }
+  // Brownfield fallback (live bug, 2026-07-22): brownfield runs never set
+  // JIRA_WORKTREE_* at all — the codeline path is discovered dynamically by
+  // codeline-discovery.js and exported as PROJECT_ROOT by
+  // run-agent-orchestration.sh instead. Without this fallback,
+  // fetchExistingCodeContext() always got an empty path here, so CodeGraph/
+  // Semble never had anything to inject — confirmed live on AMSD-1820, where
+  // the spec pass's own note read "No existing code block was injected via
+  // CodeGraph or Semble, so locationHint is empty," and the agent then wrote
+  // a brand-new, disconnected module instead of fixing the real file
+  // (apply-report-discounts.service.ts) because it never saw it existed.
+  if (process.env.PROJECT_ROOT) return process.env.PROJECT_ROOT;
   return '';
 }
 let _jsonrepair;

@@ -685,11 +685,22 @@ story_exists() {
     [ -n "$exists" ]
 }
 
-# Check if story is completed
+# Check if story is completed — looks in $PRD_FILE first, then $CROSS_CODELINE_PRD
+# (a separate PRD from another codeline, e.g. the BE PRD when running the FE codeline).
+# This allows FE stories to declare dependencies on BE stories without blocking.
 is_story_completed() {
     local story_id=$1
-    local completed=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .completed' "$PRD_FILE")
-    [ "$completed" = "true" ]
+    local completed
+    completed=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .completed' "$PRD_FILE" 2>/dev/null)
+    if [ "$completed" = "true" ]; then
+        return 0
+    fi
+    # Not found or not completed in primary PRD — check cross-codeline PRD if set
+    if [ -n "${CROSS_CODELINE_PRD:-}" ] && [ -f "${CROSS_CODELINE_PRD}" ]; then
+        completed=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .completed' "$CROSS_CODELINE_PRD" 2>/dev/null)
+        [ "$completed" = "true" ] && return 0
+    fi
+    return 1
 }
 
 # Get story dependencies
@@ -1276,6 +1287,7 @@ $files
 ## Dependencies
 ${dependencies:-None}
 $([ -n "$dependency_contracts" ] && printf '\n## Dependency Contracts (EXACT import paths and signatures — use these verbatim, do NOT guess a different path)\n%s\n' "$dependency_contracts" || true)
+$([ -n "${CROSS_CODELINE_CONTRACT:-}" ] && [ -f "${CROSS_CODELINE_CONTRACT}" ] && printf '\n## Cross-Codeline API Contract (upstream codeline exports — use these types and endpoints verbatim when integrating)\n%s\n' "$(cat "${CROSS_CODELINE_CONTRACT}")" || true)
 
 ## Instructions
 **CRITICAL — WRITE FILES FIRST:**
@@ -1725,6 +1737,36 @@ project_root, config_file = sys.argv[1], sys.argv[2]
 with open(config_file) as f:
     cfg = json.load(f)
 
+# preInstallHook (optional): a one-time shell command run ONCE before any
+# per-package scanning or installation. Intended for brownfield repos that
+# need a full package-manager reconciliation before the agent touches any
+# code — e.g. stripping a private-registry dep from package.json, running
+# a full package install with --prefer-offline --ignore-scripts, restoring.
+# This runs in project_root as cwd.  The hook failing is non-fatal: dep-
+# check logs the error and continues so the agent can still attempt work.
+# Live bug (2026-07-21): Metrolinx azure.commerce.cdts had cx-shared (GitHub
+# Packages, requires auth) causing every per-package install to 401,
+# and cp -rn workarounds left truncated files (tsc.js 435KB, ~5MB expected).
+# A single full install with cx-shared stripped fixes everything.
+hook_cmd = cfg.get('preInstallHook', '')
+if hook_cmd:
+    print('  [dependency-check] Running preInstallHook...')
+    hook_timeout = int(os.environ.get('EPAM_DEP_HOOK_TIMEOUT_SECS', '300'))
+    hook_proc = subprocess.Popen(hook_cmd, shell=True, cwd=project_root, start_new_session=True)
+    try:
+        hook_rc = hook_proc.wait(timeout=hook_timeout)
+        if hook_rc != 0:
+            print(f'  [dependency-check] preInstallHook exited {hook_rc} (non-fatal — continuing)')
+        else:
+            print('  [dependency-check] preInstallHook complete')
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(os.getpgid(hook_proc.pid), signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        hook_proc.wait()
+        print(f'  [dependency-check] preInstallHook TIMED OUT after {hook_timeout}s (non-fatal — continuing)')
+
 manifest_path = os.path.join(project_root, cfg['manifestFile'])
 if not os.path.exists(manifest_path):
     sys.exit(0)
@@ -1770,9 +1812,48 @@ for root, dirs, files in os.walk(project_root):
 # this function has no language-specific knowledge of what counts as a
 # builtin; the orchestration's manifest declares that list.
 ignore_packages = set(cfg.get('ignorePackages', []))
+
+# Collect tsconfig path alias prefixes from ALL tsconfig*.json files under
+# project_root. Path aliases (e.g. @background/*, @commerce/*) are local
+# module mappings, not npm packages — trying to install them fails with 404.
+# Generic: reads any tsconfig.json found; no alias names are hardcoded here.
+# Live bug (2026-07-21): Metrolinx azure.commerce.cdts has 15+ workspace path
+# aliases that aren't npm packages, causing 20+ min dep-check stalls per turn.
+import glob as _glob
+_tsconfig_aliases = set()
+for _tc_path in _glob.glob(os.path.join(project_root, '**/tsconfig*.json'), recursive=True):
+    if 'node_modules' in _tc_path:
+        continue
+    try:
+        with open(_tc_path) as _f:
+            _tc = json.load(_f)
+        for _alias in _tc.get('compilerOptions', {}).get('paths', {}):
+            # Strip trailing /* glob: "@background/*" -> "@background"
+            _clean = _alias.rstrip('/*').rstrip('/')
+            if _clean:
+                _tsconfig_aliases.add(_clean)
+    except Exception:
+        pass
+
 missing = []
 for pkg in sorted(imported):
     if pkg in ignore_packages:
+        continue
+    # Path alias prefixes (~, #) are never real package names.
+    # ~ is a TypeScript/webpack path alias (e.g. ~/controllers/foo).
+    # # is a Node.js subpath import alias (e.g. #internal/utils).
+    # Passing them to the package manager always fails (live bug: Metrolinx codebase).
+    if pkg.startswith('~') or pkg.startswith('#'):
+        continue
+    # Template literal strings in import paths are not package names
+    # (e.g. `import x from '${currentPayment.state.value}'`). The import
+    # scanner picks up the raw string before interpolation, so `${` in a
+    # matched group means it's dynamic code, not an installable package.
+    if '${' in pkg:
+        continue
+    # Tsconfig path aliases are project-local module mappings, not npm packages.
+    # Collected above from all tsconfig*.json files under project_root.
+    if any(pkg == a or pkg.startswith(a + '/') for a in _tsconfig_aliases):
         continue
     # Live bug (2026-07-06): a Node builtin SUBPATH import (e.g. 'fs/promises',
     # 'node:fs/promises') was only recognized if the exact subpath string was
@@ -1789,6 +1870,14 @@ for pkg in sorted(imported):
     if pkg in declared:
         continue
     if any(pkg == d or pkg.startswith(d + '/') or d.startswith(pkg + '/') for d in declared):
+        continue
+    # Brownfield repos often have packages installed in node_modules but not
+    # declared in package.json (undeclared transitive deps, pre-existing installs).
+    # If the top-level package directory already exists in node_modules, it is
+    # satisfiable at runtime — skip the install to avoid modifying a brownfield
+    # repo's package.json unnecessarily.
+    top_pkg = pkg.split('/')[0] if not pkg.startswith('@') else '/'.join(pkg.split('/')[:2])
+    if os.path.isdir(os.path.join(project_root, 'node_modules', top_pkg)):
         continue
     missing.append(pkg)
 
@@ -2605,7 +2694,24 @@ run_external_verification() {
             '.stories[] | select(.id == $id) | (.technicalNotes.files // []) | map(select(test("\\.(test|spec)\\.[jt]sx?$"))) | length' \
             "$prd_target" 2>/dev/null || echo 0)
         if [ -n "$has_test" ] && [ "${_owns_test_file:-0}" -gt 0 ]; then
-            test_cmd="npm test"
+            # Derive owned test file paths so the command runs ONLY those files,
+            # preventing failures in other stories' test files from contaminating
+            # this story's verification result (found live: a broken cli.test.ts
+            # caused the server test story to fail even though server.test.ts
+            # passed 15/15 on its own). Extract paths from technicalNotes.files,
+            # filter to test/spec files, and append them to the base test command
+            # from scripts.test. Most runners (vitest, jest, mocha, tap) accept
+            # file paths as trailing positional arguments — no runner-specific
+            # flags needed. Falls back to full "npm test" if no files are found.
+            local _owned_test_files
+            _owned_test_files=$(jq -r --arg id "$story_id" \
+                '.stories[] | select(.id == $id) | (.technicalNotes.files // [])[] | select(test("\\.(test|spec)\\.[jt]sx?$"))' \
+                "$prd_target" 2>/dev/null | tr '\n' ' ' | xargs)
+            if [ -n "$_owned_test_files" ]; then
+                test_cmd="npm test -- $_owned_test_files"
+            else
+                test_cmd="npm test"
+            fi
         fi
     fi
 
@@ -2784,8 +2890,22 @@ run_external_verification() {
 
     if [ "$test_exit" -ne 0 ]; then
         warning "External verification failed for $story_id (exit $test_exit)"
-        VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe orchestrator ran `%s` after your files were written and it failed (exit code %d). Fix the code so the tests pass.\n\n```\n%s\n```\n' \
-            "$test_cmd" "$test_exit" "${test_output:0:4000}")
+        # Include both the head AND tail of test output so errors that appear at
+        # the end (e.g. "Unhandled Rejection" summaries emitted after per-test
+        # results) reach the failure analyst — a head-only truncation causes
+        # misdiagnosis when the real root cause is in the final lines
+        # (found live: analyst diagnosed "missing env var" from truncated head
+        # while the real cause — async main() rejection — was in the tail).
+        local _test_head="${test_output:0:2000}"
+        local _test_tail=""
+        if [ "${#test_output}" -gt 2000 ]; then
+            _test_tail=$(printf '%s' "$test_output" | tail -c 2000)
+            _test_tail="
+[... output truncated ...]
+$_test_tail"
+        fi
+        VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe orchestrator ran `%s` after your files were written and it failed (exit code %d). Fix the code so the tests pass.\n\n```\n%s%s\n```\n' \
+            "$test_cmd" "$test_exit" "$_test_head" "$_test_tail")
         {
             echo ""
             echo "=== External verification failed (exit $test_exit) ==="
@@ -2935,6 +3055,7 @@ ${declared_files:-  (none declared)}
 ## Acceptance Criteria
 ${ac}
 $([ -n "$plan_dep_contracts" ] && printf '\n## Dependency Contracts (ground-truth import paths and signatures — use these verbatim in read/import steps)\n%s\n' "$plan_dep_contracts" || true)
+$([ -n "${CROSS_CODELINE_CONTRACT:-}" ] && [ -f "${CROSS_CODELINE_CONTRACT}" ] && printf '\n## Cross-Codeline API Contract (upstream codeline exports — use these types and endpoints verbatim when integrating)\n%s\n' "$(cat "${CROSS_CODELINE_CONTRACT}")" || true)
 Produce 5-10 numbered implementation steps. Your write/create steps MUST use the exact paths listed under 'Files to Create/Modify' above. Be specific about function signatures and test requirements."
 
     local plan_result_file
@@ -3548,7 +3669,10 @@ run_prd_change_reviewer() {
         echo "pass"
         return 0
     fi
-    local gate_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
+    # KB/PRD/profile writes are persistent and must be reviewed by the highest-quality
+    # model available, not the cheap gate model. Use ESCALATION_MODEL_HIGH with high
+    # reasoning so every persisted write is agentic-quality-reviewed.
+    local gate_model="${ESCALATION_MODEL_HIGH:-${ORCH_GATE_MODEL:-MiniMax-M3}}"
 
     # Select profile based on change type — KB entries use the stricter kb-change-reviewer
     local _profile_key="prd-change-reviewer"
@@ -3578,6 +3702,8 @@ Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[\"<issue1>\"],\"reason\":\"<15
         AI_PROVIDER="$gate_provider" \
         AI_MODEL="$gate_model" \
         EPAM_CLI="$EPAM_CLI" \
+        EPAM_REASONING_EFFORT="high" \
+        EPAM_TEMPERATURE="0.7" \
         bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \
         ${gate_model:+--model "$gate_model"} \
         2>/dev/null || echo '{"verdict":"pass","issues":[],"reason":"reviewer unavailable"}')
@@ -3650,7 +3776,9 @@ run_prd_change_summarizer() {
         printf '%s' "$rejected_text"
         return 0
     fi
-    local gate_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
+    # Summarizer rewrites rejected KB/PRD/profile writes — must use the same
+    # high-quality model as the reviewer so the rewrite is meaningfully better.
+    local gate_model="${ESCALATION_MODEL_HIGH:-${ORCH_GATE_MODEL:-MiniMax-M3}}"
 
     # tool_creation rewrites a bash script, not a short prose rule — the
     # kb_entry/skill_note constraints (single line, under 200 chars, imperative
@@ -3686,6 +3814,8 @@ Emit ONLY the corrected text — nothing else."
         AI_PROVIDER="$gate_provider" \
         AI_MODEL="$gate_model" \
         EPAM_CLI="$EPAM_CLI" \
+        EPAM_REASONING_EFFORT="high" \
+        EPAM_TEMPERATURE="0.7" \
         bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \
         ${gate_model:+--model "$gate_model"} \
         2>/dev/null | head -c "$output_cap" || echo "")
@@ -3936,7 +4066,9 @@ run_failure_analyst() {
     [ -z "${VERIFICATION_FAILURE:-}" ] && return 0
 
     local gate_provider="${ORCH_GATE_PROVIDER:-}"
-    local gate_model="${ORCH_GATE_MODEL:-}"
+    # Failure analyst uses ESCALATION_MODEL (z-ai/glm-5.2) when set — never qwen chat models;
+    # falls back to ORCH_GATE_MODEL only when no escalation model is configured.
+    local gate_model="${ESCALATION_MODEL:-${ORCH_GATE_MODEL:-}}"
     if [ -z "$gate_provider" ]; then
         log "  [FailureAnalyst] No gate provider configured — skipping self-heal analysis"
         return 0
@@ -4055,7 +4187,7 @@ ANALYST_PROMPT_END
     analyst_prompt="${analyst_prompt//__STORY_ACS__/$story_acs}"
     analyst_prompt="${analyst_prompt//__SKILL_ADDENDUM__/$skill_addendum}"
     analyst_prompt="${analyst_prompt//__DEPENDENCY_CONTRACTS__/$dependency_contracts}"
-    analyst_prompt="${analyst_prompt//__VERIFICATION_FAILURE__/${VERIFICATION_FAILURE:0:2500}}"
+    analyst_prompt="${analyst_prompt//__VERIFICATION_FAILURE__/$VERIFICATION_FAILURE}"
 
     local analyst_raw="" analyst_json="" _analyst_call_ok="false"
     local _analyst_max_attempts=3 _analyst_attempt=1
@@ -4067,6 +4199,8 @@ ANALYST_PROMPT_END
                 AI_MODEL="$gate_model" \
                 EPAM_CLI="$EPAM_CLI" \
                 ORCH_JSON_RESULT="$_analyst_json_result" \
+                EPAM_REASONING_EFFORT="high" \
+                EPAM_TEMPERATURE="0.7" \
                 bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \
                 ${gate_model:+--model "$gate_model"} \
                 2>>"$output_file"); then
@@ -5428,6 +5562,17 @@ implement_story() {
     resolve_planner_settings "$story_id"
     # Resolve dynamic constitution rules for this story (appends to AGENT_CONSTITUTION)
     resolve_dynamic_constitution "$story_id"
+    # Brownfield surgeon preamble — injected when EPAM_BROWNFIELD=1; never active in greenfield.
+    # Rules numbered from 6 to extend the five already in AGENT_CONSTITUTION without overlap.
+    if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
+        DYNAMIC_CONSTITUTION="${DYNAMIC_CONSTITUTION}
+
+BROWNFIELD SURGEON MODE — non-negotiable (applies to every story in this run):
+6. FIND FIRST: Before writing a single line of code, locate the existing code path that handles the behavior described in this story. Use Search, Glob, or Read. Do not skip this step.
+7. FIX MINIMALLY: Make the smallest change that corrects the behavior. Do not restructure, refactor, or extend surrounding code.
+8. NO NEW FILES BY DEFAULT: Do not create new files, services, or abstractions unless the story description explicitly uses the words 'create', 'add new', or 'build new'. A bug report or a change request means modifying existing code.
+9. USE EXISTING HELPERS: Before writing any new function or utility, search the codebase for an existing one that already serves the same purpose."
+    fi
     # GAP-P17: inject outputSchema instruction when story defines one
     local schema_block=""
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
@@ -5505,8 +5650,9 @@ implement_story() {
             if [ "$_entering_rung" -eq 1 ]; then
                 case "$_rung" in
                     1)
-                        # Rung 1: same model, effort → medium
+                        # Rung 1: same model, effort → medium, temperature stays 0
                         export EPAM_REASONING_EFFORT="medium"
+                        export EPAM_TEMPERATURE="0"
                         STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
                         log "  InferenceLadder[Rung1/R${retry_count}]: model='${STORY_MODEL:-default}' unchanged — effort → medium"
                         ;;
@@ -5536,14 +5682,58 @@ implement_story() {
                             _resolved_provider_r2=$(resolve_model_provider "$escalated_model_r2")
                             [ -n "$_resolved_provider_r2" ] && STORY_PROVIDER="$_resolved_provider_r2"
                         else
-                            if [ "$_skip_ladder" = "true" ]; then
-                                log "  InferenceLadder[Rung2/R${retry_count}]: skipLadder=true, already at ceiling '${STORY_MODEL:-default}' — effort → medium"
-                            else
-                                log "  InferenceLadder[Rung2/R${retry_count}]: no ladder step — keeping model, effort → medium"
+                            # Stuck at ceiling — check if HealingBroken is confirmed in
+                            # healing-events.jsonl. When skipLadder=true pre-assigns the ceiling
+                            # model and self-healing hasn't converged, model diversity is the only
+                            # remaining lever. Force HIGH-tier escalation so a different model
+                            # gets a chance — skipLadder is downgrade-prevention, not a lock
+                            # against upward escalation under confirmed healing failure.
+                            local _healed_count=0
+                            if [ -f "${LOG_DIR}/healing-events.jsonl" ]; then
+                                _healed_count=$(python3 -c "
+import json
+count = 0
+try:
+    for line in open('${LOG_DIR}/healing-events.jsonl'):
+        try:
+            e = json.loads(line)
+            if e.get('story_id') == '$story_id':
+                count += 1
+        except Exception:
+            pass
+except Exception:
+    pass
+print(count)
+" 2>/dev/null || echo 0)
+                            fi
+                            local _high_step=""
+                            if [ "${_healed_count:-0}" -ge 1 ] && [ "$_skip_ladder" = "true" ]; then
+                                _high_step=$(get_model_ladder_step "${STORY_MODEL:-}" "high")
+                                if [ -n "$_high_step" ] && [ "$_high_step" != "${STORY_MODEL:-}" ]; then
+                                    log "  InferenceLadder[Rung2/R${retry_count}]: HealingBroken+skipLadder — forcing HIGH-tier escalation '${STORY_MODEL:-default}' → '$_high_step' for model diversity"
+                                    STORY_MODEL="$_high_step"
+                                    local _resolved_provider_r2h
+                                    _resolved_provider_r2h=$(resolve_model_provider "$_high_step")
+                                    [ -n "$_resolved_provider_r2h" ] && STORY_PROVIDER="$_resolved_provider_r2h"
+                                fi
+                            fi
+                            if [ -z "$_high_step" ] || [ "$_high_step" = "${STORY_MODEL:-}" ]; then
+                                if [ "$_skip_ladder" = "true" ]; then
+                                    log "  InferenceLadder[Rung2/R${retry_count}]: skipLadder=true, already at ceiling '${STORY_MODEL:-default}' — effort → medium"
+                                else
+                                    log "  InferenceLadder[Rung2/R${retry_count}]: no ladder step — keeping model, effort → medium"
+                                fi
                             fi
                         fi
                         export EPAM_REASONING_EFFORT="medium"
+                        export EPAM_TEMPERATURE="0.3"
                         STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
+                        # Rung 2: bump output tokens to 8192 — a story that needed
+                        # escalation is likely generating larger outputs than the
+                        # baseline budget assumed; truncation at the original ceiling
+                        # causes the same syntax error on every retry regardless of
+                        # model capability (confirmed live: SKY-003-test-tc2 2026-07-18).
+                        [ "${STORY_MAX_OUTPUT_TOKENS:-0}" -lt 8192 ] && STORY_MAX_OUTPUT_TOKENS=8192
                         ;;
                     *)
                         # Rung 3+: escalate to the strongest configured model, effort → high (maximum).
@@ -5587,14 +5777,52 @@ implement_story() {
                                 _resolved_provider_r3=$(resolve_model_provider "$ladder_step_r3")
                                 [ -n "$_resolved_provider_r3" ] && STORY_PROVIDER="$_resolved_provider_r3"
                             else
-                                if [ "$_skip_ladder" = "true" ]; then
-                                    log "  InferenceLadder[Rung3/R${retry_count}]: skipLadder=true, already at ceiling '${STORY_MODEL:-default}' — effort → high (maximum)"
+                                # Same HealingBroken+skipLadder override as Rung 2: when stuck
+                                # at ceiling and self-healing is confirmed broken, force HIGH tier.
+                                local _healed_count_r3=0
+                                if [ -f "${LOG_DIR}/healing-events.jsonl" ]; then
+                                    _healed_count_r3=$(python3 -c "
+import json
+count = 0
+try:
+    for line in open('${LOG_DIR}/healing-events.jsonl'):
+        try:
+            e = json.loads(line)
+            if e.get('story_id') == '$story_id':
+                count += 1
+        except Exception:
+            pass
+except Exception:
+    pass
+print(count)
+" 2>/dev/null || echo 0)
+                                fi
+                                local _high_step_r3=""
+                                if [ "${_healed_count_r3:-0}" -ge 1 ] && [ "$_skip_ladder" = "true" ] && [ "$_ladder_tier_r3" != "high" ]; then
+                                    _high_step_r3=$(get_model_ladder_step "${STORY_MODEL:-}" "high")
+                                    if [ -n "$_high_step_r3" ] && [ "$_high_step_r3" != "${STORY_MODEL:-}" ]; then
+                                        log "  InferenceLadder[Rung3/R${retry_count}]: HealingBroken+skipLadder — forcing HIGH-tier escalation '${STORY_MODEL:-default}' → '$_high_step_r3'"
+                                        STORY_MODEL="$_high_step_r3"
+                                        local _resolved_provider_r3h
+                                        _resolved_provider_r3h=$(resolve_model_provider "$_high_step_r3")
+                                        [ -n "$_resolved_provider_r3h" ] && STORY_PROVIDER="$_resolved_provider_r3h"
+                                    fi
+                                fi
+                                if [ -z "$_high_step_r3" ] || [ "$_high_step_r3" = "${STORY_MODEL:-}" ]; then
+                                    if [ "$_skip_ladder" = "true" ]; then
+                                        log "  InferenceLadder[Rung3/R${retry_count}]: skipLadder=true, already at ceiling '${STORY_MODEL:-default}' — effort → high (maximum)"
+                                    fi
                                 fi
                             fi
                         fi
                         export EPAM_REASONING_EFFORT="high"
+                        export EPAM_TEMPERATURE="0.7"
                         STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
-                        log "  InferenceLadder[Rung3/R${retry_count}]: model='${STORY_MODEL:-default}' — effort → high (maximum)"
+                        # Rung 3: bump output tokens to 12288 — at the strongest
+                        # configured model, full file rewrites are expected; any
+                        # prior token ceiling that caused truncation must be lifted.
+                        [ "${STORY_MAX_OUTPUT_TOKENS:-0}" -lt 12288 ] && STORY_MAX_OUTPUT_TOKENS=12288
+                        log "  InferenceLadder[Rung3/R${retry_count}]: model='${STORY_MODEL:-default}' — effort → high"
                         ;;
                 esac
                 # Emit ladder_rung event so agent-activity dashboard shows every escalation,
@@ -6083,10 +6311,40 @@ ${_trimmed_amendment}"
             if [ "${DETERMINISTIC_CHECK_FAILURE:-0}" -eq 1 ]; then
                 log "  [DeterministicCheck] Skipping failure-analyst — violation already precisely known"
                 local _existing_amendment="${COORDINATOR_PROMPT_AMENDMENT:-}"
+                # Re-inject the last failure-analyst diagnosis for this story from
+                # healing-events.jsonl. DeterministicCheck skips the analyst (saving
+                # a gate-model call) but that means the agent loses the actionable
+                # "use this pattern instead" guidance the analyst wrote on earlier
+                # retries. Without re-injection, subsequent retries only see the
+                # pre-check's terse error message — not the richer fix guidance.
+                local _last_fa_diagnosis=""
+                local _heal_log="${LOG_DIR}/healing-events.jsonl"
+                if [ -f "$_heal_log" ]; then
+                    _last_fa_diagnosis=$(python3 -c "
+import json, sys
+story = '$story_id'
+last = ''
+try:
+    for line in open('$_heal_log'):
+        try:
+            e = json.loads(line)
+            if e.get('story_id') == story and e.get('diagnosis') and e.get('target') not in ('none', ''):
+                last = e['diagnosis']
+        except Exception:
+            pass
+except Exception:
+    pass
+print(last)
+" 2>/dev/null || echo "")
+                fi
                 COORDINATOR_PROMPT_AMENDMENT="${_existing_amendment}
 ## Deterministic Check Failure
 ${VERIFICATION_FAILURE}
-This was caught by an automated check before the test suite even ran — fix the exact issue named above."
+This was caught by an automated check before the test suite even ran — fix the exact issue named above.${_last_fa_diagnosis:+
+
+## Prior failure-analyst diagnosis (re-injected for context)
+$_last_fa_diagnosis
+Apply the above diagnosis AND fix the deterministic check violation — both must be resolved.}"
 
                 # A deterministic-check violation repeating IDENTICALLY across attempts
                 # is just as strong an escalation signal as an LLM-diagnosed repeat, but
@@ -6213,6 +6471,11 @@ This was caught by an automated check before the test suite even ran — fix the
         _granted_extra_retries=$(run_retry_extension_coordinator "$story_id")
         if [ -n "$_granted_extra_retries" ] && [ "$_granted_extra_retries" -gt 0 ] 2>/dev/null; then
             MAX_RETRIES=$((MAX_RETRIES + _granted_extra_retries))
+            # Retry extension (kimi-k3 territory): open the output token ceiling
+            # to generator-level (16384) — at this point the story has exhausted
+            # the standard ladder and is receiving the strongest available model;
+            # any remaining token budget constraint must not be the failure mode.
+            [ "${STORY_MAX_OUTPUT_TOKENS:-0}" -lt 16384 ] && STORY_MAX_OUTPUT_TOKENS=16384
             continue
         fi
     fi
@@ -6471,7 +6734,7 @@ get_next_kb_id() {
     if [ -z "$last_num" ]; then
         echo "KB-001"
     else
-        printf "KB-%03d" $((last_num + 1))
+        printf "KB-%03d" $(( 10#${last_num} + 1 ))
     fi
 }
 

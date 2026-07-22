@@ -16,6 +16,68 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, execSync } = require('node:child_process');
+
+// Semble code-context retrieval — loaded lazily so the module is optional.
+// When SEMBLE_ENABLED=1 and the binary is present, fetchSembleContext() returns
+// a formatted block of existing-code snippets to inject into the spec prompt.
+let _semble;
+function fetchSembleContext(story) {
+  if (process.env.SEMBLE_ENABLED !== '1') return '';
+  try {
+    if (!_semble) _semble = require('./lib/semble-context');
+    const repoPath = resolveCodelinePath(story);
+    if (!repoPath || !fs.existsSync(repoPath)) return '';
+
+    const isBrownfield = process.env.EPAM_BROWNFIELD === '1';
+
+    // Symptom query — same in both modes; finds code near the described behavior
+    const symptomQuery = [story.title, ...(story.acceptanceCriteria || []).slice(0, 3)].join(' ').slice(0, 400);
+    const symptomResult = _semble.sembleSearch(symptomQuery, repoPath, 8, 20);
+
+    if (!isBrownfield) {
+      if (!symptomResult.results || symptomResult.results.length === 0) return '';
+      const block = _semble.formatAsText(symptomResult);
+      return `\nEXISTING CODE CONTEXT (from semble semantic search — use this to write precise, grounded ACs):\n${block}\n`;
+    }
+
+    // Brownfield: second query targets the service/handler boundary rather than the symptom.
+    // Strips stop-words and prefixes with action verbs to find the code path that *implements*
+    // the domain behavior, not just code that mentions the same keywords.
+    const domainTerms = story.title
+      .replace(/\b(the|a|an|is|not|for|in|of|and|or|to|as|at|by|be|was|are|it|its|that|this|with)\b/gi, '')
+      .trim()
+      .slice(0, 200);
+    const pathQuery = `applies handles processes calculates resolves ${domainTerms}`.slice(0, 400);
+    const pathResult = _semble.sembleSearch(pathQuery, repoPath, 5, 30);
+
+    // Combine and deduplicate by file+line
+    const seen = new Set();
+    const combined = [];
+    for (const r of [...(symptomResult.results || []), ...(pathResult.results || [])]) {
+      const key = `${r.file_path}:${r.start_line}`;
+      if (!seen.has(key)) { seen.add(key); combined.push(r); }
+    }
+    if (combined.length === 0) return '';
+    const block = _semble.formatAsText({ results: combined });
+    return `\nEXISTING CODE (brownfield — identify the code path that handles this behavior, then specify how to fix it; do not propose new abstractions):\n${block}\n`;
+  } catch (e) {
+    return '';
+  }
+}
+
+function resolveCodelinePath(story) {
+  // Prefer story-level codeline → JIRA_WORKTREE_<UPPER> → JIRA_WORKTREE_<DEFAULT>
+  const cl = story.codeline || process.env.JIRA_DEFAULT_CODELINE || '';
+  if (cl) {
+    const key = `JIRA_WORKTREE_${cl.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`;
+    if (process.env[key]) return process.env[key];
+  }
+  // Last resort: find any JIRA_WORKTREE_* that is set
+  for (const [k, v] of Object.entries(process.env)) {
+    if (k.startsWith('JIRA_WORKTREE_') && v) return v;
+  }
+  return '';
+}
 let _jsonrepair;
 try { _jsonrepair = require('jsonrepair').jsonrepair; } catch { _jsonrepair = null; }
 
@@ -268,13 +330,23 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     if (logName.includes('speckit')) {
       specModel = process.env.SPEC_MODE_SPECKIT_MODEL || 'moonshotai/kimi-k2';
     } else if (logName.includes('openspec') || logName.includes('-openspec-') || logName.includes('-spec.log')) {
-      specModel = process.env.SPEC_MODE_OPENSPEC_MODEL || 'moonshotai/kimi-k2';
+      // Brownfield investigation requires tracing call chains through unfamiliar code —
+      // use the HIGH model as the base so archaeology doesn't fall back to generation.
+      specModel = (process.env.EPAM_BROWNFIELD === '1' && process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH)
+        ? process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH
+        : process.env.SPEC_MODE_OPENSPEC_MODEL || 'moonshotai/kimi-k2';
     } else {
       specModel = process.env.SPEC_MODE_MODEL || process.env.SPEC_MODE_OPENSPEC_MODEL || 'moonshotai/kimi-k2';
     }
     console.log(`spec-mode: fast-path ${specModeProvider}/${specModel} (skipping MiniMax)`);
     const directExec = { cmd: execSpec.cmd, args: ['--provider', specModeProvider, '--model', specModel] };
-    const output = await runClaude(directExec, prompt, logPath, {});
+    // Spec-mode responses are large JSON blobs — use a higher output-token budget
+    // than the implementation default (4096) so speckit never truncates mid-JSON.
+    // SPEC_MODE_MAX_OUTPUT_TOKENS is spec-only; it doesn't affect implementation runs.
+    const specEnv = process.env.SPEC_MODE_MAX_OUTPUT_TOKENS
+      ? { EPAM_MAX_OUTPUT_TOKENS: process.env.SPEC_MODE_MAX_OUTPUT_TOKENS }
+      : {};
+    const output = await runClaude(directExec, prompt, logPath, specEnv);
     return extractTaggedJson(output, tag);
   }
 
@@ -523,17 +595,19 @@ ${storiesPayload}
       });
 
       let agentResult;
-      if (agent === 'speckit' && openspecPayload) {
-        // Speckit receives openspec's output for collaborative review
-        agentResult = await runSpeckitReview({
-          promptExec, story, openspecOutput: openspecPayload,
-          phase: opts.phase, runId, logDir
-        });
-      } else {
-        agentResult = await runSpecAgent({
-          promptExec, agent, story, phase: opts.phase, runId, logDir
-        });
-      }
+      try {
+        if (agent === 'speckit' && openspecPayload) {
+          // Speckit receives openspec's output for collaborative review
+          agentResult = await runSpeckitReview({
+            promptExec, story, openspecOutput: openspecPayload,
+            phase: opts.phase, runId, logDir
+          });
+        } else {
+          agentResult = await runSpecAgent({
+            promptExec, agent, story, phase: opts.phase, runId, logDir
+          });
+        }
+      } catch (err) { agentResult = null; }
 
       // Retry on transient failure (timeout, provider outage).
       // For openspec (the sole split authority), use a HIGH ladder:
@@ -541,26 +615,33 @@ ${storiesPayload}
       //   retry 2+ — escalate to SPEC_MODE_OPENSPEC_MODEL_HIGH if configured
       // SPEC_AGENT_MAX_RETRIES defaults to 3 for openspec, 1 for other agents.
       const _isOpenspec = agent === 'openspec';
-      const _specMaxRetries = parseInt(
-        process.env.SPEC_AGENT_MAX_RETRIES || (_isOpenspec ? '3' : '1'), 10
-      );
+      // openspec and speckit are both critical — neither may fail. Both agents get the
+      // same 3-retry budget (+ model escalation on attempt 2+). "Failures are not permitted"
+      // means: retry to success, or abort the pipeline with exit(1). Never continue silently.
+      const _specMaxRetries = parseInt(process.env.SPEC_AGENT_MAX_RETRIES || '3', 10);
       const _openspecHighModel = process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH || process.env.SPEC_MODE_OPENSPEC_MODEL || '';
       const _openspecBaseModel = process.env.SPEC_MODE_OPENSPEC_MODEL || '';
+      const _speckitHighModel = process.env.SPEC_MODE_SPECKIT_MODEL_HIGH || process.env.SPEC_MODE_SPECKIT_MODEL || '';
+      const _speckitBaseModel = process.env.SPEC_MODE_SPECKIT_MODEL || '';
       let _specRetry = 0;
       while (!agentResult && _specRetry < _specMaxRetries) {
         _specRetry++;
-        // For openspec retry 2+, escalate to the HIGH model if it differs from base.
-        const _escalate = _isOpenspec && _specRetry >= 2 && _openspecHighModel && _openspecHighModel !== _openspecBaseModel;
+        // For retry 2+, escalate to the HIGH model if it differs from base — both agents.
+        const _escalateOpenspec = _isOpenspec && _specRetry >= 2 && _openspecHighModel && _openspecHighModel !== _openspecBaseModel;
+        const _escalateSpeckit = !_isOpenspec && agent === 'speckit' && _specRetry >= 2 && _speckitHighModel && _speckitHighModel !== _speckitBaseModel;
+        const _escalate = _escalateOpenspec || _escalateSpeckit;
+        const _prevModel = _isOpenspec ? _openspecBaseModel : _speckitBaseModel;
+        const _nextModel = _isOpenspec ? _openspecHighModel : _speckitHighModel;
         if (_escalate) {
           console.warn(
-            `spec-mode: ${agent} ladder escalation for ${story.id} (attempt ${_specRetry + 1}/${_specMaxRetries + 1}) — model ${_openspecBaseModel} → ${_openspecHighModel}`
+            `spec-mode: ${agent} ladder escalation for ${story.id} (attempt ${_specRetry + 1}/${_specMaxRetries + 1}) — model ${_prevModel} → ${_nextModel}`
           );
           appendSpecPassEvent(logDir, {
             storyId: story.id,
             phase: opts.phase,
             event: 'spec_timeout_escalation',
             decision: 'escalating',
-            details: { prevModel: _openspecBaseModel, newModel: _openspecHighModel, retry: _specRetry }
+            details: { agent, prevModel: _prevModel, newModel: _nextModel, retry: _specRetry }
           });
         } else {
           console.warn(
@@ -569,7 +650,7 @@ ${storiesPayload}
         }
         summary.stats.agentAttempts += 1;
         try {
-          if (_escalate) {
+          if (_escalateOpenspec) {
             const _savedModel = process.env.SPEC_MODE_OPENSPEC_MODEL;
             process.env.SPEC_MODE_OPENSPEC_MODEL = _openspecHighModel;
             try {
@@ -577,6 +658,15 @@ ${storiesPayload}
             } finally {
               if (_savedModel !== undefined) process.env.SPEC_MODE_OPENSPEC_MODEL = _savedModel;
               else delete process.env.SPEC_MODE_OPENSPEC_MODEL;
+            }
+          } else if (_escalateSpeckit) {
+            const _savedModel = process.env.SPEC_MODE_SPECKIT_MODEL;
+            process.env.SPEC_MODE_SPECKIT_MODEL = _speckitHighModel;
+            try {
+              agentResult = await runSpeckitReview({ promptExec, story, openspecOutput: openspecPayload, phase: opts.phase, runId, logDir });
+            } finally {
+              if (_savedModel !== undefined) process.env.SPEC_MODE_SPECKIT_MODEL = _savedModel;
+              else delete process.env.SPEC_MODE_SPECKIT_MODEL;
             }
           } else {
             agentResult = agent === 'speckit' && openspecPayload
@@ -587,36 +677,21 @@ ${storiesPayload}
       }
 
       if (!agentResult || !agentResult.payload) {
-        // Mark story as spec-pass-failed when it still needs a split — the orchestrator
-        // can read this flag to block execution on untuned PRDs (SPEC_PASS_BLOCK_ON_TIMEOUT).
-        const _splitReq = storyRequiresSplit(captureStorySnapshot(story));
-        if (_splitReq.required) {
-          story.specification = {
-            ...(story.specification || {}),
-            specPassFailed: true,
-            specPassFailedReason: `${agent} returned null after ${_specRetry + 1} attempt(s)`
-          };
-          console.error(
-            `[WARN] Spec pass FAILED for ${story.id} — PRD untuned (${_splitReq.reason}), execution proceeding at risk`
-          );
-        }
-        summary.stats.agentFailures += 1;
+        // openspec/speckit failures are not permitted — hard abort so the run is clearly
+        // contaminated and must be relaunched rather than proceeding with an unreviewed PRD.
         await emitMonitorEvent({
           monitorScript,
           type: 'error',
-          message: `[${opts.phase}] ${agent} produced no parsable output for ${story.id}${codeHint}`,
+          message: `[${opts.phase}] FATAL — ${agent} produced no parsable output for ${story.id} after ${_specRetry + 1} attempt(s)`,
           storyId: story.id,
           role: agent
         });
-        agentContributions.push({
-          agent,
-          applied: false,
-          notes: 'Agent output could not be parsed',
-          acceptanceChanged: false,
-          splitCount: 0,
-          timestamp: new Date().toISOString()
-        });
-        continue;
+        console.error(
+          `spec-mode: FATAL — ${agent} returned null for ${story.id} after ${_specRetry + 1} attempt(s). ` +
+          `openspec/speckit failures are not permitted. Aborting pipeline. ` +
+          `Check SPEC_MODE_SPECKIT_MODEL/SPEC_MODE_OPENSPEC_MODEL and RUNCLAUDE_TIMEOUT_MS.`
+        );
+        process.exit(1);
       }
 
       let { payload } = agentResult;
@@ -1208,14 +1283,17 @@ Use "keep-current" to accept the current (possibly rule-upgraded) model. Only pr
 <MODEL_REVIEW>
 </MODEL_REVIEW>`;
 
-    const llmDecisions = await runAgentForJson(
-      promptExec,
-      modelReviewPrompt,
-      TOOL_MODEL_REVIEW,
-      'MODEL_REVIEW',
-      path.join(logDir, `spec-model-review-${opts.phase}.log`),
-      'items'
-    );
+    let llmDecisions = null;
+    try {
+      llmDecisions = await runAgentForJson(
+        promptExec,
+        modelReviewPrompt,
+        TOOL_MODEL_REVIEW,
+        'MODEL_REVIEW',
+        path.join(logDir, `spec-model-review-${opts.phase}.log`),
+        'items'
+      );
+    } catch (err) { llmDecisions = null; }
     if (Array.isArray(llmDecisions)) {
       // Tier label → canonical model ID (LLM sometimes echoes the tier label instead of a real model string)
       const TIER_LABEL_MAP = {
@@ -1403,8 +1481,20 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
   // maximum prominence, not just a repeat of the same mid-prompt phrasing.
   const forcedRetryBlock = forcedRetryNote ? `${forcedRetryNote}\n\n` : '';
 
-  const prompt = `${forcedRetryBlock}You are the ${agent} specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.${splitWarning}${priorGapsBlock}
+  const sembleContext = fetchSembleContext(story);
 
+  // Brownfield archaeology block — injected for openspec only when EPAM_BROWNFIELD=1.
+  // openspec must identify the existing change site before writing any AC.
+  // locationHint feeds directly into the story agent's context so it opens the right file.
+  const isBrownfieldOpenspec = process.env.EPAM_BROWNFIELD === '1' && agent === 'openspec';
+  const brownfieldArchaeologyBlock = isBrownfieldOpenspec
+    ? `\n\nBROWNFIELD INVESTIGATION (mandatory — complete before writing any AC):\nThis is an existing codebase. Identify the specific file(s) and function(s) that currently handle the behavior described in this story. Set the "locationHint" field in your output to: [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this is the fix site>"}]. ACs must describe changes to those specific locations — do not propose new files, services, or abstractions.\n`
+    : '';
+  const locationHintSchemaLine = isBrownfieldOpenspec
+    ? `\n  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this is the fix site"}],`
+    : '';
+
+  const prompt = `${forcedRetryBlock}You are the ${agent} specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.${splitWarning}${priorGapsBlock}${sembleContext}${brownfieldArchaeologyBlock}
 Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
 {
   "storyId":"${story.id}",
@@ -1412,7 +1502,7 @@ Generate refined acceptance criteria, optionally updated title/description, and 
   "notes":"context",
   "acceptanceCriteria":["..."],
   "description":"...",
-  "title":"...",
+  "title":"...",${locationHintSchemaLine}
   "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]
 }
 Use existing text when no change is needed.
@@ -2386,7 +2476,7 @@ function extractTaggedJson(text, tag) {
   return null;
 }
 
-const RUNCLAUDE_TIMEOUT_MS = parseInt(process.env.RUNCLAUDE_TIMEOUT_MS || '180000', 10);
+const RUNCLAUDE_TIMEOUT_MS = parseInt(process.env.RUNCLAUDE_TIMEOUT_MS || '360000', 10);
 
 function runClaude(execSpec, prompt, logPath, envOverrides = {}) {
   return new Promise((resolve, reject) => {
@@ -2823,14 +2913,17 @@ async function validateMidExecutionSplits(prdFile, storyIdsCsv) {
       }))
     };
 
-    const speckitResult = await runSpeckitReview({
-      promptExec,
-      story: parentStory,
-      openspecOutput,
-      phase,
-      runId,
-      logDir
-    });
+    let speckitResult = null;
+    try {
+      speckitResult = await runSpeckitReview({
+        promptExec,
+        story: parentStory,
+        openspecOutput,
+        phase,
+        runId,
+        logDir
+      });
+    } catch (err) { speckitResult = null; }
 
     // Apply speckit refinements if returned
     if (speckitResult?.payload?.splitStories) {

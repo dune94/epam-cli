@@ -1503,6 +1503,33 @@ Use "keep-current" to accept the current (possibly rule-upgraded) model. Only pr
 // Agent prompt builders
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Brownfield archaeology block — must fire for EPAM_BROWNFIELD=1 regardless of
+// which spec agent (openspec or speckit) is running the prompt. Whichever
+// agent runs must identify the existing change site before writing any AC;
+// locationHint feeds directly into the story agent's context so it opens the
+// right file. Extracted as a pure, exported function (rather than left inline
+// as a private ternary) specifically so this condition can be tested by
+// calling it, not by grepping source text for a string pattern — a static
+// regex assertion is exactly what let the original bug ship silently.
+//
+// Root cause fix (2026-07-23, live AMSD-1820 failure): this used to also
+// require `agent === 'openspec'`. The coordinator can legitimately assign
+// ONLY speckit to a story (openspec ran "0 stories" that phase) — when that
+// happens, this block never fired for that story at all: no locationHint
+// request, no CodeGraph/Semble grounding instruction, nothing. The story
+// then went to execution with zero file guidance in a large real repo, and
+// 8 real agent attempts never found the actual fix site.
+function buildBrownfieldArchaeologyBlock(env = process.env) {
+  const isBrownfield = env.EPAM_BROWNFIELD === '1';
+  const archaeologyBlock = isBrownfield
+    ? `\n\nBROWNFIELD MODE — output JSON only, no tools, no search.\nUsing ONLY the EXISTING CODE block already present in this prompt (injected above via CodeGraph or Semble), identify which file(s) and function(s) currently handle the behavior described in this story. Set the "locationHint" field in your JSON output to: [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this is the fix site>"}]. If no relevant code appears in the existing code block above, set locationHint to []. ACs must describe changes to those existing locations — do not propose new files, services, or abstractions.\n`
+    : '';
+  const schemaLine = isBrownfield
+    ? `\n  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this is the fix site"}],`
+    : '';
+  return { archaeologyBlock, schemaLine };
+}
+
 // openspec: first-pass elaboration
 async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, forcedRetryNote }) {
   const acCount = Array.isArray(story.acceptanceCriteria) ? story.acceptanceCriteria.length : 0;
@@ -1546,16 +1573,22 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
 
   const sembleContext = fetchExistingCodeContext(story);
 
-  // Brownfield archaeology block — injected for openspec only when EPAM_BROWNFIELD=1.
-  // openspec must identify the existing change site before writing any AC.
-  // locationHint feeds directly into the story agent's context so it opens the right file.
-  const isBrownfieldOpenspec = process.env.EPAM_BROWNFIELD === '1' && agent === 'openspec';
-  const brownfieldArchaeologyBlock = isBrownfieldOpenspec
-    ? `\n\nBROWNFIELD MODE — output JSON only, no tools, no search.\nUsing ONLY the EXISTING CODE block already present in this prompt (injected above via CodeGraph or Semble), identify which file(s) and function(s) currently handle the behavior described in this story. Set the "locationHint" field in your JSON output to: [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this is the fix site>"}]. If no relevant code appears in the existing code block above, set locationHint to []. ACs must describe changes to those existing locations — do not propose new files, services, or abstractions.\n`
-    : '';
-  const locationHintSchemaLine = isBrownfieldOpenspec
-    ? `\n  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this is the fix site"}],`
-    : '';
+  // Brownfield archaeology block — injected for EPAM_BROWNFIELD=1 regardless of
+  // which spec agent is running. Whichever agent runs must identify the
+  // existing change site before writing any AC; locationHint feeds directly
+  // into the story agent's context so it opens the right file.
+  //
+  // Root cause fix (2026-07-23, live AMSD-1820 failure): this used to also
+  // require `agent === 'openspec'`. The coordinator can legitimately assign
+  // ONLY speckit to a story (openspec ran "0 stories" that phase) — when that
+  // happens, this block never fired for that story at all: no locationHint
+  // request, no CodeGraph/Semble grounding instruction, nothing. The story
+  // then went to execution with zero file guidance in a large real repo,
+  // and 8 real agent attempts never found the actual fix site. sembleContext
+  // (the CodeGraph/Semble-injected existing code, above) is already computed
+  // unconditionally regardless of which agent runs, so it's available either way.
+  const { archaeologyBlock: brownfieldArchaeologyBlock, schemaLine: locationHintSchemaLine } =
+    buildBrownfieldArchaeologyBlock(process.env);
 
   const prompt = `${forcedRetryBlock}You are the ${agent} specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.${splitWarning}${priorGapsBlock}${sembleContext}${brownfieldArchaeologyBlock}
 Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
@@ -1716,13 +1749,30 @@ function buildAssignments(assignments, stories, runId) {
   const map = new Map();
   const fallback = ['openspec', 'speckit'];
   const storyIds = new Set(stories.map((s) => s.id));
+  // Brownfield mode: the coordinator can legitimately decide a story needs no
+  // AC elaboration/hardening (agents: []) — but the archaeology/locationHint
+  // block that grounds the story in the EXISTING repo (which file to change)
+  // only exists inside the openspec/speckit per-agent prompt. When agents is
+  // empty, that block never fires for ANY reason, including well-formed
+  // stories whose ACs came from the Jira AC-gate's own enrichment — the exact
+  // case a real ticket produces. The story then proceeds to implementation
+  // with zero file/location grounding. Found live 2026-07-23 (MOCK-HW-1):
+  // "Trivial string change with clear, complete AC... Ready for direct
+  // implementation" → agents:[] → technicalNotes.files never populated.
+  // Fix: in brownfield mode, always run at least one agent (speckit — the
+  // cheaper hardening-only pass) so archaeology always gets a chance to run,
+  // regardless of AC quality. The coordinator's "no elaboration needed"
+  // judgment about openspec is still respected; only the "zero agents at
+  // all" outcome is disallowed.
+  const isBrownfield = process.env.EPAM_BROWNFIELD === '1';
   if (Array.isArray(assignments)) {
     assignments.forEach((entry) => {
       if (!entry || !storyIds.has(entry.storyId)) return;
       // Guard: only accept known agent names — LLM sometimes returns review content as agent name
       const VALID_AGENTS = new Set(['openspec', 'speckit']);
       const rawAgents = Array.isArray(entry.agents) ? entry.agents : [];
-      const agents = rawAgents.filter(a => typeof a === 'string' && VALID_AGENTS.has(a));
+      let agents = rawAgents.filter(a => typeof a === 'string' && VALID_AGENTS.has(a));
+      if (isBrownfield && agents.length === 0) agents = ['speckit'];
       map.set(entry.storyId, {
         storyId: entry.storyId,
         agents,
@@ -2249,6 +2299,31 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId, logDi
   }
   if (payload.technicalNotes && typeof payload.technicalNotes === 'object') {
     story.technicalNotes = payload.technicalNotes;
+  }
+  // locationHint (brownfield openspec only): CodeGraph/Semble-grounded fix-site
+  // file paths, discovered from the "EXISTING CODE" context already injected
+  // into this same prompt. The prompt explicitly asks the model for this
+  // (see locationHintSchemaLine above) but until now nothing ever read the
+  // response back out — it was requested and silently discarded every time.
+  // Without this reaching technicalNotes.files, the later planning/execution
+  // prompts show an empty "Files to Create/Modify" section, so the story
+  // agent has no grounded target and has to spend its own turn budget
+  // searching the codebase from scratch — often running out before writing
+  // anything real. Live bug (2026-07-22): AMSD-1820 ran dry mid-search
+  // ("Now let me look at the Mozio dispatch models:") and the only file that
+  // actually changed was CodeGraph's own incidental index write, which the
+  // auto-commit step then swept up as if it were the story's real output.
+  // Merge (not overwrite) — technicalNotes may already carry other fields
+  // (or files) from this same payload or an earlier pass.
+  if (Array.isArray(payload.locationHint) && payload.locationHint.length) {
+    const hintFiles = payload.locationHint
+      .map(h => (h && typeof h === 'object' ? h.file : null))
+      .filter(f => typeof f === 'string' && f.trim().length > 0);
+    if (hintFiles.length) {
+      const existingFiles = Array.isArray(story.technicalNotes?.files) ? story.technicalNotes.files : [];
+      const mergedFiles = [...new Set([...existingFiles, ...hintFiles])];
+      story.technicalNotes = { ...(story.technicalNotes || {}), files: mergedFiles };
+    }
   }
   if (Array.isArray(payload.splitStories) && payload.splitStories.length) {
     const currentDepth = splitDepth(story, prd);
@@ -3135,6 +3210,7 @@ module.exports = {
   isSplitDelegationOnlyChange,
   SPLIT_MANDATE_AC_THRESHOLD,
   applySpecChanges,
+  buildBrownfieldArchaeologyBlock,
   validateMidExecutionSplits,
   extractCodeRefs,
   resolvePromptProvider,

@@ -38,8 +38,12 @@ fi
 PHASE_ID=$1
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
-PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
-PRD_FILE="$AUTOMATION_DIR/prd.json"
+# Respect the caller's PROJECT_ROOT/PRD_FILE (exported by run-agent-orchestration.sh)
+# so an external-project run (test-app/codeline) reviews ITS OWN code and PRD,
+# not epam-cli's own repo/prd.json — falls back to epam-cli's own paths only
+# when invoked standalone with neither set.
+PROJECT_ROOT="${PROJECT_ROOT:-$(dirname "$AUTOMATION_DIR")}"
+PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
 AUTO_APPROVE="${AUTO_APPROVE:-false}"
 REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
 AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"

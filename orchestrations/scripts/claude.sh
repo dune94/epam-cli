@@ -1389,6 +1389,7 @@ verify_story_deliverables() {
             done)
     fi
 
+    local unchanged=()
     while IFS= read -r file; do
         [ -n "$file" ] || continue
         declared=$((declared + 1))
@@ -1418,6 +1419,52 @@ verify_story_deliverables() {
         [ "$_is_vendor_path" = true ] && continue
         if [ ! -s "$check_path" ]; then
             missing+=("$file")
+            continue
+        fi
+        # Brownfield: "exists and is non-empty" is a real signal for a file
+        # the agent was supposed to CREATE, but it is trivially true — and
+        # proves nothing — for a file that already existed before this story
+        # started, which is the normal case for a bugfix in an existing
+        # codebase. Live bug (2026-07-22): three separate story attempts ran
+        # out of turn budget mid-exploration, called WriteFile/Edit on
+        # nothing, and this check still passed every time because the
+        # declared files (pre-existing application code) were obviously
+        # already there — the pipeline then marked the story "completed" and
+        # committed whatever incidental pipeline noise (CodeGraph index,
+        # .epam manifests) happened to be dirty instead. For a file that
+        # already existed at the story's own baseline (the commit its branch
+        # was created from — see ensure_story_branch), require a REAL
+        # content diff, not just presence. A genuinely NEW file (didn't
+        # exist at baseline) is already fully proven by the exists+non-empty
+        # check above — no diff is possible or required for it.
+        if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -d "$PROJECT_ROOT/.git" ]; then
+            local _baseline_ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+            if git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1; then
+                local _rel_path="$check_path"
+                case "$_rel_path" in
+                    "$PROJECT_ROOT"/*) _rel_path="${_rel_path#"$PROJECT_ROOT"/}" ;;
+                esac
+                if git -C "$PROJECT_ROOT" cat-file -e "${_baseline_ref}:${_rel_path}" 2>/dev/null; then
+                    if git -C "$PROJECT_ROOT" diff --quiet "$_baseline_ref" -- "$_rel_path" 2>/dev/null; then
+                        # Soft signal, NOT added to missing[] — declared files
+                        # that pre-existed at baseline (the normal case for a
+                        # bugfix) can legitimately include several CANDIDATE
+                        # fix sites (e.g. locationHint's 2-3 file guesses from
+                        # spec-mode-runner.js), only some of which the agent
+                        # may genuinely need to touch. Requiring EVERY
+                        # candidate to change is over-strict and produces a
+                        # false failure the moment a real fix only needs a
+                        # subset — found live (2026-07-23, AMSD-1820): openspec
+                        # correctly identified 3 candidate files, the agent
+                        # correctly edited 2 of them, and this check failed
+                        # the whole story over the 1 unedited candidate.
+                        # A file the story explicitly says to CREATE (didn't
+                        # exist at baseline) has no such ambiguity — that one
+                        # stays a hard requirement via missing[] above.
+                        unchanged+=("$file")
+                    fi
+                fi
+            fi
         fi
     done < <(jq -r --arg id "$story_id" \
         '.stories[] | select(.id == $id) | .technicalNotes.files[]? // empty' \
@@ -1429,6 +1476,52 @@ verify_story_deliverables() {
             error "  $file"
         done
         return 1
+    fi
+
+    # Fail only when EVERY declared, pre-existing file is unchanged — that's
+    # the "nothing real happened" signal this whole function exists to catch.
+    # If at least one declared file shows a real diff, the story did genuine
+    # work; the rest were legitimate candidates that turned out unnecessary.
+    if [ "$declared" -gt 0 ] && [ ${#unchanged[@]} -eq "$declared" ]; then
+        error "Story $story_id: all $declared declared deliverable(s) exist but are UNCHANGED since baseline — no real work done anywhere in the declared set:"
+        for file in "${unchanged[@]}"; do
+            error "  $file"
+        done
+        return 1
+    elif [ ${#unchanged[@]} -gt 0 ]; then
+        warning "Story $story_id: ${#unchanged[@]}/$declared declared candidate file(s) were unchanged (real work landed in the others) — informational, not a failure:"
+        for file in "${unchanged[@]}"; do
+            warning "  $file"
+        done
+    fi
+
+    # Brownfield, zero declared files: the per-file loop above has nothing to
+    # check, so it trivially passes — but that proves nothing about whether
+    # the agent actually did any real work. Live bug (2026-07-22, run14):
+    # locationHint propagation into technicalNotes.files (see spec-mode-
+    # runner.js) is itself non-deterministic — the same spec-pass prompt can
+    # return it populated on one attempt and empty on the next. When it's
+    # empty, this function had NOTHING to verify and silently passed a story
+    # whose agent turn produced no real change at all (confirmed: the only
+    # file that had changed was CodeGraph's own incidental index write).
+    # Fallback: if brownfield declared zero files, require the WHOLE tree to
+    # show some real change relative to baseline, excluding known-incidental
+    # pipeline paths (.codegraph/, .epam/) that are never genuine story
+    # output. This is a coarser check than the per-file diff above (it can't
+    # say WHICH file should have changed, since none were declared), but it
+    # still catches "nothing real happened" — the actual failure pattern
+    # behind three separate false-completion incidents today.
+    if [ "$declared" -eq 0 ] && [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -d "$PROJECT_ROOT/.git" ]; then
+        local _baseline_ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+        if git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1; then
+            local _real_changes
+            _real_changes=$(git -C "$PROJECT_ROOT" diff --name-only "$_baseline_ref" 2>/dev/null | \
+                grep -v -E '^(\.codegraph/|\.epam/)' || true)
+            if [ -z "$_real_changes" ]; then
+                error "Story $story_id declared NO technicalNotes.files, and no real change exists anywhere in $PROJECT_ROOT relative to ${_baseline_ref} (only incidental pipeline paths, if anything, changed) — treating as incomplete rather than trusting an empty deliverable list."
+                return 1
+            fi
+        fi
     fi
 
     if [ "$declared" -gt 0 ]; then
@@ -1718,15 +1811,28 @@ run_vendor_integrity_check() {
 # kept hitting (supertest imported but never added to devDependencies,
 # burning full retry cycles on the same mechanical mistake every time).
 #
-# Fully generic: reads <project_root>/.epam/dependency-check.json for the
-# manifest file, its dependency keys, the import-statement regex, and the
-# install command template — all data, no npm/pip/cargo/language assumption
-# anywhere in this function. Different orchestrations (Python, Rust, etc.)
-# supply their own manifest; this function is identical for all of them.
+# Fully generic: reads a dependency-check.json for the manifest file, its
+# dependency keys, the import-statement regex, and the install command
+# template — all data, no npm/pip/cargo/language assumption anywhere in this
+# function. Different orchestrations (Python, Rust, etc.) supply their own
+# manifest; this function is identical for all of them.
+#
+# Config location: for a brownfield codeline, this config is NEVER stored
+# inside the client's own repo (a client codeline is not epam-cli's to write
+# into, even for our own tooling — see feedback_no_client_repo_writes_or_
+# hardcoding memory). EPAM_PROJECT_CONFIG_DIR (set by the project's own
+# tier3-*-run.sh, e.g. orchestrations/projects/metrolinx) is checked first;
+# only a project WITHOUT that var set (greenfield, scaffolding its own new
+# repo from scratch — a repo the pipeline itself owns) falls back to
+# <project_root>/.epam/dependency-check.json, which is legitimate there
+# since the pipeline authored that repo in the first place.
 # No manifest present = no-op (opt-in feature, old projects unaffected).
 run_dependency_check() {
     local project_root="$1"
-    local config_file="${project_root}/.epam/dependency-check.json"
+    local config_file="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    if [ -z "${EPAM_PROJECT_CONFIG_DIR:-}" ] || [ ! -f "$config_file" ]; then
+        config_file="${project_root}/.epam/dependency-check.json"
+    fi
     [ -f "$config_file" ] || return 0
 
     python3 - "$project_root" "$config_file" << 'PYEOF'

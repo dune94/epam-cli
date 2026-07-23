@@ -38,6 +38,11 @@ fi
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
 # Always resolve to absolute path — relative paths break when CWD changes in worktrees
 PRD_FILE="$(cd "$(dirname "$PRD_FILE")" && pwd)/$(basename "$PRD_FILE")"
+# Exported so subprocesses invoked by absolute path (e.g. team-lead-review.sh)
+# resolve the SAME PRD as this run, instead of falling back to their own
+# AUTOMATION_DIR/prd.json — which silently reviews the wrong project entirely
+# whenever PRD_FILE points at an external test-app/codeline.
+export PRD_FILE
 
 # Resolve NODE_BIN once so all inline `node -e` calls (codeline extraction,
 # story counting, etc.) use a consistent, working binary regardless of PATH.
@@ -91,8 +96,20 @@ if [ "$PROJECT_ROOT" = "$_repo_root" ]; then
 fi
 
 AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
-# Compute PRD path relative to PROJECT_ROOT for injecting into agent prompts
+# Compute PRD path relative to PROJECT_ROOT for injecting into agent prompts.
+# In the codeline-loop path, PRD_FILE is a per-codeline temp copy under /tmp/
+# (e.g. /tmp/orch-<cl>-prd-$$.json) that lives nowhere near PROJECT_ROOT (a
+# codeline worktree elsewhere under /tmp/ or the real project tree) — the
+# "relative" path then requires several "../" hops out of the project root
+# entirely (e.g. "../../../orch-mockhelloworld-prd-12345.json"). Found live
+# 2026-07-23: an agent given that path burned its whole iteration budget
+# reasoning about whether the traversal was valid instead of just reading
+# the file, and never completed its actual task. Use the absolute path in
+# that case — it's unambiguous and costs the agent nothing to resolve.
 PRD_REL="$(realpath --relative-to="$PROJECT_ROOT" "$(realpath "$PRD_FILE")" 2>/dev/null || echo "orchestrations/prd.json")"
+case "$PRD_REL" in
+  ../*) PRD_REL="$(realpath "$PRD_FILE" 2>/dev/null || echo "$PRD_FILE")" ;;
+esac
 # Select wrapper script based on PROVIDER override or CLAUDE_CMD
 case "${EPAM_ORCHESTRATION_PROVIDER:-${CLAUDE_CMD}}" in
     codemie-claude) CLAUDE_SH="$SCRIPT_DIR/codemie-claude.sh" ;;
@@ -368,6 +385,267 @@ detect_node() {
         [ -n "$c" ] && [ -x "$c" ] && echo "$c" && return 0
     done
     echo ""
+    return 1
+}
+
+# resolve_codeline_node <codeline_root>
+# Resolves a node binary satisfying <codeline_root>/package.json's OWN
+# "engines.node" declaration, installing it on demand via fnm if not already
+# present. Fully data-driven — the required version comes entirely from the
+# codeline's own manifest; no version number is ever hardcoded here, so this
+# works for any Node version any codeline happens to declare.
+#
+# Live bug this closes (2026-07-22): the regression guard ran a codeline's
+# vitest using detect_node()'s orchestrator-side Node (whatever fnm/nvm
+# version happens to be active for THIS shell — v24.14.1 at the time), not
+# the Node version the codeline itself was built/tested against
+# ("engines": {"node": "^22"}). Running vitest under a mismatched major Node
+# version crashed outright (SIGBUS/segfault from a native module ABI break),
+# which the regression guard then reported as "tests broken" even though the
+# codeline's own tests were never actually exercised.
+#
+# Falls back to detect_node()'s existing generic candidate search if the
+# codeline declares no engines.node, fnm is unavailable, or the declared
+# range can't be resolved/installed for any reason — this must never be the
+# thing that blocks a run outright.
+resolve_codeline_node() {
+    local codeline_root="$1"
+    local pkg="$codeline_root/package.json"
+    local required=""
+
+    if [ -f "$pkg" ]; then
+        required=$(node -e '
+          try {
+            const p = require(process.argv[1]);
+            process.stdout.write((p.engines && p.engines.node) || "");
+          } catch { process.stdout.write(""); }
+        ' "$pkg" 2>/dev/null || true)
+    fi
+
+    if [ -z "$required" ] || ! command -v fnm &>/dev/null; then
+        detect_node
+        return
+    fi
+
+    # fnm install/exec want a partial semver (e.g. "22", "20.10"), not a full
+    # range operator like "^22" or ">=22 <23" — extract the first version-like
+    # token from whatever the codeline declares. This is a heuristic, not a
+    # full semver-range resolver, but covers the common declaration shapes
+    # (^N, ~N, >=N, N.x, exact N.N.N) without hardcoding any specific version.
+    local fnm_version
+    fnm_version=$(echo "$required" | grep -oE '[0-9]+(\.[0-9]+){0,2}' | head -1)
+
+    if [ -z "$fnm_version" ]; then
+        detect_node
+        return
+    fi
+
+    fnm install "$fnm_version" >/dev/null 2>&1 || true
+
+    local resolved_bin
+    resolved_bin=$(fnm exec --using="$fnm_version" -- node -e 'process.stdout.write(process.execPath)' 2>/dev/null || true)
+
+    if [ -n "$resolved_bin" ] && [ -x "$resolved_bin" ]; then
+        echo "$resolved_bin"
+        return 0
+    fi
+
+    detect_node
+}
+
+# detect_and_install_dependencies <codeline_root> <node_bin>
+# Generic, manifest-driven dependency install — detects the stack from
+# manifest file PRESENCE (data), never assumes npm/Node is the only stack a
+# codeline could use. Same detection matrix the old setup-deps.sh had, minus
+# the private-scope-strip hack it also carried (that hack was rejected as
+# permanent pipeline tooling — see feedback_no_client_repo_writes_or_
+# hardcoding memory; a repair needing that kind of manifest mutation stays a
+# manual, case-by-case decision, e.g. the azure.commerce.cdts cx-shared
+# incident, 2026-07-22).
+#
+# Each handler is independent and non-fatal on its own failure — this
+# mirrors run_dependency_check's own philosophy (a bad handler shouldn't
+# block every other stack's install). Returns 0 if at least one recognized
+# manifest was found and its handler didn't hard-fail; 1 if no manifest was
+# recognized, or the one that WAS found failed outright.
+detect_and_install_dependencies() {
+    local codeline_root="$1"
+    local node_bin="$2"
+    local ran_any=0
+    local ok=1
+
+    if [ -f "$codeline_root/package.json" ]; then
+        ran_any=1
+        local npm_bin
+        npm_bin="$(dirname "$node_bin")/npm"
+        if [ ! -x "$npm_bin" ]; then
+            warning "  [deps-install] npm not found alongside $node_bin"
+            ok=0
+        else
+            local pm_bin="$npm_bin" pm_cmd="install"
+            if [ -f "$codeline_root/pnpm-lock.yaml" ] && command -v pnpm &>/dev/null; then
+                pm_bin=$(command -v pnpm); pm_cmd="install"
+            elif [ -f "$codeline_root/yarn.lock" ] && command -v yarn &>/dev/null; then
+                pm_bin=$(command -v yarn); pm_cmd="install"
+            elif [ -f "$codeline_root/package-lock.json" ]; then
+                pm_cmd="ci"
+            fi
+            local repair_log; repair_log=$(mktemp)
+            if [ "$pm_bin" = "$npm_bin" ]; then
+                (cd "$codeline_root" && "$node_bin" "$npm_bin" "$pm_cmd" --no-audit --no-fund) > "$repair_log" 2>&1
+            else
+                (cd "$codeline_root" && "$pm_bin" "$pm_cmd") > "$repair_log" 2>&1
+            fi
+            if [ $? -eq 0 ]; then
+                success "  [deps-install] npm-stack install ($pm_cmd via $(basename "$pm_bin")) succeeded in $codeline_root"
+            else
+                warning "  [deps-install] npm-stack install FAILED in $codeline_root — tail below (often a private-registry auth wall):"
+                tail -10 "$repair_log" >&2
+                ok=0
+            fi
+            rm -f "$repair_log"
+        fi
+    fi
+
+    if [ -f "$codeline_root/Pipfile" ] && command -v pipenv &>/dev/null; then
+        ran_any=1
+        (cd "$codeline_root" && pipenv install --dev --quiet) 2>&1 || { warning "  [deps-install] pipenv install failed in $codeline_root"; ok=0; }
+    elif { [ -f "$codeline_root/requirements.txt" ] || [ -f "$codeline_root/pyproject.toml" ]; } \
+         && { command -v pip3 &>/dev/null || command -v pip &>/dev/null; }; then
+        ran_any=1
+        local pip_bin; pip_bin=$(command -v pip3 || command -v pip)
+        if [ -f "$codeline_root/requirements.txt" ]; then
+            (cd "$codeline_root" && "$pip_bin" install --quiet -r requirements.txt) 2>&1 \
+              || { warning "  [deps-install] pip install failed in $codeline_root"; ok=0; }
+        else
+            (cd "$codeline_root" && "$pip_bin" install --quiet -e .) 2>&1 \
+              || { warning "  [deps-install] pip install (pyproject) failed in $codeline_root"; ok=0; }
+        fi
+    fi
+
+    if [ -f "$codeline_root/Cargo.toml" ] && command -v cargo &>/dev/null; then
+        ran_any=1
+        (cd "$codeline_root" && cargo fetch --quiet) 2>&1 || { warning "  [deps-install] cargo fetch failed in $codeline_root"; ok=0; }
+    fi
+
+    if [ -f "$codeline_root/go.mod" ] && command -v go &>/dev/null; then
+        ran_any=1
+        (cd "$codeline_root" && go mod download) 2>&1 || { warning "  [deps-install] go mod download failed in $codeline_root"; ok=0; }
+    fi
+
+    if [ -f "$codeline_root/pom.xml" ] && command -v mvn &>/dev/null; then
+        ran_any=1
+        (cd "$codeline_root" && mvn -q dependency:resolve) 2>&1 || { warning "  [deps-install] mvn dependency:resolve failed in $codeline_root"; ok=0; }
+    fi
+
+    if { [ -f "$codeline_root/build.gradle" ] || [ -f "$codeline_root/build.gradle.kts" ]; } && command -v gradle &>/dev/null; then
+        ran_any=1
+        (cd "$codeline_root" && ./gradlew dependencies --quiet) 2>&1 || { warning "  [deps-install] gradle dependencies failed in $codeline_root"; ok=0; }
+    fi
+
+    if [ -f "$codeline_root/Gemfile" ] && command -v bundle &>/dev/null; then
+        ran_any=1
+        (cd "$codeline_root" && bundle install --quiet) 2>&1 || { warning "  [deps-install] bundle install failed in $codeline_root"; ok=0; }
+    fi
+
+    if [ -f "$codeline_root/composer.json" ] && command -v composer &>/dev/null; then
+        ran_any=1
+        (cd "$codeline_root" && composer install --quiet --no-interaction) 2>&1 || { warning "  [deps-install] composer install failed in $codeline_root"; ok=0; }
+    fi
+
+    if [ "$ran_any" -eq 0 ]; then
+        warning "  [deps-install] no recognized manifest found in $codeline_root — nothing to install"
+        return 1
+    fi
+    [ "$ok" -eq 1 ]
+}
+
+# ensure_node_modules_healthy <codeline_root> <node_bin> <test_bin>
+# Detects a missing or CORRUPTED dependency install (not just "missing") and
+# repairs it via detect_and_install_dependencies() — never by editing any
+# manifest file, which stays purely a manual, case-by-case decision (see the
+# azure.commerce.cdts cx-shared incident, 2026-07-22 — that repair required
+# temporarily stripping a private-registry dependency and was done as an
+# explicit, user-approved one-off, not baked into automated tooling).
+#
+# Live bug this closes: a prior interrupted/killed install left node_modules
+# with truncated native binaries (esbuild, rollup) — present on disk, correct
+# file names, but silently corrupted. A plain "does node_modules exist" check
+# would have missed this entirely; the failure only surfaced when vitest
+# actually tried to load them and crashed outright (SIGBUS/segfault) instead
+# of a normal test failure. This function directly smoke-tests the SAME
+# binary the regression guard is about to invoke ("<test_bin> --version"),
+# which is the cheapest, most direct way to know whether it will actually
+# work — no need to guess at which native files might be corrupted, or fetch
+# reference file sizes from a registry.
+#
+# Returns 0 (healthy or successfully repaired) or 1 (still broken after a
+# genuine repair attempt — e.g. a private-registry auth wall with no
+# credentials available). Never silent: logs what it found and did either way.
+ensure_node_modules_healthy() {
+    local codeline_root="$1"
+    local node_bin="$2"
+    local test_bin="$3"
+
+    if [ -n "$test_bin" ] && [ -x "$test_bin" ]; then
+        if "$node_bin" "$test_bin" --version >/dev/null 2>&1; then
+            return 0
+        fi
+        warning "  [node-modules-health] $test_bin exists but crashed on --version — dependencies present but corrupted, attempting repair..."
+    else
+        warning "  [node-modules-health] test runner not found in $codeline_root/node_modules/.bin — attempting install..."
+    fi
+
+    detect_and_install_dependencies "$codeline_root" "$node_bin"
+}
+
+# ensure_story_branch <codeline_root> <story_id> [baseline_branch]
+# Every story commits to its OWN dedicated branch ("AI-<story_id>", derived
+# entirely from the story ID in flight — never a hardcoded name), freshly
+# created off origin/<baseline_branch> every single time via `checkout -B`
+# (which resets the branch to that start-point if it already exists,
+# discarding any prior half-done local attempt — same "clean slate every
+# run" principle already applied elsewhere in this pipeline).
+#
+# Live bug this eliminates (2026-07-22): the previous design committed
+# directly onto the shared baseline branch (develop) and relied on a durable
+# local marker (record_brownfield_verified_baseline / brownfield-preflight-
+# reset.sh) to know what "last known good" state to reset back to before each
+# run. That marker only updates when a story genuinely passes story_tsc_gate
+# — a manual correction to the branch (e.g. a human running `git reset --hard
+# origin/develop`) doesn't update it, so it can point at an already-discarded,
+# orphaned commit. The next run then trusts that stale marker and resets the
+# shared branch BACKWARD onto abandoned history, and a new story commit lands
+# on top of the wrong base — confirmed live: a discarded commit
+# (.epam/setup-deps.sh cruft) got silently reintroduced this way, and the
+# story commit built on top of it.
+#
+# Branching per story removes the entire problem class: there is no shared
+# mutable branch state to protect via a local marker. Every story always
+# starts from the ACTUAL current origin/<baseline_branch> tip, live, via
+# `git fetch` — never a cached/remembered SHA that can go stale.
+ensure_story_branch() {
+    local codeline_root="$1"
+    local story_id="$2"
+    local baseline_branch="${3:-${JIRA_BASELINE_BRANCH:-main}}"
+
+    [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
+    [ -d "$codeline_root/.git" ] || return 0
+    [ -n "$story_id" ] || return 0
+
+    local _branch="AI-${story_id}"
+
+    if ! git -C "$codeline_root" fetch origin "$baseline_branch" --quiet 2>/dev/null; then
+        warning "  [story-branch] $story_id: could not fetch origin/${baseline_branch} — proceeding on current branch state"
+        return 1
+    fi
+
+    if git -C "$codeline_root" checkout -B "$_branch" "origin/${baseline_branch}" --quiet 2>/dev/null; then
+        success "  [story-branch] $story_id: on branch '${_branch}', freshly based on origin/${baseline_branch}"
+        return 0
+    fi
+
+    warning "  [story-branch] $story_id: could not create/reset branch '${_branch}' off origin/${baseline_branch} — proceeding on current branch"
     return 1
 }
 
@@ -2016,6 +2294,23 @@ KNOWNFIXES_EOF
     if [ "$_cl_failed" = "0" ] && [ "${#_cl_entries[@]}" -gt 1 ]; then
       _run_codeline_bridge "$_cl" "$_wt" "$_cl_prd"
     fi
+
+    # Merge this codeline's final story state (status/completed/completedAt/
+    # testCriteria/etc — whatever claude.sh/TC-writer wrote into the filtered
+    # temp copy during real execution) back into the canonical PRD. Without
+    # this, _cl_prd is the only file that ever held the real completion
+    # result, and it was being deleted at the end of the loop — so the
+    # canonical PRD (the file every downstream consumer, dashboard, and test
+    # actually reads) stayed "pending" forever even after a real, successful
+    # run. Found live 2026-07-23 via mock1.
+    "$NODE_BIN" -e "
+      const fs = require('fs');
+      const canonical = JSON.parse(fs.readFileSync('${_prd_path}', 'utf8'));
+      const updated = JSON.parse(fs.readFileSync('${_cl_prd}', 'utf8'));
+      const byId = new Map(updated.stories.map(s => [s.id, s]));
+      canonical.stories = canonical.stories.map(s => byId.has(s.id) ? byId.get(s.id) : s);
+      fs.writeFileSync('${_prd_path}', JSON.stringify(canonical, null, 2));
+    " 2>/dev/null && log "[orch] Merged codeline '${_cl}' story state back into canonical PRD"
   done
 
   rm -f "${_cl_prds[@]}" "$_cross_prd" 2>/dev/null || true
@@ -2065,7 +2360,10 @@ _run_jira_pipeline() {
 
   log "[jira] ${JIRA_URL} (project: ${JIRA_PROJECT_KEY}) → ${_log_file}"
 
-  local _synth_prd="$AUTOMATION_DIR/travel-app-prd.json"
+  # Overridable so a test (or any concurrent, isolated Jira-pipeline run) can
+  # point the synthesized PRD at its own disposable path instead of colliding
+  # with whatever real project last used the shared default location.
+  local _synth_prd="${JIRA_SYNTH_PRD_PATH:-$AUTOMATION_DIR/travel-app-prd.json}"
   local _ingest_exit=0
   # IMPORTANT: do NOT use `|| _ingest_exit=${PIPESTATUS[0]}` here.
   # Without pipefail, the pipeline exit code is tee's exit code (almost always 0),
@@ -3402,7 +3700,6 @@ fi
 # Skip with: SKIP_REGRESSION_GUARD=true
 # ──────────────────────────────────────────────
 if [ "${SKIP_REGRESSION_GUARD:-false}" != "true" ]; then
-    _rg_node=$(detect_node 2>/dev/null || true)
     # Brownfield: run tests in the codeline directory, not PROJECT_ROOT.
     # The codeline has its own node_modules with its own test runner.
     _rg_root="$PROJECT_ROOT"
@@ -3414,10 +3711,30 @@ if [ "${SKIP_REGRESSION_GUARD:-false}" != "true" ]; then
         _cl_path="${!_wtvar}"
         [ -n "$_cl_path" ] && _rg_root="$_cl_path"
     fi
+    # Resolve node AFTER _rg_root is finalized — must be the version the
+    # codeline itself declares (engines.node), not whatever version happens
+    # to be active in the orchestrator's own shell. See resolve_codeline_node
+    # above for why this matters (a Node major-version mismatch crashes
+    # vitest outright rather than reporting a normal test failure).
+    _rg_node=$(resolve_codeline_node "$_rg_root" 2>/dev/null || true)
     # Detect test runner: prefer vitest, fall back to jest
     _rg_bin=""
     [ -f "$_rg_root/node_modules/.bin/vitest" ] && _rg_bin="$_rg_root/node_modules/.bin/vitest"
     [ -z "$_rg_bin" ] && [ -f "$_rg_root/node_modules/.bin/jest" ] && _rg_bin="$_rg_root/node_modules/.bin/jest"
+    # Brownfield environment prep: node_modules can be present-but-corrupted
+    # (a prior interrupted install left truncated native binaries — real
+    # incident, 2026-07-22) or missing entirely for a codeline the pipeline
+    # hasn't touched before. Smoke-test + repair BEFORE trusting the test
+    # runner, so a broken environment reads as a clear repair attempt, not a
+    # confusing "tests broken" failure that's actually an environment issue.
+    if [ -n "$_rg_node" ] && [ -f "$_rg_root/package.json" ]; then
+        ensure_node_modules_healthy "$_rg_root" "$_rg_node" "$_rg_bin" || true
+        # Re-detect — a first-time install creates node_modules/.bin/* that
+        # didn't exist a moment ago.
+        _rg_bin=""
+        [ -f "$_rg_root/node_modules/.bin/vitest" ] && _rg_bin="$_rg_root/node_modules/.bin/vitest"
+        [ -z "$_rg_bin" ] && [ -f "$_rg_root/node_modules/.bin/jest" ] && _rg_bin="$_rg_root/node_modules/.bin/jest"
+    fi
     if [ -n "$_rg_node" ] && [ -f "$_rg_root/package.json" ] && [ -n "$_rg_bin" ]; then
         step_emit "5" "running" "Step 5: Regression guard"
         log "Step 5: Cross-phase regression guard ($(basename "$_rg_bin")) in $_rg_root..."
@@ -3876,6 +4193,15 @@ if [ -n "$main_stories" ]; then
                 return 0
             fi
 
+            # Brownfield: this story commits to its own dedicated branch, not
+            # directly onto the shared baseline branch. See ensure_story_branch
+            # above for why (eliminates the stale-marker/reset-to-orphaned-
+            # commit failure class entirely, rather than working around it).
+            # `|| true` — a failed branch creation (e.g. no network, no origin
+            # remote) must never abort the whole phase; the story just
+            # proceeds on whatever branch is already checked out.
+            ensure_story_branch "${PROJECT_ROOT:-}" "$story" "${JIRA_BASELINE_BRANCH:-}" || true
+
             log "  Running: $story"
             local _story_monitor_role _story_model_hint _story_provider_hint
             _story_monitor_role=$(jq -r --arg id "$story" \
@@ -3978,10 +4304,25 @@ fi
 # Real agents may commit via git tools, but mock/epam-run agents only write files.
 # Without this commit, worktrees created from HEAD lack the main-branch deliverables,
 # causing tests that import shared code (e.g. greet.ts) to fail in the worktrees.
-# ──────────────────────────────────────────────
+#
+# Live bug (2026-07-22): this fired whenever there were worktree-bound
+# stories AND the tree was dirty — with NO check that Step 8 actually ran
+# any main-branch stories. A parallel-only run (all stories routed to
+# worktrees, zero in the main lane — "no stories in lane" logged) still has
+# a dirty tree from incidental pipeline writes (CodeGraph indexing,
+# dependency-check manifests), which is NOT genuine story output. This
+# committed that noise directly onto the shared baseline branch (develop)
+# with zero branch protection — worse than the Step 8 story-commit bug this
+# session already fixed via ensure_story_branch, since there's no dedicated
+# branch involved here at all. Gate on `$main_stories` actually being
+# non-empty (Step 8's own condition, line ~4062) — if Step 8 had nothing to
+# run, any dirtiness here is pipeline noise, not a deliverable to preserve.
+# When $main_stories WAS non-empty, the tree is already on the last story's
+# ensure_story_branch branch (set inside the Step 8 loop above), so this
+# commit correctly lands there too — no additional branch logic needed here.
 _has_worktree_stories=false
 { [ -n "${primary_stories:-}" ] || [ -n "${independent_stories:-}" ]; } && _has_worktree_stories=true
-if [ "$_has_worktree_stories" = true ] && \
+if [ "$_has_worktree_stories" = true ] && [ -n "${main_stories:-}" ] && \
    [ -n "$(git -C "$PROJECT_ROOT" status --porcelain 2>/dev/null)" ]; then
     step_emit "9" "running" "Step 9: Auto-commit"
     log "Step 9: Auto-committing main-branch deliverables before worktree creation..."
@@ -4000,8 +4341,13 @@ if [ "$_has_worktree_stories" = true ] && \
             || { step_emit "9" "skip" "Step 9: Auto-commit" "nothing to commit"; warning "Step 9: Nothing new to commit (working tree already clean)"; }
     fi
 else
-    step_emit "9" "skip" "Step 9: Auto-commit" "already clean"
-    info "Step 9: No uncommitted main-branch changes — skipping auto-commit"
+    if [ -z "${main_stories:-}" ]; then
+        step_emit "9" "skip" "Step 9: Auto-commit" "no main-branch stories ran"
+        info "Step 9: No main-branch stories ran this phase — any dirty tree state is pipeline noise, not a deliverable; skipping auto-commit"
+    else
+        step_emit "9" "skip" "Step 9: Auto-commit" "already clean"
+        info "Step 9: No uncommitted main-branch changes — skipping auto-commit"
+    fi
 fi
 # ──────────────────────────────────────────────
 # Step 10 (TC writer gate) has moved — see after Step 17 below. Running it
@@ -4762,6 +5108,15 @@ PROMPT_EOF
     # all. Capture the first command's real exit status explicitly instead.
     local _pa_attempt=0 _pa_success=0
     local _saved_pa_model="${ORCH_GATE_MODEL:-}"
+    local _saved_gate_timeout="${EPAM_GATE_TIMEOUT_SECS:-}"
+    # This assessment is explicitly non-critical (a failure just logs a
+    # warning and continues — see the caller). Letting it inherit the full
+    # 600s-per-attempt gate timeout means 2 attempts can burn up to 20
+    # minutes on an optional step. Found live 2026-07-23: a stuck agent
+    # ("reached maximum iterations without completing") consumed the
+    # entire pipeline run's wall-clock budget on this step alone. Cap it
+    # much shorter so a stall here can never dominate a real run.
+    EPAM_GATE_TIMEOUT_SECS="${PHASE_ASSESSMENT_TIMEOUT_SECS:-120}"
     while [ "$_pa_attempt" -lt 2 ] && [ "$_pa_success" = "0" ]; do
         local _pa_prompt="$assessment_prompt"
         if [ "$_pa_attempt" -ge 1 ]; then
@@ -4798,6 +5153,7 @@ $assessment_prompt"
         _pa_attempt=$(( _pa_attempt + 1 ))
     done
     ORCH_GATE_MODEL="$_saved_pa_model"
+    EPAM_GATE_TIMEOUT_SECS="$_saved_gate_timeout"
 
     if [ "$_pa_success" = "0" ]; then
         warning "Phase assessment for '$phase_id' failed after 2 attempt(s) — no new assessment record written; non-critical, continuing"
@@ -4911,6 +5267,32 @@ if [ "${SKIP_PRE_REVIEW_GATE:-false}" != "true" ] && [ -f "$PROJECT_ROOT/package
                 success "  tsc: PASS"
             else
                 error "  tsc: FAIL — fix type errors before review proceeds"
+                # Diagnostic instrumentation (2026-07-23): a recurring, so-far
+                # unreproducible-in-isolation TS5108 (moduleResolution=node10)
+                # failure at this exact step, with a tsconfig.json PROVEN
+                # byte-identical to a known-good, passing config both before
+                # and after. `tsc --showConfig` prints TypeScript's actual
+                # RESOLVED configuration (post any `extends`/inheritance/
+                # implicit-default resolution) — this is the ground truth,
+                # not a guess, for what TS is really using, independent of
+                # what the raw tsconfig.json file's text says.
+                {
+                    echo "=== DIAGNOSTIC: tsc --showConfig (resolved config TS is actually using) ==="
+                    "$_node_bin" ./node_modules/.bin/tsc --showConfig 2>&1
+                    echo "=== DIAGNOSTIC: node/tsc binary identity ==="
+                    echo "node_bin=$_node_bin -> $(readlink -f "$_node_bin" 2>/dev/null || echo "$_node_bin")"
+                    echo "tsc=./node_modules/.bin/tsc -> $(readlink -f ./node_modules/.bin/tsc 2>/dev/null || echo unknown)"
+                    echo "typescript package version: $(cat ./node_modules/typescript/package.json 2>/dev/null | grep -m1 '"version"')"
+                    echo "=== DIAGNOSTIC: every tsconfig*.json under PROJECT_ROOT ==="
+                    find "$PROJECT_ROOT" -iname "tsconfig*.json" -not -path "*/node_modules/*" 2>/dev/null | while read -r _tc; do
+                        echo "--- $_tc ---"
+                        cat "$_tc"
+                    done
+                    echo "=== DIAGNOSTIC: pwd and git state ==="
+                    pwd
+                    git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null
+                    git -C "$PROJECT_ROOT" status --short 2>/dev/null
+                } >> "$_pre_review_log" 2>&1
                 _pre_review_failed=1
             fi
         fi

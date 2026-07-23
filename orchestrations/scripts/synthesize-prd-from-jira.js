@@ -83,9 +83,18 @@ for (const s of template.stories || []) {
 
 // ── Map classification → story ─────────────────────────────────────────────
 
-function classificationToStory(c) {
+// Single-ticket JQL scopes (e.g. "issue = AMSD-1820") always synthesize
+// exactly one story with no real parallelism to gain — defaulting it to
+// agentGroup:"primary" put it on a worktree lane whose topology is decided
+// by a live, non-deterministic LLM call, exposing it to a worktree-merge
+// bug (found 2026-07-22) that a plain main-branch story never hits. Default
+// to "main" whenever this run's whole classification set is a single
+// story; multi-story runs keep the previous "primary" default so real
+// parallel work still gets worktree lanes.
+function classificationToStory(c, totalStoryCount) {
   const tmpl = templateStoryMap[c.storyId] || {};
   const acs  = c.enrichedAcs && c.enrichedAcs.length > 0 ? c.enrichedAcs : c.originalAcs;
+  const defaultGroup = totalStoryCount <= 1 ? 'main' : 'primary';
 
   return {
     ...tmpl,
@@ -98,7 +107,7 @@ function classificationToStory(c) {
     status:             'pending',
     completed:          false,
     agentRole:          tmpl.agentRole || 'typescript-engineer',
-    agentGroup:         tmpl.agentGroup || 'primary',
+    agentGroup:         tmpl.agentGroup || defaultGroup,
     effort:             tmpl.effort || c.effort || 'medium',
     estimate:           tmpl.estimate || 10,
     acGateVerdict:      c.verdict,
@@ -111,8 +120,8 @@ function classificationToStory(c) {
 // Per-codeline ACs are read from c[`${cl}Acs`] (e.g. c.beAcs, c.feAcs).
 // Later codeline sub-stories depend on earlier ones — enforces run order.
 
-function splitAcrossCodelines(c) {
-  const base    = classificationToStory(c);
+function splitAcrossCodelines(c, totalStoryCount) {
+  const base    = classificationToStory(c, totalStoryCount);
   const allAcs  = base.acceptanceCriteria || [];
   const results = [];
 
@@ -143,7 +152,9 @@ function splitAcrossCodelines(c) {
 // ── Build stories ──────────────────────────────────────────────────────────
 
 const stories = classifications.flatMap(c =>
-  c.codeline === SPLIT_VALUE ? splitAcrossCodelines(c) : [classificationToStory(c)]
+  c.codeline === SPLIT_VALUE
+    ? splitAcrossCodelines(c, classifications.length)
+    : [classificationToStory(c, classifications.length)]
 );
 
 // ── Build implementation order ─────────────────────────────────────────────

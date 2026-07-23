@@ -1,0 +1,45 @@
+{
+  "id": "mock-hello-dolly-main-v1",
+  "version": "1.0.0",
+  "project": {
+    "name": "mock-hello-world",
+    "description": "Disposable mock codeline for real full-pipeline integration tests (mock1)"
+  },
+  "configuration": {
+    "budget": 5,
+    "aiRuntime": { "provider": "qwen", "defaultModel": "z-ai/glm-5.1" }
+  },
+  "implementationOrder": {
+    "mock_hello_dolly": ["MOCK-HW-1"]
+  },
+  "phasesConfig": {
+    "mock_hello_dolly": {
+      "orchestrationMode": "bash",
+      "description": "Single main-branch story, real full gate chain (mock1)"
+    }
+  },
+  "stories": [
+    {
+      "id": "MOCK-HW-1",
+      "jiraKey": "MOCK-HW-1",
+      "title": "Change the greeting from hello world to hello dolly",
+      "description": "The getGreeting() function in this codebase currently returns the string 'hello world'. It should instead return 'hello dolly'. Update any test that asserts the old value to match the new one.",
+      "acceptanceCriteria": [
+        "getGreeting() returns exactly 'hello dolly'",
+        "The existing test file's assertion on the return value is updated to match the new value and passes under vitest",
+        "tsc --noEmit exits 0"
+      ],
+      "codeline": "mock-hello-world",
+      "status": "pending",
+      "completed": false,
+      "agentRole": "typescript-engineer",
+      "agentGroup": "main",
+      "effort": "low",
+      "estimate": 1,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "No file location is provided — the agent must locate the existing getGreeting() implementation itself, exactly like a real freshly-ingested Jira ticket."
+    }
+  ],
+  "currentIteration": 0,
+  "source": "mock-canonical"
+}

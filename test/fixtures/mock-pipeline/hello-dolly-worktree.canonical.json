@@ -1,0 +1,88 @@
+{
+  "id": "mock-hello-dolly-worktree-v1",
+  "version": "1.0.0",
+  "project": {
+    "name": "mock-hello-world",
+    "description": "Disposable mock codeline for real full-pipeline integration tests (mock2 — worktree/parallel topology)"
+  },
+  "configuration": {
+    "budget": 5,
+    "aiRuntime": { "provider": "qwen", "defaultModel": "z-ai/glm-5.1" }
+  },
+  "implementationOrder": {
+    "mock2_incident": ["PRI-1", "IND-1"],
+    "mock2_contrast": ["MAIN-1", "PRI-1", "IND-1"]
+  },
+  "phasesConfig": {
+    "mock2_incident": {
+      "orchestrationMode": "bash",
+      "description": "Zero main-branch stories, 2 parallel-lane stories only (mock2 incident-shape)"
+    },
+    "mock2_contrast": {
+      "orchestrationMode": "bash",
+      "description": "One main-branch story alongside 2 parallel-lane stories (mock2 contrast)"
+    }
+  },
+  "stories": [
+    {
+      "id": "MAIN-1",
+      "jiraKey": "MAIN-1",
+      "title": "Change the greeting from hello world to hello dolly",
+      "description": "The getGreeting() function in this codebase currently returns the string 'hello world'. It should instead return 'hello dolly'. Update any test that asserts the old value to match the new one.",
+      "acceptanceCriteria": [
+        "getGreeting() returns exactly 'hello dolly'",
+        "The existing test file's assertion on the return value is updated to match the new value and passes under vitest",
+        "tsc --noEmit exits 0"
+      ],
+      "codeline": "mock-hello-world",
+      "status": "pending",
+      "completed": false,
+      "agentRole": "typescript-engineer",
+      "agentGroup": "main",
+      "effort": "low",
+      "estimate": 1,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "No file location is provided — the agent must locate the existing getGreeting() implementation itself."
+    },
+    {
+      "id": "PRI-1",
+      "jiraKey": "PRI-1",
+      "title": "Add a utilA() utility function",
+      "description": "Add a new function utilA() to this codebase that returns the literal string 'utilA-ok'. Place it wherever fits the existing project's conventions.",
+      "acceptanceCriteria": [
+        "utilA() exists somewhere in the project and returns exactly 'utilA-ok'",
+        "tsc --noEmit exits 0"
+      ],
+      "codeline": "mock-hello-world",
+      "status": "pending",
+      "completed": false,
+      "agentRole": "typescript-engineer",
+      "agentGroup": "primary",
+      "effort": "low",
+      "estimate": 1,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "No file location is provided — the agent decides where a new utility belongs, exactly like a real freshly-ingested Jira ticket."
+    },
+    {
+      "id": "IND-1",
+      "jiraKey": "IND-1",
+      "title": "Add a utilB() utility function",
+      "description": "Add a new function utilB() to this codebase that returns the literal string 'utilB-ok'. Place it wherever fits the existing project's conventions.",
+      "acceptanceCriteria": [
+        "utilB() exists somewhere in the project and returns exactly 'utilB-ok'",
+        "tsc --noEmit exits 0"
+      ],
+      "codeline": "mock-hello-world",
+      "status": "pending",
+      "completed": false,
+      "agentRole": "typescript-engineer",
+      "agentGroup": "independent",
+      "effort": "low",
+      "estimate": 1,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "No file location is provided — the agent decides where a new utility belongs, exactly like a real freshly-ingested Jira ticket."
+    }
+  ],
+  "currentIteration": 0,
+  "source": "mock-canonical"
+}

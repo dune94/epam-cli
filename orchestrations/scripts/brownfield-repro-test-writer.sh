@@ -59,7 +59,55 @@ done
 # ── Detect the repo's test convention so the gate can actually RUN the test ──
 # Dominant extension (.spec.ts vs .test.ts), a real example test to mirror style,
 # and a co-located target path next to the first fix file.
-_primary_fix="${FIX_FILES[0]}"
+# B15 — pick a target the test can meaningfully live next to.
+# `FIX_FILES[0]` was simply the first changed non-test file, so a lockfile leading
+# the diff sent the test to `package-lock.test.ts` — which was then COMMITTED,
+# because it parses and runs (validation asked "can this execute?", never "is this
+# the right place?"). Caught by the mock1 re-run 2026-07-24.
+#
+# Authority order:
+#   1. the detective's fixSiteAnalysis — it identified the CAUSAL site
+#   2. the first changed file that is genuinely testable source
+#   3. nothing sensible -> skip; a garbage test is worse than none, and the
+#      repro-gate will report the absence honestly.
+_is_testable_source() {
+    case "$1" in
+        # lockfiles / manifests / docs / config / data — never a test target
+        package-lock.json|*/package-lock.json|yarn.lock|*/yarn.lock|pnpm-lock.yaml|*/pnpm-lock.yaml) return 1 ;;
+        package.json|*/package.json|tsconfig*.json|*/tsconfig*.json) return 1 ;;
+        *.md|*.markdown|*.txt|*.json|*.yml|*.yaml|*.toml|*.ini|*.env|*.lock) return 1 ;;
+        *.snap|*.png|*.jpg|*.svg|*.ico|*.css|*.scss) return 1 ;;
+        # genuinely testable source
+        *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+_primary_fix=""
+# 1. detective fix site, if it is present in this change and testable
+if [ -n "$PRD_FILE" ] && [ -f "$PRD_FILE" ]; then
+    _det_site=$(jq -r --arg id "$STORY_ID" \
+        '(.stories[]? | select(.id == $id) | .fixSiteAnalysis // [])[0].file // ""' \
+        "$PRD_FILE" 2>/dev/null || echo "")
+    if [ -n "$_det_site" ] && [ "$_det_site" != "null" ] && _is_testable_source "$_det_site"; then
+        for f in "${FIX_FILES[@]}"; do
+            [ "$f" = "$_det_site" ] && { _primary_fix="$_det_site"; break; }
+        done
+        # the detective may name a path the diff touched under a different prefix
+        [ -z "$_primary_fix" ] && [ -f "$PROJECT_ROOT/$_det_site" ] && _primary_fix="$_det_site"
+    fi
+fi
+# 2. first genuinely testable changed source file
+if [ -z "$_primary_fix" ]; then
+    for f in "${FIX_FILES[@]}"; do
+        if _is_testable_source "$f"; then _primary_fix="$f"; break; fi
+    done
+fi
+# 3. nothing testable changed
+if [ -z "$_primary_fix" ]; then
+    log "no testable source file in the change (only: ${FIX_FILES[*]}) — nothing to test"
+    exit 0
+fi
 # grep -c already prints "0" on no match (and exits 1) — use `|| true` so the non-zero
 # exit doesn't append a SECOND "0" (which broke the integer test: "0\n0" is not an int).
 _spec_ct=$(git -C "$PROJECT_ROOT" ls-files '*.spec.ts' '*.spec.tsx' 2>/dev/null | grep -c . || true)

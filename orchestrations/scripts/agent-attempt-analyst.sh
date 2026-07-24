@@ -50,6 +50,7 @@ case "$FAILURE_CLASS" in
     max_iterations) _class_hint="The agent EXHAUSTED its iteration budget exploring and NEVER produced its output. The corrective directive must make it commit output EARLY — e.g. 'you have N calls; do the minimum lookup then WRITE your file/answer as your very next action; do NOT keep exploring.'" ;;
     no_file)        _class_hint="The agent finished WITHOUT writing the required file. The directive must make writing the file its FIRST action, at the exact required path." ;;
     no_json|malformed) _class_hint="The agent produced no parseable structured output (prose, or a tool-call wrapper). The directive must make it emit ONLY the required output inline, no tool calls, no prose." ;;
+    invalid_test)   _class_hint="The agent DID write the file, but it is not valid, runnable code — it failed to parse/compile, so the test never executed (the runner's exact error is in the output below). This is a SYNTAX/structure problem, not a logic problem: the directive must tell it to emit a complete, syntactically valid file — balanced braces/brackets, correct object-literal and array syntax, every import present — and to re-read its own output end-to-end before finishing. Do NOT tell it to change the assertion or the scenario; the previous attempt's intent was fine, only the code was malformed." ;;
     *)              _class_hint="The agent failed to produce usable output." ;;
 esac
 

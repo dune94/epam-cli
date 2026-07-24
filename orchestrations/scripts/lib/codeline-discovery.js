@@ -29,6 +29,7 @@
 const fs           = require('fs');
 const path         = require('path');
 const { execSync } = require('child_process');
+const { crossRepoTermScores, rankingConfidence } = require('./codeline-score');
 
 // Semble removed from codeline scoring — all repos are CodeGraph-indexed,
 // making Tier 3 probabilistic scoring redundant and a source of re-ranking noise.
@@ -183,6 +184,44 @@ function scoreRepos(issues, manifest, topN = 8) {
   const cgSpecificWords = words.filter(w => !DOMAIN_STOPWORDS.has(w));
   const cgQuery = cgSpecificWords.slice(0, 10).join(' ');
 
+  // Tier 2 is computed for ALL repos at once, because cross-repo document
+  // frequency is only knowable across the whole candidate set — see
+  // codeline-score.js for the full root cause. Terms are queried INDIVIDUALLY
+  // (not as one joined query) so a globally-rare token like a product name
+  // cannot be drowned by generic ones sharing a capped result window.
+  let tier2ByPath = new Map();
+  if (cgEnabled && cg && cgSpecificWords.length) {
+    // Bound = codeline-score's own cap, so the count logged below is the count
+    // actually queried (they diverged at first, making the log lie).
+    const _maxTerms = Number(process.env.CODELINE_SCORE_MAX_TERMS || 7);
+    const terms = cgSpecificWords.slice(0, _maxTerms);
+    // Index-on-demand first: indexing status must never decide whether a repo
+    // is considered (the 2026-07-22 starvation bug — see the note below).
+    for (const repo of manifest) {
+      try {
+        if (!cg.isCodeGraphIndexed(repo.path)) cg.initCodeGraph(repo.path, { quiet: true });
+      } catch { /* unindexable repo still gets Tier 1 */ }
+    }
+    const indexed = manifest.filter(r => { try { return cg.isCodeGraphIndexed(r.path); } catch { return false; } });
+    const t2 = crossRepoTermScores(indexed, terms, (term, repoPath, limit) =>
+      cg.queryCodeGraph(term, repoPath, limit));
+    for (const r of t2) tier2ByPath.set(r.path, r);
+
+    const conf = rankingConfidence(t2);
+    const ranked = [...t2].sort((a, b) => b.tier2 - a.tier2).slice(0, 3);
+    log(`Tier-2 cross-repo scoring (${terms.length} term(s) over ${indexed.length} indexed repo(s)): ` +
+        ranked.map(r => `${r.name}=${r.tier2.toFixed(1)}`).join(', ') +
+        ` | top1/top2=${conf.ratio === Infinity ? 'inf' : conf.ratio.toFixed(2)}` +
+        ` ${conf.decisive ? '(DECISIVE)' : '(CLOSE — genuine ambiguity, LLM judgment matters)'}`);
+    const best = ranked[0];
+    if (best && best.breakdown) {
+      const drivers = Object.entries(best.breakdown)
+        .sort((a, b) => b[1].contribution - a[1].contribution).slice(0, 3)
+        .map(([t, d]) => `${t}(hits=${d.hits}, in ${d.repoFrequency}/${indexed.length} repos)`);
+      log(`  top candidate '${best.name}' driven by: ${drivers.join(', ')}`);
+    }
+  }
+
   const scored = manifest.map(repo => {
     let score = 0;
 
@@ -210,21 +249,16 @@ function scoreRepos(issues, manifest, topN = 8) {
     // forced to pick from 8 wrong candidates and chose gotransit.webservices.
     // Fix: index on demand, right here, before scoring — indexing status must
     // never gate whether a repo is even considered.
-    if (cgEnabled && cg && cgQuery) {
-      try {
-        if (!cg.isCodeGraphIndexed(repo.path)) {
-          cg.initCodeGraph(repo.path, { quiet: true });
-        }
-        if (cg.isCodeGraphIndexed(repo.path)) {
-          const results = cg.queryCodeGraph(cgQuery, repo.path, 20);
-          const bm25Sum = (results || []).reduce((s, r) => s + (r.score || 0), 0);
-          // Divide by 10 to bring BM25 totals (~200-2000) into the same scale as Tier 1 (~9-30)
-          score += Math.round(bm25Sum / 10);
-        }
-      } catch { /* codegraph unavailable/init failed for this repo — skip, Tier 1 still applies */ }
-    }
+    // Tier 2 — cross-repo term exclusivity, computed above for the whole set.
+    // Scaled by 10 to sit on the same order of magnitude as Tier 1 (~9-30):
+    // a term unique to one repo contributes ~10-14 here, a term present in every
+    // repo contributes ~2, so a genuine discriminator outweighs generic noise
+    // instead of being averaged away by it.
+    const t2 = tier2ByPath.get(repo.path);
+    const tier2Score = t2 ? Math.round(t2.tier2 * 10) : 0;
+    score += tier2Score;
 
-    return { ...repo, score };
+    return { ...repo, score, tier2: tier2Score, tier2Breakdown: t2 ? t2.breakdown : {} };
   });
 
   scored.sort((a, b) => b.score - a.score);

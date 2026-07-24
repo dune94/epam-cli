@@ -139,6 +139,41 @@ _provider_for_model() {
 _base_provider="${SPEC_MODE_PROVIDER:-${EPAM_ORCHESTRATION_PROVIDER:-qwen}}"
 _base_model="${SPEC_MODE_SPECKIT_MODEL:-${ESCALATION_MODEL_HIGH:-z-ai/glm-5.1}}"
 _writer_log="${LOG_DIR:-$(dirname "$SCRIPT_DIR")/logs}/repro-test-writer-${STORY_ID}.log"
+_test_validated=0
+
+# ── Validate the written test can actually be PARSED and EXECUTED ────────────
+# Returns: 0 = runnable (parsed and executed — pass OR assertion-failure)
+#          1 = NOT runnable (parse/transform error, or nothing collected)
+#          3 = no usable test runner in this project — cannot validate
+#
+# The pass/fail VERDICT is deliberately NOT decided here: a test that runs and
+# fails its assertions is a legitimate outcome that belongs to the repro-gate
+# (it is how the gate proves the bug reproduces). This function only answers
+# "can this file run at all?" — because a file that cannot run proves nothing
+# and, once committed, breaks the regression guard for every later cycle.
+_validate_written_test() {
+    local rel="$1" out=""
+    if [ -x "$PROJECT_ROOT/node_modules/.bin/vitest" ]; then
+        out=$(cd "$PROJECT_ROOT" && ./node_modules/.bin/vitest run "$rel" 2>&1)
+    elif [ -x "$PROJECT_ROOT/node_modules/.bin/jest" ]; then
+        out=$(cd "$PROJECT_ROOT" && ./node_modules/.bin/jest "$rel" 2>&1)
+    elif [ -f "$PROJECT_ROOT/package.json" ] && grep -q '"test"' "$PROJECT_ROOT/package.json" 2>/dev/null; then
+        out=$(cd "$PROJECT_ROOT" && npm test -- "$rel" 2>&1)
+    else
+        return 3
+    fi
+    printf '%s\n' "$out" >> "$_writer_log" 2>/dev/null || true
+
+    # Transform/parse/module-resolution errors => the test never ran.
+    if printf '%s' "$out" | grep -qiE "Transform failed|Failed to parse|Failed to load url|SyntaxError|Unexpected token|ERROR: Expected|Cannot find (module|package)"; then
+        return 1
+    fi
+    # Nothing collected => nothing was actually exercised.
+    if printf '%s' "$out" | grep -qiE "Tests +no tests|No test files found|no tests found"; then
+        return 1
+    fi
+    return 0
+}
 _ctx_file="$(mktemp 2>/dev/null || echo /tmp/rtw-ctx-$$)"; printf '%s' "$_prompt" > "$_ctx_file"
 _max_attempts="${REPRO_TEST_WRITER_MAX_ATTEMPTS:-3}"
 _corrective=""
@@ -163,20 +198,42 @@ for _attempt in $(seq 1 "$_max_attempts"); do
       AI_MODEL="$_model" \
       bash "$AI_RUNNER_CMD" --provider "$_provider" --model "$_model" > "$_writer_log" 2>&1 || true
 
-    [ -f "$PROJECT_ROOT/$_target_rel" ] && { log "test produced on attempt ${_attempt} (model ${_model})"; break; }
-    [ "$_attempt" -ge "$_max_attempts" ] && { log "no test after ${_max_attempts} attempts — repro-gate will BLOCK"; break; }
+    # A file existing is NOT success. The agent can (and live, on 2026-07-24, DID)
+    # write a test with a syntax error; committing it both proves nothing and
+    # poisons every later gate. Validate that it actually PARSES AND RUNS first.
+    _fclass_override=""
+    if [ -f "$PROJECT_ROOT/$_target_rel" ]; then
+        _validate_written_test "$_target_rel"
+        case "$?" in
+            0) _test_validated=1
+               log "test produced and validated on attempt ${_attempt} (model ${_model})"
+               break ;;
+            3) _test_validated=1
+               log "test produced on attempt ${_attempt} (model ${_model}) — no usable test runner, cannot validate (not treated as failure)"
+               break ;;
+            *) log "attempt ${_attempt}: test was written but does NOT parse/run — discarding it (class=invalid_test)"
+               # Remove it so a later attempt starts clean and no stale broken file
+               # can ever reach the commit step.
+               rm -f "$PROJECT_ROOT/$_target_rel" 2>/dev/null || true
+               _fclass_override="invalid_test" ;;
+        esac
+    fi
+    [ "$_attempt" -ge "$_max_attempts" ] && { log "no valid test after ${_max_attempts} attempts — repro-gate will BLOCK"; break; }
 
     # Classify the failure and self-heal for the next attempt.
     _fclass="no_file"
     grep -qiE "reached maximum iterations" "$_writer_log" 2>/dev/null && _fclass="max_iterations"
     grep -qiE "ai-run failed|no error output" "$_writer_log" 2>/dev/null && _fclass="provider"
-    log "attempt ${_attempt} produced no file (class=${_fclass}) — invoking self-heal analyst"
+    [ -n "$_fclass_override" ] && _fclass="$_fclass_override"
+    log "attempt ${_attempt} failed (class=${_fclass}) — invoking self-heal analyst"
     _corrective="$(AGENT_ANALYST_STORY_ID="$STORY_ID" AI_RUNNER_CMD="$AI_RUNNER_CMD" bash "$SCRIPT_DIR/agent-attempt-analyst.sh" "$_fclass" "$_writer_log" "$_ctx_file" 2>/dev/null || echo "")"
 done
 rm -f "$_ctx_file" 2>/dev/null || true
 
 # ── Commit the test if one was written ──────────────────────────────────────
-if [ -f "$PROJECT_ROOT/$_target_rel" ]; then
+# Only a VALIDATED test may be committed — an unparseable one proves nothing and
+# breaks the regression guard on every subsequent cycle (live deadlock 2026-07-24).
+if [ -f "$PROJECT_ROOT/$_target_rel" ] && [ "${_test_validated:-0}" = "1" ]; then
     git -C "$PROJECT_ROOT" add "$_target_rel" 2>/dev/null || true
     if ! git -C "$PROJECT_ROOT" diff --cached --quiet 2>/dev/null; then
         git -C "$PROJECT_ROOT" commit -m "test: add bug-reproducing test for ${STORY_ID}" --quiet 2>/dev/null \

@@ -198,12 +198,17 @@ describe('codeline-discovery.js: CodeGraph Tier 2 in scoreRepos', () => {
     expect(scoreFn).not.toMatch(/sembleSearch|SEMBLE_ENABLED/);
   });
 
-  it('CodeGraph scoring uses BM25 score sum from queryCodeGraph results', () => {
+  it('CodeGraph scoring uses cross-repo term exclusivity, not per-repo BM25 sum', () => {
+    // Was "uses BM25 score sum". That premise was DISPROVEN live on 2026-07-24:
+    // summing a capped top-20 saturates (every repo returned exactly 20 hits) and
+    // BM25's IDF is computed WITHIN each repo, so it is not comparable across
+    // repos. Result: `mozio` hit 50+ times in azure.commerce.cdts and 0 times in
+    // c365, yet BM25-sum ranked c365 higher. Scoring is now document-frequency
+    // based across the repo SET — see lib/codeline-score.js.
     const scoreIdx = DISCOVERY_SRC.indexOf('function scoreRepos');
     const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 5000);
-    expect(scoreFn).toMatch(/queryCodeGraph/);
-    // Must sum BM25 scores — NOT count results (count saturates cap for all repos)
-    expect(scoreFn).toMatch(/reduce.*score|bm25Sum/);
+    expect(scoreFn).toMatch(/crossRepoTermScores/);
+    expect(scoreFn).not.toMatch(/bm25Sum/);
     expect(scoreFn).not.toMatch(/\.length.*\*.*5|5.*\*.*\.length/);
   });
 });

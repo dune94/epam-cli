@@ -110,3 +110,23 @@ describe('Tier-2 scoring — cross-repo term exclusivity', () => {
     expect(Math.min(...seen)).toBeGreaterThan(20);
   });
 });
+
+describe('Tier-2 scoring — bounded cost', () => {
+  it('caps the number of terms queried so cost cannot grow with ticket verbosity', () => {
+    // terms x repos process spawns at ~190ms each; an unbounded term list would
+    // make discovery time a function of how wordy the Jira ticket happens to be.
+    const seen = new Set<string>();
+    const q = (t: string) => { seen.add(t); return []; };
+    const many = Array.from({ length: 30 }, (_, i) => `term${i}`);
+    crossRepoTermScores(REPOS, many, q as any);
+    expect(seen.size).toBeLessThanOrEqual(7);
+  });
+
+  it('keeps the most-specific terms when truncating (they arrive ordered)', () => {
+    const seen: string[] = [];
+    const q = (t: string) => { if (!seen.includes(t)) seen.push(t); return []; };
+    crossRepoTermScores(REPOS, ['mozio', 'promo', 'a', 'b', 'c', 'd', 'e', 'f', 'g'], q as any);
+    expect(seen[0]).toBe('mozio');
+    expect(seen).toContain('promo');
+  });
+});

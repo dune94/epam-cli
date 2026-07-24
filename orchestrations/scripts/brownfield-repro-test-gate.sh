@@ -66,18 +66,42 @@ if [ "${#FIX_FILES[@]}" -eq 0 ]; then
 fi
 
 # Pick the test runner (project-local binaries preferred; npm test as fallback).
+# Output is CAPTURED, never discarded: the exit code alone cannot distinguish
+# "the test could not be parsed" from "the test ran and failed its assertions",
+# and those two demand opposite responses. Discarding it caused a live
+# misdiagnosis on 2026-07-24 (see _test_never_ran below).
+_LAST_TEST_OUTPUT=""
 run_new_tests() {
-    ( cd "$PROJECT_ROOT" || return 2
-      if [ -x node_modules/.bin/vitest ]; then node_modules/.bin/vitest run "$@" >/dev/null 2>&1
-      elif [ -x node_modules/.bin/jest ]; then node_modules/.bin/jest "$@" >/dev/null 2>&1
-      elif [ -f package.json ] && grep -q '"test"' package.json 2>/dev/null; then npm test -- "$@" >/dev/null 2>&1
-      else return 3; fi )
+    local _out _rc
+    _out=$( cd "$PROJECT_ROOT" || exit 2
+      if [ -x node_modules/.bin/vitest ]; then node_modules/.bin/vitest run "$@" 2>&1
+      elif [ -x node_modules/.bin/jest ]; then node_modules/.bin/jest "$@" 2>&1
+      elif [ -f package.json ] && grep -q '"test"' package.json 2>/dev/null; then npm test -- "$@" 2>&1
+      else exit 3; fi )
+    _rc=$?
+    _LAST_TEST_OUTPUT="$_out"
+    return "$_rc"
+}
+
+# Did the test fail to PARSE/COMPILE (i.e. never actually execute), as opposed to
+# running and failing an assertion? A test that never ran proves nothing about the
+# fix, so blaming the fix for it sends the investigation the wrong way.
+_test_never_ran() {
+    printf '%s' "$_LAST_TEST_OUTPUT" | grep -qiE \
+      "Transform failed|Failed to parse|Failed to load url|SyntaxError|Unexpected token|ERROR: Expected|Cannot find (module|package)|Tests +no tests|No test files found"
 }
 
 # 3. The new test(s) must PASS with the fix in place.
 if ! run_new_tests "${TEST_FILES[@]}"; then
     _rc=$?
     [ "$_rc" = "3" ] && { log "no supported test runner found — skipping reproduction gate"; exit 0; }
+    if _test_never_ran; then
+        # A malformed test still BLOCKS — it cannot be allowed through — but the
+        # defect is in the TEST, not the fix. Say so, and show the runner's error.
+        log "runner output (first 15 lines):"
+        printf '%s\n' "$_LAST_TEST_OUTPUT" | head -15 | sed 's/^/    /' >&2
+        block "the new test(s) could not be parsed/compiled and therefore never ran — the TEST is malformed and must be rewritten. This says NOTHING about whether the fix is correct; the fix was never exercised."
+    fi
     block "the new test(s) FAIL with the fix in place — the fix is incomplete or the test is wrong."
 fi
 

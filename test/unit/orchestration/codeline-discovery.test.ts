@@ -52,7 +52,15 @@ function runDiscovery(args: string[], env: NodeJS.ProcessEnv = {}): { stdout: st
   const result = spawnSync(NODE, [DISCOVERY_JS, ...args], {
     encoding: 'utf8',
     env: { ...process.env, ...env, SEMBLE_ENABLED: '0' },
-    timeout: 60000,
+    // Tier-2 now queries each term SEPARATELY against every repo (cross-repo
+    // document frequency), which is terms x repos process spawns at ~185ms each
+    // — ~35s over the real 31-repo Metrolinx root, vs ~6s for the old single
+    // joined query. That joined query was fast and WRONG (it ranked the wrong
+    // repo first, see codeline-score.js), so the extra time is the price of a
+    // correct ranking. 60s was tight standalone and blew up under parallel
+    // suite load; the cost is spawn-bound, so raise the ceiling rather than
+    // trade away correctness.
+    timeout: 180000,
   });
   return {
     stdout:   result.stdout || '',
@@ -312,16 +320,28 @@ describe('codeline-discovery.js — source invariants', () => {
     expect(scoreFn).not.toMatch(/sembleScore|sembleSearch|SEMBLE_ENABLED/);
   });
 
-  it('CodeGraph scoring uses BM25 score sum, not result count', () => {
-    // Counting results saturates at the 20-result cap for every repo (common words
-    // like "email" exist in every codebase). BM25 sum rewards rare symbol names
-    // (e.g. "mozio" = 70-100 pts) and penalises common terms (e.g. "email" = 3-5).
+  it('CodeGraph scoring uses CROSS-REPO term exclusivity, not per-repo BM25 sum', () => {
+    // REPLACES the old "uses BM25 score sum, not result count" invariant, whose
+    // premise was DISPROVEN by live measurement on 2026-07-24. Summing a capped
+    // top-20 of BM25 scores has two fatal flaws:
+    //   1. every candidate repo returned exactly 20 hits, so the sum degenerated to
+    //      "average BM25 of your top 20" and could not express 50-hits vs 0-hits;
+    //   2. BM25's IDF is computed WITHIN each repo's own index, so a token that is
+    //      rare inside an irrelevant repo scores high there — an intra-corpus
+    //      measure used as an inter-corpus ranking.
+    // Measured: `mozio` had 50+ hits in azure.commerce.cdts and 0 in c365, yet the
+    // BM25-sum ranked c365 HIGHER (140 vs 128) — the deterministic evidence argued
+    // for the WRONG repo. Scoring is now document-frequency based across the repo
+    // SET (see lib/codeline-score.js + codeline-score-cross-repo.test.ts).
     const scoreIdx = src.indexOf('function scoreRepos');
     const scoreFn  = src.slice(scoreIdx, scoreIdx + 5000);
-    expect(scoreFn).toMatch(/bm25Sum|bm25|\.score/);
-    expect(scoreFn).toMatch(/reduce.*score|score.*reduce/);
-    // Must NOT use length × fixed multiplier (the old count-based approach)
-    expect(scoreFn).not.toMatch(/\.length.*\*.*5|5.*\*.*\.length/);
+    expect(scoreFn).toMatch(/crossRepoTermScores/);
+    // Terms must be queried INDIVIDUALLY — a single joined query lets generic
+    // tokens flood a shared result window and drown the discriminating one.
+    expect(scoreFn).toMatch(/terms/);
+    // The old saturating construct must be gone.
+    expect(scoreFn).not.toMatch(/bm25Sum/);
+    expect(scoreFn).not.toMatch(/queryCodeGraph\([^)]*cgQuery[^)]*,\s*20\s*\)/);
   });
 
   it('CodeGraph query filters domain stopwords before querying FTS5', () => {
@@ -510,7 +530,10 @@ describe('codeline-discovery.js — CodeGraph indexing-status starvation bug (re
 
   it('scoreRepos() calls initCodeGraph for a repo missing .codegraph/codegraph.db (source invariant)', () => {
     const src = readFileSync(DISCOVERY_JS, 'utf8');
-    expect(src).toMatch(/if\s*\(!cg\.isCodeGraphIndexed\(repo\.path\)\)\s*\{[\s\S]{0,80}cg\.initCodeGraph/);
+    // Brace-optional: the guard is now a single-line `if (...) cg.initCodeGraph(...)`
+    // inside the pre-scoring index-on-demand loop. What matters is the INVARIANT —
+    // an unindexed repo gets indexed rather than silently scored zero — not the style.
+    expect(src).toMatch(/if\s*\(!cg\.isCodeGraphIndexed\(repo\.path\)\)\s*\{?[\s\S]{0,80}cg\.initCodeGraph/);
   });
 });
 

@@ -3734,10 +3734,14 @@ if [ "${SKIP_REGRESSION_GUARD:-false}" != "true" ]; then
     _rg_root="$PROJECT_ROOT"
     if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -n "${JIRA_DEFAULT_CODELINE:-}" ]; then
         _cl_upper=$(echo "$JIRA_DEFAULT_CODELINE" | tr '[:lower:]' '[:upper:]' | tr -c 'A-Z0-9' '_')
-        _cl_path="${!JIRA_WORKTREE_${_cl_upper}:-}"
-        # Bash indirect expansion via nameref
+        # NOTE: `${!JIRA_WORKTREE_${_cl_upper}:-}` is NOT valid bash — nested
+        # expansion inside an indirect reference is a FATAL "bad substitution" that
+        # aborts the script. It sat here as dead code, immediately overwritten by
+        # the correct two-step form below, and was only ever reachable when
+        # JIRA_DEFAULT_CODELINE is set (no project set it until mock2 did on
+        # 2026-07-24). Removed — the two-step form is the correct idiom.
         _wtvar="JIRA_WORKTREE_${_cl_upper}"
-        _cl_path="${!_wtvar}"
+        _cl_path="${!_wtvar:-}"
         [ -n "$_cl_path" ] && _rg_root="$_cl_path"
     fi
     # Resolve node AFTER _rg_root is finalized — must be the version the

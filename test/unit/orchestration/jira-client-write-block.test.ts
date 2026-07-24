@@ -84,11 +84,18 @@ describe('jira-client.js — write functions do not exist (not blocked — absen
 
   it("source invariant: request() takes no method parameter — only GET is hardcoded", () => {
     const src = readFileSync(JIRA_CLIENT_PATH, 'utf8');
-    const fnIdx = src.indexOf('function request(');
-    const fnSignature = src.slice(fnIdx, src.indexOf(')', fnIdx) + 1);
-    expect(fnSignature).toBe('function request(path)');
-    const fnBody = src.slice(fnIdx, fnIdx + 800);
-    expect(fnBody).toMatch(/method:\s*'GET'/);
+    // Asserted over the WHOLE FILE, not a fixed window inside one function. B20
+    // split request() into a retry wrapper + requestOnce(), which moved `method:
+    // 'GET'` out of an 800-char slice and made this security invariant read as
+    // VIOLATED while it was fully intact. A guard that breaks on refactoring is a
+    // guard people learn to override.
+    for (const m of [...src.matchAll(/^\s*function\s+(request\w*)\s*\(([^)]*)\)/gm)]) {
+      expect(m[2], `${m[1]}() must take only a path — no method parameter`).toBe('path');
+    }
+    // Every HTTP method literal in the file must be GET, and none may be dynamic.
+    const methods = [...src.matchAll(/method:\s*([^,\n]+)/g)].map(m => m[1].trim());
+    expect(methods.length, 'no HTTP method set at all?').toBeGreaterThan(0);
+    for (const m of methods) expect(m, 'a non-GET method exists').toBe("'GET'");
   });
 });
 

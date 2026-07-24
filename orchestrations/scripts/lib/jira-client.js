@@ -37,7 +37,54 @@ if (!CONFIGURED) {
 
 // ── HTTP helper (GET only — no method parameter exists) ────────────────────
 
-function request(path) {
+// ── Transient-failure retry ────────────────────────────────────────────────
+// B20 (2026-07-24): a single `connect ETIMEDOUT` four seconds into a metrolinx run
+// aborted the whole pipeline — after the codeline teardown and a 31-repo CodeGraph
+// preflight had already run. Jira was healthy; the same credentials returned 200 in
+// 196ms moments later. One blip should not cost a run.
+//
+// RETRY ONLY WHAT IS RETRYABLE. A 401/403/404 means bad credentials, no permission,
+// or a missing issue — retrying cannot help, and hammering an auth endpoint risks
+// account lockout. Only network-level errors and 429/5xx are retried.
+const RETRY_ATTEMPTS = Number(process.env.JIRA_RETRY_ATTEMPTS || 3);
+const RETRY_BASE_MS  = Number(process.env.JIRA_RETRY_BASE_MS || 1000);
+const SOCKET_TIMEOUT_MS = Number(process.env.JIRA_SOCKET_TIMEOUT_MS || 30000);
+
+const RETRYABLE_CODES = new Set([
+  'ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN',
+  'EPIPE', 'EHOSTUNREACH', 'ENETUNREACH', 'ESOCKETTIMEDOUT',
+]);
+
+function isRetryable(err) {
+  if (!err) return false;
+  if (err.code && RETRYABLE_CODES.has(err.code)) return true;
+  // HTTP status carried on the error we construct below
+  if (err.statusCode === 429) return true;              // rate limited
+  if (err.statusCode >= 500 && err.statusCode < 600) return true;  // server-side
+  return false;                                         // 4xx: never retry
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/** GET with bounded retry on transient failures. Still GET-only — see below. */
+async function request(path) {
+  let lastErr;
+  for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
+    try {
+      return await requestOnce(path);
+    } catch (err) {
+      lastErr = err;
+      if (!isRetryable(err) || attempt === RETRY_ATTEMPTS) throw err;
+      // exponential backoff: 1s, 2s, 4s ...
+      const wait = RETRY_BASE_MS * Math.pow(2, attempt - 1);
+      process.stderr.write(`[jira-client] transient ${err.code || err.statusCode || 'error'} — retry ${attempt}/${RETRY_ATTEMPTS - 1} in ${wait}ms\n`);
+      await sleep(wait);
+    }
+  }
+  throw lastErr;
+}
+
+function requestOnce(path) {
   return new Promise((resolve, reject) => {
     if (!CONFIGURED) { resolve({}); return; }
 
@@ -61,7 +108,9 @@ function request(path) {
       res.on('data', d => (raw += d));
       res.on('end', () => {
         if (res.statusCode >= 400) {
-          reject(new Error(`Jira API ${res.statusCode}: ${raw.slice(0, 200)}`));
+          const e = new Error(`Jira API ${res.statusCode}: ${raw.slice(0, 200)}`);
+          e.statusCode = res.statusCode;   // lets isRetryable() distinguish 429/5xx from 4xx
+          reject(e);
           return;
         }
         try { resolve(raw ? JSON.parse(raw) : {}); }
@@ -69,6 +118,12 @@ function request(path) {
       });
     });
 
+    // A hung connection previously blocked indefinitely — there was no timeout.
+    req.setTimeout(SOCKET_TIMEOUT_MS, () => {
+      const e = new Error(`Jira request timed out after ${SOCKET_TIMEOUT_MS}ms`);
+      e.code = 'ESOCKETTIMEDOUT';           // retryable
+      req.destroy(e);
+    });
     req.on('error', reject);
     req.end();
   });

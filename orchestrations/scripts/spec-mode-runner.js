@@ -15,7 +15,20 @@
 // ─────────────────────────────────────────────────────────────────────────────
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 const { spawn, execSync } = require('node:child_process');
+// Cost emission for every agent this file drives — see lib/cost-emitter.js for
+// why (spec-mode previously emitted no cost at all, hiding ~68% of run spend).
+// Loaded DEFENSIVELY: cost tracking is observability, never a hard dependency of
+// running an agent. A hard require made this whole module unloadable wherever
+// lib/ isn't alongside it (e.g. tests that copy the script to a temp dir), which
+// is exactly the kind of self-inflicted breakage observability must not cause.
+let emitCostSnapshot = () => null;
+try {
+  ({ emitCostSnapshot } = require('./lib/cost-emitter'));
+} catch {
+  /* cost emitter unavailable — agents still run, cost simply isn't recorded */
+}
 
 // Semble code-context retrieval — loaded lazily so the module is optional.
 // When SEMBLE_ENABLED=1 and the binary is present, fetchSembleContext() returns
@@ -3397,6 +3410,36 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
   return new Promise((resolve, reject) => {
     const env = { ...process.env, ...envOverrides };
     delete env.CLAUDECODE;
+
+    // COST TRACKING. Every LLM call in this file funnels through runClaude, so
+    // wiring it here covers the detective, openspec, speckit, spec-coordinator,
+    // the VC reviewer and the PRD change reviewer in one place. Before this,
+    // spec-mode emitted NO cost at all and ~68% of a run's real spend was
+    // invisible ($0.1115 recorded vs $0.3480 actually billed on 2026-07-24).
+    // ai-run.sh already writes the normalized {total_cost_usd, usage:{...}} JSON
+    // to $ORCH_JSON_RESULT — it just was never asked to.
+    let _costFile = null;
+    try {
+      _costFile = path.join(os.tmpdir(), `spec-cost-${process.pid}-${Date.now()}-${Math.floor(Math.random() * 1e6)}.json`);
+      env.ORCH_JSON_RESULT = _costFile;
+    } catch { _costFile = null; }
+
+    const _emitCost = () => {
+      if (!_costFile) return;
+      try {
+        emitCostSnapshot({
+          resultFile: _costFile,
+          activityFile: process.env.ACTIVITY_FILE ||
+            path.join(process.env.LOG_DIR || path.join(__dirname, '..', 'logs'), 'agent-activity.jsonl'),
+          agent: opts.costAgent || envOverrides.SPEC_AGENT_NAME || 'spec-mode-agent',
+          storyId: opts.costStoryId || '',
+          phase: process.env.PHASE || '',
+          model: envOverrides.AI_MODEL || execSpec?.model || process.env.SPEC_MODE_MODEL || '',
+          provider: execSpec?.provider || process.env.SPEC_MODE_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || '',
+        });
+      } catch { /* cost emission must never break the agent call */ }
+      try { fs.unlinkSync(_costFile); } catch { /* ignore */ }
+    };
     const cmd = execSpec?.cmd;
     if (!cmd) {
       return reject(new Error('prompt runner exited with code 1: no execSpec.cmd — set EPAM_ORCHESTRATION_PROVIDER'));
@@ -3437,9 +3480,11 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
       if (logPath) { try { fs.writeFileSync(logPath, `# Prompt\n${prompt}\n\n# Output (timed out)\n${salvaged}\n`); } catch { /* ignore */ } }
       proc.stdout?.destroy();
       proc.stderr?.destroy();
+      _emitCost();
       if (opts.salvageOutputOnFailure && salvaged) {
         return resolve(salvaged);
       }
+      _emitCost();
       reject(new Error(`prompt runner timed out after ${timeoutMs}ms`));
     }, timeoutMs);
 
@@ -3452,6 +3497,10 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
       clearTimeout(killTimer);
       const output = finishOutput();
       if (logPath) fs.writeFileSync(logPath, `# Prompt\n${prompt}\n\n# Output\n${output}\n`);
+      // Emit on EVERY terminal path, including failures: a call that errored or
+      // was salvaged still consumed tokens and still cost real money. Recording
+      // only successes is how spend goes missing precisely when things go wrong.
+      _emitCost();
       if (code !== 0) {
         if (opts.salvageOutputOnFailure && output) {
           return resolve(output);

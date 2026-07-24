@@ -189,7 +189,12 @@ CONTROL_PLANE_LOG="$LOG_DIR/control-plane.log"
 # Each run gets a unique ID. After each story completes, a checkpoint entry is
 # written so a crash-restart can skip already-finished stories without needing
 # RESET_STORIES=false (which would otherwise re-run everything from scratch).
-ORCH_RUN_ID="${ORCH_RUN_ID:-$(date +%Y%m%dT%H%M%SZ)}"
+# EXPORTED so every child inherits it — each agent call is a separate `epam run`
+# subprocess, and TracedProvider uses ORCH_RUN_ID as the Langfuse sessionId to
+# group a run's traces. Without the export it was set but invisible to children,
+# so every trace had sessionId:null and all runs blended into one stream
+# (which produced a wrong, retracted cost analysis on 2026-07-24).
+export ORCH_RUN_ID="${ORCH_RUN_ID:-$(date +%Y%m%dT%H%M%SZ)}"
 CHECKPOINT_FILE="${LOG_DIR}/checkpoint-${PHASE:-main}-${ORCH_RUN_ID}.jsonl"
 
 # Colors

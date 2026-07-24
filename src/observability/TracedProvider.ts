@@ -23,12 +23,22 @@ export class TracedProvider implements LLMProvider {
 
   constructor(
     private inner: LLMProvider,
-    private sessionId?: string,
+    sessionId?: string,
     private userId?: string,
   ) {
     this.name = inner.name;
     this.defaultModel = inner.defaultModel;
+    // Group traces by pipeline run. Every orchestration agent call is a separate
+    // `epam run` subprocess, so an explicit sessionId rarely reaches us — without
+    // a fallback every trace got sessionId:null and all runs piled into one
+    // undifferentiated stream. That is not cosmetic: on 2026-07-24 a per-model
+    // cost table built from Langfuse silently blended a killed run's traces with
+    // the live run's and had to be retracted. ORCH_RUN_ID is already exported by
+    // the orchestration scripts and inherited by every child process.
+    this.sessionId = sessionId ?? process.env.ORCH_RUN_ID ?? undefined;
   }
+
+  private sessionId?: string;
 
   async complete(request: ProviderRequest): Promise<ProviderResponse> {
     const langfuseEnabled = isLangfuseEnabled();

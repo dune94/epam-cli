@@ -23,9 +23,21 @@
 
 set -u
 
-GIT_ROOT="${1:?Usage: scan-secrets.sh <git-root>}"
+GIT_ROOT="${1:?Usage: scan-secrets.sh <git-root> [commit-range]}"
+RANGE="${2:-}"
 
-DIFF=$(git -C "$GIT_ROOT" diff --cached -U0 2>/dev/null) || exit 0
+# A staged-diff-only scan is blind to anything ALREADY COMMITTED but not yet
+# pushed — which is exactly how a live Atlassian token reached the remote on
+# 2026-07-24: the push carried 14 pre-existing commits, none of which were in
+# `git diff --cached`. Passing a range (e.g. `origin/master..HEAD`) scans what a
+# push would actually publish.
+if [ -n "$RANGE" ]; then
+    DIFF=$(git -C "$GIT_ROOT" diff -U0 "$RANGE" 2>/dev/null) || exit 0
+    SCOPE="commit range $RANGE"
+else
+    DIFF=$(git -C "$GIT_ROOT" diff --cached -U0 2>/dev/null) || exit 0
+    SCOPE="staged changes"
+fi
 [ -z "$DIFF" ] && exit 0
 
 # Only inspect added lines (diff `+` lines), not removed/context lines.
@@ -34,10 +46,26 @@ ADDED=$(echo "$DIFF" | grep -E '^\+[^+]' || true)
 
 FOUND=""
 
+# Lines that are unmistakably dummy/fixture values. Format-specific checks apply
+# this too (not just the generic rule): security TESTS must be able to contain a
+# credential-SHAPED string without the scanner blocking its own test suite. The
+# markers are deliberately explicit (DUMMY/NOT-REAL/FAKE/PLACEHOLDER/CHANGEME) —
+# a real leaked credential will not carry them.
+#
+# NOTE: `process.env` and `${...}` are deliberately NOT excused here (unlike in the
+# generic rule). A hardcoded literal used as an env-var FALLBACK —
+# `process.env.JIRA_TOKEN || 'ATATT<real>'` — is precisely how a live token sat in
+# scripts/jira-proxy.js and reached the remote. A well-known credential FORMAT is a
+# credential regardless of what else shares the line; only an explicit dummy marker
+# excuses it.
+PLACEHOLDER_RE='dummy|not-?a-?real|not-?real|fake|placeholder|changeme|xxxx|your_'
+
 check_pattern() {
     local label="$1"
     local pattern="$2"
-    if echo "$ADDED" | grep -qE -e "$pattern"; then
+    local hits
+    hits=$(echo "$ADDED" | grep -E -e "$pattern" | grep -viE "$PLACEHOLDER_RE" || true)
+    if [ -n "$hits" ]; then
         FOUND="${FOUND}${FOUND:+, }${label}"
     fi
 }
@@ -48,15 +76,19 @@ check_pattern "GitHub token" 'gh[pousr]_[A-Za-z0-9]{30,}'
 check_pattern "Slack token" 'xox[baprs]-[0-9A-Za-z-]{10,}'
 check_pattern "OpenAI-style API key" 'sk-[A-Za-z0-9]{20,}'
 check_pattern "Google API key" 'AIza[0-9A-Za-z_-]{35}'
+# Atlassian (Jira/Confluence) API tokens — the format that actually escaped.
+check_pattern "Atlassian API token" 'ATATT[A-Za-z0-9_.=+/-]{20,}'
 
-# Generic: password/secret/token/apikey assigned a quoted literal that does
-# NOT look like a placeholder.
-GENERIC_HIT=$(echo "$ADDED" | grep -iE "(password|passwd|secret|token|api[_-]?key)[\"']?[[:space:]]*[:=][[:space:]]*[\"'][A-Za-z0-9_./+=-]{16,}[\"']" \
-    | grep -viE "test|example|dummy|fake|xxxx|changeme|your_|placeholder|process\.env|<[a-z_]+>|\\\$\{" || true)
+# Generic: password/secret/token/apikey assigned a long literal that does NOT
+# look like a placeholder. The quotes are OPTIONAL — requiring them made every
+# bare `KEY=value` line invisible, i.e. the entire contents of every .env file,
+# which is where the 2026-07-24 leak lived.
+GENERIC_HIT=$(echo "$ADDED" | grep -iE "(password|passwd|secret|token|api[_-]?key)[\"']?[[:space:]]*[:=][[:space:]]*[\"']?[A-Za-z0-9_./+=-]{16,}[\"']?" \
+    | grep -viE "test|example|dummy|fake|xxxx|changeme|your_|placeholder|process\.env|<[a-z_]+>|\\\$\{|=\\\$|set-during-setup|admin-password" || true)
 [ -n "$GENERIC_HIT" ] && FOUND="${FOUND}${FOUND:+, }generic credential-shaped assignment"
 
 if [ -n "$FOUND" ]; then
-    echo "SECRET_SCAN: possible credential(s) detected in staged changes: $FOUND" >&2
+    echo "SECRET_SCAN: possible credential(s) detected in ${SCOPE}: $FOUND" >&2
     echo "SECRET_SCAN: refusing to commit — unstage and remove the credential, or use an environment variable / secret store instead." >&2
     exit 1
 fi

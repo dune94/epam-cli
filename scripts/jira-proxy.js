@@ -8,9 +8,19 @@
 
 const http = require('http');
 
+// Credentials come from the environment ONLY — never a hardcoded fallback.
+// A live Atlassian API token used to be inlined here as the JIRA_TOKEN default and
+// was published to the remote; it has been removed and must be treated as
+// compromised/rotated. Fail loudly rather than silently falling back to a secret.
 const JIRA_URL = process.env.JIRA_URL || 'https://metrolinx.atlassian.net';
-const JIRA_EMAIL = process.env.JIRA_EMAIL || 'v-bradley.jerome@metrolinx.com';
-const JIRA_TOKEN = process.env.JIRA_TOKEN || 'ATATT3xFfGF04-ArGiBP8_YD2NH1-EbdX-z8J_uLLiSsFS_Ur7ss8NJ4hYEvNdPLaha-pXKZ7JsLqUZggKjyKCMn3RZYfZHkYa_gcgkR-2rMGDnn-fCa4PbHZSsVNj1-KLUdgR-SDo08GSfbxihSKW1UEc9z4GdQTky2c61J_WiN7oAZEE1Wo8=E7E9E077';
+const JIRA_EMAIL = process.env.JIRA_EMAIL || '';
+const JIRA_TOKEN = process.env.JIRA_TOKEN || '';
+
+if (!JIRA_TOKEN || !JIRA_EMAIL) {
+  console.error('[jira-proxy] JIRA_EMAIL and JIRA_TOKEN must be set in the environment. ' +
+                'Source your secrets file (e.g. orchestrations/jira/metrolinx.env) before starting.');
+  process.exit(1);
+}
 
 const server = http.createServer(async (req, res) => {
   // Enable CORS

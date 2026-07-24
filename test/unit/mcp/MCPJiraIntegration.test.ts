@@ -6,17 +6,19 @@ describe('MCP JIRA/Confluence Integration - Complete E2E Scenario', () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
-    // Set up demo environment with REAL credentials
+    // Credentials come from the environment; a real Atlassian token used to be
+    // hardcoded here and was published to the remote (removed 2026-07-24 — treat
+    // as compromised/rotated). Never inline a live credential in a test.
     process.env = {
       ...originalEnv,
       // Atlassian credentials for REAL JIRA access
       ATLASSIAN_USER_EMAIL: 'v-bradley.jerome@metrolinx.com',
-      ATLASSIAN_API_TOKEN: 'ATATT3xFfGF04-ArGiBP8_YD2NH1-EbdX-z8J_uLLiSsFS_Ur7ss8NJ4hYEvNdPLaha-pXKZ7JsLqUZggKjyKCMn3RZYfZHkYa_gcqgkR-2rMGDnn-fCa4PbHZSsVNj1-KLUdgR-SDo08GSfbxihSKW1UEc9z4GdQTky2c61J_WiN7oAZEE1Wo8=E7E9E077',
+      ATLASSIAN_API_TOKEN: process.env.JIRA_TOKEN || 'ATATT-DUMMY-TEST-TOKEN-NOT-REAL=AAAA0000',
       ATLASSIAN_BASE_URL: 'https://metrolinx.atlassian.net',
       
       // Map to JIRA_EMAIL/JIRA_API_TOKEN for compatibility
       JIRA_EMAIL: 'v-bradley.jerome@metrolinx.com',
-      JIRA_API_TOKEN: 'ATATT3xFfGF04-ArGiBP8_YD2NH1-EbdX-z8J_uLLiSsFS_Ur7ss8NJ4hYEvNdPLaha-pXKZ7JsLqUZggKjyKCMn3RZYfZHkYa_gcqgkR-2rMGDnn-fCa4PbHZSsVNj1-KLUdgR-SDo08GSfbxihSKW1UEc9z4GdQTky2c61J_WiN7oAZEE1Wo8=E7E9E077',
+      JIRA_API_TOKEN: process.env.JIRA_TOKEN || 'ATATT-DUMMY-TEST-TOKEN-NOT-REAL=AAAA0000',
       JIRA_URL: 'https://metrolinx.atlassian.net',
       
       // MCP server URLs

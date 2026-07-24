@@ -83,3 +83,8 @@ orchestrations/logs/spec-run-latest.json
 orchestrations/logs/spec-summary.json
 orchestrations/logs/spec-runs/
 session.md
+
+# Real Jira credentials — NEVER commit (live Atlassian API token).
+# The committable template is orchestrations/jira/.env.example (placeholders only).
+orchestrations/jira/*.env
+!orchestrations/jira/*.env.example

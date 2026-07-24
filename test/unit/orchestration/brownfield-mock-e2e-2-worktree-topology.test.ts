@@ -47,7 +47,11 @@ const NODE20 = '/home/bradleyjerome/.nvm/versions/node/v20.20.0/bin/node';
 const RUN_REAL = process.env.RUN_REAL_PIPELINE_MOCK === '1';
 
 const cleanupDirs: string[] = [];
+const jiraStops: Array<() => void> = [];
 afterAll(() => {
+  // Stop every mock Jira server before removing dirs — a surviving listener would
+  // outlive the test run and hold a port.
+  for (const stop of jiraStops.splice(0)) { try { stop(); } catch { /* already gone */ } }
   for (const d of cleanupDirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
@@ -138,11 +142,50 @@ function makeMockCodeline(): { clone: string } {
  *  already defined in the canonical file; nothing is added or removed here.
  *  Copied fresh for every test run, never mutated in place. */
 const CANONICAL_PRD = join(REPO_ROOT, 'test/fixtures/mock-pipeline/hello-dolly-worktree.canonical.json');
+const MOCK_JIRA_SERVER = join(REPO_ROOT, 'test/fixtures/mock-pipeline/mock-jira-server.js');
 
 function resetPrdFromCanonical(prdPath: string, projectRoot: string): void {
   const canonical = JSON.parse(readFileSync(CANONICAL_PRD, 'utf8'));
   canonical.project.outputDir = projectRoot;
   writeFileSync(prdPath, JSON.stringify(canonical, null, 2));
+}
+
+/** Starts the mock Jira server with one ticket PER STORY in the canonical
+ *  template, so this mock drives the REAL Jira ingest (real jira-client, real
+ *  AC-gate, real synthesis) instead of skipping the stage.
+ *
+ *  Topology stays deterministic despite going through ingest: synthesis is given
+ *  the canonical PRD as --template (JIRA_PRD_TEMPLATE) and keys it by story id,
+ *  preserving each story's agentGroup. That is what makes this a topology test
+ *  rather than a coin flip on what an LLM decides to call "primary".
+ *
+ *  Was JIRA_PIPELINE=0 until 2026-07-24 — a whole production stage unexercised
+ *  (user: "mock2 should not skip jira", "no difference in piping"). */
+function startMockJiraServerForCanonical(dir: string): Promise<{ port: number; stop: () => void }> {
+  const canonical = JSON.parse(readFileSync(CANONICAL_PRD, 'utf8'));
+  const issues = (canonical.stories || []).map((st: any) => ({
+    key: st.id,
+    summary: st.title || st.id,
+    description: st.description || st.title || st.id,
+  }));
+  const specPath = join(dir, 'mock-jira-issues.json');
+  writeFileSync(specPath, JSON.stringify(issues, null, 2));
+  return new Promise((resolve, reject) => {
+    const proc = spawn(NODE20, [MOCK_JIRA_SERVER, '--issues', specPath]);
+    let buf = '';
+    const onData = (d: Buffer) => {
+      buf += d.toString();
+      const m = buf.match(/LISTENING:(\d+)/);
+      if (m) {
+        proc.stdout.off('data', onData);
+        resolve({ port: parseInt(m[1], 10), stop: () => proc.kill('SIGTERM') });
+      }
+    };
+    proc.stdout.on('data', onData);
+    proc.stderr.on('data', d => { buf += d.toString(); });
+    proc.on('error', reject);
+    proc.on('exit', c => { if (c !== null && c !== 0) reject(new Error(`mock-jira-server exited ${c}: ${buf}`)); });
+  });
 }
 
 function readPrd(prdPath: string): any {
@@ -179,12 +222,25 @@ function watchAndSymlinkWorktreeNodeModules(clone: string): () => void {
 function runFullPipeline(clone: string, phase: string, env: NodeJS.ProcessEnv): Promise<{ stdout: string; exitCode: number }> {
   const baseEnv: NodeJS.ProcessEnv = {
     ...process.env,
-    JIRA_PIPELINE: '0',
-    JIRA_URL: '',
-    JIRA_TOKEN: '',
-    JIRA_EMAIL: '',
-    JIRA_PROJECT_KEY: '',
-    JIRA_CODELINE_RUN: '',
+    // ── Flow-parity with orchestrations/projects/metrolinx/config.env ──
+    // These decide whether whole STAGES run; drift means this mock exercises a
+    // different pipeline than production. Enforced by mock-metrolinx-flow-parity.
+    JIRA_PIPELINE: '1',
+    AC_GATE_AUTO_ELABORATE: '1',
+    SKIP_REGRESSION_GUARD: 'false',
+    SKIP_BROWSER_E2E_ROUTING: 'true',
+    // REAL Jira ingest — no stage skipped (user directive 2026-07-24: "mock2
+    // should not skip jira"). JIRA_URL is supplied per-test from the mock Jira
+    // server's assigned port. JIRA_PRD_TEMPLATE pins lane topology through
+    // synthesis, so driving real ingest does NOT make this test non-deterministic:
+    // synthesize-prd-from-jira.js keys the template by story id and preserves
+    // each story's agentGroup.
+    JIRA_EMAIL: 'mock@test.com',
+    JIRA_TOKEN: 'mock-token',
+    JIRA_PROJECT_KEY: 'MOCK',
+    JIRA_STATUS_FILTER: 'To Do',
+    JIRA_DEFAULT_CODELINE: 'mock',
+    JIRA_PRD_TEMPLATE: CANONICAL_PRD,
     ...env,
   };
   const attempt = (extra: NodeJS.ProcessEnv): Promise<{ stdout: string; exitCode: number }> =>
@@ -218,8 +274,13 @@ describe.skipIf(!RUN_REAL)('Mock 2 — REAL run-agent-orchestration.sh, parallel
     const phase = 'mock2_incident';
     const prdPath = join(clone, '..', 'prd.json');
     resetPrdFromCanonical(prdPath, clone);
+    // REAL Jira ingest: one ticket per canonical story, served over HTTP exactly
+    // as production hits Jira Cloud. Nothing downstream of this boundary is stubbed.
+    const jira = await startMockJiraServerForCanonical(join(clone, '..'));
+    jiraStops.push(jira.stop);
 
     const { stdout, exitCode } = await runFullPipeline(clone, phase, {
+      JIRA_URL: `http://127.0.0.1:${jira.port}`,
       PRD_FILE: prdPath,
       AGENT_PROFILES_FILE,
       EPAM_BROWNFIELD: '1',
@@ -262,8 +323,11 @@ describe.skipIf(!RUN_REAL)('Mock 2 — REAL run-agent-orchestration.sh, parallel
     const phase = 'mock2_contrast';
     const prdPath = join(clone, '..', 'prd.json');
     resetPrdFromCanonical(prdPath, clone);
+    const jira = await startMockJiraServerForCanonical(join(clone, '..'));
+    jiraStops.push(jira.stop);
 
     const { stdout, exitCode } = await runFullPipeline(clone, phase, {
+      JIRA_URL: `http://127.0.0.1:${jira.port}`,
       PRD_FILE: prdPath,
       AGENT_PROFILES_FILE,
       EPAM_BROWNFIELD: '1',

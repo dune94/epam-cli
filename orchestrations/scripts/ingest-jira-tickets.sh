@@ -200,9 +200,25 @@ fi
 log "Synthesizing PRD from classified tickets..."
 # Worktree paths are read from JIRA_WORKTREE_<CODELINE_UPPER> env vars by convention.
 # No --be-dir/--fe-dir flags: synthesize-prd-from-jira.js discovers codelines from data.
+# PRD template: synthesize-prd-from-jira.js keys it by story id and preserves each
+# story's agentGroup/agentRole/effort, so it is what fixes lane TOPOLOGY. Without a
+# --template it silently fell back to the built-in travel-app canonical for EVERY
+# project. JIRA_PRD_TEMPLATE lets a project supply its own; unset keeps the previous
+# default exactly, so existing projects are unaffected.
+_synth_template_args=()
+if [ -n "${JIRA_PRD_TEMPLATE:-}" ]; then
+  if [ -f "$JIRA_PRD_TEMPLATE" ]; then
+    _synth_template_args=(--template "$JIRA_PRD_TEMPLATE")
+    log "Using PRD template: ${JIRA_PRD_TEMPLATE}"
+  else
+    log "WARN: JIRA_PRD_TEMPLATE set but not found: ${JIRA_PRD_TEMPLATE} — using default canonical"
+  fi
+fi
+
 "$NODE_BIN" "${SCRIPT_DIR}/synthesize-prd-from-jira.js" \
   --classifications "$GATE_JSON" \
   --out "$OUT_PRD" \
+  "${_synth_template_args[@]}" \
   2>&1 | grep '^\[synthesize-prd\]' | sed 's/\[synthesize-prd\]/[ingest]/' >&2
 
 log "PRD ready: ${OUT_PRD}"

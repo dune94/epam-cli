@@ -17,41 +17,81 @@
  * real AC-gate has genuine elaboration work to do — no field is hand-filled
  * with what a real run would have to discover.
  *
- * Usage: node mock-jira-server.js <issueKey> <summary> <description>
+ * Usage (single ticket):  node mock-jira-server.js <issueKey> <summary> <description>
+ *       (many tickets):    node mock-jira-server.js --issues <path-to-json>
+ *
+ * The --issues form takes [{key, summary, description}, ...] and is what a
+ * multi-story mock needs: mock2 drives three tickets through the REAL Jira
+ * ingest so it exercises the same piping as production rather than skipping
+ * the ingest stage (user directive 2026-07-24: "mock2 should not skip jira").
+ * Story TOPOLOGY stays deterministic because synthesize-prd-from-jira.js keys
+ * its --template by story id and preserves each story's agentGroup, so serving
+ * real tickets does not put lane assignment at the mercy of an LLM.
+ *
  * Prints "LISTENING:<port>" to stdout once bound (port 0 = OS-assigned).
  */
 
 const http = require('http');
 
-const [, , issueKey, summary, description] = process.argv;
-if (!issueKey || !summary || !description) {
-  process.stderr.write('Usage: mock-jira-server.js <issueKey> <summary> <description>\n');
-  process.exit(1);
+const fs = require('fs');
+
+/** Shape a bare Jira issue — no labels, no pre-supplied ACs, so the real
+ *  AC-gate has genuine elaboration work to do (same as the single-ticket form). */
+function makeIssue(key, summary, description) {
+  return {
+    key,
+    fields: {
+      summary,
+      description,
+      status: { name: 'To Do' },
+      labels: [],
+      issuetype: { name: 'Bug' },
+      assignee: null,
+      priority: { name: 'Medium' },
+    },
+  };
 }
 
-const issue = {
-  key: issueKey,
-  fields: {
-    summary,
-    description,
-    status: { name: 'To Do' },
-    labels: [],
-    issuetype: { name: 'Bug' },
-    assignee: null,
-    priority: { name: 'Medium' },
-  },
-};
+let issues;
+if (process.argv[2] === '--issues') {
+  const specPath = process.argv[3];
+  if (!specPath) {
+    process.stderr.write('Usage: mock-jira-server.js --issues <path-to-json>\n');
+    process.exit(1);
+  }
+  const spec = JSON.parse(fs.readFileSync(specPath, 'utf8'));
+  if (!Array.isArray(spec) || spec.length === 0) {
+    process.stderr.write('--issues file must be a non-empty JSON array\n');
+    process.exit(1);
+  }
+  issues = spec.map(i => makeIssue(i.key, i.summary, i.description));
+} else {
+  const [, , issueKey, summary, description] = process.argv;
+  if (!issueKey || !summary || !description) {
+    process.stderr.write('Usage: mock-jira-server.js <issueKey> <summary> <description>\n');
+    process.exit(1);
+  }
+  issues = [makeIssue(issueKey, summary, description)];
+}
+const byKey = new Map(issues.map(i => [i.key, i]));
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
   res.setHeader('Content-Type', 'application/json');
 
   if (url.pathname === '/rest/api/3/search/jql') {
-    res.end(JSON.stringify({ issues: [issue], total: 1, maxResults: 100 }));
+    res.end(JSON.stringify({ issues, total: issues.length, maxResults: 100 }));
     return;
   }
-  if (url.pathname === `/rest/api/3/issue/${issueKey}`) {
-    res.end(JSON.stringify(issue));
+  // Look the ticket up BY KEY — with several tickets in play, always returning
+  // issues[0] would silently hand back the wrong ticket (and `issueKey` is not
+  // even defined in the --issues form).
+  const m = url.pathname.match(/^\/rest\/api\/3\/issue\/([^/]+)$/);
+  if (m) {
+    const found = byKey.get(decodeURIComponent(m[1]));
+    if (found) { res.end(JSON.stringify(found)); return; }
+    res.statusCode = 404;
+    res.end(JSON.stringify({ errorMessages: [`No such mock issue: ${m[1]}`] }));
     return;
   }
   res.statusCode = 404;

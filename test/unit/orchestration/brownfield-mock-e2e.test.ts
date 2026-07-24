@@ -250,6 +250,16 @@ describe.skipIf(!RUN_REAL)('Full mock brownfield pipeline — REAL Jira ingest +
           // ~/.local/bin/semble) correctly finds src/hello.ts's getGreeting() for
           // this story's exact title before relying on a full pipeline run to prove it.
           SEMBLE_ENABLED: '1',
+          // ── Flow-parity with orchestrations/projects/metrolinx/config.env ──
+          // These decide whether whole STAGES run. Missing here, mock1 exercised a
+          // DIFFERENT pipeline than production and could never reproduce a
+          // production failure. Enforced by mock-metrolinx-flow-parity.test.ts.
+          // SKIP_REGRESSION_GUARD in particular: the guard is what DEADLOCKED the
+          // 2026-07-24 15:36 live run (on a broken test the pipeline itself had
+          // committed) — unset here, mock1 could not have caught it.
+          AC_GATE_AUTO_ELABORATE: '1',
+          SKIP_REGRESSION_GUARD: 'false',
+          SKIP_BROWSER_E2E_ROUTING: 'true',
           // Real launchers (tier3-*-run.sh) always set a genuinely different
           // escalation-tier model (see orchestrations/projects/metrolinx/config.env:
           // primary z-ai/glm-5.2, ESCALATION_MODEL_HIGH z-ai/glm-5.1) so a retry

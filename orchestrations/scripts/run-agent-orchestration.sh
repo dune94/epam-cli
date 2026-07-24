@@ -3270,13 +3270,58 @@ run_pre_phase_assessment() {
 
     log "Running pre-phase skill assessment for '$phase_id'..."
 
+    # B19 — COMPUTE THE DATA HERE, do not ask the model to fetch it.
+    # This prompt used to hand over PATHS and instruct 13 shell commands ("Run: jq
+    # ...", "find . -name ..."). Every instructed command costs a full round-trip —
+    # emit tool call, execute, re-send the WHOLE conversation to interpret it — and
+    # the conversation is re-paid each step (input grew 3,483 -> 15,985 tokens across
+    # iterations). Measured for a ONE-LINE story: 48 LLM calls, 432K input tokens,
+    # 224-282s, a quarter of the run before implementation started. It also TAUGHT
+    # the model to use `find`, which is how it reached for `find /` and hung the
+    # pipeline for 282 seconds.
+    #
+    # The orchestrator already runs these exact queries ~70 times in this file, and
+    # every comparable agent interpolates DATA (claude.sh impl: 26 interpolations;
+    # repro-test-writer: 7). This step was the outlier.
+    local _pfa_stories_json _pfa_profile_roles
+    _pfa_stories_json=$(jq -c --arg phase "$phase_id" \
+        '[ (.implementationOrder[$phase] // []) as $ids
+           | .stories[] | select(.id as $id | $ids | index($id) != null)
+           | {id, agentRole, unitTests, technicalNotes, acceptanceCriteria} ]' \
+        "$PRD_FILE" 2>/dev/null || echo '[]')
+    _pfa_profile_roles=$(jq -r 'keys | join(", ")' "$profiles_file" 2>/dev/null || echo "")
+    # The agent's actual job is to AUGMENT existing profiles — "only ADD to existing
+    # profile strings" and add skills "NOT already covered in the profile". It cannot
+    # judge either from role NAMES alone, so the CONTENT of the relevant profiles must
+    # be interpolated too. Full profiles.json is ~146KB (~36K tokens) — far too large —
+    # but a phase touches only the handful of roles its stories name, so send exactly
+    # those. Falls back to names-only if the roles cannot be determined.
+    local _pfa_relevant_roles _pfa_profiles_content
+    _pfa_relevant_roles=$(printf '%s' "$_pfa_stories_json" \
+        | jq -r '[.[].agentRole // empty] | unique | .[]' 2>/dev/null || echo "")
+    if [ -n "$_pfa_relevant_roles" ]; then
+        _pfa_profiles_content=$(printf '%s' "$_pfa_relevant_roles" \
+            | jq -Rs --slurpfile P <(jq -c . "$profiles_file") \
+                'split("\n") | map(select(length>0)) as $roles
+                 | $P[0] as $prof
+                 | [ $roles[] | {role: ., profile: ($prof[.] // "(no existing profile — you will create one)")} ]
+                 | map("### \(.role)\n\(.profile)") | join("\n\n")' -r 2>/dev/null || echo "")
+    fi
+    # Exported symbols: the prompt used to instruct `grep -rn "^export" src/` — another
+    # shell round-trip for something the orchestrator can compute directly. Bounded so a
+    # large codeline cannot blow up the prompt.
+    local _pfa_exports
+    _pfa_exports=$(grep -rhoE "^export (async )?(function|const|class) [A-Za-z0-9_]+" \
+        "$PROJECT_ROOT/src" --include="*.ts" 2>/dev/null \
+        | awk '{print $NF}' | sort -u | head -200 | tr '\n' ' ' || echo "")
+
     # Build assessment prompt
     local assessment_prompt
     # shellcheck disable=SC2287
     assessment_prompt=$(cat << PROMPT_HEADER
 You are the skill assessment agent running in PRE-PHASE mode. Your job is to deeply reason about what each assigned agent will need to succeed — not just check a list of requiredSkills, but actively anticipate pitfalls given the tech stack, file types, and implementation patterns the stories demand. You augment agent profiles with the specific knowledge needed to avoid failures before they happen.
 
-## PRD STRUCTURE (read this carefully before issuing any jq commands)
+## PRD STRUCTURE (context for interpreting the story data given below)
 The PRD file uses a FLAT structure — not nested phases. Key paths:
 - Story list: .stories[]
 - Phase story order: .implementationOrder["${phase_id}"] — returns an array of story IDs
@@ -3287,10 +3332,21 @@ The PRD file uses a FLAT structure — not nested phases. Key paths:
 DO NOT use .phases[0] — that path does not exist in this PRD.
 
 ## Task
-1. Run: jq -r '.implementationOrder["${phase_id}"][]' ${PRD_REL}
-   This gives you the ordered list of story IDs for this phase.
+THE STORY DATA YOU NEED IS BELOW — it is already extracted for you. Do NOT run jq,
+cat, find, ls or any other command to fetch it, and do NOT go looking for files.
 
-2. For each story ID, run: jq -c --arg id "<id>" '.stories[] | select(.id == \$id) | {id, agentRole, unitTests, technicalNotes}' ${PRD_REL}
+=== STORIES IN PHASE "${phase_id}" (id, agentRole, unitTests, technicalNotes, acceptanceCriteria) ===
+${_pfa_stories_json}
+
+=== ALL AGENT ROLES THAT ALREADY EXIST (names only) ===
+${_pfa_profile_roles}
+
+=== CURRENT PROFILE CONTENT for the roles this phase actually uses ===
+(This is what you are augmenting. Do NOT re-add a skill already stated here.)
+${_pfa_profiles_content}
+
+=== EXPORTED SYMBOLS in the codeline's src/ (authoritative — any finding about a symbol not in this list is a hallucination) ===
+${_pfa_exports}
 
 3. ROLE ASSIGNMENT — For any story where agentRole is null or empty:
    a. Examine the story's technicalNotes.files list
@@ -3324,9 +3380,9 @@ DO NOT use .phases[0] — that path does not exist in this PRD.
    For each inferred gap, append a targeted skill to the agent's profile in ${PROFILES_REL}. Be specific and actionable — state the exact rule, not a general category.
 
 5b. QA AGENT SKILL INJECTION — After inferring implementation gaps, also inject project-specific context into the QA agent profiles (sast-sentinel, review-ranger, spec-validator, mutant-hunter). These agents run against every phase and must know the project's actual file structure and conventions to avoid hallucinating findings about non-existent code. For each QA agent profile:
-   a. Read the current list of source files: find . -name "*.ts" -not -path "*/node_modules/*"
+   a. Use the technicalNotes.files listed in the story data above — do NOT search the filesystem.
    b. Append to sast-sentinel profile: the exact list of source files it is authorized to report findings on. Any finding referencing a file not in this list must be suppressed as a hallucination.
-   c. Append to review-ranger profile: the exact list of exported symbols (from grep -rn "^export" src/ --include="*.ts") that exist. Any finding about an untested function must reference a symbol from this list — findings about non-existent functions are hallucinations and must be suppressed.
+   c. Append to review-ranger profile: the exact list of exported symbols, given below under EXPORTED SYMBOLS. Any finding about an untested function must reference a symbol from this list — findings about non-existent functions are hallucinations and must be suppressed.
    d. Append to both: the project's test file naming convention (*.test.ts in src/) and the fact that a function tested in any test file in src/ counts as covered — not just a dedicated file.
 
 6. EXPLICIT SKILL GAP FILL — After proactive inference, also do the traditional check:

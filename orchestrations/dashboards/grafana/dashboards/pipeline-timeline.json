@@ -1,0 +1,82 @@
+{
+  "uid": "epam-pipeline-timeline",
+  "title": "Run Timeline",
+  "tags": ["epam-cli", "pipeline"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Step/agent durations (seconds)",
+      "type": "barchart",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "P0666D91AE6B4D6B1" },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "http://agent-monitor/logs-json/phase-cost.jsonl",
+          "url_options": { "method": "GET", "data": "" },
+          "format": "table",
+          "parser": "backend",
+          "root_selector": "",
+          "columns": [
+            { "selector": "agent_type", "text": "agent", "type": "string" },
+            { "selector": "story_id", "text": "story", "type": "string" },
+            { "selector": "started_at", "text": "started_at", "type": "timestamp" },
+            { "selector": "ended_at", "text": "ended_at", "type": "timestamp" }
+          ],
+          "computed_columns": [
+            {
+              "selector": "(ended_at - started_at) / 1000",
+              "text": "duration_seconds"
+            }
+          ]
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "options": {
+        "xField": "agent",
+        "orientation": "horizontal"
+      }
+    },
+    {
+      "id": 2,
+      "title": "Raw timeline (start/end per agent call)",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 12 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "P0666D91AE6B4D6B1" },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "http://agent-monitor/logs-json/phase-cost.jsonl",
+          "url_options": { "method": "GET", "data": "" },
+          "format": "table",
+          "parser": "backend",
+          "root_selector": "",
+          "columns": [
+            { "selector": "phase_id", "text": "phase", "type": "string" },
+            { "selector": "story_id", "text": "story", "type": "string" },
+            { "selector": "agent_type", "text": "agent", "type": "string" },
+            { "selector": "resolvedModel", "text": "model", "type": "string" },
+            { "selector": "started_at", "text": "started_at", "type": "string" },
+            { "selector": "ended_at", "text": "ended_at", "type": "string" },
+            { "selector": "status", "text": "status", "type": "string" }
+          ],
+          "computed_columns": [
+            {
+              "selector": "(ended_at - started_at) / 1000",
+              "text": "duration_seconds"
+            }
+          ]
+        }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] }
+    }
+  ]
+}

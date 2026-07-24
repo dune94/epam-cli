@@ -159,6 +159,10 @@ function normalizeIssue(issue) {
     labels,
     codeline,
     effort:             pointsToEffort(f.customfield_10016),
+    // Ground-truth ticket type ("Bug", "Story", "Task"). Used downstream to
+    // anchor the brownfield defect/novel classification so a bug ticket is
+    // treated as a defect regardless of the spec model's own judgment.
+    issueType:          (f.issuetype && f.issuetype.name) || null,
   };
 }
 

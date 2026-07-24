@@ -2257,7 +2257,11 @@ KNOWNFIXES_EOF
       OUTPUT_DIR="$_wt" \
       PHASE="$_phase" \
       CROSS_CODELINE_PRD="${CROSS_CODELINE_PRD:-}" \
-      bash "$0" --reset 2>&1 | tee -a "$_log_file" || _pex=${PIPESTATUS[0]}
+      bash "$0" --reset 2>&1 | tee -a "$_log_file"
+      # No pipefail in this script, so `| tee || _pex=` tests tee's exit (0) and never
+      # fires — a phase exit-2 (gate block) was masked to _pex=0 → "done" → PASSED
+      # (live AMSD-1820 run #3). Capture the inner orch's real exit; tee exits 0 so set -e is fine.
+      _pex=${PIPESTATUS[0]}
 
       # exit 2 = gate remediation applied — reset stories and retry once (mirrors tier3 launcher)
       if [ "$_pex" -eq 2 ]; then
@@ -2270,7 +2274,8 @@ KNOWNFIXES_EOF
         PHASE="$_phase" \
         SKIP_GATE_REMEDIATION=1 \
         CROSS_CODELINE_PRD="${CROSS_CODELINE_PRD:-}" \
-        bash "$0" --reset 2>&1 | tee -a "$_log_file" || _pex=${PIPESTATUS[0]}
+        bash "$0" --reset 2>&1 | tee -a "$_log_file"
+        _pex=${PIPESTATUS[0]}
         if [ "$_pex" -ne 0 ]; then
           error "[orch] Phase '${_phase}' for '${_cl}' failed after self-healing retry (exit $_pex)"
         else
@@ -2790,6 +2795,22 @@ run_specification_pass() {
                 error "  Execution blocked (SPEC_PASS_BLOCK_ON_TIMEOUT=true). Set to false to override."
                 exit 1
             fi
+        fi
+        # SUFFICIENCY GATE (always on, NOT overridable): a brownfield story where
+        # the detective found no fix site AND the ticket context is thin cannot be
+        # implemented or verified — fail early with a clear reason rather than
+        # burning a doomed run. Autonomous (no human halt); the flag is set by the
+        # spec pass (spec-mode-runner.js sufficiency gate).
+        _insufficient=$(jq -r \
+            '[.stories[] | select(.specification.insufficientContext == true)] | length' \
+            "$PRD_FILE" 2>/dev/null || echo 0)
+        if [ "${_insufficient:-0}" -gt 0 ]; then
+            _insufficient_ids=$(jq -r \
+                '[.stories[] | select(.specification.insufficientContext == true) | .id] | join(", ")' \
+                "$PRD_FILE" 2>/dev/null || echo "unknown")
+            error "Step 1: INSUFFICIENT CONTEXT — $_insufficient_ids: the code-graph-detective located no fix site and the ticket's ACs + description are too thin to implement or to write a reproducing test."
+            error "  Failing early rather than proceeding to a doomed run. Enrich the ticket (ACs or description) and re-run."
+            exit 2
         fi
     else
         step_emit "1" "fail" "Step 1: Specification pass"
@@ -4505,7 +4526,11 @@ if [ "$need_worktrees" = true ]; then
         # mis-detection, or from prior failed runs. Both tracked-modified and untracked files
         # that would block the merge are cleaned here.
         git -C "$_merge_git_root" checkout -- . 2>/dev/null || true
-        git -C "$_merge_git_root" clean -fd 2>/dev/null || true
+        # -e .codegraph: never delete the CodeGraph index (see
+        # brownfield-preflight-reset.sh for the root cause — the .gitignore that
+        # protects codegraph.db is itself removed by git clean's first pass,
+        # exposing the db to deletion on any later clean like this one).
+        git -C "$_merge_git_root" clean -fd -e .codegraph 2>/dev/null || true
 
         # Merge-integrity guard (found live via flow-gap analysis, 2026-07-12):
         # the real merge below uses `-X ours`, which silently resolves any
@@ -5194,27 +5219,131 @@ assert_no_story_ids_gained "post-parallel" "Step 18: Post-parallel assessment"
 
 # ──────────────────────────────────────────────
     "$SCRIPT_DIR/update-monitor.sh" event "phase_assessment" "Running post-phase assessment" "" "main" "team-lead-agent" 2>/dev/null || true
-# Step 3.6: Team Lead Code Review
+
 # ──────────────────────────────────────────────
-log "Step 3.6: Running Team Lead code review for phase..."
-_emit_agent start "review-agent" "Team Lead Code Review"
-if "$SCRIPT_DIR/team-lead-review.sh" "$PHASE"; then
-    success "Team Lead code review completed for phase '$PHASE'"
-    _emit_agent complete "review-agent" "Code review done"
-else
-    warning "Team Lead code review had issues (check logs)"
-    _emit_agent complete "review-agent" "Code review completed with issues"
+# Step 3.54: Dedicated reproducing-test writer (brownfield) — runs BEFORE the gate.
+# Asking the impl agent to do BOTH the fix and a good reproducing test in one budget
+# failed live (AMSD-1820 run #3: agent ran out of turns, shipped no test). Give
+# test-writing its OWN agent turn here — it sees the committed fix diff + the VCs and
+# writes a test that MATCHES the repo's convention (so the gate can run it). No-op if
+# a test already accompanies the change. The Step 3.55 gate still independently
+# validates fail-on-baseline/pass-with-fix; this only ensures a test EXISTS to check.
+# ──────────────────────────────────────────────
+if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/brownfield-repro-test-writer.sh" ]; then
+    while IFS= read -r _tw_story; do
+        [ -z "$_tw_story" ] && continue
+        PROJECT_ROOT="$PROJECT_ROOT" PRD_FILE="$PRD_FILE" LOG_DIR="$LOG_DIR" \
+        JIRA_BASELINE_BRANCH="${JIRA_BASELINE_BRANCH:-develop}" \
+            bash "$SCRIPT_DIR/brownfield-repro-test-writer.sh" "$_tw_story" 2>&1 | tee -a "$LOG_DIR/repro-test-writer-${PHASE}.log"
+    done < <(jq -r --arg phase "$PHASE" \
+        '(.implementationOrder[$phase] // []) as $ids |
+         .stories[] | select(.id as $id | $ids | index($id) != null) | .id' \
+        "$PRD_FILE" 2>/dev/null)
 fi
 
-# Hard-block if any story was escalated (max iterations exhausted without approval)
+# ──────────────────────────────────────────────
+# Step 3.55: Bug-reproduction test gate (brownfield, hard) — runs BEFORE review.
+# The fix + test are committed by now; require that each story's new test actually
+# REPRODUCES the bug (fails on the pre-fix baseline, passes with the fix). A change
+# that ships no test, or a test that passes without the fix, BLOCKS the phase.
+# ──────────────────────────────────────────────
+if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/brownfield-repro-test-gate.sh" ]; then
+    log "Step 3.55: Bug-reproduction test gate (brownfield)..."
+    _repro_blocked=0
+    while IFS= read -r _rg_story; do
+        [ -z "$_rg_story" ] && continue
+        # This script runs under `set -e` WITHOUT pipefail, so `if ! gate | tee`
+        # tests tee's exit (always 0) — the gate's `exit 1` on BLOCK was swallowed
+        # and a testless change PASSED (live AMSD-1820 run #3). Capture the gate's
+        # real exit via ${PIPESTATUS[0]}; tee exits 0 so `set -e` is not tripped.
+        PROJECT_ROOT="$PROJECT_ROOT" JIRA_BASELINE_BRANCH="${JIRA_BASELINE_BRANCH:-develop}" \
+             bash "$SCRIPT_DIR/brownfield-repro-test-gate.sh" "$_rg_story" 2>&1 | tee -a "$LOG_DIR/repro-gate-${PHASE}.log"
+        _rg_rc=${PIPESTATUS[0]}
+        if [ "${_rg_rc:-1}" -ne 0 ]; then
+            warning "Step 3.55: reproduction gate BLOCKED $_rg_story (gate exit ${_rg_rc})"
+            _repro_blocked=1
+            _tmp_prd="$(mktemp)"; jq --arg id "$_rg_story" \
+                '(.stories[] | select(.id == $id)) |= (. + {reviewStatus: "escalated", reproGate: "failed"})' \
+                "$PRD_FILE" > "$_tmp_prd" 2>/dev/null && mv "$_tmp_prd" "$PRD_FILE" || rm -f "$_tmp_prd"
+        fi
+    done < <(jq -r --arg phase "$PHASE" \
+        '(.implementationOrder[$phase] // []) as $ids |
+         .stories[] | select(.id as $id | $ids | index($id) != null) | .id' \
+        "$PRD_FILE" 2>/dev/null)
+    if [ "$_repro_blocked" -eq 1 ]; then
+        error "Step 3.55: one or more stories failed the bug-reproduction test gate — the fix does not ship a test that reproduces the bug. Blocking before review."
+        exit 2
+    fi
+    success "Step 3.55: bug-reproduction test gate passed for all phase stories"
+fi
+
+# Step 3.6: Team Lead Code Review — with a review → re-implement → re-review loop.
+# ──────────────────────────────────────────────
+# The reviewer can now TELL the impl agent to make changes: on changes_requested
+# it writes review-feedback-<id>.json, which the re-implementation reads (see
+# build_implementation_prompt) and the impl agent's own self-heal (failure-analyst
+# + agent-KB) refines. Bounded by REVIEW_MAX_CYCLES; on exhaustion the story is
+# marked escalated and the pipeline hard-blocks (a change that keeps failing
+# review must never silently merge).
+log "Step 3.6: Running Team Lead code review for phase..."
+_emit_agent start "review-agent" "Team Lead Code Review"
+_review_max_cycles="${REVIEW_MAX_CYCLES:-2}"
+_review_cycle=1
+# Direct escalation flag. The hard-block below USED to rely solely on stories
+# being tagged reviewStatus=escalated by iterating review-feedback-*.json files —
+# but when the reviewer produced NO such files (found live 2026-07-24, AMSD-1820:
+# review escalated after 2 cycles yet 0 feedback files existed), nothing got
+# tagged, the jq count was 0, and a change the reviewer NEVER approved fell
+# through to PASSED. The loop itself knows it escalated; block on that fact
+# directly, independent of any file the reviewer may or may not have written.
+_review_escalated=0
+while true; do
+    if "$SCRIPT_DIR/team-lead-review.sh" "$PHASE"; then
+        success "Team Lead code review APPROVED for phase '$PHASE' (cycle $_review_cycle)"
+        _emit_agent complete "review-agent" "Code review approved"
+        break
+    fi
+    # changes_requested — team-lead-review.sh wrote review-feedback-<id>.json per story.
+    if [ "$_review_cycle" -ge "$_review_max_cycles" ]; then
+        warning "Step 3.6: review still requesting changes after $_review_max_cycles cycle(s) — escalating"
+        _review_escalated=1
+        for _fb in "$LOG_DIR"/review-feedback-*.json; do
+            [ -f "$_fb" ] || continue
+            _fb_story="$(basename "$_fb" | sed 's/^review-feedback-//; s/\.json$//')"
+            # Persist a reusable review lesson to the review-agent KB (reviewer
+            # self-heal: it improves across runs) and mark the story escalated.
+            mkdir -p "$LOG_DIR/kb-scratchpad" 2>/dev/null || true
+            jq -r '.issues[]? | select((.severity // "") == "blocker") | "- " + (.description // "")' "$_fb" \
+                >> "$LOG_DIR/kb-scratchpad/KB-review-agent.md" 2>/dev/null || true
+            _tmp_prd="$(mktemp)"; jq --arg id "$_fb_story" \
+                '(.stories[] | select(.id == $id)) |= (. + {reviewStatus: "escalated"})' \
+                "$PRD_FILE" > "$_tmp_prd" 2>/dev/null && mv "$_tmp_prd" "$PRD_FILE" || rm -f "$_tmp_prd"
+        done
+        _emit_agent complete "review-agent" "Code review escalated (unresolved after retries)"
+        break
+    fi
+    warning "Step 3.6: review requested changes — re-implementing (cycle $_review_cycle → $((_review_cycle + 1)))"
+    for _fb in "$LOG_DIR"/review-feedback-*.json; do
+        [ -f "$_fb" ] || continue
+        _fb_story="$(basename "$_fb" | sed 's/^review-feedback-//; s/\.json$//')"
+        log "  Re-implementing $_fb_story to address reviewer feedback (self-heal enabled)..."
+        # claude.sh reads review-feedback-<id>.json (injects it into the impl
+        # prompt) and its existing failure-analyst self-heal + agent-KB run on any
+        # test failure during the re-implementation.
+        run_story_with_watchdog "$_fb_story" "$LOG_DIR/main-${_fb_story}-rereview${_review_cycle}.log" || true
+    done
+    _review_cycle=$((_review_cycle + 1))
+done
+
+# Hard-block if any story was escalated (review loop exhausted without approval).
 _escalated=$(jq -r --arg phase "$PHASE" \
     '(.implementationOrder[$phase] // []) as $ids |
      [.stories[] | select(.id as $id | $ids | index($id) != null) |
       select(.reviewStatus == "escalated")] | length' \
     "$PRD_FILE" 2>/dev/null || echo "0")
-if [ "${_escalated:-0}" -gt 0 ]; then
-    error "Step 3.6: $_escalated escalated story/stories — max review iterations exhausted without approval"
-    error "         Human review required before pipeline can proceed"
+if [ "${_review_escalated:-0}" -eq 1 ] || [ "${_escalated:-0}" -gt 0 ]; then
+    error "Step 3.6: review changes unresolved after $_review_max_cycles cycle(s) (escalated: flag=${_review_escalated:-0} tagged-stories=${_escalated:-0})"
+    error "         A change the reviewer never approved must NOT proceed — human review required."
     exit 2
 fi
 

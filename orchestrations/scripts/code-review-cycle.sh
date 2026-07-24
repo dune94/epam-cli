@@ -248,9 +248,10 @@ if start != -1:
     except (ValueError, json.JSONDecodeError):
         result = None
 if not isinstance(result, dict) or 'verdict' not in result:
-    result = {'verdict': 'approved', 'issues': []}
+    # SAFE default = BLOCK, never silently approve an unreviewed change (2026-07-23).
+    result = {'verdict': 'changes_requested', 'issues': [{'severity': 'blocker', 'description': 'review output had no parseable verdict — the change was NOT reviewed; blocking rather than auto-approving.'}], 'summary': 'review output unparseable'}
 print(json.dumps(result))
-" 2>/dev/null || echo '{"verdict":"approved","issues":[]}')
+" 2>/dev/null || echo '{"verdict":"changes_requested","issues":[{"severity":"blocker","description":"review verdict unparseable — not auto-approving"}],"summary":"review parse failure"}')
 
 ISSUES=()
 _RAW_VERDICT=$(echo "$_REVIEW_JSON" | jq -r '.verdict // "approved"' 2>/dev/null || echo "approved")

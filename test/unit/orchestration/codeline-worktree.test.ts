@@ -41,7 +41,7 @@ describe('G1: scaffold-fe-repo.sh named correctly for codeline loop lookup', () 
 describe('G2: _run_codeline_loop handles exit 2 (gate remediation) with self-healing retry', () => {
   // _run_codeline_loop grows with each fix; use a wide enough window.
   const loopIdx = orchSrc.indexOf('_run_codeline_loop()');
-  const block   = orchSrc.slice(loopIdx, loopIdx + 13000);
+  const block   = orchSrc.slice(loopIdx, loopIdx + 16000);
 
   it('handles exit 2 from phase re-exec as gate-remediation (not hard failure)', () => {
     expect(block).toMatch(/_pex.*-eq 2|_pex.*== 2/);

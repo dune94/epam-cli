@@ -61,7 +61,10 @@ if (!ISSUES_PATH || !ROOT_DIR || !OUT_PATH) {
 }
 
 const SCRIPT_DIR = path.join(__dirname, '..');
-const AI_RUN_SH  = path.join(SCRIPT_DIR, 'ai-run.sh');
+// Overridable for tests only — lets a test point callLlm() at a fake
+// ai-run.sh stub with a controlled response, without ever touching the real
+// one. Empty by default in production; no behavior change unless set.
+const AI_RUN_SH  = process.env.CODELINE_DISCOVERY_AI_RUN_SH_OVERRIDE || path.join(SCRIPT_DIR, 'ai-run.sh');
 
 const log  = msg => process.stderr.write(`[codeline-discovery] ${msg}\n`);
 const warn = msg => process.stderr.write(`[codeline-discovery] WARN: ${msg}\n`);
@@ -189,19 +192,36 @@ function scoreRepos(issues, manifest, topN = 8) {
       if (repoText.includes(word)) score += 3;
     }
 
-    // Tier 2 — CodeGraph FTS5 symbol-name query (indexed repos only).
+    // Tier 2 — CodeGraph FTS5 symbol-name query.
     // Use the SUM of BM25 scores, not result count. BM25 rewards rare/specific
     // terms (e.g. "mozio" in a symbol name scores 70-100) and penalises common
     // words (e.g. "email" in comments scores 3-5). Simple result counting
     // saturated at the 20-result cap for every repo because common words like
     // "email" and "amount" appear in every codebase, collapsing score separation.
-    if (cgEnabled && cg && cgQuery && cg.isCodeGraphIndexed(repo.path)) {
+    //
+    // Live bug (2026-07-22): this used to assume every candidate repo was
+    // already indexed ("all 31 Metrolinx repos are indexed" — a stale,
+    // unverified assumption). A repo missing its .codegraph/codegraph.db got
+    // ZERO Tier-2 score no matter how relevant it actually was, while any
+    // already-indexed-but-irrelevant repo still got a real BM25 boost —
+    // silently starving the correct repo out of the top-N candidates offered
+    // to the LLM. Confirmed live: azure.commerce.cdts (the actual fix site for
+    // AMSD-1820) was never indexed and didn't even make top-8; the LLM was
+    // forced to pick from 8 wrong candidates and chose gotransit.webservices.
+    // Fix: index on demand, right here, before scoring — indexing status must
+    // never gate whether a repo is even considered.
+    if (cgEnabled && cg && cgQuery) {
       try {
-        const results = cg.queryCodeGraph(cgQuery, repo.path, 20);
-        const bm25Sum = (results || []).reduce((s, r) => s + (r.score || 0), 0);
-        // Divide by 10 to bring BM25 totals (~200-2000) into the same scale as Tier 1 (~9-30)
-        score += Math.round(bm25Sum / 10);
-      } catch { /* codegraph unavailable for this repo — skip */ }
+        if (!cg.isCodeGraphIndexed(repo.path)) {
+          cg.initCodeGraph(repo.path, { quiet: true });
+        }
+        if (cg.isCodeGraphIndexed(repo.path)) {
+          const results = cg.queryCodeGraph(cgQuery, repo.path, 20);
+          const bm25Sum = (results || []).reduce((s, r) => s + (r.score || 0), 0);
+          // Divide by 10 to bring BM25 totals (~200-2000) into the same scale as Tier 1 (~9-30)
+          score += Math.round(bm25Sum / 10);
+        }
+      } catch { /* codegraph unavailable/init failed for this repo — skip, Tier 1 still applies */ }
     }
 
     return { ...repo, score };
@@ -263,17 +283,28 @@ ${issuesSummary}
 REPOSITORY MANIFEST (git repos only):
 ${manifestSummary}
 
+The repository manifest above is PRE-SCORED and pre-filtered before reaching you —
+each one is already a plausible candidate, not a random sample of all repos. It is
+listed in descending order of match confidence: the FIRST entry is the strongest
+candidate found by keyword and code-symbol matching against the ticket text.
+
 Rules:
 1. Match each ticket to the repository whose name, packageName, or description
    best fits the ticket's domain. Use context clues: service names, domain terms,
    technology references, component names, file path mentions.
-2. Return ONLY the repos that are genuinely needed for the given tickets.
-   Do not return repos that are unlikely to require changes.
-3. Assign each selected repo a short codeline identifier: 2–20 chars, lowercase,
+2. You MUST return at least one repository for every ticket — an empty result is
+   NEVER acceptable and will abort the entire pipeline run before any work can
+   happen. If you are not fully confident, select your single best guess from the
+   list (the first-listed entry is usually the right choice, since the list is
+   already ranked by match confidence) rather than returning nothing.
+3. Only omit a candidate from your selection if a DIFFERENT candidate in the same
+   list is clearly a better fit for it — never omit a candidate just because you
+   are uncertain, since uncertainty alone is not a reason to return fewer repos.
+4. Assign each selected repo a short codeline identifier: 2–20 chars, lowercase,
    alphanumeric only, no dots or dashes. Derive it from the directory name
    (e.g. "cdts" for "azure.commerce.cdts", "gotransit" for "next.gotransit.com").
-4. If all tickets clearly belong to one repo, return exactly one entry.
-5. "reason" must be one sentence explaining why this repo was selected.
+5. If all tickets clearly belong to one repo, return exactly one entry.
+6. "reason" must be one sentence explaining why this repo was selected.
 
 Output format (strict JSON, no markdown fences, no preamble, no trailing text):
 {
@@ -286,8 +317,14 @@ Output format (strict JSON, no markdown fences, no preamble, no trailing text):
 function callLlm(prompt) {
   const tmpPrompt = `/tmp/codeline-discovery-prompt-${process.pid}.txt`;
   fs.writeFileSync(tmpPrompt, prompt);
+  const debug = process.env.DEBUG_CODELINE_DISCOVERY === '1';
   try {
-    const cmd = `bash ${AI_RUN_SH} --model ${MODEL} < ${tmpPrompt} 2>/dev/null`;
+    // stderr is captured (not discarded) when DEBUG_CODELINE_DISCOVERY=1, so
+    // provider-side warnings/errors that still produce SOME stdout output
+    // (and would otherwise be silently invisible) can actually be seen.
+    const cmd = debug
+      ? `bash ${AI_RUN_SH} --model ${MODEL} < ${tmpPrompt}`
+      : `bash ${AI_RUN_SH} --model ${MODEL} < ${tmpPrompt} 2>/dev/null`;
     const raw = execSync(cmd, {
       encoding:   'utf8',
       timeout:    300000,
@@ -295,12 +332,16 @@ function callLlm(prompt) {
       env:        { ...process.env },
     }).trim();
 
+    if (debug) log(`DEBUG raw LLM response:\n${raw}`);
+
     if (!raw) throw new Error('Empty response from ai-run.sh');
 
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error(`No JSON in LLM response: ${raw.slice(0, 200)}`);
 
-    return JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (debug) log(`DEBUG parsed codelines: ${JSON.stringify(parsed.codelines)}`);
+    return parsed;
   } finally {
     try { fs.unlinkSync(tmpPrompt); } catch { /* ignore */ }
   }
@@ -355,9 +396,28 @@ function callLlm(prompt) {
     return true;
   });
 
+  // Live bug (2026-07-22): the LLM sometimes returns a VALID JSON response
+  // with an empty (or all-invalid-path) codelines array — not a call
+  // failure (no exception thrown, so the try/catch above never fires), but
+  // a genuine model decision to select nothing. Reproduced directly: same
+  // prompt, same top-scored candidate, non-deterministic across identical
+  // invocations — sometimes it picks a repo, sometimes it returns
+  // {"codelines": []}. This used to hard-fail the entire pipeline before a
+  // single story could even be attempted. Code-level determinism beats
+  // relying on prompt wording alone to fix non-deterministic model
+  // behavior — fall back to the same highest-scored candidate used for
+  // dry-run and LLM-call-failure, exactly like those paths already do.
   if (validated.length === 0) {
-    process.stderr.write('[codeline-discovery] ERROR: Discovery returned no valid codeline paths.\n');
-    process.exit(1);
+    warn('LLM returned no valid codeline selection (empty result or all paths invalid). Using highest-scored candidate as fallback.');
+    result = selectBestCandidate(candidates);
+    const fallbackValidated = result.codelines.filter(cl =>
+      path.isAbsolute(cl.path) && fs.existsSync(cl.path) && fs.existsSync(path.join(cl.path, '.git'))
+    );
+    if (fallbackValidated.length === 0) {
+      process.stderr.write('[codeline-discovery] ERROR: Discovery returned no valid codeline paths, and the scored fallback is also invalid.\n');
+      process.exit(1);
+    }
+    validated.push(...fallbackValidated);
   }
 
   const output = { codelines: validated };

@@ -34,7 +34,23 @@ function fetchCodeGraphContext(story) {
     if (!_codegraph) _codegraph = require('./lib/codegraph-context');
     const repoPath = resolveCodelinePath(story);
     if (!repoPath || !fs.existsSync(repoPath)) return null;
-    if (!_codegraph.isCodeGraphIndexed(repoPath)) return null;
+    if (!_codegraph.isCodeGraphIndexed(repoPath)) {
+      // Self-heal at the point of use instead of trusting a run-start
+      // preflight to still hold by the time the spec pass actually needs
+      // it. Found live 2026-07-23: a valid index existed right after
+      // preflight passed, but was gone minutes later by the time this
+      // function ran — something between the two silently invalidated it.
+      // Re-index on demand here so CodeGraph's contribution never silently
+      // degrades to null regardless of what happened in between.
+      console.log(`spec-mode: CodeGraph index missing/invalid for ${repoPath} at point of use — re-indexing now`);
+      try {
+        _codegraph.initCodeGraph(repoPath, { quiet: true });
+      } catch (err) {
+        console.warn(`spec-mode: CodeGraph re-index failed for ${repoPath}: ${err.message}`);
+        return null;
+      }
+      if (!_codegraph.isCodeGraphIndexed(repoPath)) return null;
+    }
 
     const domainTerms = story.title
       .replace(/\b(the|a|an|is|not|for|in|of|and|or|to|as|at|by|be|was|are|it|its|that|this|with)\b/gi, '')
@@ -83,6 +99,111 @@ function fetchSembleContext(story) {
     const block = _semble.formatAsText({ results: combined });
     return `\nEXISTING CODE (brownfield fallback via Semble — identify the code path that handles this behavior, then specify how to fix it; do not propose new abstractions):\n${block}\n`;
   } catch { return ''; }
+}
+
+// getDeterministicCandidateFiles(story, topN) — brownfield only. Runs the
+// EXACT same Semble query fetchSembleContext uses, but returns raw
+// deduped file paths (ranked) instead of a formatted text block, for
+// deterministic merging into locationHint/technicalNotes.files.
+//
+// Root cause this closes (found live 2026-07-23, AMSD-1820): Semble search
+// itself reliably surfaced the real fix site (apply-report-discounts.service.ts)
+// in its top 1-2 results across multiple different real AC wordings — but
+// the MODEL's own selection of which candidates to report as locationHint
+// varied run to run even at temperature=0 (a known characteristic of many
+// hosted inference backends — batching/MoE routing/floating-point
+// non-associativity in parallel decode — not something fixable in this
+// codebase). Rather than trying to make an LLM more deterministic, remove
+// its discretion from the one step that doesn't need judgment: the top-N
+// search candidates are injected directly, unconditionally, regardless of
+// what the model itself reports. The model's own locationHint still adds
+// anything beyond the top-N (its real judgment is still used for that).
+// buildBrownfieldSearchQuery(story) — builds the code-search query from a
+// brownfield story's DOMAIN nouns, deliberately dropping symptom/presentation
+// words.
+//
+// Root cause this closes (proven live 2026-07-23, AMSD-1820, 3x reproducible):
+// a bug ticket describes a SYMPTOM ("promo code amount is NOT displayed as
+// expected ... in the email confirmation"), but the fix lives in the CAUSE —
+// a discount-matching service (apply-report-discounts.service.ts) whose code
+// says nothing about "display" or "email". Searching Semble with the raw
+// title+ACs put presentation words ("displayed", "email confirmation",
+// "as expected") at the front of the query, which pulled the ranking toward
+// the display/mapper layer and buried the actual fix site past rank 20.
+// Stripping those symptom/presentation words and keeping only the domain
+// nouns ("promo code discount amount return trip mozio dispatch report")
+// ranks the real fix site #1, deterministically. This is a general property,
+// not overfit to this ticket: for ANY "output field X is wrong" bug, the
+// causal fix site is where X is COMPUTED, and that code is described by X's
+// domain terms — never by the presentation verb ("displayed"/"shown") that
+// only the symptom uses.
+const SYMPTOM_STOPWORDS = new Set([
+  // grammatical
+  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'not',
+  'for', 'in', 'of', 'and', 'or', 'to', 'as', 'at', 'by', 'it', 'its', 'that',
+  'this', 'with', 'on', 'from', 'when', 'if', 'but', 'per', 'via', 'into',
+  // presentation / symptom noise — describe how a bug LOOKS, never where it's caused
+  'displayed', 'display', 'displays', 'shown', 'show', 'shows', 'showing',
+  'rendered', 'render', 'renders', 'appear', 'appears', 'appearing', 'visible',
+  'expected', 'correctly', 'incorrectly', 'properly', 'improperly', 'wrong',
+  'screen', 'page', 'ui', 'view', 'email', 'confirmation', 'message', 'text',
+  'label', 'field', 'value', 'output', 'result', 'issue', 'bug', 'problem',
+]);
+function buildBrownfieldSearchQuery(story) {
+  const raw = [story.title || '', ...(Array.isArray(story.acceptanceCriteria) ? story.acceptanceCriteria.slice(0, 3) : [])].join(' ');
+  const domainTerms = raw
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]+/g, ' ')      // strip punctuation/brackets like "[Mozio]"
+    .split(/\s+/)
+    .filter((w) => w.length > 1 && !SYMPTOM_STOPWORDS.has(w));
+  // De-dupe while preserving order (keeps the most salient domain terms first).
+  const seen = new Set();
+  const ordered = [];
+  for (const w of domainTerms) {
+    if (!seen.has(w)) { seen.add(w); ordered.push(w); }
+  }
+  const query = ordered.join(' ').slice(0, 400);
+  // Safety net: if stripping removed everything (degenerate title), fall back
+  // to the raw title so we never send an empty query.
+  return query || (story.title || '').slice(0, 400);
+}
+
+function getDeterministicCandidateFiles(story, topN = 3) {
+  if (process.env.EPAM_BROWNFIELD !== '1') return [];
+  const repoPath = resolveCodelinePath(story);
+  if (!repoPath || !fs.existsSync(repoPath)) return [];
+  const symptomQuery = buildBrownfieldSearchQuery(story);
+  const ordered = [];
+  const seen = new Set();
+  const add = (f) => { if (f && !seen.has(f)) { seen.add(f); ordered.push(f); } };
+
+  // PRIMARY: CodeGraph. Deterministic (static FTS5 symbol index), structural
+  // (ranks by symbol relevance + blast radius), and — with the domain-noun
+  // query above — lands the true CAUSAL fix site at rank #1 (proven 3x live,
+  // AMSD-1820). This is the demotion of Semble from primary to fallback: it
+  // only ever carried fix-site discovery because CodeGraph was silently
+  // returning null (unindexed) for months.
+  try {
+    if (!_codegraph) _codegraph = require('./lib/codegraph-context');
+    if (process.env.CODEGRAPH_ENABLED === '1') {
+      for (const f of _codegraph.exploreCandidateFiles(symptomQuery, repoPath, topN)) add(f);
+    }
+  } catch { /* CodeGraph unavailable — Semble fallback below still applies */ }
+
+  // FALLBACK/SUPPLEMENT: Semble. Semantic (embedding) search catches concepts
+  // that aren't in any symbol name — useful when CodeGraph's lexical index is
+  // thin or unindexed. Fills remaining slots after CodeGraph's picks.
+  if (ordered.length < topN && process.env.SEMBLE_ENABLED === '1') {
+    try {
+      if (!_semble) _semble = require('./lib/semble-context');
+      // Semble's ranking is NOT stable across different -k values — always
+      // request a fixed larger k (8) and slice in JS, never pass topN as -k.
+      const result = _semble.sembleSearch(symptomQuery, repoPath, 8, 5);
+      for (const r of (result.results || [])) add(r.file_path);
+    } catch { /* both retrievers unavailable — return whatever CodeGraph gave */ }
+  }
+
+  return ordered.slice(0, topN);
 }
 
 // Returns the code context block to inject into the spec prompt.
@@ -1519,15 +1640,491 @@ Use "keep-current" to accept the current (possibly rule-upgraded) model. Only pr
 // request, no CodeGraph/Semble grounding instruction, nothing. The story
 // then went to execution with zero file guidance in a large real repo, and
 // 8 real agent attempts never found the actual fix site.
+// Deterministic backstop to openspec's own defect/novel classification (STEP 3
+// of the brownfield archaeology block). When openspec classifies a story as a
+// "defect", its acceptance criteria must pass through UNCHANGED — rewriting a
+// bug's ACs bakes in a guessed fix mechanism that misdirects the implementer
+// (live AMSD-1820). This restores the story's original ACs onto the payload,
+// enforcing the instruction even when the model ignores it.
+//
+// Greenfield-safe: no-op unless env.EPAM_BROWNFIELD === '1'. "novel" brownfield
+// stories are left fully elaborated (a brownfield story is not always a bug).
+// Returns true iff openspec had actually altered the ACs (i.e. an edit was
+// redacted) — purely so the caller can log it.
+// Verify the detective's prescribed helper actually EXISTS in the repo before we
+// inject its fix as "AUTHORITATIVE — the plan of record". The detective is an LLM
+// and can hallucinate a plausible-sounding helper/symbol; making a hallucinated
+// fix authoritative misdirects harder than no fix at all. Deterministic + cheap:
+// grep the repo for a definition of the named symbol.
+//   returns true  — a helper was named AND a definition exists (trust it)
+//   returns false — a helper was named but NOT found anywhere (likely invented)
+//   returns null  — no helper named (nothing to verify; not every fix needs one)
+function verifyDetectiveHelper(helper, repoPath) {
+  if (!helper || typeof helper !== 'string') return null;
+  const sym = helper.trim().replace(/[^A-Za-z0-9_].*$/, ''); // first identifier only
+  if (!/^[A-Za-z_][A-Za-z0-9_]+$/.test(sym)) return null;
+  if (!repoPath) return null;
+  try {
+    const res = require('child_process').spawnSync(
+      'grep',
+      ['-rEl', '--include=*.ts', '--include=*.tsx',
+        '--exclude-dir=node_modules', '--exclude-dir=.git',
+        `(function|const|class|type|interface|enum)[[:space:]]+${sym}\\b`, repoPath],
+      { encoding: 'utf8', timeout: 15000 }
+    );
+    return res.status === 0 && String(res.stdout || '').trim().length > 0;
+  } catch { return null; }
+}
+
+// AC IMMUTABILITY (VC model): the acceptanceCriteria are the ticket's intent and
+// are NEVER mutated by the spec pass for a brownfield story — all verification
+// lives in the separate verificationCriteria (VC) layer, so ACs can't be poisoned
+// with a guessed implementation mechanism. Restores the story's original ACs onto
+// the payload. (Was defect-only; now every brownfield story per the VC design,
+// 2026-07-24.) Returns true iff openspec had altered the ACs (so the caller logs).
+function preserveDefectAcceptanceCriteria(payload, story, env = process.env) {
+  if (!payload || env.EPAM_BROWNFIELD !== '1') return false;
+  if (!story || !Array.isArray(story.acceptanceCriteria)) return false;
+  const original = story.acceptanceCriteria.slice();
+  const changed = JSON.stringify(payload.acceptanceCriteria) !== JSON.stringify(original);
+  payload.acceptanceCriteria = original;
+  return changed;
+}
+
+// SHARED verification-criteria rules — the SINGLE source of truth used verbatim by
+// BOTH the producer (openspec: archaeology STEP 3 + regenerate) AND the reviewer
+// (speckit). Keeping one text means the producer and reviewer can never disagree
+// about what counts as "observable" — the disagreement that made AMSD-1820 loop
+// forever (producer emitted an internal "confirmation data" response field as a VC;
+// reviewer flagged that same field as a mechanism; regen re-emitted it; → fallback).
+const VC_OBSERVABILITY_RULES = `A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.`;
+
+// Validate + normalize the verification criteria openspec produced: an array of
+// non-empty strings. Kept separate so a malformed payload never corrupts the story.
+function normalizeVerificationCriteria(payload) {
+  const vc = payload && Array.isArray(payload.verificationCriteria) ? payload.verificationCriteria : [];
+  return vc.filter((v) => typeof v === 'string' && v.trim().length > 0).map((v) => v.trim());
+}
+
+// Thin-context signal for the sufficiency gate (step 3): a ticket has too little
+// to work with when it has NO meaningful acceptance criterion AND a short
+// description. Combined with "the detective found no fix site", this is the
+// autonomous "insufficient context — fail early" condition (no human halt).
+function isThinContext(story, env = process.env) {
+  const minAcLen = Number(env.VC_MIN_MEANINGFUL_AC_LEN || '20');
+  const minDescLen = Number(env.VC_MIN_DESCRIPTION_LEN || '120');
+  const acs = Array.isArray(story && story.acceptanceCriteria) ? story.acceptanceCriteria : [];
+  const meaningful = acs.filter((a) => typeof a === 'string' && a.trim().length >= minAcLen);
+  const descLen = String((story && story.description) || '').trim().length;
+  return meaningful.length < 1 && descLen < minDescLen;
+}
+
+// DETERMINISTIC VC guard (step 2 of the AC/VC/TC design). A VC must describe WHAT
+// a tester observes, never HOW to implement it. These patterns catch the exact
+// domain-mechanism phrasing that misdirected the fix live (AMSD-1820: "split",
+// "halve/×0.5", "calculate independently", "per segment/leg") plus new-code-
+// structure directives. Distinct from PRESCRIPTIVE_AC_PATTERNS (which catches
+// test/code mechanics like vi.mock/import). Returns the flagged VCs with reasons.
+const VC_MECHANISM_PATTERNS = [
+  { pattern: /\bsplit(s|ting)?\b/i,                          reason: 'prescribes splitting (an implementation, not an observable outcome)' },
+  { pattern: /\bhalv(e|ed|es|ing)\b|[×*]\s*0?\.5|by\s+0?\.5/i, reason: 'prescribes halving/×0.5 (an implementation)' },
+  { pattern: /\bindependent(ly)?\b/i,                        reason: 'prescribes an independent calculation (an implementation)' },
+  { pattern: /\bper\s+(segment|leg|line[- ]?item)\b/i,       reason: 'prescribes per-segment logic (an implementation)' },
+  { pattern: /\bfor\s+each\s+line[- ]?item\b/i,              reason: 'prescribes per-line-item logic (an implementation)' },
+  { pattern: /\b(add|introduce|create)\s+(a\s+)?(new\s+)?(\w+\s+){0,2}(field|flag|column|property|service|abstraction|helper|method|function|endpoint)\b/i, reason: 'prescribes a new code structure (an implementation)' },
+];
+function findVcMechanism(vc, storyId) {
+  const flagged = [];
+  for (const c of (Array.isArray(vc) ? vc : [])) {
+    const hit = VC_MECHANISM_PATTERNS.find(({ pattern }) => pattern.test(String(c)));
+    if (hit) {
+      flagged.push({ criterion: c, reason: hit.reason });
+      if (storyId) console.warn(`spec-mode: VC guard flagged mechanism in ${storyId} VC: [${hit.reason}] "${String(c).slice(0, 80)}"`);
+    }
+  }
+  return flagged;
+}
+
+// Conservative, guaranteed-mechanism-free fallback VC derived purely from the
+// ticket symptom — the never-fail branch of the autonomous flag loop (no human).
+function safeFallbackVc(story) {
+  const subject = String((story && (story.title || story.description)) || 'the behavior described in the ticket')
+    .replace(/\s+/g, ' ').trim().slice(0, 160);
+  return [
+    `The behavior described in the ticket is observed to be correct after the change: "${subject}".`,
+    `Existing behavior related to this area is unchanged (no regression).`,
+  ];
+}
+
+// Enforce clean, mechanism-free VCs with an AUTONOMOUS loop (no human):
+// deterministic guard + speckit strict review → if flagged, regenerate (with the
+// flag reasons; the caller ladder-escalates the model per cycle) → re-check → up
+// to maxCycles → if still flagged, a conservative safe-fallback VC. `regenerateVc`
+// and `reviewVc` are injected so the orchestration is unit-testable without an LLM.
+// Returns { vc, source: 'clean'|'regenerated'|'fallback', cycles, flags }.
+async function enforceVerificationCriteria(story, initialVc, opts = {}) {
+  const { regenerateVc = null, reviewVc = null, maxCycles = Number(process.env.VC_MAX_CYCLES || '2') } = opts;
+  let vc = Array.isArray(initialVc) ? initialVc.slice() : [];
+  let lastFlags = [];
+  for (let cycle = 1; cycle <= maxCycles; cycle++) {
+    const mech = findVcMechanism(vc, story && story.id).map((f) => f.reason + `: "${String(f.criterion).slice(0, 80)}"`);
+    let speckitFlags = [];
+    if (reviewVc) {
+      try { speckitFlags = (await reviewVc(vc, cycle)) || []; } catch { speckitFlags = []; }
+    }
+    lastFlags = [...mech, ...speckitFlags];
+    if (lastFlags.length === 0) {
+      return { vc, source: cycle === 1 ? 'clean' : 'regenerated', cycles: cycle, flags: [] };
+    }
+    if (cycle === maxCycles || !regenerateVc) break; // out of cycles → fall back below
+    let regenerated = null;
+    try { regenerated = await regenerateVc(lastFlags, cycle + 1); } catch { regenerated = null; }
+    vc = Array.isArray(regenerated) && regenerated.length ? regenerated : vc;
+  }
+  console.warn(`spec-mode: ⚠️ VC could not be made mechanism-free for ${story && story.id} after ${maxCycles} cycle(s) — using conservative fallback VC. Last flags: ${lastFlags.slice(0, 3).join(' | ')}`);
+  return { vc: safeFallbackVc(story), source: 'fallback', cycles: maxCycles, flags: lastFlags };
+}
+
+// Shared LLM call for the VC loop — ladder-escalates the model per cycle (base
+// HIGH model → kimi-k3), reusing runClaude's salvage + tight timeout (same
+// resilience as the detective, so a VC regen/review can't stall the pipeline).
+async function _vcLlmCall(prompt, cycle, logPath) {
+  const baseModel = process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH || process.env.ESCALATION_MODEL_HIGH || 'z-ai/glm-5.1';
+  const escalated = ladderNextModel(baseModel, process.env);
+  const useEsc = cycle >= 2 && escalated;
+  const model = useEsc ? escalated : baseModel;
+  const provider = useEsc ? (resolveModelProvider(model, process.env) || resolvePromptProvider(process.env)) : resolvePromptProvider(process.env);
+  const exec = { cmd: process.env.AI_RUNNER_CMD || path.join(__dirname, 'ai-run.sh'), args: ['--provider', provider, '--model', model] };
+  return runClaude(exec, prompt, logPath, {
+    EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || '24576',
+    EPAM_MAX_ITERATIONS: '2',
+    // VC production is a RESTATE task, not a reasoning task: describe the observable
+    // outcome faithfully, do NOT reason toward an implementation. High reasoning
+    // effort is what drives the prescriptive drift (the model "solves" the bug and
+    // bakes the mechanism into the VC); non-zero temperature adds the variance that
+    // occasionally lands on a forbidden mechanism. Pin both DOWN for VC calls only
+    // (scoped to this child env, so the wider run's temperature/effort are untouched).
+    EPAM_TEMPERATURE: process.env.VC_LLM_TEMPERATURE || '0',
+    EPAM_REASONING_EFFORT: process.env.VC_LLM_REASONING_EFFORT || 'low',
+  }, { salvageOutputOnFailure: true, timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '360000') });
+}
+function _firstJsonArray(out) {
+  const m = out && out.match(/\[[\s\S]*?\]/);
+  if (!m) return null;
+  try { const a = JSON.parse(m[0]); return Array.isArray(a) ? a : null; } catch { return null; }
+}
+
+// speckit-brownfield: STRICT, flag-only VC review (never rewrites). Flags a VC
+// that prescribes HOW (mechanism), isn't observable/testable, or fails to cover
+// an AC's intent. Returns an array of flag strings ([] = all clean).
+async function reviewVcViaSpeckit({ story, vc, cycle, logDir }) {
+  const prompt = `You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+${(story.acceptanceCriteria || []).map((a) => '- ' + a).join('\n') || '- (none)'}
+Description: ${String(story.description || '').slice(0, 1000)}
+
+Proposed verification criteria:
+${vc.map((v, i) => `${i + 1}. ${v}`).join('\n')}
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+${VC_OBSERVABILITY_RULES}
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.`;
+  const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-review.log`) : null);
+  const arr = _firstJsonArray(out);
+  return Array.isArray(arr) ? arr.filter((x) => typeof x === 'string') : [];
+}
+
+// openspec-brownfield: regenerate the VCs addressing the flags (producer side of
+// the autonomous loop). Returns a fresh VC array, or null if it couldn't produce one.
+async function regenerateVcViaOpenspec({ story, flags, cycle, logDir }) {
+  const prompt = `Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+${flags.map((f) => '- ' + f).join('\n')}
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+${(story.acceptanceCriteria || []).map((a) => '- ' + a).join('\n') || '- (none)'}
+Description: ${String(story.description || '').slice(0, 1000)}
+
+${VC_OBSERVABILITY_RULES}
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.`;
+  const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-regen.log`) : null);
+  const arr = _firstJsonArray(out);
+  if (!arr) return null;
+  const cleaned = arr.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim());
+  return cleaned.length ? cleaned : null;
+}
+
 function buildBrownfieldArchaeologyBlock(env = process.env) {
   const isBrownfield = env.EPAM_BROWNFIELD === '1';
   const archaeologyBlock = isBrownfield
-    ? `\n\nBROWNFIELD MODE — output JSON only, no tools, no search.\nUsing ONLY the EXISTING CODE block already present in this prompt (injected above via CodeGraph or Semble), identify which file(s) and function(s) currently handle the behavior described in this story. Set the "locationHint" field in your JSON output to: [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this is the fix site>"}]. If no relevant code appears in the existing code block above, set locationHint to []. ACs must describe changes to those existing locations — do not propose new files, services, or abstractions.\n`
+    ? `\n\nBROWNFIELD MODE — output JSON only, no tools, no search.
+
+STEP 1 — CLASSIFY THIS STORY. Set "storyKind":
+- "defect" if it reports that EXISTING behavior is wrong, broken, or produces an incorrect/missing result (a bug).
+- "novel" if it asks for a NEW capability that does not exist in the codebase yet. A brownfield story is not always a bug — genuinely new work is "novel".
+
+STEP 2 — LOCATE (always, for both kinds). Using ONLY the EXISTING CODE block already present in this prompt (injected above via CodeGraph or Semble), identify which file(s) and function(s) currently handle the behavior this story is about. Set "locationHint" to [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this is the fix site>"}]. If no relevant code appears above, set locationHint to [].
+
+STEP 3 — VERIFICATION CRITERIA (do NOT touch the acceptance criteria).
+The acceptanceCriteria are the IMMUTABLE ticket intent — copy the existing array through VERBATIM: never reword, split, add, remove, re-scope, or inject any implementation mechanism into them.
+Instead, PRODUCE a "verificationCriteria" array — concrete, OBSERVABLE checks that confirm the change is correct — derived from the acceptance criteria AND the description (lean on the description when the ACs are sparse or missing). Apply these rules to EVERY verification criterion (a strict reviewer holds you to this SAME text, so a VC that breaks any rule will be flagged and rejected):
+${VC_OBSERVABILITY_RULES}
+- If the ticket describes a SYMPTOM, the VCs verify that symptom is resolved AND that related existing behavior does not regress.
+Set "vcSource" to "acceptance", "description", or "both" — where you derived the VCs from (use "description" when the ACs were too sparse to derive from).
+`
     : '';
   const schemaLine = isBrownfield
-    ? `\n  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this is the fix site"}],`
+    ? `\n  "storyKind":"defect|novel",\n  "verificationCriteria":["<observable check a tester can confirm>"],\n  "vcSource":"acceptance|description|both",\n  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this is the fix site"}],`
     : '';
   return { archaeologyBlock, schemaLine };
+}
+
+// runCodeGraphDetective(story, logDir) — invokes the code-graph-detective
+// agent: a tool-using LLM (GLM-5.1, upper-tier ladder) that iterates CodeGraph
+// queries and traces callers to find the CAUSAL fix site for a symptom-worded
+// bug ticket. This is the ROBUST path (proven live 2026-07-23, AMSD-1820):
+// deterministic single/union queries reliably surface only the display layer
+// the symptom words describe; only judgment-driven iteration + caller-tracing
+// converges on the cause. Returns an array of repo-relative fix-site files
+// (may be empty). Best-effort: any failure (no repo, tool unavailable, parse
+// error, timeout) returns [] so the spec pass proceeds unblocked.
+async function runCodeGraphDetective(story, logDir) {
+  if (process.env.EPAM_BROWNFIELD !== '1') return [];
+  const repoPath = resolveCodelinePath(story);
+  if (!repoPath || !fs.existsSync(repoPath)) return [];
+  // Ensure the index exists (and is git-clean-protected) before the agent queries it.
+  try { if (!_codegraph) _codegraph = require('./lib/codegraph-context'); _codegraph.ensureIndexed(repoPath); } catch { /* tool self-heals too */ }
+
+  const profiles = (() => {
+    try {
+      const p = path.join(automationDirFromLogDir(logDir), 'agents', 'profiles.json');
+      return JSON.parse(fs.readFileSync(p, 'utf8'));
+    } catch { return {}; }
+  })();
+  const detectiveProfile = profiles['code-graph-detective'] || '';
+  const scriptDir = path.join(__dirname); // orchestrations/scripts
+  const toolPath = path.join(scriptDir, 'codegraph-agent-query.sh');
+
+  // Activity emit — the detective is a first-class agent (it picks the fix site + helper) and
+  // MUST be visible in agent-activity.html like every other agent. It emitted nothing before,
+  // so it was invisible in the dashboard (found 2026-07-24). Start now; complete/fail at the returns.
+  const _detMon = path.join(scriptDir, 'update-monitor.sh');
+  const _detPhase = process.env.PHASE || story.codeline || 'spec';
+  const _detEmit = (type, message) => emitMonitorEvent({ monitorScript: _detMon, type, message, storyId: story.id, role: 'code-graph-detective' });
+  await _detEmit('spec_update', `[${_detPhase}] code-graph-detective started on ${story.id} — tracing the causal fix site`);
+
+  const prompt = `${detectiveProfile ? detectiveProfile + '\n\n' : ''}You are investigating this bug ticket. The repository is at: ${repoPath}
+
+TICKET (read it, then decide for YOURSELF which few domain nouns matter — do not treat every word as a search term):
+Title: ${story.title || ''}
+${story.description ? 'Description: ' + String(story.description) + '\n' : ''}Acceptance criteria:
+${(story.acceptanceCriteria || []).map((a) => '- ' + String(a)).join('\n')}
+
+Your CodeGraph tool is the shell script at: ${toolPath}
+Invoke it with the Bash tool, always passing PROJECT_ROOT:
+  PROJECT_ROOT="${repoPath}" bash "${toolPath}" explore <domain nouns>
+  PROJECT_ROOT="${repoPath}" bash "${toolPath}" callers <SymbolName>
+  PROJECT_ROOT="${repoPath}" bash "${toolPath}" callees <SymbolName>
+
+CONVERGE FAST — HARD LIMIT: 6 tool calls total. This is not a suggestion.
+By your 6th tool call you MUST stop querying and emit the JSON answer with your BEST current hypothesis. Exploring past 6 calls WITHOUT emitting the JSON means you FAIL and every bit of your investigation is thrown away — a best-guess fix site is infinitely better than no answer. If you are unsure, pick the single most likely file/function from what you have seen and emit it now; do NOT keep exploring to be "sure".
+1. First call: \`explore\` with the DOMAIN NOUNS only (drop symptom/presentation words like displayed/shown/email/confirmation/expected).
+2. Look at the top-ranked symbols. If the top hit's file only READS the wrong field (a mapper/sanitizer/display file), do ONE \`callers\` or \`callees\` (or one more \`explore\` toward the mechanism) to reach the code that COMPUTES/ASSIGNS it.
+3. As SOON as you identify a file whose function body actually computes/assigns the wrong value, STOP tracing and switch to prescribing the fix (step 4). Aim to finish tracing in 2-4 tool calls, never more than 6.
+4. PRESCRIBE THE MINIMAL FIX. This is the most important output. For the causal site:
+   - Name the EXACT broken line/expression (e.g. \`lineItem.id === discount.lineItemId\`) and why it is wrong.
+   - State the SMALLEST change that corrects it. Do NOT describe a re-architecture, a new abstraction, or a "split/recalculate/add-a-field" scheme unless the code genuinely has no simpler fix. Prefer a one-line/one-expression change.
+   - LOCATE AN EXISTING HELPER instead of inventing new logic. Before proposing any new function, use \`explore\` (and \`callers\`/\`callees\`) to search for an already-present util/helper/parser in this repo that does the needed transform (e.g. a key parser, id normalizer, formatter). If one exists, your fix MUST name it (exact symbol + its import path) and reuse it. Writing novel code when a helper already exists is a defect.
+
+CRITICAL — HOW TO ANSWER: Emit the JSON array as TEXT directly in your reply. Do NOT call WriteFile and do NOT write your answer to any file — the pipeline reads your reply text, not a file. If you write your answer to a file, it is LOST and the whole investigation is wasted. Use the Bash tool ONLY to run the CodeGraph query script above; use no other tool.
+
+Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" field is REQUIRED and must be a concrete, minimal instruction naming the exact change and any existing helper to reuse. The "helper" field must be the BARE SYMBOL NAME of the existing function you are telling the implementer to reuse (so it can be machine-verified to actually exist) — leave it "" if the fix genuinely needs no existing helper. Do NOT invent a helper name; only put a symbol you actually saw in the tool output:
+[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the value, not just displays it>","fix":"<the exact minimal change: which line/expression to change, to what, and which EXISTING helper (symbol + import path) to reuse — never 'write a new function' if one already exists>","helper":"<bare existing symbol name to reuse, or empty>"}]`;
+
+  // Model ladder — cohesive with openspec/speckit (which escalate to their HIGH
+  // model on retry). Attempt 1 uses the base HIGH model (glm-5.1); a retry
+  // escalates up the HIGH ladder (glm-5.1 → kimi-k3 per EPAM_MODEL_LADDER_HIGH),
+  // resolving that model's provider from EPAM_MODEL_PROVIDER_MAP. This is the fix
+  // for the detective hanging on one model in-pipeline (a slow/stuck glm-5.1
+  // endpoint no longer dead-ends — the retry moves to a stronger model on
+  // possibly-different infra). A single hard-pinned model was the non-cohesive
+  // gap vs the rest of the pipeline.
+  const runnerCmd = process.env.AI_RUNNER_CMD || path.join(scriptDir, 'ai-run.sh');
+  const baseModel = process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH || process.env.ESCALATION_MODEL_HIGH || 'z-ai/glm-5.1';
+  const baseProvider = resolvePromptProvider(process.env);
+  const escalatedModel = ladderNextModel(baseModel, process.env);
+  const escalatedProvider = escalatedModel
+    ? (resolveModelProvider(escalatedModel, process.env) || baseProvider)
+    : null;
+  const execFor = (attempt) => {
+    // attempt 1 → base HIGH model; attempt 2+ → ladder successor (if any).
+    const useEscalated = attempt >= 2 && escalatedModel;
+    const m = useEscalated ? escalatedModel : baseModel;
+    const p = useEscalated ? escalatedProvider : baseProvider;
+    return { exec: { cmd: runnerCmd, args: ['--provider', p, '--model', m] }, model: m, escalated: !!useEscalated };
+  };
+  const logPath = logDir ? path.join(logDir, `${story.id}-codegraph-detective.log`) : null;
+
+  // Extract the findings array from the (possibly chatty) agent output. Returns
+  // null when NO JSON array is present at all — the signal that the model did
+  // not actually answer (e.g. it wandered off and called WriteFile, returning
+  // "The file has been written successfully" instead of the JSON). null → retry;
+  // an explicit [] → the model's real answer of "no fix site".
+  const parseFindings = (out) => {
+    const m = out && out.match(/\[\s*\{[\s\S]*?\}\s*\]/);
+    if (!m) return null;
+    let arr;
+    try { arr = JSON.parse(m[0]); } catch { return null; }
+    const seen = new Set();
+    const findings = [];
+    for (const h of (Array.isArray(arr) ? arr : [])) {
+      if (!h || typeof h.file !== 'string') continue;
+      const file = h.file.replace(/^\.?\//, '');
+      if (!file || seen.has(file)) continue;
+      seen.add(file);
+      const helper = typeof h.helper === 'string' ? h.helper : '';
+      findings.push({
+        file,
+        function: typeof h.function === 'string' ? h.function : '',
+        reason: typeof h.reason === 'string' ? h.reason : '',
+        fix: typeof h.fix === 'string' ? h.fix : '',
+        helper,
+        // true = named helper exists; false = named but not found (likely
+        // hallucinated); null = no helper named. Only false downgrades the fix.
+        fixVerified: verifyDetectiveHelper(helper, repoPath),
+      });
+    }
+    return findings;
+  };
+
+  // The detective is a LOAD-BEARING step for a brownfield defect: if it yields
+  // nothing, the implementer gets symptom ACs with no root cause (the exact
+  // pre-2026-07-23 failure). It must NOT fail silently. Found live 2026-07-23:
+  // with tools enabled the model sometimes "answers" by calling WriteFile and
+  // returns a tool-echo instead of the JSON — the old code swallowed that as a
+  // silent []. Now: retry with a corrective note when the output carries no
+  // JSON array, and log LOUDLY at every empty/failed step.
+  // Default 3 attempts: base model, then two escalated (kimi-k3) tries — a
+  // stuck/slow base endpoint gets a real second chance on a stronger model.
+  const maxAttempts = Number(process.env.CODEGRAPH_DETECTIVE_MAX_ATTEMPTS || '3');
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const { exec, model: attemptModel, escalated } = execFor(attempt);
+    if (escalated) {
+      console.warn(`spec-mode: code-graph-detective ladder escalation for ${story.id} (attempt ${attempt}/${maxAttempts}) — model ${baseModel} → ${attemptModel}`);
+    }
+    const correctiveNote = attempt === 1 ? '' :
+      `\n\nRETRY — your previous reply contained NO JSON array (you may have called a write tool). Emit ONLY the JSON array as text in THIS reply now. Do NOT call WriteFile or write to any file.`;
+    try {
+      // PHASE 1 — EXPLORE (tools). A reasoning model reliably EXPLORES but does
+      // NOT reliably switch to emitting structured JSON in the same turn: found
+      // live 2026-07-23 it ended on a narrative "Now let me read the full X to
+      // understand…" and hit the iteration cap mid-sentence, so there was no
+      // JSON to parse/persist. So phase 1's job is just to INVESTIGATE; a
+      // separate no-tools phase 2 does the structured output. If phase 1 happens
+      // to already contain JSON (it sometimes does), we use it directly.
+      const out = await runClaude(exec, prompt + correctiveNote, logPath, {
+        AI_GATE_ALLOW_TOOLS: '1',           // enable tools so it can call the CodeGraph script via Bash
+        // Output-token budget: the detective runs on a REASONING model (GLM-5.1)
+        // whose <think> blocks count against the output budget. SPEC_MODE_MAX_
+        // OUTPUT_TOKENS (6000) is tuned for non-reasoning spec elaboration and is
+        // far too small here — the model exhausts it mid-reasoning and emits an
+        // EMPTY result BEFORE writing the JSON (found live 2026-07-23: nailed the
+        // fix on a run that fit under 6000, emitted nothing on a run that didn't —
+        // the source of the detective's non-determinism). Floor it high so the
+        // model has room to think AND write. Same class as claude.sh's
+        // resolve_brownfield_effort_floor (24576) for the impl agent.
+        EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || '24576',
+        // STRUCTURAL guard: the detective is read-only — it queries CodeGraph via
+        // Bash and outputs JSON. Restricting it to `bash` means it CANNOT reach
+        // write_file, so it can never "answer" by writing a file and losing its
+        // real output (the live 2026-07-23 failure). Prompt wording alone did not
+        // hold; this makes the failure structurally impossible. Inherited by the
+        // grandchild `epam run` through runClaude's env merge (spawn env).
+        EPAM_ALLOWED_TOOLS: process.env.CODEGRAPH_DETECTIVE_ALLOWED_TOOLS || 'bash',
+        PROJECT_ROOT: repoPath,
+        // Iteration budget. HARD-WON lesson (2026-07-23): a GENEROUS cap is
+        // actively harmful here. At 40 the model THRASHED — 40 tool calls,
+        // 680K input tokens, ~$0.17, and it hit the cap returning "Agent reached
+        // maximum iterations" with NO fix (the real cause of the detective's
+        // empty output). A free-form loop lets glm-5.1 explore forever instead
+        // of committing. A TIGHT cap + the prompt's "output your best guess by
+        // call 6" forces it to decide (it converges in a few calls when it does
+        // converge — proven live). 10 = 6 tool calls + room to write the JSON.
+        EPAM_MAX_ITERATIONS: process.env.CODEGRAPH_DETECTIVE_MAX_ITERATIONS || '10',
+        // The detective TRACES the causal fix site + picks the helper to reuse —
+        // correctness is paramount and it must reason carefully. With story-point-
+        // derived LOW effort it gave different/wrong helpers across passes (live
+        // 2026-07-24: getPreciseFloatNumber vs the correct parseDispatchLineItemKey).
+        // Force HIGH effort for the brownfield ladder — less guessing, more tracing.
+        // (Distinct from VC generation, which stays LOW: that is a restate task where
+        // high effort drives prescriptive drift.) Env-overridable.
+        EPAM_REASONING_EFFORT: process.env.CODEGRAPH_DETECTIVE_REASONING_EFFORT || 'high',
+      }, {
+        // Salvage the detective's JSON even if its process exits non-zero/null
+        // (it emits the answer, then a detached grandchild teardown trips the
+        // exit code). parseFindings validates, so a genuinely broken run still
+        // yields null and retries. Found live 2026-07-23: perfect fix-site JSON
+        // was produced and then discarded on a null exit.
+        salvageOutputOnFailure: true,
+        // Tighter per-attempt timeout so a stalled base-model call (seen live
+        // in-pipeline: glm-5.1 hung 6 min producing nothing while the pipeline
+        // hammered the same OpenRouter key) fails FAST and escalates up the
+        // ladder, instead of burning the full RUNCLAUDE_TIMEOUT_MS per attempt.
+        timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '360000'),
+      });
+      let findings = parseFindings(out);
+      // PHASE 2 — EXTRACT (no tools). Phase 1 investigated but ended in prose
+      // (no JSON). Hand that investigation text to a NO-TOOLS turn whose ONLY
+      // possible action is to emit the JSON — it cannot wander off exploring
+      // because it has no tools. This is the robust fix for "reasoning model
+      // won't commit to structured output": separate exploration from output.
+      if (findings === null && out && out.trim() && !/reached maximum iterations/i.test(out)) {
+        const extractPrompt = `A code investigation of a bug produced the analysis below. Extract the single most-likely causal fix site and output ONLY a JSON array — no prose, no markdown fences, then stop. If the analysis is incomplete, output your BEST hypothesis from what it contains (a best guess beats nothing).\n[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the wrong value, not just displays it>","fix":"<the exact minimal change: which line/expression to change and which EXISTING helper (symbol) to reuse>","helper":"<bare existing symbol name to reuse, or empty>"}]\n\n=== INVESTIGATION ===\n${out}`;
+        const extractLog = logPath ? logPath.replace(/\.log$/, '-extract.log') : null;
+        const out2 = await runClaude(exec, extractPrompt, extractLog, {
+          // No AI_GATE_ALLOW_TOOLS → ai-run.sh adds --no-tools → pure extraction.
+          EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || '24576',
+          EPAM_MAX_ITERATIONS: '2',
+        }, { salvageOutputOnFailure: true, timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '360000') });
+        findings = parseFindings(out2);
+        if (findings && findings.length) {
+          console.warn(`spec-mode: code-graph-detective phase-2 extraction recovered ${findings.length} fix-site(s) for ${story.id} from a narrative phase-1 answer.`);
+        }
+      }
+      if (findings === null) {
+        console.warn(`spec-mode: ⚠️ code-graph-detective produced NO parseable JSON for ${story.id} (attempt ${attempt}/${maxAttempts}) even after the extraction phase. Phase-1 head: "${String(out || '').slice(0, 140).replace(/\s+/g, ' ').trim()}"`);
+        continue; // retry — this is the silent-failure mode we must not accept
+      }
+      if (findings.length === 0) {
+        console.warn(`spec-mode: ⚠️ code-graph-detective returned an EMPTY fix-site list for ${story.id} — no causal site located.`);
+        await _detEmit('error', `[${_detPhase}] code-graph-detective located NO causal fix site for ${story.id}`);
+        return findings;
+      }
+      await _detEmit('spec_update', `[${_detPhase}] code-graph-detective located fix site: ${findings[0].file}${findings[0].helper ? ' (reuse ' + findings[0].helper + ')' : ''}`);
+      return findings;
+    } catch (e) {
+      console.warn(`spec-mode: code-graph-detective invocation failed for ${story.id} (attempt ${attempt}/${maxAttempts}): ${e.message}`);
+    }
+  }
+  console.warn(`spec-mode: ⛔ code-graph-detective found NO fix site for ${story.id} after ${maxAttempts} attempts — the implementer will proceed WITHOUT root-cause guidance (defect-fidelity risk).`);
+  await _detEmit('error', `[${_detPhase}] code-graph-detective found NO fix site for ${story.id} after ${maxAttempts} attempts`);
+  return [];
+}
+
+// Resolve the automation dir (orchestrations/) from a logDir like
+// ".../orchestrations/logs" or an override; falls back to the script's parent.
+function automationDirFromLogDir(logDir) {
+  if (logDir && /(^|\/)logs\/?$/.test(logDir)) return path.dirname(logDir);
+  return path.dirname(__dirname); // orchestrations/
 }
 
 // openspec: first-pass elaboration
@@ -1620,6 +2217,111 @@ ${storyPayload}
       promptExec, prompt, TOOL_SPEC_AGENT, 'SPEC_AGENT',
       path.join(logDir, `${story.id}-${agent}-spec.log`), null
     );
+    // Merge fix-site candidates into locationHint. PRIMARY: the code-graph-
+    // detective — a tool-using agent (GLM-5.1) that iterates CodeGraph queries
+    // and traces callers to converge on the CAUSAL fix site (proven the only
+    // reliable path for symptom-worded tickets). SUPPLEMENT: the deterministic
+    // top-N search (a cheap seed — fragile alone, but harmless as extra
+    // candidates). Both are additive to whatever openspec itself reported.
+    if (payload && agent === 'openspec') {
+      // Brownfield DEFECT guard (deterministic backstop to openspec's own
+      // classification): when openspec judges this story a bug fix, it must NOT
+      // rewrite the acceptance criteria — elaborating a defect's ACs bakes in a
+      // guessed fix mechanism that misdirects the implementer (live AMSD-1820:
+      // openspec expanded a symptom into 8 "split the discount" ACs and the
+      // agent built exactly that wrong design). openspec still RUNS (locationHint
+      // + detective below still fire); we just restore the reporter's original
+      // ACs verbatim, enforcing the STEP-3 instruction even if the model ignored
+      // it. Greenfield never triggers this (EPAM_BROWNFIELD gate); a "novel"
+      // brownfield story is untouched and elaborates normally.
+      // Anchor the classification to Jira ground truth when present: a ticket
+      // typed "Bug" is a defect regardless of the spec model's own judgment
+      // (a misclassified defect→novel re-opens the exact AC-misdirection this
+      // guards against). No-op when issueType is absent — falls back to the
+      // model's storyKind. Greenfield never reaches this block.
+      const _jiraType = String(story.issueType || story.issuetype || '').toLowerCase();
+      if (_jiraType === 'bug' && payload.storyKind !== 'defect') {
+        payload.storyKind = 'defect';
+        console.log(`spec-mode: ${story.id} is Jira type "Bug" — anchoring storyKind=defect (overriding model judgment)`);
+      }
+      if (preserveDefectAcceptanceCriteria(payload, story, process.env)) {
+        console.log(`spec-mode: ${story.id} — ACs are immutable (VC model); openspec AC edits redacted, verification captured in verificationCriteria`);
+      }
+      // Persist the VERIFICATION CRITERIA (VC) layer onto the story so it reaches
+      // the PRD (observability) and downstream agents (TC writer, impl, reviewer).
+      // ACs stay the immutable ticket intent; VCs are the observable checks.
+      if (process.env.EPAM_BROWNFIELD === '1') {
+        const rawVc = normalizeVerificationCriteria(payload);
+        if (rawVc.length) {
+          // Autonomous guard + regenerate loop (NO human): deterministic mechanism
+          // check + speckit strict flag-only review; on flags, regenerate via
+          // openspec with ladder escalation; conservative safe-fallback if it can't
+          // converge. Never halts — always persists a clean VC set.
+          const enforced = await enforceVerificationCriteria(story, rawVc, {
+            regenerateVc: (flags, nextCycle) => regenerateVcViaOpenspec({ story, flags, cycle: nextCycle, logDir }),
+            reviewVc: (vc, cycle) => reviewVcViaSpeckit({ story, vc, cycle, logDir }),
+          });
+          story.verificationCriteria = enforced.vc;
+          story.vcSource = enforced.source === 'fallback'
+            ? 'fallback'
+            : ((typeof payload.vcSource === 'string' && payload.vcSource) || 'acceptance');
+          // Persist a small provenance record for observability in the PRD.
+          story.vcResolution = enforced.source; // clean | regenerated | fallback
+          console.log(`spec-mode: ${story.id} — ${enforced.vc.length} verification criteria persisted (source: ${story.vcSource}, resolution: ${enforced.source})`);
+        }
+      }
+      const detectiveFindings = await runCodeGraphDetective(story, logDir);
+      const detectiveFiles = detectiveFindings.map((f) => f.file);
+      const deterministicFiles = getDeterministicCandidateFiles(story);
+      const candidateFiles = [...new Set([...detectiveFiles, ...deterministicFiles])];
+      if (candidateFiles.length) {
+        const existingHints = Array.isArray(payload.locationHint) ? payload.locationHint : [];
+        const seenFiles = new Set(existingHints.map((h) => h && h.file).filter(Boolean));
+        const merged = [...existingHints];
+        for (const file of candidateFiles) {
+          if (!seenFiles.has(file)) {
+            const finding = detectiveFindings.find((f) => f.file === file);
+            merged.push(finding
+              ? { file, function: finding.function, reason: finding.reason, fix: finding.fix }
+              : { file, function: '', reason: 'deterministic search seed', fix: '' });
+            seenFiles.add(file);
+          }
+        }
+        payload.locationHint = merged;
+      }
+      // Persist the detective's ROOT-CAUSE ANALYSIS on the story so the
+      // implementation agent starts WITH the answer (the cross-file bug the
+      // detective already traced) instead of re-reading files to re-discover
+      // it — the "input bloat on a bad attempt" is exactly that re-tracing.
+      // Stored on the story directly (survives applySpecChanges into the PRD);
+      // claude.sh's build_implementation_prompt injects it verbatim.
+      if (detectiveFindings.length) {
+        story.fixSiteAnalysis = detectiveFindings.filter((f) => f.reason);
+      }
+      // Loud, spec-pass-level surface: a DEFECT that reaches implementation with
+      // NO located fix site is the exact failure mode this whole subsystem
+      // exists to prevent — it must never pass by unnoticed. (Detective already
+      // warned internally; this makes it visible at the story/spec-pass level.)
+      const isDefect = String(story.issueType || '').toLowerCase() === 'bug'
+        || payload.storyKind === 'defect';
+      const hasFixSite = Array.isArray(story.fixSiteAnalysis) && story.fixSiteAnalysis.length;
+      if (isDefect && !hasFixSite) {
+        console.warn(`spec-mode: ⛔ DEFECT ${story.id} has NO fixSiteAnalysis after the spec pass — the implementer gets symptom ACs with no root cause. This is a defect-fidelity risk; investigate the detective before trusting this run's fix.`);
+      }
+      // SUFFICIENCY GATE (step 3): the detective IS the sufficiency signal. If it
+      // located NO fix site AND the ticket context is thin (sparse ACs + short
+      // description), there is not enough to implement OR to write a test that
+      // reproduces the bug — fail EARLY with a clear reason instead of proceeding
+      // to a doomed run. Autonomous (no human halt): the flag blocks execution
+      // loudly at the orchestration level.
+      if (!hasFixSite && isThinContext(story)) {
+        story.specification = story.specification || {};
+        story.specification.insufficientContext = true;
+        story.specification.specPassFailed = true;
+        story.specification.insufficientReason = 'code-graph-detective located no fix site and the ticket context is thin (sparse acceptance criteria + short description) — not enough to implement or to write a reproducing test';
+        console.warn(`spec-mode: ⛔ INSUFFICIENT CONTEXT for ${story.id} — no fix site located and thin AC/description. Failing early (no human halt).`);
+      }
+    }
     return { agent, payload };
   } catch (error) {
     console.warn(`spec-mode: ${agent} run failed for ${story.id}:`, error.message);
@@ -1646,9 +2348,14 @@ function stripPrescriptiveACs(acceptanceCriteria, storyId) {
   const clean = [];
   const flagged = [];
   for (const ac of (acceptanceCriteria || [])) {
-    const hit = PRESCRIPTIVE_AC_PATTERNS.find(({ pattern }) => pattern.test(ac.trim()));
+    // Speckit output is LLM-shaped and occasionally non-string (an object / null /
+    // number) — coerce for the pattern test so a malformed item never throws
+    // (`ac.trim is not a function`, live 2026-07-24). Keep the ORIGINAL value in
+    // clean/flagged so we never corrupt or drop it.
+    const acStr = typeof ac === 'string' ? ac : (ac == null ? '' : JSON.stringify(ac));
+    const hit = PRESCRIPTIVE_AC_PATTERNS.find(({ pattern }) => pattern.test(acStr.trim()));
     if (hit) {
-      console.warn(`spec-mode: speckit validator stripped prescriptive AC from ${storyId}: [${hit.reason}] "${ac.slice(0, 80)}"`);
+      console.warn(`spec-mode: speckit validator stripped prescriptive AC from ${storyId}: [${hit.reason}] "${acStr.slice(0, 80)}"`);
       flagged.push({ criterion: ac, flag: `speckit-validator: ${hit.reason} — describes HOW not WHAT` });
     } else {
       clean.push(ac);
@@ -1749,22 +2456,24 @@ function buildAssignments(assignments, stories, runId) {
   const map = new Map();
   const fallback = ['openspec', 'speckit'];
   const storyIds = new Set(stories.map((s) => s.id));
-  // Brownfield mode: the coordinator can legitimately decide a story needs no
-  // AC elaboration/hardening (agents: []) — but the archaeology/locationHint
-  // block that grounds the story in the EXISTING repo (which file to change)
-  // only exists inside the openspec/speckit per-agent prompt. When agents is
-  // empty, that block never fires for ANY reason, including well-formed
-  // stories whose ACs came from the Jira AC-gate's own enrichment — the exact
-  // case a real ticket produces. The story then proceeds to implementation
-  // with zero file/location grounding. Found live 2026-07-23 (MOCK-HW-1):
-  // "Trivial string change with clear, complete AC... Ready for direct
-  // implementation" → agents:[] → technicalNotes.files never populated.
-  // Fix: in brownfield mode, always run at least one agent (speckit — the
-  // cheaper hardening-only pass) so archaeology always gets a chance to run,
-  // regardless of AC quality. The coordinator's "no elaboration needed"
-  // judgment about openspec is still respected; only the "zero agents at
-  // all" outcome is disallowed.
+  // Brownfield mode: OPENSPEC MUST RUN for every story. openspec is the fix-site
+  // discovery pass — it hosts the brownfield archaeology/locationHint block AND
+  // the code-graph-detective invocation that grounds the story in the EXISTING
+  // repo (which file actually computes the wrong value). The coordinator may
+  // legitimately think a story needs no AC elaboration and assign only speckit
+  // (or nothing) — but that skips openspec entirely, so fix-site discovery and
+  // the detective never run, and the story proceeds to implementation with zero
+  // location grounding. Found live 2026-07-23: coordinator assigned only
+  // speckit → "openspec (elaboration) [0 stories]" → detective never fired →
+  // technicalNotes.files null → wrong/absent fix site. Fix: in brownfield,
+  // ALWAYS ensure openspec is in the agent list (prepended — it runs first),
+  // regardless of what the coordinator chose. The coordinator's judgment about
+  // whether speckit ALSO runs is still respected.
   const isBrownfield = process.env.EPAM_BROWNFIELD === '1';
+  const ensureOpenspec = (agents) => {
+    if (!isBrownfield) return agents;
+    return agents.includes('openspec') ? agents : ['openspec', ...agents];
+  };
   if (Array.isArray(assignments)) {
     assignments.forEach((entry) => {
       if (!entry || !storyIds.has(entry.storyId)) return;
@@ -1772,7 +2481,7 @@ function buildAssignments(assignments, stories, runId) {
       const VALID_AGENTS = new Set(['openspec', 'speckit']);
       const rawAgents = Array.isArray(entry.agents) ? entry.agents : [];
       let agents = rawAgents.filter(a => typeof a === 'string' && VALID_AGENTS.has(a));
-      if (isBrownfield && agents.length === 0) agents = ['speckit'];
+      agents = ensureOpenspec(agents);
       map.set(entry.storyId, {
         storyId: entry.storyId,
         agents,
@@ -2164,6 +2873,23 @@ function assertNoStoryIdsLost(beforeIds, afterIds, contextLabel) {
 // correctly and hangs until the pipeline's 600s watchdog kills it — the actual
 // root cause of SKY-002-test/SKY-003-test repeatedly stalling with zero output
 // in that day's live run, misread at first as a flaky-API/network issue.
+// Look up a model's HIGH-ladder successor (EPAM_MODEL_LADDER_HIGH is a
+// "from=to|from=to" map, e.g. "z-ai/glm-5.1=moonshotai/kimi-k3"). Returns the
+// escalation target for `model`, or null if the model isn't in the ladder. Used
+// to escalate the code-graph-detective to a stronger model (kimi-k3) on retry —
+// the same laddering openspec/speckit already do, so the detective is cohesive
+// with the rest of the pipeline instead of hard-pinned to one model.
+function ladderNextModel(model, env = process.env) {
+  const map = env.EPAM_MODEL_LADDER_HIGH || env.EPAM_MODEL_LADDER || '';
+  if (!map || !model) return null;
+  for (const pair of map.split('|')) {
+    const eq = pair.indexOf('=');
+    if (eq === -1) continue;
+    if (pair.slice(0, eq).trim() === model.trim()) return pair.slice(eq + 1).trim();
+  }
+  return null;
+}
+
 function resolveModelProvider(model, env = process.env) {
   const map = env.EPAM_MODEL_PROVIDER_MAP;
   if (!map || !model) return null;
@@ -2279,6 +3005,19 @@ function capSplitACs(story, parentId) {
 
 function applySpecChanges(story, payload, newStories, prd, phaseId, runId, logDir = null) {
   const result = { acceptanceChanged: false, splitCount: 0 };
+  // AC IMMUTABILITY — UNIVERSAL BACKSTOP (brownfield only). Every spec-agent
+  // payload merges through here (openspec, speckit, every retry/token-retry path),
+  // so this is the ONE choke point where the ticket's ACs can be locked as
+  // immutable regardless of which agent produced the payload. The per-agent
+  // preserve call in runSpecAgent only covered the `agent==='openspec'` branch;
+  // speckit's prompt explicitly asks it to emit "the FULL merged acceptanceCriteria
+  // list", and that payload reached applySpecChanges with NO guard — so speckit
+  // silently re-elaborated a 0-AC brownfield ticket into 9 fabricated ACs (found
+  // live 2026-07-24, AMSD-1820). Restoring here makes the AC array the immutable
+  // ticket intent for ALL brownfield agents; the merge below then sees no change.
+  // No-op for greenfield (EPAM_BROWNFIELD gate inside preserveDefectAcceptanceCriteria),
+  // where speckit legitimately merges/refines ACs.
+  preserveDefectAcceptanceCriteria(payload, story, process.env);
   if (Array.isArray(payload.acceptanceCriteria) && payload.acceptanceCriteria.length) {
     const capped = payload.acceptanceCriteria.slice(0, MAX_ACS_PER_STORY);
     if (capped.length < payload.acceptanceCriteria.length) {
@@ -2554,6 +3293,39 @@ function emitMonitorEvent({ monitorScript, type, message, storyId = '', lane = '
   });
 }
 
+// Recover a JSON payload a tool-trained model hid inside a TOOL CALL. Some models
+// "answer" by emitting a write_file-style call — e.g.
+//   <tool_use><tool_name>write_file</tool_name><arguments>{"path":"...","content":"{...JSON...}"}</arguments></tool_use>
+// — wrapping the real answer in the call's `content` (or in the arguments object)
+// instead of returning it inline. The pipeline reads the reply TEXT (not a file), so
+// the answer would be lost. This unwraps it. General across models/tags — no
+// model- or field-name hardcoding beyond the standard tool-call shape. (Found live
+// 2026-07-24, AMSD-1820: glm-5.1 wrapped the spec JSON in a write_file call → FATAL.)
+function unwrapToolCallJson(text) {
+  if (!text) return null;
+  const candidates = [];
+  // Arg container tag varies by model/provider: <arguments> (glm), <input> (others),
+  // <parameters>. Backref \1 keeps open/close matched. Found live 2026-07-24: speckit
+  // used <arguments>, MODEL_REVIEW used <input>.
+  for (const m of text.matchAll(/<(arguments|input|parameters)>\s*([\s\S]*?)\s*<\/\1>/g)) candidates.push(m[2]);
+  candidates.push(text); // whole text may be a bare tool-call JSON object
+  for (const raw of candidates) {
+    let args;
+    try { args = JSON.parse(String(raw).trim()); } catch { continue; }
+    // Unwrap one nesting level if it's {name, arguments:{...}}.
+    if (args && typeof args === 'object' && args.arguments && typeof args.arguments === 'object') args = args.arguments;
+    if (!args || typeof args !== 'object') continue;
+    // write_file-style call: the real payload is a JSON string in `content`.
+    if (typeof args.content === 'string') {
+      try { const inner = JSON.parse(args.content); if (inner && typeof inner === 'object') return inner; } catch { /* not JSON */ }
+    }
+    // Otherwise the arguments object itself may BE the payload (ignore path/tool wrappers).
+    const keys = Object.keys(args).filter((k) => !['path', 'server_name', 'tool_name', 'content'].includes(k));
+    if (keys.length > 0) return args;
+  }
+  return null;
+}
+
 function extractTaggedJson(text, tag) {
   if (!text) return null;
 
@@ -2611,12 +3383,17 @@ function extractTaggedJson(text, tag) {
   const rawAttempt = stripAndParse(text);
   if (rawAttempt !== null) return rawAttempt;
 
+  // Last resort: the model "answered" by emitting a tool CALL that wraps the real
+  // JSON payload (write_file content / arguments). Recover it rather than lose it.
+  const unwrapped = unwrapToolCallJson(text);
+  if (unwrapped !== null) return unwrapped;
+
   return null;
 }
 
 const RUNCLAUDE_TIMEOUT_MS = parseInt(process.env.RUNCLAUDE_TIMEOUT_MS || '360000', 10);
 
-function runClaude(execSpec, prompt, logPath, envOverrides = {}) {
+function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
   return new Promise((resolve, reject) => {
     const env = { ...process.env, ...envOverrides };
     delete env.CLAUDECODE;
@@ -2636,6 +3413,19 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}) {
       try { process.kill(-proc.pid, 'SIGKILL'); } catch { /* already gone */ }
     };
 
+    // Salvage: a subprocess can emit a COMPLETE, parseable result and STILL exit
+    // non-zero / with a null (signal) code — killed during teardown, or a
+    // detached grandchild (epam CLI → codegraph, etc.) disturbing the process
+    // group. Discarding that already-captured output loses real work. Found live
+    // 2026-07-23: the code-graph-detective emitted its perfect fix-site JSON and
+    // then exited with code null; runClaude discarded it, so the implementer got
+    // no root cause. When the caller opts in AND we actually captured output,
+    // resolve with it and let the caller's parser decide — a genuinely broken run
+    // yields unparseable output the caller already handles. Off by default so
+    // other callers keep their strict reject-on-failure semantics.
+    const finishOutput = () => `${stdout}\n${stderr}`.trim();
+
+    const timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : RUNCLAUDE_TIMEOUT_MS;
     const killTimer = setTimeout(() => {
       if (settled) return;
       settled = true;
@@ -2643,10 +3433,15 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}) {
       // FIX: destroy stdio streams so grandchildren that inherited these pipe fds
       // (e.g. epam CLI spawning detached node subprocesses) don't keep the Node.js
       // event loop alive after the process group is killed.
+      const salvaged = finishOutput();
+      if (logPath) { try { fs.writeFileSync(logPath, `# Prompt\n${prompt}\n\n# Output (timed out)\n${salvaged}\n`); } catch { /* ignore */ } }
       proc.stdout?.destroy();
       proc.stderr?.destroy();
-      reject(new Error(`prompt runner timed out after ${RUNCLAUDE_TIMEOUT_MS}ms`));
-    }, RUNCLAUDE_TIMEOUT_MS);
+      if (opts.salvageOutputOnFailure && salvaged) {
+        return resolve(salvaged);
+      }
+      reject(new Error(`prompt runner timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
 
     proc.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
     proc.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
@@ -2655,9 +3450,12 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}) {
       if (settled) return;
       settled = true;
       clearTimeout(killTimer);
-      const output = `${stdout}\n${stderr}`.trim();
+      const output = finishOutput();
       if (logPath) fs.writeFileSync(logPath, `# Prompt\n${prompt}\n\n# Output\n${output}\n`);
       if (code !== 0) {
+        if (opts.salvageOutputOnFailure && output) {
+          return resolve(output);
+        }
         return reject(new Error(`prompt runner exited with code ${code}`));
       }
       resolve(output);
@@ -2755,6 +3553,24 @@ function parseReviewVerdict(text) {
   return { verdict: m ? m[1] : 'pass', issues: [] };
 }
 
+// capReviewSnapshot(snapshot) — caps only acceptanceCriteria (the one field
+// with unbounded length) so JSON.stringify(...) never needs a blind
+// .slice(0, N) that can silently truncate technicalNotes/description/title
+// out of what the reviewer actually sees. Real tickets with several detailed
+// ACs routinely serialize past any fixed char budget; mock1's trivial 4-AC
+// fixture never does, which is exactly why this bug (found live 2026-07-23,
+// AMSD-1820: openspec's real locationHint got reverted to null because the
+// reviewer never saw technicalNotes in its truncated payload) had no
+// coverage until now.
+function capReviewSnapshot(snapshot) {
+  const ac = Array.isArray(snapshot?.acceptanceCriteria) ? snapshot.acceptanceCriteria : [];
+  const CAP = 8;
+  const acceptanceCriteria = ac.length > CAP
+    ? [...ac.slice(0, CAP), `…and ${ac.length - CAP} more AC(s), omitted here for length`]
+    : ac;
+  return { ...snapshot, acceptanceCriteria };
+}
+
 // reviewPrdChange <opts>
 // Calls the prd-change-reviewer gate agent to validate a proposed spec-pass
 // change (AC/description/title rewrite or split creation) before it is
@@ -2778,16 +3594,29 @@ async function reviewPrdChange({ aiRunnerCmd, profiles, storyId, changeType, bef
     ? '\nNOTE: This story was just split into child stories. Its acceptanceCriteria field is a deterministic "Delegated to split children: ..." placeholder written by the engine, not an authored AC — do NOT flag that placeholder as vague or unmeasurable. Only evaluate the description/title changes.\n'
     : '';
 
+  // A blind `.slice(0, N)` on the full serialized snapshot silently drops
+  // whichever fields serialize LAST (technicalNotes, since captureStorySnapshot
+  // orders acceptanceCriteria first) whenever acceptanceCriteria is long enough
+  // — which real tickets with several detailed ACs routinely are, but mock1's
+  // deliberately trivial 4-AC fixture never is (confirmed: this exact story's
+  // snapshot put technicalNotes at byte offset 1448, past the old 1000-char
+  // cutoff). The reviewer then judged a payload it never actually saw
+  // technicalNotes in, and any verdict — pass OR fail — that triggers a revert
+  // restores the field to its PRE-this-turn value, silently discarding a real,
+  // well-grounded locationHint openspec had just discovered. Found live
+  // 2026-07-23 on AMSD-1820. Fix: cap acceptanceCriteria (the only field whose
+  // length is unbounded) independently, and always include technicalNotes/
+  // description/title in full so structural fields can never be truncated away.
   const prompt = `${reviewerProfile}
 
 STORY: ${storyId}
 CHANGE TYPE: ${changeType}
 ${splitNote}
 BEFORE:
-${JSON.stringify(before).slice(0, 1000)}
+${JSON.stringify(capReviewSnapshot(before))}
 
 AFTER:
-${JSON.stringify(after).slice(0, 1000)}
+${JSON.stringify(capReviewSnapshot(after))}
 
 Emit ONLY: {"verdict":"pass|fail","issues":["<issue1>"],"reason":"<15 words max>"}`;
 
@@ -3193,6 +4022,7 @@ if (require.main === module) {
 
 module.exports = {
   extractTaggedJson,
+  stripPrescriptiveACs,
   buildAssignments,
   captureStorySnapshot,
   splitDepth,
@@ -3211,6 +4041,21 @@ module.exports = {
   SPLIT_MANDATE_AC_THRESHOLD,
   applySpecChanges,
   buildBrownfieldArchaeologyBlock,
+  VC_OBSERVABILITY_RULES,
+  preserveDefectAcceptanceCriteria,
+  normalizeVerificationCriteria,
+  findVcMechanism,
+  safeFallbackVc,
+  enforceVerificationCriteria,
+  isThinContext,
+  verifyDetectiveHelper,
+  ladderNextModel,
+  runClaude,
+  capReviewSnapshot,
+  getDeterministicCandidateFiles,
+  buildBrownfieldSearchQuery,
+  runCodeGraphDetective,
+  fetchCodeGraphContext,
   validateMidExecutionSplits,
   extractCodeRefs,
   resolvePromptProvider,

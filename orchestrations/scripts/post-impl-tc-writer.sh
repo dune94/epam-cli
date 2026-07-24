@@ -200,6 +200,14 @@ for sid in phase_ids:
     lines.append(f'EXISTING_ACS:')
     for ac in s.get('acceptanceCriteria', []):
         lines.append(f'  - {ac}')
+    # Verification Criteria (VC) — the observable, mechanism-free checks the change
+    # must satisfy. TEST CRITERIA should assert these directly; they are the
+    # primary source of test facts (the ACs are the ticket intent).
+    vc = s.get('verificationCriteria', [])
+    if vc:
+        lines.append(f'VERIFICATION_CRITERIA (derive the test facts primarily from these — each should become an assertion):')
+        for v in vc:
+            lines.append(f'  - {v}')
     lines.append('')
 
 print('\n'.join(lines))

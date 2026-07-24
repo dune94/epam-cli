@@ -53,6 +53,10 @@ ENV_FILE="$SCRIPT_DIR/../jira/metrolinx.env"
 PROJECT_CONFIG="$SCRIPT_DIR/../projects/metrolinx/config.env"
 [ -f "$PROJECT_CONFIG" ] && { set -a; source "$PROJECT_CONFIG"; set +a; }
 
+# Project-level tool config (dependency-check.json, etc.) — lives in epam-cli's
+# own codeline, never in a client repo. See run_dependency_check in claude.sh.
+export EPAM_PROJECT_CONFIG_DIR="$SCRIPT_DIR/../projects/metrolinx"
+
 # ── Required key checks ───────────────────────────────────────────────────────
 [ -z "${MINIMAX_API_KEY:-}" ]    && fail "MINIMAX_API_KEY is not set. Export it or add it to .env"
 [ -z "${OPENROUTER_API_KEY:-}" ] && fail "OPENROUTER_API_KEY is not set. Export it or add it to .env"
@@ -156,10 +160,56 @@ done
 echo ""
 
 # ── Wire the dashboard to this run's live PRD + logs ─────────────────────────
+# MUST run BEFORE CodeGraph preflight below: pre-run-reset.sh resets
+# agent-status.json. Emitting preflight events before that reset would have
+# them wiped a moment later, before the dashboard ever showed them.
 info "Wiring dashboard to serve this run's live PRD + logs..."
 bash orchestrations/scripts/pre-run-reset.sh --prd "$PRD_FILE" || \
   info "  pre-run-reset.sh failed or Docker unavailable — dashboard may show stale data (non-fatal, continuing)"
 echo "${OUTPUT_DIR:-$JIRA_CODELINE_ROOT}" > "orchestrations/dashboards/.active-output-dir" 2>/dev/null || true
+echo ""
+
+# ── CodeGraph preflight: every codeline must be indexed before codeline ──────
+# discovery scoring ever runs — abort the launch otherwise. MUST run AFTER
+# both the teardown loop (indexing a pre-reset tree would build an index that
+# no longer matches the post-reset files) and the dashboard-wiring step above
+# (so its agent-activity events land in the freshly-reset agent-status.json,
+# not one about to be wiped). Live bug (2026-07-22): codeline-discovery's
+# scoring gave a repo missing its CodeGraph index a score of zero on that
+# tier regardless of true relevance — azure.commerce.cdts (the actual
+# AMSD-1820 fix site) was never indexed, never made the top-8 candidates
+# handed to the LLM, and the wrong repo got selected instead. Silently
+# indexing on-demand mid-scoring (also fixed, in codeline-discovery.js, as
+# defense in depth) is not enough alone — a failure there is swallowed and
+# scoring continues anyway. This gate fails loud, before any Jira/spec work
+# starts, if indexing cannot be completed for any candidate codeline — and
+# emits its own progress to agent-activity so it's visible on the dashboard,
+# not just buried in a log file.
+info "CodeGraph preflight: verifying every codeline is indexed..."
+_emit_preflight_event() {
+  local msg="$1"
+  local monitor_file="${MONITOR_FILE:-orchestrations/logs/agent-status.json}"
+  [ -f "$monitor_file" ] || return 0
+  local tmp_file="${monitor_file}.tmp.$$"
+  (
+    flock -w 5 200 || return 1
+    jq --arg type "preflight" \
+       --arg msg "$msg" \
+       --arg ts "$(date -Iseconds)" \
+       '.events += [{"type": $type, "story": "", "lane": "preflight", "role": "codegraph-preflight", "message": $msg, "timestamp": $ts}]' \
+       "$monitor_file" > "$tmp_file" 2>/dev/null && mv "$tmp_file" "$monitor_file"
+  ) 200>"${monitor_file}.lock"
+}
+_emit_preflight_event "CodeGraph preflight started — verifying every codeline under $JIRA_CODELINE_ROOT is indexed"
+if bash "$SCRIPT_DIR/codegraph-preflight-index.sh" "$JIRA_CODELINE_ROOT" 2>&1 | tee /tmp/codegraph-preflight-$$.log; then
+  _emit_preflight_event "CodeGraph preflight passed — all codelines indexed, safe to proceed to codeline discovery"
+else
+  _preflight_summary=$(tail -5 /tmp/codegraph-preflight-$$.log | tr '\n' ' ')
+  _emit_preflight_event "CodeGraph preflight FAILED — aborting before codeline discovery: ${_preflight_summary}"
+  rm -f /tmp/codegraph-preflight-$$.log
+  fail "CodeGraph preflight failed — one or more codelines could not be indexed. Aborting before codeline discovery ever runs."
+fi
+rm -f /tmp/codegraph-preflight-$$.log
 echo ""
 
 # ── run_phase: invoke orch script with self-healing retry on exit 2 ───────────

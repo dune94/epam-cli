@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { resolveConfig } from '../../config/ConfigResolver.js';
 import { AuthManager } from '../../auth/AuthManager.js';
-import { createTools } from '../../tools/createTools.js';
+import { createTools, applyToolAllowlist } from '../../tools/createTools.js';
 import { AgentRunner } from '../../agent/AgentRunner.js';
 import { buildSessionSystemPrompt } from '../../constraints/sessionPrompt.js';
 import { consumeConsultationContext } from '../../context/ContextBuilder.js';
@@ -77,9 +77,7 @@ export function createRunCommand(): Command {
       await chain.initialize();
 
       const tools = opts.tools
-        ? [
-            ...createTools(),
-          ]
+        ? applyToolAllowlist([...createTools()], process.env.EPAM_ALLOWED_TOOLS)
         : [];
 
       const systemPrompt = await buildSessionSystemPrompt(config, authManager);

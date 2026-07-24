@@ -270,13 +270,13 @@ describe('claude.sh — resolve_reasoning_effort_from_story wiring', () => {
 
   it('reads .reasoningEffort field from the PRD story', () => {
     const idx = claudeSrc.indexOf('resolve_reasoning_effort_from_story()');
-    const block = claudeSrc.slice(idx, idx + 700);
+    const block = claudeSrc.slice(idx, idx + 1300);
     expect(block).toMatch(/\.reasoningEffort/);
   });
 
   it('overrides EPAM_REASONING_EFFORT only when the field is present (does not clear it)', () => {
     const idx = claudeSrc.indexOf('resolve_reasoning_effort_from_story()');
-    const block = claudeSrc.slice(idx, idx + 700);
+    const block = claudeSrc.slice(idx, idx + 1300);
     expect(block).toMatch(/if \[ -n "\$story_effort" \]/);
     expect(block).toMatch(/export EPAM_REASONING_EFFORT="\$story_effort"/);
   });

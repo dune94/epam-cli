@@ -203,10 +203,21 @@ const GATE_LOG_NAMES = [
 describe.skipIf(!RUN_REAL)('Full mock brownfield pipeline — REAL Jira ingest + real launch sequence + full gate chain', () => {
   it('runs the complete real pipeline end to end, starting from a real Jira ticket pull: ingest, AC-gate, codeline discovery, PRD synthesis, spec/CPA/skill passes, real agent edit, TC-writer, team-lead review, all QA gates, tsc/vitest', async () => {
     const { clone, codelineRoot } = makeMockCodeline();
+    // Deliberately verbose (matching real ticket density, not a minimal
+    // one-liner) — gives the AC-gate/speckit enrichment a realistic chance
+    // to produce enough ACs for a live run to also exercise the
+    // reviewPrdChange payload-size class of bug (see
+    // review-snapshot-technicalNotes-truncation.test.ts for the deterministic,
+    // fast-test guarantee — a live run can't reliably hit an exact byte
+    // threshold since that depends on how verbose the LLM's own AC output
+    // happens to be, so this is defense-in-depth, not the primary coverage).
     const jiraServer = await startMockJiraServer(
       STORY_ID,
       'Hello world greeting should say hello dolly',
-      "The getGreeting() function in this codebase currently returns the string 'hello world'. It should instead return 'hello dolly'. Update any test that asserts the old value to match the new one.",
+      "The getGreeting() function in this codebase currently returns the string 'hello world'. It should instead return 'hello dolly'. Update any test that asserts the old value to match the new one. " +
+      "This is a customer-facing greeting shown on first load; the exact casing, spacing, and punctuation of the returned string matter and must match 'hello dolly' precisely — no trailing punctuation, no capitalization changes, no extra whitespace. " +
+      "Every existing test in src/hello.test.ts that currently asserts the old 'hello world' value must be updated to assert the new value instead — do not leave any stale assertion in place, and do not delete test coverage for this function. " +
+      "No other exported function's behavior, signature, or return type in this file may change as a side effect of this fix — the change must be scoped precisely to the string literal returned by getGreeting().",
     );
     try {
       const synthPrdPath = join(codelineRoot, '..', 'synthesized-prd.json');

@@ -385,6 +385,97 @@ describe('applySpecChanges', () => {
     const result = applySpecChanges(story, { splitStories: [] }, [], prd, 'phase1', 'run1');
     expect(result.splitCount).toBe(0);
   });
+
+  // locationHint → technicalNotes.files (live bug, 2026-07-22): the brownfield
+  // openspec prompt explicitly asks the model for a CodeGraph/Semble-grounded
+  // "locationHint" (the file(s)/function(s) that actually handle the story's
+  // behavior), but nothing ever read that field back out of the response —
+  // it was requested and silently discarded on every single call. Without it
+  // reaching technicalNotes.files, the planning/execution prompts show an
+  // empty "Files to Create/Modify" section, so the story agent has to search
+  // the codebase itself and often runs out of turn budget before writing
+  // anything real. Confirmed live: AMSD-1820 ran dry mid-search and the only
+  // file that changed was CodeGraph's own incidental index write.
+  describe('locationHint propagation to technicalNotes.files', () => {
+    it('extracts file paths from locationHint and writes them into technicalNotes.files', () => {
+      const story = baseStory();
+      const prd = makePrd([story]);
+      const payload = {
+        locationHint: [
+          { file: 'src/services/apply-report-discounts.service.ts', function: 'applyReportDiscountsService', reason: 'handles discount propagation' },
+        ],
+      };
+      applySpecChanges(story, payload, [], prd, 'phase1', 'run1');
+      expect((story as any).technicalNotes.files).toEqual(['src/services/apply-report-discounts.service.ts']);
+    });
+
+    it('collects multiple file paths from a multi-entry locationHint, deduplicated', () => {
+      const story = baseStory();
+      const prd = makePrd([story]);
+      const payload = {
+        locationHint: [
+          { file: 'src/a.ts', function: 'fnA', reason: 'r1' },
+          { file: 'src/b.ts', function: 'fnB', reason: 'r2' },
+          { file: 'src/a.ts', function: 'fnA2', reason: 'r3' }, // duplicate file, different function
+        ],
+      };
+      applySpecChanges(story, payload, [], prd, 'phase1', 'run1');
+      expect((story as any).technicalNotes.files.sort()).toEqual(['src/a.ts', 'src/b.ts']);
+    });
+
+    it('merges into an EXISTING technicalNotes.files rather than clobbering it', () => {
+      const story = baseStory();
+      (story as any).technicalNotes = { files: ['src/existing.ts'], someOtherField: 'preserved' };
+      const prd = makePrd([story]);
+      const payload = {
+        locationHint: [{ file: 'src/discovered.ts', function: 'fn', reason: 'r' }],
+      };
+      applySpecChanges(story, payload, [], prd, 'phase1', 'run1');
+      expect((story as any).technicalNotes.files.sort()).toEqual(['src/discovered.ts', 'src/existing.ts']);
+      expect((story as any).technicalNotes.someOtherField).toBe('preserved');
+    });
+
+    it('merges locationHint files on top of a technicalNotes object present in the SAME payload', () => {
+      const story = baseStory();
+      const prd = makePrd([story]);
+      const payload = {
+        technicalNotes: { files: ['src/from-technical-notes.ts'] },
+        locationHint: [{ file: 'src/from-location-hint.ts', function: 'fn', reason: 'r' }],
+      };
+      applySpecChanges(story, payload, [], prd, 'phase1', 'run1');
+      expect((story as any).technicalNotes.files.sort()).toEqual(['src/from-location-hint.ts', 'src/from-technical-notes.ts']);
+    });
+
+    it('is a no-op when locationHint is an empty array (model found nothing relevant)', () => {
+      const story = baseStory();
+      const prd = makePrd([story]);
+      applySpecChanges(story, { locationHint: [] }, [], prd, 'phase1', 'run1');
+      expect((story as any).technicalNotes).toBeUndefined();
+    });
+
+    it('is a no-op when locationHint is absent entirely (non-brownfield / non-openspec passes)', () => {
+      const story = baseStory();
+      const prd = makePrd([story]);
+      applySpecChanges(story, { acceptanceCriteria: ['ac'] }, [], prd, 'phase1', 'run1');
+      expect((story as any).technicalNotes).toBeUndefined();
+    });
+
+    it('ignores malformed locationHint entries (missing/non-string file) without crashing', () => {
+      const story = baseStory();
+      const prd = makePrd([story]);
+      const payload = {
+        locationHint: [
+          { function: 'fnNoFile', reason: 'no file key at all' },
+          { file: '', function: 'fnEmptyFile', reason: 'empty string file' },
+          { file: 42, function: 'fnNumericFile', reason: 'wrong type' },
+          null,
+          { file: 'src/valid.ts', function: 'fnValid', reason: 'the only real one' },
+        ],
+      };
+      expect(() => applySpecChanges(story, payload as any, [], prd, 'phase1', 'run1')).not.toThrow();
+      expect((story as any).technicalNotes.files).toEqual(['src/valid.ts']);
+    });
+  });
 });
 
 // ─── extractCodeRefs ─────────────────────────────────────────────────────────

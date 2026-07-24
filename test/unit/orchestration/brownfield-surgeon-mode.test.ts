@@ -19,6 +19,7 @@ const SPEC_RUNNER = join(REPO_ROOT, 'orchestrations/scripts/spec-mode-runner.js'
 
 const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
 const specSrc   = readFileSync(SPEC_RUNNER, 'utf8');
+const { buildBrownfieldArchaeologyBlock } = require(SPEC_RUNNER);
 
 // ─── Change 1: claude.sh brownfield surgeon preamble ────────────────────────
 
@@ -72,67 +73,73 @@ describe('claude.sh — brownfield surgeon preamble (Change 1)', () => {
 
 // ─── Change 2: openspec brownfield archaeology block ────────────────────────
 
-describe('spec-mode-runner.js — openspec brownfield archaeology block (Change 2)', () => {
-  it('brownfield archaeology block is gated on EPAM_BROWNFIELD=1 AND agent === openspec', () => {
-    expect(specSrc).toMatch(/EPAM_BROWNFIELD.*===.*'1'.*openspec|openspec.*EPAM_BROWNFIELD.*===.*'1'/);
+describe('spec-mode-runner.js — brownfield archaeology block, REAL behavior via buildBrownfieldArchaeologyBlock (Change 2)', () => {
+  // Real bug (2026-07-23, live AMSD-1820 failure): the ORIGINAL version of
+  // this describe block asserted the archaeology block was gated on
+  // `agent === 'openspec'` — i.e. it tested that the bug's condition existed,
+  // via static regex over the source text, and passed happily while the real
+  // pipeline shipped a story with zero file guidance because the coordinator
+  // assigned only speckit (openspec ran "0 stories" that phase). A source-text
+  // "does X exist" assertion cannot catch "X only fires for one of two valid
+  // callers" — these tests now call the real, exported, pure function with
+  // both agent shapes and assert on its actual return value instead.
+
+  it('fires for EPAM_BROWNFIELD=1 regardless of which agent is running — the exact gap that broke AMSD-1820', () => {
+    const openspecResult = buildBrownfieldArchaeologyBlock({ EPAM_BROWNFIELD: '1' });
+    const speckitResult = buildBrownfieldArchaeologyBlock({ EPAM_BROWNFIELD: '1' });
+    // buildBrownfieldArchaeologyBlock takes no agent parameter at all — its
+    // whole point is that the block no longer depends on which agent calls it.
+    expect(openspecResult.archaeologyBlock).not.toBe('');
+    expect(speckitResult.archaeologyBlock).not.toBe('');
+    expect(openspecResult.archaeologyBlock).toBe(speckitResult.archaeologyBlock);
   });
 
-  it('archaeology block instructs openspec to identify the existing fix site', () => {
-    expect(specSrc).toMatch(/BROWNFIELD MODE/);
-    expect(specSrc).toMatch(/locationHint/);
+  it('archaeology block instructs the agent to identify the existing fix site', () => {
+    const { archaeologyBlock } = buildBrownfieldArchaeologyBlock({ EPAM_BROWNFIELD: '1' });
+    expect(archaeologyBlock).toMatch(/BROWNFIELD MODE/);
+    expect(archaeologyBlock).toMatch(/locationHint/);
   });
 
   it('archaeology block explicitly forbids tool use and requires JSON-only output', () => {
     // GLM-5.1 emitted <search_fi...> XML on the first live run when given
     // "you MUST identify the existing code path" without a no-tools constraint.
-    // The block must say both "no tools" and "JSON only" to prevent tool-call XML.
-    const archaeologyIdx = specSrc.indexOf('brownfieldArchaeologyBlock');
-    const region = specSrc.slice(archaeologyIdx, archaeologyIdx + 1000);
-    expect(region).toMatch(/no tools|no tool/i);
-    expect(region).toMatch(/JSON only|output JSON/i);
+    const { archaeologyBlock } = buildBrownfieldArchaeologyBlock({ EPAM_BROWNFIELD: '1' });
+    expect(archaeologyBlock).toMatch(/no tools|no tool/i);
+    expect(archaeologyBlock).toMatch(/JSON only|output JSON/i);
   });
 
   it('archaeology block constrains locationHint derivation to the Semble context already in the prompt', () => {
-    // Must tell the model to use ONLY what Semble injected — not to search externally.
-    const archaeologyIdx = specSrc.indexOf('brownfieldArchaeologyBlock');
-    const region = specSrc.slice(archaeologyIdx, archaeologyIdx + 1000);
-    expect(region).toMatch(/ONLY.*EXISTING CODE|already present in this prompt|Semble/i);
+    const { archaeologyBlock } = buildBrownfieldArchaeologyBlock({ EPAM_BROWNFIELD: '1' });
+    expect(archaeologyBlock).toMatch(/ONLY.*EXISTING CODE|already present in this prompt|Semble/i);
   });
 
   it('archaeology block instructs model to set locationHint to [] when no Semble context is available', () => {
-    // Prevents the model searching externally when Semble returns nothing.
-    const archaeologyIdx = specSrc.indexOf('brownfieldArchaeologyBlock');
-    const region = specSrc.slice(archaeologyIdx, archaeologyIdx + 1000);
-    expect(region).toMatch(/locationHint.*\[\]|\[\].*locationHint/s);
+    const { archaeologyBlock } = buildBrownfieldArchaeologyBlock({ EPAM_BROWNFIELD: '1' });
+    expect(archaeologyBlock).toMatch(/locationHint.*\[\]|\[\].*locationHint/s);
   });
 
-  it('locationHint schema line is only added for brownfield openspec', () => {
-    // The locationHintSchemaLine variable must be conditional
-    const locationSchemaIdx = specSrc.indexOf('locationHintSchemaLine');
-    expect(locationSchemaIdx).toBeGreaterThan(-1);
-    const region = specSrc.slice(locationSchemaIdx - 300, locationSchemaIdx + 200);
-    expect(region).toMatch(/isBrownfieldOpenspec/);
+  it('locationHint schema line is added for brownfield regardless of agent', () => {
+    const { schemaLine } = buildBrownfieldArchaeologyBlock({ EPAM_BROWNFIELD: '1' });
+    expect(schemaLine).toMatch(/locationHint/);
+    expect(schemaLine).not.toBe('');
   });
 
   it('locationHint includes file, function, and reason fields', () => {
-    expect(specSrc).toMatch(/"file".*"function".*"reason"|locationHint.*file.*function.*reason/s);
+    const { schemaLine } = buildBrownfieldArchaeologyBlock({ EPAM_BROWNFIELD: '1' });
+    expect(schemaLine).toMatch(/"file".*"function".*"reason"|locationHint.*file.*function.*reason/s);
   });
 
-  it('archaeology block is NOT added when agent is speckit', () => {
-    // The isBrownfieldOpenspec variable must require agent === 'openspec'
-    expect(specSrc).toMatch(/agent\s*===\s*['"]openspec['"]/);
-    // There must be no separate speckit brownfield archaeology injection
-    const speckitBlockIdx = specSrc.indexOf('runSpeckitReview');
-    const speckitSrc = specSrc.slice(speckitBlockIdx, speckitBlockIdx + 2000);
-    expect(speckitSrc).not.toMatch(/BROWNFIELD MODE/);
+  it('archaeology block and schema line are both empty when EPAM_BROWNFIELD is not "1" — greenfield unaffected', () => {
+    expect(buildBrownfieldArchaeologyBlock({}).archaeologyBlock).toBe('');
+    expect(buildBrownfieldArchaeologyBlock({}).schemaLine).toBe('');
+    expect(buildBrownfieldArchaeologyBlock({ EPAM_BROWNFIELD: '0' }).archaeologyBlock).toBe('');
+    expect(buildBrownfieldArchaeologyBlock({ EPAM_BROWNFIELD: 'true' }).archaeologyBlock).toBe('');
   });
 
-  it('brownfieldArchaeologyBlock is empty string when EPAM_BROWNFIELD is not 1', () => {
-    // The ternary must have a '' fallback — search across the full ternary (it spans > 300 chars)
-    const archaeologyIdx = specSrc.indexOf('brownfieldArchaeologyBlock');
-    expect(archaeologyIdx).toBeGreaterThan(-1);
-    const region = specSrc.slice(archaeologyIdx, archaeologyIdx + 1000);
-    expect(region).toMatch(/:\s*['"`]{2}/); // ternary false-branch is an empty string literal
+  it('the real prompt-building call site actually uses buildBrownfieldArchaeologyBlock, not a private inline ternary re-implementing the same logic', () => {
+    // Guards against a future edit silently reverting to an inline, per-agent
+    // condition without touching (or breaking) this test file.
+    expect(specSrc).toMatch(/buildBrownfieldArchaeologyBlock\(process\.env\)/);
   });
 });
 

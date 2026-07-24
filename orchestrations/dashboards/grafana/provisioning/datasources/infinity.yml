@@ -1,0 +1,16 @@
+# Infinity datasource — reads the pipeline's existing JSON/JSONL endpoints
+# directly over HTTP, no new database/exporter needed. Points at the
+# agent-monitor nginx container (same docker-compose network, reachable by
+# service name) which already serves prd.json, /logs/agent-status.json,
+# /logs/phase-cost.jsonl, /logs/agent-activity.jsonl, etc.
+apiVersion: 1
+
+datasources:
+  - name: Pipeline JSON (Infinity)
+    type: yesoreyeram-infinity-datasource
+    access: proxy
+    isDefault: true
+    jsonData:
+      # No auth — same trust boundary as the existing dashboard nginx, which
+      # is already unauthenticated on localhost:8092.
+    editable: true

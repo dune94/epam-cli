@@ -103,11 +103,12 @@ describe('team-lead-review.sh — REVIEW_JSON extraction (REAL python source, re
     expect(parsed.verdict).toBe('approved');
   });
 
-  it('falls back to the safe default on non-JSON/garbage output', () => {
+  it('falls back to the SAFE default (changes_requested, never approved) on non-JSON/garbage output', () => {
+    // The safe default is to BLOCK, not silently approve — an unparseable
+    // verdict means the change was not reviewed (found live 2026-07-23).
     const out = runExtraction(py, 'the model rambled and never produced JSON at all');
     const parsed = JSON.parse(out);
-    expect(parsed.verdict).toBe('approved');
-    expect(parsed.issues).toEqual([]);
+    expect(parsed.verdict).toBe('changes_requested');
   });
 
   it('handles prose BEFORE the JSON block (model ignored "ONLY JSON" instruction partially)', () => {
@@ -129,10 +130,10 @@ describe('code-review-cycle.sh — _REVIEW_JSON extraction (REAL python source, 
     expect(parsed.issues).toHaveLength(2);
   });
 
-  it('falls back to the safe default on garbage input', () => {
+  it('falls back to the SAFE default (changes_requested, never approved) on garbage input', () => {
     const out = runExtraction(py, 'not json at all');
     const parsed = JSON.parse(out);
-    expect(parsed.verdict).toBe('approved');
+    expect(parsed.verdict).toBe('changes_requested');
   });
 });
 

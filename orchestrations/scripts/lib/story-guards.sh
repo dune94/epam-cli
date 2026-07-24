@@ -320,8 +320,21 @@ story_tsc_gate() {
 record_brownfield_verified_baseline() {
     [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
     [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
-    local _sha
-    _sha=$(git -C "$PROJECT_ROOT" rev-parse HEAD 2>/dev/null) || return 0
+    local _sha=""
+    # When a fixed baseline branch is configured (JIRA_BASELINE_BRANCH, e.g.
+    # "develop"), the "verified baseline" is that BRANCH — never a story's own
+    # fix commit sitting on top of it. Recording HEAD here (which becomes the fix
+    # commit once a story completes) is exactly what made a re-run of the same
+    # story reset to the PREVIOUS fix and build on top of it, so the detective saw
+    # already-fixed code and the run was invalid (found live 2026-07-24,
+    # AMSD-1820). Pin the marker to the baseline branch so it can never advance
+    # onto a fix — repeat runs of the same story always start from the clean
+    # original state.
+    if [ -n "${JIRA_BASELINE_BRANCH:-}" ]; then
+        _sha=$(git -C "$PROJECT_ROOT" rev-parse --verify --quiet "origin/${JIRA_BASELINE_BRANCH}" 2>/dev/null \
+            || git -C "$PROJECT_ROOT" rev-parse --verify --quiet "${JIRA_BASELINE_BRANCH}" 2>/dev/null || echo "")
+    fi
+    [ -n "$_sha" ] || _sha=$(git -C "$PROJECT_ROOT" rev-parse HEAD 2>/dev/null) || return 0
     local _state_dir="${EPAM_BROWNFIELD_STATE_DIR:-$HOME/.epam/brownfield-baselines}"
     mkdir -p "$_state_dir" 2>/dev/null || true
     local _key

@@ -1,0 +1,136 @@
+{
+  "uid": "epam-pipeline-status",
+  "title": "Story & Pipeline Status",
+  "tags": ["epam-cli", "pipeline"],
+  "timezone": "browser",
+  "refresh": "15s",
+  "time": { "from": "now-24h", "to": "now" },
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Stories",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "P0666D91AE6B4D6B1" },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "http://agent-monitor/prd.json",
+          "url_options": { "method": "GET", "data": "" },
+          "format": "table",
+          "parser": "backend",
+          "root_selector": "stories",
+          "columns": [
+            { "selector": "id", "text": "id", "type": "string" },
+            { "selector": "jiraKey", "text": "jira", "type": "string" },
+            { "selector": "title", "text": "title", "type": "string" },
+            { "selector": "status", "text": "status", "type": "string" },
+            { "selector": "completed", "text": "completed", "type": "boolean" },
+            { "selector": "agentRole", "text": "role", "type": "string" }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "status" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": {
+                    "pending":   { "color": "text",  "index": 0 },
+                    "running":   { "color": "blue",  "index": 1 },
+                    "completed": { "color": "green", "index": 2 },
+                    "failed":    { "color": "red",   "index": 3 }
+                  }}
+                ]
+              },
+              { "id": "custom.displayMode", "value": "color-background" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "title": "Pipeline steps (current phase)",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "P0666D91AE6B4D6B1" },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "http://agent-monitor/logs/step-status.json",
+          "url_options": { "method": "GET", "data": "" },
+          "format": "table",
+          "parser": "backend",
+          "root_selector": "steps",
+          "columns": [
+            { "selector": "id", "text": "step", "type": "string" },
+            { "selector": "label", "text": "name", "type": "string" },
+            { "selector": "status", "text": "status", "type": "string" },
+            { "selector": "detail", "text": "detail", "type": "string" }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "status" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": {
+                    "pending": { "color": "text",   "index": 0 },
+                    "running": { "color": "blue",   "index": 1 },
+                    "pass":    { "color": "green",  "index": 2 },
+                    "fail":    { "color": "red",    "index": 3 },
+                    "skip":    { "color": "orange", "index": 4 }
+                  }}
+                ]
+              },
+              { "id": "custom.displayMode", "value": "color-background" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "title": "Live activity feed",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 10 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "P0666D91AE6B4D6B1" },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "http://agent-monitor/logs/agent-status.json",
+          "url_options": { "method": "GET", "data": "" },
+          "format": "table",
+          "parser": "backend",
+          "root_selector": "events",
+          "columns": [
+            { "selector": "timestamp", "text": "time", "type": "string" },
+            { "selector": "type", "text": "type", "type": "string" },
+            { "selector": "lane", "text": "lane", "type": "string" },
+            { "selector": "role", "text": "role", "type": "string" },
+            { "selector": "story", "text": "story", "type": "string" },
+            { "selector": "message", "text": "message", "type": "string" }
+          ]
+        }
+      ],
+      "fieldConfig": { "defaults": {}, "overrides": [] }
+    }
+  ]
+}

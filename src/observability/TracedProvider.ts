@@ -10,6 +10,7 @@ import type {
   ProviderRequest,
   ProviderResponse,
   StreamHandler,
+  ContentPart,
 } from '../providers/types.js';
 import { getLangfuse, isLangfuseEnabled } from './LangfuseTracer.js';
 import { emitLlmSpan, isOtelEnabled } from './OtelTracer.js';
@@ -143,38 +144,65 @@ export class TracedProvider implements LLMProvider {
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
+  // Full capture, not a metadata summary: this trace only ever goes to a
+  // self-hosted, local-only Langfuse instance (LANGFUSE_BASE_URL defaults to
+  // localhost) — there is no third-party exposure to guard against, and the
+  // whole point of tracing is to be able to actually read what an agent was
+  // told and what it said back. A prior version of this method dropped the
+  // system prompt entirely (kept only a boolean), truncated the last user
+  // message to 200 chars, and never captured the response text at all (only
+  // its length) — meaning no prompt or completion was ever really
+  // inspectable via Langfuse, defeating the purpose of tracing them.
+  // MAX_CAPTURE_CHARS guards only against a pathological runaway payload
+  // (e.g. a tool result dumping an entire file), not normal prompt sizes.
+  private static readonly MAX_CAPTURE_CHARS = 200_000;
+
+  private truncateForCapture(text: string): string {
+    return text.length > TracedProvider.MAX_CAPTURE_CHARS
+      ? text.slice(0, TracedProvider.MAX_CAPTURE_CHARS) + `...[truncated, ${text.length} chars total]`
+      : text;
+  }
+
+  private contentPartsToText(content: string | ContentPart[]): string {
+    if (typeof content === 'string') return content;
+    return content.map(p => {
+      if (p.type === 'text') return p.text ?? '';
+      if (p.type === 'tool_use') return `[tool_use: ${p.name}(${JSON.stringify(p.input)})]`;
+      if (p.type === 'tool_result') {
+        const inner = typeof p.content === 'string' ? p.content : this.contentPartsToText(p.content ?? []);
+        return `[tool_result: ${inner}]`;
+      }
+      return `[${p.type}]`;
+    }).join('\n');
+  }
+
   private summarizeInput(request: ProviderRequest): Record<string, unknown> {
     return {
       messageCount: request.messages.length,
       toolCount: request.tools?.length ?? 0,
-      hasSystemPrompt: !!request.systemPrompt,
-      lastUserMessage: this.extractLastUserMessage(request),
+      systemPrompt: request.systemPrompt
+        ? this.truncateForCapture(request.systemPrompt)
+        : null,
+      messages: request.messages.map(m => ({
+        role: m.role,
+        content: this.truncateForCapture(this.contentPartsToText(m.content)),
+      })),
+      tools: request.tools?.map(t => t.name) ?? [],
     };
   }
 
   private summarizeOutput(response: ProviderResponse): Record<string, unknown> {
     const textParts = response.content.filter(p => p.type === 'text');
     const toolUses = response.content.filter(p => p.type === 'tool_use');
+    const fullText = textParts.map(p => p.text ?? '').join('');
     return {
       stopReason: response.stopReason,
-      textLength: textParts.reduce((sum, p) => sum + (p.text?.length ?? 0), 0),
-      toolCalls: toolUses.map(t => t.name).filter(Boolean),
+      text: this.truncateForCapture(fullText),
+      textLength: fullText.length,
+      toolCalls: toolUses.map(t => ({ name: t.name, input: t.input })),
       inputTokens: response.usage.inputTokens,
       outputTokens: response.usage.outputTokens,
     };
-  }
-
-  private extractLastUserMessage(request: ProviderRequest): string {
-    for (let i = request.messages.length - 1; i >= 0; i--) {
-      const msg = request.messages[i];
-      if (msg.role === 'user') {
-        const text = typeof msg.content === 'string'
-          ? msg.content
-          : msg.content.filter(p => p.type === 'text').map(p => p.text ?? '').join('');
-        return text.length > 200 ? text.slice(0, 197) + '...' : text;
-      }
-    }
-    return '';
   }
 }
 

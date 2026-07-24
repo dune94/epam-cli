@@ -12588,3 +12588,315 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/AMSD-1820_*.log
 
+## AMSD-1820: [Mozio] - Promo code discount amount not displayed for return trip in email confirmation
+- **Date**: 2026-07-22 12:43:11
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - Promo code discount amount not displayed for return trip in email confirmation
+- **Date**: 2026-07-22 12:43:13
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+- **Date**: 2026-07-22 16:58:15
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - Promo code discount amount missing from return trip dispatch in Mozio email confirmation
+- **Date**: 2026-07-22 17:25:50
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - Promo code discount amount missing for return trip tickets in Mozio email confirmation
+- **Date**: 2026-07-22 18:16:03
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - Promo code discount amount missing on return-trip dispatch in Mozio email confirmation
+- **Date**: 2026-07-22 18:55:58
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## MOCK-HW-1: Change greeting from hello world to hello dolly
+- **Date**: 2026-07-22 20:45:10
+- **Phase**: mock_hello_dolly
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Change greeting from hello world to hello dolly
+- **Date**: 2026-07-22 20:59:29
+- **Phase**: mock_hello_dolly
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## PRI-1: Add utilA() utility
+- **Date**: 2026-07-22 21:16:32
+- **Phase**: mock2_incident
+- **Status**: completed
+- **Log**: logs/claude_outputs/PRI-1_*.log
+
+## IND-1: Add utilB() utility
+- **Date**: 2026-07-22 21:17:53
+- **Phase**: mock2_incident
+- **Status**: failed
+- **Log**: logs/claude_outputs/IND-1_*.log
+
+## MAIN-1: Change greeting from hello world to hello dolly
+- **Date**: 2026-07-22 21:23:49
+- **Phase**: mock2_contrast
+- **Status**: completed
+- **Log**: logs/claude_outputs/MAIN-1_*.log
+
+## PRI-1: Add utilA() utility
+- **Date**: 2026-07-22 21:24:05
+- **Phase**: mock2_contrast
+- **Status**: completed
+- **Log**: logs/claude_outputs/PRI-1_*.log
+
+## IND-1: Add utilB() utility
+- **Date**: 2026-07-22 21:24:24
+- **Phase**: mock2_contrast
+- **Status**: completed
+- **Log**: logs/claude_outputs/IND-1_*.log
+
+## PRI-1: Add utilA() utility
+- **Date**: 2026-07-22 21:36:09
+- **Phase**: mock2_incident
+- **Status**: completed
+- **Log**: logs/claude_outputs/PRI-1_*.log
+
+## IND-1: Add utilB() utility
+- **Date**: 2026-07-22 21:36:10
+- **Phase**: mock2_incident
+- **Status**: completed
+- **Log**: logs/claude_outputs/IND-1_*.log
+
+## MAIN-1: Change greeting from hello world to hello dolly
+- **Date**: 2026-07-22 21:48:07
+- **Phase**: mock2_contrast
+- **Status**: completed
+- **Log**: logs/claude_outputs/MAIN-1_*.log
+
+## PRI-1: Add utilA() utility
+- **Date**: 2026-07-22 21:48:20
+- **Phase**: mock2_contrast
+- **Status**: completed
+- **Log**: logs/claude_outputs/PRI-1_*.log
+
+## IND-1: Add utilB() utility
+- **Date**: 2026-07-22 21:48:30
+- **Phase**: mock2_contrast
+- **Status**: completed
+- **Log**: logs/claude_outputs/IND-1_*.log
+
+## MAIN-1: Change greeting from hello world to hello dolly
+- **Date**: 2026-07-22 21:58:05
+- **Phase**: mock2_contrast
+- **Status**: completed
+- **Log**: logs/claude_outputs/MAIN-1_*.log
+
+## PRI-1: Add utilA() utility
+- **Date**: 2026-07-22 21:59:14
+- **Phase**: mock2_contrast
+- **Status**: completed
+- **Log**: logs/claude_outputs/PRI-1_*.log
+
+## IND-1: Add utilB() utility
+- **Date**: 2026-07-22 21:59:25
+- **Phase**: mock2_contrast
+- **Status**: completed
+- **Log**: logs/claude_outputs/IND-1_*.log
+
+## MAIN-1: Change greeting from hello world to hello dolly
+- **Date**: 2026-07-23 05:06:43
+- **Phase**: mock2_contrast
+- **Status**: completed
+- **Log**: logs/claude_outputs/MAIN-1_*.log
+
+## PRI-1: Add utilA() utility
+- **Date**: 2026-07-23 05:06:50
+- **Phase**: mock2_contrast
+- **Status**: completed
+- **Log**: logs/claude_outputs/PRI-1_*.log
+
+## IND-1: Add utilB() utility
+- **Date**: 2026-07-23 05:06:55
+- **Phase**: mock2_contrast
+- **Status**: completed
+- **Log**: logs/claude_outputs/IND-1_*.log
+
+## AMSD-1820: [Mozio] - Promo code discount amount not displayed for return-trip tickets in Mozio email confirmation
+- **Date**: 2026-07-23 06:01:17
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## MOCK-HW-1: Change the greeting from hello world to hello dolly
+- **Date**: 2026-07-23 06:43:32
+- **Phase**: mock_hello_dolly
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-23 07:09:07
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-23 07:23:05
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Change greeting from hello world to hello dolly
+- **Date**: 2026-07-23 07:35:18
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-23 07:46:54
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Change greeting from hello world to hello dolly
+- **Date**: 2026-07-23 07:57:16
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Change greeting from hello world to hello dolly
+- **Date**: 2026-07-23 07:58:44
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-23 08:28:32
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-23 08:39:33
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-23 08:53:40
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-23 09:22:51
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-23 09:47:52
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-23 10:06:19
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-23 10:24:48
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## AMSD-1820: [Mozio] - Promo code discount amount missing/incorrect for return-trip tickets in Mozio email confirmation dispatch report
+- **Date**: 2026-07-23 12:47:18
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - Promo code amount not displayed for Return trip tickets in Mozio email confirmation
+- **Date**: 2026-07-23 13:12:05
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - Promo code discount amount not correctly mapped for return trip legs in Mozio dispatch report
+- **Date**: 2026-07-23 15:05:02
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+- **Date**: 2026-07-23 18:15:54
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+- **Date**: 2026-07-23 20:39:48
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+- **Date**: 2026-07-23 22:46:17
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+- **Date**: 2026-07-24 07:51:51
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+- **Date**: 2026-07-24 08:31:01
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+- **Date**: 2026-07-24 09:26:55
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+- **Date**: 2026-07-24 11:07:17
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+- **Date**: 2026-07-24 11:50:14
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - Promo code discount amount is incorrect for return trip tickets in Mozio email confirmation
+- **Date**: 2026-07-24 12:07:53
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+- **Date**: 2026-07-24 13:12:05
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+

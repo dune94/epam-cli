@@ -42,7 +42,15 @@ info()    { echo -e "${MAGENTA}[CPA]${NC} $1" >&2; }
 # ── Paths ───────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
-PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
+# Unconditional assignment here (no ${PROJECT_ROOT:-...} fallback) always
+# overwrote the caller's real codeline path with epam-cli's own repo root —
+# same bug class already fixed in team-lead-review.sh. Found live 2026-07-23
+# on AMSD-1820: CPA's file-existence check (compute_signals below) looked for
+# "$PROJECT_ROOT/$f" in epam-cli's own tree instead of the real Metrolinx
+# codeline (/home/.../metrolinx/azure.commerce.cdts), so 3 real, verified-to-
+# exist files were reported as "don't exist" and contributed to a BLOCK
+# verdict on a legitimate, correctly-grounded story.
+PROJECT_ROOT="${PROJECT_ROOT:-$(dirname "$AUTOMATION_DIR")}"
 LIB_DIR="$SCRIPT_DIR/lib"
 
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"

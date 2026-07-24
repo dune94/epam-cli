@@ -52,12 +52,17 @@ describe('codegraph-context.js: module structure', () => {
     expect(CODEGRAPH_SRC).toMatch(/module\.exports.*exploreCodeGraph/);
   });
 
-  it('isCodeGraphIndexed checks .codegraph/codegraph.db (fast filesystem check, no subprocess)', () => {
+  it('isCodeGraphIndexed validates .codegraph/codegraph.db (fast filesystem check, no subprocess)', () => {
     expect(CODEGRAPH_SRC).toMatch(/codegraph\.db/);
-    expect(CODEGRAPH_SRC).toMatch(/fs\.existsSync/);
-    // Must NOT call execSync for isCodeGraphIndexed
     const fnIdx  = CODEGRAPH_SRC.indexOf('function isCodeGraphIndexed');
-    const fnBody = CODEGRAPH_SRC.slice(fnIdx, fnIdx + 200);
+    const fnBody = CODEGRAPH_SRC.slice(fnIdx, fnIdx + 700);
+    // Updated 2026-07-23: the check now validates the real SQLite magic
+    // header (openSync + readSync on the first bytes) instead of a bare
+    // fs.existsSync — a plain existence check accepted a truncated/corrupt
+    // db (e.g. from an interrupted `codegraph init`) as "indexed". Still a
+    // pure filesystem check with NO subprocess.
+    expect(fnBody).toMatch(/SQLite format 3/);
+    expect(fnBody).toMatch(/openSync|readSync/);
     expect(fnBody).not.toMatch(/execSync/);
   });
 
@@ -170,32 +175,32 @@ describe('codeline-discovery.js: CodeGraph Tier 2 in scoreRepos', () => {
 
   it('CodeGraph scoring is gated on CODEGRAPH_ENABLED=1', () => {
     const scoreIdx = DISCOVERY_SRC.indexOf('function scoreRepos');
-    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 4000);
+    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 5000);
     expect(scoreFn).toMatch(/CODEGRAPH_ENABLED.*=.*'1'/);
   });
 
   it('CodeGraph scoring only runs for indexed repos (isCodeGraphIndexed check)', () => {
     const scoreIdx = DISCOVERY_SRC.indexOf('function scoreRepos');
-    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 4000);
+    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 5000);
     expect(scoreFn).toMatch(/isCodeGraphIndexed/);
   });
 
   it('CodeGraph is the sole scoring tier (Tier 2 comment present, no Tier 3)', () => {
     const scoreIdx = DISCOVERY_SRC.indexOf('function scoreRepos');
-    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 4000);
+    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 5000);
     expect(scoreFn).toMatch(/Tier 2/);
     expect(scoreFn).not.toMatch(/Tier 3/);
   });
 
   it('Semble is not present in scoreRepos (removed — all repos indexed, no fallback needed)', () => {
     const scoreIdx = DISCOVERY_SRC.indexOf('function scoreRepos');
-    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 2000);
+    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 5000);
     expect(scoreFn).not.toMatch(/sembleSearch|SEMBLE_ENABLED/);
   });
 
   it('CodeGraph scoring uses BM25 score sum from queryCodeGraph results', () => {
     const scoreIdx = DISCOVERY_SRC.indexOf('function scoreRepos');
-    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 3000);
+    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 5000);
     expect(scoreFn).toMatch(/queryCodeGraph/);
     // Must sum BM25 scores — NOT count results (count saturates cap for all repos)
     expect(scoreFn).toMatch(/reduce.*score|bm25Sum/);
@@ -218,7 +223,9 @@ describe('spec-mode-runner.js: CodeGraph context for brownfield', () => {
 
   it('fetchCodeGraphContext checks isCodeGraphIndexed before calling explore', () => {
     const fnIdx  = SPEC_SRC.indexOf('function fetchCodeGraphContext');
-    const fnBody = SPEC_SRC.slice(fnIdx, fnIdx + 1200);
+    // Widened 2026-07-23: the on-demand self-heal re-index block now sits
+    // between the isCodeGraphIndexed check and the exploreCodeGraph call.
+    const fnBody = SPEC_SRC.slice(fnIdx, fnIdx + 2000);
     expect(fnBody).toMatch(/isCodeGraphIndexed/);
     expect(fnBody).toMatch(/exploreCodeGraph/);
   });
@@ -259,7 +266,10 @@ describe('spec-mode-runner.js: CodeGraph context for brownfield', () => {
   it('archaeology block references CodeGraph or Semble generically (not Semble-only)', () => {
     const blockIdx = SPEC_SRC.indexOf('BROWNFIELD MODE — output JSON only');
     expect(blockIdx).toBeGreaterThan(-1);
-    const block = SPEC_SRC.slice(blockIdx, blockIdx + 400);
+    // Window widened: the block now leads with a defect/novel CLASSIFY step, so
+    // the "CodeGraph or Semble" grounding phrase (STEP 2 — LOCATE) sits further
+    // in than the original 400-char window reached.
+    const block = SPEC_SRC.slice(blockIdx, blockIdx + 1600);
     expect(block).toMatch(/CodeGraph.*Semble|Semble.*CodeGraph/);
   });
 

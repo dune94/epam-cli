@@ -126,7 +126,7 @@ describe('agent write-first prompt — absolute paths rewritten in worktree mode
 
   it('write_first_lines block rewrites MAIN_PROJECT_ROOT paths to worktree', () => {
     expect(promptIdx).toBeGreaterThan(-1);
-    const block = claudeSrc.slice(promptIdx, promptIdx + 800);
+    const block = claudeSrc.slice(promptIdx, promptIdx + 3000);
     expect(block).toContain('WORKTREE_MODE');
     expect(block).toContain('MAIN_PROJECT_ROOT');
   });
@@ -136,7 +136,7 @@ describe('agent write-first prompt — absolute paths rewritten in worktree mode
     const verifyIdx = claudeSrc.indexOf('verify_story_deliverables()');
     // Widened from 1000 (2026-07-12): see the vendor-dir-skip fix comment above.
     const verifyBlock = claudeSrc.slice(verifyIdx, verifyIdx + 2400);
-    const promptBlock = claudeSrc.slice(promptIdx, promptIdx + 800);
+    const promptBlock = claudeSrc.slice(promptIdx, promptIdx + 3000);
 
     expect(verifyBlock).toMatch(/PROJECT_ROOT.*#.*MAIN_PROJECT_ROOT/);
     expect(promptBlock).toMatch(/PROJECT_ROOT.*#.*MAIN_PROJECT_ROOT/);
@@ -314,7 +314,9 @@ describe('scope guard — EPAM_ALLOWED_WRITE_PATHS rewritten to worktree in work
 
   it('_allowed_write_paths rewrite appears AFTER jq extraction and BEFORE EPAM_ALLOWED_WRITE_PATHS export', () => {
     expect(sgCommentIdx).toBeGreaterThan(-1);
-    const block = claudeSrc.slice(sgCommentIdx, sgCommentIdx + 1400);
+    // Window widened: a fix-site-path union block now sits between the worktree
+    // rewrite and the env export (detective fix-site → allowed write paths).
+    const block = claudeSrc.slice(sgCommentIdx, sgCommentIdx + 2400);
     const jqIdx = block.indexOf('jq -r');
     const rewriteIdx = block.search(/_allowed_write_paths=.*\$\{_allowed_write_paths\/\//);
     const exportIdx = block.indexOf('EPAM_ALLOWED_WRITE_PATHS=');

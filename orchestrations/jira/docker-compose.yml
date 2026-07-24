@@ -1,0 +1,60 @@
+version: '3.8'
+
+# Local Jira Software + PostgreSQL for brownfield pipeline testing.
+# Bind address: 0.0.0.0 so it is reachable from Windows browser via WSL2 IP.
+# First-time setup: run ./setup.sh after `docker compose up -d`.
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: jira-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: jiradb
+      POSTGRES_USER: jira
+      POSTGRES_PASSWORD: jirapassword
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jira -d jiradb"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - jira-net
+
+  jira:
+    image: atlassian/jira-software:9.12
+    container_name: jira-software
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "0.0.0.0:8080:8080"
+    environment:
+      ATL_JDBC_URL: "jdbc:postgresql://postgres:5432/jiradb"
+      ATL_JDBC_USER: "jira"
+      ATL_JDBC_PASSWORD: "jirapassword"
+      ATL_DB_DRIVER: "org.postgresql.Driver"
+      ATL_DB_SCHEMA_NAME: "public"
+      ATL_DB_TYPE: "postgres72"
+      ATL_TOMCAT_SCHEME: "http"
+      ATL_TOMCAT_SECURE: "false"
+      ATL_PROXY_NAME: ""
+      ATL_PROXY_PORT: ""
+      JVM_MINIMUM_MEMORY: "1024m"
+      JVM_MAXIMUM_MEMORY: "2048m"
+      JVM_RESERVED_CODE_CACHE_SIZE: "512m"
+    volumes:
+      - jira-data:/var/atlassian/application-data/jira
+    networks:
+      - jira-net
+
+volumes:
+  postgres-data:
+  jira-data:
+
+networks:
+  jira-net:
+    driver: bridge

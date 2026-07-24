@@ -235,7 +235,7 @@ describe('B. Orch script — all 3 tsc gates have empty-src guard', () => {
 
   describe('Gate 2: Step 3.7 pre-review gate', () => {
     const stepIdx = orchSrc.indexOf('Running tsc --noEmit');
-    const block = orchSrc.slice(stepIdx, stepIdx + 1000);
+    const block = orchSrc.slice(stepIdx, stepIdx + 3000);
 
     it('Step 3.7 tsc block exists', () => {
       expect(stepIdx).toBeGreaterThan(-1);

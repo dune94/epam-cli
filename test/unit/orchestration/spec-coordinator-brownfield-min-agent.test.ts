@@ -28,11 +28,11 @@ afterEach(() => {
 const STORIES = [{ id: 'MOCK-HW-1' }];
 
 describe('buildAssignments — brownfield minimum-agent guarantee', () => {
-  it('forces speckit when the coordinator returns agents:[] in brownfield mode', () => {
+  it('ensures openspec runs when the coordinator returns agents:[] in brownfield mode (openspec hosts fix-site discovery + the detective)', () => {
     process.env.EPAM_BROWNFIELD = '1';
     const assignments = [{ storyId: 'MOCK-HW-1', agents: [], notes: 'Trivial change, no elaboration needed.' }];
     const map = buildAssignments(assignments, STORIES, 'run1');
-    expect(map.get('MOCK-HW-1').agents).toEqual(['speckit']);
+    expect(map.get('MOCK-HW-1').agents).toEqual(['openspec']);
   });
 
   it('does NOT force an agent in greenfield mode (EPAM_BROWNFIELD unset) — preserves existing behavior', () => {
@@ -42,11 +42,18 @@ describe('buildAssignments — brownfield minimum-agent guarantee', () => {
     expect(map.get('MOCK-HW-1').agents).toEqual([]);
   });
 
-  it('does NOT override a real, non-empty coordinator decision in brownfield mode', () => {
+  it('PRESERVES a coordinator openspec-only decision in brownfield mode', () => {
     process.env.EPAM_BROWNFIELD = '1';
     const assignments = [{ storyId: 'MOCK-HW-1', agents: ['openspec'], notes: 'Needs elaboration.' }];
     const map = buildAssignments(assignments, STORIES, 'run1');
     expect(map.get('MOCK-HW-1').agents).toEqual(['openspec']);
+  });
+
+  it('PREPENDS openspec when the coordinator assigned ONLY speckit in brownfield (the real AMSD-1820 miss)', () => {
+    process.env.EPAM_BROWNFIELD = '1';
+    const assignments = [{ storyId: 'MOCK-HW-1', agents: ['speckit'], notes: 'Only hardening needed.' }];
+    const map = buildAssignments(assignments, STORIES, 'run1');
+    expect(map.get('MOCK-HW-1').agents).toEqual(['openspec', 'speckit']);
   });
 
   it('preserves the both-agents case unchanged in brownfield mode', () => {
@@ -67,7 +74,7 @@ describe('buildAssignments — brownfield minimum-agent guarantee', () => {
     const assignments = [{ storyId: 'MOCK-HW-1', agents: [], notes: '' }];
     for (let i = 0; i < 5; i++) {
       const map = buildAssignments(assignments, STORIES, 'run1');
-      expect(map.get('MOCK-HW-1').agents).toEqual(['speckit']);
+      expect(map.get('MOCK-HW-1').agents).toEqual(['openspec']);
     }
   });
 });

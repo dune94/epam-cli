@@ -18,7 +18,7 @@
  */
 
 import { describe, it, expect, afterAll } from 'vitest';
-import { spawnSync }                      from 'node:child_process';
+import { spawnSync, execFileSync }        from 'node:child_process';
 import { mkdtempSync, mkdirSync,
          writeFileSync, readFileSync,
          rmSync, existsSync }             from 'node:fs';
@@ -308,7 +308,7 @@ describe('codeline-discovery.js — source invariants', () => {
 
   it('Semble is not used in scoring (all repos indexed; removed as noise source)', () => {
     const scoreIdx = src.indexOf('function scoreRepos');
-    const scoreFn  = src.slice(scoreIdx, scoreIdx + 2000);
+    const scoreFn  = src.slice(scoreIdx, scoreIdx + 5000);
     expect(scoreFn).not.toMatch(/sembleScore|sembleSearch|SEMBLE_ENABLED/);
   });
 
@@ -317,7 +317,7 @@ describe('codeline-discovery.js — source invariants', () => {
     // like "email" exist in every codebase). BM25 sum rewards rare symbol names
     // (e.g. "mozio" = 70-100 pts) and penalises common terms (e.g. "email" = 3-5).
     const scoreIdx = src.indexOf('function scoreRepos');
-    const scoreFn  = src.slice(scoreIdx, scoreIdx + 3000);
+    const scoreFn  = src.slice(scoreIdx, scoreIdx + 5000);
     expect(scoreFn).toMatch(/bm25Sum|bm25|\.score/);
     expect(scoreFn).toMatch(/reduce.*score|score.*reduce/);
     // Must NOT use length × fixed multiplier (the old count-based approach)
@@ -328,7 +328,7 @@ describe('codeline-discovery.js — source invariants', () => {
     // Generic transit words ("trip","ticket","return","schedule") flood every repo
     // equally and collapse score separation. They must be stripped from the cgQuery.
     const scoreIdx = src.indexOf('function scoreRepos');
-    const scoreFn  = src.slice(scoreIdx, scoreIdx + 3000);
+    const scoreFn  = src.slice(scoreIdx, scoreIdx + 5000);
     expect(scoreFn).toMatch(/DOMAIN_STOPWORDS/);
     expect(scoreFn).toMatch(/cgSpecificWords/);
     expect(scoreFn).toMatch(/cgSpecificWords.*slice|cgQuery.*cgSpecificWords/);
@@ -395,5 +395,292 @@ describe('codeline-discovery.js — live scoring: AMSD-1820 repo rank', () => {
 
     const result = JSON.parse(readFileSync(outPath, 'utf8'));
     expect(result.codelines[0].path).toBe(CDTS_PATH);
+  });
+});
+
+// ── CodeGraph indexing-status starvation bug (live, 2026-07-22) ─────────────
+// scoreRepos() used to assume every candidate repo was already CodeGraph-
+// indexed ("all 31 Metrolinx repos are indexed" — a stale, unverified claim).
+// A repo missing .codegraph/codegraph.db got ZERO Tier-2 score no matter how
+// relevant its actual source was, while an already-indexed-but-irrelevant
+// repo still got a real BM25 boost — so indexing status, not relevance,
+// decided the winner. Confirmed live: azure.commerce.cdts (the real AMSD-1820
+// fix site) was never indexed and didn't even make the top-8 offered to the
+// LLM, which picked gotransit.webservices instead. Fix: scoreRepos() now
+// calls codegraph init on demand for any un-indexed repo before scoring it.
+//
+// This suite is self-contained (temp git repos with real TS source, real
+// codegraph binary) — no dependency on the live Metrolinx checkout, so it
+// runs in CI. Per explicit instruction: run repeatedly to prove determinism,
+// not just "it passed once."
+describe('codeline-discovery.js — CodeGraph indexing-status starvation bug (real codegraph binary)', () => {
+  function hasRealCodegraphBinary(): boolean {
+    try {
+      return spawnSync('which', ['codegraph'], { encoding: 'utf8' }).status === 0;
+    } catch {
+      return false;
+    }
+  }
+  const CODEGRAPH_PRESENT = hasRealCodegraphBinary();
+
+  function buildFixture(): { root: string; unindexedRelevant: string; preindexedIrrelevant: string; issuesPath: string; outPath: string } {
+    const root = mkdtempSync(join(tmpdir(), 'codegraph-starve-test-'));
+
+    // The ACTUAL fix-site repo — real source containing the exact symbol/terms
+    // the query will search for. Deliberately left un-indexed until scoreRepos()
+    // runs, so this test only passes if on-demand indexing actually happens.
+    const unindexedRelevant = makeGitRepo(root, 'zzz-real-fix-site');
+    mkdirSync(join(unindexedRelevant, 'src', 'services'), { recursive: true });
+    writeFileSync(
+      join(unindexedRelevant, 'src', 'services', 'apply-report-discounts.service.ts'),
+      `
+      // Applies mozio promo discount amounts to return-dispatch line items
+      // before the confirmation email is generated.
+      export function applyReportDiscounts(lineItems: LineItem[], discounts: Discount[]) {
+        return lineItems.map(item => {
+          const mozioDiscount = discounts.find(d => d.lineItemId === item.id);
+          return mozioDiscount ? { ...item, discountAmount: mozioDiscount.amount, confirmationReady: true } : item;
+        });
+      }
+      `
+    );
+    writeFileSync(join(unindexedRelevant, 'package.json'), JSON.stringify({ name: 'zzz-real-fix-site' }));
+
+    // A repo that gets pre-indexed (simulating "already indexed at some
+    // point") but whose actual source has nothing to do with the ticket —
+    // generic transit boilerplate only. Must NOT win just for being indexed.
+    const preindexedIrrelevant = makeGitRepo(root, 'aaa-irrelevant-but-indexed');
+    mkdirSync(join(preindexedIrrelevant, 'src'), { recursive: true });
+    writeFileSync(
+      join(preindexedIrrelevant, 'src', 'schedule.ts'),
+      `
+      export function getTrainSchedule(stationId: string) {
+        return { stationId, departures: [], arrivals: [] };
+      }
+      `
+    );
+    writeFileSync(join(preindexedIrrelevant, 'package.json'), JSON.stringify({ name: 'aaa-irrelevant-but-indexed' }));
+    // Pre-index it for real, using the real binary — this is the repo that
+    // should NOT win despite having a head start.
+    execFileSync('codegraph', ['init', preindexedIrrelevant], { encoding: 'utf8', timeout: 30000 });
+
+    const issuesPath = join(root, 'issues.json');
+    writeFileSync(issuesPath, JSON.stringify([{
+      jiraKey: 'AMSD-1820',
+      title: '[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation',
+      description: 'Promo discount not shown in Mozio confirmation email for return dispatch tickets.',
+    }]));
+
+    return { root, unindexedRelevant, preindexedIrrelevant, issuesPath, outPath: join(root, 'out.json') };
+  }
+
+  it('an un-indexed but genuinely relevant repo beats a pre-indexed but irrelevant one — run 10x to prove determinism', () => {
+    if (!CODEGRAPH_PRESENT) return;
+
+    const RUNS = 10;
+    const results: { winner: string; indexedAfter: boolean }[] = [];
+
+    for (let i = 0; i < RUNS; i++) {
+      const fx = buildFixture();
+      try {
+        const { stdout, stderr, exitCode } = runDiscovery(
+          ['--issues', fx.issuesPath, '--root', fx.root, '--out', fx.outPath, '--dry-run'],
+          { CODEGRAPH_ENABLED: '1' }
+        );
+        expect(exitCode, `run ${i}: discovery failed.\nstdout: ${stdout}\nstderr: ${stderr}`).toBe(0);
+
+        const out = JSON.parse(readFileSync(fx.outPath, 'utf8'));
+        const winnerPath: string = out.codelines[0].path;
+        const indexedAfter = existsSync(join(fx.unindexedRelevant, '.codegraph', 'codegraph.db'));
+        results.push({
+          winner: winnerPath === fx.unindexedRelevant ? 'relevant' : 'irrelevant',
+          indexedAfter,
+        });
+      } finally {
+        rmSync(fx.root, { recursive: true, force: true });
+      }
+    }
+
+    // Every single run: the relevant (initially un-indexed) repo must win,
+    // AND on-demand indexing must have actually happened for it.
+    const failures = results.filter(r => r.winner !== 'relevant' || !r.indexedAfter);
+    expect(failures, `${failures.length}/${RUNS} runs failed: ${JSON.stringify(results)}`).toHaveLength(0);
+    expect(results).toHaveLength(RUNS);
+  }, 180000);
+
+  it('scoreRepos() calls initCodeGraph for a repo missing .codegraph/codegraph.db (source invariant)', () => {
+    const src = readFileSync(DISCOVERY_JS, 'utf8');
+    expect(src).toMatch(/if\s*\(!cg\.isCodeGraphIndexed\(repo\.path\)\)\s*\{[\s\S]{0,80}cg\.initCodeGraph/);
+  });
+});
+
+// ── LLM returns a valid-but-empty (or all-invalid-path) selection (live bug, 2026-07-22) ──
+// Reproduced live: the SAME prompt against the SAME real repo, called twice
+// back to back, returned different results — once a repo, once
+// {"codelines": []}. Not a call failure (no exception; the existing
+// try/catch around callLlm() never fires), just a non-deterministic model
+// decision to select nothing. This used to hard-fail the entire pipeline
+// (process.exit(1)) before a single story could be attempted, even though
+// deterministic scoring had already identified a clear best candidate.
+//
+// Uses a fake ai-run.sh stub via CODELINE_DISCOVERY_AI_RUN_SH_OVERRIDE so
+// this is deterministic and fast — no real LLM call, no network — while
+// exercising the REAL non-dry-run code path (buildDiscoveryPrompt, callLlm,
+// the validation/fallback logic), not a hand-copied reimplementation.
+describe('codeline-discovery.js — LLM returns empty/invalid selection: deterministic fallback (live bug, 2026-07-22)', () => {
+  // Self-contained fixture — deliberately NOT sharing TMP_ROOT/ISSUES_PATH/
+  // RELEVANT_REPO from the 'scoring and fallback' describe block above,
+  // whose afterAll(cleanupFixtures) deletes that shared fixture once ITS
+  // its finish. Reusing it here worked only when run in isolation (a `-t`
+  // filter skips the other block's afterAll) and broke the moment the whole
+  // file ran in its natural order — found live while adding this suite.
+  let root: string, issuesPath: string, outPath: string, relevantRepo: string;
+
+  function setup() {
+    root = mkdtempSync(join(tmpdir(), 'codeline-empty-selection-test-'));
+    relevantRepo = makeGitRepo(root, 'z-commerce-cdts');
+    mkdirSync(join(relevantRepo, 'src', 'services'), { recursive: true });
+    writeFileSync(join(relevantRepo, 'src', 'services', 'apply-report-discounts.service.ts'), `
+      export function applyReportDiscounts(lineItems, discounts) {
+        return lineItems.map(item => ({ ...item }));
+      }
+    `);
+    writeFileSync(join(relevantRepo, 'package.json'), JSON.stringify({
+      name: 'z-commerce-cdts', description: 'Commerce and dispatch ticketing service',
+    }));
+    issuesPath = makeIssuesJson(root, AMSD_LIKE_ISSUE);
+    outPath = join(root, 'out.json');
+  }
+
+  function makeAiRunStub(responseJson: string): string {
+    const stubDir = mkdtempSync(join(tmpdir(), 'ai-run-stub-'));
+    const stubPath = join(stubDir, 'ai-run.sh');
+    writeFileSync(stubPath, `#!/usr/bin/env bash\ncat <<'STUBEOF'\n${responseJson}\nSTUBEOF\n`);
+    execFileSync('chmod', ['+x', stubPath]);
+    return stubPath;
+  }
+
+  it('falls back to the highest-scored candidate when the LLM returns {"codelines": []} — does NOT hard-fail', () => {
+    setup();
+    const stub = makeAiRunStub(JSON.stringify({ codelines: [] }));
+    try {
+      const { stdout, stderr, exitCode } = runDiscovery(
+        ['--issues', issuesPath, '--root', root, '--out', outPath],
+        { CODELINE_DISCOVERY_AI_RUN_SH_OVERRIDE: stub }
+      );
+      expect(exitCode, `stdout:\n${stdout}\nstderr:\n${stderr}`).toBe(0);
+      expect(stderr).toMatch(/LLM returned no valid codeline selection/);
+      expect(stderr).toMatch(/Using highest-scored candidate as fallback/);
+      const out = JSON.parse(readFileSync(outPath, 'utf8'));
+      expect(out.codelines).toHaveLength(1);
+      expect(out.codelines[0].path).toBe(relevantRepo);
+    } finally {
+      rmSync(require('node:path').dirname(stub), { recursive: true, force: true });
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back to the highest-scored candidate when the LLM returns only invalid/nonexistent paths', () => {
+    setup();
+    const stub = makeAiRunStub(JSON.stringify({
+      codelines: [{ name: 'ghost', path: '/definitely/does/not/exist/anywhere', reason: 'hallucinated path' }],
+    }));
+    try {
+      const { stdout, stderr, exitCode } = runDiscovery(
+        ['--issues', issuesPath, '--root', root, '--out', outPath],
+        { CODELINE_DISCOVERY_AI_RUN_SH_OVERRIDE: stub }
+      );
+      expect(exitCode, `stdout:\n${stdout}\nstderr:\n${stderr}`).toBe(0);
+      expect(stderr).toMatch(/Skipping codeline 'ghost'/);
+      expect(stderr).toMatch(/LLM returned no valid codeline selection/);
+      const out = JSON.parse(readFileSync(outPath, 'utf8'));
+      expect(out.codelines[0].path).toBe(relevantRepo);
+    } finally {
+      rmSync(require('node:path').dirname(stub), { recursive: true, force: true });
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('still hard-fails with a clear error if even the scored fallback has no valid candidates (no git repos at all)', () => {
+    const emptyRoot = mkdtempSync(join(tmpdir(), 'codeline-discovery-empty-root-'));
+    try {
+      const stub = makeAiRunStub(JSON.stringify({ codelines: [] }));
+      const emptyIssuesPath = makeIssuesJson(emptyRoot, AMSD_LIKE_ISSUE);
+      const { exitCode } = runDiscovery(
+        ['--issues', emptyIssuesPath, '--root', emptyRoot, '--out', join(emptyRoot, 'out.json')],
+        { CODELINE_DISCOVERY_AI_RUN_SH_OVERRIDE: stub }
+      );
+      // No git repos found at all -> exits before ever reaching the LLM call.
+      expect(exitCode).not.toBe(0);
+      rmSync(require('node:path').dirname(stub), { recursive: true, force: true });
+    } finally {
+      rmSync(emptyRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('does not use the empty/invalid-selection fallback path when the LLM genuinely picks a valid repo', () => {
+    setup();
+    const stub = makeAiRunStub(JSON.stringify({
+      codelines: [{ name: 'cdts', path: relevantRepo, reason: 'genuine match' }],
+    }));
+    try {
+      const { exitCode, stderr } = runDiscovery(
+        ['--issues', issuesPath, '--root', root, '--out', outPath],
+        { CODELINE_DISCOVERY_AI_RUN_SH_OVERRIDE: stub }
+      );
+      expect(exitCode).toBe(0);
+      expect(stderr).not.toMatch(/LLM returned no valid codeline selection/);
+      const out = JSON.parse(readFileSync(outPath, 'utf8'));
+      expect(out.codelines[0].path).toBe(relevantRepo);
+    } finally {
+      rmSync(require('node:path').dirname(stub), { recursive: true, force: true });
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 30000);
+
+  it('run 10x in a row with a stub that always returns empty — deterministic fallback every time, never hard-fails', () => {
+    const RUNS = 10;
+    const outcomes: { exitCode: number; path: string | null }[] = [];
+    for (let i = 0; i < RUNS; i++) {
+      setup();
+      const stub = makeAiRunStub(JSON.stringify({ codelines: [] }));
+      try {
+        const { exitCode } = runDiscovery(
+          ['--issues', issuesPath, '--root', root, '--out', outPath],
+          { CODELINE_DISCOVERY_AI_RUN_SH_OVERRIDE: stub }
+        );
+        let outCodelinePath: string | null = null;
+        try {
+          outCodelinePath = JSON.parse(readFileSync(outPath, 'utf8')).codelines[0].path;
+        } catch { /* leave null */ }
+        outcomes.push({ exitCode, path: outCodelinePath === relevantRepo ? relevantRepo : outCodelinePath });
+      } finally {
+        rmSync(require('node:path').dirname(stub), { recursive: true, force: true });
+        rmSync(root, { recursive: true, force: true });
+      }
+    }
+    const failures = outcomes.filter(o => o.exitCode !== 0 || !o.path);
+    expect(failures, `${failures.length}/${RUNS} failed: ${JSON.stringify(outcomes)}`).toHaveLength(0);
+  }, 60000);
+});
+
+describe('codeline-discovery.js — LLM prompt clarity (live bug, 2026-07-22: model non-deterministically returned empty selection)', () => {
+  const src = readFileSync(DISCOVERY_JS, 'utf8');
+  const promptFnStart = src.indexOf('function buildDiscoveryPrompt');
+  const promptFnEnd = src.indexOf('\n}\n\nfunction callLlm', promptFnStart);
+  const promptFn = src.slice(promptFnStart, promptFnEnd > -1 ? promptFnEnd : promptFnStart + 3000);
+
+  it('explicitly instructs the model that an empty result is never acceptable', () => {
+    expect(promptFn).toMatch(/MUST return at least one/i);
+    expect(promptFn).toMatch(/empty result is\s*\n?\s*NEVER acceptable|NEVER acceptable/i);
+  });
+
+  it('tells the model the candidate list is pre-scored and ordered by confidence, so it has a concrete fallback choice', () => {
+    expect(promptFn).toMatch(/PRE-SCORED|pre-scored/);
+    expect(promptFn).toMatch(/descending order of match confidence|ranked by match confidence/i);
+  });
+
+  it('instructs against omitting a candidate purely due to uncertainty', () => {
+    expect(promptFn).toMatch(/uncertain|not fully confident/i);
   });
 });

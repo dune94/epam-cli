@@ -153,7 +153,9 @@ ${schemaAcFields}
 
 "enrichedAcs" is required when verdict is "enrichable". "enrichedAcs" should be [] otherwise.
 ${splitNote} are required when codeline is "${SPLIT_VALUE}". All should be [] otherwise.
-"gaps" should be [] when verdict is "sufficient".`;
+"gaps" should be [] when verdict is "sufficient".
+
+ENRICHMENT RULE (critical): enrichedAcs must describe OBSERVABLE BEHAVIOR to VERIFY — never HOW to implement it. Do NOT prescribe an internal mechanism or algorithm. Forbidden: "calculate independently", "split", "halve"/"×0.5", "per segment", "for each line item", adding new fields/flags, or any phrasing that presumes a particular code approach. A bug ticket describes a SYMPTOM ("the amount is not displayed for the return leg"); keep the enriched ACs at that symptom/behavior level (what a tester observes), and enrich ONLY for clarity, testability, and genuinely-missing edge/error cases. Inventing an implementation approach in an AC misdirects the downstream code investigation toward the wrong fix.`;
 }
 
 // ── LLM call via epam run ──────────────────────────────────────────────────
@@ -232,6 +234,7 @@ Rules:
 3. Include: primary success path, at least one edge case, and one error/boundary case.
 4. Do NOT invent requirements not implied by the description.
 5. Use plain English, present tense, third-person ("The system...", "The UI shows...").
+6. Describe WHAT to verify (observable behavior), never HOW to implement it. Do NOT prescribe a mechanism/algorithm — no "calculate independently", "split", "halve", "per segment", "for each line item", new fields, or internal approach. Keep a bug's ACs at the symptom/behavior level; prescribing an implementation misdirects the downstream code investigation.
 
 Respond with JSON only — no markdown, no preamble:
 { "enrichedAcs": ["<AC 1>", "<AC 2>", ...] }`;
@@ -324,6 +327,12 @@ Respond with JSON only — no markdown, no preamble:
       storyId:     issue.storyId,
       title:       issue.title,
       codeline:    resolvedCodeline,
+      // Carry the Jira ticket type through the gate so synthesize-prd can set
+      // story.issueType — without this the defect/novel classification anchor
+      // (Bug → defect) silently never fires (found live 2026-07-23, AMSD-1820:
+      // issueType arrived null at the PRD because the gate dropped it here).
+      issueType:   issue.issueType || null,
+      effort:      issue.effort,
       verdict,
       reason:      classification.reason,
       gaps:        classification.gaps || [],

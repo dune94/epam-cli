@@ -93,7 +93,19 @@ for (const s of template.stories || []) {
 // parallel work still gets worktree lanes.
 function classificationToStory(c, totalStoryCount) {
   const tmpl = templateStoryMap[c.storyId] || {};
-  const acs  = c.enrichedAcs && c.enrichedAcs.length > 0 ? c.enrichedAcs : c.originalAcs;
+  // AC IMMUTABILITY (AC/VC/TC design, 2026-07-24): for brownfield the story's
+  // acceptanceCriteria are the ticket's ORIGINAL ACs — never the ac-gate's
+  // description-fabricated enrichedAcs. When a ticket has no ACs, that's fine:
+  // ACs stay empty (immutable), and openspec-brownfield derives the VERIFICATION
+  // CRITERIA from the description instead. Using enrichedAcs here re-created the
+  // exact AC-elaboration the VC layer exists to eliminate, just one stage earlier
+  // (found live 2026-07-24: AMSD-1820 had zero ACs, ac-gate fabricated 6 from the
+  // description, and those became the "immutable" ACs). Greenfield (no EPAM_
+  // BROWNFIELD) keeps the enriched behavior — there, defining new behavior is the job.
+  const isBrownfield = process.env.EPAM_BROWNFIELD === '1';
+  const acs = isBrownfield
+    ? (c.originalAcs || [])
+    : (c.enrichedAcs && c.enrichedAcs.length > 0 ? c.enrichedAcs : c.originalAcs);
   const defaultGroup = totalStoryCount <= 1 ? 'main' : 'primary';
 
   return {
@@ -112,6 +124,9 @@ function classificationToStory(c, totalStoryCount) {
     estimate:           tmpl.estimate || 10,
     acGateVerdict:      c.verdict,
     acGateReason:       c.reason,
+    // Carry the Jira ticket type through to the PRD story so the spec pass can
+    // anchor its defect/novel classification to ground truth (Bug → defect).
+    issueType:          c.issueType || null,
   };
 }
 

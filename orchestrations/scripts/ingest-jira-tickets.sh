@@ -176,7 +176,15 @@ INSUFFICIENT_COUNT=$("$NODE_BIN" -e "
   console.log(r.filter(x=>x.verdict==='insufficient').length);
 " 2>/dev/null || echo "0")
 
-if [ "$GATE_EXIT" = "2" ] || [ "$INSUFFICIENT_COUNT" -gt "0" ]; then
+# Brownfield (AC/VC/TC design, 2026-07-24): a ticket with no/sparse ACs is NOT a
+# human-halt condition — the acceptanceCriteria stay as the ticket's immutable
+# intent (even empty), openspec-brownfield derives the VERIFICATION CRITERIA from
+# the description, and SUFFICIENCY is decided by the code-graph-detective (no fix
+# site + thin context → fail early, no human in the loop). Only halt on
+# insufficient ACs in the NON-brownfield (greenfield) flow.
+if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && { [ "$GATE_EXIT" = "2" ] || [ "${INSUFFICIENT_COUNT:-0}" -gt "0" ]; }; then
+  log "AC gate: ${INSUFFICIENT_COUNT} story/stories have sparse/no ACs — brownfield proceeds (ACs stay immutable; VCs derived from the description; the detective decides sufficiency). No human halt."
+elif [ "$GATE_EXIT" = "2" ] || [ "$INSUFFICIENT_COUNT" -gt "0" ]; then
   warn "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   warn "  AC Gate: ${INSUFFICIENT_COUNT} story/stories have INSUFFICIENT ACs."
   warn "  Pipeline halted. Human approval required."

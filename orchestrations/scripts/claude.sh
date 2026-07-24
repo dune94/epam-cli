@@ -237,6 +237,54 @@ resolve_test_engineer_effort_floor() {
     esac
 }
 
+# resolve_brownfield_effort_floor <story_id>
+# Brownfield-specific output-budget floor. The default effort tiers give tiny
+# output budgets (low=3072, medium=6144) tuned for greenfield NON-reasoning
+# writes. But brownfield runs on REASONING models (MiniMax-M3, GLM) that emit a
+# large <think> block BEFORE any tool call — and that reasoning counts against
+# the output-token budget. Found live 2026-07-23 (AMSD-1820): every attempt at
+# the default budget was TRUNCATED mid-<think> at ~18k tokens and never reached
+# a WriteFile/Edit — reported as "deliverables UNCHANGED" for 3 straight
+# attempts. The one attempt that completed only did so once its output reached
+# ~22k. So a reasoning model needs room to think AND write in the same
+# response. Floor the output budget high for brownfield (never lower it), so
+# the model can finish reasoning and still emit the edit. Iterations get a
+# floor too, since a multi-file brownfield fix legitimately spans several
+# read/edit turns. Only ever RAISES the budget.
+#
+# Note on effort: the detective already did the deep reasoning (the root cause
+# is injected into the prompt), so brownfield implementation does NOT need the
+# model to re-reason from scratch — but rather than fight the InferenceLadder's
+# effort ramp here, we simply guarantee enough output budget that the think
+# block, however large, still leaves room to write. Override the floor with
+# EPAM_BROWNFIELD_MIN_OUTPUT_TOKENS if a project needs more/less.
+resolve_brownfield_effort_floor() {
+    local story_id="$1"
+    [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
+    local _bf_min_out="${EPAM_BROWNFIELD_MIN_OUTPUT_TOKENS:-24576}"
+    local _bf_min_iter="${EPAM_BROWNFIELD_MIN_ITERATIONS:-12}"
+    # When the detective already prescribed the fix (fixSiteAnalysis + helper), the
+    # "reasoning headroom" rationale is inverted — the thinking is done; the agent just
+    # applies the handed fix. Bumping to 12 then wastes ~11 ReAct turns, each re-sending
+    # the accumulating conversation → input ballooned to ~169K (live 2026-07-24). Keep the
+    # effort-tier default (do not inflate iterations) for a prescribed fix; the output-token
+    # floor still applies (writing needs room). Env-overridable.
+    local _prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    local _has_helper
+    _has_helper=$(jq -r --arg id "$story_id" '[.stories[] | select(.id==$id) | .fixSiteAnalysis[]?.helper] | map(select(. != null and . != "")) | length' "$_prd_target" 2>/dev/null || echo 0)
+    if [ "${_has_helper:-0}" -gt 0 ]; then
+        _bf_min_iter="${EPAM_BROWNFIELD_PRESCRIBED_MIN_ITERATIONS:-6}"
+    fi
+    local _raised=0
+    if [ "${STORY_MAX_OUTPUT_TOKENS:-0}" -lt "$_bf_min_out" ]; then
+        STORY_MAX_OUTPUT_TOKENS="$_bf_min_out"; _raised=1
+    fi
+    if [ "${STORY_MAX_ITERATIONS:-0}" -lt "$_bf_min_iter" ]; then
+        STORY_MAX_ITERATIONS="$_bf_min_iter"; _raised=1
+    fi
+    [ "$_raised" = "1" ] && log "  BrownfieldEffortFloor: reasoning-model headroom -> maxIter=${STORY_MAX_ITERATIONS} maxOutTok=${STORY_MAX_OUTPUT_TOKENS} (think + write must fit one response)"
+}
+
 # resolve_model_from_story <story_id>
 # For epam-run providers (copilot/openai/qwen/cursor), the prd.json story carries
 # a .model field directly.  If set, it overrides the effort-based STORY_MODEL.
@@ -272,6 +320,16 @@ resolve_reasoning_effort_from_story() {
         '.stories[] | select(.id == $id) | .reasoningEffort // ""' \
         "$prd_target" 2>/dev/null || echo "")
     if [ -n "$story_effort" ]; then
+        # Brownfield correctness floor: a defect's reasoning effort is derived from Jira
+        # story points (pointsToEffort), so a ticket with no/low points runs at LOW —
+        # even though a brownfield fix's correctness has nothing to do with story points.
+        # LOW effort gave inconsistent/wrong results (live 2026-07-24, AMSD-1820). Floor
+        # brownfield at MEDIUM (env-overridable); an explicit higher effort is preserved.
+        # Less guessing on the brownfield ladder. Greenfield is unchanged.
+        if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ "$story_effort" = "low" ]; then
+            story_effort="${EPAM_BROWNFIELD_MIN_REASONING_EFFORT:-medium}"
+            log "  BrownfieldEffortFloor(reasoning): low -> ${story_effort} (story-point-derived LOW is not enough for a brownfield fix)"
+        fi
         export EPAM_REASONING_EFFORT="$story_effort"
         log "  ReasoningEffort[prd.json] -> $EPAM_REASONING_EFFORT"
     fi
@@ -1101,6 +1159,69 @@ build_implementation_prompt() {
         description="${description//${MAIN_PROJECT_ROOT}/${PROJECT_ROOT}}"
     fi
 
+    # Root-cause analysis from the code-graph-detective (brownfield). The
+    # detective already traced the CAUSAL fix site and WHY it's wrong (often a
+    # cross-file bug — e.g. an ID transformed in one function that a match in
+    # another function doesn't account for). Injecting its reason strings here
+    # means the coding agent starts WITH the answer instead of re-reading files
+    # to re-discover it — which is exactly what bloats a "bad" retry's token
+    # count (found live 2026-07-23: attempt read 143k tokens tracing the bug,
+    # wrote nothing). Each entry: the file, the function, and the root cause.
+    local fix_site_analysis
+    fix_site_analysis=$(echo "$story_json" | jq -r '
+      (.fixSiteAnalysis // []) | map(
+        "- **\(.file)**" + (if .function != "" then " (`\(.function)`)" else "" end) + ": \(.reason)"
+        + (if (.fix // "") != "" then "\n  - **Minimal fix:** \(.fix)"
+             + (if .fixVerified == false then " ⚠️ UNVERIFIED: the helper named here (`\(.helper // "?")`) was NOT found in the repo — treat it as a HYPOTHESIS, not fact. Confirm it exists with the CodeGraph tool before importing it; if it does not exist, do not invent it — solve the fix another minimal way." else "" end)
+           else "" end)
+      ) | join("\n")
+    ' 2>/dev/null || echo "")
+
+    # Verification Criteria (VC) — the observable checks openspec-brownfield
+    # produced (mechanism-free, from AC ∪ description). The impl agent must make
+    # the change satisfy these; the ACs above are the intent, the VCs are what a
+    # tester will actually confirm. Persisted on the story → PRD.
+    local verification_criteria
+    verification_criteria=$(echo "$story_json" | jq -r '(.verificationCriteria // []) | map("- " + .) | join("\n")' 2>/dev/null || echo "")
+
+    # REQUIRED bug-reproducing test (brownfield defect). The repro-gate (Step 3.55)
+    # HARD-BLOCKS any brownfield change that ships no test which FAILS on the pre-fix
+    # baseline and PASSES with the fix. For a single-agent defect story NOTHING else
+    # writes that test — the TC-writer only serves separate test-engineer stories —
+    # so the impl agent MUST write it here. Found live 2026-07-24 (AMSD-1820): with
+    # only a weak "your accompanying test should assert them", the agent shipped a
+    # garbage file literally named `test` (a copy of the SOURCE) and no real test.
+    # Make the requirement explicit, concrete (a real co-located path the repro-gate
+    # recognises: *.test.*), and unambiguous. Fires for brownfield defects (fix site
+    # known); novel brownfield still gets the VC "your test asserts these" guidance.
+    local required_test_block=""
+    if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -n "$fix_site_analysis" ]; then
+        local _rt_fix_file _rt_test_path
+        _rt_fix_file=$(echo "$story_json" | jq -r '(.fixSiteAnalysis // [])[0].file // ""' 2>/dev/null || echo "")
+        if [ -n "$_rt_fix_file" ] && [ "$_rt_fix_file" != "null" ]; then
+            # co-locate: src/a/foo.service.ts -> src/a/foo.service.test.ts (recognised by the gate's *.test.* rule)
+            _rt_test_path="${PROJECT_ROOT%/}/${_rt_fix_file%.*}.test.${_rt_fix_file##*.}"
+        else
+            _rt_test_path="${PROJECT_ROOT%/}/<co-locate next to the file you changed>.test.ts"
+        fi
+        required_test_block=$(printf '\n## REQUIRED: ship a bug-reproducing test (MANDATORY — the change is BLOCKED without it)\nEvery brownfield fix MUST include a test that REPRODUCES the bug: it FAILS against the old (buggy) behavior and PASSES with your fix. A deterministic gate blocks the change if no such test ships or if the test passes even without the fix.\n- Write it to this EXACT path (a real test file, co-located with the fix): %s\n- The filename MUST end in .test.ts (or .spec.ts) and follow the repo'"'"'s existing test framework/conventions. NEVER write a test to a bare name like "test", and NEVER put a newline or space in the path.\n- Assert the Verification Criteria above — the OBSERVABLE outcome (e.g. the return-trip discount value is present and correct), NOT the implementation mechanism.\n- Write REAL test cases (arrange/act/assert). Do NOT paste source code into the test file. The test must genuinely fail on the un-fixed code.\n' "$_rt_test_path")
+    fi
+
+    # Reviewer feedback (review→re-implement loop): if a prior team-lead review
+    # requested changes, its issues are written to review-feedback-<id>.json.
+    # Inject them so THIS re-implementation directly addresses what the reviewer
+    # flagged (e.g. "over-engineered — a more concise change would do; reuse the
+    # existing helper"). This is the reviewer telling the impl agent what to fix.
+    local review_feedback="" _review_feedback_file="${LOG_DIR:-$(dirname "$SCRIPT_DIR")/logs}/review-feedback-${story_id}.json"
+    if [ -f "$_review_feedback_file" ]; then
+        review_feedback=$(jq -r '
+          (.issues // []) | map(
+            "- [" + (.severity // "issue") + "] " + (.description // "")
+            + (if (.file // "") != "" then " (" + .file + (if (.line // 0) > 0 then ":" + (.line|tostring) else "" end) + ")" else "" end)
+            + (if (.suggestedFix // "") != "" then "\n  - Suggested fix: " + .suggestedFix else "" end)
+          ) | join("\n")' "$_review_feedback_file" 2>/dev/null || echo "")
+    fi
+
     # testCriteria — written by TC writer from actual source; ground truth for test stories.
     # Extracted after worktree path rewriting (TC fields don't contain absolute paths).
     local tc_facts tc_mock_strategy tc_banned
@@ -1132,6 +1253,32 @@ $(printf '%s\n' "$string_invariants" | sed 's/^/- /')
 
     # Build a write-first directive listing each file with its exact absolute path
     local write_first_lines=""
+    # Brownfield: inject each existing file's REAL content directly into the
+    # prompt (deterministic, one bash `cat`/`head` per file) instead of just
+    # instructing "ReadFile these first". Same established pattern as
+    # dependency_contracts below ("Inject it directly so it's guaranteed, not
+    # requested") — applied here because telling the agent to read via tool
+    # calls, while it fixed hallucination, traded it for a NEW problem: each
+    # ReadFile result accumulates in conversation history, and every
+    # subsequent turn in the same ReAct loop resends that whole growing
+    # transcript. Found live 2026-07-23 (AMSD-1820, post-fix): the static
+    # prompt itself measured ~3,000 tokens, but attempts were reporting
+    # ~240,000 input tokens and then failing with 0 output bytes — a real
+    # multi-file service investigation ballooned the accumulated transcript
+    # far past what a single static injection would ever cost. Injecting
+    # content ONCE, deterministically, in bash gives the same real grounding
+    # at a small, fixed, one-time cost instead of a cost that multiplies with
+    # every tool-call turn the agent takes.
+    local existing_file_contents=""
+    local _EXISTING_FILE_MAX_LINES=400
+    # Inject FULL content ONLY for the detective's fix-site file(s). Injecting every
+    # declared file (5 for AMSD-1820) ballooned the impl prompt to 137-189K input tokens,
+    # and the agent burned its whole output budget exploring before ever calling WriteFile
+    # (live 2026-07-24: in=137K out=1707, zero writes → deliverable gate failed → 8 retries).
+    # Non-fix-site declared files are listed as paths (agent ReadFiles on demand). When there
+    # is no fixSiteAnalysis (novel work / no detective result), inject all files (fallback).
+    local _fixsite_rel
+    _fixsite_rel=$(echo "$story_json" | jq -r '[.fixSiteAnalysis[]?.file] | map(select(. != null and . != "")) | .[]' 2>/dev/null)
     while IFS= read -r f; do
         [ -z "$f" ] && continue
         # Resolve to absolute path; in worktree mode, rewrite main-repo absolute paths
@@ -1146,8 +1293,129 @@ $(printf '%s\n' "$string_invariants" | sed 's/^/- /')
         else
             abs_f="$PROJECT_ROOT/$f"
         fi
-        write_first_lines="${write_first_lines}   - WRITE ${abs_f} first, before any other action\n"
+        # Inject CONTENT only for a fix-site file (or all, when no fixSiteAnalysis exists).
+        local _rel_f _inject_content
+        _rel_f="${abs_f#"$PROJECT_ROOT"/}"
+        if [ -z "$_fixsite_rel" ] || printf '%s\n' "$_fixsite_rel" | grep -qxF "$_rel_f"; then _inject_content=1; else _inject_content=0; fi
+        if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
+            if [ "$_inject_content" = "1" ] && [ -f "$abs_f" ]; then
+                write_first_lines="${write_first_lines}   - ${abs_f} (content already injected below — do not ReadFile it unless you need lines beyond what's shown)\n"
+                local _total_lines
+                _total_lines=$(wc -l < "$abs_f" 2>/dev/null || echo 0)
+                local _body
+                _body=$(head -n "$_EXISTING_FILE_MAX_LINES" "$abs_f" 2>/dev/null)
+                existing_file_contents="${existing_file_contents}
+### ${abs_f}
+\`\`\`
+${_body}
+\`\`\`
+"
+                if [ "${_total_lines:-0}" -gt "$_EXISTING_FILE_MAX_LINES" ]; then
+                    existing_file_contents="${existing_file_contents}(truncated at ${_EXISTING_FILE_MAX_LINES} of ${_total_lines} lines — ReadFile this path yourself if you need the rest)
+"
+                fi
+            else
+                write_first_lines="${write_first_lines}   - ${abs_f} (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)\n"
+            fi
+        else
+            write_first_lines="${write_first_lines}   - WRITE ${abs_f} first, before any other action\n"
+        fi
     done < <(echo "$story_json" | jq -r '.technicalNotes.files[]? // empty')
+
+    # Brownfield testing policy — the "no wild tests" gate. Greenfield writes
+    # new code + its own new tests. Brownfield MODIFIES existing code: the
+    # existing suite already runs (Step 5 regression guard + Step 4.5 unit
+    # gate), so a modified file that already has covering tests needs NO new
+    # test. Only a modified file with ZERO covering tests warrants ONE targeted
+    # test. We compute exactly that set deterministically here (CodeGraph's
+    # `affected`) and tell the agent — so it never generates speculative tests
+    # for already-covered code just because an AC says "add tests".
+    local brownfield_test_policy=""
+    # For a DEFECT (fix site known), the repro-gate REQUIRES a new bug-reproducing
+    # test EVEN IF the file already has coverage — the bug escaped that coverage by
+    # definition, and required_test_block above already mandates the test. Skip the
+    # coverage-based "don't write unnecessary tests / already covered → out of scope"
+    # policy for defects: it DIRECTLY CONTRADICTED the repro-gate and was the live
+    # cause of the missing test (AMSD-1820, 2026-07-24 — the agent was told the file
+    # "ALREADY has covering tests. Do NOT write any new test file", so it shipped
+    # none). The coverage policy still applies to non-defect brownfield changes.
+    if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -z "$fix_site_analysis" ]; then
+        local _story_rel_files=()
+        while IFS= read -r _sf; do
+            [ -z "$_sf" ] && continue
+            # Gate wants repo-relative paths; strip any absolute PROJECT_ROOT prefix.
+            _story_rel_files+=("${_sf#"$PROJECT_ROOT"/}")
+        done < <(echo "$story_json" | jq -r '.technicalNotes.files[]? // empty')
+        if [ "${#_story_rel_files[@]}" -gt 0 ]; then
+            local _uncovered _gate_rc=0
+            _uncovered=$(PROJECT_ROOT="$PROJECT_ROOT" NODE_BIN="${NODE_BIN:-node}" \
+                bash "$SCRIPT_DIR/brownfield-coverage-gate.sh" "${_story_rel_files[@]}" 2>/dev/null) || _gate_rc=$?
+            if [ "$_gate_rc" -eq 3 ]; then
+                # Gate couldn't determine coverage (no index) — do not claim
+                # anything; fall back to the default AC-driven behavior.
+                brownfield_test_policy=""
+            elif [ -n "$_uncovered" ]; then
+                brownfield_test_policy="## Brownfield Testing Policy (READ — do not write unnecessary tests)
+This is a change to EXISTING code. The existing test suite already runs after your change (regression gate) — you do NOT need to re-prove already-tested behavior. Add a test ONLY for the file(s) below, which currently have NO covering tests, and add just ONE focused test covering the specific behavior you changed. Do NOT add tests for any other file, and do NOT expand scope:
+$(printf '%s\n' "$_uncovered" | sed 's/^/  - /')"
+            else
+                brownfield_test_policy="## Brownfield Testing Policy (READ — do not write unnecessary tests)
+This is a change to EXISTING code, and every file you are modifying ALREADY has covering tests. Do NOT write any new test file. Make your code change; the existing test suite runs automatically and will verify it. Writing new tests here is out of scope."
+            fi
+        fi
+    fi
+
+    # "Do NOT investigate" is right for greenfield (nothing exists yet to
+    # read — the failure mode this directive originally fixed was agents
+    # describing a plan in prose and never calling WriteFile at all). It is
+    # actively wrong for brownfield: forbidding the agent from reading an
+    # EXISTING file before modifying it guarantees it can't see the file's
+    # real exports/utilities, and it will hallucinate plausible-sounding ones
+    # instead. Found live 2026-07-23 (AMSD-1820): agent invented a
+    # non-existent `@eps/utils` import and wrong export names across 8
+    # attempts, at every model tier including the ladder's highest, because
+    # it was told "do NOT read files, do NOT investigate" on every attempt.
+    local write_first_directive
+    if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
+        write_first_directive="CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below."
+    else
+        write_first_directive="CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say \"I will...\".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:"
+    fi
+
+    # CodeGraph tool (brownfield only): the agent can query the existing codebase
+    # to CONFIRM an existing helper before writing new logic. The prescribed fix
+    # (Root Cause Analysis, above) may name a helper to reuse; this lets the agent
+    # verify its exact symbol + import path rather than hallucinate one. Reusing
+    # an existing function instead of hand-rolling a new one is the whole point —
+    # fewer lines, no duplicated logic (found live 2026-07-23, AMSD-1820: the
+    # agent invented split-discount logic and a phantom field instead of reusing
+    # the existing key parser the one-line fix needed).
+    local codegraph_tool_block=""
+    if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && command -v codegraph >/dev/null 2>&1; then
+        # When the detective already prescribed the exact helper to reuse
+        # (fixSiteAnalysis[].helper), do NOT push CodeGraph exploration — it drives the
+        # agent to burn ReAct turns re-finding a helper it was already handed, and the
+        # re-sent conversation balloons input to 137-189K tokens so it never reaches
+        # WriteFile (live 2026-07-24, AMSD-1820). Give a minimal "apply directly" note.
+        # Full exploration block only when NO helper is prescribed (genuine novel work).
+        local _prescribed_helper
+        _prescribed_helper=$(echo "$story_json" | jq -r '[.fixSiteAnalysis[]?.helper] | map(select(. != null and . != "")) | .[0] // ""' 2>/dev/null)
+        if [ -n "$_prescribed_helper" ]; then
+            codegraph_tool_block="## The helper to reuse is ALREADY identified — do NOT search
+The Root Cause Analysis above names the exact existing helper to reuse (\`${_prescribed_helper}\`). Do NOT run CodeGraph or explore the codebase to re-find it — that wastes your turn budget. Import it, apply the prescribed minimal fix, write your file(s), and stop. Only search if you hit something the prescribed fix genuinely does not cover."
+        else
+            codegraph_tool_block="## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+An existing-code search tool is available. Run it with the Bash tool to discover reusable functions instead of inventing new ones:
+  PROJECT_ROOT=\"$PROJECT_ROOT\" bash \"$SCRIPT_DIR/codegraph-agent-query.sh\" helpers <domain nouns>   # existing util/parser/formatter to REUSE (symbol + import path)
+  PROJECT_ROOT=\"$PROJECT_ROOT\" bash \"$SCRIPT_DIR/codegraph-agent-query.sh\" query <SymbolName>        # exact definition site of a symbol
+  PROJECT_ROOT=\"$PROJECT_ROOT\" bash \"$SCRIPT_DIR/codegraph-agent-query.sh\" callees <SymbolName>      # what a function already calls
+RULE: Before you add ANY new function, run \`helpers\` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better."
+        fi
+    fi
 
     # Deterministic contract injection — root cause of a recurring live-run
     # failure (validated live: baseline model call guessed the wrong import
@@ -1259,9 +1527,7 @@ PYEOF
     fi
 
     cat << EOF
-$([ -n "$spec_reality_warning" ] && printf '%s\n\n' "$spec_reality_warning" || true)CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
-Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
-Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+$([ -n "$spec_reality_warning" ] && printf '%s\n\n' "$spec_reality_warning" || true)$write_first_directive
 
 $(printf '%b' "$write_first_lines")
 ---
@@ -1274,12 +1540,19 @@ $description
 ## Acceptance Criteria
 - $acceptance_criteria
 $([ -n "$string_invariants_block" ] && printf '%s\n' "$string_invariants_block" || true)
+$([ -n "$fix_site_analysis" ] && printf '\n## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)\nA code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.\n\nThe Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.\n\nHARD RULES:\n- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.\n- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.\n%s\n' "$fix_site_analysis" || true)
+$([ -n "$review_feedback" ] && printf '\n## Reviewer Feedback — ADDRESS THESE (a prior code review requested changes)\nThe team-lead reviewer examined your previous attempt and requested the changes below. This is the highest priority: make the SMALLEST edits that resolve each point. If a point says the change is over-engineered or a more concise change/existing helper would do, REMOVE the excess and use the minimal approach — do not add more code.\n%s\n' "$review_feedback" || true)
+$([ -n "$verification_criteria" ] && printf '\n## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)\nThese are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:\n%s\n' "$verification_criteria" || true)
+$([ -n "$required_test_block" ] && printf '%s\n' "$required_test_block" || true)
+$([ -n "$codegraph_tool_block" ] && printf '\n%s\n' "$codegraph_tool_block" || true)
+$([ -n "$brownfield_test_policy" ] && printf '\n%s\n' "$brownfield_test_policy" || true)
 $([ -n "$tc_facts" ] && printf '\n## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)\n%s\n' "$tc_facts" || true)
 $([ -n "$tc_mock_strategy" ] && printf '\n## Mock Strategy\n%s\n' "$tc_mock_strategy" || true)
 $([ -n "$tc_banned" ] && printf '\n## Banned Patterns (must NOT appear in your file)\n%s\n' "$tc_banned" || true)
 
 ## Technical Notes
 $([ -n "$technical_notes" ] && echo "$technical_notes" | jq -r 'to_entries | map("- \(.key): \(.value)") | join("\n")' 2>/dev/null || echo "None specified")
+$([ -n "$existing_file_contents" ] && printf '\n## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)\n%s\n' "$existing_file_contents" || true)
 
 ## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
 $files
@@ -1290,11 +1563,19 @@ $([ -n "$dependency_contracts" ] && printf '\n## Dependency Contracts (EXACT imp
 $([ -n "${CROSS_CODELINE_CONTRACT:-}" ] && [ -f "${CROSS_CODELINE_CONTRACT}" ] && printf '\n## Cross-Codeline API Contract (upstream codeline exports — use these types and endpoints verbatim when integrating)\n%s\n' "$(cat "${CROSS_CODELINE_CONTRACT}")" || true)
 
 ## Instructions
-**CRITICAL — WRITE FILES FIRST:**
+$write_first_directive
 $(printf '%b' "$write_first_lines")
-**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+$(if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
+  echo "**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**"
+else
+  echo "**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**"
+fi)
 
-1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+$(if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
+  echo "1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full"
+else
+  echo "1. Write each required file to its exact absolute path listed above — do this FIRST before anything else"
+fi)
 2. Implement all acceptance criteria for this story
 $([ -n "$tc_facts" ] && echo "3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly" || echo "3. Follow the project's existing code patterns and conventions")
 4. Do NOT create tests unless explicitly required in acceptance criteria
@@ -3473,10 +3754,21 @@ classify_failure_class() {
     if echo "$result_text" | grep -qi "maximum iterations\|max.*iter"; then
         COORDINATOR_FAILURE_CLASS="capability"
         COORDINATOR_ESCALATE="yes"
-        # Inject a write-first directive so the escalated model doesn't repeat
-        # the same exhaustion pattern. Without this, the retry gets the same
-        # generic prompt and burns all turns on reads/planning again.
-        COORDINATOR_PROMPT_AMENDMENT="CRITICAL: The previous attempt exhausted all available turns without creating the required deliverable. Your FIRST action MUST be to call WriteFile to the exact absolute path listed under 'Files to Create/Modify' — do NOT read files, do NOT plan, do NOT investigate. Write the required file IMMEDIATELY as your very first action."
+        # Inject a directive so the escalated model doesn't repeat the same
+        # exhaustion pattern. This is a SEPARATE occurrence of the same
+        # write-first-vs-read-first distinction fixed in
+        # build_implementation_prompt() (found live 2026-07-23, AMSD-1820) —
+        # missed here because it's a different code path (the max-iterations
+        # failure classifier, not the initial prompt builder). Without this
+        # brownfield branch, a story that hits this classifier gets the OLD
+        # "do NOT investigate" text re-injected via ## Coordinator Guidance,
+        # silently contradicting and undoing the "READ BEFORE YOU WRITE"
+        # directive already shown earlier in the SAME prompt.
+        if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
+            COORDINATOR_PROMPT_AMENDMENT="CRITICAL: The previous attempt exhausted all available turns without creating the required deliverable. These files already exist — their real content is injected in ## Existing File Contents; do not spend turns re-reading them. Use Edit for a targeted, minimal change and act on it immediately — do not re-explore the codebase beyond what's already injected."
+        else
+            COORDINATOR_PROMPT_AMENDMENT="CRITICAL: The previous attempt exhausted all available turns without creating the required deliverable. Your FIRST action MUST be to call WriteFile to the exact absolute path listed under 'Files to Create/Modify' — do NOT read files, do NOT plan, do NOT investigate. Write the required file IMMEDIATELY as your very first action."
+        fi
         log "  Coordinator[L1]: capability failure (max iterations) — escalation approved, write-first amendment injected"
         return
     fi
@@ -5700,6 +5992,11 @@ implement_story() {
     # Bump the iteration/token budget one tier for test-engineer stories —
     # see resolve_test_engineer_effort_floor's own docstring for why.
     resolve_test_engineer_effort_floor "$story_id"
+    # Floor the output/iteration budget for brownfield reasoning-model runs so
+    # the <think> block + the actual edit both fit in one response — see
+    # resolve_brownfield_effort_floor's docstring (found live: reasoning
+    # truncated mid-think before writing → "deliverables UNCHANGED").
+    resolve_brownfield_effort_floor "$story_id"
     log "  Effort[final] -> maxIter=${STORY_MAX_ITERATIONS} maxOutTok=${STORY_MAX_OUTPUT_TOKENS}"
     # Resolve aiProvider -> which CLI binary to use
     resolve_provider_settings "$story_id"
@@ -6160,6 +6457,7 @@ ${_trimmed_amendment}"
         local invoke_success=false
         # Track the raw output file across all provider branches for coordinator triage
         local attempt_raw_file="${json_result_file%.json}_raw.json"
+        local attempt_started_at=$(date -Iseconds)
 
         # Optional per-story wall-clock timeout — set EPAM_STORY_TIMEOUT_SECS in the tier script.
         # No default: if unset, no timeout is applied (behaviour is unchanged).
@@ -6246,6 +6544,21 @@ ${_trimmed_amendment}"
                 # writes to the main repo instead of the worktree.
                 if [ -n "${WORKTREE_MODE:-}" ] && [ -n "${MAIN_PROJECT_ROOT:-}" ]; then
                     _allowed_write_paths="${_allowed_write_paths//${MAIN_PROJECT_ROOT}/${PROJECT_ROOT}}"
+                fi
+                # Also permit the detective's CAUSAL fix-site file(s). The spec-pass
+                # detective traces the real fix location, which often differs from the
+                # ticket's declared technicalNotes.files; the locationHint→technicalNotes.files
+                # propagation is non-deterministic (run14, 2026-07-22), so the scope-guard
+                # could otherwise BLOCK the agent from writing the very file it was told to
+                # fix. These are repo-relative and resolve against the agent's cwd
+                # (=PROJECT_ROOT/worktree) exactly as WriteFile.ts's path.resolve() expects,
+                # so no worktree rewrite is needed.
+                local _fixsite_paths
+                _fixsite_paths=$(jq -r --arg id "$story_id" \
+                    '.stories[] | select(.id == $id) | .fixSiteAnalysis[]?.file // empty' \
+                    "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null | tr '\n' ':' | sed 's/:$//')
+                if [ -n "$_fixsite_paths" ]; then
+                    _allowed_write_paths="${_allowed_write_paths:+${_allowed_write_paths}:}${_fixsite_paths}"
                 fi
                 if echo "$prompt" | \
                         EPAM_DANGEROUS_SKIP_APPROVAL=1 \
@@ -6338,6 +6651,19 @@ ${_trimmed_amendment}"
                 fi
                 ;;
         esac
+
+        # Log THIS attempt's real token/cost usage unconditionally (success or
+        # failure) — previously only the FINAL attempt's json_result_file
+        # ever reached phase-cost.jsonl (append_cost_record was only called
+        # once, at the story's terminal completed/failed state), so every
+        # earlier retry's real, billed tokens were silently invisible to any
+        # dashboard or report. Found live 2026-07-23 (AMSD-1820): an 8-attempt
+        # failure with ~200-240k input tokens on EACH attempt would have shown
+        # only the last one — hiding roughly 7/8 of the real cost. Distinct
+        # status ("attempt", not "completed"/"failed") so existing consumers
+        # that filter on terminal status are unaffected; the attempt number
+        # lets a per-story total be summed independently of that filter.
+        append_cost_record "$story_id" "attempt" "$attempt_started_at" "$(date -Iseconds)" "$output_file" "$json_result_file" "$((retry_count + 1))"
 
         # Vendor-dir guard: NOT unlocked here — run_vendor_integrity_check()
         # (called at the very start of run_external_verification, before
@@ -6690,9 +7016,12 @@ update_story_status() {
 }
 
 # Append a cost/time record to phase-cost.jsonl
-# Called after each story completes (success or failure) for phase-aware tracking
+# Called after each story completes (success or failure) for phase-aware
+# tracking, AND after every individual retry attempt (status="attempt",
+# attempt_num set) so real per-attempt token/cost usage is never invisible —
+# see the call site right after the provider-invocation case block above.
 append_cost_record() {
-    local story_id=$1 status=$2 started_at=$3 ended_at=$4 output_file=$5 json_result_file=${6:-}
+    local story_id=$1 status=$2 started_at=$3 ended_at=$4 output_file=$5 json_result_file=${6:-} attempt_num=${7:-}
     local cost_file="${PHASE_COST_FILE:-$LOG_DIR/phase-cost.jsonl}"
     local lock_file="${cost_file}.lock"
 
@@ -6790,6 +7119,7 @@ append_cost_record() {
             --argjson ptm "${prompt_tokens_measured:-0}" \
             --arg im "${invoke_mode}" \
             --argjson cie "$cost_is_estimate" \
+            --argjson an2 "${attempt_num:-null}" \
             '{phase_id:$pid, phase_name:$pn, story_id:$sid, story_title:$st,
               agent_id:$aid, agent_name:$an, forecast_hours:$fh, forecast_cost_usd:$fc,
               started_at:$sa, ended_at:$ea, elapsed_minutes:$em,
@@ -6799,7 +7129,7 @@ append_cost_record() {
               effort:$ef, storyType:$stype, resolvedModel:$rm,
               plannerModel:$pm,
               prompt_tokens_measured:$ptm, invokeMode:$im,
-              costIsEstimate:$cie}' >> "$cost_file"
+              costIsEstimate:$cie, attempt:$an2}' >> "$cost_file"
     ) 200>"$lock_file"
 
     # Emit human-readable cost summary to the run log so it appears in pipeline output.

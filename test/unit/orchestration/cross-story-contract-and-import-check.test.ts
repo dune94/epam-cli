@@ -393,10 +393,19 @@ describe('build_implementation_prompt() — spec-reality cross-check (static)', 
   });
 
   it('injects the mismatch warning at the TOP of the prompt (primacy), not buried mid-prompt', () => {
-    const warningIdx = body.indexOf('spec_reality_warning');
-    const criticalIdx = body.indexOf('CRITICAL — WRITE FILES FIRST');
-    expect(warningIdx).toBeGreaterThan(-1);
-    expect(warningIdx).toBeLessThan(criticalIdx);
+    // Primacy is determined by the order of REFERENCES inside the `cat << EOF`
+    // template that assembles the prompt — NOT by where literal strings are
+    // defined in the function. The write-first directive text now lives in the
+    // $write_first_directive variable (assigned above the template, so it can
+    // branch on brownfield/greenfield), so follow the reference, not the literal.
+    const templateStart = body.indexOf('cat << EOF');
+    expect(templateStart).toBeGreaterThan(-1);
+    const template = body.slice(templateStart);
+    const warningRefIdx = template.indexOf('$spec_reality_warning');
+    const directiveRefIdx = template.indexOf('$write_first_directive');
+    expect(warningRefIdx).toBeGreaterThan(-1);
+    expect(directiveRefIdx).toBeGreaterThan(-1);
+    expect(warningRefIdx).toBeLessThan(directiveRefIdx);
   });
 
   it('is detection-only — does not silently rewrite the PRD/description (Option D pattern: flag, don\'t auto-fix)', () => {

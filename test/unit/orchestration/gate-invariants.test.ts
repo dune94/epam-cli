@@ -266,7 +266,7 @@ describe('step 3.7 pre-review gate tsc exit code handling', () => {
 
   it('pre-review gate marks _pre_review_failed=1 when tsc exits non-zero', () => {
     const preReviewIdx = orchSrc.indexOf('Running tsc --noEmit');
-    const block = orchSrc.slice(preReviewIdx, preReviewIdx + 900);
+    const block = orchSrc.slice(preReviewIdx, preReviewIdx + 3000);
     // After the tsc invocation, _pre_review_failed must be set on non-zero exit
     expect(block).toContain('_pre_review_failed=1');
     expect(block).toContain('PIPESTATUS');

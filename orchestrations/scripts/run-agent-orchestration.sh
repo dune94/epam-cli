@@ -5250,6 +5250,42 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/brownfield-repro-test-
 fi
 
 # ──────────────────────────────────────────────
+# Step 3.545: Update tests the fix legitimately INVALIDATED (brownfield).
+# A defect fix changes behaviour that pre-existing tests asserted — those tests
+# encoded the BUG. impl may not edit tests (it writes only the fix) and the
+# test-writer only AUTHORS the new repro test, so without this step nobody updates
+# them: Step 5's regression guard then blocks on a broken test the pipeline itself
+# produced, and the self-heal retry fails identically (caught by mock1 2026-07-24,
+# same shape as the metrolinx deadlock).
+# It is deliberately narrow — it BLOCKS rather than editing whenever a failure is
+# not explained by the story's Verification Criteria, so a wrong fix can never
+# rewrite its own oracle to go green.
+# ──────────────────────────────────────────────
+if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/update-invalidated-tests.sh" ]; then
+    _uit_failed=0
+    while IFS= read -r _uit_story; do
+        [ -z "$_uit_story" ] && continue
+        _uit_vcs=$(jq -r --arg id "$_uit_story" \
+            '(.stories[] | select(.id == $id) | .verificationCriteria // []) | join("\n- ")' \
+            "$PRD_FILE" 2>/dev/null || echo "")
+        PROJECT_ROOT="$PROJECT_ROOT" PRD_FILE="$PRD_FILE" LOG_DIR="$LOG_DIR" \
+        JIRA_BASELINE_BRANCH="${JIRA_BASELINE_BRANCH:-develop}" \
+        STORY_VERIFICATION_CRITERIA="$_uit_vcs" \
+            bash "$SCRIPT_DIR/update-invalidated-tests.sh" "$_uit_story" 2>&1 \
+            | tee -a "$LOG_DIR/update-invalidated-tests-${PHASE}.log"
+        # No pipefail in this script — read the real exit code from PIPESTATUS.
+        [ "${PIPESTATUS[0]}" -ne 0 ] && _uit_failed=1
+    done < <(jq -r --arg phase "$PHASE" \
+        '(.implementationOrder[$phase] // []) as $ids |
+         .stories[] | select(.id as $id | $ids | index($id) != null) | .id' \
+        "$PRD_FILE" 2>/dev/null)
+    if [ "$_uit_failed" -ne 0 ]; then
+        error "Step 3.545: a failing pre-existing test was NOT explained by the intended behaviour change — treating it as a REGRESSION and blocking before review."
+        exit 1
+    fi
+fi
+
+# ──────────────────────────────────────────────
 # Step 3.55: Bug-reproduction test gate (brownfield, hard) — runs BEFORE review.
 # The fix + test are committed by now; require that each story's new test actually
 # REPRODUCES the bug (fails on the pre-fix baseline, passes with the fix). A change

@@ -1194,17 +1194,24 @@ build_implementation_prompt() {
     # Make the requirement explicit, concrete (a real co-located path the repro-gate
     # recognises: *.test.*), and unambiguous. Fires for brownfield defects (fix site
     # known); novel brownfield still gets the VC "your test asserts these" guidance.
-    local required_test_block=""
+    # B1 (2026-07-24) — impl writes ONLY the fix. The reproducing test belongs to
+    # brownfield-repro-test-writer.sh, which gets its own agent turn AFTER the fix
+    # commits, and (since 2026-07-24) VALIDATES the test parses and runs before
+    # committing it, with retry + ladder + self-heal on failure.
+    #
+    # This block used to MANDATE that impl ship a co-located *.test.* file. That was
+    # a hedge taken when the test-writer produced nothing at all. Measured cost of
+    # keeping it: the 15:36 run was killed at 7 impl attempts / $1.11, having
+    # committed apply-report-discounts.service.test.ts, with the failure-analyst's
+    # own diagnosis pointing AT that file ("Test file accesses possibly-undefined
+    # variables without null narrowing under strict mode"). Six consecutive quality
+    # failures were spent fighting a test impl should never have written.
+    #
+    # Enforcement is unchanged — the repro-gate still BLOCKS a fix that ships
+    # without a reproducing test. Only authorship moved.
+    local test_ownership_block=""
     if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -n "$fix_site_analysis" ]; then
-        local _rt_fix_file _rt_test_path
-        _rt_fix_file=$(echo "$story_json" | jq -r '(.fixSiteAnalysis // [])[0].file // ""' 2>/dev/null || echo "")
-        if [ -n "$_rt_fix_file" ] && [ "$_rt_fix_file" != "null" ]; then
-            # co-locate: src/a/foo.service.ts -> src/a/foo.service.test.ts (recognised by the gate's *.test.* rule)
-            _rt_test_path="${PROJECT_ROOT%/}/${_rt_fix_file%.*}.test.${_rt_fix_file##*.}"
-        else
-            _rt_test_path="${PROJECT_ROOT%/}/<co-locate next to the file you changed>.test.ts"
-        fi
-        required_test_block=$(printf '\n## REQUIRED: ship a bug-reproducing test (MANDATORY — the change is BLOCKED without it)\nEvery brownfield fix MUST include a test that REPRODUCES the bug: it FAILS against the old (buggy) behavior and PASSES with your fix. A deterministic gate blocks the change if no such test ships or if the test passes even without the fix.\n- Write it to this EXACT path (a real test file, co-located with the fix): %s\n- The filename MUST end in .test.ts (or .spec.ts) and follow the repo'"'"'s existing test framework/conventions. NEVER write a test to a bare name like "test", and NEVER put a newline or space in the path.\n- Assert the Verification Criteria above — the OBSERVABLE outcome (e.g. the return-trip discount value is present and correct), NOT the implementation mechanism.\n- Write REAL test cases (arrange/act/assert). Do NOT paste source code into the test file. The test must genuinely fail on the un-fixed code.\n' "$_rt_test_path")
+        test_ownership_block=$(printf '\n## Tests are NOT your job this turn\nA dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.\n')
     fi
 
     # Reviewer feedback (review→re-implement loop): if a prior team-lead review
@@ -1333,7 +1340,8 @@ ${_body}
     local brownfield_test_policy=""
     # For a DEFECT (fix site known), the repro-gate REQUIRES a new bug-reproducing
     # test EVEN IF the file already has coverage — the bug escaped that coverage by
-    # definition, and required_test_block above already mandates the test. Skip the
+    # definition. The dedicated repro-test-writer now authors it (impl is told the
+    # test is NOT its job — see test_ownership_block above). Skip the
     # coverage-based "don't write unnecessary tests / already covered → out of scope"
     # policy for defects: it DIRECTLY CONTRADICTED the repro-gate and was the live
     # cause of the missing test (AMSD-1820, 2026-07-24 — the agent was told the file
@@ -1543,7 +1551,7 @@ $([ -n "$string_invariants_block" ] && printf '%s\n' "$string_invariants_block" 
 $([ -n "$fix_site_analysis" ] && printf '\n## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)\nA code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.\n\nThe Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.\n\nHARD RULES:\n- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.\n- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.\n%s\n' "$fix_site_analysis" || true)
 $([ -n "$review_feedback" ] && printf '\n## Reviewer Feedback — ADDRESS THESE (a prior code review requested changes)\nThe team-lead reviewer examined your previous attempt and requested the changes below. This is the highest priority: make the SMALLEST edits that resolve each point. If a point says the change is over-engineered or a more concise change/existing helper would do, REMOVE the excess and use the minimal approach — do not add more code.\n%s\n' "$review_feedback" || true)
 $([ -n "$verification_criteria" ] && printf '\n## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)\nThese are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:\n%s\n' "$verification_criteria" || true)
-$([ -n "$required_test_block" ] && printf '%s\n' "$required_test_block" || true)
+$([ -n "$test_ownership_block" ] && printf '%s\n' "$test_ownership_block" || true)
 $([ -n "$codegraph_tool_block" ] && printf '\n%s\n' "$codegraph_tool_block" || true)
 $([ -n "$brownfield_test_policy" ] && printf '\n%s\n' "$brownfield_test_policy" || true)
 $([ -n "$tc_facts" ] && printf '\n## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)\n%s\n' "$tc_facts" || true)

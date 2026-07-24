@@ -543,7 +543,7 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     const specEnv = process.env.SPEC_MODE_MAX_OUTPUT_TOKENS
       ? { EPAM_MAX_OUTPUT_TOKENS: process.env.SPEC_MODE_MAX_OUTPUT_TOKENS }
       : {};
-    const output = await runClaude(directExec, prompt, logPath, specEnv);
+    const output = await runClaude(directExec, prompt, logPath, specEnv, { costAgent: tag });
     return extractTaggedJson(output, tag);
   }
 
@@ -572,14 +572,14 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     // which always wins. Without this fix the ladder calls MiniMax again.
     const ladderExec = { cmd: execSpec.cmd, args: ['--provider', ladderProvider] };
     const output = await Promise.race([
-      runClaude(ladderExec, prompt, logPath, {}),
+      runClaude(ladderExec, prompt, logPath, {}, { costAgent: tag }),
       new Promise((_, reject) => setTimeout(() => reject(new Error(`ladder hard-timeout after ${ladderTimeout}ms`)), ladderTimeout + 5000))
     ]);
     return extractTaggedJson(output, tag);
   }
 
   // Non-minimax: existing raw text path with tag extraction + jsonrepair
-  const output = await runClaude(execSpec, prompt, logPath);
+  const output = await runClaude(execSpec, prompt, logPath, {}, { costAgent: tag });
   return extractTaggedJson(output, tag);
 }
 
@@ -667,7 +667,10 @@ async function run() {
     return;
   }
 
-  const runId = new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, 'Z');
+  // B5: prefer the pipeline's ONE run id. Minting a second one here split a
+  // single run across two identities in guarded-step-retries.jsonl and broke
+  // every join on runId (cost roll-ups, retry history, Langfuse sessions).
+  const runId = process.env.ORCH_RUN_ID || new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, 'Z');
   const specRunDir = path.join(logDir, 'spec-runs', runId);
   fs.mkdirSync(specRunDir, { recursive: true });
   const baselinePath = path.join(specRunDir, 'prd.before.json');
@@ -1824,7 +1827,7 @@ async function _vcLlmCall(prompt, cycle, logPath) {
     // (scoped to this child env, so the wider run's temperature/effort are untouched).
     EPAM_TEMPERATURE: process.env.VC_LLM_TEMPERATURE || '0',
     EPAM_REASONING_EFFORT: process.env.VC_LLM_REASONING_EFFORT || 'low',
-  }, { salvageOutputOnFailure: true, timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '360000') });
+  }, { costAgent: 'vc-agent', salvageOutputOnFailure: true, timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '360000') });
 }
 function _firstJsonArray(out) {
   const m = out && out.match(/\[[\s\S]*?\]/);
@@ -2081,7 +2084,7 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
         // (Distinct from VC generation, which stays LOW: that is a restate task where
         // high effort drives prescriptive drift.) Env-overridable.
         EPAM_REASONING_EFFORT: process.env.CODEGRAPH_DETECTIVE_REASONING_EFFORT || 'high',
-      }, {
+      }, { costAgent: 'code-graph-detective',
         // Salvage the detective's JSON even if its process exits non-zero/null
         // (it emits the answer, then a detached grandchild teardown trips the
         // exit code). parseFindings validates, so a genuinely broken run still
@@ -2107,7 +2110,7 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
           // No AI_GATE_ALLOW_TOOLS → ai-run.sh adds --no-tools → pure extraction.
           EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || '24576',
           EPAM_MAX_ITERATIONS: '2',
-        }, { salvageOutputOnFailure: true, timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '360000') });
+        }, { salvageOutputOnFailure: true, costAgent: 'code-graph-detective', timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '360000') });
         findings = parseFindings(out2);
         if (findings && findings.length) {
           console.warn(`spec-mode: code-graph-detective phase-2 extraction recovered ${findings.length} fix-site(s) for ${story.id} from a narrative phase-1 answer.`);
@@ -3672,7 +3675,7 @@ Emit ONLY: {"verdict":"pass|fail","issues":["<issue1>"],"reason":"<15 words max>
   try {
     const gateExec = buildGateExec(aiRunnerCmd);
     const logPath = logDir ? path.join(logDir, `prd-reviewer-${storyId}-${changeType}.log`) : null;
-    const output = await runClaude(gateExec, prompt, logPath, {});
+    const output = await runClaude(gateExec, prompt, logPath, {}, { costAgent: 'prd-change-reviewer' });
     return parseReviewVerdict(output);
   } catch (err) {
     console.warn(`spec-mode: prd-change-reviewer call failed for ${storyId} (${err.message}) — defaulting to pass`);

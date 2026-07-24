@@ -24,14 +24,16 @@ import { join } from 'node:path';
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
 const src = readFileSync(CLAUDE_SH, 'utf8');
 
-// Extract the real required_test_block computation from claude.sh and run it.
+// Extract the real test-ownership block computation from claude.sh and run it.
+// Renamed from test_ownership_block on 2026-07-24 (B1): impl no longer AUTHORS the
+// test, it is told the test is not its job and the repro-test-writer owns it.
 function extractRequiredTestBlock(): string {
-  const start = src.indexOf('    local required_test_block=""');
-  const end = src.indexOf('    # Reviewer feedback (review→re-implement loop)');
-  if (start === -1 || end === -1) throw new Error('required_test_block markers not found');
+  const start = src.indexOf('    local test_ownership_block=""');
+  const end = src.indexOf('    # Reviewer feedback');
+  if (start === -1 || end === -1) throw new Error('test_ownership_block markers not found');
   return src.slice(start, end);
 }
-const rtBlock = extractRequiredTestBlock();
+const rtBlock = extractRequiredTestBlock().replace(/test_ownership_block/g, 'test_ownership_block');
 
 function runRequiredTest(opts: { brownfield: boolean; fixSite: boolean; fixFile?: string }): string {
   const fixSiteAnalysis = opts.fixSite ? 'present' : '';
@@ -47,7 +49,7 @@ run_it() {
   local story_json='${storyJson}'
   local fix_site_analysis='${fixSiteAnalysis}'
 ${rtBlock}
-  printf '%s' "$required_test_block"
+  printf '%s' "$test_ownership_block"
 }
 ${opts.brownfield ? 'export EPAM_BROWNFIELD=1' : 'unset EPAM_BROWNFIELD'}
 run_it
@@ -56,22 +58,26 @@ run_it
 }
 
 describe('required bug-reproducing test — injected for brownfield defects', () => {
-  it('brownfield defect → mandates a test at a concrete co-located *.test.* path', () => {
+  // SUPERSEDED 2026-07-24 (B1): impl no longer authors the test — see
+  // impl-does-not-own-the-test.test.ts. Measured: keeping the mandate cost 7 impl
+  // attempts / $1.11 on a run killed while impl fought a test file it should never
+  // have written. Enforcement did not move — the repro-gate still blocks.
+  it('brownfield defect → tells impl the test is NOT its job (hand-off, not a mandate)', () => {
     const out = runRequiredTest({ brownfield: true, fixSite: true });
-    expect(out).toMatch(/REQUIRED: ship a bug-reproducing test/);
-    expect(out).toMatch(/MANDATORY/);
-    // concrete path, co-located, recognised by the gate's *.test.* rule
-    expect(out).toContain('/tmp/mockrepo/src/services/submit-reservations/apply-report-discounts.service.test.ts');
-    // must reproduce: fail on baseline, pass with fix
-    expect(out).toMatch(/FAILS against the old .*behavior and PASSES with your fix/);
-    // guard against the exact live failure: no bare "test" filename, no newline in path
-    expect(out).toMatch(/NEVER write a test to a bare name like "test"/);
-    expect(out).toMatch(/Do NOT paste source code into the test file/);
+    // The hand-off must be explicit. Silence is not enough — an AC or plain habit
+    // still pulls the agent into writing tests, which is what burned 7 attempts.
+    expect(out).toMatch(/Tests are NOT your job/);
+    expect(out).toMatch(/Do NOT write, edit, or create any test file/);
+    expect(out).toMatch(/\*\.test\.\*|\*\.spec\.\*|__tests__/);
+    // and the old mandate must be gone, not merely softened
+    expect(out).not.toMatch(/REQUIRED: ship a bug-reproducing test/);
+    expect(out).not.toMatch(/MANDATORY/);
   });
 
-  it('derives the co-located path from ANY fix file extension', () => {
+  it('names the dedicated test-writer as the owner, for ANY fix file extension', () => {
+    // The block no longer derives a co-located path — impl is not writing the file.
     const out = runRequiredTest({ brownfield: true, fixSite: true, fixFile: 'src/mappers/line-item.mapper.ts' });
-    expect(out).toContain('/tmp/mockrepo/src/mappers/line-item.mapper.test.ts');
+    expect(out).toMatch(/dedicated test-writer agent/);
   });
 
   it('non-defect brownfield (no fix site) → no required-test block (VC guidance handles it)', () => {
@@ -85,6 +91,6 @@ describe('required bug-reproducing test — injected for brownfield defects', ()
   });
 
   it('the impl prompt actually wires the block in (after Verification Criteria)', () => {
-    expect(src).toMatch(/\$\(\[ -n "\$required_test_block" \] && printf '%s\\n' "\$required_test_block" \|\| true\)/);
+    expect(src).toMatch(/\$\(\[ -n "\$test_ownership_block" \] && printf '%s\\n' "\$test_ownership_block" \|\| true\)/);
   });
 });

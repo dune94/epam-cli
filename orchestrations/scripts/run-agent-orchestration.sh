@@ -194,7 +194,10 @@ CONTROL_PLANE_LOG="$LOG_DIR/control-plane.log"
 # group a run's traces. Without the export it was set but invisible to children,
 # so every trace had sessionId:null and all runs blended into one stream
 # (which produced a wrong, retracted cost analysis on 2026-07-24).
-export ORCH_RUN_ID="${ORCH_RUN_ID:-$(date +%Y%m%dT%H%M%SZ)}"
+# `date -u`: the id ends in Z, which asserts UTC. It was LOCAL time, so the same
+# instant rendered as 15:36:35Z here and 19:37:20Z elsewhere — one run looking
+# like two, hours apart.
+export ORCH_RUN_ID="${ORCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
 CHECKPOINT_FILE="${LOG_DIR}/checkpoint-${PHASE:-main}-${ORCH_RUN_ID}.jsonl"
 
 # Colors

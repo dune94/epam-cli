@@ -61,12 +61,36 @@ export class BashTool implements Tool {
       `command -v python >/dev/null 2>&1 || python() { python3 "$@"; }\n` + command;
 
     try {
-      const result = await execa('bash', ['-c', shimmedCommand], {
+      // `detached: true` puts bash in its OWN PROCESS GROUP so the timeout can kill
+      // the whole tree. Without it execa kills only the bash shell; any grandchild
+      // that outlives it keeps the stdout pipe OPEN, and execa then blocks until
+      // that orphan finishes on its own — the timeout becomes decorative.
+      //
+      // Measured (2026-07-24): a 2s timeout took 8.0s with `timedOut=true`. Live in
+      // mock1 an agent ran `find / -name profiles.json`; it was killed at the 30s
+      // timeout but the orphaned find kept walking the filesystem and held the pipe,
+      // stalling the pipeline for 282 SECONDS — which looked for hours like "slow
+      // LLM calls".
+      const subprocess = execa('bash', ['-c', shimmedCommand], {
         cwd,
         timeout,
         all: true,
         reject: false,
+        detached: true,
       });
+      // On timeout execa signals the shell; also SIGKILL the process GROUP so no
+      // grandchild survives to hold the pipe. Negative pid = the whole group.
+      const killGroup = setTimeout(() => {
+        if (subprocess.pid) {
+          try { process.kill(-subprocess.pid, 'SIGKILL'); } catch { /* already gone */ }
+        }
+      }, timeout + 500);
+      let result;
+      try {
+        result = await subprocess;
+      } finally {
+        clearTimeout(killGroup);
+      }
 
       const output = result.all ?? result.stdout ?? '';
       const stderr = result.stderr ?? '';

@@ -107,13 +107,19 @@ describe('run-agent-orchestration.sh — Step 0.5 profile-mutation reviewer gate
   // these tests anchor into, pushing it past the old fixed-size windows.
   it('snapshots profiles.json fresh at the start of run_pre_phase_assessment (not the canonical backup)', () => {
     const fnIdx = orchSrc.indexOf("_pfa_profiles_before=");
-    const block = orchSrc.slice(fnIdx, fnIdx + 5500);
+    // 9000, not 5500: the asserted strings sit ~5.9K chars in, and a fixed window
+    // reported a correct ORDERING as absent the moment comments were added above
+    // them. The invariant is the order, not the byte offset.
+    const block = orchSrc.slice(fnIdx, fnIdx + 9000);
     expect(block).toMatch(/_pfa_profiles_before=/);
   });
 
   it('runs the reviewer gate AFTER the jq-empty syntax check (syntax check is not replaced, only supplemented)', () => {
     const fnIdx = orchSrc.indexOf("_pfa_profiles_before=");
-    const block = orchSrc.slice(fnIdx, fnIdx + 5500);
+    // 9000, not 5500: the asserted strings sit ~5.9K chars in, and a fixed window
+    // reported a correct ORDERING as absent the moment comments were added above
+    // them. The invariant is the order, not the byte offset.
+    const block = orchSrc.slice(fnIdx, fnIdx + 9000);
     const syntaxIdx = block.indexOf('jq empty "$profiles_file"');
     const reviewerIdx = block.indexOf('CHANGE TYPE: profile_creation');
     expect(syntaxIdx).toBeGreaterThan(-1);
@@ -122,7 +128,10 @@ describe('run-agent-orchestration.sh — Step 0.5 profile-mutation reviewer gate
 
   it('computes a structural diff (new_profiles vs changed_profiles) instead of a raw text tail excerpt', () => {
     const fnIdx = orchSrc.indexOf("_pfa_profiles_before=");
-    const block = orchSrc.slice(fnIdx, fnIdx + 5500);
+    // 9000, not 5500: the asserted strings sit ~5.9K chars in, and a fixed window
+    // reported a correct ORDERING as absent the moment comments were added above
+    // them. The invariant is the order, not the byte offset.
+    const block = orchSrc.slice(fnIdx, fnIdx + 9000);
     expect(block).toMatch(/new_profiles/);
     expect(block).toMatch(/changed_profiles/);
   });
@@ -131,7 +140,10 @@ describe('run-agent-orchestration.sh — Step 0.5 profile-mutation reviewer gate
     // The interpolation approach is fragile (unescaped quotes/backslashes in
     // profile text can break the heredoc). Must use a file-based handoff.
     const fnIdx = orchSrc.indexOf("_pfa_profiles_before=");
-    const block = orchSrc.slice(fnIdx, fnIdx + 5500);
+    // 9000, not 5500: the asserted strings sit ~5.9K chars in, and a fixed window
+    // reported a correct ORDERING as absent the moment comments were added above
+    // them. The invariant is the order, not the byte offset.
+    const block = orchSrc.slice(fnIdx, fnIdx + 9000);
     expect(block).toMatch(/_pfa_before_tmp=\$\(mktemp\)/);
     expect(block).toMatch(/printf '%s' "\$_pfa_profiles_before" > "\$_pfa_before_tmp"/);
     expect(block).toMatch(/open\(sys\.argv\[1\]\)/);
@@ -139,7 +151,10 @@ describe('run-agent-orchestration.sh — Step 0.5 profile-mutation reviewer gate
 
   it('only calls the reviewer when the diff actually contains changes (skips the LLM call otherwise)', () => {
     const fnIdx = orchSrc.indexOf("_pfa_profiles_before=");
-    const block = orchSrc.slice(fnIdx, fnIdx + 5500);
+    // 9000, not 5500: the asserted strings sit ~5.9K chars in, and a fixed window
+    // reported a correct ORDERING as absent the moment comments were added above
+    // them. The invariant is the order, not the byte offset.
+    const block = orchSrc.slice(fnIdx, fnIdx + 9000);
     expect(block).toMatch(/_pfa_has_changes/);
   });
 
@@ -163,13 +178,19 @@ describe('run-agent-orchestration.sh — Step 0.5 profile-mutation reviewer gate
 
   it('is gated by ORCH_GATE_PROVIDER (skips the whole review block when gate unconfigured)', () => {
     const fnIdx = orchSrc.indexOf("_pfa_profiles_before=");
-    const block = orchSrc.slice(fnIdx, fnIdx + 5500);
+    // 9000, not 5500: the asserted strings sit ~5.9K chars in, and a fixed window
+    // reported a correct ORDERING as absent the moment comments were added above
+    // them. The invariant is the order, not the byte offset.
+    const block = orchSrc.slice(fnIdx, fnIdx + 9000);
     expect(block).toMatch(/if \[ -n "\$\{ORCH_GATE_PROVIDER:-\}" \]/);
   });
 
   it('cleans up the temp file after computing the diff', () => {
     const fnIdx = orchSrc.indexOf("_pfa_profiles_before=");
-    const block = orchSrc.slice(fnIdx, fnIdx + 5500);
+    // 9000, not 5500: the asserted strings sit ~5.9K chars in, and a fixed window
+    // reported a correct ORDERING as absent the moment comments were added above
+    // them. The invariant is the order, not the byte offset.
+    const block = orchSrc.slice(fnIdx, fnIdx + 9000);
     expect(block).toMatch(/rm -f "\$_pfa_before_tmp"/);
   });
 });

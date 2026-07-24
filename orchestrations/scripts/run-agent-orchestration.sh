@@ -110,6 +110,15 @@ PRD_REL="$(realpath --relative-to="$PROJECT_ROOT" "$(realpath "$PRD_FILE")" 2>/d
 case "$PRD_REL" in
   ../*) PRD_REL="$(realpath "$PRD_FILE" 2>/dev/null || echo "$PRD_FILE")" ;;
 esac
+# B18 — agents run with cwd = the CODELINE, not this repo, so a BARE "profiles.json"
+# does not resolve. The pre-phase assessment prompt named it bare eight times; unable
+# to find it, the agent ran `find / -name profiles.json` and the pipeline sat there
+# for 282 SECONDS (mock1, 2026-07-24 — nearly all of what looked like "slow LLM
+# calls"). Same relative-inside / absolute-outside treatment as PRD_REL above.
+PROFILES_REL="$(realpath --relative-to="$PROJECT_ROOT" "$(realpath "$AGENT_PROFILES_FILE")" 2>/dev/null || echo "$AGENT_PROFILES_FILE")"
+case "$PROFILES_REL" in
+  ../*) PROFILES_REL="$(realpath "$AGENT_PROFILES_FILE" 2>/dev/null || echo "$AGENT_PROFILES_FILE")" ;;
+esac
 # Select wrapper script based on PROVIDER override or CLAUDE_CMD
 case "${EPAM_ORCHESTRATION_PROVIDER:-${CLAUDE_CMD}}" in
     codemie-claude) CLAUDE_SH="$SCRIPT_DIR/codemie-claude.sh" ;;
@@ -3290,14 +3299,14 @@ DO NOT use .phases[0] — that path does not exist in this PRD.
       - Implementation child: files without *.test.ts, agentRole "typescript-engineer"
       - Test child: only the *.test.ts files, agentRole "test-engineer"
       - Update ${PRD_REL} with the split and assign agentRoles on both children
-   d. Otherwise assign the most appropriate role from profiles.json based on the story's tech stack
+   d. Otherwise assign the most appropriate role from ${PROFILES_REL} based on the story's tech stack
    e. Write the assigned agentRole back to the story in ${PRD_REL}
 
-4. PROFILE CREATION — For any agentRole assigned in step 3 that does NOT exist as a key in profiles.json:
+4. PROFILE CREATION — For any agentRole assigned in step 3 that does NOT exist as a key in ${PROFILES_REL}:
    a. Read the project context from ${PRD_REL} (projectName, techStack, constraints)
    b. Read the story's technicalNotes to understand the testing conventions for this project
    c. Generate a new profile string for that role that includes: project name, test framework + version, module system (CJS vs ESM), mock patterns (vi.stubGlobal vs vi.spyOn), forbidden packages, constructor signatures, vitest config path and include pattern, and the instruction that this agent ONLY writes test files — never implementation files
-   d. Add the new profile as a key in profiles.json
+   d. Add the new profile as a key in ${PROFILES_REL}
    e. Append a JSONL record to orchestrations/logs/profiles-audit.jsonl:
       {"timestamp":"<ISO8601>","phase_id":"<phase>","agent_role":"<role>","event":"profile_created","skill":"test-engineering","skill_category":"testing","context":"Story <id> requires dedicated test agent","added_by":"pre-phase-assessment"}
 
@@ -3312,7 +3321,7 @@ DO NOT use .phases[0] — that path does not exist in this PRD.
    - Story writes an Express route handler with optional numeric query params → infer: agent may pass number|undefined where number is required without explicit type narrowing. Add rule.
    - Story has multiple deliverable files (e.g. cli.ts AND cli.test.ts) → infer: agent may write implementation first and run out of context before writing the test. Add rule: write test file first.
 
-   For each inferred gap, append a targeted skill to the agent's profile in profiles.json. Be specific and actionable — state the exact rule, not a general category.
+   For each inferred gap, append a targeted skill to the agent's profile in ${PROFILES_REL}. Be specific and actionable — state the exact rule, not a general category.
 
 5b. QA AGENT SKILL INJECTION — After inferring implementation gaps, also inject project-specific context into the QA agent profiles (sast-sentinel, review-ranger, spec-validator, mutant-hunter). These agents run against every phase and must know the project's actual file structure and conventions to avoid hallucinating findings about non-existent code. For each QA agent profile:
    a. Read the current list of source files: find . -name "*.ts" -not -path "*/node_modules/*"
@@ -3331,13 +3340,13 @@ DO NOT use .phases[0] — that path does not exist in this PRD.
 Known skill categories: deployment_platform, language, framework, testing, database, infrastructure, api, cloud_service
 
 CRITICAL RULES:
-- Keep profiles.json valid JSON at all times. Only ADD to existing profile strings, never remove content.
+- Keep ${PROFILES_REL} valid JSON at all times. Only ADD to existing profile strings, never remove content.
 - A test-engineer profile must instruct the agent to ONLY write test files — never touch implementation files.
 - The same agentRole must NEVER appear on both an implementation story and its paired test story in the same phase.
 - Inferred skill additions must be specific and actionable (a concrete rule the agent can follow), not vague capability claims.
 - NEVER write example API keys, tokens, or secrets into any source file — not even as placeholders. If example values are needed in documentation, use the pattern \`process.env.SKYSCANNER_API_KEY\` or the literal string \`YOUR_API_KEY_HERE\`. Any string matching \`/sk-[a-z]+-[a-zA-Z0-9]+/\` or resembling a credential will trigger a SAST blocker.
 - NEVER modify package.json, tsconfig.json, vitest.config.ts, or any other scaffold-phase infrastructure file. These are owned by the scaffold phase and are immutable to all subsequent phases. If a story appears to require changing these files, flag it as a blocker in skills-gap-report.jsonl instead.
-- NEVER rewrite the PRD file (${PRD_REL}) with a different story structure. You may only update agentRole fields and append to profiles.json. Any other structural change to the PRD is forbidden.
+- NEVER rewrite the PRD file (${PRD_REL}) with a different story structure. You may only update agentRole fields and append to ${PROFILES_REL}. Any other structural change to the PRD is forbidden.
 - NEVER modify .env, .env.*, *credentials*, or any file containing API keys or secrets. These files are immutable to all agents — modification would break the entire pipeline for all subsequent runs.
 PROMPT_HEADER
     )
@@ -3393,6 +3402,15 @@ Fix this and retry. Do not repeat the same mistake."
         # story. Passing "${PHASE:-unknown}" here previously polluted agent-activity's
         # story_id field with the phase name ("core"), making "stories touched" counts
         # wrong (a 1-story PRD showed 2 distinct story_id values: the real story + "core").
+        # B18 — write-scope. In the mock1 run (2026-07-24) this step issued
+        # `write_file src/hello.ts`, editing the very application file the story was
+        # about, BEFORE implementation ran — so impl no longer started from baseline.
+        # Scope is BOTH files it is legitimately allowed to touch: the profiles file
+        # AND the PRD (it may update agentRole fields, per its own prompt). Scoping
+        # to profiles alone broke that and was caught by step-0.5-retry-guard tests.
+        # :- guards — under `set -u` an unset var here aborts the whole command and the
+        # agent never runs at all (same class as the B14 bad-substitution abort).
+        EPAM_ALLOWED_WRITE_PATHS="${PROFILES_REL:-},${PRD_REL:-}" \
         run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "team-lead-agent" 2>&1 | tee "$assessment_log" || _pfa_call_ok=0
 
         if [ "$_pfa_call_ok" -eq 0 ]; then

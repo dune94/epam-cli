@@ -61,8 +61,26 @@ done
 [ -z "$PRD_FILE" ] && fail "--prd <path> is required"
 
 # Resolve to absolute path (supports paths outside project)
-PRD_FILE="$(cd "$(dirname "$PRD_FILE")" && pwd)/$(basename "$PRD_FILE")"
-[ -f "$PRD_FILE" ] && success "PRD: $PRD_FILE" || fail "PRD not found: $PRD_FILE"
+# Tolerate a not-yet-created PRD *and* a not-yet-created parent directory: the
+# per-project PRD is written later by the Jira ingest.
+_prd_dir="$(dirname "$PRD_FILE")"
+if [ -d "$_prd_dir" ]; then
+  PRD_FILE="$(cd "$_prd_dir" && pwd)/$(basename "$PRD_FILE")"
+fi
+# A MISSING PRD MUST NOT ABORT THE RESET. This used to `fail`, which killed the
+# script before archiving logs, clearing the KB scratchpad or resetting cost.
+# That became reachable when PRD paths went per-project (2026-07-25): the
+# metrolinx PRD is CREATED BY THE JIRA INGEST, which runs AFTER this script — and
+# the tier3 caller swallows a failure here as "non-fatal", so the run would have
+# proceeded with none of the standing pre-run resets done.
+PRD_PRESENT=1
+if [ -f "$PRD_FILE" ]; then
+  success "PRD: $PRD_FILE"
+else
+  PRD_PRESENT=0
+  info "PRD not found (not yet created?): $PRD_FILE"
+  info "  skipping dashboard mount; ALL resets below still run."
+fi
 
 if [ -n "$LOG_DIR_ARG" ]; then
   mkdir -p "$LOG_DIR_ARG"
@@ -88,6 +106,9 @@ export EPAM_PROJECT_OUTPUT_DIR="$LOG_DIR"
 # indefinitely). A directory mount doesn't have this problem — renames INSIDE
 # the mounted directory are visible immediately, no container restart needed
 # for subsequent PRD writes during the run.
+if [ "$PRD_PRESENT" = "0" ]; then
+  info "Dashboard mount skipped — no PRD at $PRD_FILE yet."
+else
 info "Configuring agent-monitor to serve: $(basename "$PRD_FILE")..."
 
 PRD_DIR="$(dirname "$PRD_FILE")"
@@ -148,6 +169,7 @@ if docker compose \
 else
   info "  Docker not available or agent-monitor not running — skipping container restart"
 fi
+fi   # end: dashboard mount, skipped when the PRD does not exist yet
 
 # Step 2 (removed 2026-07-13): used to sed-patch a BUDGET_TOTAL constant into
 # monitor.html from prd.configuration.budget. Removed along with the

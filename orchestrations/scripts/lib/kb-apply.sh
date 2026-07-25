@@ -72,7 +72,7 @@ kb_apply_constraints() {
 # kb_record_episode <story_id> <agent_role> <diagnosis> — tool output on stdin.
 # Additive: never fails the caller, because losing an episode must not fail a run.
 kb_record_episode() {
-    local _story="${1:-}" _role="${2:-}" _diag="${3:-}"
+    local _story="${1:-}" _role="${2:-}" _diag="${3:-}" _class="${4:-${FAILURE_CLASS:-}}"
     local _cli="$_KB_APPLY_DIR/kb-cli.js"
     local _node="${NODE_BIN:-node}"
 
@@ -86,8 +86,11 @@ kb_record_episode() {
     fi
     # Keep the signature: it is the lookup key synthesis needs. Discarding it (the
     # previous `>/dev/null`) is why nothing could ever build a rule.
+    # --failure-class gives an otherwise-unkeyable failure (max_iterations,
+    # no_file) a lookup key, so synthesis can act on it at all.
     KB_LAST_SIGNATURE="$("$_node" "$_cli" record \
         --story "$_story" --agent-role "$_role" --diagnosis "$_diag" \
+        --failure-class "$_class" \
         --phase "${PHASE:-}" --model "${STORY_MODEL:-}" 2>/dev/null || true)"
     return 0
 }

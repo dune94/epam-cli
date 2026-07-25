@@ -138,7 +138,7 @@ if [ -f "$_kb_lib" ]; then
     . "$_kb_lib"
     # Here-string, NOT a pipe: `x | kb_record_episode` runs the function in a
     # subshell, so the signature it captures dies with it and synthesis has no key.
-    kb_record_episode "${AGENT_ANALYST_STORY_ID:-}" "${STORY_ROLE:-}" "$_trimmed" \
+    kb_record_episode "${AGENT_ANALYST_STORY_ID:-}" "${STORY_ROLE:-}" "$_trimmed" "$FAILURE_CLASS" \
         <<< "$_failed_output" || true
     KB_SYNTHESIS_THRESHOLD=1 kb_maybe_synthesize "${STORY_ROLE:-}" || true
 fi

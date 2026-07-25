@@ -97,7 +97,7 @@ describe('B22 — behaviour against a REAL vitest run', () => {
     const WRITER_SH = join(REPO, 'orchestrations/scripts/brownfield-repro-test-writer.sh');
     const fnFile = join(dir, '_fn.sh');
     execFileSync('bash', ['-c',
-      `sed -n '/^_validate_written_test() {/,/^}/p' ${JSON.stringify(WRITER_SH)} > ${JSON.stringify(fnFile)}`]);
+      `sed -n '/^_typecheck_written_test() {/,/^}/p' ${JSON.stringify(WRITER_SH)} > ${JSON.stringify(fnFile)} && sed -n '/^_validate_written_test() {/,/^}/p' ${JSON.stringify(WRITER_SH)} >> ${JSON.stringify(fnFile)}`]);
     const script = [
       'set -uo pipefail',
       `PROJECT_ROOT=${JSON.stringify(dir)}`,

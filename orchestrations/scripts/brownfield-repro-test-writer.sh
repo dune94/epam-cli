@@ -219,6 +219,31 @@ _test_validated=0
 # (it is how the gate proves the bug reproduces). This function only answers
 # "can this file run at all?" — because a file that cannot run proves nothing
 # and, once committed, breaks the regression guard for every later cycle.
+# A generated test must COMPILE, not merely execute. vitest strips types rather
+# than checking them, so a spec can run green and still fail tsc — which is exactly
+# how the live metrolinx run died at Step 19 with TS2352 (a mock missing a required
+# field) AFTER the fix, the test, the repro-gate and the team-lead review had all
+# passed. Checking here means the writer still has a retry and a stronger model.
+#
+# SCOPED TO THE FILE JUST WRITTEN. Brownfield repos carry pre-existing type errors;
+# failing on any tsc error would reject good tests in every real client repo.
+_typecheck_written_test() {
+    local rel="$1"
+    local _tsc="$PROJECT_ROOT/node_modules/.bin/tsc"
+    [ -x "$_tsc" ] || return 0
+    [ -f "$PROJECT_ROOT/tsconfig.json" ] || return 0
+
+    local _out
+    _out=$(cd "$PROJECT_ROOT" && "$_tsc" --noEmit 2>&1)
+    if printf '%s\n' "$_out" | grep -qF "${rel}("; then
+        log "written test FAILS TYPECHECK — rejecting so the writer can retry:"
+        printf '%s\n' "$_out" | grep -F "${rel}(" | head -5 | sed 's/^/    /'
+        printf '%s\n' "$_out" | grep -F "${rel}(" >> "$_writer_log" 2>/dev/null || true
+        return 1
+    fi
+    return 0
+}
+
 _validate_written_test() {
     local rel="$1" out="" json=""
     # DETERMINISTIC: ask the runner for machine-readable output and decide on a
@@ -260,7 +285,9 @@ _validate_written_test() {
         if [ "$total" = "-1" ]; then
             out="$json"          # no usable JSON — fall through to the text heuristic
         elif [ "${total:-0}" -gt 0 ]; then
-            return 0             # tests EXECUTED (pass or assertion-fail) => valid
+            # Executed is necessary but NOT sufficient — it must also compile.
+            _typecheck_written_test "$rel" || return 1
+            return 0             # tests EXECUTED and TYPECHECKED => valid
         else
             return 1             # nothing ran => the file never executed
         fi
@@ -276,6 +303,7 @@ _validate_written_test() {
     if printf '%s' "$out" | grep -qiE "Tests +no tests|No test files found|no tests found"; then
         return 1
     fi
+    _typecheck_written_test "$rel" || return 1
     return 0
 }
 _ctx_file="$(mktemp 2>/dev/null || echo /tmp/rtw-ctx-$$)"; printf '%s' "$_prompt" > "$_ctx_file"

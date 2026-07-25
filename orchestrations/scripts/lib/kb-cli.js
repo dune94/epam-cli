@@ -53,6 +53,7 @@ function cmdRecord() {
     toolOutput: readStdin(),
     diagnosis: arg('diagnosis') || null,
     agent_role: arg('agent-role') || null,
+    failure_class: arg('failure-class') || null,
     story_id: arg('story') || null,
     phase: arg('phase') || null,
     model: arg('model') || null,

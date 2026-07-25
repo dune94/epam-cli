@@ -65,12 +65,27 @@ function fromToolOutput(toolOutput) {
  */
 function buildEpisode({ id, toolOutput, diagnosis, ...rest }) {
   const derived = fromToolOutput(toolOutput);
+
+  // Fall back to the FAILURE CLASS when tool output yields no key. Live metrolinx
+  // 2026-07-25: a max_iterations failure emits no compiler code and no runner
+  // error, so the episode was recorded unkeyed and synthesis correctly refused to
+  // build a rule it could never look up — self-heal did nothing for the class that
+  // actually occurred. "This role keeps exhausting its budget" is a perfectly good
+  // key, and exactly what a param constraint is designed to fix.
+  //
+  // A tool-derived signature ALWAYS wins: TS2532 is far more specific than "ran
+  // out of turns". signature_source stays distinct so an audit can tell a precise
+  // key from a coarse one.
+  const cls = typeof rest.failure_class === 'string' ? rest.failure_class.trim() : '';
+  const fallback = cls ? { signature: `class:${cls}`, source: 'failure_class' } : null;
+  const chosen = derived || fallback;
+
   return {
     id,
     ...rest,
     diagnosis: diagnosis ?? null,
-    signature: derived ? derived.signature : null,
-    signature_source: derived ? derived.source : null,
+    signature: chosen ? chosen.signature : null,
+    signature_source: chosen ? chosen.source : null,
   };
 }
 

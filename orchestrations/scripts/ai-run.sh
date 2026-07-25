@@ -42,6 +42,25 @@ load_env_file "${PROJECT_ROOT:-}/.env"
 # Per-site values still win — this only applies when the caller set nothing.
 export EPAM_MAX_OUTPUT_TOKENS="${EPAM_MAX_OUTPUT_TOKENS:-32768}"
 
+# ── Pillar 3: enforced-state verification ───────────────────────────────────
+# Every agent invocation passes through here, so this is where a drifted KB
+# surface must be caught. Only fires when constraints were actually applied
+# (KB_STATE_DIGEST set); otherwise it is a no-op, so runs with no KB state are
+# unaffected. Refusing to invoke is deliberate: running the agent unconstrained
+# while the pipeline believes a healed rule is in force is worse than failing,
+# because the KB then records a "fix that did not work" and ages the rule out.
+if [ -n "${KB_STATE_DIGEST:-}" ]; then
+  _kb_lib="$(dirname "${BASH_SOURCE[0]}")/lib/kb-apply.sh"
+  if [ -f "$_kb_lib" ]; then
+    # shellcheck disable=SC1090
+    . "$_kb_lib"
+    if ! kb_verify_state; then
+      echo "[ai-run] ABORT: enforced KB state drifted before invocation — refusing to run the agent unconstrained." >&2
+      exit 3
+    fi
+  fi
+fi
+
 usage() {
   cat <<'EOF'
 Usage: ai-run.sh [--provider NAME] [--model NAME]

@@ -92,6 +92,21 @@ kb_record_episode() {
     return 0
 }
 
+# kb_verify_state — PILLAR 3. Confirm the enforced KB surface still matches what
+# `apply` compiled. Between apply and execution a wrapper can re-export a default,
+# a subshell can be spawned with a scrubbed env, or a later export can overwrite a
+# knob — and the agent then runs UNCONSTRAINED while a healed rule is believed in
+# force. Scoped to KB_STATE_VARS only; a no-op when nothing was applied.
+# Returns non-zero on drift so the caller can refuse to invoke.
+kb_verify_state() {
+    local _cli="$_KB_APPLY_DIR/kb-cli.js"
+    local _node="${NODE_BIN:-node}"
+    [ -n "${KB_STATE_DIGEST:-}" ] || return 0
+    [ -f "$_cli" ] || return 0
+    command -v "$_node" >/dev/null 2>&1 || return 0
+    "$_node" "$_cli" verify-state
+}
+
 # kb_maybe_synthesize <agent_role> [signature]
 #
 # Turn REPEATED episodes for one signature into a single arbitrated constraint.

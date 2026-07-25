@@ -1,32 +1,60 @@
 {
   "_doc": [
-    "Agent invocation profiles — the Parameter Object for every LLM call in the pipeline.",
+    "Agent invocation profiles \u2014 the Parameter Object for every LLM call in the pipeline.",
     "",
     "WHY THIS EXISTS. Before this file, all 15 invocation sites hand-assembled their own",
     "env bundle, and every site omitted a different subset: no shell site set a timeout,",
     "13 of 15 never set ORCH_JSON_RESULT (so per-agent cost was invisible), and 5 set no",
-    "output budget at all — which on 2026-07-25 made the team-lead reviewer emit 169 bytes",
+    "output budget at all \u2014 which on 2026-07-25 made the team-lead reviewer emit 169 bytes",
     "of truncated <think> instead of a verdict and blocked a metrolinx run. Each omission",
     "was found by a LIVE RUN, one at a time, because 'a call site forgot a parameter' is",
     "invisible to a test that checks behaviour one site at a time.",
     "",
     "THE FIX IS STRUCTURAL, NOT A DEFAULT. Call sites no longer pass execution parameters;",
     "they name a ROLE. lib/agent-invoke.sh resolves the role here, validates that every",
-    "required key is present (fail-fast — an incomplete profile aborts the run loudly",
+    "required key is present (fail-fast \u2014 an incomplete profile aborts the run loudly",
     "rather than silently running at 4096), and exports the whole set. You cannot forget a",
     "parameter you never supply.",
     "",
     "SPLIT OF CONCERNS. Routing (which model/provider, ladder escalation, retry tiers) stays",
-    "with the caller — it is genuinely per-site and dynamic. The EXECUTION BUDGET lives here.",
+    "with the caller \u2014 it is genuinely per-site and dynamic. The EXECUTION BUDGET lives here.",
     "That is precisely the parameter set that kept getting dropped.",
     "",
-    "maxOutputTokens: reasoning models (glm-5.x, kimi) bill <think> against this budget, so",
     "anything under ~8192 risks the model spending its whole allowance thinking and",
-    "returning a truncated fragment. Do not lower these below 8192 for a reasoning model."
+    "returning a truncated fragment. Do not lower these below 8192 for a reasoning model.",
+    "",
+    "SIZING IS EVIDENCE-BASED (2026-07-25). Two independent sources agreed:",
+    "",
+    "MEASURED, 794 real calls from this pipeline via Langfuse: reasoning is the budget,",
+    "not the answer. One glm-5.1 call counted 7,230 output tokens while returning 332",
+    "CHARACTERS of visible text (~85 tokens). In aggregate 64% of glm-5.1's and 37% of",
+    "glm-5.2's output tokens are invisible thinking. Truncations by budget, out of 794:",
+    "3072->12, 4096->7, 6000->6, 8192->2, 16384->1, 24576->0. A glm-5.2 call was cut off",
+    "at exactly 16384, and glm-5.1 produced a LEGITIMATE 16,403-token completion.",
+    "",
+    "VENDOR-VERIFIED (live probes + docs): reasoning tokens are deducted from max_tokens",
+    "on glm-5.1, glm-5.2, kimi-k3 and minimax-m3 \u2014 probed with max_tokens:200, all four",
+    "spent the ENTIRE budget thinking and returned EMPTY content with HTTP 200. Moonshot",
+    "documents 'set max_tokens >= 16000 ... without truncation'; OpenAI advises reserving",
+    ">= 25,000; Anthropic 16,000+ for complex work. Artificial Analysis measures GLM-5.2",
+    "at ~43k output per task, 37k of it reasoning.",
+    "",
+    "So 32768: above every call we have ever observed, above every vendor floor, and",
+    "safely under the LOWEST per-provider ceiling on OpenRouter (65,535 \u2014 glm-5.1 ranges",
+    "65,535-202,752 across providers and OpenRouter load-balances between them).",
+    "",
+    "Raising a cap costs NOTHING: max_tokens is a ceiling, not a reservation, and billing",
+    "is on tokens generated. Median real output is 108 tokens. Capping low does not make",
+    "the model think less \u2014 it cuts it off mid-thought, and you pay for the wasted tokens",
+    "AND the escalation retry. That is the 169-byte reviewer.",
+    "",
+    "reasoning.max_tokens is NOT supported on these models (probed: glm-5.1 ignores it).",
+    "The only working lever is full off: reasoning:{enabled:false} (5.1) /",
+    "reasoning:{effort:'none'} (5.2), both verified. Worth using for structured-JSON",
+    "gates that do not need deep reasoning \u2014 safer and cheaper than budget-tuning."
   ],
-
   "defaults": {
-    "maxOutputTokens": 16384,
+    "maxOutputTokens": 32768,
     "maxIterations": 1,
     "reasoningEffort": "medium",
     "timeoutSecs": 300,
@@ -34,11 +62,10 @@
     "allowedTools": "",
     "temperature": ""
   },
-
   "profiles": {
     "team-lead-review": {
       "_what": "Reviews the story's code change AND its test; emits a verdict.",
-      "maxOutputTokens": 24576,
+      "maxOutputTokens": 32768,
       "maxIterations": 25,
       "reasoningEffort": "high",
       "allowedTools": "bash,read_file,list_files,search",
@@ -46,79 +73,79 @@
     },
     "code-review-cycle": {
       "_what": "Per-iteration code review pass.",
-      "maxOutputTokens": 16384,
+      "maxOutputTokens": 32768,
       "reasoningEffort": "medium",
       "timeoutSecs": 600
     },
     "agent-failure-analyst": {
       "_what": "Diagnoses a no-output/failed agent attempt, prescribes a corrective directive.",
-      "maxOutputTokens": 12288,
+      "maxOutputTokens": 32768,
       "maxIterations": 1,
       "reasoningEffort": "high",
       "timeoutSecs": 360
     },
     "repro-test-writer": {
       "_what": "Writes the bug-reproducing test for a brownfield fix.",
-      "maxOutputTokens": 16384,
+      "maxOutputTokens": 32768,
       "maxIterations": 15,
       "reasoningEffort": "high",
       "timeoutSecs": 900
     },
     "tc-writer": {
       "_what": "Writes post-implementation test criteria into the PRD.",
-      "maxOutputTokens": 16384,
+      "maxOutputTokens": 32768,
       "maxIterations": 6,
       "reasoningEffort": "medium",
       "timeoutSecs": 600
     },
     "cpa-gate": {
       "_what": "Judges a CPA estimate rewrite: pass/fail.",
-      "maxOutputTokens": 8192,
+      "maxOutputTokens": 16384,
       "reasoningEffort": "low",
       "timeoutSecs": 180
     },
     "cpa-inference": {
       "_what": "Produces the cost/effort estimate for a story.",
-      "maxOutputTokens": 8192,
+      "maxOutputTokens": 16384,
       "reasoningEffort": "medium",
       "timeoutSecs": 300
     },
     "prd-change-reviewer": {
       "_what": "Reviews a proposed PRD mutation before it is applied.",
-      "maxOutputTokens": 12288,
+      "maxOutputTokens": 32768,
       "reasoningEffort": "high",
       "temperature": "0.7",
       "timeoutSecs": 360
     },
     "prd-change-summarizer": {
       "_what": "Summarizes a rewrite for the change log.",
-      "maxOutputTokens": 8192,
+      "maxOutputTokens": 16384,
       "reasoningEffort": "high",
       "temperature": "0.7",
       "timeoutSecs": 240
     },
     "impl-failure-analyst": {
       "_what": "Diagnoses why an implementation attempt failed.",
-      "maxOutputTokens": 12288,
+      "maxOutputTokens": 32768,
       "reasoningEffort": "high",
       "temperature": "0.7",
       "timeoutSecs": 360
     },
     "ac-classification": {
       "_what": "Classifies acceptance criteria.",
-      "maxOutputTokens": 8192,
+      "maxOutputTokens": 16384,
       "reasoningEffort": "low",
       "timeoutSecs": 90
     },
     "ac-elaboration": {
       "_what": "Elaborates an acceptance criterion into verification criteria.",
-      "maxOutputTokens": 12288,
+      "maxOutputTokens": 32768,
       "reasoningEffort": "medium",
       "timeoutSecs": 180
     },
     "codeline-discovery": {
       "_what": "Picks which local codeline a Jira ticket belongs to.",
-      "maxOutputTokens": 8192,
+      "maxOutputTokens": 16384,
       "reasoningEffort": "medium",
       "timeoutSecs": 300
     }

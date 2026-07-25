@@ -40,7 +40,7 @@ load_env_file "${PROJECT_ROOT:-}/.env"
 # under 4096, which is exactly why standalone testing on haiku never saw it.
 #
 # Per-site values still win — this only applies when the caller set nothing.
-export EPAM_MAX_OUTPUT_TOKENS="${EPAM_MAX_OUTPUT_TOKENS:-16384}"
+export EPAM_MAX_OUTPUT_TOKENS="${EPAM_MAX_OUTPUT_TOKENS:-32768}"
 
 usage() {
   cat <<'EOF'

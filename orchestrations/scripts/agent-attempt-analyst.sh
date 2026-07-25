@@ -81,7 +81,7 @@ log "diagnosing ${FAILURE_CLASS} via ${_model}"
 _note=$(echo "$_prompt" | \
     EPAM_MAX_ITERATIONS=1 \
     EPAM_REASONING_EFFORT="${AGENT_ANALYST_REASONING_EFFORT:-high}" \
-    EPAM_MAX_OUTPUT_TOKENS="${AGENT_ANALYST_MAX_OUTPUT_TOKENS:-12288}" \
+    EPAM_MAX_OUTPUT_TOKENS="${AGENT_ANALYST_MAX_OUTPUT_TOKENS:-32768}" \
     AI_MODEL="$_model" \
     bash "$AI_RUNNER_CMD" --provider "$_provider" --model "$_model" 2>/dev/null || echo "")
 

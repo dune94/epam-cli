@@ -58,10 +58,27 @@ describe('jira/.env — SPEC_AGENT_MAX_RETRIES=0 (fail-fast: kill run on first o
     expect(jiraEnvSrc).toMatch(/^SPEC_AGENT_MAX_RETRIES=0$/m);
   });
 
-  it('SPEC_MODE_MAX_OUTPUT_TOKENS is ≤6000 (prevents slow reasoning-model generation)', () => {
+  it('SPEC_MODE_MAX_OUTPUT_TOKENS is ≥16384 (a starved budget truncates mid-reasoning)', () => {
+    // REVERSED 2026-07-25 on evidence. This asserted ≤6000 to "prevent slow
+    // reasoning-model generation" — capping output as a TIMEOUT mitigation. Two
+    // independent measurements show it does not mitigate timeouts and does cause
+    // the failure it was meant to avoid:
+    //
+    //  - 794 real pipeline calls (Langfuse): ZERO exceeded the 360s spec timeout;
+    //    the slowest was 227s. But 6 exceeded 6000 output tokens, and those get cut
+    //    off rather than slowed down.
+    //  - Live probes against OpenRouter: glm-5.1, glm-5.2, kimi-k3 and minimax-m3
+    //    all deduct reasoning tokens from max_tokens. At max_tokens:200 every one
+    //    spent the ENTIRE budget thinking and returned EMPTY content with HTTP 200.
+    //
+    // Capping low does not make the model think less — it truncates it mid-thought,
+    // and you pay for the wasted tokens plus the escalation retry. Moonshot's own
+    // guidance for these models is "set max_tokens >= 16000 ... without truncation".
+    // The timeout is the correct instrument for bounding time, and RUNCLAUDE_TIMEOUT_MS
+    // (360000, asserted above) already does it.
     const match = jiraEnvSrc.match(/^SPEC_MODE_MAX_OUTPUT_TOKENS=(\d+)$/m);
     expect(match).not.toBeNull();
-    expect(parseInt(match![1], 10)).toBeLessThanOrEqual(6000);
+    expect(parseInt(match![1], 10)).toBeGreaterThanOrEqual(16384);
   });
 
   it('SPEC_MODE_OPENSPEC_MODEL is not the slow reasoning model (z-ai/glm-5.1)', () => {

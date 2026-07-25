@@ -32,7 +32,7 @@ const GATEWAY = join(__dirname, '../../../orchestrations/scripts/lib/agent-invok
 const REGISTRY = join(__dirname, '../../../orchestrations/agents/invocation-profiles.json');
 
 /** Below this a reasoning model can consume its whole budget in <think>. */
-const REASONING_FLOOR = 8192;
+const REASONING_FLOOR = 16384;
 
 let dir: string;
 let stub: string;

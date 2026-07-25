@@ -36,7 +36,7 @@ const root = (p: string) => join(SCRIPTS, p);
 const read = (p: string) => (existsSync(root(p)) ? readFileSync(root(p), 'utf8') : '');
 
 /** Below this, a glm-5.x/kimi response can be consumed entirely by <think>. */
-const REASONING_FLOOR = 8192;
+const REASONING_FLOOR = 16384;
 
 /**
  * Every script that invokes an agent. This list is not the safety mechanism — the

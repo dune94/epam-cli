@@ -278,7 +278,7 @@ for _attempt in $(seq 1 "$_max_attempts"); do
       EPAM_DANGEROUS_SKIP_APPROVAL=1 \
       EPAM_ALLOWED_WRITE_PATHS="${_target_rel}" \
       EPAM_MAX_ITERATIONS="${REPRO_TEST_WRITER_MAX_ITERATIONS:-15}" \
-      EPAM_MAX_OUTPUT_TOKENS="${REPRO_TEST_WRITER_MAX_OUTPUT_TOKENS:-8192}" \
+      EPAM_MAX_OUTPUT_TOKENS="${REPRO_TEST_WRITER_MAX_OUTPUT_TOKENS:-32768}" \
       AI_MODEL="$_model" \
       bash "$AI_RUNNER_CMD" --provider "$_provider" --model "$_model" > "$_writer_log" 2>&1 || true
 

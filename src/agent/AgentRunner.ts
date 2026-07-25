@@ -33,6 +33,29 @@ function truncateToolOutput(content: string, limit: number): string {
   return `${kept}\n\n[truncated — showing first ${limit.toLocaleString()} of ${content.length.toLocaleString()} chars (${droppedChars.toLocaleString()} dropped)]`;
 }
 
+/**
+ * PILLAR 2 — a self-heal constraint of kind `response_schema` compiles to
+ * EPAM_RESPONSE_SCHEMA. Read it here, where the ProviderRequest is built, so the
+ * healed rule binds the model's OUTPUT SPACE rather than being asked for in prose.
+ *
+ * Malformed input is ignored (loudly): a broken KB must never take the agent down
+ * with it, but it must not be invisible either.
+ */
+function resolveKbResponseSchema(): { type: 'json_schema'; name: string; schema: Record<string, unknown>; strict: boolean } | undefined {
+  const raw = process.env.EPAM_RESPONSE_SCHEMA;
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed?.name || !parsed?.schema) throw new Error('missing name or schema');
+    return { type: 'json_schema', name: parsed.name, schema: parsed.schema, strict: true };
+  } catch (e) {
+    process.stderr.write(
+      `[kb] ignoring malformed EPAM_RESPONSE_SCHEMA (${(e as Error).message}) — ` +
+      `agent output is NOT schema-bound\n`);
+    return undefined;
+  }
+}
+
 export class AgentRunner {
   private executor: Executor;
   private iterationCount = 0;
@@ -111,6 +134,7 @@ export class AgentRunner {
           model: this.options.model,
           stream: true,
           maxTokens: this.options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+          ...(resolveKbResponseSchema() ? { responseFormat: resolveKbResponseSchema()! } : {}),
         },
         delta => {
           if (delta.type === 'text_delta') {

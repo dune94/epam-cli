@@ -99,8 +99,26 @@ class PreExecBlockEnforcement(BaseModel):
     pattern: str = Field(min_length=1, description="literal substring; matching commands are refused")
 
 
+class ResponseSchemaEnforcement(BaseModel):
+    """Bind the agent's OUTPUT SPACE (pillar 2).
+
+    The strongest enforcement available: the model cannot emit a non-conforming
+    reply, rather than being asked not to. Exists because `no_json` — an agent
+    that keeps answering with prose or a tool-call wrapper instead of the required
+    structure — has no knob to turn, and was therefore only ever expressible as
+    prompt prose, which is banned as a self-heal channel.
+    """
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["response_schema"]
+    name: str = Field(min_length=1, description="schema name sent to the provider")
+    schema_: dict = Field(alias="schema", description="JSON Schema the reply must satisfy")
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
 Enforcement = Annotated[
-    Union[GateEnforcement, ParamEnforcement, ToolScopeEnforcement, PreExecBlockEnforcement],
+    Union[GateEnforcement, ParamEnforcement, ToolScopeEnforcement,
+          PreExecBlockEnforcement, ResponseSchemaEnforcement],
     Field(discriminator="kind"),
 ]
 

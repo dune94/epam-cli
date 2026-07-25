@@ -29,7 +29,7 @@
  */
 'use strict';
 
-const SUPPORTED = ['gate', 'param', 'tool_scope', 'pre_exec_block'];
+const SUPPORTED = ['gate', 'param', 'tool_scope', 'pre_exec_block', 'response_schema'];
 
 const csv = s => String(s || '').split(',').map(x => x.trim()).filter(Boolean);
 
@@ -62,6 +62,11 @@ function compile(constraints) {
         break;
       case 'param':
         env[e.name] = String(e.value);
+        break;
+      case 'response_schema':
+        // Pillar 2: the output space IS the enforcement space. Carried as JSON on
+        // the env channel; ai-run.sh hands it to the provider as response_format.
+        env.EPAM_RESPONSE_SCHEMA = JSON.stringify({ name: e.name, schema: e.schema });
         break;
       case 'pre_exec_block':
         // id travels with the pattern: the rejection must name the gate that

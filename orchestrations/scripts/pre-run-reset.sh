@@ -159,7 +159,7 @@ fi
 # ── Step 2: Archive + clear JSONL logs ────────────────────────────────────────
 info "Archiving and clearing run logs..."
 
-ARCHIVE_DIR="$LOG_DIR/archive/pre-run-$(date +%Y%m%dT%H%M%S)"
+ARCHIVE_DIR="$LOG_DIR/archive/pre-run-${ORCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
 mkdir -p "$ARCHIVE_DIR"
 
 CLEARABLE_LOGS=(
@@ -189,6 +189,29 @@ for f in "${CLEARABLE_LOGS[@]}"; do
     ARCHIVED=$((ARCHIVED+1))
   fi
 done
+
+# B13 — MOVE per-run *.log files out of the way.
+#
+# The list above covers .jsonl only. The .log files keep FIXED names
+# (review-agent-<story>.log, repro-test-writer-<story>.log,
+# regression-guard-<phase>.log) and are rewritten only if the step that owns them
+# actually runs — so after a run where a step did NOT run, the file still holds
+# output from hours earlier and reads as current. That cost five wrong diagnoses on
+# 2026-07-24, including a 16:33 mock-era review log attributed to a 20:52 metrolinx
+# run, which produced an entire "reviewer thrashed" theory about a different run.
+#
+# MOVED, not truncated: a MISSING file is honest ("this run did not write it"),
+# whereas a stale file is a lie that looks exactly like data. .jsonl stays
+# truncate-in-place above because dashboards read those paths live and expect them
+# to exist.
+_ARCHIVED_LOGS=0
+while IFS= read -r _lf; do
+    [ -f "$_lf" ] || continue
+    mv "$_lf" "$ARCHIVE_DIR/" 2>/dev/null && _ARCHIVED_LOGS=$((_ARCHIVED_LOGS+1)) || true
+done < <(find "$LOG_DIR" -maxdepth 1 -type f -name '*.log' 2>/dev/null || true)
+[ "$_ARCHIVED_LOGS" -gt 0 ] \
+  && success "Moved $_ARCHIVED_LOGS stale *.log file(s) → $ARCHIVE_DIR (absence now means 'this run did not write it')" \
+  || info "  No stale .log files to move"
 
 # Clear stale lock files
 for lf in "$LOG_DIR"/*.lock; do

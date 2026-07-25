@@ -51,7 +51,7 @@ def _utc_now() -> str:
 
 
 # ─── Enforcement: the three compile targets (pillar 3) ────────────────────────
-# Adding a fourth kind is a deliberate act: it requires a matching compiler branch
+# Adding a kind is a deliberate act: it requires a matching compiler branch
 # in constraint-compiler.js, and the compiler test enumerates these to prove every
 # kind can actually be applied. A constraint with no mechanism cannot be expressed.
 
@@ -85,8 +85,22 @@ class ToolScopeEnforcement(BaseModel):
         return v
 
 
+class PreExecBlockEnforcement(BaseModel):
+    """A command the agent is refused BEFORE execution (pillar 1).
+
+    Deliberately a literal substring, not a regex or an AST query. A full bash
+    parser is its own failure domain — command substitution, here-docs, quoting —
+    and a half-correct one gives false confidence, which is the silent-failure
+    class this whole design removes. A substring predicate is ~0ms, has no grammar
+    edge cases, and expresses the failures actually seen (`sudo `, `--no-verify`).
+    """
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["pre_exec_block"]
+    pattern: str = Field(min_length=1, description="literal substring; matching commands are refused")
+
+
 Enforcement = Annotated[
-    Union[GateEnforcement, ParamEnforcement, ToolScopeEnforcement],
+    Union[GateEnforcement, ParamEnforcement, ToolScopeEnforcement, PreExecBlockEnforcement],
     Field(discriminator="kind"),
 ]
 

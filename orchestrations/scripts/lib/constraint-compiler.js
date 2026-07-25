@@ -29,7 +29,7 @@
  */
 'use strict';
 
-const SUPPORTED = ['gate', 'param', 'tool_scope'];
+const SUPPORTED = ['gate', 'param', 'tool_scope', 'pre_exec_block'];
 
 const csv = s => String(s || '').split(',').map(x => x.trim()).filter(Boolean);
 
@@ -42,6 +42,10 @@ const csv = s => String(s || '').split(',').map(x => x.trim()).filter(Boolean);
 function compile(constraints) {
   const env = {};
   const gates = [];
+  // Pillar 1: commands refused BEFORE execution. Carried as JSON on the env
+  // channel so it crosses the process boundary into the Bash tool — there is
+  // still no free-text field, only an id and a literal pattern.
+  const blocks = [];
   const scopes = { EPAM_ALLOWED_WRITE_PATHS: null, EPAM_ALLOWED_TOOLS: null };
 
   for (const c of constraints || []) {
@@ -58,6 +62,13 @@ function compile(constraints) {
         break;
       case 'param':
         env[e.name] = String(e.value);
+        break;
+      case 'pre_exec_block':
+        // id travels with the pattern: the rejection must name the gate that
+        // fired, or an agent hits an invisible wall and retries blindly.
+        if (!blocks.find(b => b.pattern === e.pattern)) {
+          blocks.push({ id: c.id, pattern: e.pattern });
+        }
         break;
       case 'tool_scope':
         // Intersect: the narrowest constraint wins. Never widen.
@@ -78,6 +89,7 @@ function compile(constraints) {
   for (const [key, list] of Object.entries(scopes)) {
     if (list && list.length) env[key] = list.join(',');
   }
+  if (blocks.length) env.KB_PRE_EXEC_BLOCKS = JSON.stringify(blocks);
   return { env, gates };
 }
 

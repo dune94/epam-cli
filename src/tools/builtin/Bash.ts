@@ -51,10 +51,60 @@ export class BashTool implements Tool {
     },
   };
 
+  /**
+   * PILLAR 1 — pre-flight guard. Constraints of kind `pre_exec_block` compile to
+   * KB_PRE_EXEC_BLOCKS on the env channel; a matching command is refused HERE,
+   * before it reaches the OS. No subprocess, no wasted turn, no diagnose-after-
+   * the-fact round trip.
+   *
+   * Literal substring, never a regex or a parser: a partial bash grammar is its
+   * own silent-failure surface, which is the class this design removes.
+   *
+   * Fails OPEN on a malformed value — a broken KB must not block every command an
+   * agent runs — but never silently: the reason goes to stderr.
+   */
+  private blockedBy(command: string): { id: string; pattern: string } | null {
+    const raw = process.env.KB_PRE_EXEC_BLOCKS;
+    if (!raw) return null;
+    let blocks: Array<{ id?: string; pattern?: string }>;
+    try {
+      blocks = JSON.parse(raw);
+      if (!Array.isArray(blocks)) throw new Error('not an array');
+    } catch (e) {
+      process.stderr.write(
+        `[kb-pre-exec] ignoring malformed KB_PRE_EXEC_BLOCKS (${String((e as Error).message)}) — ` +
+        `commands are NOT being filtered\n`);
+      return null;
+    }
+    for (const b of blocks) {
+      if (b && typeof b.pattern === 'string' && b.pattern && command.includes(b.pattern)) {
+        return { id: b.id || '(unnamed)', pattern: b.pattern };
+      }
+    }
+    return null;
+  }
+
   async execute(input: Record<string, unknown>): Promise<BashToolResult> {
     const command = input.command as string;
     const cwd = (input.cwd as string) ?? process.cwd();
     const timeout = (input.timeout as number) ?? 30000;
+
+    // Refuse before executing. Returned as a TOOL RESULT — in-band, deterministic
+    // and tied to this exact call, the same category as an OS permission error.
+    // Deliberately NOT a prompt injection: naming the gate and the pattern is what
+    // stops the agent retrying blindly against an invisible wall.
+    const blocked = this.blockedBy(command);
+    if (blocked) {
+      return {
+        toolUseId: (input.toolUseId as string) ?? '',
+        content:
+          `rejected by KB gate ${blocked.id}: command blocked before execution ` +
+          `(matched ${JSON.stringify(blocked.pattern)}). This is an enforced constraint ` +
+          `from a previous failure — do not retry this command; use a different approach.`,
+        isError: true,
+        exitCode: 126,
+      };
+    }
 
     // Silently shim `python` → `python3` on systems where only python3 exists
     const shimmedCommand =

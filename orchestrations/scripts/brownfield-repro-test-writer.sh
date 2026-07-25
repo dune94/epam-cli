@@ -31,6 +31,10 @@ NODE_BIN="${NODE_BIN:-node}"
 [ -x "/home/bradleyjerome/.nvm/versions/node/v20.20.0/bin/node" ] && NODE_BIN="/home/bradleyjerome/.nvm/versions/node/v20.20.0/bin/node"
 
 log()  { echo "[repro-test-writer] $*"; }
+# Both B30 (analyst failed) and B31 (no ladder escalation) called `warning`, which
+# this script never defined — so bash printed "command not found" and the
+# diagnostics were NEVER SEEN. A no-silent-failure fix that fails silently.
+warning() { echo "[repro-test-writer] WARNING: $*" >&2; }
 
 # ── Guards ──────────────────────────────────────────────────────────────────
 [ "${EPAM_SKIP_REPRO_TEST_WRITER:-0}" = "1" ] && { log "skipped (EPAM_SKIP_REPRO_TEST_WRITER=1)"; exit 0; }
@@ -301,12 +305,18 @@ for _attempt in $(seq 1 "$_max_attempts"); do
     # the retry. Prose here would be silently trimmed on a long prompt with nothing
     # verifying the agent obeyed it — which is why the channel is banned.
     kb_apply_constraints "${STORY_ROLE:-repro-test-writer}" "story:${STORY_ID:-}" || true
+    # An APPLIED constraint must win over the site default. These prefixes used to
+    # hardcode the knobs, so kb_apply_constraints exported 40, logged success, and
+    # the call site clobbered it back to 15 one line later — every layer reporting
+    # success while the agent ran unconstrained. Worse: the Pillar 3 digest covers
+    # EPAM_MAX_ITERATIONS, so in a REAL run ai-run.sh would have detected the drift
+    # and ABORTED every retry. Found by the induced-failure test, not by a run.
     printf '%s' "$_prompt" | \
       AI_GATE_ALLOW_TOOLS=1 \
       EPAM_DANGEROUS_SKIP_APPROVAL=1 \
       EPAM_ALLOWED_WRITE_PATHS="${_target_rel}" \
-      EPAM_MAX_ITERATIONS="${REPRO_TEST_WRITER_MAX_ITERATIONS:-15}" \
-      EPAM_MAX_OUTPUT_TOKENS="${REPRO_TEST_WRITER_MAX_OUTPUT_TOKENS:-32768}" \
+      EPAM_MAX_ITERATIONS="${EPAM_MAX_ITERATIONS:-${REPRO_TEST_WRITER_MAX_ITERATIONS:-15}}" \
+      EPAM_MAX_OUTPUT_TOKENS="${EPAM_MAX_OUTPUT_TOKENS:-${REPRO_TEST_WRITER_MAX_OUTPUT_TOKENS:-32768}}" \
       AI_MODEL="$_model" \
       bash "$AI_RUNNER_CMD" --provider "$_provider" --model "$_model" > "$_writer_log" 2>&1 || true
 

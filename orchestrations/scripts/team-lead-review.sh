@@ -181,6 +181,9 @@ run_review_prompt() {
     return 0
 }
 
+_reviewed_count=0
+BASELINE_SHA="${BASELINE_SHA:-$(git -C "$PROJECT_ROOT" rev-parse --verify --quiet "origin/${JIRA_BASELINE_BRANCH:-develop}" 2>/dev/null || git -C "$PROJECT_ROOT" rev-parse --verify --quiet "${JIRA_BASELINE_BRANCH:-develop}" 2>/dev/null || echo HEAD~1)}"
+
 log "Team Lead Code Review for Phase: $PHASE_ID"
 echo ""
 
@@ -217,10 +220,28 @@ while IFS= read -r story_id; do
     STORY_COMPLETED=$(jq -r --arg id "$story_id" \
         '.stories[] | select(.id == $id) | .completed' "$PRD_FILE")
 
-    if [ "$STORY_COMPLETED" != "true" ]; then
-        warning "  Story not completed, skipping review"
+    # B26 — review keys on CHANGES, not on `completed`.
+    #
+    # `completed` is set by a HUMAN marking the story done. It is not a pipeline
+    # readiness signal and must not gate code review. Reading it as one meant the
+    # repro-gate (which resets story status before Step 3.6) could silently disable
+    # review: live 2026-07-24 the story arrived as status=pending while the branch
+    # held the 3-line fix AND a 125-line reproducing test the gate had already
+    # verified — the reviewer skipped it, reviewed ZERO stories, and returned
+    # "approved". A change nobody looked at reported as reviewed.
+    #
+    # The reviewer's job is the CODE and the TEST. If the story changed anything vs
+    # baseline, there is something to review.
+    # NOTE: no `| head -1` here. Under `set -o pipefail`, head closes the pipe after
+    # the first line, git takes SIGPIPE, the assignment returns non-zero and `set -e`
+    # kills the script SILENTLY — which is exactly the class of failure this whole
+    # investigation was chasing. `|| true` keeps a diff failure non-fatal.
+    _story_changed=$(git -C "$PROJECT_ROOT" diff --name-only "$BASELINE_SHA" HEAD 2>/dev/null || true)
+    if [ -z "$_story_changed" ]; then
+        warning "  Story $story_id changed nothing vs baseline — nothing to review"
         continue
     fi
+    _reviewed_count=$((_reviewed_count + 1))
 
     log "  Story: $STORY_TITLE"
     log "  Agent: $STORY_AGENT"
@@ -342,8 +363,8 @@ $STORY_DESC
 
 ACCEPTANCE CRITERIA:
 $STORY_ACS
-$([ -n "$STORY_VC" ] && printf '\nVERIFICATION CRITERIA (the observable checks this change MUST satisfy — judge the diff against every one):\n%s\n' "$STORY_VC")
-$([ -n "$STORY_FIX_ANALYSIS" ] && printf '\nROOT CAUSE ANALYSIS & PRESCRIBED MINIMAL FIX (from prior code investigation — the plan of record the implementer was given):\n%s\n\nThe acceptance criteria describe the desired BEHAVIOR to verify; they are NOT a blueprint. The correct implementation is the minimal fix above. Judge the diff against BOTH.\n' "$STORY_FIX_ANALYSIS")
+$([ -n "$STORY_VC" ] && printf '\nVERIFICATION CRITERIA (the observable checks this change MUST satisfy — judge the diff against every one):\n%s\n' "$STORY_VC" || true)
+$([ -n "$STORY_FIX_ANALYSIS" ] && printf '\nROOT CAUSE ANALYSIS & PRESCRIBED MINIMAL FIX (from prior code investigation — the plan of record the implementer was given):\n%s\n\nThe acceptance criteria describe the desired BEHAVIOR to verify; they are NOT a blueprint. The correct implementation is the minimal fix above. Judge the diff against BOTH.\n' "$STORY_FIX_ANALYSIS" || true)
 
 RELEVANT FILES (fix files + the reproducing test the pipeline shipped — review BOTH): $STORY_FILES ${_test_files:-}
 
@@ -353,7 +374,7 @@ $STORY_DIFF
 \`\`\`
 
 PROJECT ROOT: $PROJECT_ROOT
-$([ -n "$_review_codegraph_tool" ] && printf '\nEXISTING-CODE TOOL (use the Bash tool to check whether a helper already exists before accepting hand-rolled logic):\n  PROJECT_ROOT="%s" bash "%s" helpers <domain nouns>   # existing util/parser/formatter (symbol + import path)\n  PROJECT_ROOT="%s" bash "%s" query <SymbolName>        # exact definition site\n' "$PROJECT_ROOT" "$_review_codegraph_tool" "$PROJECT_ROOT" "$_review_codegraph_tool")
+$([ -n "$_review_codegraph_tool" ] && printf '\nEXISTING-CODE TOOL (use the Bash tool to check whether a helper already exists before accepting hand-rolled logic):\n  PROJECT_ROOT="%s" bash "%s" helpers <domain nouns>   # existing util/parser/formatter (symbol + import path)\n  PROJECT_ROOT="%s" bash "%s" query <SymbolName>        # exact definition site\n' "$PROJECT_ROOT" "$_review_codegraph_tool" "$PROJECT_ROOT" "$_review_codegraph_tool" || true)
 
 Review the implementation against each acceptance criterion above.
 Check: TypeScript strict compliance, test coverage, error handling, security (OWASP).
@@ -364,7 +385,7 @@ CONCISION & REUSE (blocker-level checks):
 - If the diff hand-rolls logic that an EXISTING function/helper already provides (verify with the tool above), that is a 'blocker' — request changes and name the helper to reuse instead.
 - Do NOT approve an over-engineered fix just because it satisfies the AC wording.
 Do NOT read from external URLs.
-$([ -n "$_review_kb" ] && printf '\nLEARNED REVIEW RULES (from prior runs — apply these):\n%s\n' "$_review_kb")
+$([ -n "$_review_kb" ] && printf '\nLEARNED REVIEW RULES (from prior runs — apply these):\n%s\n' "$_review_kb" || true)
 
 Respond with ONLY a JSON object (no markdown fences):
 {\"verdict\":\"approved\",\"issues\":[],\"summary\":\"...\"}
@@ -549,6 +570,18 @@ echo "$REVIEW_RECORD" >> "$REVIEW_LOG"
 echo ""
 log "Review logged to: $REVIEW_LOG"
 success "Team Lead code review completed"
+
+# B26 — reviewing NOTHING must never read as approved.
+# Live 2026-07-24: every story was skipped by the old `completed` guard, so zero
+# stories were reviewed and this returned "approved" — a change nobody looked at
+# reported as reviewed. Only the escalation flag caught it, and it caught it as the
+# WRONG diagnosis ("review requested changes"), costing two empty re-implementation
+# cycles. Same fail-open class as the gates fixed earlier that day.
+if [ "${_reviewed_count:-0}" -eq 0 ]; then
+    warning "Team Lead review reviewed NO stories — refusing to report approved (nothing was reviewed)"
+    echo "REVIEW_INCOMPLETE" > "${AUTOMATION_DIR}/logs/review-incomplete-${PHASE_ID:-phase}.flag" 2>/dev/null || true
+    exit 1
+fi
 
 # Exit with appropriate code
 # Exit 1 when changes_requested so the caller can detect issues and trigger the

@@ -373,9 +373,23 @@ Respond with ONLY a JSON object (no markdown fences):
 
 A 'blocker' issue MUST be fixed before merge. 'major' should be fixed. 'minor' is optional."
 
-    log "  Invoking review-agent for $story_id..."
+    log "  Invoking review-agent for $story_id... (model=${ORCH_GATE_MODEL:-?} provider=${EPAM_ORCHESTRATION_PROVIDER:-?})"
     REVIEW_OUTPUT_FILE="$AUTOMATION_DIR/logs/review-agent-${story_id}.log"
-    REVIEW_OUTPUT=$(run_review_prompt "$REVIEW_PROMPT" 2>&1 | tee "$REVIEW_OUTPUT_FILE")
+    # B25 — the reviewer used to fail leaving NO evidence: `$(... | tee FILE)` never
+    # creates FILE when the pipeline dies before producing stdout, so a filesystem
+    # search after a failed run found no log at all and the failure could only be
+    # guessed at. Create the file up front, record the exit status, and always write
+    # SOMETHING — a step that cannot explain its own failure gets re-diagnosed by
+    # guesswork every time (three wrong mechanism guesses on 2026-07-24 alone).
+    : > "$REVIEW_OUTPUT_FILE" 2>/dev/null || true
+    REVIEW_OUTPUT=$(run_review_prompt "$REVIEW_PROMPT" 2>&1 | tee -a "$REVIEW_OUTPUT_FILE")
+    _review_rc=${PIPESTATUS[0]}
+    if [ -z "$(printf '%s' "$REVIEW_OUTPUT" | tr -d '[:space:]')" ]; then
+        warning "  review-agent produced NO OUTPUT AT ALL (rc=${_review_rc}, model=${ORCH_GATE_MODEL:-?}, provider=${EPAM_ORCHESTRATION_PROVIDER:-?})"
+        printf '[team-lead-review] EMPTY RESULT rc=%s model=%s provider=%s story=%s at %s\n' \
+            "${_review_rc}" "${ORCH_GATE_MODEL:-?}" "${EPAM_ORCHESTRATION_PROVIDER:-?}" "$story_id" "$(date -Is)" \
+            >> "$REVIEW_OUTPUT_FILE" 2>/dev/null || true
+    fi
 
     # Extract JSON verdict from output.
     # BUG (found live, 2026-07-07): both the grep pattern and the original python

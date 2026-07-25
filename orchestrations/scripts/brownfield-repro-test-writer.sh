@@ -146,6 +146,11 @@ _emit_tw "spec_update" "repro-test-writer started for ${STORY_ID} → ${_target_
 read -r -d '' _prompt <<PROMPT || true
 You are a TEST ENGINEER. Your ONLY job in this turn is to write ONE bug-reproducing test for a fix that has ALREADY been implemented and committed. Do NOT modify any source file — write ONLY the test file.
 
+## VERIFY IT COMPILES BEFORE YOU FINISH
+Your test must TYPECHECK, not merely run — a spec that passes the test runner but fails tsc blocks the whole pipeline five steps later. Mock objects are the usual cause: they must satisfy the FULL type, with every required property, and no property the type does not declare. After writing the file, run:
+  cd "${PROJECT_ROOT}" && ./node_modules/.bin/tsc --noEmit 2>&1 | grep "${_target_rel}"
+If that prints anything, FIX YOUR FILE and re-check before finishing.
+
 ## The fix that was just made (diff vs baseline)
 \`\`\`diff
 ${_fix_diff}
@@ -236,6 +241,14 @@ _typecheck_written_test() {
     local _out
     _out=$(cd "$PROJECT_ROOT" && "$_tsc" --noEmit 2>&1)
     if printf '%s\n' "$_out" | grep -qF "${rel}("; then
+        _typecheck_feedback="
+
+## COMPILER ERRORS FROM YOUR PREVIOUS ATTEMPT — FIX THESE
+Your last test ran but did NOT compile. tsc reported, for this exact file:
+\`\`\`
+$(printf '%s\n' "$_out" | grep -F "${rel}(" | head -8)
+\`\`\`
+Rewrite the file so these are gone. Mock objects must satisfy the full type."
         log "written test FAILS TYPECHECK — rejecting so the writer can retry:"
         printf '%s\n' "$_out" | grep -F "${rel}(" | head -5 | sed 's/^/    /'
         printf '%s\n' "$_out" | grep -F "${rel}(" >> "$_writer_log" 2>/dev/null || true
@@ -306,6 +319,14 @@ _validate_written_test() {
     _typecheck_written_test "$rel" || return 1
     return 0
 }
+# Compiler errors from the PREVIOUS attempt, injected into the next prompt.
+#
+# NOT the banned self-heal prose channel: that ban covers accumulated cross-run KB
+# knowledge injected as advice. This is the compiler's own output about the file
+# THIS agent just wrote in THIS attempt — in-band, deterministic, tied to the exact
+# action, the same category as a gate rejection returned as a tool result.
+# Withholding it makes the agent guess at an error the toolchain knows exactly.
+_typecheck_feedback=""
 _ctx_file="$(mktemp 2>/dev/null || echo /tmp/rtw-ctx-$$)"; printf '%s' "$_prompt" > "$_ctx_file"
 _max_attempts="${REPRO_TEST_WRITER_MAX_ATTEMPTS:-3}"
 # Self-heal enforcement seam: constraints compiled onto this shell's knobs.
@@ -339,7 +360,7 @@ for _attempt in $(seq 1 "$_max_attempts"); do
     # success while the agent ran unconstrained. Worse: the Pillar 3 digest covers
     # EPAM_MAX_ITERATIONS, so in a REAL run ai-run.sh would have detected the drift
     # and ABORTED every retry. Found by the induced-failure test, not by a run.
-    printf '%s' "$_prompt" | \
+    { printf '%s' "$_prompt"; [ -n "$_typecheck_feedback" ] && printf '%s' "$_typecheck_feedback"; } | \
       AI_GATE_ALLOW_TOOLS=1 \
       EPAM_DANGEROUS_SKIP_APPROVAL=1 \
       EPAM_ALLOWED_WRITE_PATHS="${_target_rel}" \

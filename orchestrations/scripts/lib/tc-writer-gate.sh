@@ -31,6 +31,22 @@
 # writer succeeded within 3 attempts). Returns 1 if the story was BLOCKED
 # (no valid testCriteria after 3 attempts) — the caller must skip running
 # this story's implementation when this returns 1.
+# B31: a ladder that does not escalate must say WHY. Empty previously collapsed
+# three cases into one silent outcome: at the ceiling (fine), model not on the
+# ladder (misconfiguration — escalation silently never happens), and ladder unset
+# (no escalation at all this run). "The ladder didn't help" and "the ladder never
+# ran" are very different diagnoses.
+_ladder_skip_reason() {
+    local _m="$1" _map="$2"
+    if [ -z "$_map" ]; then
+        echo "ladder is EMPTY/unset — NO escalation configured for this run"
+    elif printf '%s' "$_map" | grep -qF -- "=${_m}"; then
+        echo "at ladder ceiling (${_m}) — no further escalation available"
+    else
+        echo "model '${_m}' is NOT on the ladder — escalation impossible (renamed model or stale map?)"
+    fi
+}
+
 run_inline_tc_writer_gate() {
     local story_id="$1"
     local phase="$2"
@@ -65,6 +81,7 @@ run_inline_tc_writer_gate() {
     local _tc_corrective=""
     local _tc_writer_log="$LOG_DIR/tc-writer-${story_id}.log"
 
+
     # Next rung on the MEDIUM ladder ("A=B|C=D"). Empty when already at the top.
     _tc_ladder_next_model() {
         local _cur="$1" _pair _from _to
@@ -84,6 +101,8 @@ run_inline_tc_writer_gate() {
             if [ -n "$_tc_next" ]; then
                 log "  [tc-writer] ladder escalation (attempt ${_tc_gate_attempt}/3) — ${_tc_model} → ${_tc_next}"
                 _tc_model="$_tc_next"
+            else
+                warning "  [tc-writer] NO ladder escalation on attempt ${_tc_gate_attempt}/3 — $(_ladder_skip_reason "$_tc_model" "${EPAM_MODEL_LADDER_MEDIUM:-}")"
             fi
         fi
         log "  Story $story_id needs testCriteria — running TC writer inline before it starts... (attempt ${_tc_gate_attempt}/3, model ${_tc_model})"
@@ -143,8 +162,13 @@ run_inline_tc_writer_gate() {
             grep -qiE "ai-run failed|no error output" "$_tc_writer_log" 2>/dev/null && _tc_fclass="provider"
             [ "${_tc_gate_facts_len:-0}" -eq 0 ] && [ "$_tc_gate_exit" -eq 0 ] && _tc_fclass="no_json"
             log "  [tc-writer] attempt ${_tc_gate_attempt} failed (class=${_tc_fclass}) — invoking self-heal analyst"
+            # B30: same three-valued contract as the repro-test-writer call site.
             _tc_corrective="$(AGENT_ANALYST_STORY_ID="$story_id" \
-                bash "$SCRIPT_DIR/../agent-attempt-analyst.sh" "$_tc_fclass" "$_tc_writer_log" 2>/dev/null || echo "")"
+                bash "$SCRIPT_DIR/../agent-attempt-analyst.sh" "$_tc_fclass" "$_tc_writer_log" 2>>"$_tc_writer_log")"
+            _tc_analyst_rc=$?
+            if [ "$_tc_analyst_rc" -eq 2 ]; then
+                warning "  [tc-writer] self-heal analyst FAILED (class=${_tc_fclass}) — attempt $((_tc_gate_attempt + 1)) retries WITHOUT corrective guidance"
+            fi
         fi
     done
 

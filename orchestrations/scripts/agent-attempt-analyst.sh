@@ -15,7 +15,21 @@
 # emits nothing and the caller just retries/ladders.
 #
 # Output: the corrective directive on stdout (empty string = nothing to add, just retry).
-# Exit: always 0 (best-effort; never blocks the caller).
+#
+# Exit contract (B30, 2026-07-25) — deliberately three-valued, because "produced
+# no corrective" is a LEGITIMATE outcome for provider/infra/timeout and must stay
+# distinguishable from a BROKEN analyst:
+#   0 + output    -> corrective prescribed
+#   0 + no output -> deliberate skip (provider/infra/timeout: no behaviour to fix)
+#   2             -> the analyst itself failed; the caller must RECORD that the
+#                    next attempt is running with no corrective guidance
+#
+# This is still best-effort and still must not block the caller. Previously it
+# was `exit 0` unconditionally, swallowed its runner's stderr, and emitted
+# self_heal_complete before checking anything had been produced — so a dead
+# analyst was indistinguishable from a working one in both logs and dashboard,
+# and every retry silently re-ran the identical prompt. Not blocking the caller
+# is not the same as not telling anyone.
 set -uo pipefail
 
 FAILURE_CLASS="${1:-}"
@@ -78,14 +92,31 @@ _emit_fa() { bash "$SCRIPT_DIR/update-monitor.sh" event "$1" "$2" "$_fa_sid" "ma
 _emit_fa "self_heal_start" "failure-analyst diagnosing ${FAILURE_CLASS}${_fa_sid:+ for ${_fa_sid}}"
 
 log "diagnosing ${FAILURE_CLASS} via ${_model}"
+# Keep the runner's stderr: it is the only evidence of WHY self-heal failed, and
+# both call sites used to discard it along with everything else.
+_analyst_err="$(mktemp 2>/dev/null || echo /tmp/agent-analyst-err.$$)"
 _note=$(echo "$_prompt" | \
     EPAM_MAX_ITERATIONS=1 \
     EPAM_REASONING_EFFORT="${AGENT_ANALYST_REASONING_EFFORT:-high}" \
     EPAM_MAX_OUTPUT_TOKENS="${AGENT_ANALYST_MAX_OUTPUT_TOKENS:-32768}" \
     AI_MODEL="$_model" \
-    bash "$AI_RUNNER_CMD" --provider "$_provider" --model "$_model" 2>/dev/null || echo "")
+    bash "$AI_RUNNER_CMD" --provider "$_provider" --model "$_model" 2>"$_analyst_err")
+_analyst_rc=$?
 
 # Trim to a bounded directive; never emit a huge blob.
-_emit_fa "self_heal_complete" "failure-analyst prescribed corrective directive (${FAILURE_CLASS})"
-printf '%s' "$(printf '%s' "$_note" | head -c 800)"
+_trimmed="$(printf '%s' "$_note" | head -c 800)"
+
+if [ "$_analyst_rc" -ne 0 ] || [ -z "${_trimmed//[[:space:]]/}" ]; then
+    log "FAILED — no corrective produced for ${FAILURE_CLASS} (exit=${_analyst_rc}, model=${_model})"
+    [ -s "$_analyst_err" ] && log "  runner stderr: $(head -c 400 "$_analyst_err" | tr '\n' ' ')"
+    log "  the next attempt will retry WITHOUT corrective guidance"
+    _emit_fa "self_heal_failed" "failure-analyst FAILED (${FAILURE_CLASS}, exit=${_analyst_rc}) — next attempt has NO corrective guidance"
+    rm -f "$_analyst_err" 2>/dev/null || true
+    exit 2
+else
+    _emit_fa "self_heal_complete" "failure-analyst prescribed corrective directive (${FAILURE_CLASS})"
+fi
+
+rm -f "$_analyst_err" 2>/dev/null || true
+printf '%s' "$_trimmed"
 exit 0

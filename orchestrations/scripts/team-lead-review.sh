@@ -56,6 +56,22 @@ ORCH_GATE_MODEL="${ORCH_GATE_MODEL:-z-ai/glm-5.2}"
 # instead of dead-ending (found live 2026-07-23: the review-agent thrashed to its
 # 20-iteration cap producing NO verdict, which the pipeline silently defaulted to
 # APPROVED — a fix was rubber-stamped without ever being reviewed).
+# B31: a ladder that does not escalate must say WHY. Empty previously collapsed
+# three cases into one silent outcome: at the ceiling (fine), model not on the
+# ladder (misconfiguration — escalation silently never happens), and ladder unset
+# (no escalation at all this run). "The ladder didn't help" and "the ladder never
+# ran" are very different diagnoses.
+_ladder_skip_reason() {
+    local _m="$1" _map="$2"
+    if [ -z "$_map" ]; then
+        echo "ladder is EMPTY/unset — NO escalation configured for this run"
+    elif printf '%s' "$_map" | grep -qF -- "=${_m}"; then
+        echo "at ladder ceiling (${_m}) — no further escalation available"
+    else
+        echo "model '${_m}' is NOT on the ladder — escalation impossible (renamed model or stale map?)"
+    fi
+}
+
 _ladder_next_model() {
     local _m="$1" _map="${EPAM_MODEL_LADDER_HIGH:-${EPAM_MODEL_LADDER:-}}" _pair
     [ -z "$_map" ] && return 0
@@ -90,6 +106,7 @@ run_review_prompt() {
     fi
     local _base_model="$ORCH_GATE_MODEL"
     local _next_model; _next_model="$(_ladder_next_model "$_base_model")"
+    [ -z "$_next_model" ] && warning "  review-agent has NO ladder escalation available — $(_ladder_skip_reason "$_base_model" "${EPAM_MODEL_LADDER_HIGH:-${EPAM_MODEL_LADDER:-}}")"
     local _max_attempts="${REVIEW_MAX_ATTEMPTS:-2}"
     local _attempt=1 _model _provider _review_out=""
     while [ "$_attempt" -le "$_max_attempts" ]; do

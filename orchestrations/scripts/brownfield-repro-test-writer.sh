@@ -165,6 +165,22 @@ Over-exploring here is the #1 failure mode — do the MINIMUM lookup, then Write
 PROMPT
 
 # ── HIGH-ladder helpers (glm-5.1 → kimi-k3), same maps the detective/reviewer use ──
+# B31: a ladder that does not escalate must say WHY. Empty previously collapsed
+# three cases into one silent outcome: at the ceiling (fine), model not on the
+# ladder (misconfiguration — escalation silently never happens), and ladder unset
+# (no escalation at all this run). "The ladder didn't help" and "the ladder never
+# ran" are very different diagnoses.
+_ladder_skip_reason() {
+    local _m="$1" _map="$2"
+    if [ -z "$_map" ]; then
+        echo "ladder is EMPTY/unset — NO escalation configured for this run"
+    elif printf '%s' "$_map" | grep -qF -- "=${_m}"; then
+        echo "at ladder ceiling (${_m}) — no further escalation available"
+    else
+        echo "model '${_m}' is NOT on the ladder — escalation impossible (renamed model or stale map?)"
+    fi
+}
+
 _ladder_next_model() {
     local _m="$1" _map="${EPAM_MODEL_LADDER_HIGH:-${EPAM_MODEL_LADDER:-}}" _pair
     IFS='|' read -ra _pairs <<< "$_map"
@@ -269,6 +285,8 @@ for _attempt in $(seq 1 "$_max_attempts"); do
         if [ -n "$_next" ]; then
             _model="$_next"; _provider="$(_provider_for_model "$_model")"; [ -z "$_provider" ] && _provider="$_base_provider"
             log "ladder escalation (attempt ${_attempt}/${_max_attempts}) — ${_base_model} → ${_model}"
+        else
+            warning "NO ladder escalation on attempt ${_attempt}/${_max_attempts} — $(_ladder_skip_reason "$_base_model" "${EPAM_MODEL_LADDER_HIGH:-${EPAM_MODEL_LADDER:-}}")"
         fi
     fi
     # Prepend the self-heal corrective directive (empty on attempt 1). printf '%s' on the prompt
@@ -310,7 +328,17 @@ for _attempt in $(seq 1 "$_max_attempts"); do
     grep -qiE "ai-run failed|no error output" "$_writer_log" 2>/dev/null && _fclass="provider"
     [ -n "$_fclass_override" ] && _fclass="$_fclass_override"
     log "attempt ${_attempt} failed (class=${_fclass}) — invoking self-heal analyst"
-    _corrective="$(AGENT_ANALYST_STORY_ID="$STORY_ID" AI_RUNNER_CMD="$AI_RUNNER_CMD" bash "$SCRIPT_DIR/agent-attempt-analyst.sh" "$_fclass" "$_writer_log" "$_ctx_file" 2>/dev/null || echo "")"
+    # B30: capture the analyst's exit instead of swallowing it. rc=2 means the
+    # analyst itself failed, so the next attempt runs with NO corrective — that
+    # must be visible, not inferred later from a confusing retry log.
+    _corrective="$(AGENT_ANALYST_STORY_ID="$STORY_ID" AI_RUNNER_CMD="$AI_RUNNER_CMD" bash "$SCRIPT_DIR/agent-attempt-analyst.sh" "$_fclass" "$_writer_log" "$_ctx_file" 2>>"$_writer_log")"
+    _analyst_rc=$?
+    if [ "$_analyst_rc" -eq 2 ]; then
+        warning "  self-heal analyst FAILED (class=${_fclass}) — attempt $((_attempt + 1)) retries WITHOUT corrective guidance"
+        _emit_tw "error" "self-heal analyst failed for ${STORY_ID} (${_fclass}) — retry has no corrective guidance"
+    elif [ -n "$_corrective" ]; then
+        log "  self-heal analyst prescribed a corrective for attempt $((_attempt + 1))"
+    fi
 done
 rm -f "$_ctx_file" 2>/dev/null || true
 

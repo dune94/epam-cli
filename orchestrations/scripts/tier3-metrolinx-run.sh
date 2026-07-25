@@ -10,13 +10,13 @@
 #   core only (scaffold is a no-op for brownfield)
 #
 # Model assignment:
-#   Story agents : MiniMax-M3 (direct) and moonshotai/kimi-k2 (OpenRouter)
+#   Story agents : z-ai/glm-5.2 (OpenRouter)
 #   Gates/analyst: z-ai/glm-5.2
-#   Retry ladder : glm-5.2 → glm-5.1 → kimi-k2 (HIGH ceiling)
+#   Retry ladder : glm-5.2 → glm-5.1 → kimi-k3 (HIGH ceiling)
 #
 # Prerequisites:
 #   - MINIMAX_API_KEY set (MiniMax-M3 story agents)
-#   - OPENROUTER_API_KEY set (Kimi K2, GLM-Z1 via OpenRouter)
+#   - OPENROUTER_API_KEY set (GLM-5.x, Kimi K3 via OpenRouter)
 #   - JIRA_TOKEN set (Metrolinx Atlassian API token)
 #
 # Usage:

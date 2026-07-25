@@ -130,10 +130,35 @@ async function maybeSynthesize(store, {
     timeout: Number(process.env.KB_SYNTHESIS_TIMEOUT_MS || 180000),
   });
   const reply = (r.stdout || '').trim();
-  if (!reply || /^NO_CONSTRAINT\b/m.test(reply)) return null;
+  const q = base => store.quarantine({ signature, agent_role, ...base });
+
+  // PILLAR 4 — every path out of here that is NOT an admitted rule leaves
+  // evidence. These were four bare `return null`s: a broken synthesizer looked
+  // exactly like one with nothing to say.
+  if (!reply) {
+    // Distinguish a FAILED runner from a model that declined. `status` is null
+    // when spawnSync could not run the command at all (ENOENT/timeout).
+    q({ outcome: 'no_output',
+        reason: r.status === 0 ? 'runner returned empty stdout' : `runner exit ${r.status ?? 'null'}`,
+        detail: (r.stderr || '').slice(0, 400) || null });
+    return null;
+  }
+  if (/^NO_CONSTRAINT\b/m.test(reply)) {
+    q({ outcome: 'declined', reason: 'model declined: no enforceable constraint from these episodes' });
+    return null;
+  }
 
   const parsed = extractJson(reply);
-  if (!parsed || !parsed.enforcement) return null;
+  if (!parsed) {
+    q({ outcome: 'unparseable', reason: 'reply contained no JSON object', raw: reply });
+    return null;
+  }
+  if (!parsed.enforcement) {
+    q({ outcome: 'unmapped_rule', reason: 'proposal has no enforcement mechanism',
+        detail: 'advice-shaped output: exactly what the discriminated union exists to reject',
+        raw: reply });
+    return null;
+  }
 
   const candidate = {
     id: store.slug(`${agent_role || 'global'}-${signature}`),
@@ -148,7 +173,13 @@ async function maybeSynthesize(store, {
     // admit() validates FIRST, so an unenforceable proposal cannot archive an
     // existing rule as a side effect, and leaves the store untouched on refusal.
     return arb.admit(store, candidate);
-  } catch {
+  } catch (e) {
+    // Pydantic's field-level reason is the whole point — discarding it left
+    // nobody able to tell WHY a rule was refused.
+    q({ outcome: 'unmapped_rule',
+        reason: 'refused by schema/arbitration',
+        detail: String((e && e.message) || e).slice(0, 400),
+        raw: reply });
     return null;
   }
 }

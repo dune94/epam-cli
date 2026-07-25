@@ -39,6 +39,11 @@ function configure({ root } = {}) {
 const episodesPath = () => path.join(ROOT, 'healing-events.jsonl');
 const constraintsPath = () => path.join(ROOT, 'constraints.json');
 const archivePath = () => path.join(ROOT, 'constraints.archive.jsonl');
+// PILLAR 4 — blast radius. Every synthesis that did NOT become a rule lands here
+// with its reason. Without it, a synthesizer that never once produced a valid
+// constraint is indistinguishable from a pipeline with nothing to learn — the
+// same silent-failure class as the analyst (B30), one layer up.
+const quarantinePath = () => path.join(ROOT, 'unmapped-rules.jsonl');
 
 function ensure() {
   fs.mkdirSync(ROOT, { recursive: true });
@@ -78,6 +83,41 @@ function recordEpisode(ep) {
   validate('episode', rec);
   fs.appendFileSync(episodesPath(), JSON.stringify(rec) + '\n');
   return rec;
+}
+
+/**
+ * Record a synthesis that did not enter the procedural store.
+ *
+ * EVIDENCE, NEVER INSTRUCTION: like the episodic log this is never read back to
+ * an agent and is deliberately not reachable from lookup(), so it cannot become a
+ * prompt-injection channel by the back door.
+ *
+ * `outcome` is three-valued in the same discipline used everywhere else here:
+ *   declined       the model deliberately refused (NO_CONSTRAINT) — legitimate
+ *   no_output      the runner FAILED or returned nothing — broken, not a decision
+ *   unparseable    a reply arrived but was not a JSON object
+ *   unmapped_rule  parsed, but outside the enforcement whitelist (Pydantic refused)
+ * Never write it unvalidated: quarantine is not a bypass around the schema.
+ */
+function quarantine({ outcome, signature, agent_role, reason, detail, raw }) {
+  ensure();
+  const rec = {
+    ts: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+    outcome, signature: signature || null, agent_role: agent_role || null,
+    reason: reason || null, detail: detail || null,
+    raw: raw ? String(raw).slice(0, 2000) : null,
+  };
+  fs.appendFileSync(quarantinePath(), JSON.stringify(rec) + '\n');
+  return rec;
+}
+
+function quarantined() {
+  ensure();
+  if (!fs.existsSync(quarantinePath())) return [];
+  return fs.readFileSync(quarantinePath(), 'utf8')
+    .split('\n').filter(Boolean)
+    .map(l => { try { return JSON.parse(l); } catch { return null; } })
+    .filter(Boolean);
 }
 
 function episodes() {
@@ -161,7 +201,7 @@ const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-')
   .replace(/^-+|-+$/g, '').slice(0, 60) || 'constraint';
 
 module.exports = {
-  configure, recordEpisode, episodes,
+  configure, recordEpisode, episodes, quarantine, quarantined,
   putConstraint, readConstraints, writeConstraints, lookup, synthesize,
   validate, slug,
   _paths: () => ({ episodes: episodesPath(), constraints: constraintsPath(), archive: archivePath() }),

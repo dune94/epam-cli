@@ -54,6 +54,9 @@ const AGENT_SITES = [
   'lib/cpa-inference.js',
   'lib/ac-gate.js',
   'lib/codeline-discovery.js',
+  // Self-heal synthesis: bounded by the generated JSON Schema, routed through
+  // ai-run.sh so it inherits the 32768 output net.
+  'lib/kb-synthesizer.js',
 ];
 
 describe('B28 — the central net (the actual fix)', () => {

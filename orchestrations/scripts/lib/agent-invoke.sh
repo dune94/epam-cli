@@ -100,6 +100,39 @@ invoke_agent() {
 
     local _cmd="${_runner:-${AI_RUNNER_CMD:-$_AGENT_INVOKE_DIR/../ai-run.sh}}"
 
+    # ── Self-heal constraints (pillar 3) ────────────────────────────────────
+    # Healed knowledge arrives here as ENV, never as prompt text. kb-cli apply
+    # emits only `export` lines and a gate list — there is no channel by which a
+    # constraint can degrade back into advice the model may ignore, which is what
+    # COORDINATOR_PROMPT_AMENDMENT does today.
+    #
+    # Applied AFTER the profile defaults above and BEFORE dispatch, so a learned
+    # constraint overrides the static default. Wholly inert unless the caller sets
+    # KB_AGENT_ROLE + KB_SIGNATURES: no KB context, no behaviour change.
+    local _kb_gates="" _kb_fired=""
+    if [ -n "${KB_AGENT_ROLE:-}" ] && [ -n "${KB_SIGNATURES:-}" ]; then
+        local _kb_cli="$_AGENT_INVOKE_DIR/kb-cli.js"
+        local _kb_node="${NODE_BIN:-node}"
+        if [ -f "$_kb_cli" ] && command -v "$_kb_node" >/dev/null 2>&1; then
+            local _kb_out
+            _kb_out=$("$_kb_node" "$_kb_cli" apply \
+                        --agent-role "$KB_AGENT_ROLE" --signatures "$KB_SIGNATURES" 2>/dev/null || true)
+            if [ -n "$_kb_out" ]; then
+                # shellcheck disable=SC1090
+                eval "$_kb_out"
+                _kb_gates="${KB_GATES:-}"; _kb_fired="${KB_FIRED:-}"
+                # Re-read the knobs a constraint is allowed to turn, so the learned
+                # value wins over the profile default resolved above.
+                [ -n "${EPAM_MAX_OUTPUT_TOKENS:-}" ] && _out_tok="$EPAM_MAX_OUTPUT_TOKENS"
+                [ -n "${EPAM_MAX_ITERATIONS:-}" ]    && _max_iter="$EPAM_MAX_ITERATIONS"
+                [ -n "${EPAM_REASONING_EFFORT:-}" ]  && _effort="$EPAM_REASONING_EFFORT"
+                [ -n "${EPAM_ALLOWED_TOOLS:-}" ]     && _tools="$EPAM_ALLOWED_TOOLS"
+                [ -n "${EPAM_ALLOWED_WRITE_PATHS:-}" ] && _write_paths="$EPAM_ALLOWED_WRITE_PATHS"
+                [ -n "$_kb_fired" ] && echo "[agent-invoke] self-heal constraints applied: $_kb_fired" >&2
+            fi
+        fi
+    fi
+
     # ORCH_JSON_RESULT is what the cost emitter reads. Before this gateway only 2 of
     # 15 sites set it, which is why per-agent cost was mostly blank on the dashboard.
     if [ "$_capture" = "true" ] && [ -z "$_json_result" ]; then

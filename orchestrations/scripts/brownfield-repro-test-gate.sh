@@ -74,21 +74,38 @@ _LAST_TEST_OUTPUT=""
 run_new_tests() {
     local _out _rc
     _out=$( cd "$PROJECT_ROOT" || exit 2
-      if [ -x node_modules/.bin/vitest ]; then node_modules/.bin/vitest run "$@" 2>&1
+      if [ -x node_modules/.bin/vitest ]; then node_modules/.bin/vitest run "$@" --reporter=json 2>&1
       elif [ -x node_modules/.bin/jest ]; then node_modules/.bin/jest "$@" 2>&1
       elif [ -f package.json ] && grep -q '"test"' package.json 2>/dev/null; then npm test -- "$@" 2>&1
       else exit 3; fi )
     _rc=$?
     _LAST_TEST_OUTPUT="$_out"
+    _LAST_TEST_JSON="$_out"   # vitest --reporter=json emits JSON on stdout
     return "$_rc"
 }
 
 # Did the test fail to PARSE/COMPILE (i.e. never actually execute), as opposed to
 # running and failing an assertion? A test that never ran proves nothing about the
 # fix, so blaming the fix for it sends the investigation the wrong way.
+# DETERMINISTIC — same defect as the writer's validator (B22, 2026-07-24). The
+# pattern `ERROR: Expected` (esbuild) matched vitest's ordinary
+# `AssertionError: expected ...` case-insensitively, so an assertion failure — the
+# NORMAL result for a reproducing test — read as "never ran". Decide on a number.
+_LAST_TEST_JSON=""
 _test_never_ran() {
+    if [ -n "$_LAST_TEST_JSON" ]; then
+        local total
+        total=$(printf '%s' "$_LAST_TEST_JSON" | node -e '
+            let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+              try{ const j=JSON.parse(s.slice(s.indexOf("{")));
+                   process.stdout.write(String(j.numTotalTests ?? 0)); }
+              catch { process.stdout.write("-1"); }
+            });' 2>/dev/null || echo "-1")
+        [ "$total" != "-1" ] && { [ "${total:-0}" -eq 0 ]; return; }
+    fi
+    # Fallback only when JSON is unavailable. `ERROR: Expected` deliberately absent.
     printf '%s' "$_LAST_TEST_OUTPUT" | grep -qiE \
-      "Transform failed|Failed to parse|Failed to load url|SyntaxError|Unexpected token|ERROR: Expected|Cannot find (module|package)|Tests +no tests|No test files found"
+      "Transform failed|Failed to parse|Failed to load url|SyntaxError|Cannot find (module|package)|Tests +no tests|No test files found"
 }
 
 # 3. The new test(s) must PASS with the fix in place.

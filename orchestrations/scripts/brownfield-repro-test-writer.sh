@@ -200,23 +200,59 @@ _test_validated=0
 # "can this file run at all?" — because a file that cannot run proves nothing
 # and, once committed, breaks the regression guard for every later cycle.
 _validate_written_test() {
-    local rel="$1" out=""
+    local rel="$1" out="" json=""
+    # DETERMINISTIC: ask the runner for machine-readable output and decide on a
+    # NUMBER, not on English phrases.
+    #
+    # B22 (2026-07-24): this used to grep the terminal dump for ten patterns, one of
+    # which was `ERROR: Expected` (esbuild's parse error). vitest's ordinary
+    # `AssertionError: expected undefined to deeply equal ...` matches that
+    # case-insensitively, so EVERY assertion failure was classified as unparseable.
+    # Live cost: a genuine reproducing test (`4 tests | 1 failed`) was discarded on
+    # all three attempts, the ladder escalated to kimi-k3, and the repro-gate then
+    # blocked for "no test file". The pipeline threw away a working test 3 times.
+    #
+    # Exit code cannot separate the cases (both non-zero). numTotalTests can:
+    #   assertion failure (VALID):  numTotalTests=1  numFailed=1
+    #   parse error      (INVALID): numTotalTests=0  + a suite-level failureMessage
+    # An assertion failure IS valid here — a reproducing test is SUPPOSED to fail
+    # before the fix. Whether it reproduces the bug is the repro-gate's call, not
+    # this function's.
     if [ -x "$PROJECT_ROOT/node_modules/.bin/vitest" ]; then
-        out=$(cd "$PROJECT_ROOT" && ./node_modules/.bin/vitest run "$rel" 2>&1)
+        json=$(cd "$PROJECT_ROOT" && ./node_modules/.bin/vitest run "$rel" --reporter=json 2>/dev/null)
     elif [ -x "$PROJECT_ROOT/node_modules/.bin/jest" ]; then
-        out=$(cd "$PROJECT_ROOT" && ./node_modules/.bin/jest "$rel" 2>&1)
+        json=$(cd "$PROJECT_ROOT" && ./node_modules/.bin/jest "$rel" --json 2>/dev/null)
     elif [ -f "$PROJECT_ROOT/package.json" ] && grep -q '"test"' "$PROJECT_ROOT/package.json" 2>/dev/null; then
         out=$(cd "$PROJECT_ROOT" && npm test -- "$rel" 2>&1)
     else
         return 3
     fi
-    printf '%s\n' "$out" >> "$_writer_log" 2>/dev/null || true
 
-    # Transform/parse/module-resolution errors => the test never ran.
-    if printf '%s' "$out" | grep -qiE "Transform failed|Failed to parse|Failed to load url|SyntaxError|Unexpected token|ERROR: Expected|Cannot find (module|package)"; then
+    if [ -n "$json" ]; then
+        printf '%s\n' "$json" >> "$_writer_log" 2>/dev/null || true
+        local total
+        total=$("$NODE_BIN" -e '
+            let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+              try{ const j=JSON.parse(s.slice(s.indexOf("{")));
+                   process.stdout.write(String(j.numTotalTests ?? 0)); }
+              catch { process.stdout.write("-1"); }   // unparseable JSON -> fall back
+            });' <<< "$json" 2>/dev/null || echo "-1")
+        if [ "$total" = "-1" ]; then
+            out="$json"          # no usable JSON — fall through to the text heuristic
+        elif [ "${total:-0}" -gt 0 ]; then
+            return 0             # tests EXECUTED (pass or assertion-fail) => valid
+        else
+            return 1             # nothing ran => the file never executed
+        fi
+    fi
+
+    # FALLBACK for runners with no JSON reporter. Deliberately narrow: only
+    # unambiguous "never ran" signals. `ERROR: Expected` is NOT here — it is what
+    # broke this function.
+    printf '%s\n' "$out" >> "$_writer_log" 2>/dev/null || true
+    if printf '%s' "$out" | grep -qiE "Transform failed|Failed to parse|Failed to load url|SyntaxError|Cannot find (module|package)"; then
         return 1
     fi
-    # Nothing collected => nothing was actually exercised.
     if printf '%s' "$out" | grep -qiE "Tests +no tests|No test files found|no tests found"; then
         return 1
     fi

@@ -74,7 +74,13 @@ for f in "$@"; do
     exit 1
   fi
   if grep -q 'ASSERTION_FAILS' "$PWD/$f" 2>/dev/null; then
+    # RULE 6: this output is COPIED from a real vitest run, not written from memory.
+    # The AssertionError line was previously OMITTED, and that omission hid the bug
+    # that deleted every working test live: the validator's \`ERROR: Expected\`
+    # regex matched \`AssertionError: expected\` case-insensitively. A fixture that
+    # prints only the summary lines cannot catch it.
     echo " ❯ reproduces the bug"
+    echo "AssertionError: expected undefined to deeply equal { name: '' }"
     echo " Test Files  1 failed (1)"
     echo "      Tests  1 failed (1)"
     exit 1

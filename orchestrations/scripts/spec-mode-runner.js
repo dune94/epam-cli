@@ -2083,7 +2083,8 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
         // paid the escalation on every run. 20 is ~2x the observed need and still
         // BOUNDED — a runaway agent must terminate, and the ladder + self-heal
         // remain the backstop rather than being replaced by a bigger budget.
-        EPAM_MAX_ITERATIONS: process.env.CODEGRAPH_DETECTIVE_MAX_ITERATIONS || '20',
+        // Raised 20 -> 25 on 2026-07-24: 20 still exhausted on a self-heal retry pass.
+        EPAM_MAX_ITERATIONS: process.env.CODEGRAPH_DETECTIVE_MAX_ITERATIONS || '25',
         // The detective TRACES the causal fix site + picks the helper to reuse —
         // correctness is paramount and it must reason carefully. With story-point-
         // derived LOW effort it gave different/wrong helpers across passes (live

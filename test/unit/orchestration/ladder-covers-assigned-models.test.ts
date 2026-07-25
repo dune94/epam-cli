@@ -37,9 +37,26 @@ function parseLadderFromKeys(varName: string): string[] {
   // references (e.g. ${ESCALATION_MODEL}) that a non-greedy match would stop at.
   const defaultMatch = line.match(/:-(.*)\}"$/);
   expect(defaultMatch, `Could not parse default value for ${varName}`).not.toBeNull();
-  const ladderValue = defaultMatch![1];
+  const ladderValue = expandShellVars(defaultMatch![1], src);
   // Pipe-separated "from=to" pairs; collect the "from" side of each
   return ladderValue.split('|').map(pair => pair.split('=')[0]);
+}
+
+/**
+ * Resolve ${VAR} against the script's OWN `export VAR="${VAR:-default}"` lines.
+ *
+ * The ladder is written in terms of ${ESCALATION_MODEL}/${ESCALATION_MODEL_HIGH},
+ * but a story's `model` field is a literal ("z-ai/glm-5.2"). Comparing the two
+ * verbatim only ever matched while stories happened to be pinned to a literal that
+ * also appeared literally in the ladder — it did not survive stories moving onto
+ * the escalation model itself. Expanding first checks what the shell ACTUALLY
+ * produces at runtime, which is what the guard is for.
+ */
+function expandShellVars(value: string, src: string): string {
+  return value.replace(/\$\{([A-Z_]+)\}/g, (whole, name) => {
+    const m = src.match(new RegExp(`export ${name}="\\$\\{${name}:-([^}"]+)\\}"`));
+    return m ? m[1] : whole;
+  });
 }
 
 function assignedModels(): string[] {

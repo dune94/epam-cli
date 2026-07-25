@@ -1,0 +1,3 @@
+{"phase_id":"core","story_id":"core","agent_type":"spec-pass","resolvedModel":"z-ai/glm-5.2","started_at":"2026-07-23T15:21:27-04:00","ended_at":"2026-07-23T15:23:43-04:00","task_cost_usd":0,"task_tokens_in":0,"task_tokens_out":0,"task_turns":0,"status":"completed","invokeMode":"cli"}
+{"event":"topology_decision","phase":"core","topology":"single","reason":"Count heuristic: ≤1 worktree story.","source":"heuristic","timestamp":"2026-07-23T19:24:46Z"}
+{"phase_id":"core","story_id":"pipeline","agent_type":"team-lead-agent","resolvedModel":"z-ai/glm-5.2","started_at":"2026-07-23T15:24:46-04:00","ended_at":"2026-07-23T15:26:24-04:00","task_cost_usd":0.0632,"task_tokens_in":269845,"task_tokens_out":2975,"task_turns":20,"status":"completed","invokeMode":"cli"}

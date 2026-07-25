@@ -1,0 +1,1 @@
+{"ts":"2026-07-20T20:28:05Z","story_id":"SKY-002-a","retry":0,"rung":0,"target":"none","diagnosis":"Agent combined `private` keyword with `#` identifier and typed fetch response as bare `object`.","patches_applied":0,"profile_updated":false}

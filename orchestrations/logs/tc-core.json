@@ -1,1 +1,30 @@
-[]
+{
+  "MOCK-HW-1": {
+    "verifiedAt": "2025-01-24T16:20:00.000Z",
+    "sourceFiles": ["src/hello.ts", ".codegraph/.gitignore"],
+    "facts": [
+      "Function getGreeting() returns the exact string 'hello dolly'",
+      "Module exports a named function getGreeting with no parameters",
+      "Import path for the module under test is './hello' from src/",
+      "No async operations in the function",
+      "No dependencies to mock within hello.ts"
+    ],
+    "mockStrategy": "No mocking required — hello.ts has no external dependencies",
+    "bannedPatterns": [
+      "async",
+      "await",
+      "mock",
+      "jest",
+      "@jest/globals",
+      "origin",
+      "destination",
+      "from",
+      "to",
+      "API",
+      "fetch",
+      "http",
+      "route",
+      "endpoint"
+    ]
+  }
+}

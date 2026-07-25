@@ -1,0 +1,4 @@
+{"timestamp":"2026-07-24T14:56:24.159Z","step":"ac-review","storyId":"AMSD-1820","runId":"20260724T145411Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"ffb148f"}
+{"timestamp":"2026-07-24T15:02:38Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260724T105410Z","promptVersion":"ffb148f"}
+{"timestamp":"2026-07-24T15:03:56Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260724T105410Z","promptVersion":"ffb148f"}
+{"timestamp":"2026-07-24T15:20:51.950Z","step":"ac-review","storyId":"AMSD-1820","runId":"20260724T151244Z","agent":"openspec","attempts":2,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"ffb148f"}

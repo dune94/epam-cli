@@ -1,0 +1,1 @@
+{"ts":"2026-07-21T17:38:15Z","story_id":"SKY-003-test","retry":0,"rung":0,"target":"skill","diagnosis":"Validation process.exit(2) calls are inside try/catch that catches the mock's thrown error and re-exits with code 1.","patches_applied":0,"profile_updated":true}

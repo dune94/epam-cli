@@ -1,0 +1,2 @@
+{"ts":"2026-07-18T01:58:10Z","story_id":"SKY-002-a","retry":0,"rung":0,"target":"tool","diagnosis":"Missing @types packages for body-parser, http-errors, qs, range-parser, and send cause tsc type definition errors.","patches_applied":0,"profile_updated":true}
+{"ts":"2026-07-18T02:25:28Z","story_id":"SKY-003-test","retry":0,"rung":0,"target":"tc","diagnosis":"main function not exported from cli.ts; tests cannot import it.","patches_applied":1,"profile_updated":false}

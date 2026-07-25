@@ -1,0 +1,2 @@
+- review-agent output had no parseable verdict — the change was NOT reviewed; blocking rather than auto-approving.
+- review-agent output had no parseable verdict — the change was NOT reviewed; blocking rather than auto-approving.

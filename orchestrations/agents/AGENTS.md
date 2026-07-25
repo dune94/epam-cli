@@ -12900,3 +12900,105 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/AMSD-1820_*.log
 
+## AMSD-1820: [Mozio] - Promo code amount not displayed correctly for Return trip tickets in Mozio email confirmation
+- **Date**: 2026-07-24 14:25:05
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+- **Date**: 2026-07-24 16:01:51
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-24 16:19:15
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## PRI-1: Add a utilA() utility function
+- **Date**: 2026-07-24 16:30:55
+- **Phase**: mock2_incident
+- **Status**: completed
+- **Log**: logs/claude_outputs/PRI-1_*.log
+
+## IND-1: Add a utilB() utility function
+- **Date**: 2026-07-24 16:32:43
+- **Phase**: mock2_incident
+- **Status**: failed
+- **Log**: logs/claude_outputs/IND-1_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-24 17:06:02
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-24 17:54:18
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1a: Fix getGreeting to return 'hello dolly'
+- **Date**: 2026-07-24 18:02:55
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1a_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-24 18:41:27
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1-impl: Hello world greeting should say hello dolly — implementation
+- **Date**: 2026-07-24 18:51:20
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1-impl_*.log
+
+## MOCK-HW-1-test: Hello world greeting should say hello dolly — test
+- **Date**: 2026-07-24 18:53:20
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1-test_*.log
+
+## AMSD-1820: Fix promo code amount display for return trip tickets in Mozio email confirmations
+- **Date**: 2026-07-24 20:23:33
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - Promo code amount not displayed for Return trip tickets in Mozio email confirmation
+- **Date**: 2026-07-24 20:59:09
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - Promo code amount not displayed for Return trip tickets in Mozio email confirmation
+- **Date**: 2026-07-24 21:36:18
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+- **Date**: 2026-07-24 22:32:16
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+- **Date**: 2026-07-25 04:47:31
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+
+## AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+- **Date**: 2026-07-25 05:15:28
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-1820_*.log
+

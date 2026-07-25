@@ -1,0 +1,2 @@
+{"ts":"2026-07-22T01:42:04Z","story_id":"AMSD-1820","retry":0,"rung":0,"target":"tool","diagnosis":"TypeScript compiler itself is corrupted (SyntaxError: Unexpected end of input in tsc.js), not a source code error.","patches_applied":0,"profile_updated":true}
+{"ts":"2026-07-22T01:43:47Z","story_id":"AMSD-1820","retry":1,"rung":0,"target":"tool","diagnosis":"TypeScript compiler (tsc) not installed; node_modules/.bin/tsc missing when orchestrator ran type check.","patches_applied":0,"profile_updated":true}

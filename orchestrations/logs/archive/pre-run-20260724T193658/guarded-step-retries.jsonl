@@ -1,0 +1,5 @@
+{"timestamp":"2026-07-24T22:36:04.365Z","step":"ac-review","storyId":"MOCK-HW-1","runId":"20260724T223440Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"1651ab1"}
+{"timestamp":"2026-07-24T22:40:38Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260724T223440Z","promptVersion":"1651ab1"}
+{"timestamp":"2026-07-24T22:41:16Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260724T223440Z","promptVersion":"1651ab1"}
+{"timestamp":"2026-07-24T22:41:44Z","step":"tc-writer-batch","phaseId":"core","attempts":1,"outcome":"pass","violationTypes":[],"runId":"20260724T223440Z","promptVersion":"1651ab1"}
+{"timestamp":"2026-07-24T22:50:36Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260724T223440Z","promptVersion":"1651ab1"}

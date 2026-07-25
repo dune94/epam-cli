@@ -511,9 +511,9 @@ async function callMiniMaxWithTool(prompt, toolDef, logPath, itemsKey) {
 // (default: openai via OpenRouter) using the raw JSON + jsonrepair path.
 //
 // Fast-path: set SPEC_MODE_PROVIDER=qwen to skip MiniMax entirely.
-//   SPEC_MODE_OPENSPEC_MODEL — model for openspec calls (default: moonshotai/kimi-k2)
-//   SPEC_MODE_SPECKIT_MODEL  — model for speckit calls  (default: moonshotai/kimi-k2)
-//   SPEC_MODE_MODEL          — fallback for all other spec-mode calls (default: moonshotai/kimi-k2)
+//   SPEC_MODE_OPENSPEC_MODEL — model for openspec calls (default: z-ai/glm-5.2)
+//   SPEC_MODE_SPECKIT_MODEL  — model for speckit calls  (default: z-ai/glm-5.2)
+//   SPEC_MODE_MODEL          — fallback for all other spec-mode calls (default: z-ai/glm-5.2)
 // storyId: cost attribution. Without it every cost_snapshot carried storyId:''
 // and spend could not be grouped by story (backlog B6).
 async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey, storyId = '') {
@@ -527,15 +527,15 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     const logName = (logPath || '').toLowerCase();
     let specModel;
     if (logName.includes('speckit')) {
-      specModel = process.env.SPEC_MODE_SPECKIT_MODEL || 'moonshotai/kimi-k2';
+      specModel = process.env.SPEC_MODE_SPECKIT_MODEL || 'z-ai/glm-5.2';
     } else if (logName.includes('openspec') || logName.includes('-openspec-') || logName.includes('-spec.log')) {
       // Brownfield investigation requires tracing call chains through unfamiliar code —
       // use the HIGH model as the base so archaeology doesn't fall back to generation.
       specModel = (process.env.EPAM_BROWNFIELD === '1' && process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH)
         ? process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH
-        : process.env.SPEC_MODE_OPENSPEC_MODEL || 'moonshotai/kimi-k2';
+        : process.env.SPEC_MODE_OPENSPEC_MODEL || 'z-ai/glm-5.2';
     } else {
-      specModel = process.env.SPEC_MODE_MODEL || process.env.SPEC_MODE_OPENSPEC_MODEL || 'moonshotai/kimi-k2';
+      specModel = process.env.SPEC_MODE_MODEL || process.env.SPEC_MODE_OPENSPEC_MODEL || 'z-ai/glm-5.2';
     }
     console.log(`spec-mode: fast-path ${specModeProvider}/${specModel} (skipping MiniMax)`);
     const directExec = { cmd: execSpec.cmd, args: ['--provider', specModeProvider, '--model', specModel] };
@@ -3571,7 +3571,7 @@ function resolvePromptExec(aiRunnerCmd, env = process.env) {
 function buildKnownValidModels(upgradeModel, miniModel) {
   return new Set([
     'MiniMax-M3', 'MiniMax-M2.5', 'MiniMax-M2.7', 'MiniMax-M2.1', 'MiniMax-M2',
-    'moonshotai/kimi-k2', 'z-ai/glm-5.2', 'z-ai/glm-5.1', 'z-ai/glm-4.7',
+    'moonshotai/kimi-k3', 'z-ai/glm-5.2', 'z-ai/glm-5.1', 'z-ai/glm-4.7',
     upgradeModel, miniModel,
   ]);
 }

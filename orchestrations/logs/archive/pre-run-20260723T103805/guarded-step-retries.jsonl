@@ -1,0 +1,4 @@
+{"timestamp":"2026-07-23T14:19:17.969Z","step":"ac-review","storyId":"MOCK-HW-1","runId":"20260723T141837Z","agent":"speckit","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"84a62d4"}
+{"timestamp":"2026-07-23T14:23:50Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260723T101836Z","promptVersion":"84a62d4"}
+{"timestamp":"2026-07-23T14:24:35Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260723T101836Z","promptVersion":"84a62d4"}
+{"timestamp":"2026-07-23T14:25:01Z","step":"tc-writer-batch","phaseId":"core","attempts":1,"outcome":"pass","violationTypes":[],"runId":"20260723T101836Z","promptVersion":"84a62d4"}

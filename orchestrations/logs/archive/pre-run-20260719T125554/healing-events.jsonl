@@ -1,0 +1,1 @@
+{"ts":"2026-07-19T16:26:44Z","story_id":"SKY-002-impl","retry":0,"rung":0,"target":"skill","diagnosis":"tsconfig rootDir is 'src' but vitest.config.ts at project root is included by default pattern, causing TS6059.","patches_applied":0,"profile_updated":true}

@@ -1,0 +1,1 @@
+{"phase_id":"core","timestamp":"2026-07-23T09:26:26-04:00","decision":"go","criteria":{"stories_complete":true,"deliverables_present":true,"tests_passing":true,"cost_variance_pct":-43.00,"cost_tier":"ok","gate_warn_threshold":30,"gate_escalate_threshold":150},"decision_maker":"check-phase-gate.sh","issues":[],"notes":"All criteria met"}

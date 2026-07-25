@@ -1,0 +1,8 @@
+{"storyId":"MOCK-HW-1","phase":"core","status":"attempt","elapsedMinutes":0.06,"costUsd":0.0027,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-24T22:41:26Z"}
+{"storyId":"MOCK-HW-1","phase":"core","status":"completed","elapsedMinutes":0.18,"costUsd":0.0027,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-24T22:41:27Z"}
+{"storyId":"MOCK-HW-1-impl","phase":"core","status":"attempt","elapsedMinutes":0.13,"costUsd":0.0022,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-24T22:51:19Z"}
+{"storyId":"MOCK-HW-1-impl","phase":"core","status":"completed","elapsedMinutes":0.15,"costUsd":0.0022,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-24T22:51:20Z"}
+{"storyId":"MOCK-HW-1-test","phase":"core","status":"attempt","elapsedMinutes":0.23,"costUsd":0.0032,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-24T22:51:36Z"}
+{"storyId":"MOCK-HW-1-test","phase":"core","status":"attempt","elapsedMinutes":0.53,"costUsd":0.0064,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-24T22:52:13Z"}
+{"storyId":"MOCK-HW-1-test","phase":"core","status":"attempt","elapsedMinutes":1.01,"costUsd":0.0139,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-24T22:53:19Z"}
+{"storyId":"MOCK-HW-1-test","phase":"core","status":"completed","elapsedMinutes":1.98,"costUsd":0.0139,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-24T22:53:20Z"}

@@ -1,0 +1,2 @@
+{"timestamp":"2026-07-23T16:10:49.632Z","step":"ac-review","storyId":"AMSD-1820","runId":"20260723T160851Z","agent":"openspec","attempts":2,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"ffb148f"}
+{"timestamp":"2026-07-23T16:13:03.329Z","step":"ac-review","storyId":"AMSD-1820","runId":"20260723T160851Z","agent":"speckit","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"ffb148f"}

@@ -1,0 +1,11 @@
+{"timestamp":"2026-07-21T14:02:28Z","step":"0.5","phaseId":"scaffold","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260721T095400Z","promptVersion":"2e4e9e0"}
+{"timestamp":"2026-07-21T14:03:30Z","step":"0.9","phaseId":"scaffold","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260721T095400Z","promptVersion":"2e4e9e0"}
+{"timestamp":"2026-07-21T14:29:13.498Z","step":"ac-review","storyId":"SKY-002","runId":"20260721T142748Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"2e4e9e0"}
+{"timestamp":"2026-07-21T14:30:39.184Z","step":"ac-review","storyId":"SKY-002","runId":"20260721T142748Z","agent":"speckit","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"2e4e9e0"}
+{"timestamp":"2026-07-21T14:32:36.069Z","step":"ac-review","storyId":"SKY-003","runId":"20260721T142748Z","agent":"speckit","attempts":2,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"2e4e9e0"}
+{"timestamp":"2026-07-21T14:35:09.846Z","step":"ac-review","storyId":"SKY-004","runId":"20260721T142748Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"2e4e9e0"}
+{"timestamp":"2026-07-21T14:37:35.962Z","step":"ac-review","storyId":"SKY-004","runId":"20260721T142748Z","agent":"speckit","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"2e4e9e0"}
+{"timestamp":"2026-07-21T14:51:31Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260721T102747Z","promptVersion":"2e4e9e0"}
+{"timestamp":"2026-07-21T14:57:17Z","step":"tc-writer-inline","storyId":"SKY-002-b","attempts":1,"outcome":"pass","violationTypes":[],"runId":"20260721T102747Z","promptVersion":"2e4e9e0"}
+{"timestamp":"2026-07-21T15:21:08Z","step":"tc-writer-inline","storyId":"SKY-004-C","attempts":1,"outcome":"pass","violationTypes":[],"runId":"20260721T102747Z","promptVersion":"2e4e9e0"}
+{"timestamp":"2026-07-21T15:28:01Z","step":"tc-writer-batch","phaseId":"core","attempts":1,"outcome":"pass","violationTypes":[],"runId":"20260721T102747Z","promptVersion":"2e4e9e0"}

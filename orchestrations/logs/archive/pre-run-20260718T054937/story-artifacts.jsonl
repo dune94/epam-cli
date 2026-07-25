@@ -1,0 +1,8 @@
+{"storyId":"SKY-001","phase":"scaffold","status":"completed","elapsedMinutes":2.65,"costUsd":0.0048,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-18T01:22:17Z"}
+{"storyId":"SKY-002-a","phase":"core","status":"completed","elapsedMinutes":3.00,"costUsd":0.0197,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-18T01:59:12Z"}
+{"storyId":"SKY-002-b","phase":"core","status":"completed","elapsedMinutes":4.93,"costUsd":0.0748,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-18T02:04:43Z"}
+{"storyId":"SKY-003-impl","phase":"core","status":"completed","elapsedMinutes":1.90,"costUsd":0.0265,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-18T02:06:37Z"}
+{"storyId":"SKY-004-a","phase":"core","status":"completed","elapsedMinutes":3.53,"costUsd":0.0831,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-18T02:10:10Z"}
+{"storyId":"SKY-004-b","phase":"core","status":"completed","elapsedMinutes":2.48,"costUsd":0.0469,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-18T02:12:40Z"}
+{"storyId":"SKY-003-test","phase":"core","status":"completed","elapsedMinutes":3.93,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-18T02:32:10Z"}
+{"storyId":"SKY-004-c","phase":"core","status":"completed","elapsedMinutes":8.23,"costUsd":0.1072,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-18T02:40:59Z"}

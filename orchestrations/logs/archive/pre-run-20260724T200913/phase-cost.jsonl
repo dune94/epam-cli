@@ -1,0 +1,2 @@
+{"phase_id":"core","story_id":"core","agent_type":"spec-pass","resolvedModel":"z-ai/glm-5.2","started_at":"2026-07-24T19:58:35-04:00","ended_at":"2026-07-24T20:03:50-04:00","task_cost_usd":0,"task_tokens_in":0,"task_tokens_out":0,"task_turns":0,"status":"completed","invokeMode":"cli"}
+{"event":"topology_decision","phase":"core","topology":"single","reason":"Count heuristic: ≤1 worktree story.","source":"heuristic","timestamp":"2026-07-25T00:04:21Z"}

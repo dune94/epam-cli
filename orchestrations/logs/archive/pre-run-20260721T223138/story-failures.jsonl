@@ -1,0 +1,2 @@
+{"storyId":"AMSD-1820","failureClass":"quality","model":"MiniMax-M3","attempt":0,"exitCode":1,"rawBytes":430,"outputTokens":732,"maxIterations":10,"timestamp":"2026-07-22T01:41:31Z"}
+{"storyId":"AMSD-1820","failureClass":"quality","model":"MiniMax-M3","attempt":1,"exitCode":1,"rawBytes":398,"outputTokens":953,"maxIterations":10,"timestamp":"2026-07-22T01:43:06Z"}

@@ -1,0 +1,14 @@
+{"phase_id":"core","phase_name":"Core Implementation","actual_minutes":0.21,"forecast_minutes":1.4,"actual_cost_usd":0.0022,"forecast_cost_usd":0.1355,"variance_minutes":-1.19,"variance_cost_usd":-0.1333,"over_threshold":false,"agent_recommendations":[],"notes":"All tasks completed within forecast. Single story MOCK-HW-1 executed successfully with actual time 0.21 min vs forecast 1.4 min.","assessed_at":"2026-07-23T14:27:09Z"}
+{
+  "phase_id": "core",
+  "phase_name": "core",
+  "actual_minutes": 0.21,
+  "forecast_minutes": 1.398,
+  "actual_cost_usd": 0.0022,
+  "forecast_cost_usd": 0.1355,
+  "variance_minutes": -1.188,
+  "variance_cost_usd": -0.1333,
+  "over_threshold": false,
+  "agent_recommendations": [],
+  "notes": "Core phase completed successfully. Single implementation story MOCK-HW-1 completed in 0.21 minutes vs 1.4 minutes forecast. Cost was $0.0022 vs $0.1355 forecast. Both time and cost significantly under forecast (under by 85% time, 98% cost). No improvements needed."
+}

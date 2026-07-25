@@ -1,0 +1,5 @@
+{"timestamp":"2026-07-24T18:19:34.733Z","step":"ac-review","storyId":"AMSD-1820","runId":"20260724T181114Z","agent":"openspec","attempts":3,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"e205e1e"}
+{"timestamp":"2026-07-24T18:24:17Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260724T141114Z","promptVersion":"e205e1e"}
+{"timestamp":"2026-07-24T18:24:44Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260724T141114Z","promptVersion":"e205e1e"}
+{"timestamp":"2026-07-24T18:33:14.852Z","step":"ac-review","storyId":"AMSD-1820","runId":"20260724T182839Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"e205e1e"}
+{"timestamp":"2026-07-24T18:39:28Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260724T142838Z","promptVersion":"e205e1e"}

@@ -1,0 +1,11 @@
+{"timestamp":"2026-07-18T01:19:10Z","step":"0.5","phaseId":"scaffold","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260717T211503Z","promptVersion":"8bbf816"}
+{"timestamp":"2026-07-18T01:19:37Z","step":"0.9","phaseId":"scaffold","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260717T211503Z","promptVersion":"8bbf816"}
+{"timestamp":"2026-07-18T01:27:19.526Z","step":"ac-review","storyId":"SKY-002","runId":"20260718T012629Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"8bbf816"}
+{"timestamp":"2026-07-18T01:32:36.976Z","step":"ac-review","storyId":"SKY-002","runId":"20260718T012629Z","agent":"speckit","attempts":2,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"8bbf816"}
+{"timestamp":"2026-07-18T01:33:47.765Z","step":"ac-review","storyId":"SKY-003","runId":"20260718T012629Z","agent":"speckit","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"8bbf816"}
+{"timestamp":"2026-07-18T01:37:06.574Z","step":"ac-review","storyId":"SKY-004","runId":"20260718T012629Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"8bbf816"}
+{"timestamp":"2026-07-18T01:43:53.664Z","step":"ac-review","storyId":"SKY-004","runId":"20260718T012629Z","agent":"speckit","attempts":3,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"8bbf816"}
+{"timestamp":"2026-07-18T01:50:59Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260717T212627Z","promptVersion":"8bbf816"}
+{"timestamp":"2026-07-18T01:59:47Z","step":"tc-writer-inline","storyId":"SKY-002-b","attempts":1,"outcome":"pass","violationTypes":[],"runId":"20260717T212627Z","promptVersion":"8bbf816"}
+{"timestamp":"2026-07-18T02:13:14Z","step":"tc-writer-inline","storyId":"SKY-003-test","attempts":1,"outcome":"pass","violationTypes":[],"runId":"20260717T212627Z","promptVersion":"8bbf816"}
+{"timestamp":"2026-07-18T02:32:45Z","step":"tc-writer-inline","storyId":"SKY-004-c","attempts":1,"outcome":"pass","violationTypes":[],"runId":"20260717T212627Z","promptVersion":"8bbf816"}

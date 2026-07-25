@@ -1,0 +1,12 @@
+migration-scripts/client.ts(1,24): error TS2307
+migration-scripts/content_types/e_ticket/e_ticket.v3.ts(1,29): error TS2307
+migration-scripts/content_types/pass/pass.v3.ts(1,29): error TS2307
+migration-scripts/index.ts(4,8): error TS2307
+src/clients/redis/get-credentials.ts(1,49): error TS7016
+src/clients/redis/get-credentials.ts(2,51): error TS7016
+src/clients/stripe/stripe.ts(7,3): error TS2322
+src/otel/otel.ts(9,8): error TS7016
+src/otel/otel.ts(19,8): error TS7016
+src/otel/otel.ts(65,5): error TS2353
+tests/bootstrap.ts(112,3): error TS2739
+tests/features/common/common.mocks.ts(21,10): error TS2769

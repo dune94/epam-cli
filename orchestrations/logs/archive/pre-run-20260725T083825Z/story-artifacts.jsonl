@@ -1,0 +1,3 @@
+{"storyId":"AMSD-1820","phase":"core","status":"attempt","elapsedMinutes":2.83,"costUsd":0,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-25T02:31:27Z"}
+{"storyId":"AMSD-1820","phase":"core","status":"attempt","elapsedMinutes":0.66,"costUsd":0.0138,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-25T02:32:13Z"}
+{"storyId":"AMSD-1820","phase":"core","status":"completed","elapsedMinutes":4.03,"costUsd":0.0138,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-25T02:32:16Z"}

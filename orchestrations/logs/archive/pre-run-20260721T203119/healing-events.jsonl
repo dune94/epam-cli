@@ -1,0 +1,1 @@
+{"ts":"2026-07-22T00:21:13Z","story_id":"AMSD-1820","retry":0,"rung":0,"target":"tool","diagnosis":"TypeScript compiler (tsc) not installed in node_modules — tsc --noEmit cannot run.","patches_applied":0,"profile_updated":true}

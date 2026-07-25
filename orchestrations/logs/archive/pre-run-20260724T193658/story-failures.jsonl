@@ -1,0 +1,2 @@
+{"storyId":"MOCK-HW-1-test","failureClass":"quality","model":"MiniMax-M2.5","attempt":0,"exitCode":1,"rawBytes":697,"outputTokens":1293,"maxIterations":12,"timestamp":"2026-07-24T22:51:36Z"}
+{"storyId":"MOCK-HW-1-test","failureClass":"quality","model":"MiniMax-M2.5","attempt":1,"exitCode":1,"rawBytes":1105,"outputTokens":2764,"maxIterations":12,"timestamp":"2026-07-24T22:52:13Z"}

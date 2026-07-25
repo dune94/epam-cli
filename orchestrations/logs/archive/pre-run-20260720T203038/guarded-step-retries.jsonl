@@ -1,0 +1,9 @@
+{"timestamp":"2026-07-20T19:30:37Z","step":"0.5","phaseId":"scaffold","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260720T152142Z","promptVersion":"2e4e9e0"}
+{"timestamp":"2026-07-20T19:31:43Z","step":"0.9","phaseId":"scaffold","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260720T152142Z","promptVersion":"2e4e9e0"}
+{"timestamp":"2026-07-20T19:56:03.971Z","step":"ac-review","storyId":"SKY-002","runId":"20260720T195229Z","agent":"speckit","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"2e4e9e0"}
+{"timestamp":"2026-07-20T20:05:16.067Z","step":"ac-review","storyId":"SKY-004","runId":"20260720T195229Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"2e4e9e0"}
+{"timestamp":"2026-07-20T20:07:29.034Z","step":"ac-review","storyId":"SKY-004","runId":"20260720T195229Z","agent":"speckit","attempts":2,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"2e4e9e0"}
+{"timestamp":"2026-07-20T20:19:08Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260720T155228Z","promptVersion":"2e4e9e0"}
+{"timestamp":"2026-07-20T20:29:55Z","step":"tc-writer-inline","storyId":"SKY-002-b","attempts":1,"outcome":"pass","violationTypes":[],"runId":"20260720T155228Z","promptVersion":"2e4e9e0"}
+{"timestamp":"2026-07-20T20:39:56Z","step":"tc-writer-inline","storyId":"SKY-003-b","attempts":1,"outcome":"pass","violationTypes":[],"runId":"20260720T155228Z","promptVersion":"2e4e9e0"}
+{"timestamp":"2026-07-20T20:51:52Z","step":"tc-writer-inline","storyId":"SKY-004-c","attempts":1,"outcome":"pass","violationTypes":[],"runId":"20260720T155228Z","promptVersion":"2e4e9e0"}

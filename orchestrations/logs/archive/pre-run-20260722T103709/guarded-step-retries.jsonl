@@ -1,0 +1,2 @@
+{"timestamp":"2026-07-22T14:24:58Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260722T102231Z","promptVersion":"fbe4230"}
+{"timestamp":"2026-07-22T14:25:27Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260722T102231Z","promptVersion":"fbe4230"}

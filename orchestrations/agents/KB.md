@@ -171,3 +171,14 @@ When testing CLI code that calls `process.exit()` inside a try/catch block, mock
 **StoryRef:** AMSD-1820
 
 When a previous attempt corrupts a TypeScript file with malformed syntax (e.g., `const appliedDiscount remainingDiscount,` missing `=` and function call), the tsc error messages point to the broken line and subsequent lines. The fix is to restore the correct syntax based on the surrounding logic — in this case `const appliedDiscount = getPreciseFloatNumber(discount.amount.value - remainingDiscount);`. The prescribed fix (using `parseDispatchLineItemKey` to strip `#return` suffix) was already correctly applied; only the syntax error from a prior bad write remained. Always verify the full file content after a write, especially when the root cause analysis prescribes a one-line change — don't accidentally corrupt adjacent lines.
+
+
+## KB-013 -- 2026-07-24
+
+**Category:** testing
+**AgentRole:** test-engineer
+**Tags:** vitest, test-assertion, test-failure, hello-world
+**Trigger:** retry
+**StoryRef:** MOCK-HW-1-test
+
+When a test fails because the assertion expects an outdated value while the implementation was already fixed to return the correct value, the test needs to be updated to expect the correct value. The root cause analysis indicated the implementation already returns 'hello dolly', so the test assertion needed to be changed from `toBe('hello world')` to `toBe('hello dolly')`.

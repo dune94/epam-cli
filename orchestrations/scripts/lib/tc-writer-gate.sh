@@ -188,7 +188,7 @@ run_inline_tc_writer_gate() {
         --arg ts "$(date -Iseconds)" \
         --arg story "$story_id" \
         --arg phase "${_tc_phase:-}" \
-        --arg model "${TC_WRITER_MODEL:-moonshotai/kimi-k2}" \
+        --arg model "${TC_WRITER_MODEL:-z-ai/glm-5.2}" \
         --arg provider "${TC_WRITER_PROVIDER:-qwen}" \
         '{
           event_id: ("evt-cost-" + ($ts | gsub("[^0-9]";""))),

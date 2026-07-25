@@ -330,8 +330,8 @@ print_step_checklist() {
     }
 
     _checklist_row "1"    "Specification pass"       "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "EPAM_SPEC_MODE=0"
-    _checklist_row "1a"   "  openspec (elaboration)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "${SPEC_MODE_OPENSPEC_MODEL:-moonshotai/kimi-k2}"
-    _checklist_row "1b"   "  speckit (verification)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "${SPEC_MODE_SPECKIT_MODEL:-moonshotai/kimi-k2}"
+    _checklist_row "1a"   "  openspec (elaboration)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "${SPEC_MODE_OPENSPEC_MODEL:-z-ai/glm-5.2}"
+    _checklist_row "1b"   "  speckit (verification)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "${SPEC_MODE_SPECKIT_MODEL:-z-ai/glm-5.2}"
     _checklist_row "2"  "CPA pre-pass"             "$([ "${SKIP_CPA:-0}" = "1" ] && echo SKIP || echo ACTIVE)"           "SKIP_CPA=1"
     _checklist_row "3"  "Pre-phase skill assess"   "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP_SKILL_ASSESSMENT=1 || true)"
     _checklist_row "4"  "Hybrid pre-coord"         "$([ "${RESOLVED_ORCH_MODE:-bash}" = "hybrid" ] && echo ACTIVE || echo SKIP)" "ORCH_MODE≠hybrid"
@@ -2785,8 +2785,8 @@ run_specification_pass() {
     # count per agent; model comes from the same env vars the runner itself
     # uses (SPEC_MODE_OPENSPEC_MODEL/SPEC_MODE_SPECKIT_MODEL).
     local _spec_summary="$LOG_DIR/spec-summary.json"
-    local _openspec_model="${SPEC_MODE_OPENSPEC_MODEL:-moonshotai/kimi-k2}"
-    local _speckit_model="${SPEC_MODE_SPECKIT_MODEL:-moonshotai/kimi-k2}"
+    local _openspec_model="${SPEC_MODE_OPENSPEC_MODEL:-z-ai/glm-5.2}"
+    local _speckit_model="${SPEC_MODE_SPECKIT_MODEL:-z-ai/glm-5.2}"
     local _openspec_count=0 _speckit_count=0
     if [ -f "$_spec_summary" ]; then
         _openspec_count=$(jq -r '.stats.agents.openspec // 0' "$_spec_summary" 2>/dev/null || echo 0)

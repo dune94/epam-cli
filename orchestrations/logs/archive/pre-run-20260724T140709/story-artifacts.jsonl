@@ -1,0 +1,6 @@
+{"storyId":"AMSD-1820","phase":"core","status":"attempt","elapsedMinutes":0.78,"costUsd":0.0166,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-24T17:05:54Z"}
+{"storyId":"AMSD-1820","phase":"core","status":"attempt","elapsedMinutes":0.98,"costUsd":0.015,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-24T17:06:59Z"}
+{"storyId":"AMSD-1820","phase":"core","status":"attempt","elapsedMinutes":1.28,"costUsd":0.0346,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-24T17:08:21Z"}
+{"storyId":"AMSD-1820","phase":"core","status":"attempt","elapsedMinutes":1.58,"costUsd":0.0276,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-24T17:10:01Z"}
+{"storyId":"AMSD-1820","phase":"core","status":"attempt","elapsedMinutes":1.88,"costUsd":0.0431,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-24T17:12:00Z"}
+{"storyId":"AMSD-1820","phase":"core","status":"completed","elapsedMinutes":6.98,"costUsd":0.0431,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-24T17:12:05Z"}

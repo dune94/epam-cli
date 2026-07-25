@@ -279,8 +279,8 @@ export SPEC_MODE_MAX_OUTPUT_TOKENS="${SPEC_MODE_MAX_OUTPUT_TOKENS:-16384}"
 # .js extension to a relative import) across every rung and exhausted all 8
 # attempts still on kimi-k2, then aborted — a mechanical, easily-fixed mistake
 # that likely would have resolved in 1-2 attempts on a stronger model.
-export EPAM_MODEL_LADDER_MEDIUM="${EPAM_MODEL_LADDER_MEDIUM:-MiniMax-M2.5=MiniMax-M3|MiniMax-M3=${ESCALATION_MODEL}|zhipuai/glm-z1-32b=${ESCALATION_MODEL}|zhipuai/glm-z1-9b=${ESCALATION_MODEL}|moonshotai/kimi-k2=${ESCALATION_MODEL}}"
-export EPAM_MODEL_LADDER_HIGH="${EPAM_MODEL_LADDER_HIGH:-MiniMax-M2.5=MiniMax-M3|MiniMax-M3=${ESCALATION_MODEL_HIGH}|zhipuai/glm-z1-32b=${ESCALATION_MODEL_HIGH}|zhipuai/glm-z1-9b=${ESCALATION_MODEL_HIGH}|${ESCALATION_MODEL}=${ESCALATION_MODEL_HIGH}|moonshotai/kimi-k2=${ESCALATION_MODEL_HIGH}|${ESCALATION_MODEL_HIGH}=moonshotai/kimi-k3}"
+export EPAM_MODEL_LADDER_MEDIUM="${EPAM_MODEL_LADDER_MEDIUM:-MiniMax-M2.5=MiniMax-M3|MiniMax-M3=${ESCALATION_MODEL}|zhipuai/glm-z1-32b=${ESCALATION_MODEL}|zhipuai/glm-z1-9b=${ESCALATION_MODEL}|${ESCALATION_MODEL}=${ESCALATION_MODEL_HIGH}}"
+export EPAM_MODEL_LADDER_HIGH="${EPAM_MODEL_LADDER_HIGH:-MiniMax-M2.5=MiniMax-M3|MiniMax-M3=${ESCALATION_MODEL_HIGH}|zhipuai/glm-z1-32b=${ESCALATION_MODEL_HIGH}|zhipuai/glm-z1-9b=${ESCALATION_MODEL_HIGH}|${ESCALATION_MODEL}=${ESCALATION_MODEL_HIGH}|${ESCALATION_MODEL_HIGH}=moonshotai/kimi-k3}"
 # kimi-k3 rung (2026-07-17): new HIGH-tier ceiling above glm-5.1. Only reached
 # when a story exhausts all glm-5.1 retries (Rung3 max-effort). 1M ctx, highest
 # reasoning — $3/M input / $15/M output, so 2 retries max before HEALING_BROKEN.
@@ -289,7 +289,7 @@ export EPAM_MODEL_LADDER_HIGH="${EPAM_MODEL_LADDER_HIGH:-MiniMax-M2.5=MiniMax-M3
 # medium/high split.
 export EPAM_MODEL_LADDER="${EPAM_MODEL_LADDER:-}"
 # Final fallback: used at R3 when the story model was never escalated at R2
-export EPAM_FINAL_FALLBACK_MODEL="${EPAM_FINAL_FALLBACK_MODEL:-moonshotai/kimi-k2}"
+export EPAM_FINAL_FALLBACK_MODEL="${EPAM_FINAL_FALLBACK_MODEL:-moonshotai/kimi-k3}"
 export EPAM_FINAL_FALLBACK_PROVIDER="${EPAM_FINAL_FALLBACK_PROVIDER:-qwen}"
 # Dynamic retry-extension coordinator (2026-07-12): ships DISABLED by
 # default, same rollout discipline as the DeepEval groundedness check --

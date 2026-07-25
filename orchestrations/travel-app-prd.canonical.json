@@ -143,7 +143,7 @@
       "cpaGate": "review",
       "completedAt": "2026-05-31T07:26:29-04:00",
       "aiProvider": "qwen",
-      "model": "moonshotai/kimi-k2"
+      "model": "z-ai/glm-5.2"
     },
     {
       "id": "SKY-003",
@@ -192,7 +192,7 @@
       "cpaGate": "review",
       "completedAt": "2026-05-31T07:29:46-04:00",
       "aiProvider": "qwen",
-      "model": "moonshotai/kimi-k2",
+      "model": "z-ai/glm-5.2",
       "dependencies": [
         "SKY-002"
       ]
@@ -252,7 +252,7 @@
       "cpaGate": "review",
       "completedAt": "2026-05-31T07:30:50-04:00",
       "aiProvider": "qwen",
-      "model": "moonshotai/kimi-k2",
+      "model": "z-ai/glm-5.2",
       "dependencies": [
         "SKY-002"
       ]

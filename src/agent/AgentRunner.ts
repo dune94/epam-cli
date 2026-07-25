@@ -155,6 +155,34 @@ export class AgentRunner {
         finalResponse = textParts.map(p => p.text ?? '').join('') || accumulatedText;
       }
 
+      // TRUNCATED REASONING IS A HARD FAILURE, NOT AN ANSWER.
+      //
+      // Verified against OpenRouter (2026-07-25): glm-5.1, glm-5.2, kimi-k3 and
+      // minimax-m3 all deduct reasoning tokens from max_tokens. Probed at
+      // max_tokens:200, every one spent the ENTIRE budget thinking and returned
+      // HTTP 200, finish_reason="length", content:"" — a success status carrying
+      // nothing. Downstream that became the 169-byte team-lead "review".
+      //
+      // This check must sit ABOVE the end_turn branch: a fully-truncated response
+      // has zero tool_uses, so it satisfied `toolUses.length === 0`, broke out of
+      // the loop, and returned the empty/partial text as the result. The
+      // max_tokens handler further down was unreachable for exactly this case —
+      // it only ever saw a truncated PARTIAL TOOL CALL, which is genuinely
+      // continuable and is still handled there.
+      //
+      // FailoverPolicy.ts:66 already routes on an error whose message contains
+      // 'max_tokens' ("thrown by AgentRunner when stopReason === 'max_tokens'"),
+      // so the failover path was written for this throw before it existed.
+      if (response.stopReason === 'max_tokens' && toolUses.length === 0) {
+        const partial = (textParts.map(p => p.text ?? '').join('') || accumulatedText).trim();
+        throw new Error(
+          `Response truncated at max_tokens with no usable output — the model spent its ` +
+          `entire output budget on reasoning. Raise EPAM_MAX_OUTPUT_TOKENS or disable ` +
+          `reasoning for this call. Partial text (${partial.length} chars): ` +
+          `${partial.slice(0, 200)}${partial.length > 200 ? '…' : ''}`
+        );
+      }
+
       if (response.stopReason === 'end_turn' || toolUses.length === 0) {
         // When the model outputs only planning/thinking text with no tool calls,
         // nudge it to actually call the tool rather than exiting the loop.

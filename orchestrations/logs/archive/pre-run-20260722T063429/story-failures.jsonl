@@ -1,0 +1,6 @@
+{"storyId":"AMSD-1820","failureClass":"quality","model":"MiniMax-M3","attempt":0,"exitCode":1,"rawBytes":352,"outputTokens":1033,"maxIterations":10,"timestamp":"2026-07-22T02:50:04Z"}
+{"storyId":"AMSD-1820","failureClass":"quality","model":"MiniMax-M3","attempt":1,"exitCode":1,"rawBytes":435,"outputTokens":3645,"maxIterations":10,"timestamp":"2026-07-22T02:55:17Z"}
+{"storyId":"AMSD-1820","failureClass":"quality","model":"MiniMax-M3","attempt":2,"exitCode":1,"rawBytes":485,"outputTokens":2813,"maxIterations":15,"timestamp":"2026-07-22T02:59:41Z"}
+{"storyId":"AMSD-1820","failureClass":"capability","model":"z-ai/glm-5.1","attempt":4,"exitCode":1,"rawBytes":316,"outputTokens":1327,"maxIterations":20,"timestamp":"2026-07-22T03:04:30Z"}
+{"storyId":"AMSD-1820","failureClass":"capability","model":"z-ai/glm-5.1","attempt":0,"exitCode":1,"rawBytes":313,"outputTokens":614,"maxIterations":10,"timestamp":"2026-07-22T03:09:42Z"}
+{"storyId":"AMSD-1820","failureClass":"capability","model":"z-ai/glm-5.1","attempt":2,"exitCode":1,"rawBytes":316,"outputTokens":1098,"maxIterations":15,"timestamp":"2026-07-22T03:14:56Z"}

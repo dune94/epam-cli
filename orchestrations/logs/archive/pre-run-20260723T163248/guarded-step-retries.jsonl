@@ -1,0 +1,3 @@
+{"timestamp":"2026-07-23T20:05:36.863Z","step":"ac-review","storyId":"AMSD-1820","runId":"20260723T200354Z","agent":"speckit","attempts":2,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"ffb148f"}
+{"timestamp":"2026-07-23T20:10:26Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260723T160353Z","promptVersion":"ffb148f"}
+{"timestamp":"2026-07-23T20:11:29Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260723T160353Z","promptVersion":"ffb148f"}

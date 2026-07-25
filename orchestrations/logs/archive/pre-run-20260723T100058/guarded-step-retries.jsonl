@@ -1,0 +1,2 @@
+{"timestamp":"2026-07-23T13:46:38Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260723T093748Z","promptVersion":"84a62d4"}
+{"timestamp":"2026-07-23T13:47:06Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260723T093748Z","promptVersion":"84a62d4"}

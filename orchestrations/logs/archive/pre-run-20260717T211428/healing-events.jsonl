@@ -1,0 +1,1 @@
+{"ts":"2026-07-17T23:20:59Z","story_id":"SKY-002-impl","retry":0,"rung":0,"target":"tool","diagnosis":"TypeScript compiler (tsc) is not installed in node_modules — the orchestrator cannot run tsc --noEmit.","patches_applied":0,"profile_updated":true}

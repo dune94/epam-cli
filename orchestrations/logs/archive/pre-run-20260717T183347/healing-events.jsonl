@@ -1,0 +1,2 @@
+{"ts":"2026-07-17T20:13:42Z","story_id":"SKY-002-impl","retry":1,"rung":0,"target":"skill","diagnosis":"Parsed JSON properties assigned without type assertions — strict mode rejects unknown→number/string","patches_applied":0,"profile_updated":true}
+{"ts":"2026-07-17T20:20:58Z","story_id":"SKY-003-a","retry":0,"rung":0,"target":"kb","diagnosis":"Agent used types/exports that don't exist in the codebase without verifying actual source files","patches_applied":0,"profile_updated":true}

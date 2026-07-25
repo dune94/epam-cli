@@ -1,0 +1,9 @@
+{
+  "gate": "spec-validator",
+  "story_id": "SKY-004-b",
+  "file": "src/public/index.html",
+  "line": null,
+  "rule": "AC-3",
+  "message": "src/public/index.html does NOT exist on disk. The server code will throw ENOENT when GET / is hit at runtime. The HTML file was never created.",
+  "suggested_fix": "Create src/public/index.html with the HTML dashboard content and update the build script to copy src/public/ into dist/public/."
+}

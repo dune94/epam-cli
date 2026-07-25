@@ -1,0 +1,4 @@
+{"timestamp":"2026-07-22T21:42:54.362Z","step":"ac-review","storyId":"AMSD-1820","runId":"20260722T213946Z","agent":"openspec","attempts":3,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"84a62d4"}
+{"timestamp":"2026-07-22T21:43:45.260Z","step":"ac-review","storyId":"AMSD-1820","runId":"20260722T213946Z","agent":"speckit","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"84a62d4"}
+{"timestamp":"2026-07-22T21:46:57Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260722T173945Z","promptVersion":"84a62d4"}
+{"timestamp":"2026-07-22T21:48:48Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260722T173945Z","promptVersion":"84a62d4"}

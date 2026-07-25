@@ -42,7 +42,8 @@ describe('buildKnownValidModels — the allow-list', () => {
     const set = buildKnownValidModels('MiniMax-M3', 'MiniMax-M2.5');
     expect(set.has('MiniMax-M3')).toBe(true);
     expect(set.has('MiniMax-M2.5')).toBe(true);
-    expect(set.has('moonshotai/kimi-k2')).toBe(true);
+    // k2 removed from the roster 2026-07-25 (EOL upstream); k3 is the ladder's top rung.
+    expect(set.has('moonshotai/kimi-k3')).toBe(true);
     expect(set.has('z-ai/glm-5.2')).toBe(true);
   });
 
@@ -62,7 +63,7 @@ describe('isValidModelString — real execution against the exact hallucinated d
   const knownValidModels = buildKnownValidModels('MiniMax-M3', 'MiniMax-M2.5');
 
   it('REPRODUCES the exact live-run defect: rejects "moonshotai/MiniMax-M3"', () => {
-    expect(isValidModelString('moonshotai/MiniMax-M3', 'moonshotai/kimi-k2', knownValidModels)).toBe(false);
+    expect(isValidModelString('moonshotai/MiniMax-M3', 'moonshotai/kimi-k3', knownValidModels)).toBe(false);
   });
 
   it('accepts a known-valid model string', () => {
@@ -115,7 +116,7 @@ describe('isValidModelString — real execution against the exact hallucinated d
 
   it('does not falsely reject legitimate models that merely contain similar substrings', () => {
     expect(isValidModelString('MiniMax-M3', 'MiniMax-M3', knownValidModels)).toBe(true);
-    expect(isValidModelString('moonshotai/kimi-k2', 'MiniMax-M3', knownValidModels)).toBe(true);
+    expect(isValidModelString('moonshotai/kimi-k3', 'MiniMax-M3', knownValidModels)).toBe(true);
   });
 });
 

@@ -76,6 +76,14 @@ function buildEpisode({ id, toolOutput, diagnosis, ...rest }) {
   // A tool-derived signature ALWAYS wins: TS2532 is far more specific than "ran
   // out of turns". signature_source stays distinct so an audit can tell a precise
   // key from a coarse one.
+  // The limit the agent actually hit is stated in its own output ("Agent reached
+  // maximum iterations (15)"). Capturing it gives the admission guard a fact to
+  // compare against, instead of an environment variable that is absent in
+  // production — which is why the first version of that guard went inert and let a
+  // harmful rule through twice.
+  const limitMatch = String(toolOutput || '').match(/reached maximum iterations \(?(\d+)\)?/i);
+  const observed_limit = limitMatch ? Number(limitMatch[1]) : undefined;
+
   const cls = typeof rest.failure_class === 'string' ? rest.failure_class.trim() : '';
   const fallback = cls ? { signature: `class:${cls}`, source: 'failure_class' } : null;
   const chosen = derived || fallback;
@@ -86,6 +94,7 @@ function buildEpisode({ id, toolOutput, diagnosis, ...rest }) {
     diagnosis: diagnosis ?? null,
     signature: chosen ? chosen.signature : null,
     signature_source: chosen ? chosen.source : null,
+    ...(observed_limit !== undefined ? { observed_limit } : {}),
   };
 }
 

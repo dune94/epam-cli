@@ -150,6 +150,35 @@ describe('Pillar 4 — every refused synthesis leaves evidence', () => {
   });
 });
 
+describe('a harmful rule is refused end to end, and quarantined', () => {
+  it('rejects the live "you ran out at 15, so use 14" rule and records why', async () => {
+    const ctx2 = freshStore();
+    // Episodes carrying the real exhaustion text, so observed_limit is captured.
+    for (let i = 0; i < 2; i++) {
+      ctx2.store.recordEpisode({
+        id: `x-${i}`, signature: 'class:max_iterations', agent_role: ROLE,
+        story_id: 'S', diagnosis: 'ran out of turns',
+        observed_limit: 15,
+      });
+    }
+    const harmful = JSON.stringify({
+      enforcement: { kind: 'param', name: 'EPAM_MAX_ITERATIONS', value: '14' },
+      reason: 'Prevents exceeding the 15-iteration limit by capping at 14',
+    });
+    const r = await ctx2.synth.maybeSynthesize(ctx2.store, {
+      // heredoc: stubRunner writes its arg as the script BODY, so raw JSON would
+      // be executed as shell and the stub would fail before proposing anything.
+      agent_role: ROLE, signature: 'class:max_iterations',
+      runner: stubRunner(`cat <<'EOF'\n${harmful}\nEOF`),
+    });
+    expect(r, 'the harmful rule was admitted again').toBeFalsy();
+    expect(ctx2.store.readConstraints().length, 'it reached the store').toBe(0);
+    const q = quarantine(ctx2.root);
+    expect(q.length, 'refused but not recorded — invisible').toBeGreaterThan(0);
+    expect(q[q.length - 1].detail, 'the reason was lost').toMatch(/INCREASE|sanity/i);
+  });
+});
+
 describe('Pillar 4 — quarantine is evidence, never instruction', () => {
   it('is not readable through the retrieval path agents use', () => {
     const store = require(join(LIB, 'kb-store.js'));

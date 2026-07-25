@@ -46,8 +46,9 @@ const INCREASE_ONLY = new Set([
  * Throw if the candidate is schema-valid but semantically self-defeating.
  * @param {object} candidate a constraint that has ALREADY passed schema validation
  * @param {object} env       the environment to compare against (default process.env)
+ * @param {object} opts      { observedLimit } — the limit the agent actually hit
  */
-function assertSane(candidate, env) {
+function assertSane(candidate, env, opts) {
   const e = (candidate && candidate.enforcement) || {};
   if (e.kind !== 'param' || !INCREASE_ONLY.has(e.name)) return;
 
@@ -61,16 +62,45 @@ function assertSane(candidate, env) {
     throw new Error(`constraint-sanity: ${e.name} must be positive, got ${proposed}`);
   }
 
+  // Baseline, in order of trustworthiness:
+  //   1. observedLimit — the number the agent actually hit, read from its own tool
+  //      output. A fact.
+  //   2. the environment — only present in some contexts.
+  //
+  // The FIRST version of this guard used (2) alone and skipped when absent. In
+  // production EPAM_MAX_ITERATIONS is not in the shell where synthesis runs (the
+  // writer passes it as a per-command prefix, not an export), so it went inert and
+  // the identical harmful rule was admitted on the very next run. A guard that
+  // silently does nothing is worse than no guard, because it is trusted.
   const source = env || process.env;
-  const current = Number(source[e.name]);
-  // No value in force — nothing to compare against. Skip rather than guess at a
-  // default, which would differ per agent and could reject a legitimate rule.
-  if (!Number.isFinite(current)) return;
+  const envValue = Number(source[e.name]);
+  const observed = Number(opts && opts.observedLimit);
+  const baseline = Number.isFinite(observed) ? observed
+    : Number.isFinite(envValue) ? envValue
+    : NaN;
 
-  if (proposed <= current) {
+  const exhaustionTriggered =
+    /(^|:)max_iterations|exhaust|timeout/i.test((candidate.trigger && candidate.trigger.signature) || '');
+
+  if (!Number.isFinite(baseline)) {
+    // FAIL CLOSED. A budget rule born of exhaustion is only ever meaningful as an
+    // increase; admitting one we cannot verify is exactly what caused the damage.
+    // The refusal is quarantined with this reason, so it is visible rather than
+    // silent.
+    if (exhaustionTriggered) {
+      throw new Error(
+        `constraint-sanity: cannot verify ${e.name}=${proposed} for an ` +
+        `exhaustion-triggered rule (constraint '${candidate.id}') — no observed ` +
+        `limit in the episode and no value in the environment. Refusing rather ` +
+        `than admitting an unverifiable budget change.`);
+    }
+    return;
+  }
+
+  if (proposed <= baseline) {
     throw new Error(
       `constraint-sanity: ${e.name} may only INCREASE — it is a budget, and this ` +
-      `rule exists because the budget was exhausted. Currently ${current}, rule ` +
+      `rule exists because the budget was exhausted. Observed ${baseline}, rule ` +
       `proposes ${proposed} (constraint '${candidate.id}'). Lowering it makes the ` +
       `failure it is meant to fix strictly more likely.`);
   }

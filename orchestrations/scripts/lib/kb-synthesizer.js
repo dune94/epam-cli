@@ -194,9 +194,19 @@ async function maybeSynthesize(store, {
   };
 
   try {
+    // Hand the guard the limit the agent ACTUALLY hit, taken from the episodes'
+    // own tool output. Without it the guard has no baseline: the env var it would
+    // otherwise use is absent in production, and an exhaustion-triggered budget
+    // rule then fails closed. The highest observed limit is the right baseline —
+    // a fix must clear the worst case seen, not the mildest.
+    const observedLimit = episodes
+      .map(e => Number(e.observed_limit))
+      .filter(Number.isFinite)
+      .reduce((a, b) => Math.max(a, b), NaN);
+
     // admit() validates FIRST, so an unenforceable proposal cannot archive an
     // existing rule as a side effect, and leaves the store untouched on refusal.
-    return arb.admit(store, candidate);
+    return arb.admit(store, candidate, { observedLimit });
   } catch (e) {
     // Pydantic's field-level reason is the whole point — discarding it left
     // nobody able to tell WHY a rule was refused.

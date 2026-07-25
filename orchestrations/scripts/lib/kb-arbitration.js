@@ -68,7 +68,7 @@ function archive(store, rule, supersededBy) {
  * Admit a candidate rule after arbitration.
  * Throws (leaving the store untouched) if the candidate is not schema-valid.
  */
-function admit(store, candidate) {
+function admit(store, candidate, opts) {
   // Validate FIRST: an invalid rule must never cause an archive as a side effect.
   store.validate('constraint', candidate);
 
@@ -76,7 +76,7 @@ function admit(store, candidate) {
   // right way. Live 2026-07-25: a rule that fired because an agent exhausted 15
   // iterations set the iteration budget to 14 — structurally perfect, and it made
   // the very failure it was meant to fix strictly worse.
-  sanity.assertSane(candidate);
+  sanity.assertSane(candidate, undefined, opts);
 
   const active = store.readConstraints().filter(x => x.status !== 'archived');
   for (const existing of active) {
@@ -104,6 +104,7 @@ function admit(store, candidate) {
   return store.putConstraint({
     ...candidate,
     ttl_cycles: candidate.ttl_cycles ?? 20,
+    status: candidate.status ?? 'active',
     cycles_idle: 0,
   });
 }

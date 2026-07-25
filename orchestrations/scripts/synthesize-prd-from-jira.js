@@ -33,8 +33,13 @@ const getArg = (flag, def = '') => { const i = argv.indexOf(flag); return i !== 
 const CLASSIFICATIONS_PATH = getArg('--classifications');
 const TEMPLATE_PATH        = getArg('--template',
   path.join(__dirname, '..', 'travel-app-prd.canonical.json'));
-const OUT_PATH             = getArg('--out',
-  path.join(__dirname, '..', 'travel-app-prd.json'));
+// NO default. This defaulted to travel-app-prd.json, so omitting --out silently
+// overwrote the travel-app PRD with whatever project was being synthesized.
+const OUT_PATH             = getArg('--out', '');
+if (!OUT_PATH) {
+  console.error('[synthesize-prd] --out is required (no default: it used to overwrite travel-app-prd.json)');
+  process.exit(2);
+}
 const PROJECT_NAME         = getArg('--project-name', '');
 
 // Configurable: the codeline value that means "spans all codelines, split me"

@@ -83,7 +83,10 @@ export NODE_BIN
 
 # PRD_FILE: runtime file written by Jira ingest (brownfield) or restored from
 # canonical (greenfield). Both modes write to the same path; pre-run-reset clears it.
-PRD_FILE="${PRD_FILE:-${REPO_ROOT}/orchestrations/travel-app-prd.json}"
+# PER-PROJECT. This defaulted to travel-app-prd.json, so `orchestrate.sh --project
+# metrolinx` (PRD_FILE unset in its config.env) synthesized the AMSD PRD straight
+# into the travel-app PRD — the same clobber the tier3 runner was fixed for.
+PRD_FILE="${PRD_FILE:-${REPO_ROOT}/orchestrations/projects/${PROJECT}/prd.json}"
 export PRD_FILE
 
 # ── Required key validation ───────────────────────────────────────────────────

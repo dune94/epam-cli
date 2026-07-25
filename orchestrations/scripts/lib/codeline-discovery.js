@@ -50,7 +50,10 @@ function getCodeGraph() {
 const argv    = process.argv.slice(2);
 const getArg  = (flag, def = '') => { const i = argv.indexOf(flag); return i !== -1 ? argv[i + 1] : def; };
 const DRY_RUN = argv.includes('--dry-run') || process.env.CODELINE_DISCOVERY_DRY_RUN === '1';
-const MODEL   = getArg('--model', process.env.ORCH_GATE_MODEL || process.env.EPAM_MODEL || 'claude-haiku-4-5-20251001');
+// Explicit provider. These called ai-run.sh with --model but NO --provider, so
+// provider came only from ambient env — e.g. `--provider qwen --model claude-haiku`.
+const PROVIDER = getArg('--provider', process.env.ORCH_GATE_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || 'qwen');
+const MODEL   = getArg('--model', process.env.ORCH_GATE_MODEL || process.env.EPAM_MODEL || 'z-ai/glm-5.2');
 
 const ISSUES_PATH = getArg('--issues');
 const ROOT_DIR    = getArg('--root', process.env.JIRA_CODELINE_ROOT || '');
@@ -357,8 +360,8 @@ function callLlm(prompt) {
     // provider-side warnings/errors that still produce SOME stdout output
     // (and would otherwise be silently invisible) can actually be seen.
     const cmd = debug
-      ? `bash ${AI_RUN_SH} --model ${MODEL} < ${tmpPrompt}`
-      : `bash ${AI_RUN_SH} --model ${MODEL} < ${tmpPrompt} 2>/dev/null`;
+      ? `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt}`
+      : `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>/dev/null`;
     const raw = execSync(cmd, {
       encoding:   'utf8',
       timeout:    300000,

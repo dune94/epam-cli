@@ -41,7 +41,10 @@ echo "[kill-tier3] Sweeping for orphaned orchestration processes (pre-fix runs, 
 # `nohup ... &` launch) — no pidfile exists, so only this sweep runs, and it
 # used to miss these two, leaving them running (and billing) after the "kill"
 # reported success.
-orphan_pattern='orchestrations/scripts/tier3-travel-app-run\.sh|orchestrations/scripts/run-agent-orchestration\.sh|orchestrations/scripts/ai-run\.sh|orchestrations/scripts/claude\.sh|epam run --provider'
+# EVERY top-level runner must appear here. Only travel-app was listed, so a
+# metrolinx or skyscanner kill left the runner alive to relaunch phases — and
+# with the pid-file default also pointing at travel-app, could miss entirely.
+orphan_pattern='orchestrations/scripts/tier3-travel-app-run\.sh|orchestrations/scripts/tier3-metrolinx-run\.sh|orchestrations/scripts/tier3-skyscanner-app-run\.sh|orchestrations/scripts/tier3-mock-run\.sh|orchestrations/scripts/tier3-paid-run\.sh|orchestrations/scripts/orchestrate\.sh|orchestrations/scripts/run-agent-orchestration\.sh|orchestrations/scripts/ai-run\.sh|orchestrations/scripts/claude\.sh|epam run --provider'
 orphans="$(pgrep -f "$orphan_pattern" 2>/dev/null || true)"
 if [ -n "$orphans" ]; then
   echo "$orphans" | xargs -r kill -TERM 2>/dev/null || true

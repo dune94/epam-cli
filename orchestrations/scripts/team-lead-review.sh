@@ -48,7 +48,7 @@ AUTO_APPROVE="${AUTO_APPROVE:-false}"
 REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
 AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
-ORCH_GATE_MODEL="${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}"
+ORCH_GATE_MODEL="${ORCH_GATE_MODEL:-z-ai/glm-5.2}"
 
 # Look up a model's HIGH-ladder successor (EPAM_MODEL_LADDER_HIGH is "from=to|...",
 # e.g. "z-ai/glm-5.1=moonshotai/kimi-k3"). Same laddering the detective + spec

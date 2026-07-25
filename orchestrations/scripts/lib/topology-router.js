@@ -26,7 +26,7 @@
 'use strict';
 
 const TIMEOUT_MS = 12000;
-const MODEL      = process.env.ORCH_GATE_MODEL || 'claude-haiku-4-5-20251001';
+const MODEL      = process.env.ORCH_GATE_MODEL || 'z-ai/glm-5.2';
 
 // ── Tool schema ──────────────────────────────────────────────────────────────
 const TOPOLOGY_TOOL = {

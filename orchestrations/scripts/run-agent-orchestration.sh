@@ -5647,7 +5647,7 @@ LINT_FIND_EOF
             _lga_attempt=0
             while [ "$_lga_attempt" -lt 2 ] && [ -z "$_lint_finding_raw" ]; do
                 _lga_prompt="$_lint_finding_prompt"
-                _lga_model="${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}"
+                _lga_model="${ORCH_GATE_MODEL:-z-ai/glm-5.2}"
                 if [ "$_lga_attempt" -ge 1 ]; then
                     [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _lga_model="${ESCALATION_MODEL_HIGH}"
                     _lga_prompt="RETRY (attempt 2): Your previous response was empty. Read the lint log at ${_lint_log}, identify the failing file and story, and emit ONLY the JSON output.
@@ -5655,7 +5655,7 @@ LINT_FIND_EOF
 $_lint_finding_prompt"
                 fi
                 _lga_raw="$(echo "$_lga_prompt" | \
-                    timeout 120 epam run --provider "${ORCH_GATE_PROVIDER:-anthropic}" \
+                    timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
                         --model "${_lga_model}" \
                         --json - 2>>"$_lint_rem_log" || echo "")"
                 if [ -n "$_lga_raw" ]; then
@@ -5698,7 +5698,7 @@ LINT_AC_EOF
                 _lrem_attempt=0
                 while [ "$_lrem_attempt" -lt 2 ] && [ -z "$_lint_ac_raw" ]; do
                     _lrem_prompt="$_lint_ac_prompt"
-                    _lrem_model="${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}"
+                    _lrem_model="${ORCH_GATE_MODEL:-z-ai/glm-5.2}"
                     if [ "$_lrem_attempt" -ge 1 ]; then
                         [ -n "${ESCALATION_MODEL_HIGH:-}" ] && _lrem_model="${ESCALATION_MODEL_HIGH}"
                         _lrem_prompt="RETRY (attempt 2): Your previous response was empty or missing the 'new_acs' field. Emit ONLY the JSON: {\"story_id\":\"...\",\"new_acs\":[\"...\"]}.
@@ -5706,7 +5706,7 @@ LINT_AC_EOF
 $_lint_ac_prompt"
                     fi
                     _lrem_raw="$(echo "$_lrem_prompt" | \
-                        timeout 120 epam run --provider "${ORCH_GATE_PROVIDER:-anthropic}" \
+                        timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
                             --model "${_lrem_model}" \
                             --json - 2>>"$_lint_rem_log" || echo "")"
                     if [ -n "$_lrem_raw" ]; then
@@ -5771,14 +5771,14 @@ LINT_AC_PY
                 # Agent 3: profile-augmentor — 1 retry on empty output
                 info "  [lint-gate:augmentor] Recording lint anti-pattern in profile..."
                 _laug_raw="$(echo "$_lint_finding_raw" | \
-                    timeout 60 epam run --provider "${ORCH_GATE_PROVIDER:-anthropic}" \
-                        --model "${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}" \
+                    timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
+                        --model "${ORCH_GATE_MODEL:-z-ai/glm-5.2}" \
                         --json - 2>>"$_lint_rem_log" || echo "")"
                 if [ -z "$_laug_raw" ]; then
                     warning "  [lint-gate:augmentor] attempt 1 returned no output — retrying"
                     echo "$_lint_finding_raw" | \
-                        timeout 60 epam run --provider "${ORCH_GATE_PROVIDER:-anthropic}" \
-                            --model "${ORCH_GATE_MODEL:-claude-haiku-4-5-20251001}" \
+                        timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
+                            --model "${ORCH_GATE_MODEL:-z-ai/glm-5.2}" \
                             --json - 2>>"$_lint_rem_log" || true
                 fi
             else

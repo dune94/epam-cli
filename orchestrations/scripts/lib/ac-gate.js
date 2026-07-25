@@ -43,7 +43,10 @@ const argv    = process.argv.slice(2);
 const getArg  = (flag, def = '') => { const i = argv.indexOf(flag); return i !== -1 ? argv[i + 1] : def; };
 const DRY_RUN           = argv.includes('--dry-run') || process.env.AC_GATE_DRY_RUN === '1';
 const AUTO_ELABORATE     = process.env.AC_GATE_AUTO_ELABORATE === '1';
-const MODEL   = getArg('--model', process.env.ORCH_GATE_MODEL || process.env.EPAM_MODEL || 'claude-haiku-4-5-20251001');
+// Explicit provider. These called ai-run.sh with --model but NO --provider, so
+// provider came only from ambient env — e.g. `--provider qwen --model claude-haiku`.
+const PROVIDER = getArg('--provider', process.env.ORCH_GATE_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || 'qwen');
+const MODEL   = getArg('--model', process.env.ORCH_GATE_MODEL || process.env.EPAM_MODEL || 'z-ai/glm-5.2');
 
 const ISSUES_PATH = getArg('--issues');
 const OUT_PATH    = getArg('--out', '');   // write JSON results to file instead of stdout
@@ -181,7 +184,7 @@ function classifyWithLLM(issue, knownCodelines) {
 
   try {
     // Use ai-run.sh for provider-agnostic LLM call with proper env/key routing
-    const cmd = `bash ${AI_RUN_SH} --model ${MODEL} < ${tmpPrompt} 2>/dev/null`;
+    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>/dev/null`;
     const raw = execSync(cmd, {
       encoding: 'utf8',
       timeout: 90000,
@@ -242,7 +245,7 @@ Respond with JSON only — no markdown, no preamble:
   const tmpPrompt = `/tmp/ac-gate-elaborate-${issue.jiraKey}.txt`;
   fs.writeFileSync(tmpPrompt, prompt);
   try {
-    const cmd = `bash ${AI_RUN_SH} --model ${MODEL} < ${tmpPrompt} 2>/dev/null`;
+    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>/dev/null`;
     const raw = execSync(cmd, { encoding: 'utf8', timeout: 90000, env: { ...process.env } }).trim();
     if (!raw) throw new Error('Empty elaboration response');
     const jsonMatch = raw.match(/\{[\s\S]*\}/);

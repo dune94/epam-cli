@@ -42,13 +42,15 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-LOG_FILE="/tmp/tier3-travel-app-run-$(date +%Y%m%dT%H%M%S).log"
+LOG_FILE="/tmp/tier3-skyscanner-app-run-$(date +%Y%m%dT%H%M%S).log"
 
 # Record our own PID (== the process-group ID after the setsid re-exec above)
 # so orchestrations/scripts/kill-tier3-run.sh can reliably find and kill the
 # whole tree in one command, without having to hunt down orphaned children by
 # hand the way the 2026-07-07 incident required.
-TIER3_PID_FILE="${TIER3_PID_FILE:-/tmp/tier3-travel-app-run.pid}"
+# Named after THIS runner. It said tier3-travel-app-run.pid (copy-paste), so a
+# skyscanner launch overwrote the travel-app pid and the kill hit the wrong group.
+TIER3_PID_FILE="${TIER3_PID_FILE:-/tmp/tier3-skyscanner-app-run.pid}"
 echo "$$" > "$TIER3_PID_FILE"
 trap 'rm -f "$TIER3_PID_FILE"' EXIT
 

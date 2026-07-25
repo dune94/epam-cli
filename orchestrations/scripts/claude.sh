@@ -7742,17 +7742,29 @@ commit_completed_story() {
     # worktree lane (SKY-003-impl/-test, SKY-004 in the observed incident)
     # never even attempted.
     set +e
+    # .epam/ is OUR tooling config (dependency-check, contract-generation,
+    # known-fixes), written into the target repo so the gates can read it. It must
+    # never be COMMITTED there: a client repo does not carry epam-cli's manifests.
+    # Found in the metrolinx commit e60b7bb and reproduced by mock1 (d3df3f9),
+    # where three .epam files plus a lockfile buried a one-line fix in 1881
+    # insertions.
     timeout "$_git_timeout" git -C "$_commit_root" add -A -- \
         ':!orchestrations/logs/*' \
         ':!*/node_modules/*' \
         ':!*/build/*' \
         ':!*/.next/*' \
+        ':!.epam/*' \
+        ':!*/.epam/*' \
         2>/dev/null
     local _add_rc=$?
     if [ "$_add_rc" -ne 0 ]; then
         timeout "$_git_timeout" git -C "$_commit_root" add -A 2>/dev/null
         _add_rc=$?
     fi
+    # Belt and braces: the fallback above has NO pathspec, so a failure of the
+    # exclusion form would silently put .epam back into the commit. Unstage it
+    # unconditionally — this holds whichever add path ran.
+    timeout "$_git_timeout" git -C "$_commit_root" reset -q -- '.epam' 2>/dev/null || true
     set -e
     if [ "$_add_rc" -ne 0 ]; then
         if [ "$_add_rc" -eq 124 ]; then

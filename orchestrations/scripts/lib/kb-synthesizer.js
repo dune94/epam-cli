@@ -128,6 +128,14 @@ async function maybeSynthesize(store, {
     input: buildPrompt({ agent_role, signature, episodes }),
     encoding: 'utf8',
     timeout: Number(process.env.KB_SYNTHESIS_TIMEOUT_MS || 180000),
+    // B28: an explicit budget, not the inherited default. This is a reasoning
+    // model emitting schema-bound JSON — <think> tokens are billed against the
+    // same allowance, so an undersized budget yields truncated output that never
+    // reaches the closing brace and is quarantined as 'unparseable'.
+    env: {
+      ...process.env,
+      EPAM_MAX_OUTPUT_TOKENS: process.env.KB_SYNTHESIS_MAX_OUTPUT_TOKENS || '32768',
+    },
   });
   const reply = (r.stdout || '').trim();
   const q = base => store.quarantine({ signature, agent_role, ...base });

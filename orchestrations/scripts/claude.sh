@@ -5204,13 +5204,17 @@ run_healing_recorder() {
     # 118 real episodes found only 4 diagnoses carried a compiler code, so prose
     # cannot serve as a stable lookup key. Never fails the run: losing an episode
     # must not lose a story.
-    if [ "${EPAM_KB_SELFHEAL:-0}" = "1" ]; then
+    if true; then   # self-heal always on (switch removed 2026-07-25)
         local _kb_apply_lib="${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/lib/kb-apply.sh"
         if [ -f "$_kb_apply_lib" ]; then
             # shellcheck disable=SC1090
             . "$_kb_apply_lib"
             printf '%s' "${VERIFICATION_FAILURE:-}" | \
                 kb_record_episode "$story_id" "${STORY_ROLE:-}" "$diagnosis" || true
+            # Close the loop: episodes alone build nothing. Synthesis turns a
+            # REPEATED signature into one arbitrated, schema-valid constraint that
+            # the next attempt gets as enforcement — never as prompt prose.
+            kb_maybe_synthesize "${STORY_ROLE:-}" || true
         fi
     fi
 }
@@ -6028,13 +6032,16 @@ implement_story() {
     # Applied AFTER effort resolution and BEFORE the invocation, so a learned
     # constraint overrides the computed default rather than being overwritten by
     # it. Arrives as parameters, never as prompt text. Flag-guarded and inert by
-    # default — with EPAM_KB_SELFHEAL unset this is a no-op.
-    if [ "${EPAM_KB_SELFHEAL:-0}" = "1" ]; then
+    # Always on — self-heal is not optional (switch removed 2026-07-25).
+    if true; then
         local _kb_lib="${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/lib/kb-apply.sh"
         if [ -f "$_kb_lib" ]; then
             # shellcheck disable=SC1090
             . "$_kb_lib"
             kb_apply_constraints "${STORY_ROLE:-}" "story:${story_id:-}" || true
+            # Pillar 2: rules that fired stay alive, rules that did not age toward
+            # their TTL and are archived for re-validation instead of trusted forever.
+            kb_tick "${KB_LAST_FIRED:-}" || true
             [ -n "${KB_LAST_FIRED:-}" ] && \
                 log "  Effort[KB] -> maxIter=${STORY_MAX_ITERATIONS} maxOutTok=${STORY_MAX_OUTPUT_TOKENS} (${KB_LAST_FIRED})"
         fi

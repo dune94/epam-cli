@@ -5633,7 +5633,7 @@ if [ "${SKIP_LINT_GATE:-false}" != "true" ] && [ -n "$_node_bin" ] && [ -x "$_no
             # claude.sh's story-implementation heal: a mock run proved the story
             # path never fires for a gate failure, so wiring only that one left
             # this whole class unrecorded. Flag-guarded; never fails the gate.
-            if [ "${EPAM_KB_SELFHEAL:-0}" = "1" ] && [ -f "$SCRIPT_DIR/lib/kb-apply.sh" ]; then
+            if [ -f "$SCRIPT_DIR/lib/kb-apply.sh" ]; then
                 # shellcheck disable=SC1090
                 . "$SCRIPT_DIR/lib/kb-apply.sh"
                 head -c 8000 "$_lint_log" 2>/dev/null | \

@@ -54,9 +54,14 @@ const AGENT_SITES = [
   'lib/cpa-inference.js',
   'lib/ac-gate.js',
   'lib/codeline-discovery.js',
-  // Self-heal synthesis: bounded by the generated JSON Schema, routed through
-  // ai-run.sh so it inherits the 32768 output net.
+  // Self-heal synthesis: bounded by the generated JSON Schema. Sets an EXPLICIT
+  // budget rather than relying on the ai-run.sh net — a reasoning model spends
+  // <think> tokens against the same allowance, and a truncated reply never
+  // reaches the closing brace, so it is quarantined as 'unparseable'.
   'lib/kb-synthesizer.js',
+  // The shell-facing seam (record/synthesize-auto/apply/tick). Its only model
+  // call is delegated to kb-synthesizer.js above.
+  'lib/kb-cli.js',
 ];
 
 describe('B28 — the central net (the actual fix)', () => {

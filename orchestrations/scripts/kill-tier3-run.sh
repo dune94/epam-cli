@@ -86,9 +86,12 @@ list_survivors() {
 # Explicit TIER3_PID_FILE first (honoured for back-compat), then every
 # /tmp/tier3-*.pid — one per runner, so a metrolinx/skyscanner/mock kill works
 # without the caller having to know which variable to export.
+# An explicitly-passed TIER3_PID_FILE is always honoured: it names ONE process
+# group, so it cannot reach anything the caller did not intend. The /tmp glob is
+# skipped under MATCH_ROOT — that one is unbounded and could reach a real run.
 pid_files=()
+[ -n "${TIER3_PID_FILE:-}" ] && pid_files+=("$TIER3_PID_FILE")
 if [ -z "$MATCH_ROOT" ]; then
-  [ -n "${TIER3_PID_FILE:-}" ] && pid_files+=("$TIER3_PID_FILE")
   for f in /tmp/tier3-*.pid; do [ -f "$f" ] && pid_files+=("$f"); done
 fi
 

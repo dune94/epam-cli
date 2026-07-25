@@ -105,7 +105,7 @@ wait
 
     execFileSync('bash', [KILL_SCRIPT], {
       encoding: 'utf8',
-      env: { ...process.env, TIER3_PID_FILE: pidFile },
+      env: { ...process.env, TIER3_PID_FILE: pidFile, KILL_TIER3_MATCH_ROOT: dir },
     });
 
     waitUntil(() => !pidAlive(leaderPid), 3000);
@@ -124,7 +124,7 @@ wait
 
     const output = execFileSync('bash', [KILL_SCRIPT], {
       encoding: 'utf8',
-      env: { ...process.env, TIER3_PID_FILE: pidFile },
+      env: { ...process.env, TIER3_PID_FILE: pidFile, KILL_TIER3_MATCH_ROOT: dir },
     });
     expect(output).toMatch(/Sweeping for orphaned orchestration processes/);
     expect(output).not.toMatch(/Traceback|command not found/);
@@ -137,7 +137,7 @@ wait
 
     const output = execFileSync('bash', [KILL_SCRIPT], {
       encoding: 'utf8',
-      env: { ...process.env, TIER3_PID_FILE: pidFile },
+      env: { ...process.env, TIER3_PID_FILE: pidFile, KILL_TIER3_MATCH_ROOT: dir },
     });
     expect(output).toContain('Nothing was running.');
   });

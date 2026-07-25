@@ -51,8 +51,10 @@ describe('gate remediation records an episode keyed by the lint log', () => {
     expect(ep.agent_role).toBe('lint-gate');
   });
 
-  it('records nothing when the flag is off', () => {
-    expect(recordFromLintLog("src/hello.ts(3,1): error TS1005: ';' expected.\n", null)).toBeNull();
+  it('records with no flag set — self-heal is always on', () => {
+    // The feature switch was removed 2026-07-25: self-heal is not optional.
+    expect(recordFromLintLog("src/hello.ts(3,1): error TS1005: ';' expected.\n", null),
+      'no episode recorded without a flag — self-heal is still gated somewhere').not.toBeNull();
   });
 
   it('still records when the log has no derivable signature', () => {
@@ -69,9 +71,11 @@ describe('the call site exists in the gate-remediation block', () => {
     expect(before).toContain('kb_record_episode');
   });
 
-  it('is flag-guarded so a default run is unaffected', () => {
-    const i = src.indexOf('kb_record_episode');
-    expect(src.slice(Math.max(0, i - 400), i)).toContain('EPAM_KB_SELFHEAL');
+  it('is NOT feature-flagged — a default run records', () => {
+    // Inverted deliberately. A permanent off-switch on a feature that is supposed
+    // to be running is indistinguishable from the feature being broken.
+    expect(src, 'the self-heal feature switch is back — it must stay removed')
+      .not.toMatch(/\$\{EPAM_KB_SELFHEAL/);
   });
 
   it('cannot fail the gate — the recording is best-effort', () => {

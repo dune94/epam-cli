@@ -26,6 +26,7 @@ const store = require('./kb-store.js');
 const arb = require('./kb-arbitration.js');
 const compiler = require('./constraint-compiler.js');
 const { buildEpisode } = require('./failure-signature.js');
+const synthesizer = require('./kb-synthesizer.js');
 
 function arg(name, dflt = undefined) {
   const i = process.argv.indexOf(`--${name}`);
@@ -105,14 +106,50 @@ function cmdApply() {
   process.stdout.write(lines.join('\n') + '\n');
 }
 
-function main() {
+/**
+ * synthesize-auto — the LLM-driven step that turns REPEATED episodes into one
+ * arbitrated constraint. Without this reachable from the shell, the loop is
+ * record -> apply-finds-nothing forever: episodes accumulate, no rule is ever
+ * built, and the KB is write-only while LOOKING enabled.
+ *
+ * Refusals are not silent: kb-synthesizer quarantines every path that does not
+ * produce a rule (no_output / declined / unparseable / unmapped_rule).
+ */
+async function cmdSynthesizeAuto() {
+  const c = await synthesizer.maybeSynthesize(store, {
+    agent_role: arg('agent-role') || undefined,
+    signature: arg('signature'),
+    threshold: arg('threshold') ? Number(arg('threshold')) : undefined,
+    runner: process.env.AI_RUNNER_CMD || undefined,
+    model: arg('model') || undefined,
+    provider: arg('provider') || undefined,
+  });
+  // Empty stdout = nothing synthesised. The REASON is in the quarantine log, not
+  // here, so a caller cannot mistake prose for a result.
+  if (c && c.id) process.stdout.write(`${c.id}\n`);
+}
+
+/**
+ * tick — PILLAR 2 ageing. Rules that fired stay alive; rules that did not age
+ * toward their TTL and are archived for re-validation rather than trusted
+ * forever. --fired takes the KB_FIRED list emitted by `apply`.
+ */
+function cmdTick() {
+  const fired = String(arg('fired') || '').split(',').map(s => s.trim()).filter(Boolean);
+  const r = arb.tick(store, { fired });
+  process.stdout.write(`${JSON.stringify(r || {})}\n`);
+}
+
+async function main() {
   configure();
   switch (process.argv[2]) {
     case 'record': return cmdRecord();
     case 'synthesize': return cmdSynthesize();
+    case 'synthesize-auto': return cmdSynthesizeAuto();
     case 'apply': return cmdApply();
+    case 'tick': return cmdTick();
     default:
-      process.stderr.write('usage: kb-cli.js record|synthesize|apply [...]\n');
+      process.stderr.write('usage: kb-cli.js record|synthesize|synthesize-auto|apply|tick [...]\n');
       process.exit(2);
   }
 }

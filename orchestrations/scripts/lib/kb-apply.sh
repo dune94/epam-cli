@@ -9,10 +9,11 @@
 # appended prose that is silently trimmed past ~16000 chars and that nothing
 # verifies the agent obeyed. A parameter cannot be softened over a long run.
 #
-# GUARDED BY EPAM_KB_SELFHEAL. Default OFF — with the flag unset this function
-# returns immediately and a run behaves byte-for-byte as before, matching constraint
-# stored or not. That is deliberate: this touches the live retry path, and "landed
-# but inert" is the only safe way to put it in front of a real run.
+# ALWAYS ON. The feature switch was removed 2026-07-25 by explicit instruction:
+# self-heal is not optional. A permanent off-switch on a feature that is supposed
+# to be running is indistinguishable from the feature being broken — the exact
+# failure mode this pipeline keeps hitting. These functions stay non-fatal (a KB
+# problem must never fail a story) but they are never inert.
 #
 #   kb_apply_constraints <agent_role> <comma-separated signatures>
 #
@@ -28,12 +29,12 @@ _KB_APPLY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # fires ages out for re-validation.
 KB_LAST_FIRED=""
 KB_LAST_GATES=""
+KB_LAST_SIGNATURE=""
 
 kb_apply_constraints() {
     local _role="${1:-}" _sigs="${2:-}"
     KB_LAST_FIRED=""; KB_LAST_GATES=""
 
-    [ "${EPAM_KB_SELFHEAL:-0}" = "1" ] || return 0
     [ -n "$_role" ] && [ -n "$_sigs" ] || return 0
 
     local _cli="$_KB_APPLY_DIR/kb-cli.js"
@@ -79,12 +80,55 @@ kb_record_episode() {
     # in (`head -c 8000 lint.log | kb_record_episode ...`); returning without
     # reading gives the upstream `head` a SIGPIPE, which under `set -o pipefail`
     # fails the caller's pipeline — i.e. a disabled feature could break a gate.
-    if [ "${EPAM_KB_SELFHEAL:-0}" != "1" ] || [ ! -f "$_cli" ] || ! command -v "$_node" >/dev/null 2>&1; then
+    if [ ! -f "$_cli" ] || ! command -v "$_node" >/dev/null 2>&1; then
         cat >/dev/null 2>&1 || true
         return 0
     fi
-    "$_node" "$_cli" record \
+    # Keep the signature: it is the lookup key synthesis needs. Discarding it (the
+    # previous `>/dev/null`) is why nothing could ever build a rule.
+    KB_LAST_SIGNATURE="$("$_node" "$_cli" record \
         --story "$_story" --agent-role "$_role" --diagnosis "$_diag" \
-        --phase "${PHASE:-}" --model "${STORY_MODEL:-}" >/dev/null 2>&1 || true
+        --phase "${PHASE:-}" --model "${STORY_MODEL:-}" 2>/dev/null || true)"
+    return 0
+}
+
+# kb_maybe_synthesize <agent_role> [signature]
+#
+# Turn REPEATED episodes for one signature into a single arbitrated constraint.
+# Without this the loop is record -> apply-finds-nothing forever: episodes pile up,
+# no rule is ever built, and the KB looks enabled while doing nothing.
+#
+# Never fails the caller — a synthesis failure must not fail a story — but it is
+# never SILENT either: kb-synthesizer quarantines every refusal with its reason
+# (no_output / declined / unparseable / unmapped_rule).
+kb_maybe_synthesize() {
+    local _role="${1:-}" _sig="${2:-${KB_LAST_SIGNATURE:-}}"
+    [ -n "$_role" ] && [ -n "$_sig" ] || return 0
+
+    local _cli="$_KB_APPLY_DIR/kb-cli.js"
+    local _node="${NODE_BIN:-node}"
+    [ -f "$_cli" ] || return 0
+    command -v "$_node" >/dev/null 2>&1 || return 0
+
+    local _id
+    _id="$("$_node" "$_cli" synthesize-auto --agent-role "$_role" --signature "$_sig" 2>/dev/null || true)"
+    [ -n "$_id" ] && echo "  [SelfHeal/KB] constraint synthesised for ${_role}/${_sig}: ${_id}" >&2
+    return 0
+}
+
+# kb_tick [fired-ids]
+#
+# PILLAR 2 ageing. Rules that fired stay alive; rules that did not advance toward
+# their TTL and are archived for RE-VALIDATION rather than trusted indefinitely.
+# Defaults to the ids the last apply reported.
+kb_tick() {
+    local _fired="${1:-${KB_LAST_FIRED:-}}"
+
+    local _cli="$_KB_APPLY_DIR/kb-cli.js"
+    local _node="${NODE_BIN:-node}"
+    [ -f "$_cli" ] || return 0
+    command -v "$_node" >/dev/null 2>&1 || return 0
+
+    "$_node" "$_cli" tick --fired "$_fired" >/dev/null 2>&1 || true
     return 0
 }

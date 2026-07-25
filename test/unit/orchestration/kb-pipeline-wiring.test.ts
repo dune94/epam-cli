@@ -13,7 +13,7 @@
  *   APPLY   before the next attempt, matching constraints are compiled onto the
  *           STORY_* knobs the invocation actually reads — enforcement, not advice.
  *
- * Both are behind EPAM_KB_SELFHEAL. Default OFF: a live run is byte-identical until
+ * Always on: there is no flag. Self-heal runs in every run by design.
  * the flag is set deliberately. The last test asserts that directly, because
  * "landed but inert" is the only safe way to put this in front of a real run.
  */
@@ -83,12 +83,17 @@ describe('RECORD — the pipeline writes a KB episode keyed by tool output', () 
     expect(legacy).toContain('"story_id":"S-1"');
   });
 
-  it('records nothing to the KB when the flag is OFF', () => {
+  it('records with NO flag set — self-heal is always on', () => {
+    // The EPAM_KB_SELFHEAL switch is gone. A permanent off-switch on a feature
+    // that is supposed to be running is indistinguishable from the feature being
+    // broken, which is the failure mode this pipeline keeps hitting.
     const { kbRoot } = runRecorder({
-      VERIFICATION_FAILURE: 'src/a.ts(1,1): error TS2532: x', STORY_ROLE: 'r',
+      VERIFICATION_FAILURE: "src/a.ts(1,1): error TS2532: Object is possibly 'undefined'.",
+      STORY_ROLE: 'r',
     });
     const f = join(kbRoot, 'healing-events.jsonl');
-    expect(!existsSync(f) || readFileSync(f, 'utf8').trim() === '').toBe(true);
+    expect(existsSync(f) && readFileSync(f, 'utf8').trim() !== '',
+      'no episode recorded without a flag — self-heal is still gated').toBe(true);
   });
 
   it('survives tool output with no derivable signature', () => {
@@ -134,7 +139,7 @@ echo "STORY_MAX_ITERATIONS=$STORY_MAX_ITERATIONS"
     expect(out).toMatch(/STORY_MAX_ITERATIONS=6/);
   });
 
-  it('is a no-op when the flag is OFF, even with a matching constraint stored', () => {
+  it('applies a stored constraint with NO flag set — self-heal is always on', () => {
     const kbRoot = mkdtempSync(join(tmpdir(), 'kb-apply3-')); dirs.push(kbRoot);
     const cli = join(LIB, 'kb-cli.js');
     const env = { ...process.env, KB_ROOT: kbRoot };
@@ -150,6 +155,6 @@ source ${JSON.stringify(join(LIB, 'kb-apply.sh'))}
 kb_apply_constraints r TS2532
 echo "STORY_MAX_ITERATIONS=$STORY_MAX_ITERATIONS"
 `], { encoding: 'utf8', env });   // flag deliberately absent
-    expect(out).toMatch(/STORY_MAX_ITERATIONS=6/);
+    expect(out).toMatch(/STORY_MAX_ITERATIONS=99/);
   });
 });

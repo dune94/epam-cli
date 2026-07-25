@@ -27,14 +27,15 @@ afterAll(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, fo
 
 /** The KB block, lifted verbatim out of the orchestrator. */
 function extractKbBlock(): string {
-  const start = src.indexOf('            if [ "${EPAM_KB_SELFHEAL:-0}" = "1" ] && [ -f "$SCRIPT_DIR/lib/kb-apply.sh" ]; then');
+  // Anchored on the sourcing guard that remains now the feature switch is gone.
+  const start = src.indexOf('            if [ -f "$SCRIPT_DIR/lib/kb-apply.sh" ]; then');
   expect(start, 'KB block not found in the gate-remediation path').toBeGreaterThan(-1);
   const end = src.indexOf('\n            fi', start);
   expect(end).toBeGreaterThan(start);
   return src.slice(start, end + '\n            fi'.length);
 }
 
-function runBlock(lintLog: string, flag: string | null) {
+function runBlock(lintLog: string, _unused?: unknown, extraEnv: Record<string, string> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'kb-block-')); dirs.push(dir);
   const logFile = join(dir, 'lint.log');
   writeFileSync(logFile, lintLog);
@@ -47,8 +48,8 @@ PHASE=core
 ${extractKbBlock()}
 echo "BLOCK_COMPLETED"
 `;
-  const env: Record<string, string> = { ...process.env as any, KB_ROOT: dir };
-  if (flag) env.EPAM_KB_SELFHEAL = flag;
+  // No feature flag any more — self-heal is always on.
+  const env: Record<string, string> = { ...process.env as any, KB_ROOT: dir, ...extraEnv };
   const out = execFileSync('bash', ['-c', script], { encoding: 'utf8', env });
   const f = join(dir, 'healing-events.jsonl');
   const ep = existsSync(f) && readFileSync(f, 'utf8').trim()
@@ -66,12 +67,15 @@ describe('the real gate block, executed', () => {
     expect(ep.agent_role).toBe('lint-gate');
   });
 
-  it('completes under set -euo pipefail with the flag OFF (SIGPIPE safety)', () => {
+  it('completes under set -euo pipefail when the KB is UNAVAILABLE (SIGPIPE safety)', () => {
     // Returning without draining stdin gives `head` a SIGPIPE; under pipefail that
-    // would abort the gate. A disabled feature must not be able to break a run.
-    const { out, ep } = runBlock("src/hello.ts(3,1): error TS1005: ';' expected.\n", null);
+    // would abort the gate. With the flag gone, the early-return path is now
+    // "node/kb-cli missing" rather than "feature disabled" — the drain still has
+    // to happen, or an unavailable KB could break a run it has no business
+    // touching.
+    const { out } = runBlock("src/hello.ts(3,1): error TS1005: ';' expected.\n", null,
+      { NODE_BIN: '/nonexistent/node' });
     expect(out).toContain('BLOCK_COMPLETED');
-    expect(ep).toBeNull();
   });
 
   it('completes on a huge lint log without tripping the 8000-byte head', () => {

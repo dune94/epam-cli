@@ -28,6 +28,20 @@ load_env_file() {
 load_env_file "$(dirname "$(dirname "$_SCRIPT_DIR_AIRUN")")/.env"
 load_env_file "${PROJECT_ROOT:-}/.env"
 
+# ── Output-budget safety net ────────────────────────────────────────────────
+# AgentRunner's default when EPAM_MAX_OUTPUT_TOKENS is unset is 4096
+# (src/agent/AgentRunner.ts). That is fine for a non-reasoning model, and far
+# too small for the glm-5.x / kimi models this pipeline actually routes: their
+# <think> blocks are billed against the SAME budget, so the model can exhaust
+# it reasoning and emit truncated intermediate text — which ai-run.sh then
+# returns as "the result". Live 2026-07-25: the team-lead reviewer emitted 169
+# bytes ("Now let me verify the test actually covers...") with no verdict, and
+# the run blocked on "review output unparseable". A non-reasoning model fits
+# under 4096, which is exactly why standalone testing on haiku never saw it.
+#
+# Per-site values still win — this only applies when the caller set nothing.
+export EPAM_MAX_OUTPUT_TOKENS="${EPAM_MAX_OUTPUT_TOKENS:-16384}"
+
 usage() {
   cat <<'EOF'
 Usage: ai-run.sh [--provider NAME] [--model NAME]

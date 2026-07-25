@@ -117,6 +117,7 @@ run_review_prompt() {
         EPAM_ALLOWED_TOOLS="bash,read_file,list_files,search" \
         EPAM_MAX_ITERATIONS="${REVIEW_MAX_ITERATIONS:-25}" \
         EPAM_REASONING_EFFORT="${REVIEW_REASONING_EFFORT:-high}" \
+        EPAM_MAX_OUTPUT_TOKENS="${REVIEW_MAX_OUTPUT_TOKENS:-24576}" \
         PROJECT_ROOT="$PROJECT_ROOT" \
         "$AI_RUNNER_CMD" --provider "$_provider" \
             --model "$_model" 2>&1)

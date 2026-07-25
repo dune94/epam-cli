@@ -76,6 +76,7 @@ run_review_prompt() {
         AI_MODEL="$ORCH_GATE_MODEL" \
         CLAUDE_CMD="${CLAUDE_CMD:-claude}" \
         EPAM_CLI="${EPAM_CLI:-epam}" \
+        EPAM_MAX_OUTPUT_TOKENS="${CODE_REVIEW_MAX_OUTPUT_TOKENS:-16384}" \
         "$AI_RUNNER_CMD" --provider "${EPAM_ORCHESTRATION_PROVIDER:-claude}" \
             --model "$ORCH_GATE_MODEL" 2>&1
 }

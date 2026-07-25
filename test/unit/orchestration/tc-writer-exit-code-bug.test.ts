@@ -44,8 +44,13 @@ describe('post-impl-tc-writer.sh — invokes epam run without --cwd', () => {
   });
 
   it('changes directory via a subshell (cd "$OUTPUT_DIR" && ...) instead', () => {
+    // Window-free: take everything from the start of the invocation's own statement
+    // (the preceding blank line) to the epam call. A fixed slice(idx-200) broke the
+    // moment an env var name grew — the 4th time that fixed-window shape has produced
+    // a false failure in this suite.
     const idx = tcWriterSrc.indexOf('"$EPAM_BIN" run "$TC_PROMPT"');
-    const block = tcWriterSrc.slice(Math.max(0, idx - 200), idx);
+    const stmtStart = tcWriterSrc.lastIndexOf('\n\n', idx);
+    const block = tcWriterSrc.slice(stmtStart, idx);
     expect(block).toMatch(/cd "\$OUTPUT_DIR" &&/);
   });
 

@@ -273,6 +273,15 @@ export class AgentRunner {
       for (const result of toolResults) {
         result.content = truncateToolOutput(result.content, this.maxToolOutputChars);
 
+        // Remember what was actually written, so an agent whose work went to disk
+        // can SAY so instead of returning empty. Only successful writes count —
+        // see the summary below for why that distinction is load-bearing.
+        const req = toolCallRequests.find(r => r.id === result.toolUseId);
+        if (req && !result.isError && /write|edit|create/i.test(req.name)) {
+          const p = (req.input?.path ?? req.input?.file_path ?? req.input?.filename) as string | undefined;
+          if (p) this.writtenPaths.push(p);
+        }
+
         this.options.onToolResult?.(
           toolCallRequests.find(r => r.id === result.toolUseId)?.name ?? '',
           result.content,
@@ -297,6 +306,20 @@ export class AgentRunner {
 
     if (this.iterationCount >= maxIterations && !finalResponse) {
       finalResponse = `Agent reached maximum iterations (${maxIterations}) without completing.`;
+    }
+
+    // A file-writing agent often ends its turn with no text, making finalResponse
+    // indistinguishable from an agent that produced NOTHING. Report what was
+    // written instead — generated from tool results, not asked of the model, since
+    // a prompt instruction can be ignored and a deterministic summary cannot.
+    //
+    // Deliberately only when writes SUCCEEDED and no other response exists. Doing
+    // this for a failed or silent agent would turn a detectable failure into a
+    // plausible success, which is the defect being removed everywhere else here.
+    // The max-iterations message above is set first and therefore wins.
+    if (!finalResponse && this.writtenPaths.length > 0) {
+      const unique = [...new Set(this.writtenPaths)];
+      finalResponse = `Wrote ${unique.length} file(s): ${unique.join(', ')}`;
     }
 
     return this.buildResult(finalResponse, messages);
@@ -395,6 +418,9 @@ export class AgentRunner {
     // Return original results if recovery failed
     return toolResults as any;
   }
+
+  /** Paths successfully written this run, used to summarise an otherwise-empty reply. */
+  private writtenPaths: string[] = [];
 
   private buildResult(finalResponse: string, messages: Message[]): AgentRunResult {
     // Only expose a summed costUsd when EVERY turn reported real cost — a

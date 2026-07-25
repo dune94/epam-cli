@@ -189,13 +189,44 @@ run_provider_once() {
         _tool_flag=""
         _skip_approval="1"
       fi
+      # Keep the CLI's stderr. It used to go to /dev/null, so an API exception
+      # message was destroyed before the caller's err_file capture could see it:
+      # Langfuse had the reason, the run log said "ai-run failed with no error
+      # output", and retryable_failure classified against an empty string.
+      local _epam_err
+      _epam_err="$(mktemp)"
       if ! EPAM_MINIMAX_JSON_MODE=1 EPAM_DANGEROUS_SKIP_APPROVAL="$_skip_approval" \
           "$EPAM_CLI" run --provider "$provider" "${model_args[@]}" ${_tool_flag:+"$_tool_flag"} --json \
-          < "$PROMPT_FILE" > "$_epam_out" 2>/dev/null; then
+          < "$PROMPT_FILE" > "$_epam_out" 2>"$_epam_err"; then
+        cat "$_epam_err" >&2
         cat "$_epam_out" >&2
-        rm -f "$_epam_out"
+        rm -f "$_epam_out" "$_epam_err"
         return 1
       fi
+
+      # A call that produced NOTHING is not a success. jq exits 0 on empty output,
+      # so this used to `return 0` with no stdout — no fallback provider tried, and
+      # the caller could not tell it apart from a real answer. That is exactly how
+      # the reviewer's truncated 169-byte non-verdict reached the pipeline as "the
+      # reviewer's answer".
+      #
+      # The test is whether a COMPLETION RECORD exists, not whether the text is
+      # non-empty: file-writing agents legitimately return an empty result string
+      # because their work went to disk. Conflating those two caused an earlier bug.
+      local _completions
+      # Detect on has("result") ALONE. The extraction below still falls back to
+      # .message/.output/.text for odd shapes, but they must not count as
+      # COMPLETION: pino log lines carry .message, so accepting it here would let
+      # "thinking..." register as an answer and defeat the whole check.
+      _completions=$(jq -rs '[.[] | select(type == "object" and has("result"))] | length' \
+        "$_epam_out" 2>/dev/null || echo 0)
+      if [ "${_completions:-0}" -eq 0 ]; then
+        echo "[ai-run] provider '$provider' returned NO completion record — truncated or empty reply, treating as FAILURE" >&2
+        cat "$_epam_err" >&2
+        rm -f "$_epam_out" "$_epam_err"
+        return 1
+      fi
+      rm -f "$_epam_err"
       # When cost tracking is requested, save the normalized JSON result
       if [ -n "${ORCH_JSON_RESULT:-}" ]; then
         # Extract the result object (select lines that have a .result field)
@@ -203,7 +234,7 @@ run_provider_once() {
           > "$ORCH_JSON_RESULT" 2>/dev/null || true
       fi
       # Extract text result, tolerating mixed pino JSON lines in output
-      jq -rs '[.[] | select(.result != null and .result != "")] | last // {} | .result // .message // .output // .text // empty' \
+      jq -rs '[.[] | select(type == "object" and (has("result") or has("message") or has("output") or has("text")))] | last // {} | .result // .message // .output // .text // empty' \
         "$_epam_out"
       local _jq_rc=$?
       rm -f "$_epam_out"

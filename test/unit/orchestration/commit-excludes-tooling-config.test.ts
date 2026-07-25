@@ -41,9 +41,16 @@ function stageInSandbox() {
 
   // The real deliverable, plus the tooling config that should never be committed.
   writeFileSync(join(repo, 'src', 'hello.ts'), 'export const x = 2;\n');
-  mkdirSync(join(repo, '.epam'), { recursive: true });
-  for (const f of ['dependency-check.json', 'contract-generation.json', 'known-fixes.json']) {
-    writeFileSync(join(repo, '.epam', f), '{}\n');
+  // Every tool artifact epam-cli drops into a client repo — the CLASS, not one
+  // instance. Excluding only .epam let .deepeval into a live commit hours later.
+  for (const [dir, file] of [
+    ['.epam', 'dependency-check.json'],
+    ['.deepeval', '.deepeval_telemetry.txt'],
+    ['.codegraph', 'index.json'],
+    ['.contracts', 'generated.json'],
+  ]) {
+    mkdirSync(join(repo, dir), { recursive: true });
+    writeFileSync(join(repo, dir, file), '{}\n');
   }
 
   // Pull the exact pathspec the pipeline uses, so this tracks the real code.
@@ -62,8 +69,8 @@ describe('the pathspec fallback cannot reintroduce it', () => {
     const src = readFileSync(CLAUDE_SH, 'utf8');
     // The fallback `git add -A` carries no pathspec, so exclusion alone is not
     // enough — a failure of the pathspec form would put .epam straight back.
-    expect(src, 'no unconditional unstage — the no-pathspec fallback reintroduces .epam')
-      .toMatch(/reset -q -- '\.epam'/);
+    expect(src, 'no unconditional unstage — the no-pathspec fallback reintroduces them')
+      .toMatch(/reset -q --[\s\S]{0,80}'\.epam'[\s\S]{0,80}'\.deepeval'/);
   });
 });
 
@@ -74,11 +81,26 @@ describe('story commit excludes our own tooling config', () => {
     expect(staged).toContain('src/hello.ts');
   });
 
-  it('does NOT stage .epam/ — epam-cli config must not enter a client repo', () => {
-    const leaked = staged.filter(f => f.startsWith('.epam/'));
+  it('does NOT stage ANY tool artifact — epam-cli output must not enter a client repo', () => {
+    const leaked = staged.filter(f => /^\.(epam|deepeval|codegraph|contracts)\//.test(f));
     expect(leaked,
       'our dependency-check/contract manifests were committed into the client repo, ' +
       'burying the real fix and violating the no-client-repo-writes rule')
       .toEqual([]);
+  });
+});
+
+describe('the optional phase assessment has room for a reasoning model', () => {
+  it('allows more than 120s per attempt', () => {
+    const src = readFileSync(
+      join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+    const m = src.match(/PHASE_ASSESSMENT_TIMEOUT_SECS:-(\d+)/);
+    expect(m, 'the assessment timeout default vanished').toBeTruthy();
+    // 120 timed out twice live: these models spend <think> tokens against a
+    // 32768-token budget before emitting anything.
+    expect(Number(m![1])).toBeGreaterThanOrEqual(300);
+    // But the cap must still bound an OPTIONAL step: 2 attempts must stay under
+    // the 600s-per-attempt default it was introduced to protect against.
+    expect(Number(m![1]), 'the cap no longer bounds an optional step').toBeLessThan(600);
   });
 });

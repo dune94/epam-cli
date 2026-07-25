@@ -5173,7 +5173,13 @@ PROMPT_EOF
     # ("reached maximum iterations without completing") consumed the
     # entire pipeline run's wall-clock budget on this step alone. Cap it
     # much shorter so a stall here can never dominate a real run.
-    EPAM_GATE_TIMEOUT_SECS="${PHASE_ASSESSMENT_TIMEOUT_SECS:-120}"
+    # 300, not 120 (raised 2026-07-25 after two live timeouts on this step). The
+    # cap exists so an optional step cannot dominate a run, and that intent is
+    # preserved: 2 attempts x 300s = 10 minutes worst case, still half the 600s
+    # default it was protecting against. 120 was calibrated before this pipeline
+    # moved to reasoning models with 32768-token budgets — they spend <think>
+    # tokens before emitting anything, so the floor for a real answer rose.
+    EPAM_GATE_TIMEOUT_SECS="${PHASE_ASSESSMENT_TIMEOUT_SECS:-300}"
     while [ "$_pa_attempt" -lt 2 ] && [ "$_pa_success" = "0" ]; do
         local _pa_prompt="$assessment_prompt"
         if [ "$_pa_attempt" -ge 1 ]; then

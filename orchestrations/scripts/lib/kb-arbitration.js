@@ -28,6 +28,7 @@
 'use strict';
 
 const fs = require('fs');
+const sanity = require('./constraint-sanity.js');
 
 const nowIso = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 
@@ -71,6 +72,12 @@ function admit(store, candidate) {
   // Validate FIRST: an invalid rule must never cause an archive as a side effect.
   store.validate('constraint', candidate);
 
+  // Schema proves a MECHANISM exists; it cannot prove the mechanism points the
+  // right way. Live 2026-07-25: a rule that fired because an agent exhausted 15
+  // iterations set the iteration budget to 14 — structurally perfect, and it made
+  // the very failure it was meant to fix strictly worse.
+  sanity.assertSane(candidate);
+
   const active = store.readConstraints().filter(x => x.status !== 'archived');
   for (const existing of active) {
     if (!sameBinding(existing, candidate)) continue;
@@ -91,7 +98,14 @@ function admit(store, candidate) {
     // rule is archived rather than left to fight it.
     archive(store, existing, candidate.id);
   }
-  return store.putConstraint({ ...candidate, cycles_idle: 0 });
+  // ttl_cycles default belongs here, not only in store.synthesize(): callers that
+  // build a candidate directly (kb-synthesizer does) would otherwise store a rule
+  // with no TTL, which pillar 2 can never age out for re-validation.
+  return store.putConstraint({
+    ...candidate,
+    ttl_cycles: candidate.ttl_cycles ?? 20,
+    cycles_idle: 0,
+  });
 }
 
 /**

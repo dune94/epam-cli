@@ -7742,19 +7742,25 @@ commit_completed_story() {
     # worktree lane (SKY-003-impl/-test, SKY-004 in the observed incident)
     # never even attempted.
     set +e
-    # .epam/ is OUR tooling config (dependency-check, contract-generation,
-    # known-fixes), written into the target repo so the gates can read it. It must
-    # never be COMMITTED there: a client repo does not carry epam-cli's manifests.
-    # Found in the metrolinx commit e60b7bb and reproduced by mock1 (d3df3f9),
-    # where three .epam files plus a lockfile buried a one-line fix in 1881
-    # insertions.
+    # Tool artifacts epam-cli writes into the target repo so its gates can read
+    # them. They must never be COMMITTED there: a client repo does not carry our
+    # manifests, indexes or telemetry.
+    #
+    # The list is the CLASS, not one instance. Excluding only .epam (as this first
+    # did) let .deepeval/.deepeval_telemetry.txt into a live metrolinx commit hours
+    # later — the same defect wearing a different filename. All four were verified
+    # absent from the client's baseline tree (origin/develop), so none is client
+    # content. Checking against HEAD would have been wrong: .deepeval appeared
+    # "tracked" there only because our own run had just committed it.
     timeout "$_git_timeout" git -C "$_commit_root" add -A -- \
         ':!orchestrations/logs/*' \
         ':!*/node_modules/*' \
         ':!*/build/*' \
         ':!*/.next/*' \
-        ':!.epam/*' \
-        ':!*/.epam/*' \
+        ':!.epam/*' ':!*/.epam/*' \
+        ':!.deepeval/*' ':!*/.deepeval/*' \
+        ':!.codegraph/*' ':!*/.codegraph/*' \
+        ':!.contracts/*' ':!*/.contracts/*' \
         2>/dev/null
     local _add_rc=$?
     if [ "$_add_rc" -ne 0 ]; then
@@ -7764,7 +7770,8 @@ commit_completed_story() {
     # Belt and braces: the fallback above has NO pathspec, so a failure of the
     # exclusion form would silently put .epam back into the commit. Unstage it
     # unconditionally — this holds whichever add path ran.
-    timeout "$_git_timeout" git -C "$_commit_root" reset -q -- '.epam' 2>/dev/null || true
+    timeout "$_git_timeout" git -C "$_commit_root" reset -q -- \
+        '.epam' '.deepeval' '.codegraph' '.contracts' 2>/dev/null || true
     set -e
     if [ "$_add_rc" -ne 0 ]; then
         if [ "$_add_rc" -eq 124 ]; then

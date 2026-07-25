@@ -40,3 +40,15 @@ if (!process.env.COMPOSE_OVERRIDE) {
 if (!process.env.DASHBOARD_STATE_DIR) {
   process.env.DASHBOARD_STATE_DIR = mkdtempSync(join(tmpdir(), 'vitest-dashboard-state-'));
 }
+
+// Third vector, same bug. kb-store defaults to orchestrations/agents/kb, so any
+// test that does not set KB_ROOT writes episodes, constraints and quarantine into
+// the LIVE self-heal store. Found 2026-07-25: a suite run left 44 episodes and 24
+// quarantine entries there, and mock1 then started against a pre-seeded KB.
+//
+// This matters more since synthesis threshold dropped to 1 for the same-story
+// heal: one stale episode whose signature recurs is enough to synthesise a
+// constraint that binds a knob in a later, unrelated run.
+if (!process.env.KB_ROOT) {
+  process.env.KB_ROOT = mkdtempSync(join(tmpdir(), 'vitest-kb-root-'));
+}

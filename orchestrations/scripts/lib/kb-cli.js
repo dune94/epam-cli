@@ -78,7 +78,16 @@ function cmdSynthesize() {
 
 function cmdApply() {
   const role = arg('agent-role');
-  const signatures = String(arg('signatures') || '').split(',').map(s => s.trim()).filter(Boolean);
+  let signatures = String(arg('signatures') || '').split(',').map(s => s.trim()).filter(Boolean);
+  // --story derives the signatures from THIS story's own episodes, so the caller
+  // does not have to track them across retries. Null signatures are skipped: an
+  // episode we could not key must not match anything.
+  const story = arg('story');
+  if (story && !signatures.length) {
+    signatures = Array.from(new Set(store.episodes()
+      .filter(e => e.story_id === story && e.signature)
+      .map(e => e.signature)));
+  }
   const matched = [];
   for (const signature of signatures) {
     for (const c of store.lookup({ agent_role: role, signature })) {

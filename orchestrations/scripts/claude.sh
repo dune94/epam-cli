@@ -5196,6 +5196,23 @@ run_healing_recorder() {
         "$patches_applied" "$profile_updated" \
         >> "$heal_log"
     log "  [HealingRecorder] Event written (story=$story_id retry=$retry_num rung=$rung target=$target)"
+
+    # ── Self-heal KB (pillar 1: episodic tier) ───────────────────────────────
+    # Additive and flag-guarded. The legacy line above still feeds the dashboard;
+    # this second write is keyed by a signature derived from the TOOL OUTPUT
+    # ($VERIFICATION_FAILURE), never from the diagnosis prose above — a replay of
+    # 118 real episodes found only 4 diagnoses carried a compiler code, so prose
+    # cannot serve as a stable lookup key. Never fails the run: losing an episode
+    # must not lose a story.
+    if [ "${EPAM_KB_SELFHEAL:-0}" = "1" ]; then
+        local _kb_apply_lib="${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/lib/kb-apply.sh"
+        if [ -f "$_kb_apply_lib" ]; then
+            # shellcheck disable=SC1090
+            . "$_kb_apply_lib"
+            printf '%s' "${VERIFICATION_FAILURE:-}" | \
+                kb_record_episode "$story_id" "${STORY_ROLE:-}" "$diagnosis" || true
+        fi
+    fi
 }
 
 # apply_known_fix <project_root> <diagnosis>
@@ -6006,6 +6023,22 @@ implement_story() {
     # truncated mid-think before writing → "deliverables UNCHANGED").
     resolve_brownfield_effort_floor "$story_id"
     log "  Effort[final] -> maxIter=${STORY_MAX_ITERATIONS} maxOutTok=${STORY_MAX_OUTPUT_TOKENS}"
+
+    # ── Self-heal KB (pillar 3: enforcement) ─────────────────────────────────
+    # Applied AFTER effort resolution and BEFORE the invocation, so a learned
+    # constraint overrides the computed default rather than being overwritten by
+    # it. Arrives as parameters, never as prompt text. Flag-guarded and inert by
+    # default — with EPAM_KB_SELFHEAL unset this is a no-op.
+    if [ "${EPAM_KB_SELFHEAL:-0}" = "1" ]; then
+        local _kb_lib="${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/lib/kb-apply.sh"
+        if [ -f "$_kb_lib" ]; then
+            # shellcheck disable=SC1090
+            . "$_kb_lib"
+            kb_apply_constraints "${STORY_ROLE:-}" "story:${story_id:-}" || true
+            [ -n "${KB_LAST_FIRED:-}" ] && \
+                log "  Effort[KB] -> maxIter=${STORY_MAX_ITERATIONS} maxOutTok=${STORY_MAX_OUTPUT_TOKENS} (${KB_LAST_FIRED})"
+        fi
+    fi
     # Resolve aiProvider -> which CLI binary to use
     resolve_provider_settings "$story_id"
     # Capture original model so phase R3 can detect whether R2 escalated it

@@ -72,11 +72,17 @@ kb_apply_constraints() {
 # Additive: never fails the caller, because losing an episode must not fail a run.
 kb_record_episode() {
     local _story="${1:-}" _role="${2:-}" _diag="${3:-}"
-    [ "${EPAM_KB_SELFHEAL:-0}" = "1" ] || return 0
     local _cli="$_KB_APPLY_DIR/kb-cli.js"
     local _node="${NODE_BIN:-node}"
-    [ -f "$_cli" ] || return 0
-    command -v "$_node" >/dev/null 2>&1 || return 0
+
+    # ALWAYS drain stdin, including on every early return. Callers pipe tool output
+    # in (`head -c 8000 lint.log | kb_record_episode ...`); returning without
+    # reading gives the upstream `head` a SIGPIPE, which under `set -o pipefail`
+    # fails the caller's pipeline — i.e. a disabled feature could break a gate.
+    if [ "${EPAM_KB_SELFHEAL:-0}" != "1" ] || [ ! -f "$_cli" ] || ! command -v "$_node" >/dev/null 2>&1; then
+        cat >/dev/null 2>&1 || true
+        return 0
+    fi
     "$_node" "$_cli" record \
         --story "$_story" --agent-role "$_role" --diagnosis "$_diag" \
         --phase "${PHASE:-}" --model "${STORY_MODEL:-}" >/dev/null 2>&1 || true

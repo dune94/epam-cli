@@ -190,10 +190,14 @@ describe('step 3.8 lint gate', () => {
   });
 
   it('lint gate fails the phase on non-zero tsc exit', () => {
+    // WINDOW-FREE. This was slice(lintIdx, lintIdx + 13500) and broke when the gate
+    // grew by 34 bytes — `exit 2` landed at +13534. A fixed byte window asserts the
+    // length of a block, not its behaviour, and this is the third false failure of
+    // that shape today. Bound by the NEXT step marker instead, so the block can
+    // grow freely and the test still measures the right region.
     const lintIdx = orchSrc.indexOf('step_emit "20" "running"');
-    // Gate includes self-healing remediation before the exit — measure with:
-    // node -e "src=require('fs').readFileSync('orchestrations/scripts/run-agent-orchestration.sh','utf8'); s=src.indexOf('step_emit \"3.8\" \"running\"'); console.log(src.indexOf('exit 1',s)-s)"
-    const block = orchSrc.slice(lintIdx, lintIdx + 13500);
+    const nextStep = orchSrc.indexOf('step_emit "21"', lintIdx);
+    const block = orchSrc.slice(lintIdx, nextStep > lintIdx ? nextStep : undefined);
     expect(block).toContain('_lint_failed=1');
     // exit 2 = remediation applied (retry); exit 1 = fallback (hard abort). Both must be present.
     expect(block).toContain('exit 2');

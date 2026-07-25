@@ -189,7 +189,11 @@ function runFullPipeline(opts: { prdPath: string; projectRoot: string; env: Node
   ], {
     cwd: REPO_ROOT,
     encoding: 'utf8',
-    timeout: 20 * 60 * 1000,
+    // 45min, not 20: the observed first pass alone takes ~19 minutes, and this
+    // mock deliberately runs the FULL chain including the exit-2 gate-remediation
+    // retry — which restarts from Step 1. A 20-minute budget could not fit pass +
+    // retry, so the run was being killed mid-retry and reported as a failure.
+    timeout: 45 * 60 * 1000,
     env: { ...process.env, ...opts.env },
   });
   const stdout = (result.stdout || '') + (result.stderr || '');

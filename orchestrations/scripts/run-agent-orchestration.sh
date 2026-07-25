@@ -5626,6 +5626,19 @@ if [ "${SKIP_LINT_GATE:-false}" != "true" ] && [ -n "$_node_bin" ] && [ -x "$_no
         _profiles_file="${AUTOMATION_DIR}/agents/profiles.json"
 
         if [ "${SKIP_GATE_REMEDIATION:-0}" != "1" ] && [ -f "$_lint_log" ]; then
+            # ── Self-heal KB (episodic tier) ─────────────────────────────────
+            # The lint log is tsc --noEmit + eslint output — deterministic tool
+            # signal, exactly what the signature must be derived from. Recorded
+            # here because gate remediation is a DIFFERENT mechanism from
+            # claude.sh's story-implementation heal: a mock run proved the story
+            # path never fires for a gate failure, so wiring only that one left
+            # this whole class unrecorded. Flag-guarded; never fails the gate.
+            if [ "${EPAM_KB_SELFHEAL:-0}" = "1" ] && [ -f "$SCRIPT_DIR/lib/kb-apply.sh" ]; then
+                # shellcheck disable=SC1090
+                . "$SCRIPT_DIR/lib/kb-apply.sh"
+                head -c 8000 "$_lint_log" 2>/dev/null | \
+                    kb_record_episode "${_phase:-${PHASE:-core}}" "lint-gate" "lint gate failed" || true
+            fi
             info "  [lint-gate:analyst] Extracting grounded finding from lint log..."
             _lint_finding_prompt="$(cat <<LINT_FIND_EOF
 You are the gate-finding-analyst. A lint gate (tsc --noEmit + eslint) failed during the '$PHASE' phase of an automated TypeScript project build.

@@ -5388,6 +5388,22 @@ while true; do
         _emit_agent complete "review-agent" "Code review escalated (unresolved after retries)"
         break
     fi
+    # B24 — is this "the code needs changing" or "the REVIEWER failed"?
+    # team-lead-review.sh fails SAFE when its agent produces no verdict: it emits a
+    # synthetic changes_requested so an unreviewed change can never auto-approve.
+    # But that verdict is PHASE-level, so no per-story review-feedback-<id>.json
+    # exists — and the loop below then "re-implements" nothing at all. Live
+    # 2026-07-24: two entirely empty cycles, then escalation with tagged-stories=0,
+    # on a story whose fix AND verified reproducing test had passed every gate.
+    # Re-implementing is the wrong response when the story was never the problem.
+    _review_incomplete_flag="$LOG_DIR/review-incomplete-${PHASE}.flag"
+    _fb_count=$(ls "$LOG_DIR"/review-feedback-*.json 2>/dev/null | wc -l)
+    if [ -f "$_review_incomplete_flag" ] || [ "$_fb_count" -eq 0 ]; then
+        rm -f "$_review_incomplete_flag" 2>/dev/null || true
+        warning "Step 3.6: the REVIEWER did not produce a verdict (no per-story feedback) — re-running the REVIEW, not re-implementing (cycle $_review_cycle → $((_review_cycle + 1)))"
+        _review_cycle=$((_review_cycle + 1))
+        continue
+    fi
     warning "Step 3.6: review requested changes — re-implementing (cycle $_review_cycle → $((_review_cycle + 1)))"
     for _fb in "$LOG_DIR"/review-feedback-*.json; do
         [ -f "$_fb" ] || continue

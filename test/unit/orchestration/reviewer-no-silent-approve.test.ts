@@ -29,7 +29,16 @@ describe('reviewer ladder + resilience', () => {
 
   it('run_review_prompt retries with ladder escalation and a tight iteration cap', () => {
     expect(src).toMatch(/review-agent ladder escalation \(attempt/);
-    expect(src).toMatch(/EPAM_MAX_ITERATIONS="\$\{REVIEW_MAX_ITERATIONS:-12\}"/);
+    // Assert the INVARIANT (a bounded, overridable cap), not a literal. This was
+    // pinned to 12 until 2026-07-24, when 12 thrashed live: the reviewer produced
+    // no verdict, the loop misread that as "changes requested", and two empty
+    // re-implementation cycles ran on a story whose fix and verified reproducing
+    // test had already passed every gate. Raised to 25. A test pinned to the
+    // failing value makes fixing it look like a regression.
+    const cap = src.match(/EPAM_MAX_ITERATIONS="\$\{REVIEW_MAX_ITERATIONS:-(\d+)\}"/);
+    expect(cap, 'reviewer iteration cap not found').toBeTruthy();
+    expect(Number(cap![1]), 'must exceed the 12 that thrashed').toBeGreaterThan(12);
+    expect(Number(cap![1]), 'must stay bounded').toBeLessThanOrEqual(40);
     expect(src).toMatch(/REVIEW_MAX_ATTEMPTS/);
   });
 

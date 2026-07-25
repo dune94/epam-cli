@@ -115,7 +115,7 @@ run_review_prompt() {
         ORCH_JSON_RESULT="$_review_json_result" \
         AI_GATE_ALLOW_TOOLS=1 \
         EPAM_ALLOWED_TOOLS="bash,read_file,list_files,search" \
-        EPAM_MAX_ITERATIONS="${REVIEW_MAX_ITERATIONS:-12}" \
+        EPAM_MAX_ITERATIONS="${REVIEW_MAX_ITERATIONS:-25}" \
         EPAM_REASONING_EFFORT="${REVIEW_REASONING_EFFORT:-high}" \
         PROJECT_ROOT="$PROJECT_ROOT" \
         "$AI_RUNNER_CMD" --provider "$_provider" \
@@ -169,7 +169,15 @@ run_review_prompt() {
     # changes_requested so a change that was never actually reviewed is BLOCKED,
     # not silently merged.
     warning "  review-agent failed to produce a verdict after $_max_attempts attempt(s) (incl. ladder escalation) — emitting review-incomplete (NOT approved)"
-    echo '{"verdict":"changes_requested","issues":[{"severity":"blocker","description":"review-agent did not complete — it thrashed/stalled and produced no verdict even after ladder escalation. The change was NOT reviewed; blocking rather than auto-approving.","suggestedFix":"Re-run the reviewer, or review manually before merge."}],"summary":"review incomplete — not reviewed"}'
+    # B24: mark this verdict as REVIEW_INCOMPLETE. It is emitted when the AGENT
+    # failed, not when the code is wrong — the caller must retry the REVIEWER, not
+    # re-implement the story. Live 2026-07-24: the loop could not tell the two
+    # apart, ran two re-implementation cycles that touched nothing (no per-story
+    # feedback file exists for a phase-level synthetic verdict), then escalated
+    # with tagged-stories=0 — on a story whose fix AND reproducing test had already
+    # passed every gate.
+    echo "REVIEW_INCOMPLETE" > "${AUTOMATION_DIR}/logs/review-incomplete-${PHASE_ID:-phase}.flag" 2>/dev/null || true
+    echo '{"verdict":"changes_requested","reviewIncomplete":true,"issues":[{"severity":"blocker","description":"review-agent did not complete — it thrashed/stalled and produced no verdict even after ladder escalation. The change was NOT reviewed; blocking rather than auto-approving.","suggestedFix":"Re-run the reviewer, or review manually before merge."}],"summary":"review incomplete — not reviewed"}'
     return 0
 }
 

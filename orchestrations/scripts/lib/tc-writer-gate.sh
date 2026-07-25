@@ -49,8 +49,45 @@ run_inline_tc_writer_gate() {
     local _tc_gate_exit=0
     "$SCRIPT_DIR/update-monitor.sh" story_start "$story_id" "main" "tc-writer-agent" "TC Writer: $story_id" \
         "${ORCH_GATE_PROVIDER:-}" "${ORCH_GATE_MODEL:-MiniMax-M3}" 2>/dev/null || true
+    # B23 — self-heal + MEDIUM-ladder escalation.
+    # This loop already retried 3x, but every attempt used the SAME model with the
+    # SAME prompt: no escalation, no corrective guidance. That is the pattern that
+    # wasted attempts on the detective (max_iterations x3) and the repro-test-writer
+    # until each got a ladder plus agent-attempt-analyst.sh.
+    #
+    # MEDIUM, deliberately not HIGH: the TC writer turns ACs/VCs into test-criteria
+    # FACTS — structured restatement, not causal reasoning. It is closer to the VC
+    # producer (pinned to temp 0 / low effort precisely because high reasoning caused
+    # prescriptive drift) than to the detective. The HIGH ladder tops out at kimi-k3;
+    # paying the ceiling rung for restatement buys nothing and may buy WORSE output.
+    local _tc_base_model="${ORCH_GATE_MODEL:-MiniMax-M3}"
+    local _tc_model="$_tc_base_model"
+    local _tc_corrective=""
+    local _tc_writer_log="$LOG_DIR/tc-writer-${story_id}.log"
+
+    # Next rung on the MEDIUM ladder ("A=B|C=D"). Empty when already at the top.
+    _tc_ladder_next_model() {
+        local _cur="$1" _pair _from _to
+        IFS='|' read -ra _pairs <<< "${EPAM_MODEL_LADDER_MEDIUM:-}"
+        for _pair in "${_pairs[@]}"; do
+            _from="${_pair%%=*}"; _to="${_pair#*=}"
+            [ "$_from" = "$_cur" ] && { echo "$_to"; return 0; }
+        done
+        echo ""
+    }
+
     for _tc_gate_attempt in 1 2 3; do
-        log "  Story $story_id needs testCriteria — running TC writer inline before it starts... (attempt ${_tc_gate_attempt}/3)"
+        # Rung change on attempts 2 and 3 (the pipeline's ladder convention is 2
+        # tries per model, but this gate is bounded at 3 attempts total).
+        if [ "$_tc_gate_attempt" -gt 1 ]; then
+            local _tc_next; _tc_next="$(_tc_ladder_next_model "$_tc_model")"
+            if [ -n "$_tc_next" ]; then
+                log "  [tc-writer] ladder escalation (attempt ${_tc_gate_attempt}/3) — ${_tc_model} → ${_tc_next}"
+                _tc_model="$_tc_next"
+            fi
+        fi
+        log "  Story $story_id needs testCriteria — running TC writer inline before it starts... (attempt ${_tc_gate_attempt}/3, model ${_tc_model})"
+        TC_WRITER_CORRECTIVE="$_tc_corrective" ORCH_GATE_MODEL="$_tc_model" AI_MODEL="$_tc_model" \
         bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
             --prd "$PRD_FILE" \
             --phase "$phase" \
@@ -95,6 +132,20 @@ run_inline_tc_writer_gate() {
             break
         fi
         warning "  Inline TC writer attempt ${_tc_gate_attempt}/3 for $story_id produced no valid testCriteria (exit=${_tc_gate_exit}, facts=${_tc_gate_facts_len:-0})"
+
+        # ── self-heal: classify WHY the attempt failed and prepend a tailored
+        # corrective to the next one, instead of re-running an identical prompt.
+        # Reuses agent-attempt-analyst.sh (the same crown-jewel analyst the
+        # test-writer uses); it skips provider/infra failures on its own.
+        if [ "$_tc_gate_attempt" -lt 3 ]; then
+            _tc_fclass="no_json"
+            grep -qiE "reached maximum iterations" "$_tc_writer_log" 2>/dev/null && _tc_fclass="max_iterations"
+            grep -qiE "ai-run failed|no error output" "$_tc_writer_log" 2>/dev/null && _tc_fclass="provider"
+            [ "${_tc_gate_facts_len:-0}" -eq 0 ] && [ "$_tc_gate_exit" -eq 0 ] && _tc_fclass="no_json"
+            log "  [tc-writer] attempt ${_tc_gate_attempt} failed (class=${_tc_fclass}) — invoking self-heal analyst"
+            _tc_corrective="$(AGENT_ANALYST_STORY_ID="$story_id" \
+                bash "$SCRIPT_DIR/../agent-attempt-analyst.sh" "$_tc_fclass" "$_tc_writer_log" 2>/dev/null || echo "")"
+        fi
     done
 
     local _tc_gate_violation_types="[]"

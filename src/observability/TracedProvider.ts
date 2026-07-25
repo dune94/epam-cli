@@ -65,7 +65,15 @@ export class TracedProvider implements LLMProvider {
     try {
       const response = await this.inner.complete(request);
       const latencyMs = Date.now() - start;
-      const cost = calculateCost(request.model, response.usage.inputTokens, response.usage.outputTokens);
+      // REAL BILLED COST WINS. Providers that report what was actually charged
+      // (OpenRouter via `usage: { include: true }` — see QwenProvider) are
+      // authoritative; calculateCost is only an estimate, and returns 0 for any
+      // model absent from MODEL_PRICING (pricing.ts:104). That silently reported
+      // $0 for moonshotai/kimi-k3 while it burned 34,511 in / 3,088 out — and
+      // kimi-k3 is the TOP ladder rung, reached only when a story is going badly
+      // and spending the most. `?? ` not `||`, so a genuine $0 stays $0.
+      const cost = response.usage.costUsd
+        ?? calculateCost(request.model, response.usage.inputTokens, response.usage.outputTokens);
       const toolCalls = response.content.filter(p => p.type === 'tool_use').length;
 
       generation?.end({
@@ -124,7 +132,15 @@ export class TracedProvider implements LLMProvider {
     try {
       const response = await this.inner.stream(request, wrappedHandler);
       const latencyMs = Date.now() - start;
-      const cost = calculateCost(request.model, response.usage.inputTokens, response.usage.outputTokens);
+      // REAL BILLED COST WINS. Providers that report what was actually charged
+      // (OpenRouter via `usage: { include: true }` — see QwenProvider) are
+      // authoritative; calculateCost is only an estimate, and returns 0 for any
+      // model absent from MODEL_PRICING (pricing.ts:104). That silently reported
+      // $0 for moonshotai/kimi-k3 while it burned 34,511 in / 3,088 out — and
+      // kimi-k3 is the TOP ladder rung, reached only when a story is going badly
+      // and spending the most. `?? ` not `||`, so a genuine $0 stays $0.
+      const cost = response.usage.costUsd
+        ?? calculateCost(request.model, response.usage.inputTokens, response.usage.outputTokens);
       const toolCalls = response.content.filter(p => p.type === 'tool_use').length;
 
       generation?.end({

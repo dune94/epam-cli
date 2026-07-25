@@ -34,7 +34,17 @@ err()  { echo -e "${RED}[ingest]${NC} $*" >&2; }
 # ── Arg parsing ───────────────────────────────────────────────────────────
 PROJECT_KEY="${JIRA_PROJECT_KEY:-SKY}"
 JIRA_STATUS="To Do"
-OUT_PRD="${ORCH_DIR}/travel-app-prd.json"
+# NO default into a named project's PRD. This used to be travel-app-prd.json, so
+# an ingest for ANY Jira project landed in the travel-app PRD unless the caller
+# remembered --out-prd. Callers pass --out-prd; PRD_FILE is the env fallback.
+OUT_PRD="${PRD_FILE:-}"
+_out_prd_required() {
+  [ -n "$OUT_PRD" ] && return 0
+  err "no output PRD path: pass --out-prd, or export PRD_FILE."
+  err "  (this used to default to travel-app-prd.json, so an ingest for ANY Jira"
+  err "   project silently overwrote the travel-app PRD)"
+  exit 2
+}
 DRY_RUN=0
 
 while [[ $# -gt 0 ]]; do
@@ -215,6 +225,7 @@ if [ -n "${JIRA_PRD_TEMPLATE:-}" ]; then
   fi
 fi
 
+_out_prd_required
 "$NODE_BIN" "${SCRIPT_DIR}/synthesize-prd-from-jira.js" \
   --classifications "$GATE_JSON" \
   --out "$OUT_PRD" \

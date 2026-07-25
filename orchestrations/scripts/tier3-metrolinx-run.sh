@@ -68,9 +68,12 @@ for arg in "$@"; do [[ "$arg" == "--yes" || "$arg" == "-y" ]] && AUTO_YES=true; 
 [[ "${CI:-}" == "true" || "${AUTO_YES_TIER3:-}" == "1" ]] && AUTO_YES=true
 [[ ! -t 0 ]] && AUTO_YES=true
 
-# PRD_FILE: written by the Jira ingest step at runtime. Path matches what
-# ingest-jira-tickets.sh's --out-prd arg resolves to inside the orch script.
-PRD_FILE="$REPO_ROOT/orchestrations/travel-app-prd.json"
+# PRD_FILE: written by the Jira ingest step at runtime.
+# PER-PROJECT. All three tier3 runners previously pointed here at
+# orchestrations/travel-app-prd.json, so a metrolinx run's Jira ingest overwrote
+# the travel-app PRD outright (4 SKY stories -> 1 AMSD story, 2026-07-25). The
+# path now derives from the project identity that already exists a few lines up.
+PRD_FILE="${EPAM_PROJECT_CONFIG_DIR:-$REPO_ROOT/orchestrations/projects/metrolinx}/prd.json"
 
 info "Tier 3 Metrolinx brownfield run — GLM + Kimi multi-model pipeline (USES CREDITS)"
 info "  Jira:    ${JIRA_URL} / project ${JIRA_PROJECT_KEY}"

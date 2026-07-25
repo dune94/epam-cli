@@ -18,8 +18,13 @@ const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.
 const orchSrc = readFileSync(ORCH_SH, 'utf8');
 
 describe('run-agent-orchestration.sh — _run_jira_pipeline synthesized PRD path is overridable', () => {
-  it('the source declares _synth_prd with a JIRA_SYNTH_PRD_PATH override and the original default preserved', () => {
-    expect(orchSrc).toMatch(/_synth_prd="\$\{JIRA_SYNTH_PRD_PATH:-\$AUTOMATION_DIR\/travel-app-prd\.json\}"/);
+  it('the source declares _synth_prd overridable, falling back to the run\'s own PRD_FILE', () => {
+    // CONTRACT CHANGED 2026-07-25. The default used to be travel-app-prd.json
+    // outright, which meant every Jira-driven project synthesized into the
+    // TRAVEL-APP PRD: a metrolinx run replaced its 4 SKY stories with a single
+    // AMSD-1820 story. The run's own PRD_FILE now takes precedence, with the old
+    // path kept as the innermost fallback so nothing that relied on it breaks.
+    expect(orchSrc).toMatch(/_synth_prd="\$\{JIRA_SYNTH_PRD_PATH:-\$\{PRD_FILE:-\$AUTOMATION_DIR\/travel-app-prd\.json\}\}"/);
   });
 
   it('REAL execution: with JIRA_SYNTH_PRD_PATH set, the resolved value is the override, not the default', () => {

@@ -514,7 +514,9 @@ async function callMiniMaxWithTool(prompt, toolDef, logPath, itemsKey) {
 //   SPEC_MODE_OPENSPEC_MODEL — model for openspec calls (default: moonshotai/kimi-k2)
 //   SPEC_MODE_SPECKIT_MODEL  — model for speckit calls  (default: moonshotai/kimi-k2)
 //   SPEC_MODE_MODEL          — fallback for all other spec-mode calls (default: moonshotai/kimi-k2)
-async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey) {
+// storyId: cost attribution. Without it every cost_snapshot carried storyId:''
+// and spend could not be grouped by story (backlog B6).
+async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey, storyId = '') {
   const provider = (process.env.AI_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || '').toLowerCase();
   const ladderProvider = (process.env.SPEC_PASS_LADDER_PROVIDER || 'qwen').toLowerCase();
 
@@ -543,7 +545,7 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     const specEnv = process.env.SPEC_MODE_MAX_OUTPUT_TOKENS
       ? { EPAM_MAX_OUTPUT_TOKENS: process.env.SPEC_MODE_MAX_OUTPUT_TOKENS }
       : {};
-    const output = await runClaude(directExec, prompt, logPath, specEnv, { costAgent: tag });
+    const output = await runClaude(directExec, prompt, logPath, specEnv, { costAgent: tag, costStoryId: storyId });
     return extractTaggedJson(output, tag);
   }
 
@@ -572,14 +574,14 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     // which always wins. Without this fix the ladder calls MiniMax again.
     const ladderExec = { cmd: execSpec.cmd, args: ['--provider', ladderProvider] };
     const output = await Promise.race([
-      runClaude(ladderExec, prompt, logPath, {}, { costAgent: tag }),
+      runClaude(ladderExec, prompt, logPath, {}, { costAgent: tag, costStoryId: storyId }),
       new Promise((_, reject) => setTimeout(() => reject(new Error(`ladder hard-timeout after ${ladderTimeout}ms`)), ladderTimeout + 5000))
     ]);
     return extractTaggedJson(output, tag);
   }
 
   // Non-minimax: existing raw text path with tag extraction + jsonrepair
-  const output = await runClaude(execSpec, prompt, logPath, {}, { costAgent: tag });
+  const output = await runClaude(execSpec, prompt, logPath, {}, { costAgent: tag, costStoryId: storyId });
   return extractTaggedJson(output, tag);
 }
 
@@ -742,7 +744,8 @@ ${storiesPayload}
       TOOL_SPEC_ASSIGNMENTS,
       'SPEC_ASSIGNMENTS',
       path.join(logDir, `spec-coordinator-${opts.phase}.log`),
-      'assignments'
+      'assignments',
+      `phase:${opts.phase}`   // phase-level agent — no single story owns it
     );
   } catch (error) {
     console.warn('spec-mode: coordinator failed, falling back to default agent pair:', error.message);
@@ -1336,7 +1339,8 @@ ${reviewPayload}
         TOOL_SPEC_REVIEW,
         'SPEC_REVIEW',
         path.join(logDir, `spec-coordinator-review-${opts.phase}.log`),
-        'items'
+        'items',
+        `phase:${opts.phase}`   // phase-level agent — no single story owns it
       );
     } catch (error) {
       console.warn('spec-mode: coordinator review failed:', error.message);
@@ -1491,7 +1495,8 @@ Use "keep-current" to accept the current (possibly rule-upgraded) model. Only pr
         TOOL_MODEL_REVIEW,
         'MODEL_REVIEW',
         path.join(logDir, `spec-model-review-${opts.phase}.log`),
-        'items'
+        'items',
+        `phase:${opts.phase}`   // phase-level agent — no single story owns it
       );
     } catch (err) { llmDecisions = null; }
     if (Array.isArray(llmDecisions)) {
@@ -1809,7 +1814,7 @@ async function enforceVerificationCriteria(story, initialVc, opts = {}) {
 // Shared LLM call for the VC loop — ladder-escalates the model per cycle (base
 // HIGH model → kimi-k3), reusing runClaude's salvage + tight timeout (same
 // resilience as the detective, so a VC regen/review can't stall the pipeline).
-async function _vcLlmCall(prompt, cycle, logPath) {
+async function _vcLlmCall(prompt, cycle, logPath, storyId = '') {
   const baseModel = process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH || process.env.ESCALATION_MODEL_HIGH || 'z-ai/glm-5.1';
   const escalated = ladderNextModel(baseModel, process.env);
   const useEsc = cycle >= 2 && escalated;
@@ -1827,7 +1832,7 @@ async function _vcLlmCall(prompt, cycle, logPath) {
     // (scoped to this child env, so the wider run's temperature/effort are untouched).
     EPAM_TEMPERATURE: process.env.VC_LLM_TEMPERATURE || '0',
     EPAM_REASONING_EFFORT: process.env.VC_LLM_REASONING_EFFORT || 'low',
-  }, { costAgent: 'vc-agent', salvageOutputOnFailure: true, timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '360000') });
+  }, { costAgent: 'vc-agent', costStoryId: storyId, salvageOutputOnFailure: true, timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '360000') });
 }
 function _firstJsonArray(out) {
   const m = out && out.match(/\[[\s\S]*?\]/);
@@ -1853,7 +1858,7 @@ ${VC_OBSERVABILITY_RULES}
 
 FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
 Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.`;
-  const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-review.log`) : null);
+  const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-review.log`) : null, story.id);
   const arr = _firstJsonArray(out);
   return Array.isArray(arr) ? arr.filter((x) => typeof x === 'string') : [];
 }
@@ -1872,7 +1877,7 @@ ${VC_OBSERVABILITY_RULES}
 
 Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
 Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.`;
-  const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-regen.log`) : null);
+  const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-regen.log`) : null, story.id);
   const arr = _firstJsonArray(out);
   if (!arr) return null;
   const cleaned = arr.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim());
@@ -2093,7 +2098,7 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
         // (Distinct from VC generation, which stays LOW: that is a restate task where
         // high effort drives prescriptive drift.) Env-overridable.
         EPAM_REASONING_EFFORT: process.env.CODEGRAPH_DETECTIVE_REASONING_EFFORT || 'high',
-      }, { costAgent: 'code-graph-detective',
+      }, { costAgent: 'code-graph-detective', costStoryId: story && story.id ? story.id : '',
         // Salvage the detective's JSON even if its process exits non-zero/null
         // (it emits the answer, then a detached grandchild teardown trips the
         // exit code). parseFindings validates, so a genuinely broken run still
@@ -2119,7 +2124,7 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
           // No AI_GATE_ALLOW_TOOLS → ai-run.sh adds --no-tools → pure extraction.
           EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || '24576',
           EPAM_MAX_ITERATIONS: '2',
-        }, { salvageOutputOnFailure: true, costAgent: 'code-graph-detective', timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '360000') });
+        }, { salvageOutputOnFailure: true, costAgent: 'code-graph-detective', costStoryId: story && story.id ? story.id : '', timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '360000') });
         findings = parseFindings(out2);
         if (findings && findings.length) {
           console.warn(`spec-mode: code-graph-detective phase-2 extraction recovered ${findings.length} fix-site(s) for ${story.id} from a narrative phase-1 answer.`);
@@ -2240,7 +2245,7 @@ ${storyPayload}
   try {
     const payload = await runAgentForJson(
       promptExec, prompt, TOOL_SPEC_AGENT, 'SPEC_AGENT',
-      path.join(logDir, `${story.id}-${agent}-spec.log`), null
+      path.join(logDir, `${story.id}-${agent}-spec.log`), null, story.id
     );
     // Merge fix-site candidates into locationHint. PRIMARY: the code-graph-
     // detective — a tool-using agent (GLM-5.1) that iterates CodeGraph queries
@@ -2443,7 +2448,7 @@ Produce your refined output as raw JSON only (no XML tags, no markdown fences, n
   try {
     const payload = await runAgentForJson(
       promptExec, prompt, TOOL_SPEC_AGENT, 'SPEC_AGENT',
-      path.join(logDir, `${story.id}-speckit-review.log`), null
+      path.join(logDir, `${story.id}-speckit-review.log`), null, story.id
     );
     if (payload) {
       payload.agent = 'speckit';
@@ -3684,7 +3689,7 @@ Emit ONLY: {"verdict":"pass|fail","issues":["<issue1>"],"reason":"<15 words max>
   try {
     const gateExec = buildGateExec(aiRunnerCmd);
     const logPath = logDir ? path.join(logDir, `prd-reviewer-${storyId}-${changeType}.log`) : null;
-    const output = await runClaude(gateExec, prompt, logPath, {}, { costAgent: 'prd-change-reviewer' });
+    const output = await runClaude(gateExec, prompt, logPath, {}, { costAgent: 'prd-change-reviewer', costStoryId: storyId });
     return parseReviewVerdict(output);
   } catch (err) {
     console.warn(`spec-mode: prd-change-reviewer call failed for ${storyId} (${err.message}) — defaulting to pass`);

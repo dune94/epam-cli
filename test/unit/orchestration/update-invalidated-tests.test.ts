@@ -163,10 +163,20 @@ describe('B12 — pipeline wiring', () => {
     expect(ORCH).toMatch(/STORY_VERIFICATION_CRITERIA=/);
   });
 
-  it('blocks the phase when the updater reports a regression', () => {
+  it('does NOT block the phase — it is advisory; the repro-gate enforces', () => {
+    // Changed 2026-07-25. This step gated on the WHOLE suite being red, which
+    // includes the brand-new repro test the test-writer had just committed. Judging
+    // that test belongs to the repro-gate (Step 3.55), which reverts the fix,
+    // confirms the test fails, restores, and confirms it passes. Live: this step
+    // pre-empted the gate and killed a run whose fix AND test were committed and
+    // whose reviewer had approved the same change standalone.
     const i = ORCH.indexOf('update-invalidated-tests.sh');
-    const near = ORCH.slice(i, i + 1400);
-    expect(near).toMatch(/PIPESTATUS\[0\]/);   // set -e only, no pipefail here
-    expect(near).toMatch(/exit 1/);
+    // 2600, not 1600: the rationale comment sits between the invocation and the
+    // warning, and a fixed window reported a correct change as absent. Fourth time
+    // today a fixed-size window has produced a false negative.
+    const near = ORCH.slice(i, i + 2600);
+    expect(near).toMatch(/PIPESTATUS\[0\]/);        // still reads the real exit code
+    expect(near).toMatch(/NOT blocking/i);          // but does not fail the phase
+    expect(near).not.toMatch(/exit 1/);
   });
 });

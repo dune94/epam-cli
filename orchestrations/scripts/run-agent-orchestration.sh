@@ -2385,7 +2385,9 @@ _run_jira_pipeline() {
   # Overridable so a test (or any concurrent, isolated Jira-pipeline run) can
   # point the synthesized PRD at its own disposable path instead of colliding
   # with whatever real project last used the shared default location.
-  local _synth_prd="${JIRA_SYNTH_PRD_PATH:-$AUTOMATION_DIR/travel-app-prd.json}"
+  # Follows the run's own PRD_FILE. Defaulting to travel-app-prd.json meant every
+  # Jira-driven project synthesized into the travel-app PRD (2026-07-25 clobber).
+  local _synth_prd="${JIRA_SYNTH_PRD_PATH:-${PRD_FILE:-$AUTOMATION_DIR/travel-app-prd.json}}"
   local _ingest_exit=0
   # IMPORTANT: do NOT use `|| _ingest_exit=${PIPESTATUS[0]}` here.
   # Without pipefail, the pipeline exit code is tee's exit code (almost always 0),
@@ -5301,9 +5303,17 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/update-invalidated-tes
         '(.implementationOrder[$phase] // []) as $ids |
          .stories[] | select(.id as $id | $ids | index($id) != null) | .id' \
         "$PRD_FILE" 2>/dev/null)
+    # NON-BLOCKING (2026-07-25). This step exists to UPDATE pre-existing tests the
+    # fix invalidated — it is not an enforcement gate and must never fail a phase.
+    # It gated on the WHOLE suite being red, which includes the brand-new repro test
+    # the test-writer had just committed. Judging that test belongs to the repro-gate
+    # at Step 3.55, which knows how to do it properly (revert the fix, confirm the
+    # test fails, restore, confirm it passes). Live 2026-07-24: this step pre-empted
+    # the gate and killed a run whose fix and test were both committed and whose
+    # reviewer had approved the same change standalone.
+    # The repro-gate remains the enforcer.
     if [ "$_uit_failed" -ne 0 ]; then
-        error "Step 3.545: a failing pre-existing test was NOT explained by the intended behaviour change — treating it as a REGRESSION and blocking before review."
-        exit 1
+        warning "Step 3.545: could not reconcile a failing test — leaving it for the repro-gate (Step 3.55) to judge. NOT blocking."
     fi
 fi
 

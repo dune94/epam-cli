@@ -71,7 +71,8 @@ for arg in "$@"; do [[ "$arg" == "--yes" || "$arg" == "-y" ]] && AUTO_YES=true; 
 [[ "${CI:-}" == "true" || "${AUTO_YES_TIER3:-}" == "1" ]] && AUTO_YES=true
 [[ ! -t 0 ]] && AUTO_YES=true
 
-PRD_FILE="$REPO_ROOT/orchestrations/travel-app-prd.json"
+# travel-app legitimately owns this file (travel-app-prd.canonical.json restores it).
+PRD_FILE="${TRAVEL_APP_PRD_FILE:-$REPO_ROOT/orchestrations/travel-app-prd.json}"
 OUTPUT_DIR="${OUTPUT_DIR:-/home/bradleyjerome/projects/skyscanner-app}"
 
 info "Tier 3 travel app run — MiniMax + GLM + Kimi multi-model pipeline (USES CREDITS)"

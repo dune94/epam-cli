@@ -53,6 +53,16 @@ describe('kimi-k2 is not reachable from any routing path', () => {
     expect(hits, 'these can still select the discontinued kimi-k2').toEqual([]);
   });
 
+  it('no mock fixture pins it as an escalation model', () => {
+    // The mocks drive the REAL launcher, so a k2 pin there is live routing, not a
+    // fixture detail — and the orchestration guard above deliberately skips test/.
+    const dir = join(__dirname);
+    for (const f of readdirSync(dir).filter(n => /^brownfield-mock-e2e.*\.test\.ts$/.test(n))) {
+      expect(readFileSync(join(dir, f), 'utf8'),
+        `${f} routes an escalation to the discontinued k2`).not.toMatch(/ESCALATION_MODEL[^\n]*kimi-k2/);
+    }
+  });
+
   it('the agent profiles do not permit assigning it', () => {
     const p = join(ORCH, 'agents/profiles.json');
     if (!existsSync(p)) return;

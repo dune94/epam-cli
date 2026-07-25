@@ -266,7 +266,7 @@ describe.skipIf(!RUN_REAL)('Full mock brownfield pipeline — REAL Jira ingest +
           // actually gets a different model, not a pointless repeat. Missing here,
           // this mock's retry-on-stall (Step 24 phase assessment) silently retried
           // with the IDENTICAL model. Found live 2026-07-23.
-          ESCALATION_MODEL_HIGH: 'moonshotai/kimi-k2',
+          ESCALATION_MODEL_HIGH: 'moonshotai/kimi-k3',
           STORY_TIMEOUT_SECS: '300',
         },
       });

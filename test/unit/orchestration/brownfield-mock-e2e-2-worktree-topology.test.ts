@@ -293,7 +293,7 @@ describe.skipIf(!RUN_REAL)('Mock 2 — REAL run-agent-orchestration.sh, parallel
       // SEMBLE_ENABLED=1 for real spec-pass location grounding — without these,
       // retries silently reuse the same model and technicalNotes.files never gets
       // populated by real discovery.
-      ESCALATION_MODEL_HIGH: 'moonshotai/kimi-k2',
+      ESCALATION_MODEL_HIGH: 'moonshotai/kimi-k3',
       SEMBLE_ENABLED: '1',
       STORY_TIMEOUT_SECS: '300',
     });
@@ -340,7 +340,7 @@ describe.skipIf(!RUN_REAL)('Mock 2 — REAL run-agent-orchestration.sh, parallel
       // SEMBLE_ENABLED=1 for real spec-pass location grounding — without these,
       // retries silently reuse the same model and technicalNotes.files never gets
       // populated by real discovery.
-      ESCALATION_MODEL_HIGH: 'moonshotai/kimi-k2',
+      ESCALATION_MODEL_HIGH: 'moonshotai/kimi-k3',
       SEMBLE_ENABLED: '1',
       STORY_TIMEOUT_SECS: '300',
     });

@@ -2075,7 +2075,15 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
         // of committing. A TIGHT cap + the prompt's "output your best guess by
         // call 6" forces it to decide (it converges in a few calls when it does
         // converge — proven live). 10 = 6 tool calls + room to write the JSON.
-        EPAM_MAX_ITERATIONS: process.env.CODEGRAPH_DETECTIVE_MAX_ITERATIONS || '10',
+        // B21 (2026-07-24): was 10, which exhausted on THREE consecutive runs —
+        // "reached maximum iterations (10)" appears 16 times in today's logs, every
+        // one the detective — forcing a glm-5.1 -> kimi-k3 ladder escalation each
+        // time. A SUCCESSFUL pass used 7 round-trips, so 10 sat right on the
+        // boundary: the top-of-ladder model fits, the cheaper one does not, and we
+        // paid the escalation on every run. 20 is ~2x the observed need and still
+        // BOUNDED — a runaway agent must terminate, and the ladder + self-heal
+        // remain the backstop rather than being replaced by a bigger budget.
+        EPAM_MAX_ITERATIONS: process.env.CODEGRAPH_DETECTIVE_MAX_ITERATIONS || '20',
         // The detective TRACES the causal fix site + picks the helper to reuse —
         // correctness is paramount and it must reason carefully. With story-point-
         // derived LOW effort it gave different/wrong helpers across passes (live

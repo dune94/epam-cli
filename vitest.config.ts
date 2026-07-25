@@ -5,6 +5,10 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['test/**/*.test.ts', 'greet.test.ts'],
+    // B29: default COMPOSE_OVERRIDE to a throwaway path so no test can rewrite
+    // the repo's live dashboard mount config. See the setup file for why this is
+    // a global default rather than a per-call-site fix.
+    setupFiles: ['test/setup/compose-override-guard.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

@@ -40,7 +40,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 COMPOSE_BASE="$REPO_ROOT/docker-compose.observability.yml"
-COMPOSE_OVERRIDE="$REPO_ROOT/docker-compose.observability.override.yml"
+# B29: overridable so a TEST can point this at a throwaway path. Hardcoding it
+# meant any test invoking this script rewrote the repo's own git-tracked override
+# to mount its mkdtemp dirs; once those were removed at teardown the live
+# dashboard mounted two vanished paths and served 403/404 for /prd.json and
+# /logs/* until someone noticed. Real runs pass nothing and get the repo file.
+COMPOSE_OVERRIDE="${COMPOSE_OVERRIDE:-$REPO_ROOT/docker-compose.observability.override.yml}"
+# B29 (second vector): the dashboard pointer files are git-TRACKED too, and a
+# test running this script rewrote them to its mkdtemp paths exactly like the
+# compose override did. Same indirection, same reason.
+DASHBOARD_STATE_DIR="${DASHBOARD_STATE_DIR:-$REPO_ROOT/orchestrations/dashboards}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 info()    { echo -e "${YELLOW}[pre-run-reset]${NC} $*"; }
@@ -123,7 +132,7 @@ chmod o+r "$PRD_FILE"
 # orchestrations/prd.json symlink when absent so an unrun/older setup doesn't
 # break. Truncate-write (>), not atomic rename — this file itself must never
 # be subject to the inode-staleness bug it exists to work around.
-echo -n "$PRD_FILE" > "$REPO_ROOT/orchestrations/dashboards/.active-prd-path"
+echo -n "$PRD_FILE" > "$DASHBOARD_STATE_DIR/.active-prd-path"
 
 # Same pointer-file pattern for the project output directory: snapshot.js
 # (the Eleventy watcher) reads EPAM_PROJECT_OUTPUT_DIR from its process env,
@@ -131,7 +140,7 @@ echo -n "$PRD_FILE" > "$REPO_ROOT/orchestrations/dashboards/.active-prd-path"
 # export above does not propagate to the parent shell or to the Eleventy
 # watcher started later by run-agent-orchestration.sh. Writing the path here
 # lets snapshot.js read it without requiring the env var in the process chain.
-echo -n "$LOG_DIR" > "$REPO_ROOT/orchestrations/dashboards/.active-output-dir"
+echo -n "$LOG_DIR" > "$DASHBOARD_STATE_DIR/.active-output-dir"
 
 # /logs-dir gets the same directory-mount treatment as /prd-dir above, and for
 # the identical reason: step-status.json/agent-status.json/agent-activity.jsonl/

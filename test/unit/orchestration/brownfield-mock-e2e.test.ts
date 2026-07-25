@@ -67,7 +67,30 @@ const PHASE = 'core';
 const STORY_ID = 'MOCK-HW-1';
 
 const cleanupDirs: string[] = [];
+
+// B29 opt-out. The suite-wide guard (test/setup/compose-override-guard.ts) points
+// COMPOSE_OVERRIDE at a throwaway file so no unit test can rewrite the repo's live
+// dashboard mounts. This test is the exception: it IS a real 45-minute run, and
+// watching it on the dashboard while it executes is the point. So it opts back in
+// to the real repo override — and, unlike before, restores the previous contents
+// afterwards, so it stops leaving the dashboard mounted on a temp dir that this
+// file's own cleanup has just deleted.
+const REPO_COMPOSE_OVERRIDE = join(REPO_ROOT, 'docker-compose.observability.override.yml');
+const composeOverrideBefore = existsSync(REPO_COMPOSE_OVERRIDE)
+  ? readFileSync(REPO_COMPOSE_OVERRIDE, 'utf8')
+  : null;
+process.env.COMPOSE_OVERRIDE = REPO_COMPOSE_OVERRIDE;
+// Same opt-out for the dashboard pointer files: a real run must aim the live
+// dashboard at itself, and restores them below.
+const DASHBOARD_DIR = join(REPO_ROOT, 'orchestrations/dashboards');
+const dashStateBefore = ['.active-prd-path', '.active-output-dir'].map(f => ({
+  f, v: existsSync(join(DASHBOARD_DIR, f)) ? readFileSync(join(DASHBOARD_DIR, f), 'utf8') : null,
+}));
+process.env.DASHBOARD_STATE_DIR = DASHBOARD_DIR;
+
 afterAll(() => {
+  if (composeOverrideBefore !== null) writeFileSync(REPO_COMPOSE_OVERRIDE, composeOverrideBefore);
+  for (const { f, v } of dashStateBefore) if (v !== null) writeFileSync(join(DASHBOARD_DIR, f), v);
   for (const d of cleanupDirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 

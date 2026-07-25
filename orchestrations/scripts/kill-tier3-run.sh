@@ -62,12 +62,24 @@ signal_target() {
   fi
 }
 
+# Optional scope. Unset in production => every matching process, as before.
+# Tests set it to their sandbox root so exercising this script cannot reap
+# unrelated processes: the sweep pattern legitimately includes pipeline agents
+# (agent-attempt-analyst.sh et al), so an unscoped kill inside a PARALLEL test
+# suite kills other tests' children — observed as a self-heal test failing with
+# a killed child (execFileSync status null) roughly 1 run in 3.
+MATCH_ROOT="${KILL_TIER3_MATCH_ROOT:-}"
+
 # Never count this script, its shell, or the pgrep itself as a survivor.
 list_survivors() {
-  pgrep -f "$orphan_pattern" 2>/dev/null \
-    | grep -vx "$$" \
-    | grep -vx "${PPID:-0}" \
-    || true
+  local _lines
+  _lines="$(pgrep -af "$orphan_pattern" 2>/dev/null || true)"
+  [ -z "$_lines" ] && return 0
+  if [ -n "$MATCH_ROOT" ]; then
+    _lines="$(printf '%s\n' "$_lines" | grep -F -- "$MATCH_ROOT" || true)"
+    [ -z "$_lines" ] && return 0
+  fi
+  printf '%s\n' "$_lines" | awk '{print $1}' | grep -vx "$$" | grep -vx "${PPID:-0}" || true
 }
 
 # ── Process-group kill for every known runner pidfile ────────────────────────
@@ -75,8 +87,10 @@ list_survivors() {
 # /tmp/tier3-*.pid — one per runner, so a metrolinx/skyscanner/mock kill works
 # without the caller having to know which variable to export.
 pid_files=()
-[ -n "${TIER3_PID_FILE:-}" ] && pid_files+=("$TIER3_PID_FILE")
-for f in /tmp/tier3-*.pid; do [ -f "$f" ] && pid_files+=("$f"); done
+if [ -z "$MATCH_ROOT" ]; then
+  [ -n "${TIER3_PID_FILE:-}" ] && pid_files+=("$TIER3_PID_FILE")
+  for f in /tmp/tier3-*.pid; do [ -f "$f" ] && pid_files+=("$f"); done
+fi
 
 for PID_FILE in "${pid_files[@]:-}"; do
   [ -n "$PID_FILE" ] && [ -f "$PID_FILE" ] || continue

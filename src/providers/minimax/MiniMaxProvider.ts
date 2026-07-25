@@ -79,7 +79,7 @@ export class MiniMaxProvider implements LLMProvider {
         temperature: resolveTemperature(request, 0.7),
         ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
         ...(tools && tools.length > 0 ? { tools } : {}),
-        ...(this.resolveResponseFormat(request) ? { response_format: { type: this.resolveResponseFormat(request) } } : {}),
+        ...(this.resolveResponseFormat(request) ? { response_format: this.resolveResponseFormat(request) } : {}),
       }),
     });
 
@@ -172,7 +172,7 @@ export class MiniMaxProvider implements LLMProvider {
         stream: true,
         stream_options: { include_usage: true },
         ...(tools && tools.length > 0 ? { tools } : {}),
-        ...(this.resolveResponseFormat(request) ? { response_format: { type: this.resolveResponseFormat(request) } } : {}),
+        ...(this.resolveResponseFormat(request) ? { response_format: this.resolveResponseFormat(request) } : {}),
       }),
     });
 
@@ -269,10 +269,18 @@ export class MiniMaxProvider implements LLMProvider {
     };
   }
 
-  private resolveResponseFormat(request: ProviderRequest): string | undefined {
+  private resolveResponseFormat(request: ProviderRequest): Record<string, unknown> | undefined {
     // Explicit request field takes priority; env var EPAM_MINIMAX_JSON_MODE=1 as fallback.
-    if (request.responseFormat) return request.responseFormat;
-    if (process.env.EPAM_MINIMAX_JSON_MODE === '1') return 'json_object';
+    const rf = request.responseFormat;
+    if (rf && rf !== 'json_object') {
+      // Pass a schema contract straight through. Deliberately NOT downgraded to
+      // json_object: silently weakening a declared contract to "syntactically
+      // valid JSON" would hand back unbound output that looks bound. If MiniMax
+      // rejects it, that is a loud API error, which is the correct outcome.
+      return { type: 'json_schema', json_schema: { name: rf.name, strict: rf.strict !== false, schema: rf.schema } };
+    }
+    if (rf === 'json_object') return { type: 'json_object' };
+    if (process.env.EPAM_MINIMAX_JSON_MODE === '1') return { type: 'json_object' };
     return undefined;
   }
 

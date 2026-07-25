@@ -48,9 +48,15 @@ function alive(pattern: string): number {
   } catch { return 0; }
 }
 
-function runKill(env: Record<string, string> = {}) {
+// Scope every invocation to this test's sandbox. The sweep pattern legitimately
+// includes pipeline agents, so an unscoped kill inside a PARALLEL suite reaps
+// other tests' children — it was killing the self-heal analyst about 1 run in 3.
+function runKill(env: Record<string, string> = {}, root?: string) {
   try {
-    const out = execFileSync('bash', [KILL], { encoding: 'utf8', env: { ...process.env, ...env } });
+    const out = execFileSync('bash', [KILL], {
+      encoding: 'utf8',
+      env: { ...process.env, ...(root ? { KILL_TIER3_MATCH_ROOT: root } : {}), ...env },
+    });
     return { out, code: 0 };
   } catch (e: any) { return { out: (e.stdout || '') + (e.stderr || ''), code: e.status ?? 1 }; }
 }
@@ -85,7 +91,7 @@ describe('B32 — kill-tier3-run.sh reaches every pipeline process', () => {
     await new Promise(r => setTimeout(r, 600));
     expect(alive(script), 'fixture did not start').toBeGreaterThan(0);
 
-    runKill();
+    runKill({}, root);
     await new Promise(r => setTimeout(r, 1500));
     expect(alive(script),
       'spec-mode-runner.js survived the kill — it kept spawning billed LLM calls').toBe(0);
@@ -114,7 +120,7 @@ describe('B32 — a kill that did not work must not report success', () => {
     await new Promise(r => setTimeout(r, 800));
     expect(alive(child), 'respawner fixture did not start').toBeGreaterThan(0);
 
-    const { out, code } = runKill({ KILL_TIER3_MAX_ROUNDS: '2' });
+    const { out, code } = runKill({ KILL_TIER3_MAX_ROUNDS: '2' }, root);
     await new Promise(r => setTimeout(r, 1200));
 
     const survivors = alive(child) + alive(parent);

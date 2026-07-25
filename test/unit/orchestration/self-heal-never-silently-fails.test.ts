@@ -78,8 +78,8 @@ describe('B30 — a failed self-heal analyst is detectable by its caller', () =>
   });
 
   it('still succeeds, and prints the directive, when the analyst works', () => {
-    const { out, code } = runAnalyst(stubRunner('echo "Write the file before finishing."'));
-    expect(code).toBe(0);
+    const { out, err, code } = runAnalyst(stubRunner('echo "Write the file before finishing."'));
+    expect(code, `analyst exited ${code}; stderr: ${err}`).toBe(0);
     expect(out).toContain('Write the file before finishing.');
   });
 

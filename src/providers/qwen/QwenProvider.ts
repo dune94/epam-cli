@@ -110,6 +110,26 @@ export class QwenProvider implements LLMProvider {
    *  EPAM_OPENROUTER_EXACTO=true (default off — not universally available for
    *  every model, and changes routing behavior, so this is a deliberate choice,
    *  not a silent default). OpenRouter-only; never applied to DashScope calls. */
+  /**
+   * Compile the declared output contract into the OpenAI-compatible wire format.
+   *
+   * Previously absent entirely: `response_format` lived only in MiniMaxProvider,
+   * while every metrolinx agent runs through this provider — so
+   * EPAM_MINIMAX_JSON_MODE=1, which ai-run.sh sets for ALL providers, was a no-op
+   * for the models actually in use. Output contracts were enforced after the fact
+   * by regex/brace-matching, which is how a 169-byte non-verdict reached the
+   * pipeline as "the reviewer's answer".
+   */
+  private resolveResponseFormat(request: ProviderRequest): Record<string, unknown> | undefined {
+    const rf = request.responseFormat;
+    if (!rf) return undefined;
+    if (rf === 'json_object') return { type: 'json_object' };
+    return {
+      type: 'json_schema',
+      json_schema: { name: rf.name, strict: rf.strict !== false, schema: rf.schema },
+    };
+  }
+
   private applyExactoSuffix(model: string): string {
     if (process.env.EPAM_OPENROUTER_EXACTO !== 'true') return model;
     if (model.endsWith(':exacto')) return model;
@@ -172,6 +192,14 @@ export class QwenProvider implements LLMProvider {
         usage: { include: true },
         ...(tools && tools.length > 0 ? { tools } : {}),
         ...this.resolveOpenRouterReasoning(request),
+        ...(this.resolveResponseFormat(request) ? { response_format: this.resolveResponseFormat(request) } : {}),
+        // OpenRouter may route to an upstream provider that does not support
+        // response_format — it drops the parameter and returns UNBOUND output that
+        // looks like a success. require_parameters pins routing to a provider that
+        // honours everything we sent, or fails loudly instead of silently
+        // downgrading the contract.
+        ...(this.openRouterMode && this.resolveResponseFormat(request)
+          ? { provider: { require_parameters: true } } : {}),
       }),
     });
 
@@ -257,6 +285,14 @@ export class QwenProvider implements LLMProvider {
         usage: { include: true },
         ...(tools && tools.length > 0 ? { tools } : {}),
         ...this.resolveOpenRouterReasoning(request),
+        ...(this.resolveResponseFormat(request) ? { response_format: this.resolveResponseFormat(request) } : {}),
+        // OpenRouter may route to an upstream provider that does not support
+        // response_format — it drops the parameter and returns UNBOUND output that
+        // looks like a success. require_parameters pins routing to a provider that
+        // honours everything we sent, or fails loudly instead of silently
+        // downgrading the contract.
+        ...(this.openRouterMode && this.resolveResponseFormat(request)
+          ? { provider: { require_parameters: true } } : {}),
       }),
     });
 

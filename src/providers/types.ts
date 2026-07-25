@@ -23,6 +23,15 @@ export interface ToolDefinition {
   };
 }
 
+/** A JSON Schema the provider must bind the reply to. */
+export interface JsonSchemaFormat {
+  type: 'json_schema';
+  name: string;
+  schema: Record<string, unknown>;
+  /** Reject non-conforming output at the provider rather than accepting near-misses. */
+  strict?: boolean;
+}
+
 export interface ProviderRequest {
   messages: Message[];
   systemPrompt?: string;
@@ -33,7 +42,19 @@ export interface ProviderRequest {
   temperature?: number;
   /** Reasoning effort level — controls thinking depth. Providers map this to their native parameter. */
   reasoningEffort?: 'low' | 'medium' | 'high';
-  responseFormat?: 'json_object';
+  /**
+   * Bind the model's output to a shape.
+   *
+   * 'json_object' only guarantees syntactic JSON. The json_schema form binds the
+   * OUTPUT SPACE to the enforcement space, so a reply that does not fit the
+   * contract cannot be generated — rather than being parsed out afterwards and
+   * failing silently. Verified honoured by z-ai/glm-5.2, z-ai/glm-5.1 and
+   * moonshotai/kimi-k3 via OpenRouter (2026-07-25).
+   *
+   * NOTE: reasoning models still spend maxTokens on <think> BEFORE emitting the
+   * structured reply, so a schema does not remove the output-budget requirement.
+   */
+  responseFormat?: 'json_object' | JsonSchemaFormat;
 }
 
 export interface TokenUsage {

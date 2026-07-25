@@ -5209,8 +5209,11 @@ run_healing_recorder() {
         if [ -f "$_kb_apply_lib" ]; then
             # shellcheck disable=SC1090
             . "$_kb_apply_lib"
-            printf '%s' "${VERIFICATION_FAILURE:-}" | \
-                kb_record_episode "$story_id" "${STORY_ROLE:-}" "$diagnosis" || true
+            # Here-string, NOT a pipe: a pipeline runs kb_record_episode in a
+            # subshell and KB_LAST_SIGNATURE — the key kb_maybe_synthesize needs —
+            # is lost when it exits, leaving synthesis unable to build anything.
+            kb_record_episode "$story_id" "${STORY_ROLE:-}" "$diagnosis" \
+                <<< "${VERIFICATION_FAILURE:-}" || true
             # Close the loop: episodes alone build nothing. Synthesis turns a
             # REPEATED signature into one arbitrated, schema-valid constraint that
             # the next attempt gets as enforcement — never as prompt prose.

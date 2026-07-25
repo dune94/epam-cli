@@ -114,10 +114,19 @@ const EXEMPT = /^(lib\/agent-invoke\.sh|ai-run\.sh|run-agent-orchestration\.sh|o
 
 describe('B28 — the registry cannot silently go stale', () => {
   it('no agent-invoking script is missing from AGENT_SITES', () => {
+    // Scan CODE, not comments. A doc-comment that merely mentions ai-run.sh is not
+    // an invocation site; grepping raw text reported constraint-compiler.js purely
+    // because a comment named the runner, and that false positive would recur on
+    // every explanatory comment anyone writes.
     const found = execFileSync('bash', ['-c',
       `grep -rlE 'AI_RUNNER_CMD|run_orch_prompt|ai-run\\.sh' ${JSON.stringify(SCRIPTS)} --include='*.sh' --include='*.js' || true`,
       ], { encoding: 'utf8' })
       .split('\n').filter(Boolean)
+      .filter(abs => {
+        const code = readFileSync(abs, 'utf8').split('\n')
+          .filter(l => !/^\s*(#|\/\/|\*|\/\*)/.test(l)).join('\n');
+        return /AI_RUNNER_CMD|run_orch_prompt|ai-run\.sh/.test(code);
+      })
       .map(p => p.replace(SCRIPTS, ''))
       // not invocation sites: the runner itself, orchestrators that delegate, wrappers
       .filter(p => !EXEMPT.test(p));

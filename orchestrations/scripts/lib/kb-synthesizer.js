@@ -135,6 +135,22 @@ async function maybeSynthesize(store, {
     env: {
       ...process.env,
       EPAM_MAX_OUTPUT_TOKENS: process.env.KB_SYNTHESIS_MAX_OUTPUT_TOKENS || '32768',
+      // Bind this step's own output space. It is the one place an LLM re-enters
+      // the self-heal loop, so it should be the LAST place a reply has to be
+      // salvaged by a parser. Only the enforcement/reason pair is required —
+      // ids, scope and trigger are assigned here, not proposed by the model.
+      EPAM_RESPONSE_SCHEMA: JSON.stringify({
+        name: 'constraint_proposal',
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['enforcement', 'reason'],
+          properties: {
+            enforcement: { type: 'object' },
+            reason: { type: 'string' },
+          },
+        },
+      }),
     },
   });
   const reply = (r.stdout || '').trim();

@@ -106,7 +106,7 @@ run_inline_tc_writer_gate() {
             fi
         fi
         log "  Story $story_id needs testCriteria — running TC writer inline before it starts... (attempt ${_tc_gate_attempt}/3, model ${_tc_model})"
-        TC_WRITER_CORRECTIVE="$_tc_corrective" ORCH_GATE_MODEL="$_tc_model" AI_MODEL="$_tc_model" \
+        ORCH_GATE_MODEL="$_tc_model" AI_MODEL="$_tc_model" \
         bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
             --prd "$PRD_FILE" \
             --phase "$phase" \

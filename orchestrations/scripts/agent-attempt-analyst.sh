@@ -118,5 +118,30 @@ else
 fi
 
 rm -f "$_analyst_err" 2>/dev/null || true
-printf '%s' "$_trimmed"
+
+# ── Feed the KB, never the prompt ────────────────────────────────────────────
+# The diagnosis used to be returned as prose for the caller to prepend to the
+# next attempt ("CORRECTIVE GUIDANCE FROM SELF-HEAL: ..."). That is a self-heal
+# push into a prompt, which is banned: appended text is silently trimmed on long
+# runs and nothing verifies the agent obeyed it.
+#
+# Instead the diagnosis becomes an EPISODE, and synthesis turns it into an
+# enforceable constraint via the path that is already tested and schema-bounded.
+# Threshold 1 because this heal is same-story: the retry happens seconds later,
+# and waiting for a second identical failure would leave the very next attempt —
+# the one that matters most — with nothing. Arbitration, TTL ageing and
+# quarantine are all in place, so a single-episode rule is safe: if it is wrong,
+# it ages out.
+_kb_lib="$SCRIPT_DIR/lib/kb-apply.sh"
+if [ -f "$_kb_lib" ]; then
+    # shellcheck disable=SC1090
+    . "$_kb_lib"
+    # Here-string, NOT a pipe: `x | kb_record_episode` runs the function in a
+    # subshell, so the signature it captures dies with it and synthesis has no key.
+    kb_record_episode "${AGENT_ANALYST_STORY_ID:-}" "${STORY_ROLE:-}" "$_trimmed" \
+        <<< "$_failed_output" || true
+    KB_SYNTHESIS_THRESHOLD=1 kb_maybe_synthesize "${STORY_ROLE:-}" || true
+fi
+
+# Deliberately no stdout: there is no prose channel back to the caller any more.
 exit 0

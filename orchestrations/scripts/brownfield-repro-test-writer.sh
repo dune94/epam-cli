@@ -276,7 +276,11 @@ _validate_written_test() {
 }
 _ctx_file="$(mktemp 2>/dev/null || echo /tmp/rtw-ctx-$$)"; printf '%s' "$_prompt" > "$_ctx_file"
 _max_attempts="${REPRO_TEST_WRITER_MAX_ATTEMPTS:-3}"
-_corrective=""
+# Self-heal enforcement seam: constraints compiled onto this shell's knobs.
+_kb_apply_lib="$SCRIPT_DIR/lib/kb-apply.sh"
+# shellcheck disable=SC1090
+[ -f "$_kb_apply_lib" ] && . "$_kb_apply_lib"
+
 
 for _attempt in $(seq 1 "$_max_attempts"); do
     _model="$_base_model"; _provider="$_base_provider"
@@ -291,7 +295,13 @@ for _attempt in $(seq 1 "$_max_attempts"); do
     fi
     # Prepend the self-heal corrective directive (empty on attempt 1). printf '%s' on the prompt
     # so the diff's backslashes/backticks are never re-interpreted.
-    { [ -n "$_corrective" ] && printf 'CORRECTIVE GUIDANCE FROM SELF-HEAL (address this FIRST): %s\n\n' "$_corrective"; printf '%s' "$_prompt"; } | \
+    # Self-heal arrives as ENFORCEMENT, never as prompt text. The analyst's
+    # diagnosis became a validated Constraint; kb_apply_constraints compiles it
+    # onto this shell's knobs (iteration budget, tool scope, output schema) before
+    # the retry. Prose here would be silently trimmed on a long prompt with nothing
+    # verifying the agent obeyed it — which is why the channel is banned.
+    kb_apply_constraints "${STORY_ROLE:-repro-test-writer}" "story:${STORY_ID:-}" || true
+    printf '%s' "$_prompt" | \
       AI_GATE_ALLOW_TOOLS=1 \
       EPAM_DANGEROUS_SKIP_APPROVAL=1 \
       EPAM_ALLOWED_WRITE_PATHS="${_target_rel}" \
@@ -331,13 +341,18 @@ for _attempt in $(seq 1 "$_max_attempts"); do
     # B30: capture the analyst's exit instead of swallowing it. rc=2 means the
     # analyst itself failed, so the next attempt runs with NO corrective — that
     # must be visible, not inferred later from a confusing retry log.
-    _corrective="$(AGENT_ANALYST_STORY_ID="$STORY_ID" AI_RUNNER_CMD="$AI_RUNNER_CMD" bash "$SCRIPT_DIR/agent-attempt-analyst.sh" "$_fclass" "$_writer_log" "$_ctx_file" 2>>"$_writer_log")"
+    # The analyst returns NOTHING now: it records an episode and synthesises a
+    # constraint. Its exit code still matters (B30) — rc=2 means self-heal itself
+    # failed and the retry proceeds with no enforcement.
+    AGENT_ANALYST_STORY_ID="$STORY_ID" STORY_ROLE="${STORY_ROLE:-repro-test-writer}" \
+        AI_RUNNER_CMD="$AI_RUNNER_CMD" \
+        bash "$SCRIPT_DIR/agent-attempt-analyst.sh" "$_fclass" "$_writer_log" "$_ctx_file" 2>>"$_writer_log"
     _analyst_rc=$?
     if [ "$_analyst_rc" -eq 2 ]; then
         warning "  self-heal analyst FAILED (class=${_fclass}) — attempt $((_attempt + 1)) retries WITHOUT corrective guidance"
         _emit_tw "error" "self-heal analyst failed for ${STORY_ID} (${_fclass}) — retry has no corrective guidance"
-    elif [ -n "$_corrective" ]; then
-        log "  self-heal analyst prescribed a corrective for attempt $((_attempt + 1))"
+    else
+        log "  self-heal analyst ran for attempt $((_attempt + 1)) — enforcement applied from the KB"
     fi
 done
 rm -f "$_ctx_file" 2>/dev/null || true

@@ -77,10 +77,15 @@ describe('B30 — a failed self-heal analyst is detectable by its caller', () =>
       'empty corrective for a correctable failure class reported as success').not.toBe(0);
   });
 
-  it('still succeeds, and prints the directive, when the analyst works', () => {
+  it('still succeeds when the analyst works — and returns NO prose', () => {
+    // Contract change: the directive used to be printed for a caller to prepend
+    // to the next prompt. That channel is banned, so success is now signalled by
+    // exit 0 and an enforceable constraint in the store, never by returned text.
     const { out, err, code } = runAnalyst(stubRunner('echo "Write the file before finishing."'));
     expect(code, `analyst exited ${code}; stderr: ${err}`).toBe(0);
-    expect(out).toContain('Write the file before finishing.');
+    expect(out,
+      'the analyst still returns prompt text — the banned prose channel is open')
+      .not.toContain('Write the file before finishing.');
   });
 
   it('keeps exit 0 for provider/infra/timeout — a deliberate skip is not a failure', () => {

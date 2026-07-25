@@ -43,9 +43,14 @@ function run(failureClass: string, failedOutput: string, context: string): { out
 }
 
 describe('agent-attempt-analyst — reusable self-heal for no-output agent failures', () => {
-  it('max_iterations → returns a tailored corrective directive from the analyst', () => {
+  it('max_iterations → the diagnosis becomes ENFORCEMENT, not returned prose', () => {
+    // Contract change (prose-channel removal): the analyst no longer returns a
+    // directive for a caller to prepend to the next prompt. It records the
+    // diagnosis as an episode and synthesises a constraint; the retry receives it
+    // as compiled env, which cannot be trimmed or ignored the way prose can.
     const { out } = run('max_iterations', 'reached maximum iterations (15) without completing.', 'Write a .spec.ts reproducing test for the parseDispatchLineItemKey fix.');
-    expect(out).toMatch(/COMMIT EARLY|WRITE the test/);
+    expect(out, 'the analyst is emitting prompt text again — the banned channel is reopened')
+      .not.toMatch(/COMMIT EARLY|WRITE the test/);
   });
 
   it('the analyst prompt is grounded: it carries the failure class, the agent output, and the real task', () => {

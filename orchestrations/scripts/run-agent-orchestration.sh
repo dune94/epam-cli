@@ -5664,6 +5664,12 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/brownfield-repro-test-
             # ADVISORY: reports, never blocks. The change is already proven by
             # execution, which is stronger evidence than a coverage opinion.
             if [ -x "$SCRIPT_DIR/vc-coverage-check.sh" ]; then
+                # story_outputs_tests lives in lib/story-outputs.sh, which is
+                # otherwise only sourced inside _brownfield_gate_scope — so at
+                # this point in the run it may not exist yet. Run 8: it did not,
+                # the call failed into /dev/null, and the check vanished without
+                # a word.
+                [ -f "$SCRIPT_DIR/lib/story-outputs.sh" ] && . "$SCRIPT_DIR/lib/story-outputs.sh"
                 _vc_test_file=$(story_outputs_tests "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null | head -1)
                 if [ -n "$_vc_test_file" ]; then
                     bash "$SCRIPT_DIR/vc-coverage-check.sh" \
@@ -5671,6 +5677,10 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/brownfield-repro-test-
                         --test-file "$PROJECT_ROOT/$_vc_test_file" \
                         --out "$LOG_DIR/vc-coverage-${_rg_story}.json" 2>&1 \
                         | tee -a "$LOG_DIR/vc-coverage-${PHASE}.log" || true
+                else
+                    # Never silent: "no test to check" and "everything covered"
+                    # must not look the same in the report.
+                    warning "  [vc-coverage] no test file in the writer manifest — coverage NOT checked"
                 fi
             fi
         fi

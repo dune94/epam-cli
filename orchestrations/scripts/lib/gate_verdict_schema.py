@@ -31,6 +31,17 @@ import sys
 
 VALID_VERDICTS = {'pass', 'fail', 'warn', 'not_applicable'}
 
+# Two verdict shapes are DECLARED by prompts in this pipeline, and the prompt is
+# the contract: single-subject gates emit a top-level "verdict"; gates that report
+# per story emit "overallVerdict" alongside a per-item breakdown. Run 8 failed
+# because this module knew only the first, and rejected a spec-validator answer
+# that matched its own prompt exactly.
+_verdict_keys = {'verdict', 'overallVerdict'}
+
+# A list of per-item results IS the account of what was examined. Demanding a
+# prose "summary" on top of it imposes a second contract the agent was never given.
+_detail_keys = ('stories', 'results', 'items')
+
 # Gates whose findings must carry a severity to be actionable.
 _SEVERITIES = {'blocker', 'major', 'minor', 'info'}
 
@@ -46,7 +57,7 @@ def extract_json(text):
             break
         try:
             obj, end = decoder.raw_decode(text, start)
-            if isinstance(obj, dict) and ('verdict' in obj or 'findings' in obj):
+            if isinstance(obj, dict) and (_verdict_keys & obj.keys() or 'findings' in obj):
                 # Prefer the richest object — a gate may emit several.
                 if best is None or len(obj) > len(best):
                     best = obj
@@ -72,14 +83,17 @@ def validate(gate, text):
                        '{"agent":"%s","verdict":"pass|fail|warn|not_applicable","summary":"...",'
                        '"findings":[]}' % gate)
 
-    verdict = obj.get('verdict')
+    verdict = next((obj[k] for k in ('verdict', 'overallVerdict') if obj.get(k) is not None), None)
     if verdict is None:
         return False, 'emitted a JSON object with no "verdict" field.'
     if not isinstance(verdict, str) or verdict.strip().lower() not in VALID_VERDICTS:
         return False, ('used verdict %r, which is not one of: %s.'
                        % (verdict, ', '.join(sorted(VALID_VERDICTS))))
 
-    if not str(obj.get('summary') or '').strip():
+    # The KEY declares the shape; emptiness is a content question, and the
+    # caller already interprets an empty stories[] (no data -> warn, not pass).
+    _has_detail = any(isinstance(obj.get(k), list) for k in _detail_keys)
+    if not _has_detail and not str(obj.get('summary') or '').strip():
         return False, ('gave a verdict with no "summary". State in one sentence what you checked '
                        'and what you concluded.')
 
@@ -98,8 +112,10 @@ def validate(gate, text):
                 return False, 'finding %d has no description — an unexplained finding is unactionable.' % i
 
     # A blocking verdict with no findings is self-contradictory: it blocks the
-    # run while saying nothing about what to fix.
-    if verdict.strip().lower() == 'fail' and not findings:
+    # run while saying nothing about what to fix. In the multi-item shape the
+    # reasons live per item, not in a top-level findings list, so structured
+    # detail satisfies this the same way it satisfies "summary".
+    if verdict.strip().lower() == 'fail' and not findings and not _has_detail:
         return False, 'returned "fail" with no findings. Say what is wrong, or use "pass"/"warn".'
 
     return True, ''

@@ -177,3 +177,75 @@ describe('brownfield gates judge the change, not the codebase', () => {
       .toMatch(/do NOT return "pass" to\s*#?\s*mean/is);
   });
 });
+
+/**
+ * A gate that obeys its own prompt must not be rejected.
+ *
+ * Live metrolinx 2026-07-26, run 8. Everything the run existed for succeeded:
+ * the detective found the real line, the fix was two lines reusing the
+ * prescribed existing parser, the bug-reproduction gate proved it RED→GREEN by
+ * execution, review approved it, the lint gate reported NEW_FINDINGS=0. Then the
+ * run failed — on the spec validator, which had answered `pass`.
+ *
+ * Its prompt declares this exact shape:
+ *
+ *   { "agent": "...", "phase": "...",
+ *     "stories": [{ "storyId": "...", "verdict": "pass|warn|fail", ... }],
+ *     "overallVerdict": "pass|warn|fail" }
+ *
+ * The agent emitted precisely that. This validator demanded a TOP-LEVEL
+ * "verdict" plus a "summary", found neither, and rejected it twice — then the
+ * whole phase failed, and the finding-analyst had no grounded finding to
+ * remediate because there was no defect, only a disagreement between two parts
+ * of this engine about what an answer looks like.
+ *
+ * The prompt is the contract. A validator that contradicts the instructions the
+ * agent was given is not enforcing a standard, it is inventing a second one.
+ */
+describe('the declared multi-item gate shape is accepted', () => {
+  // Verbatim from orchestrations/logs/spec-validator-core.log, run 8.
+  const LIVE = `\`\`\`json
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [{
+    "storyId": "AMSD-1820",
+    "title": "[Mozio] - The Promo code amount is NOT displayed as expected",
+    "criteria": [],
+    "overallCompliance": 100,
+    "verdict": "pass"
+  }],
+  "overallVerdict": "pass"
+}
+\`\`\``;
+
+  it('accepts the answer that failed run 8', () => {
+    const r = check(LIVE, 'spec-validator');
+    expect(r.ok, `a correct verdict was rejected: ${r.reason}`).toBe(true);
+  });
+
+  it('reads the verdict from overallVerdict when that is the declared field', () => {
+    expect(check('{"overallVerdict":"fail","stories":[]}', 'spec-validator').ok).toBe(true);
+  });
+
+  it('does not demand a prose summary when structured detail is present', () => {
+    // The per-item breakdown IS the account of what was checked; requiring a
+    // separate sentence on top of it is a second, undeclared contract.
+    const r = check('{"overallVerdict":"pass","stories":[{"storyId":"X","verdict":"pass"}]}',
+                    'spec-validator');
+    expect(r.ok, r.reason).toBe(true);
+  });
+
+  it('still rejects an illegal verdict value in the declared shape', () => {
+    expect(check('{"overallVerdict":"maybe","stories":[]}', 'spec-validator').ok).toBe(false);
+  });
+
+  it('still rejects an object carrying no verdict of any kind', () => {
+    expect(check('{"stories":[{"storyId":"X"}]}', 'spec-validator').ok).toBe(false);
+  });
+
+  it('still requires a summary from a gate that emits no structured detail', () => {
+    // A bare {"verdict":"pass"} says nothing about what was examined.
+    expect(check('{"verdict":"pass"}', 'sast-sentinel').ok).toBe(false);
+  });
+});

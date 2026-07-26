@@ -197,9 +197,48 @@ describe('it is wired into the brownfield flow', () => {
   });
 
   it('cannot fail the phase', () => {
-    // From the -x guard through the end of the invocation, including its
-    // line continuations.
+    // Anchor on the invocation itself, not the -x guard above it, so adding
+    // lines between the two cannot silently move the assertion off target.
+    const i = ORCH.indexOf('bash "$SCRIPT_DIR/vc-coverage-check.sh"');
+    expect(i, 'the check is never actually invoked').toBeGreaterThan(-1);
+    expect(ORCH.slice(i, i + 600), 'the invocation is not guarded').toMatch(/\|\| true/);
+  });
+});
+
+/**
+ * Run 8: the check never ran, and said nothing about not running.
+ *
+ * The wiring called `story_outputs_tests` to locate the test. That function is
+ * defined by lib/story-outputs.sh, which at that point in the script has only
+ * ever been sourced INSIDE `_brownfield_gate_scope` — so at the repro-gate call
+ * site it did not exist. The call failed into `2>/dev/null`, produced an empty
+ * path, and the check was skipped. No log line, no artefact, no trace in the run
+ * log: indistinguishable from a run where every criterion was covered.
+ *
+ * A check that can vanish is worse than no check, because the report then shows
+ * a clean bill of health that nobody ever issued.
+ */
+describe('the wiring cannot skip in silence', () => {
+  const ORCH = require('node:fs').readFileSync(
+    join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+
+  function wiring(): string {
     const i = ORCH.indexOf('vc-coverage-check.sh');
-    expect(ORCH.slice(i, i + 900), 'the invocation is not guarded').toMatch(/\|\| true/);
+    return ORCH.slice(Math.max(0, i - 900), i + 1200);
+  }
+
+  it('sources the library that defines the helper it calls', () => {
+    expect(wiring(),
+      'story_outputs_tests is called but lib/story-outputs.sh is never sourced here, ' +
+      'so the call fails silently and the check is skipped')
+      .toMatch(/story-outputs\.sh/);
+  });
+
+  it('says so when it cannot find a test to check', () => {
+    // Otherwise "no test file" and "every criterion covered" look identical.
+    const w = wiring();
+    const elseBranch = w.slice(w.indexOf('_vc_test_file'));
+    expect(elseBranch, 'the empty-path case produces no output at all')
+      .toMatch(/else|no test|skipp/i);
   });
 });

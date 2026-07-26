@@ -84,8 +84,61 @@ export class BashTool implements Tool {
     return null;
   }
 
+  /**
+   * Validate the raw command input before any shell sees it.
+   *
+   * The failure this guards against: upstream template interpolation of an
+   * undefined variable (e.g. `\`${cmd}\``) produces the LITERAL STRING
+   * "undefined", which bash then reports as `undefined: command not found`
+   * (exit 127) — a misleading error that sends recovery down the wrong path.
+   * Rejecting it here surfaces the real bug: a missing command parameter.
+   */
+  private validateCommand(raw: unknown): { command: string } | { error: BashToolResult } {
+    if (typeof raw !== 'string' || raw.trim() === '') {
+      return {
+        error: {
+          toolUseId: '',
+          content:
+            'Invalid bash command: expected a non-empty string, received ' +
+            (raw === undefined ? 'undefined' : JSON.stringify(raw)),
+          isError: true,
+          exitCode: 2,
+          errorClassification: {
+            recoverable: true,
+            reason: 'missing_command',
+            suggestion: 'The command parameter was empty or undefined — pass the actual command string to run',
+          },
+        },
+      };
+    }
+    const trimmed = raw.trim();
+    if (trimmed === 'undefined' || trimmed === 'null') {
+      return {
+        error: {
+          toolUseId: '',
+          content:
+            `Invalid bash command: the literal string ${JSON.stringify(trimmed)} was passed, ` +
+            'which means an undefined variable was interpolated into the command upstream. ' +
+            'This was NOT executed.',
+          isError: true,
+          exitCode: 2,
+          errorClassification: {
+            recoverable: true,
+            reason: 'undefined_interpolation',
+            suggestion: 'A variable used to build this command was undefined — fix the code that constructs the command string',
+          },
+        },
+      };
+    }
+    return { command: raw };
+  }
+
   async execute(input: Record<string, unknown>): Promise<BashToolResult> {
-    const command = input.command as string;
+    const validated = this.validateCommand(input.command);
+    if ('error' in validated) {
+      return { ...validated.error, toolUseId: (input.toolUseId as string) ?? '' };
+    }
+    const command = validated.command;
     const cwd = (input.cwd as string) ?? process.cwd();
     const timeout = (input.timeout as number) ?? 30000;
 

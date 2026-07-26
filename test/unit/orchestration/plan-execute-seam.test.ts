@@ -144,3 +144,47 @@ describe('cost stays truthful', () => {
     expect(typeof run().json?.result).toBe('string');
   });
 });
+
+/**
+ * A plan nobody can read is a plan that cannot be judged.
+ *
+ * The seam builds a plan, feeds it to the execute pass, and discarded it. So we
+ * could see THAT two calls happened — cost, latency — but never WHAT any agent
+ * intended. That is most of the value: runs 8 and 9 produced byte-identical
+ * logs and different answers, and without the plans there is nothing to compare.
+ *
+ * Two readers, because they fail independently: Langfuse (rich, but off in
+ * mock1 and in any run without LANGFUSE_* configured) and a plain JSONL file
+ * that always exists.
+ */
+describe('the plan is observable', () => {
+  it('labels the planning call distinctly for tracing', () => {
+    // Both passes inherit EPAM_AGENT_NAME, so Langfuse showed two identical
+    // traces per agent with no way to tell plan from answer.
+    const r = run({ env: { EPAM_AGENT_NAME: 'code-graph-detective' } });
+    expect(r.prompts.length).toBe(2);
+    const src = readFileSync(
+      join(__dirname, '../../../orchestrations/scripts/ai-run.sh'), 'utf8');
+    expect(src, 'the plan pass is indistinguishable from the answer in tracing')
+      .toMatch(/EPAM_AGENT_NAME="?\$\{?EPAM_AGENT_NAME[^\n]*:plan/);
+  });
+
+  it('writes the plan to a file, since Langfuse is often off', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'plan-log-'));
+    dirs.push(dir);
+    const r = run({ env: { LOG_DIR: dir, PHASE: 'core', EPAM_AGENT_NAME: 'code-graph-detective' } });
+    expect(r.prompts.length).toBe(2);
+    const f = join(dir, 'plans-core.jsonl');
+    expect(existsSync(f), 'no plan record was written').toBe(true);
+    const rec = JSON.parse(readFileSync(f, 'utf8').trim().split('\n')[0]);
+    expect(rec.agent).toBe('code-graph-detective');
+    expect(rec.plan, 'the plan text itself was not recorded')
+      .toContain('inspect the service that computes it');
+  });
+
+  it('does not fail the call when the plan cannot be written', () => {
+    const r = run({ env: { LOG_DIR: '/nonexistent-xyz/nope', PHASE: 'core' } });
+    expect(r.code, 'an unwritable log directory broke the agent call').toBe(0);
+    expect(r.stdout).toContain('FINAL ANSWER');
+  });
+});

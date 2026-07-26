@@ -292,8 +292,13 @@ if [ "${EPAM_PLAN_EXECUTE:-1}" = "1" ] && [ "${_EPAM_IN_PLAN_PASS:-0}" != "1" ];
 
   # The plan pass is an ordinary invocation with planning suppressed, so it
   # cannot recurse.
+  # A distinct agent label, so the planning call is a separate, identifiable
+  # generation in Langfuse instead of a second trace with the same name. Both
+  # passes previously inherited EPAM_AGENT_NAME, which made plan and answer
+  # indistinguishable in the one place their cost and latency are comparable.
   _plan_text="$(
     _EPAM_IN_PLAN_PASS=1 \
+    EPAM_AGENT_NAME="${EPAM_AGENT_NAME:-agent}:plan" \
     ORCH_JSON_RESULT="$_plan_json" \
     PROMPT_FILE="$_plan_file" \
     bash "$0" ${PRIMARY_PROVIDER:+--provider "$PRIMARY_PROVIDER"} ${AI_MODEL:+--model "$AI_MODEL"} \
@@ -303,6 +308,21 @@ if [ "${EPAM_PLAN_EXECUTE:-1}" = "1" ] && [ "${_EPAM_IN_PLAN_PASS:-0}" != "1" ];
 
   if [ -n "$_plan_text" ]; then
     _plan_cost_json="$_plan_json"
+
+    # Langfuse is off in mock1 and in any run without LANGFUSE_* configured, so
+    # the plan is also written somewhere that always exists. Runs 8 and 9
+    # produced byte-identical logs and different answers; without the plans
+    # there is nothing to compare. Best-effort: a plan that cannot be recorded
+    # must never break the agent call it belongs to.
+    if [ -n "${LOG_DIR:-}" ] && [ -d "$LOG_DIR" ]; then
+      jq -cn --arg agent "${EPAM_AGENT_NAME:-agent}" \
+             --arg story "${EPAM_STORY_ID:-}" \
+             --arg model "${AI_MODEL:-}" \
+             --arg phase "${PHASE:-unknown}" \
+             --arg plan  "$_plan_text" \
+             '{ts:(now|todate), agent:$agent, story:$story, model:$model, phase:$phase, plan:$plan}' \
+        >> "$LOG_DIR/plans-${PHASE:-unknown}.jsonl" 2>/dev/null || true
+    fi
     _exec_file="$(mktemp)"
     {
       cat "$PROMPT_FILE"

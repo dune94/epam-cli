@@ -335,9 +335,31 @@ describe.skipIf(!RUN_REAL)('Full mock brownfield pipeline — REAL Jira ingest +
       expect(Array.isArray(story.technicalNotes?.files), JSON.stringify(story.technicalNotes)).toBe(true);
       expect(story.technicalNotes.files.length).toBeGreaterThan(0);
 
-      // ── Real TC-writer gate populated testCriteria.facts ──
-      expect(Array.isArray(story.testCriteria?.facts), JSON.stringify(story.testCriteria)).toBe(true);
-      expect(story.testCriteria.facts.length).toBeGreaterThan(0);
+      // ── Brownfield proves a change with VERIFICATION criteria, not test criteria ──
+      // This assertion used to require testCriteria.facts. The TC writer is now
+      // greenfield-only: brownfield stories are proved by observable VCs plus the
+      // bug-reproduction gate, which runs the test against the original code
+      // (must fail) and the fix (must pass). Step 10 skips here by design and
+      // says so — "brownfield — VCs + bug-reproduction gate instead".
+      //
+      // The old assertion outlived the contract it described, and mock1 then
+      // reported a correct run as a failure. Assert what this flow actually
+      // promises, or the test measures a pipeline that no longer exists.
+      expect(Array.isArray(story.verificationCriteria),
+        `brownfield produced no verification criteria: ${JSON.stringify(story.verificationCriteria)}`)
+        .toBe(true);
+      expect(story.verificationCriteria.length,
+        'the TC writer is skipped for brownfield, so VCs are the ONLY statement of ' +
+        'what this change must do — an empty list means nothing verifies it')
+        .toBeGreaterThan(0);
+      // Every VC must be observable prose a tester could act on, not a restated title.
+      for (const vc of story.verificationCriteria) {
+        expect(typeof vc === 'string' ? vc.length : String(vc?.text ?? '').length,
+          `empty verification criterion: ${JSON.stringify(vc)}`).toBeGreaterThan(20);
+      }
+      // The TC writer must have stood down for the RIGHT reason, not silently.
+      expect(stdout, 'Step 10 did not announce why it skipped')
+        .toMatch(/Step 10.*(skip|⊘)/i);
 
       // ── Real team-lead review ran (Step 3.6) — non-empty per-story log + a
       // code-reviews.jsonl entry for this phase ──

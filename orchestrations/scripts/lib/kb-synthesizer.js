@@ -199,10 +199,12 @@ async function maybeSynthesize(store, {
     // otherwise use is absent in production, and an exhaustion-triggered budget
     // rule then fails closed. The highest observed limit is the right baseline —
     // a fix must clear the worst case seen, not the mildest.
-    const observedLimit = episodes
-      .map(e => Number(e.observed_limit))
-      .filter(Number.isFinite)
-      .reduce((a, b) => Math.max(a, b), NaN);
+    // Math.max(NaN, x) is NaN, so seeding the reduce with NaN poisoned every
+    // iteration and this was ALWAYS NaN regardless of the episodes. Filtering
+    // finite values first does not help when the SEED is the problem — the guard
+    // then fell through to fail-closed, which refused legitimate INCREASES too.
+    const limits = episodes.map(e => Number(e.observed_limit)).filter(Number.isFinite);
+    const observedLimit = limits.length ? Math.max(...limits) : undefined;
 
     // admit() validates FIRST, so an unenforceable proposal cannot archive an
     // existing rule as a side effect, and leaves the store untouched on refusal.

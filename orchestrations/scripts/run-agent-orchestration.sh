@@ -732,6 +732,17 @@ _emit_agent() {
 # Runs a pipeline agent prompt, tracks cost to phase-cost.jsonl (GAP-P22),
 # and returns the text output.
 run_orch_prompt() {
+    # Bound the LOOP, not only the clock. Without this a gate agent — especially
+    # one with tools, as the phase assessment has — can explore indefinitely and is
+    # only stopped by its timeout. Live 2026-07-25 that produced a ZERO-BYTE log
+    # killed at 120s, then again at 300s after the timeout was raised: a stall, not
+    # slowness, and raising the clock merely spent longer failing.
+    #
+    # An iteration cap fails fast and deterministically. Generous by default so QA
+    # gates that legitimately read source files are not strangled; override per
+    # site where a gate genuinely needs more.
+    local EPAM_MAX_ITERATIONS="${ORCH_GATE_MAX_ITERATIONS:-25}"
+    export EPAM_MAX_ITERATIONS
     local prompt_text="$1"
     local agent_type="${2:-pipeline}"
     local story_id="${3:-pipeline}"

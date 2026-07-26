@@ -24,6 +24,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const sanity = require('./constraint-sanity.js');
 
 const SCRIPT_DIR = __dirname;
 const SCHEMA_PY = path.join(SCRIPT_DIR, 'kb_schema.py');
@@ -160,11 +161,41 @@ function putConstraint(c) {
  * either the role matches exactly, or the constraint is global.
  */
 function lookup({ agent_role, signature, phase } = {}) {
-  return readConstraints().filter(c =>
+  const matched = readConstraints().filter(c =>
     c.status !== 'archived' &&
     c.trigger?.signature === signature &&
     (c.scope?.global === true || c.scope?.agent_role === agent_role) &&
     (!c.trigger?.phase || !phase || c.trigger.phase === phase));
+
+  // RE-VALIDATE ON THE WAY OUT. Admission is a one-time gate on a PERMANENT store,
+  // so anything already inside — admitted before a guard existed, or while one was
+  // inert — would otherwise be applied forever unexamined. The harmful
+  // EPAM_MAX_ITERATIONS=14 rule had to be archived by hand TWICE on 2026-07-25 for
+  // exactly this reason.
+  //
+  // TTL does not cover this and is backwards for it: tick() resets cycles_idle
+  // whenever a rule fires, so a rule that fires constantly never ages out. The more
+  // damage it did, the more permanent it became.
+  //
+  // A rule that cannot be applied safely is skipped and the reason surfaced. Never
+  // throw: a bad rule must not take down the caller that merely asked what applies.
+  const out = [];
+  for (const c of matched) {
+    try {
+      const limits = episodes()
+        .filter(e => (c.origin_episodes || []).includes(e.id))
+        .map(e => Number(e.observed_limit))
+        .filter(Number.isFinite);
+      sanity.assertSane(c, undefined,
+        limits.length ? { observedLimit: Math.max(...limits) } : undefined);
+      out.push(c);
+    } catch (err) {
+      process.stderr.write(
+        `[kb-store] SKIPPING stored constraint '${c.id}' — it no longer passes ` +
+        `admission checks: ${String(err && err.message).slice(0, 200)}\n`);
+    }
+  }
+  return out;
 }
 
 // ─── Synthesis: N episodes -> ONE rule (pillar 1) ────────────────────────────

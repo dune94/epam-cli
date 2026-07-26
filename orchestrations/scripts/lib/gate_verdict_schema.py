@@ -111,6 +111,28 @@ def validate(gate, text):
             if not str(f.get('description') or f.get('message') or '').strip():
                 return False, 'finding %d has no description — an unexplained finding is unactionable.' % i
 
+    # A score computed over an empty set is not a pass. Run 8 reported
+    # criteria: [] with overallCompliance: 100 — nothing examined, full marks —
+    # because the oracle had been injecting a field the flow no longer filled.
+    # That cause is fixed upstream; this refuses the shape so the next rename
+    # cannot reopen it. Only a CLAIM of compliance is contradictory: an item that
+    # reports no score, or says not_applicable, is making no such claim.
+    for key in _detail_keys:
+        for item in (obj.get(key) or []):
+            if not isinstance(item, dict):
+                continue
+            if str(item.get('verdict') or '').strip().lower() not in ('pass', 'warn', 'fail'):
+                continue
+            scored = any(k for k in item if 'compliance' in k.lower() or 'score' in k.lower())
+            if not scored:
+                continue
+            evaluated = any(isinstance(v, list) and v for k, v in item.items() if k != 'findings')
+            if not evaluated:
+                return False, ('reported a compliance score for %r with an empty criteria list. '
+                               'A score over nothing examined is not a verdict — list what you '
+                               'checked, or use "not_applicable".'
+                               % (item.get('storyId') or item.get('id') or 'an item'))
+
     # A blocking verdict with no findings is self-contradictory: it blocks the
     # run while saying nothing about what to fix. In the multi-item shape the
     # reasons live per item, not in a top-level findings list, so structured

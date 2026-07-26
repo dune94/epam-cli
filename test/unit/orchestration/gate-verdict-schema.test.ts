@@ -211,7 +211,8 @@ describe('the declared multi-item gate shape is accepted', () => {
   "stories": [{
     "storyId": "AMSD-1820",
     "title": "[Mozio] - The Promo code amount is NOT displayed as expected",
-    "criteria": [],
+    "criteria": [{ "text": "discount shows on the return leg", "status": "met",
+                   "evidence": "apply-report-discounts.service.ts:17" }],
     "overallCompliance": 100,
     "verdict": "pass"
   }],
@@ -219,7 +220,10 @@ describe('the declared multi-item gate shape is accepted', () => {
 }
 \`\`\``;
 
-  it('accepts the answer that failed run 8', () => {
+  it('accepts the SHAPE that failed run 8', () => {
+    // Run 8's own payload was additionally hollow (criteria: []), which is
+    // rejected on its own merits below. What was wrong here was rejecting this
+    // shape at all — the prompt declares it.
     const r = check(LIVE, 'spec-validator');
     expect(r.ok, `a correct verdict was rejected: ${r.reason}`).toBe(true);
   });
@@ -247,5 +251,63 @@ describe('the declared multi-item gate shape is accepted', () => {
   it('still requires a summary from a gate that emits no structured detail', () => {
     // A bare {"verdict":"pass"} says nothing about what was examined.
     expect(check('{"verdict":"pass"}', 'sast-sentinel').ok).toBe(false);
+  });
+});
+
+/**
+ * A score computed over nothing is not a pass.
+ *
+ * Accepting the declared multi-item shape (above) was necessary but opened a
+ * hole: run 8's actual answer reported `criteria: []` with
+ * `overallCompliance: 100`. Nothing was examined and full marks were awarded.
+ * The upstream cause is fixed — the oracle now injects the criteria the story
+ * is really judged against — but the gate must also refuse to record a verdict
+ * that rests on an empty evidence set, or the next field rename reopens it.
+ *
+ * This is the "count of nothing" shape that has escaped before: a check that
+ * passes because it found no items to fail.
+ */
+describe('a verdict cannot rest on an empty evidence set', () => {
+  it('rejects the exact hollow answer run 8 produced', () => {
+    const r = check(JSON.stringify({
+      agent: 'spec-validator',
+      stories: [{ storyId: 'AMSD-1820', criteria: [], overallCompliance: 100, verdict: 'pass' }],
+      overallVerdict: 'pass',
+    }), 'spec-validator');
+    expect(r.ok, 'a 100% score over zero criteria was accepted as a pass').toBe(false);
+  });
+
+  it('names the emptiness in the reason, so the retry can act on it', () => {
+    const r = check(JSON.stringify({
+      stories: [{ storyId: 'X', criteria: [], overallCompliance: 100, verdict: 'pass' }],
+      overallVerdict: 'pass',
+    }), 'spec-validator');
+    expect(r.reason).toMatch(/empt|no criteria|nothing/i);
+  });
+
+  it('accepts the same shape once criteria were actually evaluated', () => {
+    const r = check(JSON.stringify({
+      stories: [{ storyId: 'X', criteria: [{ text: 'c', status: 'met' }],
+                  overallCompliance: 100, verdict: 'pass' }],
+      overallVerdict: 'pass',
+    }), 'spec-validator');
+    expect(r.ok, r.reason).toBe(true);
+  });
+
+  it('still allows not_applicable with nothing evaluated', () => {
+    // Having nothing to check is legitimate — claiming to have checked is not.
+    const r = check(JSON.stringify({
+      stories: [{ storyId: 'X', criteria: [], verdict: 'not_applicable' }],
+      overallVerdict: 'not_applicable',
+    }), 'spec-validator');
+    expect(r.ok, r.reason).toBe(true);
+  });
+
+  it('does not object to an item that reports no score at all', () => {
+    // Only a claim of compliance over an empty set is contradictory.
+    const r = check(JSON.stringify({
+      stories: [{ storyId: 'X', verdict: 'pass' }], overallVerdict: 'pass',
+    }), 'spec-validator');
+    expect(r.ok, r.reason).toBe(true);
   });
 });

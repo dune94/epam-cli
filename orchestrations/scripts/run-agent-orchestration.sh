@@ -6884,7 +6884,7 @@ E2E routing override context:
 IMPORTANT: All evidence has been pre-injected below. Do NOT call any tools, ReadFile, or Bash commands. Classify each AC using ONLY the injected story oracle, test oracle, and implementation evidence.
 
 For each story in the phase:
-1. Use the pre-injected acceptanceCriteria from the Story Oracle section
+1. Use the pre-injected criteria from the Story Oracle section — it states which\n   kind the story is judged against. If it records none, you cannot report\n   compliance against an empty set: say so, do not pass.
 2. Use the pre-injected git diff and file excerpts as implementation evidence
 3. Classify each criterion as: met, partial, unmet, or untestable
    - untestable: evidence is insufficient to determine status — do NOT call tools to investigate further
@@ -6965,39 +6965,14 @@ $oracle_summary
 
 $spec_prompt"
 
-        # ── Story Oracle: inject ACs from prd.json so agent doesn't need file tools ──
+        # ── Story Oracle: inject the criteria the story is JUDGED against ──
+        # Not acceptanceCriteria specifically: brownfield stories carry
+        # verificationCriteria, and run 8 scored 100% over an empty set because
+        # this read the wrong field. lib/story_oracle.py decides and labels.
         local story_oracle=""
-        story_oracle=$(python3 - "$PRD_FILE" "$phase_id" <<'PYEOF'
-import sys, json
-prd_path, phase_id = sys.argv[1], sys.argv[2]
-try:
-    with open(prd_path) as f:
-        prd = json.load(f)
-    phase_ids = prd.get('implementationOrder', {}).get(phase_id, [])
-    story_map = {s['id']: s for s in prd.get('stories', [])}
-    lines = ["Stories in phase '{}': {}".format(phase_id, len(phase_ids))]
-    for sid in phase_ids:
-        s = story_map.get(sid)
-        if not s:
-            continue
-        completed = s.get('completed', False)
-        status = s.get('status', '?')
-        acs = s.get('acceptanceCriteria', [])
-        lines.append("\n### {}: {} [status={}, completed={}]".format(sid, s.get('title','?'), status, completed))
-        lines.append("AgentRole: {}".format(s.get('agentRole','?')))
-        tn = s.get('technicalNotes')
-        files = tn.get('files', []) if isinstance(tn, dict) else []
-        if files:
-            lines.append("Expected files: {}".format(', '.join(files)))
-        lines.append("Acceptance criteria ({}):".format(len(acs)))
-        for i, ac in enumerate(acs, 1):
-            lines.append("  {}. {}".format(i, ac))
-    print('\n'.join(lines))
-except Exception as e:
-    print("(story oracle error: {})".format(e))
-PYEOF
-2>/dev/null || echo "(story oracle unavailable)")
-        spec_prompt="## Story Acceptance Criteria (hard evidence from prd.json — classify each criterion)
+        story_oracle=$(python3 "$SCRIPT_DIR/lib/story_oracle.py" "$PRD_FILE" "$phase_id" \
+            2>/dev/null || echo "(story oracle unavailable)")
+        spec_prompt="## Story Criteria (hard evidence from prd.json — classify each criterion)
 $story_oracle
 
 $_spec_impl_evidence

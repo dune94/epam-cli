@@ -88,3 +88,4 @@ session.md
 # The committable template is orchestrations/jira/.env.example (placeholders only).
 orchestrations/jira/*.env
 !orchestrations/jira/*.env.example
+orchestrations/projects/*/runs/

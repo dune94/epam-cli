@@ -200,6 +200,8 @@ run_review_prompt() {
 }
 
 _reviewed_count=0
+# shellcheck disable=SC1090
+[ -f "$SCRIPT_DIR/lib/story-outputs.sh" ] && . "$SCRIPT_DIR/lib/story-outputs.sh"
 BASELINE_SHA="${BASELINE_SHA:-$(git -C "$PROJECT_ROOT" rev-parse --verify --quiet "origin/${JIRA_BASELINE_BRANCH:-develop}" 2>/dev/null || git -C "$PROJECT_ROOT" rev-parse --verify --quiet "${JIRA_BASELINE_BRANCH:-develop}" 2>/dev/null || echo HEAD~1)}"
 
 log "Team Lead Code Review for Phase: $PHASE_ID"
@@ -254,7 +256,16 @@ while IFS= read -r story_id; do
     # the first line, git takes SIGPIPE, the assignment returns non-zero and `set -e`
     # kills the script SILENTLY — which is exactly the class of failure this whole
     # investigation was chasing. `|| true` keeps a diff failure non-fatal.
-    _story_changed=$(git -C "$PROJECT_ROOT" diff --name-only "$BASELINE_SHA" HEAD 2>/dev/null || true)
+    #
+    # Scope comes from the writers' output when the story loop recorded it
+    # (record_story_outputs in claude.sh, read via lib/story-outputs.sh), and
+    # falls back to this diff otherwise. The diff is commit-to-commit, so it
+    # cannot see writer output that has not been committed yet — and the
+    # repro-test-writer commits separately from the impl agent, so that is a
+    # normal state, not an edge case.
+    _story_changed=$(story_outputs_files "$PROJECT_ROOT" "${AUTOMATION_DIR}/logs" 2>/dev/null || true)
+    [ -z "$_story_changed" ] && \
+        _story_changed=$(git -C "$PROJECT_ROOT" diff --name-only "$BASELINE_SHA" HEAD 2>/dev/null || true)
     if [ -z "$_story_changed" ]; then
         warning "  Story $story_id changed nothing vs baseline — nothing to review"
         continue

@@ -6851,8 +6851,14 @@ SPEC_EXTRACTOR_PY
                 else
                     _diff_ref="HEAD~1"
                 fi
+                # Scope from the writers' output when the story loop recorded it
+                # (lib/story-outputs.sh); the diff below stays as the fallback.
+                # shellcheck disable=SC1090
+                [ -f "$SCRIPT_DIR/lib/story-outputs.sh" ] && . "$SCRIPT_DIR/lib/story-outputs.sh"
                 local _diff_files
-                _diff_files=$(cd "$PROJECT_ROOT" && "$_git_bin" diff --name-only "$_diff_ref" 2>/dev/null || echo "")
+                _diff_files=$(story_outputs_files "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null || echo "")
+                [ -z "$_diff_files" ] && \
+                    _diff_files=$(cd "$PROJECT_ROOT" && "$_git_bin" diff --name-only "$_diff_ref" 2>/dev/null || echo "")
                 local _diff_stat
                 _diff_stat=$(cd "$PROJECT_ROOT" && "$_git_bin" diff --stat "$_diff_ref" 2>/dev/null || echo "(no diff available)")
                 local _diff_patch
@@ -6928,9 +6934,14 @@ $review_prompt"
                 else
                     _mut_diff_ref="HEAD~1"
                 fi
+                # shellcheck disable=SC1090
+                [ -f "$SCRIPT_DIR/lib/story-outputs.sh" ] && . "$SCRIPT_DIR/lib/story-outputs.sh"
                 local _changed_src
-                _changed_src=$(cd "$PROJECT_ROOT" && "$_git_bin2" diff --name-only "$_mut_diff_ref" -- '*.ts' 2>/dev/null | \
-                               grep -v '\.test\.ts$' | head -10 || echo "")
+                _changed_src=$(story_outputs_sources "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null | \
+                               grep -E '\.ts$' | head -10 || echo "")
+                [ -z "$_changed_src" ] && \
+                    _changed_src=$(cd "$PROJECT_ROOT" && "$_git_bin2" diff --name-only "$_mut_diff_ref" -- '*.ts' 2>/dev/null | \
+                                   grep -v '\.test\.ts$' | head -10 || echo "")
                 set -e
                 local _src_content=""
                 if [ -n "$_changed_src" ]; then
@@ -6941,8 +6952,19 @@ $review_prompt"
 $(head -100 "$PROJECT_ROOT/$_f" 2>/dev/null || echo '(unreadable)')"
                     done <<< "$_changed_src"
                 fi
+                # The tests to judge are THIS RUN'S tests. This used to be
+                # `find -name "*.test.ts"` over the whole tree, which (a) picked
+                # arbitrary unrelated tests when it matched and (b) matched
+                # NOTHING on a codeline whose tests are named `.spec.ts` — as
+                # the live metrolinx one is. It reported "(no test files found)"
+                # on a run that had just written a reproducing spec, so the
+                # mutation oracle judged the change against no tests at all.
                 local _test_files
-                _test_files=$(find "$PROJECT_ROOT" -name "*.test.ts" -not -path "*/node_modules/*" 2>/dev/null | head -5)
+                _test_files=$(story_outputs_tests "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null | \
+                              sed "s#^#$PROJECT_ROOT/#" | head -5 || echo "")
+                [ -z "$_test_files" ] && \
+                    _test_files=$(find "$PROJECT_ROOT" \( -name "*.test.ts" -o -name "*.spec.ts" \) \
+                                       -not -path "*/node_modules/*" 2>/dev/null | head -5)
                 local _test_content=""
                 while IFS= read -r _tf; do
                     [ -f "$_tf" ] || continue

@@ -2082,6 +2082,10 @@ By your 6th tool call you MUST stop querying and emit the JSON answer with your 
 
 CRITICAL — HOW TO ANSWER: Emit the JSON array as TEXT directly in your reply. Do NOT call WriteFile and do NOT write your answer to any file — the pipeline reads your reply text, not a file. If you write your answer to a file, it is LOST and the whole investigation is wasted. Use the Bash tool ONLY to run the CodeGraph query script above; use no other tool.
 
+NAME THE FORMAT, DO NOT DESCRIBE IT. If your fix depends on the SHAPE of a string — a prefix, suffix, separator, delimiter — you must QUOTE THE EXACT LITERAL (e.g. '#') or name the constant that defines it (e.g. DIVIDER). Saying "a prefix match that accounts for the suffix" without stating the suffix is not implementable: on 2026-07-26 exactly that wording made the implementer guess '-' where the repository uses '#', and the fix could never match. This is machine-checked.
+
+PREFER THE PARSER OVER THE WRITER. If a helper CONSTRUCTS the value (getX/buildX/toX) and another READS it (parseX/fromX), prescribe the reader. Naming the writer invites the implementer to reconstruct the format by hand — which is how the above happened. The best fix does no string surgery at all, because the helper owns the format.
+
 SHOW THE BROKEN CODE — "brokenLine" is REQUIRED and is machine-verified. Quote the EXACT source expression, copied verbatim from the file you name, that is wrong today. It is checked against that file's real contents: if what you quote is not in the file, your answer is rejected as ungrounded and you will be asked again. This is the difference between a diagnosis and a guess — a confident story about code that is not there reads exactly like a correct one until this check runs. If you cannot point at a real line that is wrong, you have not found the cause yet: go back to the tool and trace further.
 
 Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" field is REQUIRED and must be a concrete, minimal instruction naming the exact change and any existing helper to reuse. The "helper" field must be the BARE SYMBOL NAME of the existing function you are telling the implementer to reuse (so it can be machine-verified to actually exist) — leave it "" if the fix genuinely needs no existing helper. Do NOT invent a helper name; only put a symbol you actually saw in the tool output:
@@ -2291,6 +2295,32 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
       // discard on the LAST attempt: the detective is load-bearing, and a
       // flagged hypothesis still beats handing the implementer symptom ACs
       // with no root cause at all.
+      // A prescription that turns on a string format must state the format.
+      // Live 2026-07-26: "a prefix match that accounts for the return-trip key
+      // suffix" never said WHAT the suffix was, the implementer guessed '-'
+      // against a repo that uses '#', and the bug shipped unfixed behind a
+      // plausible diff. Same treatment as an ungrounded quote — reject and
+      // regenerate rather than hand a guess downstream. Fails open.
+      for (const f of findings) {
+        if (!f.fix) continue;
+        try {
+          const res = require('child_process').spawnSync('python3', [
+            path.join(__dirname, 'lib', 'fix_prescription_check.py'),
+            repoPath, f.helper || '', f.fix,
+          ], { encoding: 'utf8', timeout: 30000 });
+          f.prescriptionNote = String(res.stdout || '').trim();
+          f.prescriptionUnderspecified = res.status === 1;
+          if (f.prescriptionNote) {
+            console.warn(`spec-mode: code-graph-detective prescription for ${story.id}: ${f.prescriptionNote}`);
+          }
+        } catch { /* never block on this check */ }
+      }
+      const underspecified = findings.filter((f) => f.prescriptionUnderspecified);
+      if (underspecified.length === findings.length && attempt < maxAttempts) {
+        console.warn(`spec-mode: ⚠️ code-graph-detective prescription for ${story.id} is UNDER-SPECIFIED (attempt ${attempt}/${maxAttempts}) — it depends on a string format it never states, so the implementer would have to guess it. Retrying.`);
+        continue;
+      }
+
       const grounded = findings.filter((f) => f.evidenceVerified === true);
       if (grounded.length === 0) {
         const quoted = findings.filter((f) => f.evidenceVerified === false);

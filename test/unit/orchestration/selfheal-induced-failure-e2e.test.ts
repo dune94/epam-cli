@@ -52,7 +52,7 @@ printf '%s' "$prompt" > "${captureDir}/prompt-\${n}"
 if printf '%s' "$prompt" | grep -q 'PREVENT a repeated agent failure'; then
   # synthesis: propose a real, schema-valid constraint
   cat <<'J'
-{"enforcement":{"kind":"param","name":"EPAM_MAX_ITERATIONS","value":"${MAX_ITER}"},"reason":"agent never wrote the file"}
+{"enforcement":{"kind":"param","name":"EPAM_REASONING_EFFORT","value":"${MAX_ITER}"},"reason":"agent never wrote the file"}
 J
   exit 0
 fi
@@ -169,7 +169,7 @@ describe('induced failure — the self-heal loop closes in the real retry path',
     expect(retryEnv,
       'the constraint was stored but never reached the agent — every layer reports ' +
       'success while the mechanism does nothing')
-      .toMatch(new RegExp(`EPAM_MAX_ITERATIONS=${MAX_ITER}`));
+      .toMatch(new RegExp(`EPAM_REASONING_EFFORT=${MAX_ITER}`));
   });
 
   it('and with NO self-heal prose in its prompt', () => {

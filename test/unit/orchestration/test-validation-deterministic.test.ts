@@ -110,12 +110,28 @@ describe('B22 — behaviour against a REAL vitest run', () => {
     return Number((out.match(/RC=(\d+)/) || [])[1] ?? -1);
   }
 
-  it('an ASSERTION FAILURE is VALID (rc 0) — this is what broke the live run', () => {
-    // Exactly the shape that was discarded 3x: `AssertionError: expected ...`
+  it('an ASSERTION FAILURE is still distinguished from a PARSE ERROR (B22 intact)', () => {
+    // B22's insight stands and must not be lost: `AssertionError: expected ...` was
+    // being matched by a parse-error regex, so every genuinely-running test was
+    // discarded as "never ran" and the pipeline threw away working tests 3x.
+    // numTotalTests still separates the two cases.
+    //
+    // CONTRACT CHANGE (2026-07-25): an executed-but-FAILING test is no longer
+    // accepted. The old rule reasoned "a reproducing test is SUPPOSED to fail
+    // before the fix", but this writer runs AFTER the fix is committed, so a
+    // failing assertion means the test contradicts the fix — which the repro-gate
+    // then reports one step later, where nothing can retry. It is now rejected
+    // HERE, with the failure fed back, while retries and the ladder remain.
+    // The rejection reason is explicit, NOT the parse-error path B22 fixed.
     const d = repoWith(
       "import { it, expect } from 'vitest';\n" +
       "it('reproduces', () => { expect(undefined).toEqual({ name: '' }); });\n");
-    try { expect(validate(d), 'a running test that fails an assertion must be VALID').toBe(0); }
+    try {
+      expect(validate(d),
+        'a test that contradicts the committed fix must be rejected while the writer ' +
+        'can still retry — but via the assertion path, not the parse-error path B22 fixed')
+        .not.toBe(0);
+    }
     finally { rmSync(d, { recursive: true, force: true }); }
   }, 60000);
 

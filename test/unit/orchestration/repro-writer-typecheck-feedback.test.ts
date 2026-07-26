@@ -45,7 +45,7 @@ prompt="$(cat)"
 n=$(( $(ls "${captureDir}" 2>/dev/null | grep -c '^prompt-') + 1 ))
 printf '%s' "$prompt" > "${captureDir}/prompt-\${n}"
 if printf '%s' "$prompt" | grep -qE 'FAILURE CLASS|PREVENT a repeated agent failure'; then
-  echo '{"enforcement":{"kind":"param","name":"EPAM_MAX_ITERATIONS","value":"40"},"reason":"r"}'
+  echo '{"enforcement":{"kind":"param","name":"EPAM_REASONING_EFFORT","value":"high"},"reason":"r"}'
   exit 0
 fi
 cat > "${repo}/${TARGET}" <<'SPEC'

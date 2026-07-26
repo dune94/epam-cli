@@ -295,8 +295,37 @@ _validate_written_test() {
                    process.stdout.write(String(j.numTotalTests ?? 0)); }
               catch { process.stdout.write("-1"); }   // unparseable JSON -> fall back
             });' <<< "$json" 2>/dev/null || echo "-1")
+        # FAILED ASSERTIONS ARE NOT VALID HERE. The old rule said "a reproducing test
+        # is SUPPOSED to fail before the fix" — but this writer runs AFTER the fix is
+        # committed (story execution -> writer -> repro-gate). The fix is already in
+        # the tree, so a failing assertion means the test CONTRADICTS it, and the
+        # repro-gate says exactly that one step later, where nothing can retry.
+        #
+        # The gate's contract splits cleanly: it owns "fails on the pre-fix
+        # baseline" (only it can check the baseline out); the writer owns "passes
+        # with the fix", which is checkable right here while retries and the ladder
+        # are still available.
+        local _failed
+        _failed=$("$NODE_BIN" -e '
+            let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+              try{ const j=JSON.parse(s.slice(s.indexOf("{")));
+                   process.stdout.write(String(j.numFailedTests ?? 0)); }
+              catch { process.stdout.write("0"); }
+            });' <<< "$json" 2>/dev/null || echo 0)
+
         if [ "$total" = "-1" ]; then
             out="$json"          # no usable JSON — fall through to the text heuristic
+        elif [ "${total:-0}" -gt 0 ] && [ "${_failed:-0}" -gt 0 ]; then
+            log "written test FAILS against the committed fix (${_failed}/${total}) — rejecting so the writer can retry"
+            _assertion_feedback="
+
+## YOUR TEST FAILED AGAINST THE FIX THAT IS ALREADY COMMITTED
+The fix for this story is ALREADY in the working tree. Your test ran but ${_failed} of ${total} assertion(s) FAILED, which means your test contradicts the implemented fix — not that it reproduces the bug.
+Read the fix diff above again and assert the behaviour it ACTUALLY produces.
+\`\`\`
+$(printf '%s' "$json" | head -c 1200)
+\`\`\`"
+            return 1
         elif [ "${total:-0}" -gt 0 ]; then
             # Executed is necessary but NOT sufficient — it must also compile.
             _typecheck_written_test "$rel" || return 1
@@ -327,6 +356,7 @@ _validate_written_test() {
 # action, the same category as a gate rejection returned as a tool result.
 # Withholding it makes the agent guess at an error the toolchain knows exactly.
 _typecheck_feedback=""
+_assertion_feedback=""
 _ctx_file="$(mktemp 2>/dev/null || echo /tmp/rtw-ctx-$$)"; printf '%s' "$_prompt" > "$_ctx_file"
 _max_attempts="${REPRO_TEST_WRITER_MAX_ATTEMPTS:-3}"
 # Self-heal enforcement seam: constraints compiled onto this shell's knobs.
@@ -366,7 +396,7 @@ for _attempt in $(seq 1 "$_max_attempts"); do
     # success while the agent ran unconstrained. Worse: the Pillar 3 digest covers
     # EPAM_MAX_ITERATIONS, so in a REAL run ai-run.sh would have detected the drift
     # and ABORTED every retry. Found by the induced-failure test, not by a run.
-    { printf '%s' "$_prompt"; [ -n "$_typecheck_feedback" ] && printf '%s' "$_typecheck_feedback"; } | \
+    { printf '%s' "$_prompt"; [ -n "$_typecheck_feedback" ] && printf '%s' "$_typecheck_feedback"; [ -n "$_assertion_feedback" ] && printf '%s' "$_assertion_feedback"; } | \
       AI_GATE_ALLOW_TOOLS=1 \
       EPAM_DANGEROUS_SKIP_APPROVAL=1 \
       EPAM_ALLOWED_WRITE_PATHS="${_target_rel}" \

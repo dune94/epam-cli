@@ -60,6 +60,14 @@ def collect(args):
     d = {'launch_log': args.launch_log, 'logs_dir': args.logs_dir}
 
     d['timeline'] = build_timeline(read(args.launch_log))
+    # Codeline selection evidence — how the repo was chosen, not just which.
+    d['title'] = first(r'Title:\s*([^\n]+)', log) or first(r'\[Mozio\][^\n]{10,140}', log) or ''
+    d['codeline_path'] = first(r"\[orch\] Codeline '\S+' → (\S+)", log)
+    d['repo_count'] = first(r'Found (\d+) git repo\(s\) in codeline root', log)
+    d['scoring'] = first(r'Tier-2 cross-repo scoring \([^)]*\): ([^\n]+)', log)
+    d['scoring_driver'] = first(r"top candidate '\S+' driven by: ([^\n]+)", log)
+    d['shortlist'] = first(r'Repo scoring: top (\d+) candidate\(s\) from (\d+) repos', log)
+    d['selector_model'] = first(r'Calling LLM \((\S+)\) to match', log)
     d['story'] = first(r'\b(AMSD-\d+|[A-Z]{2,}-\d+)\b', log)
     d['cost_before'] = first(r'OpenRouter usage before:\s*\$([0-9.]+)', log)
     d['cost_after'] = first(r'OpenRouter usage after:\s*\$([0-9.]+)', log)
@@ -149,18 +157,18 @@ def collect(args):
         try:
             out = subprocess.run(
                 ['git', '-C', args.codeline, 'log', '--format=%h|%s|%ad', '--date=iso',
-                 f'{args.baseline}..HEAD'],
+                 f'{args.baseline}..{args.head}'],
                 capture_output=True, text=True, timeout=30).stdout
             d['commits'] = [l.split('|', 2) for l in out.splitlines() if l.strip()]
             diff = subprocess.run(
-                ['git', '-C', args.codeline, 'diff', f'{args.baseline}..HEAD'],
+                ['git', '-C', args.codeline, 'diff', f'{args.baseline}..{args.head}'],
                 capture_output=True, text=True, timeout=30).stdout
             d['diff'] = diff
             d['diffstat'] = subprocess.run(
-                ['git', '-C', args.codeline, 'diff', '--stat', f'{args.baseline}..HEAD'],
+                ['git', '-C', args.codeline, 'diff', '--stat', f'{args.baseline}..{args.head}'],
                 capture_output=True, text=True, timeout=30).stdout
             names = subprocess.run(
-                ['git', '-C', args.codeline, 'diff', '--name-only', f'{args.baseline}..HEAD'],
+                ['git', '-C', args.codeline, 'diff', '--name-only', f'{args.baseline}..{args.head}'],
                 capture_output=True, text=True, timeout=30).stdout
             d['manifest'] = [l for l in names.splitlines() if l.strip()]
         except (OSError, subprocess.SubprocessError):
@@ -192,6 +200,7 @@ def collect(args):
                 d['title'] = s.get('title') or ''
         except (OSError, ValueError):
             pass
+    d['selfheal'] = collect_selfheal(d, log, args)
     return d
 
 
@@ -204,80 +213,162 @@ _CHECKLIST_RERENDER = re.compile(r'^\s*[✓○⊘⚠]\s+\d+[a-z]?\s+')
 
 # (pattern, kind, status, headline template, commentary)
 _EVENTS = [
-    (r'OpenRouter usage before:\s*\$([\d.]+)', 'cost', 'info',
-     'Run starts — provider balance ${0}', ''),
-    (r'Moved (\d+) stale [^\n]*file\(s\) → (\S+)', 'reset', 'info',
-     'Clean slate: {0} stale artefact(s) archived',
-     'A leftover log or manifest reads exactly like current data, so they are moved, not truncated.'),
-    (r'Cleared (\d+) KB scratchpad file', 'reset', 'info', 'KB scratchpad cleared ({0} file(s))', ''),
+
     (r'\[jira\] (https?://\S+) \(project: (\w+)\)', 'ingest', 'info',
-     'Jira ingest — {1} from {0}', ''),
-    (r'\[ac-gate\]\s+verdict: (\w+)', 'ingest', 'info', 'AC gate verdict: {0}',
-     'The ticket carries no acceptance criteria; the gate judged whether the description alone is enough.'),
-    (r"\[orch\] Codeline '(\S+)' → (\S+)", 'ingest', 'info', 'Codeline selected: {0}', ''),
+     'Ticket pulled from Jira',
+     'The pipeline reads the ticket straight from {0} (project {1}). Nothing about the bug is hand-written '
+     'for the run &mdash; the agents see the same words a developer would.'),
+    (r'\[ac-gate\]\s+verdict: (\w+)', 'ingest', 'info',
+     'Acceptance-criteria gate: {0}',
+     'This ticket has no acceptance criteria written on it. The gate judged whether the description alone '
+     'says enough to work from; &ldquo;enrichable&rdquo; means yes &mdash; the symptom and the expected '
+     'behaviour are both stated, so the pipeline may proceed and derive its own verification criteria.'),
+    (r'Found (\d+) git repo\(s\) in codeline root', 'ingest', 'info',
+     'Searching {0} repositories for the right codebase',
+     'The ticket does not say which repository the bug lives in. The pipeline has to work that out itself '
+     'from {0} candidates.'),
+    (r"top candidate '(\S+)' driven by: ([^\n]+)", 'ingest', 'info',
+     'Strongest match: {0}',
+     'Chosen on the ticket&rsquo;s domain words appearing far more often in this repository than in the '
+     'others &mdash; {1}. Presentation words like &ldquo;displayed&rdquo; are deliberately stripped first, '
+     'because they describe the symptom rather than the code that causes it.'),
+    (r'Repo scoring: top (\d+) candidate\(s\) from (\d+) repos', 'ingest', 'info',
+     'Shortlist of {0} from {1} repositories',
+     'Deterministic keyword scoring narrows the field first, so the language model is asked to choose '
+     'between a handful of plausible repositories rather than search all {1}.'),
+    (r'Calling LLM \((\S+)\) to match', 'ingest', 'info',
+     'Model {0} picks from the shortlist',
+     'The final choice is a judgement call, so it goes to a model &mdash; but only after the arithmetic '
+     'has removed the obviously-wrong candidates.'),
+    (r"\[orch\] Codeline '(\S+)' → (\S+)", 'ingest', 'ok',
+     'Codeline selected: {1}',
+     'This is the repository the run will actually change. Everything after this point happens inside it.'),
     (r'\[orch\] Brownfield baseline: (\S+) @ (\S+)', 'ingest', 'info',
-     'Baseline pinned: {0} @ {1}', 'Everything later is measured against this commit.'),
+     'Baseline pinned at {0} @ {1}',
+     'A fixed reference point. Every later question &mdash; what changed, what lint findings are new, does '
+     'the test fail without the fix &mdash; is answered against this exact commit, so pre-existing problems '
+     'are never blamed on this run.'),
     (r'^\s*▶ (Step [\d.]+[a-z]?: .+?)\s*$', 'step', 'info', '{0}', ''),
     (r'^\s*✓ (Step [\d.]+[a-z]?: .+?)\s*$', 'step', 'ok', '{0} — passed', ''),
     (r'^\s*⊘ (Step [\d.]+[a-z]?: .+?)\s+\[(.+?)\]', 'step', 'skip', '{0} — skipped ({1})', ''),
     (r'^\s*⚠ (Step [\d.]+[a-z]?: .+?)\s+\[(.+?)\]', 'step', 'warn', '{0} — {1}', ''),
     (r'is UNGROUNDED \(attempt (\d)/(\d)\)[^\n]*?"([^"]+)"', 'detective', 'warn',
-     'Detective answer REJECTED as ungrounded (attempt {0}/{1})',
-     'It quoted <code>{2}</code> as the broken code — an expression not present in the file it named. '
-     'The evidence gate checks the quote against the real file, so the diagnosis was refused instead of trusted.'),
+     'First diagnosis rejected — it described code that does not exist',
+     'The investigating agent claimed the broken line was <code>{2}</code>. That expression is nowhere in the '
+     'file it named. Because the pipeline checks every quoted line against the real file, the diagnosis was '
+     'thrown away instead of being passed to the developer agent as fact. Without that check it would have '
+     'looked entirely convincing: right file, plausible variable names, confident explanation.'),
     (r'ladder escalation for \S+ \(attempt (\d)/(\d)\) — model (\S+) → (\S+)', 'detective', 'warn',
-     'Model escalated: {2} → {3}', 'Attempt {0} of {1}.'),
+     'Escalating to a stronger model: {2} → {3}',
+     'Attempt {0} of {1}. The cheaper model failed to produce a grounded answer, so the work moves up to a '
+     'more capable (and more expensive) one rather than accepting a weak result.'),
     (r'code-graph-detective located fix site: (\S+)(?: \(reuse (\S+)\))?', 'detective', 'ok',
-     'Fix site located: {0}', 'Prescribed reuse of the existing helper <code>{1}</code>.'),
-    (r'(\d+) verification criteria persisted', 'spec', 'ok', '{0} verification criteria written', ''),
+     'Root cause located in {0}',
+     'The agent traced backwards from the symptom to the code that actually computes the wrong value, and '
+     'pointed at an existing helper (<code>{1}</code>) already in the repository rather than inventing new '
+     'logic &mdash; a smaller, safer change that a reviewer is far more likely to accept.'),
+    (r'(\d+) verification criteria persisted', 'spec', 'ok',
+     '{0} verification criteria written',
+     'Plain-language statements of what must be observably true once the bug is fixed. They describe '
+     'outcomes, never implementation, so they cannot quietly dictate how the fix is written.'),
+    (r'VC guard flagged mechanism[^\n]*?\[([^\]]+)\]', 'spec', 'warn',
+     'A verification criterion was rejected for prescribing implementation',
+     'It said how to fix the bug ({0}) rather than what a user should see afterwards. Criteria that smuggle '
+     'in a solution bias the developer agent toward it &mdash; possibly toward the wrong one &mdash; so it '
+     'was regenerated.'),
     (r'InferenceLadder\[Rung(\d)/R(\d)\]: model=.(\S+?). ', 'impl', 'info',
-     'Implementation ladder rung {0}, try {1} — model {2}', ''),
+     'Developer agent — rung {0}, try {1}, model {2}',
+     'Work starts on the cheapest capable model and only climbs if it fails.'),
     (r'declared deliverable\(s\) exist but are UNCHANGED[^\n]*?\[attempt (\d+)/(\d+)', 'impl', 'warn',
-     'Attempt {0}/{1} produced no change — retrying',
-     'A per-attempt verdict, not a failure: the guard refuses to accept a turn that wrote nothing.'),
+     'Attempt {0} of {1} changed nothing — retrying',
+     'The agent reported success but the files are byte-for-byte identical to the baseline. The pipeline '
+     'verifies the claim against the repository instead of believing it, so the attempt is discarded and '
+     'retried. This is routine, not a failure.'),
     (r'Cost\[(\S+)\] model=(\S+) in=(\d+) out=(\d+) cost=\$([\d.]+)[^\n]*status=(\w+)', 'impl', 'info',
-     'Agent call — {1} · in {2} / out {3} tokens · ${4} ({5})', ''),
+     'Model call — {1}',
+     '{2} tokens in, {3} out, ${4} ({5}).'),
     (r'Implemented: (\d+), Failed: (\d+), Skipped: (\d+)', 'impl', 'ok',
-     'Story implemented — {0} done, {1} failed, {2} skipped', ''),
+     'Fix written and committed',
+     '{0} story implemented, {1} failed, {2} skipped.'),
     (r'\[repro-test-writer\] writing reproducing test[^\n]*→ (\S+)', 'test', 'info',
-     'Writing a bug-reproducing test → {0}', ''),
-    (r'written test FAILS TYPECHECK', 'test', 'warn', 'Written test rejected — it does not compile',
-     'Discarded rather than committed: a test that cannot run would look like coverage while proving nothing.'),
+     'Writing a test that reproduces the bug → {0}',
+     'The fix alone proves nothing. A test is written that fails on the ORIGINAL code, so the bug is '
+     'demonstrated to exist before anyone claims to have fixed it.'),
+    (r'written test FAILS TYPECHECK', 'test', 'warn',
+     'The first test did not compile — discarded',
+     'A test that cannot run would still sit in the repository looking like coverage while proving nothing, '
+     'so it is thrown away rather than committed.'),
     (r'constraints applied for (\S+) \(story:[^)]+\): (\S+)', 'test', 'info',
-     'Self-heal constraints applied to {0}', 'Compiled constraints, not prompt text: <code>{1}</code>'),
+     'Applying what the pipeline learned from earlier failures',
+     'Past mistakes by this agent are enforced as machine-checked constraints (<code>{1}</code>), not as '
+     'extra paragraphs of advice in the prompt.'),
     (r'test produced and validated on attempt (\d+) \(model (\S+)\)', 'test', 'ok',
-     'Valid test produced on attempt {0} ({1})', ''),
+     'Working test produced on attempt {0}',
+     'Written by {1} and confirmed to compile and run.'),
     (r'\[repro-test-writer\] committed reproducing test: (\S+)', 'test', 'ok',
-     'Reproducing test committed — {0}', ''),
+     'Test committed — {0}', ''),
     (r'\[repro-gate\] ✓ (\S+): the test reproduces the bug[^\n]*', 'test', 'ok',
-     'BUG REPRODUCTION PROVEN for {0}',
-     'The test was executed against the untouched baseline and against the fix: it fails on one and passes on the '
-     'other. This is a demonstration, not a judgement.'),
-    (r'Review Decision: ([A-Z_ ]+)', 'review', 'ok', 'Team-lead review: {0}', ''),
+     'RED → GREEN confirmed: the fix genuinely works',
+     'The test was executed twice: against the original code, where it FAILED (proving the bug is real and '
+     'the test detects it), and against the fixed code, where it PASSED. This is the strongest evidence in '
+     'the run &mdash; it is an executed demonstration, not an opinion from a model.'),
+    (r'Review Decision: ([A-Z_ ]+)', 'review', 'ok',
+     'Senior-developer review: {0}',
+     'A separate agent reads the change against the ticket and the verification criteria, and can send it '
+     'back for rework.'),
     (r'code review APPROVED for phase \S+ \(cycle (\d+)\)', 'review', 'ok',
-     'Review approved on cycle {0}', ''),
+     'Approved on the first review cycle' , 'Cycle {0} &mdash; no rework was required.'),
     (r'review requested changes — re-implementing \(cycle (\d+) → (\d+)\)', 'review', 'warn',
-     'Review requested changes — re-implementing (cycle {0} → {1})', ''),
+     'Review sent the change back for rework (cycle {0} → {1})', ''),
     (r'\[lint\] scope: (\d+) file\(s\) from (.+)', 'lint', 'info',
-     'Lint gate scoped to {0} file(s)', 'Source: {1} — the files this run produced, not the whole tree.'),
+     'Code-style check, limited to the {0} files this run touched',
+     'It deliberately does not examine the rest of the repository: the run should be judged on what it '
+     'wrote, not on problems that were already there.'),
     (r'could not compute baseline findings for (\S+)', 'lint', 'warn',
-     'Baseline findings could NOT be computed',
-     'Every finding will be attributed to this run — the inherited-debt protection did not run.'),
+     'Could not measure the original code&rsquo;s style problems',
+     'Without that measurement every finding gets attributed to this run, including any that already '
+     'existed. The protection against inheriting someone else&rsquo;s mess did not run.'),
     (r'\[lint\] auto-fixing (\d+) file\(s\) clean at baseline \((\d+) skipped', 'lint', 'info',
-     'Auto-fixing {0} file(s) clean at baseline', '{1} skipped — files carrying pre-existing findings are not reformatted.'),
-    (r'\[lint\] eslint: (PASS[^\n]*|FAIL[^\n]*|COULD NOT RUN[^\n]*)', 'lint', 'ok', 'Lint: {0}', ''),
+     'Auto-correcting formatting in {0} file(s)',
+     'Only files that were already clean before this run are touched &mdash; {1} skipped &mdash; so the '
+     'pipeline never reformats code somebody else wrote.'),
+    (r'\[lint\] eslint: (PASS[^\n]*|FAIL[^\n]*|COULD NOT RUN[^\n]*)', 'lint', 'ok', 'Code style: {0}', ''),
     (r'\[qa-gate\] (\S+) attempt (\d) produced no structured output', 'gate', 'warn',
-     '{0}: no structured output on attempt {1} — retrying with an escalated model', ''),
+     '{0} returned nothing usable on attempt {1} — retrying with a stronger model', ''),
     (r'\[qa-gate\] (\S+) all (\d+) attempt\(s\) exhausted with no structured output', 'gate', 'bad',
-     '{0}: NO VERDICT after {1} attempts', 'This gate reviewed nothing.'),
-    (r'"mutationScore":\s*(\d+)', 'gate', 'info', 'Mutation score: {0}', ''),
-    (r'Mutant-hunter: ([A-Z]+ — [^\n]+)', 'gate', 'warn', 'Mutant-hunter: {0}', ''),
-    (r'Step 4\.\d[a-z]?: Running (\S+)\.\.\.', 'gate', 'info', 'Quality gate: {0}', ''),
-    (r'\[orch\] ✅ (Pipeline complete)', 'terminal', 'ok', 'PIPELINE COMPLETE', ''),
-    (r'Total spent this run:\s+\$([\d.]+)', 'cost', 'ok', 'Total billed for this run: ${0}', ''),
-    (r'✓ (\S+): completed', 'terminal', 'ok', 'Story {0} marked completed', ''),
-    (r'PASSED — all (\d+) stories complete', 'terminal', 'ok', 'RUN PASSED — {0}/{0} stories complete', ''),
+     '{0} never produced a verdict',
+     'After {1} attempts this quality check returned nothing. It did not review the change &mdash; an '
+     'absent opinion, not an approving one.'),
+    (r'"mutationScore":\s*(\d+)', 'gate', 'info',
+     'Mutation score: {0}',
+     'The pipeline deliberately corrupts the new code in small ways and re-runs the tests. A high score '
+     'means the tests actually notice when the code breaks; a score of zero means they would pass even if '
+     'the fix were undone.'),
+    (r'Mutant-hunter: ([A-Z]+ — [^\n]+)', 'gate', 'warn', 'Mutation testing: {0}', ''),
+    (r'Step 4\.\d[a-z]?: Running (\S+)\.\.\.', 'gate', 'info', 'Quality check: {0}', ''),
+    (r'\[orch\] ✅ (Pipeline complete)', 'terminal', 'ok', 'Pipeline complete', ''),
+    (r'Total spent this run:\s+\$([\d.]+)', 'cost', 'ok',
+     'Total cost of this run: ${0}',
+     'Measured from what the provider actually billed, not estimated from token counts.'),
+    (r'✓ (\S+): completed', 'terminal', 'ok', 'Story {0} marked complete', ''),
+    (r'PASSED — all (\d+) stories complete', 'terminal', 'ok',
+     'RUN PASSED', 'All {0} stories completed and every blocking gate satisfied.'),
 ]
+
+def _authoritative_step_starts(raw):
+    """{step-number: HH:MM:SS} from lines that genuinely carry a clock.
+
+    Only `[HH:MM:SS] Step N: Running …` lines are timestamped by the runner. The
+    ▶/✓ marker lines are not, and inherit whatever clock was last printed — which
+    made a 13-minute specification pass report "took 2s". Durations are computed
+    from these lines alone, and omitted entirely where two real timestamps are
+    not available: no number at all beats a confident wrong one.
+    """
+    starts = {}
+    for m in re.finditer(r'^\[(\d{2}:\d{2}:\d{2})\]\s+Step ([\d.]+[a-z]?): Running',
+                         strip_ansi(raw), re.M):
+        starts.setdefault(m.group(2), m.group(1))
+    return starts
 
 
 def build_timeline(raw):
@@ -306,7 +397,140 @@ def build_timeline(raw):
             events.append({'t': clock, 'kind': kind, 'status': status,
                            'head': headline, 'note': commentary})
             break
-    return events
+    return _collapse_gates(_collapse_steps(events, _authoritative_step_starts(raw)))
+
+
+# Steps that carry no story: bookkeeping the reader does not need. Naming them
+# explicitly (rather than dropping anything that looks dull) keeps the omission
+# honest and reviewable.
+_TRIVIAL_STEPS = ('mkdir', 'Initializing', 'coordinator audit', 'Hybrid pre-coord')
+
+
+def _collapse_steps(events, real_starts=None):
+    """One line per step, carrying how long it took.
+
+    Raw logs emit a step twice — "Step 1: Specification pass" on entry and
+    "… — passed" on exit — which doubled the timeline to 44 near-identical rows
+    and buried the beats that matter. Merging the pair also recovers the
+    duration, which is the genuinely interesting part: it shows WHERE the
+    45 minutes went, something the original report could not answer at all.
+    """
+    out, open_steps = [], {}
+    for e in events:
+        if e['kind'] != 'step':
+            out.append(e)
+            continue
+        name = re.sub(r' — (passed|skipped.*|.*)$', '', e['head']).strip()
+        if any(t.lower() in name.lower() for t in _TRIVIAL_STEPS):
+            continue
+        if e['status'] == 'info':          # entry
+            open_steps[name] = (e, len(out))
+            out.append(e)
+            continue
+        started = open_steps.pop(name, None)
+        if not started:                     # exit with no entry seen
+            out.append(e)
+            continue
+        entry, idx = started
+        entry['head'] = name
+        entry['status'] = e['status']
+        entry['note'] = e['note'] or entry['note']
+        entry['_step'] = True
+        out[idx] = entry
+
+    # Durations come from when the NEXT step began, not from the exit line.
+    # Exit lines ("✓ Step 1: …") carry no timestamp of their own and inherit
+    # whatever clock was last seen, which made Step 1 — a 13-minute
+    # specification pass — report "took 2s". A confidently wrong number is worse
+    # than no number: it is exactly the kind of fabricated precision these
+    # reports exist to avoid.
+    real_starts = real_starts or {}
+    step_idx = [i for i, e in enumerate(out) if e.get('_step')]
+    for pos, i in enumerate(step_idx):
+        num = (re.match(r'Step ([\d.]+[a-z]?):', out[i]['head']) or [None, None])[1]
+        t0 = real_starts.get(num)
+        if t0:
+            out[i]['t'] = t0                      # correct the displayed clock too
+        t1 = None
+        for j in step_idx[pos + 1:]:
+            nxt_num = (re.match(r'Step ([\d.]+[a-z]?):', out[j]['head']) or [None, None])[1]
+            if nxt_num and real_starts.get(nxt_num):
+                t1 = real_starts[nxt_num]
+                break
+        secs = _elapsed(t0, t1) if (t0 and t1) else ''
+        if secs:
+            out[i]['head'] += f' — took {secs}'
+        out[i].pop('_step', None)
+    return out
+
+
+def _collapse_gates(events):
+    """One line per quality gate, stating what it actually concluded.
+
+    The raw sequence emits three beats per failing gate — "Quality check: X",
+    "X returned nothing usable on attempt 1", "X never produced a verdict" —
+    all stamped with the same inherited clock. For two failing gates that is six
+    near-identical rows saying one thing twice, which buries the finding it is
+    trying to report.
+
+    The finding itself is real and is NOT softened here: a gate that returns
+    nothing has not reviewed the change. It is stated once, plainly.
+    """
+    out, seen_gate = [], {}
+    for e in events:
+        if e['kind'] != 'gate':
+            out.append(e)
+            continue
+        m = (re.search(r'qa-gate:([a-z][a-z-]+)', e['head'])
+             or re.search(r'Quality check:\s*([a-z][a-z-]+)', e['head'])
+             or re.search(r'^([a-z][a-z-]+):', e['head']))
+        if not m:
+            out.append(e)
+            continue
+        gate = m.group(1)
+        low = e['head'].lower()
+
+        if 'never produced a verdict' in low:
+            seen_gate[gate] = {
+                'status': 'bad', 'head': f'{gate}: no verdict — this check did not review the change',
+                'note': 'Two attempts, including one on a stronger model, both returned nothing '
+                        'usable. An absent opinion is not an approving one.'}
+        elif 'returned nothing usable' in low:
+            # Retry chatter. The OUTCOME line carries the finding, and where a
+            # gate recovered (mutant-hunter) its score already says so.
+            continue
+        elif 'quality check:' in low and gate in seen_gate:
+            continue
+        else:
+            out.append(e)
+            continue
+
+        idx = next((i for i, x in enumerate(out)
+                    if x['kind'] == 'gate' and gate in x['head']), None)
+        beat = {'t': e['t'], 'kind': 'gate', **seen_gate[gate]}
+        if idx is None:
+            out.append(beat)
+        else:
+            out[idx] = beat
+    return out
+
+
+def _elapsed(t0, t1):
+    if not t0 or not t1:
+        return ''
+    try:
+        h0, m0, s0 = (int(x) for x in t0.split(':'))
+        h1, m1, s1 = (int(x) for x in t1.split(':'))
+    except ValueError:
+        return ''
+    d = (h1 * 3600 + m1 * 60 + s1) - (h0 * 3600 + m0 * 60 + s0)
+    if d < 0:
+        d += 24 * 3600
+    if d < 1:
+        return ''
+    if d < 60:
+        return f'{d}s'
+    return f'{d // 60}m {d % 60}s'
 
 
 # ── rendering ──────────────────────────────────────────────────────────────────
@@ -372,11 +596,15 @@ TIMELINE_CSS = """
 .tl li.ok .h{color:var(--ok)} .tl li.warn .h{color:var(--warn)} .tl li.bad .h{color:var(--bad)}
 .tl li.skip .h{color:var(--muted); font-weight:400;}
 .tl .n { display:block; color:var(--muted); font-size:13.5px; margin-top:.15rem; }
+.lede { font-size:16.5px; }
+.intro { color:var(--fg); opacity:.85; margin:.35rem 0 .6rem; max-width:46rem; }
 .phase { margin:1.75rem 0 .35rem; font-size:.78rem; text-transform:uppercase; letter-spacing:.07em;
          color:var(--muted); font-weight:700; }
 """
 
 _QA_KINDS = {'test', 'review', 'lint', 'gate', 'terminal'}
+
+_NARRATIVE_SKIP = {'reset'}  # archiving the PREVIOUS run's artefacts is not this run's story
 
 _PHASE_OF = {
     'cost': 'Setup', 'reset': 'Setup', 'ingest': 'Ingest & selection',
@@ -386,8 +614,59 @@ _PHASE_OF = {
 }
 
 
-def render_timeline(events, kinds=None):
-    """Chronological play-by-play, grouped by the phase each beat belongs to."""
+# A reader who knows nothing about this pipeline needs to be told what each
+# stage is FOR before being shown what it did. Without this the timeline is a
+# list of jargon; with it, each beat has somewhere to land.
+_PHASE_INTRO = {
+    'Setup': (
+        'Before any work starts, the pipeline records where it is beginning from — the money already '
+        'spent with the model provider, so the cost of this run can be measured exactly rather than '
+        'guessed at afterwards.'),
+    'Ingest & selection': (
+        'The pipeline is given nothing but a Jira ticket number. It has to fetch the ticket, work out '
+        'which of the organisation&rsquo;s many repositories the bug actually lives in, and pin down the '
+        'exact version of that code to work against. Nobody tells it any of this in advance.'),
+    'Pipeline steps': (
+        'The run advances through a fixed sequence of numbered steps. Some do work, some are checks, and '
+        'some are skipped when they do not apply to this kind of change. They are listed here in the order '
+        'they executed so the shape of the run is visible at a glance.'),
+    'Diagnosis': (
+        'This is the hardest part, and the part most likely to go wrong. A bug ticket describes a '
+        '<em>symptom</em> in everyday language — &ldquo;the discount is not displayed&rdquo; — but the '
+        'code that causes it usually contains none of those words. An investigating agent has to search '
+        'the codebase, follow the data backwards from where the wrong value appears to where it is '
+        'actually calculated, and name the exact line at fault. A confident wrong answer here poisons '
+        'everything downstream, so the pipeline checks the answer against the real file before trusting it.'),
+    'Implementation': (
+        'A developer agent is given the diagnosis and asked to make the smallest change that fixes it. '
+        'Smallest matters: a large rewrite is harder to review, more likely to break something else, and '
+        'more likely to be rejected. The pipeline verifies that the agent actually changed the files it '
+        'claims to have changed, rather than taking its word for it.'),
+    'Proving the fix': (
+        'A fix that nobody can demonstrate is just an assertion. So a second agent writes a test that '
+        'reproduces the original bug, and the pipeline runs it twice — once against the ORIGINAL code, '
+        'where it must fail, and once against the fixed code, where it must pass. Only then is the fix '
+        'considered proven.'),
+    'Review': (
+        'A separate reviewing agent reads the change as a senior developer would: does it address the '
+        'ticket, is it the smallest sensible change, does it reuse what already exists? It can send the '
+        'work back to be redone.'),
+    'Lint gate': (
+        'An automated check of code style and formatting, deliberately limited to the files this run '
+        'touched. It is careful not to judge the run on problems that were already in the codebase — '
+        'making an agent clean up somebody else&rsquo;s formatting would bloat the change and get it '
+        'rejected in review.'),
+    'Quality gates': (
+        'A final battery of independent checks — security scanning, specification conformance, code '
+        'review by machine, mutation testing, fuzzing and performance. Each returns its own verdict. '
+        'Some block the run; some only warn.'),
+    'Outcome': (
+        'The final result, and what the whole run cost.'),
+}
+
+
+def render_timeline(events, kinds=None, intros=True):
+    """Chronological play-by-play, with an explanation of each stage's purpose."""
     rows, current = [], None
     for e in events:
         if kinds and e['kind'] not in kinds:
@@ -396,7 +675,10 @@ def render_timeline(events, kinds=None):
         if phase != current:
             if current is not None:
                 rows.append('</ul>')
-            rows.append('<div class="phase">' + esc(phase) + '</div><ul class="tl">')
+            rows.append('<div class="phase">' + esc(phase) + '</div>')
+            if intros and _PHASE_INTRO.get(phase):
+                rows.append('<p class="intro">' + _PHASE_INTRO[phase] + '</p>')
+            rows.append('<ul class="tl">')
             current = phase
         note = ('<span class="n">' + e['note'] + '</span>') if e['note'] else ''
         rows.append(
@@ -407,10 +689,254 @@ def render_timeline(events, kinds=None):
     return '\n'.join(rows) or ('<p>' + MISSING + '</p>')
 
 
+def render_preamble(d):
+    """Tell a reader who knows nothing about this system what they are reading."""
+    title = d.get('title') or ''
+    outcome = ('It succeeded: the bug was found, fixed, proved by an executed test, reviewed and merged '
+               'to the branch.' if d['passed'] else
+               'It did not run to completion — the timeline below shows how far it got.')
+    return (
+        '<h2>What you are looking at</h2>'
+        '<p class="lede">This is an automated software pipeline. It was given one thing: the number of a '
+        'bug ticket. No human wrote any of the code in this report, chose which file to change, or wrote '
+        'the test that proves the change works.</p>'
+        '<p>The pipeline works the way a careful developer would. It reads the ticket, finds the right '
+        'repository among many, investigates the codebase to find the true cause of the bug rather than '
+        'the place the symptom appears, writes the smallest fix it can, writes a test that fails without '
+        'that fix, has the change reviewed, and runs a series of quality checks before accepting it. '
+        'Each of those jobs is done by a different AI agent, and — importantly — the pipeline does not '
+        'simply believe what those agents report. It verifies their claims against the actual code and '
+        'the actual test results, and rejects them when they do not hold up. Several such rejections '
+        'appear below.</p>'
+        + ('<p><strong>The bug it was asked to fix:</strong> &ldquo;' + esc(title) + '&rdquo;</p>' if title else '')
+        + '<p><strong>Outcome.</strong> ' + outcome + ' The whole run took '
+        + esc(d.get('t_start') or '?') + ' to ' + esc(d.get('t_end') or '?')
+        + ' and cost $' + esc(d.get('cost_total') or '?') + '.</p>'
+        + '<p class="intro">Everything below is read from the run&rsquo;s own logs. Where a fact has no '
+        'supporting record it is marked <span class="missing">not recorded</span> rather than guessed at.</p>')
+
+
 def head_block(title, subtitle, cards):
     return ('<title>' + esc(title) + '</title>\n<style>' + CSS + TIMELINE_CSS + '</style>\n<main>\n'
             '<h1>' + esc(title) + '</h1>\n<p class="sub">' + subtitle + '</p>\n'
             '<div class="cards">' + cards + '</div>')
+
+
+def split_diff_by_file(diff):
+    """[(path, body)] — one entry per file in a unified diff."""
+    out, path, buf = [], None, []
+    for line in (diff or '').splitlines():
+        m = re.match(r'^diff --git a/(\S+) b/(\S+)', line)
+        if m:
+            if path:
+                out.append((path, '\n'.join(buf)))
+            path, buf = m.group(2), []
+            continue
+        if path:
+            buf.append(line)
+    if path:
+        out.append((path, '\n'.join(buf)))
+    return out
+
+
+def describe_change(path, body):
+    """Plain-language description derived from the diff itself — never guessed."""
+    added = [l[1:] for l in body.splitlines() if l.startswith('+') and not l.startswith('+++')]
+    removed = [l[1:] for l in body.splitlines() if l.startswith('-') and not l.startswith('---')]
+    is_new = '\nnew file mode' in body or body.startswith('new file mode')
+    is_test = '.spec.' in path or '.test.' in path or '/__tests__/' in path
+    bits = []
+
+    if is_new:
+        bits.append('This file is <strong>new</strong> — it did not exist before the run '
+                    f'({len(added)} lines added).')
+    else:
+        bits.append(f'<strong>{len(added)} line(s) added, {len(removed)} removed.</strong>')
+
+    imports = [a.strip() for a in added if re.match(r'\s*import\b', a)]
+    if imports:
+        names = re.findall(r'import\s+\{?\s*([A-Za-z0-9_,\s]+?)\s*\}?\s+from', ' ; '.join(imports))
+        if names:
+            bits.append('It brings in an existing helper from elsewhere in the repository — '
+                        f'<code>{esc(names[0].strip())}</code> — rather than writing new logic to do the '
+                        'same job.')
+
+    # A one-for-one line swap is the clearest signal of a minimal, surgical fix.
+    body_add = [a for a in added if not re.match(r'\s*import\b', a) and a.strip()]
+    body_del = [r for r in removed if r.strip()]
+    if not is_new and len(body_del) == 1 and len(body_add) == 1:
+        bits.append('A single expression was replaced — the smallest change that can fix the behaviour, '
+                    'and the easiest kind for a reviewer to check.')
+
+    if is_test:
+        bits.append('Because this is the reproducing test, it was run against the ORIGINAL code first and '
+                    'had to <strong>fail</strong> there. A test that passes before the fix would prove '
+                    'nothing at all.')
+    return ' '.join(bits)
+
+
+def collect_selfheal(d, log, args):
+    """What the pipeline learned, and what that learning prevented."""
+    sh = {}
+    sh['constraints_applied'] = []
+    for m in re.finditer(r'\[SelfHeal/KB\] constraints applied for (\S+) \(story:([^)]*)\): ([^\n]+)', log):
+        sh['constraints_applied'].append({
+            'agent': m.group(1), 'story': m.group(2),
+            'rules': [r.strip() for r in m.group(3).split(',') if r.strip()]})
+    sh['analyst_runs'] = len(find_all(r'self-heal analyst', log))
+    sh['typecheck_rejections'] = len(find_all(r'FAILS TYPECHECK', log))
+    sh['failure_classes'] = sorted(set(find_all(r'class=([a-z_]+)', log)))
+    sh['recovered_on_attempt'] = first(r'test produced and validated on attempt (\d+)', log)
+    sh['escalations'] = [{'from': m.group(1), 'to': m.group(2)} for m in
+                         re.finditer(r'ladder escalation[^\n]*model (\S+) → (\S+)', log)]
+    sh['deliverable_retries'] = len(find_all(r'declared deliverable\(s\) exist but are UNCHANGED', log))
+    sh['ungrounded_rejections'] = len(find_all(r'is UNGROUNDED', log))
+
+    # KB store — prefer the run's own archived copy over live (mutating) state.
+    kb_dir = None
+    for cand in (os.path.join(args.out, 'kb'),
+                 os.path.join(os.path.dirname(args.logs_dir), 'agents', 'kb')):
+        if os.path.isdir(cand):
+            kb_dir = cand
+            break
+    sh['kb_source'] = 'this run’s archived copy' if kb_dir and kb_dir.startswith(args.out) \
+        else 'the live store (may have changed since the run)'
+    sh['constraint_count'] = None
+    sh['healing_events'] = None
+    if kb_dir:
+        try:
+            c = json.load(open(os.path.join(kb_dir, 'constraints.json')))
+            rules = c.get('rules', c) if isinstance(c, dict) else c
+            sh['constraint_count'] = len(rules)
+            sh['constraint_ids'] = [r.get('id') for r in rules if isinstance(r, dict)][:12]
+        except (OSError, ValueError, TypeError):
+            pass
+        try:
+            with open(os.path.join(kb_dir, 'healing-events.jsonl')) as f:
+                sh['healing_events'] = sum(1 for line in f if line.strip())
+        except OSError:
+            pass
+        scratch = os.path.join(kb_dir, 'kb-scratchpad')
+        sh['scratchpad'] = sorted(os.listdir(scratch)) if os.path.isdir(scratch) else []
+    return sh
+
+
+def render_selfheal(d):
+    """The self-healing story: what failed, what was learned, what it prevented."""
+    sh = d.get('selfheal') or {}
+    parts = ['<h2>Self-healing and the knowledge base</h2>']
+    parts.append(
+        '<p class="intro">This is the part of the pipeline that improves itself. When an agent fails, '
+        'the failure is not simply retried — it is diagnosed, and the diagnosis is turned into a '
+        '<strong>machine-checked constraint</strong> stored in a knowledge base. On the next attempt, and '
+        'on every future run, that constraint is enforced at the point the agent is invoked. Crucially it '
+        'is enforced as a rule, not appended to the prompt as more advice: an instruction a model can '
+        'ignore is not a safeguard, and this pipeline has repeatedly proved that models do ignore them.</p>')
+
+    beats = []
+    if sh.get('typecheck_rejections'):
+        beats.append(
+            f'<li><strong>{sh["typecheck_rejections"]} written test(s) rejected before being committed.</strong> '
+            'The test did not compile. It was discarded rather than kept — a test that cannot run would sit '
+            'in the repository looking like coverage while proving nothing.</li>')
+    if sh.get('analyst_runs'):
+        beats.append(
+            f'<li><strong>The self-heal analyst was invoked.</strong> It examines the failure and decides what '
+            'rule would have prevented it, rather than simply asking the agent to try again.</li>')
+    for c in sh.get('constraints_applied', []):
+        rules = ', '.join(f'<code>{esc(r)}</code>' for r in c['rules'])
+        beats.append(
+            f'<li><strong>Constraints enforced on <code>{esc(c["agent"])}</code>:</strong> {rules}. '
+            'These were compiled from earlier failures and applied to the retry automatically.</li>')
+    if sh.get('recovered_on_attempt'):
+        beats.append(
+            f'<li><strong>Recovered on attempt {esc(sh["recovered_on_attempt"])}.</strong> The work succeeded '
+            'under the constraints that the earlier failure produced — the loop closed.</li>')
+    if sh.get('ungrounded_rejections'):
+        beats.append(
+            f'<li><strong>{sh["ungrounded_rejections"]} diagnosis rejected as ungrounded.</strong> The agent '
+            'quoted code that does not exist in the file it named, so the answer was refused before it could '
+            'reach the developer agent as fact.</li>')
+    if sh.get('deliverable_retries'):
+        beats.append(
+            f'<li><strong>{sh["deliverable_retries"]} agent turn(s) claimed success while changing nothing</strong> '
+            'and were retried. The claim is checked against the repository rather than believed.</li>')
+    for e in sh.get('escalations', []):
+        beats.append(
+            f'<li><strong>Escalated {esc(e["from"])} → {esc(e["to"])}.</strong> A weak result moves the work to a '
+            'stronger model instead of being accepted.</li>')
+
+    if beats:
+        parts.append('<h3>What healed during this run</h3><ul>' + ''.join(beats) + '</ul>')
+    else:
+        parts.append('<h3>What healed during this run</h3><p>Nothing needed to heal — no agent failure '
+                     'occurred that required diagnosis or a new constraint.</p>')
+
+    rows = []
+    if sh.get('constraint_count') is not None:
+        rows.append(f'<tr><td>Compiled constraints in force</td><td>{sh["constraint_count"]}</td></tr>')
+    if sh.get('healing_events') is not None:
+        rows.append(f'<tr><td>Healing episodes recorded to date</td><td>{sh["healing_events"]}</td></tr>')
+    if sh.get('failure_classes'):
+        rows.append('<tr><td>Failure classes seen this run</td><td>'
+                    + ', '.join(f'<code>{esc(c)}</code>' for c in sh['failure_classes']) + '</td></tr>')
+    if sh.get('scratchpad'):
+        rows.append('<tr><td>Diagnosis notes kept</td><td>'
+                    + ', '.join(f'<code>{esc(f)}</code>' for f in sh['scratchpad']) + '</td></tr>')
+    if rows:
+        parts.append('<h3>Knowledge base state</h3><table><tr><th>Measure</th><th>Value</th></tr>'
+                     + ''.join(rows) + '</table>')
+        parts.append(f'<p class="intro">Read from {sh.get("kb_source", "the store")}.</p>')
+
+    if sh.get('constraint_ids'):
+        parts.append('<h3>Rules currently enforced</h3><ul>'
+                     + ''.join(f'<li><code>{esc(r)}</code></li>' for r in sh['constraint_ids'] if r)
+                     + '</ul><p class="intro">Each began as a real failure in an earlier run and is now '
+                       'checked automatically, so that failure cannot silently recur.</p>')
+    return '\n'.join(parts)
+
+
+def render_code_section(d):
+    files = split_diff_by_file(d.get('diff', ''))
+    if not files:
+        return '<h2>Code produced</h2><p>' + MISSING + '</p>'
+
+    parts = ['<h2>Code produced by this run</h2>']
+    parts.append('<p class="sub">Every line below was written by the pipeline. The diff is shown against '
+                 'the baseline commit the run started from.</p>')
+    if d.get('diffstat'):
+        parts.append('<pre>' + esc(d['diffstat'].strip()) + '</pre>')
+
+    for path, body in files:
+        is_test = '.spec.' in path or '.test.' in path
+        role = 'Reproducing test' if is_test else 'The fix'
+        parts.append('<h3>' + esc(role) + ' &mdash; <code>' + esc(path) + '</code></h3>')
+        parts.append('<p>' + describe_change(path, body) + '</p>')
+        # Show only the changed hunks, not the whole file.
+        hunks = [l for l in body.splitlines()
+                 if l.startswith(('@@', '+', '-')) and not l.startswith(('+++', '---'))]
+        shown = hunks[:40]
+        rendered = []
+        for l in shown:
+            cls = 'diff-add' if l.startswith('+') else ('diff-del' if l.startswith('-') else '')
+            rendered.append(('<span class="' + cls + '">' + esc(l) + '</span>') if cls else esc(l))
+        if len(hunks) > len(shown):
+            rendered.append(esc('… %d more line(s)' % (len(hunks) - len(shown))))
+        parts.append('<pre>' + '\n'.join(rendered) + '</pre>')
+
+    if d.get('repro_gate'):
+        parts.append(
+            '<h3>How the fix was proved &mdash; RED then GREEN</h3>'
+            '<table><tr><th>Stage</th><th>Code under test</th><th>Test result</th><th>What it proves</th></tr>'
+            '<tr><td><strong class="bad">RED</strong></td><td>the original code, fix removed</td>'
+            '<td><span class="bad">FAILS</span></td>'
+            '<td>the bug is real, and this test actually detects it</td></tr>'
+            '<tr><td><strong class="ok">GREEN</strong></td><td>the code with the fix applied</td>'
+            '<td><span class="ok">PASSES</span></td>'
+            '<td>the change fixes the reported behaviour</td></tr></table>'
+            '<p>Both runs were executed by the pipeline, not judged by a model. A test that only ever ran '
+            'against the fixed code could pass for reasons unrelated to the bug.</p>')
+    return '\n'.join(parts)
 
 
 def narrative_html(d):
@@ -422,7 +948,7 @@ def narrative_html(d):
         '<div class="card"><div class="k">Outcome</div><div class="v ' + verdict_cls + '">' + verdict + '</div></div>'
         '<div class="card"><div class="k">Billed</div><div class="v">$' + esc(d['cost_total'] or '?') + '</div></div>'
         '<div class="card"><div class="k">Window</div><div class="v">' + esc(d['t_start'] or '?') + '&ndash;' + esc(d['t_end'] or '?') + '</div></div>'
-        '<div class="card"><div class="k">Codeline</div><div class="v">' + esc(d['codeline'] or '?') + '</div></div>')
+        '<div class="card"><div class="k">Story</div><div class="v">' + esc(d['story'] or '?') + '</div></div>')
 
     costs = '\n'.join(
         '<tr><td><code>%s</code></td><td class="num">$%.4f</td><td class="num">%s</td>'
@@ -456,10 +982,13 @@ def narrative_html(d):
     return (head_block('Run narrative — ' + (d['story'] or ''),
                        'A play-by-play of the run, in the order it happened. Every beat is read from the '
                        'run&rsquo;s own log.', cards)
-            + '\n<h2>Play-by-play</h2>\n' + render_timeline(d['timeline'])
-            + '\n<h2>The change it produced</h2>\n<table><tr><th>SHA</th><th>Subject</th><th>When</th></tr>'
-            + commits + '</table>\n<pre>' + esc((d.get('diffstat') or '').strip() or 'not recorded') + '</pre>\n'
-            + render_diff(d.get('diff', ''))
+            + render_preamble(d)
+            + '\n<h2>How the run unfolded</h2>\n' + render_timeline(
+                [e for e in d['timeline'] if e['kind'] not in _NARRATIVE_SKIP])
+            + '\n<h2>Commits</h2>\n<table><tr><th>SHA</th><th>Subject</th><th>When</th></tr>'
+            + commits + '</table>\n'
+            + render_code_section(d)
+            + render_selfheal(d)
             + '\n<h2>Verification criteria</h2>\n<ul>' + (vc_items or '<li>' + MISSING + '</li>') + '</ul>\n' + vc_note
             + '\n<h2>Cost</h2>\n<table><tr><th>Agent</th><th class="num">Cost</th><th class="num">Tokens in</th>'
               '<th class="num">Tokens out</th><th class="num">Calls</th></tr>\n'
@@ -521,7 +1050,7 @@ def qa_html(d):
 
     return (head_block('QA test summary — ' + (d['story'] or ''),
                        'Testing and quality events in the order they happened, then the structured summary.', cards)
-            + '\n<h2>Play-by-play — testing &amp; quality</h2>\n' + render_timeline(d['timeline'], kinds=_QA_KINDS)
+            + '\n<h2>Play-by-play — testing &amp; quality</h2>\n' + render_timeline(d['timeline'], kinds=_QA_KINDS, intros=False)
             + '\n<h2>Testing summary</h2>'
             + '\n<h3>1 &middot; Does the change fix the reported bug?</h3>'
               '\n<table><tr><th>Check</th><th>Result</th><th>Evidence</th></tr>'
@@ -554,6 +1083,8 @@ def main():
     ap.add_argument('--out', required=True)
     ap.add_argument('--codeline')
     ap.add_argument('--baseline')
+    ap.add_argument('--head', default='HEAD',
+                    help="tip of the run's work; defaults to HEAD")
     ap.add_argument('--prd')
     args = ap.parse_args()
 

@@ -35,6 +35,12 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 LOG_FILE="/tmp/tier3-metrolinx-jira-$(date +%Y%m%dT%H%M%S)-$$.log"
+# One identifier for the whole run. Previously only the CHILD orchestration
+# script set this, so the parent could not name anything after it — the run
+# folder, the Langfuse session and pre-run-reset's archive each invented their
+# own timestamp and could not be tied together. Setting it here and exporting it
+# means all three agree, and a run folder can be matched to its traces.
+export ORCH_RUN_ID="${ORCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
 
 TIER3_PID_FILE="${TIER3_PID_FILE:-/tmp/tier3-metrolinx-run.pid}"
 echo "$$" > "$TIER3_PID_FILE"
@@ -43,7 +49,43 @@ trap 'rm -f "$TIER3_PID_FILE"' EXIT
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 info()    { echo -e "${YELLOW}[tier3-metrolinx]${NC} $*"; }
 success() { echo -e "${GREEN}[tier3-metrolinx] ✓${NC} $*"; }
-fail()    { echo -e "${RED}[tier3-metrolinx] ✗${NC} $*"; exit 1; }
+# ── Run artefacts, on EVERY outcome ──────────────────────────────────────────
+# A failed run is the one you most need evidence from, and its artefacts are the
+# most perishable: the working PRD lives in /tmp, profiles.json is restored from
+# canonical at the next launch, and the KB scratchpad is cleared by
+# pre-run-reset.sh. Archiving only on success meant every failure investigated
+# today had to be reconstructed from a log after the fact.
+#
+# Never allowed to change the run's outcome: `|| true` throughout, and the
+# original exit status is preserved.
+_archive_run_artifacts() {
+  local outcome="$1"
+  local dir="${EPAM_PROJECT_CONFIG_DIR:-$REPO_ROOT/orchestrations/projects/metrolinx}/runs/${ORCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
+  mkdir -p "$dir" 2>/dev/null || return 0
+  AUTOMATION_DIR="$REPO_ROOT/orchestrations" \
+  LOG_DIR="$REPO_ROOT/orchestrations/logs" \
+  RUN_ARTIFACT_DIR="$dir" \
+    bash "$SCRIPT_DIR/archive-run-artifacts.sh" >/dev/null 2>&1 || true
+  [ -f "$LOG_FILE" ] && cp "$LOG_FILE" "$dir/run.log" 2>/dev/null || true
+  printf '%s\n' "$outcome" > "$dir/outcome.txt" 2>/dev/null || true
+
+  # The two deliverables a run owes: a narrative and a QA summary, built from
+  # the artefacts just captured.
+  python3 "$SCRIPT_DIR/generate-run-report.py" \
+    --launch-log "$LOG_FILE" \
+    --logs-dir "$REPO_ROOT/orchestrations/logs" \
+    --codeline "$(sed 's/\x1b\[[0-9;]*m//g' "$LOG_FILE" 2>/dev/null | grep -oE "Codeline '\''[^'\'']+'\'' → \S+" | head -1 | awk '{print $NF}')" \
+    --baseline "$(cat "$REPO_ROOT/orchestrations/logs/phase-baseline-sha.txt" 2>/dev/null | tr -d '[:space:]')" \
+    --prd "$dir/working-prd.json" \
+    --out "$dir" >/dev/null 2>&1 || true
+  echo -e "${YELLOW}[tier3-metrolinx]${NC} Run artefacts + reports: $dir"
+}
+
+fail()    {
+  echo -e "${RED}[tier3-metrolinx] ✗${NC} $*"
+  _archive_run_artifacts "FAILED: $*"
+  exit 1
+}
 
 # ── Load .env then metrolinx project env ─────────────────────────────────────
 [ -f "$REPO_ROOT/.env" ] && { set -a; source "$REPO_ROOT/.env"; set +a; }
@@ -303,6 +345,7 @@ if [ -n "${FAIL_LIST:-}" ] || [ "$PIPELINE_EXIT" -ne 0 ]; then
 fi
 
 success "Tier 3 Metrolinx PASSED — all ${PASS:-0} stories complete"
+_archive_run_artifacts "PASSED: ${PASS:-0} stories complete"
 echo ""
 echo "  Codeline: $JIRA_CODELINE_ROOT"
 echo "  Log:      $LOG_FILE"

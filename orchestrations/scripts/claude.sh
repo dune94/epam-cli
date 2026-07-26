@@ -1688,28 +1688,17 @@ EOF
 # An ABSENT manifest tells the gate to fall back and say so; an EMPTY one would
 # assert "the writers produced nothing", which is a lie that disables the gate.
 # Never fails the story: this is a reporting aid, not a verdict.
+# Delegates to lib/story-outputs.sh, which owns the one implementation: there
+# is more than one producer (this loop, and the repro-test-writer, which commits
+# LATER), and a second copy of this logic is how they would drift apart.
 record_story_outputs() {
     local story_id="$1"
     [ -n "${LOG_DIR:-}" ] || return 0
-    [ -n "${PROJECT_ROOT:-}" ] && [ -d "$PROJECT_ROOT/.git" ] || return 0
-
-    local _ref=""
-    if [ -f "$LOG_DIR/phase-baseline-sha.txt" ]; then
-        _ref=$(tr -d '[:space:]' < "$LOG_DIR/phase-baseline-sha.txt" 2>/dev/null)
-    fi
-    [ -n "$_ref" ] || _ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
-    git -C "$PROJECT_ROOT" rev-parse --verify "$_ref" >/dev/null 2>&1 || return 0
-
-    local _manifest="$LOG_DIR/story-outputs-${PHASE:-core}.txt"
-    local _produced
-    _produced=$( { git -C "$PROJECT_ROOT" diff --name-only "$_ref" 2>/dev/null
-                   git -C "$PROJECT_ROOT" ls-files --others --exclude-standard 2>/dev/null; } | \
-                 grep -v -E '^(\.codegraph/|\.epam/)' | sort -u )
-    [ -n "$_produced" ] || return 0
-
-    { [ -f "$_manifest" ] && cat "$_manifest"; printf '%s\n' "$_produced"; } 2>/dev/null | \
-        grep -v '^$' | sort -u > "${_manifest}.tmp" && mv "${_manifest}.tmp" "$_manifest"
-    return 0
+    local _so_lib="${SCRIPT_DIR:-$(dirname "${BASH_SOURCE[0]}")}/lib/story-outputs.sh"
+    [ -f "$_so_lib" ] || return 0
+    # shellcheck disable=SC1090
+    . "$_so_lib"
+    story_outputs_record "${PROJECT_ROOT:-}" "$LOG_DIR"
 }
 
 verify_story_deliverables() {
@@ -1835,9 +1824,27 @@ verify_story_deliverables() {
     # If at least one declared file shows a real diff, the story did genuine
     # work; the rest were legitimate candidates that turned out unnecessary.
     if [ "$declared" -gt 0 ] && [ ${#unchanged[@]} -eq "$declared" ]; then
-        error "Story $story_id: all $declared declared deliverable(s) exist but are UNCHANGED since baseline — no real work done anywhere in the declared set:"
+        # PER-ATTEMPT verdict, exactly like the zero-declared fallback below:
+        # returning 1 sends the story back through the retry ladder and a later
+        # attempt routinely succeeds. d2a7c1b fixed the severity of that sibling
+        # and left this one terminal-sounding, so live metrolinx 2026-07-26
+        # printed this as [ERROR] on attempts 3 and 4 of 8, carrying no attempt
+        # number, for a story that then succeeded. That is the same reading trap
+        # that once got a healthy run killed by hand, one branch over. Severity
+        # is a contract with the reader the way exit status is a contract with
+        # the caller: warn per attempt, and leave the terminal error to the
+        # loop's own exhaustion path.
+        local _unchanged_note=""
+        if [ -n "${retry_count:-}" ] && [ -n "${MAX_RETRIES:-}" ]; then
+            if [ "$retry_count" -lt "$MAX_RETRIES" ]; then
+                _unchanged_note=" [attempt $((retry_count + 1))/$((MAX_RETRIES + 1)) — will retry]"
+            else
+                _unchanged_note=" [attempt $((retry_count + 1))/$((MAX_RETRIES + 1)) — no retries remain]"
+            fi
+        fi
+        warning "Story $story_id: all $declared declared deliverable(s) exist but are UNCHANGED since baseline — no real work done anywhere in the declared set${_unchanged_note}:"
         for file in "${unchanged[@]}"; do
-            error "  $file"
+            warning "  $file"
         done
         return 1
     elif [ ${#unchanged[@]} -gt 0 ]; then

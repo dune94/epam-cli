@@ -134,8 +134,20 @@ eslint_baseline_gate() {
     local baseline_json="-" baseline_root="$project_root"
     if [ "$greenfield" -eq 0 ] && [ -n "$baseline_sha" ]; then
         local cache="$log_dir/eslint-baseline-${baseline_sha:0:12}.json"
-        local wt_dir="$log_dir/.eslint-baseline-wt-${baseline_sha:0:12}"
-        if [ ! -f "$cache" ]; then
+        # The CHECKOUT must live outside this repo, even though the CACHE lives
+        # in log_dir. Live metrolinx 2026-07-26: the worktree was created under
+        # orchestrations/logs/ — inside epam-cli — so ESLint walked up from the
+        # checkout and found @typescript-eslint twice, once via the client's
+        # symlinked node_modules and once via epam-cli's own:
+        #   ESLint couldn't determine the plugin "@typescript-eslint" uniquely.
+        # It exited 2, wrote nothing, the cache was 0 bytes, and the entire
+        # subtraction was silently skipped — every finding attributed to this
+        # run, the precise false-blame this function exists to prevent.
+        # lib/tsc-baseline-gate.sh has always used mktemp -d for this reason.
+        local wt_parent wt_dir
+        wt_parent=$(mktemp -d 2>/dev/null) || wt_parent=""
+        wt_dir="${wt_parent:+$wt_parent/wt}"
+        if [ ! -f "$cache" ] && [ -n "$wt_dir" ]; then
             rm -rf "$wt_dir" 2>/dev/null || true
             if git -C "$project_root" worktree add --detach "$wt_dir" "$baseline_sha" >/dev/null 2>&1; then
                 # node_modules is gitignored, so `worktree add` does not check it
@@ -151,6 +163,22 @@ eslint_baseline_gate() {
                 done
                 if [ ${#baseline_targets[@]} -gt 0 ]; then
                     ( cd "$wt_dir" && "$eslint_bin" "${baseline_targets[@]}" -f json 2>/dev/null ) > "$cache" || true
+                    # ESLint always reports ABSOLUTE filePaths, and this
+                    # checkout is a throwaway temp dir. Store repo-relative
+                    # paths so the cache stays meaningful on a later CACHE HIT,
+                    # when that temp dir no longer exists and a freshly-minted
+                    # one would share no prefix with it.
+                    python3 - "$cache" "$wt_dir" <<'REBASE_PY' 2>/dev/null || true
+import json, sys
+cache, wt = sys.argv[1], sys.argv[2].rstrip('/') + '/'
+try:
+    with open(cache) as f: data = json.load(f)
+except Exception: sys.exit(0)
+for entry in data if isinstance(data, list) else []:
+    p = entry.get('filePath', '')
+    if p.startswith(wt): entry['filePath'] = p[len(wt):]
+with open(cache, 'w') as f: json.dump(data, f)
+REBASE_PY
                 else
                     echo '[]' > "$cache"
                 fi
@@ -158,9 +186,12 @@ eslint_baseline_gate() {
             fi
             rm -rf "$wt_dir" 2>/dev/null || true
         fi
+        [ -n "$wt_parent" ] && rm -rf "$wt_parent" 2>/dev/null || true
         if [ -s "$cache" ]; then
             baseline_json="$cache"
-            baseline_root="$wt_dir"
+            # Paths in the cache are repo-relative (see the rebase above), so the
+            # live tree is the right root to interpret them against.
+            baseline_root="$project_root"
         else
             warning "  [lint] could not compute baseline findings for ${baseline_sha:0:12} — every finding will be attributed to this run"
         fi

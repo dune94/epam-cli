@@ -188,6 +188,34 @@ describe('diff: only findings this run introduced are reported', () => {
     expect(stdout).toMatch(/NEW_FINDINGS=0/);
   });
 
+  it('accepts a baseline whose paths are already repo-relative', () => {
+    // The baseline cache is rebased to repo-relative paths when written, because
+    // it is produced in a throwaway worktree whose absolute prefix is gone by
+    // the time a later run reads the cache. Treating a relative path as if it
+    // were absolute reduced it to a basename, so nothing matched and every
+    // pre-existing finding read as new.
+    const baseline = JSON.stringify([
+      { filePath: 'src/touched.ts', messages: [{ ruleId: 'prettier/prettier', message: 'Insert `;`', line: 3, column: 1, severity: 2 }] },
+    ]);
+    const current = eslintJson(ROOT, {
+      'src/touched.ts': [{ ruleId: 'prettier/prettier', message: 'Insert `;`', line: 9 }],
+    });
+    const { status, stdout } = run('diff', baseline, current, ROOT);
+
+    expect(status, 'a pre-existing finding was re-reported because the cached path was relative').toBe(0);
+    expect(stdout).toMatch(/NEW_FINDINGS=0/);
+  });
+
+  it('reports dirty files from a relative-path baseline', () => {
+    // Drives the auto-fix exclusion: a file misidentified as clean gets
+    // eslint --fix run over its inherited violations.
+    const baseline = JSON.stringify([
+      { filePath: 'src/dirty.ts', messages: [{ ruleId: 'r', message: 'm', line: 1, column: 1, severity: 2 }] },
+    ]);
+    const { stdout } = run('dirty-files', baseline, null, ROOT);
+    expect(stdout.split('\n').filter(Boolean)).toEqual(['src/dirty.ts']);
+  });
+
   it('survives an unparseable baseline rather than silently passing everything', () => {
     const { status, stdout } = run(
       'diff',

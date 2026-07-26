@@ -73,6 +73,11 @@ function record(fx: { projectRoot: string; logDir: string }, storyId: string) {
     script,
     [
       '#!/usr/bin/env bash',
+      // record_story_outputs delegates to lib/story-outputs.sh — one
+      // implementation, because the repro-test-writer is a second producer that
+      // finishes later and a copy would drift. It resolves the lib from
+      // SCRIPT_DIR, so the harness must supply it exactly as claude.sh does.
+      `SCRIPT_DIR=${JSON.stringify(join(REPO_ROOT, 'orchestrations/scripts'))}`,
       `PROJECT_ROOT=${JSON.stringify(fx.projectRoot)}`,
       `LOG_DIR=${JSON.stringify(fx.logDir)}`,
       'PHASE=core',

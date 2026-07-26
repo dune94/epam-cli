@@ -470,7 +470,13 @@ if start != -1:
 if not isinstance(result, dict) or 'verdict' not in result:
     # No parseable verdict = the review did NOT happen. Never silently approve —
     # that rubber-stamped an unreviewed change live (2026-07-23). Block instead.
-    result = {'verdict': 'changes_requested', 'issues': [{'severity': 'blocker', 'description': 'review-agent output had no parseable verdict — the change was NOT reviewed; blocking rather than auto-approving.'}], 'summary': 'review output unparseable'}
+    # reviewIncomplete marks this as REVIEWER failure, not a code finding. The
+    # orchestration loop keys on it to re-run the REVIEW instead of
+    # re-implementing a story nobody actually looked at (live 2026-07-26: a
+    # repro-gate-verified fix was re-implemented on the strength of this very
+    # verdict). Content-based, because the sibling paths signal the same thing
+    # with a flag FILE whose name must match across two scripts — and did not.
+    result = {'verdict': 'changes_requested', 'reviewIncomplete': True, 'issues': [{'severity': 'blocker', 'description': 'review-agent output had no parseable verdict — the change was NOT reviewed; blocking rather than auto-approving.'}], 'summary': 'review output unparseable'}
 print(json.dumps(result))
 " 2>/dev/null || echo '{"verdict":"changes_requested","issues":[{"severity":"blocker","description":"review verdict could not be parsed — not auto-approving"}],"summary":"review parse failure"}')
 

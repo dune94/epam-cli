@@ -245,6 +245,39 @@ _json_escape_str() {
     printf '%s' "$s"
 }
 
+# review_feedback_is_incomplete
+# True when the REVIEWER failed rather than the code being wrong. Re-running the
+# review is the right answer then; re-implementing is not.
+#
+# B24 established this, but keyed only on review-incomplete-<phase>.flag or an
+# empty feedback set. team-lead-review.sh has THREE unparseable-verdict paths:
+# two write the flag, and one writes only a per-story
+# review-feedback-<id>.json. Live metrolinx 2026-07-26 hit that third path, so
+# the flag was absent AND the feedback count was 1 — both halves of the guard
+# missed, and the pipeline re-implemented a fix the bug-reproduction gate had
+# just proven correct, on "feedback" whose only content was that there was none.
+#
+# Keys on CONTENT (reviewIncomplete in the verdict) so it cannot depend on a
+# side-channel filename matching across two scripts. Unreadable feedback counts
+# as incomplete too: that is not evidence the code is wrong either. A single
+# genuinely-reviewed story means real findings — the re-implementation loop is
+# how over-engineering gets corrected and must not be disabled.
+review_feedback_is_incomplete() {
+    [ -f "$LOG_DIR/review-incomplete-${PHASE}.flag" ] && return 0
+    local _f _any=0
+    for _f in "$LOG_DIR"/review-feedback-*.json; do
+        [ -f "$_f" ] || continue
+        _any=1
+        if [ "$(jq -r '.reviewIncomplete // false' "$_f" 2>/dev/null)" != "true" ]; then
+            # jq failed (unreadable) or the verdict is a real finding.
+            jq -e . "$_f" >/dev/null 2>&1 || continue
+            return 1
+        fi
+    done
+    [ "$_any" -eq 0 ] && return 0
+    return 0
+}
+
 step_emit() {
     local step_id="$1"
     local status="$2"
@@ -5416,6 +5449,7 @@ while true; do
         break
     fi
     # B24 — is this "the code needs changing" or "the REVIEWER failed"?
+    # (predicate: review_feedback_is_incomplete, defined near the top)
     # team-lead-review.sh fails SAFE when its agent produces no verdict: it emits a
     # synthetic changes_requested so an unreviewed change can never auto-approve.
     # But that verdict is PHASE-level, so no per-story review-feedback-<id>.json
@@ -5423,10 +5457,8 @@ while true; do
     # 2026-07-24: two entirely empty cycles, then escalation with tagged-stories=0,
     # on a story whose fix AND verified reproducing test had passed every gate.
     # Re-implementing is the wrong response when the story was never the problem.
-    _review_incomplete_flag="$LOG_DIR/review-incomplete-${PHASE}.flag"
-    _fb_count=$(ls "$LOG_DIR"/review-feedback-*.json 2>/dev/null | wc -l)
-    if [ -f "$_review_incomplete_flag" ] || [ "$_fb_count" -eq 0 ]; then
-        rm -f "$_review_incomplete_flag" 2>/dev/null || true
+    if review_feedback_is_incomplete; then
+        rm -f "$LOG_DIR/review-incomplete-${PHASE}.flag" 2>/dev/null || true
         warning "Step 3.6: the REVIEWER did not produce a verdict (no per-story feedback) — re-running the REVIEW, not re-implementing (cycle $_review_cycle → $((_review_cycle + 1)))"
         _review_cycle=$((_review_cycle + 1))
         continue
@@ -6274,6 +6306,27 @@ $sast_prompt"
             if [ -f "$audit_json" ] && [ -s "$audit_json" ]; then
                 local _audit_py='
 import sys, json
+# Each package is tagged runtime / dev / transitive. The SAST prompt REQUIRES
+# that classification (runtime high = major, dev-only = minor regardless of
+# CVSS) but the evidence never carried it, so the agent could not comply. Live
+# 2026-07-26 it said so and left 70 CVEs unclassified. This is a dictionary
+# lookup, not a judgement — the pipeline should answer it, not delegate it.
+runtime_deps, dev_deps = set(), set()
+if len(sys.argv) > 2:
+    try:
+        with open(sys.argv[2]) as f:
+            pkg = json.load(f)
+        runtime_deps = set((pkg.get("dependencies") or {}).keys()) | set((pkg.get("optionalDependencies") or {}).keys())
+        dev_deps = set((pkg.get("devDependencies") or {}).keys())
+    except Exception:
+        pass
+
+def classify(name):
+    if name in runtime_deps: return "runtime"
+    if name in dev_deps: return "dev"
+    if not runtime_deps and not dev_deps: return "unclassified"
+    return "transitive"
+
 try:
     with open(sys.argv[1]) as f:
         data = json.load(f)
@@ -6285,6 +6338,8 @@ try:
     moderate   = meta.get("moderate", 0)
     low        = meta.get("low", 0)
     lines = [f"total={total}  critical={critical}  high={high}  moderate={moderate}  low={low}"]
+    if runtime_deps or dev_deps:
+        lines.append("  (each package tagged runtime|dev|transitive from package.json — apply the major/minor rule directly)")
     shown = 0
     for name, v in vulns.items():
         if shown >= 15:
@@ -6293,13 +6348,13 @@ try:
         sev  = v.get("severity", "?")
         via  = ", ".join(str(x.get("title", x) if isinstance(x, dict) else x)
                          for x in (v.get("via") or [])[:2])
-        lines.append(f"  [{sev}] {name}: {via[:100]}")
+        lines.append(f"  [{sev}] ({classify(name)}) {name}: {via[:100]}")
         shown += 1
     print("\n".join(lines))
 except Exception as e:
     print(f"(audit parse error: {e})")
 '
-                audit_summary=$(echo "$_audit_py" | python3 - "$audit_json" 2>/dev/null \
+                audit_summary=$(echo "$_audit_py" | python3 - "$audit_json" "$PROJECT_ROOT/package.json" 2>/dev/null \
                     || echo "(audit parse error)")
             else
                 audit_summary="(npm audit produced no output — exit code $_audit_rc)"

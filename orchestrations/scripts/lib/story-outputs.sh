@@ -30,6 +30,47 @@ _STORY_OUTPUTS_INCIDENTAL_RE='^(\.codegraph/|\.epam/)'
 # had just written a reproducing spec.
 _STORY_OUTPUTS_TEST_RE='(\.|_)(spec|test)\.[A-Za-z0-9]+$|/__tests__/|(^|/)test_[^/]+$'
 
+# story_outputs_record <project_root> <log_dir>
+# Appends what this producer just put in the tree to the phase manifest.
+#
+# Shared because there is more than one producer and they finish at different
+# times. Live metrolinx 2026-07-26: only the story loop recorded, at deliverable
+# verification — but the repro-test-writer commits its .spec.ts AFTERWARDS, so
+# the test never entered the manifest. mutant-hunter, freshly rewired to read
+# its tests from that manifest, saw none, every mutant survived, it scored 0 and
+# failed the gate — on a run whose test the repro gate had just proven fails on
+# baseline and passes with the fix. The gate then ran its remediation pipeline
+# against a finding that existed only because of the missing entry.
+#
+# Additive and idempotent: each producer records its own contribution and the
+# list is the union. Writes nothing when there is no baseline to diff against
+# (greenfield) — an ABSENT manifest means "fall back and say so", while an EMPTY
+# one would assert the writers produced nothing. Never fails the caller.
+story_outputs_record() {
+    local project_root="$1"
+    local log_dir="$2"
+    [ -n "$log_dir" ] || return 0
+    [ -n "$project_root" ] && [ -d "$project_root/.git" ] || return 0
+
+    local _ref=""
+    if [ -f "$log_dir/phase-baseline-sha.txt" ]; then
+        _ref=$(tr -d '[:space:]' < "$log_dir/phase-baseline-sha.txt" 2>/dev/null)
+    fi
+    [ -n "$_ref" ] || _ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+    git -C "$project_root" rev-parse --verify "$_ref" >/dev/null 2>&1 || return 0
+
+    local _manifest="$log_dir/story-outputs-${PHASE:-core}.txt"
+    local _produced
+    _produced=$( { git -C "$project_root" diff --name-only "$_ref" 2>/dev/null
+                   git -C "$project_root" ls-files --others --exclude-standard 2>/dev/null; } | \
+                 grep -v -E "$_STORY_OUTPUTS_INCIDENTAL_RE" | sort -u )
+    [ -n "$_produced" ] || return 0
+
+    { [ -f "$_manifest" ] && cat "$_manifest"; printf '%s\n' "$_produced"; } 2>/dev/null | \
+        grep -v '^$' | sort -u > "${_manifest}.tmp" && mv "${_manifest}.tmp" "$_manifest"
+    return 0
+}
+
 # story_outputs_files <project_root> <log_dir>
 # Prints repo-relative paths, one per line. Sets STORY_OUTPUTS_SOURCE.
 story_outputs_files() {

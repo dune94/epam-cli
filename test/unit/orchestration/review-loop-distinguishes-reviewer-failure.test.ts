@@ -57,7 +57,13 @@ describe('B24 — reviewer failure is distinguishable from changes-requested', (
   });
 
   it('retries the REVIEWER when the reviewer is what failed', () => {
-    const i = ORCH.search(/review_incomplete|REVIEW_INCOMPLETE/);
+    // The decision moved into review_feedback_is_incomplete(). It used to be an
+    // inline `[ -f "$_review_incomplete_flag" ] || [ "$_fb_count" -eq 0 ]`,
+    // which missed the third unparseable path in team-lead-review.sh — the one
+    // that writes a per-story feedback file and no flag. That path fired live on
+    // 2026-07-26 and re-implemented a repro-gate-verified fix. Behaviour is
+    // pinned in review-incomplete-not-changes-requested.test.ts.
+    const i = ORCH.search(/review_feedback_is_incomplete|review-incomplete-|REVIEW_INCOMPLETE/);
     expect(i).toBeGreaterThan(-1);
     expect(ORCH.slice(i, i + 800)).toMatch(/re-?run|retry|review/i);
   });

@@ -174,6 +174,52 @@ describe('the zero-declared-files verdict is reported as retryable, not terminal
   });
 });
 
+describe('the DECLARED-files verdict is retryable too', () => {
+  // d2a7c1b fixed the zero-declared branch and left its sibling untouched.
+  // Live metrolinx 2026-07-26, attempts 3 and 4 of 8:
+  //
+  //   [ERROR] Story AMSD-1820: all 6 declared deliverable(s) exist but are
+  //           UNCHANGED since baseline — no real work done anywhere in the
+  //           declared set:
+  //
+  // Same retryable meaning, same terminal-sounding ERROR, same missing attempt
+  // number — the exact reading trap that got a healthy run killed by hand, one
+  // branch over. The story went on to succeed on a later attempt, as this
+  // verdict always allows.
+  const declaredUnchanged = (retryCount?: number, maxRetries?: number) => {
+    const { clone } = makeBrownfieldFixture();
+    return run({ projectRoot: clone, declaredFiles: ['src/existing.ts'], retryCount, maxRetries });
+  };
+  const line = (output: string) =>
+    output.split('\n').find(l => /declared deliverable\(s\) exist but are UNCHANGED/.test(l)) ?? '';
+
+  it('emits at WARNING severity, like its sibling', () => {
+    const { output } = declaredUnchanged(0, 7);
+    expect(line(output), 'the verdict was not emitted').toBeTruthy();
+    expect(line(output),
+      'a per-attempt verdict still logs as ERROR — indistinguishable from a dead run')
+      .toMatch(/^WARNING:/);
+  });
+
+  it('names the attempt and says a retry follows', () => {
+    const { output } = declaredUnchanged(2, 7);
+    expect(line(output)).toMatch(/attempt 3\/8/);
+    expect(line(output)).toMatch(/will retry/i);
+  });
+
+  it('does not promise a retry on the final attempt', () => {
+    const { output } = declaredUnchanged(7, 7);
+    expect(line(output)).toMatch(/attempt 8\/8/);
+    expect(line(output)).not.toMatch(/will retry/i);
+    expect(line(output)).toMatch(/no retries remain/i);
+  });
+
+  it('still returns 1 — the guard is unchanged', () => {
+    const { rc } = declaredUnchanged(0, 7);
+    expect(rc, 'softening the severity also softened the guard').toBe(1);
+  });
+});
+
 describe('reporting changed, blocking did not', () => {
   it('still returns 1 when only incidental pipeline paths changed', () => {
     const { clone } = makeBrownfieldFixture();

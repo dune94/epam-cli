@@ -63,13 +63,25 @@ describe('every reviewer reads the shared writer-output source', () => {
     expect(findFallback![0], 'the fallback still matches only *.test.ts').toContain('spec.ts');
   });
 
-  it('the producer and the readers agree on the manifest path', () => {
+  it('the producers and the readers agree on the manifest path', () => {
     // A producer writing story-outputs-<phase>.txt and a reader looking
     // elsewhere would degrade to the fallback forever, silently.
-    expect(claudeSrc).toContain('story-outputs-${PHASE:-core}.txt');
+    //
+    // Both producers now delegate to lib/story-outputs.sh rather than carrying
+    // their own copy of the path: the story loop records at deliverable
+    // verification, and the repro-test-writer records after committing its test
+    // — a second copy is exactly how the test file came to be missing from the
+    // manifest, which scored mutant-hunter 0 on a good run.
     const lib = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/lib/story-outputs.sh'), 'utf8');
     expect(lib).toContain('story-outputs-${PHASE:-core}.txt');
     const gate = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/lib/eslint-baseline-gate.sh'), 'utf8');
     expect(gate).toContain('story-outputs-${PHASE:-core}.txt');
+
+    for (const producer of ['orchestrations/scripts/claude.sh',
+                            'orchestrations/scripts/brownfield-repro-test-writer.sh']) {
+      const src = readFileSync(join(REPO_ROOT, producer), 'utf8');
+      expect(src, `${producer} neither delegates to the lib nor names the manifest`)
+        .toMatch(/story_outputs_record|story-outputs-\$\{PHASE:-core\}\.txt/);
+    }
   });
 });

@@ -137,6 +137,93 @@ describe('one shared answer to "what did this run produce"', () => {
   });
 });
 
+describe('recording is shared, so every producer lands in the same list', () => {
+  /** Invoke the recorder the way a producer script does. */
+  function record(fx: { projectRoot: string; logDir: string }) {
+    const r = spawnSync(
+      'bash',
+      ['-c',
+        `warning(){ :; }; info(){ :; }\n` +
+        `. ${JSON.stringify(LIB)}\n` +
+        `story_outputs_record ${JSON.stringify(fx.projectRoot)} ${JSON.stringify(fx.logDir)}\n` +
+        `echo "RC=$?"`],
+      { encoding: 'utf8', timeout: 20000, env: { ...process.env, PHASE: 'core', JIRA_BASELINE_BRANCH: 'develop' } },
+    );
+    return { rc: ((r.stdout || '').match(/RC=(\d+)/) || [, ''])[1], out: (r.stdout || '') + (r.stderr || '') };
+  }
+
+  it('a later producer ADDS to the manifest instead of being missed', () => {
+    // Live metrolinx 2026-07-26, and the reason mutant-hunter scored 0. The
+    // manifest is written when the impl story verifies, but the
+    // repro-test-writer commits its .spec.ts AFTERWARDS — so the test file
+    // never entered the list. mutant-hunter, now reading tests from that list,
+    // saw none, every mutant survived, and it failed the gate on a run whose
+    // test the repro gate had just proven fails-on-baseline/passes-with-fix.
+    const fx = makeFixture();
+    write(fx.projectRoot, 'src/existing.ts', 'export const a = 2;\n');
+    record(fx); // impl story verifies
+
+    write(fx.projectRoot, 'src/existing.spec.ts', 'describe("x", () => {});\n');
+    record(fx); // repro-test-writer commits its test later
+
+    expect(call(fx, 'story_outputs_files').files,
+      'the test written after the impl story never reached the manifest')
+      .toEqual(['src/existing.spec.ts', 'src/existing.ts']);
+  });
+
+  it('makes the late-arriving test visible AS a test', () => {
+    // This is the input mutant-hunter actually consumes.
+    const fx = makeFixture();
+    write(fx.projectRoot, 'src/existing.ts', 'export const a = 2;\n');
+    record(fx);
+    write(fx.projectRoot, 'src/existing.spec.ts', 'describe("x", () => {});\n');
+    record(fx);
+
+    expect(call(fx, 'story_outputs_tests').files,
+      'mutant-hunter still receives no tests, so every mutant survives and it fails a good run')
+      .toEqual(['src/existing.spec.ts']);
+  });
+
+  it('is idempotent — recording twice does not duplicate', () => {
+    const fx = makeFixture();
+    write(fx.projectRoot, 'src/existing.ts', 'export const a = 2;\n');
+    record(fx);
+    record(fx);
+    expect(call(fx, 'story_outputs_files').files).toEqual(['src/existing.ts']);
+  });
+
+  it('writes nothing when there is no baseline, and does not fail the caller', () => {
+    const fx = makeFixture({ baseline: false });
+    write(fx.projectRoot, 'src/new.ts', 'export const a = 1;\n');
+    const { rc } = record(fx);
+    expect(rc, 'a missing baseline was treated as a producer failure').toBe('0');
+    expect(call(fx, 'story_outputs_files').files).toEqual([]);
+  });
+
+  it('excludes pipeline noise', () => {
+    const fx = makeFixture();
+    write(fx.projectRoot, '.codegraph/db', 'x\n');
+    write(fx.projectRoot, 'src/existing.ts', 'export const a = 2;\n');
+    record(fx);
+    expect(call(fx, 'story_outputs_files').files).toEqual(['src/existing.ts']);
+  });
+});
+
+describe('both producers call the shared recorder', () => {
+  const read = (p: string) => require('node:fs').readFileSync(join(__dirname, '../../../', p), 'utf8');
+
+  it('the story loop records on deliverable verification', () => {
+    expect(read('orchestrations/scripts/claude.sh')).toMatch(/story_outputs_record|record_story_outputs/);
+  });
+
+  it('the repro-test-writer records after committing its test', () => {
+    const src = read('orchestrations/scripts/brownfield-repro-test-writer.sh');
+    expect(src,
+      'the test-writer commits but never records, so its output is invisible to every gate')
+      .toMatch(/story_outputs_record/);
+  });
+});
+
 describe('splitting output into code and tests', () => {
   it('recognises .spec.ts as a test — the live codeline names them that way', () => {
     // mutant-hunter used `find -name "*.test.ts"`, which matches nothing on a

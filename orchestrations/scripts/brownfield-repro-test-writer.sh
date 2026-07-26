@@ -463,6 +463,19 @@ if [ -f "$PROJECT_ROOT/$_target_rel" ] && [ "${_test_validated:-0}" = "1" ]; the
             || log "commit failed (non-fatal) — repro-gate will report"
     fi
     _emit_tw "spec_update" "repro-test-writer committed reproducing test: ${_target_rel}"
+
+    # Record this test as writer output. The manifest is what the phase gates
+    # judge, and this producer finishes AFTER the story loop has already written
+    # its entry — so without this the test is invisible to them. Live metrolinx
+    # 2026-07-26: mutant-hunter reads its tests from the manifest, found none,
+    # every mutant survived, it scored 0 and failed the gate on a run whose test
+    # the repro gate had just proven fails-on-baseline/passes-with-fix.
+    _so_lib="${SCRIPT_DIR}/lib/story-outputs.sh"
+    if [ -f "$_so_lib" ]; then
+        # shellcheck disable=SC1090
+        . "$_so_lib"
+        story_outputs_record "$PROJECT_ROOT" "${LOG_DIR:-$(dirname "$SCRIPT_DIR")/logs}" || true
+    fi
 else
     log "no test file produced at $_target_rel — the repro-gate will BLOCK (as designed)"
     _emit_tw "error" "repro-test-writer produced NO test for ${STORY_ID} — repro-gate will BLOCK"

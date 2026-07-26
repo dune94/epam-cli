@@ -69,6 +69,12 @@ def relativize(file_path, root, known=None):
     when it applies; otherwise recover the path by matching a known
     repo-relative key as a suffix.
     """
+    # Already repo-relative: the baseline cache is rebased on write, because it
+    # is produced in a throwaway worktree whose absolute prefix no longer exists
+    # by the time a later run reads the cache. Falling through to the basename
+    # branch here made nothing match, so every pre-existing finding read as new.
+    if not file_path.startswith('/'):
+        return file_path
     root = root.rstrip('/')
     if root and file_path.startswith(root + '/'):
         return file_path[len(root) + 1:]

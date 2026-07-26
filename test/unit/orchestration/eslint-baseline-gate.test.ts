@@ -59,6 +59,9 @@ function installStubEslint(projectRoot: string) {
     `#!/usr/bin/env python3
 import sys, os, json, glob
 
+with open(os.path.join(${JSON.stringify(JSON.stringify(projectRoot))}.strip('"'), 'eslint-cwds.log'), 'a') as _f:
+    _f.write(os.getcwd() + '\\n')
+
 args = sys.argv[1:]
 if '--print-config' in args:
     sys.exit(0)
@@ -226,11 +229,14 @@ function runGate(fx: Fixture, env: Record<string, string> = {}) {
   });
   const output = (r.stdout || '') + (r.stderr || '');
   const m = output.match(/GATE_RC=(\d+)/);
+  const cwdLog = join(fx.projectRoot, 'eslint-cwds.log');
   return {
     rc: m ? parseInt(m[1], 10) : -1,
     output,
     lintLog: existsSync(lintLog) ? readFileSync(lintLog, 'utf8') : '',
     read: (rel: string) => readFileSync(join(fx.projectRoot, rel), 'utf8'),
+    /** Working directories ESLint was invoked from, in order. */
+    cwds: existsSync(cwdLog) ? readFileSync(cwdLog, 'utf8').split('\n').filter(Boolean) : [],
   };
 }
 
@@ -276,6 +282,43 @@ describe('the gate judges the writers output, not the codebase', () => {
 
     const { rc } = runGate(fx);
     expect(rc, 'adding another instance of an existing violation was invisible').toBe(1);
+  });
+});
+
+describe('the baseline checkout must not live inside the pipeline repo', () => {
+  it('creates the baseline worktree outside the log directory', () => {
+    // Live metrolinx 2026-07-26: the worktree was created under
+    // orchestrations/logs/, i.e. INSIDE the epam-cli repo. ESLint then walked
+    // up from the checkout and found @typescript-eslint twice — once via the
+    // client's symlinked node_modules, once via epam-cli's own:
+    //
+    //   ESLint couldn't determine the plugin "@typescript-eslint" uniquely.
+    //
+    // It exited 2 and wrote nothing, so the baseline cache was 0 bytes and the
+    // whole subtraction silently did not happen — "every finding will be
+    // attributed to this run", which is the exact false-blame the gate exists
+    // to prevent. lib/tsc-baseline-gate.sh uses mktemp -d for this reason.
+    const fx = makeFixture({ 'src/target.ts': 'export const b = 2;\n' });
+    writerProduces(fx, { 'src/target.ts': 'export const b = 3;\n' });
+
+    const { cwds } = runGate(fx);
+    const inLogDir = cwds.filter(c => c.startsWith(fx.logDir));
+    expect(inLogDir,
+      `ESLint ran from inside the log directory (${JSON.stringify(inLogDir)}) — when that ` +
+      `sits inside a repo with its own eslint plugins, the baseline run dies on a ` +
+      `duplicate-plugin error and the subtraction is silently skipped`)
+      .toEqual([]);
+  });
+
+  it('still produces a usable baseline (the subtraction actually runs)', () => {
+    const fx = makeFixture({ 'src/target.ts': 'const legacy = 1; // LINT_HARD\n' });
+    writerProduces(fx, { 'src/target.ts': 'const legacy = 1; // LINT_HARD\nexport const b = 3;\n' });
+
+    const { rc, output } = runGate(fx);
+    expect(output,
+      'the gate fell back to "every finding is new" — the baseline never computed')
+      .not.toMatch(/could not compute baseline findings/);
+    expect(rc, 'inherited debt was blamed on this run').toBe(0);
   });
 });
 

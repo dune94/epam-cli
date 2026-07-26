@@ -106,7 +106,7 @@ describe('RECORD — the pipeline writes a KB episode keyed by tool output', () 
 });
 
 describe('APPLY — constraints land on the knobs the invocation reads', () => {
-  it('kb_apply_constraints overrides STORY_MAX_ITERATIONS from a stored rule', () => {
+  it('kb_apply_constraints exports the tier override from a stored rule', () => {
     const kbRoot = mkdtempSync(join(tmpdir(), 'kb-apply-')); dirs.push(kbRoot);
     const cli = join(LIB, 'kb-cli.js');
     const env = { ...process.env, KB_ROOT: kbRoot };
@@ -114,7 +114,7 @@ describe('APPLY — constraints land on the knobs the invocation reads', () => {
       { input: 'src/a.ts(1,1): error TS2532: x', env, encoding: 'utf8' });
     execFileSync(process.execPath, [cli, 'synthesize', '--agent-role', 'typescript-engineer',
       '--signature', 'TS2532', '--enforcement',
-      JSON.stringify({ kind: 'param', name: 'EPAM_MAX_ITERATIONS', value: '14' }),
+      JSON.stringify({ kind: 'effort_tier', tier: 'high' }),
       '--reason', 'r'], { env, encoding: 'utf8' });
 
     const out = execFileSync('bash', ['-c', `
@@ -122,9 +122,11 @@ set -uo pipefail
 STORY_MAX_ITERATIONS=6
 source ${JSON.stringify(join(LIB, 'kb-apply.sh'))}
 kb_apply_constraints typescript-engineer TS2532
-echo "STORY_MAX_ITERATIONS=$STORY_MAX_ITERATIONS"
+echo "EPAM_EFFORT_TIER=\${EPAM_EFFORT_TIER:-unset}"
 `], { encoding: 'utf8', env: { ...env, EPAM_KB_SELFHEAL: '1' } });
-    expect(out).toMatch(/STORY_MAX_ITERATIONS=14/);
+    // Budget params are unconstructable now; the bounded channel is the tier,
+    // which resolve_effort_settings() applies upgrade-only.
+    expect(out).toMatch(/EPAM_EFFORT_TIER=.?high/);
   });
 
   it('leaves the knob untouched when no constraint matches', () => {
@@ -146,15 +148,15 @@ echo "STORY_MAX_ITERATIONS=$STORY_MAX_ITERATIONS"
     execFileSync(process.execPath, [cli, 'record', '--id', 'e1', '--agent-role', 'r'],
       { input: 'src/a.ts(1,1): error TS2532: x', env, encoding: 'utf8' });
     execFileSync(process.execPath, [cli, 'synthesize', '--agent-role', 'r', '--signature', 'TS2532',
-      '--enforcement', JSON.stringify({ kind: 'param', name: 'EPAM_MAX_ITERATIONS', value: '99' }),
+      '--enforcement', JSON.stringify({ kind: 'effort_tier', tier: 'high' }),
       '--reason', 'r'], { env, encoding: 'utf8' });
     const out = execFileSync('bash', ['-c', `
 set -uo pipefail
 STORY_MAX_ITERATIONS=6
 source ${JSON.stringify(join(LIB, 'kb-apply.sh'))}
 kb_apply_constraints r TS2532
-echo "STORY_MAX_ITERATIONS=$STORY_MAX_ITERATIONS"
+echo "EPAM_EFFORT_TIER=\${EPAM_EFFORT_TIER:-unset}"
 `], { encoding: 'utf8', env });   // flag deliberately absent
-    expect(out).toMatch(/STORY_MAX_ITERATIONS=99/);
+    expect(out).toMatch(/EPAM_EFFORT_TIER=.?high/);
   });
 });

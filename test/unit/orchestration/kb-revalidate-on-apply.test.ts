@@ -5,7 +5,7 @@
  * admitted before a guard existed, or while a guard was inert — is applied forever
  * without ever being re-examined.
  *
- * That is not hypothetical. The harmful EPAM_MAX_ITERATIONS=14 rule had to be
+ * That is not hypothetical. The harmful EPAM_MAX_ITERATIONS=high rule had to be
  * archived BY HAND twice on 2026-07-25: once after the run it sabotaged, and again
  * after the next run re-admitted it through a guard that was silently inert.
  *

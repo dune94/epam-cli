@@ -62,12 +62,55 @@ class GateEnforcement(BaseModel):
     check: str = Field(min_length=1, description="id of a deterministic check to enable")
 
 
+# Resource budgets are NOT proposable by self-heal. They already have a bounded
+# assignment path that the model participates in correctly:
+#
+#   CPA estimates estimatedHours -> get_effort_tier() (<=2h low, <=6h medium,
+#   >6h high) -> resolve_effort_settings() (low=6, medium=10, high=15 iterations)
+#
+# There the model expresses a judgement it can make — how big is this work — and
+# deterministic code owns the numbers. A self-heal rule proposing a raw integer
+# bypasses the estimate, the tier, the thresholds and the table, inventing a value
+# from ONE observed failure with no view of the distribution.
+#
+# Live evidence, every budget rule self-heal ever produced (2026-07-25):
+#   EPAM_MAX_ITERATIONS=14  after the agent exhausted 15
+#   EPAM_MAX_ITERATIONS=1   "Prevents iterative retries that could lead to
+#                            repeated file writing failures"
+#   EPAM_MAX_ITERATIONS=14  again, the next run
+# Three for three harmful, zero useful. Four successive guards tried to separate
+# good proposals from bad; the honest conclusion is the model cannot make a good
+# one here, so the class is removed from the proposable space instead of refereed.
+#
+# Behaviour remains fully expressible: tool_scope narrows reach, gate enables a
+# check, pre_exec_block forbids a command, response_schema binds output. Those are
+# "what the agent may DO". A budget is "how much resource it gets" — capacity
+# planning, owned by the effort pipeline.
+_BUDGET_PARAMS = frozenset({
+    "EPAM_MAX_ITERATIONS", "STORY_MAX_ITERATIONS",
+    "EPAM_MAX_OUTPUT_TOKENS", "STORY_MAX_OUTPUT_TOKENS",
+    "EPAM_STORY_TIMEOUT_SECS", "EPAM_GATE_TIMEOUT_SECS",
+})
+
+
 class ParamEnforcement(BaseModel):
     """A field in the agent invocation registry the agent physically cannot exceed."""
     model_config = ConfigDict(extra="forbid")
     kind: Literal["param"]
-    name: str = Field(min_length=1, description="e.g. EPAM_MAX_ITERATIONS")
+    name: str = Field(min_length=1, description="e.g. EPAM_REASONING_EFFORT (NOT a budget)")
     value: str = Field(min_length=1)
+
+    @field_validator("name")
+    @classmethod
+    def _not_a_budget(cls, v: str) -> str:
+        if v.strip() in _BUDGET_PARAMS:
+            raise ValueError(
+                f"{v} is a resource budget owned by the effort pipeline "
+                f"(estimatedHours -> tier -> table); self-heal must not set it. "
+                f"Express the behaviour instead: tool_scope, gate, pre_exec_block "
+                f"or response_schema."
+            )
+        return v
 
 
 class ToolScopeEnforcement(BaseModel):
@@ -116,9 +159,28 @@ class ResponseSchemaEnforcement(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
 
+class EffortTierEnforcement(BaseModel):
+    """Raise the story's EFFORT TIER — the bounded channel for resource budgets.
+
+    The pipeline already assigns budgets through a path the model participates in
+    correctly: CPA estimates estimatedHours -> get_effort_tier() -> a fixed table
+    (low=6, medium=10, high=15 iterations). The model expresses a judgement it CAN
+    make (how big is this work) and deterministic code owns every number.
+
+    Self-heal emitting raw integers bypassed all of that and was wrong three times
+    out of three (14 after exhausting 15; 1 "to prevent iterative retries"; 14
+    again). A tier is an ordered enum, so "is this an upgrade" is decidable
+    wherever both values are known — no numeric baseline to plumb, which is what
+    defeated four successive guards.
+    """
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["effort_tier"]
+    tier: Literal["low", "medium", "high"]
+
+
 Enforcement = Annotated[
     Union[GateEnforcement, ParamEnforcement, ToolScopeEnforcement,
-          PreExecBlockEnforcement, ResponseSchemaEnforcement],
+          PreExecBlockEnforcement, ResponseSchemaEnforcement, EffortTierEnforcement],
     Field(discriminator="kind"),
 ]
 

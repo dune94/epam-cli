@@ -138,7 +138,7 @@ describe('Pillar 4 — every refused synthesis leaves evidence', () => {
   it('admits a valid constraint and quarantines nothing', async () => {
     seedEpisodes(ctx.store);
     const good = JSON.stringify({
-      enforcement: { kind: 'param', name: 'EPAM_MAX_ITERATIONS', value: '40' },
+      enforcement: { kind: 'effort_tier', tier: 'high' },
       reason: 'agent ran out of turns before writing the file',
     });
     const r = await ctx.synth.maybeSynthesize(ctx.store, {
@@ -175,7 +175,10 @@ describe('a harmful rule is refused end to end, and quarantined', () => {
     expect(ctx2.store.readConstraints().length, 'it reached the store').toBe(0);
     const q = quarantine(ctx2.root);
     expect(q.length, 'refused but not recorded — invisible').toBeGreaterThan(0);
-    expect(q[q.length - 1].detail, 'the reason was lost').toMatch(/INCREASE|sanity/i);
+    expect(q[q.length - 1].detail, 'the reason was lost')
+      // Refused by the SCHEMA now, not the sanity guard: budget params are
+      // unconstructable, so the rejection happens before arbitration.
+      .toMatch(/resource budget|effort pipeline|self-heal must not set/i);
   });
 });
 

@@ -38,22 +38,22 @@ beforeEach(() => {
 
 const c = (over: any = {}) => ({
   id: 'iter-12', scope: { agent_role: 'typescript-engineer' }, trigger: { signature: 'TS2532' },
-  enforcement: { kind: 'param', name: 'EPAM_MAX_ITERATIONS', value: '12' },
+  enforcement: { kind: 'param', name: 'EPAM_REASONING_EFFORT', value: 'high' },
   reason: 'needs more iterations', origin_episodes: ['e1'], ...over,
 });
 
 describe('arbitration — contradiction archives the stale rule', () => {
   it('two rules setting the SAME param to different values cannot both be active', () => {
     store.putConstraint(c());
-    arb.admit(store, c({ id: 'iter-20', enforcement: { kind: 'param', name: 'EPAM_MAX_ITERATIONS', value: '20' } }));
+    arb.admit(store, c({ id: 'iter-20', enforcement: { kind: 'param', name: 'EPAM_REASONING_EFFORT', value: 'medium' } }));
     const active = store.lookup({ agent_role: 'typescript-engineer', signature: 'TS2532' });
     expect(active).toHaveLength(1);
-    expect(active[0].enforcement.value).toBe('20');
+    expect(active[0].enforcement.value).toBe('medium');
   });
 
   it('the superseded rule is archived, not deleted', () => {
     store.putConstraint(c());
-    arb.admit(store, c({ id: 'iter-20', enforcement: { kind: 'param', name: 'EPAM_MAX_ITERATIONS', value: '20' } }));
+    arb.admit(store, c({ id: 'iter-20', enforcement: { kind: 'param', name: 'EPAM_REASONING_EFFORT', value: 'medium' } }));
     const archived = store.readConstraints().find((x: any) => x.id === 'iter-12');
     expect(archived.status).toBe('archived');
     expect(archived.superseded_by).toBe('iter-20');

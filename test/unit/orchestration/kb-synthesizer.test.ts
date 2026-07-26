@@ -50,7 +50,7 @@ const record = (n: number, sig = 'TS2532') => {
 };
 
 const VALID = JSON.stringify({
-  enforcement: { kind: 'param', name: 'EPAM_MAX_ITERATIONS', value: '14' },
+  enforcement: { kind: 'param', name: 'EPAM_REASONING_EFFORT', value: 'high' },
   reason: 'repeated strict-null failure needs more iterations',
 });
 
@@ -135,7 +135,7 @@ describe('an existing rule is not re-derived every time', () => {
     rmSync(promptFile, { force: true });
     const again = await synth.maybeSynthesize(store, {
       agent_role: 'typescript-engineer', signature: 'TS2532', runner: stubRunner('SHOULD NOT BE CALLED') });
-    expect(again.enforcement.value).toBe('14');
+    expect(again.enforcement.value).toBe('high');
     expect(existsSync(promptFile)).toBe(false);   // the model was never consulted
   });
 });
@@ -158,10 +158,10 @@ describe('how a stale rule is REPLACED — the pillar 2 update path', () => {
     const fresh = await synth.maybeSynthesize(store, {
       agent_role: 'typescript-engineer', signature: 'TS2532',
       runner: stubRunner(JSON.stringify({
-        enforcement: { kind: 'param', name: 'EPAM_MAX_ITERATIONS', value: '20' }, reason: 'more' })) });
-    expect(fresh.enforcement.value).toBe('20');
+        enforcement: { kind: 'param', name: 'EPAM_REASONING_EFFORT', value: 'medium' }, reason: 'more' })) });
+    expect(fresh.enforcement.value).toBe('medium');
     const active = store.lookup({ agent_role: 'typescript-engineer', signature: 'TS2532' });
     expect(active).toHaveLength(1);
-    expect(active[0].enforcement.value).toBe('20');
+    expect(active[0].enforcement.value).toBe('medium');
   });
 });

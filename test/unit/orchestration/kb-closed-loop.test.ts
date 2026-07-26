@@ -59,7 +59,7 @@ function cli(root: string, args: string[], extraEnv: Record<string, string> = {}
 const SIG = 'TS2532';
 const ROLE = 'impl-agent';
 const RULE = JSON.stringify({
-  enforcement: { kind: 'param', name: 'EPAM_MAX_ITERATIONS', value: '40' },
+  enforcement: { kind: 'param', name: 'EPAM_REASONING_EFFORT', value: 'high' },
   reason: 'agent exhausted turns before writing the deliverable',
 });
 
@@ -86,7 +86,7 @@ describe('self-heal loop — record → synthesize → apply → tick', () => {
 
     // 3. APPLY — compiles to env exports, and to nothing else.
     const applied = cli(root, ['apply', '--agent-role', ROLE, '--signatures', SIG]);
-    expect(applied).toMatch(/export EPAM_MAX_ITERATIONS=/);
+    expect(applied).toMatch(/export EPAM_REASONING_EFFORT=/);
     expect(applied).toMatch(/export KB_FIRED=/);
     expect(applied,
       'the human-readable reason leaked into the applied output — enforcement only, never prose')

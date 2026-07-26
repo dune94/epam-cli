@@ -1,36 +1,23 @@
 /**
- * A schema-valid constraint can still be self-defeating. Admission must check
- * DIRECTION, not just shape.
+ * The sanity guard is now a LEGACY DEFENCE, and that is all it is.
  *
- * Live metrolinx, 2026-07-25. The repro-test-writer failed by EXHAUSTING its 15
- * iterations. Self-heal synthesised, admitted and applied this:
+ * Budget parameters are unconstructable as of kb_schema.py's ParamEnforcement
+ * validator, so a budget rule can no longer be ADMITTED: validate() rejects it
+ * before arbitration or sanity ever runs. The admission-path tests that used to
+ * live here tested a path that no longer exists, and were deleted rather than
+ * re-fixtured.
  *
- *   { enforcement: { kind: "param", name: "EPAM_MAX_ITERATIONS", value: "14" },
- *     reason: "Prevents exceeding the 15-iteration limit by setting a hard cap
- *              at 14 iterations." }
+ * What remains real: the store PERSISTS across runs by design, so it can still
+ * contain a budget rule written before that change — this session produced two
+ * (EPAM_MAX_ITERATIONS=14, then =1). lookup() re-validates on the way out, so such
+ * a rule can never be applied even though it is sitting in constraints.json.
  *
- * The model reasoned backwards: told the agent hit a limit, it LOWERED the limit.
- * Result — "Agent reached maximum iterations (14) without completing" on all three
- * attempts, no test written, repro-gate blocked. The previous run, with no
- * self-heal, had succeeded on attempt 2. Self-heal caused the regression.
- *
- * Every pillar passed it, correctly and uselessly:
- *   - Pydantic validated it: kind/name/value are all structurally perfect.
- *     A schema checks SHAPE, and "raise the budget" and "lower the budget" have
- *     identical shape.
- *   - Arbitration admitted it: no contradicting rule existed to conflict with.
- *   - The state digest verified it: it was applied faithfully, which IS the bug.
- *
- * This is the over-correction failure mode the memory-drift design warns about,
- * and the enforcement vocabulary can express a harmful rule as easily as a helpful
- * one. Schema validation cannot close that; a semantic guard can.
- *
- * THE RULE: budget parameters are INCREASE-ONLY. A rule that fires because a
- * budget was exhausted must never shrink that budget. Compared against the value
- * actually in force, so it is a real comparison rather than a guess.
+ * Why this matters: admission is a one-time gate on a permanent store. Without the
+ * exit check, anything admitted before a rule existed is enforced forever. Both
+ * live harmful rules had to be archived BY HAND before this was added.
  */
 import { describe, it, expect, afterAll } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -39,177 +26,58 @@ const dirs: string[] = [];
 afterAll(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
 function freshStore() {
-  const root = mkdtempSync(join(tmpdir(), 'sanity-')); dirs.push(root);
-  for (const m of ['kb-store.js', 'kb-arbitration.js']) {
-    delete require.cache[require.resolve(join(LIB, m))];
-  }
+  const root = mkdtempSync(join(tmpdir(), 'legacy-')); dirs.push(root);
+  delete require.cache[require.resolve(join(LIB, 'kb-store.js'))];
   const store = require(join(LIB, 'kb-store.js'));
   store.configure({ root });
-  const arb = require(join(LIB, 'kb-arbitration.js'));
-  return { root, store, arb };
+  return { root, store };
 }
 
-const candidate = (value: string) => ({
-  id: 'repro-test-writer-class-max-iterations',
-  scope: { agent_role: 'repro-test-writer' },
-  trigger: { signature: 'class:max_iterations' },
-  enforcement: { kind: 'param', name: 'EPAM_MAX_ITERATIONS', value },
-  reason: 'agent exhausted its iteration budget',
-  origin_episodes: [],
-});
+/** Written straight to disk, bypassing validate() — exactly the state a run from
+ *  before the schema change leaves behind. */
+function plantLegacy(store: any, value: string) {
+  store.writeConstraints([{
+    id: 'repro-test-writer-class-max-iterations',
+    scope: { agent_role: 'repro-test-writer' },
+    trigger: { signature: 'class:max_iterations' },
+    enforcement: { kind: 'param', name: 'EPAM_MAX_ITERATIONS', value },
+    reason: 'admitted before budget params became unconstructable',
+    origin_episodes: ['e-1'],
+    ttl_cycles: 20, cycles_idle: 0, status: 'active',
+  }]);
+  store.recordEpisode({
+    id: 'e-1', signature: 'class:max_iterations', agent_role: 'repro-test-writer',
+    story_id: 'S', diagnosis: 'ran out', observed_limit: 15,
+  });
+}
 
-describe('admission rejects a self-defeating constraint', () => {
-  it('REFUSES to lower a budget that was just exhausted', () => {
-    const { store, arb } = freshStore();
-    const prev = process.env.EPAM_MAX_ITERATIONS;
-    process.env.EPAM_MAX_ITERATIONS = '15';
-    try {
-      expect(() => arb.admit(store, candidate('14')),
-        'the exact live rule — "you ran out at 15, so use 14" — was admitted and applied')
-        .toThrow(/increase|lower|sanity/i);
-      expect(store.readConstraints().length, 'a harmful rule reached the store').toBe(0);
-    } finally {
-      if (prev === undefined) delete process.env.EPAM_MAX_ITERATIONS;
-      else process.env.EPAM_MAX_ITERATIONS = prev;
-    }
+describe('a legacy budget rule cannot be applied', () => {
+  it('lookup() refuses the live "ran out at 15, so use 14" rule', () => {
+    const { store } = freshStore();
+    plantLegacy(store, '14');
+    expect(store.lookup({ agent_role: 'repro-test-writer', signature: 'class:max_iterations' }).length,
+      'a stored budget rule from before the schema change is still applied — ' +
+      'admission is a one-time gate on a permanent store')
+      .toBe(0);
   });
 
-  it('ADMITS a rule that raises the budget', () => {
-    const { store, arb } = freshStore();
-    const prev = process.env.EPAM_MAX_ITERATIONS;
-    process.env.EPAM_MAX_ITERATIONS = '15';
-    try {
-      arb.admit(store, candidate('40'));
-      expect(store.readConstraints().length, 'the correct fix was rejected').toBe(1);
-    } finally {
-      if (prev === undefined) delete process.env.EPAM_MAX_ITERATIONS;
-      else process.env.EPAM_MAX_ITERATIONS = prev;
-    }
+  it('lookup() refuses the "one turn" rule too', () => {
+    const { store } = freshStore();
+    plantLegacy(store, '1');
+    expect(store.lookup({ agent_role: 'repro-test-writer', signature: 'class:max_iterations' }).length)
+      .toBe(0);
   });
 
-  it('does not block params that are not budgets', () => {
-    const { store, arb } = freshStore();
-    arb.admit(store, {
-      ...candidate('1'),
-      enforcement: { kind: 'param', name: 'EPAM_REASONING_EFFORT', value: 'high' },
-    });
-    expect(store.readConstraints().length).toBe(1);
-  });
-
-  it('rejects a non-numeric value for a numeric budget', () => {
-    const { store, arb } = freshStore();
-    expect(() => arb.admit(store, candidate('lots'))).toThrow();
-  });
-});
-
-describe('a synthesised rule carries a TTL so pillar 2 can age it', () => {
-  it('defaults ttl_cycles instead of leaving it null', () => {
-    const { store, arb } = freshStore();
-    const prev = process.env.EPAM_MAX_ITERATIONS;
-    process.env.EPAM_MAX_ITERATIONS = '15';
-    try {
-      arb.admit(store, candidate('40'));
-      const stored = store.readConstraints()[0];
-      expect(stored.ttl_cycles,
-        'ttl_cycles came back null — kb-synthesizer builds its candidate directly ' +
-        'and bypasses store.synthesize(), where the default lives, so the rule ' +
-        'never ages out for re-validation')
-        .toBeGreaterThan(0);
-      expect(stored.cycles_idle).toBe(0);
-      // Same missing-default class as ttl_cycles: a directly-built candidate
-      // reached the store with status null, which only worked because
-      // null !== 'archived'.
-      expect(stored.status, 'a stored rule has no status — lookup works by accident')
-        .toBe('active');
-    } finally {
-      if (prev === undefined) delete process.env.EPAM_MAX_ITERATIONS;
-      else process.env.EPAM_MAX_ITERATIONS = prev;
-    }
-  });
-});
-
-describe('a refused rule is quarantined, not silently dropped', () => {
-  it('kb-synthesizer records the sanity refusal with its reason', () => {
-    const src = readFileSync(join(LIB, 'kb-synthesizer.js'), 'utf8');
-    // The existing catch around admit() must keep capturing the reason.
-    expect(src).toMatch(/unmapped_rule/);
-    expect(src).toMatch(/refused by schema\/arbitration|detail:/);
-  });
-});
-
-/**
- * SECOND ATTEMPT AT THIS GUARD. The first compared the proposed value against
- * process.env[name] and skipped when it was absent:
- *
- *   const current = Number(source[e.name]);
- *   if (!Number.isFinite(current)) return;    // <- skipped in production
- *
- * In a real run EPAM_MAX_ITERATIONS is NOT in the shell where synthesis happens —
- * the writer passes it as a per-command prefix, not an export. So `current` was
- * NaN, the guard returned early, and the identical harmful rule (value 14 after
- * exhausting 15) was admitted a SECOND time on the very next run. Quarantine was
- * empty; nothing was rejected.
- *
- * I built a guard that fails open silently — the exact defect class this whole
- * effort exists to remove. It passed its tests only because the tests set the env
- * var that production does not.
- *
- * The fix keys on EVIDENCE, not ambient state: "Agent reached maximum iterations
- * (15)" is in the tool output the episode already captures, so the observed limit
- * is a fact, not a guess. And when no baseline can be established at all, an
- * exhaustion-triggered budget rule now FAILS CLOSED — such a rule is only
- * meaningful as an increase, and admitting one we cannot verify is what caused the
- * damage twice.
- */
-describe('the guard works without any environment help', () => {
-  const EXHAUSTED = 'Agent reached maximum iterations (15) without completing.';
-
-  it('extracts the observed limit from tool output', () => {
-    const { buildEpisode } = require(join(LIB, 'failure-signature.js'));
-    const ep = buildEpisode({ id: 'e1', toolOutput: EXHAUSTED, failure_class: 'max_iterations' });
-    expect(ep.observed_limit,
-      'the limit is right there in the tool output but is not captured, so the ' +
-      'guard has no fact to compare against').toBe(15);
-  });
-
-  it('REJECTS a decrease using the observed limit, with NO env var set', () => {
-    const { store, arb } = freshStore();
-    const prev = process.env.EPAM_MAX_ITERATIONS;
-    delete process.env.EPAM_MAX_ITERATIONS;          // production conditions
-    try {
-      expect(() => arb.admit(store, candidate('14'), { observedLimit: 15 }),
-        'without an env var the guard went inert and admitted the harmful rule again')
-        .toThrow(/increase|observed|sanity/i);
-      expect(store.readConstraints().length).toBe(0);
-    } finally {
-      if (prev !== undefined) process.env.EPAM_MAX_ITERATIONS = prev;
-    }
-  });
-
-  it('ADMITS an increase above the observed limit, with no env var set', () => {
-    const { store, arb } = freshStore();
-    const prev = process.env.EPAM_MAX_ITERATIONS;
-    delete process.env.EPAM_MAX_ITERATIONS;
-    try {
-      arb.admit(store, candidate('40'), { observedLimit: 15 });
-      expect(store.readConstraints().length, 'the correct fix was rejected').toBe(1);
-    } finally {
-      if (prev !== undefined) process.env.EPAM_MAX_ITERATIONS = prev;
-    }
-  });
-
-  it('FAILS CLOSED when no baseline can be established at all', () => {
-    const { store, arb } = freshStore();
-    const prev = process.env.EPAM_MAX_ITERATIONS;
-    delete process.env.EPAM_MAX_ITERATIONS;
-    try {
-      // Exhaustion trigger + budget param + nothing to compare against. Admitting
-      // an unverifiable rule here is precisely what caused the damage, twice.
-      expect(() => arb.admit(store, candidate('14')),
-        'an unverifiable exhaustion rule was admitted — fail closed, not open')
-        .toThrow();
-    } finally {
-      if (prev !== undefined) process.env.EPAM_MAX_ITERATIONS = prev;
-    }
+  it('a non-budget stored rule is still returned', () => {
+    const { store } = freshStore();
+    store.writeConstraints([{
+      id: 'r', scope: { agent_role: 'repro-test-writer' },
+      trigger: { signature: 'class:max_iterations' },
+      enforcement: { kind: 'param', name: 'EPAM_TEMPERATURE', value: '0' },
+      reason: 'deterministic output', origin_episodes: [],
+      ttl_cycles: 20, cycles_idle: 0, status: 'active',
+    }]);
+    expect(store.lookup({ agent_role: 'repro-test-writer', signature: 'class:max_iterations' }).length,
+      'a legitimate stored rule was refused').toBe(1);
   });
 });

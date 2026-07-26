@@ -41,7 +41,7 @@ function stubRunner(body: string) {
 }
 
 const RULE = JSON.stringify({
-  enforcement: { kind: 'param', name: 'EPAM_MAX_ITERATIONS', value: '40' },
+  enforcement: { kind: 'effort_tier', tier: 'high' },
   reason: 'agent exhausted its turns before writing the deliverable',
 });
 
@@ -77,8 +77,8 @@ describe('the analyst feeds the KB instead of the prompt', () => {
     const { constraints } = runAnalyst(`cat <<'J'\n${RULE}\nJ`);
     expect(constraints.length,
       'no constraint synthesised — the retry would run with no enforcement at all').toBe(1);
-    expect(constraints[0].enforcement.kind).toBe('param');
-    expect(constraints[0].enforcement.name).toBe('EPAM_MAX_ITERATIONS');
+    expect(constraints[0].enforcement.kind).toBe('effort_tier');
+    expect(constraints[0].enforcement.tier).toBe('high');
   });
 
   it('emits no prose on stdout for a caller to prepend to a prompt', () => {

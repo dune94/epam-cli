@@ -29,7 +29,7 @@
  */
 'use strict';
 
-const SUPPORTED = ['gate', 'param', 'tool_scope', 'pre_exec_block', 'response_schema'];
+const SUPPORTED = ['gate', 'param', 'tool_scope', 'pre_exec_block', 'response_schema', 'effort_tier'];
 
 const csv = s => String(s || '').split(',').map(x => x.trim()).filter(Boolean);
 
@@ -62,6 +62,12 @@ function compile(constraints) {
         break;
       case 'param':
         env[e.name] = String(e.value);
+        break;
+      case 'effort_tier':
+        // Travels as ENV, never as a PRD edit — editing the PRD is never the fix
+        // for a story failure. resolve_effort_settings() applies it upgrade-only,
+        // since that is the one place holding BOTH the story's tier and this one.
+        env.EPAM_EFFORT_TIER = String(e.tier);
         break;
       case 'response_schema':
         // Pillar 2: the output space IS the enforcement space. Carried as JSON on

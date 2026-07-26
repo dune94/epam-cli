@@ -54,13 +54,13 @@ describe('apply — emits enforcement, never prose', () => {
   beforeEach(() => {
     cli(['record', '--id', 'e1', '--agent-role', 'typescript-engineer'], 'src/a.ts(1,1): error TS2532: x');
     cli(['synthesize', '--agent-role', 'typescript-engineer', '--signature', 'TS2532',
-         '--enforcement', JSON.stringify({ kind: 'param', name: 'EPAM_MAX_ITERATIONS', value: '14' }),
+         '--enforcement', JSON.stringify({ kind: 'param', name: 'EPAM_TEMPERATURE', value: '0' }),
          '--reason', 'repeated strict-null failure']);
   });
 
   it('emits a shell export for a matching role+signature', () => {
     const out = cli(['apply', '--agent-role', 'typescript-engineer', '--signatures', 'TS2532']);
-    expect(out).toContain("export EPAM_MAX_ITERATIONS='14'");
+    expect(out).toContain("export EPAM_TEMPERATURE='0'");
   });
 
   it('emits nothing for a role with no constraints', () => {
@@ -84,7 +84,7 @@ describe('gateway integration — constraints reach the real invocation', () => 
   it('invoke_agent applies a compiled constraint to the agent env', () => {
     cli(['record', '--id', 'e1', '--agent-role', 'typescript-engineer'], 'src/a.ts(1,1): error TS2532: x');
     cli(['synthesize', '--agent-role', 'typescript-engineer', '--signature', 'TS2532',
-         '--enforcement', JSON.stringify({ kind: 'param', name: 'EPAM_MAX_ITERATIONS', value: '14' }),
+         '--enforcement', JSON.stringify({ kind: 'param', name: 'EPAM_TEMPERATURE', value: '0' }),
          '--reason', 'r']);
 
     const stub = join(kbRoot, 'stub.sh');
@@ -105,7 +105,7 @@ describe('gateway integration — constraints reach the real invocation', () => 
       if (i > 0) env[line.slice(0, i)] = line.slice(i + 1).replace(/^"|"$/g, '');
     }
     // The healed constraint overrides the profile default (25) — enforcement, not advice.
-    expect(env.EPAM_MAX_ITERATIONS).toBe('14');
+    expect(env.EPAM_TEMPERATURE).toBe('0');
   });
 
   it('a run with no KB context is completely unaffected', () => {

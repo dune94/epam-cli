@@ -143,6 +143,26 @@ resolve_effort_settings() {
         '.stories[] | select(.id == $id) | .effort // "medium"' \
         "$prd_target" 2>/dev/null || echo "medium")
 
+    # A self-heal `effort_tier` constraint compiles to EPAM_EFFORT_TIER. Apply it
+    # UPGRADE-ONLY: this is the one place that holds BOTH the story's tier and the
+    # proposed one, so the comparison needs no baseline plumbing — which is exactly
+    # what defeated four successive numeric guards.
+    #
+    # A downgrade after a failure would repeat the mistake the raw integers made
+    # (EPAM_MAX_ITERATIONS=1 "to prevent iterative retries"): taking room away from
+    # an agent that ran out of it. Refused, and said out loud.
+    if [ -n "${EPAM_EFFORT_TIER:-}" ]; then
+        local _rank_cur _rank_new
+        case "$effort" in low) _rank_cur=1 ;; high) _rank_cur=3 ;; *) _rank_cur=2 ;; esac
+        case "$EPAM_EFFORT_TIER" in low) _rank_new=1 ;; high) _rank_new=3 ;; medium) _rank_new=2 ;; *) _rank_new=0 ;; esac
+        if [ "$_rank_new" -gt "$_rank_cur" ]; then
+            log "  EffortTier[KB] -> upgrading ${effort} → ${EPAM_EFFORT_TIER} (self-heal constraint)"
+            effort="$EPAM_EFFORT_TIER"
+        elif [ "$_rank_new" -gt 0 ]; then
+            log "  EffortTier[KB] -> IGNORING ${EPAM_EFFORT_TIER} (not an upgrade on ${effort}); budgets are increase-only"
+        fi
+    fi
+
     case "$effort" in
         low)
             STORY_MODEL="$EFFORT_MODEL_LOW"

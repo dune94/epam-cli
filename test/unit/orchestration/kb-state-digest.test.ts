@@ -52,7 +52,7 @@ function appliedStore() {
   }
   execFileSync(NODE20, [KB_CLI, 'synthesize-auto', '--agent-role', 'impl-agent', '--signature', 'TS2532'],
     { encoding: 'utf8', env: { ...env, AI_RUNNER_CMD: stubRunner(JSON.stringify({
-      enforcement: { kind: 'param', name: 'EPAM_MAX_ITERATIONS', value: '40' }, reason: 'r' })) } });
+      enforcement: { kind: 'param', name: 'EPAM_REASONING_EFFORT', value: 'high' }, reason: 'r' })) } });
   const exports = execFileSync(NODE20,
     [KB_CLI, 'apply', '--agent-role', 'impl-agent', '--signatures', 'TS2532'],
     { encoding: 'utf8', env }).trim();
@@ -80,7 +80,7 @@ describe('Pillar 3 — the compiled surface is digested', () => {
     expect(exports, 'no digest emitted — drift cannot be detected').toMatch(/export KB_STATE_DIGEST=/);
     expect(exports, 'no variable list — the verifier cannot know what it is checking')
       .toMatch(/export KB_STATE_VARS=/);
-    expect(exports).toMatch(/EPAM_MAX_ITERATIONS/);
+    expect(exports).toMatch(/EPAM_REASONING_EFFORT/);
   });
 
   it('verifies clean immediately after apply', () => {
@@ -93,14 +93,14 @@ describe('Pillar 3 — the compiled surface is digested', () => {
 describe('Pillar 3 — drift is caught, loudly', () => {
   it('fails when an enforced variable has been STRIPPED', () => {
     const { root, exports } = appliedStore();
-    const { rc, out } = verify(root, `${exports}\nunset EPAM_MAX_ITERATIONS`);
+    const { rc, out } = verify(root, `${exports}\nunset EPAM_REASONING_EFFORT`);
     expect(rc, 'a stripped constraint went undetected — the agent runs unconstrained').not.toBe(0);
-    expect(out).toMatch(/EPAM_MAX_ITERATIONS|drift|mismatch/i);
+    expect(out).toMatch(/EPAM_REASONING_EFFORT|drift|mismatch/i);
   });
 
   it('fails when an enforced value has been OVERWRITTEN', () => {
     const { root, exports } = appliedStore();
-    const { rc } = verify(root, `${exports}\nexport EPAM_MAX_ITERATIONS=6`);
+    const { rc } = verify(root, `${exports}\nexport EPAM_REASONING_EFFORT=low`);
     expect(rc, 'a later export silently replaced a healed constraint').not.toBe(0);
   });
 });

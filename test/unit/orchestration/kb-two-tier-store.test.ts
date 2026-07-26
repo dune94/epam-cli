@@ -107,7 +107,7 @@ describe('Pillar 3 (admission) — a constraint MUST compile to an enforcement m
   it('accepts the three real compile targets', () => {
     for (const enforcement of [
       { kind: 'gate', check: 'no-unnarrowed-optional-access' },
-      { kind: 'param', name: 'EPAM_MAX_ITERATIONS', value: '12' },
+      { kind: 'param', name: 'EPAM_TEMPERATURE', value: '12' },
       { kind: 'tool_scope', allowed_write_paths: 'src/svc/discount.ts' },
     ]) {
       // ids are kebab-case slugs — `tool_scope` must be normalised, not passed raw

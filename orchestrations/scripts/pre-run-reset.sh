@@ -231,6 +231,13 @@ done
 # 2026-07-24, including a 16:33 mock-era review log attributed to a 20:52 metrolinx
 # run, which produced an entire "reviewer thrashed" theory about a different run.
 #
+# story-outputs-<phase>.txt (the writer-output manifest) is archived by the same
+# sweep, and is the sharpest case of this rule: lib/story-outputs.sh and
+# lib/eslint-baseline-gate.sh read an ABSENT manifest as "fall back and say so"
+# but a PRESENT one as authoritative. A leftover manifest is therefore not just
+# misleading to a human — it is a lie the lint gate, review-ranger and
+# mutant-hunter all act on, attributing a previous run's files to this one.
+#
 # MOVED, not truncated: a MISSING file is honest ("this run did not write it"),
 # whereas a stale file is a lie that looks exactly like data. .jsonl stays
 # truncate-in-place above because dashboards read those paths live and expect them
@@ -239,9 +246,9 @@ _ARCHIVED_LOGS=0
 while IFS= read -r _lf; do
     [ -f "$_lf" ] || continue
     mv "$_lf" "$ARCHIVE_DIR/" 2>/dev/null && _ARCHIVED_LOGS=$((_ARCHIVED_LOGS+1)) || true
-done < <(find "$LOG_DIR" -maxdepth 1 -type f -name '*.log' 2>/dev/null || true)
+done < <(find "$LOG_DIR" -maxdepth 1 -type f \( -name '*.log' -o -name 'story-outputs-*.txt' \) 2>/dev/null || true)
 [ "$_ARCHIVED_LOGS" -gt 0 ] \
-  && success "Moved $_ARCHIVED_LOGS stale *.log file(s) → $ARCHIVE_DIR (absence now means 'this run did not write it')" \
+  && success "Moved $_ARCHIVED_LOGS stale *.log / writer-output manifest file(s) → $ARCHIVE_DIR (absence now means 'this run did not write it')" \
   || info "  No stale .log files to move"
 
 # Clear stale lock files

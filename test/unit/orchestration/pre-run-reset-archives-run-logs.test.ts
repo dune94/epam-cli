@@ -53,6 +53,23 @@ describe('B13 — per-run .log files are cleared between runs', () => {
     expect(RESET).toMatch(/>\s*"\$fp"/);
   });
 
+  it('archives the writer-output manifest too — the gates TRUST it', () => {
+    // story-outputs-<phase>.txt is the same class of hazard as a stale .log,
+    // but sharper: lib/eslint-baseline-gate.sh and lib/story-outputs.sh read an
+    // ABSENT manifest as "fall back and say so", and a PRESENT one as
+    // authoritative writer output. A leftover from the previous run is
+    // therefore not merely misleading to a human — it is a lie the lint gate,
+    // review-ranger and mutant-hunter all act on, attributing another run's
+    // files to this one. Found pre-launch 2026-07-26: a killed run left its
+    // manifest behind and nothing cleared it.
+    const i = RESET.search(/story-outputs/);
+    expect(i, 'the manifest survives into the next run — the gates would read stale scope')
+      .toBeGreaterThan(-1);
+    expect(RESET.slice(Math.max(0, i - 500), i + 500),
+      'the manifest is not MOVED, so absence cannot mean "this run produced nothing yet"')
+      .toMatch(/\bmv\b/);
+  });
+
   it('never archives into itself (the archive dir must be excluded)', () => {
     const i = RESET.search(/\*\.log/);
     const near = RESET.slice(Math.max(0, i - 600), i + 600);

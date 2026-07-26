@@ -64,7 +64,9 @@ function run(opts: {
       mkdirSync(join(full, '..'), { recursive: true });
       writeFileSync(full, 'content');
     }
-    const fnBody = extractFunctionBody('verify_story_deliverables');
+    const fnBody = 'verify_prescribed_helper_used() { return 0; }\n'
+      + 'record_story_outputs() { return 0; }\n'
+      + extractFunctionBody('verify_story_deliverables');
     const vendorDirsFn = extractFunctionBody('_get_vendor_dirs');
     const scriptPath = join(dir, 'run.sh');
     writeFileSync(
@@ -183,7 +185,8 @@ describe('verify_story_deliverables — 0-byte file check (REAL execution)', () 
       const scriptPath = join(dir, 'run.sh');
       writeFileSync(
         scriptPath,
-        ['#!/usr/bin/env bash', `PROJECT_ROOT=${JSON.stringify(dir)}`, `PRD_FILE=${JSON.stringify(prdPath)}`, `MAIN_PRD_FILE=${JSON.stringify(prdPath)}`, 'error() { echo "ERROR: $*" >&2; }', 'success() { echo "SUCCESS: $*" >&2; }', vendorDirsFn, fnBody, 'verify_story_deliverables "SKY-TEST"', 'echo "RC=$?"'].join('\n'),
+        ['#!/usr/bin/env bash', `PROJECT_ROOT=${JSON.stringify(dir)}`, `PRD_FILE=${JSON.stringify(prdPath)}`, `MAIN_PRD_FILE=${JSON.stringify(prdPath)}`, 'error() { echo "ERROR: $*" >&2; }', 'success() { echo "SUCCESS: $*" >&2; }', 'warning() { echo "WARNING: $*" >&2; }', // collaborators, unit-tested separately
+        'verify_prescribed_helper_used() { return 0; }', 'record_story_outputs() { return 0; }', vendorDirsFn, fnBody, 'verify_story_deliverables "SKY-TEST"', 'echo "RC=$?"'].join('\n'),
       );
       const stderrPath = join(dir, 'stderr.log');
       const wrapperPath = join(dir, 'run-wrapper.sh');

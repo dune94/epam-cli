@@ -1701,6 +1701,67 @@ record_story_outputs() {
     story_outputs_record "${PROJECT_ROOT:-}" "$LOG_DIR"
 }
 
+# verify_prescribed_helper_used <story_id>
+# When the pipeline prescribes an EXISTING helper, the change must use it.
+#
+# Live metrolinx 2026-07-26, run 5. The detective was right — real fix site, real
+# quoted line, real helper (getDispatchLineItemKey, fixVerified: true) — and the
+# implementer wrote this instead:
+#
+#   - (lineItem) => lineItem.id === discount.lineItemId,
+#   + (lineItem) => lineItem.id === discount.lineItemId
+#                   || lineItem.id.startsWith(discount.lineItemId + '-'),
+#
+# The separator in that repo is '#', declared as `const DIVIDER = '#'`. So
+# "ORDER123#return".startsWith("ORDER123-") is false, the clause never matches,
+# and the bug was entirely unfixed by a change that looked plausible. The helper
+# appeared ZERO times in the diff.
+#
+# An agent hand-rolled string surgery against a format it GUESSED, when the repo
+# already contained a parser for that format and the pipeline had already named
+# it. Reusing the helper makes the separator impossible to get wrong, because the
+# helper owns it.
+#
+# Only fires when the helper was named AND verified to exist (fixVerified). If the
+# detective may have hallucinated it, demanding its use would force the agent to
+# import something imaginary. Brownfield only; per-attempt WARNING, so the retry
+# ladder owns the outcome.
+verify_prescribed_helper_used() {
+    local story_id="$1"
+    [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
+    [ -n "${PROJECT_ROOT:-}" ] && [ -d "$PROJECT_ROOT/.git" ] || return 0
+    local prd_target="${MAIN_PRD_FILE:-${PRD_FILE:-}}"
+    [ -f "$prd_target" ] || return 0
+
+    local _helper
+    _helper=$(jq -r --arg id "$story_id" '
+        .stories[] | select(.id == $id) | (.fixSiteAnalysis // [])
+        | map(select((.fixVerified == true) and ((.helper // "") != "")))
+        | (.[0].helper // "")' "$prd_target" 2>/dev/null)
+    [ -n "$_helper" ] && [ "$_helper" != "null" ] || return 0
+
+    local _ref=""
+    [ -f "${LOG_DIR:-}/phase-baseline-sha.txt" ] &&         _ref=$(tr -d '[:space:]' < "$LOG_DIR/phase-baseline-sha.txt" 2>/dev/null)
+    [ -n "$_ref" ] || _ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+    git -C "$PROJECT_ROOT" rev-parse --verify "$_ref" >/dev/null 2>&1 || return 0
+
+    local _diff
+    _diff=$(git -C "$PROJECT_ROOT" diff "$_ref" 2>/dev/null)
+    [ -n "$_diff" ] || return 0
+    printf '%s' "$_diff" | grep -q -- "$_helper" && return 0
+
+    local _note=""
+    if [ -n "${retry_count:-}" ] && [ -n "${MAX_RETRIES:-}" ]; then
+        if [ "$retry_count" -lt "$MAX_RETRIES" ]; then
+            _note=" [attempt $((retry_count + 1))/$((MAX_RETRIES + 1)) — will retry]"
+        else
+            _note=" [attempt $((retry_count + 1))/$((MAX_RETRIES + 1)) — no retries remain]"
+        fi
+    fi
+    warning "Story $story_id: the prescribed helper \`${_helper}\` EXISTS in this repository but does NOT appear in the change. The agent hand-rolled the logic instead of reusing it — live 2026-07-26 that produced a fix matching on '-' when the repository's own separator is '#', so the fix could never work. Import and use ${_helper}, which owns that format, rather than re-implementing it.${_note}"
+    return 1
+}
+
 verify_story_deliverables() {
     local story_id="$1"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
@@ -1904,6 +1965,10 @@ verify_story_deliverables() {
     if [ "$declared" -gt 0 ]; then
         success "Verified $declared declared deliverable(s) for $story_id"
     fi
+    # A prescribed, existing helper that the change never uses means the agent
+    # re-implemented it — and guessed. Retryable.
+    verify_prescribed_helper_used "$story_id" || return 1
+
     # The story produced real, verified work — tell the phase gates what it was
     # so they can judge this run's output instead of the whole codebase.
     record_story_outputs "$story_id"

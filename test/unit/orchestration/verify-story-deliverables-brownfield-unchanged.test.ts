@@ -102,6 +102,11 @@ function run(opts: {
       'success() { echo "SUCCESS: $*" >&2; }',
       'warning() { echo "WARNING: $*" >&2; }',
       '_get_vendor_dirs() { :; }',
+      // Collaborator, unit-tested separately in
+      // prescribed-helper-must-be-used.test.ts. Stubbed so this file keeps
+      // testing verify_story_deliverables in isolation.
+      'verify_prescribed_helper_used() { return 0; }',
+      'record_story_outputs() { return 0; }',
       fnBody,
       'verify_story_deliverables "SKY-TEST"',
       'echo "RC=$?"',

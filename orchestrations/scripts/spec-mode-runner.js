@@ -2068,6 +2068,7 @@ Invoke it with the Bash tool, always passing PROJECT_ROOT:
   PROJECT_ROOT="${repoPath}" bash "${toolPath}" explore <domain nouns>
   PROJECT_ROOT="${repoPath}" bash "${toolPath}" callers <SymbolName>
   PROJECT_ROOT="${repoPath}" bash "${toolPath}" callees <SymbolName>
+  PROJECT_ROOT="${repoPath}" bash "${toolPath}" show <file> [startLine] [endLine]
 
 ${preseedBlock}
 CONVERGE FAST — HARD LIMIT: 6 tool calls total. This is not a suggestion.
@@ -2080,7 +2081,9 @@ By your 6th tool call you MUST stop querying and emit the JSON answer with your 
    - State the SMALLEST change that corrects it. Do NOT describe a re-architecture, a new abstraction, or a "split/recalculate/add-a-field" scheme unless the code genuinely has no simpler fix. Prefer a one-line/one-expression change.
    - LOCATE AN EXISTING HELPER instead of inventing new logic. Before proposing any new function, use \`explore\` (and \`callers\`/\`callees\`) to search for an already-present util/helper/parser in this repo that does the needed transform (e.g. a key parser, id normalizer, formatter). If one exists, your fix MUST name it (exact symbol + its import path) and reuse it. Writing novel code when a helper already exists is a defect.
 
-CRITICAL — HOW TO ANSWER: Emit the JSON array as TEXT directly in your reply. Do NOT call WriteFile and do NOT write your answer to any file — the pipeline reads your reply text, not a file. If you write your answer to a file, it is LOST and the whole investigation is wasted. Use the Bash tool ONLY to run the CodeGraph query script above; use no other tool.
+READ THE FILE BEFORE YOU QUOTE IT. Once you have a candidate file, run \`show <file>\` and look at the real lines. Your "brokenLine" must be COPIED EXACTLY from that output — it is checked character-for-character against the file, after whitespace normalisation. Do NOT reconstruct the line from symbol names: on 2026-07-26 that produced \`lineItemKey === orderLineItem.id\`, a plausible-looking expression using an identifier that exists nowhere in the repository, and the answer was rejected. \`show\` accepts a line range so you can read just the region you care about.
+
+CRITICAL — HOW TO ANSWER: Emit the JSON array as TEXT directly in your reply. Do NOT call WriteFile and do NOT write your answer to any file — the pipeline reads your reply text, not a file. If you write your answer to a file, it is LOST and the whole investigation is wasted. Use the Bash tool ONLY to run the CodeGraph query script above (including its \`show\` subcommand, which you MUST use before quoting a line); use no other tool.
 
 NAME THE FORMAT, DO NOT DESCRIBE IT. If your fix depends on the SHAPE of a string — a prefix, suffix, separator, delimiter — you must QUOTE THE EXACT LITERAL (e.g. '#') or name the constant that defines it (e.g. DIVIDER). Saying "a prefix match that accounts for the suffix" without stating the suffix is not implementable: on 2026-07-26 exactly that wording made the implementer guess '-' where the repository uses '#', and the fix could never match. This is machine-checked.
 

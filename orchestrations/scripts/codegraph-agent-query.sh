@@ -90,6 +90,45 @@ case "$sub" in
   impact)
     codegraph impact "$1" --path "$REPO" 2>&1
     ;;
+  show)
+    # SHOW REAL SOURCE. The detective must emit `brokenLine` as a VERBATIM quote,
+    # machine-checked against the file — but every other subcommand returns only
+    # symbol names and import paths. It was being asked to copy text it had never
+    # been shown, and forbidden from fetching it. The only thing it could do was
+    # reconstruct the line from symbol names, which is exactly what the failures
+    # looked like: right concept, invented identifiers (`lineItemKey`, which
+    # exists nowhere in the repo). Intermittent, too — when the symbol names
+    # happened to resemble the real expression it came out right by luck.
+    #
+    # With this, quoting is copying.
+    #
+    #   show <repo-relative-file> [start] [end]
+    _file="${1:-}"
+    [ -n "$_file" ] || { err "show: no file given"; exit 2; }
+    _abs="$REPO/${_file#./}"
+    # Never leave the repository under analysis.
+    case "$(cd "$(dirname "$_abs")" 2>/dev/null && pwd -P)/" in
+      "$(cd "$REPO" && pwd -P)"/*) : ;;
+      *) err "show: refusing to read outside the project: $_file"; exit 2 ;;
+    esac
+    [ -f "$_abs" ] || { err "show: file not found: $_file"; exit 2; }
+    _start="${2:-1}"
+    _end="${3:-}"
+    _total=$(wc -l < "$_abs" | tr -d ' ')
+    if [ -z "$_end" ]; then
+      # Whole file, capped: an unbounded dump swamps the context window on a
+      # repository of this size.
+      _cap=300
+      _end=$(( _start + _cap - 1 ))
+      [ "$_end" -gt "$_total" ] && _end="$_total"
+      awk -v s="$_start" -v e="$_end" 'NR>=s && NR<=e {printf "%6d  %s\n", NR, $0}' "$_abs"
+      # `|| true`: a false test as the LAST statement makes the subcommand exit
+      # 1 even though it succeeded — exit status is a contract with the caller.
+      [ "$_total" -gt "$_end" ] && echo "… truncated at line $_end of $_total — request a range to see more" || true
+    else
+      awk -v s="$_start" -v e="$_end" 'NR>=s && NR<=e {printf "%6d  %s\n", NR, $0}' "$_abs"
+    fi
+    ;;
   helpers)
     # Scan for EXISTING exported functions that likely already do what the agent
     # is about to hand-roll. Two signals, unioned:

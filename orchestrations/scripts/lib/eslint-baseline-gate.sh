@@ -147,7 +147,15 @@ eslint_baseline_gate() {
         local wt_parent wt_dir
         wt_parent=$(mktemp -d 2>/dev/null) || wt_parent=""
         wt_dir="${wt_parent:+$wt_parent/wt}"
-        if [ ! -f "$cache" ] && [ -n "$wt_dir" ]; then
+        # -s, not -f: a zero-byte cache is a FAILED computation, not a cached
+        # result. Live metrolinx 2026-07-26 — run 2 left an empty cache behind
+        # (the duplicate-plugin failure this worktree relocation fixes), and on
+        # run 3 `-f` read it as "already computed, skip", so the corrected code
+        # never ran and the warning repeated verbatim. The consumption check
+        # below already used -s; one function must not hold two notions of
+        # "usable cache".
+        if [ ! -s "$cache" ] && [ -n "$wt_dir" ]; then
+            rm -f "$cache" 2>/dev/null || true
             rm -rf "$wt_dir" 2>/dev/null || true
             if git -C "$project_root" worktree add --detach "$wt_dir" "$baseline_sha" >/dev/null 2>&1; then
                 # node_modules is gitignored, so `worktree add` does not check it

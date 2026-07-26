@@ -238,6 +238,12 @@ done
 # misleading to a human — it is a lie the lint gate, review-ranger and
 # mutant-hunter all act on, attributing a previous run's files to this one.
 #
+# eslint-baseline-<sha>.json (the lint gate's baseline-findings cache) goes the
+# same way. It is keyed by SHA and would otherwise be reused across runs — and a
+# run that FAILED to compute it leaves a zero-byte file that looks exactly like a
+# valid cached result. That is what silently disabled the lint gate's
+# inherited-debt subtraction on 2026-07-26.
+#
 # MOVED, not truncated: a MISSING file is honest ("this run did not write it"),
 # whereas a stale file is a lie that looks exactly like data. .jsonl stays
 # truncate-in-place above because dashboards read those paths live and expect them
@@ -246,9 +252,9 @@ _ARCHIVED_LOGS=0
 while IFS= read -r _lf; do
     [ -f "$_lf" ] || continue
     mv "$_lf" "$ARCHIVE_DIR/" 2>/dev/null && _ARCHIVED_LOGS=$((_ARCHIVED_LOGS+1)) || true
-done < <(find "$LOG_DIR" -maxdepth 1 -type f \( -name '*.log' -o -name 'story-outputs-*.txt' \) 2>/dev/null || true)
+done < <(find "$LOG_DIR" -maxdepth 1 -type f \( -name '*.log' -o -name 'story-outputs-*.txt' -o -name 'eslint-baseline-*.json' \) 2>/dev/null || true)
 [ "$_ARCHIVED_LOGS" -gt 0 ] \
-  && success "Moved $_ARCHIVED_LOGS stale *.log / writer-output manifest file(s) → $ARCHIVE_DIR (absence now means 'this run did not write it')" \
+  && success "Moved $_ARCHIVED_LOGS stale *.log / manifest / baseline-cache file(s) → $ARCHIVE_DIR (absence now means 'this run did not write it')" \
   || info "  No stale .log files to move"
 
 # Clear stale lock files

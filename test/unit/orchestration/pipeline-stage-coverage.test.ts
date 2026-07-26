@@ -1096,7 +1096,12 @@ describe('Tool access contract — QA gate agents have file access', () => {
   });
 
   it('run_orch_prompt_with_tools sets AI_GATE_ALLOW_TOOLS=1', () => {
-    expect(orchSrc).toMatch(/AI_GATE_ALLOW_TOOLS=1 run_orch_prompt/);
+    // No longer immediately adjacent to run_orch_prompt: the same invocation now
+    // also carries EPAM_ALLOWED_TOOLS, so these agents can read source but can
+    // never reach write_file (perf-sentinel "answered" by writing a file on
+    // 2026-07-26 and reviewed nothing). Assert the contract — the flag is set on
+    // the invocation — rather than the exact character sequence.
+    expect(orchSrc).toMatch(/AI_GATE_ALLOW_TOOLS=1[^\n]*run_orch_prompt|AI_GATE_ALLOW_TOOLS=1[^\n]*\\\n\s*run_orch_prompt/);
   });
 
   it('all 6 QA gate agents use _run_qa_gate_with_retry (which sets AI_GATE_ALLOW_TOOLS=1 internally)', () => {

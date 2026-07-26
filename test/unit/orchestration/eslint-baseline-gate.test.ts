@@ -310,6 +310,29 @@ describe('the baseline checkout must not live inside the pipeline repo', () => {
       .toEqual([]);
   });
 
+  it('recomputes when a previous run left an EMPTY cache behind', () => {
+    // Live metrolinx 2026-07-26, run 3. The worktree relocation fix was correct
+    // and never executed: run 2 had written a 0-byte
+    // eslint-baseline-<sha>.json (the duplicate-plugin failure), and the
+    // production guard was `[ ! -f "$cache" ]` — an existing-but-empty file
+    // reads as "already computed, skip". The consumption check right below it
+    // used `-s`. One function, two different notions of "usable cache".
+    //
+    // Same shape as the stale-manifest and stale-.log hazards: a zero-byte
+    // failure artefact that looks exactly like a valid result.
+    const fx = makeFixture({ 'src/target.ts': 'const legacy = 1; // LINT_HARD\n' });
+    writerProduces(fx, { 'src/target.ts': 'const legacy = 1; // LINT_HARD\nexport const b = 3;\n' });
+
+    const sha = readFileSync(join(fx.logDir, 'phase-baseline-sha.txt'), 'utf8').trim();
+    writeFileSync(join(fx.logDir, `eslint-baseline-${sha.slice(0, 12)}.json`), '');
+
+    const { rc, output } = runGate(fx);
+    expect(output,
+      'an empty cache from a previous run permanently disables the subtraction')
+      .not.toMatch(/could not compute baseline findings/);
+    expect(rc, 'inherited debt was blamed on this run because the cache was never rebuilt').toBe(0);
+  });
+
   it('still produces a usable baseline (the subtraction actually runs)', () => {
     const fx = makeFixture({ 'src/target.ts': 'const legacy = 1; // LINT_HARD\n' });
     writerProduces(fx, { 'src/target.ts': 'const legacy = 1; // LINT_HARD\nexport const b = 3;\n' });

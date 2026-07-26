@@ -896,8 +896,25 @@ PYEOF
 # Required for QA gate agents that must read source files to ground their analysis:
 # sast-sentinel, spec-validator, review-ranger, mutant-hunter, fuzz-weaver, perf-sentinel.
 # Without tool access these agents hallucinate findings about files they cannot verify.
+# STRUCTURAL, not prompt-level: the allowlist means write_file is never handed to
+# the model, so "answering" by writing a file becomes unreachable. Live metrolinx
+# 2026-07-26 — perf-sentinel's ENTIRE log was "The file has been written
+# successfully.", both attempts exhausted, ~20 minutes spent reviewing nothing;
+# fuzz-weaver produced a 0-byte log in the same run. Two of six quality gates
+# passed the phase having examined nothing.
+#
+# This was already diagnosed and structurally fixed for the code-graph-detective
+# on 2026-07-23, and src/tools/createTools.ts names "the source-reading QA gates"
+# as intended beneficiaries — the wiring here was simply never done. In its place
+# the pipeline grew two work-arounds for the symptom (a retry that detects "has
+# been written" and prepends a corrective paragraph, and a recovery pass that
+# hunts the project for the file the model wrote). Prompt instructions could not
+# prevent it; removing the capability does. Those work-arounds stay as a
+# backstop for any model that finds another way to avoid answering.
+ORCH_GATE_ALLOWED_TOOLS="${ORCH_GATE_ALLOWED_TOOLS:-bash,read_file,list_files,search}"
+
 run_orch_prompt_with_tools() {
-    AI_GATE_ALLOW_TOOLS=1 run_orch_prompt "$@"
+    AI_GATE_ALLOW_TOOLS=1 EPAM_ALLOWED_TOOLS="${ORCH_GATE_ALLOWED_TOOLS}" run_orch_prompt "$@"
 }
 
 # _run_qa_gate_with_retry <prompt> <agent> <phase> <log_file>
@@ -934,7 +951,11 @@ _run_qa_gate_with_retry() {
 
 $_qg_prompt"
         fi
-        AI_GATE_ALLOW_TOOLS=1 run_orch_prompt "$_qg_eff_prompt" "$_qg_agent" "$_qg_phase" 2>&1 | tee "$_qg_log"
+        # Same allowlist as run_orch_prompt_with_tools: this path calls
+        # run_orch_prompt directly, so wiring only the helper would leave every
+        # actual gate invocation unrestricted.
+        AI_GATE_ALLOW_TOOLS=1 EPAM_ALLOWED_TOOLS="${ORCH_GATE_ALLOWED_TOOLS}" \
+            run_orch_prompt "$_qg_eff_prompt" "$_qg_agent" "$_qg_phase" 2>&1 | tee "$_qg_log"
         if grep -qE '"(verdict|findings|agent|summary)"' "$_qg_log" 2>/dev/null; then
             ORCH_GATE_MODEL="$_saved_gate_model"
             return 0

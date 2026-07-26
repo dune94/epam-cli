@@ -597,7 +597,11 @@ TIMELINE_CSS = """
 .tl li.skip .h{color:var(--muted); font-weight:400;}
 .tl .n { display:block; color:var(--muted); font-size:13.5px; margin-top:.15rem; }
 .lede { font-size:16.5px; }
-.intro { color:var(--fg); opacity:.85; margin:.35rem 0 .6rem; max-width:46rem; }
+.intro { color:var(--fg); opacity:.85; margin:.35rem 0 .6rem; max-width:46rem; line-height:1.65; }
+/* The middle paragraph is the mechanism — retries, escalation, self-healing.
+   It is the part worth reading, so it is not styled as filler. */
+.intro.cont { margin:.55rem 0; }
+.intro.cont:first-of-type ~ .intro.cont:last-of-type { opacity:.8; }
 .phase { margin:1.75rem 0 .35rem; font-size:.78rem; text-transform:uppercase; letter-spacing:.07em;
          color:var(--muted); font-weight:700; }
 """
@@ -617,57 +621,177 @@ _PHASE_OF = {
 # A reader who knows nothing about this pipeline needs to be told what each
 # stage is FOR before being shown what it did. Without this the timeline is a
 # list of jargon; with it, each beat has somewhere to land.
+# A reader who knows nothing about this pipeline needs to be told what each
+# stage is FOR before being shown what it did. Each stage is narrated as three
+# paragraphs of prose: what it was HANDED, what it DID with it — including the
+# retry, escalation and self-healing machinery, which is the part worth reading —
+# and what it HANDED ON. The mechanisms are the story; the code that comes out
+# the far end is only the receipt.
 _PHASE_INTRO = {
     'Setup': (
-        'Before any work starts, the pipeline records where it is beginning from — the money already '
-        'spent with the model provider, so the cost of this run can be measured exactly rather than '
-        'guessed at afterwards.'),
+        'The pipeline begins with nothing but a ticket number and a wallet. Before it is allowed to '
+        'spend anything it reads the current balance at the model provider &mdash; the real, billed '
+        'figure, not an estimate assembled from its own logs.',
+
+        'This matters because every agent in this run is a paid API call, and an agent that retries, '
+        'escalates to a stronger model and retries again can quietly cost several times what a clean '
+        'pass would. Measuring from a recorded starting balance means the run&rsquo;s true price can be '
+        'read off at the end by subtraction, rather than trusted from a tally that the pipeline itself '
+        'kept and could be wrong about.',
+
+        'What it hands forward is a number: the line in the sand that everything after this is measured '
+        'against.'),
+
     'Ingest & selection': (
-        'The pipeline is given nothing but a Jira ticket number. It has to fetch the ticket, work out '
-        'which of the organisation&rsquo;s many repositories the bug actually lives in, and pin down the '
-        'exact version of that code to work against. Nobody tells it any of this in advance.'),
+        'It is handed one Jira ticket identifier. Nothing else &mdash; not the repository, not the '
+        'branch, not the file, not even which of the organisation&rsquo;s many codebases the bug lives in.',
+
+        'So it fetches the ticket and reads it the way a new engineer would: the summary, the '
+        'description, the comments, any linked pull requests. From that it has to infer a repository. '
+        'This is a genuine decision and it is made in the open &mdash; the candidate repositories are '
+        'considered, one is selected, and the reason is recorded rather than assumed. Once a repository '
+        'is chosen it is cloned at a specific commit, so that everything downstream &mdash; the '
+        'diagnosis, the fix, the test run against the original code &mdash; is anchored to one exact '
+        'version of the codebase and cannot drift underneath the run.',
+
+        'What it hands forward is a working copy pinned to a known commit, and a written statement of '
+        'the problem in the reporter&rsquo;s own words.'),
+
     'Pipeline steps': (
-        'The run advances through a fixed sequence of numbered steps. Some do work, some are checks, and '
-        'some are skipped when they do not apply to this kind of change. They are listed here in the order '
-        'they executed so the shape of the run is visible at a glance.'),
+        'The run advances through a fixed, numbered sequence. Each step is either work, a check, or a '
+        'step that recognises it does not apply to this kind of change and stands down.',
+
+        'The sequence is deliberately rigid. An agent cannot choose to skip a gate it expects to fail, '
+        'and it cannot reorder the work so that its own output is checked before the thing that would '
+        'contradict it runs. Steps that do not apply announce that they are not applicable rather than '
+        'silently passing, because a check that quietly returns success when it did nothing is '
+        'indistinguishable from a check that ran and approved &mdash; and that distinction is exactly '
+        'the one a reader of this report needs.',
+
+        'What it hands forward is the shape of the run: which stages engaged, which stood down, and in '
+        'what order.'),
+
     'Diagnosis': (
-        'This is the hardest part, and the part most likely to go wrong. A bug ticket describes a '
-        '<em>symptom</em> in everyday language — &ldquo;the discount is not displayed&rdquo; — but the '
-        'code that causes it usually contains none of those words. An investigating agent has to search '
-        'the codebase, follow the data backwards from where the wrong value appears to where it is '
-        'actually calculated, and name the exact line at fault. A confident wrong answer here poisons '
-        'everything downstream, so the pipeline checks the answer against the real file before trusting it.'),
+        'The investigating agent is handed the ticket text and a codebase it has never seen. It is '
+        'handed no file names, no starting point and no hints.',
+
+        'This is the hardest stage and the one most likely to go wrong, because the ticket describes a '
+        '<em>symptom</em> in everyday language &mdash; &ldquo;the discount is not displayed&rdquo; &mdash; '
+        'while the code responsible almost certainly contains none of those words. The agent has to '
+        'search the codebase, follow the data backwards from where the wrong value is displayed to where '
+        'it is actually computed, and name the single line at fault. The failure mode here is not '
+        'silence but confidence: a model that has seen enough plausible symbol names will happily '
+        'assemble a line of code that looks exactly right and does not exist. So the pipeline does not '
+        'take the diagnosis on trust. The agent must quote the broken line <em>verbatim</em>, and that '
+        'quotation is then checked character for character against the real file on disk. If the quote '
+        'does not appear in the source, the diagnosis is rejected and the agent is asked again &mdash; '
+        'and if it keeps failing, the work escalates to a stronger and more expensive model. To make '
+        'that demand answerable rather than impossible, the agent is given a tool that prints real '
+        'numbered source lines, so quoting is an act of copying rather than of recollection.',
+
+        'What it hands forward is a verified diagnosis: a file, a line, the actual text of that line, an '
+        'explanation of why it is wrong, and a prescription for the smallest change that would fix it.'),
+
     'Implementation': (
-        'A developer agent is given the diagnosis and asked to make the smallest change that fixes it. '
-        'Smallest matters: a large rewrite is harder to review, more likely to break something else, and '
-        'more likely to be rejected. The pipeline verifies that the agent actually changed the files it '
-        'claims to have changed, rather than taking its word for it.'),
+        'The developer agent is handed the verified diagnosis, the prescribed shape of the fix, and the '
+        'names of the helpers that already exist in this codebase for the job.',
+
+        'It is asked for the smallest change that fixes the diagnosed line &mdash; and &ldquo;smallest&rdquo; '
+        'is enforced rather than encouraged. A sprawling rewrite is harder to review, likelier to break '
+        'something unrelated, and routinely rejected downstream, so the pipeline checks that a '
+        'prescribed existing helper actually appears in the resulting diff instead of a new one invented '
+        'alongside it. It also refuses to take the agent&rsquo;s word for what it did: the files the '
+        'agent reports writing are reconciled against the files that actually changed on disk, and that '
+        'record &mdash; not the plan written earlier &mdash; becomes the authoritative list of what this '
+        'run touched. Everything downstream, from the lint gate to the coverage check, is scoped by that '
+        'record, because what a run predicted it would edit and what it edited are routinely different.',
+
+        'What it hands forward is a real diff against the pinned commit, and a manifest of exactly which '
+        'files it produced.'),
+
     'Proving the fix': (
-        'A fix that nobody can demonstrate is just an assertion. So a second agent writes a test that '
-        'reproduces the original bug, and the pipeline runs it twice — once against the ORIGINAL code, '
-        'where it must fail, and once against the fixed code, where it must pass. Only then is the fix '
-        'considered proven.'),
+        'The test-writing agent is handed the diagnosis, the diff, and the verification criteria the '
+        'story was accepted against.',
+
+        'A fix nobody can demonstrate is only an assertion, so the test is not judged by reading it. It '
+        'is executed twice: once against the <em>original</em> code, where it is required to FAIL, and '
+        'once against the fixed code, where it is required to PASS. A test that passes against the '
+        'original never reproduced the bug and is worthless as proof, however convincing it reads; a '
+        'test that fails against the fix means the fix does not work. Only a genuine red-then-green '
+        'transition is accepted, and it is a transition observed by running the code, not claimed by an '
+        'agent. Passing that gate settles correctness but not completeness, so a separate advisory check '
+        'then asks, one criterion at a time, whether the test would actually fail if each stated '
+        'requirement were violated &mdash; a question the red/green gate cannot answer, because a test '
+        'can reproduce the bug perfectly while ignoring a requirement entirely.',
+
+        'What it hands forward is an executable proof, and an honest account of which criteria that '
+        'proof does and does not cover.'),
+
     'Review': (
-        'A separate reviewing agent reads the change as a senior developer would: does it address the '
-        'ticket, is it the smallest sensible change, does it reuse what already exists? It can send the '
-        'work back to be redone.'),
+        'The reviewing agent is handed the ticket, the diagnosis, the diff and the test &mdash; and the '
+        'manifest of what actually changed, rather than what was planned.',
+
+        'It reads the change the way a senior engineer would at a pull request: does this address the '
+        'ticket that was actually filed, is it the smallest change that would do so, does it reuse what '
+        'the codebase already provides instead of reinventing it, and does the test genuinely prove '
+        'anything. It has real authority &mdash; it can reject the work and send it back to be redone, '
+        'and a rejection restarts implementation rather than being logged and stepped over. It is also '
+        'empowered to reject a change for being <em>too large</em>, which is the failure this pipeline '
+        'sees more often than under-engineering.',
+
+        'What it hands forward is a verdict with reasons, and either an approval or a specific '
+        'instruction for the next attempt.'),
+
     'Lint gate': (
-        'An automated check of code style and formatting, deliberately limited to the files this run '
-        'touched. It is careful not to judge the run on problems that were already in the codebase — '
-        'making an agent clean up somebody else&rsquo;s formatting would bloat the change and get it '
-        'rejected in review.'),
+        'The gate is handed the manifest of files this run actually wrote, and a copy of the codebase as '
+        'it stood <em>before</em> the run started.',
+
+        'It lints both, and subtracts. Only findings that this run introduced are counted; anything the '
+        'linter already objected to before the run began is not this run&rsquo;s problem. That '
+        'subtraction is the whole point of the gate. Judging a change against the absolute state of a '
+        'large codebase would make an agent responsible for cleaning up years of accumulated style '
+        'debt, which bloats a two-line fix into an unreviewable one and gets it rejected upstairs. When '
+        'a genuinely new finding does appear, the pipeline attempts to repair it in place &mdash; and '
+        'then verifies the repair by re-linting, re-compiling and re-running the affected tests, because '
+        'the obvious way to silence a complaint in a test file is to weaken the test, and that test is '
+        'the run&rsquo;s only proof. A repair that fails any of those checks is reverted outright.',
+
+        'What it hands forward is a clean diff, or a specific and genuinely new objection to it.'),
+
     'Quality gates': (
-        'A final battery of independent checks — security scanning, specification conformance, code '
-        'review by machine, mutation testing, fuzzing and performance. Each returns its own verdict. '
-        'Some block the run; some only warn.'),
+        'The gates are handed the finished change, the test, and the review verdict.',
+
+        'Each is an independent specialist &mdash; security scanning, conformance to the written '
+        'specification, machine code review, mutation testing, fuzzing, performance &mdash; and each '
+        'returns its own verdict rather than contributing to a single aggregate score, so no gate can be '
+        'outvoted into silence. Some block the run and some only warn, and which is which is fixed in '
+        'advance rather than decided once the results are in. A gate that finds nothing to say about '
+        'this kind of change reports that it does not apply, which is a different statement from '
+        'approval and is recorded as such.',
+
+        'What they hand forward is a set of independent verdicts on a change that has already been '
+        'proven to work.'),
+
     'Outcome': (
-        'The final result, and what the whole run cost.'),
+        'The final position: what the run produced, and what it cost.',
+
+        'The cost is a real billed figure measured against the balance recorded at the very start, not a '
+        'total the pipeline accumulated as it went. Retries, escalations to stronger models and '
+        'self-healing attempts all land in that number, which is why it is worth reading next to the '
+        'account of how much healing the run needed.',
+
+        'What it hands forward is the merged branch, this report, and the money spent to get here.'),
 }
 
 
 def render_timeline(events, kinds=None, intros=True):
     """Chronological play-by-play, with an explanation of each stage's purpose."""
     rows, current = [], None
+    # A phase recurs whenever the run loops back through it (a rejected review
+    # sends implementation round again). Narrate it in full the first time and
+    # only name it thereafter — three paragraphs repeated twenty-five times
+    # buries the beats they exist to introduce.
+    narrated = set()
     for e in events:
         if kinds and e['kind'] not in kinds:
             continue
@@ -676,8 +800,14 @@ def render_timeline(events, kinds=None, intros=True):
             if current is not None:
                 rows.append('</ul>')
             rows.append('<div class="phase">' + esc(phase) + '</div>')
-            if intros and _PHASE_INTRO.get(phase):
-                rows.append('<p class="intro">' + _PHASE_INTRO[phase] + '</p>')
+            if intros and _PHASE_INTRO.get(phase) and phase not in narrated:
+                narrated.add(phase)
+                para = _PHASE_INTRO[phase]
+                if isinstance(para, str):
+                    para = (para,)
+                for i, block in enumerate(para):
+                    cls = 'intro' if i == 0 else 'intro cont'
+                    rows.append('<p class="' + cls + '">' + block + '</p>')
             rows.append('<ul class="tl">')
             current = phase
         note = ('<span class="n">' + e['note'] + '</span>') if e['note'] else ''

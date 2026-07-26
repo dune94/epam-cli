@@ -89,3 +89,4 @@ session.md
 orchestrations/jira/*.env
 !orchestrations/jira/*.env.example
 orchestrations/projects/*/runs/
+__pycache__/

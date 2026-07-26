@@ -569,8 +569,12 @@ describe('Step 10: TC writer gate', () => {
     expect(stepEmitCount('10', 'skip')).toBeGreaterThanOrEqual(1);
   });
 
-  it('no duplicate step_emit skip calls (max 2)', () => {
-    expect(stepEmitCount('10', 'skip')).toBeLessThanOrEqual(2);
+  it('no duplicate step_emit skip calls (max 3)', () => {
+    // Three mutually exclusive reasons a TC writer legitimately stands down:
+    // SKIP_TC_WRITER=1, brownfield (VCs + the bug-reproduction gate do this job
+    // instead), and every story already having its TCs. The guard exists to catch
+    // the same path emitting twice, not to cap distinct branches.
+    expect(stepEmitCount('10', 'skip')).toBeLessThanOrEqual(3);
   });
 
   it('label references "TC" or "writer"', () => {

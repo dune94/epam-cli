@@ -67,6 +67,27 @@ with open(${JSON.stringify(prdPath)}) as f:
     d = json.load(f)
 phase_ids = d.get('implementationOrder', {}).get(${JSON.stringify(phase)}, [])
 by_id = {s['id']: s for s in d['stories']}
+def _is_test_file(f):
+    f = f or ''
+    base = f.split('/')[-1]
+    if '__tests__/' in f or f.startswith('__tests__/'):
+        return True
+    if base.startswith('test_'):
+        return True
+    for _m in ('.spec.', '.test.', '_spec.', '_test.'):
+        if _m in base:
+            return True
+    return False
+def _pair_key(f):
+    f = f or ''
+    for _m in ('.spec.', '.test.', '_spec.', '_test.'):
+        if _m in f:
+            return f[:f.rindex(_m)]
+    return f.rsplit('.', 1)[0] if '.' in f.split('/')[-1] else f
+def _test_base(f):
+    return _pair_key((f or '').split('/')[-1])
+def _files_for(story):
+    return (story.get('technicalNotes') or {}).get('files') or []
 story_filter = ''
 ${bodySnippet}
 `;

@@ -17,6 +17,15 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Files this run PRODUCED supersede the files it DECLARED.
+#
+# technicalNotes.files is a PREDICTION written during the spec pass; the manifest
+# is a RECORD of what the run actually wrote. This script runs AFTER
+# implementation, so the record is authoritative — and the reproducing test is
+# created by a later agent, so it can never appear in a prediction made earlier.
+_TCW_MANIFEST="${LOG_DIR:-$(dirname "$0")/../logs}/story-outputs-${PHASE:-core}.txt"
+export _TCW_MANIFEST
 PRD_FILE=""
 PHASE=""
 OUTPUT_DIR=""
@@ -68,6 +77,53 @@ fi
 # ── Find test stories in this phase that need TCs ──────────────────────────────
 TC_NEEDED=$(python3 << PYEOF
 import json, sys
+import os as _os
+# Test conventions vary per project (.spec.ts here, .test.ts elsewhere,
+# __tests__/, test_*.py). NO REGEX: two of this script's heredocs are unquoted,
+# so backslash escapes are collapsed by the shell before Python sees them.
+def _is_test_file(f):
+    f = f or ''
+    base = f.split('/')[-1]
+    if '__tests__/' in f or f.startswith('__tests__/'):
+        return True
+    if base.startswith('test_'):
+        return True
+    for _m in ('.spec.', '.test.', '_spec.', '_test.'):
+        if _m in base:
+            return True
+    return False
+def _pair_key(f):
+    """Path with the test marker AND extension removed, so 'a.service.ts' and
+    'a.service.spec.ts' produce the same key."""
+    f = f or ''
+    for _m in ('.spec.', '.test.', '_spec.', '_test.'):
+        if _m in f:
+            return f[:f.rindex(_m)]
+    return f.rsplit('.', 1)[0] if '.' in f.split('/')[-1] else f
+def _test_base(f):
+    return _pair_key((f or '').split('/')[-1])
+def _manifest_files():
+    try:
+        with open(_os.environ.get('_TCW_MANIFEST', '')) as fh:
+            return [l.strip() for l in fh if l.strip()]
+    except OSError:
+        return []
+def _files_for(story):
+    """After implementation the RECORD supersedes the PREDICTION."""
+    declared = (story.get('technicalNotes') or {}).get('files') or []
+    produced = _manifest_files()
+    if not produced:
+        return declared
+    base = set()
+    for _f in declared:
+        base.add(_pair_key(_f))
+    extra = []
+    for _f in produced:
+        if _f in declared or _pair_key(_f) in base:
+            extra.append(_f)
+    return list(dict.fromkeys(declared + extra))
+
+
 
 with open('$PRD_FILE') as f:
     d = json.load(f)
@@ -116,8 +172,8 @@ for sid in phase_ids:
     # verified (tsc + external tests passed) work over a bookkeeping mismatch.
     if s.get('status') == 'deprecated':
         continue
-    files = s.get('technicalNotes', {}).get('files', [])
-    is_test_story = any(f.endswith('.test.ts') for f in files)
+    files = _files_for(s)
+    is_test_story = any(_is_test_file(f) for f in files)
     already_has_tc = bool(s.get('testCriteria', {}).get('facts'))
     if is_test_story and not already_has_tc:
         results.append(sid)
@@ -143,6 +199,53 @@ mkdir -p "$(dirname "$TC_OUT_FILE")"
 # Build story context for the prompt
 STORY_CONTEXT=$(python3 << PYEOF
 import json
+import os as _os
+# Test conventions vary per project (.spec.ts here, .test.ts elsewhere,
+# __tests__/, test_*.py). NO REGEX: two of this script's heredocs are unquoted,
+# so backslash escapes are collapsed by the shell before Python sees them.
+def _is_test_file(f):
+    f = f or ''
+    base = f.split('/')[-1]
+    if '__tests__/' in f or f.startswith('__tests__/'):
+        return True
+    if base.startswith('test_'):
+        return True
+    for _m in ('.spec.', '.test.', '_spec.', '_test.'):
+        if _m in base:
+            return True
+    return False
+def _pair_key(f):
+    """Path with the test marker AND extension removed, so 'a.service.ts' and
+    'a.service.spec.ts' produce the same key."""
+    f = f or ''
+    for _m in ('.spec.', '.test.', '_spec.', '_test.'):
+        if _m in f:
+            return f[:f.rindex(_m)]
+    return f.rsplit('.', 1)[0] if '.' in f.split('/')[-1] else f
+def _test_base(f):
+    return _pair_key((f or '').split('/')[-1])
+def _manifest_files():
+    try:
+        with open(_os.environ.get('_TCW_MANIFEST', '')) as fh:
+            return [l.strip() for l in fh if l.strip()]
+    except OSError:
+        return []
+def _files_for(story):
+    """After implementation the RECORD supersedes the PREDICTION."""
+    declared = (story.get('technicalNotes') or {}).get('files') or []
+    produced = _manifest_files()
+    if not produced:
+        return declared
+    base = set()
+    for _f in declared:
+        base.add(_pair_key(_f))
+    extra = []
+    for _f in produced:
+        if _f in declared or _pair_key(_f) in base:
+            extra.append(_f)
+    return list(dict.fromkeys(declared + extra))
+
+
 
 with open('$PRD_FILE') as f:
     d = json.load(f)
@@ -164,15 +267,15 @@ for sid in phase_ids:
     if story_filter and sid != story_filter:
         continue
     s = by_id.get(sid, {})
-    files = s.get('technicalNotes', {}).get('files', [])
-    is_test_story = any(f.endswith('.test.ts') for f in files)
+    files = _files_for(s)
+    is_test_story = any(_is_test_file(f) for f in files)
     if not is_test_story:
         continue
     if s.get('testCriteria', {}).get('facts'):
         continue
 
-    impl_files = [f for f in files if not f.endswith('.test.ts')]
-    test_files = [f for f in files if f.endswith('.test.ts')]
+    impl_files = [f for f in files if not _is_test_file(f)]
+    test_files = [f for f in files if _is_test_file(f)]
 
     # Impl source files can live in the SAME story (impl+test not split into
     # separate children) or in a PEER story (split topology, e.g. SKY-004-A/
@@ -185,10 +288,10 @@ for sid in phase_ids:
         if peer_id == sid:
             continue
         ps = by_id.get(peer_id, {})
-        peer_files = ps.get('technicalNotes', {}).get('files', [])
+        peer_files = _files_for(ps)
         # A peer is an impl story sharing a non-test filename base
-        test_bases = {f.split('/')[-1].replace('.test.ts', '') for f in test_files}
-        peer_bases = {f.split('/')[-1].replace('.ts', '') for f in peer_files if not f.endswith('.test.ts')}
+        test_bases = {_test_base(f) for f in test_files}
+        peer_bases = {_pair_key(f.split('/')[-1]) for f in peer_files if not _is_test_file(f)}
         if test_bases & peer_bases:
             impl_src.extend(peer_files)
 
@@ -304,6 +407,47 @@ set -e
 
 # ── Validate and apply TCs to prd.json ─────────────────────────────────────────
 python3 << PYEOF
+import os as _os
+# Backslash-free by necessity: this heredoc is UNQUOTED, so the shell collapses
+# escape sequences before Python sees them — a regex here is silently corrupted.
+def _is_test_file(f):
+    f = f or ''
+    base = f.split('/')[-1]
+    if '__tests__/' in f or f.startswith('__tests__/'):
+        return True
+    if base.startswith('test_'):
+        return True
+    for _m in ('.spec.', '.test.', '_spec.', '_test.'):
+        if _m in base:
+            return True
+    return False
+def _pair_key(f):
+    f = f or ''
+    for _m in ('.spec.', '.test.', '_spec.', '_test.'):
+        if _m in f:
+            return f[:f.rindex(_m)]
+    return f.rsplit('.', 1)[0] if '.' in f.split('/')[-1] else f
+def _test_base(f):
+    return _pair_key((f or '').split('/')[-1])
+def _manifest_files():
+    try:
+        with open(_os.environ.get('_TCW_MANIFEST', '')) as fh:
+            return [l.strip() for l in fh if l.strip()]
+    except OSError:
+        return []
+def _files_for(story):
+    declared = (story.get('technicalNotes') or {}).get('files') or []
+    produced = _manifest_files()
+    if not produced:
+        return declared
+    base = set()
+    for _f in declared:
+        base.add(_pair_key(_f))
+    extra = []
+    for _f in produced:
+        if _f in declared or _pair_key(_f) in base:
+            extra.append(_f)
+    return list(dict.fromkeys(declared + extra))
 import json, re, sys, os
 from datetime import datetime, timezone
 
@@ -433,15 +577,15 @@ def find_contract_mock_skeleton(peer_ids):
 
 def peer_ids_for(sid):
     story = by_id.get(sid, {})
-    files = story.get('technicalNotes', {}).get('files', [])
-    test_files = [f for f in files if f.endswith('.test.ts')]
-    test_bases = {f.split('/')[-1].replace('.test.ts', '') for f in test_files}
+    files = _files_for(story)
+    test_files = [f for f in files if _is_test_file(f)]
+    test_bases = {_test_base(f) for f in test_files}
     peers = []
     for peer_id in phase_ids_list:
         if peer_id == sid:
             continue
         peer_files = by_id.get(peer_id, {}).get('technicalNotes', {}).get('files', [])
-        peer_bases = {f.split('/')[-1].replace('.ts', '') for f in peer_files if not f.endswith('.test.ts')}
+        peer_bases = {_pair_key(f.split('/')[-1]) for f in peer_files if not _is_test_file(f)}
         if test_bases & peer_bases:
             peers.append(peer_id)
     return peers
@@ -490,8 +634,8 @@ still_missing = []
 check_ids = [story_filter] if story_filter else phase_ids
 for sid in check_ids:
     s = by_id.get(sid, {})
-    files = s.get('technicalNotes', {}).get('files', [])
-    if any(f.endswith('.test.ts') for f in files) and not s.get('testCriteria', {}).get('facts'):
+    files = _files_for(s)
+    if any(_is_test_file(f) for f in files) and not s.get('testCriteria', {}).get('facts'):
         still_missing.append(sid)
 
 if still_missing:

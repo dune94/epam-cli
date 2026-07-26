@@ -34,6 +34,22 @@ fi
 python3 << PYEOF
 import json, re, sys
 
+# Test-file conventions vary per project (.spec.ts here, .test.ts elsewhere,
+# __tests__/, test_*.py). Hardcoding one made this check a silent no-op on any
+# codebase using another. NO REGEX: this heredoc is unquoted, so backslash
+# escapes would be eaten by the shell before Python ever sees them.
+def _is_test_file(f):
+    f = f or ''
+    base = f.split('/')[-1]
+    if '__tests__/' in f or f.startswith('__tests__/'):
+        return True
+    if base.startswith('test_'):
+        return True
+    for marker in ('.spec.', '.test.', '_spec.', '_test.'):
+        if marker in base:
+            return True
+    return False
+
 PRD_FILE = """$PRD_FILE"""
 # Optional: scope the per-story "is this story in a clean/correct state right
 # now" checks (#9, #10, #17) to a single phase's own implementationOrder,
@@ -165,7 +181,7 @@ test_ts_minimax = []
 for sid in check_ids:
     s = by_id.get(sid, {})
     files = s.get('technicalNotes', {}).get('files', [])
-    if any(f.endswith('.test.ts') for f in files) and s.get('aiProvider') == 'minimax':
+    if any(_is_test_file(f) for f in files) and s.get('aiProvider') == 'minimax':
         test_ts_minimax.append(sid)
 if test_ts_minimax:
     err(f".test.ts active stories using minimax (must use qwen/K2): {test_ts_minimax}")
@@ -271,7 +287,7 @@ test_stories_missing_tc_field = []
 for sid in check_ids:
     s = by_id.get(sid, {})
     files = s.get('technicalNotes', {}).get('files', [])
-    is_test_story = any(f.endswith('.test.ts') for f in files)
+    is_test_story = any(_is_test_file(f) for f in files)
     if is_test_story and 'testCriteria' not in s:
         test_stories_missing_tc_field.append(sid)
 if test_stories_missing_tc_field:

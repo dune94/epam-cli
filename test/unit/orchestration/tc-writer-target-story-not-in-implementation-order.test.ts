@@ -42,14 +42,17 @@ describe('post-impl-tc-writer.sh — target-story inclusion guard (static)', () 
 
   it('the "needs TC" query force-includes the --story target when absent from implementationOrder[phase]', () => {
     const idx = src.indexOf('# ── Find test stories in this phase that need TCs');
-    const block = src.slice(idx, idx + 1400);
+    // Bounded by the enclosing python program, not a character count — a fixed
+    // window measures code length, not behaviour, and broke when shared helpers
+    // were added above.
+    const block = src.slice(idx, src.indexOf('\nPYEOF', idx));
     expect(block).toMatch(/if story_filter and story_filter not in phase_ids:/);
     expect(block).toMatch(/phase_ids = phase_ids \+ \[story_filter\]/);
   });
 
   it('the STORY_CONTEXT builder force-includes the --story target', () => {
     const idx = src.indexOf('# Build story context for the prompt');
-    const block = src.slice(idx, idx + 1000);
+    const block = src.slice(idx, src.indexOf('\nPYEOF', idx));
     expect(block).toMatch(/if story_filter and story_filter not in phase_ids:/);
   });
 

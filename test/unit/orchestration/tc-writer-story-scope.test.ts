@@ -45,15 +45,18 @@ describe('post-impl-tc-writer.sh — --story flag wiring (static)', () => {
   });
 
   it('the "needs TC" query loop is filtered by story_filter when set', () => {
+    // Bounded by the end of the enclosing python program, not a character
+    // count: a fixed window measures the length of the code rather than its
+    // behaviour, and broke when shared helpers were added above this line.
     const idx = src.indexOf('# ── Find test stories in this phase that need TCs');
-    const block = src.slice(idx, idx + 1400);
+    const block = src.slice(idx, src.indexOf('\nPYEOF', idx));
     expect(block).toMatch(/story_filter = '\$STORY'/);
     expect(block).toMatch(/if story_filter and sid != story_filter:/);
   });
 
   it('the STORY_CONTEXT builder loop is filtered by story_filter when set', () => {
     const idx = src.indexOf('# Build story context for the prompt');
-    const block = src.slice(idx, idx + 1200);
+    const block = src.slice(idx, src.indexOf('\nPYEOF', idx));
     expect(block).toMatch(/story_filter = '\$STORY'/);
     expect(block).toMatch(/if story_filter and sid != story_filter:/);
   });

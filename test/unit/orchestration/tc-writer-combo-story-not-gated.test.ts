@@ -70,7 +70,12 @@ describe('TC-writer gating — combo-story scoping (static)', () => {
     const matches = [...tcWriterSrc.matchAll(/is_test_story = (.+)/g)];
     expect(matches.length).toBeGreaterThanOrEqual(2);
     for (const m of matches) {
-      expect(m[1]).toBe("any(f.endswith('.test.ts') for f in files)");
+      // The point of this test is any() vs all() — a combo story must not be
+      // gated. The test-file predicate itself is no longer a hardcoded
+      // extension: .test.ts made the check a silent no-op on a .spec.ts
+      // codebase, so it now uses the shared convention-agnostic helper.
+      expect(m[1]).toMatch(/^any\(/);
+      expect(m[1], 'a hardcoded test convention is back').not.toMatch(/\.test\.ts/);
     }
   });
 });

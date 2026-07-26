@@ -981,6 +981,118 @@ run_orch_prompt_with_tools() {
 # Wraps run_orch_prompt_with_tools with up to QA_GATE_MAX_RETRIES (default 2) attempts.
 # Retry 2: prepends corrective note + escalates to ESCALATION_MODEL_HIGH when set.
 # Returns 0 when the log contains structured JSON output; 1 when all attempts fail.
+# _lint_fix_findings_directly <lint_log> <phase>
+# Repair the flagged lines. Do not rebuild the story around them.
+#
+# Live metrolinx 2026-07-26, run 7: a correct fix, a test proven RED→GREEN by
+# execution and an approved review were all discarded-in-waiting because
+# `'line-item-1'` appeared four times in the test's fixture data
+# (sonarjs/no-duplicate-string). The only remediation available was to add
+# acceptance criteria, exit 2, reset the codeline and rebuild the entire phase —
+# ~20 minutes and ~$1 — and nothing in that loop actually fixes the literal, so
+# the rebuild can land in exactly the same place.
+#
+# Nothing here knows any rule names. Whatever the PROJECT'S eslint config
+# flagged is what gets repaired; an engine carrying a list of "rules we can fix"
+# would rot the moment the project changed its config.
+#
+# The danger this must not create is worse than the one it solves: an agent
+# editing a test could "fix" the finding by weakening the test — and that test is
+# the run's only executable proof. So every edit is verified (lint clean, types
+# compile, tests still pass) and reverted on any failure, leaving the pipeline
+# exactly where it was.
+_lint_fix_findings_directly() {
+    local _lf_log="$1" _lf_phase="${2:-core}"
+    [ "${LINT_FIX_DIRECT_ENABLED:-1}" = "1" ] || return 1
+    [ -f "$_lf_log" ] || return 1
+
+    # Findings as the gate reported them: "path:line:col  rule  message".
+    local _lf_findings
+    _lf_findings=$(grep -oE '^[^ ]+\.[A-Za-z]+:[0-9]+:[0-9]+ +[^ ]+ +.*' "$_lf_log" 2>/dev/null | head -25)
+    [ -n "$_lf_findings" ] || return 1
+
+    # Scope: ONLY the files the gate flagged. Nothing else is touched.
+    local _lf_files
+    _lf_files=$(printf '%s\n' "$_lf_findings" | awk -F: '{print $1}' | sort -u)
+    [ -n "$_lf_files" ] || return 1
+
+    # Snapshot, so a bad repair can be undone completely.
+    local _lf_stash="$LOG_DIR/lint-fix-${_lf_phase}.snapshot"
+    rm -rf "$_lf_stash" 2>/dev/null; mkdir -p "$_lf_stash" 2>/dev/null || return 1
+    local _f
+    while IFS= read -r _f; do
+        [ -f "$PROJECT_ROOT/$_f" ] || continue
+        mkdir -p "$_lf_stash/$(dirname "$_f")" 2>/dev/null
+        cp "$PROJECT_ROOT/$_f" "$_lf_stash/$_f" 2>/dev/null || true
+    done <<< "$_lf_files"
+
+    local _lf_attempt=0 _lf_max="${LINT_FIX_MAX_ATTEMPTS:-2}"
+    while [ "$_lf_attempt" -lt "$_lf_max" ]; do
+        _lf_attempt=$(( _lf_attempt + 1 ))
+        info "  [lint-fix] repairing ${_lf_findings_count:-$(printf '%s\n' "$_lf_findings" | wc -l | tr -d ' ')} finding(s) in place (attempt ${_lf_attempt}/${_lf_max})"
+
+        local _lf_prompt="You are fixing code-style findings a linter reported on files THIS RUN just wrote.
+
+## Findings to fix (and nothing else)
+${_lf_findings}
+
+## Rules
+1. Fix ONLY these findings, ONLY in these files. Do not refactor anything else.
+2. Do NOT weaken any test. Assertions, expected values and the scenario under
+   test must be preserved EXACTLY — a test here is the only executable proof the
+   bug is fixed, and a test that no longer proves it is far worse than a lint
+   warning. Extracting a repeated literal into a constant is fine; changing what
+   is asserted is not.
+3. Keep the change minimal and idiomatic for this repository.
+4. Edit the files in place with your write tool. Do not create new files.
+
+Files: ${_lf_files}
+Project root: ${PROJECT_ROOT}"
+
+        AI_GATE_ALLOW_TOOLS=1 \
+        EPAM_ALLOWED_TOOLS="${LINT_FIX_ALLOWED_TOOLS:-bash,read_file,write_file,list_files,search}" \
+        EPAM_AGENT_NAME="lint-fixer" EPAM_STORY_ID="${_lf_phase}" \
+            run_orch_prompt "$_lf_prompt" "lint-fixer" "$_lf_phase" \
+            > "$LOG_DIR/lint-fix-${_lf_phase}.log" 2>&1 || true
+
+        # ── VERIFY. The agent's claim is not evidence. ────────────────────────
+        local _lf_ok=1
+
+        # 1. the finding is actually gone
+        local _lf_relint=0
+        eslint_baseline_gate "$PROJECT_ROOT" "$_eslint_bin" "$LOG_DIR" \
+            "$LOG_DIR/lint-recheck-${_lf_phase}.log" || _lf_relint=$?
+        [ "$_lf_relint" -eq 0 ] || _lf_ok=0
+
+        # 2. it still compiles
+        if [ "$_lf_ok" = "1" ] && [ -n "${_node_bin:-}" ]; then
+            ( cd "$PROJECT_ROOT" && "$_node_bin" ./node_modules/.bin/tsc --noEmit ) \
+                >/dev/null 2>&1 || _lf_ok=0
+        fi
+
+        # 3. the tests still pass — a repair must never weaken the proof
+        if [ "$_lf_ok" = "1" ] && [ -n "${_node_bin:-}" ] && [ -x "$PROJECT_ROOT/node_modules/.bin/vitest" ]; then
+            ( cd "$PROJECT_ROOT" && timeout 600 "$_node_bin" ./node_modules/.bin/vitest run ) \
+                >/dev/null 2>&1 || _lf_ok=0
+        fi
+
+        if [ "$_lf_ok" = "1" ]; then
+            success "  [lint-fix] findings repaired in place — lint clean, types compile, tests still pass"
+            rm -rf "$_lf_stash" 2>/dev/null || true
+            return 0
+        fi
+
+        warning "  [lint-fix] repair rejected by verification (attempt ${_lf_attempt}/${_lf_max}) — revert the files to their pre-repair state"
+        while IFS= read -r _f; do
+            [ -f "$_lf_stash/$_f" ] && cp "$_lf_stash/$_f" "$PROJECT_ROOT/$_f" 2>/dev/null || true
+        done <<< "$_lf_files"
+    done
+
+    rm -rf "$_lf_stash" 2>/dev/null || true
+    warning "  [lint-fix] could not repair in place — falling through to gate remediation"
+    return 1
+}
+
 _run_qa_gate_with_retry() {
     local _qg_prompt="$1" _qg_agent="$2" _qg_phase="$3" _qg_log="$4"
     local _qg_max="${QA_GATE_MAX_RETRIES:-2}"
@@ -4844,7 +4956,22 @@ _tc_writer_needed=$(jq -r --arg phase "$PHASE" \
       )] | length' "$PRD_FILE" 2>/dev/null || echo 0)
 fi
 
-if [ "${_tc_writer_needed:-0}" -gt 0 ]; then
+# TC WRITER IS A GREENFIELD MECHANISM (decision, 2026-07-26).
+#
+# Brownfield proves a change differently and better: verification criteria
+# describe the observable outcome, the repro-test-writer builds a test from them
+# plus the real fix diff, and the bug-reproduction gate then EXECUTES that test
+# against the pre-fix and post-fix code. A test criterion is a written
+# intention; RED→GREEN is a demonstration.
+#
+# Adding TCs on top would restate the VCs one model call further from the
+# source, and give the writer a second, overlapping requirement list to drift
+# from. Greenfield has no bug to reproduce and no baseline to run against, so
+# there TCs remain the mechanism that says what "done" means.
+if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
+    step_emit "10" "skip" "Step 10: TC writer gate" "brownfield — VCs + bug-reproduction gate instead"
+    info "Step 10: TC writer gate skipped — brownfield proves changes with verification criteria and the bug-reproduction gate, not test criteria"
+elif [ "${_tc_writer_needed:-0}" -gt 0 ]; then
     step_emit "10" "running" "Step 10: TC writer gate"
     log "Step 10: TC writer gate — ${_tc_writer_needed} test story/stories need testCriteria..."
     # Retry-on-violation (2026-07-13), same shape as the inline gate above:
@@ -5527,6 +5654,25 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/brownfield-repro-test-
             _tmp_prd="$(mktemp)"; jq --arg id "$_rg_story" \
                 '(.stories[] | select(.id == $id)) |= (. + {reviewStatus: "escalated", reproGate: "failed"})' \
                 "$PRD_FILE" > "$_tmp_prd" 2>/dev/null && mv "$_tmp_prd" "$PRD_FILE" || rm -f "$_tmp_prd"
+        else
+            # The test is proven to reproduce the bug. Separate question: does it
+            # cover every verification criterion the story was accepted against?
+            # Run 7 covered two of three and silently skipped the negative case —
+            # the repro gate cannot see that, because it only asks whether the
+            # test fails before the fix and passes after.
+            #
+            # ADVISORY: reports, never blocks. The change is already proven by
+            # execution, which is stronger evidence than a coverage opinion.
+            if [ -x "$SCRIPT_DIR/vc-coverage-check.sh" ]; then
+                _vc_test_file=$(story_outputs_tests "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null | head -1)
+                if [ -n "$_vc_test_file" ]; then
+                    bash "$SCRIPT_DIR/vc-coverage-check.sh" \
+                        --prd "$PRD_FILE" --story "$_rg_story" \
+                        --test-file "$PROJECT_ROOT/$_vc_test_file" \
+                        --out "$LOG_DIR/vc-coverage-${_rg_story}.json" 2>&1 \
+                        | tee -a "$LOG_DIR/vc-coverage-${PHASE}.log" || true
+                fi
+            fi
         fi
     done < <(jq -r --arg phase "$PHASE" \
         '(.implementationOrder[$phase] // []) as $ids |
@@ -5814,6 +5960,22 @@ if [ "${SKIP_LINT_GATE:-false}" != "true" ] && [ -n "$_node_bin" ] && [ -x "$_no
     fi
 
     echo "=== Gate Result: $([ "$_lint_failed" -eq 0 ] && echo PASS || echo FAIL) ===" >> "$_lint_log"
+
+    if [ "$_lint_failed" -ne 0 ]; then
+        # Try the cheap repair FIRST. Run 7 ended here with everything it existed
+        # for already correct — grounded diagnosis, minimal fix, a test proven
+        # RED→GREEN, review approved — over a string literal repeated four times
+        # in fixture data. The only remediation on offer was to rewrite the story
+        # and rebuild the entire phase, discarding a correct fix and a proven test
+        # to address a duplicated string. Fix the finding; do not rebuild around it.
+        #
+        # Every edit is verified (lint clean, types compile, tests still pass) and
+        # reverted on any failure, so the worst case is exactly where we were.
+        if _lint_fix_findings_directly "$_lint_log" "$PHASE"; then
+            step_emit "20" "pass" "Step 20: Lint gate" "findings repaired in place"
+            _lint_failed=0
+        fi
+    fi
 
     if [ "$_lint_failed" -ne 0 ]; then
         step_emit "20" "fail" "Step 20: Lint gate"

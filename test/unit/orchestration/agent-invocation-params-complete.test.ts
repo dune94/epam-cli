@@ -62,6 +62,11 @@ const AGENT_SITES = [
   // The shell-facing seam (record/synthesize-auto/apply/tick). Its only model
   // call is delegated to kb-synthesizer.js above.
   'lib/kb-cli.js',
+  // Verification, not generation: one closed yes/no question per criterion about
+  // two artefacts that already exist. It sets no reasoning effort and needs no
+  // explicit budget — the reply is a single small JSON object, and an unparseable
+  // one is reported as UNKNOWN rather than counted as a gap.
+  'vc-coverage-check.sh',
 ];
 
 describe('B28 — the central net (the actual fix)', () => {

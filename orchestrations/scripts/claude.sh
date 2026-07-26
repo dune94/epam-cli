@@ -1827,7 +1827,25 @@ verify_story_deliverables() {
             _real_changes=$(git -C "$PROJECT_ROOT" diff --name-only "$_baseline_ref" 2>/dev/null | \
                 grep -v -E '^(\.codegraph/|\.epam/)' || true)
             if [ -z "$_real_changes" ]; then
-                error "Story $story_id declared NO technicalNotes.files, and no real change exists anywhere in $PROJECT_ROOT relative to ${_baseline_ref} (only incidental pipeline paths, if anything, changed) — treating as incomplete rather than trusting an empty deliverable list."
+                # This is a PER-ATTEMPT verdict, not a terminal one: returning 1
+                # sends the story back through the retry ladder, and a later
+                # attempt routinely succeeds. Live metrolinx 2026-07-25 —
+                # MiniMax-M3 returned success on attempt 1 having written
+                # nothing; this check caught it, attempt 2 produced the correct
+                # fix. But it was logged via error() with no attempt number, so
+                # a healthy run read as a dead one and was killed by hand
+                # mid-QA. Severity is a contract with the reader the same way
+                # exit status is a contract with the caller: warn per attempt,
+                # and let the loop's own exhaustion path own the terminal error.
+                local _attempt_note=""
+                if [ -n "${retry_count:-}" ] && [ -n "${MAX_RETRIES:-}" ]; then
+                    if [ "$retry_count" -lt "$MAX_RETRIES" ]; then
+                        _attempt_note=" [attempt $((retry_count + 1))/$((MAX_RETRIES + 1)) — will retry]"
+                    else
+                        _attempt_note=" [attempt $((retry_count + 1))/$((MAX_RETRIES + 1)) — no retries remain]"
+                    fi
+                fi
+                warning "Story $story_id declared NO technicalNotes.files, and no real change exists anywhere in $PROJECT_ROOT relative to ${_baseline_ref} (only incidental pipeline paths, if anything, changed) — treating this attempt as incomplete rather than trusting an empty deliverable list.${_attempt_note}"
                 return 1
             fi
         fi

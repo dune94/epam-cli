@@ -202,6 +202,22 @@ function findStory(prd: any, id: string): any {
   return (prd.stories || []).find((s: any) => s.id === id);
 }
 
+/**
+ * The stories that actually did the work for `id`.
+ *
+ * The spec pass routinely SPLITS a story — MOCK-HW-1 becomes MOCK-HW-1-impl and
+ * MOCK-HW-1-test, and the parent is marked deprecated. Looking up the parent by
+ * exact id then finds a deprecated shell whose status is not "completed", so a
+ * correct run reads as a failure. Assert against whatever actually ran: the
+ * children if it split, the story itself if it did not.
+ */
+function workedStories(prd: any, id: string): any[] {
+  const all = (prd.stories || []) as any[];
+  const live = all.filter(
+    (st) => (st.id === id || String(st.id).startsWith(`${id}-`)) && st.status !== 'deprecated');
+  return live.length ? live : all.filter((st) => st.id === id);
+}
+
 /** Real invocation of the real launch sequence — tier3-mock-run.sh, unmodified. */
 function runFullPipeline(opts: { prdPath: string; projectRoot: string; env: NodeJS.ProcessEnv }): { stdout: string; exitCode: number } {
   const result = spawnSync('bash', [
@@ -318,22 +334,49 @@ describe.skipIf(!RUN_REAL)('Full mock brownfield pipeline — REAL Jira ingest +
       expect(stdout).toMatch(new RegExp(STORY_ID));
 
       // ── Real branch + real commit diff vs origin/main ──
-      const branches = execFileSync('git', ['branch', '--list', `AI-${STORY_ID}`], { cwd: clone, encoding: 'utf8' });
-      expect(branches).toContain(`AI-${STORY_ID}`);
-      const diff = execFileSync('git', ['diff', 'origin/main', `AI-${STORY_ID}`, '--', 'src/hello.ts'], { cwd: clone, encoding: 'utf8' });
-      expect(diff).toMatch(/hello dolly/);
+      // The story is routinely SPLIT by the spec pass into MOCK-HW-1-impl and
+      // MOCK-HW-1-test, so the branches are AI-MOCK-HW-1-impl / -test and an
+      // exact --list match on AI-MOCK-HW-1 returns nothing. Splitting is normal
+      // pipeline behaviour, and asserting the unsplit shape reported a correct
+      // run as a failure.
+      const branches = execFileSync(
+        'git', ['branch', '--list', `AI-${STORY_ID}*`], { cwd: clone, encoding: 'utf8' })
+        .split('\n').map(b => b.replace(/^[*+ ]+/, '').trim()).filter(Boolean);
+      expect(branches.length,
+        `no AI-${STORY_ID}* branch was created — the pipeline produced no branch to merge`)
+        .toBeGreaterThan(0);
+
+      // Existing is not enough: the code must actually have changed. A branch
+      // that exists proves the plumbing ran; only the diff proves the work did.
+      const diffs = branches.map(b => {
+        try {
+          return execFileSync('git', ['diff', 'origin/main', b, '--', 'src/hello.ts'],
+                              { cwd: clone, encoding: 'utf8' });
+        } catch { return ''; }
+      });
+      expect(diffs.join('\n'),
+        `no branch changes src/hello.ts to the new greeting. Branches: ${branches.join(', ')}`)
+        .toMatch(/hello dolly/);
 
       // ── Real, pipeline-synthesized PRD (never hand-authored) shows real completion ──
       const prd = readPrd(synthPrdPath);
-      const story = findStory(prd, STORY_ID);
-      expect(story, JSON.stringify(story)).toBeTruthy();
-      expect(story.status, stdout.slice(-4000)).toBe('completed');
-      expect(story.completed).toBe(true);
-      expect(story.completedAt).toBeTruthy();
+      const worked = workedStories(prd, STORY_ID);
+      expect(worked.length,
+        `no live story for ${STORY_ID}: ${JSON.stringify((prd.stories || []).map((x: any) => [x.id, x.status]))}`)
+        .toBeGreaterThan(0);
+      for (const st of worked) {
+        expect(st.status, `${st.id}: ${stdout.slice(-2000)}`).toBe('completed');
+        expect(st.completed, st.id).toBe(true);
+        expect(st.completedAt, st.id).toBeTruthy();
+      }
+      const story = worked[0];
 
       // ── Real spec pass discovered the fix site itself — no hand-supplied files ──
-      expect(Array.isArray(story.technicalNotes?.files), JSON.stringify(story.technicalNotes)).toBe(true);
-      expect(story.technicalNotes.files.length).toBeGreaterThan(0);
+      // At least one worked story must name real files; a test-only child may
+      // legitimately declare none of its own.
+      expect(worked.some((st: any) => Array.isArray(st.technicalNotes?.files)
+                                      && st.technicalNotes.files.length > 0),
+        JSON.stringify(worked.map((st: any) => [st.id, st.technicalNotes?.files]))).toBe(true);
 
       // ── Brownfield proves a change with VERIFICATION criteria, not test criteria ──
       // This assertion used to require testCriteria.facts. The TC writer is now
@@ -345,15 +388,16 @@ describe.skipIf(!RUN_REAL)('Full mock brownfield pipeline — REAL Jira ingest +
       // The old assertion outlived the contract it described, and mock1 then
       // reported a correct run as a failure. Assert what this flow actually
       // promises, or the test measures a pipeline that no longer exists.
-      expect(Array.isArray(story.verificationCriteria),
-        `brownfield produced no verification criteria: ${JSON.stringify(story.verificationCriteria)}`)
+      const vcs = worked.flatMap((st: any) => st.verificationCriteria || []);
+      expect(Array.isArray(vcs),
+        `brownfield produced no verification criteria: ${JSON.stringify(vcs)}`)
         .toBe(true);
-      expect(story.verificationCriteria.length,
+      expect(vcs.length,
         'the TC writer is skipped for brownfield, so VCs are the ONLY statement of ' +
         'what this change must do — an empty list means nothing verifies it')
         .toBeGreaterThan(0);
       // Every VC must be observable prose a tester could act on, not a restated title.
-      for (const vc of story.verificationCriteria) {
+      for (const vc of vcs) {
         expect(typeof vc === 'string' ? vc.length : String(vc?.text ?? '').length,
           `empty verification criterion: ${JSON.stringify(vc)}`).toBeGreaterThan(20);
       }

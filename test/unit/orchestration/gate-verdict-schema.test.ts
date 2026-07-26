@@ -311,3 +311,68 @@ describe('a verdict cannot rest on an empty evidence set', () => {
     expect(r.ok, r.reason).toBe(true);
   });
 });
+
+/**
+ * The other four gates declare their own evidence fields.
+ *
+ * review-ranger uses `findings`; mutant-hunter uses `mutations`; fuzz-weaver
+ * uses `cases`; perf-sentinel uses `findings`. All four also declare `summary`
+ * as an OBJECT of counts, not a sentence.
+ *
+ * Only sast-sentinel and spec-validator ever ran in run 8 — the rest were
+ * skipped once the validator failed — so these shapes have never met this
+ * schema. A mutant-hunter returning "fail" carries its reasons in `mutations`,
+ * and the "a fail must carry findings" rule knew only `findings`: it would have
+ * been rejected for being complete, which is precisely how run 8 died.
+ *
+ * Written before the next run rather than discovered during it.
+ */
+describe('every declared gate shape survives the schema', () => {
+  const SUMMARY = { filesReviewed: 3, findingsCount: 1, blockerCount: 0 };
+
+  it('mutant-hunter: a fail whose evidence is in "mutations"', () => {
+    const r = check(JSON.stringify({
+      agent: 'mutant-hunter', phase: 'core',
+      summary: { mutationsProposed: 4, killed: 3, survived: 1, mutationScore: 75 },
+      mutations: [{ file: 'a.ts', line: 17, status: 'survived',
+                    recommendation: 'assert the return-leg discount' }],
+      verdict: 'fail',
+    }), 'qa-gate:mutant-hunter');
+    expect(r.ok, `a complete mutant-hunter report was rejected: ${r.reason}`).toBe(true);
+  });
+
+  it('fuzz-weaver: a fail whose evidence is in "cases"', () => {
+    const r = check(JSON.stringify({
+      agent: 'fuzz-weaver', phase: 'core',
+      summary: { functionsAnalysed: 2, gaps: 1, vulnerabilities: 1 },
+      cases: [{ function: 'applyReportDiscounts', file: 'a.ts', status: 'vulnerability',
+                invariant: 'discount never exceeds price' }],
+      verdict: 'fail',
+    }), 'qa-gate:fuzz-weaver');
+    expect(r.ok, `a complete fuzz-weaver report was rejected: ${r.reason}`).toBe(true);
+  });
+
+  it('review-ranger: an object-valued summary is not a missing summary', () => {
+    const r = check(JSON.stringify({
+      agent: 'review-ranger', phase: 'core', summary: SUMMARY,
+      findings: [{ severity: 'major', file: 'a.ts', description: 'duplicated literal' }],
+      verdict: 'fail',
+    }), 'qa-gate:review-ranger');
+    expect(r.ok, r.reason).toBe(true);
+  });
+
+  it('perf-sentinel: a clean pass with an empty findings list', () => {
+    const r = check(JSON.stringify({
+      agent: 'perf-sentinel', phase: 'core',
+      summary: { filesAnalysed: 2, findingsCount: 0, blockerCount: 0 },
+      findings: [], verdict: 'pass',
+    }), 'qa-gate:perf-sentinel');
+    expect(r.ok, r.reason).toBe(true);
+  });
+
+  it('still rejects a fail that carries no evidence anywhere', () => {
+    // The rule must survive being generalised — this is what it exists for.
+    expect(check('{"verdict":"fail","summary":"broken","findings":[]}',
+                 'qa-gate:review-ranger').ok).toBe(false);
+  });
+});

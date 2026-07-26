@@ -38,9 +38,22 @@ VALID_VERDICTS = {'pass', 'fail', 'warn', 'not_applicable'}
 # that matched its own prompt exactly.
 _verdict_keys = {'verdict', 'overallVerdict'}
 
-# A list of per-item results IS the account of what was examined. Demanding a
-# prose "summary" on top of it imposes a second contract the agent was never given.
-_detail_keys = ('stories', 'results', 'items')
+# Each gate declares its OWN evidence field: review-ranger and perf-sentinel use
+# "findings", spec-validator "stories", mutant-hunter "mutations", fuzz-weaver
+# "cases". Enumerating them here is how run 8 happened in the first place — a
+# validator that knows a fixed set of field names goes stale the moment a prompt
+# adds one. So any list-valued field counts as the evidence channel.
+#
+# "findings" is excluded from the SHAPE test only: it has its own explicit
+# non-empty rule below, and an empty findings list must not excuse a "fail".
+def _detail_present(obj):
+    """Does this object declare a per-item breakdown at all?"""
+    return any(isinstance(v, list) for k, v in obj.items() if k != 'findings')
+
+
+def _has_evidence(obj):
+    """Did it actually report any items, in whatever field it declares?"""
+    return any(v for v in obj.values() if isinstance(v, list))
 
 # Gates whose findings must carry a severity to be actionable.
 _SEVERITIES = {'blocker', 'major', 'minor', 'info'}
@@ -92,7 +105,7 @@ def validate(gate, text):
 
     # The KEY declares the shape; emptiness is a content question, and the
     # caller already interprets an empty stories[] (no data -> warn, not pass).
-    _has_detail = any(isinstance(obj.get(k), list) for k in _detail_keys)
+    _has_detail = _detail_present(obj)
     if not _has_detail and not str(obj.get('summary') or '').strip():
         return False, ('gave a verdict with no "summary". State in one sentence what you checked '
                        'and what you concluded.')
@@ -117,8 +130,10 @@ def validate(gate, text):
     # That cause is fixed upstream; this refuses the shape so the next rename
     # cannot reopen it. Only a CLAIM of compliance is contradictory: an item that
     # reports no score, or says not_applicable, is making no such claim.
-    for key in _detail_keys:
-        for item in (obj.get(key) or []):
+    for key, _items in obj.items():
+        if not isinstance(_items, list):
+            continue
+        for item in _items:
             if not isinstance(item, dict):
                 continue
             if str(item.get('verdict') or '').strip().lower() not in ('pass', 'warn', 'fail'):
@@ -137,7 +152,7 @@ def validate(gate, text):
     # run while saying nothing about what to fix. In the multi-item shape the
     # reasons live per item, not in a top-level findings list, so structured
     # detail satisfies this the same way it satisfies "summary".
-    if verdict.strip().lower() == 'fail' and not findings and not _has_detail:
+    if verdict.strip().lower() == 'fail' and not _has_evidence(obj) and not _has_detail:
         return False, 'returned "fail" with no findings. Say what is wrong, or use "pass"/"warn".'
 
     return True, ''

@@ -15,6 +15,7 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 
 | # | ID | Title | Status | Source |
 |---|---|---|---|---|
+| 0 | SCHEMA-1 | **Schema-bind the reviewer's output (first client of a general agent I/O seam)** | pending | Live metrolinx failures, 2026-07-25 |
 | 1 | GAP-P5 | Intra-story planner/executor model split | done | Aider, CrewAI |
 | 2 | GAP-P4 | Semantic RAG — replace TF-IDF in CPA | done | CrewAI, OpenHands |
 | 3 | GAP-P6 | OpenTelemetry emission alongside Langfuse | done | MAF, OAI Agents SDK |
@@ -37,6 +38,58 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | 19 | GAP-P21 | Multi-repo / monorepo and enterprise GitOps | pending | Enterprise GitOps |
 | 20 | GAP-P1 | Docker sandbox execution | deferred | OpenHands, SWE-agent |
 | 21 | GAP-P3 | SWE-bench benchmark harness | done | SWE-agent |
+
+---
+
+## SCHEMA-1 — Schema-bind the reviewer's output  `pending`  **TOP PRIORITY**
+
+**Why the reviewer first.** Its output is already structured (`{verdict, issues[], summary}`)
+and already parsed as JSON, so binding it changes *when* the contract is enforced, not what
+the contract is. Its failure mode is exactly what schema binding prevents — a model emitting
+truncated prose where a verdict belongs — and that blocked FOUR consecutive runs (B28: a
+169-byte non-verdict, killed mid-`<think>`). Small blast radius: one agent, one schema, and it
+already has a retry ladder to escalate on hard failure.
+
+**Audit finding that motivates it (2026-07-25).** `lib/kb-synthesizer.js` is the ONLY one of
+twelve agent invocation sites whose output space is schema-bound. Every other agent —
+reviewer, detective, spec, CPA, TC writer, codeline discovery — generates freely and a parser
+tries to recover structure afterwards (`claude.sh` alone has ~197 post-hoc parse sites).
+`kb_schema.py`'s Pydantic reach stops at the self-heal KB boundary. The four-pillar work made
+the KB rigorous; the agents that do the actual work are exactly as unbounded as before.
+
+**Capability is proven, not assumed.** Verified live against OpenRouter on 2026-07-25:
+`z-ai/glm-5.2`, `z-ai/glm-5.1` and `moonshotai/kimi-k3` all honour `json_schema` strict mode.
+The provider seam ships it (`QwenProvider`), with `provider.require_parameters` so OpenRouter
+cannot silently route to an upstream that ignores the schema.
+
+### Build with three specifics
+
+1. **Keep a free-text field inside the schema** (`reasoning: string` alongside `verdict` /
+   `issues[]`). A reviewer forced into pure JSON may reason less, and this codebase has already
+   demonstrated that constraining output changes behaviour — the VC producer is pinned to low
+   effort precisely because high reasoning caused prescriptive drift. Let it think in prose;
+   keep the decision machine-readable.
+2. **Do not touch the output budget.** Schema binding does NOT remove `<think>` tokens — they
+   still bill against `EPAM_MAX_OUTPUT_TOKENS`. A live probe used 663–842 completion tokens for
+   a *trivial* verdict; a real review with issues is far longer. B28 still applies and this is
+   where a naive implementation would reintroduce it.
+3. **Fail loudly; never fall back to parsing.** If a provider cannot honour the schema that must
+   be a hard error. A silent degrade to regex recovery is the old bug in new clothes.
+
+### Acceptance — quality must not regress
+
+Standing rule: *"if quality is not the same or is lower — revert."* Run the reviewer BOTH ways
+over the SAME diffs (the AMSD-1820 change is on hand) and compare verdicts and issues found.
+If bound review finds fewer or shallower issues, revert rather than rationalise. Without this
+comparison the change ships on the theory that structure is free, which is untested here.
+
+### Explicitly NOT in scope
+
+Converting all twelve agents. The detective and spec agents produce exploratory output where
+the reasoning IS the product; they need the free-text-field treatment carefully, or not at all.
+Prove the pattern on the reviewer first.
+
+Related: `project_structured_agent_io_framework` (memory), B28, `constraint-sanity.js`.
 
 ---
 

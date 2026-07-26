@@ -7826,6 +7826,49 @@ $_prof_prompt"
                 fi
 
                 if echo "$_prof_result" | grep -q '"profile_updated"[[:space:]]*:[[:space:]]*true'; then
+                    # GROUNDING PRE-CHECK — is the proposed rule TRUE of this repo?
+                    #
+                    # The LLM reviewer below is handed the last 500 chars of
+                    # profiles.json before/after, with no tools and no access to
+                    # the repo under work. It cannot verify a claim about the
+                    # codebase, only judge whether the wording looks reasonable.
+                    # Live 2026-07-26 it approved a rule hardcoding
+                    # `${file%.ts}.test.ts` for a codebase where every test is
+                    # .spec.ts — encoding, as permanent guidance, the exact
+                    # naming assumption that had blinded mutant-hunter, derived
+                    # from a finding that was itself an artefact of a manifest
+                    # bug. `.test.ts` is entirely plausible in isolation; it is
+                    # false only against code the reviewer never sees.
+                    #
+                    # A file-convention claim is verifiable, so verify it. Runs
+                    # first so an unfounded rule costs no LLM call, and fails
+                    # OPEN on any error of its own.
+                    # Guarded against unset SCRIPT_DIR/PROJECT_ROOT: this check
+                    # must never be the reason remediation breaks.
+                    local _pa_ground_lib="${SCRIPT_DIR:-}/lib/profile_rule_grounding.py"
+                    if [ -n "${SCRIPT_DIR:-}" ] && [ -n "${PROJECT_ROOT:-}" ] && [ -f "$_pa_ground_lib" ]; then
+                        local _pa_before_f _pa_after_f
+                        _pa_before_f=$(mktemp); _pa_after_f=$(mktemp)
+                        printf '%s' "$_profiles_before" > "$_pa_before_f"
+                        printf '%s' "$_profiles_after"  > "$_pa_after_f"
+                        # NOT piped into tee: `cmd | tee` yields TEE's exit
+                        # status, so the rejection below would never fire. That
+                        # pipe-masking is the same defect that made the
+                        # repro-gate and review-escalation log a block without
+                        # enforcing one.
+                        local _pa_ground_out _pa_ground_rc=0
+                        _pa_ground_out=$(python3 "$_pa_ground_lib" "$_pa_before_f" "$_pa_after_f" "${PROJECT_ROOT:-}" 2>&1) || _pa_ground_rc=$?
+                        [ -n "$_pa_ground_out" ] && printf '%s\n' "$_pa_ground_out" >> "${LOG_DIR:-/tmp}/profile-grounding-${PHASE:-core}.log"
+                        if [ "$_pa_ground_rc" -ne 0 ]; then
+                            [ -n "$_pa_ground_out" ] && warning "  [profile-augmentor] $_pa_ground_out"
+                            warning "  [profile-augmentor] Profile change REJECTED — it asserts a file convention this repo does not use; reverting profiles.json"
+                            echo "$_profiles_before" > "$_profiles_file" 2>/dev/null || true
+                            rm -f "$_pa_before_f" "$_pa_after_f"
+                            continue
+                        fi
+                        rm -f "$_pa_before_f" "$_pa_after_f"
+                    fi
+
                     # Reviewer gate — validate the change before accepting it
                     local _reviewer_profile
                     _reviewer_profile=$(echo "$_profiles_after" | \

@@ -1865,9 +1865,21 @@ Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving �
 
 // openspec-brownfield: regenerate the VCs addressing the flags (producer side of
 // the autonomous loop). Returns a fresh VC array, or null if it couldn't produce one.
-async function regenerateVcViaOpenspec({ story, flags, cycle, logDir }) {
+async function regenerateVcViaOpenspec({ story, flags, cycle, logDir, findings = [] }) {
+  // Ground the regeneration in the LOCATED fix site. Without this the model has
+  // only ticket prose to work from and drifts to whatever the words suggest —
+  // live, "station names" for a promo-code-in-email ticket. The detective already
+  // knows the file and function; withholding it is what makes the criteria
+  // unanchored.
+  const siteBlock = Array.isArray(findings) && findings.length
+    ? `\nTHE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):\n`
+      + findings.slice(0, 5).map((f) => `- ${f.file}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${f.reason}` : ''}`).join('\n')
+      + `\nDo NOT write criteria about areas unrelated to this code.\n`
+    : '';
+
   const prompt = `Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
 ${flags.map((f) => '- ' + f).join('\n')}
+${siteBlock}
 
 Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
 ${(story.acceptanceCriteria || []).map((a) => '- ' + a).join('\n') || '- (none)'}
@@ -2280,6 +2292,17 @@ ${storyPayload}
       // Persist the VERIFICATION CRITERIA (VC) layer onto the story so it reaches
       // the PRD (observability) and downstream agents (TC writer, impl, reviewer).
       // ACs stay the immutable ticket intent; VCs are the observable checks.
+      // The detective runs FIRST so its findings can ground VC generation. It was
+      // previously called AFTER this block, which meant the VC generator was asked
+      // to specify OBSERVABLE behaviour for code it had never been shown — working
+      // from ticket prose alone. Live 2026-07-25 that produced "VC 3 addresses
+      // station names" for a promo-code-in-email ticket, two failed regeneration
+      // cycles, and a fallback to generic VCs that the test writer could not anchor
+      // to anything. The detective's own prompt states the intent: "You run early
+      // (during the specification pass) and your output grounds every downstream
+      // agent."
+      const detectiveFindings = await runCodeGraphDetective(story, logDir);
+
       if (process.env.EPAM_BROWNFIELD === '1') {
         const rawVc = normalizeVerificationCriteria(payload);
         if (rawVc.length) {
@@ -2288,7 +2311,9 @@ ${storyPayload}
           // openspec with ladder escalation; conservative safe-fallback if it can't
           // converge. Never halts — always persists a clean VC set.
           const enforced = await enforceVerificationCriteria(story, rawVc, {
-            regenerateVc: (flags, nextCycle) => regenerateVcViaOpenspec({ story, flags, cycle: nextCycle, logDir }),
+            regenerateVc: (flags, nextCycle) => regenerateVcViaOpenspec({
+              story, flags, cycle: nextCycle, logDir, findings: detectiveFindings,
+            }),
             reviewVc: (vc, cycle) => reviewVcViaSpeckit({ story, vc, cycle, logDir }),
           });
           story.verificationCriteria = enforced.vc;
@@ -2300,7 +2325,6 @@ ${storyPayload}
           console.log(`spec-mode: ${story.id} — ${enforced.vc.length} verification criteria persisted (source: ${story.vcSource}, resolution: ${enforced.source})`);
         }
       }
-      const detectiveFindings = await runCodeGraphDetective(story, logDir);
       const detectiveFiles = detectiveFindings.map((f) => f.file);
       const deterministicFiles = getDeterministicCandidateFiles(story);
       const candidateFiles = [...new Set([...detectiveFiles, ...deterministicFiles])];

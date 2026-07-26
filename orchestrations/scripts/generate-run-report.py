@@ -939,6 +939,157 @@ def render_code_section(d):
     return '\n'.join(parts)
 
 
+def render_code_page(d):
+    """The third deliverable: what was written, HOW, why it is minimal, and the proof.
+
+    A run's outputs matter more than the run: this is the page a reviewer reads
+    to decide whether to trust the change. It must never flatter it. Where the
+    RED/GREEN proof is missing the page says PROBLEM, because an unproven change
+    that looks reviewed is worse than one that is obviously unreviewed.
+    """
+    files = split_diff_by_file(d.get('diff', ''))
+    fs = (d.get('fix_sites') or [{}])[0]
+    parts = [head_block('Code — ' + (d.get('story') or ''),
+                        'What the pipeline wrote, how it decided to write it, and what proves it '
+                        'works.', _code_cards(d, files))]
+
+    # ── HOW the change was arrived at ────────────────────────────────────────
+    parts.append('<h2>How this code was arrived at</h2>')
+    if fs:
+        steps = []
+        if fs.get('brokenLine'):
+            steps.append(
+                '<li><strong>The defect was located and quoted.</strong> The investigating agent '
+                'traced the symptom back to the code that computes the wrong value and quoted the '
+                'exact broken expression: <code>' + esc(fs['brokenLine']) + '</code> in <code>'
+                + esc(fs.get('file')) + '</code>. That quote is checked character-for-character '
+                'against the real file, so a confident-sounding but invented diagnosis is refused '
+                'before any code is written.'
+                + (' <strong>Verified: ' + esc(fs.get('evidenceVerified')) + '</strong>.'
+                   if fs.get('evidenceVerified') is not None else '') + '</li>')
+        if fs.get('helper'):
+            steps.append(
+                '<li><strong>An existing helper was prescribed, not new logic.</strong> <code>'
+                + esc(fs['helper']) + '</code> already lives in this repository and already owns '
+                'the behaviour needed, so the fix reuses it. This is deliberate: hand-written '
+                'equivalents have to re-derive details the helper already encodes, and get them '
+                'wrong.</li>')
+        if fs.get('fix'):
+            steps.append('<li><strong>The change was specified before it was written:</strong> '
+                         + esc(fs['fix'][:400]) + '</li>')
+        parts.append('<ol>' + ''.join(steps) + '</ol>' if steps else '<p>' + MISSING + '</p>')
+    else:
+        parts.append('<p>' + MISSING + ' — no fix-site analysis was preserved for this run.</p>')
+
+    # ── The diffs, per file, with a derived explanation ──────────────────────
+    parts.append('<h2>The change itself</h2>')
+    if d.get('diffstat'):
+        parts.append('<pre>' + esc(d['diffstat'].strip()) + '</pre>')
+    if not files:
+        parts.append('<p>' + MISSING + '</p>')
+    for path, body in files:
+        is_test = '.spec.' in path or '.test.' in path
+        parts.append('<h3>' + ('Reproducing test' if is_test else 'The fix')
+                     + ' &mdash; <code>' + esc(path) + '</code></h3>')
+        parts.append('<p>' + describe_change(path, body) + '</p>')
+        hunks = [l for l in body.splitlines()
+                 if l.startswith(('@@', '+', '-')) and not l.startswith(('+++', '---'))]
+        shown = hunks[:60]
+        rendered = []
+        for l in shown:
+            cls = 'diff-add' if l.startswith('+') else ('diff-del' if l.startswith('-') else '')
+            rendered.append(('<span class="' + cls + '">' + esc(l) + '</span>') if cls else esc(l))
+        if len(hunks) > len(shown):
+            rendered.append(esc('… %d more line(s)' % (len(hunks) - len(shown))))
+        parts.append('<pre>' + '\n'.join(rendered) + '</pre>')
+
+    parts.append(_minimality_section(d, files, fs))
+    parts.append(_proof_section(d))
+    parts.append('<footer>Every claim on this page is derived from the run&rsquo;s own artefacts — '
+                 'the diff, the fix-site analysis and the gate logs. Nothing is inferred.</footer>'
+                 '</main>')
+    return '\n'.join(parts)
+
+
+def _code_cards(d, files):
+    added = sum(len([l for l in b.splitlines()
+                     if l.startswith('+') and not l.startswith('+++')]) for _, b in files)
+    removed = sum(len([l for l in b.splitlines()
+                       if l.startswith('-') and not l.startswith('---')]) for _, b in files)
+    proven = bool(d.get('repro_gate'))
+    return (
+        '<div class="card"><div class="k">Files changed</div><div class="v">' + str(len(files)) + '</div></div>'
+        '<div class="card"><div class="k">Lines +/&minus;</div><div class="v">' + str(added) + ' / ' + str(removed) + '</div></div>'
+        '<div class="card"><div class="k">Proof</div><div class="v ' + ('ok">RED→GREEN' if proven else 'bad">MISSING') + '</div></div>'
+        '<div class="card"><div class="k">Review</div><div class="v">' + esc((d.get('review_decision') or '?').strip()) + '</div></div>')
+
+
+def _minimality_section(d, files, fs):
+    """Argue minimality from the diff, or decline to argue it."""
+    src = [(p, b) for p, b in files if '.spec.' not in p and '.test.' not in p]
+    rows, verdict = [], []
+    for path, body in src:
+        add = [l[1:] for l in body.splitlines() if l.startswith('+') and not l.startswith('+++')]
+        rem = [l[1:] for l in body.splitlines() if l.startswith('-') and not l.startswith('---')]
+        body_add = [a for a in add if a.strip() and not re.match(r'\s*import\b', a)]
+        body_del = [r for r in rem if r.strip()]
+        imports = [a for a in add if re.match(r'\s*import\b', a)]
+        rows.append('<tr><td><code>' + esc(path) + '</code></td><td>' + str(len(body_add))
+                    + ' added, ' + str(len(body_del)) + ' removed</td><td>'
+                    + (str(len(imports)) + ' import' if imports else 'none') + '</td></tr>')
+        if len(body_del) == 1 and len(body_add) <= 2:
+            verdict.append('a single expression was replaced')
+        elif len(body_add) <= 6:
+            verdict.append('a handful of lines changed in one place')
+        else:
+            verdict.append('<strong class="warn">%d lines of new logic — larger than a minimal fix</strong>'
+                           % len(body_add))
+
+    helper_used = bool(fs.get('helper')) and fs['helper'] in (d.get('diff') or '')
+    out = ['<h2>Is this the minimum change?</h2>',
+           '<table><tr><th>File</th><th>Body lines</th><th>Imports</th></tr>' + ''.join(rows) + '</table>']
+    if verdict:
+        out.append('<p>In the source files: ' + '; '.join(verdict) + '.</p>')
+    if fs.get('helper'):
+        out.append('<p>' + ('<strong class="ok">The prescribed helper <code>' + esc(fs['helper'])
+                            + '</code> is used in the change</strong> rather than reimplemented — so the '
+                              'details it encodes cannot be got wrong here.'
+                            if helper_used else
+                            '<strong class="bad">The prescribed helper <code>' + esc(fs['helper'])
+                            + '</code> does NOT appear in the change.</strong> The logic was hand-written '
+                              'instead, which means a detail the helper owns has been re-derived — and on '
+                              '2026-07-26 exactly that produced a fix matching on the wrong separator.')
+                   + '</p>')
+    if not src:
+        out.append('<p>' + MISSING + ' — no source change to assess.</p>')
+    return '\n'.join(out)
+
+
+def _proof_section(d):
+    """RED/GREEN, or an explicit PROBLEM."""
+    if d.get('repro_gate'):
+        return (
+            '<h2>Proof the change works — RED then GREEN</h2>'
+            '<table><tr><th>Stage</th><th>Code under test</th><th>Test result</th><th>What it establishes</th></tr>'
+            '<tr><td><strong class="bad">RED</strong></td><td>the original code, without the fix</td>'
+            '<td><span class="bad">FAILS</span></td>'
+            '<td>the bug is real, and this test detects it</td></tr>'
+            '<tr><td><strong class="ok">GREEN</strong></td><td>the code with the fix applied</td>'
+            '<td><span class="ok">PASSES</span></td>'
+            '<td>the change fixes the reported behaviour</td></tr></table>'
+            '<p>Both runs were executed by the pipeline against real code — this is a demonstration, not '
+            'a model&rsquo;s opinion. A test that had only ever run against the fixed code could pass for '
+            'reasons unrelated to the bug, which is why the baseline run is the important half.</p>'
+            '<p class="intro">Gate output: ' + esc(d['repro_gate']) + '</p>')
+    return (
+        '<h2>Proof the change works</h2>'
+        '<div class="note bad"><strong>PROBLEM — there is no RED/GREEN proof for this change.</strong> '
+        'No bug-reproduction gate result was recorded, so nothing here demonstrates that the reported bug '
+        'existed or that this change fixes it. The code may be correct; it is <em>unproven</em>. Treat it '
+        'as a proposal, not a verified fix, and do not merge it on the strength of the review alone — a '
+        'reviewer reads intent, while the RED run is the only thing that tests reality.</div>')
+
+
 def narrative_html(d):
     verdict_cls = 'ok' if d['passed'] else 'bad'
     verdict = 'PASSED' if d['passed'] else 'DID NOT COMPLETE'
@@ -1091,14 +1242,18 @@ def main():
     d = collect(args)
     os.makedirs(args.out, exist_ok=True)
     for name, body in (('narrative.html', narrative_html(d)),
-                       ('qa-summary.html', qa_html(d))):
+                       ('qa-summary.html', qa_html(d)),
+                       ('code.html', render_code_page(d))):
         with open(os.path.join(args.out, name), 'w') as f:
             f.write(body)
         print('wrote', os.path.join(args.out, name))
-    if args.prd and os.path.exists(args.prd):
-        # Snapshot: the working PRD is temp state and disappears.
+    snapshot = os.path.join(args.out, 'working-prd.json')
+    if args.prd and os.path.exists(args.prd) and os.path.abspath(args.prd) != os.path.abspath(snapshot):
+        # Snapshot: the working PRD is temp state and disappears. Skipped when
+        # the source IS the snapshot — regenerating a report from an archived run
+        # would otherwise crash on copying a file onto itself.
         import shutil
-        shutil.copy(args.prd, os.path.join(args.out, 'working-prd.json'))
+        shutil.copy(args.prd, snapshot)
         print('wrote', os.path.join(args.out, 'working-prd.json'))
     with open(os.path.join(args.out, 'run-facts.json'), 'w') as f:
         json.dump({k: v for k, v in d.items() if k != 'diff'}, f, indent=2, default=str)

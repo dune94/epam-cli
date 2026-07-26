@@ -2224,6 +2224,11 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
         // explore already handed over, and one successful live pass used 7
         // round-trips. EPAM_MAX_ITERATIONS stays as the outer backstop.
         EPAM_MAX_TOOL_CALLS: process.env.CODEGRAPH_DETECTIVE_MAX_TOOL_CALLS || '7',
+        // Identity for the Langfuse trace. Without it every trace in the run
+        // renders as `llm-stream (uuid)` with no agent, no story and no prompt
+        // — a list of 35 identical unreadable rows.
+        EPAM_AGENT_NAME: 'code-graph-detective',
+        EPAM_STORY_ID: (story && story.id) || '',
         // The detective TRACES the causal fix site + picks the helper to reuse —
         // correctness is paramount and it must reason carefully. With story-point-
         // derived LOW effort it gave different/wrong helpers across passes (live

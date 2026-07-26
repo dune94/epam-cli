@@ -156,11 +156,34 @@ export class AgentRunner {
         });
       }
 
-      const response = await this.options.provider.stream(
+      // A hung forced-answer turn must cost ONE turn, not the whole run.
+      const turnDeadline = budgetSpent ? this.options.finalTurnTimeoutMs : undefined;
+      const withDeadline = <T>(p: Promise<T>): Promise<T> => {
+        if (!turnDeadline) return p;
+        return Promise.race([
+          p,
+          new Promise<T>((_, reject) => setTimeout(
+            () => reject(new Error(
+              `Final answer turn timed out after ${turnDeadline}ms with no response. The model was ` +
+              `asked to conclude with tools withdrawn and never replied.`)),
+            turnDeadline).unref?.()),
+        ]) as Promise<T>;
+      };
+
+      const response = await withDeadline(this.options.provider.stream(
         {
           messages,
           systemPrompt,
-          tools: budgetSpent ? [] : this.options.tools.map(t => t.definition),
+          // OMIT tools entirely once the budget is spent — do not send `tools: []`.
+          // Live metrolinx run 4 (2026-07-26): the detective made 7 quick,
+          // productive tool calls in ~65s, then this forced-answer turn hung and
+          // never returned, burning the rest of its 360s budget until the
+          // timeout fired. Langfuse recorded it precisely — `tools given: []`,
+          // `endTime: None`. An empty array is not the same request as no tools:
+          // it leaves the tool-calling path active with nothing to call, and the
+          // model can stall instead of answering. Omitting the field is the
+          // request we actually mean.
+          ...(budgetSpent ? {} : { tools: this.options.tools.map(t => t.definition) }),
           model: this.options.model,
           stream: true,
           maxTokens: this.options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
@@ -172,7 +195,7 @@ export class AgentRunner {
             accumulatedText += delta.text;
           }
         }
-      );
+      ));
 
       this.totalInputTokens += response.usage.inputTokens;
       this.totalOutputTokens += response.usage.outputTokens;

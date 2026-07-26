@@ -40,12 +40,39 @@ export class TracedProvider implements LLMProvider {
 
   private sessionId?: string;
 
+  /**
+   * Who is running, and on what. Live 2026-07-26: a session of 35 traces every
+   * one of which rendered as `llm-stream (uuid)` / "This trace has no input or
+   * output." — nothing to scan, search or sort by, so finding anything meant
+   * opening traces at random. The prompt was captured all along, one level down
+   * on the generation, invisible from the list. Each agent call is its own
+   * `epam run` subprocess, so env is the only channel that reaches here without
+   * touching every call site — the same reason sessionId falls back to
+   * ORCH_RUN_ID.
+   */
+  private get agentLabel(): string {
+    const agent = process.env.EPAM_AGENT_NAME?.trim();
+    const story = process.env.EPAM_STORY_ID?.trim();
+    if (agent && story) return `${agent} · ${story}`;
+    return agent || story || `${this.name} call`;
+  }
+
+  /** First user message, trimmed — enough to identify the call from a list. */
+  private tracePreview(request: ProviderRequest): string {
+    const firstUser = request.messages?.find(m => m.role === 'user');
+    const text = typeof firstUser?.content === 'string'
+      ? firstUser.content
+      : JSON.stringify(firstUser?.content ?? '');
+    return text.length > 600 ? text.slice(0, 600) + ' …' : text;
+  }
+
   async complete(request: ProviderRequest): Promise<ProviderResponse> {
     const langfuseEnabled = isLangfuseEnabled();
     const langfuse = langfuseEnabled ? getLangfuse() : null;
 
     const trace = langfuse?.trace({
-      name: 'llm-complete',
+      name: this.agentLabel,
+      input: this.tracePreview(request),
       sessionId: this.sessionId,
       userId: this.userId,
       metadata: { provider: this.name, model: request.model },
@@ -76,6 +103,7 @@ export class TracedProvider implements LLMProvider {
         ?? calculateCost(request.model, response.usage.inputTokens, response.usage.outputTokens);
       const toolCalls = response.content.filter(p => p.type === 'tool_use').length;
 
+      trace?.update({ output: this.summarizeOutput(response) });
       generation?.end({
         output: this.summarizeOutput(response),
         usage: { input: response.usage.inputTokens, output: response.usage.outputTokens, totalCost: cost },
@@ -106,7 +134,8 @@ export class TracedProvider implements LLMProvider {
     const langfuse = langfuseEnabled ? getLangfuse() : null;
 
     const trace = langfuse?.trace({
-      name: 'llm-stream',
+      name: this.agentLabel,
+      input: this.tracePreview(request),
       sessionId: this.sessionId,
       userId: this.userId,
       metadata: { provider: this.name, model: request.model },
@@ -143,6 +172,7 @@ export class TracedProvider implements LLMProvider {
         ?? calculateCost(request.model, response.usage.inputTokens, response.usage.outputTokens);
       const toolCalls = response.content.filter(p => p.type === 'tool_use').length;
 
+      trace?.update({ output: this.summarizeOutput(response) });
       generation?.end({
         output: this.summarizeOutput(response),
         usage: { input: response.usage.inputTokens, output: response.usage.outputTokens, totalCost: cost },

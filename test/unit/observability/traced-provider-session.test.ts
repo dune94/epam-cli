@@ -48,12 +48,15 @@ describe('TracedProvider — per-run session grouping', () => {
   });
 
   it('both trace kinds (complete and stream) carry the sessionId', () => {
-    const completeIdx = SRC.indexOf("name: 'llm-complete'");
-    const streamIdx = SRC.indexOf("name: 'llm-stream'");
-    expect(completeIdx).toBeGreaterThan(-1);
-    expect(streamIdx).toBeGreaterThan(-1);
-    expect(SRC.slice(completeIdx, completeIdx + 200)).toMatch(/sessionId/);
-    expect(SRC.slice(streamIdx, streamIdx + 200)).toMatch(/sessionId/);
+    // Located by the trace() call itself, not by a hardcoded name: the fixed
+    // names 'llm-complete'/'llm-stream' were removed because a list where every
+    // row reads `llm-stream (uuid)` is unreadable — traces are now named after
+    // the agent. Grouping by sessionId is unchanged and still required here.
+    const calls = [...SRC.matchAll(/langfuse\?\.trace\(\{/g)];
+    expect(calls.length, 'expected both a complete() and a stream() trace').toBe(2);
+    for (const c of calls) {
+      expect(SRC.slice(c.index!, c.index! + 260)).toMatch(/sessionId/);
+    }
   });
 });
 

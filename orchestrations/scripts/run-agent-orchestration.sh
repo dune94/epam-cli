@@ -968,7 +968,12 @@ $_qg_prompt"
         # Same allowlist as run_orch_prompt_with_tools: this path calls
         # run_orch_prompt directly, so wiring only the helper would leave every
         # actual gate invocation unrestricted.
+        # EPAM_AGENT_NAME/STORY_ID name the Langfuse trace. Without them every
+        # trace in a run renders as `llm-stream (uuid)` with no agent and no
+        # prompt — 35 identical unreadable rows, which is how a hung call went
+        # unnoticed behind a generic "timed out" message.
         AI_GATE_ALLOW_TOOLS=1 EPAM_ALLOWED_TOOLS="${ORCH_GATE_ALLOWED_TOOLS}" \
+            EPAM_AGENT_NAME="$_qg_agent" EPAM_STORY_ID="${_qg_phase:-}" \
             run_orch_prompt "$_qg_eff_prompt" "$_qg_agent" "$_qg_phase" 2>&1 | tee "$_qg_log"
         if grep -qE '"(verdict|findings|agent|summary)"' "$_qg_log" 2>/dev/null; then
             ORCH_GATE_MODEL="$_saved_gate_model"

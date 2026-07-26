@@ -24,6 +24,14 @@ export interface AgentRunOptions {
    * limit. This one is the limit the prompt was actually describing.
    */
   maxToolCalls?: number;
+  /**
+   * Deadline for the forced final-answer turn (ms). Unset = no deadline.
+   *
+   * That turn hung indefinitely on a live run and consumed the agent's entire
+   * outer timeout, so the attempt died with nothing — not even the evidence it
+   * had already gathered. A hang must cost one turn, not the whole run.
+   */
+  finalTurnTimeoutMs?: number;
   /** Prior conversation history to prepend before the current user message. */
   history?: Message[];
   /** Token threshold at which the runner auto-compresses older messages. */

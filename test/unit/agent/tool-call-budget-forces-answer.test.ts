@@ -123,6 +123,26 @@ describe('the tool-call budget is enforced, not requested', () => {
     expect(seen.length).toBe(25);
   });
 
+  it('OMITS the tools parameter when the budget is spent — never sends an empty array', async () => {
+    // Live metrolinx run 4, 2026-07-26. The detective made seven quick,
+    // productive tool calls in ~65s, then this forced-answer turn HUNG and never
+    // returned, burning the rest of its 360s budget until the timeout fired.
+    // Langfuse recorded it exactly: `tools given: []`, `endTime: None`.
+    //
+    // An empty tools array is not the same request as no tools at all — some
+    // providers keep tool-calling machinery active for `tools: []` and the model
+    // can stall rather than answer. Omitting the field is the request we
+    // actually mean: "answer in prose, there is nothing to call".
+    const { provider, seen } = relentlessProvider();
+    await makeRunner(provider, { maxToolCalls: 2 }).run();
+
+    const finalReq = (provider.stream as any).mock.calls.at(-1)[0];
+    expect('tools' in finalReq && (finalReq.tools ?? []).length === 0 && finalReq.tools !== undefined,
+      'the final turn sent tools: [] — the exact request shape that hung glm-5.1 for 5 minutes')
+      .toBe(false);
+    expect(seen.at(-1)!.toolCount).toBe(0);
+  });
+
   it('is reachable from the pipeline, not just from code', async () => {
     // The orchestration layer configures agents purely through EPAM_* env vars
     // (spec-mode-runner → ai-run.sh → epam run), so an option with no env path
@@ -152,5 +172,31 @@ describe('the tool-call budget is enforced, not requested', () => {
     const result = await makeRunner(provider, { maxToolCalls: 6 }).run();
     expect(result.finalResponse).toBe('done');
     expect((provider.stream as any).mock.calls.length).toBe(1);
+  });
+});
+
+describe('a hung forced-answer turn cannot consume the whole run', () => {
+  it('gives up on the final turn after its own deadline instead of hanging', async () => {
+    // The other half of the run-4 failure. Omitting `tools` addresses the likely
+    // cause; this addresses the consequence. The forced-answer turn inherited the
+    // detective's entire 360s allowance, so ONE request that never returned burned
+    // every remaining second and the attempt died with nothing — not even the
+    // evidence it had already gathered.
+    const provider = {
+      name: 'qwen',
+      complete: vi.fn(),
+      stream: vi.fn(async (req: any) => {
+        if (!req.tools) return new Promise(() => {});   // the hang, exactly as observed
+        return { content: [toolUse('t1')], stopReason: 'tool_use', usage };
+      }),
+    } as unknown as LLMProvider;
+
+    const started = Date.now();
+    await expect(
+      makeRunner(provider, { maxToolCalls: 1, finalTurnTimeoutMs: 300 }).run(),
+    ).rejects.toThrow(/final answer|timed out/i);
+    expect(Date.now() - started,
+      'the runner waited far past its own deadline — a hung provider still stalls the run')
+      .toBeLessThan(4000);
   });
 });

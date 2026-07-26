@@ -69,6 +69,8 @@ export class AgentRunner {
   private allTurnsHadRealCost = true;
   private anyTurnRan = false;
   private totalToolCalls = 0;
+  /** Announce the spent tool budget once, not on every subsequent turn. */
+  private toolBudgetAnnounced = false;
   private maxToolOutputChars: number;
   private memoryLoader?: MemoryLoader;
   private memoryPromptBlock?: string;
@@ -126,11 +128,39 @@ export class AgentRunner {
       // Build system prompt with memory injection
       const systemPrompt = this.buildSystemPrompt();
 
+      // TOOL BUDGET — enforced, not requested.
+      //
+      // The code-graph-detective's prompt says "HARD LIMIT: 6 tool calls total.
+      // This is not a suggestion." Nothing enforced it, so the model explored
+      // past 6 and hit the ITERATION cap with no answer at all, discarding the
+      // whole investigation. That was "fixed" three times by raising the cap
+      // (10 → 20 → 25, and 40 was worst of all: 40 calls, 680K input tokens, no
+      // fix). The budget was never the constraint — the absence of a mechanism
+      // was. Withdrawing the tools is what actually stops the exploring, the
+      // same way EPAM_ALLOWED_TOOLS='bash' structurally ended the
+      // answer-by-WriteFile failure that prompt wording could not.
+      //
+      // Unset = unlimited, so existing agents are unchanged.
+      const toolBudget = this.options.maxToolCalls;
+      const budgetSpent = typeof toolBudget === 'number' && toolBudget > 0 &&
+        this.totalToolCalls >= toolBudget;
+      if (budgetSpent && !this.toolBudgetAnnounced) {
+        this.toolBudgetAnnounced = true;
+        messages.push({
+          role: 'user',
+          content:
+            `Tool budget spent (${this.totalToolCalls}/${toolBudget} calls). No further tool ` +
+            `calls are available. Give your final answer NOW, in the required output format, ` +
+            `using only what you have already seen. A best-guess answer from the evidence you ` +
+            `gathered is worth everything; another query is worth nothing.`,
+        });
+      }
+
       const response = await this.options.provider.stream(
         {
           messages,
           systemPrompt,
-          tools: this.options.tools.map(t => t.definition),
+          tools: budgetSpent ? [] : this.options.tools.map(t => t.definition),
           model: this.options.model,
           stream: true,
           maxTokens: this.options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,

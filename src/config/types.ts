@@ -39,6 +39,8 @@ export interface ProjectConfig {
     dangerousSkipApproval?: boolean;
   };
   maxIterations?: number;
+  /** Max tool calls before tools are withdrawn and a final answer is required. */
+  maxToolCalls?: number;
   autoCompressAt?: number;
   maxOutputTokens?: number;
   /** Priority-ordered list of LLM provider+model slots (up to 5) for failover. */
@@ -71,6 +73,8 @@ export interface ResolvedConfig {
     dangerousSkipApproval: boolean;
   };
   maxIterations: number;
+  /** Max tool calls before tools are withdrawn; undefined = unlimited. */
+  maxToolCalls?: number;
   autoCompressAt: number;
   /** Maximum output tokens per LLM response (default: 16384). */
   maxOutputTokens: number;

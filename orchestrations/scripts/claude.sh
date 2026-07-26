@@ -1193,6 +1193,7 @@ build_implementation_prompt() {
         "- **\(.file)**" + (if .function != "" then " (`\(.function)`)" else "" end) + ": \(.reason)"
         + (if (.fix // "") != "" then "\n  - **Minimal fix:** \(.fix)"
              + (if .fixVerified == false then " ⚠️ UNVERIFIED: the helper named here (`\(.helper // "?")`) was NOT found in the repo — treat it as a HYPOTHESIS, not fact. Confirm it exists with the CodeGraph tool before importing it; if it does not exist, do not invent it — solve the fix another minimal way." else "" end)
+             + (if .evidenceVerified == false then " ⛔ UNGROUNDED DIAGNOSIS: the detective quoted `\(.brokenLine // "?")` as the broken code, but that expression is NOT in this file. The root cause below is therefore a GUESS about code that does not exist — live 2026-07-26 an answer of exactly this shape prescribed halving a discount that is in fact never applied at all, because the real defect was a key mismatch elsewhere. Do NOT implement it as written: re-derive the cause from the actual file contents first, and if the prescribed change has no basis in the code you read, fix what IS broken instead." else "" end)
            else "" end)
       ) | join("\n")
     ' 2>/dev/null || echo "")

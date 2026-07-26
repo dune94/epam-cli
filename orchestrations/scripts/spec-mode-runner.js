@@ -1697,6 +1697,98 @@ function verifyDetectiveHelper(helper, repoPath) {
   } catch { return null; }
 }
 
+// precomputeDetectiveExplore(repoPath, story, toolPath, env)
+// Runs the detective's own step-1 `explore` for it, deterministically, before
+// the model is invoked.
+//
+// The prompt says "First call: explore with the DOMAIN NOUNS only" — and that
+// call needs no judgement at all: buildBrownfieldSearchQuery() already computes
+// exactly that noun set (the stopword-stripped query proven to rank the real
+// fix site #1 rather than the display layer the symptom words describe).
+//
+// The scarce resource here is the iteration budget, not intelligence. glm-5.1
+// exhausted the cap at 10, 20, 25 and 40 — every turn spent re-deriving a query
+// we can compute for free is a turn not spent tracing callers, which is the
+// part that actually needs a model. Best-effort by construction: a missing
+// tool, a broken index or a slow query degrades to "no pre-seed" and never
+// breaks the spec pass.
+const DETECTIVE_PRESEED_MAX_CHARS = 8000;
+function precomputeDetectiveExplore(repoPath, story, toolPath, env = process.env) {
+  if (env.CODEGRAPH_DETECTIVE_PRESEED === '0') return '';
+  if (!repoPath || !toolPath || !story) return '';
+  let query = '';
+  try { query = buildBrownfieldSearchQuery(story) || ''; } catch { return ''; }
+  const terms = String(query).trim().split(/\s+/).filter(Boolean);
+  if (!terms.length) return '';
+  try {
+    if (!fs.existsSync(toolPath)) return '';
+    const res = require('child_process').spawnSync(
+      'bash', [toolPath, 'explore', ...terms],
+      {
+        encoding: 'utf8',
+        timeout: Number(env.CODEGRAPH_DETECTIVE_PRESEED_TIMEOUT_MS || '60000'),
+        env: Object.assign({}, env, { PROJECT_ROOT: repoPath }),
+      },
+    );
+    if (res.status !== 0) return '';
+    const out = String(res.stdout || '').trim();
+    if (!out) return '';
+    if (out.length <= DETECTIVE_PRESEED_MAX_CHARS) return out;
+    // Say so — a silently truncated ranking reads as a complete one. The notice
+    // counts against the cap: the point is a bounded block, not a bounded body
+    // with an unbounded footer.
+    const notice = '\n… (truncated — re-run explore yourself if you need the rest)';
+    return out.slice(0, DETECTIVE_PRESEED_MAX_CHARS - notice.length) + notice;
+  } catch { return ''; }
+}
+
+// verifyDetectiveEvidence(brokenLine, file, repoPath)
+// Does the code the detective claims is broken actually EXIST in the file it
+// named? true = quoted and found, false = quoted and NOT found (the diagnosis
+// is about code that isn't there), null = nothing quoted / too short to prove
+// anything.
+//
+// Live metrolinx 2026-07-26. The detective returned clean JSON naming the right
+// file and a confident root cause — "the discount is applied at full value to
+// each leg, halve it with getPreciseFloatNumber". Wrong. The real defect is the
+// matcher: dispatch line-item ids are built by getDispatchLineItemKey as
+// `"<id>#return"`, so `lineItem.id === discount.lineItemId` never matches for a
+// return trip, discountsForDispatch comes back empty, the function returns
+// early and NO discount is ever set — which is precisely the ticket's symptom
+// (amount NOT DISPLAYED; a doubled amount would show a wrong number, not
+// nothing).
+//
+// Every existing guard passed it. `helper` was getPreciseFloatNumber, which
+// really exists, so verifyDetectiveHelper said true; the JSON parsed, so the
+// attempt counted as success. This agent was scored on "emitted valid JSON",
+// never on "the claim is true of the code" — the same PRODUCED-vs-VALID gap
+// behind every escaped defect here.
+//
+// So: a fix that changes existing code must quote the expression it changes,
+// and that expression must be in the file. The wrong prescription invents new
+// logic and can quote nothing; the correct one quotes a line that is really
+// there. A check, not more prompt text.
+function verifyDetectiveEvidence(brokenLine, file, repoPath) {
+  if (!brokenLine || typeof brokenLine !== 'string') return null;
+  // Strip the backticks the prompt's own example uses, then normalise
+  // whitespace: the model reformats what it quotes, and a formatting
+  // difference must never reject a genuine quote.
+  const norm = (s) => s.replace(/`/g, ' ').replace(/\s+/g, ' ').trim();
+  const needle = norm(brokenLine);
+  // A quote too short to be distinctive (`}`, `=>`) proves nothing — treat it
+  // as no claim rather than as evidence.
+  if (needle.length < 8) return null;
+  if (!file || typeof file !== 'string' || !repoPath) return false;
+  try {
+    const rel = file.replace(/^\.?\//, '');
+    const abs = path.resolve(repoPath, rel);
+    // Never read outside the repo under diagnosis.
+    if (abs !== repoPath && !abs.startsWith(repoPath + path.sep)) return false;
+    if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) return false;
+    return norm(fs.readFileSync(abs, 'utf8')).includes(needle);
+  } catch { return false; }
+}
+
 // AC IMMUTABILITY (VC model): the acceptanceCriteria are the ticket's intent and
 // are NEVER mutated by the spec pass for a brownfield story — all verification
 // lives in the separate verificationCriteria (VC) layer, so ACs can't be poisoned
@@ -1955,6 +2047,15 @@ async function runCodeGraphDetective(story, logDir) {
   const _detEmit = (type, message) => emitMonitorEvent({ monitorScript: _detMon, type, message, storyId: story.id, role: 'code-graph-detective' });
   await _detEmit('spec_update', `[${_detPhase}] code-graph-detective started on ${story.id} — tracing the causal fix site`);
 
+  // Step 1 of the method below needs no judgement, so it is already done — see
+  // precomputeDetectiveExplore(). Spending a scarce iteration on a query we can
+  // compute deterministically is pure waste on a model that keeps exhausting
+  // its budget.
+  const preseed = precomputeDetectiveExplore(repoPath, story, toolPath, process.env);
+  const preseedBlock = preseed
+    ? `\nYOUR FIRST \`explore\` HAS ALREADY BEEN RUN FOR YOU — these are its real results (domain nouns only, symptom/presentation words stripped). Treat this as call 1 of your budget; do NOT re-run it. Start from step 2: decide whether the top hit COMPUTES the wrong value or only READS it, and trace from there.\n\n=== PRE-COMPUTED \`explore\` RESULTS ===\n${preseed}\n=== END PRE-COMPUTED RESULTS ===\n`
+    : '';
+
   const prompt = `${detectiveProfile ? detectiveProfile + '\n\n' : ''}You are investigating this bug ticket. The repository is at: ${repoPath}
 
 TICKET (read it, then decide for YOURSELF which few domain nouns matter — do not treat every word as a search term):
@@ -1968,6 +2069,7 @@ Invoke it with the Bash tool, always passing PROJECT_ROOT:
   PROJECT_ROOT="${repoPath}" bash "${toolPath}" callers <SymbolName>
   PROJECT_ROOT="${repoPath}" bash "${toolPath}" callees <SymbolName>
 
+${preseedBlock}
 CONVERGE FAST — HARD LIMIT: 6 tool calls total. This is not a suggestion.
 By your 6th tool call you MUST stop querying and emit the JSON answer with your BEST current hypothesis. Exploring past 6 calls WITHOUT emitting the JSON means you FAIL and every bit of your investigation is thrown away — a best-guess fix site is infinitely better than no answer. If you are unsure, pick the single most likely file/function from what you have seen and emit it now; do NOT keep exploring to be "sure".
 1. First call: \`explore\` with the DOMAIN NOUNS only (drop symptom/presentation words like displayed/shown/email/confirmation/expected).
@@ -1980,8 +2082,10 @@ By your 6th tool call you MUST stop querying and emit the JSON answer with your 
 
 CRITICAL — HOW TO ANSWER: Emit the JSON array as TEXT directly in your reply. Do NOT call WriteFile and do NOT write your answer to any file — the pipeline reads your reply text, not a file. If you write your answer to a file, it is LOST and the whole investigation is wasted. Use the Bash tool ONLY to run the CodeGraph query script above; use no other tool.
 
+SHOW THE BROKEN CODE — "brokenLine" is REQUIRED and is machine-verified. Quote the EXACT source expression, copied verbatim from the file you name, that is wrong today. It is checked against that file's real contents: if what you quote is not in the file, your answer is rejected as ungrounded and you will be asked again. This is the difference between a diagnosis and a guess — a confident story about code that is not there reads exactly like a correct one until this check runs. If you cannot point at a real line that is wrong, you have not found the cause yet: go back to the tool and trace further.
+
 Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" field is REQUIRED and must be a concrete, minimal instruction naming the exact change and any existing helper to reuse. The "helper" field must be the BARE SYMBOL NAME of the existing function you are telling the implementer to reuse (so it can be machine-verified to actually exist) — leave it "" if the fix genuinely needs no existing helper. Do NOT invent a helper name; only put a symbol you actually saw in the tool output:
-[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the value, not just displays it>","fix":"<the exact minimal change: which line/expression to change, to what, and which EXISTING helper (symbol + import path) to reuse — never 'write a new function' if one already exists>","helper":"<bare existing symbol name to reuse, or empty>"}]`;
+[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the value, not just displays it>","brokenLine":"<the exact existing expression that is wrong, copied verbatim from that file>","fix":"<the exact minimal change: which line/expression to change, to what, and which EXISTING helper (symbol + import path) to reuse — never 'write a new function' if one already exists>","helper":"<bare existing symbol name to reuse, or empty>"}]`;
 
   // Model ladder — cohesive with openspec/speckit (which escalate to their HIGH
   // model on retry). Attempt 1 uses the base HIGH model (glm-5.1); a retry
@@ -2025,15 +2129,21 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
       if (!file || seen.has(file)) continue;
       seen.add(file);
       const helper = typeof h.helper === 'string' ? h.helper : '';
+      const brokenLine = typeof h.brokenLine === 'string' ? h.brokenLine : '';
       findings.push({
         file,
         function: typeof h.function === 'string' ? h.function : '',
         reason: typeof h.reason === 'string' ? h.reason : '',
         fix: typeof h.fix === 'string' ? h.fix : '',
         helper,
+        brokenLine,
         // true = named helper exists; false = named but not found (likely
         // hallucinated); null = no helper named. Only false downgrades the fix.
         fixVerified: verifyDetectiveHelper(helper, repoPath),
+        // true = the quoted broken expression is really in the named file;
+        // false = it is not (a diagnosis about code that does not exist —
+        // the live 2026-07-26 failure); null = nothing quoted.
+        evidenceVerified: verifyDetectiveEvidence(brokenLine, file, repoPath),
       });
     }
     return findings;
@@ -2102,6 +2212,18 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
         // remain the backstop rather than being replaced by a bigger budget.
         // Raised 20 -> 25 on 2026-07-24: 20 still exhausted on a self-heal retry pass.
         EPAM_MAX_ITERATIONS: process.env.CODEGRAPH_DETECTIVE_MAX_ITERATIONS || '25',
+        // Tool budget — the limit the prompt above has always CLAIMED ("HARD
+        // LIMIT: 6 tool calls total. This is not a suggestion.") and which
+        // nothing enforced. The model explored past 6 and hit the ITERATION
+        // cap with no answer, discarding the investigation; that is what every
+        // one of the 16 recorded ladder escalations actually was. Raising
+        // EPAM_MAX_ITERATIONS three times never fixed it because it is the
+        // wrong limit. At the budget, AgentRunner withdraws the tools and
+        // demands the answer, so "keep querying instead of committing" stops
+        // being reachable. 7 = the prompt's 6 calls plus the pre-seeded
+        // explore already handed over, and one successful live pass used 7
+        // round-trips. EPAM_MAX_ITERATIONS stays as the outer backstop.
+        EPAM_MAX_TOOL_CALLS: process.env.CODEGRAPH_DETECTIVE_MAX_TOOL_CALLS || '7',
         // The detective TRACES the causal fix site + picks the helper to reuse —
         // correctness is paramount and it must reason carefully. With story-point-
         // derived LOW effort it gave different/wrong helpers across passes (live
@@ -2150,6 +2272,37 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
         console.warn(`spec-mode: ⚠️ code-graph-detective returned an EMPTY fix-site list for ${story.id} — no causal site located.`);
         await _detEmit('error', `[${_detPhase}] code-graph-detective located NO causal fix site for ${story.id}`);
         return findings;
+      }
+
+      // EVIDENCE GATE. A finding whose quoted broken expression is NOT in the
+      // file it names is a diagnosis about code that does not exist. Live
+      // metrolinx 2026-07-26: a confident, cleanly-parsed answer prescribed
+      // halving a discount that is in fact never applied at all, because the
+      // real defect is a key mismatch one line up. It named a helper that
+      // really exists and its JSON parsed, so every guard we had waved it
+      // through. Parseability is not correctness.
+      //
+      // Retry (which escalates the model) rather than accept it — but never
+      // discard on the LAST attempt: the detective is load-bearing, and a
+      // flagged hypothesis still beats handing the implementer symptom ACs
+      // with no root cause at all.
+      const grounded = findings.filter((f) => f.evidenceVerified === true);
+      if (grounded.length === 0) {
+        const quoted = findings.filter((f) => f.evidenceVerified === false);
+        console.warn(
+          `spec-mode: ⚠️ code-graph-detective answer for ${story.id} is UNGROUNDED (attempt ${attempt}/${maxAttempts}) — ` +
+          (quoted.length
+            ? `${quoted.length} finding(s) quote code that is NOT in the file they name (e.g. ${quoted[0].file}: "${String(quoted[0].brokenLine).slice(0, 80)}")`
+            : `no finding quoted an existing broken expression at all`) +
+          ` — the diagnosis is not backed by real code.`);
+        if (attempt < maxAttempts) {
+          continue; // escalate: a plausible story about absent code is not an answer
+        }
+        console.warn(`spec-mode: ⛔ code-graph-detective remained UNGROUNDED for ${story.id} after ${maxAttempts} attempts — passing the best hypothesis through, flagged.`);
+      } else if (grounded.length < findings.length) {
+        // Grounded findings first: the implementer reads findings[0] as the
+        // primary fix site.
+        findings = grounded.concat(findings.filter((f) => f.evidenceVerified !== true));
       }
       await _detEmit('spec_update', `[${_detPhase}] code-graph-detective located fix site: ${findings[0].file}${findings[0].helper ? ' (reuse ' + findings[0].helper + ')' : ''}`);
       return findings;
@@ -4139,6 +4292,8 @@ module.exports = {
   enforceVerificationCriteria,
   isThinContext,
   verifyDetectiveHelper,
+  verifyDetectiveEvidence,
+  precomputeDetectiveExplore,
   ladderNextModel,
   runClaude,
   capReviewSnapshot,

@@ -311,6 +311,7 @@ export class Repl {
           toolRunner: this.toolRunner,
           memoryLoader: this.memoryLoader,
           maxIterations: config.maxIterations,
+        maxToolCalls: config.maxToolCalls,
           history: this.messages.slice(0, -1),
           autoCompressAt: config.autoCompressAt,
           maxOutputTokens: config.maxOutputTokens,

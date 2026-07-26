@@ -106,6 +106,7 @@ export function createChatCommand(): Command {
           model: config.model,
           tools,
           maxIterations: config.maxIterations,
+        maxToolCalls: config.maxToolCalls,
           autoCompressAt: config.autoCompressAt,
           maxOutputTokens: config.maxOutputTokens,
           dangerousSkipApproval: config.tools.dangerousSkipApproval,

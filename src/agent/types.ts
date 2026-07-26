@@ -13,6 +13,17 @@ export interface AgentRunOptions {
   model: string;
   tools: Tool[];
   maxIterations?: number;
+  /**
+   * Maximum tool calls before tools are withdrawn and a final answer is
+   * required. Unset = unlimited (existing behaviour).
+   *
+   * Distinct from maxIterations, which bounds LLM round-trips: an agent told
+   * "HARD LIMIT: 6 tool calls" in its prompt kept querying past 6 and hit the
+   * ITERATION cap with no answer, discarding the whole investigation. Raising
+   * that cap (10 → 20 → 25 → 40) never helped because it addressed the wrong
+   * limit. This one is the limit the prompt was actually describing.
+   */
+  maxToolCalls?: number;
   /** Prior conversation history to prepend before the current user message. */
   history?: Message[];
   /** Token threshold at which the runner auto-compresses older messages. */

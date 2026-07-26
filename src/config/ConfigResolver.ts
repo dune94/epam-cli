@@ -278,6 +278,10 @@ export async function resolveConfig(flags: CLIFlagOverrides = {}): Promise<Resol
         false,
     },
 
+    maxToolCalls:
+      envOverrides.maxToolCalls ??
+      projectConfig.maxToolCalls,
+
     maxIterations:
       flags.maxIterations ??
       envOverrides.maxIterations ??

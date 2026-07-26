@@ -407,9 +407,16 @@ describe.skipIf(!RUN_REAL)('Full mock brownfield pipeline — REAL Jira ingest +
 
       // ── Real team-lead review ran (Step 3.6) — non-empty per-story log + a
       // code-reviews.jsonl entry for this phase ──
-      const reviewLog = join(LOG_DIR, `review-agent-${STORY_ID}.log`);
-      expect(existsSync(reviewLog), reviewLog).toBe(true);
-      expect(readFileSync(reviewLog, 'utf8').trim().length).toBeGreaterThan(0);
+      // Split stories are reviewed individually: review-agent-MOCK-HW-1-impl.log
+      // and -test.log, never review-agent-MOCK-HW-1.log. Assert a review exists
+      // for every story that actually ran, which is stronger than the old check
+      // and does not assume the unsplit shape.
+      for (const st of worked) {
+        const reviewLog = join(LOG_DIR, `review-agent-${st.id}.log`);
+        expect(existsSync(reviewLog), `no review log for ${st.id}: ${reviewLog}`).toBe(true);
+        expect(readFileSync(reviewLog, 'utf8').trim().length, `${st.id} review log empty`)
+          .toBeGreaterThan(0);
+      }
       const codeReviews = readFileSync(join(LOG_DIR, 'code-reviews.jsonl'), 'utf8');
       expect(codeReviews).toMatch(new RegExp(PHASE));
 

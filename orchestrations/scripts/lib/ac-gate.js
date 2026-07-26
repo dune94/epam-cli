@@ -188,7 +188,7 @@ function classifyWithLLM(issue, knownCodelines) {
     const raw = execSync(cmd, {
       encoding: 'utf8',
       timeout: 90000,
-      env: { ...process.env },
+      env: { ...process.env, EPAM_AGENT_NAME: 'ac-gate' },
     }).trim();
 
     if (!raw) throw new Error('Empty response from ai-run.sh');
@@ -246,7 +246,7 @@ Respond with JSON only — no markdown, no preamble:
   fs.writeFileSync(tmpPrompt, prompt);
   try {
     const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>/dev/null`;
-    const raw = execSync(cmd, { encoding: 'utf8', timeout: 90000, env: { ...process.env } }).trim();
+    const raw = execSync(cmd, { encoding: 'utf8', timeout: 90000, env: { ...process.env, EPAM_AGENT_NAME: 'ac-gate' } }).trim();
     if (!raw) throw new Error('Empty elaboration response');
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error(`No JSON in elaboration response: ${raw.slice(0, 200)}`);

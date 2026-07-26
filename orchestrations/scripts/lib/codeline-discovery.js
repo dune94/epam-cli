@@ -366,7 +366,7 @@ function callLlm(prompt) {
       encoding:   'utf8',
       timeout:    300000,
       maxBuffer:  10 * 1024 * 1024,
-      env:        { ...process.env },
+      env:        { ...process.env, EPAM_AGENT_NAME: 'codeline-discovery' },
     }).trim();
 
     if (debug) log(`DEBUG raw LLM response:\n${raw}`);

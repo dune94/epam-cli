@@ -153,6 +153,7 @@ async function maybeSynthesize(store, {
     // same allowance, so an undersized budget yields truncated output that never
     // reaches the closing brace and is quarantined as 'unparseable'.
     env: {
+      EPAM_AGENT_NAME: 'kb-synthesizer',
       ...process.env,
       EPAM_MAX_OUTPUT_TOKENS: process.env.KB_SYNTHESIS_MAX_OUTPUT_TOKENS || '32768',
       // Bind this step's own output space. It is the one place an LLM re-enters

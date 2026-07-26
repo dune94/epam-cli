@@ -113,8 +113,13 @@ if [ -z "${EPAM_AGENT_NAME:-}" ] && [ -r "/proc/$PPID/cmdline" ]; then
   # `|| true`: this script runs under `set -euo pipefail`, and a grep that
   # matches nothing exits 1 — which killed every invocation whose caller was not
   # a .sh/.js file. A best-effort label must never be able to fail the call.
+  # Match a script name ANYWHERE in the parent's argv, not only at line end:
+  # execSync wraps the command as `sh -c "bash /path/ai-run.sh ... 2>/dev/null"`,
+  # one argv element that does not end in .sh — so every lib/*.js agent stayed
+  # anonymous. And skip ai-run.sh itself, or it names itself as the agent.
   _caller="$(tr '\0' '\n' < "/proc/$PPID/cmdline" 2>/dev/null \
-             | grep -oE '[^/]+\.(sh|js)$' | head -1 || true)"
+             | grep -oE '[a-zA-Z0-9_.-]+\.(sh|js)' \
+             | grep -v '^ai-run\.sh$' | head -1 || true)"
   [ -n "$_caller" ] && EPAM_AGENT_NAME="${_caller%.*}"
 fi
 export EPAM_AGENT_NAME="${EPAM_AGENT_NAME:-agent}"

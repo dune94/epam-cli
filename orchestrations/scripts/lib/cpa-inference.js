@@ -168,7 +168,8 @@ async function main() {
   const result = spawnSync(
     AI_RUNNER_CMD,
     cliArgs,
-    { input: fullPrompt, encoding: 'utf8', timeout: TIMEOUT_MS, env }
+    { input: fullPrompt, encoding: 'utf8', timeout: TIMEOUT_MS,
+      env: { EPAM_AGENT_NAME: 'cpa-inference', ...env } }
   );
   const latencyMs = Date.now() - t0;
 

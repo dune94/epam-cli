@@ -2083,6 +2083,13 @@ By your 6th tool call you MUST stop querying and emit the JSON answer with your 
 
 READ THE FILE BEFORE YOU QUOTE IT. Once you have a candidate file, run \`show <file>\` and look at the real lines. Your "brokenLine" must be COPIED EXACTLY from that output — it is checked character-for-character against the file, after whitespace normalisation. Do NOT reconstruct the line from symbol names: on 2026-07-26 that produced \`lineItemKey === orderLineItem.id\`, a plausible-looking expression using an identifier that exists nowhere in the repository, and the answer was rejected. \`show\` accepts a line range so you can read just the region you care about.
 
+CRITICAL REALITY ANCHOR: if the CodeGraph tool does not return a file or symbol, it does NOT exist in this codebase. Do not infer, assume, or extrapolate file paths, function signatures, or variable names from naming patterns — that is exactly how \`lineItemKey\` was invented. The index answers only for what it parsed, so a miss is a question, not an answer. If you believe something exists and CodeGraph did not return it, PROVE it before reasoning about it:
+
+    bash orchestrations/scripts/ripgrep-search.sh --string "<exact symbol>" [--glob "*.ts"]
+    bash orchestrations/scripts/ripgrep-search.sh --file "<part of a filename>"
+
+That searches the real working tree, so a hit is ground truth and "NOT FOUND" is definitive absence. If both tools come back empty, the thing does not exist — say so and revise your hypothesis. Never write a name into your answer that no tool has shown you.
+
 CRITICAL — HOW TO ANSWER: Emit the JSON array as TEXT directly in your reply. Do NOT call WriteFile and do NOT write your answer to any file — the pipeline reads your reply text, not a file. If you write your answer to a file, it is LOST and the whole investigation is wasted. Use the Bash tool ONLY to run the CodeGraph query script above (including its \`show\` subcommand, which you MUST use before quoting a line); use no other tool.
 
 NAME THE FORMAT, DO NOT DESCRIBE IT. If your fix depends on the SHAPE of a string — a prefix, suffix, separator, delimiter — you must QUOTE THE EXACT LITERAL (e.g. '#') or name the constant that defines it (e.g. DIVIDER). Saying "a prefix match that accounts for the suffix" without stating the suffix is not implementable: on 2026-07-26 exactly that wording made the implementer guess '-' where the repository uses '#', and the fix could never match. This is machine-checked.

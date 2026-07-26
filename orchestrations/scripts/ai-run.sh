@@ -256,10 +256,91 @@ if [ -n "$FALLBACKS_RAW" ]; then
   done
 fi
 
+# ── Plan-execute ────────────────────────────────────────────────────────────
+# Every agent states what it intends to do before it does it.
+#
+# Runs 8 and 9 (metrolinx, same ticket, same model, temperature 0) explored the
+# identical eight files and hit the identical tool budget — 282 of 283 log lines
+# byte-identical — then named different root causes: one the function that
+# COMPUTES the discount, one the function that DISPLAYS it. There was no stage
+# in between at which the intent could be read and checked, because exploring
+# and answering happened in a single call.
+#
+# This lives here because every agent in the pipeline funnels through this
+# script. One seam, so no agent is quietly left behind.
+#
+# It must never become a new way to fail: if the planning call produces nothing,
+# the execute call runs exactly as it does today.
+_plan_text=""
+_plan_cost_json=""
+if [ "${EPAM_PLAN_EXECUTE:-1}" = "1" ] && [ "${_EPAM_IN_PLAN_PASS:-0}" != "1" ]; then
+  _plan_file="$(mktemp)"
+  {
+    cat "$PROMPT_FILE"
+    printf '\n\n---\n'
+    printf 'BEFORE YOU ANSWER: state your PLAN, and nothing else.\n\n'
+    printf 'Say what you believe the answer is going to be and WHY, name the\n'
+    printf 'specific targets you will examine or produce, and state how you will\n'
+    printf 'know if you are wrong. If the task above sets a requirement your\n'
+    printf 'answer must satisfy, say in one line how your plan satisfies it.\n\n'
+    printf 'Do NOT produce the final answer yet. Do NOT emit the output format\n'
+    printf 'the task asks for. Plain prose, at most 200 words.\n'
+  } > "$_plan_file"
+
+  _plan_json=""
+  [ -n "${ORCH_JSON_RESULT:-}" ] && _plan_json="$(mktemp)"
+
+  # The plan pass is an ordinary invocation with planning suppressed, so it
+  # cannot recurse.
+  _plan_text="$(
+    _EPAM_IN_PLAN_PASS=1 \
+    ORCH_JSON_RESULT="$_plan_json" \
+    PROMPT_FILE="$_plan_file" \
+    bash "$0" ${PRIMARY_PROVIDER:+--provider "$PRIMARY_PROVIDER"} ${AI_MODEL:+--model "$AI_MODEL"} \
+      < "$_plan_file" 2>/dev/null || true
+  )"
+  rm -f "$_plan_file"
+
+  if [ -n "$_plan_text" ]; then
+    _plan_cost_json="$_plan_json"
+    _exec_file="$(mktemp)"
+    {
+      cat "$PROMPT_FILE"
+      printf '\n\n---\n'
+      printf 'YOUR PLAN (you wrote this a moment ago):\n%s\n\n' "$_plan_text"
+      printf 'Now produce the final answer, in exactly the format the task above\n'
+      printf 'requires. If carrying out the plan showed it to be wrong, say so and\n'
+      printf 'answer correctly rather than following it.\n'
+    } > "$_exec_file"
+    mv "$_exec_file" "$PROMPT_FILE"
+  else
+    [ -n "$_plan_json" ] && rm -f "$_plan_json"
+  fi
+fi
+
+# The plan pass billed real money. Fold its cost into the result the caller
+# reads, or every run reports less than it actually spent.
+_merge_plan_cost() {
+  [ -n "${ORCH_JSON_RESULT:-}" ] || return 0
+  [ -n "$_plan_cost_json" ] && [ -s "$_plan_cost_json" ] || return 0
+  [ -s "$ORCH_JSON_RESULT" ] || return 0
+  local _merged
+  _merged="$(jq -s '
+      (.[0] // {}) as $plan | (.[1] // {}) as $exec |
+      $exec
+      | .total_cost_usd = (($exec.total_cost_usd // 0) + ($plan.total_cost_usd // 0))
+      | .tokens         = (($exec.tokens         // 0) + ($plan.tokens         // 0))
+      | .planCostUsd    = ($plan.total_cost_usd // 0)
+    ' "$_plan_cost_json" "$ORCH_JSON_RESULT" 2>/dev/null)"
+  [ -n "$_merged" ] && printf '%s\n' "$_merged" > "$ORCH_JSON_RESULT"
+  rm -f "$_plan_cost_json"
+}
+
 last_err=""
 for provider in "${providers[@]}"; do
   err_file="$(mktemp)"
   if out="$(run_provider_once "$provider" 2>"$err_file")"; then
+    _merge_plan_cost
     [ -n "$out" ] && printf '%s\n' "$out"
     rm -f "$err_file"
     exit 0

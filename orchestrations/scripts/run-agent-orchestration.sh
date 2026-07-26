@@ -95,6 +95,20 @@ if [ "$PROJECT_ROOT" = "$_repo_root" ]; then
   exit 1
 fi
 
+# Safety guard: the binary must be built from the source in this tree.
+# `epam` is a shim around dist/epam.js — the pipeline never runs src/ — so a
+# stale dist means a source change silently does not execute while APPEARING to
+# (2026-07-26: dist was two days old, and that morning's AgentRunner tool-budget
+# change would have been a complete no-op in a live run; caught only by a manual
+# check before launch). Sourced defensively so a missing lib cannot block a run.
+if [ -f "$SCRIPT_DIR/lib/dist-freshness.sh" ]; then
+  # shellcheck disable=SC1090
+  . "$SCRIPT_DIR/lib/dist-freshness.sh"
+  if ! assert_dist_fresh "$_repo_root"; then
+    exit 1
+  fi
+fi
+
 AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
 # Compute PRD path relative to PROJECT_ROOT for injecting into agent prompts.
 # In the codeline-loop path, PRD_FILE is a per-codeline temp copy under /tmp/

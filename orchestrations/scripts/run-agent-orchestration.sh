@@ -5849,6 +5849,16 @@ You are the gate-finding-analyst. A lint gate (tsc --noEmit + eslint) failed dur
 ## Lint Gate Log
 $(cat "$_lint_log" 2>/dev/null | head -200)
 
+## Files THIS RUN produced or modified (the writer-output manifest)
+$(if [ -f "$SCRIPT_DIR/lib/story-outputs.sh" ]; then . "$SCRIPT_DIR/lib/story-outputs.sh" 2>/dev/null; story_outputs_files "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null | head -30; fi)
+
+A finding in ANY file above was produced by this run and is in scope, even if
+that file is not declared in a story's technicalNotes.files. Reproducing tests are written by a separate
+agent AFTER the story declares its files, so a .spec.ts/.test.ts will normally be
+absent from the declared list while still being this run's work — live
+2026-07-26, a real finding in a newly-written test file was dropped for exactly
+that reason. Attribute such a file to the story whose source file it tests.
+
 ## PRD Stories (active)
 $(python3 -c "import json,sys; d=json.load(open('${MAIN_PRD_FILE:-$PRD_FILE}')); active=set(s for p in d['implementationOrder'].values() for s in p); [print(json.dumps({'id':s['id'],'title':s.get('title',''),'files':s.get('technicalNotes',{}).get('files',[])})) for s in d['stories'] if s['id'] in active]" 2>/dev/null | head -50)
 

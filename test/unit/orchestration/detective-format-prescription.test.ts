@@ -137,3 +137,47 @@ describe('the detective enforces it', () => {
     expect(SPEC.slice(Math.max(0, i - 600), i + 600)).toMatch(/catch\s*\{/);
   });
 });
+
+describe('the check is language-agnostic — the engine must not assume a stack', () => {
+  it('works on a Python repo', () => {
+    // The first version filtered to .ts/.js and matched `const|let|var` and
+    // `function|const` declarations. On any other stack it would find nothing,
+    // fail open, and silently do nothing at all — a no-op wearing the costume
+    // of a safeguard.
+    const repo = repoWith({
+      'app/keys.py':
+        "DIVIDER = '#'\n"
+        + 'def get_dispatch_line_item_key(id, is_return=False):\n'
+        + "    return f'{id}{DIVIDER}return' if is_return else id\n"
+        + 'def parse_dispatch_line_item_key(key):\n    return key.split(DIVIDER)[0]\n',
+    });
+    expect(check('use a prefix match for the suffix', repo, 'get_dispatch_line_item_key').ok,
+      'an under-specified fix passed because the checker could not read Python').toBe(false);
+    expect(check('split on DIVIDER before comparing', repo, 'get_dispatch_line_item_key').ok,
+      'a constant that genuinely exists in a .py file was not recognised').toBe(true);
+  });
+
+  it('works on a Go repo', () => {
+    const repo = repoWith({
+      'pkg/keys.go':
+        'const Divider = "#"\n'
+        + 'func BuildDispatchKey(id string, isReturn bool) string { return id + Divider }\n'
+        + 'func ParseDispatchKey(key string) string { return strings.Split(key, Divider)[0] }\n',
+    });
+    const r = check('prefix match on the suffix appended by BuildDispatchKey', repo, 'BuildDispatchKey');
+    expect(r.ok, 'a Go repo was not scanned at all').toBe(false);
+    expect(r.reason, 'the Go parser counterpart was not found').toMatch(/ParseDispatchKey/);
+  });
+
+  it('does not treat vendored code as project source', () => {
+    // Vendor directories are read from the project's own config and gitignore,
+    // not from a list this engine invents.
+    const repo = repoWith({
+      '.gitignore': 'node_modules/\n',
+      'node_modules/dep/keys.js': "const SEPARATOR = '@';\n",
+      'src/app.js': 'export const x = 1;\n',
+    });
+    expect(check('split on SEPARATOR before comparing', repo, '').ok,
+      'a constant from a vendored dependency was accepted as project evidence').toBe(false);
+  });
+});

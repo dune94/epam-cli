@@ -44,7 +44,39 @@ _LITERAL = re.compile(r"""['"`][^'"`]{1,24}['"`]""")
 # a cited constant that does not exist is not a specification either.
 _CONSTANT = re.compile(r'\b[A-Z][A-Z0-9_]{3,}\b')
 
-_SKIP_DIRS = {'node_modules', '.git', 'dist', 'build', 'coverage', '.codegraph', '.epam'}
+# Vendor/build directories, named per project rather than assumed. The engine
+# must not know that a codebase is JavaScript — the same check has to work on a
+# Python, Go or C# client repo, where a hardcoded node_modules/dist list would
+# silently scan the wrong tree and quietly find nothing.
+_DEFAULT_SKIP = {'.git', '.codegraph', '.epam'}
+
+
+def skip_dirs(repo):
+    skips = set(_DEFAULT_SKIP)
+    try:
+        import json as _json
+        with open(os.path.join(repo, '.epam', 'dependency-check.json')) as f:
+            for d in (_json.load(f).get('vendorDirs') or []):
+                skips.add(str(d).strip('/'))
+    except (OSError, ValueError, AttributeError):
+        pass
+    # The project's own .gitignore names what is not project source. Read the
+    # file directly rather than shelling out to git: `git check-ignore` needs a
+    # real repository, and this must also work on a plain directory. Either way
+    # the list is AUTHORED BY THE PROJECT, never invented by this engine.
+    try:
+        with open(os.path.join(repo, '.gitignore')) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith(('#', '!')):
+                    continue
+                entry = line.rstrip('/').lstrip('/')
+                if entry and '*' not in entry and '?' not in entry:
+                    skips.add(entry)
+    except OSError:
+        pass
+    return skips
+
 
 # Pairs of verbs that indicate a writer and its reader.
 _WRITER_HINTS = ('get', 'build', 'make', 'create', 'to', 'format', 'encode', 'serialize')
@@ -52,25 +84,40 @@ _READER_HINTS = ('parse', 'read', 'from', 'decode', 'deserialize', 'extract', 's
 
 
 def source_files(repo):
+    """Text files that are not vendored. No extension allowlist: the engine does
+    not get to decide which languages exist."""
+    skips = skip_dirs(repo)
     for root, dirs, files in os.walk(repo):
-        dirs[:] = [d for d in dirs if d not in _SKIP_DIRS]
+        dirs[:] = [d for d in dirs if d not in skips and not d.startswith('.')]
         for f in files:
-            if f.endswith(('.ts', '.tsx', '.js', '.jsx', '.mts', '.cts')):
-                yield os.path.join(root, f)
+            path = os.path.join(root, f)
+            try:
+                if os.path.getsize(path) > 512_000:
+                    continue
+                with open(path, 'rb') as fh:
+                    if b'\0' in fh.read(2048):      # binary
+                        continue
+            except OSError:
+                continue
+            yield path
 
 
 def find_parser_counterpart(repo, helper):
     """A function over the same noun that READS rather than WRITES."""
     if not helper:
         return None
-    noun = re.sub(r'^(get|build|make|create|to|format|encode|serialize)', '', helper)
+    noun = re.sub(r'^(get|build|make|create|to|format|encode|serialize)', '', helper, flags=re.I)
     if not noun or noun == helper:
         return None
     try:
         for path in source_files(repo):
             with open(path, errors='replace') as f:
                 text = f.read()
-            for m in re.finditer(r'\b(?:function|const)\s+([A-Za-z_][A-Za-z0-9_]*)', text):
+            # Language-agnostic: any identifier that appears as a word. A
+            # `function|const` pattern only finds JS/TS declarations and would
+            # miss `def`, `func`, `public static` — making the whole check a
+            # silent no-op outside one ecosystem.
+            for m in re.finditer(r'\b([A-Za-z_][A-Za-z0-9_]{3,})\s*\(', text):
                 name = m.group(1)
                 if name == helper:
                     continue
@@ -104,8 +151,10 @@ def main(argv):
             for path in source_files(repo):
                 with open(path, errors='replace') as f:
                     text = f.read()
-                if any(re.search(r'\b(?:const|let|var|enum)\s+%s\b' % re.escape(c), text)
-                       for c in cited):
+                # Declaration keywords differ per language (const/final/val/
+                # #define/static readonly). Presence of the identifier as a word
+                # is the language-agnostic evidence that the citation is real.
+                if any(re.search(r'\b%s\b' % re.escape(c), text) for c in cited):
                     has_constant = True
                     break
         except OSError:

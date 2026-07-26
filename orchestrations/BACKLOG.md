@@ -16,7 +16,7 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | # | ID | Title | Status | Source |
 |---|---|---|---|---|
 | 1 | VC-1 | **Investigate VC agent drift — fallback VCs poison the whole downstream chain** | pending | Live metrolinx repro-gate block, 2026-07-25 |
-| 2 | SCHEMA-1 | **Schema-bind the reviewer's output (first client of a general agent I/O seam)** | pending | Live metrolinx failures, 2026-07-25 |
+| 2 | SCHEMA-1 | **Schema-bind agent output — BLOCKED on the reviewer: strict schema suppresses tool calls** | blocked | Live metrolinx failures + probe, 2026-07-25 |
 | 3 | GAP-P5 | Intra-story planner/executor model split | done | Aider, CrewAI |
 | 4 | GAP-P4 | Semantic RAG — replace TF-IDF in CPA | done | CrewAI, OpenHands |
 | 5 | GAP-P6 | OpenTelemetry emission alongside Langfuse | done | MAF, OAI Agents SDK |
@@ -91,53 +91,68 @@ Code: `orchestrations/scripts/spec-mode-runner.js` — `enforceVerificationCrite
 
 ---
 
-## SCHEMA-1 — Schema-bind the reviewer's output  `pending`  **TOP PRIORITY**
+## SCHEMA-1 — Schema-bind agent output  `blocked`  **PRIORITY 2**
 
-**Why the reviewer first.** Its output is already structured (`{verdict, issues[], summary}`)
-and already parsed as JSON, so binding it changes *when* the contract is enforced, not what
-the contract is. Its failure mode is exactly what schema binding prevents — a model emitting
-truncated prose where a verdict belongs — and that blocked FOUR consecutive runs (B28: a
-169-byte non-verdict, killed mid-`<think>`). Small blast radius: one agent, one schema, and it
-already has a retry ladder to escalate on hard failure.
+> **BLOCKED 2026-07-25 — do NOT implement as originally written.** A live probe showed a
+> strict `json_schema` SUPPRESSES tool calling on both pipeline models. Measured on
+> OpenRouter with a prompt that explicitly demanded a tool call ("You MUST call list_files
+> first. Do not answer until you have called it."):
+>
+> | model | schema off | schema ON |
+> |---|---|---|
+> | `z-ai/glm-5.2` | tool_calls=**1** | tool_calls=**0** |
+> | `moonshotai/kimi-k3` | tool_calls=**1** | tool_calls=**0** |
+>
+> The team-lead reviewer runs with `AI_GATE_ALLOW_TOOLS=1` and
+> `EPAM_ALLOWED_TOOLS="bash,read_file,list_files,search"` for a documented reason — the
+> comment in `team-lead-review.sh` says it is so the reviewer can "run the read-only
+> CodeGraph tool to confirm whether an existing helper already provides logic the diff
+> hand-rolled". That is the IMPL-FIDELITY check (see memory
+> `project_impl_fidelity_minimal_fix_reuse`, added after AMSD-1820's false pass).
+>
+> Schema-binding the reviewer would silently delete that check: perfectly-formed verdicts
+> produced without ever looking at the code. A mechanism reporting success while doing LESS
+> than before — the exact class this session spent the day removing.
+>
+> The original entry assumed schema binding was free for the reviewer. It is not.
 
-**Audit finding that motivates it (2026-07-25).** `lib/kb-synthesizer.js` is the ONLY one of
-twelve agent invocation sites whose output space is schema-bound. Every other agent —
-reviewer, detective, spec, CPA, TC writer, codeline discovery — generates freely and a parser
-tries to recover structure afterwards (`claude.sh` alone has ~197 post-hoc parse sites).
-`kb_schema.py`'s Pydantic reach stops at the self-heal KB boundary. The four-pillar work made
-the KB rigorous; the agents that do the actual work are exactly as unbounded as before.
+### Three options, none chosen — each needs live verification before it is written
 
-**Capability is proven, not assumed.** Verified live against OpenRouter on 2026-07-25:
-`z-ai/glm-5.2`, `z-ai/glm-5.1` and `moonshotai/kimi-k3` all honour `json_schema` strict mode.
-The provider seam ships it (`QwenProvider`), with `provider.require_parameters` so OpenRouter
-cannot silently route to an upstream that ignores the schema.
+1. **Forced tool-call instead of `response_format`.** Bind the output by requiring a
+   `submit_verdict` tool call rather than a response schema, so structure comes THROUGH the
+   tool channel instead of fighting it. Preferred instinct, but unverified: must confirm both
+   models honour `tool_choice` while still permitting the investigative calls first.
+2. **Two-phase.** A tool-using investigation pass, then a second schema-bound call that only
+   formats the verdict. Correct, but doubles reviewer cost and latency.
+3. **Bind only the NON-tool agents.** `code-review-cycle.sh` and similar keep their schema;
+   the tool-using team-lead reviewer stays as-is. Smallest blast radius, leaves the highest-
+   value agent unbound.
 
-### Build with three specifics
+### Still true, and still the motivation
 
-1. **Keep a free-text field inside the schema** (`reasoning: string` alongside `verdict` /
-   `issues[]`). A reviewer forced into pure JSON may reason less, and this codebase has already
-   demonstrated that constraining output changes behaviour — the VC producer is pinned to low
-   effort precisely because high reasoning caused prescriptive drift. Let it think in prose;
-   keep the decision machine-readable.
-2. **Do not touch the output budget.** Schema binding does NOT remove `<think>` tokens — they
-   still bill against `EPAM_MAX_OUTPUT_TOKENS`. A live probe used 663–842 completion tokens for
-   a *trivial* verdict; a real review with issues is far longer. B28 still applies and this is
-   where a naive implementation would reintroduce it.
-3. **Fail loudly; never fall back to parsing.** If a provider cannot honour the schema that must
-   be a hard error. A silent degrade to regex recovery is the old bug in new clothes.
+`lib/kb-synthesizer.js` is the ONLY one of twelve agent invocation sites whose output space is
+schema-bound. Every other agent generates freely and a parser recovers structure afterwards
+(`claude.sh` alone has ~197 post-hoc parse sites); `kb_schema.py`'s Pydantic reach stops at the
+self-heal KB boundary. The reviewer's 169-byte truncated non-verdict (B28) blocked four
+consecutive runs and is exactly what binding would prevent — which is why this stays high
+priority rather than being dropped.
+
+### The build specifics still hold for whichever option wins
+
+1. **Keep a free-text field** (`reasoning`) so the model can still think in prose while the
+   decision stays machine-readable. Constraining output changes behaviour — the VC producer is
+   pinned to low effort precisely because high reasoning caused prescriptive drift.
+2. **Do not touch the output budget.** Schema binding does NOT remove `<think>` tokens; they
+   still bill against `EPAM_MAX_OUTPUT_TOKENS`. A trivial verdict used 663-842 completion
+   tokens live.
+3. **Fail loudly; never fall back to parsing.** `provider.require_parameters` makes routing
+   explicit so OpenRouter cannot silently pick an upstream that ignores the schema.
 
 ### Acceptance — quality must not regress
 
-Standing rule: *"if quality is not the same or is lower — revert."* Run the reviewer BOTH ways
-over the SAME diffs (the AMSD-1820 change is on hand) and compare verdicts and issues found.
-If bound review finds fewer or shallower issues, revert rather than rationalise. Without this
-comparison the change ships on the theory that structure is free, which is untested here.
-
-### Explicitly NOT in scope
-
-Converting all twelve agents. The detective and spec agents produce exploratory output where
-the reasoning IS the product; they need the free-text-field treatment carefully, or not at all.
-Prove the pattern on the reviewer first.
+Standing rule: *"if quality is not the same or is lower — revert."* Run the reviewer both ways
+over the SAME diffs and compare verdicts AND issues found. For the reviewer specifically, also
+confirm the CodeGraph helper-reuse check still fires — that is the capability most at risk.
 
 Related: `project_structured_agent_io_framework` (memory), B28, `constraint-sanity.js`.
 

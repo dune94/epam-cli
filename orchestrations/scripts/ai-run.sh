@@ -100,6 +100,25 @@ if [ -z "$PRIMARY_PROVIDER" ]; then
   esac
 fi
 
+# ── Who is calling? ─────────────────────────────────────────────────────────
+# Agent identity drives the plan record, the Langfuse trace name and the cost
+# row. Nineteen scripts invoke this one without setting EPAM_AGENT_NAME, so
+# their agents were all recorded as `agent` — indistinguishable from each other
+# and from anything else.
+#
+# Naming each caller explicitly is the real fix and a registry test drives it.
+# Until then, derive a name from the invoking script rather than leaving the
+# record anonymous: imperfect beats useless. An explicitly-set name always wins.
+if [ -z "${EPAM_AGENT_NAME:-}" ] && [ -r "/proc/$PPID/cmdline" ]; then
+  # `|| true`: this script runs under `set -euo pipefail`, and a grep that
+  # matches nothing exits 1 — which killed every invocation whose caller was not
+  # a .sh/.js file. A best-effort label must never be able to fail the call.
+  _caller="$(tr '\0' '\n' < "/proc/$PPID/cmdline" 2>/dev/null \
+             | grep -oE '[^/]+\.(sh|js)$' | head -1 || true)"
+  [ -n "$_caller" ] && EPAM_AGENT_NAME="${_caller%.*}"
+fi
+export EPAM_AGENT_NAME="${EPAM_AGENT_NAME:-agent}"
+
 PROMPT_FILE="$(mktemp)"
 trap 'rm -f "$PROMPT_FILE"' EXIT
 cat > "$PROMPT_FILE"

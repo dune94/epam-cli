@@ -275,3 +275,37 @@ describe('a plan can be attributed', () => {
       .toMatch(/EPAM_STORY_ID\s*=\s*opts\.costStoryId/);
   });
 });
+
+/**
+ * When a caller does not name itself, the seam works out who it is.
+ *
+ * Nineteen scripts invoke ai-run.sh without setting EPAM_AGENT_NAME. Naming
+ * them one by one is the right long-term answer and the registry test drives
+ * it, but until then every one of those agents writes an anonymous plan, an
+ * anonymous trace and an anonymous cost row — and anonymous records are close
+ * to useless for the comparison they exist to enable.
+ *
+ * ai-run.sh cannot know its caller's intent, but on Linux it can read who
+ * invoked it. A name derived from the calling script is imperfect and vastly
+ * better than `agent`.
+ */
+describe('an unnamed caller still gets identified', () => {
+  it('derives the agent name from the invoking script', () => {
+    const src = readFileSync(
+      join(__dirname, '../../../orchestrations/scripts/ai-run.sh'), 'utf8');
+    expect(src, 'an unnamed caller stays anonymous in plans, traces and cost')
+      .toMatch(/\/proc\/\$?\{?PPID/);
+  });
+
+  it('never overrides a name the caller did set', () => {
+    const r = run({ env: { EPAM_AGENT_NAME: 'code-graph-detective', PHASE: 'core' } });
+    const dir = mkdtempSync(join(tmpdir(), 'plan-name-'));
+    dirs.push(dir);
+    const r2 = run({ env: { EPAM_AGENT_NAME: 'code-graph-detective', PHASE: 'core', LOG_DIR: dir } });
+    expect(r2.prompts.length).toBe(2);
+    const rec = JSON.parse(
+      readFileSync(join(dir, 'plans-core.jsonl'), 'utf8').trim().split('\n')[0]);
+    expect(rec.agent, 'the derived name clobbered an explicit one').toBe('code-graph-detective');
+    expect(r.code).toBe(0);
+  });
+});

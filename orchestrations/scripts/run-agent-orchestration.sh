@@ -5598,27 +5598,45 @@ if [ "${SKIP_LINT_GATE:-false}" != "true" ] && [ -n "$_node_bin" ] && [ -x "$_no
     # Verify eslint can actually resolve its config before running on src/.
     # File-existence checks alone are insufficient: ESLint 6.x doesn't support .cjs/.mjs
     # config formats even if the file exists. Use --print-config as a dry-run probe.
-    _eslint_config=""
+    # Probe with a file eslint will really be asked to lint — probing a stack the
+    # run then fails to cover is how this gate passed its own preflight and still
+    # examined nothing.
+    _probe_file=""
     if [ -n "$_eslint_bin" ]; then
-        _probe_file="$PROJECT_ROOT/src/index.ts"
-        [ -f "$_probe_file" ] || _probe_file="$(find "$PROJECT_ROOT/src" -name "*.ts" | head -1)"
-        if [ -n "$_probe_file" ] && \
-           cd "$PROJECT_ROOT" && "$_eslint_bin" --print-config "$_probe_file" > /dev/null 2>&1; then
-            _eslint_config="confirmed"
-        fi
+        for _ext in js jsx mjs cjs ts tsx mts cts vue svelte; do
+            _probe_file="$(find "$PROJECT_ROOT/src" -type f -name "*.${_ext}" \
+                            -not -path '*/node_modules/*' -print -quit 2>/dev/null)"
+            [ -n "$_probe_file" ] && break
+        done
+    fi
+    _eslint_config=""
+    if [ -n "$_eslint_bin" ] && [ -n "$_probe_file" ] && \
+       cd "$PROJECT_ROOT" && "$_eslint_bin" --print-config "$_probe_file" > /dev/null 2>&1; then
+        _eslint_config="confirmed"
     fi
 
-    if [ -n "$_eslint_bin" ] && [ -n "$_eslint_config" ]; then
-        log "  [lint] Running eslint src/..."
-        _lint_eslint_exit=0
-        cd "$PROJECT_ROOT" && "$_eslint_bin" src/ --max-warnings 0 2>&1 | tee -a "$_lint_log"
-        _lint_eslint_exit=${PIPESTATUS[0]}
-        if [ "$_lint_eslint_exit" -eq 0 ]; then
-            success "  [lint] eslint: PASS"
-        else
-            error "  [lint] eslint: FAIL (exit $_lint_eslint_exit) — fix lint errors before proceeding"
-            _lint_failed=1
-        fi
+    if [ -n "$_eslint_bin" ] && [ -z "$_probe_file" ]; then
+        # Not a failure: there is nothing here for ESLint to have an opinion
+        # about. Reporting this as FAIL would push an empty finding into the
+        # remediation pipeline, which can only answer "could not map lint
+        # failure to a story".
+        info "  [lint] eslint: SKIP (no lintable source files under src/)"
+        echo "eslint: no lintable source files under src/ — nothing examined" >> "$_lint_log"
+    elif [ -n "$_eslint_bin" ] && [ -n "$_eslint_config" ]; then
+        # Delegated to lib/eslint-baseline-gate.sh — see that file's header for
+        # why. In short: this used to be `eslint src/ --max-warnings 0`, which
+        # (a) expands a bare directory using --ext, default .js, so on the live
+        # TypeScript codeline it examined ZERO files and failed with exit 2, and
+        # (b) judged the whole tree, so on any codeline carrying pre-existing
+        # lint debt it fails on files no agent ever touched. The gate now judges
+        # the writers' output against the phase baseline, and fixes what is
+        # auto-fixable rather than buying a full phase re-run to correct
+        # whitespace.
+        # shellcheck disable=SC1090
+        . "$SCRIPT_DIR/lib/eslint-baseline-gate.sh"
+        _eslint_gate_rc=0
+        eslint_baseline_gate "$PROJECT_ROOT" "$_eslint_bin" "$LOG_DIR" "$_lint_log" || _eslint_gate_rc=$?
+        [ "$_eslint_gate_rc" -ne 0 ] && _lint_failed=1
     elif [ -n "$_eslint_bin" ]; then
         info "  [lint] eslint found but no config in PROJECT_ROOT — skipping eslint (tsc only)"
         echo "eslint: binary present but no config file found" >> "$_lint_log"

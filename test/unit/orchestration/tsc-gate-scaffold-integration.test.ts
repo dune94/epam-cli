@@ -271,7 +271,12 @@ describe('B. Orch script — all 3 tsc gates have empty-src guard', () => {
 
   describe('Gate 3: Step 3.8 lint gate', () => {
     const lintRunningIdx = orchSrc.indexOf('step_emit "20" "running"');
-    const block = orchSrc.slice(lintRunningIdx, lintRunningIdx + 2500);
+    // Bound by the NEXT step marker, not by a character count: a fixed 2500-char
+    // window measures the length of the block rather than its behaviour, and
+    // breaks the moment the gate grows a comment. gate-invariants.test.ts hit
+    // this same trap and fixed it the same way.
+    const lintNextIdx = orchSrc.indexOf('step_emit "21"', lintRunningIdx);
+    const block = orchSrc.slice(lintRunningIdx, lintNextIdx > lintRunningIdx ? lintNextIdx : undefined);
 
     it('Step 3.8 lint gate block exists', () => {
       expect(lintRunningIdx).toBeGreaterThan(-1);
@@ -304,8 +309,13 @@ describe('B. Orch script — all 3 tsc gates have empty-src guard', () => {
     });
 
     it('runs eslint when binary is available', () => {
+      // `--max-warnings 0` is gone: the verdict moved into
+      // lib/eslint-baseline-gate.sh, which reads `-f json` and counts every
+      // message, severity 1 included. Same contract, and the invariant it
+      // protected (a warning still fails) is pinned as behaviour in
+      // eslint-baseline-gate.test.ts.
       expect(block).toContain('eslint');
-      expect(block).toContain('--max-warnings 0');
+      expect(block).toContain('eslint_baseline_gate');
     });
 
     it('guards eslint with --print-config probe (not bare file-existence check)', () => {

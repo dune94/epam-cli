@@ -205,30 +205,45 @@ describe('step 3.8 lint gate', () => {
   });
 
   it('lint gate runs eslint when binary is available', () => {
+    // The verdict itself moved into lib/eslint-baseline-gate.sh (scoped to the
+    // writers' output, judged against the phase baseline). This used to assert
+    // the literal string `--max-warnings 0`; that flag is gone because the gate
+    // now reads `-f json` and counts every message, severity 1 included — the
+    // same contract expressed differently. The invariant it was protecting (a
+    // warning still fails the gate) is behaviour, so it is tested as behaviour
+    // in eslint-baseline-gate.test.ts rather than as a substring here.
     const lintIdx = orchSrc.indexOf('step_emit "20" "running"');
-    const block = orchSrc.slice(lintIdx, lintIdx + 2500);
+    const nextStep = orchSrc.indexOf('step_emit "21"', lintIdx);
+    const block = orchSrc.slice(lintIdx, nextStep > lintIdx ? nextStep : undefined);
     expect(block).toContain('eslint');
-    expect(block).toContain('--max-warnings 0');
+    expect(block, 'the lint verdict is no longer delegated to the baseline-scoped gate')
+      .toContain('eslint_baseline_gate');
+    expect(block, 'a non-zero gate result must still fail the step').toContain('_lint_failed=1');
   });
 
-  it('lint gate guards eslint with --print-config probe before running on src/ (run 84 regression)', () => {
+  it('lint gate guards eslint with --print-config probe before running (run 84 regression)', () => {
     // Bug (first fix): eslint ran when binary found but no config file existed → ESLint 6.x "no config" error.
     // Bug (second fix): file-existence check found .eslintrc.cjs but ESLint 6.x doesn't support .cjs format.
     // Root fix: use `eslint --print-config <file>` as a dry-run probe — if eslint itself can't resolve
     // its config, skip it. This works regardless of eslint version or config file format.
+    //
+    // This test previously required the invocation `"$_eslint_bin" src/` to be
+    // present — enshrining the very defect that killed the 2026-07-25 run: a
+    // bare directory is expanded with --ext (default .js), so on a TypeScript
+    // codeline it matched nothing and the gate failed having examined no files.
+    // The probe requirement is real and stays; the bare-directory target does not.
     const lintIdx = orchSrc.indexOf('step_emit "20" "running"');
-    const block = orchSrc.slice(lintIdx, lintIdx + 2500);
+    const nextStep = orchSrc.indexOf('step_emit "21"', lintIdx);
+    const block = orchSrc.slice(lintIdx, nextStep > lintIdx ? nextStep : undefined);
 
-    // eslint invocation must be present
-    const eslintInvocationIdx = block.indexOf('"$_eslint_bin" src/');
-    expect(eslintInvocationIdx, 'eslint invocation not found in lint gate block').toBeGreaterThan(-1);
+    const gateCallIdx = block.indexOf('eslint_baseline_gate "$PROJECT_ROOT"');
+    expect(gateCallIdx, 'eslint gate invocation not found in lint gate block').toBeGreaterThan(-1);
 
-    // The block before the invocation must use --print-config as a probe
-    const preInvocation = block.slice(0, eslintInvocationIdx);
+    const preInvocation = block.slice(0, gateCallIdx);
     expect(preInvocation).toContain('--print-config');
-
-    // The guard condition must reference _eslint_config (not just _eslint_bin)
     expect(preInvocation).toMatch(/if\s+\[.*_eslint_bin.*_eslint_config|if\s+\[.*_eslint_config/);
+    expect(block, 'a bare directory target is back — it matches nothing on a TypeScript tree')
+      .not.toContain('"$_eslint_bin" src/');
   });
 
   it('lint gate is positioned after step 3.7 and before step 4', () => {

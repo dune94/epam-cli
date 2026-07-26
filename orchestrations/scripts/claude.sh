@@ -1669,6 +1669,48 @@ EOF
 # Verify every file declared by the story exists in the execution root.
 # This prevents a successful provider response from completing a story that
 # produced no deliverables.
+# record_story_outputs <story_id>
+# Records what this story actually produced, so the phase gates can be HANDED
+# that set instead of rediscovering it.
+#
+# Step 20's lint gate used to lint the whole tree and fail on any finding,
+# which is only survivable on a codeline with zero pre-existing lint debt.
+# Scoping it to the writers' output is the fix, and this is the producer half
+# of that contract (lib/eslint-baseline-gate.sh is the consumer).
+#
+# The set is derived from git rather than from technicalNotes.files: that field
+# is empty on the live metrolinx PRD shape — which is precisely why the
+# zero-declared-files fallback below exists — so trusting it would hand the
+# gates an empty scope and silently disable them.
+#
+# Writes nothing at all when there is no baseline to diff against (greenfield).
+# An ABSENT manifest tells the gate to fall back and say so; an EMPTY one would
+# assert "the writers produced nothing", which is a lie that disables the gate.
+# Never fails the story: this is a reporting aid, not a verdict.
+record_story_outputs() {
+    local story_id="$1"
+    [ -n "${LOG_DIR:-}" ] || return 0
+    [ -n "${PROJECT_ROOT:-}" ] && [ -d "$PROJECT_ROOT/.git" ] || return 0
+
+    local _ref=""
+    if [ -f "$LOG_DIR/phase-baseline-sha.txt" ]; then
+        _ref=$(tr -d '[:space:]' < "$LOG_DIR/phase-baseline-sha.txt" 2>/dev/null)
+    fi
+    [ -n "$_ref" ] || _ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+    git -C "$PROJECT_ROOT" rev-parse --verify "$_ref" >/dev/null 2>&1 || return 0
+
+    local _manifest="$LOG_DIR/story-outputs-${PHASE:-core}.txt"
+    local _produced
+    _produced=$( { git -C "$PROJECT_ROOT" diff --name-only "$_ref" 2>/dev/null
+                   git -C "$PROJECT_ROOT" ls-files --others --exclude-standard 2>/dev/null; } | \
+                 grep -v -E '^(\.codegraph/|\.epam/)' | sort -u )
+    [ -n "$_produced" ] || return 0
+
+    { [ -f "$_manifest" ] && cat "$_manifest"; printf '%s\n' "$_produced"; } 2>/dev/null | \
+        grep -v '^$' | sort -u > "${_manifest}.tmp" && mv "${_manifest}.tmp" "$_manifest"
+    return 0
+}
+
 verify_story_deliverables() {
     local story_id="$1"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
@@ -1854,6 +1896,9 @@ verify_story_deliverables() {
     if [ "$declared" -gt 0 ]; then
         success "Verified $declared declared deliverable(s) for $story_id"
     fi
+    # The story produced real, verified work — tell the phase gates what it was
+    # so they can judge this run's output instead of the whole codebase.
+    record_story_outputs "$story_id"
     return 0
 }
 

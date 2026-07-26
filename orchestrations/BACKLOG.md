@@ -15,29 +15,79 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 
 | # | ID | Title | Status | Source |
 |---|---|---|---|---|
-| 0 | SCHEMA-1 | **Schema-bind the reviewer's output (first client of a general agent I/O seam)** | pending | Live metrolinx failures, 2026-07-25 |
-| 1 | GAP-P5 | Intra-story planner/executor model split | done | Aider, CrewAI |
-| 2 | GAP-P4 | Semantic RAG — replace TF-IDF in CPA | done | CrewAI, OpenHands |
-| 3 | GAP-P6 | OpenTelemetry emission alongside Langfuse | done | MAF, OAI Agents SDK |
-| 4 | GAP-P7 | SwarmRouter-style topology selection | done | kyegomez/swarms |
-| 5 | GAP-P8 | Constitution injection at agent invocation | done | swarm-forge |
-| 6 | GAP-P9 | Brownfield support — existing system context ingestion | done | codemie, smolagents |
-| 7 | GAP-P2 | External event triggers (webhook/Jira/Slack) | done | OpenHands, Cline |
-| 8 | GAP-P10 | Dynamic constitution augmentation | done | Constitutional AI |
-| 9 | GAP-P11 | LLM-based topology routing | done | kyegomez/swarms |
-| 10 | GAP-P15 | Cross-run scorecard dashboard | done | SWE-bench, OpenHands |
-| 11 | GAP-P18 | One-command demo (travel app + working API) | done | All competitors |
-| 12 | GAP-P14 | Sandboxing / security isolation for tool execution | done | OpenHands, SWE-agent |
-| 13 | GAP-P16 | First-class plugin/tool marketplace | done | LangGraph, AutoGen |
-| 14 | GAP-P17 | Model-specific optimizations + structured outputs | done | LangGraph, AutoGen |
-| 15 | GAP-P13 | Durable, distributed orchestration semantics | done | Temporal, Prefect |
-| 16 | GAP-P12 | Library/framework ecosystem & composability | done | LangGraph, AutoGen, CrewAI |
-| 17 | GAP-P22 | Full pipeline cost tracking (spec, CPA, gates, assessments) | pending | Cost observability |
-| 18 | GAP-P19 | Secrets redaction in logs and artifacts | pending | Enterprise security |
-| 18 | GAP-P20 | Deterministic replay and version pinning | pending | Temporal, Dagster |
-| 19 | GAP-P21 | Multi-repo / monorepo and enterprise GitOps | pending | Enterprise GitOps |
-| 20 | GAP-P1 | Docker sandbox execution | deferred | OpenHands, SWE-agent |
-| 21 | GAP-P3 | SWE-bench benchmark harness | done | SWE-agent |
+| 1 | VC-1 | **Investigate VC agent drift — fallback VCs poison the whole downstream chain** | pending | Live metrolinx repro-gate block, 2026-07-25 |
+| 2 | SCHEMA-1 | **Schema-bind the reviewer's output (first client of a general agent I/O seam)** | pending | Live metrolinx failures, 2026-07-25 |
+| 3 | GAP-P5 | Intra-story planner/executor model split | done | Aider, CrewAI |
+| 4 | GAP-P4 | Semantic RAG — replace TF-IDF in CPA | done | CrewAI, OpenHands |
+| 5 | GAP-P6 | OpenTelemetry emission alongside Langfuse | done | MAF, OAI Agents SDK |
+| 6 | GAP-P7 | SwarmRouter-style topology selection | done | kyegomez/swarms |
+| 7 | GAP-P8 | Constitution injection at agent invocation | done | swarm-forge |
+| 8 | GAP-P9 | Brownfield support — existing system context ingestion | done | codemie, smolagents |
+| 9 | GAP-P2 | External event triggers (webhook/Jira/Slack) | done | OpenHands, Cline |
+| 10 | GAP-P10 | Dynamic constitution augmentation | done | Constitutional AI |
+| 11 | GAP-P11 | LLM-based topology routing | done | kyegomez/swarms |
+| 12 | GAP-P15 | Cross-run scorecard dashboard | done | SWE-bench, OpenHands |
+| 13 | GAP-P18 | One-command demo (travel app + working API) | done | All competitors |
+| 14 | GAP-P14 | Sandboxing / security isolation for tool execution | done | OpenHands, SWE-agent |
+| 15 | GAP-P16 | First-class plugin/tool marketplace | done | LangGraph, AutoGen |
+| 16 | GAP-P17 | Model-specific optimizations + structured outputs | done | LangGraph, AutoGen |
+| 17 | GAP-P13 | Durable, distributed orchestration semantics | done | Temporal, Prefect |
+| 18 | GAP-P12 | Library/framework ecosystem & composability | done | LangGraph, AutoGen, CrewAI |
+| 19 | GAP-P22 | Full pipeline cost tracking (spec, CPA, gates, assessments) | pending | Cost observability |
+| 20 | GAP-P19 | Secrets redaction in logs and artifacts | pending | Enterprise security |
+| 21 | GAP-P20 | Deterministic replay and version pinning | pending | Temporal, Dagster |
+| 22 | GAP-P21 | Multi-repo / monorepo and enterprise GitOps | pending | Enterprise GitOps |
+| 23 | GAP-P1 | Docker sandbox execution | deferred | OpenHands, SWE-agent |
+| 24 | GAP-P3 | SWE-bench benchmark harness | done | SWE-agent |
+
+---
+
+## VC-1 — Investigate VC agent drift  `pending`  **PRIORITY 1**
+
+**Symptom, live 2026-07-25 (AMSD-1820).** The VC guard flagged:
+
+> `VC 3 addresses station names, which is unrelated to the ticket's stated symptom
+> (promo code amount in return trip email)`
+
+Two regeneration cycles failed to clear it, so `enforceVerificationCriteria` returned
+`safeFallbackVc` — dropping from 4 specific VCs to 2 generic ones. The run then produced a
+VALID test (ran, typechecked, committed on attempt 1) which the repro-gate rejected:
+
+> `⛔ BLOCK: the new test(s) FAIL with the fix in place — the fix is incomplete or the test
+> is wrong.`
+
+**The suspected chain.** Fallback VC → test writer has nothing concrete to assert → test
+targets the wrong behaviour → repro-gate blocks a fix that may well be correct. Note this was
+the FIRST run where every mechanical stage succeeded (writer first-attempt, no self-heal, no
+ladder), so VC quality became the binding constraint rather than being masked by earlier
+failures.
+
+**Three things to investigate, in order.**
+
+1. **The drift itself, not the phrasing.** "Station names" for a promo-code-in-email ticket is
+   not a mechanism leak — it is the generator answering a different question. The guard is
+   catching a symptom of bad generation. Look at what the generator is given: which fields of
+   the ticket, in what order, and whether the codeline context is crowding out the symptom.
+
+2. **`VC_MAX_CYCLES` default of 2 means ONE regeneration attempt.** The loop ladder-escalates
+   the model per cycle, so a third cycle would reach a stronger model before giving up. Cheap
+   to try, but only worth it if (1) shows the generator can recover with a better model rather
+   than needing better input.
+
+3. **Falling back may be worse than failing.** `safeFallbackVc` is derived purely from the
+   ticket title and is guaranteed-safe *and* guaranteed-uninformative. It cannot fail the
+   guard, and it cannot drive a useful test — so the story proceeds and burns the writer, the
+   repro-gate and the reviewer before dying. Blocking with "VCs could not be established" would
+   fail faster and more honestly. Weigh against: a hard block on an optional-ish quality signal
+   stops runs that might otherwise succeed.
+
+**Gather data before changing anything.** Across runs, count `source: clean` vs `regenerated`
+vs `fallback`, and check whether `fallback` correlates with repro-gate blocks. One run is one
+data point; this whole area has already produced two wrong diagnoses from single observations
+(the 300s timeout, the first sanity guard).
+
+Code: `orchestrations/scripts/spec-mode-runner.js` — `enforceVerificationCriteria`,
+`safeFallbackVc`, `findVcMechanism`.
 
 ---
 

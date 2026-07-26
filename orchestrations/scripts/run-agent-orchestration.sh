@@ -927,6 +927,52 @@ PYEOF
 # backstop for any model that finds another way to avoid answering.
 ORCH_GATE_ALLOWED_TOOLS="${ORCH_GATE_ALLOWED_TOOLS:-bash,read_file,list_files,search}"
 
+# _brownfield_gate_scope <gate-name>
+# The brownfield addendum every QA gate prompt gets. Empty on greenfield, whose
+# flow is deliberately unchanged.
+#
+# These gates were designed for a freshly-scaffolded application. On a brownfield
+# bugfix they are pointed at 850+ existing files and a three-line change, and it
+# shows: on 2026-07-26 only TWO of six gates mentioned the code the run actually
+# changed. sast spent its budget on 70 pre-existing dependency CVEs; review-ranger
+# returned a 211-byte "pass" without naming the diff; perf-sentinel was handed
+# browser E2E routing context for a backend string comparison and returned 40
+# bytes; fuzz-weaver returned nothing.
+#
+# Two corrections: judge THIS CHANGE, and be allowed to say the change is not
+# your business. Silence is indistinguishable from failure, and a fabricated
+# "pass" is worse than both — so `not_applicable` is a first-class verdict with
+# a required reason.
+_brownfield_gate_scope() {
+    [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
+    local _gate="${1:-this gate}"
+    local _files=""
+    if [ -f "$SCRIPT_DIR/lib/story-outputs.sh" ]; then
+        # shellcheck disable=SC1090
+        . "$SCRIPT_DIR/lib/story-outputs.sh" 2>/dev/null || true
+        _files=$(story_outputs_files "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null | head -20)
+    fi
+    cat <<BROWNFIELD_SCOPE
+
+## BROWNFIELD — judge THIS CHANGE, not the codebase
+This is an existing production repository. It contains problems that predate this
+run and are none of this run's business. You are reviewing one small change to it.
+
+Files this run produced or modified:
+${_files:-  (none recorded — fall back to the injected diff)}
+
+RULES:
+1. Findings MUST be about the lines this run changed. A pre-existing issue in an
+   untouched file, or on an untouched line of a touched file, is NOT a finding
+   here — reporting it blocks a correct change over somebody else's problem.
+2. If ${_gate} has nothing meaningful to say about a change of this kind, return
+   verdict "not_applicable" with a one-line reason. That is a valid, useful
+   answer. Do NOT invent a finding to look thorough, and do NOT return "pass" to
+   mean "I could not evaluate this".
+3. Prefer fewer, real findings over broad coverage.
+BROWNFIELD_SCOPE
+}
+
 run_orch_prompt_with_tools() {
     AI_GATE_ALLOW_TOOLS=1 EPAM_ALLOWED_TOOLS="${ORCH_GATE_ALLOWED_TOOLS}" run_orch_prompt "$@"
 }
@@ -958,13 +1004,43 @@ _run_qa_gate_with_retry() {
                 if [ "${_qg_log_size:-0}" -lt 200 ] && grep -q "has been written" "$_qg_log" 2>/dev/null; then
                     _qg_retry_prefix="RETRY (attempt $(( _qg_attempt + 1 ))): CRITICAL — your previous response used WriteFile to write your output to a file. That file was NOT read by the pipeline. You MUST emit your JSON verdict as plain text in this message — do NOT use WriteFile, do NOT write to any file. Use ReadFile to read source files, then emit your findings directly here."
                 else
-                    _qg_retry_prefix="RETRY (attempt $(( _qg_attempt + 1 ))): The previous invocation timed out or produced no structured output. Use ReadFile and Bash tools to read the relevant source files now, then emit your JSON findings directly in your response — do NOT use WriteFile."
+                    _qg_retry_prefix="RETRY (attempt $(( _qg_attempt + 1 ))): Your previous answer was REJECTED because it ${_qg_schema_reason:-timed out or produced no structured output}. Use ReadFile and Bash tools to read the relevant source files now, then emit your JSON findings directly in your response — do NOT use WriteFile."
                 fi
             fi
             _qg_eff_prompt="$_qg_retry_prefix
 
 $_qg_prompt"
         fi
+        # SELF-HEAL (brownfield only — greenfield flow deliberately unchanged).
+        #
+        # Every gate already had retry + ladder escalation, and none had this.
+        # Live 2026-07-26: perf-sentinel failed IDENTICALLY twice — both attempts
+        # returned only "The file has been written successfully." — because
+        # nothing diagnosed attempt 1, so attempt 2 differed only by model.
+        # fuzz-weaver produced a 0-byte log in the same run. Two of six quality
+        # gates reviewed nothing and the phase still passed.
+        #
+        # The repro-test-writer hit the same failure class that day and RECOVERED
+        # on attempt 2, because its failure was recorded as an episode, diagnosed
+        # and compiled into an enforced constraint. That machinery is proven; the
+        # gates simply never called it.
+        if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ "$_qg_attempt" -ge 1 ] \
+           && [ -f "$SCRIPT_DIR/lib/kb-apply.sh" ]; then
+            # shellcheck disable=SC1090
+            . "$SCRIPT_DIR/lib/kb-apply.sh" || true
+            # "produced no output" carries no error string to key on, so give the
+            # episode an explicit class — otherwise it can never be looked up,
+            # which is exactly why the write-tool failure was never learned from.
+            local _qg_class="no_structured_output"
+            if [ -f "$_qg_log" ] && grep -q "has been written" "$_qg_log" 2>/dev/null; then
+                _qg_class="answered_via_write_tool"
+            fi
+            head -c 8000 "$_qg_log" 2>/dev/null | \
+                FAILURE_CLASS="$_qg_class" \
+                kb_record_episode "${_qg_phase:-}" "$_qg_slug" "gate produced no verdict" "$_qg_class" || true
+            kb_apply_constraints "$_qg_slug" "story:${_qg_phase:-}" || true
+        fi
+
         # Same allowlist as run_orch_prompt_with_tools: this path calls
         # run_orch_prompt directly, so wiring only the helper would leave every
         # actual gate invocation unrestricted.
@@ -975,10 +1051,30 @@ $_qg_prompt"
         AI_GATE_ALLOW_TOOLS=1 EPAM_ALLOWED_TOOLS="${ORCH_GATE_ALLOWED_TOOLS}" \
             EPAM_AGENT_NAME="$_qg_agent" EPAM_STORY_ID="${_qg_phase:-}" \
             run_orch_prompt "$_qg_eff_prompt" "$_qg_agent" "$_qg_phase" 2>&1 | tee "$_qg_log"
-        if grep -qE '"(verdict|findings|agent|summary)"' "$_qg_log" 2>/dev/null; then
+        # VALIDATE the verdict rather than grepping for the word.
+        #
+        # This was `grep -qE '"(verdict|findings|agent|summary)"'`, so any text
+        # containing the word "verdict" counted as a completed review — a
+        # truncated report, a fragment of reasoning, a verdict of "maybe".
+        # Live 2026-07-26: two gates "reviewed" a change while emitting 40 bytes
+        # of write-tool echo between them.
+        #
+        # Validated AFTER the call, not via provider-level strict json_schema:
+        # these gates need tools to read source and strict schema suppresses
+        # tool calling (SCHEMA-1). The reason is fed back into the retry so
+        # attempt 2 is told what was wrong instead of just getting a bigger model.
+        _qg_schema_reason=""
+        if [ -f "$SCRIPT_DIR/lib/gate_verdict_schema.py" ]; then
+            _qg_schema_reason=$(python3 "$SCRIPT_DIR/lib/gate_verdict_schema.py" \
+                                  "$_qg_agent" "$_qg_log" 2>/dev/null) || true
+        fi
+        if [ -z "$_qg_schema_reason" ] \
+           && grep -qE '"(verdict|findings|agent|summary)"' "$_qg_log" 2>/dev/null; then
             ORCH_GATE_MODEL="$_saved_gate_model"
             return 0
         fi
+        [ -n "$_qg_schema_reason" ] && \
+            warning "  [qa-gate] ${_qg_agent}: rejected — ${_qg_schema_reason}"
         # ── WriteFile recovery: model wrote JSON to a file instead of emitting it ──
         # Search project root for a recently-written JSON file containing this
         # gate's structured output. If found, append its content to the log so
@@ -6241,6 +6337,7 @@ Phase: $phase_id
 Project root: $PROJECT_ROOT
 
 IMPORTANT: All evidence has been pre-computed and is injected above. Do NOT attempt to call any shell commands, bash, or tools. Analyze ONLY the injected Semgrep, npm audit, and TypeScript compiler data.
+$(_brownfield_gate_scope sast-sentinel)
 
 Analyze the pre-computed evidence above and produce a structured JSON report covering:
 
@@ -6593,6 +6690,7 @@ $_spec_file_excerpts"
         fi
 
         local spec_prompt="You are acting as the spec-validator agent.
+$(_brownfield_gate_scope spec-validator)
 
 Phase: $phase_id
 Project root: $PROJECT_ROOT
@@ -6974,6 +7072,7 @@ Phase: $phase_id
 Project root: $PROJECT_ROOT
 
 IMPORTANT: All evidence has been pre-computed and is injected below. Do NOT attempt to call any shell commands, bash, or tools. Analyze ONLY the injected git diff data.
+$(_brownfield_gate_scope review-ranger)
 
 ## Git Diff Evidence (hard evidence — treat as ground truth)
 $review_diff_summary
@@ -7082,6 +7181,7 @@ Phase: $phase_id
 Project root: $PROJECT_ROOT
 
 IMPORTANT: All evidence has been pre-computed and is injected below. Do NOT attempt to call any shell commands, bash, or tools. Analyze ONLY the injected source and test file data.
+$(_brownfield_gate_scope mutant-hunter)
 
 ## Source and Test Evidence (hard evidence — treat as ground truth)
 $mutant_oracle_summary
@@ -7189,6 +7289,7 @@ $mutant_prompt"
         log "  Step 4.4a: Running fuzz-weaver..."
         {
             local fuzz_prompt="You are acting as the fuzz-weaver agent.
+$(_brownfield_gate_scope fuzz-weaver)
 
 Phase: $phase_id
 Project root: $PROJECT_ROOT
@@ -7240,6 +7341,7 @@ $fuzz_prompt"
         log "  Step 4.4b: Running perf-sentinel..."
         {
             local perf_prompt="You are acting as the perf-sentinel agent.
+$(_brownfield_gate_scope perf-sentinel)
 
 Phase: $phase_id
 Project root: $PROJECT_ROOT

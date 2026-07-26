@@ -90,7 +90,10 @@ describe('the QA gates are structurally prevented from writing files', () => {
     // every actual gate invocation unrestricted.
     const start = orchSrc.indexOf('_run_qa_gate_with_retry() {');
     expect(start, '_run_qa_gate_with_retry not found').toBeGreaterThan(-1);
-    const body = orchSrc.slice(start, start + 4000);
+    // Bounded by the function's own end. A fixed character window measures the
+    // length of the code rather than its behaviour, and broke the moment the
+    // wrapper grew self-healing and schema validation.
+    const body = orchSrc.slice(start, orchSrc.indexOf('\n}', start));
     expect(body, 'the retry path invokes the model without the allowlist')
       .toMatch(/EPAM_ALLOWED_TOOLS/);
   });

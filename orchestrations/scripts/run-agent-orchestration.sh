@@ -161,6 +161,9 @@ export GATE_LOG="$LOG_DIR/phase-gates.jsonl"
 export COST_LOG="$LOG_DIR/phase-cost.jsonl"
 export MESSAGES_DIR="$LOG_DIR/messages"
 export LOG_DIR
+# PHASE reaches ai-run.sh so each agent plan is filed under the phase that
+# produced it. Unexported, every plan landed in plans-unknown.jsonl.
+export PHASE
 # Propagate OpenRouter mock URL to all subprocesses (CPA, spec, ai-run.sh, testing gates)
 [ -n "${OPENROUTER_BASE_URL:-}" ] && export OPENROUTER_BASE_URL
 [ -n "${OPENROUTER_API_KEY:-}" ] && export OPENROUTER_API_KEY

@@ -3648,6 +3648,13 @@ const RUNCLAUDE_TIMEOUT_MS = parseInt(process.env.RUNCLAUDE_TIMEOUT_MS || '36000
 function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
   return new Promise((resolve, reject) => {
     const env = { ...process.env, ...envOverrides };
+    // Name the agent from the label it already declares for cost tracking.
+    // Only the detective ever set EPAM_AGENT_NAME explicitly, so every other
+    // spec-mode agent's plan record and Langfuse trace was anonymous — written
+    // as `agent:plan`, attributable to nothing. One place, so a new agent
+    // cannot be added without a name.
+    if (!env.EPAM_AGENT_NAME && opts.costAgent) env.EPAM_AGENT_NAME = opts.costAgent;
+    if (!env.EPAM_STORY_ID && opts.costStoryId) env.EPAM_STORY_ID = opts.costStoryId;
     delete env.CLAUDECODE;
 
     // COST TRACKING. Every LLM call in this file funnels through runClaude, so

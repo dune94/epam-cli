@@ -244,3 +244,34 @@ describe('planning is cheap by construction', () => {
     expect(r.stdout).toContain('FINAL ANSWER');
   });
 });
+
+/**
+ * An anonymous plan is barely worth recording.
+ *
+ * The first live run wrote its plans to `plans-unknown.jsonl`, with empty
+ * `agent` and `story` fields — because PHASE is never exported, and most
+ * spec-mode agents never set EPAM_AGENT_NAME (only the detective does). So the
+ * records existed but could not be attributed, and Langfuse showed `agent:plan`
+ * instead of the agent's real name — blunting the very labelling that makes
+ * plan and answer comparable.
+ */
+describe('a plan can be attributed', () => {
+  const ORCH = readFileSync(
+    join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+
+  it('exports PHASE, so plans are filed under the phase that produced them', () => {
+    expect(ORCH, 'PHASE never reaches ai-run.sh, so every plan files as "unknown"')
+      .toMatch(/^export PHASE$/m);
+  });
+
+  it('names every spec-mode agent, not only the detective', () => {
+    const SPEC = readFileSync(
+      join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'), 'utf8');
+    // Named from the costAgent label each call already declares, in runClaude —
+    // one place, so a new agent cannot be added without a name.
+    expect(SPEC, "agents are named per-call-site, so any site that forgets is anonymous")
+      .toMatch(/EPAM_AGENT_NAME\s*=\s*opts\.costAgent/);
+    expect(SPEC, 'the story is not carried onto the plan record either')
+      .toMatch(/EPAM_STORY_ID\s*=\s*opts\.costStoryId/);
+  });
+});

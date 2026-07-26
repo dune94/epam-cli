@@ -188,3 +188,59 @@ describe('the plan is observable', () => {
     expect(r.stdout).toContain('FINAL ANSWER');
   });
 });
+
+/**
+ * The plan must not repeat the exploration it exists to precede.
+ *
+ * The first cut inherited EPAM_ALLOWED_TOOLS and EPAM_MAX_TOOL_CALLS unchanged,
+ * so the detective explored TWICE — seven tool calls to plan, seven more to
+ * answer. Double the cost and latency for work already done, and the mock1
+ * rerun was ~40% behind the previous run at the same step.
+ *
+ * Worse, the agent timeout wraps the whole ai-run.sh invocation, which is now
+ * both passes. An agent that took 200s had 360s; now it needs ~400s and is
+ * killed at 360 — plan-execute would manufacture timeouts that look like model
+ * failures.
+ *
+ * So the plan pass gets no tools and its own short deadline. The detective
+ * prompt already carries pre-seeded CodeGraph output, so a hypothesis can be
+ * formed without spending a call — and a plan made BEFORE looking is the more
+ * useful artefact, because the answer can be checked against it. The execute
+ * pass keeps its full budget and is told to abandon the plan if what it finds
+ * contradicts it.
+ */
+describe('planning is cheap by construction', () => {
+  it('gives the planning call no tools', () => {
+    const src = readFileSync(
+      join(__dirname, '../../../orchestrations/scripts/ai-run.sh'), 'utf8');
+    const i = src.indexOf('_EPAM_IN_PLAN_PASS=1');
+    expect(i, 'the plan pass is not marked').toBeGreaterThan(-1);
+    const block = src.slice(i, i + 700);
+    expect(block, 'the plan pass inherits the tool budget and explores twice')
+      .toMatch(/EPAM_MAX_TOOL_CALLS=(")?0/);
+    expect(block, 'the plan pass inherits tool permissions')
+      .toMatch(/EPAM_ALLOWED_TOOLS=/);
+  });
+
+  it('bounds the planning call so it cannot eat the execute budget', () => {
+    const src = readFileSync(
+      join(__dirname, '../../../orchestrations/scripts/ai-run.sh'), 'utf8');
+    const i = src.indexOf('_EPAM_IN_PLAN_PASS=1');
+    expect(src.slice(Math.max(0, i - 400), i + 700),
+      'a hung planning call consumes the whole agent deadline')
+      .toMatch(/timeout\s+"?\$\{?EPAM_PLAN_TIMEOUT_SECS/);
+  });
+
+  it('tells the execute pass it may abandon a wrong plan', () => {
+    const src = readFileSync(
+      join(__dirname, '../../../orchestrations/scripts/ai-run.sh'), 'utf8');
+    expect(src, 'the agent is bound to a plan it made before looking')
+      .toMatch(/showed it to be wrong|abandon/i);
+  });
+
+  it('still produces a plan and an answer with tools disabled', () => {
+    const r = run();
+    expect(r.prompts.length).toBe(2);
+    expect(r.stdout).toContain('FINAL ANSWER');
+  });
+});

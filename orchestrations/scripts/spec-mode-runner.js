@@ -1924,7 +1924,7 @@ async function _vcLlmCall(prompt, cycle, logPath, storyId = '') {
     // (scoped to this child env, so the wider run's temperature/effort are untouched).
     EPAM_TEMPERATURE: process.env.VC_LLM_TEMPERATURE || '0',
     EPAM_REASONING_EFFORT: process.env.VC_LLM_REASONING_EFFORT || 'low',
-  }, { costAgent: 'vc-agent', costStoryId: storyId, salvageOutputOnFailure: true, timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '360000') });
+  }, { costAgent: 'vc-agent', costStoryId: storyId, salvageOutputOnFailure: true, timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '450000') });
 }
 function _firstJsonArray(out) {
   const m = out && out.match(/\[[\s\S]*?\]/);
@@ -2262,7 +2262,7 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
         // in-pipeline: glm-5.1 hung 6 min producing nothing while the pipeline
         // hammered the same OpenRouter key) fails FAST and escalates up the
         // ladder, instead of burning the full RUNCLAUDE_TIMEOUT_MS per attempt.
-        timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '360000'),
+        timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '450000'),
       });
       let findings = parseFindings(out);
       // PHASE 2 — EXTRACT (no tools). Phase 1 investigated but ended in prose
@@ -2277,7 +2277,7 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
           // No AI_GATE_ALLOW_TOOLS → ai-run.sh adds --no-tools → pure extraction.
           EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || '24576',
           EPAM_MAX_ITERATIONS: '2',
-        }, { salvageOutputOnFailure: true, costAgent: 'code-graph-detective', costStoryId: story && story.id ? story.id : '', timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '360000') });
+        }, { salvageOutputOnFailure: true, costAgent: 'code-graph-detective', costStoryId: story && story.id ? story.id : '', timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '450000') });
         findings = parseFindings(out2);
         if (findings && findings.length) {
           console.warn(`spec-mode: code-graph-detective phase-2 extraction recovered ${findings.length} fix-site(s) for ${story.id} from a narrative phase-1 answer.`);

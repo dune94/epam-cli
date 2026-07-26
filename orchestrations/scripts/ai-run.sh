@@ -296,11 +296,26 @@ if [ "${EPAM_PLAN_EXECUTE:-1}" = "1" ] && [ "${_EPAM_IN_PLAN_PASS:-0}" != "1" ];
   # generation in Langfuse instead of a second trace with the same name. Both
   # passes previously inherited EPAM_AGENT_NAME, which made plan and answer
   # indistinguishable in the one place their cost and latency are comparable.
+  # NO TOOLS, and its own short deadline.
+  #
+  # Inheriting the tool budget made the detective explore twice — seven calls to
+  # plan, seven more to answer — for work already done. And because the agent's
+  # timeout wraps this whole script, a second exploration pushed agents toward
+  # deadlines set for one pass, manufacturing timeouts that read as model
+  # failures.
+  #
+  # It does not need them: the prompt already carries pre-seeded CodeGraph
+  # output, so a hypothesis can be formed without spending a call — and a plan
+  # made BEFORE looking is the more useful artefact, because the answer can be
+  # checked against it. The execute pass keeps the full budget.
   _plan_text="$(
     _EPAM_IN_PLAN_PASS=1 \
     EPAM_AGENT_NAME="${EPAM_AGENT_NAME:-agent}:plan" \
+    EPAM_ALLOWED_TOOLS="" \
+    EPAM_MAX_TOOL_CALLS=0 \
     ORCH_JSON_RESULT="$_plan_json" \
     PROMPT_FILE="$_plan_file" \
+    timeout "${EPAM_PLAN_TIMEOUT_SECS:-90}" \
     bash "$0" ${PRIMARY_PROVIDER:+--provider "$PRIMARY_PROVIDER"} ${AI_MODEL:+--model "$AI_MODEL"} \
       < "$_plan_file" 2>/dev/null || true
   )"

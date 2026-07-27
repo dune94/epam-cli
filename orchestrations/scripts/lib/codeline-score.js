@@ -107,6 +107,69 @@ function crossRepoTermScores(repos, terms, queryFn, opts = {}) {
   });
 }
 
+
+/**
+ * repoRecency(repoPath) — how alive is this repository?
+ *
+ * Deterministic, from git. No model, no heuristic about names.
+ * Returns null when there is no usable history (shallow clone, empty repo), so
+ * a MISSING measurement is never confused with a DORMANT repo.
+ */
+function repoRecency(repoPath, execFileSync = require('child_process').execFileSync) {
+  const git = (args) => execFileSync('git', ['-C', repoPath, ...args],
+    { encoding: 'utf8', timeout: 10000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  try {
+    const iso = git(['log', '-1', '--format=%cI']);
+    if (!iso) return null;
+    const days = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 86400000));
+    const commits90d = git(['log', '--since=90 days ago', '--oneline'])
+      .split('\n').filter(Boolean).length;
+    return { daysSinceLastCommit: days, commits90d };
+  } catch {
+    return null;                       // not a repo, no history, git unavailable
+  }
+}
+
+/**
+ * applyRecency(scored, ages) — demote repositories nobody is working in.
+ *
+ * AMSD-2041 selected UPExpress.com: last commit eight months earlier, zero
+ * commits in ninety days, for a feature landing in the actively-developed
+ * next.* sites. Pure TF-IDF cannot tell "this repo is ABOUT UP Express" from
+ * "this repo is where UP Express is still BUILT" — and a legacy codebase often
+ * matches BETTER, precisely because it is the old implementation of the same
+ * domain.
+ *
+ * Recency is a MODIFIER, never a term. Relevance decides who is in the running;
+ * this breaks ties and demotes the dead. A repo that matches nothing scores zero
+ * and stays zero however busy it is — otherwise the most active repository in
+ * the organisation would win every ticket.
+ *
+ * Multiplicative and bounded: a live repo keeps its score, a dormant one is
+ * halved. It cannot rescue an irrelevant repo, and it cannot bury a decisive
+ * relevance gap.
+ */
+function applyRecency(scored, ages = {}, opts = {}) {
+  const staleDays = opts.staleDays || Number(process.env.CODELINE_STALE_DAYS || 180);
+  const floor = opts.floor || Number(process.env.CODELINE_STALE_FLOOR || 0.5);
+  return scored.map((repo) => {
+    const age = ages[repo.path];
+    if (!age || typeof age.daysSinceLastCommit !== 'number') {
+      // No measurement is NOT evidence of dormancy. Leave the score untouched.
+      return { ...repo, score: repo.tier2, recency: null };
+    }
+    // Linear decay from "today" to staleDays, then flat at the floor.
+    const decay = age.daysSinceLastCommit >= staleDays
+      ? floor
+      : 1 - (1 - floor) * (age.daysSinceLastCommit / staleDays);
+    return {
+      ...repo,
+      score: repo.tier2 * decay,
+      recency: { ...age, multiplier: Number(decay.toFixed(3)) },
+    };
+  });
+}
+
 /**
  * Ranking confidence — lets a caller skip the LLM when the deterministic
  * evidence is already decisive, and flag when it genuinely is not.
@@ -120,4 +183,4 @@ function rankingConfidence(scored) {
   return { top1, top2, gap: top1 - top2, ratio, decisive: ratio >= 1.5 && top1 > 0 };
 }
 
-module.exports = { crossRepoTermScores, rankingConfidence, DEFAULT_TERM_QUERY_LIMIT };
+module.exports = { crossRepoTermScores, applyRecency, repoRecency, rankingConfidence, DEFAULT_TERM_QUERY_LIMIT };

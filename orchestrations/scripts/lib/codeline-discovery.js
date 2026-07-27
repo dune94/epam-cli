@@ -29,7 +29,7 @@
 const fs           = require('fs');
 const path         = require('path');
 const { execSync } = require('child_process');
-const { crossRepoTermScores, rankingConfidence } = require('./codeline-score');
+const { crossRepoTermScores, applyRecency, repoRecency, rankingConfidence } = require('./codeline-score');
 
 // Semble removed from codeline scoring — all repos are CodeGraph-indexed,
 // making Tier 3 probabilistic scoring redundant and a source of re-ranking noise.
@@ -206,8 +206,31 @@ function scoreRepos(issues, manifest, topN = 8) {
       } catch { /* unindexable repo still gets Tier 1 */ }
     }
     const indexed = manifest.filter(r => { try { return cg.isCodeGraphIndexed(r.path); } catch { return false; } });
-    const t2 = crossRepoTermScores(indexed, terms, (term, repoPath, limit) =>
+    let t2 = crossRepoTermScores(indexed, terms, (term, repoPath, limit) =>
       cg.queryCodeGraph(term, repoPath, limit));
+
+    // Demote repositories nobody is working in. AMSD-2041 selected UPExpress.com
+    // — last commit eight months earlier, zero commits in ninety days — for a
+    // feature landing in the actively-developed next.* sites. A legacy codebase
+    // often out-matches its replacement on term frequency precisely BECAUSE it is
+    // the old implementation of the same domain. Recency is the discriminator
+    // relevance cannot provide, and git already knows it.
+    if (process.env.CODELINE_RECENCY !== '0') {
+      const ages = {};
+      for (const r of indexed) {
+        const age = repoRecency(r.path);
+        if (age) ages[r.path] = age;
+      }
+      t2 = applyRecency(t2, ages);
+      for (const r of t2) {
+        if (r.recency && r.recency.multiplier < 1) {
+          log(`  recency: ${r.name} last commit ${r.recency.daysSinceLastCommit}d ago, ` +
+              `${r.recency.commits90d} commit(s)/90d → score ×${r.recency.multiplier}`);
+        }
+      }
+      // The modifier decides the ranking from here on.
+      for (const r of t2) r.tier2 = r.score;
+    }
     for (const r of t2) tier2ByPath.set(r.path, r);
 
     const conf = rankingConfidence(t2);

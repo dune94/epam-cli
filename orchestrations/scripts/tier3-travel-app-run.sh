@@ -96,6 +96,11 @@ _usage_before=$(curl -s "https://openrouter.ai/api/v1/auth/key" \
   -H "Authorization: Bearer $OPENROUTER_API_KEY" 2>/dev/null | \
   node -e "process.stdout.write(''+JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).data.usage)" 2>/dev/null || echo "0")
 info "OpenRouter usage before: \$$_usage_before"
+# Also into $LOG_FILE: the line above goes to stdout, which is the launch log
+# that pre-run-reset deletes. The run report is generated from $LOG_FILE, so a
+# balance recorded only on stdout leaves every report saying "Billed by
+# provider $?" — the one number that is ground truth rather than our own tally.
+printf 'OpenRouter usage before: $%s\n' "$_usage_before" >> "$LOG_FILE" 2>/dev/null || true
 echo ""
 
 # Tear down the entire output directory before every run.
@@ -476,6 +481,11 @@ _usage_after=$(curl -s "https://openrouter.ai/api/v1/auth/key" \
   node -e "process.stdout.write(''+JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).data.usage)" 2>/dev/null || echo "0")
 _spent=$(node -e "console.log(($_usage_after-$_usage_before).toFixed(4))" 2>/dev/null || echo "?")
 info "OpenRouter usage after: \$$_usage_after"
+# Also into $LOG_FILE: the line above goes to stdout, which is the launch log
+# that pre-run-reset deletes. The run report is generated from $LOG_FILE, so a
+# balance recorded only on stdout leaves every report saying "Billed by
+# provider $?" — the one number that is ground truth rather than our own tally.
+printf 'OpenRouter usage after: $%s\n' "$_usage_after" >> "$LOG_FILE" 2>/dev/null || true
 info "Total spent this run: \$$_spent"
 echo ""
 

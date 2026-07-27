@@ -359,19 +359,33 @@ function callLlm(prompt) {
     // stderr is captured (not discarded) when DEBUG_CODELINE_DISCOVERY=1, so
     // provider-side warnings/errors that still produce SOME stdout output
     // (and would otherwise be silently invisible) can actually be seen.
+    // stderr is CAPTURED, never discarded. `2>/dev/null` turned a timeout into
+    // "Empty response from ai-run.sh", so the run logged a tidy fallback to the
+    // highest-scored repo and proceeded against the wrong codeline. The reason a
+    // call failed is the only thing that makes the fallback judgeable.
+    const _errFile = `${tmpPrompt}.err`;
     const cmd = debug
       ? `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt}`
-      : `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>/dev/null`;
+      : `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>${_errFile}`;
     const raw = execSync(cmd, {
       encoding:   'utf8',
-      timeout:    300000,
+      // Covers BOTH passes: plan-execute puts a plan call (up to
+      // EPAM_PLAN_TIMEOUT_SECS, 90s) and an execute call inside one ai-run.sh
+      // invocation. 300000 was set for a single call and failed live on
+      // AMSD-2041 the first time this ran with two.
+      timeout:    Number(process.env.CODELINE_DISCOVERY_TIMEOUT_MS || 420000),
       maxBuffer:  10 * 1024 * 1024,
       env:        { ...process.env, EPAM_AGENT_NAME: 'codeline-discovery' },
     }).trim();
 
     if (debug) log(`DEBUG raw LLM response:\n${raw}`);
 
-    if (!raw) throw new Error('Empty response from ai-run.sh');
+    if (!raw) {
+      // Say WHY. "Empty response" describes the symptom and hides the cause.
+      let why = '';
+      try { why = require('fs').readFileSync(_errFile, 'utf8').trim().slice(-400); } catch { /* none */ }
+      throw new Error('Empty response from ai-run.sh' + (why ? ` — stderr: ${why}` : ' (no stderr captured)'));
+    }
 
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error(`No JSON in LLM response: ${raw.slice(0, 200)}`);

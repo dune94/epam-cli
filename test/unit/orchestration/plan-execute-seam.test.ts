@@ -309,3 +309,70 @@ describe('an unnamed caller still gets identified', () => {
     expect(r.code).toBe(0);
   });
 });
+
+/**
+ * Adding a pass means every caller's deadline has to cover two calls.
+ *
+ * Live AMSD-2041, 2026-07-27. Codeline discovery reported:
+ *
+ *   WARN: LLM call failed: Empty response from ai-run.sh.
+ *         Using highest-scored candidate as fallback.
+ *   → codeline 'upexpress' = .../UPExpress.com  [scored-fallback]
+ *
+ * The provider was healthy. The call died on the CALLER's own timeout, because
+ * plan-execute puts two model calls inside one ai-run.sh invocation and the
+ * library callers' deadlines were never raised — only the detective (360→450s)
+ * and story (600→690s) were. ac-gate.js is the worst case at 90s, which the plan
+ * pass alone is permitted to consume: arithmetically impossible to complete.
+ *
+ * The consequence was not a visible failure. Discovery fell back to the
+ * highest-scored repo — the legacy site, not the one holding the CMS code — and
+ * the run would have proceeded through the entire pipeline against one wrong
+ * codeline, reporting a clean start.
+ */
+describe('every caller allows room for both passes', () => {
+  const LIB = join(__dirname, '../../../orchestrations/scripts/lib');
+
+  // Callers that invoke ai-run.sh with their own execSync/spawnSync deadline.
+  const CALLERS = ['codeline-discovery.js', 'ac-gate.js'];
+
+  it('the plan pass has a bounded cost that callers can budget against', () => {
+    const src = readFileSync(
+      join(__dirname, '../../../orchestrations/scripts/ai-run.sh'), 'utf8');
+    expect(src).toMatch(/EPAM_PLAN_TIMEOUT_SECS:-(\d+)/);
+  });
+
+  for (const caller of CALLERS) {
+    it(`${caller}: deadline exceeds the plan pass with room to execute`, () => {
+      const src = readFileSync(join(LIB, caller), 'utf8');
+      // Accepts a literal or an env-overridable default — what matters is the
+      // effective value when nothing is set.
+      const timeouts = [
+        ...[...src.matchAll(/timeout:\s*(\d+)/g)].map(m => Number(m[1])),
+        ...[...src.matchAll(/timeout:\s*Number\(process\.env\.\w+\s*\|\|\s*(\d+)\)/g)]
+            .map(m => Number(m[1])),
+      ];
+      expect(timeouts.length, `${caller} declares no timeout to check`).toBeGreaterThan(0);
+      for (const t of timeouts) {
+        expect(t,
+          `${caller} allows ${t}ms for a call that now contains a plan pass (up to ` +
+          '90000ms) AND an execute pass. Discovery failed live at 300000ms, so that ' +
+          'is demonstrably not enough. The caller ' +
+          'reports an empty response rather than a timeout.')
+          .toBeGreaterThanOrEqual(360000);
+      }
+    });
+  }
+
+  it('codeline-discovery does not discard the reason a call failed', () => {
+    // `2>/dev/null` turned a timeout into "Empty response", so the run logged a
+    // tidy fallback instead of the cause. A swallowed error costs a whole run.
+    const src = readFileSync(join(LIB, 'codeline-discovery.js'), 'utf8');
+    // The invocation uses ${AI_RUN_SH}, a variable — matching the literal
+    // 'ai-run.sh' silently passes while the redirect is still there.
+    const i = src.indexOf('execSync(cmd');
+    const near = src.slice(Math.max(0, i - 900), i + 200);
+    expect(near, 'stderr is discarded, so a failing call is indistinguishable from an empty one')
+      .not.toMatch(/AI_RUN_SH\}[^\n]*2>\s*\/dev\/null/);
+  });
+});

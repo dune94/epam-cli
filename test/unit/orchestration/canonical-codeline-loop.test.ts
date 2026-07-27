@@ -44,7 +44,13 @@ describe('C1: _run_codeline_loop has _phase_filter as third arg', () => {
 describe('C2: phase filter in _run_codeline_loop skips non-matching phases', () => {
   const loopIdx = orchSrc.indexOf('_run_codeline_loop()');
   // Wide enough to include the skip logic after the phases loop starts
-  const block   = orchSrc.slice(loopIdx, loopIdx + 12000);
+  // Bounded by the NEXT top-level function, not a magic character count. A fixed
+  // 12000-char window broke when the loop grew by 92 characters — the assertion
+  // silently stopped covering the code it was written for. A bare `\n}\n` is no
+  // good either: this function embeds JSON heredocs whose closing brace sits at
+  // column 0.
+  const _next   = orchSrc.slice(loopIdx + 1).search(/\n[a-z_][a-z0-9_]*\(\)\s*\{/i);
+  const block   = orchSrc.slice(loopIdx, _next > 0 ? loopIdx + 1 + _next : orchSrc.length);
 
   it('loop skips phases that do not match _phase_filter', () => {
     expect(block).toMatch(/\$_phase.*!=.*\$_phase_filter|_phase_filter.*!=.*_phase/);

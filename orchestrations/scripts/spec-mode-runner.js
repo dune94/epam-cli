@@ -267,6 +267,10 @@ function getDeterministicCandidateFiles(story, topN = 3) {
  * neighbouring codebase — only the neighbouring surface.
  */
 function publishedContracts(repoPath, story) {
+  // A story whose codeline cannot be resolved is ordinary — mocks, greenfield,
+  // a lane not yet created. path.join(null, ...) throws, and this is called
+  // while building a prompt, so that throw takes the whole spec pass down.
+  if (!repoPath) return '';
   const dir = path.join(repoPath, '.contracts');
   let files = [];
   try {
@@ -297,6 +301,49 @@ boundary hides it and will pass every test you can write here. If what you see
 contradicts a contract above, say so and name the other codeline rather than
 prescribing a local workaround. There is always SOME line in this repository that
 consumes the wrong value; naming it is not the same as finding the cause.`;
+}
+
+/**
+ * _specAgentFailed — what to do when a spec agent throws.
+ *
+ * Both call sites used to catch the error and assign null without looking at
+ * it. The error object was discarded, so a spec agent that crashed and a
+ * provider that timed out were indistinguishable, and both were treated as
+ * transient: four
+ * attempts, then a FATAL message telling the operator to check SPEC_MODE_*
+ * models and RUNCLAUDE_TIMEOUT_MS.
+ *
+ * Live mock1 run 8: the cause was `ReferenceError: repoPath is not defined` in
+ * the prompt builder. Unconditional, identical every attempt, and nowhere in any
+ * log. The retry budget bought nothing but four times the delay.
+ *
+ * So: always surface the error, and distinguish the two cases. A provider
+ * failure is worth retrying. A programming error is not — it will fail the same
+ * way forever, and the honest response is to stop immediately with the actual
+ * stack rather than three more attempts and a misleading diagnosis.
+ */
+const _PROGRAMMING_ERRORS = [ReferenceError, TypeError, SyntaxError, RangeError];
+
+function _specAgentFailed(agent, story, err, attemptLabel) {
+  const storyId = (story && story.id) || 'unknown';
+  const isBug = _PROGRAMMING_ERRORS.some((E) => err instanceof E);
+
+  console.error(
+    `spec-mode: ${agent} threw for ${storyId} (${attemptLabel}) — ` +
+    `${err && err.name ? err.name : 'Error'}: ${err && err.message ? err.message : String(err)}`
+  );
+  if (err && err.stack) console.error(err.stack);
+
+  if (isBug) {
+    // Not a provider problem, and no number of retries changes it. Fail with the
+    // real cause instead of laundering it into "transient failure".
+    console.error(
+      `spec-mode: this is a defect in the orchestrator, not a provider failure — ` +
+      `retrying cannot help. Aborting immediately.`
+    );
+    throw err;
+  }
+  return null;
 }
 
 function unreachableExternalsConstraint(env = process.env) {
@@ -902,7 +949,7 @@ ${storiesPayload}
             promptExec, agent, story, phase: opts.phase, runId, logDir
           });
         }
-      } catch (err) { agentResult = null; }
+      } catch (err) { agentResult = _specAgentFailed(agent, story, err, 'initial'); }
 
       // Retry on transient failure (timeout, provider outage).
       // For openspec (the sole split authority), use a HIGH ladder:
@@ -968,7 +1015,7 @@ ${storiesPayload}
               ? await runSpeckitReview({ promptExec, story, openspecOutput: openspecPayload, phase: opts.phase, runId, logDir })
               : await runSpecAgent({ promptExec, agent, story, phase: opts.phase, runId, logDir });
           }
-        } catch (err) { agentResult = null; }
+        } catch (err) { agentResult = _specAgentFailed(agent, story, err, `retry ${_specRetry}`); }
       }
 
       if (!agentResult || !agentResult.payload) {
@@ -2501,6 +2548,12 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
   const forcedRetryBlock = forcedRetryNote ? `${forcedRetryNote}\n\n` : '';
 
   const sembleContext = fetchExistingCodeContext(story);
+
+  // Resolved here rather than taken as a parameter, the same way every other
+  // consumer in this module does it. It feeds publishedContracts() below, which
+  // is interpolated into the prompt — outside any try — so an unbound name here
+  // is not a degraded prompt, it is a hard crash on every single attempt.
+  const repoPath = resolveCodelinePath(story);
 
   // Brownfield archaeology block — injected for EPAM_BROWNFIELD=1 regardless of
   // which spec agent is running. Whichever agent runs must identify the
@@ -4444,6 +4497,8 @@ module.exports = {
   getDeterministicCandidateFiles,
   buildBrownfieldSearchQuery,
   runCodeGraphDetective,
+  runSpecAgent,
+  publishedContracts,
   fetchCodeGraphContext,
   validateMidExecutionSplits,
   extractCodeRefs,

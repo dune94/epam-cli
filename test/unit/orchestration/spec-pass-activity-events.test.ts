@@ -168,7 +168,12 @@ describe('spec-mode-runner.js — all agent calls guarded against thrown excepti
     const speckitCallIdx = loopBody.indexOf('runSpeckitReview({');
     expect(tryCatchIdx).toBeGreaterThan(-1);
     expect(speckitCallIdx).toBeGreaterThan(tryCatchIdx);
-    expect(loopBody).toContain('} catch (err) { agentResult = null; }');
+    // The guard is still required — a provider failure must reach the retry
+    // loop rather than kill the process. It no longer DISCARDS the error: this
+    // asserted the literal `catch (err) { agentResult = null; }`, and that
+    // discard is exactly what reported mock1 run 8's ReferenceError as four
+    // transient failures. See spec-agent-prompt-construction.test.ts.
+    expect(loopBody).toMatch(/catch\s*\(\s*err\s*\)\s*\{\s*agentResult\s*=\s*_specAgentFailed\(/);
     const whileLoopIdx = loopBody.indexOf('while (!agentResult');
     expect(whileLoopIdx).toBeGreaterThan(tryCatchIdx);
   });

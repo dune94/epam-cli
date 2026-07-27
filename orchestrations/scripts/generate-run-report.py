@@ -72,6 +72,14 @@ def collect(args):
     d['cost_before'] = first(r'OpenRouter usage before:\s*\$([0-9.]+)', log)
     d['cost_after'] = first(r'OpenRouter usage after:\s*\$([0-9.]+)', log)
     d['cost_total'] = first(r'Total spent this run:\s*\$([0-9.]+)', log)
+    # Was this run's coverage narrowed by an unreachable external service? A
+    # green run with a service mocked is a NARROWER claim than a green run
+    # without, and a flag set once and never unset removes integration signal
+    # silently. Say it in the report or nobody will know six months from now.
+    d['mocked_externals'] = first(r'EPAM_MOCK_EXTERNAL_CMS_HOSTS=[\'"]?([^\'"\n]+)', log)
+    if not d['mocked_externals'] and os.environ.get('EPAM_MOCK_EXTERNAL_CMS_APIS') == '1':
+        d['mocked_externals'] = os.environ.get('EPAM_MOCK_EXTERNAL_CMS_HOSTS', '')
+
     d['pipeline_complete'] = 'Pipeline complete' in log
 
     # The verdict is READ, not inferred from prose.
@@ -917,6 +925,21 @@ def render_timeline(events, kinds=None, intros=True):
     return '\n'.join(rows) or ('<p>' + MISSING + '</p>')
 
 
+def _mocked_externals_note(d):
+    """State plainly that this run proved less than an unqualified pass would."""
+    hosts = (d.get('mocked_externals') or '').strip()
+    if not hosts:
+        return ''
+    return ('<p class="note bad"><strong>Integration with an external service was NOT '
+            'verified.</strong> This project declares it cannot reach '
+            + esc(hosts) + ' at test time &mdash; there are no credentials and no local '
+            'substitute &mdash; so that client was mocked and the criteria were written to '
+            'our side of the boundary. Everything below is true of the code this run wrote '
+            'and of how it behaves against a stubbed client. It is <em>not</em> evidence '
+            'that the real integration works. Every other dependency was exercised '
+            'normally.</p>')
+
+
 def render_preamble(d):
     """Tell a reader who knows nothing about this system what they are reading."""
     title = d.get('title') or ''
@@ -941,6 +964,7 @@ def render_preamble(d):
         + esc(d.get('t_start') or '?') + ' to ' + esc(d.get('t_end') or '?')
         + ' and cost $' + esc(_cost_shown(d)[0])
         + ('' if _cost_shown(d)[1] else ' (summed from the per-call records)') + '.</p>'
+        + _mocked_externals_note(d)
         + '<p class="intro">Everything below is read from the run&rsquo;s own logs. Where a fact has no '
         'supporting record it is marked <span class="missing">not recorded</span> rather than guessed at.</p>')
 

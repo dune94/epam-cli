@@ -234,6 +234,49 @@ function getDeterministicCandidateFiles(story, topN = 3) {
 // fix file 3rd. Confirmed live: the agent never saw apply-report-discounts.
 // service.ts existed and wrote a brand-new, disconnected module instead.
 // Greenfield: Semble only (no existing code to search).
+/**
+ * A constraint for services this project has declared it cannot reach.
+ *
+ * Returns '' unless the project declares one, so every other project — and every
+ * run with reachable infrastructure — is completely unaffected. Narrowing what
+ * "done" means is only correct when the narrowing is true.
+ *
+ * Consumed where verification criteria are WRITTEN, not only by the test writer.
+ * A criterion demanding live behaviour cannot be satisfied by a mocked test: the
+ * writer would do as instructed and the validator would correctly report the
+ * criterion unmet — two agents in conflict, both behaving correctly, because the
+ * constraint arrived downstream of the thing that defines done.
+ *
+ * The engine never learns what any of these services ARE. It reads a flag and a
+ * host list; the vendor lives in per-project config.
+ */
+function unreachableExternalsConstraint(env = process.env) {
+  if (env.EPAM_MOCK_EXTERNAL_CMS_APIS !== '1') return '';
+  const hosts = String(env.EPAM_MOCK_EXTERNAL_CMS_HOSTS || '')
+    .split(',').map((h) => h.trim()).filter(Boolean);
+  if (!hosts.length) return '';
+  return `
+
+UNREACHABLE EXTERNAL SERVICE — write criteria to the boundary, not past it.
+This project cannot reach the following hosts at test time: ${hosts.join(', ')}.
+There are no credentials for them and no local substitute, so any criterion that
+asserts their real behaviour is unprovable and will fail verification no matter
+how correct the code is.
+
+Write criteria that stop at OUR side of that boundary and are therefore provable:
+what request our code makes, with what parameters, under what conditions; how it
+handles the responses and failures those services can return; what it renders or
+returns given a known response. State the assumption explicitly, e.g. "given the
+<service> client is mocked, ...", so a reader knows the claim's limits.
+
+SCOPE — this applies ONLY to the hosts listed above. Every other integration
+keeps its real coverage: internal APIs, this codeline's own services, databases,
+and anything else reachable are exercised for real exactly as normal. Do NOT mock
+a dependency merely because mocking it would be more convenient. Removing
+coverage from something we CAN test trades a real defect for a green tick, which
+is the opposite of why this constraint exists.`;
+}
+
 function fetchExistingCodeContext(story) {
   const isBrownfield = process.env.EPAM_BROWNFIELD === '1';
   if (isBrownfield) {
@@ -2004,7 +2047,7 @@ The acceptanceCriteria are the IMMUTABLE ticket intent — copy the existing arr
 Instead, PRODUCE a "verificationCriteria" array — concrete, OBSERVABLE checks that confirm the change is correct — derived from the acceptance criteria AND the description (lean on the description when the ACs are sparse or missing). Apply these rules to EVERY verification criterion (a strict reviewer holds you to this SAME text, so a VC that breaks any rule will be flagged and rejected):
 ${VC_OBSERVABILITY_RULES}
 - If the ticket describes a SYMPTOM, the VCs verify that symptom is resolved AND that related existing behavior does not regress.
-Set "vcSource" to "acceptance", "description", or "both" — where you derived the VCs from (use "description" when the ACs were too sparse to derive from).
+Set "vcSource" to "acceptance", "description", or "both" — where you derived the VCs from (use "description" when the ACs were too sparse to derive from).${unreachableExternalsConstraint()}
 `
     : '';
   const schemaLine = isBrownfield

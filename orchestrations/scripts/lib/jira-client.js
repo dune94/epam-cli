@@ -146,7 +146,10 @@ async function getIssue(issueKey) {
 async function searchIssues(jql, maxResults = 50, fields = []) {
   if (!CONFIGURED) return { issues: [], total: 0 };
   const defaultFields = [
-    'summary', 'description', 'status', 'labels', 'issuetype',
+    // components: the one STRUCTURED field stating which product areas a
+    // ticket touches. Without it the pipeline infers product scope from prose
+    // and converges on a single repository for work that spans several.
+    'summary', 'description', 'status', 'labels', 'issuetype', 'components',
     'assignee', 'priority', 'customfield_10016', 'comment', 'parent',
   ].join(',');
   const f = fields.length > 0 ? fields.join(',') : defaultFields;
@@ -212,6 +215,11 @@ function normalizeIssue(issue) {
     acceptanceCriteria,
     status:             (f.status && f.status.name) || 'To Do',
     labels,
+    // The product areas this ticket touches, as the tracker records them. A
+    // ticket naming several is the tracker stating the work spans several parts
+    // of the estate — the pipeline must be able to act on that rather than
+    // inferring scope from the summary text.
+    components:         Array.isArray(f.components) ? f.components.map(c => c && c.name).filter(Boolean) : [],
     codeline,
     effort:             pointsToEffort(f.customfield_10016),
     // Ground-truth ticket type ("Bug", "Story", "Task"). Used downstream to

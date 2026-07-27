@@ -150,7 +150,7 @@ function buildRepoManifest(rootDir) {
 //   Tier 1 — name/description/readme keyword match   (fast, zero I/O, always)
 //   Tier 2 — CodeGraph FTS5 symbol-name query        (CODEGRAPH_ENABLED=1, indexed repos only)
 //             Deterministic: finds functions literally named "applyReportDiscounts";
-//             5 pts per symbol hit, maximum 100 pts. All 31 Metrolinx repos are
+//             5 pts per symbol hit, maximum 100 pts. All indexed repos in the codeline root are
 //             indexed — this tier fires for every repo, giving decisive separation.
 //
 // Returns repos sorted descending by combined score, sliced to topN.
@@ -209,9 +209,10 @@ function scoreRepos(issues, manifest, topN = 8) {
     let t2 = crossRepoTermScores(indexed, terms, (term, repoPath, limit) =>
       cg.queryCodeGraph(term, repoPath, limit));
 
-    // Demote repositories nobody is working in. AMSD-2041 selected UPExpress.com
-    // — last commit eight months earlier, zero commits in ninety days — for a
-    // feature landing in the actively-developed next.* sites. A legacy codebase
+    // Demote repositories nobody is working in. Live 2026-07-27: a repository
+    // whose last commit was eight months earlier, with zero commits in ninety
+    // days, outranked the actively-developed sites where the work belonged. A
+    // legacy codebase
     // often out-matches its replacement on term frequency precisely BECAUSE it is
     // the old implementation of the same domain. Recency is the discriminator
     // relevance cannot provide, and git already knows it.
@@ -265,14 +266,14 @@ function scoreRepos(issues, manifest, topN = 8) {
     // "email" and "amount" appear in every codebase, collapsing score separation.
     //
     // Live bug (2026-07-22): this used to assume every candidate repo was
-    // already indexed ("all 31 Metrolinx repos are indexed" — a stale,
+    // already indexed ("every repo in the root is indexed" — a stale,
     // unverified assumption). A repo missing its .codegraph/codegraph.db got
     // ZERO Tier-2 score no matter how relevant it actually was, while any
     // already-indexed-but-irrelevant repo still got a real BM25 boost —
     // silently starving the correct repo out of the top-N candidates offered
     // to the LLM. Confirmed live: azure.commerce.cdts (the actual fix site for
     // AMSD-1820) was never indexed and didn't even make top-8; the LLM was
-    // forced to pick from 8 wrong candidates and chose gotransit.webservices.
+    // forced to pick from the wrong candidates and chose an unrelated repo.
     // Fix: index on demand, right here, before scoring — indexing status must
     // never gate whether a repo is even considered.
     // Tier 2 — cross-repo term exclusivity, computed above for the whole set.
@@ -309,7 +310,7 @@ function selectBestCandidate(scored) {
 
 // ── Codeline name derivation ───────────────────────────────────────────────
 // Produces a short lowercase identifier from a directory name.
-// e.g. "azure.commerce.cdts" → "cdts"  "next.gotransit.com" → "gotransit"
+// e.g. strip vendor/domain affixes: "<org>.<product>.<name>" -> "<name>"
 
 function deriveCodelineName(dirName) {
   const parts = dirName.replace(/\.(com|org|net|io|dev)$/, '').split(/[.\-_]+/);
@@ -328,9 +329,16 @@ function buildDiscoveryPrompt(issues, manifest) {
     (r.readmeExcerpt ? `\n  readme: ${r.readmeExcerpt}` : '')
   ).join('\n\n');
 
-  const issuesSummary = issues.map(i =>
-    `- key: ${i.jiraKey}\n  title: ${i.title}\n  description: ${(i.description || '').slice(0, 300)}`
-  ).join('\n\n');
+  const issuesSummary = issues.map(i => {
+    const comps = Array.isArray(i.components) ? i.components.filter(Boolean) : [];
+    return `- key: ${i.jiraKey}\n  title: ${i.title}` +
+      // The tracker's own statement of which product areas the ticket touches.
+      // Several components is evidence of several repositories — it is not a
+      // hint to be weighed against the summary, it is the field maintained for
+      // exactly this purpose.
+      (comps.length ? `\n  components: ${comps.join(', ')}` : '') +
+      `\n  description: ${(i.description || '').slice(0, 300)}`;
+  }).join('\n\n');
 
   return `You are the codeline-discovery agent for a brownfield engineering pipeline.
 
@@ -354,17 +362,39 @@ Rules:
    technology references, component names, file path mentions.
 2. You MUST return at least one repository for every ticket — an empty result is
    NEVER acceptable and will abort the entire pipeline run before any work can
-   happen. If you are not fully confident, select your single best guess from the
-   list (the first-listed entry is usually the right choice, since the list is
-   already ranked by match confidence) rather than returning nothing.
+   happen. If you are not fully confident, select your best guess from the list
+   (the first-listed entry is usually a good choice, since the list is already
+   ranked by match confidence) rather than returning nothing.
+
+2a. ONE TICKET MAY SPAN SEVERAL REPOSITORIES, and you MUST return one entry for
+   each. This estate is maintained as many separate codelines, so a single
+   ticket routinely covers work in more than one of them — a change with both
+   front-end and back-end parts, or one applied across several product areas.
+   Returning a single repository for such a ticket silently drops the rest of
+   the work: those repositories are never touched, and the run reports success
+   having done a fraction of the job.
+
+   The strongest evidence is the ticket's own "components" field, which is the
+   tracker's record of which product areas it touches. When a ticket names
+   several distinct product areas, return the repository that owns each one.
+   Do not collapse them because one candidate scored highest — the ranking
+   measures textual similarity to a single repository, not how much of the
+   ticket that repository covers.
+
+   Decide the count from the ticket. Do not aim for any particular number.
 3. Only omit a candidate from your selection if a DIFFERENT candidate in the same
    list is clearly a better fit for it — never omit a candidate just because you
    are uncertain, since uncertainty alone is not a reason to return fewer repos.
 4. Assign each selected repo a short codeline identifier: 2–20 chars, lowercase,
    alphanumeric only, no dots or dashes. Derive it from the directory name
-   (e.g. "cdts" for "azure.commerce.cdts", "gotransit" for "next.gotransit.com").
-5. If all tickets clearly belong to one repo, return exactly one entry.
-6. "reason" must be one sentence explaining why this repo was selected.
+   Derive it from the directory name by dropping domain suffixes and org prefixes.
+5. Return exactly one entry only when the ticket genuinely belongs to exactly one
+   repository. "One entry" is the right answer for a self-contained change, and
+   the wrong answer for a ticket spanning several product areas — see rule 2a.
+6. "reason" must be one sentence explaining why THIS repository was selected, and
+   what part of the ticket it covers. Every selected repository needs its own
+   reason — a single justification covering the whole set makes a wrong
+   selection impossible to spot afterwards.
 
 Output format (strict JSON, no markdown fences, no preamble, no trailing text):
 {

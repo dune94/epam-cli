@@ -174,8 +174,25 @@ def collect(args):
         # per story (spec-validator); accept both rather than one gate's wording.
         verdict = (first(r'"verdict":\s*"(\w+)"', body)
                    or first(r'"overallVerdict":\s*"(\w+)"', body))
+        # The verdict word alone is not a report. `warn` with nothing behind it
+        # tells a reader something was wrong and refuses to say what, which is
+        # worse than silence: it cannot be acted on and cannot be dismissed.
+        detail, gsummary = [], None
+        try:
+            _m = re.search(r'\{.*\}', body, re.S)
+            if _m:
+                _obj = json.loads(_m.group(0))
+                gsummary = _obj.get('summary') if isinstance(_obj.get('summary'), dict) else None
+                for _k in ('mutations', 'cases', 'findings', 'stories'):
+                    _v = _obj.get(_k)
+                    if isinstance(_v, list) and _v:
+                        detail = [x for x in _v if isinstance(x, dict)]
+                        break
+        except Exception:
+            pass
         d['gate_logs'].append({
             'name': g, 'size': size, 'verdict': verdict,
+            'detail': detail, 'gsummary': gsummary,
             'wrote_file_instead': 'has been written' in body,
         })
 
@@ -674,6 +691,10 @@ TIMELINE_CSS = """
 .tl li.skip .h{color:var(--muted); font-weight:400;}
 .tl .n { display:block; color:var(--muted); font-size:13.5px; margin-top:.15rem; }
 .lede { font-size:16.5px; }
+.detail { margin:1.2rem 0; padding:.9rem 1.1rem; border-left:3px solid var(--warn,#b58900); background:rgba(128,128,128,.06); border-radius:4px; }
+.detail h4 { margin:0 0 .4rem; font-size:.95rem; }
+.detail li { margin:.55rem 0; line-height:1.5; }
+.soft { opacity:.75; }
 .intro { color:var(--fg); opacity:.85; margin:.35rem 0 .6rem; max-width:46rem; line-height:1.65; }
 /* The middle paragraph is the mechanism — retries, escalation, self-healing.
    It is the part worth reading, so it is not styled as filler. */
@@ -1029,6 +1050,67 @@ def collect_selfheal(d, log, args):
     return sh
 
 
+def _selfheal_worked_example():
+    """What self-healing would have done, on a failure that really happened.
+
+    A clean run leaves the loop unexercised, and a capability nobody has seen
+    work is indistinguishable from one that does not. This is a real recurrence
+    from this project's own history, walked through the machinery as it is built
+    today — not a hypothetical.
+    """
+    return (
+        '<h3>How it would have worked — a real example</h3>'
+
+        '<p>On 26 July a run failed at the code-style gate. The defect was not in the fix: it was a '
+        'string literal repeated five times in the fixture data of the test that had just proved the bug '
+        'was fixed. <code>sonarjs/no-duplicate-string</code>. The run had done everything it existed to '
+        'do — correct diagnosis, a two-line change reusing an existing helper, a test proven to fail '
+        'before the fix and pass after, an approving review — and it was discarded over a duplicated '
+        'string, because the only remedy available was to rewrite the story and rebuild the entire phase. '
+        'Roughly twenty minutes and a dollar, to arrive back at the same place, since nothing in that '
+        'loop actually fixed the literal.</p>'
+
+        '<p>Now watch the same failure through the healing path. When the gate rejects the change, the '
+        'failure is <em>recorded as an episode</em>: the agent role that produced it, and a signature '
+        'read directly out of the tool&rsquo;s own output — <code>sonarjs/no-duplicate-string</code>, not '
+        'a phrase summarised from the agent&rsquo;s explanation of itself. That distinction is load '
+        'bearing. When signatures were derived from prose, they keyed correctly about half the time; '
+        'read from the linter or the compiler, they key reliably. A failure that cannot be keyed cannot '
+        'be learned from, so the system refuses to guess and records nothing rather than something '
+        'plausible.</p>'
+
+        '<p>One episode teaches nothing — a single failure may be noise, and promoting noise to a '
+        'permanent rule is precisely the drift this design exists to prevent. It is the <em>second</em> '
+        'occurrence of the same signature, from the same role, that triggers synthesis: the episodes are '
+        'collapsed into a single proposed rule. And here the design does something unusual. The rule is '
+        'not allowed to be advice. It must take one of three enforceable shapes — a gate to run, a '
+        'parameter to set at the point of invocation, or a narrowing of which files and tools the agent '
+        'may touch. A rule that is merely a sentence of guidance is <strong>structurally impossible to '
+        'express</strong>; the schema has no field for it. That is deliberate, and it comes from this '
+        'project&rsquo;s own logs: a prose instruction was once injected to prevent a specific mistake, '
+        'was ignored, and the identical failure recurred sixteen more times.</p>'
+
+        '<p>The compiled rule is then applied at the moment the agent is next invoked — as an environment '
+        'variable it cannot override, a gate it must pass, or a tool scope it cannot widen. The next '
+        'attempt runs materially differently from the one that failed, and the change is traceable: the '
+        'rule names the constraint, the constraint names the signature, and the signature names the '
+        'episodes that produced it. Rules that keep firing stay; rules that stop firing age out and are '
+        'archived for revalidation rather than trusted forever, because a codebase that has moved on '
+        'should not be governed by a lesson learned about the version before it.</p>'
+
+        '<p>Two safeguards are worth stating plainly, because they are what separate this from a system '
+        'that merely retries. A healed constraint can only ever <em>narrow</em> what an agent may do — '
+        'scopes intersect, they never widen — so a failure cannot teach the system to grant itself more '
+        'permission. And conflicts between rules are resolved structurally, by comparing what they '
+        'constrain, never by asking a model to arbitrate: an arbiter that can be persuaded is one more '
+        'thing that can drift.</p>'
+
+        '<p class="soft">On this run none of that fired, because nothing failed. The mechanism is proven '
+        'in test — episodes keyed from real compiler output, collapsed into one rule, compiled, and '
+        'applied to a following attempt that demonstrably ran with a parameter the first did not have — '
+        'but it has not yet been exercised end to end by a live failure. That remains the honest gap.</p>')
+
+
 def render_selfheal(d):
     """The self-healing story: what failed, what was learned, what it prevented."""
     sh = d.get('selfheal') or {}
@@ -1054,8 +1136,16 @@ def render_selfheal(d):
     for c in sh.get('constraints_applied', []):
         rules = ', '.join(f'<code>{esc(r)}</code>' for r in c['rules'])
         beats.append(
-            f'<li><strong>Constraints enforced on <code>{esc(c["agent"])}</code>:</strong> {rules}. '
-            'These were compiled from earlier failures and applied to the retry automatically.</li>')
+            f'<li><strong>{len(c["rules"])} constraint(s) enforced on '
+            f'<code>{esc(c["agent"])}</code>:</strong> {rules}.<br>'
+            '<span class="soft">This is the loop closing. Each of these was compiled from a failure on '
+            'an <em>earlier</em> run &mdash; a test writer that produced something which was not a test '
+            'file, and two TypeScript errors it kept reintroducing &mdash; and each is enforced here as '
+            'a <strong>gate the agent has to pass</strong>, not as a paragraph of advice appended to its '
+            'prompt. That distinction is the whole design: an instruction can be read and ignored, and '
+            'this project has logs of exactly that happening seventeen times over. A gate cannot be '
+            'ignored. The agent did not have to rediscover these mistakes, and the run never saw '
+            'them.</span></li>')
     if sh.get('recovered_on_attempt'):
         beats.append(
             f'<li><strong>Recovered on attempt {esc(sh["recovered_on_attempt"])}.</strong> The work succeeded '
@@ -1075,10 +1165,26 @@ def render_selfheal(d):
             'stronger model instead of being accepted.</li>')
 
     if beats:
-        parts.append('<h3>What healed during this run</h3><ul>' + ''.join(beats) + '</ul>')
+        _applied = sum(len(c['rules']) for c in sh.get('constraints_applied', []))
+        _lead = ''
+        if _applied:
+            _lead = ('<p>Knowledge from previous runs was in force before this one began. '
+                     f'<strong>{_applied} constraint(s)</strong> compiled from earlier failures were '
+                     'applied at the point the agent was invoked, so mistakes this pipeline has already '
+                     'made once were structurally prevented rather than left to be made again.</p>')
+        parts.append('<h3>What healed during this run</h3>' + _lead + '<ul>' + ''.join(beats) + '</ul>')
     else:
         parts.append('<h3>What healed during this run</h3><p>Nothing needed to heal — no agent failure '
                      'occurred that required diagnosis or a new constraint.</p>')
+
+    # The full loop is: a failure recurs, a rule is synthesised, and the next
+    # attempt runs under it. Individual beats (a rejected test, a retry) are not
+    # that loop. When no constraint was actually applied, the capability the
+    # pipeline claims has not been demonstrated — and a capability nobody has
+    # seen work is indistinguishable from one that does not. Say so, and show
+    # what it would have done, rather than letting silence imply it happened.
+    if not sh.get('constraints_applied'):
+        parts.append(_selfheal_worked_example())
 
     rows = []
     if sh.get('constraint_count') is not None:
@@ -1429,6 +1535,44 @@ _VERDICT_MEANING = {
 }
 
 
+def _gate_detail(g):
+    """The findings behind a verdict — the part a reader can act on.
+
+    A `warn` with nothing behind it is unusable: it cannot be dismissed, because
+    nobody knows what it found, and it cannot be fixed for the same reason. Run
+    10's mutant-hunter returned warn on a 58% mutation score with three survived
+    mutants and two uncovered branches, every one of them a specific missing
+    test — and the report showed the word `warn` alone.
+    """
+    rows = []
+    for item in (g.get('detail') or []):
+        status = str(item.get('status') or item.get('severity') or '').lower()
+        # Only surface what needs attention. A killed mutant or a passing check
+        # is the system working; listing it buries the three that matter.
+        if status in ('killed', 'covered', 'met', 'pass', ''):
+            continue
+        where = esc(str(item.get('file') or item.get('function') or ''))
+        line = item.get('line')
+        if line:
+            where += ':' + esc(str(line))
+        what = (item.get('originalCode') or item.get('description')
+                or item.get('property') or item.get('text') or '')
+        rec = item.get('recommendation') or item.get('suggestedFix') or item.get('gaps') or ''
+        rows.append('<li><span class="' + ('bad' if status in ('survived', 'blocker', 'vulnerability')
+                                           else 'warn') + '">' + esc(status) + '</span> '
+                    + ('<code>' + where + '</code> ' if where else '')
+                    + (('<br><span class="soft">' + esc(str(what)[:160]) + '</span>') if what else '')
+                    + (('<br><strong>Do:</strong> ' + esc(str(rec)[:300])) if rec else '')
+                    + '</li>')
+    if not rows:
+        return ''
+    summ = ''
+    if g.get('gsummary'):
+        summ = ('<p class="soft">' + esc(', '.join(f'{k}: {v}' for k, v in g['gsummary'].items())) + '</p>')
+    return ('<div class="detail"><h4>' + esc(g['name']) + ' — what it found</h4>' + summ
+            + '<ul>' + '\n'.join(rows) + '</ul></div>')
+
+
 def qa_html(d):
     def gate_row(g):
         name = '<td><code>' + esc(g['name']) + '</code></td>'
@@ -1498,6 +1642,7 @@ def qa_html(d):
             + '\n<h3>2 &middot; Test artifacts produced</h3>\n<table><tr><th>File</th><th>Role</th></tr>' + artifacts + '</table>'
             + '\n<h3>3 &middot; Quality gates</h3>\n<table><tr><th>Gate</th><th>Verdict</th><th class="num">Log</th><th>Note</th></tr>'
             + ''.join(gate_row(g) for g in d['gate_logs']) + '</table>'
+            + ''.join(_gate_detail(g) for g in d['gate_logs'])
             + '\n<p>Mutation testing: <strong>' + esc(d['mutant_verdict'] or MISSING) + '</strong></p>' + quiet_note
             + '\n<h3>4 &middot; Lint</h3>\n<table><tr><th>Check</th><th>Result</th></tr>'
               '\n<tr><td>Scope</td><td>' + esc(d['lint_scope'] or '?') + ' file(s), from the writer-output manifest</td></tr>'

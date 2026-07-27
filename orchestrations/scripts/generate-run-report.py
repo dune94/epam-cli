@@ -73,7 +73,27 @@ def collect(args):
     d['cost_after'] = first(r'OpenRouter usage after:\s*\$([0-9.]+)', log)
     d['cost_total'] = first(r'Total spent this run:\s*\$([0-9.]+)', log)
     d['pipeline_complete'] = 'Pipeline complete' in log
-    d['passed'] = bool(re.search(r'PASSED — all \d+ stories complete', log))
+
+    # The verdict is READ, not inferred from prose.
+    #
+    # This matched only `PASSED — all N stories complete`, the wording
+    # tier3-travel-app-run.sh and orchestrate.sh use. tier3-metrolinx-run.sh
+    # writes `PASSED: N stories complete` — colon, no "all" — so the pattern
+    # never matched and the first fully clean metrolinx run, with every gate
+    # green and the phase gate GO, was headed DID NOT COMPLETE.
+    #
+    # outcome.txt is written by the same function that generates this report, so
+    # prefer it outright; fall back to the log only when it is absent, and accept
+    # either separator there rather than one runner's punctuation.
+    d['passed'] = None
+    if args.out:
+        try:
+            with open(os.path.join(args.out, 'outcome.txt')) as f:
+                d['passed'] = f.read().strip().upper().startswith('PASSED')
+        except OSError:
+            pass
+    if d['passed'] is None:
+        d['passed'] = bool(re.search(r'PASSED\s*[—:-]\s*(all\s+)?\d+ stor(y|ies)', log))
     d['codeline'] = first(r"Phase 'core' — codeline '([^']+)'", log)
 
     times = find_all(r'\[(\d{2}:\d{2}:\d{2})\]', log)
@@ -144,8 +164,16 @@ def collect(args):
     for g in gates:
         p = os.path.join(args.logs_dir, f'{g}-core.log')
         size = os.path.getsize(p) if os.path.exists(p) else None
-        body = read(p, 4000) if size else ''
-        verdict = first(r'"verdict":\s*"(\w+)"', body)
+        # Read the WHOLE log. Capping at 4000 bytes truncated mutant-hunter —
+        # 6294 bytes, its verdict last, after a long mutations[] array — so the
+        # report announced "1 of 6 gates produced no verdict" about a gate that
+        # had returned `warn`. A gate wrongly reported as silent is worse than a
+        # missing report: it invites re-running work that was already done.
+        body = read(p) if size else ''
+        # `overallVerdict` is the declared top-level field for gates that report
+        # per story (spec-validator); accept both rather than one gate's wording.
+        verdict = (first(r'"verdict":\s*"(\w+)"', body)
+                   or first(r'"overallVerdict":\s*"(\w+)"', body))
         d['gate_logs'].append({
             'name': g, 'size': size, 'verdict': verdict,
             'wrote_file_instead': 'has been written' in body,
@@ -250,7 +278,9 @@ _EVENTS = [
      'are never blamed on this run.'),
     (r'^\s*▶ (Step [\d.]+[a-z]?: .+?)\s*$', 'step', 'info', '{0}', ''),
     (r'^\s*✓ (Step [\d.]+[a-z]?: .+?)\s*$', 'step', 'ok', '{0} — passed', ''),
-    (r'^\s*⊘ (Step [\d.]+[a-z]?: .+?)\s+\[(.+?)\]', 'step', 'skip', '{0} — skipped ({1})', ''),
+    (r'^\s*⊘ (Step [\d.]+[a-z]?: .+?)\s+\[(.+?)\]', 'step', 'skip', '{0} — did not apply',
+     'The pipeline recognised this stage had nothing to do for this change and stood down, which is a '
+     'different statement from passing. Reason recorded: <code>{1}</code>.'),
     (r'^\s*⚠ (Step [\d.]+[a-z]?: .+?)\s+\[(.+?)\]', 'step', 'warn', '{0} — {1}', ''),
     (r'is UNGROUNDED \(attempt (\d)/(\d)\)[^\n]*?"([^"]+)"', 'detective', 'warn',
      'First diagnosis rejected — it described code that does not exist',
@@ -333,6 +363,19 @@ _EVENTS = [
      'Only files that were already clean before this run are touched &mdash; {1} skipped &mdash; so the '
      'pipeline never reformats code somebody else wrote.'),
     (r'\[lint\] eslint: (PASS[^\n]*|FAIL[^\n]*|COULD NOT RUN[^\n]*)', 'lint', 'ok', 'Code style: {0}', ''),
+    # Without this beat the timeline shows FAIL immediately followed by PASS and
+    # reads as a contradiction. It is a sequence: the gate objected, the finding
+    # was repaired in place, the gate was re-run and agreed.
+    (r'\[lint-fix\] repairing (\d+) finding\(s\) in place \(attempt (\d+)/(\d+)\)', 'lint', 'warn',
+     'Repairing {0} style finding(s) in place &mdash; attempt {1} of {2}',
+     'Rather than rewrite the story and rebuild the phase over a style nit, the pipeline edits the '
+     'flagged lines directly. The repair is then verified three ways &mdash; the linter must agree, the '
+     'code must still compile, and the tests must still pass &mdash; and is reverted outright if any of '
+     'them fails, because the easiest way to silence a complaint in a test file is to weaken the test.'),
+    (r'\[lint-fix\] findings repaired in place[^\n]*', 'lint', 'ok',
+     'Style findings repaired &mdash; lint clean, types compile, tests still pass', ''),
+    (r'\[lint-fix\] repair rejected by verification[^\n]*', 'lint', 'bad',
+     'Repair rejected by verification &mdash; the edit was reverted', ''),
     (r'\[qa-gate\] (\S+) attempt (\d) produced no structured output', 'gate', 'warn',
      '{0} returned nothing usable on attempt {1} — retrying with a stronger model', ''),
     (r'\[qa-gate\] (\S+) all (\d+) attempt\(s\) exhausted with no structured output', 'gate', 'bad',
@@ -406,6 +449,37 @@ def build_timeline(raw):
 _TRIVIAL_STEPS = ('mkdir', 'Initializing', 'coordinator audit', 'Hybrid pre-coord')
 
 
+# What each numbered step is for, in one sentence.
+#
+# Without this a reader sees "Step 3: Skill assessment — took 6m 13s" and learns
+# only that six minutes passed. The timing is the least interesting fact about
+# it; what the stage was doing with that time is the story. Steps with no entry
+# here simply render without a note rather than inventing one.
+_STEP_PURPOSE = {
+    '1':  'Reads the ticket and turns a symptom described in prose into verification criteria a test '
+          'can be written against.',
+    '2':  'Forecasts what this story should cost and how long it should take, so a run that goes wildly '
+          'over its estimate can be caught rather than discovered on the invoice.',
+    '3':  'Decides which skills the change needs and which agent role should own it, before any code is '
+          'touched.',
+    '5':  'Runs the existing test suite against the untouched codebase, so a test that was already '
+          'broken cannot later be blamed on this run.',
+    '7':  'Assigns a model to each piece of work — cheaper models for mechanical steps, stronger ones '
+          'where judgement is required.',
+    '8':  'Executes the stories that run directly on the main branch, in order.',
+    '9':  'Commits what the writers produced, so the change exists as a reviewable artefact rather than '
+          'as edits in a working tree.',
+    '18': 'Checks the phase as a whole once the parallel work has landed.',
+    '19': 'A last look before review: is there actually a change here worth reviewing?',
+    '20': 'Lints only the files this run wrote, judged against how they looked before the run, so the '
+          'change is never blamed for pre-existing style debt.',
+    '21': 'A senior-developer read of the diff: does it address the ticket, is it the smallest sensible '
+          'change, does it reuse what already exists?',
+    '24': 'Records what actually happened against what was forecast, so the next run\u2019s estimates '
+          'are calibrated from real outcomes.',
+}
+
+
 def _collapse_steps(events, real_starts=None):
     """One line per step, carrying how long it took.
 
@@ -436,6 +510,9 @@ def _collapse_steps(events, real_starts=None):
         entry['status'] = e['status']
         entry['note'] = e['note'] or entry['note']
         entry['_step'] = True
+        _n = (re.match(r'Step ([\d.]+)[a-z]?:', name) or [None, None])[1]
+        if not entry['note'] and _n in _STEP_PURPOSE:
+            entry['note'] = _STEP_PURPOSE[_n]
         out[idx] = entry
 
     # Durations come from when the NEXT step began, not from the exit line.
@@ -841,7 +918,8 @@ def render_preamble(d):
         + ('<p><strong>The bug it was asked to fix:</strong> &ldquo;' + esc(title) + '&rdquo;</p>' if title else '')
         + '<p><strong>Outcome.</strong> ' + outcome + ' The whole run took '
         + esc(d.get('t_start') or '?') + ' to ' + esc(d.get('t_end') or '?')
-        + ' and cost $' + esc(d.get('cost_total') or '?') + '.</p>'
+        + ' and cost $' + esc(_cost_shown(d)[0])
+        + ('' if _cost_shown(d)[1] else ' (summed from the per-call records)') + '.</p>'
         + '<p class="intro">Everything below is read from the run&rsquo;s own logs. Where a fact has no '
         'supporting record it is marked <span class="missing">not recorded</span> rather than guessed at.</p>')
 
@@ -1227,7 +1305,7 @@ def narrative_html(d):
 
     cards = (
         '<div class="card"><div class="k">Outcome</div><div class="v ' + verdict_cls + '">' + verdict + '</div></div>'
-        '<div class="card"><div class="k">Billed</div><div class="v">$' + esc(d['cost_total'] or '?') + '</div></div>'
+        '<div class="card"><div class="k">Cost</div><div class="v">$' + esc(_cost_shown(d)[0]) + '</div></div>'
         '<div class="card"><div class="k">Window</div><div class="v">' + esc(d['t_start'] or '?') + '&ndash;' + esc(d['t_end'] or '?') + '</div></div>'
         '<div class="card"><div class="k">Story</div><div class="v">' + esc(d['story'] or '?') + '</div></div>')
 
@@ -1275,11 +1353,80 @@ def narrative_html(d):
               '<th class="num">Tokens out</th><th class="num">Calls</th></tr>\n'
             + (costs or '<tr><td colspan="5">' + MISSING + '</td></tr>')
             + '\n<tr><th>Tracked total</th><th class="num">$%.4f</th><th colspan="3"></th></tr>' % d['cost_tracked']
-            + '\n<tr><th>Billed by provider</th><th class="num">$' + esc(d['cost_total'] or '?') + '</th><th colspan="3"></th></tr></table>\n'
+            + ('\n<tr><th>Billed by provider</th><th class="num">$%s</th><th colspan="3"></th></tr></table>\n'
+               % esc(d['cost_total']) if d['cost_total'] else
+               '\n<tr><th>Billed by provider</th><th class="num">$%.4f</th>'
+               '<th colspan="3" class="soft">summed from the per-call records &mdash; the provider\u2019s '
+               'own usage counter was not captured for this run</th></tr></table>\n' % d['cost_tracked'])
             + gap_note
             + '\n<footer>Generated from <code>' + esc(d['launch_log']) + '</code>, the gate logs, '
               '<code>agent-activity.jsonl</code> and the codeline git history. Anything without a supporting '
               'artefact is marked <span class="missing">not recorded</span> rather than inferred.</footer>\n</main>')
+
+
+def _cost_shown(d):
+    """What this run cost, and how confident that number is.
+
+    Prefer the provider's own usage delta; fall back to the sum of the per-call
+    records. Reporting "$?" when every call's cost was recorded is needlessly
+    unhelpful — the tally is a real number, it is simply the weaker of the two.
+    """
+    if d.get('cost_total'):
+        return d['cost_total'], True
+    return '%.4f' % (d.get('cost_tracked') or 0.0), False
+
+
+# What each quality gate is FOR, and what its verdict means.
+#
+# A row reading `fuzz-weaver  not_applicable  509 B` tells a reader nothing:
+# not what the gate examines, not why it exists, not whether standing down was
+# the right answer. Six gate names is jargon; six explanations is a report.
+_GATE_PURPOSE = {
+    'sast-sentinel': (
+        'Security scan',
+        'Looks for the ways a change can be exploited rather than merely be wrong &mdash; injection, '
+        'unsafe deserialisation, secrets committed to the repository, credentials in logs. It blocks '
+        'the run on anything it rates a blocker, because a security defect that reaches review has '
+        'already been normalised.'),
+    'spec-validator': (
+        'Does the change do what was asked?',
+        'Takes each verification criterion the story was accepted against and classifies it against the '
+        'diff: met, partial, unmet, or untestable. This is the gate that answers &ldquo;is this the '
+        'right change?&rdquo; as distinct from &ldquo;is this change correct?&rdquo; &mdash; a fix can '
+        'be flawless and still not be what the ticket asked for.'),
+    'review-ranger': (
+        'Machine code review',
+        'Reads the diff the way a reviewer would, looking for defects the author is least likely to see '
+        'in their own work: duplicated logic, error paths that swallow failures, names that mislead, '
+        'changes wider than the problem. It reports severity so a style nit cannot masquerade as a bug.'),
+    'mutant-hunter': (
+        'Are the tests actually load-bearing?',
+        'Deliberately breaks the changed code in small ways and checks whether the tests notice. A test '
+        'that still passes when the logic under it is corrupted is not protecting anything &mdash; it '
+        'is decoration. This is the only gate that judges the TESTS rather than the code, which is why '
+        'it can warn on a change that is otherwise perfectly correct.'),
+    'fuzz-weaver': (
+        'What happens with inputs nobody thought about?',
+        'Derives properties the changed functions should hold for ANY input &mdash; not just the '
+        'examples in the tests &mdash; and looks for inputs that violate them: empty collections, '
+        'boundary values, unexpected types, malformed data. Most real defects live in cases the author '
+        'never imagined, and example-based tests can only ever check the cases somebody did imagine.'),
+    'perf-sentinel': (
+        'Will this be slow?',
+        'Looks for complexity that will not show up on a developer machine and will on production data '
+        '&mdash; work inside loops that should be hoisted, repeated allocations, blocking calls on hot '
+        'paths, startup cost. Performance defects are rarely caught in review because the code reads '
+        'perfectly well.'),
+}
+
+# What a verdict MEANS, so `not_applicable` is not mistaken for a shrug.
+_VERDICT_MEANING = {
+    'pass': 'examined the change and found nothing to report',
+    'warn': 'found something worth a human&rsquo;s attention, but not serious enough to block',
+    'fail': 'found a defect it considers blocking',
+    'not_applicable': 'examined the change and determined this kind of check has nothing to say about '
+                      'it &mdash; an explicit statement, not silence',
+}
 
 
 def qa_html(d):
@@ -1291,9 +1438,18 @@ def qa_html(d):
             return ('<tr>' + name + '<td><span class="bad">no verdict</span></td><td class="num">'
                     + str(g['size']) + ' B</td><td>answered by calling a write tool &mdash; reviewed nothing</td></tr>')
         if g['verdict']:
-            cls = 'ok' if g['verdict'] == 'pass' else 'warn'
+            # not_applicable is a FIRST-CLASS verdict: a gate with nothing
+            # meaningful to say about a change must be able to say so. Colouring
+            # it as a warning implies a problem where the gate was explicit that
+            # there is none.
+            cls = 'ok' if g['verdict'] in ('pass', 'not_applicable') else 'warn'
+            title, why = _GATE_PURPOSE.get(g['name'], ('', ''))
+            meaning = _VERDICT_MEANING.get(g['verdict'], '')
             return ('<tr>' + name + '<td><span class="' + cls + '">' + esc(g['verdict']) + '</span></td>'
-                    '<td class="num">' + str(g['size']) + ' B</td><td></td></tr>')
+                    '<td class="num">' + str(g['size']) + ' B</td><td>'
+                    + (('<strong>' + title + '.</strong> ' + why) if why else '')
+                    + (('<br><span class="soft">This verdict: ' + meaning + '.</span>') if meaning else '')
+                    + '</td></tr>')
         return ('<tr>' + name + '<td><span class="warn">no structured verdict</span></td><td class="num">'
                 + str(g['size']) + ' B</td><td>log written but nothing parseable</td></tr>')
 

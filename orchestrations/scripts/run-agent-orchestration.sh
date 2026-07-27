@@ -2663,6 +2663,34 @@ KNOWNFIXES_EOF
     " 2>/dev/null && log "[orch] Merged codeline '${_cl}' story state back into canonical PRD"
   done
 
+  # ── Partial coverage is a failure, not a pass ──────────────────────────────
+  # A spanning story names the codelines it must be delivered in. Lane failures
+  # already stop the loop; this catches the quieter case — a lane that never ran,
+  # or ran and produced no result for this story — where every lane "succeeded",
+  # the pipeline reports complete, and part of the work simply never happened.
+  # Checked against what the story DECLARED, not against how many lanes we
+  # happened to execute.
+  if [ "$_overall" = "0" ] && [ -f "$_prd_path" ]; then
+    _mc_incomplete=$("$NODE_BIN" -e "
+      const fs = require('fs');
+      const prd = JSON.parse(fs.readFileSync('${_prd_path}', 'utf8'));
+      const bad = [];
+      for (const s of (prd.stories || [])) {
+        const want = Array.isArray(s.codelines) ? s.codelines : [];
+        if (want.length < 2) continue;                 // not a spanning story
+        const got = s.perCodeline || {};
+        const missing = want.filter(cl => !got[cl]);
+        if (missing.length) bad.push(s.id + ' → no result for: ' + missing.join(', '));
+      }
+      process.stdout.write(bad.join('; '));
+    " 2>/dev/null || true)
+    if [ -n "$_mc_incomplete" ]; then
+      error "[orch] Spanning story INCOMPLETE — a declared codeline never ran: ${_mc_incomplete}"
+      error "[orch] The run touched fewer codelines than the story requires; this is not a success."
+      _overall=1
+    fi
+  fi
+
   rm -f "${_cl_prds[@]}" "$_cross_prd" 2>/dev/null || true
   unset CROSS_CODELINE_PRD
 

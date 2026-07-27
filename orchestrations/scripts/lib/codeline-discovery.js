@@ -29,7 +29,7 @@
 const fs           = require('fs');
 const path         = require('path');
 const { execSync } = require('child_process');
-const { crossRepoTermScores, applyRecency, repoRecency, rankingConfidence } = require('./codeline-score');
+const { crossRepoTermScores, applyRecency, repoRecency, orderCodelines, rankingConfidence } = require('./codeline-score');
 
 // Semble removed from codeline scoring — all repos are CodeGraph-indexed,
 // making Tier 3 probabilistic scoring redundant and a source of re-ranking noise.
@@ -524,11 +524,21 @@ function callLlm(prompt) {
     validated.push(...fallbackValidated);
   }
 
-  const output = { codelines: validated };
+  // Producers before consumers. Lanes run sequentially and a completed lane
+  // publishes its exported surface for later lanes' detectives to read — which
+  // is only useful if the lane producing it went first. Taken from declared
+  // inter-repo dependencies, so it is a fact about the code rather than a
+  // configured preference; repos with no edges keep the order they arrived in.
+  const ordered = orderCodelines(validated);
+  if (ordered.length > 1 && ordered.map(c => c.name).join() !== validated.map(c => c.name).join()) {
+    log(`Run order (producers first): ${ordered.map(c => c.name).join(' → ')}`);
+  }
+
+  const output = { codelines: ordered };
   fs.writeFileSync(OUT_PATH, JSON.stringify(output, null, 2));
 
-  for (const cl of validated) {
+  for (const cl of ordered) {
     log(`  → codeline '${cl.name}' = ${cl.path} (${cl.reason})`);
   }
-  log(`Discovery complete. ${validated.length} codeline(s) identified.`);
+  log(`Discovery complete. ${ordered.length} codeline(s) identified.`);
 })();

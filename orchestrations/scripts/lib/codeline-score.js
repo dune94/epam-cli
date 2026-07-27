@@ -170,6 +170,78 @@ function applyRecency(scored, ages = {}, opts = {}) {
   });
 }
 
+
+/**
+ * orderCodelines(repos) — producers before consumers.
+ *
+ * A story spanning several codelines runs lane by lane, sequentially, and a
+ * completed lane publishes its exported surface for later lanes to read. That is
+ * only useful if the lane producing the surface runs first; in discovery order
+ * it frequently does not, and every lane investigates blind.
+ *
+ * The ordering is taken from the code, not from configuration: a repository
+ * declares a package name, and repositories that consume it list that name among
+ * their dependencies. That edge is a fact. Only edges BETWEEN the selected
+ * codelines count — every repo depends on third-party packages, and those say
+ * nothing about run order.
+ *
+ * Refuses to invent what it cannot justify: repositories with no edges keep the
+ * order they arrived in, and a dependency cycle (no valid topological order)
+ * falls back to input order rather than dropping a codeline, because a silently
+ * skipped repository is a repository whose work never happens.
+ */
+function orderCodelines(repos, readPkg = null) {
+  const fs = require('fs');
+  const path = require('path');
+  const read = readPkg || ((repoPath) => {
+    try { return JSON.parse(fs.readFileSync(path.join(repoPath, 'package.json'), 'utf8')); }
+    catch { return null; }
+  });
+
+  const meta = repos.map((r) => {
+    const pkg = read(r.path) || {};
+    return {
+      repo: r,
+      pkgName: pkg.name || null,
+      deps: Object.keys({ ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) }),
+    };
+  });
+
+  const owned = new Map();                       // package name -> index
+  meta.forEach((m, i) => { if (m.pkgName) owned.set(m.pkgName, i); });
+
+  // edge i -> j : i must run BEFORE j, because j depends on i
+  const indegree = meta.map(() => 0);
+  const edges = meta.map(() => []);
+  meta.forEach((m, j) => {
+    for (const d of m.deps) {
+      const i = owned.get(d);
+      if (i === undefined || i === j) continue;  // external package, or itself
+      edges[i].push(j);
+      indegree[j] += 1;
+    }
+  });
+
+  // Kahn LEVEL BY LEVEL. The ready set is collected before any decrement is
+  // applied — decrementing mid-pass lets a consumer freed earlier in the same
+  // sweep overtake one that appeared before it in the input, which silently
+  // reorders repositories whose relative order was never ours to change.
+  const out = [];
+  const done = new Set();
+  for (;;) {
+    const ready = [];
+    for (let i = 0; i < meta.length; i += 1) {
+      if (!done.has(i) && indegree[i] === 0) ready.push(i);
+    }
+    if (!ready.length) break;
+    for (const i of ready) { out.push(meta[i].repo); done.add(i); }
+    for (const i of ready) { for (const j of edges[i]) indegree[j] -= 1; }
+  }
+  // A cycle leaves nodes unplaced. Append them rather than lose them.
+  meta.forEach((m, i) => { if (!done.has(i)) out.push(m.repo); });
+  return out;
+}
+
 /**
  * Ranking confidence — lets a caller skip the LLM when the deterministic
  * evidence is already decisive, and flag when it genuinely is not.
@@ -183,4 +255,4 @@ function rankingConfidence(scored) {
   return { top1, top2, gap: top1 - top2, ratio, decisive: ratio >= 1.5 && top1 > 0 };
 }
 
-module.exports = { crossRepoTermScores, applyRecency, repoRecency, rankingConfidence, DEFAULT_TERM_QUERY_LIMIT };
+module.exports = { crossRepoTermScores, applyRecency, repoRecency, orderCodelines, rankingConfidence, DEFAULT_TERM_QUERY_LIMIT };

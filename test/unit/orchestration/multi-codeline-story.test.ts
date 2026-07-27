@@ -216,3 +216,35 @@ describe('MC-2: the detective can see the neighbouring codeline', () => {
       .toMatch(/another codeline|other codeline|outside this repo|upstream codeline/i);
   });
 });
+
+/**
+ * A spanning story must not report success on partial coverage.
+ *
+ * Lane failures already set _overall and stop the loop. The gap is quieter: a
+ * story naming three codelines whose third lane never ran — filtered out, or a
+ * lane that produced no work — leaves perCodeline with two entries and nothing
+ * checks the count against codelines[]. Every lane "succeeded", the pipeline
+ * reports complete, and a third of the work never happened.
+ *
+ * That is the shape this codebase keeps producing: a check that passes because
+ * it examined fewer things than it should have.
+ */
+describe('partial coverage is a failure, not a pass', () => {
+  const ORCH = readFileSync(
+    join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+
+  it('verifies every declared codeline actually produced a result', () => {
+    expect(ORCH,
+      'nothing compares a spanning story\'s codelines[] against the lanes that ' +
+      'actually ran, so silent partial coverage reports as success')
+      .toMatch(/codelines[\s\S]{0,400}(perCodeline|lane)[\s\S]{0,400}(missing|incomplete|never ran)/i);
+  });
+
+  it('fails the run loudly rather than logging and continuing', () => {
+    const i = ORCH.search(/spanning story[\s\S]{0,200}(incomplete|missing)/i);
+    expect(i, 'no partial-coverage check exists').toBeGreaterThan(-1);
+    expect(ORCH.slice(i, i + 600),
+      'partial coverage is reported but does not affect the run outcome')
+      .toMatch(/_overall=1|error /);
+  });
+});

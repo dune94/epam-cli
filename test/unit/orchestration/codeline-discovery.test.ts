@@ -147,7 +147,9 @@ describe('codeline-discovery.js — scoring and fallback', () => {
     expect(out.codelines).toHaveLength(1);
     // Must pick z-commerce-cdts (higher score) not ax-shared (first alphabetically)
     expect(out.codelines[0].path).toBe(RELEVANT_REPO);
-    expect(out.codelines[0].name).toBe('cdts');
+    // Every identifying word is kept — see codeline-name.js. Naming is BF17's
+    // subject; asserted here only to catch the fallback silently renaming a repo.
+    expect(out.codelines[0].name).toBe('zcommercecdts');
   });
 
   it('dry-run reason includes "scored-fallback" not "First git repo"', () => {

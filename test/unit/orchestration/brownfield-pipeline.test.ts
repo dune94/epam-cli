@@ -449,40 +449,31 @@ describe('BF16: codeline-discovery.js validation rejects paths without .git', ()
   });
 });
 
-// ─── BF17: deriveCodelineName strips generic prefixes ────────────────────────
+// ─── BF17: deriveCodelineName strips decoration, keeps identity ──────────────
 
-describe('BF17: deriveCodelineName strips generic prefixes', () => {
-  it('REAL: azure.commerce.cdts → cdts', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'bf-derive-'));
-    try {
-      const script = join(dir, 'test.js');
-      // Extract the function and test it
-      const discSrc = readFileSync(DISCOVERY_JS, 'utf8');
-      const fnStart = discSrc.indexOf('function deriveCodelineName');
-      const fnEnd   = discSrc.indexOf('\n}', fnStart) + 2;
-      const fnBody  = discSrc.slice(fnStart, fnEnd);
-      writeFileSync(script, fnBody + '\nconsole.log(deriveCodelineName("azure.commerce.cdts"));');
-      const out = execFileSync(NODE_BIN, [script], { encoding: 'utf8' }).trim();
-      expect(out).toBe('cdts');
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+/**
+ * This test used to slice the function's SOURCE TEXT out of codeline-discovery.js
+ * and eval it. That stopped testing anything the moment the function moved to its
+ * own module: indexOf returned -1, the slice produced garbage, and the failure
+ * looked like a behaviour change rather than a test that had lost its subject.
+ * It now requires the module, so moving the code again breaks the import loudly.
+ *
+ * The contract also changed, deliberately. Popping the LAST segment is what made
+ * mock1 run 7 name a codeline 'world' — see codeline-ordering.test.ts. Decoration
+ * (platform/hosting words, domain suffixes) is dropped; every word that actually
+ * identifies the repository is kept.
+ */
+describe('BF17: deriveCodelineName strips decoration, keeps identity', () => {
+  const { deriveCodelineName } = require('../../../orchestrations/scripts/lib/codeline-name.js');
+
+  it('REAL: azure.commerce.cdts → commercecdts', () => {
+    // 'azure' is decoration — it appears across the estate and distinguishes
+    // nothing. 'commerce' and 'cdts' both identify, so both survive.
+    expect(deriveCodelineName('azure.commerce.cdts')).toBe('commercecdts');
   });
 
   it('REAL: next.gotransit.com → gotransit', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'bf-derive2-'));
-    try {
-      const script = join(dir, 'test.js');
-      const discSrc = readFileSync(DISCOVERY_JS, 'utf8');
-      const fnStart = discSrc.indexOf('function deriveCodelineName');
-      const fnEnd   = discSrc.indexOf('\n}', fnStart) + 2;
-      const fnBody  = discSrc.slice(fnStart, fnEnd);
-      writeFileSync(script, fnBody + '\nconsole.log(deriveCodelineName("next.gotransit.com"));');
-      const out = execFileSync(NODE_BIN, [script], { encoding: 'utf8' }).trim();
-      expect(out).toBe('gotransit');
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    expect(deriveCodelineName('next.gotransit.com')).toBe('gotransit');
   });
 });
 

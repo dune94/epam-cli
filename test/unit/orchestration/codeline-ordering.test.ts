@@ -116,3 +116,43 @@ describe('it refuses to invent an order it cannot justify', () => {
     expect(orderCodelines(list).map((r: any) => r.name)).toEqual(['one', 'two']);
   });
 });
+
+/**
+ * The fallback name must agree with the instruction the agent is given.
+ *
+ * Live mock1 run 7. The discovery LLM returned nothing usable, the scored
+ * fallback ran, and deriveCodelineName('mock-hello-world') produced 'world' —
+ * it pops the LAST meaningful segment. The phase then ran as codeline 'world'
+ * against worktree lookups expecting the full name, and failed.
+ *
+ * Meanwhile rule 4 of the prompt tells the agent to keep every remaining word.
+ * So the deterministic fallback and the instruction disagreed about what a
+ * codeline is called, and which one you got depended on whether an LLM call
+ * happened to succeed. That is the same shape as every other defect this
+ * session: two parts of the pipeline agreeing in intent and disagreeing in
+ * detail, with nothing binding them.
+ */
+describe('codeline names survive the fallback path', () => {
+  const { deriveCodelineName } = require('../../../orchestrations/scripts/lib/codeline-name.js');
+
+  it('keeps every meaningful word', () => {
+    expect(deriveCodelineName('mock-hello-world'),
+      'the fallback drops words, producing a name that identifies nothing')
+      .toBe('mockhelloworld');
+  });
+
+  it('still strips domain suffixes', () => {
+    expect(deriveCodelineName('next.upexpress.com')).not.toMatch(/com$/);
+  });
+
+  it('produces a usable identifier for a single-word directory', () => {
+    expect(deriveCodelineName('payments')).toBe('payments');
+  });
+
+  it('never returns empty', () => {
+    // An empty codeline name would break every downstream worktree lookup.
+    for (const d of ['a', 'x.com', 'api', 'next']) {
+      expect(deriveCodelineName(d).length, `empty name for "${d}"`).toBeGreaterThan(0);
+    }
+  });
+});

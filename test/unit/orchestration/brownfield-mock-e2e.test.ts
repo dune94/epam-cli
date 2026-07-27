@@ -282,6 +282,20 @@ describe.skipIf(!RUN_REAL)('Full mock brownfield pipeline — REAL Jira ingest +
           AGENT_PROFILES_FILE,
           EPAM_DANGEROUS_SKIP_APPROVAL: '1',
           ORCH_GATE_PROVIDER: 'qwen',
+          // ── Agent routing parity with production ──────────────────────────
+          // Without SPEC_MODE_PROVIDER the spec pass does NOT take the fast path
+          // and falls through to callMiniMaxWithTool, which throws instantly
+          // when no MiniMax key is present: four attempts, eighteen seconds,
+          // "openspec returned null", dead at Step 1 (live 2026-07-27).
+          //
+          // Worse than the failure: every green run before it exercised a
+          // provider path production does not use. metrolinx runs the spec pass
+          // on qwen/glm; this mock was routing through MiniMax and calling that
+          // a passing pipeline test. Enforced by mock-metrolinx-flow-parity.
+          SPEC_MODE_PROVIDER: 'qwen',
+          SPEC_MODE_OPENSPEC_MODEL: 'z-ai/glm-5.2',
+          SPEC_MODE_SPECKIT_MODEL: 'z-ai/glm-5.1',
+          SPEC_MODE_MODEL: 'z-ai/glm-5.2',
           ORCH_GATE_MODEL: 'z-ai/glm-5.1',
           // Real Metrolinx production config (orchestrations/projects/metrolinx/
           // config.env) sets SEMBLE_ENABLED=1 — without it, fetchExistingCodeContext()

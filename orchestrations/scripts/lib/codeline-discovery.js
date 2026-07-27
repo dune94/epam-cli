@@ -308,17 +308,10 @@ function selectBestCandidate(scored) {
   return { codelines: [{ name, path: repo.path, reason: `[scored-fallback] Highest candidate (score: ${repo.score})` }] };
 }
 
-// ── Codeline name derivation ───────────────────────────────────────────────
-// Produces a short lowercase identifier from a directory name.
-// e.g. strip vendor/domain affixes: "<org>.<product>.<name>" -> "<name>"
+// Codeline name derivation lives in lib/codeline-name.js so it can be tested
+// directly — this file is a CLI whose IIFE runs on require.
+const { deriveCodelineName } = require('./codeline-name');
 
-function deriveCodelineName(dirName) {
-  const parts = dirName.replace(/\.(com|org|net|io|dev)$/, '').split(/[.\-_]+/);
-  // Prefer the last meaningful segment (avoids generic prefixes like "azure", "next")
-  const generic = new Set(['azure', 'next', 'react', 'api', 'app', 'web', 'lib', 'ui', 'docs', 'secure', 'login', 'tools']);
-  const meaningful = parts.filter(p => p.length >= 2 && !generic.has(p));
-  return (meaningful.pop() || parts[parts.length - 1] || dirName).toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20);
-}
 
 // ── LLM discovery call ─────────────────────────────────────────────────────
 
@@ -385,9 +378,13 @@ Rules:
 3. Only omit a candidate from your selection if a DIFFERENT candidate in the same
    list is clearly a better fit for it — never omit a candidate just because you
    are uncertain, since uncertainty alone is not a reason to return fewer repos.
-4. Assign each selected repo a short codeline identifier: 2–20 chars, lowercase,
-   alphanumeric only, no dots or dashes. Derive it from the directory name
-   Derive it from the directory name by dropping domain suffixes and org prefixes.
+4. Assign each selected repo a short codeline identifier: 2-20 chars, lowercase,
+   alphanumeric only, no dots or dashes. Derive it from the directory name by
+   removing only decoration - a domain suffix, or an organisation or platform
+   prefix - and keeping the part that actually names the product. Keep every
+   remaining word: for a directory "alpha-beta-gamma" the identifier is
+   "alphabetagamma", NOT "gamma". Dropping words produces an identifier that no
+   longer identifies the repository.
 5. Return exactly one entry only when the ticket genuinely belongs to exactly one
    repository. "One entry" is the right answer for a self-contained change, and
    the wrong answer for a ticket spanning several product areas — see rule 2a.

@@ -107,3 +107,37 @@ describe('mock1/mock2 flow parity with the real Metrolinx run', () => {
     }
   });
 });
+
+/**
+ * The AGENT ROUTING family. Drift here does not skip a stage — it runs the stage
+ * through a different provider entirely.
+ *
+ * Live 2026-07-27, mock1 run 6: metrolinx sets SPEC_MODE_PROVIDER=qwen and takes
+ * the fast path ("skipping MiniMax"). mock1 set no SPEC_MODE_* at all, so the
+ * spec pass fell through to callMiniMaxWithTool, which throws immediately
+ * without a MiniMax key — four attempts, eighteen seconds, "openspec returned
+ * null", run dead at Step 1.
+ *
+ * Two costs. The run never reached anything it was launched to verify. And the
+ * four green mock1 runs before it were exercising a provider path production
+ * does not use — the mock was not testing the pipeline, it was testing a
+ * neighbouring one.
+ */
+describe('agent routing parity — the mock must call the same providers', () => {
+  const ROUTING = [
+    'SPEC_MODE_PROVIDER',
+    'SPEC_MODE_OPENSPEC_MODEL',
+    'SPEC_MODE_SPECKIT_MODEL',
+  ];
+
+  for (const key of ROUTING) {
+    it(`mock1 sets ${key}`, () => {
+      const want = metrolinxValue(key);
+      expect(want, `${key} is not set in metrolinx config — update this list`).toBeTruthy();
+      expect(MOCK1,
+        `mock1 does not set ${key}, so its spec pass routes through a different ` +
+        'provider than production. This is what killed mock1 run 6 at Step 1.')
+        .toMatch(new RegExp(key));
+    });
+  }
+});

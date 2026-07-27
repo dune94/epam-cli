@@ -43,6 +43,9 @@ if (!OUT_PATH) {
 const PROJECT_NAME         = getArg('--project-name', '');
 
 // Configurable: the codeline value that means "spans all codelines, split me"
+// Keep a spanning story WHOLE (one story, N executions) instead of minting
+// per-codeline sub-stories. Off by default so existing projects are untouched.
+const MULTI_CODELINE_STORIES = process.env.EPAM_MULTI_CODELINE_STORIES === '1';
 const SPLIT_VALUE = process.env.JIRA_SPLIT_CODELINE || 'both';
 // Configurable: fallback codeline for stories with no codeline label in Jira
 const DEFAULT_CODELINE = process.env.JIRA_DEFAULT_CODELINE || '';
@@ -61,11 +64,25 @@ const template        = JSON.parse(fs.readFileSync(TEMPLATE_PATH, 'utf8'));
 // Derive codelines from the data — no names hardcoded in this script.
 // SPLIT_VALUE stories are excluded from the codeline list (they get split).
 
-const allCodelines = [...new Set(
+let allCodelines = [...new Set(
   classifications
     .map(c => c.codeline || DEFAULT_CODELINE)
     .filter(cl => cl && cl !== SPLIT_VALUE)
 )];
+
+// Fall back to the codelines DISCOVERY already found. Deriving the list only
+// from per-story labels throws that work away: AMSD-2041 was a single story
+// marked SPLIT_VALUE, every candidate was filtered out, the list came back
+// empty and ingest exited 1 — after discovery had successfully identified the
+// repositories and exported them.
+if (allCodelines.length === 0 && process.env.JIRA_CODELINES) {
+  allCodelines = process.env.JIRA_CODELINES.split(',').map(c => c.trim()).filter(Boolean);
+  if (allCodelines.length) {
+    process.stderr.write(
+      `[synthesize-prd] No per-story codeline labels; using discovered codelines: ` +
+      `${allCodelines.join(', ')}\n`);
+  }
+}
 
 if (allCodelines.length === 0) {
   process.stderr.write('[synthesize-prd] No codelines found in classifications. Check Jira codeline labels or set JIRA_DEFAULT_CODELINE.\n');
@@ -140,6 +157,29 @@ function classificationToStory(c, totalStoryCount) {
 // Per-codeline ACs are read from c[`${cl}Acs`] (e.g. c.beAcs, c.feAcs).
 // Later codeline sub-stories depend on earlier ones — enforces run order.
 
+/**
+ * A story that spans codelines stays ONE story and records where it belongs.
+ *
+ * The orchestrator already loops per codeline with PROJECT_ROOT set per
+ * iteration, so a whole story simply participates in N of those iterations —
+ * each execution still single-repo, which is what keeps worktrees, git, lint
+ * baselines and the writer manifest working unchanged.
+ *
+ * Splitting into `${id}-${cl}` sub-stories (splitAcrossCodelines below) was
+ * ruled out for brownfield: verification criteria carry the meaning downstream,
+ * and splitting at ingest widens a surface that has to be narrowed again later.
+ */
+function spanningStory(c, totalStoryCount) {
+  const base = classificationToStory(c, totalStoryCount);
+  process.stderr.write(
+    `[synthesize-prd]   ${base.id} spans [${allCodelines.join(', ')}] — kept as ONE story\n`);
+  return [{
+    ...base,
+    codeline:  allCodelines[0],   // the lane it starts in; codelines[] is authoritative
+    codelines: [...allCodelines],
+  }];
+}
+
 function splitAcrossCodelines(c, totalStoryCount) {
   const base    = classificationToStory(c, totalStoryCount);
   const allAcs  = base.acceptanceCriteria || [];
@@ -173,7 +213,9 @@ function splitAcrossCodelines(c, totalStoryCount) {
 
 const stories = classifications.flatMap(c =>
   c.codeline === SPLIT_VALUE
-    ? splitAcrossCodelines(c, classifications.length)
+    ? (MULTI_CODELINE_STORIES
+        ? spanningStory(c, classifications.length)
+        : splitAcrossCodelines(c, classifications.length))
     : [classificationToStory(c, classifications.length)]
 );
 

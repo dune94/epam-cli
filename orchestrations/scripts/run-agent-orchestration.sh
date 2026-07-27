@@ -2504,8 +2504,15 @@ KNOWNFIXES_EOF
       const fs  = require('fs');
       const prd = JSON.parse(fs.readFileSync('${_fsrc}','utf8'));
       const cl  = '${_fcl}', dcl = process.env.JIRA_DEFAULT_CODELINE||'';
+      // A story may SPAN codelines. codelines[] is authoritative when present:
+      // the story stays whole and participates in each lane's execution, rather
+      // than being partitioned into exactly one. Without this it matches no
+      // partition, appears in zero filtered PRDs, and is silently dropped from
+      // the run — which is how a [GO, UP, MX] ticket reached ingest and died.
       const stories = prd.stories.filter(s =>
-        s.codeline === cl || (!s.codeline && cl === dcl)
+        (Array.isArray(s.codelines) && s.codelines.length
+          ? s.codelines.includes(cl)
+          : (s.codeline === cl || (!s.codeline && cl === dcl)))
       );
       const ids = new Set(stories.map(s => s.id));
       const order = {};
@@ -2625,7 +2632,33 @@ KNOWNFIXES_EOF
       const canonical = JSON.parse(fs.readFileSync('${_prd_path}', 'utf8'));
       const updated = JSON.parse(fs.readFileSync('${_cl_prd}', 'utf8'));
       const byId = new Map(updated.stories.map(s => [s.id, s]));
-      canonical.stories = canonical.stories.map(s => byId.has(s.id) ? byId.get(s.id) : s);
+      const CL = '${_cl}';
+      canonical.stories = canonical.stories.map(s => {
+        const u = byId.get(s.id);
+        if (!u) return s;
+        // A story confined to one codeline merges wholesale, exactly as before.
+        const spans = Array.isArray(s.codelines) && s.codelines.length > 1;
+        if (!spans) return u;
+        // A SPANNING story is touched by every lane, so a whole-object merge is
+        // last-writer-wins: a story that failed in one codeline and succeeded in
+        // another would read as whichever lane happened to run last. Record each
+        // lane's outcome separately and derive the story's own state from all of
+        // them — it is complete only when NO lane is outstanding.
+        const perCodeline = { ...(s.perCodeline || {}), [CL]: {
+          status: u.status, completed: !!u.completed, completedAt: u.completedAt || null,
+          reviewStatus: u.reviewStatus || null,
+        } };
+        const everyLaneDone = s.codelines.every(cl =>
+          perCodeline[cl] && perCodeline[cl].completed === true);
+        return {
+          ...u,
+          perCodeline,
+          codelines: s.codelines,
+          completed: everyLaneDone,
+          status: everyLaneDone ? 'completed' : 'in-progress',
+          completedAt: everyLaneDone ? (u.completedAt || new Date().toISOString()) : null,
+        };
+      });
       fs.writeFileSync('${_prd_path}', JSON.stringify(canonical, null, 2));
     " 2>/dev/null && log "[orch] Merged codeline '${_cl}' story state back into canonical PRD"
   done

@@ -250,6 +250,55 @@ function getDeterministicCandidateFiles(story, topN = 3) {
  * The engine never learns what any of these services ARE. It reads a flag and a
  * host list; the vendor lives in per-project config.
  */
+/**
+ * publishedContracts(repoPath, story) — the exported API surface of codelines
+ * that already ran, for a story that spans several.
+ *
+ * Run 9 blamed the function that DISPLAYED a value instead of the one that
+ * COMPUTED it, inside a single repository with full CodeGraph access. Across a
+ * repo boundary that failure becomes structural: for the classic FE/BE bug the
+ * frontend detective finds "we read a field and it is undefined" and prescribes
+ * a defensive check — plausible, verbatim-quotable, and papering over a cause it
+ * cannot see. The backend detective finds nothing wrong. Both succeed; the bug
+ * survives.
+ *
+ * Completed codelines already publish their surface to .contracts/<storyId>.md
+ * for STORY agents. The detective was never given it. It does not need the
+ * neighbouring codebase — only the neighbouring surface.
+ */
+function publishedContracts(repoPath, story) {
+  const dir = path.join(repoPath, '.contracts');
+  let files = [];
+  try {
+    files = fs.readdirSync(dir).filter((f) => f.endsWith('.md'));
+  } catch { return ''; }
+  if (!files.length) return '';
+
+  const done = Array.isArray(story && story.codelines) ? story.codelines : [];
+  const parts = [];
+  for (const f of files.slice(0, 4)) {
+    let body = '';
+    try { body = fs.readFileSync(path.join(dir, f), 'utf8').slice(0, 4000); } catch { continue; }
+    if (body.trim()) parts.push(`### ${f.replace(/\.md$/, '')}\n${body}`);
+  }
+  if (!parts.length) return '';
+
+  return `
+
+## Published contracts from codelines that already ran
+${done.length ? `This story spans ${done.length} codelines (${done.join(', ')}). ` : ''}\
+The following is the exported surface of work already completed elsewhere for this story.
+
+${parts.join('\n\n')}
+
+THE CAUSE MAY NOT BE IN THIS REPOSITORY. When a value arrives here already wrong,
+the defect is upstream and the fix belongs there — a defensive check at this
+boundary hides it and will pass every test you can write here. If what you see
+contradicts a contract above, say so and name the other codeline rather than
+prescribing a local workaround. There is always SOME line in this repository that
+consumes the wrong value; naming it is not the same as finding the cause.`;
+}
+
 function unreachableExternalsConstraint(env = process.env) {
   if (env.EPAM_MOCK_EXTERNAL_CMS_APIS !== '1') return '';
   const hosts = String(env.EPAM_MOCK_EXTERNAL_CMS_HOSTS || '')
@@ -2493,7 +2542,7 @@ SPLIT RULES (mandatory, not optional — enforce these before refining AC):
 These rules apply only when splitDepth === 0. Never split a story that is already a split child.
 
 Story context:
-${storyPayload}
+${storyPayload}${publishedContracts(repoPath, story)}
 `;
   try {
     const payload = await runAgentForJson(

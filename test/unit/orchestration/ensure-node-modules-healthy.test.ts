@@ -115,7 +115,9 @@ describe('ensure_node_modules_healthy — real npm, real corruption, no mocking'
     const { stdout, exitCode } = runFn(dir, NODE_BIN, fakeBin);
     expect(exitCode).toBe(0); // repair succeeded (is-odd is a real, public, installable package)
     expect(stdout).toMatch(/corrupted, attempting repair/);
-    expect(stdout).toMatch(/npm-stack install.*succeeded/);
+    // "npm-stack" was dropped from the message: it named a stack in a log line
+    // that should describe what happened, not which ecosystem it happened in.
+    expect(stdout).toMatch(/install.*succeeded/);
     expect(existsSync(join(dir, 'node_modules/is-odd'))).toBe(true);
   }, 60000);
 
@@ -142,7 +144,7 @@ describe('ensure_node_modules_healthy — real npm, real corruption, no mocking'
 
     const { stdout, exitCode } = runFn(dir, NODE_BIN, join(dir, 'node_modules/.bin/vitest'));
     expect(exitCode).toBe(1);
-    expect(stdout).toMatch(/npm-stack install FAILED/);
+    expect(stdout).toMatch(/install FAILED/);
   }, 60000);
 
   it('never edits package.json or package-lock.json during a repair', () => {

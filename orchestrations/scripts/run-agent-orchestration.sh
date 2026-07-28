@@ -549,25 +549,72 @@ detect_and_install_dependencies() {
             warning "  [deps-install] npm not found alongside $node_bin"
             ok=0
         else
-            local pm_bin="$npm_bin" pm_cmd="install"
-            if [ -f "$codeline_root/pnpm-lock.yaml" ] && command -v pnpm &>/dev/null; then
-                pm_bin=$(command -v pnpm); pm_cmd="install"
-            elif [ -f "$codeline_root/yarn.lock" ] && command -v yarn &>/dev/null; then
-                pm_bin=$(command -v yarn); pm_cmd="install"
-            elif [ -f "$codeline_root/package-lock.json" ]; then
-                pm_cmd="ci"
+            # WHICH package manager is the PROJECT's answer. Its `packageManager`
+            # field first (the standard corepack declaration), then the lockfile
+            # it committed. Read, never assumed.
+            local pm_name=""
+            pm_name="$("$node_bin" -e '
+              try {
+                const p = JSON.parse(require("fs").readFileSync(process.argv[1] + "/package.json", "utf8"));
+                process.stdout.write(String(p.packageManager || "").split("@")[0]);
+              } catch (e) { /* no declaration */ }
+            ' "$codeline_root" 2>/dev/null)"
+            if [ -z "$pm_name" ]; then
+                [ -f "$codeline_root/pnpm-lock.yaml" ] && pm_name="pnpm"
+                [ -z "$pm_name" ] && [ -f "$codeline_root/yarn.lock" ] && pm_name="yarn"
             fi
+
+            local pm_bin="$npm_bin"
+            if [ -n "$pm_name" ] && [ "$pm_name" != "npm" ] && command -v "$pm_name" &>/dev/null; then
+                pm_bin="$(command -v "$pm_name")"
+            fi
+
+            # DESTRUCTIVE OR NOT is OUR policy, and the default is: never.
+            #
+            # This used to select `ci` whenever a lockfile existed. `npm ci`
+            # DELETES node_modules before installing, so on 2026-07-28 a repair
+            # wiped a working 1,530-package install, hit a 401 on a private
+            # dependency, aborted, and left the codeline with an EMPTY
+            # node_modules — strictly worse than it found it. The warning below
+            # already said "often a private-registry auth wall": the failure was
+            # anticipated and the destructive command ran first anyway.
+            #
+            # We did not create these repositories and cannot restore what we
+            # remove. A caller that owns its tree can opt in.
+            local pm_cmd="install"
+            [ "${DEPS_CLEAN_INSTALL:-0}" = "1" ] && [ -f "$codeline_root/package-lock.json" ] && pm_cmd="ci"
+
+            # What was there before, so the repair can be judged rather than
+            # trusted. A repair that reduces the tree must not be handed on as a
+            # working install.
+            local _deps_before=0
+            [ -d "$codeline_root/node_modules" ] && _deps_before=$(find "$codeline_root/node_modules" -maxdepth 1 -mindepth 1 2>/dev/null | wc -l)
+
             local repair_log; repair_log=$(mktemp)
             if [ "$pm_bin" = "$npm_bin" ]; then
                 (cd "$codeline_root" && "$node_bin" "$npm_bin" "$pm_cmd" --no-audit --no-fund) > "$repair_log" 2>&1
             else
                 (cd "$codeline_root" && "$pm_bin" "$pm_cmd") > "$repair_log" 2>&1
             fi
-            if [ $? -eq 0 ]; then
-                success "  [deps-install] npm-stack install ($pm_cmd via $(basename "$pm_bin")) succeeded in $codeline_root"
+            local _install_rc=$?
+            local _deps_after=0
+            [ -d "$codeline_root/node_modules" ] && _deps_after=$(find "$codeline_root/node_modules" -maxdepth 1 -mindepth 1 2>/dev/null | wc -l)
+
+            if [ "$_install_rc" -eq 0 ]; then
+                success "  [deps-install] install ($pm_cmd via $(basename "$pm_bin")) succeeded in $codeline_root"
             else
-                warning "  [deps-install] npm-stack install FAILED in $codeline_root — tail below (often a private-registry auth wall):"
+                warning "  [deps-install] install FAILED in $codeline_root — tail below (often a private-registry auth wall):"
                 tail -10 "$repair_log" >&2
+                ok=0
+            fi
+
+            # Did the repair leave LESS than it found? Silence here is how a
+            # working codeline became an empty one and the next gate was handed
+            # the wreckage as if it were a tree.
+            if [ "$_deps_after" -lt "$_deps_before" ]; then
+                error "  [deps-install] REPAIR DESTROYED WHAT IT FOUND in $codeline_root: $_deps_before entries -> $_deps_after"
+                error "    The codeline is now in a worse state than before this ran, and its gates cannot run."
+                error "    Reinstall its dependencies before relying on any result from this run."
                 ok=0
             fi
             rm -f "$repair_log"

@@ -375,9 +375,21 @@ Rules:
    ticket that repository covers.
 
    Decide the count from the ticket. Do not aim for any particular number.
-3. Only omit a candidate from your selection if a DIFFERENT candidate in the same
-   list is clearly a better fit for it — never omit a candidate just because you
-   are uncertain, since uncertainty alone is not a reason to return fewer repos.
+3. SELECT ON EVIDENCE, NOT ON A HUNCH. Every selected repository must be grounded
+   in something concrete you can point at:
+     - a ticket component, label or phrase that names that product area, or
+     - something in the repository itself (its name, its manifest, its code)
+       that matches what the ticket asks for.
+   Its RANK IS NOT EVIDENCE. The scores are the thing you are adjudicating, so
+   "it was the second-ranked candidate" justifies nothing. Neither does "it is
+   probably the backend for X" — if you have to say likely, probably, or may be,
+   you do not have evidence.
+   If a part of the ticket clearly belongs SOMEWHERE but you cannot ground it in
+   one of these repositories, DO NOT SELECT ONE ANYWAY. Put it in "unsure" with
+   what you could not resolve. An unresolved component is real information and a
+   human can settle it; a guess promoted to a selection cannot be spotted later.
+   Do not omit a candidate you CAN ground merely because another also fits — a
+   ticket spanning several product areas needs all of them (rule 2a).
 4. Assign each selected repo a short codeline identifier: 2-20 chars, lowercase,
    alphanumeric only, no dots or dashes. Derive it from the directory name by
    removing only decoration - a domain suffix, or an organisation or platform
@@ -392,13 +404,76 @@ Rules:
    what part of the ticket it covers. Every selected repository needs its own
    reason — a single justification covering the whole set makes a wrong
    selection impossible to spot afterwards.
+7. "evidence" must quote the CONCRETE thing that grounds the selection: the
+   ticket component/label/phrase verbatim, or the file, directory or manifest
+   entry in that repository. It is not a second reason and not a restatement —
+   if you cannot fill it without hedging, the repository belongs in "unsure",
+   not in "codelines".
 
 Output format (strict JSON, no markdown fences, no preamble, no trailing text):
 {
   "codelines": [
-    { "name": "cdts", "path": "/absolute/path/to/repo", "reason": "..." }
+    { "name": "cdts", "path": "/absolute/path/to/repo",
+      "reason": "what part of the ticket this repo covers",
+      "evidence": "ticket component \\"GO\\"" }
+  ],
+  "unsure": [
+    { "part": "the part of the ticket you could not place",
+      "why": "what you would need in order to place it" }
   ]
 }`;
+}
+
+/**
+ * dropUngroundedCodelines — a selection without evidence is not a selection.
+ *
+ * Live AMSD-2041: three codelines were grounded in ticket components (GO, UP,
+ * MX) and a fourth was not — "second-ranked candidate LIKELY SERVING AS the
+ * content management backend". That repo has no package.json; it holds
+ * Functional/ and Integration/ assets and its last commit was an Azure Data
+ * Factory pipeline change. The ticket is front-end live preview. It was included
+ * because rule 3 used to say never to omit an uncertain candidate.
+ *
+ * Under MC-1 that is not merely wasteful. A story completes only when EVERY
+ * declared lane completes and partial coverage fails the run, so a detective
+ * correctly finding nothing to change in an irrelevant repo fails the story.
+ *
+ * Enforced in code because prompt wording alone has repeatedly not held here —
+ * the detective was told "HARD LIMIT: 6 tool calls" and made 25. Deliberately
+ * NOT a hedge-word blocklist: "likely"/"probably" is unmaintainable and evaded
+ * by rephrasing. The requirement is positive — say what grounds it — and an
+ * entry that cannot is surfaced, not silently dropped.
+ */
+function dropUngroundedCodelines(parsed) {
+  if (!parsed || !Array.isArray(parsed.codelines)) return parsed;
+
+  const kept = [];
+  const dropped = [];
+  for (const cl of parsed.codelines) {
+    const evidence = String((cl && cl.evidence) || '').trim();
+    if (evidence) kept.push(cl);
+    else dropped.push(cl);
+  }
+
+  for (const cl of dropped) {
+    warn(`codeline '${cl && cl.name}' (${cl && cl.path}) was selected with NO evidence — not running against it.`);
+    warn(`  its stated reason was: ${(cl && cl.reason) || '(none)'}`);
+    warn(`  a repository is selected on a ticket component/label/phrase or on something in the repo itself; a hunch is not enough.`);
+  }
+  for (const u of (Array.isArray(parsed.unsure) ? parsed.unsure : [])) {
+    warn(`unresolved part of the ticket: ${u && u.part} — ${u && u.why}`);
+    warn(`  no codeline was invented for it. Resolve it by hand if it matters.`);
+  }
+
+  // Never let this empty the selection: zero codelines aborts ingest entirely,
+  // which is a worse outcome than proceeding with an unevidenced pick the
+  // operator can see in the log.
+  if (!kept.length && parsed.codelines.length) {
+    warn('every codeline lacked evidence — keeping them rather than aborting the run, but treat this selection as unverified.');
+    return parsed;
+  }
+
+  return { ...parsed, codelines: kept };
 }
 
 function callLlm(prompt) {
@@ -442,7 +517,7 @@ function callLlm(prompt) {
 
     const parsed = JSON.parse(jsonMatch[0]);
     if (debug) log(`DEBUG parsed codelines: ${JSON.stringify(parsed.codelines)}`);
-    return parsed;
+    return dropUngroundedCodelines(parsed);
   } finally {
     try { fs.unlinkSync(tmpPrompt); } catch { /* ignore */ }
   }

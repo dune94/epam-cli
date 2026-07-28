@@ -123,8 +123,25 @@ run_review_prompt() {
     # diff hand-rolled — without this, ai-run.sh's epam-umbrella branch defaults
     # to --no-tools and the reviewer can only guess. Read-only: the reviewer
     # queries the index, it does not write. PROJECT_ROOT is forwarded so the tool
-    # targets the repo under review. EPAM_MAX_ITERATIONS is capped tight so the
-    # reviewer commits to a verdict rather than exploring to its iteration limit.
+    # targets the repo under review.
+    #
+    # EPAM_MAX_TOOL_CALLS is what actually makes the reviewer commit to a verdict.
+    # Measured on a mock1 run whose only change was one string literal:
+    # team-lead-agent took 4 calls of 25/15/11/7 turns and 615K input tokens —
+    # 83% of the entire run's cost — to emit a five-line approval. It stopped at
+    # 25 because 25 is REVIEW_MAX_ITERATIONS; nothing else was stopping it.
+    #
+    # Raising that cap is the wrong lever and this codebase already knew it. From
+    # AgentRunner's tool-budget comment, about the detective: "fixed three times
+    # by raising the cap (10 -> 20 -> 25, and 40 was worst of all: 40 calls, 680K
+    # input tokens, no fix). The budget was never the constraint — the absence of
+    # a mechanism was." The reviewer's cap was nonetheless raised 12 -> 25 two
+    # days later, for the same reason, with the same result.
+    #
+    # The budget withdraws the tools when spent and demands an answer from the
+    # evidence already gathered. The iteration cap stays as the guard against a
+    # reviewer that stalls WITHOUT calling tools — the two bound different
+    # failures, so both are set.
     _review_out=$(echo "$prompt_text" | \
         AI_MODEL="$_model" \
         CLAUDE_CMD="${CLAUDE_CMD:-claude}" \
@@ -132,6 +149,7 @@ run_review_prompt() {
         ORCH_JSON_RESULT="$_review_json_result" \
         AI_GATE_ALLOW_TOOLS=1 \
         EPAM_ALLOWED_TOOLS="bash,read_file,list_files,search" \
+        EPAM_MAX_TOOL_CALLS="${REVIEW_MAX_TOOL_CALLS:-8}" \
         EPAM_MAX_ITERATIONS="${REVIEW_MAX_ITERATIONS:-25}" \
         EPAM_REASONING_EFFORT="${REVIEW_REASONING_EFFORT:-high}" \
         EPAM_MAX_OUTPUT_TOKENS="${REVIEW_MAX_OUTPUT_TOKENS:-32768}" \

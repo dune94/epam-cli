@@ -73,7 +73,8 @@ afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, f
  * Run the real loop over two lanes. `failing` is the codeline whose pipeline
  * invocation exits non-zero after its retries are spent.
  */
-function runLanes(failing: string): { entered: string[]; exit: number; out: string } {
+function runLanes(failing: string, opts: { markDelivered?: string } = {}):
+  { entered: string[]; exit: number; out: string; prd: string } {
   const dir = mkdtempSync(join(tmpdir(), 'lane-halt-'));
   dirs.push(dir);
 
@@ -107,6 +108,20 @@ if [ "\${1:-}" = "--reset" ]; then
   # Callee: which lane is this? PRD_FILE is /tmp/orch-<codeline>-prd-<pid>.json
   _cl=\$(basename "\${PRD_FILE:-}" | sed -E 's/^orch-(.*)-prd-[0-9]+\\.json$/\\1/')
   echo "\$_cl" >> "${marker}"
+  # A lane that DELIVERS marks the story complete in its own filtered PRD,
+  # exactly as claude.sh does during a real run. This is what makes the
+  # partial-success case reachable: one lane genuinely succeeded.
+  if [ "\$_cl" = "${opts.markDelivered || '__none__'}" ]; then
+    "${NODE_BIN}" -e '
+      const fs = require("fs"), p = process.env.PRD_FILE;
+      const prd = JSON.parse(fs.readFileSync(p, "utf8"));
+      for (const s of prd.stories) {
+        s.status = "completed"; s.completed = true;
+        s.completedAt = "2026-07-28T00:00:00.000Z";
+      }
+      fs.writeFileSync(p, JSON.stringify(prd, null, 2));
+    '
+  fi
   # Self-heal retries have already run by the time the loop inspects this
   # status; exit 1 (not 2) so no gate remediation is attempted.
   [ "\$_cl" = "${failing}" ] && exit 1
@@ -137,7 +152,7 @@ echo "LOOP_EXIT=\$?"
     ? readFileSync(marker, 'utf8').split('\n').map((s) => s.trim()).filter(Boolean)
     : [];
   const m = out.match(/LOOP_EXIT=(\d+)/);
-  return { entered, exit: m ? Number(m[1]) : -1, out };
+  return { entered, exit: m ? Number(m[1]) : -1, out, prd: prdPath };
 }
 
 describe('the lane loop halts once a codeline has finally failed', () => {
@@ -178,5 +193,49 @@ describe('the lane loop halts once a codeline has finally failed', () => {
     // sees a run that stopped with no record of where.
     const { out } = runLanes('lane-a');
     expect(out).toMatch(/Merged codeline 'lane-a'/);
+  });
+});
+
+describe('a partial solution is never accepted', () => {
+  // The user's rule, stated 2026-07-28: "any hard failure in a lane after
+  // retries and self healing and laddering should halt the whole run — a
+  // partial solution will not be accepted."
+  //
+  // Halting is only half of that. The sharper case is a story that one lane
+  // GENUINELY delivered while another failed: the work is real, the commit is
+  // real, and the temptation is to call the story done. It is not done — it was
+  // declared against both codelines.
+  const delivered = () => runLanes('lane-b', { markDelivered: 'lane-a' });
+
+  it('runs the delivering lane and then fails on the second', () => {
+    // Guard: if lane-a never delivered, "not completed" below proves nothing.
+    const { entered } = delivered();
+    expect(entered).toEqual(['lane-a', 'lane-b']);
+  });
+
+  it('does NOT mark the spanning story complete when one lane failed', () => {
+    const { prd } = delivered();
+    const after = JSON.parse(readFileSync(prd, 'utf8'));
+    const story = after.stories.find((s: { id: string }) => s.id === 'T-1');
+    expect(story.completed,
+      'a story delivered in only one of its two codelines was reported complete')
+      .not.toBe(true);
+    expect(story.status, 'status claims completion despite a failed lane')
+      .not.toBe('completed');
+  });
+
+  it('records which lane did deliver, so the partial work is not lost', () => {
+    // Refusing to call it complete must not erase the evidence that lane-a
+    // succeeded — a rerun needs to know what is already done.
+    const { prd } = delivered();
+    const story = JSON.parse(readFileSync(prd, 'utf8')).stories
+      .find((s: { id: string }) => s.id === 'T-1');
+    expect(story.perCodeline, 'no per-lane record survived the halt').toBeTruthy();
+    expect(story.perCodeline['lane-a'].completed,
+      "the delivering lane's result was discarded").toBe(true);
+  });
+
+  it('still exits non-zero — partial delivery is a failed run', () => {
+    expect(delivered().exit).not.toBe(0);
   });
 });

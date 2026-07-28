@@ -4260,7 +4260,7 @@ fi
 
 # ──────────────────────────────────────────────
 # Step 0.7: Cross-phase regression guard
-# Run vitest before any story in this phase executes to catch regressions
+# Run the project's own test command before any story in this phase executes,
 # introduced by the previous phase. Blocks on failure.
 # Skip with: SKIP_REGRESSION_GUARD=true
 # ──────────────────────────────────────────────
@@ -4284,12 +4284,40 @@ if [ "${SKIP_REGRESSION_GUARD:-false}" != "true" ]; then
     # codeline itself declares (engines.node), not whatever version happens
     # to be active in the orchestrator's own shell. See resolve_codeline_node
     # above for why this matters (a Node major-version mismatch crashes
-    # vitest outright rather than reporting a normal test failure).
+    # the test runner outright rather than reporting a normal test failure).
     _rg_node=$(resolve_codeline_node "$_rg_root" 2>/dev/null || true)
-    # Detect test runner: prefer vitest, fall back to jest
+    # How this project runs its tests is the project's answer (see below).
+    # HOW THIS PROJECT RUNS ITS TESTS IS THE PROJECT'S ANSWER, NOT OURS.
+    #
+    # This used to detect a runner by name and invoke `<runner> run`. Live
+    # AMSD-2041 run 5: `run` is vitest's "run once" subcommand and a test PATH
+    # PATTERN in jest, so jest searched 874 test files for paths matching "run",
+    # found none, exited 1 — and the guard reported the client's baseline as
+    # broken. A false red on the gate whose entire job is telling us whether the
+    # baseline can be trusted, and it would have failed every lane in turn.
+    #
+    # Now: the project's own `scripts.test`, executed through the package manager
+    # its lockfile names. No runner name and no runner-specific flag appears
+    # here, so a stack neither of us has seen still works.
+    _rg_test_declared=0
+    if [ -f "$_rg_root/package.json" ] &&
+       jq -e '(.scripts.test // "") != ""' "$_rg_root/package.json" >/dev/null 2>&1; then
+        _rg_test_declared=1
+    fi
+
+    # The package manager, from the lockfile the project committed.
+    _rg_pm=""
+    [ -f "$_rg_root/pnpm-lock.yaml" ]      && _rg_pm="pnpm"
+    [ -z "$_rg_pm" ] && [ -f "$_rg_root/yarn.lock" ] && _rg_pm="yarn"
+    [ -z "$_rg_pm" ] && { [ -f "$_rg_root/package-lock.json" ] || [ -f "$_rg_root/npm-shrinkwrap.json" ]; } && _rg_pm="npm"
+    [ -z "$_rg_pm" ] && [ "$_rg_test_declared" -eq 1 ] && _rg_pm="npm"
+
+    # Kept for ensure_node_modules_healthy's smoke test below, which asks "is
+    # node_modules usable" — any installed executable answers that.
     _rg_bin=""
-    [ -f "$_rg_root/node_modules/.bin/vitest" ] && _rg_bin="$_rg_root/node_modules/.bin/vitest"
-    [ -z "$_rg_bin" ] && [ -f "$_rg_root/node_modules/.bin/jest" ] && _rg_bin="$_rg_root/node_modules/.bin/jest"
+    if [ -d "$_rg_root/node_modules/.bin" ]; then
+        _rg_bin="$(find "$_rg_root/node_modules/.bin" -maxdepth 1 -type f -o -maxdepth 1 -type l 2>/dev/null | head -1)"
+    fi
     # Brownfield environment prep: node_modules can be present-but-corrupted
     # (a prior interrupted install left truncated native binaries — real
     # incident, 2026-07-22) or missing entirely for a codeline the pipeline
@@ -4299,17 +4327,21 @@ if [ "${SKIP_REGRESSION_GUARD:-false}" != "true" ]; then
     if [ -n "$_rg_node" ] && [ -f "$_rg_root/package.json" ]; then
         ensure_node_modules_healthy "$_rg_root" "$_rg_node" "$_rg_bin" || true
         # Re-detect — a first-time install creates node_modules/.bin/* that
-        # didn't exist a moment ago.
+        # didn't exist a moment ago. Any entry answers "is node_modules usable".
         _rg_bin=""
-        [ -f "$_rg_root/node_modules/.bin/vitest" ] && _rg_bin="$_rg_root/node_modules/.bin/vitest"
-        [ -z "$_rg_bin" ] && [ -f "$_rg_root/node_modules/.bin/jest" ] && _rg_bin="$_rg_root/node_modules/.bin/jest"
+        if [ -d "$_rg_root/node_modules/.bin" ]; then
+            _rg_bin="$(find "$_rg_root/node_modules/.bin" -maxdepth 1 -type f -o -maxdepth 1 -type l 2>/dev/null | head -1)"
+        fi
     fi
-    if [ -n "$_rg_node" ] && [ -f "$_rg_root/package.json" ] && [ -n "$_rg_bin" ]; then
+    if [ -n "$_rg_node" ] && [ "$_rg_test_declared" -eq 1 ] && [ -n "$_rg_pm" ] && [ -n "$_rg_bin" ]; then
         step_emit "5" "running" "Step 5: Regression guard"
-        log "Step 5: Cross-phase regression guard ($(basename "$_rg_bin")) in $_rg_root..."
+        log "Step 5: Cross-phase regression guard ($_rg_pm test) in $_rg_root..."
         _rg_log="$LOG_DIR/regression-guard-${PHASE}.log"
         set +e
-        (cd "$_rg_root" && "$_rg_node" "$_rg_bin" run) > "$_rg_log" 2>&1
+        # The project's OWN command. Its node is put on PATH first so the script
+        # resolves the version the codeline declares, without us naming a runner
+        # or guessing its arguments.
+        (cd "$_rg_root" && PATH="$(dirname "$_rg_node"):$PATH" "$_rg_pm" test) > "$_rg_log" 2>&1
         _rg_rc=$?
         set -e
         if [ $_rg_rc -ne 0 ]; then
@@ -4338,20 +4370,15 @@ if [ "${SKIP_REGRESSION_GUARD:-false}" != "true" ]; then
         # among its dependencies. No stack knowledge in the engine, no
         # per-project configuration.
         # Not `local`: Step 5 runs at top level, not inside a function.
-        _rg_declares_tests=0
-        if [ -f "$_rg_root/package.json" ]; then
-            if jq -e '(.scripts.test // "") != "" or
-                      ((.devDependencies // {}) | has("vitest") or has("jest")) or
-                      ((.dependencies    // {}) | has("vitest") or has("jest"))' \
-                   "$_rg_root/package.json" >/dev/null 2>&1; then
-                _rg_declares_tests=1
-            fi
-        fi
-
-        if [ "$_rg_declares_tests" -eq 1 ]; then
-            step_emit "5" "fail" "Step 5: Regression guard" "declares tests but none could be run"
-            error "Step 5: Regression guard COULD NOT RUN — $_rg_root declares tests but no runner was resolved"
-            error "  node: ${_rg_node:-<not found>}   runner: ${_rg_bin:-<not found>}"
+        # "Declares tests" is the project's own scripts.test — nothing else.
+        # An earlier version also looked for two runner names in the dependency
+        # lists, which is the same hard-coding that produced the false red above:
+        # a project using a third runner would have been judged by a list that
+        # never mentioned it.
+        if [ "$_rg_test_declared" -eq 1 ]; then
+            step_emit "5" "fail" "Step 5: Regression guard" "declares a test script but it could not be run"
+            error "Step 5: Regression guard COULD NOT RUN — $_rg_root declares a test script but it could not be executed"
+            error "  node: ${_rg_node:-<not found>}   package manager: ${_rg_pm:-<none detected>}   node_modules: $([ -n "$_rg_bin" ] && echo present || echo empty)"
             error "  The baseline is therefore UNVERIFIED: a break introduced by an earlier phase would not be caught."
             error "  This is an environment failure, not an absence of tests — check the codeline's node_modules install."
             error "  Bypass with: SKIP_REGRESSION_GUARD=true"

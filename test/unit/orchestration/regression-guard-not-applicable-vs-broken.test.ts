@@ -44,12 +44,12 @@ describe('a testable repo whose tests could not run is a failure, not a skip', (
     // No hardcoded stack knowledge: the repo declares whether it has tests.
     expect(step5(),
       'the guard cannot tell "no tests here" from "we failed to run the tests"')
-      .toMatch(/_rg_declares_tests|declares_tests/);
+      .toMatch(/_rg_test_declared|declares_tests/);
   });
 
   it('fails when the repo declares tests but no runner could be resolved', () => {
     const s = step5();
-    const i = s.search(/_rg_declares_tests|declares_tests/);
+    const i = s.search(/_rg_test_declared|declares_tests/);
     expect(i, 'no applicability check exists').toBeGreaterThan(-1);
     expect(s.slice(i),
       'a repo that declares tests still merely skips — an unverified baseline ' +

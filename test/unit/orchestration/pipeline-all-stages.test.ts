@@ -816,8 +816,22 @@ describe('run-agent-orchestration.sh — flow invariants', () => {
     expect(src).toMatch(/cd.*_rg_root.*\$.*_rg_node.*_rg_bin.*run|cd.*rg_root/s);
   });
 
-  it('brownfield regression guard falls back to jest when vitest absent', () => {
-    expect(src).toContain('node_modules/.bin/jest');
+  it('brownfield regression guard runs the project\'s own test command, whatever the runner', () => {
+    // Was: `expect(src).toContain('node_modules/.bin/jest')` — asserting a
+    // hardcoded fallback to one of two known runners.
+    //
+    // That design produced a false red on a green codebase (live AMSD-2041 run
+    // 5): the guard invoked `<runner> run`, which is vitest's "run once"
+    // subcommand but a test PATH PATTERN in jest, so jest matched 0 of 874 test
+    // files and exited 1. The client's suite was fine — `npm test` exits 0.
+    //
+    // The guard now runs whatever the project declares in scripts.test, via the
+    // package manager its lockfile names, so no runner is privileged and an
+    // unknown stack works. See regression-guard-project-command.test.ts.
+    expect(src, 'the guard no longer uses the project\'s declared test command')
+      .toMatch(/_rg_test_declared/);
+    expect(src, 'the guard still hardcodes a runner path')
+      .not.toContain('node_modules/.bin/jest');
   });
 
   it('phase abort propagates: orch script exits non-zero on story failure', () => {

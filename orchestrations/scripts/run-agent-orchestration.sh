@@ -2745,6 +2745,27 @@ KNOWNFIXES_EOF
       }
       fs.writeFileSync('${_prd_path}', JSON.stringify(canonical, null, 2));
     " 2>/dev/null && log "[orch] Merged codeline '${_cl}' story state back into canonical PRD"
+
+    # ── Halt once a lane has finally failed ───────────────────────────────────
+    # The failure path inside the PHASE loop above ends in a bare `break`, which
+    # leaves that inner loop only — the CODELINE loop carried on to the next
+    # lane. Live AMSD-2041 (2026-07-28): 'gotransit' hit a FATAL after 3/3 spec
+    # attempts and the self-heal retry, and five seconds later the run started
+    # 'upexpress'. A comment below this loop asserted "Lane failures already stop
+    # the loop"; it was never true, and being written down is what kept anyone
+    # from checking.
+    #
+    # By this point retries, the ladder and self-heal have ALL completed and the
+    # step is still failed — the standing mandate is to stop there. The merge
+    # above runs first deliberately, so the canonical PRD still records where the
+    # run died. Nothing is guessed about WHY it failed: a lane that reached here
+    # exhausted every recovery the pipeline has.
+    if [ "$_cl_failed" = "1" ]; then
+      error "[orch] HALT: codeline '${_cl}' failed after its retries and self-heal completed."
+      error "[orch]   Not starting the remaining codeline(s) — recovery is exhausted, so"
+      error "[orch]   another lane would reproduce the same failure at full ladder price."
+      break
+    fi
   done
 
   # ── Partial coverage is a failure, not a pass ──────────────────────────────

@@ -980,6 +980,18 @@ ${storiesPayload}
       const _specNeedsRetry = (r) => !r || !r.payload;
       while (_specNeedsRetry(agentResult) && _specRetry < _specMaxRetries) {
         _specRetry++;
+        // WHAT did it do wrong? The payload is all that comes back through the
+        // call stack, so on a parse failure the log runAgentForJson wrote is the
+        // only surviving record of the model's actual words. A contract
+        // violation is deterministic — carry a correction into the next attempt
+        // rather than re-asking the identical question, which on AMSD-2041
+        // bought three identical answers and a ladder escalation.
+        const _specRawLog = path.join(
+          logDir,
+          agent === 'speckit' ? `${story.id}-speckit-review.log` : `${story.id}-${agent}-spec.log`
+        );
+        const _specFailureKind = classifySpecFailure(readAgentRawOutput(_specRawLog));
+        const _specNote = specCorrectiveNote(_specFailureKind);
         // For retry 2+, escalate to the HIGH model if it differs from base — both agents.
         const _escalateOpenspec = _isOpenspec && _specRetry >= 2 && _openspecHighModel && _openspecHighModel !== _openspecBaseModel;
         const _escalateSpeckit = !_isOpenspec && agent === 'speckit' && _specRetry >= 2 && _speckitHighModel && _speckitHighModel !== _speckitBaseModel;
@@ -999,7 +1011,10 @@ ${storiesPayload}
           });
         } else {
           console.warn(
-            `spec-mode: ${agent} returned null for ${story.id} (attempt ${_specRetry + 1}/${_specMaxRetries + 1}) — retrying transient failure`
+            `spec-mode: ${agent} returned null for ${story.id} (attempt ${_specRetry + 1}/${_specMaxRetries + 1})` +
+            (_specFailureKind === 'empty'
+              ? ' — retrying transient failure'
+              : ` — ${_specFailureKind} contract violation, retrying WITH a correction`)
           );
         }
         summary.stats.agentAttempts += 1;
@@ -1008,7 +1023,7 @@ ${storiesPayload}
             const _savedModel = process.env.SPEC_MODE_OPENSPEC_MODEL;
             process.env.SPEC_MODE_OPENSPEC_MODEL = _openspecHighModel;
             try {
-              agentResult = await runSpecAgent({ promptExec, agent, story, phase: opts.phase, runId, logDir });
+              agentResult = await runSpecAgent({ promptExec, agent, story, phase: opts.phase, runId, logDir, forcedRetryNote: _specNote });
             } finally {
               if (_savedModel !== undefined) process.env.SPEC_MODE_OPENSPEC_MODEL = _savedModel;
               else delete process.env.SPEC_MODE_OPENSPEC_MODEL;
@@ -1017,15 +1032,15 @@ ${storiesPayload}
             const _savedModel = process.env.SPEC_MODE_SPECKIT_MODEL;
             process.env.SPEC_MODE_SPECKIT_MODEL = _speckitHighModel;
             try {
-              agentResult = await runSpeckitReview({ promptExec, story, openspecOutput: openspecPayload, phase: opts.phase, runId, logDir });
+              agentResult = await runSpeckitReview({ promptExec, story, openspecOutput: openspecPayload, phase: opts.phase, runId, logDir, forcedRetryNote: _specNote });
             } finally {
               if (_savedModel !== undefined) process.env.SPEC_MODE_SPECKIT_MODEL = _savedModel;
               else delete process.env.SPEC_MODE_SPECKIT_MODEL;
             }
           } else {
             agentResult = agent === 'speckit' && openspecPayload
-              ? await runSpeckitReview({ promptExec, story, openspecOutput: openspecPayload, phase: opts.phase, runId, logDir })
-              : await runSpecAgent({ promptExec, agent, story, phase: opts.phase, runId, logDir });
+              ? await runSpeckitReview({ promptExec, story, openspecOutput: openspecPayload, phase: opts.phase, runId, logDir, forcedRetryNote: _specNote })
+              : await runSpecAgent({ promptExec, agent, story, phase: opts.phase, runId, logDir, forcedRetryNote: _specNote });
           }
         } catch (err) { agentResult = _specAgentFailed(agent, story, err, `retry ${_specRetry}`); }
       }
@@ -2841,6 +2856,16 @@ Produce your refined output as raw JSON only (no XML tags, no markdown fences, n
 - "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
 - "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
 - "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+You have NO tools in this request and cannot call any — do not emit a tool call in any
+syntax (<tool_call>, <tool_use>, <function_call>). Nothing executes them, so a response
+containing one is discarded in full and the work is lost. Live AMSD-2041 (2026-07-28)
+died exactly this way: asked to review a story with an empty criteria list, the model
+requested the four files named above via <tool_call>read_file(...) and produced no answer
+at all. Everything you may use is already in this prompt. File PATHS are given without
+their contents by design — if the contents would have changed your answer, say so in
+"notes" and give your best answer from the description, title and paths you were given.
+An answer with a caveat is worth everything; a tool call is worth nothing.
 `;
   try {
     const payload = await runAgentForJson(
@@ -3753,6 +3778,62 @@ function unwrapToolCallJson(text) {
   return null;
 }
 
+// ─── Why a spec agent produced no payload ────────────────────────────────────
+// Only ONE of these is worth re-asking. A model that answered in the wrong shape
+// will answer in the wrong shape again: live AMSD-2041 (2026-07-28) speckit
+// emitted invented `<tool_call>read_file(...)` text, and re-sending the same
+// prompt reproduced it on glm-5.2 AND on the glm-5.1 escalation. Three attempts
+// and a ladder step to learn nothing. Classifying the failure lets the retry
+// carry a correction instead of repeating the question.
+const SPEC_TOOL_CALL_RE = /<\/?(?:tool_call|tool_use|function_call|invoke)\b/i;
+
+function classifySpecFailure(rawText) {
+  const t = String(rawText || '').trim();
+  if (!t) return 'empty';                          // genuinely no answer — a transient
+  if (SPEC_TOOL_CALL_RE.test(t)) return 'tool-call';
+  if (/^[[{]/.test(t)) return 'malformed-json';    // tried to answer, shape broke
+  return 'prose';                                  // answered in the wrong medium
+}
+
+// The correction handed to the next attempt. Empty for a transient: an empty
+// response says nothing about what went wrong, and inventing advice would make
+// the prompt differ for no reason.
+function specCorrectiveNote(kind) {
+  switch (kind) {
+    case 'tool-call':
+      return 'CRITICAL — YOUR PREVIOUS RESPONSE WAS REJECTED: it emitted tool calls ' +
+             '(e.g. <tool_call>read_file(...)</tool_call>). You have NO tools available in this ' +
+             'request and cannot call any — nothing executes them, so that response was discarded ' +
+             'entirely. Everything you are permitted to use is already in this prompt. If a file\'s ' +
+             'contents would have helped, say so in "notes" and answer from what you were given. ' +
+             'Reply with the raw JSON object and nothing else.';
+    case 'prose':
+      return 'CRITICAL — YOUR PREVIOUS RESPONSE WAS REJECTED: it was prose, not JSON. ' +
+             'Reply with the raw JSON object described above and nothing else — no preamble, ' +
+             'no explanation outside the JSON, no markdown fences.';
+    case 'malformed-json':
+      return 'CRITICAL — YOUR PREVIOUS RESPONSE WAS REJECTED: it began as JSON but could not be ' +
+             'parsed. Emit strictly valid JSON — quote every key, no trailing commas, no comments ' +
+             'and no unescaped newlines inside string values.';
+    default:
+      return '';
+  }
+}
+
+/**
+ * The raw text an agent produced, read back from the log runAgentForJson wrote.
+ * The parsed payload is all that is returned through the call stack, so on a
+ * parse failure this file is the only surviving record of what the model said —
+ * and it is what the classifier needs.
+ */
+function readAgentRawOutput(logPath) {
+  try {
+    const txt = require('fs').readFileSync(logPath, 'utf8');
+    const i = txt.indexOf('# Text output');
+    return i === -1 ? '' : txt.slice(i + '# Text output'.length).trim();
+  } catch { return ''; }
+}
+
 function extractTaggedJson(text, tag) {
   if (!text) return null;
 
@@ -4491,6 +4572,9 @@ if (require.main === module) {
 }
 
 module.exports = {
+  classifySpecFailure,
+  specCorrectiveNote,
+  readAgentRawOutput,
   extractTaggedJson,
   stripPrescriptiveACs,
   buildAssignments,

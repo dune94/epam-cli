@@ -2659,6 +2659,17 @@ KNOWNFIXES_EOF
           completedAt: everyLaneDone ? (u.completedAt || new Date().toISOString()) : null,
         };
       });
+      // Stories CREATED during the run exist only in the codeline PRD, and a map
+      // over canonical can never add them. The spec pass splits a story into
+      // <id>-impl / <id>-test there and marks the parent deprecated — so without
+      // this, mock1 run 10 implemented, tested, reviewed and committed two child
+      // stories, and canonical kept nothing but a deprecated parent. Every reader
+      // of that PRD — the run report, a rerun deciding what is outstanding, a
+      // human — would conclude the run delivered nothing.
+      const known = new Set(canonical.stories.map(s => s.id));
+      for (const u of updated.stories) {
+        if (!known.has(u.id)) canonical.stories.push(u);
+      }
       fs.writeFileSync('${_prd_path}', JSON.stringify(canonical, null, 2));
     " 2>/dev/null && log "[orch] Merged codeline '${_cl}' story state back into canonical PRD"
   done

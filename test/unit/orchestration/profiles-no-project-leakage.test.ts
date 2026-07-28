@@ -43,6 +43,21 @@ const PROFILES = join(__dirname, '../../../orchestrations/agents/profiles.json')
 const raw = readFileSync(PROFILES, 'utf8');
 const profiles: Record<string, unknown> = JSON.parse(raw);
 
+/**
+ * The CANONICAL file is what actually propagates.
+ *
+ * tier3-metrolinx-run.sh restores profiles.json from profiles.json.original at
+ * the start of every run, so a clean base is worthless if the canonical it is
+ * restored FROM is dirty. That is exactly how this survived months: the
+ * canonical is created once, ever (`if [ ! -f "$profiles_backup" ]` in
+ * run_pre_phase_assessment), so it snapshotted whatever happened to be in
+ * profiles.json the first time — by then already carrying travel-app's
+ * addenda — and every run since restored that pollution faithfully.
+ *
+ * Guarding the base alone would have caught nothing.
+ */
+const CANONICAL = join(__dirname, '../../../orchestrations/agents/profiles.json.original');
+
 /** Roles whose text matches a pattern, with a short excerpt for the failure message. */
 function offenders(pattern: RegExp): string[] {
   const out: string[] = [];
@@ -114,6 +129,44 @@ describe('the shared profiles carry no single project\'s vocabulary', () => {
     const found = offenders(/ui_and_review phase|Scaffold Phase -/i);
     expect(found, `shared profiles cite another project's phases:\n  ${found.join('\n  ')}`)
       .toEqual([]);
+  });
+});
+
+describe('the CANONICAL copy is clean — it is what every run restores from', () => {
+  const canonicalRaw = readFileSync(CANONICAL, 'utf8');
+  const canonical: Record<string, unknown> = JSON.parse(canonicalRaw);
+
+  it('names no client or third-party product', () => {
+    const found = Object.entries(canonical)
+      .filter(([, v]) => /skyscanner|rapidapi/i.test(String(v)))
+      .map(([k]) => k);
+    expect(found,
+      `the canonical restored at every run start is polluted, so cleaning the ` +
+      `base achieves nothing — roles: ${found.join(', ')}`)
+      .toEqual([]);
+  });
+
+  it('names no story IDs from a project PRD', () => {
+    const PIPELINE_OWN = /^(INIT|DASH|SKILLS|STORY)-/;
+    const found: string[] = [];
+    for (const [role, body] of Object.entries(canonical)) {
+      const ids = (String(body).match(/\b[A-Z]{2,6}-\d{3,4}[a-z]?\b/g) || [])
+        .filter((id) => !PIPELINE_OWN.test(id));
+      if (ids.length) found.push(`${role}: ${[...new Set(ids)].join(', ')}`);
+    }
+    expect(found, `canonical references project/client story IDs:\n  ${found.join('\n  ')}`)
+      .toEqual([]);
+  });
+
+  it('carries no per-run addendum sections', () => {
+    const found = Object.entries(canonical)
+      .filter(([, v]) => /^##\s*Post-Spec Skill Addendum/im.test(String(v)))
+      .map(([k]) => k);
+    expect(found, `canonical carries run-appended addenda: ${found.join(', ')}`).toEqual([]);
+  });
+
+  it('holds the same roles as the base, so a restore cannot silently drop one', () => {
+    expect(Object.keys(canonical).sort()).toEqual(Object.keys(profiles).sort());
   });
 });
 

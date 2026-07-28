@@ -3649,10 +3649,29 @@ run_pre_phase_assessment() {
 
     touch "$profiles_audit"
 
-    # Backup profiles.json on first pre-phase run (idempotent)
+    # The canonical base. tier3-*-run.sh restores profiles.json FROM this file at
+    # the start of every run, so this is the thing that actually propagates.
+    #
+    # It used to be created here silently on first use. Because it is created
+    # once and only once, it snapshotted whatever profiles.json happened to hold
+    # at that moment — by then already carrying another project's "Post-Spec
+    # Skill Addendum" sections — and every run since restored that faithfully.
+    # Months later a Metrolinx agent was being instructed to build a Skyscanner
+    # API client. Cleaning profiles.json alone would have fixed nothing; the next
+    # restore would have put it straight back.
+    #
+    # So: creating the canonical is now a LOUD, visible event, not a silent
+    # side effect. It is a git-tracked file that should be curated deliberately
+    # (see the standing rule: the canonical may be updated, but only as a
+    # tracked, reviewed change). If it is missing, something deleted it, and
+    # minting a new one from a possibly-mutated working copy is exactly how this
+    # defect was born.
     if [ ! -f "$profiles_backup" ]; then
+        warning "[pre-phase-assessment] canonical profiles missing: $profiles_backup"
+        warning "  Creating it from the CURRENT profiles.json — if that file already carries"
+        warning "  project-specific additions, they become canonical and every future run inherits them."
+        warning "  Verify it, then commit it deliberately rather than leaving it as a run artefact."
         cp "$profiles_file" "$profiles_backup"
-        log "Backed up original profiles to $profiles_backup"
     fi
 
     log "Running pre-phase skill assessment for '$phase_id'..."
@@ -4257,8 +4276,43 @@ if [ "${SKIP_REGRESSION_GUARD:-false}" != "true" ]; then
         step_emit "5" "pass" "Step 5: Regression guard"
         success "Step 5: Regression guard PASSED — baseline tests green"
     else
-        step_emit "5" "skip" "Step 5: Regression guard" "node/vitest not found"
-        info "Step 5: Regression guard skipped — node or vitest not found in $_rg_root"
+        # "This repo has no tests" and "we could not run this repo's tests" are
+        # opposite situations, and this branch used to treat them identically —
+        # emitting `skip` at info level either way.
+        #
+        # Live metrolinx 2026-07-28: "Step 5: Regression guard — node/vitest not
+        # found" against a real client repository. The gate that catches "the
+        # previous phase broke existing tests" did not run, and the run carried
+        # on with nothing reading as a problem. That is the fail-open class this
+        # pipeline keeps producing — the same shape as a lint gate exiting 2
+        # having examined zero files.
+        #
+        # The repo itself says which case it is: a `test` script, or vitest/jest
+        # among its dependencies. No stack knowledge in the engine, no
+        # per-project configuration.
+        # Not `local`: Step 5 runs at top level, not inside a function.
+        _rg_declares_tests=0
+        if [ -f "$_rg_root/package.json" ]; then
+            if jq -e '(.scripts.test // "") != "" or
+                      ((.devDependencies // {}) | has("vitest") or has("jest")) or
+                      ((.dependencies    // {}) | has("vitest") or has("jest"))' \
+                   "$_rg_root/package.json" >/dev/null 2>&1; then
+                _rg_declares_tests=1
+            fi
+        fi
+
+        if [ "$_rg_declares_tests" -eq 1 ]; then
+            step_emit "5" "fail" "Step 5: Regression guard" "declares tests but none could be run"
+            error "Step 5: Regression guard COULD NOT RUN — $_rg_root declares tests but no runner was resolved"
+            error "  node: ${_rg_node:-<not found>}   runner: ${_rg_bin:-<not found>}"
+            error "  The baseline is therefore UNVERIFIED: a break introduced by an earlier phase would not be caught."
+            error "  This is an environment failure, not an absence of tests — check the codeline's node_modules install."
+            error "  Bypass with: SKIP_REGRESSION_GUARD=true"
+            exit 1
+        fi
+
+        step_emit "5" "skip" "Step 5: Regression guard" "repo declares no tests — not applicable"
+        info "Step 5: Regression guard not applicable — $_rg_root declares no test script or test runner"
     fi
 else
     step_emit "5" "skip" "Step 5: Regression guard" "SKIP_REGRESSION_GUARD=true"

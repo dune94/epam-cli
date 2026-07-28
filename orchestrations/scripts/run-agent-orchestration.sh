@@ -3657,6 +3657,28 @@ run_pre_phase_assessment() {
 
     log "Running pre-phase skill assessment for '$phase_id'..."
 
+    # Hand the agent the profiles this phase's stories actually use.
+    #
+    # It used to go and read them, and structurally could not. profiles.json is
+    # 135,901 chars across 53 roles; every tool result is truncated at 8,192
+    # (DEFAULT_MAX_TOOL_OUTPUT_CHARS), so one read showed it 6% of the file and
+    # paging through it would cost 17 of its 25 turns. Narrowing did not help
+    # either — the typescript-engineer entry alone is 1.9x the ceiling — and
+    # ReadFile takes only path/encoding, so the read tool cannot page at all.
+    # The result, every run: "Agent reached maximum iterations (25) without
+    # completing", at $0.11 a go and 57% of the run's cost.
+    #
+    # Only THIS phase's roles are injected (typically 2 of 53). Sending all of
+    # them would swap a paging loop for a 136K-char prompt resent every turn.
+    local _pfa_profile_block=""
+    if [ -f "$SCRIPT_DIR/lib/phase_profiles.py" ]; then
+        _pfa_profile_block=$(python3 "$SCRIPT_DIR/lib/phase_profiles.py" \
+            --prd "$PRD_FILE" --profiles "$profiles_file" --phase "$phase_id" 2>&1) || {
+            warning "[pre-phase-assessment] profile injection failed — the agent will have to read profiles.json, which has never succeeded"
+            _pfa_profile_block=""
+        }
+    fi
+
     # Build assessment prompt
     local assessment_prompt
     # shellcheck disable=SC2287
@@ -3672,6 +3694,15 @@ The PRD file uses a FLAT structure — not nested phases. Key paths:
 - Files field: .technicalNotes.files[] on each story object
 
 DO NOT use .phases[0] — that path does not exist in this PRD.
+
+${_pfa_profile_block}
+
+## DO NOT READ ${PROFILES_REL}
+Everything you need from it for this phase is already above, in full. That file
+is ~136,000 characters and every tool result is truncated at 8,192, so you would
+see 6% of it per call and spend your entire iteration budget paging. Every
+previous attempt at this task did exactly that and finished with nothing. Reason
+from the profiles given to you. You may still WRITE to it (see below).
 
 ## Task
 1. Run: jq -r '.implementationOrder["${phase_id}"][]' ${PRD_REL}

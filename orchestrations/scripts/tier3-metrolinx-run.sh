@@ -219,6 +219,49 @@ bash orchestrations/scripts/pre-run-reset.sh --prd "$PRD_FILE" || \
 echo "${OUTPUT_DIR:-$JIRA_CODELINE_ROOT}" > "orchestrations/dashboards/.active-output-dir" 2>/dev/null || true
 echo ""
 
+# ── Observability preflight: Langfuse + Grafana must be UP before we spend ───
+#
+# Live 2026-07-28: the machine crashed overnight and took the whole stack with
+# it — grafana, postgres, redis and clickhouse all `Exited (255)` for 16 hours,
+# with langfuse-server crash-looping on its dead dependencies. The AMSD-2041 run
+# launched anyway and produced ZERO traces before anyone noticed. Cost tracking
+# is priority #1 and observability #2; a run neither can see is a run whose
+# spend and behaviour are unrecoverable after the fact.
+#
+# Checked at the ENDPOINT, not by `docker ps`: a container can report Up while
+# still returning 5xx, and "the process exists" is not "the service works" —
+# the same distinction that hid the Live Execution panel never working.
+#
+# Grafana answers 302 (redirect to login) when healthy, so any 2xx/3xx passes.
+# Fails LOUD and aborts: discovering this mid-run is exactly what happened.
+# OBSERVABILITY_PREFLIGHT=0 to bypass deliberately.
+if [ "${OBSERVABILITY_PREFLIGHT:-1}" = "1" ]; then
+  info "Observability preflight: verifying Langfuse and Grafana are serving..."
+  _obs_failed=""
+  _obs_check() {
+    local _name="$1" _url="$2" _code
+    _code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$_url" 2>/dev/null || echo "000")
+    case "$_code" in
+      2??|3??) success "  $_name: serving (HTTP $_code)" ;;
+      *)       error   "  $_name: NOT serving (HTTP $_code) at $_url"
+               _obs_failed="${_obs_failed}${_name} "; return 1 ;;
+    esac
+  }
+  _obs_check "Langfuse" "${LANGFUSE_BASE_URL:-http://localhost:3100}" || true
+  _obs_check "Grafana"  "${GRAFANA_BASE_URL:-http://localhost:3001}"  || true
+
+  if [ -n "$_obs_failed" ]; then
+    error "Observability preflight FAILED: ${_obs_failed}— aborting before any spend."
+    error "  The stack is usually down because the host restarted. Bring it back with:"
+    error "    docker compose -f docker-compose.observability.yml up -d postgres redis clickhouse"
+    error "    docker compose -f docker-compose.observability.yml up -d langfuse-server grafana"
+    error "  langfuse-server crash-loops until postgres/clickhouse/redis are healthy, so start them first."
+    error "  Set OBSERVABILITY_PREFLIGHT=0 to launch without tracing (the run's cost will not be recoverable)."
+    exit 1
+  fi
+  success "Observability preflight passed — Langfuse and Grafana both serving."
+fi
+
 # ── CodeGraph preflight: every codeline must be indexed before codeline ──────
 # discovery scoring ever runs — abort the launch otherwise. MUST run AFTER
 # both the teardown loop (indexing a pre-reset tree would build an index that

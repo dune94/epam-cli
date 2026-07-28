@@ -3622,6 +3622,24 @@ info "Open orchestrations/monitor.html in a browser to watch progress"
 # ──────────────────────────────────────────────
 # Step 0.5: Pre-phase skill assessment
 # ──────────────────────────────────────────────
+# _pfa_capability_failed <log> — did the agent exhaust its iteration cap?
+#
+# AgentRunner returns "Agent reached maximum iterations (N) without completing."
+# as a NORMAL result with exit 0, so an agent that produced nothing is
+# indistinguishable from one that succeeded unless someone reads the text.
+# claude.sh, spec-mode-runner.js and brownfield-repro-test-writer.sh all check
+# for it; the pre-phase assessment did not, and it is the most expensive call in
+# the pipeline — 586K tokens and 57% of mock1 run 10, for 58 bytes saying it
+# failed.
+#
+# Deliberately does NOT match the cap number: it is configurable, and a detector
+# that only recognises 25 stops working the moment someone tunes it.
+_pfa_capability_failed() {
+    local _log="${1:-}"
+    [ -n "$_log" ] && [ -s "$_log" ] || return 1
+    grep -q "reached maximum iterations" "$_log" 2>/dev/null
+}
+
 run_pre_phase_assessment() {
     local phase_id=$1
     local profiles_file="$AGENT_PROFILES_FILE"
@@ -3780,7 +3798,28 @@ Fix this and retry. Do not repeat the same mistake."
         # :- guards — under `set -u` an unset var here aborts the whole command and the
         # agent never runs at all (same class as the B14 bad-substitution abort).
         EPAM_ALLOWED_WRITE_PATHS="${PROFILES_REL:-},${PRD_REL:-}" \
-        run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "team-lead-agent" 2>&1 | tee "$assessment_log" || _pfa_call_ok=0
+        run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "team-lead-agent" 2>&1 | tee "$assessment_log"
+        # PIPESTATUS, not `|| _pfa_call_ok=0`: this is a PIPELINE, and its exit
+        # status is tee's — always 0. The `||` branch could never fire on an agent
+        # failure, so every failure here reported success. `set -e` does not save
+        # it either, for the same reason (no `set -o pipefail`).
+        [ "${PIPESTATUS[0]}" -eq 0 ] || _pfa_call_ok=0
+
+        # A capability failure, not a content failure. The agent hit its iteration
+        # cap and returned nothing, which means the TASK did not fit — not that it
+        # misbehaved. The retry loop's corrective note ("YOUR PREVIOUS ATTEMPT
+        # VIOLATED YOUR OWN INSTRUCTIONS") addresses the wrong thing, and the same
+        # prompt at the same cap exhausts again: run 10 spent 2 attempts and $0.21
+        # proving exactly that. Report it and stop, rather than buying another
+        # identical failure at full price.
+        if _pfa_capability_failed "$assessment_log"; then
+            error "[pre-phase-assessment] agent exhausted its iteration cap without completing — NO profile augmentation happened for phase '$phase_id'"
+            error "  This is a capability failure: the assessment task does not fit the iteration budget."
+            error "  Not retrying — the same prompt at the same cap fails identically. See $assessment_log"
+            cp "$_pfa_prd_before_file" "$PRD_FILE"
+            echo "$_pfa_profiles_before" > "$profiles_file"
+            break
+        fi
 
         if [ "$_pfa_call_ok" -eq 0 ]; then
             _pfa_corrective_note="the tool call itself failed (non-zero exit) — check $assessment_log"

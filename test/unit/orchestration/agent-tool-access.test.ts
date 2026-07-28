@@ -134,7 +134,12 @@ const sites: Site[] = [
     // was removed — passing the phase name as story_id polluted agent-activity's
     // story_id field, breaking "stories touched" counts (a 1-story PRD showed 2
     // distinct story_id values). This call has no story_id now — it's phase-level.
-    callAnchor: 'run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "team-lead-agent" 2>&1 | tee "$assessment_log" || _pfa_call_ok=0',
+    // Anchor updated (2026-07-27): the trailing `|| _pfa_call_ok=0` is gone. It
+    // could never fire — the call is a PIPELINE, so its exit status is tee's,
+    // which is always 0. The real status now comes from PIPESTATUS[0], and an
+    // agent that exhausts its iteration cap is caught by _pfa_capability_failed.
+    // See pre-assessment-capability-failure.test.ts.
+    callAnchor: 'run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "team-lead-agent" 2>&1 | tee "$assessment_log"',
     needsTools: true,
     reason: 'prompt instructs jq against the PRD, profiles.json read/write, and flock JSONL appends (FIXED 2026-07-08)',
   },

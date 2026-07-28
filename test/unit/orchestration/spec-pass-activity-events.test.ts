@@ -162,7 +162,11 @@ describe('spec-mode-runner.js — all agent calls guarded against thrown excepti
   it('initial runSpeckitReview/runSpecAgent call (per-story loop) is wrapped in try/catch so thrown errors enter the retry loop', () => {
     const agentResultIdx = SPEC_MODE_SRC.indexOf('let agentResult;');
     expect(agentResultIdx).toBeGreaterThan(-1);
-    const loopBody = SPEC_MODE_SRC.slice(agentResultIdx, agentResultIdx + 2000);
+    // 2000 was a byte window; a comment added above the retry loop pushed it out
+    // of range and this failed while the code was correct — the third time a
+    // fixed-width slice has done that today. Widened, and the loop is matched by
+    // shape rather than by a literal.
+    const loopBody = SPEC_MODE_SRC.slice(agentResultIdx, agentResultIdx + 4000);
 
     const tryCatchIdx = loopBody.indexOf('try {');
     const speckitCallIdx = loopBody.indexOf('runSpeckitReview({');
@@ -174,7 +178,10 @@ describe('spec-mode-runner.js — all agent calls guarded against thrown excepti
     // discard is exactly what reported mock1 run 8's ReferenceError as four
     // transient failures. See spec-agent-prompt-construction.test.ts.
     expect(loopBody).toMatch(/catch\s*\(\s*err\s*\)\s*\{\s*agentResult\s*=\s*_specAgentFailed\(/);
-    const whileLoopIdx = loopBody.indexOf('while (!agentResult');
+    // The retry loop's condition moved to a shared predicate (_specNeedsRetry) so
+    // it cannot drift from the abort condition again — see
+    // spec-agent-retry-honours-budget.test.ts. Match the loop, not the old literal.
+    const whileLoopIdx = loopBody.search(/while \(.*agentResult.*\) \{/);
     expect(whileLoopIdx).toBeGreaterThan(tryCatchIdx);
   });
 

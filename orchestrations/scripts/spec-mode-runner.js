@@ -966,7 +966,19 @@ ${storiesPayload}
       const _speckitHighModel = process.env.SPEC_MODE_SPECKIT_MODEL_HIGH || process.env.SPEC_MODE_SPECKIT_MODEL || '';
       const _speckitBaseModel = process.env.SPEC_MODE_SPECKIT_MODEL || '';
       let _specRetry = 0;
-      while (!agentResult && _specRetry < _specMaxRetries) {
+      // Retry exactly when we would otherwise ABORT. These two conditions used
+      // to disagree: the loop tested `!agentResult` while the abort below tests
+      // `!agentResult || !agentResult.payload`.
+      //
+      // An unparseable answer returns a result OBJECT with no payload — live
+      // AMSD-2041 run 7, speckit replied in prose ("It seems t...") instead of
+      // JSON. That failed the abort test but never satisfied the retry test, so
+      // all three retries were skipped and the run died on the first bad roll.
+      // The budget had been inert for the single most common failure mode there
+      // is; earlier runs only recovered from this because the model happened to
+      // fail in a way that returned nothing at all.
+      const _specNeedsRetry = (r) => !r || !r.payload;
+      while (_specNeedsRetry(agentResult) && _specRetry < _specMaxRetries) {
         _specRetry++;
         // For retry 2+, escalate to the HIGH model if it differs from base — both agents.
         const _escalateOpenspec = _isOpenspec && _specRetry >= 2 && _openspecHighModel && _openspecHighModel !== _openspecBaseModel;

@@ -174,9 +174,19 @@ describe('it never clobbers client work', () => {
     expect(src, 'a pull could rewrite client history').toMatch(/--ff-only|ff-only/);
   });
 
-  it('skips a dirty tree rather than discarding changes', () => {
+  it('skips a tree with TRACKED changes rather than discarding client work', () => {
     expect(src, 'uncommitted client work could be discarded')
-      .toMatch(/dirty|status --porcelain/);
+      .toMatch(/status --porcelain/);
+  });
+
+  it('does not count its own artefacts as client changes', () => {
+    // The pipeline writes .epam/ and .codegraph/ into client repos. Those are
+    // untracked, so a plain --porcelain check makes every repo it has ever
+    // touched look permanently dirty — meaning it syncs once and never again,
+    // silently. Found live: all four codelines reported dirty with nothing in
+    // them but our own artefacts.
+    expect(src, 'untracked pipeline artefacts would permanently disable syncing')
+      .toMatch(/--untracked-files=no/);
   });
 
   it('never commits inside a client repo', () => {

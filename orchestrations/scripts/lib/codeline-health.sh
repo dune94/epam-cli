@@ -42,7 +42,61 @@ if [ "${SKIP_CODELINE_HEALTH:-0}" = "1" ]; then
   exit 0
 fi
 
+# --root <dir>: the estate. Providers are found across ALL of it, not just the
+# lanes this run selected — live AMSD-2041's shared library was a directory
+# discovery never picked. Defaults to the parent of the first codeline.
+_ch_root_dir=""
+if [ "${1:-}" = "--root" ]; then
+  _ch_root_dir="${2:-}"
+  shift 2
+fi
+
 [ "$#" -gt 0 ] || { _ch_warn "no codelines given"; exit 0; }
+[ -n "$_ch_root_dir" ] || _ch_root_dir="$(dirname "$1")"
+
+# Package name -> directory, for every manifest in the estate. Built once.
+# Nothing here knows a vendor, scope or repository name: it reads the `name`
+# field each project declares about itself.
+_ch_provider_map=""
+if [ -d "$_ch_root_dir" ]; then
+  for _ch_cand in "$_ch_root_dir"/*/; do
+    [ -f "${_ch_cand}package.json" ] || continue
+    _ch_pkg="$("${NODE_BIN:-node}" -e '
+      try { process.stdout.write(String(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).name || "")); }
+      catch (e) { /* unreadable manifest */ }
+    ' "${_ch_cand}package.json" 2>/dev/null)"
+    [ -n "$_ch_pkg" ] && _ch_provider_map="${_ch_provider_map}${_ch_pkg}|${_ch_cand%/}"$'\n'
+  done
+fi
+
+_ch_provider_for() {
+  printf '%s' "$_ch_provider_map" | awk -F'|' -v want="$1" '$1==want {print $2; exit}'
+}
+
+# Resolve a dependency from the estate when a registry cannot serve it.
+#
+# Live: every codeline depended on a private package whose registry returned 401,
+# so nothing could install and no gate could run — while that package sat in the
+# estate, cloned and built.
+#
+# A DIRECT symlink in the consumer's own node_modules, not `npm link`'s global
+# store: nothing then depends on state outside the estate, and because health is
+# assessed on every run a link broken by a restart is simply re-made. package.json
+# is never touched — the declared dependency is unchanged, only its resolution.
+_ch_link_local() {
+  local root="$1" pkg="$2" provider="$3"
+  local dest="$root/node_modules/$pkg"
+
+  # Never substitute a working copy for a genuinely installed package.
+  if [ -d "$dest" ] && [ ! -L "$dest" ]; then return 1; fi
+
+  mkdir -p "$(dirname "$dest")" 2>/dev/null || return 1
+  # A dangling or stale link is replaced, which is the restart case.
+  [ -L "$dest" ] && rm -f "$dest"
+  ln -s "$provider" "$dest" 2>/dev/null || return 1
+  _ch_log "  linked $pkg -> $provider (local estate; registry not required)"
+  return 0
+}
 
 # Which package manager does THIS codeline use? Answered by its own lockfile,
 # never assumed. Unknown lockfile => we do not know how to install, so we do not
@@ -80,9 +134,19 @@ _ch_sync() {
   local root="$1"
   [ "${CODELINE_HEALTH_NO_PULL:-0}" = "1" ] && return 0
   git -C "$root" rev-parse --git-dir >/dev/null 2>&1 || return 0
-  # NEVER discard client work: a dirty tree is left exactly as it is.
-  if [ -n "$(git -C "$root" status --porcelain 2>/dev/null)" ]; then
-    _ch_log "  working tree is dirty — not pulling (client changes left untouched)"
+  # NEVER discard client work: a tree with TRACKED changes is left exactly as is.
+  #
+  # --untracked-files=no is deliberate. The pipeline writes its own artefacts
+  # into client repos (.epam/ manifests, .codegraph/ index), which are untracked
+  # and therefore make every repo it has ever touched look permanently dirty.
+  # Counting those would mean a codeline is synced exactly once — before the
+  # pipeline first runs against it — and never again, silently. Found live:
+  # all four codelines reported dirty with nothing but our own artefacts in them.
+  #
+  # Untracked files do not block a fast-forward anyway; only tracked
+  # modifications can conflict, and those are real client work.
+  if [ -n "$(git -C "$root" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+    _ch_log "  tracked changes present — not pulling (client work left untouched)"
     return 0
   fi
   # Fast-forward ONLY. Never merge, never rebase, never force.
@@ -136,7 +200,20 @@ for _ch_root in "$@"; do
 
   if [ -n "$_ch_missing" ]; then
     _ch_log "  declared but not resolvable:$_ch_missing"
-    if _ch_install "$_ch_root" "$(_ch_package_manager "$_ch_root")"; then
+
+    # First, satisfy anything the estate itself provides. Done BEFORE install so
+    # a dead registry cannot block a dependency that is already on disk.
+    _ch_still=""
+    for _ch_bin in $_ch_missing; do
+      _ch_prov="$(_ch_provider_for "$_ch_bin")"
+      if [ -n "$_ch_prov" ] && _ch_link_local "$_ch_root" "$_ch_bin" "$_ch_prov"; then
+        continue
+      fi
+      _ch_still="$_ch_still $_ch_bin"
+    done
+    _ch_missing="$_ch_still"
+
+    if [ -n "$_ch_missing" ] && _ch_install "$_ch_root" "$(_ch_package_manager "$_ch_root")"; then
       _ch_missing=""
       for _ch_bin in $_ch_needed; do
         [ -d "$_ch_root/node_modules/$_ch_bin" ] || _ch_missing="$_ch_missing $_ch_bin"

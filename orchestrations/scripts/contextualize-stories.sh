@@ -912,6 +912,45 @@ while IFS= read -r sid; do
     gate=$(compute_gate "$confidence" "$flag_count" "$dep_unresolved")
   fi
 
+  # ── Story kind: a NOVEL story is not a broken DEFECT ──────────────────────────
+  # Live AMSD-2041, 2026-07-28: CPA blocked a new-feature story with
+  #   "Target files don't exist; no integration context available"
+  # and exit 3. It was right to stop and wrong about why. This file read neither
+  # storyKind nor issueType, so every story was judged by the rule written for
+  # defects — and confidence was low precisely BECAUSE the target does not exist.
+  # For a bug a missing target is a genuine red flag: the bug must live in
+  # existing code. For a new feature the absence IS the expected state, so the
+  # story was being penalised for being what it is. Brownfield is not only
+  # defects.
+  #
+  # What a feature must still have is somewhere to PLUG IN. A feature nobody can
+  # place is as unimplementable as a defect nobody can locate, so a missing
+  # attachment point still BLOCKS (user decision, 2026-07-28) — this relaxes
+  # WHICH evidence is required, never whether evidence is required.
+  # Not `local`: this block runs at top level in the per-story loop, not inside
+  # a function (SC2168 — the same slip made twice today).
+  _story_kind=$(echo "$story_json" | jq -r '.storyKind // ""' 2>/dev/null || echo "")
+  if [ -z "$_story_kind" ]; then
+    # Fall back to the Jira type: "Bug" means defect, anything else is novel.
+    case "$(echo "$story_json" | jq -r '.issueType // ""' 2>/dev/null | tr '[:upper:]' '[:lower:]')" in
+      bug) _story_kind="defect" ;;
+      *)   _story_kind="novel"  ;;
+    esac
+  fi
+
+  if [ "$_story_kind" = "novel" ] && [ "$gate" = "block" ]; then
+    # The attachment point is the detective's locationHint / fixSiteAnalysis.
+    _has_attachment=$(echo "$story_json" | jq -r \
+      '(((.fixSiteAnalysis // []) | length) + ((.locationHint // []) | length))' \
+      2>/dev/null || echo 0)
+    if [ "${_has_attachment:-0}" -gt 0 ]; then
+      gate="review"
+      info "  CPA: '$sid' is a NOVEL story with an attachment point — block downgraded to review (a missing target is expected for new work)"
+    else
+      info "  CPA: '$sid' is a NOVEL story with NO attachment point — block STANDS (nothing identifies where this plugs in)"
+    fi
+  fi
+
   # ── Accumulate gate totals ────────────────────────────────────────────────────
   case "$gate" in
     block)

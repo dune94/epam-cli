@@ -55,7 +55,14 @@ describe('buildBrownfieldArchaeologyBlock — brownfield classification', () => 
   });
 
   it('still requires locationHint for both kinds (detective/archaeology preserved)', () => {
-    expect(archaeologyBlock).toMatch(/LOCATE \(always, for both kinds\)/);
+    // Both kinds must still LOCATE — but the question they are asked now
+    // differs: the fix site for a defect, the attachment point it integrates
+    // with for a novel story. Asking a feature for a "fix site" invited an
+    // invented file (live AMSD-2041: a fabricated quote against a real
+    // filename). See brownfield-new-feature.test.ts.
+    expect(archaeologyBlock).toMatch(/LOCATE \(always, for both kinds/);
+    expect(archaeologyBlock, 'the two kinds are no longer asked different questions')
+      .toMatch(/attach|integrat/i);
     expect(schemaLine).toMatch(/"locationHint":/);
   });
 });

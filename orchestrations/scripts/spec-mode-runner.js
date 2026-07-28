@@ -2136,7 +2136,14 @@ STEP 1 — CLASSIFY THIS STORY. Set "storyKind":
 - "defect" if it reports that EXISTING behavior is wrong, broken, or produces an incorrect/missing result (a bug).
 - "novel" if it asks for a NEW capability that does not exist in the codebase yet. A brownfield story is not always a bug — genuinely new work is "novel".
 
-STEP 2 — LOCATE (always, for both kinds). Using ONLY the EXISTING CODE block already present in this prompt (injected above via CodeGraph or Semble), identify which file(s) and function(s) currently handle the behavior this story is about. Set "locationHint" to [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this is the fix site>"}]. If no relevant code appears above, set locationHint to [].
+STEP 2 — LOCATE (always, for both kinds — but the question differs).
+Use ONLY the EXISTING CODE block already present in this prompt (injected above via CodeGraph or Semble).
+
+- If storyKind is "defect": find the FIX SITE — the file/function that COMPUTES the wrong value, not the one that displays it.
+- If storyKind is "novel": there is no fix site, and inventing one produces a confident wrong answer. Find the ATTACHMENT POINT instead — the existing file/function this new capability plugs INTO (the provider, hook, route, config or component it must integrate with), plus anything already present that the implementation should REUSE rather than rewrite. This is what keeps the change as small as possible: you cannot reuse what you have not found.
+
+Set "locationHint" to [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this location — the fix site for a defect, the attachment point for a novel story>"}].
+If no relevant code appears above, set locationHint to []. Do NOT invent a plausible file: a named file whose contents you cannot see in this prompt is a fabrication, and an empty locationHint is a usable answer while a fabricated one is not.
 
 STEP 3 — VERIFICATION CRITERIA (do NOT touch the acceptance criteria).
 The acceptanceCriteria are the IMMUTABLE ticket intent — copy the existing array through VERBATIM: never reword, split, add, remove, re-scope, or inject any implementation mechanism into them.
@@ -2147,7 +2154,7 @@ Set "vcSource" to "acceptance", "description", or "both" — where you derived t
 `
     : '';
   const schemaLine = isBrownfield
-    ? `\n  "storyKind":"defect|novel",\n  "verificationCriteria":["<observable check a tester can confirm>"],\n  "vcSource":"acceptance|description|both",\n  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this is the fix site"}],`
+    ? `\n  "storyKind":"defect|novel",\n  "verificationCriteria":["<observable check a tester can confirm>"],\n  "vcSource":"acceptance|description|both",\n  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this location — the fix site for a defect, the attachment point it integrates with for a novel story"}],`
     : '';
   return { archaeologyBlock, schemaLine };
 }
@@ -2704,6 +2711,17 @@ ${storyPayload}${publishedContracts(repoPath, story)}
       const hasFixSite = Array.isArray(story.fixSiteAnalysis) && story.fixSiteAnalysis.length;
       if (isDefect && !hasFixSite) {
         console.warn(`spec-mode: ⛔ DEFECT ${story.id} has NO fixSiteAnalysis after the spec pass — the implementer gets symptom ACs with no root cause. This is a defect-fidelity risk; investigate the detective before trusting this run's fix.`);
+      }
+      // A NOVEL story has no fix site by definition, so the defect check above
+      // never fires for it — but it still needs somewhere to plug IN. A feature
+      // nobody can place is as unimplementable as a defect nobody can locate:
+      // the implementer would be left to invent both the location and the
+      // integration, which is how a "small feature" becomes a rewrite.
+      // Same signal, same weight (user decision, 2026-07-28).
+      const hasAttachment = (Array.isArray(story.fixSiteAnalysis) && story.fixSiteAnalysis.length)
+        || (Array.isArray(payload.locationHint) && payload.locationHint.length);
+      if (!isDefect && !hasAttachment) {
+        console.warn(`spec-mode: ⛔ NOVEL ${story.id} has NO attachment point after the spec pass — nothing identifies the existing code this new capability plugs into, so the implementer must invent both the location and the integration. Investigate before trusting this run.`);
       }
       // SUFFICIENCY GATE (step 3): the detective IS the sufficiency signal. If it
       // located NO fix site AND the ticket context is thin (sparse ACs + short

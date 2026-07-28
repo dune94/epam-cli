@@ -3717,27 +3717,24 @@ DO NOT use .phases[0] — that path does not exist in this PRD.
 4. PROFILE CREATION — For any agentRole assigned in step 3 that does NOT exist as a key in ${PROFILES_REL}:
    a. Read the project context from ${PRD_REL} (projectName, techStack, constraints)
    b. Read the story's technicalNotes to understand the testing conventions for this project
-   c. Generate a new profile string for that role that includes: project name, test framework + version, module system (CJS vs ESM), mock patterns (vi.stubGlobal vs vi.spyOn), forbidden packages, constructor signatures, vitest config path and include pattern, and the instruction that this agent ONLY writes test files — never implementation files
+   c. Generate a new profile string for that role, derived from THIS project: its name, its test framework and version, its module system, its mocking convention, its forbidden packages, its test config path and include pattern — every one of these read from the project's own manifest and existing tests, never assumed. Include the instruction that a test-only role writes test files and never implementation files.
    d. Report it in newProfiles. Do NOT edit ${PROFILES_REL} yourself.
 
 5. PROACTIVE SKILL INFERENCE — For each story's agentRole, reason beyond the requiredSkills list. Read the story's full technicalNotes, acceptanceCriteria, and files. Then ask: given this tech stack and these implementation patterns, what are the specific pitfalls an agent is likely to walk into that are NOT already covered in the profile?
 
-   Infer gaps by reasoning about the code the agent will write, not just the labels in requiredSkills. Examples of the reasoning required:
-   - Story uses native fetch (Node 18+) with TypeScript strict mode → infer: agent may import from 'node-fetch' as a type source, which conflicts with the global fetch types and causes TS7022 cascades. Add explicit rule to profile.
-   - Story writes a function returning a union type (success | error) → infer: agent may omit the explicit return type annotation, causing TypeScript to fail to narrow the union at call sites. Add rule.
-   - Story writes variables inside a do-while or complex ternary → infer: agent may rely on TypeScript to infer types through complex control flow; add rule to annotate explicitly.
-   - Story uses vi.stubGlobal for fetch mocking → infer: agent may write untyped mock parameters, causing noImplicitAny errors. Add rule.
-   - Story writes CLI argument parsing with process.stderr output → infer: agent may use console.error instead of process.stderr.write, breaking test spies. Add rule.
-   - Story writes an Express route handler with optional numeric query params → infer: agent may pass number|undefined where number is required without explicit type narrowing. Add rule.
-   - Story has multiple deliverable files (e.g. cli.ts AND cli.test.ts) → infer: agent may write implementation first and run out of context before writing the test. Add rule: write test file first.
+   Infer gaps by reasoning about the code the agent will write, not the labels in requiredSkills. The SHAPE of the reasoning is:
+     "<something concrete this story's code will do, read from THIS repository>
+      → the specific mistake an agent tends to make there
+      → the exact rule that prevents it"
 
-   For each inferred gap, report a targeted rule in profileAdditions for that role. Be specific and actionable — state the exact rule, not a general category. Do NOT edit ${PROFILES_REL} yourself.
+   EVERY rule you report must come from THIS project's code. Name a real file, a
+   real dependency, a real convention you have actually seen in this repository.
+   You are given no worked examples on purpose: any example would be from some
+   other project, and reproducing it here would hand this project's agents
+   another codebase's rules. If you cannot ground a rule in something you have
+   read, do not report it — an empty profileAdditions is a correct answer.
 
-5b. QA AGENT SKILL INJECTION — After inferring implementation gaps, also report rules for the QA agent profiles (sast-sentinel, review-ranger, spec-validator, mutant-hunter). These agents run against every phase and must know the project's actual file structure and conventions to avoid hallucinating findings about non-existent code. Report each as a profileAdditions entry for that role:
-   a. Read the current list of source files: find . -name "*.ts" -not -path "*/node_modules/*"
-   b. For sast-sentinel: the exact list of source files it is authorized to report findings on. Any finding referencing a file not in this list must be suppressed as a hallucination.
-   c. For review-ranger: the exact list of exported symbols (from grep -rn "^export" src/ --include="*.ts") that exist. Any finding about an untested function must reference a symbol from this list — findings about non-existent functions are hallucinations and must be suppressed.
-   d. For both: the project's test file naming convention (*.test.ts in src/) and the fact that a function tested in any test file in src/ counts as covered — not just a dedicated file.
+   Be specific and actionable — state the exact rule, not a general category. Do NOT edit ${PROFILES_REL} yourself.
 
 6. EXPLICIT SKILL GAP FILL — After proactive inference, also do the traditional check:
    a. Compare each story's technicalNotes.requiredSkills against the agent's profile text

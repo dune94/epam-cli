@@ -2353,6 +2353,32 @@ _run_codeline_loop() {
     return 1
   fi
 
+  # ── Codeline health: assess every lane BEFORE spending anything ────────────
+  # Live AMSD-2041, 2026-07-28: all three discovered codelines declared a test
+  # script and a runner, and none could resolve one — two had no node_modules at
+  # all. Until that morning Step 5 skipped silently on exactly this, so an
+  # unverified baseline was accepted once per lane. Making it fail was right, but
+  # it fails INSIDE the phase, after the spec pass is already paid for: the next
+  # launch would have cost a full spec pass per lane to discover a dependency
+  # problem visible in seconds.
+  #
+  # Runs on whatever DISCOVERY returned. The codelines are resolved per ticket at
+  # runtime, so preparing a fixed list would hardcode discovery's output.
+  # lib/codeline-health.sh knows no package manager, runner or language — it
+  # reads what each codeline declares and prepares it accordingly.
+  if [ -f "$SCRIPT_DIR/lib/codeline-health.sh" ]; then
+    local _ch_paths=()
+    for _entry in "${_cl_entries[@]}"; do _ch_paths+=("${_entry#*:}"); done
+    log "[orch] Assessing health of ${#_ch_paths[@]} codeline(s) before starting work..."
+    if ! NODE_BIN="$NODE_BIN" bash "$SCRIPT_DIR/lib/codeline-health.sh" "${_ch_paths[@]}"; then
+      error "[orch] One or more codelines are UNHEALTHY — aborting before any spend."
+      error "[orch]   A codeline that cannot resolve its own declared tooling cannot run its gates,"
+      error "[orch]   so the run would accept an unverified baseline for that lane."
+      error "[orch]   Set SKIP_CODELINE_HEALTH=1 to proceed knowing the gates cannot run."
+      return 1
+    fi
+  fi
+
   # Tear down and re-scaffold every codeline worktree so each run starts clean.
   # Pre-existing worktrees from prior runs poison the next run (stale package.json,
   # accumulated artifacts, mid-run file mutations). Full deletion is the only safe state.
@@ -3682,6 +3708,27 @@ run_pre_phase_assessment() {
     local _pfa_schema=""
     _pfa_schema=$(python3 "$SCRIPT_DIR/lib/assessment_apply.py" --print-schema 2>/dev/null || echo "")
 
+    # The facts, computed rather than discovered.
+    #
+    # Live AMSD-2041 run 4: turns=1, in=3,366, out=516 — the prompt alone is
+    # ~2,100 tokens, so it never read the PRD, never ran find, never touched the
+    # repo. It invented story IDs (core-1..core-6 for a phase containing exactly
+    # AMSD-2041) and an "authorized" file list of four files that do not exist,
+    # then told sast-sentinel to suppress everything else.
+    #
+    # Caused by fixing its previous failure: it used to burn 25 turns writing
+    # files, and making it RETURN a decision removed the only thing that forced
+    # it to look at anything. Removing the prompt's worked examples took away
+    # what it fabricated WITH; this takes away the need to fabricate at all.
+    local _pfa_facts=""
+    if [ -f "$SCRIPT_DIR/lib/assessment_context.py" ]; then
+        _pfa_facts=$(python3 "$SCRIPT_DIR/lib/assessment_context.py" \
+            --prd "$PRD_FILE" --repo-root "$PROJECT_ROOT" --phase "$phase_id" 2>&1) || {
+            warning "[pre-phase-assessment] fact injection failed — the agent has nothing to ground its answer in"
+            _pfa_facts=""
+        }
+    fi
+
     # Build assessment prompt
     local assessment_prompt
     # shellcheck disable=SC2287
@@ -3697,6 +3744,8 @@ The PRD file uses a FLAT structure — not nested phases. Key paths:
 - Files field: .technicalNotes.files[] on each story object
 
 DO NOT use .phases[0] — that path does not exist in this PRD.
+
+${_pfa_facts}
 
 ## Task
 1. Run: jq -r '.implementationOrder["${phase_id}"][]' ${PRD_REL}
@@ -3872,7 +3921,8 @@ Fix this and retry. Do not repeat the same mistake."
         if [ -f "$SCRIPT_DIR/lib/assessment_apply.py" ]; then
             if ! python3 "$SCRIPT_DIR/lib/assessment_apply.py" \
                     --result "$assessment_log" --prd "$PRD_FILE" \
-                    --profiles "$profiles_file" --phase "$phase_id"; then
+                    --profiles "$profiles_file" --phase "$phase_id" \
+                    --repo-root "$PROJECT_ROOT"; then
                 # Nothing was written — the module fails closed. Treat it as a
                 # failed attempt so the loop's existing recovery handles it,
                 # rather than proceeding as though the phase was assessed.

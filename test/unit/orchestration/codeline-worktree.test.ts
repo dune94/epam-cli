@@ -20,6 +20,37 @@ const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH   = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 const orchSrc   = readFileSync(ORCH_SH, 'utf8');
 
+/**
+ * The codeline loop's body, bounded by the FUNCTION rather than a byte count.
+ *
+ * These assertions sliced `loopIdx + 3000` (and 8000, and 16000). Adding a
+ * health gate at the top of the loop pushed the scaffold and manifest lines past
+ * the 3000-char window, and two tests failed while the code was correct. The
+ * same brittleness was fixed once already this session in a different file
+ * (ce35051) — a byte count is not a scope, and it silently narrows as the
+ * function grows.
+ *
+ * Heredoc-aware, because this function embeds several and a python dict's
+ * closing brace at column 0 looks exactly like the function's own.
+ */
+function codelineLoopBody(): string {
+  const start = orchSrc.indexOf('_run_codeline_loop()');
+  if (start < 0) throw new Error('_run_codeline_loop() not found');
+  const lines = orchSrc.slice(start).split('\n');
+  let inHeredoc: string | null = null;
+  for (let i = 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (inHeredoc !== null) {
+      if (line === inHeredoc) inHeredoc = null;
+      continue;
+    }
+    const h = line.match(/<<-?\s*'?"?([A-Za-z_][A-Za-z0-9_]*)'?"?/);
+    if (h) { inHeredoc = h[1]; continue; }
+    if (line === '}') return lines.slice(0, i + 1).join('\n');
+  }
+  return orchSrc.slice(start);
+}
+
 // ─── G1: scaffold script naming ──────────────────────────────────────────────
 
 describe('G1: scaffold-fe-repo.sh named correctly for codeline loop lookup', () => {
@@ -29,8 +60,7 @@ describe('G1: scaffold-fe-repo.sh named correctly for codeline loop lookup', () 
   });
 
   it('codeline loop uses scaffold-${cl}-repo.sh convention (not scaffold-frontend-repo.sh)', () => {
-    const loopIdx = orchSrc.indexOf('_run_codeline_loop()');
-    const block   = orchSrc.slice(loopIdx, loopIdx + 3000);
+    const block   = codelineLoopBody();
     expect(block).toContain('scaffold-${_cl}-repo.sh');
     expect(block).not.toContain('scaffold-frontend-repo.sh');
   });
@@ -40,8 +70,7 @@ describe('G1: scaffold-fe-repo.sh named correctly for codeline loop lookup', () 
 
 describe('G2: _run_codeline_loop handles exit 2 (gate remediation) with self-healing retry', () => {
   // _run_codeline_loop grows with each fix; use a wide enough window.
-  const loopIdx = orchSrc.indexOf('_run_codeline_loop()');
-  const block   = orchSrc.slice(loopIdx, loopIdx + 16000);
+  const block   = codelineLoopBody();
 
   it('handles exit 2 from phase re-exec as gate-remediation (not hard failure)', () => {
     expect(block).toMatch(/_pex.*-eq 2|_pex.*== 2/);
@@ -92,16 +121,14 @@ describe('G3: --reset is passed to every phase re-exec in _run_codeline_loop', (
 
 describe('G4: .epam/ manifests are written to worktrees missing them', () => {
   it('orch script writes dependency-check.json when absent', () => {
-    const loopIdx = orchSrc.indexOf('_run_codeline_loop()');
-    const block   = orchSrc.slice(loopIdx, loopIdx + 8000);
+    const block   = codelineLoopBody();
     expect(block).toContain('dependency-check.json');
     expect(block).toContain('contract-generation.json');
     expect(block).toContain('known-fixes.json');
   });
 
   it('manifest write is guarded by absence check (idempotent)', () => {
-    const loopIdx = orchSrc.indexOf('_run_codeline_loop()');
-    const block   = orchSrc.slice(loopIdx, loopIdx + 8000);
+    const block   = codelineLoopBody();
     expect(block).toMatch(/if \[ ! -f.*dependency-check\.json/);
   });
 

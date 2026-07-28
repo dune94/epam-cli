@@ -41,6 +41,8 @@ failure mode this pipeline keeps producing.
 
 import argparse
 import json
+import os
+import re
 import sys
 
 SCHEMA = {
@@ -97,7 +99,33 @@ def _arr(value):
     return value if isinstance(value, list) else []
 
 
-def apply_decision(decision, prd, profiles, phase):
+_PATHISH = re.compile(r'\b[\w./-]+\.(?:ts|tsx|js|jsx|mjs|cjs|py|go|rb|java|cs|php)\b')
+
+
+def ungrounded_paths(rule, repo_root):
+    """File paths a rule cites that do not exist in the repository.
+
+    Live AMSD-2041 run 4: the assessment wrote into sast-sentinel —
+
+        "Only report findings on source files in the authorized list:
+         src/cli.ts, src/api.ts, src/utils.ts, src/index.ts. Findings about
+         other files are hallucinations and must be suppressed."
+
+    None of the four exist in that repo, so the security gate was told to
+    suppress every finding it could make. A fabricated allowlist is worse than
+    no allowlist: it reads as authoritative scoping.
+
+    A rule citing NO path is left alone — plenty of legitimate guidance names no
+    file. Only a claim about a specific file is checkable, and only a false one
+    is rejected.
+    """
+    if not repo_root:
+        return []
+    return [p for p in set(_PATHISH.findall(rule or ''))
+            if not os.path.isfile(os.path.join(repo_root, p.lstrip('./')))]
+
+
+def apply_decision(decision, prd, profiles, phase, repo_root=None):
     """Mutate prd/profiles in place. Returns a list of what changed."""
     changes = []
     if not isinstance(decision, dict):
@@ -143,6 +171,12 @@ def apply_decision(decision, prd, profiles, phase):
             if not isinstance(rule, str):
                 continue
             rule = rule.strip()
+            bad = ungrounded_paths(rule, repo_root)
+            if bad:
+                print('[assessment-apply] REJECTED a rule for %s — it cites file(s) that do '
+                      'not exist: %s' % (role, ', '.join(sorted(bad))))
+                print('    rule was: %s' % rule[:200])
+                continue
             # Substring, not equality: the agent re-states a rule with different
             # surrounding punctuation between attempts, and four copies of the
             # same guidance is what broke run 12.
@@ -194,6 +228,7 @@ def main():
     ap.add_argument('--prd')
     ap.add_argument('--profiles')
     ap.add_argument('--phase')
+    ap.add_argument('--repo-root', default='')
     args = ap.parse_args()
 
     if args.print_schema:
@@ -227,7 +262,7 @@ def main():
         print('[assessment-apply] invalid profiles — nothing applied (%s)' % err)
         return 1
 
-    changes = apply_decision(decision, prd, profiles, args.phase)
+    changes = apply_decision(decision, prd, profiles, args.phase, args.repo_root)
 
     if not changes:
         print('[assessment-apply] no decision to apply (0 changes)')

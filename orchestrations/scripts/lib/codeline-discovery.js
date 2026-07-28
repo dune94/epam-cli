@@ -299,10 +299,42 @@ function scoreRepos(issues, manifest, topN = 8) {
 // Never selects by alphabetical position — that was the bug that caused wrong
 // codeline selection when the LLM timed out.
 
-function selectBestCandidate(scored) {
+function selectBestCandidate(scored, issues) {
   if (scored.length === 0) {
     throw new Error('No git repositories found under JIRA_CODELINE_ROOT — cannot discover codelines.');
   }
+
+  // This fallback returns exactly ONE repository, so it cannot answer a ticket
+  // that spans several product areas — it can only answer a DIFFERENT question
+  // quietly.
+  //
+  // Live AMSD-2041 run 9: the discovery call returned an empty response, this
+  // ran, and a ticket tagged [GO, UP, MX] became a one-lane run that would have
+  // reported success for a third of the work. Six earlier runs hid that the
+  // premise of every multi-codeline run rested on one model call succeeding.
+  //
+  // The ticket itself says whether it spans: its own components. Retrying is
+  // now handled at the seam (ai-run.sh, with ladder escalation) — this is what
+  // happens when even that is exhausted, and the honest answer is to stop
+  // rather than invent a scope nobody chose.
+  const areas = new Set();
+  for (const issue of (Array.isArray(issues) ? issues : [])) {
+    for (const c of ((issue && issue.components) || [])) {
+      // Jira returns objects; some callers normalise to strings. Assuming one
+      // shape would silently disable this check for the other.
+      const label = typeof c === 'string' ? c : (c && c.name);
+      if (label) areas.add(String(label));
+    }
+  }
+
+  if (areas.size > 1) {
+    throw new Error(
+      `Cannot fall back to a single codeline: the ticket names ${areas.size} product areas ` +
+      `(${[...areas].join(', ')}) and this fallback can only return one repository. ` +
+      `The discovery call failed after every retry and ladder rung, so the codelines are ` +
+      `genuinely unknown — running one lane would silently deliver part of the work.`);
+  }
+
   const repo = scored[0]; // already sorted descending by scoreRepos()
   const name = deriveCodelineName(repo.name);
   return { codelines: [{ name, path: repo.path, reason: `[scored-fallback] Highest candidate (score: ${repo.score})` }] };
@@ -543,7 +575,7 @@ function callLlm(prompt) {
   if (DRY_RUN) {
     // Dry-run: use the highest-scored candidate, never the first alphabetically.
     warn('DRY-RUN mode — skipping LLM call, selecting highest-scored repo.');
-    result = selectBestCandidate(candidates);
+    result = selectBestCandidate(candidates, issues);
   } else {
     log(`Calling LLM (${MODEL}) to match ${issues.length} ticket(s) to ${candidates.length} candidate repo(s)...`);
     const prompt = buildDiscoveryPrompt(issues, candidates);
@@ -551,7 +583,7 @@ function callLlm(prompt) {
       result = callLlm(prompt);
     } catch (e) {
       warn(`LLM call failed: ${e.message}. Using highest-scored candidate as fallback.`);
-      result = selectBestCandidate(candidates);
+      result = selectBestCandidate(candidates, issues);
     }
   }
 
@@ -585,7 +617,7 @@ function callLlm(prompt) {
   // dry-run and LLM-call-failure, exactly like those paths already do.
   if (validated.length === 0) {
     warn('LLM returned no valid codeline selection (empty result or all paths invalid). Using highest-scored candidate as fallback.');
-    result = selectBestCandidate(candidates);
+    result = selectBestCandidate(candidates, issues);
     const fallbackValidated = result.codelines.filter(cl =>
       path.isAbsolute(cl.path) && fs.existsSync(cl.path) && fs.existsSync(path.join(cl.path, '.git'))
     );

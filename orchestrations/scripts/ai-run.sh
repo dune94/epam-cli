@@ -395,7 +395,90 @@ _merge_plan_cost() {
   rm -f "$_plan_cost_json"
 }
 
+# ─── UNIFORM CALL RESILIENCE ─────────────────────────────────────────────────
+# Retry, ladder escalation and self-heal for EVERY model call, applied here
+# because this is the one seam all of them pass through.
+#
+# Live AMSD-2041 run 9: discovery's call returned an empty response, nothing
+# retried it, and its fallback answered a three-codeline ticket with ONE
+# repository — silently. Six earlier runs hid that it was always one bad response
+# away from doing a third of the work and reporting success.
+#
+# The audit that followed found the gap is structural. Of 20 call sites:
+#   retry      hand-rolled, 6 sites
+#   ladder     _ladder_next_model() copy-pasted into 3 files, 6 sites
+#   self-heal  lib/kb-apply.sh — a library, called from claude.sh ONLY
+# Everything inside the orchestrator phase was protected; the ingest and helper
+# layer had none of it — including the two most consequential calls in the run,
+# the AC gate (which writes what "done" means) and codeline discovery (which
+# chooses the repositories the run modifies).
+#
+# Fixing it per-site would leave the same hole open for the next site added, as
+# it did for these. Here, a caller cannot omit it, cannot hand-roll a different
+# version of it, and a new call site inherits it by construction.
+#
+# The three do different jobs and all three are needed:
+#   RETRY      absorbs a transport-level transient (empty/unusable output).
+#   LADDER     changes the model between attempts, so a retry is not the same
+#              coin flip re-flipped. Uses the escalation the project configures;
+#              no model name appears here.
+#   SELF-HEAL  applies this agent's learned constraints before the call and
+#              records the episode after a failure, so knowledge is not confined
+#              to story agents. Keyed on EPAM_AGENT_NAME, which is always set by
+#              now (explicitly by the caller, or derived from /proc above), so
+#              every agent accumulates its own KB.
+
+# The project's ladder. Shared here rather than copied a fourth time.
+_ai_ladder_next_model() {
+  local _m="$1" _map="${EPAM_MODEL_LADDER_HIGH:-${EPAM_MODEL_LADDER:-}}" _pair
+  [ -z "$_map" ] && return 0
+  IFS='|' read -ra _pairs <<< "$_map"
+  for _pair in "${_pairs[@]}"; do
+    case "$_pair" in "${_m}="*) echo "${_pair#*=}"; return 0 ;; esac
+  done
+}
+
+# Self-heal is best-effort: a missing or broken KB must never take a model call
+# down with it, which is why every hook is guarded and `|| true`.
+_AI_KB_LIB="$(dirname "${BASH_SOURCE[0]}")/lib/kb-apply.sh"
+if [ -r "$_AI_KB_LIB" ]; then
+  # shellcheck source=/dev/null
+  . "$_AI_KB_LIB" 2>/dev/null || true
+fi
+
+_ai_kb_before() {
+  command -v kb_apply_constraints >/dev/null 2>&1 || return 0
+  kb_apply_constraints "${EPAM_AGENT_NAME:-agent}" "agent:${EPAM_AGENT_NAME:-agent}" 2>/dev/null || true
+}
+
+_ai_kb_after_failure() {
+  command -v kb_record_episode >/dev/null 2>&1 || return 0
+  printf '%s' "${1:-}" | kb_record_episode \
+    "${EPAM_STORY_ID:-}" "${EPAM_AGENT_NAME:-agent}" "model call produced no usable output" \
+    2>/dev/null || true
+}
+
+# The plan pass re-invokes this script; without this guard the retry budget would
+# multiply (attempts x attempts) and a slow call could spend the whole run.
+_ai_max_attempts="${EPAM_CALL_MAX_ATTEMPTS:-3}"
+[ "${_EPAM_IN_PLAN_PASS:-0}" = "1" ] && _ai_max_attempts=1
+
+_ai_kb_before
+
 last_err=""
+for _call_attempt in $(seq 1 "$_ai_max_attempts"); do
+if [ "$_call_attempt" -gt 1 ]; then
+  # Escalate before retrying: repeating the same model on the same prompt is the
+  # same gamble, which is how run 9 lost its premise on a single bad response.
+  _ai_next="$(_ai_ladder_next_model "${AI_MODEL:-}")"
+  if [ -n "$_ai_next" ] && [ "$_ai_next" != "${AI_MODEL:-}" ]; then
+    echo "[ai-run] attempt ${_call_attempt}/${_ai_max_attempts} for '${EPAM_AGENT_NAME:-agent}' — escalating ${AI_MODEL} -> ${_ai_next}" >&2
+    AI_MODEL="$_ai_next"; export AI_MODEL
+  else
+    echo "[ai-run] attempt ${_call_attempt}/${_ai_max_attempts} for '${EPAM_AGENT_NAME:-agent}' — no further ladder rung, retrying on ${AI_MODEL:-default}" >&2
+  fi
+fi
+
 for provider in "${providers[@]}"; do
   err_file="$(mktemp)"
   if out="$(run_provider_once "$provider" 2>"$err_file")"; then
@@ -419,5 +502,14 @@ for provider in "${providers[@]}"; do
   fi
 done
 
+# Every provider failed on this attempt. Teach the agent's KB what happened, then
+# let the outer loop escalate and try again.
+_ai_kb_after_failure "$last_err"
+done
+
+# All attempts, all providers, every ladder rung exhausted. This is a real
+# failure and must stay one: retry that converts a failure into a silent success
+# is worse than no retry.
 echo "${last_err:-ai-run failed with no error output}" >&2
+echo "[ai-run] '${EPAM_AGENT_NAME:-agent}' failed after ${_ai_max_attempts} attempt(s) across every provider and ladder rung." >&2
 exit 1

@@ -271,8 +271,12 @@ describe('codeline-discovery.js — source invariants', () => {
   });
 
   it('selectBestCandidate picks scored[0], never uses alphabetical index', () => {
+    // Bounded by the function's own closing brace, not a byte count: a
+    // spanning-ticket guard added ahead of the selection pushed `scored[0]`
+    // past a 400-char window and this failed while the code was correct — the
+    // fourth fixed-width slice to do that in one day.
     const fnIdx = src.indexOf('function selectBestCandidate');
-    const fn    = src.slice(fnIdx, fnIdx + 400);
+    const fn    = src.slice(fnIdx, src.indexOf('\n}', fnIdx) + 2);
     // Must pick index 0 of the scored list (already sorted descending by scoreRepos)
     expect(fn).toMatch(/scored\[0\]|scored\s*\[\s*0\s*\]/);
     // Must NOT pick by name/alphabetical ordering

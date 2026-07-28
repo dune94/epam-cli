@@ -140,7 +140,11 @@ describe('a red baseline fails loudly', () => {
   it('FAILS when the project\'s own test command fails', () => {
     const r = runStep5(codeline({ testScript: 'exit 1', installed: true }));
     expect(r.out).toMatch(/STEP_EMIT: 5 fail/);
-    expect(r.out).toMatch(/tests broken before phase/i);
+    // Wording changed when the guard gained flake retries (2026-07-28): it now
+    // reports that the failure survived EVERY attempt, which is the claim that
+    // matters. Still asserting the operator is told tests are red before the
+    // phase, not merely that a step emitted "fail".
+    expect(r.out).toMatch(/tests red in all \d+ attempt\(s\) before phase/i);
   });
 
   it('exits non-zero so the phase stops', () => {

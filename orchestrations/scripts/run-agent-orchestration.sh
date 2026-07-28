@@ -4405,20 +4405,58 @@ if [ "${SKIP_REGRESSION_GUARD:-false}" != "true" ]; then
         step_emit "5" "running" "Step 5: Regression guard"
         log "Step 5: Cross-phase regression guard ($_rg_pm test) in $_rg_root..."
         _rg_log="$LOG_DIR/regression-guard-${PHASE}.log"
-        set +e
-        # The project's OWN command. Its node is put on PATH first so the script
-        # resolves the version the codeline declares, without us naming a runner
-        # or guessing its arguments.
-        (cd "$_rg_root" && PATH="$(dirname "$_rg_node"):$PATH" "$_rg_pm" test) > "$_rg_log" 2>&1
-        _rg_rc=$?
-        set -e
+        # ── Retry before calling it a regression ──────────────────────────────
+        # The rule this gate enforces is that coding must not INCREASE the
+        # failure count — which needs a count that means something twice running.
+        # Live AMSD-2041 (2026-07-28), next.gotransit.com at origin/develop with
+        # a clean tree and no implementation yet: the suite reported 4 failures,
+        # then 1, then 0 across three runs, and the failing test CHANGED between
+        # them. In isolation those same files passed 3/3. That is interference
+        # under a 737-suite parallel run, not broken code — and blocking on it
+        # stops a run for something no one can fix.
+        #
+        # The WHOLE command is retried rather than re-running the individually
+        # named failures: extracting test names means parsing a specific runner's
+        # output, and this engine has to work on the next unknown project without
+        # being taught its grammar. A green attempt ends the loop immediately, so
+        # the common case still costs exactly one run.
+        #
+        # This is NOT baseline subtraction. Recording pre-existing failures and
+        # subtracting them assumes a stable baseline; against a flaky suite it
+        # would permanently excuse whichever tests happened to fail at capture
+        # time, including a real regression in the same file.
+        _rg_retries="${EPAM_REGRESSION_GUARD_RETRIES:-2}"
+        _rg_max=$(( _rg_retries + 1 ))
+        _rg_rc=1
+        for _rg_try in $(seq 1 "$_rg_max"); do
+            # Each attempt keeps its own log — one path overwritten twice leaves
+            # only the last attempt, and the first is usually the informative one.
+            _rg_try_log="$_rg_log"
+            [ "$_rg_try" -gt 1 ] && _rg_try_log="${_rg_log%.log}-attempt-${_rg_try}.log"
+            set +e
+            # The project's OWN command. Its node is put on PATH first so the script
+            # resolves the version the codeline declares, without us naming a runner
+            # or guessing its arguments.
+            (cd "$_rg_root" && PATH="$(dirname "$_rg_node"):$PATH" "$_rg_pm" test) > "$_rg_try_log" 2>&1
+            _rg_rc=$?
+            set -e
+            [ "$_rg_rc" -eq 0 ] && break
+            if [ "$_rg_try" -lt "$_rg_max" ]; then
+                warning "Step 5: attempt ${_rg_try}/${_rg_max} failed — re-running to tell a flaky suite from a real regression"
+            fi
+        done
         if [ $_rg_rc -ne 0 ]; then
             step_emit "5" "fail" "Step 5: Regression guard"
-            error "Step 5: Regression guard FAILED — tests broken before phase '$PHASE' starts"
+            error "Step 5: Regression guard FAILED — tests red in all ${_rg_max} attempt(s) before phase '$PHASE' starts"
+            error "  The failure survived every attempt, so it is reproducible, not a flake."
             error "  Fix failing tests from the previous phase before continuing."
             error "  See: $_rg_log"
             error "  Bypass with: SKIP_REGRESSION_GUARD=true"
             exit 1
+        fi
+        if [ "${_rg_try:-1}" -gt 1 ]; then
+            warning "Step 5: baseline green on attempt ${_rg_try}/${_rg_max} — the suite is FLAKY; earlier attempts failed"
+            warning "  This is the codeline's own instability, not a regression. Worth reporting upstream."
         fi
         step_emit "5" "pass" "Step 5: Regression guard"
         success "Step 5: Regression guard PASSED — baseline tests green"

@@ -79,8 +79,15 @@ describe('B18 — assessment agent is write-scoped to profiles', () => {
     const body = ORCH.slice(i, i + 20000);
     expect(body).toMatch(/EPAM_ALLOWED_WRITE_PATHS/);
     // and it must be scoped to the profiles file, not something broad
-    // Both files it may legitimately touch: profiles AND the PRD (it updates
-    // agentRole). Scoping to profiles alone broke the agentRole path.
-    expect(body).toMatch(/EPAM_ALLOWED_WRITE_PATHS="\$\{PROFILES_REL:?-?\},\$\{PRD_REL:?-?\}"/);
+    // The scope is now EMPTY, which is strictly stronger than the profiles+PRD
+    // scope this asserted before: the agent writes nothing at all. It returns a
+    // decision under EPAM_RESPONSE_SCHEMA and lib/assessment_apply.py applies it,
+    // because mutating a 136K-char JSON file with no write_file tool is what made
+    // this step exhaust its iteration budget in every observed run.
+    //
+    // The variable is still SET rather than deleted, so a future prompt change
+    // cannot quietly regain the write access that produced this bug.
+    expect(body, 'the assessment agent can still write files')
+      .toMatch(/EPAM_ALLOWED_WRITE_PATHS=""/);
   });
 });

@@ -3657,6 +3657,12 @@ run_pre_phase_assessment() {
 
     log "Running pre-phase skill assessment for '$phase_id'..."
 
+    # The output schema, bound at the provider rather than requested in prose.
+    # Absent/malformed => AgentRunner warns and continues unbound, and
+    # assessment_apply.py still recovers a JSON object from the answer.
+    local _pfa_schema=""
+    _pfa_schema=$(python3 "$SCRIPT_DIR/lib/assessment_apply.py" --print-schema 2>/dev/null || echo "")
+
     # Build assessment prompt
     local assessment_prompt
     # shellcheck disable=SC2287
@@ -3685,17 +3691,15 @@ DO NOT use .phases[0] — that path does not exist in this PRD.
    c. If the story has unitTests:true AND its files include test files mixed with implementation files, this story MUST be split:
       - Implementation child: files without *.test.ts, agentRole "typescript-engineer"
       - Test child: only the *.test.ts files, agentRole "test-engineer"
-      - Update ${PRD_REL} with the split and assign agentRoles on both children
+      - Report the agentRole for each child in storyRoleAssignments
    d. Otherwise assign the most appropriate role from ${PROFILES_REL} based on the story's tech stack
-   e. Write the assigned agentRole back to the story in ${PRD_REL}
+   e. Report it in storyRoleAssignments. Do NOT edit ${PRD_REL} yourself.
 
 4. PROFILE CREATION — For any agentRole assigned in step 3 that does NOT exist as a key in ${PROFILES_REL}:
    a. Read the project context from ${PRD_REL} (projectName, techStack, constraints)
    b. Read the story's technicalNotes to understand the testing conventions for this project
    c. Generate a new profile string for that role that includes: project name, test framework + version, module system (CJS vs ESM), mock patterns (vi.stubGlobal vs vi.spyOn), forbidden packages, constructor signatures, vitest config path and include pattern, and the instruction that this agent ONLY writes test files — never implementation files
-   d. Add the new profile as a key in ${PROFILES_REL}
-   e. Append a JSONL record to orchestrations/logs/profiles-audit.jsonl:
-      {"timestamp":"<ISO8601>","phase_id":"<phase>","agent_role":"<role>","event":"profile_created","skill":"test-engineering","skill_category":"testing","context":"Story <id> requires dedicated test agent","added_by":"pre-phase-assessment"}
+   d. Report it in newProfiles. Do NOT edit ${PROFILES_REL} yourself.
 
 5. PROACTIVE SKILL INFERENCE — For each story's agentRole, reason beyond the requiredSkills list. Read the story's full technicalNotes, acceptanceCriteria, and files. Then ask: given this tech stack and these implementation patterns, what are the specific pitfalls an agent is likely to walk into that are NOT already covered in the profile?
 
@@ -3708,21 +3712,37 @@ DO NOT use .phases[0] — that path does not exist in this PRD.
    - Story writes an Express route handler with optional numeric query params → infer: agent may pass number|undefined where number is required without explicit type narrowing. Add rule.
    - Story has multiple deliverable files (e.g. cli.ts AND cli.test.ts) → infer: agent may write implementation first and run out of context before writing the test. Add rule: write test file first.
 
-   For each inferred gap, append a targeted skill to the agent's profile in ${PROFILES_REL}. Be specific and actionable — state the exact rule, not a general category.
+   For each inferred gap, report a targeted rule in profileAdditions for that role. Be specific and actionable — state the exact rule, not a general category. Do NOT edit ${PROFILES_REL} yourself.
 
-5b. QA AGENT SKILL INJECTION — After inferring implementation gaps, also inject project-specific context into the QA agent profiles (sast-sentinel, review-ranger, spec-validator, mutant-hunter). These agents run against every phase and must know the project's actual file structure and conventions to avoid hallucinating findings about non-existent code. For each QA agent profile:
+5b. QA AGENT SKILL INJECTION — After inferring implementation gaps, also report rules for the QA agent profiles (sast-sentinel, review-ranger, spec-validator, mutant-hunter). These agents run against every phase and must know the project's actual file structure and conventions to avoid hallucinating findings about non-existent code. Report each as a profileAdditions entry for that role:
    a. Read the current list of source files: find . -name "*.ts" -not -path "*/node_modules/*"
-   b. Append to sast-sentinel profile: the exact list of source files it is authorized to report findings on. Any finding referencing a file not in this list must be suppressed as a hallucination.
-   c. Append to review-ranger profile: the exact list of exported symbols (from grep -rn "^export" src/ --include="*.ts") that exist. Any finding about an untested function must reference a symbol from this list — findings about non-existent functions are hallucinations and must be suppressed.
-   d. Append to both: the project's test file naming convention (*.test.ts in src/) and the fact that a function tested in any test file in src/ counts as covered — not just a dedicated file.
+   b. For sast-sentinel: the exact list of source files it is authorized to report findings on. Any finding referencing a file not in this list must be suppressed as a hallucination.
+   c. For review-ranger: the exact list of exported symbols (from grep -rn "^export" src/ --include="*.ts") that exist. Any finding about an untested function must reference a symbol from this list — findings about non-existent functions are hallucinations and must be suppressed.
+   d. For both: the project's test file naming convention (*.test.ts in src/) and the fact that a function tested in any test file in src/ counts as covered — not just a dedicated file.
 
 6. EXPLICIT SKILL GAP FILL — After proactive inference, also do the traditional check:
    a. Compare each story's technicalNotes.requiredSkills against the agent's profile text
-   b. For any skills explicitly listed but not covered in the profile, append them
-   c. Append a JSONL record for each addition: {"timestamp":"<ISO8601>","phase_id":"<phase>","agent_role":"<role>","event":"skill_added","skill":"<skill>","skill_category":"<category>","context":"Story <id> requires <skill>","added_by":"pre-phase-assessment"}
-   d. Use flock when writing to JSONL files
+   b. For any skills explicitly listed but not covered in the profile, report them in profileAdditions
 
-7. Write a summary to orchestrations/logs/phase-improvements/pre-<phase_id>.md. Include a section "Inferred Gaps" listing every proactively added skill and the reasoning chain that led to it.
+## YOUR OUTPUT — A DECISION, NOT AN EDIT
+
+You do NOT write any file. You have no write tool, and hand-rolling scripts to
+edit a 136,000-character JSON file is what made every previous attempt at this
+task run out of iterations without ever finishing — one of them appended the same
+rule four times and then spent its remaining turns undoing that.
+
+Return ONE JSON object and nothing else. The pipeline applies it deterministically:
+
+  {
+    "storyRoleAssignments": [{"storyId": "<id>", "agentRole": "<role>"}],
+    "profileAdditions":     [{"role": "<role>", "rules": ["<exact rule>", "..."]}],
+    "newProfiles":          [{"role": "<role>", "profile": "<full profile text>"}]
+  }
+
+All three keys are required; use an empty array when there is nothing for one.
+Rules already present in a profile are ignored, so do not try to de-duplicate.
+A role that already has a profile is never replaced — use profileAdditions for it.
+A story that already has an agentRole is never reassigned.
 
 Known skill categories: deployment_platform, language, framework, testing, database, infrastructure, api, cloud_service
 
@@ -3792,12 +3812,19 @@ Fix this and retry. Do not repeat the same mistake."
         # B18 — write-scope. In the mock1 run (2026-07-24) this step issued
         # `write_file src/hello.ts`, editing the very application file the story was
         # about, BEFORE implementation ran — so impl no longer started from baseline.
-        # Scope is BOTH files it is legitimately allowed to touch: the profiles file
-        # AND the PRD (it may update agentRole fields, per its own prompt). Scoping
-        # to profiles alone broke that and was caught by step-0.5-retry-guard tests.
+        # The scope is now empty because the agent writes NOTHING: it returns a
+        # decision and lib/assessment_apply.py applies it. Kept (empty) rather than
+        # deleted so a future prompt change cannot quietly regain write access.
         # :- guards — under `set -u` an unset var here aborts the whole command and the
         # agent never runs at all (same class as the B14 bad-substitution abort).
-        EPAM_ALLOWED_WRITE_PATHS="${PROFILES_REL:-},${PRD_REL:-}" \
+        #
+        # EPAM_RESPONSE_SCHEMA binds the output AT THE PROVIDER (AgentRunner sets
+        # responseFormat strict:true) rather than asking for a shape in prose. It
+        # is what makes the deterministic apply safe, and removing the writes is
+        # what makes the schema safe: a schema over an agent that still exhausts
+        # returns a valid EMPTY object, which is a loud failure turned silent.
+        EPAM_ALLOWED_WRITE_PATHS="" \
+        EPAM_RESPONSE_SCHEMA="${_pfa_schema:-}" \
         run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "team-lead-agent" 2>&1 | tee "$assessment_log"
         # PIPESTATUS, not `|| _pfa_call_ok=0`: this is a PIPELINE, and its exit
         # status is tee's — always 0. The `||` branch could never fire on an agent
@@ -3819,6 +3846,23 @@ Fix this and retry. Do not repeat the same mistake."
             cp "$_pfa_prd_before_file" "$PRD_FILE"
             echo "$_pfa_profiles_before" > "$profiles_file"
             break
+        fi
+
+        # APPLY. The agent decided; the script writes. Every rule its prompt states
+        # is enforced here instead of hoped for: a role is assigned only where one
+        # is missing, a profile is created only when absent, and a rule already
+        # present is never appended again — which is what run 12 could not manage
+        # for itself ("The addendum was duplicated 4 times!").
+        if [ -f "$SCRIPT_DIR/lib/assessment_apply.py" ]; then
+            if ! python3 "$SCRIPT_DIR/lib/assessment_apply.py" \
+                    --result "$assessment_log" --prd "$PRD_FILE" \
+                    --profiles "$profiles_file" --phase "$phase_id"; then
+                # Nothing was written — the module fails closed. Treat it as a
+                # failed attempt so the loop's existing recovery handles it,
+                # rather than proceeding as though the phase was assessed.
+                warning "[pre-phase-assessment] the agent's decision could not be applied — see $assessment_log"
+                _pfa_call_ok=0
+            fi
         fi
 
         if [ "$_pfa_call_ok" -eq 0 ]; then

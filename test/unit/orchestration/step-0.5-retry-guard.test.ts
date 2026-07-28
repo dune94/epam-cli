@@ -113,6 +113,19 @@ describe('run_pre_phase_assessment() — REAL execution', () => {
     // Stub run_orch_prompt_with_tools: on attempts <= violateForAttempts,
     // corrupt an out-of-scope field (status); afterwards, behave (only
     // touch agentRole, the allowed field).
+    //
+    // The agent no longer writes files — it returns a decision that
+    // lib/assessment_apply.py applies, and that module can only ever write
+    // agentRole. So a rogue PRD write is no longer something the ASSESSMENT
+    // AGENT can do. This stub keeps simulating one anyway, because the PRD
+    // field-allowlist checker guards the DIFF regardless of who produced it:
+    // a bug in the apply module, or a future change re-granting write access,
+    // must still be caught. The checker is defence in depth, not dead code.
+    //
+    // Each branch also emits a well-formed (empty) decision on stdout, which
+    // tee captures into the assessment log, so the apply step sees valid input
+    // and the attempt is judged on the PRD diff — which is what is under test.
+    const emptyDecision = `echo '{"storyRoleAssignments":[],"profileAdditions":[],"newProfiles":[]}'`;
     const stub = `
 _pfa_call_count_file=${JSON.stringify(join(dir, 'call-count'))}
 run_orch_prompt_with_tools() {
@@ -125,6 +138,7 @@ run_orch_prompt_with_tools() {
   else
     jq '(.stories[] | select(.id == "SKY-002")).agentRole = "test-engineer"' ${JSON.stringify(prdPath)} > ${JSON.stringify(prdPath)}.tmp && mv ${JSON.stringify(prdPath)}.tmp ${JSON.stringify(prdPath)}
   fi
+  ${emptyDecision}
   return 0
 }
 `;

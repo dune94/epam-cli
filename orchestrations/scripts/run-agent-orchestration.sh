@@ -1401,7 +1401,9 @@ hot_swap_story_model_if_unstable() {
     local current_model
     current_model=$(jq -r --arg id "$story_id" \
         '.stories[] | select(.id == $id) | .model // ""' "$prd_target" 2>/dev/null || echo "")
-    [ -z "$current_model" ] && return 0
+    # 1 = did not advance. The caller climbs while this succeeds, so a
+    # "nothing to swap" path reporting 0 would re-run the SAME model.
+    [ -z "$current_model" ] && return 1
 
     local tier
     tier=$(jq -r --arg id "$story_id" \
@@ -1413,7 +1415,7 @@ hot_swap_story_model_if_unstable() {
             *)    ladder="${EPAM_MODEL_LADDER_MEDIUM:-}" ;;
         esac
     fi
-    [ -z "$ladder" ] && return 0
+    [ -z "$ladder" ] && return 1
 
     local new_model="" pair from to IFS_SAVE="$IFS"
     IFS='|'
@@ -1445,7 +1447,7 @@ hot_swap_story_model_if_unstable() {
     if [ -z "$new_model" ] && [ -n "${EPAM_FINAL_FALLBACK_MODEL:-}" ] && [ "${EPAM_FINAL_FALLBACK_MODEL}" != "$current_model" ]; then
         new_model="${EPAM_FINAL_FALLBACK_MODEL}"
     fi
-    [ -z "$new_model" ] && return 0
+    [ -z "$new_model" ] && return 1   # ladder exhausted
 
     local new_provider="" map_pair map_from map_to
     if [ "$new_model" = "${EPAM_FINAL_FALLBACK_MODEL:-}" ] && [ -n "${EPAM_FINAL_FALLBACK_PROVIDER:-}" ]; then
@@ -1484,6 +1486,9 @@ hot_swap_story_model_if_unstable() {
         local _swap_reason="ladder step"
         [ "$new_model" = "${EPAM_FINAL_FALLBACK_MODEL:-}" ] && _swap_reason="top-of-ladder fallback"
         warning "Watchdog: hot-swapping $story_id model after timeout ($_swap_reason): '$current_model' -> '$new_model'${new_provider:+ (provider -> $new_provider)}"
+        # 0 = advanced to a new rung. The caller climbs while this succeeds, so
+        # the return value is the ladder's "is there more?" signal.
+        return 0
     else
         rm -f "$tmp_prd"
     fi
@@ -1827,12 +1832,44 @@ print(math.ceil(${timeout_secs} * ${role_multiplier}))
 import math
 print(math.ceil(${timeout_secs} * ${EPAM_WATCHDOG_RETRY_MULTIPLIER:-1.5}))
 " 2>/dev/null || echo "$timeout_secs")
-        warning "Watchdog: $story_id timed out after ${timeout_secs}s — retrying once with an extended ${retry_timeout_secs}s budget..."
-        hot_swap_story_model_if_unstable "$story_id"
-        set +e
-        timeout "$retry_timeout_secs" "$CLAUDE_SH" "$story_id" 2>&1 | tee -a "$log_file"
-        _rc=${PIPESTATUS[0]}
-        set -e
+        # ── Climb the ladder, do not merely swap once ─────────────────────
+        # This was a single retry, so at most ONE escalation could ever happen.
+        # The HIGH ladder is four rungs (MiniMax-M2.5 -> MiniMax-M3 ->
+        # z-ai/glm-5.1 -> moonshotai/kimi-k3), which made everything above the
+        # second rung unreachable BY CONSTRUCTION —
+        # EPAM_FINAL_FALLBACK_MODEL=kimi-k3 could never be used, and hot_swap
+        # even logs a "top-of-ladder fallback" case it could not reach. Live
+        # AMSD-2041 2026-07-29: three lanes, one hot-swap each, kimi-k3 absent
+        # from every log.
+        #
+        # An escalation is not a replacement: moving to a NEW rung must not
+        # consume the story's last attempt, or "escalate" means "swap the model
+        # and give up". So attempts continue while the ladder still offers a new
+        # model, bounded by EPAM_MAX_LADDER_ATTEMPTS so a mis-configured ladder
+        # cannot loop. When the swap yields nothing new the ladder is exhausted
+        # and stopping is correct — retrying the same model is the same gamble.
+        local _lad_attempt=1
+        local _lad_max="${EPAM_MAX_LADDER_ATTEMPTS:-6}"
+        while [ "$_rc" -eq 124 ] && [ "$_lad_attempt" -lt "$_lad_max" ]; do
+            local _lad_swapped=0
+            hot_swap_story_model_if_unstable "$story_id" || _lad_swapped=1
+            # The FIRST retry happens regardless — that is the pre-existing
+            # "retry once with an extended budget" behaviour, and a story whose
+            # project configures no ladder must not lose it. Only the SECOND and
+            # later retries require an actual escalation, because repeating a
+            # model that did not finish twice is the gamble the ladder exists to
+            # avoid.
+            if [ "$_lad_attempt" -gt 1 ] && [ "$_lad_swapped" -ne 0 ]; then
+                warning "Watchdog: $story_id — ladder exhausted, no further model to escalate to"
+                break
+            fi
+            _lad_attempt=$(( _lad_attempt + 1 ))
+            warning "Watchdog: $story_id timed out after ${timeout_secs}s — attempt ${_lad_attempt}/${_lad_max} on the next ladder rung with a ${retry_timeout_secs}s budget..."
+            set +e
+            timeout "$retry_timeout_secs" "$CLAUDE_SH" "$story_id" 2>&1 | tee -a "$log_file"
+            _rc=${PIPESTATUS[0]}
+            set -e
+        done
     fi
 
     if [ $_rc -eq 124 ]; then

@@ -15,7 +15,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -43,11 +43,18 @@ describe('run-agent-orchestration.sh — hot-swap wiring', () => {
     expect(orchSrc).toMatch(/hot_swap_story_model_if_unstable\s*\(\)/);
   });
 
-  it('is called after the first timeout, before the automatic retry', () => {
-    const idx = orchSrc.indexOf('timed out after ${timeout_secs}s — retrying once');
-    expect(idx).toBeGreaterThan(-1);
-    const nextLines = orchSrc.slice(idx, idx + 300);
-    expect(nextLines).toMatch(/hot_swap_story_model_if_unstable "\$story_id"/);
+  it('gates every retry on a successful escalation', () => {
+    // Restructured 2026-07-29 (LAD-1): the single "retry once" is now a climb
+    // loop, so the invariant is no longer "hot_swap appears after that message"
+    // — it is that a retry only happens when hot_swap reports it ADVANCED to a
+    // new rung. Retrying without advancing would re-run the same model, which
+    // is the gamble the ladder exists to avoid.
+    const idx = orchSrc.indexOf('while [ "$_rc" -eq 124 ]');
+    expect(idx, 'the ladder climb loop is gone — only one escalation can happen').toBeGreaterThan(-1);
+    const loop = orchSrc.slice(idx, idx + 900);
+    expect(loop, 'the retry is not gated on a successful escalation')
+      .toMatch(/hot_swap_story_model_if_unstable "\$story_id" \|\| _lad_swapped=1/);
+    expect(orchSrc, 'the climb has no upper bound').toMatch(/EPAM_MAX_LADDER_ATTEMPTS/);
   });
 });
 
@@ -84,7 +91,7 @@ describe('hot_swap_story_model_if_unstable — REAL execution', () => {
           .filter(Boolean)
           .join('\n'),
       );
-      const stderr = execFileSync('bash', [scriptPath], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+      const stderr = (() => { const r = spawnSync('bash', [scriptPath], { encoding: 'utf8' }); return `${r.stdout || ''}${r.stderr || ''}`; })();
       const prd = JSON.parse(readFileSync(prdFile, 'utf8'));
       return {
         model: prd.stories[0].model,
@@ -212,7 +219,7 @@ describe('hot_swap_story_model_if_unstable — top-of-ladder fallback (fixes liv
           .filter(Boolean)
           .join('\n'),
       );
-      const stderr = execFileSync('bash', [scriptPath], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+      const stderr = (() => { const r = spawnSync('bash', [scriptPath], { encoding: 'utf8' }); return `${r.stdout || ''}${r.stderr || ''}`; })();
       const prd = JSON.parse(readFileSync(prdFile, 'utf8'));
       return {
         model: prd.stories[0].model,
@@ -323,7 +330,7 @@ describe('run_story_with_watchdog — retry timeout scaling (REAL execution)', (
           .filter(Boolean)
           .join('\n'),
       );
-      execFileSync('bash', [scriptPath], { encoding: 'utf8' });
+      (() => { const r = spawnSync('bash', [scriptPath], { encoding: 'utf8' }); return `${r.stdout || ''}${r.stderr || ''}`; })();
       const durations = readFileSync(callLog, 'utf8')
         .trim()
         .split('\n')

@@ -2438,6 +2438,47 @@ ignore_packages = set(cfg.get('ignorePackages', []))
 # Live bug (2026-07-21): Metrolinx azure.commerce.cdts has 15+ workspace path
 # aliases that aren't npm packages, causing 20+ min dep-check stalls per turn.
 import glob as _glob
+# Top-level directories that could act as module roots. Discovered, never named:
+# whatever this repo happens to contain, minus vendor dirs and dot dirs. The
+# repo root itself is included so 'src/x/y' style imports resolve too.
+_module_roots = [project_root]
+try:
+    for _entry in sorted(os.listdir(project_root)):
+        if _entry.startswith('.'):
+            continue
+        _full = os.path.join(project_root, _entry)
+        if not os.path.isdir(_full):
+            continue
+        if _entry in set(cfg.get('vendorDirs', []) or []):
+            continue
+        _module_roots.append(_full)
+except OSError:
+    pass
+
+_resolve_cache = {}
+
+def _resolves_inside_repo(spec):
+    """True if `spec` names a file under any discovered module root.
+
+    Checks '<root>/<spec><ext>' and '<root>/<spec>/index<ext>' for each
+    extension the project declares. Memoised: the scan asks about the same
+    specifier many times, and a miss costs len(roots) x len(exts) stats.
+    """
+    if spec in _resolve_cache:
+        return _resolve_cache[spec]
+    _hit = False
+    _exts = cfg.get('scanFileExtensions', []) or []
+    for _root in _module_roots:
+        _base = os.path.join(_root, *spec.split('/'))
+        for _ext in _exts:
+            if os.path.isfile(_base + _ext) or os.path.isfile(os.path.join(_base, 'index' + _ext)):
+                _hit = True
+                break
+        if _hit:
+            break
+    _resolve_cache[spec] = _hit
+    return _hit
+
 _tsconfig_aliases = set()
 for _tc_path in _glob.glob(os.path.join(project_root, '**/tsconfig*.json'), recursive=True):
     if 'node_modules' in _tc_path:
@@ -2488,6 +2529,26 @@ for pkg in sorted(imported):
     if pkg in declared:
         continue
     if any(pkg == d or pkg.startswith(d + '/') or d.startswith(pkg + '/') for d in declared):
+        continue
+    # ── Does this specifier name a file in THIS repo? ────────────────────────
+    # If it does, it is internal source, not a package. Live metrolinx
+    # 2026-07-29: three lanes tried to npm-install 'components', 'api' and
+    # 'interface' — hundreds of times (gotransit 346, upexpress 553,
+    # metrolinx 506) — because the codelines declare `baseUrl: "./src"` with
+    # `paths: null`, so `components/x` means `src/components/x`. The alias
+    # handling above reads compilerOptions.paths ONLY, found nothing, and
+    # classified every internal import as missing. That loop consumed the story
+    # budget, and installing non-existent packages is also the likely cause of
+    # "REPAIR DESTROYED WHAT IT FOUND ... 1134 entries -> 1011" the same day.
+    #
+    # Deliberately a FILESYSTEM question, not a tsconfig one: reading baseUrl
+    # would fix TypeScript and leave the next stack broken, and would put stack
+    # knowledge in a loop that runs once per import. Roots are DISCOVERED (the
+    # repo's own top-level directories, minus vendor/dot dirs and any subtree
+    # with its own manifest, which is already pruned above); extensions come
+    # from the project's declared scanFileExtensions. No tsconfig, no baseUrl,
+    # no language, no package names.
+    if _resolves_inside_repo(pkg):
         continue
     # Brownfield repos often have packages installed in node_modules but not
     # declared in package.json (undeclared transitive deps, pre-existing installs).

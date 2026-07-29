@@ -5,12 +5,13 @@
   "lastUpdated": "2026-07-22",
   "project": {
     "name": "metrolinx",
-    "description": "Brownfield defect fixes against the Metrolinx codelines, sourced from Jira.",
+    "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
     "stack": {
       "language": "TypeScript",
       "runtime": "Node.js 20",
-      "framework": "Express",
-      "testing": "vitest",
+      "framework": "Next.js",
+      "testing": "jest",
+      "cms": "Contentstack",
       "devEnvironment": "Ubuntu WSL2"
     },
     "outputDir": "/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts",

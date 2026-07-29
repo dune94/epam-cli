@@ -1,23 +1,32 @@
 {
-  "id": "jira-sourced-1784688012737",
+  "id": "jira-sourced-1785353329689",
   "title": "Metrolinx Brownfield — Jira-sourced",
   "version": "1.0.0",
-  "lastUpdated": "2026-07-22",
+  "lastUpdated": "2026-07-29",
   "project": {
     "name": "metrolinx",
-    "description": "Brownfield defect fixes against the Metrolinx codelines, sourced from Jira.",
+    "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
     "stack": {
       "language": "TypeScript",
       "runtime": "Node.js 20",
-      "framework": "Express",
-      "testing": "vitest",
+      "framework": "Next.js",
+      "testing": "jest",
+      "cms": "Contentstack",
       "devEnvironment": "Ubuntu WSL2"
     },
-    "outputDir": "/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts",
+    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
     "outputDirs": [
       {
-        "codeline": "cdts",
-        "path": "/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts"
+        "codeline": "gotransit",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+      },
+      {
+        "codeline": "upexpress",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+      },
+      {
+        "codeline": "metrolinx",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
       }
     ]
   },
@@ -34,7 +43,7 @@
   "implementationOrder": {
     "scaffold": [],
     "core": [
-      "AMSD-1820"
+      "AMSD-2041"
     ]
   },
   "phasesConfig": {
@@ -53,32 +62,132 @@
   },
   "stories": [
     {
-      "id": "AMSD-1820",
-      "jiraKey": "AMSD-1820",
-      "title": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
-      "description": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
-      "acceptanceCriteria": [
-        "The system displays the promo code discount amount for both the outbound and return trip line items in the Mozio email confirmation when a promo code is applied to a return trip order.",
-        "The system calculates the promo code discount amount for the return trip line item using the same logic applied to the outbound trip line item, ensuring both legs reflect the correct discounted total.",
-        "The Mozio email confirmation renders the promo code amount in the same format and position for the return trip as it does for the outbound trip (e.g., line-item-level discount line showing the promo code label and amount).",
-        "When a return trip order contains multiple line items with different fromStation/toStation pairs (e.g., AJ→UN and UN→AJ), the system applies and displays the promo code discount for each line item independently.",
-        "When a promo code applies only to the outbound leg and not the return leg (per promo code configuration), the system does not display a promo discount amount for the return trip line item, and the email confirmation reflects this without error.",
-        "When the promo code discount amount is zero or the promo code is not applicable to the return trip, the system either omits the promo discount line for the return trip or displays a zero-amount entry consistently with how zero-discount outbound legs are handled.",
-        "The system includes the promo code discount amount for return trip line items in the order payload data that feeds the Mozio email confirmation template, matching the structure used for outbound trip line items.",
-        "The system correctly handles return trip orders where dateFrom and dateTo span different calendar dates (e.g., 2026-02-25 to 2026-03-05) and still displays the promo code discount amount for both legs in the email confirmation."
-      ],
-      "codeline": "cdts",
-      "status": "pending",
+      "id": "AMSD-2041",
+      "jiraKey": "AMSD-2041",
+      "title": "[GO, UP, MX] Live Preview of Content in CMS",
+      "description": "[GO, UP, MX] Live Preview of Content in CMS",
+      "acceptanceCriteria": [],
+      "codeline": "gotransit",
+      "status": "in-progress",
       "completed": false,
       "agentRole": "typescript-engineer",
-      "agentGroup": "primary",
-      "effort": "medium",
+      "agentGroup": "main",
+      "effort": "low",
       "estimate": 10,
       "acGateVerdict": "enrichable",
-      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). No acceptance criteria are provided and the description lacks specifics on expected email format, data pipeline, and template structure needed for an agent to implement without ambiguity."
+      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). No acceptance criteria are provided at all, and the description is too vague for an agent to determine what preview mechanism, content types, or protected-page handling to implement.",
+      "issueType": "Story",
+      "codelines": [
+        "gotransit",
+        "upexpress",
+        "metrolinx"
+      ],
+      "verificationCriteria": [
+        "When a tester opens a page in the GO, UP, or MX experience, the CMS-driven page sections (titles, body copy, and other managed content) are visibly rendered on screen — no blank areas, placeholder text, or missing blocks.",
+        "While the page is open in preview, a tester edits a piece of content in the CMS and saves it; the updated text then appears on the open page without the tester manually refreshing the browser.",
+        "The text displayed on the page matches the content values the tester just authored in the CMS (e.g., the edited headline shows the new wording, not the previous wording).",
+        "After the preview session is interrupted, the content that was already on screen remains visible and stable — the page does not go blank, crash, or display an error message.",
+        "Each targeted experience (GO, UP, MX) displays its own locale-appropriate CMS content on screen, with no untranslated fallback or content from another region shown in its place."
+      ],
+      "vcSource": "description",
+      "vcResolution": "regenerated",
+      "fixSiteAnalysis": [
+        {
+          "file": "src/context/ContentstackContext.tsx",
+          "function": "ContentstackProvider",
+          "reason": "This is the single source that COMPUTES and PROVIDES all CMS content to the entire React tree (165+ consumers). Currently it only accepts a static defaultContent prop and wraps it in useMemo with no mechanism for real-time updates. Live Preview requires the provider to subscribe to Contentstack SDK events and re-derive content when the CMS pushes changes — that subscription and re-derivation must happen here, not in any downstream presentation component.",
+          "fix": "Enhance ContentstackProvider to integrate Contentstack Live Preview: (1) Accept a livePreviewConfig prop (host, stackApiKey, deliveryToken, environment) on IContentStackProviderProps; (2) On mount, call Contentstack Live Preview SDK initialization (e.g. livePreview.init({ ...config, onChange: callback })) to register a listener; (3) Store live-preview-updated content in React state (useState) initialized from defaultContent; (4) In the SDK onChange callback, merge the incoming live preview data into state, replacing the static useMemo with this state-driven value so all 236+ useContent consumers re-render with updated data. The useMemo on line 56 should be replaced with state that updates on both defaultContent changes and live preview callbacks.",
+          "helper": "",
+          "brokenLine": "const context = useMemo(",
+          "fixVerified": null,
+          "evidenceVerified": true,
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false
+        }
+      ],
+      "technicalNotes": null,
+      "specification": {
+        "runId": "20260729T192816Z",
+        "assignedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "coordinatorNotes": "Story has empty acceptance criteria and null spec. Live Preview of Content in CMS is a complex feature spanning GO, UP, MX locales — needs openspec to elaborate requirements and define AC, then speckit to harden testability, security, and edge cases.",
+        "status": "completed",
+        "updatedAt": "2026-07-29T19:36:03.609Z",
+        "appliedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": true,
+            "notes": "Novel story — Live Preview is a new capability not present in the codebase. The central attachment point is useContent (236+ callers), which is the single funnel for all Contentstack content. Live Preview must plug in there to push real-time updates to every consumer without changing call sites. ACs were empty; VCs derived from the description and the existing content-fetching architecture.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-07-29T19:35:11.238Z"
+          },
+          {
+            "agent": "speckit",
+            "applied": true,
+            "notes": "Openspec provided empty ACs with a note identifying useContent (236+ callers) as the central funnel. I created all 15 ACs from scratch based on the story title, description, and openspec's architectural note. Key areas covered: (1) real-time update propagation through useContent (AC-1, AC-2, AC-9), (2) connection lifecycle — connect, disconnect, reconnect, timeout (AC-3, AC-4, AC-5), (3) backward compatibility with existing call sites (AC-6, AC-10), (4) error and edge cases — malformed data, concurrent edits, tab switching (AC-7, AC-8, AC-14), (5) performance — minimal re-renders (AC-11), (6) data isolation (AC-12), (7) accessibility (AC-13), (8) SSR safety (AC-15). IMPORTANT CAVEAT: I could not read the source files at the paths referenced by openspec (useContent, content-fetching modules). The criteria are derived solely from the story title/description and openspec's note. A code-level review of useContent's current interface, Contentstack's Live Preview SDK, and the SSR pipeline may reveal additional criteria or necessary adjustments.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-07-29T19:36:03.608Z"
+          }
+        ],
+        "coordinatorReview": {
+          "verdict": "needs_review",
+          "reviewNotes": "OpenSpec identified the architectural anchor (useContent with 236+ callers) but produced zero acceptance criteria — it only provided an architectural note. Speckit then created all 15 ACs from scratch based solely on the story title/description and OpenSpec's note, without being able to read the actual source files. This creates two critical gaps: (1) OpenSpec under-delivered on its core responsibility of AC elaboration and refinement, leaving Speckit to do all the heavy lifting from a weaker foundation; (2) Speckit explicitly flagged it could not read useContent's interface, Contentstack's Live Preview SDK, or the SSR pipeline, meaning the 15 ACs are unvalidated against real code constraints. The ACs cover a broad surface area (real-time propagation, connection lifecycle, backward compatibility, error/edge cases, performance, data isolation, accessibility, SSR safety) but their completeness is uncertain without code-level verification. Additionally, no story splits were proposed despite this being a complex feature spanning three locales (GO, UP, MX) — a feature of this scope likely warrants decomposition. Speckit's own caveat about unread source files is a strong signal that human review is required before implementation.",
+          "qualityScore": 0.55,
+          "flags": [
+            "incomplete_code_analysis",
+            "no_story_split",
+            "openspec_underdelivered",
+            "acs_unvalidated_against_source",
+            "speckit_self_flagged_gap"
+          ],
+          "reviewedAt": "2026-07-29T19:36:23.462Z"
+        }
+      },
+      "estimatedAiMinutes": 4.0659,
+      "estimatedCost": 0.0701,
+      "estimatedTokens": 272861,
+      "estimatedTurns": 10,
+      "estimatedHours": 0.0677,
+      "cpaConfidence": 0.7,
+      "cpaGate": "pass",
+      "ladderTier": "medium",
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
+      "reasoningEffort": "low",
+      "lastAttempt": "2026-07-29T19:50:15+00:00",
+      "actualCost": 0.538849,
+      "perCodeline": {
+        "gotransit": {
+          "status": "completed",
+          "completed": true,
+          "completedAt": "2026-07-29T19:46:59+00:00",
+          "reviewStatus": null
+        },
+        "upexpress": {
+          "status": "pending",
+          "completed": false,
+          "completedAt": null,
+          "reviewStatus": null
+        },
+        "metrolinx": {
+          "status": "failed",
+          "completed": false,
+          "completedAt": null,
+          "reviewStatus": null
+        }
+      },
+      "completedAt": null
     }
   ],
-  "currentIteration": 7,
+  "currentIteration": 8,
   "source": "jira",
   "sourceProject": "AMSD"
 }

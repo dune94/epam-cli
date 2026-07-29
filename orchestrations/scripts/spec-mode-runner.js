@@ -479,6 +479,7 @@ const TOOL_SPEC_ASSIGNMENTS = {
     properties: {
       assignments: {
         type: 'array',
+        minItems: 1,
         items: {
           type: 'object',
           required: ['storyId', 'agents'],
@@ -504,7 +505,7 @@ const TOOL_SPEC_AGENT = {
       storyId: { type: 'string' },
       agent: { type: 'string' },
       notes: { type: 'string' },
-      acceptanceCriteria: { type: 'array', items: { type: 'string' } },
+      acceptanceCriteria: { type: 'array', items: { type: 'string' }, minItems: 1 },
       description: { type: 'string' },
       title: { type: 'string' },
       acAddedBySpeckit: { type: 'array', items: { type: 'string' } },
@@ -518,7 +519,7 @@ const TOOL_SPEC_AGENT = {
             id: { type: 'string' },
             title: { type: 'string' },
             description: { type: 'string' },
-            acceptanceCriteria: { type: 'array', items: { type: 'string' } },
+            acceptanceCriteria: { type: 'array', items: { type: 'string' }, minItems: 1 },
             agentRole: { type: 'string' },
             technicalNotes: { type: 'object' },
           },

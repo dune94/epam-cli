@@ -331,7 +331,13 @@ function selectBestCandidate(scored, issues) {
     throw new Error(
       `Cannot fall back to a single codeline: the ticket names ${areas.size} product areas ` +
       `(${[...areas].join(', ')}) and this fallback can only return one repository. ` +
-      `The discovery call failed after every retry and ladder rung, so the codelines are ` +
+      // Says only what it can prove. The previous wording asserted "failed after
+      // every retry and ladder rung", which this code cannot know: when the
+      // caller's spawnSync window expires the attempts are cut off mid-flight,
+      // and on 2026-07-29 exactly one attempt had run. An error that overstates
+      // its own evidence sends the reader hunting for a model problem that is
+      // really a timeout problem.
+      `The discovery call did not return a usable answer, so the codelines are ` +
       `genuinely unknown — running one lane would silently deliver part of the work.`);
   }
 
@@ -530,7 +536,18 @@ function callLlm(prompt) {
       // EPAM_PLAN_TIMEOUT_SECS, 90s) and an execute call inside one ai-run.sh
       // invocation. 300000 was set for a single call and failed live on
       // AMSD-2041 the first time this ran with two.
-      timeout:    Number(process.env.CODELINE_DISCOVERY_TIMEOUT_MS || 420000),
+      // Sized to the SEAM'S RETRY BUDGET, not to one call. ai-run.sh retries up
+      // to EPAM_CALL_MAX_ATTEMPTS times with ladder escalation INSIDE this one
+      // spawnSync, so a flat 420s window meant a single slow attempt consumed
+      // everything and attempts 2..N never ran — the ladder was unreachable
+      // from here. Observed live 2026-07-29: discovery died on
+      // "spawnSync /bin/sh ETIMEDOUT" after exactly one attempt.
+      // Derived, not a constant: raise EPAM_CALL_MAX_ATTEMPTS and this follows.
+      timeout: Number(
+        process.env.CODELINE_DISCOVERY_TIMEOUT_MS ||
+        (Number(process.env.EPAM_CALL_MAX_ATTEMPTS || 3) *
+         Number(process.env.EPAM_CALL_ATTEMPT_BUDGET_MS || 300000))
+      ),
       maxBuffer:  10 * 1024 * 1024,
       env:        { ...process.env, EPAM_AGENT_NAME: 'codeline-discovery' },
     }).trim();

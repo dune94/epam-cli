@@ -466,6 +466,42 @@ _ai_max_attempts="${EPAM_CALL_MAX_ATTEMPTS:-3}"
 _ai_kb_before
 
 last_err=""
+# Bound ONE attempt, so a hung call cannot consume the whole retry budget.
+#
+# Runs IN THIS SHELL: run_provider_once is a function that depends on this
+# script's other functions and variables, so `timeout bash -c ...` would lose
+# all of it.
+#
+# Two details are load-bearing, both found by measuring rather than reading:
+#   - The watchdog's stdout is closed. Command substitution waits for EVERY
+#     process holding the captured stdout open, so a watchdog that inherits it
+#     makes even a 20ms call take the full budget.
+#   - Output goes to FILES, not through the captured pipe. This is what stops a
+#     surviving child from holding the caller open: with the pipe, killing the
+#     job left `sleep` alive and the caller waited the full 30s anyway.
+# `set -m` + the group kill (-PID) is DEFENSIVE, not proven necessary: mutating
+# it back to a plain `kill "$_work"` leaves these tests green, because the file
+# redirection already removes the dependency on the writer dying. It is kept for
+# a child that ignores a TERM sent only to its parent, and this comment says so
+# rather than claiming a load-bearing role the tests do not demonstrate.
+_ai_attempt_timeout() {
+  local _secs="${EPAM_CALL_ATTEMPT_TIMEOUT_SECS:-240}" _rc=0
+  local _o _e
+  _o="$(mktemp)"; _e="$(mktemp)"
+  set -m
+  ( "$@" ) >"$_o" 2>"$_e" &
+  local _work=$!
+  set +m
+  ( sleep "$_secs"; kill -TERM "-${_work}" 2>/dev/null || kill -TERM "$_work" 2>/dev/null ) >/dev/null 2>&1 &
+  local _watch=$!
+  wait "$_work" 2>/dev/null; _rc=$?
+  kill "-${_watch}" 2>/dev/null || kill "$_watch" 2>/dev/null
+  wait "$_watch" 2>/dev/null || true
+  cat "$_o"; cat "$_e" >&2
+  rm -f "$_o" "$_e"
+  return "$_rc"
+}
+
 for _call_attempt in $(seq 1 "$_ai_max_attempts"); do
 if [ "$_call_attempt" -gt 1 ]; then
   # Escalate before retrying: repeating the same model on the same prompt is the
@@ -481,7 +517,7 @@ fi
 
 for provider in "${providers[@]}"; do
   err_file="$(mktemp)"
-  if out="$(run_provider_once "$provider" 2>"$err_file")"; then
+  if out="$(_ai_attempt_timeout run_provider_once "$provider" 2>"$err_file")"; then
     _merge_plan_cost
     [ -n "$out" ] && printf '%s\n' "$out"
     rm -f "$err_file"

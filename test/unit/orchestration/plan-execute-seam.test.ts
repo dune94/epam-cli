@@ -351,6 +351,14 @@ describe('every caller allows room for both passes', () => {
         ...[...src.matchAll(/timeout:\s*(\d+)/g)].map(m => Number(m[1])),
         ...[...src.matchAll(/timeout:\s*Number\(process\.env\.\w+\s*\|\|\s*(\d+)\)/g)]
             .map(m => Number(m[1])),
+        // A DERIVED default: `env || (Number(env||A) * Number(env||B))`. The
+        // contract is that the effective window is big enough, not that it is
+        // spelled as a literal — and deriving it from the retry budget is
+        // better, since raising EPAM_CALL_MAX_ATTEMPTS then widens the window
+        // automatically instead of silently making each attempt smaller.
+        ...[...src.matchAll(
+          /timeout:\s*Number\(\s*process\.env\.\w+\s*\|\|\s*\(?\s*Number\(process\.env\.\w+\s*\|\|\s*(\d+)\)\s*\*\s*Number\(process\.env\.\w+\s*\|\|\s*(\d+)\)/g)]
+            .map(m => Number(m[1]) * Number(m[2])),
       ];
       expect(timeouts.length, `${caller} declares no timeout to check`).toBeGreaterThan(0);
       for (const t of timeouts) {

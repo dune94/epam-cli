@@ -318,6 +318,30 @@ resolve_model_from_story() {
     if [ -n "$story_model" ]; then
         STORY_MODEL="$story_model"
         log "  Model[prd.json] -> $STORY_MODEL (overrides effort default)"
+        # ── Novel brownfield code starts at the top of the ladder ─────────────
+        # LAD-2 forces ladderTier=high for a novel brownfield story, but the
+        # MODEL is a separate field the coordinator has already written from
+        # CPA's effort estimate — so live AMSD-2041 2026-07-29 still logged
+        # "Effort[low] ... Model[prd.json] -> MiniMax-M3" and produced nothing
+        # four times. Setting the tier without setting the model fixed half the
+        # problem: the story could climb, but it still started at the bottom.
+        #
+        # The reason CPA's estimate cannot be trusted here is the same one
+        # recorded for LAD-2: an underspecified story looks CHEAP, and
+        # underspecification is exactly what makes novel work expensive.
+        # Configured, not constant: the model comes from the project's own
+        # high-tier setting.
+        if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
+            local _rmfs_kind _rmfs_high
+            _rmfs_kind=$(jq -r --arg id "$story_id" \
+                '.stories[] | select(.id == $id) | .storyKind // ""' \
+                "$prd_target" 2>/dev/null || echo "")
+            _rmfs_high="${ESCALATION_MODEL_HIGH:-${ORCH_GATE_MODEL:-}}"
+            if [ "$_rmfs_kind" = "novel" ] && [ -n "$_rmfs_high" ] && [ "$_rmfs_high" != "$STORY_MODEL" ]; then
+                log "  Model[novel-brownfield] -> $_rmfs_high (was $STORY_MODEL; novel code does not start on the cheapest rung)"
+                STORY_MODEL="$_rmfs_high"
+            fi
+        fi
     else
         # Always log the model that will actually be used, even when it's
         # just the effort-tier default falling through unchanged -- without

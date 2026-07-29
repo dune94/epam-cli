@@ -72,34 +72,25 @@ const SPLIT_VALUE = process.env.JIRA_SPLIT_CODELINE || 'both';
 // This means zero config is required for single-codeline projects.
 
 /**
- * Parse a model's JSON answer, tolerating truncation.
+ * Parse a model's JSON answer.
  *
- * `/\{[\s\S]*\}/` needs a closing brace, so a response cut off mid-object
- * reads as "no JSON at all" and a correct answer is discarded. Live metrolinx
- * 2026-07-29: the classifier answered {"verdict":"insufficient",...}, the match
- * failed, and the gate recorded the OPPOSITE verdict.
+ * ONE function for every call site in this file: the same extractor existed in
+ * two places, and a change applied to one of them left the other behaving
+ * differently. Consolidated so that cannot recur.
  *
- * jsonrepair closes the object — the same recovery spec-mode-runner already
- * applies to this class of output. Guarded to text that actually begins with
- * '{', so prose is never coerced into an object.
- *
- * ONE function for every call site in this file: the truncation bug existed in
- * two places and was fixed in one, which is how the second site kept returning
- * a title-only AC list.
+ * Deliberately NOT tolerant of truncation. A repair path was added on
+ * 2026-07-29 and removed the same day: the truncated responses that motivated
+ * it were an artifact of the provider being out of credits — it could not cover
+ * the requested max_tokens and cut responses mid-object. With that resolved the
+ * same call returns short, complete, valid JSON. Repairing a malformed answer
+ * would have masked an external outage as a parse quirk, and the principled fix
+ * for a model returning the wrong shape is provider-side schema binding
+ * (EPAM_RESPONSE_SCHEMA), not client-side repair.
  */
 function parseLooseJson(raw, what) {
   const m = raw.match(/\{[\s\S]*\}/);
-  if (m) return JSON.parse(m[0]);
-  const first = raw.indexOf('{');
-  if (first !== -1) {
-    try {
-      const { jsonrepair } = require('jsonrepair');
-      const repaired = JSON.parse(jsonrepair(raw.slice(first)));
-      process.stderr.write(`[ac-gate] ${what} response was truncated; recovered via jsonrepair\n`);
-      return repaired;
-    } catch (_) { /* fall through */ }
-  }
-  throw new Error(`No JSON in ${what} response: ${raw.slice(0, 200)}`);
+  if (!m) throw new Error(`No JSON in ${what} response: ${raw.slice(0, 200)}`);
+  return JSON.parse(m[0]);
 }
 
 function resolveCodelines(issues) {

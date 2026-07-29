@@ -4203,6 +4203,33 @@ classify_ladder_tier() {
         medium|high) echo "$_prd_tier"; return ;;
     esac
 
+    # ── Novel brownfield code is always the high ladder ───────────────────────
+    # User rule, 2026-07-29. Deterministic, not a judgement: the spec pass
+    # already sets storyKind (spec-mode-runner.js:2162).
+    #
+    # CPA cannot decide this, because an underspecified story looks CHEAP and
+    # underspecification is exactly what makes a novel feature expensive. Live
+    # AMSD-2041 — an empty ticket, no acceptance criteria — was rated
+    # effort:"low", estimatedAiMinutes:5.4214, for a novel capability across
+    # three repositories attaching to a hook with 236 callers. Every plan in
+    # every lane called it novel; CPA still priced it at five minutes, so it
+    # started on the cheapest rung and reached a capable model only by burning
+    # two timeouts.
+    #
+    # A defect is different in kind — the fix site is known and bounded, so
+    # medium is reasonable and CPA keeps that call. An explicit ladderTier above
+    # still wins: a deliberately pinned tier is not overridden.
+    if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
+        local _story_kind
+        _story_kind=$(jq -r --arg id "$story_id" \
+            '.stories[] | select(.id == $id) | .storyKind // ""' \
+            "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
+        if [ "$_story_kind" = "novel" ]; then
+            echo "high"
+            return
+        fi
+    fi
+
     local _failures_file="${LOG_DIR}/story-failures.jsonl"
     if [ -f "$_failures_file" ]; then
         local _max_attempt _cycle_count

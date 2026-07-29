@@ -707,15 +707,38 @@ detect_and_install_dependencies() {
 ensure_node_modules_healthy() {
     local codeline_root="$1"
     local node_bin="$2"
-    local test_bin="$3"
+    local test_bin="$3"   # legacy: an arbitrary .bin entry, no longer trusted
 
-    if [ -n "$test_bin" ] && [ -x "$test_bin" ]; then
-        if "$node_bin" "$test_bin" --version >/dev/null 2>&1; then
+    # Probe the runner the PROJECT DECLARES, not whatever sorts first in
+    # node_modules/.bin. Live metrolinx 2026-07-29: the old probe picked
+    # `escodegen` (alphabetically first), ran `node escodegen --version`, got
+    # "Invalid option '--version'" — and condemned three codelines whose trees
+    # were fine (`jest --version` -> 29.5.0 on the same tree). It had always
+    # behaved this way; the caller's `|| true` hid it until that mask came off
+    # and every lane stopped.
+    local _declared _runner
+    _declared="$(jq -r '.scripts.test // ""' "$codeline_root/package.json" 2>/dev/null || echo "")"
+    # First word of the declared command is the runner: "jest --ci" -> jest.
+    # Derived from what the project says, so an unknown stack needs no changes.
+    _runner="${_declared%% *}"
+
+    if [ -z "$_runner" ]; then
+        # INCONCLUSIVE, not broken. We cannot identify a runner, so we cannot
+        # claim the tree is unusable — and halting on "cannot tell" is the
+        # escodegen bug with a different trigger. Step 5 runs the project's real
+        # test command next, which is the actual question anyway.
+        warning "  [node-modules-health] could not determine health: $codeline_root declares no test script — deferring to the real test command"
+        return 0
+    fi
+
+    local _runner_bin="$codeline_root/node_modules/.bin/$_runner"
+    if [ -x "$_runner_bin" ]; then
+        if "$node_bin" "$_runner_bin" --version >/dev/null 2>&1; then
             return 0
         fi
-        warning "  [node-modules-health] $test_bin exists but crashed on --version — dependencies present but corrupted, attempting repair..."
+        warning "  [node-modules-health] declared runner '$_runner' exists but failed --version — dependencies present but corrupted, attempting repair..."
     else
-        warning "  [node-modules-health] test runner not found in $codeline_root/node_modules/.bin — attempting install..."
+        warning "  [node-modules-health] declared runner '$_runner' not found in $codeline_root/node_modules/.bin — attempting install..."
     fi
 
     detect_and_install_dependencies "$codeline_root" "$node_bin"

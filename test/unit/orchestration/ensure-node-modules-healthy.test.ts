@@ -82,6 +82,11 @@ function makeRealNpmFixture(): string {
   cleanupDirs.push(dir);
   writeFileSync(join(dir, 'package.json'), JSON.stringify({
     name: 'fixture', version: '1.0.0',
+    // scripts.test names the runner these tests already probe (.bin/vitest).
+    // The health check reads it to know WHICH binary to smoke-test — it used to
+    // take whatever sorted first in node_modules/.bin, which condemned three
+    // healthy metrolinx codelines because `escodegen` rejects --version.
+    scripts: { test: 'vitest run' },
     dependencies: { 'is-odd': '^3.0.1' },
   }));
   return dir;
@@ -126,7 +131,7 @@ describe('ensure_node_modules_healthy — real npm, real corruption, no mocking'
     // No node_modules at all — test_bin passed in doesn't exist.
     const { stdout, exitCode } = runFn(dir, NODE_BIN, join(dir, 'node_modules/.bin/vitest'));
     expect(exitCode).toBe(0);
-    expect(stdout).toMatch(/test runner not found.*attempting install/);
+    expect(stdout).toMatch(/declared runner '[^']+' not found.*attempting install/);
     expect(existsSync(join(dir, 'node_modules/is-odd'))).toBe(true);
   }, 60000);
 
@@ -139,6 +144,9 @@ describe('ensure_node_modules_healthy — real npm, real corruption, no mocking'
     // package name here.
     writeFileSync(join(dir, 'package.json'), JSON.stringify({
       name: 'fixture', version: '1.0.0',
+      // Same reason as the primary fixture: the probe reads scripts.test to
+      // learn which binary to smoke-test.
+      scripts: { test: 'vitest run' },
       dependencies: { '@this-scope-genuinely-does-not-exist-12345/nope': '^1.0.0' },
     }));
 

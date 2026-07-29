@@ -87,7 +87,14 @@ function run(opts: {
       stories: [{ id: 'SKY-TEST', technicalNotes: { files: opts.declaredFiles } }],
     }),
   );
-  const fnBody = extractFunctionBody('verify_story_deliverables');
+  const fnBody = [
+    // verify_story_deliverables now delegates path resolution to this helper
+    // (a declared deliverable may be an extensionless module specifier), so
+    // extracting the function alone would leave it undefined and every
+    // deliverable would read as missing.
+    extractFunctionBody('_resolve_deliverable_path'),
+    extractFunctionBody('verify_story_deliverables'),
+  ].join('\n');
   const scriptPath = join(projectRoot, '..', 'run.sh');
   writeFileSync(
     scriptPath,

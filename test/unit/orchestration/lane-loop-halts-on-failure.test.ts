@@ -114,6 +114,8 @@ if [ "\${1:-}" = "--reset" ]; then
   if [ -n "\${LOG_DIR:-}" ]; then
     mkdir -p "\$LOG_DIR" 2>/dev/null || true
     echo "sha-of-\$_cl" > "\$LOG_DIR/phase-baseline-sha.txt"
+    printf '{"story_id":"T-1","codeline":"%s","task_cost_usd":0.25}\n' "\$_cl" \
+      >> "\$LOG_DIR/phase-cost.jsonl"
   fi
   # A lane that DELIVERS marks the story complete in its own filtered PRD,
   # exactly as claude.sh does during a real run. This is what makes the
@@ -137,6 +139,9 @@ fi
 
 NODE_BIN="${NODE_BIN}"
 SCRIPT_DIR="${join(REPO_ROOT, 'orchestrations/scripts')}"
+LOG_DIR="${join(dir, 'logdir')}"
+mkdir -p "$LOG_DIR"
+export LOG_DIR
 # The health gate is a separate contract with its own tests; here it would abort
 # before any lane ran and the halt assertion would pass vacuously.
 export SKIP_CODELINE_HEALTH=1
@@ -334,5 +339,48 @@ describe('parallel lanes cannot read each other\'s state', () => {
         'diff against a commit that does not exist in its repository')
         .toBe(`sha-of-${cl}`);
     }
+  });
+});
+
+describe('per-lane cost is aggregated back to the canonical ledger', () => {
+  // Per-lane LOG_DIR fixed state corruption and fragmented the cost ledger:
+  // every reader of the canonical phase-cost.jsonl — dashboard,
+  // validate-dashboards.sh, the run report — saw ZERO for a parallel run while
+  // the real records sat under lanes/<codeline>/. A cost ledger that silently
+  // reports zero is worse than one that is missing, because zero looks like an
+  // answer. Real cost tracking is the project's stated first priority.
+  it('the parent ledger contains every lane\'s records', () => {
+    const r = runLanes('none', { parallel: true });
+    const parent = join(r.prd, '..', 'logdir', 'phase-cost.jsonl');
+    expect(existsSync(parent),
+      'no aggregated ledger at the canonical path — every cost reader sees zero')
+      .toBe(true);
+    const aggLines = readFileSync(parent, 'utf8').split('\n').filter(Boolean);
+    const aggLanes = new Set(aggLines.map((l) => { try { return JSON.parse(l).codeline; } catch { return null; } }));
+    expect(aggLanes.has('lane-a') && aggLanes.has('lane-b'),
+      `canonical ledger under-reports: ${[...aggLanes].join(',')}`).toBe(true);
+    return;
+    // The harness runs the loop with LOG_DIR defaulting to the run dir; locate
+    // the aggregated ledger next to the lanes/ directory the loop created.
+    const dir = join(r.prd, '..');
+    const { readdirSync } = require('node:fs');
+    const found: string[] = [];
+    const walk = (d: string) => {
+      for (const e of readdirSync(d, { withFileTypes: true })) {
+        const p = join(d, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (e.name === 'phase-cost.jsonl') found.push(p);
+      }
+    };
+    walk(dir);
+    const aggregated = found.filter((f) => !f.includes(`${require('node:path').sep}lanes${require('node:path').sep}`));
+    expect(aggregated.length, `no aggregated ledger; only per-lane files: ${found.join(', ')}`)
+      .toBeGreaterThan(0);
+    const lines = aggregated.flatMap((f) => readFileSync(f, 'utf8').split('\n').filter(Boolean));
+    const lanes = new Set(lines.map((l) => { try { return JSON.parse(l).codeline; } catch { return null; } }));
+    expect(lanes.has('lane-a') && lanes.has('lane-b'),
+      `canonical ledger is missing a lane's cost — readers would under-report: ${[...lanes].join(',')}`)
+      .toBe(true);
+    void parent;
   });
 });

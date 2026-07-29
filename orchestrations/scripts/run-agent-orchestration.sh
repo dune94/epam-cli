@@ -2796,6 +2796,20 @@ KNOWNFIXES_EOF
       _cl_prd="${_p_prds[$_lane_idx]}"
       _cl_failed=1
       [ -f "${_p_statusdir}/${_cl}.status" ] && _cl_failed="$(cat "${_p_statusdir}/${_cl}.status" 2>/dev/null || echo 1)"
+      # ── Fold this lane's ledgers back into the parent ────────────────────
+      # Per-lane LOG_DIR fixed cross-lane state corruption, and fragmented the
+      # cost ledger as a side effect: every reader of the canonical path — the
+      # dashboard, validate-dashboards.sh, the run report — saw an EMPTY
+      # phase-cost.jsonl for a parallel run while the real records sat in
+      # lanes/<codeline>/. Cost tracking that silently reports zero is worse than
+      # none, so the append-only ledgers are concatenated back, in declared lane
+      # order, once the lane has finished writing them.
+      for _ledger in phase-cost.jsonl agent-activity.jsonl healing-events.jsonl; do
+        if [ -n "${LOG_DIR:-}" ] && [ -s "${LOG_DIR}/lanes/${_cl}/${_ledger}" ]; then
+          cat "${LOG_DIR}/lanes/${_cl}/${_ledger}" >> "${LOG_DIR}/${_ledger}" 2>/dev/null || true
+        fi
+      done
+
       if [ "$_cl_failed" = "0" ]; then
         _completed_list="${_completed_list:+${_completed_list}:}${_cl_prd}"
       else

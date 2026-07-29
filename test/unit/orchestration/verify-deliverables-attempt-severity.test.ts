@@ -115,7 +115,14 @@ function run(opts: {
       // testing verify_story_deliverables in isolation.
       'verify_prescribed_helper_used() { return 0; }',
       'record_story_outputs() { return 0; }',
-      extractFunctionBody('verify_story_deliverables'),
+      [
+    // verify_story_deliverables now delegates path resolution to this helper
+    // (a declared deliverable may be an extensionless module specifier), so
+    // extracting the function alone would leave it undefined and every
+    // deliverable would read as missing.
+    extractFunctionBody('_resolve_deliverable_path'),
+    extractFunctionBody('verify_story_deliverables'),
+  ].join('\n'),
       'verify_story_deliverables "SKY-TEST"',
       'echo "RC=$?"',
     ].join('\n'),

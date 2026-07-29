@@ -66,7 +66,14 @@ function run(opts: {
     }
     const fnBody = 'verify_prescribed_helper_used() { return 0; }\n'
       + 'record_story_outputs() { return 0; }\n'
-      + extractFunctionBody('verify_story_deliverables');
+      + [
+    // verify_story_deliverables now delegates path resolution to this helper
+    // (a declared deliverable may be an extensionless module specifier), so
+    // extracting the function alone would leave it undefined and every
+    // deliverable would read as missing.
+    extractFunctionBody('_resolve_deliverable_path'),
+    extractFunctionBody('verify_story_deliverables'),
+  ].join('\n');
     const vendorDirsFn = extractFunctionBody('_get_vendor_dirs');
     const scriptPath = join(dir, 'run.sh');
     writeFileSync(
@@ -180,7 +187,14 @@ describe('verify_story_deliverables — 0-byte file check (REAL execution)', () 
         mkdirSync(join(full, '..'), { recursive: true });
         writeFileSync(full, 'content');
       }
-      const fnBody = extractFunctionBody('verify_story_deliverables');
+      const fnBody = [
+    // verify_story_deliverables now delegates path resolution to this helper
+    // (a declared deliverable may be an extensionless module specifier), so
+    // extracting the function alone would leave it undefined and every
+    // deliverable would read as missing.
+    extractFunctionBody('_resolve_deliverable_path'),
+    extractFunctionBody('verify_story_deliverables'),
+  ].join('\n');
       const vendorDirsFn = extractFunctionBody('_get_vendor_dirs');
       const scriptPath = join(dir, 'run.sh');
       writeFileSync(

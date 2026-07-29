@@ -1762,6 +1762,56 @@ verify_prescribed_helper_used() {
     return 1
 }
 
+# Resolve a DECLARED deliverable to a real file.
+#
+# A declaration is often a module specifier, not a filename: a model reasoning
+# about `from '@/hooks/useContent'` writes "src/hooks/useContent", and no such
+# file exists — the file is useContent.ts. Live metrolinx 2026-07-29 failed all
+# three lanes on exactly this, retrying until the watchdog killed each one
+# (600s then 900s) to prove a filename wrong. The two lanes even disagreed on
+# the prefix (src/hooks/... vs hooks/...), which is the tell that the string is
+# generated rather than observed.
+#
+# Extensions are DISCOVERED from the repository, never hardcoded: globbing
+# "<path>.*" asks the project what it actually uses, so this works unchanged on
+# a .tsx, .py or .go codeline. A directory module resolves through its index.*.
+#
+# Ambiguity is a failure, not a coin toss: if two candidates match, the
+# declaration cannot identify one file and the operator must see that rather
+# than have the gate's verdict depend on glob order.
+#
+# Echoes the resolved path relative to PROJECT_ROOT and returns 0; returns 1 if
+# nothing or more than one thing matches.
+_resolve_deliverable_path() {
+    # Takes the ABSOLUTE candidate path the caller already derived (which has
+    # handled absolute declarations and worktree rewriting) and refines it.
+    # Deriving it again from PROJECT_ROOT here would discard both.
+    local _abs="$1"
+    # -f as well as -s: a DIRECTORY is non-empty by -s, so "src/hooks/useContent"
+    # naming a directory would short-circuit here and never reach the index.*
+    # lookup below.
+    if [ -f "$_abs" ] && [ -s "$_abs" ]; then printf '%s\n' "$_abs"; return 0; fi
+
+    local _cands=() _c
+    for _c in "$_abs".*; do
+        [ -f "$_c" ] && [ -s "$_c" ] && _cands+=("$_c")
+    done
+    for _c in "$_abs"/index.*; do
+        [ -f "$_c" ] && [ -s "$_c" ] && _cands+=("$_c")
+    done
+
+    if [ "${#_cands[@]}" -eq 1 ]; then
+        printf '%s\n' "${_cands[0]}"
+        return 0
+    fi
+    if [ "${#_cands[@]}" -gt 1 ]; then
+        warning "Declared deliverable '$_abs' is ambiguous — ${#_cands[@]} files match: ${_cands[*]}"
+        warning "  The declaration cannot identify one file; it needs an extension."
+        return 1
+    fi
+    return 1
+}
+
 verify_story_deliverables() {
     local story_id="$1"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
@@ -1819,7 +1869,12 @@ verify_story_deliverables() {
             done <<< "$_vendor_dirs"
         fi
         [ "$_is_vendor_path" = true ] && continue
-        if [ ! -s "$check_path" ]; then
+        local _resolved
+        if _resolved="$(_resolve_deliverable_path "$check_path")"; then
+            [ "$_resolved" != "$check_path" ] && \
+                log "  Deliverable '$file' resolved to '${_resolved#"$PROJECT_ROOT"/}' (declaration omitted the extension)"
+            check_path="$_resolved"
+        else
             missing+=("$file")
             continue
         fi

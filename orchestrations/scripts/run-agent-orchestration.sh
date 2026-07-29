@@ -2611,6 +2611,220 @@ KNOWNFIXES_EOF
     " 2>/dev/null
   }
 
+  # ── Lane execution: parallel by default ────────────────────────────────────
+  # Lanes of a spanning story are independent units of work; running them in
+  # sequence costs (N-1) x lane-duration in wall clock. On AMSD-2041 three
+  # ~20-minute lanes take an hour to do 20 minutes of work.
+  #
+  # THREE THINGS SEQUENCING GAVE FOR FREE, and how each is kept:
+  #
+  #  1. The canonical PRD merge. Every lane writes the same file, so concurrent
+  #     merges would clobber each other. Workers therefore never merge: each
+  #     writes only its own filtered PRD, and the merges run here, after the
+  #     wait, one at a time in declared order.
+  #  2. The halt rule. Sequencing prevented spend outright. In parallel the
+  #     lanes are already running, so the equivalent is to abort the survivors
+  #     the moment one fails. Money already spent cannot be recovered; money not
+  #     yet spent still can.
+  #  3. The cross-codeline contract. _run_codeline_bridge feeds one lane's
+  #     exported API into the NEXT lane's prompt, which presupposes an upstream
+  #     that has already finished. In parallel there is no upstream, so it is
+  #     skipped with a warning rather than silently writing a contract nobody
+  #     consumed. Lanes that genuinely integrate must set
+  #     EPAM_PARALLEL_CODELINES=0.
+  _EPAM_PARALLEL_LANES="${EPAM_PARALLEL_CODELINES:-1}"
+  if [ "$_EPAM_PARALLEL_LANES" = "1" ] && [ "${#_cl_entries[@]}" -gt 1 ]; then
+    local _p_cls=() _p_wts=() _p_prds=() _p_pids=()
+    local _p_statusdir; _p_statusdir="$(mktemp -d /tmp/orch-lanes-XXXXXX)"
+
+    for _entry in "${_cl_entries[@]}"; do
+      local _cl="${_entry%%:*}" _wt="${_entry#*:}"
+      local _cl_prd="/tmp/orch-${_cl}-prd-$$.json"
+      _cl_prds+=("$_cl_prd")
+      local _n_stories
+      _n_stories=$(_filtered_prd "$_cl" "$_cl_prd" "$_prd_path")
+      if [ "${_n_stories:-0}" -eq 0 ]; then
+        log "[orch] Codeline '${_cl}': no stories — skipping"
+        continue
+      fi
+      _p_cls+=("$_cl"); _p_wts+=("$_wt"); _p_prds+=("$_cl_prd")
+      log "[orch] Codeline '${_cl}' — ${_n_stories} stories → ${_wt}"
+    done
+
+    if [ "${#_p_cls[@]}" -gt 1 ]; then
+      warning "[orch] Parallel lanes: cross-codeline contract bridge SKIPPED — no lane is upstream of another."
+      warning "[orch]   Set EPAM_PARALLEL_CODELINES=0 if these lanes integrate with each other."
+    fi
+
+    log "[orch] Launching ${#_p_cls[@]} codeline(s) in PARALLEL..."
+    _lane_idx=0
+    while [ "$_lane_idx" -lt "${#_p_cls[@]}" ]; do
+      _cl="${_p_cls[$_lane_idx]}"
+      _wt="${_p_wts[$_lane_idx]}"
+      _cl_prd="${_p_prds[$_lane_idx]}"
+      _lane_status="${_p_statusdir}/${_cl}.status"
+      (
+        _log_file="${LOG_DIR:-/tmp}/lane-${_cl}.log"
+        _cl_failed=0
+    local _phases=()
+    mapfile -t _phases < <(_prd_phases "$_cl_prd")
+    local _cl_failed=0
+
+    for _phase in "${_phases[@]}"; do
+      [ -z "$_phase" ] && continue
+      # When the tier3 launcher (or any external caller) manages phases externally
+      # by calling run-agent-orchestration.sh once per phase, honour its filter so
+      # only the requested phase runs. Without this, a --phase scaffold call would
+      # still execute every phase across every codeline (double-execution bug).
+      if [ -n "$_phase_filter" ] && [ "$_phase" != "$_phase_filter" ]; then
+        log "[orch] Phase '${_phase}' — skipping (caller phase filter: '${_phase_filter}')"
+        continue
+      fi
+      log "[orch] Phase '${_phase}' — codeline '${_cl}'..."
+      local _pex=0
+      JIRA_CODELINE_RUN=1 \
+      PRD_FILE="$_cl_prd" \
+      PROJECT_ROOT="$_wt" \
+      OUTPUT_DIR="$_wt" \
+      PHASE="$_phase" \
+      CROSS_CODELINE_PRD="${CROSS_CODELINE_PRD:-}" \
+      bash "$0" --reset 2>&1 | tee -a "$_log_file"
+      # No pipefail in this script, so `| tee || _pex=` tests tee's exit (0) and never
+      # fires — a phase exit-2 (gate block) was masked to _pex=0 → "done" → PASSED
+      # (live AMSD-1820 run #3). Capture the inner orch's real exit; tee exits 0 so set -e is fine.
+      _pex=${PIPESTATUS[0]}
+
+      # exit 2 = gate remediation applied — reset stories and retry once (mirrors tier3 launcher)
+      if [ "$_pex" -eq 2 ]; then
+        log "[orch] Gate remediation applied for '${_phase}' ('${_cl}') — retrying with SKIP_GATE_REMEDIATION=1"
+        _pex=0
+        JIRA_CODELINE_RUN=1 \
+        PRD_FILE="$_cl_prd" \
+        PROJECT_ROOT="$_wt" \
+        OUTPUT_DIR="$_wt" \
+        PHASE="$_phase" \
+        SKIP_GATE_REMEDIATION=1 \
+        CROSS_CODELINE_PRD="${CROSS_CODELINE_PRD:-}" \
+        bash "$0" --reset 2>&1 | tee -a "$_log_file"
+        _pex=${PIPESTATUS[0]}
+        if [ "$_pex" -ne 0 ]; then
+          error "[orch] Phase '${_phase}' for '${_cl}' failed after self-healing retry (exit $_pex)"
+        else
+          log "[orch] Self-healing retry succeeded for '${_phase}' ('${_cl}')"
+        fi
+      fi
+
+      if [ "$_pex" -ne 0 ]; then
+        error "[orch] Phase '${_phase}' for '${_cl}' failed (exit $_pex)"
+        _cl_failed=1; _overall=1; break
+      fi
+      log "[orch] Phase '${_phase}' — '${_cl}' done."
+    done
+
+    [ "$_cl_failed" = "0" ] && \
+      _completed_list="${_completed_list:+${_completed_list}:}${_cl_prd}"
+        echo "$_cl_failed" > "$_lane_status"
+      ) &
+      _p_pids+=("$!")
+      _lane_idx=$(( _lane_idx + 1 ))
+    done
+
+    _p_any_failed=0
+    _p_running=1
+    while [ "$_p_running" = "1" ]; do
+      _p_running=0
+      for _pid in "${_p_pids[@]}"; do
+        kill -0 "$_pid" 2>/dev/null && _p_running=1
+      done
+      for _cl in "${_p_cls[@]}"; do
+        if [ -f "${_p_statusdir}/${_cl}.status" ] && [ "$(cat "${_p_statusdir}/${_cl}.status" 2>/dev/null)" != "0" ]; then
+          _p_any_failed=1
+        fi
+      done
+      if [ "$_p_any_failed" = "1" ] && [ "$_p_running" = "1" ]; then
+        error "[orch] HALT: a codeline failed after its retries and self-heal completed."
+        error "[orch]   Aborting the codeline(s) still running — recovery is exhausted, so"
+        error "[orch]   letting them finish would spend on a run already decided."
+        for _pid in "${_p_pids[@]}"; do kill "$_pid" 2>/dev/null || true; done
+        break
+      fi
+      [ "$_p_running" = "1" ] && sleep 5
+    done
+    wait 2>/dev/null || true
+
+    _lane_idx=0
+    while [ "$_lane_idx" -lt "${#_p_cls[@]}" ]; do
+      _cl="${_p_cls[$_lane_idx]}"
+      _cl_prd="${_p_prds[$_lane_idx]}"
+      _cl_failed=1
+      [ -f "${_p_statusdir}/${_cl}.status" ] && _cl_failed="$(cat "${_p_statusdir}/${_cl}.status" 2>/dev/null || echo 1)"
+      if [ "$_cl_failed" = "0" ]; then
+        _completed_list="${_completed_list:+${_completed_list}:}${_cl_prd}"
+      else
+        # Always explain a failed lane, even when every lane had already
+        # finished by the time the abort poll noticed. Without this the run ends
+        # non-zero with no statement of which lane died or why the others were
+        # stopped — the operator is left diffing timestamps.
+        error "[orch] HALT: codeline '${_cl}' failed after its retries and self-heal completed."
+        _overall=1
+      fi
+    # Merge this codeline's final story state (status/completed/completedAt/
+    # testCriteria/etc — whatever claude.sh/TC-writer wrote into the filtered
+    # temp copy during real execution) back into the canonical PRD. Without
+    # this, _cl_prd is the only file that ever held the real completion
+    # result, and it was being deleted at the end of the loop — so the
+    # canonical PRD (the file every downstream consumer, dashboard, and test
+    # actually reads) stayed "pending" forever even after a real, successful
+    # run. Found live 2026-07-23 via mock1.
+    "$NODE_BIN" -e "
+      const fs = require('fs');
+      const canonical = JSON.parse(fs.readFileSync('${_prd_path}', 'utf8'));
+      const updated = JSON.parse(fs.readFileSync('${_cl_prd}', 'utf8'));
+      const byId = new Map(updated.stories.map(s => [s.id, s]));
+      const CL = '${_cl}';
+      canonical.stories = canonical.stories.map(s => {
+        const u = byId.get(s.id);
+        if (!u) return s;
+        // A story confined to one codeline merges wholesale, exactly as before.
+        const spans = Array.isArray(s.codelines) && s.codelines.length > 1;
+        if (!spans) return u;
+        // A SPANNING story is touched by every lane, so a whole-object merge is
+        // last-writer-wins: a story that failed in one codeline and succeeded in
+        // another would read as whichever lane happened to run last. Record each
+        // lane's outcome separately and derive the story's own state from all of
+        // them — it is complete only when NO lane is outstanding.
+        const perCodeline = { ...(s.perCodeline || {}), [CL]: {
+          status: u.status, completed: !!u.completed, completedAt: u.completedAt || null,
+          reviewStatus: u.reviewStatus || null,
+        } };
+        const everyLaneDone = s.codelines.every(cl =>
+          perCodeline[cl] && perCodeline[cl].completed === true);
+        return {
+          ...u,
+          perCodeline,
+          codelines: s.codelines,
+          completed: everyLaneDone,
+          status: everyLaneDone ? 'completed' : 'in-progress',
+          completedAt: everyLaneDone ? (u.completedAt || new Date().toISOString()) : null,
+        };
+      });
+      // Stories CREATED during the run exist only in the codeline PRD, and a map
+      // over canonical can never add them. The spec pass splits a story into
+      // <id>-impl / <id>-test there and marks the parent deprecated — so without
+      // this, mock1 run 10 implemented, tested, reviewed and committed two child
+      // stories, and canonical kept nothing but a deprecated parent. Every reader
+      // of that PRD — the run report, a rerun deciding what is outstanding, a
+      // human — would conclude the run delivered nothing.
+      const known = new Set(canonical.stories.map(s => s.id));
+      for (const u of updated.stories) {
+        if (!known.has(u.id)) canonical.stories.push(u);
+      }
+      fs.writeFileSync('${_prd_path}', JSON.stringify(canonical, null, 2));
+    " 2>/dev/null && log "[orch] Merged codeline '${_cl}' story state back into canonical PRD"
+      _lane_idx=$(( _lane_idx + 1 ))
+    done
+    rm -rf "$_p_statusdir" 2>/dev/null || true
+  else
   for _entry in "${_cl_entries[@]}"; do
     local _cl="${_entry%%:*}" _wt="${_entry#*:}"
     local _cl_prd="/tmp/orch-${_cl}-prd-$$.json"
@@ -2767,6 +2981,7 @@ KNOWNFIXES_EOF
       break
     fi
   done
+  fi
 
   # ── Partial coverage is a failure, not a pass ──────────────────────────────
   # A spanning story names the codelines it must be delivered in. Lane failures

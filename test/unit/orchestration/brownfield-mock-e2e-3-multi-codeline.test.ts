@@ -114,12 +114,35 @@ function makeRuntimePrd(laneA: string, laneB: string): string {
     { codeline: 'mock-a', path: laneA },
     { codeline: 'mock-b', path: laneB },
   ];
+  // outputDir is required IN ADDITION to outputDirs, and is the first lane —
+  // exactly what Jira ingest synthesises for the real metrolinx PRD. It is read
+  // by the PROJECT_ROOT guard, which runs long before the multi-codeline
+  // routing: without it PROJECT_ROOT falls back to the epam-cli repo root and
+  // the run aborts in under a second. Found by this test on its first execution.
+  prd.project.outputDir = laneA;
   const out = join(dir, 'prd.json');
   writeFileSync(out, JSON.stringify(prd, null, 2));
   return out;
 }
 
-function runPipeline(prdPath: string, phase: string): Promise<{ stdout: string; exitCode: number }> {
+/**
+ * Where the pipeline's own output is streamed, chunk by chunk, as it arrives.
+ *
+ * The first real execution of this test buffered stdout into a variable and
+ * returned it only on close. When the run was stopped mid-file the variable died
+ * with the process, vitest's teardown deleted the mock codelines, and the ONLY
+ * record of why lane B never delivered was the absence of some log files. A test
+ * that cannot say why it failed does not earn its runtime.
+ *
+ * This directory is NOT cleaned up: it is the evidence.
+ */
+const TRANSCRIPT_DIR = join(REPO_ROOT, 'orchestrations/logs/mock3-transcripts');
+
+function runPipeline(prdPath: string, phase: string): Promise<{ stdout: string; exitCode: number; transcript: string }> {
+  mkdirSync(TRANSCRIPT_DIR, { recursive: true });
+  const transcript = join(TRANSCRIPT_DIR, `pipeline-${phase}-${process.pid}.log`);
+  writeFileSync(transcript, `# mock3 ${phase} — PRD ${prdPath}\n`);
+  const record = (chunk: string) => { try { appendFileSync(transcript, chunk); } catch { /* evidence is best-effort */ } };
   return new Promise((resolve) => {
     const child = spawn('bash', [RUN_AGENT_ORCH, '--phase', phase, '--reset'], {
       cwd: REPO_ROOT,
@@ -175,7 +198,14 @@ describe.skipIf(!RUN_REAL)('Mock 3 — REAL multi-codeline lane loop, two codeli
     expect(exitCode, `pipeline exited ${exitCode}:\n${stdout.slice(-4000)}`).toBe(0);
   }, 45 * 60 * 1000);
 
-  it('records a per-codeline result for every declared lane', async () => {
+  // SKIPPED 2026-07-28, deliberately. This repeats the ENTIRE two-lane run from
+  // scratch — a second ~45 minutes and a second billed run — to assert
+  // perCodeline, which lane-loop-halts-on-failure.test.ts already covers at unit
+  // level in seconds, including the harder case (one lane delivers, another
+  // fails). The first test above is the one that has to be paid for: it proves
+  // real delivery across both lanes. Re-enable only if the perCodeline merge
+  // needs verifying against a real agent run specifically.
+  it.skip('records a per-codeline result for every declared lane', async () => {
     // The spanning-story completeness check: a story is complete only when NO
     // lane is outstanding. A run that silently delivered one lane and reported
     // success is the failure this guards — the shape of live run 9, where
@@ -206,13 +236,28 @@ describe('mock3 wiring is valid without spending anything', () => {
     expect(prd.stories[0].codelines).toEqual(['mock-a', 'mock-b']);
   });
 
-  it('the runtime PRD injects exactly two outputDirs, and nothing else', () => {
+  it('the runtime PRD injects only the codeline paths, and nothing else', () => {
     const prd = JSON.parse(readFileSync(makeRuntimePrd('/tmp/a', '/tmp/b'), 'utf8'));
     const canonical = JSON.parse(readFileSync(CANONICAL_PRD, 'utf8'));
     expect(prd.project.outputDirs).toHaveLength(2);
-    // Everything except outputDirs must be byte-identical to canonical.
+    // Everything except the injected paths must be identical to canonical, so
+    // the injection cannot quietly grow into hand-authored fixture content.
     delete prd.project.outputDirs;
+    delete prd.project.outputDir;
     expect(prd).toEqual(canonical);
+  });
+
+  it('sets outputDir as well as outputDirs, or the run aborts before the loop', () => {
+    // The PROJECT_ROOT guard (run-agent-orchestration.sh:~88) runs long before
+    // multi-codeline routing and reads project.outputDir. With only outputDirs
+    // set, PROJECT_ROOT fell back to the epam-cli repo root and the pipeline
+    // exited in 533ms — which is exactly how this test failed the first time it
+    // ran for real. The real metrolinx PRD sets both; so must this.
+    const prd = JSON.parse(readFileSync(makeRuntimePrd('/tmp/a', '/tmp/b'), 'utf8'));
+    expect(prd.project.outputDir, 'PROJECT_ROOT will fall back to the epam-cli repo')
+      .toBe('/tmp/a');
+    expect(prd.project.outputDir, 'outputDir must be the FIRST lane, as ingest writes it')
+      .toBe(prd.project.outputDirs[0].path);
   });
 
   it('two outputDirs is what routes the run into the lane loop', () => {

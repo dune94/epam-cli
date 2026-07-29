@@ -73,7 +73,7 @@ afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, f
  * Run the real loop over two lanes. `failing` is the codeline whose pipeline
  * invocation exits non-zero after its retries are spent.
  */
-function runLanes(failing: string, opts: { markDelivered?: string } = {}):
+function runLanes(failing: string, opts: { markDelivered?: string; parallel?: boolean } = {}):
   { entered: string[]; exit: number; out: string; prd: string } {
   const dir = mkdtempSync(join(tmpdir(), 'lane-halt-'));
   dirs.push(dir);
@@ -146,7 +146,10 @@ echo "LOOP_EXIT=\$?"
 `);
   chmodSync(harness, 0o755);
 
-  const r = spawnSync('bash', [harness], { encoding: 'utf8', timeout: 120000, cwd: dir });
+  const r = spawnSync('bash', [harness], {
+    encoding: 'utf8', timeout: 120000, cwd: dir,
+    env: { ...process.env, EPAM_PARALLEL_CODELINES: opts.parallel === false ? '0' : '1' },
+  });
   const out = `${r.stdout || ''}${r.stderr || ''}`;
   const entered = existsSync(marker)
     ? readFileSync(marker, 'utf8').split('\n').map((s) => s.trim()).filter(Boolean)
@@ -155,18 +158,18 @@ echo "LOOP_EXIT=\$?"
   return { entered, exit: m ? Number(m[1]) : -1, out, prd: prdPath };
 }
 
-describe('the lane loop halts once a codeline has finally failed', () => {
+describe('the lane loop halts once a codeline has finally failed (sequential mode)', () => {
   it('the harness drives both lanes when nothing fails', () => {
     // Guards the harness itself: if the loop never reached lane-b for an
     // unrelated reason, the halt assertion below would pass vacuously.
-    const { entered, exit } = runLanes('none');
+    const { entered, exit } = runLanes('none', { parallel: false });
     expect(entered, 'the harness never ran both lanes — the halt test proves nothing')
       .toEqual(['lane-a', 'lane-b']);
     expect(exit).toBe(0);
   });
 
   it('does NOT start the next codeline after one fails', () => {
-    const { entered, out } = runLanes('lane-a');
+    const { entered, out } = runLanes('lane-a', { parallel: false });
     expect(entered,
       `lane-a failed after its retries were spent, yet the run continued into ` +
       `${entered.slice(1).join(', ')} — the live AMSD-2041 behaviour:\n${out}`)
@@ -174,12 +177,12 @@ describe('the lane loop halts once a codeline has finally failed', () => {
   });
 
   it('reports failure rather than exiting clean', () => {
-    const { exit } = runLanes('lane-a');
+    const { exit } = runLanes('lane-a', { parallel: false });
     expect(exit, 'a halted run must not report success').not.toBe(0);
   });
 
   it('says why it stopped', () => {
-    const { out } = runLanes('lane-a');
+    const { out } = runLanes('lane-a', { parallel: false });
     // Matched against the specific halt message, not a loose alternation: an
     // earlier draft used /halt|not starting|remaining/i and passed on incidental
     // text while the loop was still running every lane.
@@ -191,7 +194,7 @@ describe('the lane loop halts once a codeline has finally failed', () => {
     // The merge is what makes the failure visible in the canonical PRD; halting
     // must not cost that. Absence of the merge line would mean the operator
     // sees a run that stopped with no record of where.
-    const { out } = runLanes('lane-a');
+    const { out } = runLanes('lane-a', { parallel: false });
     expect(out).toMatch(/Merged codeline 'lane-a'/);
   });
 });
@@ -205,7 +208,7 @@ describe('a partial solution is never accepted', () => {
   // GENUINELY delivered while another failed: the work is real, the commit is
   // real, and the temptation is to call the story done. It is not done — it was
   // declared against both codelines.
-  const delivered = () => runLanes('lane-b', { markDelivered: 'lane-a' });
+  const delivered = () => runLanes('lane-b', { markDelivered: 'lane-a', parallel: false });
 
   it('runs the delivering lane and then fails on the second', () => {
     // Guard: if lane-a never delivered, "not completed" below proves nothing.
@@ -237,5 +240,47 @@ describe('a partial solution is never accepted', () => {
 
   it('still exits non-zero — partial delivery is a failed run', () => {
     expect(delivered().exit).not.toBe(0);
+  });
+});
+
+describe('parallel lanes — the same guarantees, differently enforced', () => {
+  // Lanes now run concurrently by default (EPAM_PARALLEL_CODELINES=1). That
+  // changes HOW the halt rule is honoured, not whether it is. Sequencing
+  // prevented spend outright: a failed first lane meant later lanes never
+  // started. In parallel they have already started, so the equivalent is to
+  // abort the survivors the moment one fails — money already spent cannot be
+  // recovered, money not yet spent still can.
+  //
+  // What must NOT change is the outcome contract: a failed lane fails the run,
+  // and a story delivered in only some of its lanes is not delivered.
+  it('starts every lane rather than waiting its turn', () => {
+    const { entered } = runLanes('none', { parallel: true });
+    expect(entered.sort(), 'lanes did not run concurrently').toEqual(['lane-a', 'lane-b']);
+  });
+
+  it('a failed lane still fails the whole run', () => {
+    expect(runLanes('lane-a', { parallel: true }).exit,
+      'a lane failed and the run reported success').not.toBe(0);
+  });
+
+  it('says it is aborting the lanes still running', () => {
+    const { out } = runLanes('lane-a', { parallel: true });
+    // Either message is a correct halt: "aborting the survivors" when lanes are
+    // still running, or the per-lane statement when they had all finished by
+    // the time the poll noticed. What is NOT acceptable is a non-zero exit with
+    // no explanation of which lane died.
+    expect(out, 'the run failed without naming the lane that caused it')
+      .toMatch(/HALT: codeline 'lane-a' failed|HALT: a codeline failed|Aborting the codeline/i);
+  });
+
+  it('STILL refuses a partial solution when one lane delivered and another failed', () => {
+    // The rule that survives both modes, and the one that matters most.
+    const { prd, exit } = runLanes('lane-b', { markDelivered: 'lane-a', parallel: true });
+    const story = JSON.parse(readFileSync(prd, 'utf8')).stories
+      .find((s: { id: string }) => s.id === 'T-1');
+    expect(story.completed,
+      'a story delivered in one of two lanes was accepted as complete')
+      .not.toBe(true);
+    expect(exit).not.toBe(0);
   });
 });

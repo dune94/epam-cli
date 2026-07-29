@@ -115,15 +115,19 @@ describe('run-agent-orchestration.sh — Step 0.5 profile-mutation reviewer gate
   });
 
   it('runs the reviewer gate AFTER the jq-empty syntax check (syntax check is not replaced, only supplemented)', () => {
+    // NO fixed window. This assertion is about ORDER, so it compares positions
+    // in the source directly. The window was already widened once (5500 -> 9000)
+    // for exactly this reason, and adding a tool-budget block to the assessment
+    // prompt pushed the markers past 9000 too — a correct ordering reported as
+    // absent, for the third time. A byte offset was never the invariant.
     const fnIdx = orchSrc.indexOf("_pfa_profiles_before=");
-    // 9000, not 5500: the asserted strings sit ~5.9K chars in, and a fixed window
-    // reported a correct ORDERING as absent the moment comments were added above
-    // them. The invariant is the order, not the byte offset.
-    const block = orchSrc.slice(fnIdx, fnIdx + 9000);
-    const syntaxIdx = block.indexOf('jq empty "$profiles_file"');
-    const reviewerIdx = block.indexOf('CHANGE TYPE: profile_creation');
-    expect(syntaxIdx).toBeGreaterThan(-1);
-    expect(reviewerIdx).toBeGreaterThan(syntaxIdx);
+    expect(fnIdx, 'anchor not found').toBeGreaterThan(-1);
+    const syntaxIdx = orchSrc.indexOf('jq empty "$profiles_file"', fnIdx);
+    const reviewerIdx = orchSrc.indexOf('CHANGE TYPE: profile_creation', fnIdx);
+    expect(syntaxIdx, 'the jq-empty syntax check is gone').toBeGreaterThan(-1);
+    expect(reviewerIdx, 'the reviewer gate is gone').toBeGreaterThan(-1);
+    expect(reviewerIdx, 'the reviewer gate no longer follows the syntax check')
+      .toBeGreaterThan(syntaxIdx);
   });
 
   it('computes a structural diff (new_profiles vs changed_profiles) instead of a raw text tail excerpt', () => {

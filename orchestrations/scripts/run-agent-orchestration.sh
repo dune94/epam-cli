@@ -4040,6 +4040,18 @@ run_pre_phase_assessment() {
     # The output schema, bound at the provider rather than requested in prose.
     # Absent/malformed => AgentRunner warns and continues unbound, and
     # assessment_apply.py still recovers a JSON object from the answer.
+    # ── Tool budget: ONE source, stated to the model AND enforced at the seam ──
+    # This agent had neither. It got read tools and EPAM_MAX_ITERATIONS=25, and
+    # nothing ever told it to stop exploring — so how many turns it spent was a
+    # property of whichever repository the lane happened to draw. Live metrolinx
+    # 2026-07-29 proved it: same prompt, same cap, gotransit and metrolinx
+    # converged, upexpress exhausted. The agents that DO converge (the CodeGraph
+    # detective, team-lead review) are the ones given a budget they can see.
+    #
+    # Both halves are required. A budget the model cannot see truncates it
+    # mid-thought, and the response schema then returns a valid EMPTY object —
+    # a loud failure turned silent, exactly as the note below this warns.
+    local _pfa_tool_budget="${PRE_ASSESSMENT_MAX_TOOL_CALLS:-10}"
     local _pfa_schema=""
     _pfa_schema=$(python3 "$SCRIPT_DIR/lib/assessment_apply.py" --print-schema 2>/dev/null || echo "")
 
@@ -4068,6 +4080,12 @@ run_pre_phase_assessment() {
     local assessment_prompt
     # shellcheck disable=SC2287
     assessment_prompt=$(cat << PROMPT_HEADER
+CONVERGE FAST — HARD LIMIT: ${_pfa_tool_budget} tool calls total. This is not a suggestion.
+By your ${_pfa_tool_budget}th tool call you MUST stop investigating and return your BEST current
+answer. Exploring past the budget WITHOUT answering means you return nothing at all and every
+bit of your investigation is discarded — a partially-informed augmentation is worth far more
+than none. If you are unsure, decide from what you have already seen and answer now.
+
 You are the skill assessment agent running in PRE-PHASE mode. Your job is to deeply reason about what each assigned agent will need to succeed — not just check a list of requiredSkills, but actively anticipate pitfalls given the tech stack, file types, and implementation patterns the stories demand. You augment agent profiles with the specific knowledge needed to avoid failures before they happen.
 
 ## PRD STRUCTURE (read this carefully before issuing any jq commands)
@@ -4224,6 +4242,7 @@ Fix this and retry. Do not repeat the same mistake."
         # what makes the schema safe: a schema over an agent that still exhausts
         # returns a valid EMPTY object, which is a loud failure turned silent.
         EPAM_ALLOWED_WRITE_PATHS="" \
+        EPAM_MAX_TOOL_CALLS="${_pfa_tool_budget}" \
         EPAM_RESPONSE_SCHEMA="${_pfa_schema:-}" \
         run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "team-lead-agent" 2>&1 | tee "$assessment_log"
         # PIPESTATUS, not `|| _pfa_call_ok=0`: this is a PIPELINE, and its exit
@@ -4241,8 +4260,12 @@ Fix this and retry. Do not repeat the same mistake."
         # identical failure at full price.
         if _pfa_capability_failed "$assessment_log"; then
             error "[pre-phase-assessment] agent exhausted its iteration cap without completing — NO profile augmentation happened for phase '$phase_id'"
-            error "  This is a capability failure: the assessment task does not fit the iteration budget."
-            error "  Not retrying — the same prompt at the same cap fails identically. See $assessment_log"
+            error "  The agent explored past its budget without answering, so nothing was applied."
+            error "  NOT a fixed capability wall: on 2026-07-29 the same prompt at the same cap"
+            error "  converged for two codelines and exhausted for a third — it varies with the"
+            error "  repository. If this recurs, lower PRE_ASSESSMENT_MAX_TOOL_CALLS (currently"
+            error "  ${_pfa_tool_budget}) so the agent commits earlier, rather than raising the iteration cap."
+            error "  Not retrying: an identical prompt costs full price for the same roll. See $assessment_log"
             cp "$_pfa_prd_before_file" "$PRD_FILE"
             echo "$_pfa_profiles_before" > "$profiles_file"
             break

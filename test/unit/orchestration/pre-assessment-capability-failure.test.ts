@@ -117,7 +117,7 @@ describe('the failure reaches the caller', () => {
     const body = fn('run_pre_phase_assessment');
     const i = body.indexOf('_pfa_capability_failed');
     expect(i, 'the capability check is not wired into the retry loop').toBeGreaterThan(-1);
-    expect(body.slice(i, i + 700),
+    expect(body.slice(i, (body.indexOf('\n    done', i) + 1) || body.length),
       'an exhausted agent is retried against the identical prompt — the same task ' +
       'at the same cap exhausts again, at full cost')
       .toMatch(/break/);
@@ -126,7 +126,7 @@ describe('the failure reaches the caller', () => {
   it('says so loudly rather than logging and continuing', () => {
     const body = fn('run_pre_phase_assessment');
     const i = body.indexOf('_pfa_capability_failed');
-    expect(body.slice(i, i + 700), 'the failure is not surfaced to the operator')
+    expect(body.slice(i, (body.indexOf('\n    done', i) + 1) || body.length), 'the failure is not surfaced to the operator')
       .toMatch(/error |warning /);
   });
 });

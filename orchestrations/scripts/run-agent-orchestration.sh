@@ -2206,6 +2206,17 @@ start_dashboards_watch() {
         warning "Dashboards config not found at $config_path; skipping auto-serve."
         return
     fi
+    # A lane re-exec must never start its own watcher. The parent run already has
+    # one, and the pid-file check below is NOT atomic: three lanes launched
+    # together all read the file before any of them wrote it, so live metrolinx
+    # 2026-07-29 ran three Eleventy stacks rebuilding the same dashboard from the
+    # same LOG_DIR — ~120% CPU competing with the lanes for identical output.
+    # Sequential lanes hid this by never overlapping. A lock would also close the
+    # race; not starting it at all is simpler and strictly correct, because the
+    # lane has nothing to serve that the parent is not already serving.
+    if [ "${JIRA_CODELINE_RUN:-}" = "1" ]; then
+        return
+    fi
     if [ -n "$DASHBOARD_WATCH_PID" ]; then
         return
     fi
@@ -2665,6 +2676,23 @@ KNOWNFIXES_EOF
       _lane_status="${_p_statusdir}/${_cl}.status"
       (
         _log_file="${LOG_DIR:-/tmp}/lane-${_cl}.log"
+        # ── Per-lane LOG_DIR ──────────────────────────────────────────────
+        # Lanes used to inherit ONE LOG_DIR, and several files in it are read
+        # back as STATE rather than merely written as logs. The proven case is
+        # phase-baseline-sha.txt, the git SHA every diff-based gate uses to
+        # decide what a story changed. With three lanes on three different
+        # repositories the last writer won, so two lanes diffed against a commit
+        # that does not exist in them — an empty diff, and review-ranger /
+        # mutant-hunter / team-lead-review passing on ZERO files. A false pass on
+        # unreviewed code, which is worse than a crash because it looks like
+        # success. Live metrolinx 2026-07-29, killed on discovery of this.
+        #
+        # Scoping LOG_DIR fixes every such file at once — the baseline SHA, the
+        # review-incomplete-<phase> flag (PHASE is identical across lanes), the
+        # story-outputs manifest and the worktree logs — instead of patching each
+        # call site in seven scripts and missing the eighth.
+        _lane_log_dir="${LOG_DIR:-/tmp}/lanes/${_cl}"
+        mkdir -p "$_lane_log_dir" 2>/dev/null || true
         _cl_failed=0
     local _phases=()
     mapfile -t _phases < <(_prd_phases "$_cl_prd")
@@ -2683,6 +2711,7 @@ KNOWNFIXES_EOF
       log "[orch] Phase '${_phase}' — codeline '${_cl}'..."
       local _pex=0
       JIRA_CODELINE_RUN=1 \
+      LOG_DIR="$_lane_log_dir" \
       PRD_FILE="$_cl_prd" \
       PROJECT_ROOT="$_wt" \
       OUTPUT_DIR="$_wt" \
@@ -2699,6 +2728,7 @@ KNOWNFIXES_EOF
         log "[orch] Gate remediation applied for '${_phase}' ('${_cl}') — retrying with SKIP_GATE_REMEDIATION=1"
         _pex=0
         JIRA_CODELINE_RUN=1 \
+      LOG_DIR="$_lane_log_dir" \
         PRD_FILE="$_cl_prd" \
         PROJECT_ROOT="$_wt" \
         OUTPUT_DIR="$_wt" \

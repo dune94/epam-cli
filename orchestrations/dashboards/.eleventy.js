@@ -191,6 +191,27 @@ module.exports = function (eleventyConfig) {
     }
   });
 
+  // Rebuilds were unthrottled while dashboards/logs symlinks to the pipeline's
+  // log directory, so EVERY log write triggered a full rebuild. Under three
+  // parallel lanes that was continuous rebuilding at ~30% CPU per watcher.
+  // 30s is invisible to a human watching a 20-minute run.
+  eleventyConfig.setWatchThrottleWaitTime(
+    Number(process.env.EPAM_DASH_THROTTLE_MS || 30000));
+
+  // The high-churn JSONL/status files do not need to trigger a rebuild at all:
+  // snapshot.js reads them at REQUEST time, so their content reaches the page
+  // without one. Watching them was pure cost.
+  for (const noisy of [
+    'logs/agent-activity.jsonl',
+    'logs/agent-status.json',
+    'logs/spec-phase.jsonl',
+    'logs/guarded-step-retries-history.jsonl',
+    'logs/phase-cost.jsonl',
+    'logs/healing-events.jsonl',
+  ]) {
+    eleventyConfig.watchIgnores.add(path.resolve(__dirname, noisy));
+  }
+
   eleventyConfig.setServerOptions({
     port: Number(process.env.EPAM_DASH_PORT || 8093),
     showAllHosts: true

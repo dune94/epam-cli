@@ -108,6 +108,13 @@ if [ "\${1:-}" = "--reset" ]; then
   # Callee: which lane is this? PRD_FILE is /tmp/orch-<codeline>-prd-<pid>.json
   _cl=\$(basename "\${PRD_FILE:-}" | sed -E 's/^orch-(.*)-prd-[0-9]+\\.json$/\\1/')
   echo "\$_cl" >> "${marker}"
+  # Record the LOG_DIR this lane was handed, and write a baseline SHA into it —
+  # the file that corrupted across lanes live on 2026-07-29.
+  echo "\$_cl \${LOG_DIR:-unset}" >> "${marker}.logdirs"
+  if [ -n "\${LOG_DIR:-}" ]; then
+    mkdir -p "\$LOG_DIR" 2>/dev/null || true
+    echo "sha-of-\$_cl" > "\$LOG_DIR/phase-baseline-sha.txt"
+  fi
   # A lane that DELIVERS marks the story complete in its own filtered PRD,
   # exactly as claude.sh does during a real run. This is what makes the
   # partial-success case reachable: one lane genuinely succeeded.
@@ -282,5 +289,50 @@ describe('parallel lanes — the same guarantees, differently enforced', () => {
       'a story delivered in one of two lanes was accepted as complete')
       .not.toBe(true);
     expect(exit).not.toBe(0);
+  });
+});
+
+describe('parallel lanes cannot read each other\'s state', () => {
+  // Live metrolinx 2026-07-29, the reason that run was killed. Every lane
+  // inherited one LOG_DIR, and phase-baseline-sha.txt in it is READ BACK as
+  // state — the git SHA every diff-based gate uses to decide what changed. Last
+  // writer won, so two of three lanes diffed against a commit absent from their
+  // repository: empty diff, and the review gates passed on ZERO files.
+  //
+  // A crash halts the run. This reported success on unreviewed code, which is
+  // why it is tested by what each lane can SEE, not by whether it errored.
+  const laneLogDirs = (dir: string): Record<string, string> => {
+    const f = `${dir}.logdirs`;
+    if (!existsSync(f)) return {};
+    const out: Record<string, string> = {};
+    for (const line of readFileSync(f, 'utf8').split('\n').filter(Boolean)) {
+      const [cl, ld] = line.trim().split(/\s+/);
+      if (cl) out[cl] = ld;
+    }
+    return out;
+  };
+
+  it('hands every lane a DIFFERENT LOG_DIR', () => {
+    const r = runLanes('none', { parallel: true });
+    const dirs = laneLogDirs(join(r.prd, '..', 'entered.txt'));
+    const values = Object.values(dirs);
+    expect(values.length, `lanes did not report a LOG_DIR: ${JSON.stringify(dirs)}`).toBe(2);
+    expect(new Set(values).size,
+      `both lanes share one LOG_DIR (${values[0]}) — baseline SHA, the ` +
+      'review-incomplete flag and the story-outputs manifest all collide')
+      .toBe(2);
+  });
+
+  it('each lane sees only its OWN baseline SHA', () => {
+    const r = runLanes('none', { parallel: true });
+    const dirs = laneLogDirs(join(r.prd, '..', 'entered.txt'));
+    for (const [cl, ld] of Object.entries(dirs)) {
+      const f = join(ld, 'phase-baseline-sha.txt');
+      expect(existsSync(f), `${cl} wrote no baseline`).toBe(true);
+      expect(readFileSync(f, 'utf8').trim(),
+        `${cl} is reading a baseline written by another lane — its gates would ` +
+        'diff against a commit that does not exist in its repository')
+        .toBe(`sha-of-${cl}`);
+    }
   });
 });

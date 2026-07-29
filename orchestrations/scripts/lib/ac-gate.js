@@ -71,6 +71,37 @@ const SPLIT_VALUE = process.env.JIRA_SPLIT_CODELINE || 'both';
 // own codeline labels at call time (passed into buildClassificationPrompt).
 // This means zero config is required for single-codeline projects.
 
+/**
+ * Parse a model's JSON answer, tolerating truncation.
+ *
+ * `/\{[\s\S]*\}/` needs a closing brace, so a response cut off mid-object
+ * reads as "no JSON at all" and a correct answer is discarded. Live metrolinx
+ * 2026-07-29: the classifier answered {"verdict":"insufficient",...}, the match
+ * failed, and the gate recorded the OPPOSITE verdict.
+ *
+ * jsonrepair closes the object — the same recovery spec-mode-runner already
+ * applies to this class of output. Guarded to text that actually begins with
+ * '{', so prose is never coerced into an object.
+ *
+ * ONE function for every call site in this file: the truncation bug existed in
+ * two places and was fixed in one, which is how the second site kept returning
+ * a title-only AC list.
+ */
+function parseLooseJson(raw, what) {
+  const m = raw.match(/\{[\s\S]*\}/);
+  if (m) return JSON.parse(m[0]);
+  const first = raw.indexOf('{');
+  if (first !== -1) {
+    try {
+      const { jsonrepair } = require('jsonrepair');
+      const repaired = JSON.parse(jsonrepair(raw.slice(first)));
+      process.stderr.write(`[ac-gate] ${what} response was truncated; recovered via jsonrepair\n`);
+      return repaired;
+    } catch (_) { /* fall through */ }
+  }
+  throw new Error(`No JSON in ${what} response: ${raw.slice(0, 200)}`);
+}
+
 function resolveCodelines(issues) {
   if (process.env.JIRA_CODELINES) {
     return process.env.JIRA_CODELINES.split(',').map(c => c.trim()).filter(Boolean);
@@ -193,33 +224,7 @@ function classifyWithLLM(issue, knownCodelines) {
 
     if (!raw) throw new Error('Empty response from ai-run.sh');
 
-    // Extract JSON from response (may have surrounding explanation)
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (jsonMatch) return JSON.parse(jsonMatch[0]);
-
-    // No closing brace: the response was TRUNCATED mid-object, not absent.
-    // Live metrolinx 2026-07-29 — the model answered correctly:
-    //   {"verdict": "insufficient", "reason": "Acceptance criteria are
-    //    explicitly listed as '(none)' and the description is too vague...
-    // and the gate reported "No JSON in LLM response", then recorded the
-    // OPPOSITE verdict (enrichable) and printed "All stories classified".
-    // The story ended with codelines:null, zero lanes launched, run dead.
-    //
-    // jsonrepair closes a truncated object rather than discarding a correct
-    // answer; spec-mode-runner already uses it for the same M3-style output.
-    // Guarded to text that actually starts as JSON, so arbitrary prose is not
-    // coerced into an object.
-    const firstBrace = raw.indexOf('{');
-    if (firstBrace !== -1) {
-      try {
-        const { jsonrepair } = require('jsonrepair');
-        const repaired = JSON.parse(jsonrepair(raw.slice(firstBrace)));
-        process.stderr.write(
-          `[ac-gate] response was truncated; recovered via jsonrepair (verdict=${repaired.verdict})\n`);
-        return repaired;
-      } catch (_) { /* fall through to the error below */ }
-    }
-    throw new Error(`No JSON in LLM response: ${raw.slice(0, 200)}`);
+    return parseLooseJson(raw, 'classification');
   } catch (e) {
     process.stderr.write(`[ac-gate] LLM call failed for ${issue.jiraKey}: ${e.message}\n`);
     // A FAILED CALL IS NOT A VERDICT. This used to return 'enrichable', which
@@ -281,15 +286,23 @@ Respond with JSON only — no markdown, no preamble:
     const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>/dev/null`;
     const raw = execSync(cmd, { encoding: 'utf8', timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000), env: { ...process.env, EPAM_AGENT_NAME: 'ac-gate' } }).trim();
     if (!raw) throw new Error('Empty elaboration response');
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error(`No JSON in elaboration response: ${raw.slice(0, 200)}`);
-    const parsed = JSON.parse(jsonMatch[0]);
+    const parsed = parseLooseJson(raw, 'elaboration');
     return Array.isArray(parsed.enrichedAcs) && parsed.enrichedAcs.length > 0
       ? parsed.enrichedAcs
       : [`Implement the behaviour described in ${issue.jiraKey}: ${issue.title}`];
   } catch (e) {
-    process.stderr.write(`[ac-gate]     elaboration LLM call failed: ${e.message} — using title-based fallback\n`);
-    return [`Implement the behaviour described in ${issue.jiraKey}: ${issue.title}`];
+    // A title-only AC is a FABRICATED answer, not a degraded one. It is exactly
+    // what produced the live cascade on 2026-07-29: no real criteria -> the spec
+    // pass derived verification criteria from the title -> CPA had nothing to
+    // size from -> effort:"low", 5.4 estimated minutes for a novel capability
+    // across three repositories -> the cheapest model -> nothing built.
+    //
+    // Elaboration failing means the pipeline does not know what the story
+    // requires. Proceeding on an invented criterion is worse than stopping,
+    // and the caller treats a throw here as 'unknown', which halts.
+    process.stderr.write(`[ac-gate]     elaboration failed: ${e.message}\n`);
+    process.stderr.write('[ac-gate]     NOT substituting a title-based criterion — that is a fabricated answer.\n');
+    throw e;
   } finally {
     try { fs.unlinkSync(tmpPrompt); } catch { /* ignore */ }
   }

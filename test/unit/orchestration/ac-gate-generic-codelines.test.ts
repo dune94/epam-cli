@@ -181,8 +181,18 @@ describe('ac-gate.js: AUTO_ELABORATE converts insufficient to enrichable', () =>
     expect(AC_GATE_SRC).toContain('parsed.enrichedAcs');
   });
 
-  it('elaborateAcs has a title-based fallback when LLM fails', () => {
-    expect(AC_GATE_SRC).toContain('elaboration LLM call failed');
+  it('elaborateAcs does NOT fabricate a title-based criterion when the LLM fails', () => {
+    // Changed 2026-07-29. The title-only fallback was not a degraded answer, it
+    // was an invented one, and it produced the live cascade: no real criteria ->
+    // verification criteria derived from the title -> CPA with nothing to size
+    // from -> effort:"low", 5.4 minutes for a novel three-repo capability ->
+    // the cheapest model -> nothing built. Elaboration failing means the
+    // pipeline does not know what the story requires, and proceeding on an
+    // invented criterion is worse than stopping.
+    expect(AC_GATE_SRC, 'a failed elaboration still substitutes a title-based criterion')
+      .toContain('NOT substituting a title-based criterion');
+    expect(AC_GATE_SRC, 'the failure is swallowed instead of propagating to the halt path')
+      .toMatch(/elaboration failed[\s\S]{0,400}throw e;/);
   });
 
   it('does NOT set hasInsufficient when AUTO_ELABORATE converts the verdict', () => {

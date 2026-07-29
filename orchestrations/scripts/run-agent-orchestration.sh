@@ -146,9 +146,17 @@ case "${EPAM_ORCHESTRATION_PROVIDER:-${CLAUDE_CMD}}" in
         exit 1
         ;;
 esac
-# Run logs always go to orchestrations/logs/ so the nginx-served dashboard
-# can see them. OUTPUT_DIR is for generated app code, not run telemetry.
-LOG_DIR="$AUTOMATION_DIR/logs"
+# Run logs default to orchestrations/logs/ so the nginx-served dashboard can see
+# them. OUTPUT_DIR is for generated app code, not run telemetry.
+#
+# An INHERITED LOG_DIR wins. Parallel lanes give each codeline its own directory
+# so that files read back as state — phase-baseline-sha.txt above all — cannot
+# leak between lanes. This assignment used to be unconditional, so the lane loop
+# passed the right value and the script discarded it: live metrolinx 2026-07-29
+# ran three lanes whose environments named three separate directories, all of
+# them empty, with everything still written to the shared one. The wiring was
+# correct and invisible.
+LOG_DIR="${LOG_DIR:-$AUTOMATION_DIR/logs}"
 MONITOR_STATUS_FILE="$LOG_DIR/agent-status.json"
 MESSAGES_JSONL="$LOG_DIR/agent-messages.jsonl"
 # Export so all subprocesses (claude.sh, update-monitor.sh, invoke.py) write to the same files

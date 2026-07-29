@@ -4683,7 +4683,27 @@ if [ "${SKIP_REGRESSION_GUARD:-false}" != "true" ]; then
     # runner, so a broken environment reads as a clear repair attempt, not a
     # confusing "tests broken" failure that's actually an environment issue.
     if [ -n "$_rg_node" ] && [ -f "$_rg_root/package.json" ]; then
-        ensure_node_modules_healthy "$_rg_root" "$_rg_node" "$_rg_bin" || true
+        # CANNOT-VERIFY is a third outcome, and it is never a pass.
+        #
+        # This was `|| true`. Live metrolinx 2026-07-29: the repair guard reported
+        # "REPAIR DESTROYED WHAT IT FOUND ... 1134 entries -> 1011 ... its gates
+        # cannot run", ensure_node_modules_healthy returned non-zero to say so,
+        # and `|| true` discarded it — the run continued on a wrecked toolchain
+        # with 15 processes. A regression guard run against broken dependencies
+        # does not report a regression; it reports whatever a broken toolchain
+        # emits, which is as likely to be a false PASS as a failure. Same shape
+        # as review gates passing on zero files: a verdict with no evidence.
+        #
+        # The halt rule covers "failed after retries and self-heal". This is the
+        # other case — nothing failed, and nothing can be trusted either.
+        if ! ensure_node_modules_healthy "$_rg_root" "$_rg_node" "$_rg_bin"; then
+            step_emit "5" "fail" "Step 5: Regression guard"
+            error "Step 5: codeline CANNOT BE VERIFIED — its dependencies are unusable in $_rg_root"
+            error "  This is not a test failure: the tests were never run against a sound tree."
+            error "  Reinstall this codeline's dependencies, then re-run."
+            error "  Bypass with: SKIP_REGRESSION_GUARD=true (accepts an unverified baseline)"
+            exit 1
+        fi
         # Re-detect — a first-time install creates node_modules/.bin/* that
         # didn't exist a moment ago. Any entry answers "is node_modules usable".
         _rg_bin=""

@@ -250,9 +250,19 @@ describe('run-agent-orchestration.sh — regression guard calls ensure_node_modu
   });
 
   it('re-detects _rg_bin after the health check, so a first-time install is picked up', () => {
+    // NO fixed window: this asserts ORDER (re-detect comes after the health
+    // call), so it compares positions. A 500-char slice failed the moment the
+    // call site gained a comment — the fourth fixed-window test to break on a
+    // correct change today. A byte offset was never the invariant.
     const guardStart = src.indexOf('Step 0.7: Cross-phase regression guard');
     const healthIdx = src.indexOf('ensure_node_modules_healthy "$_rg_root"', guardStart);
-    const block = src.slice(healthIdx, healthIdx + 500);
+    expect(healthIdx, 'the health check call is gone').toBeGreaterThan(-1);
+    const reDetectIdx = src.indexOf('_rg_bin=""', healthIdx);
+    expect(reDetectIdx,
+      '_rg_bin is never re-detected after the health check, so a first-time ' +
+      'install that just created node_modules/.bin is not picked up')
+      .toBeGreaterThan(healthIdx);
+    const block = src.slice(healthIdx, reDetectIdx + 200);
     // Must reset and re-check _rg_bin after the health call, not just once up front.
     const reDetectMatches = block.match(/_rg_bin=""/g) || [];
     expect(reDetectMatches.length).toBeGreaterThanOrEqual(1);

@@ -30,9 +30,9 @@
  * directories whose names cannot be known ahead of time.
  */
 
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, afterEach } from 'vitest';
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, rmSync, symlinkSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -43,7 +43,20 @@ const PROFILES = join(REPO_ROOT, 'orchestrations/agents/profiles.json');
 const RUN_REAL = process.env.RUN_REAL_PIPELINE_MOCK === '1';
 
 const cleanupDirs: string[] = [];
-afterAll(() => { for (const d of cleanupDirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
+let anyFailed = false;
+
+// A failed run's mock codelines ARE the evidence: which branch exists, what the
+// working tree holds, what git recorded. Teardown deleted them on 2026-07-28
+// and left nothing to inspect. Keep them on failure, clean up on success.
+afterEach((ctx) => { if (ctx.task.result?.state === 'fail') anyFailed = true; });
+afterAll(() => {
+  if (anyFailed) {
+    console.log(`\n[mock3] FAILED — codelines preserved for inspection:\n  ${cleanupDirs.join('\n  ')}`);
+    console.log(`[mock3] pipeline transcript(s): ${TRANSCRIPT_DIR}`);
+    return;
+  }
+  for (const d of cleanupDirs.splice(0)) rmSync(d, { recursive: true, force: true });
+});
 
 /** A disposable codeline: bare origin + clone, seeded with the hello-world baseline. */
 function makeMockCodeline(name: string): { clone: string } {
@@ -161,9 +174,16 @@ function runPipeline(prdPath: string, phase: string): Promise<{ stdout: string; 
       },
     });
     let stdout = '';
-    child.stdout.on('data', (d) => { stdout += d.toString(); });
-    child.stderr.on('data', (d) => { stdout += d.toString(); });
-    child.on('close', (code) => resolve({ stdout, exitCode: code ?? -1 }));
+    // Stream to disk AS IT ARRIVES. Buffering into `stdout` alone is what lost
+    // the evidence on 2026-07-28: the run was stopped mid-file, the variable
+    // died with the process, and the only record of why lane B never delivered
+    // was the absence of some log files.
+    child.stdout.on('data', (d) => { const t = d.toString(); stdout += t; record(t); });
+    child.stderr.on('data', (d) => { const t = d.toString(); stdout += t; record(t); });
+    child.on('close', (code) => {
+      record(`\n# exit=${code}\n`);
+      resolve({ stdout, exitCode: code ?? -1, transcript });
+    });
   });
 }
 

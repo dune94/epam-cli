@@ -195,14 +195,47 @@ function classifyWithLLM(issue, knownCodelines) {
 
     // Extract JSON from response (may have surrounding explanation)
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error(`No JSON in LLM response: ${raw.slice(0, 200)}`);
+    if (jsonMatch) return JSON.parse(jsonMatch[0]);
 
-    return JSON.parse(jsonMatch[0]);
+    // No closing brace: the response was TRUNCATED mid-object, not absent.
+    // Live metrolinx 2026-07-29 — the model answered correctly:
+    //   {"verdict": "insufficient", "reason": "Acceptance criteria are
+    //    explicitly listed as '(none)' and the description is too vague...
+    // and the gate reported "No JSON in LLM response", then recorded the
+    // OPPOSITE verdict (enrichable) and printed "All stories classified".
+    // The story ended with codelines:null, zero lanes launched, run dead.
+    //
+    // jsonrepair closes a truncated object rather than discarding a correct
+    // answer; spec-mode-runner already uses it for the same M3-style output.
+    // Guarded to text that actually starts as JSON, so arbitrary prose is not
+    // coerced into an object.
+    const firstBrace = raw.indexOf('{');
+    if (firstBrace !== -1) {
+      try {
+        const { jsonrepair } = require('jsonrepair');
+        const repaired = JSON.parse(jsonrepair(raw.slice(firstBrace)));
+        process.stderr.write(
+          `[ac-gate] response was truncated; recovered via jsonrepair (verdict=${repaired.verdict})\n`);
+        return repaired;
+      } catch (_) { /* fall through to the error below */ }
+    }
+    throw new Error(`No JSON in LLM response: ${raw.slice(0, 200)}`);
   } catch (e) {
     process.stderr.write(`[ac-gate] LLM call failed for ${issue.jiraKey}: ${e.message}\n`);
+    // A FAILED CALL IS NOT A VERDICT. This used to return 'enrichable', which
+    // is a claim about the STORY, invented from a failure to reach or parse the
+    // model. Live metrolinx 2026-07-29: the model actually answered
+    // "insufficient", the parse broke, and the gate recorded the OPPOSITE
+    // verdict and printed "All stories classified. Pipeline may proceed." The
+    // story ended with codelines:null, zero lanes launched, and the run died
+    // with a green tick in the log.
+    //
+    // 'unknown' is carried instead, so the caller can tell "the gate could not
+    // decide" from "the gate decided". Nothing downstream may treat it as a
+    // pass — see the caller's handling.
     return {
-      verdict: 'enrichable',
-      reason: `AC gate LLM call failed — treating as enrichable. Error: ${e.message.slice(0, 150)}`,
+      verdict: 'unknown',
+      reason: `AC gate could not reach a verdict — the call or its parse failed: ${e.message.slice(0, 150)}`,
       gaps: [],
       enrichedAcs: [],
     };
@@ -285,6 +318,7 @@ Respond with JSON only — no markdown, no preamble:
 
   const results = [];
   let hasInsufficient = false;
+  let hasUnknown = false;
 
   for (const issue of issues) {
     process.stderr.write(`[ac-gate]   ${issue.jiraKey} — ${(issue.title || '').slice(0, 60)}\n`);
@@ -309,6 +343,13 @@ Respond with JSON only — no markdown, no preamble:
     // This project never writes to Jira, unconditionally — no flag, no
     // DRY_RUN branch. Only track whether the story needs human attention.
     if (verdict === 'insufficient') hasInsufficient = true;
+    // 'unknown' means the gate could not decide — the call or its parse failed.
+    // It must NOT pass: a gate that cannot reach its model has produced no
+    // judgement about the story, and treating that as approval is how a run
+    // with zero working LLM calls printed "All stories classified" and then
+    // launched zero lanes (live 2026-07-29). Halting here is the same rule as
+    // "cannot-verify is never a pass" applied to Step 5.
+    if (verdict === 'unknown') hasUnknown = true;
 
     // LLM codeline overrides the Jira label when present (LLM has richer context).
     // Fall back to the issue's own label, then JIRA_DEFAULT_CODELINE — never a
@@ -354,6 +395,11 @@ Respond with JSON only — no markdown, no preamble:
   }
 
   // Exit code 2 signals "insufficient found — caller must halt"
+  if (hasUnknown) {
+    process.stderr.write('[ac-gate] HALT: could not reach a verdict for one or more stories — the call or its parse failed.\n');
+    process.stderr.write('[ac-gate]   This is not a story problem. Check provider reachability and credits, then re-run.\n');
+    process.exit(2);
+  }
   if (hasInsufficient) {
     process.stderr.write('\n[ac-gate] ⛔ One or more stories have INSUFFICIENT ACs.\n');
     process.stderr.write('[ac-gate] Pipeline must halt. Human approval required (see Jira comments).\n');

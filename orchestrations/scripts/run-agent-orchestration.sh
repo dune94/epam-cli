@@ -6344,7 +6344,8 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/brownfield-repro-test-
             bash "$SCRIPT_DIR/brownfield-repro-test-writer.sh" "$_tw_story" 2>&1 | tee -a "$LOG_DIR/repro-test-writer-${PHASE}.log"
     done < <(jq -r --arg phase "$PHASE" \
         '(.implementationOrder[$phase] // []) as $ids |
-         .stories[] | select(.id as $id | $ids | index($id) != null) | .id' \
+         .stories[] | select(.id as $id | $ids | index($id) != null)
+                    | select((.storyKind // "") != "novel") | .id' \
         "$PRD_FILE" 2>/dev/null)
 fi
 
@@ -6448,7 +6449,8 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/brownfield-repro-test-
         fi
     done < <(jq -r --arg phase "$PHASE" \
         '(.implementationOrder[$phase] // []) as $ids |
-         .stories[] | select(.id as $id | $ids | index($id) != null) | .id' \
+         .stories[] | select(.id as $id | $ids | index($id) != null)
+                    | select((.storyKind // "") != "novel") | .id' \
         "$PRD_FILE" 2>/dev/null)
     if [ "$_repro_blocked" -eq 1 ]; then
         error "Step 3.55: one or more stories failed the bug-reproduction test gate — the fix does not ship a test that reproduces the bug. Blocking before review."

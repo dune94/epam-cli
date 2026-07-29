@@ -132,12 +132,18 @@ describe('prd-change-reviewer — model_assignment change type coverage', () => 
     expect(reviewer).toMatch(/PRE-EXISTING model.*changed or removed|coordinator must only fill gaps/i);
   });
 
-  it('rejects models outside the allow-list', () => {
-    expect(reviewer).toMatch(/not one of:.*MiniMax-M3/i);
-  });
-
-  it('rejects providers outside the allow-list', () => {
-    expect(reviewer).toMatch(/aiProvider is not one of:.*minimax.*qwen/i);
+  // REMOVED 2026-07-29 (STACK-1): the reviewer no longer enumerates permitted
+  // models or providers. Those come from EPAM_MODEL_LADDER_* and
+  // EPAM_FINAL_FALLBACK_MODEL, which are per-project config — policing them
+  // from a prompt silently vetoed what the project had configured.
+  // moonshotai/kimi-k3 is the configured top of the HIGH ladder and this rule
+  // would have rejected it on arrival, so kimi was unreachable twice over.
+  //
+  // The invariant those rules were really protecting is asserted below and is
+  // unchanged: the coordinator fills gaps, it never overwrites.
+  it('still forbids overwriting a pre-existing assignment', () => {
+    expect(reviewer, 'the coordinator could now overwrite a deliberate model choice')
+      .toMatch(/coordinator must only fill gaps, never overwrite/i);
   });
 
   it('rejects split-child model mismatches with their parent', () => {

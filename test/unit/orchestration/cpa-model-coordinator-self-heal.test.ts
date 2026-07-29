@@ -213,7 +213,11 @@ describe('prd-change-reviewer — profile_creation change type coverage', () => 
   it('rejects new profiles introducing out-of-stack technology', () => {
     const idx = reviewer.indexOf('profile_creation');
     const block = reviewer.slice(idx, idx + 600);
-    expect(block).toMatch(/TypeScript\/Node\.js\/Express\/Vitest/);
+    // De-hardcoded 2026-07-29 (STACK-1): the frozen list named the travel-app's
+    // stack and rejected correct Contentstack guidance on metrolinx. The rule
+    // must STILL reject out-of-stack technology — now measured against the
+    // codeline actually in front of it.
+    expect(block).toMatch(/technology this project does not already use/);
   });
 
   it('rejects test-engineer-role profiles that do not forbid writing implementation files', () => {

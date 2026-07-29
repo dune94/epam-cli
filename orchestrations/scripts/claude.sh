@@ -1589,6 +1589,7 @@ $files
 ## Dependencies
 ${dependencies:-None}
 $([ -n "$dependency_contracts" ] && printf '\n## Dependency Contracts (EXACT import paths and signatures — use these verbatim, do NOT guess a different path)\n%s\n' "$dependency_contracts" || true)
+$(_module_resolution_context "$PROJECT_ROOT" 2>/dev/null || true)
 $([ -n "${CROSS_CODELINE_CONTRACT:-}" ] && [ -f "${CROSS_CODELINE_CONTRACT}" ] && printf '\n## Cross-Codeline API Contract (upstream codeline exports — use these types and endpoints verbatim when integrating)\n%s\n' "$(cat "${CROSS_CODELINE_CONTRACT}")" || true)
 
 ## Instructions
@@ -2327,6 +2328,58 @@ run_vendor_integrity_check() {
 # <project_root>/.epam/dependency-check.json, which is legitimate there
 # since the pipeline authored that repo in the first place.
 # No manifest present = no-op (opt-in feature, old projects unaffected).
+# Describe how THIS codeline resolves bare imports, for the agent's prompt.
+#
+# The scanner already answers this question deterministically (see
+# _resolves_inside_repo in run_dependency_check): a bare specifier naming a file
+# under one of the repo's own top-level directories is internal code, not a
+# package. The agent was never told, so on live metrolinx 2026-07-29 it wrote
+# imports the scanner then tried to npm-install — 346/553/506 attempts per lane,
+# which consumed the story budget.
+#
+# Derived from the same manifest and the same root-discovery rule the scanner
+# uses. It must never become hand-written prose in a prompt: if the agent is
+# told one convention and the scanner applies another, the result is a subtler
+# version of the original bug — "correct" imports the scanner still rejects.
+#
+# Silent when the codeline has no manifest: we do not know its conventions then,
+# and inventing them is worse than saying nothing.
+_module_resolution_context() {
+    local _repo="${1:-$PROJECT_ROOT}"
+    local _cfg="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    [ -f "$_cfg" ] || _cfg="$_repo/.epam/dependency-check.json"
+    [ -f "$_cfg" ] || return 0
+
+    "${PYTHON_BIN:-python3}" - "$_repo" "$_cfg" <<'MODRES_EOF'
+import json, os, sys
+repo, cfg_path = sys.argv[1], sys.argv[2]
+try:
+    cfg = json.load(open(cfg_path))
+except Exception:
+    sys.exit(0)
+vendor = set(cfg.get('vendorDirs', []) or [])
+exts = cfg.get('scanFileExtensions', []) or []
+roots = []
+try:
+    for e in sorted(os.listdir(repo)):
+        if e.startswith('.') or e in vendor:
+            continue
+        if os.path.isdir(os.path.join(repo, e)):
+            roots.append(e)
+except OSError:
+    sys.exit(0)
+if not roots:
+    sys.exit(0)
+print("## Module resolution in this codeline")
+print("A bare import that names a file under any of these directories is INTERNAL "
+      "source, not a dependency — never add it to the dependency manifest:")
+print("  " + ", ".join(roots))
+print("Source extensions here: " + ", ".join(exts) if exts else "")
+print("Write imports the way the existing files in this codeline write them; "
+      "read a neighbouring file before inventing a path.")
+MODRES_EOF
+}
+
 run_dependency_check() {
     local project_root="$1"
     local config_file="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"

@@ -1549,6 +1549,40 @@ $(cat "$_contract_file")
         done < <(echo "$_dep_ids_json" | jq -r '.[]?')
     fi
 
+    # Third-party package grounding (found live 2026-07-30, AMSD-2041): the
+    # loop above ground-truths INTERNAL dependencies only. A story writing
+    # config for a third-party SDK had nothing but training memory to go on —
+    # the same "Config object doesn't match the SDK's Config type" defect
+    # recurred 3 times because nobody, implementer or self-heal, ever saw the
+    # real type. Reuses .epam/dependency-check.json's importPattern/vendorDirs
+    # (already proven by run_dependency_check) purely to DISCOVER what the
+    # story's own declared files import; generates .contracts/vendor-<pkg>.md
+    # from the installed package's own source the same way generate_story_
+    # contract() already does for the story's own code. No manifest = no-op.
+    local _vendor_files_json _vendor_file _vendor_pkg
+    _vendor_files_json=$(echo "$story_json" | jq -c '.technicalNotes.files // []')
+    if [ -n "${WORKTREE_MODE:-}" ] && [ -n "${MAIN_PROJECT_ROOT:-}" ]; then
+        _vendor_files_json="${_vendor_files_json//${MAIN_PROJECT_ROOT}/${PROJECT_ROOT}}"
+    fi
+    while IFS= read -r _vendor_file; do
+        [ -z "$_vendor_file" ] && continue
+        local _vendor_abs
+        [[ "$_vendor_file" = /* ]] && _vendor_abs="$_vendor_file" || _vendor_abs="$PROJECT_ROOT/$_vendor_file"
+        _vendor_abs="$(_resolve_deliverable_path "$_vendor_abs" 2>/dev/null || echo "$_vendor_abs")"
+        [ -f "$_vendor_abs" ] || continue
+        while IFS= read -r _vendor_pkg; do
+            [ -z "$_vendor_pkg" ] && continue
+            local _vendor_contract="$PROJECT_ROOT/.contracts/vendor-${_vendor_pkg}.md"
+            [ -f "$_vendor_contract" ] || _generate_vendor_contract "$PROJECT_ROOT" "$_vendor_pkg" 2>/dev/null
+            if [ -f "$_vendor_contract" ]; then
+                dependency_contracts="${dependency_contracts}
+### Vendor package: ${_vendor_pkg}
+$(cat "$_vendor_contract")
+"
+            fi
+        done < <(_discover_vendor_packages "$_vendor_abs" 2>/dev/null)
+    done < <(echo "$_vendor_files_json" | jq -r '.[]?')
+
     # Spec-reality cross-check (added 2026-07-06 — see project_backlog memory
     # "Spec-reality cross-check"). Root cause this catches: the PRD itself is
     # an LLM-authored/elaborated artifact, just as hallucination-prone as
@@ -2541,6 +2575,108 @@ print("Source extensions here: " + ", ".join(exts) if exts else "")
 print("Write imports the way the existing files in this codeline write them; "
       "read a neighbouring file before inventing a path.")
 MODRES_EOF
+}
+
+# _discover_vendor_packages <resolved_abs_file>
+# Prints one third-party package name per line, imported by the given real
+# file — deduplicated, excluding relative/internal imports and anything in
+# ignorePackages.
+#
+# Reuses .epam/dependency-check.json's importPattern/vendorDirs/ignorePackages
+# VERBATIM — the same config already trusted by the dependency-check step. No
+# new manifest field, no project/package/language assumption in this function: a
+# project with no dependency-check.json gets an empty result (opt-in, same
+# convention as every other manifest-gated feature here).
+#
+# Ground-truthing a THIRD-PARTY API's shape (found live, 2026-07-30, AMSD-2041):
+# dependency_contracts already ground-truths a story's declared INTERNAL
+# dependencies, but a third-party package gets none of it, so every attempt —
+# implementation and self-heal alike — reconstructs the package's real shape
+# from training memory. The failure-analyst diagnosed the identical Contentstack
+# Config-type mismatch 3 times running with patches_applied:0, because nothing
+# in the pipeline ever showed either agent the SDK's actual type.
+_discover_vendor_packages() {
+    local _file="$1"
+    [ -f "$_file" ] || return 0
+    local _config="${PROJECT_ROOT}/.epam/dependency-check.json"
+    [ -f "$_config" ] || return 0
+
+    local _import_pattern _vendor_dirs_json _ignore_json
+    _import_pattern=$(jq -r '.importPattern // empty' "$_config" 2>/dev/null)
+    [ -z "$_import_pattern" ] && return 0
+    _vendor_dirs_json=$(jq -c '.vendorDirs // []' "$_config" 2>/dev/null)
+    _ignore_json=$(jq -c '.ignorePackages // []' "$_config" 2>/dev/null)
+
+    python3 - "$_file" "$_import_pattern" "$_ignore_json" << 'PYEOF'
+import re, sys, json
+file_path, pattern, ignore_json = sys.argv[1:4]
+ignore = set(json.loads(ignore_json))
+with open(file_path) as f:
+    text = f.read()
+seen = []
+for m in re.finditer(pattern, text):
+    pkg = next((g for g in m.groups() if g), None)
+    if not pkg or pkg in ignore or pkg in seen:
+        continue
+    seen.append(pkg)
+for p in seen:
+    print(p)
+PYEOF
+}
+
+# _generate_vendor_contract <project_root> <package_name>
+# Deterministically writes .contracts/vendor-<package>.md by extracting
+# exported interfaces/classes directly from the PACKAGE'S OWN installed
+# source — not by asking a model to recall them. Identical extraction
+# approach to generate_story_contract() (same interfacePattern/classPattern/
+# sourceExtensions from .epam/contract-generation.json), pointed at a vendored
+# package directory instead of the story's own files. A project with no
+# contract-generation.json, or a package that isn't actually installed under
+# any declared vendorDir, gets a silent no-op — this is additive grounding,
+# never a requirement.
+_generate_vendor_contract() {
+    local _root="$1"
+    local _package="$2"
+    local _config="${_root}/.epam/contract-generation.json"
+    [ -f "$_config" ] || return 0
+    local _dep_config="${_root}/.epam/dependency-check.json"
+    [ -f "$_dep_config" ] || return 0
+
+    local _vendor_dirs_json _vendor_dir _package_dir=""
+    _vendor_dirs_json=$(jq -r '.vendorDirs[]? // empty' "$_dep_config" 2>/dev/null)
+    while IFS= read -r _vendor_dir; do
+        [ -z "$_vendor_dir" ] && continue
+        [ -d "${_root}/${_vendor_dir}/${_package}" ] && { _package_dir="${_root}/${_vendor_dir}/${_package}"; break; }
+    done <<< "$_vendor_dirs_json"
+    [ -z "$_package_dir" ] && return 0
+
+    local _exts_json
+    _exts_json=$(jq -c '.sourceExtensions // []' "$_config" 2>/dev/null)
+    local _files_json
+    _files_json=$(python3 - "$_package_dir" "$_exts_json" << 'PYEOF'
+import json, os, sys
+package_dir, exts_json = sys.argv[1:3]
+exts = tuple(json.loads(exts_json))
+out = []
+# Bounded walk: a vendored package can be large, and this is grounding, not a
+# full audit — cap what a single contract pass will read.
+MAX_FILES = 200
+for root, _, files in os.walk(package_dir):
+    for f in files:
+        if f.endswith(exts):
+            out.append(os.path.join(root, f))
+        if len(out) >= MAX_FILES:
+            break
+    if len(out) >= MAX_FILES:
+        break
+print(json.dumps(out))
+PYEOF
+)
+    [ "$_files_json" = "[]" ] && return 0
+
+    mkdir -p "${_root}/.contracts" 2>/dev/null
+    local _contract_file="${_root}/.contracts/vendor-${_package}.md"
+    _generate_contract_from_files "$_root" "$_contract_file" "$_files_json" "vendor:${_package}" "$_config"
 }
 
 run_dependency_check() {
@@ -5122,6 +5258,42 @@ $(cat "$_fa_contract_file")
 "
         fi
     done < <(echo "$_fa_dep_ids_json" | jq -r '.[]?' 2>/dev/null)
+
+    # Third-party package grounding — the SAME defect this call exists to catch
+    # was itself caused by an ungrounded diagnosis: the analyst classified
+    # "Config object doesn't match the SDK's Config type" as target=none
+    # ("transient — retry with a stronger model") three times running, because
+    # it had no more ability to see the SDK's real shape than the implementer
+    # did. Ground it here too, from the same declared files, using the same
+    # discovery this function's caller (build_implementation_prompt) already
+    # runs — reuses .epam/dependency-check.json + .epam/contract-generation.json,
+    # no manifest = no-op.
+    local _fa_vendor_files_json _fa_vendor_file _fa_vendor_pkg
+    _fa_vendor_files_json=$(jq -c --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .technicalNotes.files // []' \
+        "$prd_target" 2>/dev/null || echo "[]")
+    if [ -n "${WORKTREE_MODE:-}" ] && [ -n "${MAIN_PROJECT_ROOT:-}" ]; then
+        _fa_vendor_files_json="${_fa_vendor_files_json//${MAIN_PROJECT_ROOT}/${PROJECT_ROOT}}"
+    fi
+    while IFS= read -r _fa_vendor_file; do
+        [ -z "$_fa_vendor_file" ] && continue
+        local _fa_vendor_abs
+        [[ "$_fa_vendor_file" = /* ]] && _fa_vendor_abs="$_fa_vendor_file" || _fa_vendor_abs="$PROJECT_ROOT/$_fa_vendor_file"
+        _fa_vendor_abs="$(_resolve_deliverable_path "$_fa_vendor_abs" 2>/dev/null || echo "$_fa_vendor_abs")"
+        [ -f "$_fa_vendor_abs" ] || continue
+        while IFS= read -r _fa_vendor_pkg; do
+            [ -z "$_fa_vendor_pkg" ] && continue
+            local _fa_vendor_contract="$PROJECT_ROOT/.contracts/vendor-${_fa_vendor_pkg}.md"
+            [ -f "$_fa_vendor_contract" ] || _generate_vendor_contract "$PROJECT_ROOT" "$_fa_vendor_pkg" 2>/dev/null
+            if [ -f "$_fa_vendor_contract" ]; then
+                dependency_contracts="${dependency_contracts}
+### Vendor package: ${_fa_vendor_pkg}
+$(cat "$_fa_vendor_contract")
+"
+            fi
+        done < <(_discover_vendor_packages "$_fa_vendor_abs" 2>/dev/null)
+    done < <(echo "$_fa_vendor_files_json" | jq -r '.[]?' 2>/dev/null)
+
     [ -z "$dependency_contracts" ] && dependency_contracts="(no dependency contracts available)"
 
     local analyst_prompt
@@ -8117,39 +8289,19 @@ dry_run() {
 # with different regexes and mock templates, and this function would not
 # change. No manifest present = no-op (opt-in feature, same pattern as
 # run_dependency_check()'s .epam/dependency-check.json).
-generate_story_contract() {
-    local story_id="$1"
-    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
-    local _commit_root="${GIT_WORK_ROOT:-$PROJECT_ROOT}"
-    local config_file="${_commit_root}/.epam/contract-generation.json"
-    [ -f "$config_file" ] || return 0
-
-    local files_json
-    files_json=$(jq -c --arg id "$story_id" \
-        '.stories[] | select(.id == $id) | .technicalNotes.files // []' \
-        "$prd_target" 2>/dev/null || echo "[]")
-    [ "$files_json" = "[]" ] && return 0
-
-    # technicalNotes.files stores ABSOLUTE paths rooted at MAIN_PROJECT_ROOT (the
-    # non-worktree checkout) — same rewrite already applied to ACs/technicalNotes/
-    # description elsewhere in this file (see the WORKTREE_MODE substitution near
-    # line 960). Without this, resolving files against $_commit_root (the worktree)
-    # silently misses every file (they don't exist under the main root yet — the
-    # story hasn't merged), so no interfaces/classes are ever found and no contract
-    # is written, with no visible error. Confirmed live: run #15's .contracts/
-    # directory existed but was empty after SKY-002 completed.
-    if [ -n "${WORKTREE_MODE:-}" ] && [ -n "${MAIN_PROJECT_ROOT:-}" ]; then
-        files_json="${files_json//${MAIN_PROJECT_ROOT}/${_commit_root}}"
-    fi
-
-    local contracts_dir="${_commit_root}/.contracts"
-    mkdir -p "$contracts_dir" 2>/dev/null
-    local contract_file="${contracts_dir}/${story_id}.md"
-
-    python3 - "$_commit_root" "$contract_file" "$files_json" "$story_id" "$config_file" << 'PYEOF'
+# _generate_contract_from_files <project_root> <contract_file> <files_json> <id_label> <config_file>
+# Shared extraction core behind generate_story_contract() (a story's own files) and
+# _generate_vendor_contract() (a vendored third-party package's files) — same
+# config-driven interfacePattern/classPattern/sourceExtensions, same output
+# format, one parser instead of two copies that could drift. files_json entries
+# may be relative to project_root OR already absolute — os.path.join() returns
+# an absolute second argument unchanged, so both callers work unmodified.
+_generate_contract_from_files() {
+    local project_root="$1" contract_file="$2" files_json="$3" id_label="$4" config_file="$5"
+    python3 - "$project_root" "$contract_file" "$files_json" "$id_label" "$config_file" << 'PYEOF'
 import json, re, sys, os
 
-project_root, contract_file, files_json, story_id, config_file = sys.argv[1:6]
+project_root, contract_file, files_json, id_label, config_file = sys.argv[1:6]
 files = json.loads(files_json)
 
 with open(config_file) as f:
@@ -8224,7 +8376,7 @@ if not interfaces and not classes:
     sys.exit(0)
 
 lines = [
-    f"# Contract: {story_id}", "",
+    f"# Contract: {id_label}", "",
     "Auto-generated from actual source (deterministic — not model-transcribed).", "",
 ]
 
@@ -8278,6 +8430,38 @@ with open(contract_file, 'w') as f:
     f.write('\n'.join(lines))
 print(f"Contract auto-generated: {len(interfaces)} interface(s), {len(classes)} class(es)")
 PYEOF
+}
+
+generate_story_contract() {
+    local story_id="$1"
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    local _commit_root="${GIT_WORK_ROOT:-$PROJECT_ROOT}"
+    local config_file="${_commit_root}/.epam/contract-generation.json"
+    [ -f "$config_file" ] || return 0
+
+    local files_json
+    files_json=$(jq -c --arg id "$story_id" \
+        '.stories[] | select(.id == $id) | .technicalNotes.files // []' \
+        "$prd_target" 2>/dev/null || echo "[]")
+    [ "$files_json" = "[]" ] && return 0
+
+    # technicalNotes.files stores ABSOLUTE paths rooted at MAIN_PROJECT_ROOT (the
+    # non-worktree checkout) — same rewrite already applied to ACs/technicalNotes/
+    # description elsewhere in this file (see the WORKTREE_MODE substitution near
+    # line 960). Without this, resolving files against $_commit_root (the worktree)
+    # silently misses every file (they don't exist under the main root yet — the
+    # story hasn't merged), so no interfaces/classes are ever found and no contract
+    # is written, with no visible error. Confirmed live: run #15's .contracts/
+    # directory existed but was empty after SKY-002 completed.
+    if [ -n "${WORKTREE_MODE:-}" ] && [ -n "${MAIN_PROJECT_ROOT:-}" ]; then
+        files_json="${files_json//${MAIN_PROJECT_ROOT}/${_commit_root}}"
+    fi
+
+    local contracts_dir="${_commit_root}/.contracts"
+    mkdir -p "$contracts_dir" 2>/dev/null
+    local contract_file="${contracts_dir}/${story_id}.md"
+
+    _generate_contract_from_files "$_commit_root" "$contract_file" "$files_json" "$story_id" "$config_file"
 }
 
 commit_completed_story() {

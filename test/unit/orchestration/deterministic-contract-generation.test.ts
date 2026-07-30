@@ -58,6 +58,16 @@ function extractFunctionBody(name: string): string {
   throw new Error(`Could not find end of function ${name}`);
 }
 
+// generate_story_contract() was refactored (2026-07-30) into a thin wrapper
+// over the shared _generate_contract_from_files() parser (reused by
+// _generate_vendor_contract() for third-party packages — see
+// vendor-contract-generation.test.ts). Extracting the wrapper alone no longer
+// includes the actual parsing logic, so every execution/text-check below
+// needs BOTH bodies, not just the wrapper's.
+function extractStoryContractWithShared(): string {
+  return extractFunctionBody('generate_story_contract') + '\n' + extractFunctionBody('_generate_contract_from_files');
+}
+
 describe('claude.sh — generate_story_contract() is wired into the implementation loop', () => {
   it('function is defined', () => {
     expect(claudeSrc).toMatch(/generate_story_contract\s*\(\)/);
@@ -75,23 +85,23 @@ describe('claude.sh — generate_story_contract() is wired into the implementati
   });
 
   it('writes to .contracts/<story_id>.md under GIT_WORK_ROOT (matches build_implementation_prompt()\'s read path)', () => {
-    const body = extractFunctionBody('generate_story_contract');
+    const body = extractStoryContractWithShared();
     expect(body).toMatch(/\.contracts/);
     expect(body).toMatch(/GIT_WORK_ROOT/);
   });
 
   it('reads technicalNotes.files from the PRD to know which source files to scan', () => {
-    const body = extractFunctionBody('generate_story_contract');
+    const body = extractStoryContractWithShared();
     expect(body).toMatch(/technicalNotes\.files/);
   });
 
   it('excludes test files from the source scan via a config-supplied excludePattern (a contract should reflect the implementation, not the test)', () => {
-    const body = extractFunctionBody('generate_story_contract');
+    const body = extractStoryContractWithShared();
     expect(body).toMatch(/cfg\['excludePattern'\]/);
   });
 
   it('is config-driven (2026-07-05 refactor): no-op when .epam/contract-generation.json is absent, and contains zero hardcoded TypeScript/Vitest regex or mock-syntax literals — all patterns/templates come from cfg[...]', () => {
-    const body = extractFunctionBody('generate_story_contract');
+    const body = extractStoryContractWithShared();
     expect(body).toMatch(/config_file="\$\{_commit_root\}\/\.epam\/contract-generation\.json"/);
     expect(body).toMatch(/\[ -f "\$config_file" \] \|\| return 0/);
     // Every parsing/rendering primitive is read from cfg, not hardcoded.
@@ -148,7 +158,7 @@ describe('generate_story_contract — no-op when .epam/contract-generation.json 
         prdPath,
         JSON.stringify({ stories: [{ id: 'SKY-002', technicalNotes: { files: ['src/skyscanner/client.ts'] } }] }),
       );
-      const fnBody = extractFunctionBody('generate_story_contract');
+      const fnBody = extractStoryContractWithShared();
       const scriptPath = join(dir, 'run.sh');
       writeFileSync(scriptPath, `PRD_FILE="${prdPath}"\nGIT_WORK_ROOT="${dir}"\n${fnBody}\ngenerate_story_contract "SKY-002"\necho "DONE"\n`);
       const output = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
@@ -176,7 +186,7 @@ describe('generate_story_contract — REAL execution against a realistic Skyscan
         stories: [{ id: storyId, technicalNotes: { files: filesForPrd } }],
       }));
 
-      const fnBody = extractFunctionBody('generate_story_contract');
+      const fnBody = extractStoryContractWithShared();
       const scriptPath = join(dir, 'run.sh');
       writeFileSync(
         scriptPath,
@@ -271,7 +281,7 @@ export class SkyscannerClient {
       writeContractGenConfig(dir);
       const prdPath = join(dir, 'prd.json');
       writeFileSync(prdPath, JSON.stringify({ stories: [{ id: 'SKY-002', technicalNotes: { files: [] } }] }));
-      const fnBody = extractFunctionBody('generate_story_contract');
+      const fnBody = extractStoryContractWithShared();
       const scriptPath = join(dir, 'run.sh');
       writeFileSync(scriptPath, `PRD_FILE="${prdPath}"\nGIT_WORK_ROOT="${dir}"\n${fnBody}\ngenerate_story_contract "SKY-002"\necho "DONE"\n`);
       const output = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
@@ -318,7 +328,7 @@ export class SkyscannerClient {
         }),
       );
 
-      const fnBody = extractFunctionBody('generate_story_contract');
+      const fnBody = extractStoryContractWithShared();
       const scriptPath = join(dir, 'run.sh');
       writeFileSync(
         scriptPath,
@@ -351,7 +361,7 @@ export class SkyscannerClient {
           stories: [{ id: 'SKY-002', technicalNotes: { files: [join(dir, 'src', 'skyscanner', 'client.ts')] } }],
         }),
       );
-      const fnBody = extractFunctionBody('generate_story_contract');
+      const fnBody = extractStoryContractWithShared();
       const scriptPath = join(dir, 'run.sh');
       writeFileSync(scriptPath, `PRD_FILE="${prdPath}"\nGIT_WORK_ROOT="${dir}"\n${fnBody}\ngenerate_story_contract "SKY-002"\n`);
       execFileSync('bash', [scriptPath], { encoding: 'utf8' });

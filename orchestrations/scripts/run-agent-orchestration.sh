@@ -2440,6 +2440,32 @@ Extract the exported API surface from the '${_bcl}' codeline files and write the
     fi
   fi
 }
+# Stop a lane and everything it spawned.
+#
+# A lane subshell is not the thing doing the work: it backgrounds `bash "$0"`,
+# which runs the node LLM calls. `kill <lane pid>` orphans those rather than
+# stopping them, so the halt reported an abort while the lane kept running and
+# kept billing for ten more minutes (live AMSD-2041 2026-07-30). It only died
+# by tripping over a PRD the parent's cleanup had already removed.
+#
+# Walks children before parents so nothing is reparented to init and left
+# running. Deliberately NOT a process-group kill: lanes share this script's
+# group, so `kill -- -$pgid` would take the orchestrator down with them.
+_kill_lane_tree() {
+  local _target="$1" _child
+  [ -z "$_target" ] && return 0
+  # Never accept our own PID or our parent's — that is self-termination
+  # wearing a lane's clothes.
+  if [ "$_target" = "$$" ] || [ "$_target" = "${BASHPID:-}" ] || [ "$_target" = "$PPID" ]; then
+    return 0
+  fi
+  for _child in $(pgrep -P "$_target" 2>/dev/null); do
+    _kill_lane_tree "$_child"
+  done
+  kill -TERM "$_target" 2>/dev/null || true
+  return 0
+}
+
 
 # ── Jira pipeline mode ────────────────────────────────────────────────────────
 # ── Shared codeline routing loop ──────────────────────────────────────────────
@@ -2450,6 +2476,7 @@ Extract the exported API surface from the '${_bcl}' codeline files and write the
 #
 # $1 — path to PRD to route (synthesized or canonical)
 # $2 — log file path (optional; defaults to a new tmp file)
+
 _run_codeline_loop() {
   local _prd_path="$1"
   local _log_file="${2:-/tmp/orch-$(date +%Y%m%dT%H%M%S).log}"
@@ -2630,6 +2657,7 @@ KNOWNFIXES_EOF
   # Per-codeline execution loop
   local _overall=0 _completed_list="" _cross_prd="/tmp/orch-cross-$$.json"
   local _cl_prds=()
+
 
   # Rebuild cumulative cross-codeline PRD so later codelines can check
   # completed stories from earlier codelines (is_story_completed fallback).
@@ -2843,7 +2871,7 @@ KNOWNFIXES_EOF
         error "[orch] HALT: a codeline failed after its retries and self-heal completed."
         error "[orch]   Aborting the codeline(s) still running — recovery is exhausted, so"
         error "[orch]   letting them finish would spend on a run already decided."
-        for _pid in "${_p_pids[@]}"; do kill "$_pid" 2>/dev/null || true; done
+        for _pid in "${_p_pids[@]}"; do _kill_lane_tree "$_pid"; done
         break
       fi
       [ "$_p_running" = "1" ] && sleep 5

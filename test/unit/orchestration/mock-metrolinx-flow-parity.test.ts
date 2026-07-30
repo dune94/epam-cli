@@ -31,7 +31,15 @@ const MOCK_LAUNCHER = readFileSync(root('orchestrations/scripts/tier3-mock-run.s
 /** Values metrolinx sets that materially change which stages/gates execute. */
 function metrolinxValue(key: string): string | null {
   const m = METRO_CFG.match(new RegExp(`^${key}=("?)([^"\\n#]*)\\1`, 'm'));
-  return m ? m[2].trim() : null;
+  if (!m) return null;
+  const raw = m[2].trim();
+  // Bypass flags are declared as `${FLAG:-default}` so a launch-time value wins
+  // over the project default (a config that overwrote an explicit
+  // SKIP_REGRESSION_GUARD=true silently blocked a run on 2026-07-30). Parity is
+  // about the EFFECTIVE value with an empty launch environment — the mocks
+  // mirror what the flag resolves to, not how it is spelled.
+  const defaulted = raw.match(/^\$\{[A-Z_]+:-([^}]*)\}$/);
+  return (defaulted ? defaulted[1] : raw).trim();
 }
 
 // Flags that decide whether a STAGE RUNS AT ALL. Drift here means the mock is

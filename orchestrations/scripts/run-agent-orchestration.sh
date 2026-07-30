@@ -807,6 +807,47 @@ resolve_prompt_provider() {
 
 # GAP-P22: emit a cost record for a pipeline agent invocation.
 # Args: agent_type, story_id, model, started_at, cost_usd, tokens_in, tokens_out, turns
+# _spec_pass_usage <phase_id>
+# Prints "<cost> <tokens_in> <tokens_out> <turns>" for the spec runner's own
+# LLM calls in this phase.
+#
+# spec-mode-runner wires emitCostSnapshot through runClaude — the funnel for the
+# detective, openspec, speckit, the spec coordinator, the VC reviewer and the
+# PRD change reviewer — so every one of those calls already lands in
+# agent-activity.jsonl tagged source="spec-mode-runner". The spec-pass row in
+# phase-cost.jsonl was nevertheless written with literal zeros, so the ledger
+# every reader sums (dashboard, run report, validate-dashboards.sh) understated
+# the run by $0.1077 on gotransit (22%) and $0.0755 on upexpress, measured
+# 2026-07-30. Cost tracking that silently reports zero is worse than none: a
+# reader cannot tell "free" from "unmeasured".
+#
+# Filtered on source, NOT on agent name: typescript-engineer and team-lead-agent
+# write their own phase-cost rows, so summing them here would double-count the
+# run. Overstating is no more true than understating.
+#
+# Fails soft to zeros — a cost record must never be the thing that breaks a run.
+_spec_pass_usage() {
+    local _phase="${1:-}"
+    local _act="${ACTIVITY_FILE:-$LOG_DIR/agent-activity.jsonl}"
+    if [ ! -f "$_act" ]; then printf '0 0 0 0\n'; return 0; fi
+    # -R (raw) + fromjson? so ONE malformed line cannot void the whole file.
+    # Lanes append concurrently, so a torn write is realistic; jq -s would abort
+    # on it and silently report zero — the exact failure this function exists to
+    # end.
+    jq -rRs --arg ph "$_phase" '
+        [ (split("\n") | .[] | select(length > 0) | fromjson? // empty)
+          | select(type == "object")
+          | select(.type == "cost_snapshot")
+          | select((.detail.source // "") == "spec-mode-runner")
+          | select(($ph == "") or ((.phase // "") == $ph))
+          | .detail ]
+        | [ (map(.costUsd // 0) | add // 0),
+            (map(.tokensIn  // 0) | add // 0),
+            (map(.tokensOut // 0) | add // 0),
+            (map(.turns     // 0) | add // 0) ]
+        | @tsv' "$_act" 2>/dev/null | tr '\t' ' ' || printf '0 0 0 0\n'
+}
+
 append_pipeline_cost_record() {
     local agent_type="${1:-pipeline}" story_id="${2:-pipeline}"
     local model="${3:-}" started_at="${4:-}" ended_at
@@ -3591,9 +3632,14 @@ run_specification_pass() {
     set -e
     # GAP-P22: emit spec runner cost record (token/cost estimated — spec runner
     # doesn't expose per-call usage; a future improvement can parse spec logs)
+    # Real usage, measured from the records spec-mode-runner already emits —
+    # see _spec_pass_usage for why this used to be four literal zeros.
+    local _spec_usage _spec_cost _spec_tin _spec_tout _spec_turns
+    _spec_usage=$(_spec_pass_usage "$phase_id")
+    read -r _spec_cost _spec_tin _spec_tout _spec_turns <<< "${_spec_usage:-0 0 0 0}"
     append_pipeline_cost_record "spec-pass" "$phase_id" \
         "${ORCH_GATE_MODEL:-z-ai/glm-5.2}" "$_spec_started" \
-        "0" "0" "0" "0" 2>/dev/null || true
+        "${_spec_cost:-0}" "${_spec_tin:-0}" "${_spec_tout:-0}" "${_spec_turns:-0}" 2>/dev/null || true
     # Surface openspec/speckit as visible checklist sub-steps instead of only
     # showing as "spec-mode: fast-path ..." log lines buried inside Step 0's
     # own log — parses the summary spec-mode-runner.js already writes

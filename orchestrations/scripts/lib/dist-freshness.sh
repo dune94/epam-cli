@@ -17,6 +17,17 @@
 #
 # Fails OPEN on anything it cannot determine: a guard that blocks runs because
 # of its own confusion is worse than the defect it prevents.
+# This library is sourced by callers that may not define the pipeline's own
+# logging helpers. Without a fallback, every diagnostic line here died as
+# "error: command not found" and the caller reported that noise INSTEAD of the
+# reason — seen live 2026-07-30, where the real message ("dist/ is STALE",
+# naming the exact unbuilt file) was replaced by four lines of shell errors.
+# A guard whose explanation is destroyed at the moment it fires is a guard that
+# gets misdiagnosed.
+if ! declare -F error >/dev/null 2>&1; then
+    error() { printf '[dist-freshness] %s\n' "$*" >&2; }
+fi
+
 assert_dist_fresh() {
     local repo="${1:-}"
     [ "${EPAM_SKIP_DIST_CHECK:-0}" = "1" ] && return 0

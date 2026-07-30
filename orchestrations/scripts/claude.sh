@@ -1818,6 +1818,7 @@ verify_prescribed_helper_used() {
             _note=" [attempt $((retry_count + 1))/$((MAX_RETRIES + 1)) — no retries remain]"
         fi
     fi
+    STORY_REJECTION_KEY="helper:${_helper}"
     warning "Story $story_id: the prescribed helper \`${_helper}\` EXISTS in this repository but does NOT appear in the change. The agent hand-rolled the logic instead of reusing it — live 2026-07-26 that produced a fix matching on '-' when the repository's own separator is '#', so the fix could never work. Import and use ${_helper}, which owns that format, rather than re-implementing it.${_note}"
     return 1
 }
@@ -1881,6 +1882,32 @@ _resolve_deliverable_path() {
         warning "  The declaration cannot identify one file; it needs an extension."
         return 1
     fi
+    return 1
+}
+
+# _rejection_repeat_check <story_id> <key>
+# Returns 0 when this exact rejection was ALSO the previous attempt's rejection.
+#
+# An identical rejection twice is evidence about the model, not the prompt.
+# Live AMSD-2041 2026-07-30: metrolinx produced the same prescribed-helper
+# rejection on attempts 2, 3 and 4 while the corrective sat in the prompt 21
+# times over. Nothing about the next attempt differed, so nothing about its
+# outcome could — $2.29 across three lanes, none delivered.
+#
+# Keyed on a STABLE key rather than the warning text, which carries the attempt
+# number ("[attempt 2/8]") and so would never match itself. State lives in a
+# file because the caller sits several scopes below the story loop; an empty key
+# is never a repeat, so an attempt that failed for some other reason cannot
+# inherit the last rejection and trigger a spurious escalation.
+_rejection_repeat_check() {
+    local _story_id="$1" _key="${2:-}"
+    [ -z "$_key" ] && return 1
+    local _state_dir="${LOG_DIR:-/tmp}"
+    local _state_file="${_state_dir}/.rejection-${_story_id//[^A-Za-z0-9_-]/_}"
+    local _prev=""
+    [ -f "$_state_file" ] && _prev=$(cat "$_state_file" 2>/dev/null || echo "")
+    printf '%s' "$_key" > "$_state_file" 2>/dev/null || true
+    [ "$_key" = "$_prev" ] && return 0
     return 1
 }
 
@@ -2000,6 +2027,7 @@ verify_story_deliverables() {
         "$prd_target" 2>/dev/null)
 
     if [ ${#missing[@]} -gt 0 ]; then
+        STORY_REJECTION_KEY="missing:$(printf '%s,' "${missing[@]}")"
         error "Story $story_id is missing ${#missing[@]} declared deliverable(s) in $PROJECT_ROOT:"
         for file in "${missing[@]}"; do
             error "  $file"
@@ -2030,6 +2058,7 @@ verify_story_deliverables() {
                 _unchanged_note=" [attempt $((retry_count + 1))/$((MAX_RETRIES + 1)) — no retries remain]"
             fi
         fi
+        STORY_REJECTION_KEY="unchanged-all:$(printf '%s,' "${unchanged[@]}")"
         warning "Story $story_id: all $declared declared deliverable(s) exist but are UNCHANGED since baseline — no real work done anywhere in the declared set${_unchanged_note}:"
         for file in "${unchanged[@]}"; do
             warning "  $file"
@@ -2083,6 +2112,7 @@ verify_story_deliverables() {
                         _attempt_note=" [attempt $((retry_count + 1))/$((MAX_RETRIES + 1)) — no retries remain]"
                     fi
                 fi
+                STORY_REJECTION_KEY="no-tree-change"
                 warning "Story $story_id declared NO technicalNotes.files, and no real change exists anywhere in $PROJECT_ROOT relative to ${_baseline_ref} (only incidental pipeline paths, if anything, changed) — treating this attempt as incomplete rather than trusting an empty deliverable list.${_attempt_note}"
                 return 1
             fi
@@ -6570,6 +6600,26 @@ BROWNFIELD SURGEON MODE — non-negotiable (applies to every story in this run):
             # ──────────────────────────────────────────────────────────────────────
             local _rung=$(( retry_count / 2 ))
             local _entering_rung=$(( retry_count % 2 == 0 ))   # 1 = first attempt of rung
+
+            # A rung normally gets two attempts: the model's answer, then a
+            # re-ask with self-heal guidance. That second attempt is only worth
+            # paying for if something about it can differ. When the LAST attempt
+            # was rejected for the exact same reason as the one before it, the
+            # model has already read the corrective and declined it — live
+            # AMSD-2041 2026-07-30 produced byte-identical prescribed-helper
+            # rejections on attempts 2, 3 and 4 while the prompt named the helper
+            # 21 times. Re-asking buys a copy of the last answer, so step the
+            # ladder instead and put a different model on it.
+            #
+            # This does not make any model comply — that requires the requirement
+            # to be structural rather than advisory (IMPL-PROSE). It stops paying
+            # for the same refusal twice.
+            if _rejection_repeat_check "$story_id" "${STORY_REJECTION_KEY:-}"; then
+                if [ "$_entering_rung" -ne 1 ]; then
+                    log "  InferenceLadder[R${retry_count}]: identical rejection twice (${STORY_REJECTION_KEY}) — advancing the rung early rather than re-asking a model that already refused"
+                    _entering_rung=1
+                fi
+            fi
 
             # skipLadder: set by spec-mode-runner.js (veryHighComplexity AC-count)
             # or lib/tc-writer-gate.sh (TC-fact-density). Both pre-assign the

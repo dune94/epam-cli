@@ -76,6 +76,34 @@ echo "RC=$?"
   return { path, rc };
 }
 
+describe('the implementation prompt resolves through the same function', () => {
+  // The deliverable CHECK resolving correctly is necessary but not sufficient:
+  // live 2026-07-30, the injection loop's own `[ -f "$abs_f" ]` failed on the
+  // wrong-case declaration FIRST, so the prompt told the agent "WRITE this
+  // file first" for a file that already existed under a different case — the
+  // agent complied and created a duplicate. Fixing only the post-hoc verifier
+  // would leave that phantom-file creation happening every time.
+  it('build_implementation_prompt resolves abs_f before the existence check', () => {
+    const i = SRC.indexOf('while IFS= read -r f; do');
+    expect(i, 'the injection loop is gone — this is anchored to nothing').toBeGreaterThan(-1);
+    const block = SRC.slice(i, i + 2200);
+    expect(block, 'the injection loop still checks the RAW declared path — a wrong ' +
+      'case or extension still reads as missing and the agent is told to WRITE a ' +
+      'file that already exists')
+      .toMatch(/_resolve_deliverable_path "\$abs_f"/);
+  });
+
+  it('the resolution happens before the write-first branch, not after', () => {
+    const i = SRC.indexOf('while IFS= read -r f; do');
+    const resolveIdx = SRC.indexOf('_resolve_deliverable_path "$abs_f"', i);
+    const checkIdx = SRC.indexOf('[ "$_inject_content" = "1" ] && [ -f "$abs_f" ]', i);
+    expect(resolveIdx).toBeGreaterThan(-1);
+    expect(checkIdx).toBeGreaterThan(-1);
+    expect(resolveIdx, 'the existence check runs before the resolution — the fix has no effect')
+      .toBeLessThan(checkIdx);
+  });
+});
+
 describe('an exact path still wins', () => {
   it('returns the literal path when it exists', () => {
     const r = resolve(['src/hooks/useContent.ts'], 'src/hooks/useContent.ts');
@@ -143,5 +171,59 @@ describe('ambiguity is reported, never guessed', () => {
     // The declaration is unusable and the operator needs to know.
     const r = resolve(['src/mod.ts', 'src/mod.js'], 'src/mod');
     expect(r.rc, 'the resolver guessed between two candidates').not.toBe(0);
+  });
+});
+
+describe('a declaration with the WRONG CASE still resolves', () => {
+  // Live AMSD-2041 2026-07-30, metrolinx. The real file is
+  // src/context/contentstackContext.tsx (lowercase c). The detective's own
+  // transcript never once shows it querying the exact case — it names
+  // "ContentstackContext.tsx" (capital C, the conventional PascalCase a model
+  // defaults to for a React Context) in both its final answer and the ONLY
+  // occurrence of the string anywhere in its log.
+  //
+  // On this case-SENSITIVE filesystem the consequence cascaded: the injection
+  // loop's `[ -f "$abs_f" ]` check failed on the wrong-case path, so the
+  // implementation prompt told the agent "WRITE this file first" for a file
+  // that already existed under a different case. The agent complied — git
+  // then showed one file ADDED (capital C) and the real one DELETED (git's
+  // rename-detection reading the old file as removed once nothing referenced
+  // it) — 7 attempts, same failure, real spend each time.
+  it('resolves the exact live failure: wrong case, same extension', () => {
+    const r = resolve(['src/context/contentstackContext.tsx'], 'src/context/ContentstackContext.tsx');
+    expect(r.rc, 'a case-only mismatch still reads as missing — this is the live failure').toBe(0);
+    expect(r.path).toBe('src/context/contentstackContext.tsx');
+  });
+
+  it('resolves wrong case AND wrong extension together', () => {
+    const r = resolve(['src/context/contentstackContext.ts'], 'src/context/ContentstackContext.tsx');
+    expect(r.rc).toBe(0);
+    expect(r.path).toBe('src/context/contentstackContext.ts');
+  });
+
+  it('prefers the exact-case file when both casings exist', () => {
+    // If the declared casing is real, it wins — no case-folding required, and
+    // no risk of silently picking the wrong one of two real files.
+    const r = resolve(['src/Mod.ts', 'src/mod.ts'], 'src/Mod.ts');
+    expect(r.rc).toBe(0);
+    expect(r.path).toBe('src/Mod.ts');
+  });
+
+  it('is ambiguous, not guessed, when two case variants both exist', () => {
+    const r = resolve(['src/Mod.ts', 'src/mod.ts'], 'src/mod.ts'.replace('mod', 'MOD'));
+    expect(r.rc, 'two real files differing only by case were silently collapsed to one')
+      .not.toBe(0);
+  });
+
+  it('still fails when no case variant exists either', () => {
+    expect(resolve(['src/other.ts'], 'src/Missing.ts').rc).not.toBe(0);
+  });
+
+  it('does not match a same-named file in a DIFFERENT directory', () => {
+    // Case-insensitivity must stay scoped to the declared directory — matching
+    // anywhere in the repo would silently redirect a genuinely wrong path to
+    // an unrelated file of the same name.
+    const r = resolve(['src/other/ContentstackContext.tsx'], 'src/context/ContentstackContext.tsx');
+    expect(r.rc, 'matched a file outside the declared directory').not.toBe(0);
   });
 });

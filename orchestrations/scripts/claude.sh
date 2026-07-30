@@ -1380,6 +1380,23 @@ $(printf '%s\n' "$string_invariants" | sed 's/^/- /')
         else
             abs_f="$PROJECT_ROOT/$f"
         fi
+        # A declared path may be wrong in extension or case while the real file
+        # genuinely exists (live 2026-07-30: declared ContentstackContext.tsx,
+        # repo holds contentstackContext.tsx — the model's conventional
+        # PascalCase guess for a React Context, not what the repo actually
+        # contains). A bare `[ -f "$abs_f" ]` here failed on that mismatch, so
+        # this loop told the agent the file did NOT exist and to WRITE it,
+        # which it did — leaving a duplicate file under the wrong name/case
+        # and the real one untouched, 7 identical attempts before this existed.
+        # Resolve through the SAME function verify_story_deliverables uses, so
+        # the prompt and the post-hoc check can never disagree about whether a
+        # declared file is real.
+        local _resolved_abs_f
+        if _resolved_abs_f="$(_resolve_deliverable_path "$abs_f")"; then
+            [ "$_resolved_abs_f" != "$abs_f" ] && \
+                log "  Deliverable '$f' resolved to '${_resolved_abs_f#"$PROJECT_ROOT"/}' for prompt injection (declaration's case/extension did not match the repository)"
+            abs_f="$_resolved_abs_f"
+        fi
         # Inject CONTENT only for a fix-site file (or all, when no fixSiteAnalysis exists).
         local _rel_f _inject_content
         _rel_f="${abs_f#"$PROJECT_ROOT"/}"
@@ -1880,6 +1897,51 @@ _resolve_deliverable_path() {
     if [ "${#_cands[@]}" -gt 1 ]; then
         warning "Declared deliverable '$_abs' is ambiguous — ${#_cands[@]} files match: ${_cands[*]}"
         warning "  The declaration cannot identify one file; it needs an extension."
+        return 1
+    fi
+
+    # A declaration may carry the WRONG CASE, not merely the wrong extension.
+    # Live 2026-07-30: a story declared ContentstackContext.tsx (the
+    # conventional PascalCase a model defaults to for a React Context) while
+    # the repository's real file is contentstackContext.tsx (lowercase c). On
+    # this case-SENSITIVE filesystem `[ -f ]` failed, so the implementation
+    # prompt told the agent the file did not exist and to WRITE it — which it
+    # did, leaving one file added under the wrong case and the real one reading
+    # as deleted. 7 identical attempts, real spend each time, before this
+    # existed. Scoped to the SAME DIRECTORY only: matching anywhere in the repo
+    # would silently redirect a genuinely wrong path to an unrelated file that
+    # happens to share a name.
+    local _dir _base _lower_target _e
+    _dir="$(dirname "$_abs")"
+    [ -d "$_dir" ] || return 1
+    _base="$(basename "$_abs")"
+    _lower_target=$(printf '%s' "$_base" | tr '[:upper:]' '[:lower:]')
+    _cands=()
+    for _e in "$_dir"/*; do
+        [ -f "$_e" ] && [ -s "$_e" ] || continue
+        [ "$(printf '%s' "$(basename "$_e")" | tr '[:upper:]' '[:lower:]')" = "$_lower_target" ] && _cands+=("$_e")
+    done
+    # Also try the extensionless/stem form case-insensitively, so a declaration
+    # that is wrong in BOTH case and extension still resolves (e.g. the repo
+    # holds contentstackContext.ts against a declared ContentstackContext.tsx).
+    if [ "${#_cands[@]}" -eq 0 ] && [ "$_stem" != "$_abs" ]; then
+        local _stem_base _lower_stem
+        _stem_base="$(basename "$_stem")"
+        _lower_stem=$(printf '%s' "$_stem_base" | tr '[:upper:]' '[:lower:]')
+        for _e in "$_dir"/*; do
+            [ -f "$_e" ] && [ -s "$_e" ] || continue
+            local _e_base_noext="${_e%.*}"
+            [ "$(printf '%s' "$(basename "$_e_base_noext")" | tr '[:upper:]' '[:lower:]')" = "$_lower_stem" ] && _cands+=("$_e")
+        done
+    fi
+
+    if [ "${#_cands[@]}" -eq 1 ]; then
+        warning "Deliverable '$_abs' resolved case-insensitively to '${_cands[0]}' — the declared casing does not match the repository."
+        printf '%s\n' "${_cands[0]}"
+        return 0
+    fi
+    if [ "${#_cands[@]}" -gt 1 ]; then
+        warning "Declared deliverable '$_abs' is ambiguous by case — ${#_cands[@]} files match: ${_cands[*]}"
         return 1
     fi
     return 1

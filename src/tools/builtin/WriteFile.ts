@@ -4,6 +4,13 @@ import type { Tool, ToolResult } from '../types.js';
 import { ensureDir } from '../../utils/fs.js';
 
 export class WriteFileTool implements Tool {
+  /**
+   * Per-file count of reuse-guard rejections, so the guard can yield rather
+   * than deadlock a story on a wrong fix-site prescription. Keyed by resolved
+   * path: one badly-prescribed file must not consume another's allowance.
+   */
+  private static readonly symbolBlocks = new Map<string, number>();
+
   readonly name = 'write_file';
   readonly description = 'Write content to a file. Creates parent directories if needed.';
   readonly permission = 'review' as const;
@@ -32,6 +39,45 @@ export class WriteFileTool implements Tool {
 
     try {
       const resolved = path.resolve(filePath);
+
+      // Reuse guard: when a story prescribes an existing helper for a specific
+      // fix site, a write to that site must actually reference it.
+      //
+      // Live AMSD-2041 2026-07-30: the retry prompt named `Stack.livePreviewQuery`
+      // 21 times and explained why re-implementing it fails. The model read the
+      // advice and hand-rolled the logic anyway, three attempts running. Prose a
+      // model may ignore is not a requirement; the write is where it becomes one,
+      // and the agent sees the rejection inside its own loop rather than one full
+      // billed attempt later.
+      //
+      // Bounded on purpose. The prescription comes from an LLM detective and has
+      // been wrong before, so this yields after EPAM_REQUIRED_SYMBOL_MAX_BLOCKS
+      // (default 2) rejections per file: a wrong fix site costs two tool results,
+      // never a dead story. The post-hoc verifier and the ladder still catch a
+      // genuine miss. A guard that can deadlock is worse than the prose it
+      // replaces. Scope is required — symbols alone must never degrade into
+      // "every file must mention it".
+      const requiredSymbols = (process.env.EPAM_REQUIRED_SYMBOLS || '')
+        .split(':').map(s => s.trim()).filter(Boolean);
+      const symbolScope = (process.env.EPAM_REQUIRED_SYMBOL_SCOPE || '')
+        .split(':').map(s => s.trim()).filter(Boolean).map(p => path.resolve(p));
+      if (requiredSymbols.length && symbolScope.includes(resolved)) {
+        const maxBlocks = Number(process.env.EPAM_REQUIRED_SYMBOL_MAX_BLOCKS ?? '2');
+        const seen = WriteFileTool.symbolBlocks.get(resolved) ?? 0;
+        if (maxBlocks > 0 && seen < maxBlocks && !requiredSymbols.some(s => content.includes(s))) {
+          WriteFileTool.symbolBlocks.set(resolved, seen + 1);
+          return {
+            toolUseId: '',
+            content:
+              `[reuse-guard] Write blocked: ${resolved} is the prescribed fix site for ` +
+              `${requiredSymbols.join(' or ')}, which already exists in this repository, but the ` +
+              `content you wrote does not reference it. Import and call it rather than ` +
+              `re-implementing its logic — a hand-rolled equivalent has produced fixes that ` +
+              `could never work. Rewrite this file using ${requiredSymbols.join(' or ')}.`,
+            isError: true,
+          };
+        }
+      }
 
       // Scope guard: when EPAM_ALLOWED_WRITE_PATHS is set, block writes to TypeScript
       // source files outside the story's declared scope. This prevents scaffold agents

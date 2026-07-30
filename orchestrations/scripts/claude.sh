@@ -7084,8 +7084,35 @@ ${_trimmed_amendment}"
                 if [ -n "$_fixsite_paths" ]; then
                     _allowed_write_paths="${_allowed_write_paths:+${_allowed_write_paths}:}${_fixsite_paths}"
                 fi
+                # Reuse guard (IMPL-PROSE): the prescribed helper and the file it
+                # belongs in, taken from the SAME verified fixSiteAnalysis entry the
+                # post-hoc verifier reads. Handing the tool the symbol makes reuse
+                # structural at the write instead of advice in the prompt, which the
+                # model demonstrably ignored three attempts running (AMSD-2041,
+                # 2026-07-30). Empty when nothing is prescribed — the guard is inert.
+                local _req_symbols _req_scope
+                _req_symbols=$(jq -r --arg id "$story_id" \
+                    '.stories[] | select(.id == $id) | (.fixSiteAnalysis // [])
+                     | map(select((.fixVerified == true) and ((.helper // "") != "")))
+                     | map(.helper) | unique | join(":")' \
+                    "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
+                _req_scope=$(jq -r --arg id "$story_id" \
+                    '.stories[] | select(.id == $id) | (.fixSiteAnalysis // [])
+                     | map(select((.fixVerified == true) and ((.helper // "") != "")))
+                     | map(.file // empty) | unique | .[]' \
+                    "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null | \
+                    while IFS= read -r _f; do
+                        [ -n "$_f" ] || continue
+                        case "$_f" in /*) printf '%s:' "$_f" ;; *) printf '%s:' "$PROJECT_ROOT/$_f" ;; esac
+                    done)
+                _req_scope="${_req_scope%:}"
+                if [ -n "$_req_symbols" ] && [ -n "$_req_scope" ]; then
+                    log "  ReuseGuard: '${_req_symbols}' enforced at write time on ${_req_scope}"
+                fi
                 if echo "$prompt" | \
                         EPAM_DANGEROUS_SKIP_APPROVAL=1 \
+                        EPAM_REQUIRED_SYMBOLS="${_req_symbols}" \
+                        EPAM_REQUIRED_SYMBOL_SCOPE="${_req_scope}" \
                         EPAM_ALLOWED_WRITE_PATHS="${_allowed_write_paths}" \
                         EPAM_MAX_ITERATIONS="${STORY_MAX_ITERATIONS:-6}" \
                         EPAM_MAX_OUTPUT_TOKENS="${STORY_MAX_OUTPUT_TOKENS:-3072}" \

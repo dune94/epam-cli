@@ -1166,15 +1166,20 @@ list_phases() {
 # Get project context for Claude
 get_project_context() {
     local stack=$(jq -r '.project.stack | to_entries | map("\(.key): \(.value)") | join(", ")' "$PRD_FILE" 2>/dev/null || echo "")
-    local criteria=$(jq -r '.acceptanceCriteria | join("\n- ")' "$PRD_FILE" 2>/dev/null || echo "")
+    # Project-level criteria are optional. When absent this used to emit the
+    # heading followed by a bare "- ", which reads to the agent as "there is a
+    # criterion here" while carrying none — observed live 2026-07-29, where the
+    # story ALSO had no acceptance criteria of its own, so the prompt asserted
+    # constraints twice and supplied none. An absent section is honest; an empty
+    # one is misleading.
+    local criteria=$(jq -r '(.acceptanceCriteria // []) | join("\n- ")' "$PRD_FILE" 2>/dev/null || echo "")
 
     cat << EOF
 Project: $(jq -r '.project.name' "$PRD_FILE")
 Description: $(jq -r '.project.description' "$PRD_FILE")
 Tech Stack: $stack
 
-Global Acceptance Criteria:
-- $criteria
+$([ -n "${criteria//[[:space:]]/}" ] && printf 'Global Acceptance Criteria:\n- %s' "$criteria" || true)
 EOF
 }
 

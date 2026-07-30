@@ -1818,6 +1818,18 @@ _resolve_deliverable_path() {
     if [ -f "$_abs" ] && [ -s "$_abs" ]; then printf '%s\n' "$_abs"; return 0; fi
 
     local _cands=() _c
+    # A declaration may carry the WRONG extension, not merely a missing one:
+    # observed live 2026-07-29, a story declared ContentstackContext.tsx while
+    # the repository holds ContentstackContext.ts. Globbing "<path>.*" only
+    # helps an extensionless declaration, so strip a trailing extension and try
+    # that stem too. Determined, not assumed — the alternatives come from what
+    # the repository actually contains.
+    local _stem="${_abs%.*}"
+    if [ "$_stem" != "$_abs" ]; then
+        for _c in "$_stem".*; do
+            [ -f "$_c" ] && [ -s "$_c" ] && _cands+=("$_c")
+        done
+    fi
     for _c in "$_abs".*; do
         [ -f "$_c" ] && [ -s "$_c" ] && _cands+=("$_c")
     done

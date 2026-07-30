@@ -114,6 +114,29 @@ describe('an extensionless module path resolves to the real file', () => {
   });
 });
 
+describe('a declaration with the WRONG extension still resolves', () => {
+  it('resolves .tsx declared against a .ts file — seen live 2026-07-29', () => {
+    // The story declared src/context/ContentstackContext.tsx; the repository
+    // holds ContentstackContext.ts. Globbing "<path>.*" only helps an
+    // EXTENSIONLESS declaration, so the deliverable read as missing and the
+    // agent was failed for work it may well have done.
+    const r = resolve(['src/context/ContentstackContext.ts'], 'src/context/ContentstackContext.tsx');
+    expect(r.rc, 'a wrong extension in the declaration still reads as missing').toBe(0);
+    expect(r.path).toBe('src/context/ContentstackContext.ts');
+  });
+
+  it('prefers the exact file when both extensions exist', () => {
+    // If the declared path is real, it wins — no stem-matching required.
+    const r = resolve(['src/m.ts', 'src/m.tsx'], 'src/m.tsx');
+    expect(r.rc).toBe(0);
+    expect(r.path).toBe('src/m.tsx');
+  });
+
+  it('still fails when no file matches the stem in any extension', () => {
+    expect(resolve(['src/other.ts'], 'src/missing.tsx').rc).not.toBe(0);
+  });
+});
+
 describe('ambiguity is reported, never guessed', () => {
   it('fails when two extensions could satisfy the declaration', () => {
     // Picking one silently would make the gate's verdict depend on glob order.

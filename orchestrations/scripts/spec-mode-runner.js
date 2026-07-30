@@ -1094,6 +1094,19 @@ ${storiesPayload}
         delete payload.splitStories;
       }
 
+      // Brownfield: no agent may split, not even openspec. Guarding the split
+      // MANDATE (storyRequiresSplit) only stops the pipeline from DEMANDING a
+      // child — an agent can still volunteer one, and the result is identical:
+      // a story id that exists nowhere in the client's tracker, cannot be
+      // written back, and fragments a minimal fix across children that each
+      // fail their own deliverable check (live AMSD-2041-A, 2026-07-30).
+      // Deterministic drop, same as the speckit rule above — prompt
+      // instruction alone has already been shown insufficient here.
+      if (process.env.EPAM_BROWNFIELD === '1' && Array.isArray(payload.splitStories) && payload.splitStories.length) {
+        console.warn(`spec-mode: ${agent} proposed splitStories for ${story.id} — dropping (brownfield stories are tickets and are never split; multi-codeline work is one story with N executions)`);
+        delete payload.splitStories;
+      }
+
       const newStoriesCountBefore = newStories.length;
       let changes = applySpecChanges(story, payload, newStories, prd, opts.phase, runId, logDir);
 
@@ -3013,6 +3026,26 @@ function estimateStoryTokens(story, contractDir) {
 const SPLIT_MANDATE_AC_THRESHOLD = 12;
 
 function storyRequiresSplit(snapshot) {
+  // Brownfield: a story IS the ticket, so there is nothing to subdivide.
+  //
+  // Live AMSD-2041 2026-07-30: the ticket carries NO acceptance criteria,
+  // speckit invented 15 from its one-line title, this rule saw 15 > 12 and
+  // forced openspec to produce `AMSD-2041-A` — a child that exists nowhere in
+  // the client's Jira, can never be written back (writes to client systems are
+  // hard-blocked), reached implementation and wrote nothing.
+  //
+  // Every assumption behind the mandate is greenfield: that ACs were authored
+  // by someone who knows the work (here the pipeline authored them, so the
+  // count measures the inventor); that AC count proxies size (a minimal fix to
+  // existing code can be three lines behind fifteen observable behaviours); and
+  // that a story is ours to split at all. Multi-codeline work is one story with
+  // N executions and joined state — deliberately NOT a split.
+  //
+  // Keyed on brownfield being ON, never on its absence: a project that does not
+  // set the variable must keep the mandate exactly as it is.
+  if (process.env.EPAM_BROWNFIELD === '1') {
+    return { required: false, reason: '' };
+  }
   const acCount = Array.isArray(snapshot.acceptanceCriteria) ? snapshot.acceptanceCriteria.length : 0;
   const files = snapshot.technicalNotes?.files || [];
   const testFiles = files.filter((f) => f.endsWith('.test.ts') || f.endsWith('.spec.ts'));

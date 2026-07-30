@@ -1,6 +1,6 @@
 import type { Message } from '../providers/types.js';
 import type { ToolCallRequest } from '../tools/types.js';
-import type { AgentRunOptions, AgentRunResult } from './types.js';
+import type { AgentRunOptions, AgentRunResult, IterationTiming } from './types.js';
 import { Executor } from './Executor.js';
 import { ToolRunner } from './tools/ToolRunner.js';
 import { compressHistory } from '../context/MemoryCompressor.js';
@@ -74,6 +74,13 @@ export class AgentRunner {
   private maxToolOutputChars: number;
   private memoryLoader?: MemoryLoader;
   private memoryPromptBlock?: string;
+  /**
+   * Per-iteration model-latency / tool-execution split. See the comment at
+   * modelCallStart in run() for why this exists: without it, a slow reasoning
+   * call and a slow tool (e.g. a large CodeGraph query) are indistinguishable
+   * from the outside, and they need opposite fixes.
+   */
+  private timings: IterationTiming[] = [];
 
   constructor(private options: AgentRunOptions) {
     const toolRunner = options.toolRunner ?? new ToolRunner(options.tools, options.dangerousSkipApproval ?? false);
@@ -170,6 +177,14 @@ export class AgentRunner {
         ]) as Promise<T>;
       };
 
+      // Split model latency from tool execution time. Both were invisible before
+      // this: the detective's own transcript log holds only the prompt and the
+      // final JSON, so a 12-minute attempt (metrolinx, 2026-07-30) and a
+      // 23-second one (mock3, same day) could not be told apart — model latency
+      // on a large/reasoning call and slow tool execution against a big index
+      // need opposite fixes, and EPAM_MAX_TOOL_CALLS was raised three times
+      // against exactly this blind spot before anyone could see which it was.
+      const modelCallStart = Date.now();
       const response = await withDeadline(this.options.provider.stream(
         {
           messages,
@@ -196,6 +211,7 @@ export class AgentRunner {
           }
         }
       ));
+      const modelLatencyMs = Date.now() - modelCallStart;
 
       this.totalInputTokens += response.usage.inputTokens;
       this.totalOutputTokens += response.usage.outputTokens;
@@ -217,6 +233,7 @@ export class AgentRunner {
         }
         if (check.action === 'pause') {
           // Hard stop — append what we have and return immediately
+          this.recordTiming(modelLatencyMs, 0, []);
           messages.push({ role: 'assistant', content: response.content });
           return this.buildResult(
             response.content.filter(p => p.type === 'text').map(p => p.text ?? '').join('') || check.message,
@@ -251,6 +268,7 @@ export class AgentRunner {
       // 'max_tokens' ("thrown by AgentRunner when stopReason === 'max_tokens'"),
       // so the failover path was written for this throw before it existed.
       if (response.stopReason === 'max_tokens' && toolUses.length === 0) {
+        this.recordTiming(modelLatencyMs, 0, []);
         const partial = (textParts.map(p => p.text ?? '').join('') || accumulatedText).trim();
         throw new Error(
           `Response truncated at max_tokens with no usable output — the model spent its ` +
@@ -273,12 +291,14 @@ export class AgentRunner {
         if (isThinkingOnly) {
           // Model is planning but hasn't acted — nudge it to call the tool.
           // Max 2 nudges per run to avoid infinite loops if model never calls tools.
+          this.recordTiming(modelLatencyMs, 0, []);
           nudgeCount++;
           messages.push({ role: 'assistant', content: response.content });
           messages.push({ role: 'user', content: 'Please call your WriteFile tool now to write the required file(s). Do not output any more text — just call the tool.' });
           continue;
         }
 
+        this.recordTiming(modelLatencyMs, 0, []);
         // Append the final assistant message so messages array is complete
         messages.push({ role: 'assistant', content: response.content });
 
@@ -302,6 +322,7 @@ export class AgentRunner {
       if (response.stopReason === 'max_tokens') {
         // Model ran out of output tokens mid-generation — push what we have
         // and continue the loop so the model can pick up where it left off.
+        this.recordTiming(modelLatencyMs, 0, []);
         logger.debug('max_tokens hit — continuing conversation');
         messages.push({ role: 'assistant', content: response.content });
         messages.push({ role: 'user', content: 'Continue from where you left off.' });
@@ -321,7 +342,13 @@ export class AgentRunner {
       );
 
       // Execute tools with Ralph Wiggum Loop error recovery for bash failures
+      const toolExecStart = Date.now();
       const toolResults = await this.executeToolsWithRecovery(toolCallRequests);
+      const toolExecMs = Date.now() - toolExecStart;
+      this.recordTiming(modelLatencyMs, toolExecMs, toolCallRequests.map(req => {
+        const result = toolResults.find(r => r.toolUseId === req.id);
+        return { name: req.name, resultBytes: result?.content.length ?? 0, isError: result?.isError ?? false };
+      }));
 
       for (const result of toolResults) {
         result.content = truncateToolOutput(result.content, this.maxToolOutputChars);
@@ -472,6 +499,24 @@ export class AgentRunner {
     return toolResults as any;
   }
 
+  /**
+   * Record one iteration's model/tool split and fire the streaming callback.
+   *
+   * Called at every exit from the iteration (early return, throw, nudge-continue,
+   * final-answer break, max_tokens-continue, and the normal tool-execution path)
+   * so no iteration silently goes unmeasured — a gap here would be the same
+   * defect this exists to fix: time spent that nobody can account for.
+   */
+  private recordTiming(
+    modelLatencyMs: number,
+    toolExecMs: number,
+    toolCalls: { name: string; resultBytes: number; isError: boolean }[],
+  ): void {
+    const timing: IterationTiming = { iteration: this.iterationCount, modelLatencyMs, toolExecMs, toolCalls };
+    this.timings.push(timing);
+    this.options.onIterationTiming?.(timing);
+  }
+
   /** Paths successfully written this run, used to summarise an otherwise-empty reply. */
   private writtenPaths: string[] = [];
 
@@ -492,6 +537,7 @@ export class AgentRunner {
         ...(costUsd != null ? { costUsd } : {}),
       },
       messages,
+      timings: this.timings,
     };
   }
 

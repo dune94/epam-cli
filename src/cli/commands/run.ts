@@ -129,6 +129,13 @@ export function createRunCommand(): Command {
           cost_is_estimate: isEstimate,
           toolCallCount: result.toolCallCount,
           iterations: result.iterations,
+          // Model-latency / tool-execution split per iteration. Small (one entry
+          // per round-trip) and additive to the existing shape — jq-based
+          // consumers that don't ask for it are unaffected. This is what makes a
+          // slow reasoning call distinguishable from a slow tool call (e.g. a
+          // large CodeGraph query) from OUTSIDE the process, which nothing
+          // before this could do (see AgentRunner's onIterationTiming comment).
+          timings: result.timings,
         };
         process.stdout.write(JSON.stringify(output, null, 2) + '\n');
       } else {

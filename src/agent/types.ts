@@ -52,6 +52,18 @@ export interface AgentRunOptions {
   onToolCall?: (toolName: string, input: Record<string, unknown>) => void;
   onToolResult?: (toolName: string, result: string, isError: boolean) => void;
   onIterationStart?: (iteration: number) => void;
+  /**
+   * Fired once per iteration with the model-latency / tool-execution split.
+   *
+   * Without this, a 12-minute detective attempt (metrolinx, 2026-07-30) and a
+   * 23-second one (mock3, same day) could not be told apart, because the
+   * detective's own transcript log carries only the prompt and the final JSON
+   * — no timing, no per-call breakdown. A slow reasoning call and a slow tool
+   * (e.g. a large CodeGraph query against a bigger repo) need opposite fixes;
+   * EPAM_MAX_TOOL_CALLS was raised three times against exactly this blind spot
+   * before anyone could see which one it actually was.
+   */
+  onIterationTiming?: (timing: IterationTiming) => void;
   /** Fired when a budget threshold is crossed (warning, downgrade, or pause). */
   onBudgetCheck?: (result: BudgetCheckResult) => void;
   /** Auditor runners to evaluate each assistant response before delivery. */
@@ -62,6 +74,21 @@ export interface AgentRunOptions {
   abortSignal?: AbortSignal;
 }
 
+/**
+ * One LLM round-trip's model-latency / tool-execution split.
+ *
+ * modelLatencyMs and toolExecMs are measured separately and never overlap: the
+ * model call and the tool execution it triggers are sequential, not
+ * concurrent, so summing both across all iterations accounts for the full run
+ * — there is no third bucket of unaccounted time.
+ */
+export interface IterationTiming {
+  iteration: number;
+  modelLatencyMs: number;
+  toolExecMs: number;
+  toolCalls: { name: string; resultBytes: number; isError: boolean }[];
+}
+
 export interface AgentRunResult {
   finalResponse: string;
   toolCallCount: number;
@@ -69,6 +96,8 @@ export interface AgentRunResult {
   usage: TokenUsage;
   /** Full message array at end of run, including history + this turn's exchanges. */
   messages: Message[];
+  /** Per-iteration model/tool timing split — see IterationTiming. */
+  timings: IterationTiming[];
 }
 
 export interface PlanStep {

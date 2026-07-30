@@ -340,6 +340,22 @@ resolve_model_from_story() {
             if [ "$_rmfs_kind" = "novel" ] && [ -n "$_rmfs_high" ] && [ "$_rmfs_high" != "$STORY_MODEL" ]; then
                 log "  Model[novel-brownfield] -> $_rmfs_high (was $STORY_MODEL; novel code does not start on the cheapest rung)"
                 STORY_MODEL="$_rmfs_high"
+                # The provider must move with the model. STORY_PROVIDER was
+                # resolved from the story's aiProvider, which the coordinator
+                # paired with the CHEAP model CPA sized — so swapping in the
+                # high-tier model leaves it pointing at the vendor that hosted
+                # the model we just discarded. Live AMSD-2041 2026-07-30: all
+                # three lanes sent z-ai/glm-5.1 (OpenRouter) to MiniMax and got
+                # 400 "unknown model" in under a second, zero tokens, $0, eight
+                # times each. Every ladder site already does this; this one did
+                # not. Empty means the map has no entry — keep the existing
+                # provider, which is resolve_model_provider's documented contract.
+                local _rmfs_provider
+                _rmfs_provider=$(resolve_model_provider "$_rmfs_high")
+                if [ -n "$_rmfs_provider" ] && [ "$_rmfs_provider" != "${STORY_PROVIDER:-}" ]; then
+                    log "  Provider[novel-brownfield] -> $_rmfs_provider (was ${STORY_PROVIDER:-unset}; follows the model)"
+                    STORY_PROVIDER="$_rmfs_provider"
+                fi
             fi
         fi
     else
@@ -349,6 +365,20 @@ resolve_model_from_story() {
         # prd.json override, since resolve_effort_settings() no longer logs
         # it either (see that function's own comment for why).
         log "  Model[effort-default] -> $STORY_MODEL"
+        # Same pairing rule as the override above. resolve_effort_settings picks
+        # this model from the effort tier BEFORE resolve_provider_settings reads
+        # the story's aiProvider, so its choice cannot re-route the provider —
+        # anything it set would be clobbered moments later. Here, after both have
+        # run, is the first point where the pair can be made consistent. A story
+        # whose configured effort model belongs to a different vendor than its
+        # aiProvider would otherwise reach the API as the same impossible pairing
+        # that killed AMSD-2041 (2026-07-30), just via a different route in.
+        local _rmfs_eff_provider
+        _rmfs_eff_provider=$(resolve_model_provider "${STORY_MODEL:-}")
+        if [ -n "$_rmfs_eff_provider" ] && [ "$_rmfs_eff_provider" != "${STORY_PROVIDER:-}" ]; then
+            log "  Provider[effort-default] -> $_rmfs_eff_provider (was ${STORY_PROVIDER:-unset}; follows the model)"
+            STORY_PROVIDER="$_rmfs_eff_provider"
+        fi
     fi
 }
 

@@ -86,6 +86,17 @@ class DependencyManifest(BaseModel):
         description="Tooling packages invoked as a binary and therefore never "
                     "imported, so import scanning cannot detect them",
     )
+    commentPatterns: List[str] = Field(
+        default_factory=list,
+        description="Regexes matching this language's comment syntax, stripped "
+                    "from a file's text before import scanning. importPattern has "
+                    "no concept of a comment or string literal, so 'from \"X\" to "
+                    "\"Y\"' inside a doc comment matches identically to a real "
+                    "import (live 2026-07-30: a JSDoc comment reading 'Convert "
+                    "time from \"11:30\" to \"11-30\" format' was scanned as an "
+                    "import of a package named 11:30). Optional: an empty list "
+                    "keeps today's behaviour unchanged.",
+    )
 
 
 def json_schema() -> dict:
@@ -131,6 +142,12 @@ def validate(manifest: dict, repo: str) -> dict:
     except re.error as exc:
         pattern = None
         issues.append(f"importPattern does not compile: {exc}")
+
+    for cp in m.commentPatterns:
+        try:
+            re.compile(cp)
+        except re.error as exc:
+            issues.append(f"commentPatterns entry '{cp}' does not compile: {exc}")
 
     if "{package}" not in m.installCommand:
         issues.append("installCommand has no {package} placeholder — nothing to substitute")

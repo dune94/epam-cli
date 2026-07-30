@@ -2770,7 +2770,28 @@ for root, dirs, files in os.walk(project_root):
                 content = f.read()
         except OSError:
             continue
-        for m in pattern.finditer(content):
+        # Strip comment text before scanning for imports. importPattern matches
+        # raw text with no concept of a comment or string literal — the word
+        # "from" followed by a quoted string is enough, whether or not it is
+        # real import syntax. Live 2026-07-30: a JSDoc comment reading
+        # 'Convert time from "11:30" to "11-30" format' matched exactly, and
+        # dependency-check tried to install a package literally named "11:30".
+        # This is the SAME defect class as the 2026-07-06 incident above
+        # (free text "mapping from 'from/to' to...") — that fix narrowed WHICH
+        # FILES get scanned; it never addressed WHERE WITHIN a file the
+        # pattern may match, and real source files have real comments.
+        #
+        # commentPatterns is OPTIONAL and config-supplied — no built-in
+        # knowledge of `//`, `/* */`, `#`, or any other comment syntax. A
+        # project that does not configure it keeps today's behaviour exactly;
+        # this is additive grounding, never a requirement.
+        _scan_content = content
+        for _cp in cfg.get('commentPatterns', []) or []:
+            try:
+                _scan_content = re.sub(_cp, '', _scan_content)
+            except re.error:
+                continue
+        for m in pattern.finditer(_scan_content):
             pkg = next((g for g in m.groups() if g), None)
             if pkg:
                 imported.add(pkg)

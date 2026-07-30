@@ -505,6 +505,7 @@ const TOOL_SPEC_AGENT = {
       storyId: { type: 'string' },
       agent: { type: 'string' },
       notes: { type: 'string' },
+      storyKind: { type: 'string', enum: ['defect', 'novel'] },
       acceptanceCriteria: { type: 'array', items: { type: 'string' }, minItems: 1 },
       description: { type: 'string' },
       title: { type: 'string' },
@@ -3491,6 +3492,25 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId, logDi
   }
   if (payload.technicalNotes && typeof payload.technicalNotes === 'object') {
     story.technicalNotes = payload.technicalNotes;
+  }
+  // ── Persist the classification, do not just use it in passing ─────────────
+  // The spec agent classifies every story as "defect" or "novel", the runner
+  // reads it in-memory (Jira-type anchoring, split decisions) — and then threw
+  // it away, so every story reached the PRD with storyKind:null.
+  //
+  // Three consumers read this field and were therefore dead code:
+  //   classify_ladder_tier   novel brownfield -> high ladder
+  //   resolve_model_from_story  novel brownfield -> high model
+  //   the bug-reproduction gate  skip novel stories (a novel story can never
+  //                              ship a test reproducing a bug that has none)
+  // All three were verified against synthetic PRDs where the field was set by
+  // hand; nothing checked that the PRODUCER writes it. It does not, so a live
+  // run classified the story "novel" in every lane and still started it on the
+  // cheapest model and gated it as a defect.
+  if (payload.storyKind === 'defect' || payload.storyKind === 'novel') {
+    story.storyKind = payload.storyKind;
+  }
+  {
   }
   // locationHint (brownfield openspec only): CodeGraph/Semble-grounded fix-site
   // file paths, discovered from the "EXISTING CODE" context already injected

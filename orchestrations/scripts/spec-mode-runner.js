@@ -2201,6 +2201,30 @@ Set "vcSource" to "acceptance", "description", or "both" — where you derived t
   return { archaeologyBlock, schemaLine };
 }
 
+// recordDetectiveRound — per-round telemetry for the spec pass's dominant cost.
+//
+// Measured 2026-07-30 across three lanes of one run: the spec pass is ~16 min
+// and the detective is 61-72% of it (11.6 / 9.8 / 9.4 min), while openspec and
+// speckit together take ~1.5 min. Every lane took roughly the same time on a
+// one-line ticket, which is the signature of a fixed exploration budget rather
+// than work proportional to the story.
+//
+// Before capping CODEGRAPH_DETECTIVE_MAX_TOOL_CALLS (currently 7) we need to
+// know whether the later rounds FIND anything or merely re-read: starving the
+// detective degrades fixSiteAnalysis, which is what the write-time reuse guard
+// now depends on. Cutting the wrong knob would trade cycle time for exactly the
+// prescription quality we just built enforcement around.
+//
+// Writes one line per attempt to detective-rounds.jsonl. Never throws — this is
+// measurement, and measurement must not be able to fail a run.
+function recordDetectiveRound(logDir, row) {
+  try {
+    if (!logDir) return;
+    fs.appendFileSync(path.join(logDir, 'detective-rounds.jsonl'),
+      JSON.stringify({ ...row, timestamp: new Date().toISOString() }) + '\n');
+  } catch { /* telemetry must never break the pass */ }
+}
+
 // runCodeGraphDetective(story, logDir) — invokes the code-graph-detective
 // agent: a tool-using LLM (GLM-5.1, upper-tier ladder) that iterates CodeGraph
 // queries and traces callers to find the CAUSAL fix site for a symptom-worded
@@ -2368,6 +2392,7 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
     }
     const correctiveNote = attempt === 1 ? '' :
       `\n\nRETRY — your previous reply contained NO JSON array (you may have called a write tool). Emit ONLY the JSON array as text in THIS reply now. Do NOT call WriteFile or write to any file.`;
+    const _roundStarted = Date.now();
     try {
       // PHASE 1 — EXPLORE (tools). A reasoning model reliably EXPLORES but does
       // NOT reliably switch to emitting structured JSON in the same turn: found
@@ -2453,6 +2478,7 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
         timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '450000'),
       });
       let findings = parseFindings(out);
+      const _phase1Findings = Array.isArray(findings) ? findings.length : 0;
       // PHASE 2 — EXTRACT (no tools). Phase 1 investigated but ended in prose
       // (no JSON). Hand that investigation text to a NO-TOOLS turn whose ONLY
       // possible action is to emit the JSON — it cannot wander off exploring
@@ -2471,6 +2497,23 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
           console.warn(`spec-mode: code-graph-detective phase-2 extraction recovered ${findings.length} fix-site(s) for ${story.id} from a narrative phase-1 answer.`);
         }
       }
+      // Round telemetry: what this attempt cost and what it actually yielded.
+      // phase2Used distinguishes "explored and answered" from "explored, ended
+      // in prose, needed a second call to extract" — the latter is pure waste.
+      recordDetectiveRound(logDir, {
+        storyId: (story && story.id) || '',
+        attempt,
+        maxAttempts,
+        model: attemptModel,
+        escalated: !!escalated,
+        elapsedSec: Math.round((Date.now() - _roundStarted) / 1000),
+        maxToolCalls: Number(process.env.CODEGRAPH_DETECTIVE_MAX_TOOL_CALLS || '7'),
+        phase1Findings: _phase1Findings,
+        phase2Used: _phase1Findings === 0 && Array.isArray(findings) && findings.length > 0,
+        findings: Array.isArray(findings) ? findings.length : 0,
+        exploreChars: String(out || '').length,
+        hitIterationCap: /reached maximum iterations/i.test(String(out || '')),
+      });
       if (findings === null) {
         console.warn(`spec-mode: ⚠️ code-graph-detective produced NO parseable JSON for ${story.id} (attempt ${attempt}/${maxAttempts}) even after the extraction phase. Phase-1 head: "${String(out || '').slice(0, 140).replace(/\s+/g, ' ').trim()}"`);
         continue; // retry — this is the silent-failure mode we must not accept
@@ -4626,6 +4669,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  recordDetectiveRound,
   classifySpecFailure,
   specCorrectiveNote,
   readAgentRawOutput,

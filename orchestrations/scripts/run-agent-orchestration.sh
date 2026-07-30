@@ -6333,6 +6333,17 @@ $assessment_prompt"
         fi
         # No story_id — phase-level assessment, not tied to any single story
         # (see the matching comment at the pre-phase assessment call site).
+        #
+        # Turn budget. Measured 2026-07-30: team-lead-agent was 40-51% of a mock3
+        # lane's wall clock, and EPAM_MAX_TOOL_CALLS was set at exactly one of its
+        # three call sites (the pre-phase assessment). Unbudgeted calls ran 9-14
+        # turns; because every turn re-sends the accumulated transcript, 14 turns
+        # pulled 184,627 input tokens to assess a one-line diff. 5-6 turn calls
+        # produced usable output at ~28k. Not a kill: at the budget AgentRunner
+        # withdraws the tools and demands the answer, the same mechanism the
+        # detective and the pre-phase assessment already rely on.
+        local _pa_tool_budget="${POST_ASSESSMENT_MAX_TOOL_CALLS:-6}"
+        EPAM_MAX_TOOL_CALLS="$_pa_tool_budget" \
         run_orch_prompt_with_tools "$_pa_prompt" "team-lead-agent" 2>&1 | tee "$assessment_log"
         local _assessment_rc=${PIPESTATUS[0]}
 

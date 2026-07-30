@@ -6554,6 +6554,33 @@ fi
 # review must never silently merge).
 log "Step 3.6: Running Team Lead code review for phase..."
 _emit_agent start "review-agent" "Team Lead Code Review"
+# _reset_story_for_reimplementation <story_id>
+# Clears completed/status on exactly ONE story so a review-driven
+# re-implementation attempt is not a guaranteed no-op against
+# is_story_completed. Same semantics as the outer whole-phase reset
+# (`.completed = false | .status = "pending"`, see the RESET_STORIES block
+# above) — that one already resets correctly at phase-restart scope; this is
+# the missing per-story equivalent at the Step 3.6 retry-cycle scope.
+# Scoped to one id deliberately: a sibling that already passed review must not
+# be re-run. Tolerates a missing/unknown id — jq's select simply matches
+# nothing, same as every other targeted PRD mutation in this file.
+_reset_story_for_reimplementation() {
+    local _story_id="$1"
+    local _prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    [ -f "$_prd_target" ] || return 0
+    local _tmp_prd
+    _tmp_prd="$(mktemp)"
+    chmod 644 "$_tmp_prd" 2>/dev/null
+    if jq --arg id "$_story_id" \
+        '(.stories[]? | select(.id == $id)) |= (.completed = false | .status = "pending")' \
+        "$_prd_target" > "$_tmp_prd" 2>/dev/null; then
+        mv "$_tmp_prd" "$_prd_target"
+    else
+        rm -f "$_tmp_prd"
+    fi
+    return 0
+}
+
 _review_max_cycles="${REVIEW_MAX_CYCLES:-2}"
 _review_cycle=1
 # Direct escalation flag. The hard-block below USED to rely solely on stories
@@ -6608,6 +6635,18 @@ while true; do
     for _fb in "$LOG_DIR"/review-feedback-*.json; do
         [ -f "$_fb" ] || continue
         _fb_story="$(basename "$_fb" | sed 's/^review-feedback-//; s/\.json$//')"
+        # Without this, the retry below is a guaranteed no-op. Step 8 marks a
+        # story `completed` the moment the agent's turn ends — regardless of
+        # whether the reviewer will accept it — and run_story_with_watchdog
+        # invokes claude.sh "$story_id", whose FIRST check is
+        # is_story_completed. Live AMSD-2041 2026-07-30: the reviewer rejected
+        # with 7 blockers, this loop logged "Re-implementing... (self-heal
+        # enabled)", and within the same second: "Story AMSD-2041 is already
+        # completed, skipping" / "Implemented: 0, Failed: 0, Skipped: 1" — zero
+        # new code, zero new review evidence, one of REVIEW_MAX_CYCLES's two
+        # cycles wasted on every rejection. Scoped to exactly this ONE story:
+        # a sibling that already passed review must not be re-run.
+        _reset_story_for_reimplementation "$_fb_story"
         log "  Re-implementing $_fb_story to address reviewer feedback (self-heal enabled)..."
         # claude.sh reads review-feedback-<id>.json (injects it into the impl
         # prompt) and its existing failure-analyst self-heal + agent-KB run on any

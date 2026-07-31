@@ -4271,6 +4271,8 @@ $(cat "$_contract_file")
 
 Check: (1) does the plan reference any file path, import path, exported class/function/type name that CONTRADICTS the dependency contracts? (2) do the plan's write/create steps use the EXACT declared output paths — not invented alternatives?
 
+You have read-only tools available (list/search/read files, run read-only shell commands). If you are about to flag a mismatch based on something the plan claims about the filesystem or an installed package, VERIFY it with your tools first — do not assume. Your tool budget is small: check the ONE fact your verdict depends on, not the whole codebase.
+
 Respond with ONLY a JSON object, no markdown fences:
 {\"verdict\":\"ok\"} if the plan is consistent with both the contracts and the declared output paths, OR
 {\"verdict\":\"mismatch\",\"corrections\":\"<one paragraph telling the planning agent exactly what to fix, citing the real path from the contract or declared files list>\"}
@@ -4282,11 +4284,22 @@ ${plan_text}
 ## Dependency Contracts (ground truth)
 ${dependency_contracts}"
 
+    # Tool access (HEAL-BLIND, 2026-07-31): this gate exists specifically to
+    # catch a plan that CONTRADICTS reality, but until now had no way to check
+    # anything beyond what dependency_contracts happens to cover (a story's
+    # declared internal dependencies) — the identical gap that let the
+    # failure-analyst confidently misdiagnose a fully-installed package as
+    # missing. Reuses ORCH_GATE_ALLOWED_TOOLS verbatim, same shared allowlist
+    # every other gate agent draws from. Bounded: this runs before EVERY
+    # story's implementation, not just on retry.
     local review_output
     review_output=$(echo "$review_prompt" | \
         AI_PROVIDER="$_orch_provider" \
         AI_MODEL="${ORCH_GATE_MODEL:-}" \
         EPAM_CLI="$EPAM_CLI" \
+        AI_GATE_ALLOW_TOOLS=1 \
+        EPAM_ALLOWED_TOOLS="${ORCH_GATE_ALLOWED_TOOLS:-bash,read_file,list_files,search}" \
+        EPAM_MAX_TOOL_CALLS="${PLAN_REVIEW_MAX_TOOL_CALLS:-6}" \
         bash "$SCRIPT_DIR/ai-run.sh" --provider "$_orch_provider" \
         ${ORCH_GATE_MODEL:+--model "$ORCH_GATE_MODEL"} \
         2>/dev/null || echo "")

@@ -75,8 +75,15 @@ const sites: Site[] = [
     label: 'review_and_correct_plan — plan vs. dependency-contract review',
     src: 'claude.sh',
     callAnchor: 'bash "$SCRIPT_DIR/ai-run.sh" --provider "$_orch_provider" \\\n        ${ORCH_GATE_MODEL:+--model "$ORCH_GATE_MODEL"} \\\n        2>/dev/null || echo "")\n\n    # Robust JSON extraction',
-    needsTools: false,
-    reason: 'plan_text and dependency_contracts are both fully injected as text in the prompt — nothing left to read',
+    needsTools: true,
+    reason: 'REVISED 2026-07-31 (HEAL-BLIND sibling fix): the original needsTools=false ' +
+      'reasoning ("fully injected — nothing left to read") is IDENTICAL to the ' +
+      'failure-analyst\'s pre-fix entry, and held only for what dependency_contracts ' +
+      'happens to cover (a story\'s declared internal dependencies) — this gate exists ' +
+      'specifically to catch a plan that CONTRADICTS reality, which it could not check ' +
+      'beyond that coverage. Fixed proactively, same night, same mechanism as ' +
+      'run_failure_analyst: reuses ORCH_GATE_ALLOWED_TOOLS, bounded with ' +
+      'EPAM_MAX_TOOL_CALLS, prompt instructs verifying before asserting a mismatch.',
   },
   {
     label: 'review_and_correct_plan — corrective re-plan',

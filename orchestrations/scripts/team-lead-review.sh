@@ -475,7 +475,7 @@ A 'blocker' issue MUST be fixed before merge. 'major' should be fixed. 'minor' i
     # — correctly parses a nested JSON object regardless of formatting/whitespace,
     # rather than pattern-matching text.
     REVIEW_JSON=$(echo "$REVIEW_OUTPUT" | python3 -c "
-import sys, json
+import re, sys, json
 text = sys.stdin.read()
 start = text.find('{')
 result = None
@@ -484,7 +484,17 @@ if start != -1:
     try:
         result, _ = decoder.raw_decode(text, start)
     except (ValueError, json.JSONDecodeError):
-        result = None
+        # Live AMSD-2041, 2026-07-31: an otherwise complete, valid 10-blocker
+        # review was discarded whole because ONE field had a stray quote
+        # directly after a number, before the delimiter (\"line\":130\",
+        # instead of \"line\":130,) — a token shape that can never appear in
+        # valid JSON, so stripping exactly that pattern before retrying is a
+        # narrow, safe repair, not a general lenient-parse hack.
+        repaired = re.sub(r'(?<=\d)\"(?=\s*[,}])', '', text)
+        try:
+            result, _ = decoder.raw_decode(repaired, start)
+        except (ValueError, json.JSONDecodeError):
+            result = None
 if not isinstance(result, dict) or 'verdict' not in result:
     # No parseable verdict = the review did NOT happen. Never silently approve —
     # that rubber-stamped an unreviewed change live (2026-07-23). Block instead.

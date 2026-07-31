@@ -264,3 +264,23 @@ When constructing objects that must satisfy a vendor SDK interface (e.g., conten
 **StoryRef:** AMSD-2041
 
 Story AMSD-2041 has failed 9 times with capability class (max iterations / empty output). It has 0 ACs. Model escalation alone has not resolved this — the story likely needs to be decomposed into smaller children (≤8 ACs each) before the next run. OpenSpec/SpecKit should split this story at Step 0 in the next pipeline run.
+
+## KB-021 -- 2026-07-31
+
+**Category:** backend
+**AgentRole:** fix
+**Tags:** contentstack, live-preview, typescript, sdk-config
+**Trigger:** retry
+**StoryRef:** AMSD-2041
+
+The Contentstack SDK's `LivePreview` TypeScript interface requires a `host` property (alongside `management_token` and `enable`). Omitting `host` causes a TS2345 error when passing the options object to `contentstack.Stack()`. The `CONTENTSTACK_API_HOST` env var (already destructured in the file) can serve as the live preview host. Also, `@metrolinx/cx-shared` resolution failures during `tsc --noEmit` are caused by missing/broken installs — use the project's dynamic tools (`ensure-cx-shared-installed.sh`, `ensure-deps-and-clean-ts-cache.sh`) to fix before running tsc.
+
+## KB-022 -- 2026-07-31
+
+**Category:** backend
+**AgentRole:** implementer
+**Tags:** contentstack, live-preview, typescript, interface-augmentation
+**Trigger:** retry
+**StoryRef:** AMSD-2041
+
+When a shared interface file (e.g. `ICommonContentstackConfig`) is outside your story's file scope, you can extend it locally using an intersection type (`OriginalInterface & { newField?: Type }`) in the file you CAN modify, rather than being blocked. This avoids module augmentation complexity and keeps the change minimal. Also, the Contentstack SDK's `.includeFallback()` method is the key call for live preview — it tells the SDK to return draft/unpublished content. It must be called on the query chain when `live_preview.enable` is true. The `live_preview` config on `contentstack.Stack()` initialization requires both `host` and `management_token` (not just `enable: true`) — without both, the SDK won't establish the preview connection.

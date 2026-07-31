@@ -36,9 +36,38 @@ import json
 import os
 import re
 import sys
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
+
+
+class LocalDependencyOverride(BaseModel):
+    """Re-provision one package from a local source instead of its registry.
+
+    Exists for the case a registry is genuinely unreachable (private-registry
+    auth unavailable, e.g. GitHub Packages with no token) but the real
+    package source is already cloned locally as another codeline. Applied by
+    brownfield-preflight-reset.sh, entirely inside node_modules (npm install
+    --no-save) — never edits package.json/package-lock.json, so there is
+    nothing to commit and nothing a client-repo git reset can undo.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    codeline: str = Field(
+        min_length=1,
+        description="Basename of the codeline directory this override applies to "
+                    "(e.g. 'next.upexpress.com') — matched against basename(PROJECT_ROOT)",
+    )
+    package: str = Field(
+        min_length=1,
+        description="The npm package name to override (e.g. '@metrolinx/cx-shared')",
+    )
+    localSourcePath: str = Field(
+        min_length=1,
+        description="Absolute path to a local directory or tarball npm can install "
+                    "via the file: protocol",
+    )
 
 
 class DependencyManifest(BaseModel):
@@ -97,6 +126,22 @@ class DependencyManifest(BaseModel):
                     "import of a package named 11:30). Optional: an empty list "
                     "keeps today's behaviour unchanged.",
     )
+    localDependencyOverrides: List[LocalDependencyOverride] = Field(
+        default_factory=list,
+        description="Packages to re-provision from a local source instead of their "
+                    "registry, per codeline. Optional: empty list keeps today's "
+                    "behaviour (real registry install) unchanged.",
+    )
+    testFailurePattern: Optional[str] = Field(
+        default=None,
+        description="Regex with one capturing group identifying a FAILING test's "
+                    "identity from this project's test-runner output (e.g. the file "
+                    "path in a Jest 'FAIL <path>' summary line). Optional: RG-DELTA "
+                    "(the regression guard's before/after failing-set comparison) is "
+                    "inert without it, and the guard falls back to today's "
+                    "all-or-nothing baseline check. Absence never breaks anything "
+                    "already relying on this manifest.",
+    )
 
 
 def json_schema() -> dict:
@@ -148,6 +193,20 @@ def validate(manifest: dict, repo: str) -> dict:
             re.compile(cp)
         except re.error as exc:
             issues.append(f"commentPatterns entry '{cp}' does not compile: {exc}")
+
+    for override in m.localDependencyOverrides:
+        if not os.path.exists(override.localSourcePath):
+            issues.append(
+                f"localDependencyOverrides entry for '{override.package}' "
+                f"(codeline '{override.codeline}'): localSourcePath "
+                f"'{override.localSourcePath}' does not exist — npm install would fail"
+            )
+
+    if m.testFailurePattern is not None:
+        try:
+            re.compile(m.testFailurePattern)
+        except re.error as exc:
+            issues.append(f"testFailurePattern does not compile: {exc}")
 
     if "{package}" not in m.installCommand:
         issues.append("installCommand has no {package} placeholder — nothing to substitute")

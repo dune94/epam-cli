@@ -119,7 +119,46 @@ describe('team-lead-review.sh — REVIEW_JSON extraction (REAL python source, re
   });
 });
 
-describe('code-review-cycle.sh — _REVIEW_JSON extraction (REAL python source, same fix)', () => {
+// Live AMSD-2041 defect, 2026-07-31: review-agent produced an otherwise
+// complete, valid, 10-blocker review — but ONE field had a stray `"`
+// immediately after a number, before the delimiter: `"line":130",` instead
+// of `"line":130,`. json.JSONDecoder.raw_decode correctly rejects this (it
+// IS invalid JSON), and the whole review — real, substantive findings about
+// missing live_preview config, absent tests, etc. — was discarded as
+// "review output unparseable", silently turning a legitimate rejection into
+// a reviewer-failure escalation that blocked the run needing human
+// intervention. A stray quote directly after a digit, immediately before a
+// comma/brace, can never appear in valid JSON — so a narrow repair (strip
+// exactly that pattern) recovers the real verdict without risking any
+// legitimate JSON.
+const STRAY_QUOTE_AFTER_NUMBER = `{
+    "verdict": "changes_requested",
+    "issues": [
+        {
+            "severity": "blocker",
+            "file": "src/context/ContentstackContext.tsx",
+            "line":130",
+            "description": "Uses hashchange events instead of the SDK livePreview callback."
+        }
+    ],
+    "summary": "Missing live_preview configuration and SDK callback usage."
+}`;
+
+describe('team-lead-review.sh — recovers a valid verdict despite one malformed field (RG stray-quote fix)', () => {
+  const src = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/team-lead-review.sh'), 'utf8');
+  const py = extractPythonBlock(src, '# Extract JSON verdict from output.');
+
+  it('recovers the real verdict/issues from an otherwise-valid JSON with a stray quote after a number', () => {
+    const out = runExtraction(py, STRAY_QUOTE_AFTER_NUMBER);
+    const parsed = JSON.parse(out);
+    expect(parsed.verdict, `expected the real verdict, got the unparseable fallback: ${out}`).toBe('changes_requested');
+    expect(parsed.summary).not.toMatch(/unparseable/i);
+    expect(parsed.issues).toHaveLength(1);
+    expect(parsed.issues[0].description).toMatch(/hashchange/);
+  });
+});
+
+describe('code-review-cycle.sh — recovers a valid verdict despite one malformed field (RG stray-quote fix)', () => {
   const src = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/code-review-cycle.sh'), 'utf8');
   const py = extractPythonBlock(src, '# Same bug/fix as team-lead-review.sh');
 
@@ -128,6 +167,13 @@ describe('code-review-cycle.sh — _REVIEW_JSON extraction (REAL python source, 
     const parsed = JSON.parse(out);
     expect(parsed.verdict).toBe('changes_requested');
     expect(parsed.issues).toHaveLength(2);
+  });
+
+  it('recovers the real verdict/issues from an otherwise-valid JSON with a stray quote after a number', () => {
+    const out = runExtraction(py, STRAY_QUOTE_AFTER_NUMBER);
+    const parsed = JSON.parse(out);
+    expect(parsed.verdict, `expected the real verdict, got the unparseable fallback: ${out}`).toBe('changes_requested');
+    expect(parsed.summary).not.toMatch(/unparseable/i);
   });
 
   it('falls back to the SAFE default (changes_requested, never approved) on garbage input', () => {

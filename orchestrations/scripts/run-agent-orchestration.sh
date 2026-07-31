@@ -4900,6 +4900,80 @@ if [ "${SKIP_REGRESSION_GUARD:-false}" != "true" ]; then
                 warning "Step 5: attempt ${_rg_try}/${_rg_max} failed — re-running to tell a flaky suite from a real regression"
             fi
         done
+        # RG-DELTA (backlog item, user requirement 2026-07-30): a fully-red
+        # baseline used to be an unconditional hard-fail — live AMSD-2041,
+        # 2026-07-31: gotransit had exactly ONE genuinely-failing test on
+        # develop itself (unrelated to the story), and the guard blocked the
+        # entire run over it. When the project declares testFailurePattern,
+        # extract the failing-test IDENTITY from each attempt's log and take
+        # the INTERSECTION — only tests failing in EVERY attempt are stable
+        # (same bar the flake retry above already uses: "survives every
+        # attempt"). A stable set is a trustworthy pre-existing baseline and
+        # is tolerated; an UNSTABLE set (attempts disagree on what failed,
+        # the exact live gotransit interference shape from 2026-07-28) cannot
+        # be trusted and falls through to the existing hard-fail unchanged.
+        # No testFailurePattern configured -> today's exact behavior, since
+        # every existing project's manifest lacks this field.
+        _rg_tolerated=0
+        if [ $_rg_rc -ne 0 ]; then
+            _rg_pattern=""
+            if [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] && [ -f "${EPAM_PROJECT_CONFIG_DIR}/dependency-check.json" ]; then
+                _rg_pattern=$(jq -r '.testFailurePattern // empty' "${EPAM_PROJECT_CONFIG_DIR}/dependency-check.json" 2>/dev/null)
+            fi
+            if [ -n "$_rg_pattern" ]; then
+                _rg_baseline_file="$LOG_DIR/regression-guard-baseline-${PHASE}.json"
+                _rg_intersect=$(python3 - "$_rg_pattern" "$_rg_max" "$_rg_log" << 'RG_INTERSECT_PY'
+import re, sys, json
+
+pattern, max_attempts, log_base = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+try:
+    rx = re.compile(pattern, re.MULTILINE)
+except re.error:
+    print(json.dumps({"stable": False, "failures": []}))
+    sys.exit(0)
+
+def attempt_log(i):
+    if i == 1:
+        return log_base
+    if log_base.endswith('.log'):
+        return log_base[:-4] + f"-attempt-{i}.log"
+    return f"{log_base}-attempt-{i}"
+
+sets = []
+for i in range(1, max_attempts + 1):
+    try:
+        with open(attempt_log(i)) as f:
+            text = f.read()
+    except OSError:
+        sets.append(None)
+        continue
+    ids = set()
+    for m in rx.finditer(text):
+        g = next((x for x in m.groups() if x), None)
+        if g:
+            ids.add(g)
+    sets.append(ids)
+
+# A missing log, or an attempt that parsed NO failing identity despite the
+# command's own nonzero exit, means the pattern is not matching this run's
+# real output — never silently treat "found nothing" as "an empty stable
+# set", which would look identical to a genuinely green baseline.
+if any(s is None or len(s) == 0 for s in sets):
+    print(json.dumps({"stable": False, "failures": []}))
+else:
+    stable = set.intersection(*sets)
+    unstable = set.union(*sets) - stable
+    print(json.dumps({"stable": len(unstable) == 0, "failures": sorted(stable)}))
+RG_INTERSECT_PY
+)
+                if echo "$_rg_intersect" | python3 -c "import json,sys; sys.exit(0 if json.load(sys.stdin).get('stable') else 1)" 2>/dev/null; then
+                    echo "$_rg_intersect" > "$_rg_baseline_file"
+                    _rg_tolerated_count=$(echo "$_rg_intersect" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['failures']))" 2>/dev/null || echo 0)
+                    _rg_tolerated=1
+                    _rg_rc=0
+                fi
+            fi
+        fi
         if [ $_rg_rc -ne 0 ]; then
             step_emit "5" "fail" "Step 5: Regression guard"
             error "Step 5: Regression guard FAILED — tests red in all ${_rg_max} attempt(s) before phase '$PHASE' starts"
@@ -4909,12 +4983,18 @@ if [ "${SKIP_REGRESSION_GUARD:-false}" != "true" ]; then
             error "  Bypass with: SKIP_REGRESSION_GUARD=true"
             exit 1
         fi
-        if [ "${_rg_try:-1}" -gt 1 ]; then
-            warning "Step 5: baseline green on attempt ${_rg_try}/${_rg_max} — the suite is FLAKY; earlier attempts failed"
-            warning "  This is the codeline's own instability, not a regression. Worth reporting upstream."
+        if [ "$_rg_tolerated" = "1" ]; then
+            step_emit "5" "pass" "Step 5: Regression guard"
+            warning "Step 5: Regression guard — ${_rg_tolerated_count} pre-existing failure(s) tolerated (stable across ${_rg_max} attempts; baseline: $_rg_baseline_file)"
+            success "Step 5: Regression guard PASSED — pre-existing failures recorded as a tolerated RG-DELTA baseline"
+        else
+            if [ "${_rg_try:-1}" -gt 1 ]; then
+                warning "Step 5: baseline green on attempt ${_rg_try}/${_rg_max} — the suite is FLAKY; earlier attempts failed"
+                warning "  This is the codeline's own instability, not a regression. Worth reporting upstream."
+            fi
+            step_emit "5" "pass" "Step 5: Regression guard"
+            success "Step 5: Regression guard PASSED — baseline tests green"
         fi
-        step_emit "5" "pass" "Step 5: Regression guard"
-        success "Step 5: Regression guard PASSED — baseline tests green"
     else
         # "This repo has no tests" and "we could not run this repo's tests" are
         # opposite situations, and this branch used to treat them identically —
@@ -6758,6 +6838,127 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/brownfield-repro-test-
         exit 2
     fi
     success "Step 3.55: bug-reproduction test gate passed for all phase stories"
+fi
+
+# Step 3.58: Regression delta gate (RG-DELTA) — the "after" half of the
+# before/after comparison Step 5's baseline capture set up. Compares the
+# failing-test set AFTER this phase's implementation against Step 5's
+# tolerated baseline (regression-guard-baseline-<phase>.json) — pass only if
+# after is a subset of the baseline (nothing NEW broke), fail if a test that
+# was NOT in the baseline now fails. A count-only comparison would miss a
+# real regression when the total count stays the same but the IDENTITY
+# differs, so this compares real test identities via testFailurePattern, not
+# counts.
+#
+# Gated to effort:"high" stories only (user decision, 2026-07-31): re-running
+# the entire suite a second time has a real cost, and most brownfield stories
+# are narrow enough that their own TC-writer test + team-lead review is
+# sufficient coverage. AMSD-2041 itself — effort:"low" despite spanning 3
+# codelines — is the concrete case that should NOT pay this cost; complexity
+# (CPA's own classification), not file/codeline count, is the trigger.
+#
+# Same fallback semantics as Step 5: no testFailurePattern configured, or no
+# effort:"high" story in this phase, or SKIP_REGRESSION_GUARD=true, and this
+# step is a no-op — never changes behavior for a project that hasn't opted in.
+if [ "${SKIP_REGRESSION_GUARD:-false}" != "true" ]; then
+    _rgd_pattern=""
+    if [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] && [ -f "${EPAM_PROJECT_CONFIG_DIR}/dependency-check.json" ]; then
+        _rgd_pattern=$(jq -r '.testFailurePattern // empty' "${EPAM_PROJECT_CONFIG_DIR}/dependency-check.json" 2>/dev/null)
+    fi
+    _rgd_high_effort=0
+    if [ -n "$_rgd_pattern" ] && [ -f "${PRD_FILE:-}" ]; then
+        if jq -e --arg phase "$PHASE" '
+              (.implementationOrder[$phase] // []) as $ids |
+              any(.stories[]?; (.id as $sid | ($ids | index($sid)) != null) and .effort == "high")
+            ' "$PRD_FILE" >/dev/null 2>&1; then
+            _rgd_high_effort=1
+        fi
+    fi
+    if [ -n "$_rgd_pattern" ] && [ "$_rgd_high_effort" = "1" ] && \
+       [ -n "${_rg_root:-}" ] && [ -n "${_rg_pm:-}" ] && [ "${_rg_test_declared:-0}" -eq 1 ]; then
+        step_emit "3.58" "running" "Step 3.58: Regression delta gate"
+        log "Step 3.58: Regression delta gate — re-running $_rg_pm test in $_rg_root (effort:high story in phase '$PHASE')..."
+        _rgd_baseline_file="$LOG_DIR/regression-guard-baseline-${PHASE}.json"
+        _rgd_max="${EPAM_REGRESSION_GUARD_RETRIES:-2}"
+        _rgd_max=$(( _rgd_max + 1 ))
+        _rgd_log="$LOG_DIR/regression-delta-${PHASE}.log"
+        for _rgd_try in $(seq 1 "$_rgd_max"); do
+            _rgd_try_log="$_rgd_log"
+            [ "$_rgd_try" -gt 1 ] && _rgd_try_log="${_rgd_log%.log}-attempt-${_rgd_try}.log"
+            (cd "$_rg_root" && PATH="$(dirname "$_rg_node"):$PATH" "$_rg_pm" test) > "$_rgd_try_log" 2>&1 || true
+        done
+        _rgd_result=$(python3 - "$_rgd_pattern" "$_rgd_max" "$_rgd_log" "$_rgd_baseline_file" << 'RGD_DIFF_PY'
+import re, sys, json
+
+pattern, max_attempts, log_base, baseline_file = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4]
+try:
+    rx = re.compile(pattern, re.MULTILINE)
+except re.error:
+    print(json.dumps({"verdict": "unknown", "new_failures": []}))
+    sys.exit(0)
+
+def attempt_log(i):
+    if i == 1:
+        return log_base
+    if log_base.endswith('.log'):
+        return log_base[:-4] + f"-attempt-{i}.log"
+    return f"{log_base}-attempt-{i}"
+
+sets = []
+for i in range(1, max_attempts + 1):
+    try:
+        with open(attempt_log(i)) as f:
+            text = f.read()
+    except OSError:
+        sets.append(set())
+        continue
+    ids = set()
+    for m in rx.finditer(text):
+        g = next((x for x in m.groups() if x), None)
+        if g:
+            ids.add(g)
+    sets.append(ids)
+
+union_after = set.union(*sets) if sets else set()
+stable_after = set.intersection(*sets) if sets else set()
+unstable = union_after - stable_after
+
+baseline = set()
+try:
+    with open(baseline_file) as f:
+        baseline = set(json.load(f).get('failures', []))
+except OSError:
+    pass
+
+if unstable:
+    print(json.dumps({"verdict": "unknown", "new_failures": sorted(unstable)}))
+else:
+    new_failures = sorted(stable_after - baseline)
+    print(json.dumps({"verdict": "fail" if new_failures else "pass", "new_failures": new_failures}))
+RGD_DIFF_PY
+)
+        _rgd_verdict=$(echo "$_rgd_result" | python3 -c "import json,sys; print(json.load(sys.stdin)['verdict'])" 2>/dev/null || echo unknown)
+        if [ "$_rgd_verdict" = "pass" ]; then
+            step_emit "3.58" "pass" "Step 3.58: Regression delta gate"
+            success "Step 3.58: Regression delta gate PASSED — no new test failures beyond the tolerated baseline"
+        else
+            step_emit "3.58" "fail" "Step 3.58: Regression delta gate"
+            _rgd_new=$(echo "$_rgd_result" | python3 -c "import json,sys; print(', '.join(json.load(sys.stdin)['new_failures']))" 2>/dev/null || echo "")
+            if [ "$_rgd_verdict" = "unknown" ]; then
+                error "Step 3.58: Regression delta gate CANNOT VERIFY — the after-run's failing set is unstable across ${_rgd_max} attempts (suspected: $_rgd_new)"
+                error "  This is not a confirmed regression, but it cannot be ruled out either — investigate before trusting this phase."
+            else
+                error "Step 3.58: Regression delta gate FAILED — this phase's changes broke test(s) that were passing at baseline: $_rgd_new"
+                error "  Pre-existing failures are tolerated; these are NEW."
+            fi
+            error "  Bypass with: SKIP_REGRESSION_GUARD=true"
+            exit 1
+        fi
+    else
+        step_emit "3.58" "skip" "Step 3.58: Regression delta gate" "no effort:high story in this phase, or testFailurePattern not configured"
+    fi
+else
+    step_emit "3.58" "skip" "Step 3.58: Regression delta gate" "SKIP_REGRESSION_GUARD=true"
 fi
 
 # Step 3.6: Team Lead Code Review — with a review → re-implement → re-review loop.

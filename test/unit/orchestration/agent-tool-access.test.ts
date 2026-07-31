@@ -110,8 +110,18 @@ const sites: Site[] = [
     label: 'run_failure_analyst (diagnoses test failures, proposes fixes)',
     src: 'claude.sh',
     callAnchor: 'bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \\\n                ${gate_model:+--model "$gate_model"} \\\n                2>>"$output_file"); then',
-    needsTools: false,
-    reason: 'ACs/TCs, skill addendum, and dependency contracts (ground-truth exports) are all injected as text — analyst reasons over given evidence, does not read files itself',
+    needsTools: true,
+    reason: 'REVISED 2026-07-31 (HEAL-BLIND): the original needsTools=false reasoning ' +
+      '("all evidence is pre-injected") held only for what dependency_contracts happens ' +
+      'to cover — the story\'s DECLARED files. It does not cover a fact discoverable only ' +
+      'from the runtime error itself. Live: a fully-installed, correctly-imported internal ' +
+      'package (@metrolinx/cx-shared) was diagnosed "not installed" 3x, HEALING_BROKEN fired, ' +
+      'because the analyst had no way to check. Now reuses ORCH_GATE_ALLOWED_TOOLS (the same ' +
+      'shared, read-only allowlist every other gate agent draws from) plus a bounded ' +
+      'EPAM_MAX_TOOL_CALLS, and the prompt instructs verifying filesystem/package claims ' +
+      'before stating them. Proven live: toolCallCount=7 on a real call, diagnosis corrected ' +
+      'itself ("the package IS physically present... the error is misleading") instead of ' +
+      'repeating the false claim (test/integration/failure-analyst-tool-verification-live.test.ts).',
   },
   {
     label: 'run_pre_phase_assessment (claude.sh variant)',

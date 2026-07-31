@@ -5363,6 +5363,15 @@ __DEPENDENCY_CONTRACTS__
 TEST FAILURE OUTPUT:
 __VERIFICATION_FAILURE__
 
+You have read-only tools available (list/search/read files, run read-only
+shell commands). If the failure claims something about the filesystem or an
+installed package — "not installed," "missing," "does not exist," a wrong
+path — VERIFY it with your tools before stating it as your diagnosis. Do not
+assume; a confident wrong diagnosis is worse than a slower correct one,
+because every retry after it repeats the same mistake unchanged. Your tool
+budget is small — check the ONE fact your diagnosis depends on, not the
+whole codebase.
+
 Output ONLY a single JSON object. No markdown fences, no prose outside the JSON:
 {"diagnosis":"<one sentence: what specifically went wrong in the code>","target":"prd|tc|skill|kb|tool|none","ac_patches":[{"index":<0-based AC index>,"new_text":"<exact replacement text for that AC>"}],"tc_patches":[{"index":<0-based TC fact index>,"new_text":"<exact replacement text for that TC fact>"}],"skill_note":"<if target=skill or target=kb: concrete coding instruction>","tool_spec":{"name":"<kebab-case tool name, e.g. add-dependency>","purpose":"<one sentence: what repeated mechanical step this automates>","recipe":"<the exact shell commands the tool script should run, using $1 $2 ... for its arguments>"},"reason":"<why this change prevents the same failure on retry>"}
 
@@ -5393,6 +5402,24 @@ ANALYST_PROMPT_END
     local _analyst_json_result
     _analyst_json_result=$(mktemp /tmp/analyst-result-XXXXXX.json)
     while [ "$_analyst_attempt" -le "$_analyst_max_attempts" ]; do
+        # Tool access (found live, 2026-07-31): the analyst was the ONLY gate
+        # agent in this file with no way to verify a claim against reality —
+        # AI_GATE_ALLOW_TOOLS=1 is set at exactly two OTHER call sites
+        # (run_plan_mode, run_pre_phase_assessment); this one hand-rolled its
+        # own invocation and never got it. It diagnosed a fully-installed,
+        # correctly-imported internal package (@metrolinx/cx-shared) as "not
+        # installed" three times, HEALING_BROKEN fired — a guess stated with
+        # full confidence from three pre-injected text blocks and nothing
+        # else. Reuses ORCH_GATE_ALLOWED_TOOLS VERBATIM — the same shared,
+        # config-driven, read-only-by-default allowlist (bash,read_file,
+        # list_files,search; no write_file) every other gate agent already
+        # draws from. No analyst-specific tool list.
+        #
+        # Bounded like the post-phase assessment (same night, same reasoning):
+        # this runs on the critical path of EVERY retry, so an unbounded grant
+        # repeats the 184k-token-review mistake at a worse multiplier. 6
+        # mirrors that fix's own measured number — enough to check one
+        # file/directory, not enough to re-explore the codebase.
         if analyst_raw=$(echo "$analyst_prompt" | \
                 AI_PROVIDER="$gate_provider" \
                 AI_MODEL="$gate_model" \
@@ -5400,6 +5427,9 @@ ANALYST_PROMPT_END
                 ORCH_JSON_RESULT="$_analyst_json_result" \
                 EPAM_REASONING_EFFORT="high" \
                 EPAM_TEMPERATURE="0.7" \
+                AI_GATE_ALLOW_TOOLS=1 \
+                EPAM_ALLOWED_TOOLS="${ORCH_GATE_ALLOWED_TOOLS:-bash,read_file,list_files,search}" \
+                EPAM_MAX_TOOL_CALLS="${FAILURE_ANALYST_MAX_TOOL_CALLS:-6}" \
                 bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \
                 ${gate_model:+--model "$gate_model"} \
                 2>>"$output_file"); then

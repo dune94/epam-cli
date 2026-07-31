@@ -1522,6 +1522,29 @@ RULE: Before you add ANY new function, run \`helpers\` for what it would do. If 
         fi
     fi
 
+    # New-dependency directive. Live metrolinx 2026-07-30/31: the model's own
+    # output, at every tier including the top of the model ladder, was the
+    # identical stall — it correctly diagnosed that the fix needed a package
+    # not yet in the project, said "let me check if X can be installed," and
+    # then took no action. The sentence repeated verbatim and the turn ended,
+    # burning the full watchdog timeout each time. Every model hit the same
+    # wall, which rules out "not smart enough" — nothing had ever told it
+    # that adding an import for a missing package is a normal, already-
+    # automated step; it stalled asking permission for something the
+    # pipeline had already solved.
+    #
+    # Fires ONLY when a dependency-check manifest actually exists for this
+    # project — that manifest's presence is what makes the claim true. A
+    # project with no manifest gets no directive, not a false promise.
+    # Generic on purpose: no package name, language, or install command
+    # appears here, the same way dependency-check.json's own installCommand
+    # is config-supplied rather than hardcoded to npm/pip/cargo.
+    local new_dependency_directive=""
+    if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -f "$PROJECT_ROOT/.epam/dependency-check.json" ]; then
+        new_dependency_directive="## Adding a New Dependency
+If the fix genuinely requires a package this project does not yet declare, import it directly and continue — do not stop to ask whether this is possible or search for an alternative that avoids it. Missing imports are detected and installed automatically after your change; this does not need your permission or a separate step. Proceed with the real fix."
+    fi
+
     # Deterministic contract injection — root cause of a recurring live-run
     # failure (validated live: baseline model call guessed the wrong import
     # path './skyscanner-client'; with the dependency's contract injected,
@@ -1685,6 +1708,7 @@ $([ -n "$verification_criteria" ] && printf '\n## Verification Criteria (what a 
 $([ -n "$test_ownership_block" ] && printf '%s\n' "$test_ownership_block" || true)
 $([ -n "$codegraph_tool_block" ] && printf '\n%s\n' "$codegraph_tool_block" || true)
 $([ -n "$brownfield_test_policy" ] && printf '\n%s\n' "$brownfield_test_policy" || true)
+$([ -n "$new_dependency_directive" ] && printf '\n%s\n' "$new_dependency_directive" || true)
 $([ -n "$tc_facts" ] && printf '\n## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)\n%s\n' "$tc_facts" || true)
 $([ -n "$tc_mock_strategy" ] && printf '\n## Mock Strategy\n%s\n' "$tc_mock_strategy" || true)
 $([ -n "$tc_banned" ] && printf '\n## Banned Patterns (must NOT appear in your file)\n%s\n' "$tc_banned" || true)

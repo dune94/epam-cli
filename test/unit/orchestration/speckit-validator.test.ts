@@ -201,7 +201,11 @@ describe('speckit prompt — describes WHAT not HOW', () => {
     'utf8'
   );
   const speckitFnStart = src.indexOf('async function runSpeckitReview');
-  const speckitSection = src.slice(speckitFnStart, speckitFnStart + 5000);
+  // Full agent audit, 2026-07-31: runSpeckitReview's prompt is now a
+  // refineExistingChildren ternary (two prompt variants), pushing the
+  // post-prompt processing code (stripPrescriptiveACs etc.) further from
+  // the function start than before.
+  const speckitSection = src.slice(speckitFnStart, speckitFnStart + 8000);
 
   it('speckit prompt has an explicit WHAT-NOT-HOW rule heading', () => {
     expect(speckitSection).toContain('WHAT-NOT-HOW');

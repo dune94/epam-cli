@@ -13002,3 +13002,195 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/AMSD-1820_*.log
 
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-30 14:56:25
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-30 14:56:57
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-30 15:10:36
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-30 16:07:16
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-30 16:18:32
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-30 17:58:56
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041-1: [GO, UP, MX] Live Preview — SDK Configuration & useContent Integration
+- **Date**: 2026-07-30 18:13:39
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041-1_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-30 18:57:12
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-30 19:10:45
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-30 19:12:58
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-30 20:44:40
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-30 20:52:56
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-30 20:55:52
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-30 20:56:01
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-31 00:13:59
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-31 00:32:59
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-31 01:20:52
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-31 01:26:59
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-31 01:30:54
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-31 01:40:24
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-31 01:42:36
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-31 01:47:35
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-31 08:57:07
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-31 09:15:12
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-07-31 09:38:02
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-31 09:37:38
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-31 10:54:19
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-31 11:42:54
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-31 11:46:31
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-31 11:58:03
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-31 12:04:40
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: Hello world greeting should say hello dolly
+- **Date**: 2026-07-31 12:27:37
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+

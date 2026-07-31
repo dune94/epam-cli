@@ -124,12 +124,17 @@ describe('M5: run_phase_assessment — retry on rc != 0 or no new record (M5)', 
     expect(src).toMatch(/_assessment_rc.*-ne 0[\s\S]{1,150}_pa_attempt.*continue/s);
   });
 
-  it('retries when record count unchanged after attempt 1', () => {
-    expect(src).toMatch(/wrote no new record.*retrying|retrying.*wrote no new record/s);
+  it('retries when the response is not valid JSON after attempt 1', () => {
+    // Full agent audit, 2026-07-31: this step was rewritten to precompute
+    // all data deterministically and narrow the LLM to a judgment-only,
+    // no-tools call — "no new record written" (tracked via before/after
+    // grep counts) no longer applies since the orchestrator, not the
+    // agent, writes the record. The retry now fires on invalid JSON output.
+    expect(src).toMatch(/no valid JSON.*retrying|retrying.*no valid JSON/s);
   });
 
   it('warns non-critically and returns 1 after exhaustion', () => {
-    expect(src).toMatch(/failed after 2 attempt.*no new assessment record.*non-critical.*continuing/);
+    expect(src).toMatch(/failed after 2 attempt.*no assessment record.*non-critical.*continuing/);
   });
 });
 

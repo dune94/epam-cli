@@ -263,7 +263,7 @@ describe('Warn paths — grounding downgrades hallucinated fails', () => {
   });
 
   it('Step 4.4b perf-sentinel ungrounded fail → step_emit warn', () => {
-    expect(orchSrc).toMatch(/step_emit "22f" "warn" "Step 22f: Perf sentinel" "hallucinated fail downgraded"/);
+    expect(orchSrc).toMatch(/step_emit "22f" "warn" "Step 22f: Perf sentinel" "unverified findings downgraded"/);
   });
 
   it('fuzz-weaver grounding uses python3 file-existence check', () => {
@@ -271,19 +271,26 @@ describe('Warn paths — grounding downgrades hallucinated fails', () => {
     expect(orchSrc).toMatch(/os\.path\.exists/);
   });
 
-  it('perf-sentinel grounding uses python3 with blockerCount + filesAnalysed', () => {
+  it('perf-sentinel grounding uses python3 with a codeSnippet field', () => {
+    // Full agent audit, 2026-07-31: replaced the old self-consistency-only
+    // check (blockerCount/filesAnalysed agreeing with themselves) with
+    // execution-adjacent grounding — a blocker finding's codeSnippet must be
+    // a literal substring of the REAL file on disk, same "quote it, then
+    // verify the quote" pattern as the code-graph-detective's brokenLine.
+    // See perf-sentinel-codesnippet-grounding.test.ts for full behavioral
+    // coverage of this mechanism.
     expect(orchSrc).toMatch(/_perf_grounded=\$\(python3/);
-    expect(orchSrc).toMatch(/blockerCount/);
-    expect(orchSrc).toMatch(/filesAnalysed/);
+    expect(orchSrc).toMatch(/codeSnippet/);
   });
 
-  it('perf-sentinel grounding: requires real_blockers > 0 AND files_analysed > 0', () => {
-    expect(orchSrc).toMatch(/grounded = 1 if.*real_blockers > 0.*files_analysed > 0/s);
+  it('perf-sentinel grounding: requires a blocker finding whose codeSnippet is verified against the real file', () => {
+    expect(orchSrc).toMatch(/if snippet in real_content:/);
+    expect(orchSrc).toMatch(/if str\(f\.get\("severity", ""\)\)\.lower\(\) != "blocker":/);
   });
 
-  it('perf-sentinel: verdict=fail with summary=null → warn (run-82 regression)', () => {
-    expect(orchSrc).toMatch(/summary = data\.get\("summary"\) or \{\}/);
-    expect(orchSrc).toMatch(/blocker_count = summary\.get\("blockerCount", 0\) if summary else 0/);
+  it('perf-sentinel: a finding with no codeSnippet or a nonexistent file is never grounded', () => {
+    expect(orchSrc).toMatch(/if not file_rel or not snippet:/);
+    expect(orchSrc).toMatch(/except Exception:\s*\n\s*continue/);
   });
 
   it('fuzz-weaver grounding counts only vulnerability-status cases', () => {
@@ -1018,8 +1025,8 @@ describe('Step 22f: Perf sentinel', () => {
     expect(hasStepEmit('22f', 'fail')).toBe(true);
   });
 
-  it('emits warn when verdict=fail but summary is null (ungrounded)', () => {
-    expect(orchSrc).toMatch(/step_emit "22f" "warn" "Step 22f: Perf sentinel" "hallucinated fail downgraded"/);
+  it('emits warn when verdict=fail but no blocker finding could be verified (ungrounded)', () => {
+    expect(orchSrc).toMatch(/step_emit "22f" "warn" "Step 22f: Perf sentinel" "unverified findings downgraded"/);
   });
 
   it('emits skip when SKIP_TESTING_GATES=true', () => {
@@ -1038,9 +1045,8 @@ describe('Step 22f: Perf sentinel', () => {
     expect(orchSrc).toMatch(/\[ "\$\{_perf_grounded:-0\}" -gt 0 \]/);
   });
 
-  it('grounding: summary=null treated as filesAnalysed=0 (ungrounded)', () => {
-    expect(orchSrc).toMatch(/summary = data\.get\("summary"\) or \{\}/);
-    expect(orchSrc).toMatch(/files_analysed = summary\.get\("filesAnalysed", 0\) if summary else 0/);
+  it('grounding: a blocker finding missing file/codeSnippet is skipped, not crashed on', () => {
+    expect(orchSrc).toMatch(/if not file_rel or not snippet:\s*\n\s*continue/);
   });
 
   it('label references "Perf" or "sentinel"', () => {

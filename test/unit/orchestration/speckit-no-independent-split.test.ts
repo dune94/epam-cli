@@ -58,7 +58,13 @@ describe('speckit prompt — no independent split authority (static)', () => {
   });
 
   it('instructs speckit to always omit splitStories in its own output schema', () => {
-    const schemaIdx = fnBody.indexOf('Produce your refined output');
+    // Full agent audit, 2026-07-31: runSpeckitReview's prompt is now a
+    // refineExistingChildren ternary — the "ALWAYS omit splitStories" rule
+    // only applies to the normal-review (false) branch, which is the LAST
+    // "Produce your refined output" occurrence in the function, not the
+    // first (that one is the refineExistingChildren branch, which legitimately
+    // DOES return splitStories — for already-existing children only).
+    const schemaIdx = fnBody.lastIndexOf('Produce your refined output');
     const schemaBlock = fnBody.slice(schemaIdx, schemaIdx + 800);
     expect(schemaBlock).toMatch(/"splitStories":\s*ALWAYS omit/);
   });

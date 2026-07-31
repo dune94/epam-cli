@@ -183,7 +183,7 @@ describe('spec-mode-runner.js — reviewer wired into the main story loop', () =
     // matches "verdict === 'fail'" FIRST. Anchor on the final `if (...) {`
     // revert block specifically (unchanged shape, just further down).
     const rejectIdx = src.indexOf("if (reviewResult.verdict === 'fail') {");
-    const block = src.slice(rejectIdx, rejectIdx + 600);
+    const block = src.slice(rejectIdx, rejectIdx + 700);
     expect(block).toMatch(/story\.acceptanceCriteria = beforeSnapshot\.acceptanceCriteria/);
     expect(block).toMatch(/story\.description = beforeSnapshot\.description/);
     expect(block).toMatch(/story\.title = beforeSnapshot\.title/);
@@ -197,7 +197,7 @@ describe('spec-mode-runner.js — reviewer wired into the main story loop', () =
     // matches "verdict === 'fail'" FIRST. Anchor on the final `if (...) {`
     // revert block specifically (unchanged shape, just further down).
     const rejectIdx = src.indexOf("if (reviewResult.verdict === 'fail') {");
-    const block = src.slice(rejectIdx, rejectIdx + 600);
+    const block = src.slice(rejectIdx, rejectIdx + 700);
     expect(block).toMatch(/newStories\.splice\(newStoriesCountBefore/);
   });
 

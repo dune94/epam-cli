@@ -82,31 +82,48 @@ function callSite(from: string, anchor: string): string {
   return SRC.slice(start, i + anchor.length);
 }
 
-describe('the post-phase assessment is budgeted', () => {
-  const ANCHOR = 'run_orch_prompt_with_tools "$_pa_prompt" "team-lead-agent"';
+describe('the post-phase assessment no longer needs a turn budget at all', () => {
+  // Full agent audit, 2026-07-31 (mock1 investigation): the 9-14 turn/184k-
+  // token problem this whole file exists to cap came from asking the agent
+  // to read TWO raw files itself (cost log + PRD), dedupe/cross-reference
+  // them, and write THREE outputs — with only a 6-tool-call budget and no
+  // write_file tool. Budgeting that turned out to be the wrong fix: it was
+  // measured live in mock1 (2026-07-31) still timing out at 300s on attempt
+  // 1, succeeding only on a model-escalated retry. The actual fix is
+  // structural, the same one already applied to every QA gate this
+  // session: precompute the dedupe/cross-reference/arithmetic
+  // deterministically in bash/python, inject the finished data, and narrow
+  // the LLM to pure judgment with NO tools at all (same shape as
+  // openspec/speckit) — so there is no multi-turn transcript to bound in
+  // the first place, not a smaller one.
+  const ANCHOR = 'run_orch_prompt "$_pa_prompt" "team-lead-agent"';
 
-  it('passes a turn budget to the call', () => {
-    const site = callSite('# No story_id', ANCHOR);
-    expect(site, 'the post-phase assessment still runs unbudgeted — this is one of ' +
-      'the two sites that produced 14-turn, 184k-token reviews of a one-line diff')
-      .toMatch(/EPAM_MAX_TOOL_CALLS=/);
+  it('calls plain run_orch_prompt, not run_orch_prompt_with_tools', () => {
+    const i = SRC.indexOf(ANCHOR);
+    expect(i, 'the post-phase assessment call site is gone — this is anchored to nothing').toBeGreaterThan(-1);
+    expect(SRC.slice(i, i + ANCHOR.length + 20)).not.toMatch(/run_orch_prompt_with_tools/);
   });
 
-  it('the budget actually reaches the invoked command', () => {
-    const site = callSite('local _pa_tool_budget', ANCHOR).replace(/\$_pa_prompt/g, '"p"');
-    const seen = budgetSeenByCall(`_pa_prompt="p"\n${site}`);
-    expect(seen, 'the variable is set but never reaches the call — asserting on ' +
-      'source text alone would have passed here').toMatch(/^\d+$/);
-    expect(Number(seen)).toBeGreaterThan(0);
-    expect(Number(seen), 'the budget is above the 9-14 turn range it exists to cap')
-      .toBeLessThanOrEqual(8);
+  it('sets no AI_GATE_ALLOW_TOOLS / EPAM_MAX_TOOL_CALLS near the call (no tools requested)', () => {
+    const i = SRC.indexOf(ANCHOR);
+    const window = SRC.slice(Math.max(0, i - 600), i);
+    expect(window, 'a tool grant reappeared on this call — the whole point of the fix ' +
+      'was to remove the need for tools, not re-budget them')
+      .not.toMatch(/AI_GATE_ALLOW_TOOLS|EPAM_MAX_TOOL_CALLS/);
   });
 
-  it('is overridable per project without editing the engine', () => {
-    const site = callSite('local _pa_tool_budget', ANCHOR).replace(/\$_pa_prompt/g, '"p"');
-    const seen = budgetSeenByCall(`_pa_prompt="p"\n${site}`, { POST_ASSESSMENT_MAX_TOOL_CALLS: '12' });
-    expect(seen, 'the budget is hardcoded — a project needing more cannot raise it')
-      .toBe('12');
+  it('the deterministic precompute step runs BEFORE the LLM call, real python execution', () => {
+    const i = SRC.indexOf(ANCHOR);
+    expect(i).toBeGreaterThan(-1);
+    const before = SRC.slice(Math.max(0, i - 4000), i);
+    expect(before, 'the precompute block is gone — the agent would be back to reading files itself')
+      .toMatch(/ASSESS_PRECOMPUTE_PY/);
+  });
+
+  it('still keeps the 300s timeout as a resilience backstop, not because the task needs it', () => {
+    const i = SRC.indexOf(ANCHOR);
+    const before = SRC.slice(Math.max(0, i - 2000), i);
+    expect(before).toMatch(/PHASE_ASSESSMENT_TIMEOUT_SECS:-300/);
   });
 });
 

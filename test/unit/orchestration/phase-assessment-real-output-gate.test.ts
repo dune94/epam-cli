@@ -1,39 +1,31 @@
 /**
  * Live gap (found 2026-07-07, tier3 relaunch, core phase, log lines
  * ~3708-3823): the Step 6/3.5 post-phase assessment agent tried to read
- * `orchestrations/logs/phase-cost.jsonl` at wrong relative paths
- * (`orchestrations/logs/` and `../ai/epam-cli/orchestrations/`), couldn't
+ * `orchestrations/logs/phase-cost.jsonl` at wrong relative paths, couldn't
  * find either, and instead of failing loudly asked a chat-style
  * "Option A/B/C -- which would you like?" question it has no way of
  * getting answered mid-pipeline. Immediately after, the orchestrator
  * logged `[SUCCESS] Phase assessment completed` -- it only ever checked
- * run_orch_prompt_with_tools's EXIT CODE, never whether a real assessment
- * record was actually written. The assessment content for that run was
- * worthless (no variance/cost analysis was ever computed), and nothing
- * caught it.
+ * the tool call's EXIT CODE, never whether a real assessment record was
+ * actually written.
  *
- * ROOT CAUSE of the path-guessing, confirmed by reading the code directly:
- * run_phase_assessment()'s prompt hardcodes the LITERAL STRING
- * "orchestrations/logs/phase-cost.jsonl" -- but LOG_DIR (where the real
- * file lives, $cost_file = "$LOG_DIR/phase-cost.jsonl") is set to
- * "${OUTPUT_DIR:-$AUTOMATION_DIR/logs}", and in the tier3 setup OUTPUT_DIR
- * IS PROJECT_ROOT directly (the target app's own root, not a nested
- * "orchestrations/logs" subdirectory of it) -- so after the agent `cd`s to
- * PROJECT_ROOT (line ~3502), the literal relative path in the prompt
- * points at a directory structure that doesn't exist. The agent was
- * GUESSING because it was handed a made-up path, not a real one.
- *
- * TWO independent fixes:
- * 1. Pass the agent the REAL, already-resolved absolute paths ($cost_file,
- *    $assessment_file, the improvement report path) instead of a
- *    hardcoded relative literal it has to guess is correct.
- * 2. After the call, verify a REAL new assessment record was actually
- *    appended for this phase_id (deterministic, verifiable evidence) --
- *    not just trust the tool call's exit code, which is 0 even when the
- *    agent gave up and asked a question instead of doing the work.
+ * Full agent audit, 2026-07-31 (mock1 investigation): this step was later
+ * rewritten entirely. It no longer hands the agent any file path to read at
+ * all — the cost-log dedup/cross-reference/arithmetic now happens
+ * deterministically in a python precompute block (ASSESS_PRECOMPUTE_PY),
+ * and the finished summary JSON is injected directly into the prompt. The
+ * agent gets NO tools (not even read_file) and its only job is judgment:
+ * emit {"notes":...,"agent_recommendations":[...],"role_reassignments":[...]}.
+ * The orchestrator (not the agent) deterministically appends the
+ * assessment record and applies any role reassignment (ASSESS_APPLY_PY),
+ * mirroring story-ac-remediator's deterministic-apply pattern. This
+ * structurally eliminates the original path-guessing failure mode (there is
+ * no path left to guess), but the REAL-EVIDENCE requirement this file
+ * exists to enforce still applies in its new form: a plain "I have a
+ * question" non-JSON response must not be silently treated as success.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -64,7 +56,7 @@ function extractPromptHeredoc(fnBody: string): string {
   return fnBody.slice(start, end);
 }
 
-describe('run_phase_assessment() prompt — real absolute paths, not guessable relative literals (static)', () => {
+describe('run_phase_assessment() prompt — no guessable literal paths, precomputed data injected (static)', () => {
   const fnBody = extractFunctionBody('run_phase_assessment');
   const promptText = extractPromptHeredoc(fnBody);
 
@@ -80,12 +72,14 @@ describe('run_phase_assessment() prompt — real absolute paths, not guessable r
     expect(promptText).not.toMatch(/orchestrations\/logs\/phase-improvements/);
   });
 
-  it('the prompt interpolates the real $cost_file variable instead', () => {
-    expect(promptText).toMatch(/\$cost_file/);
+  it('does not ask the agent to read any file at all — the precomputed summary is injected directly', () => {
+    expect(promptText).toMatch(/\$\{_pa_summary\}/);
+    expect(promptText).toMatch(/do not ask to see any file/);
   });
 
-  it('the prompt interpolates the real $assessment_file variable instead', () => {
-    expect(promptText).toMatch(/\$assessment_file/);
+  it('grants the agent no tools — this is judgment-only, matching openspec/speckit', () => {
+    expect(fnBody).not.toMatch(/run_orch_prompt_with_tools/);
+    expect(fnBody).toMatch(/you have no tools and do not need any/);
   });
 });
 
@@ -102,7 +96,7 @@ describe('Step 6 call site — run_phase_assessment() failure must not abort the
   // received a GO phase-gate decision was killed with "Phase 'scaffold'
   // failed (exit 1) -- aborting pipeline" by tier3-travel-app-run.sh, over
   // nothing but Step 6's assessment call.
-  it('Step 6 wraps run_phase_assessment in an if/else, not a bare call', () => {
+  it('Step 24 (final assessment) wraps run_phase_assessment in an if/else, not a bare call', () => {
     const idx = orchSrc.indexOf('Step 24: Running final post-phase assessment');
     const block = orchSrc.slice(idx, idx + 1400);
     expect(block).toMatch(/if run_phase_assessment "\$PHASE"; then/);
@@ -110,19 +104,30 @@ describe('Step 6 call site — run_phase_assessment() failure must not abort the
   });
 });
 
-describe('run_phase_assessment() — REAL execution: verifies a genuine new assessment record before reporting success', () => {
+describe('run_phase_assessment() — REAL execution: verifies a genuine judgment response before reporting success', () => {
   function run(opts: {
     phaseId: string;
     existingAssessmentLines?: string[];
-    fakeOrchPromptWritesRecord: boolean; // simulates whether the stubbed agent call actually appends a real record
+    agentResponse: string; // raw stdout the stubbed run_orch_prompt call produces
     fakeOrchPromptExitCode?: number;
-  }): { rc: number; logOutput: string } {
+  }): { rc: number; logOutput: string; assessmentFileContent: string } {
     const dir = mkdtempSync(join(tmpdir(), 'phase-assessment-'));
     try {
       const costFile = join(dir, 'phase-cost.jsonl');
-      writeFileSync(costFile, `{"phase_id":${JSON.stringify(opts.phaseId)},"story_id":"SKY-001","started_at":"2026-07-12T00:00:00Z"}\n`);
+      writeFileSync(
+        costFile,
+        `{"phase_id":${JSON.stringify(opts.phaseId)},"story_id":"SKY-001","started_at":"2026-07-12T00:00:00Z","ended_at":"2026-07-12T00:05:00Z","task_cost_usd":0.1}\n`,
+      );
       const assessmentFile = join(dir, 'phase-skill-assessments.jsonl');
       writeFileSync(assessmentFile, (opts.existingAssessmentLines ?? []).join('\n') + (opts.existingAssessmentLines?.length ? '\n' : ''));
+      const prdFile = join(dir, 'prd.json');
+      writeFileSync(
+        prdFile,
+        JSON.stringify({
+          stories: [{ id: 'SKY-001', status: 'completed', completed: true, agentRole: 'typescript-engineer', description: 'a story' }],
+          implementationOrder: { [opts.phaseId]: ['SKY-001'] },
+        }),
+      );
 
       const fnBody = extractFunctionBody('run_phase_assessment');
       const scriptPath = join(dir, 'run.sh');
@@ -132,19 +137,20 @@ describe('run_phase_assessment() — REAL execution: verifies a genuine new asse
           '#!/usr/bin/env bash',
           `LOG_DIR=${JSON.stringify(dir)}`,
           `PROJECT_ROOT=${JSON.stringify(dir)}`,
-          `PRD_FILE=${JSON.stringify(join(dir, 'prd.json'))}`,
-          `PRD_REL="prd.json"`,
+          `PRD_FILE=${JSON.stringify(prdFile)}`,
           'log() { echo "LOG: $*" >&2; }',
           'info() { echo "INFO: $*" >&2; }',
           'warning() { echo "WARN: $*" >&2; }',
           'success() { echo "SUCCESS: $*" >&2; }',
-          // Stub the actual LLM call: simulates either a genuine assessment
-          // write (matching the prompt's real instructions) or the live
-          // "asked a question instead of writing anything" failure mode.
-          `run_orch_prompt_with_tools() {`,
-          opts.fakeOrchPromptWritesRecord
-            ? `  echo '{"phase_id":${JSON.stringify(opts.phaseId)},"variance_cost_usd":0.1}' >> ${JSON.stringify(assessmentFile)}`
-            : `  echo 'Option A: skip. Option B: retry. Which would you like?'`,
+          'error() { echo "ERROR: $*" >&2; }',
+          '_build_skill_domain_guidance() { echo ""; }',
+          // Stub the actual LLM call: simulates either a genuine judgment
+          // response (matching the new prompt's required JSON shape) or the
+          // live "asked a question instead of doing the work" failure mode.
+          `run_orch_prompt() {`,
+          `  cat << 'AGENT_RESPONSE_EOF'`,
+          opts.agentResponse,
+          `AGENT_RESPONSE_EOF`,
           `  return ${opts.fakeOrchPromptExitCode ?? 0}`,
           `}`,
           fnBody,
@@ -152,7 +158,6 @@ describe('run_phase_assessment() — REAL execution: verifies a genuine new asse
           'echo "RC=$?"',
         ].join('\n'),
       );
-      writeFileSync(join(dir, 'prd.json'), '{}');
       const stderrPath = join(dir, 'stderr.log');
       const wrapperPath = join(dir, 'run-wrapper.sh');
       writeFileSync(wrapperPath, `bash ${JSON.stringify(scriptPath)} 2> ${JSON.stringify(stderrPath)}`);
@@ -164,35 +169,46 @@ describe('run_phase_assessment() — REAL execution: verifies a genuine new asse
       }
       const combined = stdout + readFileSync(stderrPath, 'utf8');
       const rc = parseInt(combined.match(/RC=(\d+)/)?.[1] ?? '-1', 10);
-      return { rc, logOutput: combined };
+      const assessmentFileContent = readFileSync(assessmentFile, 'utf8');
+      return { rc, logOutput: combined, assessmentFileContent };
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   }
 
-  it('REPRODUCES the live gap: agent asks a question instead of writing an assessment, exit code is still 0, current code would report success', () => {
-    const { rc, logOutput } = run({ phaseId: 'core', fakeOrchPromptWritesRecord: false, fakeOrchPromptExitCode: 0 });
-    // Desired (post-fix): rc=1 / warning, because no real record was written.
-    expect(rc).toBe(1);
-    expect(logOutput).toMatch(/no new assessment record|did not write/i);
-  });
-
-  it('reports success when a genuine new assessment record is actually written', () => {
-    const { rc } = run({ phaseId: 'core', fakeOrchPromptWritesRecord: true });
-    expect(rc).toBe(0);
-  });
-
-  it('does not get fooled by a PRE-EXISTING record for this phase from an earlier run -- must see a NEW one', () => {
-    const { rc } = run({
+  it('REPRODUCES the live gap in its new form: agent asks a question instead of valid JSON, gets no silent success', () => {
+    const { rc, logOutput, assessmentFileContent } = run({
       phaseId: 'core',
-      existingAssessmentLines: ['{"phase_id":"core","variance_cost_usd":0.05}'],
-      fakeOrchPromptWritesRecord: false,
+      agentResponse: 'Option A: skip. Option B: retry. Which would you like?',
     });
     expect(rc).toBe(1);
+    expect(logOutput).toMatch(/no valid JSON/);
+    expect(logOutput).toMatch(/no assessment record written/);
+    expect(assessmentFileContent).toBe('');
   });
 
-  it('still fails when the underlying tool call itself returns non-zero, regardless of file content', () => {
-    const { rc } = run({ phaseId: 'core', fakeOrchPromptWritesRecord: false, fakeOrchPromptExitCode: 1 });
+  it('reports success and appends a genuine assessment record when the agent returns valid judgment JSON', () => {
+    const { rc, assessmentFileContent } = run({
+      phaseId: 'core',
+      agentResponse: '{"notes":"all good","agent_recommendations":[],"role_reassignments":[]}',
+    });
+    expect(rc).toBe(0);
+    const record = JSON.parse(assessmentFileContent.trim());
+    expect(record.phase_id).toBe('core');
+    // The written numbers come from the deterministic precompute, not the
+    // agent's own arithmetic — the agent never had the cost file at all.
+    expect(record.actual_minutes).toBeCloseTo(5, 1);
+    expect(record.actual_cost_usd).toBeCloseTo(0.1, 4);
+    expect(record.notes).toBe('all good');
+  });
+
+  it('still fails when the underlying tool call itself returns non-zero, regardless of response content', () => {
+    const { rc, assessmentFileContent } = run({
+      phaseId: 'core',
+      agentResponse: '{"notes":"all good","agent_recommendations":[],"role_reassignments":[]}',
+      fakeOrchPromptExitCode: 1,
+    });
     expect(rc).toBe(1);
+    expect(assessmentFileContent).toBe('');
   });
 });

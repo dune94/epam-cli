@@ -2443,7 +2443,18 @@ Extract the exported API surface from the '${_bcl}' codeline files and write the
 
     local _bridge_rc=0
     rm -f "$_bridge_out"
-    run_orch_prompt "$_bridge_prompt" "codeline-bridge-agent" "$_bcl" || _bridge_rc=$?
+    # Tools granted below with no restricted allowlist (unlike the read-only
+    # QA gates' ORCH_GATE_ALLOWED_TOOLS): this agent's whole job is
+    # to read real source files in BRIDGE_SRC_DIR and WriteFile the extracted
+    # contract to BRIDGE_OUT_FILE — the read-only allowlist would let it read
+    # but never persist its own output. Found live (2026-07-31 agent audit):
+    # this call went through plain run_orch_prompt with no tool grant at all,
+    # under the pipeline's actual qwen/openai gate providers that means
+    # --no-tools — the same class of gap already fixed once for
+    # code-graph-detective/failure-analyst. Budgeted like every other
+    # tool-bearing gate call in this file.
+    AI_GATE_ALLOW_TOOLS=1 EPAM_MAX_TOOL_CALLS="${CODELINE_BRIDGE_MAX_TOOL_CALLS:-10}" \
+        run_orch_prompt "$_bridge_prompt" "codeline-bridge-agent" "$_bcl" || _bridge_rc=$?
 
     # Determine success: exit 0 AND file exists AND file is non-empty
     if [ "$_bridge_rc" = "0" ] && [ -f "$_bridge_out" ] && [ -s "$_bridge_out" ]; then
@@ -5013,6 +5024,7 @@ Fix this and retry. Do not repeat the same mistake."
             AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
             AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
             EPAM_DANGEROUS_SKIP_APPROVAL=1 \
+            EPAM_MAX_TOOL_CALLS="${PRD_MODEL_COORDINATOR_MAX_TOOL_CALLS:-12}" \
             CLAUDE_CMD="$CLAUDE_CMD" \
             EPAM_CLI="${EPAM_CLI:-epam}" \
             "$AI_RUNNER_CMD" \
@@ -6225,18 +6237,6 @@ run_phase_assessment() {
 
     info "Found $phase_records cost records for phase '$phase_id'"
 
-    # Build assessment prompt
-    # Real, verified-to-exist absolute paths for the prompt below -- found
-    # live (2026-07-07): the prompt used to hardcode the literal relative
-    # string "orchestrations/logs/phase-cost.jsonl", but LOG_DIR (where
-    # $cost_file/$assessment_file actually live) is
-    # "${OUTPUT_DIR:-$AUTOMATION_DIR/logs}", which in the tier3 setup IS
-    # PROJECT_ROOT directly, not a nested "orchestrations/logs"
-    # subdirectory of it. After the agent `cd`s to PROJECT_ROOT below, that
-    # literal path pointed at a directory structure that doesn't exist --
-    # the agent was GUESSING because it was handed a made-up path, not a
-    # real one, and ended up asking an unanswerable interactive question
-    # instead of doing the work.
     local improvement_report_file="${improvement_dir}/${phase_id}.md"
     # Generic, project-supplied skill-domain guidance (see
     # _build_skill_domain_guidance's own docstring) -- falls back to a
@@ -6246,106 +6246,212 @@ run_phase_assessment() {
     local _skill_domain_guidance
     _skill_domain_guidance=$(_build_skill_domain_guidance "$PROJECT_ROOT")
     [ -z "$_skill_domain_guidance" ] && _skill_domain_guidance="not configured for this project (.epam/skill-domain-map.json) — use conservative judgment; only reassign a role when the mismatch between the task description and assigned agentRole is unambiguous"
+
+    # Full agent audit, 2026-07-31 (mock1 investigation): this step used to
+    # hand the agent two raw files (cost log + PRD) and ask it to read,
+    # dedupe-by-latest-timestamp, cross-reference, sum, and write THREE
+    # outputs (JSONL append, markdown report, conditional PRD mutation) —
+    # all with only bash/read_file/list_files/search (no write_file) and a
+    # 6-tool-call/300s budget. That's exactly the "unstructured, multi-file,
+    # agent-does-its-own-data-gathering" pattern already fixed for every QA
+    # gate this session (sast-sentinel, review-ranger, mutant-hunter,
+    # perf-sentinel all get pre-computed evidence injected, never explore
+    # for it themselves) — and it's what caused the mock1 timeout (attempt 1
+    # exhausted 300s, attempt 2 succeeded only on an escalated model).
+    #
+    # Fixed the same way: the dedupe/cross-reference/arithmetic is 100%
+    # deterministic (no judgment involved) and now happens here in
+    # bash/python. The LLM's job is narrowed to genuine judgment only —
+    # writing human-readable notes/recommendations and deciding skill-domain
+    # role reassignments — and needs NO tools at all, since everything it
+    # needs is injected and the orchestrator (not the agent) performs every
+    # write, atomically and lock-guarded, exactly like story-ac-remediator's
+    # deterministic-apply pattern.
+    local _pa_summary_file
+    _pa_summary_file=$(mktemp)
+    python3 - "$cost_file" "$PRD_FILE" "$phase_id" "$_pa_summary_file" << 'ASSESS_PRECOMPUTE_PY'
+import json, os, sys
+from datetime import datetime
+
+cost_file, prd_file, phase_id, out_file = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+
+def parse_ts(s):
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s)
+    except Exception:
+        return None
+
+# Dedupe: for each story_id, keep only the record with the highest started_at
+# (the log accumulates records across multiple runs of the same phase).
+latest = {}
+with open(cost_file) as f:
+    for line in f:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except Exception:
+            continue
+        if rec.get('phase_id') != phase_id:
+            continue
+        sid = rec.get('story_id')
+        if not sid:
+            continue
+        prev = latest.get(sid)
+        if prev is None or (rec.get('started_at') or '') > (prev.get('started_at') or ''):
+            latest[sid] = rec
+
+with open(prd_file) as f:
+    prd = json.load(f)
+
+stories_by_id = {s['id']: s for s in prd.get('stories', []) if s.get('id')}
+
+# implementationOrder is the authoritative phase->story-ids mapping (a
+# story's own optional .phase field is not reliably populated) — build a
+# reverse lookup and use ordering position to find phases AFTER this one,
+# for the corrective-action scope.
+impl_order = prd.get('implementationOrder', {}) or {}
+phase_names = list(impl_order.keys())
+story_to_phase = {}
+for pname, ids in impl_order.items():
+    for sid in (ids or []):
+        story_to_phase[sid] = pname
+try:
+    future_phases = set(phase_names[phase_names.index(phase_id) + 1:])
+except ValueError:
+    future_phases = set()
+
+# Only records whose story_id matches a REAL PRD story are per-story
+# variance data — other story_ids (e.g. "core", "pipeline") are gate/
+# pipeline-level cost records, not story work, and are excluded here.
+per_story = []
+actual_minutes_total = 0.0
+forecast_minutes_total = 0.0
+actual_cost_total = 0.0
+forecast_cost_total = 0.0
+
+for sid, rec in latest.items():
+    story = stories_by_id.get(sid)
+    if not story:
+        continue
+    completed = bool(story.get('completed'))
+    status = 'succeeded' if completed else rec.get('status', 'unknown')
+    started = parse_ts(rec.get('started_at'))
+    ended = parse_ts(rec.get('ended_at'))
+    elapsed_minutes = 0.0
+    if started and ended:
+        elapsed_minutes = max(0.0, (ended - started).total_seconds() / 60.0)
+    forecast_minutes = story.get('estimatedAiMinutes')
+    if forecast_minutes is None:
+        forecast_minutes = (story.get('estimatedHours') or 0) * 60
+    forecast_cost = story.get('estimatedCost') or 0
+    actual_cost = rec.get('task_cost_usd') or 0
+
+    actual_minutes_total += elapsed_minutes
+    forecast_minutes_total += forecast_minutes
+    actual_cost_total += actual_cost
+    forecast_cost_total += forecast_cost
+
+    per_story.append({
+        'story_id': sid,
+        'status': status,
+        'elapsed_minutes': round(elapsed_minutes, 3),
+        'forecast_minutes': round(forecast_minutes, 3),
+        'actual_cost_usd': round(actual_cost, 4),
+        'forecast_cost_usd': round(forecast_cost, 4),
+        'description': story.get('description', ''),
+        'agentRole': story.get('agentRole', ''),
+    })
+
+variance_minutes = actual_minutes_total - forecast_minutes_total
+variance_cost_usd = actual_cost_total - forecast_cost_total
+threshold_pct = float(os.environ.get('PHASE_ASSESSMENT_OVER_THRESHOLD_PCT', '20'))
+over_threshold = (
+    forecast_minutes_total > 0
+    and actual_minutes_total > forecast_minutes_total * (1 + threshold_pct / 100.0)
+)
+
+future_pending_stories = []
+for s in prd.get('stories', []):
+    sid = s.get('id')
+    if story_to_phase.get(sid) in future_phases and s.get('status') == 'pending' and not s.get('completed'):
+        future_pending_stories.append({
+            'story_id': sid,
+            'description': s.get('description', ''),
+            'agentRole': s.get('agentRole', ''),
+            'phase': story_to_phase.get(sid),
+        })
+
+summary = {
+    'phase_id': phase_id,
+    'actual_minutes': round(actual_minutes_total, 3),
+    'forecast_minutes': round(forecast_minutes_total, 3),
+    'actual_cost_usd': round(actual_cost_total, 4),
+    'forecast_cost_usd': round(forecast_cost_total, 4),
+    'variance_minutes': round(variance_minutes, 3),
+    'variance_cost_usd': round(variance_cost_usd, 4),
+    'over_threshold': over_threshold,
+    'over_threshold_pct': threshold_pct,
+    'per_story': per_story,
+    'future_pending_stories': future_pending_stories,
+    }
+
+with open(out_file, 'w') as f:
+    json.dump(summary, f, indent=2)
+ASSESS_PRECOMPUTE_PY
+
+    local _pa_summary
+    _pa_summary=$(cat "$_pa_summary_file" 2>/dev/null || echo '{}')
+    rm -f "$_pa_summary_file"
+
     local assessment_prompt
     assessment_prompt=$(cat << PROMPT_EOF
-You are the skill assessment agent. Analyze the phase cost data and produce an assessment.
+You are the skill assessment agent. All cost/variance data below is PRE-COMPUTED, real, and already deduplicated (latest record per story) and cross-referenced against the PRD's completion state — do not re-derive it, do not ask to see any file, just judge it.
 
 ## Phase: $phase_id
 
-## Task
-1. Read $cost_file and filter for phase_id="$phase_id"
-   IMPORTANT: The log accumulates records across multiple runs. For each story_id, use ONLY the
-   most recent record (highest started_at timestamp). Discard all earlier records for the same story_id.
-2. Cross-reference each story's status against ${PRD_REL}: if the story has "completed": true in the
-   PRD, treat it as succeeded regardless of older cost-log entries. The PRD is the source of truth for
-   current completion state; the cost log is used only for timing/cost figures from the latest run.
-3. For each task (using latest record only), compare elapsed_minutes vs forecast_hours (converted to minutes)
-4. Calculate phase-level totals and variance
-5. Write a single-line JSON assessment to $assessment_file with fields:
-   phase_id, phase_name, actual_minutes, forecast_minutes, actual_cost_usd, forecast_cost_usd,
-   variance_minutes, variance_cost_usd, over_threshold (bool), agent_recommendations (array), notes
-6. Write a human-readable improvement report to $improvement_report_file
-7. CORRECTIVE ACTION: If any task's description clearly requires a different skill domain than the assigned agentRole,
-   update ${PRD_REL} to change agentRole for FUTURE phase stories that have the same mismatch.
-   - Only modify stories that are status "pending" and completed false
-   - Only modify stories in phases AFTER the current phase (do NOT modify completed phase stories)
-   - When changing agentRole, preserve the original value in the "originalAgentRole" field (already present)
-   - Document every role change in the improvement report
-   - Skill domain indicators: $_skill_domain_guidance
+## Pre-computed assessment data
+${_pa_summary}
 
-Use flock when appending to JSONL files. If all tasks were within forecast, note "No improvements needed."
+## Your job (judgment only — you have no tools and do not need any)
+1. Write "notes": a short human-readable summary of the variance (or "No improvements needed." if over_threshold is false and future_pending_stories is empty).
+2. Write "agent_recommendations": an array of short strings (empty array if none).
+3. CORRECTIVE ACTION: for each entry in future_pending_stories, decide whether its "description" clearly requires a
+   different skill domain than its current "agentRole". Skill domain indicators: $_skill_domain_guidance
+   Only propose a reassignment when the mismatch is unambiguous — conservative judgment, not a guess.
+   Return "role_reassignments" as an array of {"story_id":"...","newAgentRole":"...","reason":"..."} (empty array if none).
+   You do NOT write to any file yourself — the orchestrator applies your reassignments deterministically.
+
+Output ONLY this JSON object, no markdown fences, no preamble:
+{"notes":"...","agent_recommendations":["..."],"role_reassignments":[{"story_id":"...","newAgentRole":"...","reason":"..."}]}
 PROMPT_EOF
     )
 
     log "Running assessment agent for phase '$phase_id'..."
     local assessment_log="$LOG_DIR/assessment-${phase_id}.log"
 
-    # Backup prd.json before assessment modifies it
-    cp "$PRD_FILE" "${PRD_FILE}.pre-assessment"
-    log "Backed up prd.json to ${PRD_FILE}.pre-assessment"
-
-    # Snapshot how many records already exist for this phase BEFORE the call
-    # -- needed to tell a genuinely NEW assessment apart from an old one left
-    # over from an earlier run (see the real-evidence check below).
-    # grep -c prints "0" (correctly) but exits 1 on zero matches; `|| true`
-    # (not `|| echo 0`) neutralizes that under this script's `set -e`
-    # without double-printing (same class of bug fixed earlier this session
-    # in compute_retry_extension_evidence).
-    local _assessment_count_before
-    _assessment_count_before=$(grep -c "\"phase_id\":\"$phase_id\"" "$assessment_file" 2>/dev/null || true)
-    _assessment_count_before="${_assessment_count_before:-0}"
-
-    cd "$PROJECT_ROOT"
-    # run_orch_prompt_with_tools (not plain run_orch_prompt): this prompt
-    # instructs writing a report file, updating the PRD's agentRole fields, and
-    # flock-appending to JSONL — same class of bug already fixed above for the
-    # pre-phase (Step 0.5) assessment call.
-    #
-    # PIPESTATUS[0] (not the pipeline's own exit code): this script has no
-    # `set -o pipefail`, so `if cmd | tee file; then` was ALWAYS evaluating
-    # tee's exit status (virtually always 0), never run_orch_prompt_with_
-    # tools's real one -- a tool-call failure could never be detected at
-    # all. Capture the first command's real exit status explicitly instead.
-    local _pa_attempt=0 _pa_success=0
+    local _pa_attempt=0 _pa_success=0 _pa_raw=""
     local _saved_pa_model="${ORCH_GATE_MODEL:-}"
     local _saved_gate_timeout="${EPAM_GATE_TIMEOUT_SECS:-}"
-    # This assessment is explicitly non-critical (a failure just logs a
-    # warning and continues — see the caller). Letting it inherit the full
-    # 600s-per-attempt gate timeout means 2 attempts can burn up to 20
-    # minutes on an optional step. Found live 2026-07-23: a stuck agent
-    # ("reached maximum iterations without completing") consumed the
-    # entire pipeline run's wall-clock budget on this step alone. Cap it
-    # much shorter so a stall here can never dominate a real run.
-    # 300, not 120 (raised 2026-07-25 after two live timeouts on this step). The
-    # cap exists so an optional step cannot dominate a run, and that intent is
-    # preserved: 2 attempts x 300s = 10 minutes worst case, still half the 600s
-    # default it was protecting against. 120 was calibrated before this pipeline
-    # moved to reasoning models with 32768-token budgets — they spend <think>
-    # tokens before emitting anything, so the floor for a real answer rose.
+    # No tools needed anymore (see comment above) — this is now a pure
+    # text-in/JSON-out judgment call, same class as openspec/speckit. The
+    # 300s cap and 2-attempt/model-escalation retry are kept as a resilience
+    # backstop, not because the task is expected to need them.
     EPAM_GATE_TIMEOUT_SECS="${PHASE_ASSESSMENT_TIMEOUT_SECS:-300}"
     while [ "$_pa_attempt" -lt 2 ] && [ "$_pa_success" = "0" ]; do
         local _pa_prompt="$assessment_prompt"
         if [ "$_pa_attempt" -ge 1 ]; then
             [ -n "${ESCALATION_MODEL_HIGH:-}" ] && ORCH_GATE_MODEL="${ESCALATION_MODEL_HIGH}"
-            _pa_prompt="RETRY (attempt 2): The previous invocation failed to write a new assessment record to $assessment_file for phase '$phase_id'. Use your tools to read the cost log, compute the assessment, and write the JSON record now.
+            _pa_prompt="RETRY (attempt 2): Your previous response was not valid JSON in the required shape. Emit ONLY the JSON object now.
 
 $assessment_prompt"
         fi
-        # No story_id — phase-level assessment, not tied to any single story
-        # (see the matching comment at the pre-phase assessment call site).
-        #
-        # Turn budget. Measured 2026-07-30: team-lead-agent was 40-51% of a mock3
-        # lane's wall clock, and EPAM_MAX_TOOL_CALLS was set at exactly one of its
-        # three call sites (the pre-phase assessment). Unbudgeted calls ran 9-14
-        # turns; because every turn re-sends the accumulated transcript, 14 turns
-        # pulled 184,627 input tokens to assess a one-line diff. 5-6 turn calls
-        # produced usable output at ~28k. Not a kill: at the budget AgentRunner
-        # withdraws the tools and demands the answer, the same mechanism the
-        # detective and the pre-phase assessment already rely on.
-        local _pa_tool_budget="${POST_ASSESSMENT_MAX_TOOL_CALLS:-6}"
-        EPAM_MAX_TOOL_CALLS="$_pa_tool_budget" \
-        run_orch_prompt_with_tools "$_pa_prompt" "team-lead-agent" 2>&1 | tee "$assessment_log"
-        local _assessment_rc=${PIPESTATUS[0]}
+        local _assessment_rc=0
+        run_orch_prompt "$_pa_prompt" "team-lead-agent" > "$assessment_log" 2>&1 || _assessment_rc=$?
+        _pa_raw=$(cat "$assessment_log" 2>/dev/null)
 
         if [ "$_assessment_rc" -ne 0 ]; then
             warning "Phase assessment attempt $(( _pa_attempt + 1 )) failed for '$phase_id' (rc=${_assessment_rc})"
@@ -6353,19 +6459,13 @@ $assessment_prompt"
             continue
         fi
 
-        # Deterministic evidence check (found live, 2026-07-07): a successful
-        # exit code alone doesn't mean the agent actually did the work -- it can
-        # exit 0 after asking an unanswerable interactive question instead of
-        # writing anything. Verify a genuinely NEW assessment record was
-        # appended for THIS phase, not just trust the exit code.
-        local _assessment_count_after
-        _assessment_count_after=$(grep -c "\"phase_id\":\"$phase_id\"" "$assessment_file" 2>/dev/null || true)
-        _assessment_count_after="${_assessment_count_after:-0}"
-
-        if [ "$_assessment_count_after" -le "$_assessment_count_before" ]; then
-            warning "Phase assessment attempt $(( _pa_attempt + 1 )) for '$phase_id' wrote no new record$([ "$_pa_attempt" -lt 1 ] && echo " — retrying with escalated model" || echo "")"
-        else
+        if echo "$_pa_raw" | python3 -c "import sys,json,re
+t=sys.stdin.read()
+m=re.search(r'\{.*\}', t, re.DOTALL)
+sys.exit(0 if m and isinstance(json.loads(m.group(0)), dict) else 1)" 2>/dev/null; then
             _pa_success=1
+        else
+            warning "Phase assessment attempt $(( _pa_attempt + 1 )) for '$phase_id' produced no valid JSON$([ "$_pa_attempt" -lt 1 ] && echo " — retrying with escalated model" || echo "")"
         fi
         _pa_attempt=$(( _pa_attempt + 1 ))
     done
@@ -6373,9 +6473,125 @@ $assessment_prompt"
     EPAM_GATE_TIMEOUT_SECS="$_saved_gate_timeout"
 
     if [ "$_pa_success" = "0" ]; then
-        warning "Phase assessment for '$phase_id' failed after 2 attempt(s) — no new assessment record written; non-critical, continuing"
+        warning "Phase assessment for '$phase_id' failed after 2 attempt(s) — no assessment record written; non-critical, continuing"
         return 1
     fi
+
+    # Deterministic apply: build the final assessment record from the
+    # PRE-COMPUTED totals (never from the LLM's own arithmetic) plus the
+    # LLM's judgment fields, flock-append it, write the markdown report, and
+    # apply role reassignments — re-validated against the SAME
+    # future_pending_stories list computed above, not blindly trusted from
+    # the LLM's response. Mirrors story-ac-remediator's deterministic-apply
+    # pattern (flock -w 10 200, python3 heredoc, atomic os.replace).
+    local _pa_raw_tmp _pa_summary_tmp
+    _pa_raw_tmp=$(mktemp); echo "$_pa_raw" > "$_pa_raw_tmp"
+    _pa_summary_tmp=$(mktemp); echo "$_pa_summary" > "$_pa_summary_tmp"
+    ( flock -w 10 200 || { error "  [phase-assessment] Could not acquire lock on $assessment_file"; rm -f "$_pa_raw_tmp" "$_pa_summary_tmp"; return 1; }
+    python3 - "$_pa_summary_tmp" "$_pa_raw_tmp" "$assessment_file" "$improvement_report_file" "${MAIN_PRD_FILE:-$PRD_FILE}" <<'ASSESS_APPLY_PY'
+import json, re, sys, os
+from datetime import datetime, timezone
+
+summary_file, raw_file, assessment_file, report_file, prd_file = sys.argv[1:6]
+
+with open(summary_file) as f:
+    summary = json.load(f)
+raw = open(raw_file).read()
+
+decoder = json.JSONDecoder()
+payload = {}
+idx = 0
+while True:
+    start = raw.find('{', idx)
+    if start == -1:
+        break
+    try:
+        obj, end = decoder.raw_decode(raw, start)
+        if isinstance(obj, dict) and ('notes' in obj or 'agent_recommendations' in obj or 'role_reassignments' in obj):
+            payload = obj
+            break
+        idx = end
+    except json.JSONDecodeError:
+        idx = start + 1
+
+notes = payload.get('notes') or ('No improvements needed.' if not summary['over_threshold'] and not summary['future_pending_stories'] else '')
+recommendations = payload.get('agent_recommendations') or []
+reassignments = payload.get('role_reassignments') or []
+
+record = {
+    'phase_id': summary['phase_id'],
+    'phase_name': summary['phase_id'],
+    'actual_minutes': summary['actual_minutes'],
+    'forecast_minutes': summary['forecast_minutes'],
+    'actual_cost_usd': summary['actual_cost_usd'],
+    'forecast_cost_usd': summary['forecast_cost_usd'],
+    'variance_minutes': summary['variance_minutes'],
+    'variance_cost_usd': summary['variance_cost_usd'],
+    'over_threshold': summary['over_threshold'],
+    'agent_recommendations': recommendations,
+    'notes': notes,
+    }
+with open(assessment_file, 'a') as f:
+    f.write(json.dumps(record) + '\n')
+
+# Re-validate reassignments against the SAME future_pending_stories set the
+# LLM was given — never trust a story_id/role pair from the model's own
+# text without re-checking it against real, deterministically-computed
+# eligibility (pending, not completed, phase strictly after this one).
+eligible = {s['story_id']: s for s in summary['future_pending_stories']}
+applied = []
+if reassignments:
+    with open(prd_file) as f:
+        prd = json.load(f)
+    stories_by_id = {s['id']: s for s in prd.get('stories', []) if s.get('id')}
+    changed = False
+    for r in reassignments:
+        sid = r.get('story_id')
+        new_role = r.get('newAgentRole')
+        if not sid or not new_role or sid not in eligible:
+            continue
+        story = stories_by_id.get(sid)
+        if not story or story.get('status') != 'pending' or story.get('completed'):
+            continue
+        if story.get('agentRole') == new_role:
+            continue
+        if 'originalAgentRole' not in story:
+            story['originalAgentRole'] = story.get('agentRole')
+        story['agentRole'] = new_role
+        applied.append({'story_id': sid, 'newAgentRole': new_role, 'reason': r.get('reason', '')})
+        changed = True
+    if changed:
+        tmp_path = prd_file + '.tmp'
+        with open(tmp_path, 'w') as f:
+            json.dump(prd, f, indent=2)
+        os.replace(tmp_path, prd_file)
+
+ts = datetime.now(timezone.utc).isoformat()
+lines = [
+    f"# Phase Improvement Report: {summary['phase_id']}",
+    f"_Generated: {ts}_",
+    "",
+    f"- Actual: {summary['actual_minutes']} min / ${summary['actual_cost_usd']}",
+    f"- Forecast: {summary['forecast_minutes']} min / ${summary['forecast_cost_usd']}",
+    f"- Variance: {summary['variance_minutes']} min / ${summary['variance_cost_usd']}",
+    f"- Over threshold ({summary['over_threshold_pct']}%): {summary['over_threshold']}",
+    "",
+    "## Notes",
+    notes,
+]
+if recommendations:
+    lines += ["", "## Recommendations"] + [f"- {r}" for r in recommendations]
+if applied:
+    lines += ["", "## Role reassignments applied"] + [
+        f"- {a['story_id']}: -> {a['newAgentRole']} ({a['reason']})" for a in applied
+    ]
+with open(report_file, 'w') as f:
+    f.write("\n".join(lines) + "\n")
+
+print(f"assessment record written; {len(applied)} role reassignment(s) applied")
+ASSESS_APPLY_PY
+    ) 200>"${assessment_file}.lock"
+    rm -f "$_pa_raw_tmp" "$_pa_summary_tmp"
 
     success "Phase assessment completed for '$phase_id'"
     return 0
@@ -6940,6 +7156,20 @@ LINT_FIND_EOF
 
 $_lint_finding_prompt"
                 fi
+                # Full agent audit, 2026-07-31: gate-finding-analyst gets tool
+                # access via TWO DIFFERENT mechanisms at its two call sites —
+                # here, calling `epam run` directly bypasses ai-run.sh
+                # entirely, so ai-run.sh's --no-tools-by-default gating never
+                # applies and the CLI's own default (tools ON) is used. The
+                # OTHER call site (self-heal remediation, agent 1/3, further
+                # below) goes through ai-run.sh with an explicit
+                # AI_GATE_ALLOW_TOOLS=1. Both are correct TODAY — this is a
+                # maintainability tripwire, not a bug: if a future refactor
+                # routes this call through ai-run.sh (e.g. for consistency
+                # with the retry/cost-tracking helpers elsewhere in this
+                # file) without also adding AI_GATE_ALLOW_TOOLS=1, it will
+                # silently lose tool access the same way codeline-bridge-agent
+                # did. See gate-finding-analyst-dual-mechanism.test.ts.
                 _lga_raw="$(echo "$_lga_prompt" | \
                     timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run --provider "${ORCH_GATE_PROVIDER:-qwen}" \
                         --model "${_lga_model}" \
@@ -8137,7 +8367,7 @@ Output format (strict JSON, no markdown fences, no preamble):
   \"agent\": \"review-ranger\",
   \"phase\": \"$phase_id\",
   \"summary\": { \"filesReviewed\": N, \"findingsCount\": N, \"blockerCount\": N, \"majorCount\": N, \"minorCount\": N },
-  \"findings\": [{ \"severity\": \"blocker|major|minor\", \"category\": \"...\", \"file\": \"...\", \"line\": N, \"description\": \"...\", \"suggestedFix\": \"...\" }],
+  \"findings\": [{ \"severity\": \"blocker|major|minor\", \"category\": \"...\", \"file\": \"...\", \"line\": N, \"codeSnippet\": \"<the EXACT line(s) from the file that show the problem, copied verbatim — required for any blocker-severity finding, or it will be treated as unverified>\", \"description\": \"...\", \"suggestedFix\": \"...\" }],
   \"verdict\": \"pass|fail\"
 }"
 
@@ -8186,9 +8416,22 @@ $review_prompt"
                 if [ -n "$_changed_src" ]; then
                     while IFS= read -r _f; do
                         [ -f "$PROJECT_ROOT/$_f" ] || continue
+                        local _mut_src_total_lines _mut_src_marker=""
+                        _mut_src_total_lines=$(wc -l < "$PROJECT_ROOT/$_f" 2>/dev/null || echo 0)
+                        # Full agent audit, 2026-07-31: this excerpt was silently
+                        # capped with no signal to the agent, unlike review-ranger's
+                        # diff injection (which appends a "[TRUNCATED...]" marker
+                        # when its own cap is hit). A file longer than 100 lines
+                        # was invisible past that point with no indication anything
+                        # was cut — the agent could confidently judge mutations
+                        # against a partial file and never know it.
+                        if [ "${_mut_src_total_lines:-0}" -gt 100 ]; then
+                            _mut_src_marker="
+[TRUNCATED — ${_mut_src_total_lines} total lines, showing first 100. Do not assume the omitted tail is unmutated.]"
+                        fi
                         _src_content="$_src_content
 --- $_f ---
-$(head -100 "$PROJECT_ROOT/$_f" 2>/dev/null || echo '(unreadable)')"
+$(head -100 "$PROJECT_ROOT/$_f" 2>/dev/null || echo '(unreadable)')${_mut_src_marker}"
                     done <<< "$_changed_src"
                 fi
                 # The tests to judge are THIS RUN'S tests. This used to be
@@ -8207,9 +8450,15 @@ $(head -100 "$PROJECT_ROOT/$_f" 2>/dev/null || echo '(unreadable)')"
                 local _test_content=""
                 while IFS= read -r _tf; do
                     [ -f "$_tf" ] || continue
+                    local _mut_test_total_lines _mut_test_marker=""
+                    _mut_test_total_lines=$(wc -l < "$_tf" 2>/dev/null || echo 0)
+                    if [ "${_mut_test_total_lines:-0}" -gt 60 ]; then
+                        _mut_test_marker="
+[TRUNCATED — ${_mut_test_total_lines} total lines, showing first 60. Do not assume the omitted tail has no assertions.]"
+                    fi
                     _test_content="$_test_content
 --- $_tf ---
-$(head -60 "$_tf" 2>/dev/null || echo '(unreadable)')"
+$(head -60 "$_tf" 2>/dev/null || echo '(unreadable)')${_mut_test_marker}"
                 done <<< "$_test_files"
                 mutant_oracle_summary="Changed source files:
 ${_src_content:-  (none — no TypeScript source changes in this phase)}
@@ -8244,9 +8493,10 @@ Output format (strict JSON, no markdown fences, no preamble):
   \"agent\": \"mutant-hunter\",
   \"phase\": \"$phase_id\",
   \"summary\": { \"mutationsProposed\": N, \"killed\": N, \"survived\": N, \"noCoverage\": N, \"mutationScore\": 75 },
-  \"mutations\": [{ \"file\": \"...\", \"line\": N, \"originalCode\": \"...\", \"mutatedCode\": \"...\", \"status\": \"killed|survived|no-coverage\", \"relatedTest\": \"...\", \"recommendation\": \"...\" }],
+  \"mutations\": [{ \"file\": \"...\", \"line\": N, \"originalCode\": \"<the EXACT line(s) from the file being mutated, copied verbatim — required for any status:survived mutation, or it will be treated as unverified>\", \"mutatedCode\": \"...\", \"status\": \"killed|survived|no-coverage\", \"relatedTest\": \"...\", \"recommendation\": \"...\" }],
   \"verdict\": \"pass|warn|fail\"
-}"
+}
+The summary.survived count MUST equal the number of status:survived entries in the mutations array — they describe the same thing and must agree."
 
             if [ -n "$mutant_profile" ]; then
                 mutant_prompt="$mutant_profile
@@ -8272,13 +8522,63 @@ $mutant_prompt"
             failed=1
         else
             if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$review_log" 2>/dev/null; then
-                step_emit "22c" "fail" "Step 22c: Review ranger"
-                error "  Review-ranger: FAIL verdict — blocker findings detected"
-                failed=1
-                # review_exit=0 here (agent exited clean) — append explicitly so
-                # self-heal remediation fires; see the SAST fix above for why.
-                _failing_logs+=("$review_log")
-                _log_labels+=("review-ranger")
+                # Full agent audit re-audit, 2026-07-31: this used to trust a bare
+                # self-reported "verdict":"fail" with NO check that any named
+                # file:line actually exists — unlike sast-sentinel (real
+                # Semgrep/tsc/npm-audit oracle) or perf-sentinel (codeSnippet
+                # verified against the real file). An agent could cite a
+                # plausible but fabricated file:line and still block the
+                # pipeline. Same "quote it, then verify the quote" pattern now
+                # applied here: require at least one blocker finding whose
+                # codeSnippet is a literal substring of the real file on disk.
+                _review_grounded=$(python3 - "$review_log" "$PROJECT_ROOT" << 'REVIEW_PYEOF'
+import json, sys, re, os
+
+log_file, project_root = sys.argv[1], sys.argv[2]
+content = open(log_file).read()
+json_match = re.search(r'\{.*"agent".*"review-ranger".*\}', content, re.DOTALL)
+if not json_match:
+    print("0"); sys.exit(0)
+
+try:
+    data = json.loads(json_match.group(0))
+except Exception:
+    print("0"); sys.exit(0)
+
+findings = data.get("findings", [])
+grounded = 0
+for f in findings:
+    if str(f.get("severity", "")).lower() != "blocker":
+        continue
+    file_rel = f.get("file", "")
+    snippet = (f.get("codeSnippet") or "").strip()
+    if not file_rel or not snippet:
+        continue
+    file_path = file_rel if os.path.isabs(file_rel) else os.path.join(project_root, file_rel)
+    try:
+        with open(file_path) as fh:
+            real_content = fh.read()
+    except Exception:
+        continue
+    if snippet in real_content:
+        grounded = 1
+        break
+
+print(str(grounded))
+REVIEW_PYEOF
+2>/dev/null || echo "0")
+                if [ "${_review_grounded:-0}" -gt 0 ]; then
+                    step_emit "22c" "fail" "Step 22c: Review ranger"
+                    error "  Review-ranger: FAIL — confirmed blocker (codeSnippet verified against the real file)"
+                    failed=1
+                    # review_exit=0 here (agent exited clean) — append explicitly so
+                    # self-heal remediation fires; see the SAST fix above for why.
+                    _failing_logs+=("$review_log")
+                    _log_labels+=("review-ranger")
+                else
+                    step_emit "22c" "warn" "Step 22c: Review ranger" "unverified findings downgraded"
+                    warning "  Review-ranger: FAIL verdict downgraded to WARN — no blocker finding's codeSnippet could be verified against the real file (likely hallucinated; re-check manually)"
+                fi
             elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$review_log" 2>/dev/null; then
                 step_emit "22c" "warn" "Step 22c: Review ranger" "non-blocking findings"
                 warning "  Review-ranger: WARN — non-blocking findings (continuing)"
@@ -8294,13 +8594,70 @@ $mutant_prompt"
             failed=1
         else
             if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$mutant_log" 2>/dev/null; then
-                step_emit "22d" "fail" "Step 22d: Mutant hunter"
-                error "  Mutant-hunter: FAIL verdict — mutation score below threshold"
-                failed=1
-                # mutant_exit=0 here (agent exited clean) — append explicitly so
-                # self-heal remediation fires; see the SAST fix above for why.
-                _failing_logs+=("$mutant_log")
-                _log_labels+=("mutant-hunter")
+                # Full agent audit re-audit, 2026-07-31: mutationScore/survived
+                # counts were entirely self-reported with zero independent
+                # verification — an agent could report a low score with no
+                # basis in its own listed mutations and still block the
+                # pipeline. Now requires: (1) summary.survived agrees with the
+                # actual count of status:survived entries in the mutations
+                # array (self-consistency — catches a score disconnected from
+                # its own detail), AND (2) at least one survived mutation's
+                # originalCode is a literal substring of the real file on disk
+                # (catches a fabricated file/line/code claim, same "quote it,
+                # verify it" pattern as review-ranger/perf-sentinel).
+                _mutant_grounded=$(python3 - "$mutant_log" "$PROJECT_ROOT" << 'MUTANT_PYEOF'
+import json, sys, re, os
+
+log_file, project_root = sys.argv[1], sys.argv[2]
+content = open(log_file).read()
+json_match = re.search(r'\{.*"agent".*"mutant-hunter".*\}', content, re.DOTALL)
+if not json_match:
+    print("0"); sys.exit(0)
+
+try:
+    data = json.loads(json_match.group(0))
+except Exception:
+    print("0"); sys.exit(0)
+
+summary = data.get("summary") or {}
+mutations = data.get("mutations", [])
+survived = [m for m in mutations if str(m.get("status", "")).lower() == "survived"]
+
+# Self-consistency: the aggregate score must agree with the model's own detail.
+if summary.get("survived", -1) != len(survived):
+    print("0"); sys.exit(0)
+
+grounded = 0
+for m in survived:
+    file_rel = m.get("file", "")
+    snippet = (m.get("originalCode") or "").strip()
+    if not file_rel or not snippet:
+        continue
+    file_path = file_rel if os.path.isabs(file_rel) else os.path.join(project_root, file_rel)
+    try:
+        with open(file_path) as fh:
+            real_content = fh.read()
+    except Exception:
+        continue
+    if snippet in real_content:
+        grounded = 1
+        break
+
+print(str(grounded))
+MUTANT_PYEOF
+2>/dev/null || echo "0")
+                if [ "${_mutant_grounded:-0}" -gt 0 ]; then
+                    step_emit "22d" "fail" "Step 22d: Mutant hunter"
+                    error "  Mutant-hunter: FAIL — confirmed surviving mutation (originalCode verified against the real file, survived count self-consistent)"
+                    failed=1
+                    # mutant_exit=0 here (agent exited clean) — append explicitly so
+                    # self-heal remediation fires; see the SAST fix above for why.
+                    _failing_logs+=("$mutant_log")
+                    _log_labels+=("mutant-hunter")
+                else
+                    step_emit "22d" "warn" "Step 22d: Mutant hunter" "unverified findings downgraded"
+                    warning "  Mutant-hunter: FAIL verdict downgraded to WARN — survived count disagreed with its own mutations detail, or no surviving mutation's originalCode could be verified against the real file (likely hallucinated; re-check manually)"
+                fi
             elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$mutant_log" 2>/dev/null; then
                 step_emit "22d" "warn" "Step 22d: Mutant hunter" "score 50-69%"
                 warning "  Mutant-hunter: WARN — mutation score 50-69% (non-blocking)"
@@ -8408,7 +8765,7 @@ Output format (strict JSON, no markdown fences, no preamble — emit directly as
   \"agent\": \"perf-sentinel\",
   \"phase\": \"$phase_id\",
   \"summary\": { \"filesAnalysed\": N, \"findingsCount\": N, \"blockerCount\": N, \"estimatedStartupImpactMs\": N },
-  \"findings\": [{ \"severity\": \"blocker|major|minor\", \"category\": \"complexity|memory|async|startup|provider\", \"file\": \"...\", \"line\": N, \"description\": \"...\", \"estimatedImpact\": \"high|medium|low\", \"suggestedFix\": \"...\" }],
+  \"findings\": [{ \"severity\": \"blocker|major|minor\", \"category\": \"complexity|memory|async|startup|provider\", \"file\": \"...\", \"line\": N, \"codeSnippet\": \"<the EXACT line(s) from the file that show the problem, copied verbatim — required for any blocker-severity finding, or it will be treated as unverified>\", \"description\": \"...\", \"estimatedImpact\": \"high|medium|low\", \"suggestedFix\": \"...\" }],
   \"verdict\": \"pass|warn|fail\"
 }"
 
@@ -8565,10 +8922,22 @@ PYEOF
                 # Ground-truth check: a "fail" is only valid if the agent found real blocker
                 # findings. An agent with no tool access reports verdict:fail with empty findings
                 # and null/zero summary — downgrade these hallucinated fails to WARN.
-                _perf_grounded=$(python3 - "$perf_log" << 'PERF_PYEOF'
+                # Full agent audit, 2026-07-31: the old check only verified the
+                # agent's OWN summary numbers were internally self-consistent
+                # (blockerCount>0 and filesAnalysed>0/blockerCount>0) — never
+                # confirmed the claimed hotspot actually exists in the named
+                # file at the named line. An agent could hallucinate a
+                # self-consistent blocker and it would pass grounding and
+                # block a clean pipeline. Now requires, for at least one
+                # blocker finding: the referenced file exists on disk AND its
+                # codeSnippet is a literal substring of that file's real
+                # content — same "quote it, then we verify the quote"
+                # pattern already used for the code-graph-detective's
+                # brokenLine field.
+                _perf_grounded=$(python3 - "$perf_log" "$PROJECT_ROOT" << 'PERF_PYEOF'
 import json, sys, re, os
 
-log_file = sys.argv[1]
+log_file, project_root = sys.argv[1], sys.argv[2]
 content = open(log_file).read()
 json_match = re.search(r'\{.*"agent".*"perf-sentinel".*\}', content, re.DOTALL)
 if not json_match:
@@ -8579,28 +8948,39 @@ try:
 except Exception:
     print("0"); sys.exit(0)
 
-summary = data.get("summary") or {}
-blocker_count = summary.get("blockerCount", 0) if summary else 0
-files_analysed = summary.get("filesAnalysed", 0) if summary else 0
 findings = data.get("findings", [])
-real_blockers = sum(1 for f in findings if str(f.get("severity","")).lower() == "blocker")
+grounded = 0
+for f in findings:
+    if str(f.get("severity", "")).lower() != "blocker":
+        continue
+    file_rel = f.get("file", "")
+    snippet = (f.get("codeSnippet") or "").strip()
+    if not file_rel or not snippet:
+        continue
+    file_path = file_rel if os.path.isabs(file_rel) else os.path.join(project_root, file_rel)
+    try:
+        with open(file_path) as fh:
+            real_content = fh.read()
+    except Exception:
+        continue
+    if snippet in real_content:
+        grounded = 1
+        break
 
-# Grounded = has actual blocker findings AND agent analysed at least one file
-grounded = 1 if (real_blockers > 0 and (files_analysed > 0 or blocker_count > 0)) else 0
 print(str(grounded))
 PERF_PYEOF
 2>/dev/null || echo "0")
                 if [ "${_perf_grounded:-0}" -gt 0 ]; then
                     step_emit "22f" "fail" "Step 22f: Perf sentinel"
-                    error "  Perf-sentinel: FAIL — confirmed performance blocker in analysed files"
+                    error "  Perf-sentinel: FAIL — confirmed performance blocker (codeSnippet verified against the real file)"
                     failed=1
                     # perf_exit=0 here (agent exited clean) so _failing_logs won't pick it up
                     # via the exit-code check below — add it explicitly so remediation fires.
                     _failing_logs+=("$perf_log")
                     _log_labels+=("perf-sentinel")
                 else
-                    step_emit "22f" "warn" "Step 22f: Perf sentinel" "hallucinated fail downgraded"
-                    warning "  Perf-sentinel: FAIL verdict downgraded to WARN — no blocker findings with analysed files (agent had no tool access; re-check manually)"
+                    step_emit "22f" "warn" "Step 22f: Perf sentinel" "unverified findings downgraded"
+                    warning "  Perf-sentinel: FAIL verdict downgraded to WARN — no blocker finding's codeSnippet could be verified against the real file (likely hallucinated; re-check manually)"
                 fi
             elif grep -q '"verdict"[[:space:]]*:[[:space:]]*"warn"' "$perf_log" 2>/dev/null; then
                 step_emit "22f" "warn" "Step 22f: Perf sentinel" "concerns non-blocking"
@@ -8968,6 +9348,7 @@ $_prof_prompt"
                         AI_PROVIDER="${ORCH_GATE_PROVIDER:-minimax}" \
                         AI_MODEL="${ORCH_GATE_MODEL:-MiniMax-M3}" \
                         EPAM_DANGEROUS_SKIP_APPROVAL=1 \
+                        EPAM_MAX_TOOL_CALLS="${PROFILE_AUGMENTOR_MAX_TOOL_CALLS:-10}" \
                         CLAUDE_CMD="$CLAUDE_CMD" \
                         EPAM_CLI="${EPAM_CLI:-epam}" \
                         "$AI_RUNNER_CMD" \

@@ -84,10 +84,14 @@ describe('runSpeckitReview() — accepts forcedRetryNote with the same primacy p
   });
 
   it('prepends forcedRetryNote at the top of the prompt (primacy), same as runSpecAgent\'s forcedRetryBlock', () => {
+    // Full agent audit, 2026-07-31: runSpeckitReview's prompt is now a
+    // refineExistingChildren ternary (two prompt variants) — forcedRetryBlock
+    // must still lead BOTH variants.
     const idx = src.indexOf('async function runSpeckitReview(');
-    const body = src.slice(idx, idx + 600);
+    const body = src.slice(idx, idx + 4000);
     expect(body).toMatch(/const forcedRetryBlock = forcedRetryNote \? `\$\{forcedRetryNote\}\\n\\n` : '';/);
-    expect(body).toMatch(/const prompt = `\$\{forcedRetryBlock\}/);
+    const promptOccurrences = (body.match(/`\$\{forcedRetryBlock\}You are the speckit specification agent/g) || []).length;
+    expect(promptOccurrences, 'both the refineExistingChildren and normal-review prompt variants must lead with forcedRetryBlock').toBe(2);
   });
 });
 

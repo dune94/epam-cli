@@ -182,3 +182,85 @@ When a previous attempt corrupts a TypeScript file with malformed syntax (e.g., 
 **StoryRef:** MOCK-HW-1-test
 
 When a test fails because the assertion expects an outdated value while the implementation was already fixed to return the correct value, the test needs to be updated to expect the correct value. The root cause analysis indicated the implementation already returns 'hello dolly', so the test assertion needed to be changed from `toBe('hello world')` to `toBe('hello dolly')`.
+
+## KB-014 -- 2026-07-25
+
+**Category:** backend
+**AgentRole:** backend-engineer
+**Tags:** typescript, syntax-error, reconstruction, prescribed-fix, retry
+**Trigger:** retry
+**StoryRef:** AMSD-1820
+
+When the orchestrator's `tsc --noEmit` gates report a syntax error at the middle of an otherwise intact function (the prescribed root-cause fix is already present and unrelated variables/types are fine), re-read the corrupted region in full and reconstruct by inferring the *intended* declarations from downstream usages. The variable names referenced later in the function (`appliedDiscount` summed into the dispatch's reported discount amount; `remainingDiscount` assigned back into `discount.amount.value` for the next iteration) are themselves a precise spec — split a single mangled expression back into the two `const` declarations the function's data flow requires. Do NOT re-derive the fix; trust the prescribed minimal fix and the surrounding code as the contract for what the mangled lines were supposed to do.
+
+## KB-015 -- 2026-07-29
+
+**Category:** frontend
+**AgentRole:** backend-engineer
+**Tags:** typescript, contentstack, live-preview, sdk-config
+**Trigger:** retry
+**StoryRef:** AMSD-2041
+
+When enabling Contentstack SDK Live Preview by adding `live_preview: { enable, host }` to the `contentstack.Stack(options)` init options, the `LivePreview` type from `contentstack` (TS SDK) requires `management_token` as a required field — not optional. Including only `enable` and `host` causes `tsc --noEmit` to fail with TS2345: "Property 'management_token' is missing in type '{ enable: boolean; host: string; }' but required in type 'LivePreview'". The minimum fix is to also read `CONTENTSTACK_MANAGEMENT_TOKEN` from `process.env` and include it in the `live_preview` object. Gate the entire `live_preview` block on the presence of the management token (or preview host) so non-preview builds don't pass an empty string for `management_token`. This is a type-only requirement that the runtime SDK does not enforce but the SDK's shipped `LivePreview` TypeScript type does.
+
+## KB-016 -- 2026-07-30
+
+**Category:** frontend
+**AgentRole:** implementation
+**Tags:** react, contentstack, live-preview, context
+**Trigger:** retry
+**StoryRef:** AMSD-2041
+
+When a story's execution plan conflicts with the authoritative Root Cause Analysis (e.g. plan asks to add live-preview methods to services/hooks/components but the RCA prescribes a single minimal fix in the context provider), follow the RCA: make the smallest change at the single source of truth. Also verify the SDK package exists in package.json before importing it — here `@contentstack/live-preview-utils` was not installed, so a window CustomEvent (`contentstack:live-preview-content`) subscription in the provider's useEffect achieves the same reactive setContent propagation without adding a dependency.
+
+
+## KB-017 -- 2026-07-30
+
+**Category:** frontend
+**AgentRole:** impl
+**Tags:** typescript, react, nextjs, contentstack, live-preview, scope-guard
+**Trigger:** retry
+**StoryRef:** AMSD-2041
+
+When the scope guard restricts writes to a single file (e.g. `src/context/ContentstackContext.tsx`) but the story's prescribed fix implies creating helper hooks elsewhere, do NOT create new files — put the provider logic (useState + live-preview subscription useEffect) directly inside the permitted file, and `git mv` an existing `.ts` file to the declared `.tsx` path if the declared path differs in extension from what exists on disk. Wire the new provider at its single call site (`src/pages/_app.tsx`) with a minimal edit rather than re-architecting. Also: no Live Preview SDK was installed in this repo, so gating on `window.__CONTENTSTACK_LIVE_PREVIEW__`/iframe detection plus a `message` event listener satisfies the requirement without adding a dependency.
+
+## KB-018 -- 2026-07-30
+
+**Category:** frontend
+**AgentRole:** impl
+**Tags:** typescript, react, casing, tsconfig
+**Trigger:** retry
+**StoryRef:** AMSD-2041
+
+When replacing a file with a differently-cased name (e.g. `contentstackContext.tsx` → `ContentstackContext.tsx`), the old file must be explicitly deleted. Git and some OS filesystems (case-insensitive on macOS/Windows) may not treat a write to the new casing as a replacement — both files can coexist on disk, causing TS1261 ("Already included file name differs only in casing") when `forceConsistentCasingInFileNames: true` is set in tsconfig. Always `rm` the old file after writing the new one.
+
+## KB-019 -- 2026-07-30
+
+**Category:** frontend
+**AgentRole:** fix
+**Tags:** typescript, casing, import, tsc
+**Trigger:** retry
+**StoryRef:** AMSD-2041
+
+When renaming a file with different casing (e.g., `contentstackContext.tsx` → `ContentstackContext.tsx`), the old lowercase file may still exist on disk because Linux filesystems are case-sensitive and a `write_file` to the new name creates a separate file rather than replacing the old one. TypeScript's TS1261/TS1149 errors about "differs from already included file name … only in casing" indicate two files with the same name differing only in case exist simultaneously. The fix is to delete the old file (`rm`) in addition to updating all import paths to match the new casing.
+
+
+## KB-020 -- 2026-07-30
+
+**Category:** backend
+**AgentRole:** fix
+**Tags:** typescript, contentstack, live-preview, interface-contract
+**Trigger:** retry
+**StoryRef:** AMSD-2041
+
+When constructing objects that must satisfy a vendor SDK interface (e.g., contentstack's `LivePreview`), always cross-check every required field in the dependency contract before writing the literal. The `LivePreview` interface requires `management_token` as a mandatory field — omitting it causes `TS2741`. The env var `CONTENTSTACK_LIVE_PREVIEW_MANAGEMENT_TOKEN` must be destructured from `process.env` and included in the `live_preview` config alongside `enable` and `host`.
+
+## KB-PERSIST-AMSD-2041 -- 2026-07-30
+
+**Category:** orchestration
+**AgentRole:** any
+**Tags:** inference-ladder, story-decomposition, capability-failure
+**Trigger:** cross-run-synthesis
+**StoryRef:** AMSD-2041
+
+Story AMSD-2041 has failed 9 times with capability class (max iterations / empty output). It has 0 ACs. Model escalation alone has not resolved this — the story likely needs to be decomposed into smaller children (≤8 ACs each) before the next run. OpenSpec/SpecKit should split this story at Step 0 in the next pipeline run.

@@ -4871,15 +4871,27 @@ ${before_json:0:1000}
 AFTER:
 ${after_json:0:1000}
 
+You have read-only tools available (list/search/read files, run read-only shell commands). Several of your rejection rules (introduces a technology this project does not already use; TC fact cannot be verified by reading source code) require checking a claim against the real manifests/config/source of THIS codeline — do not judge those from the before/after excerpts alone. Verify before rejecting on that basis; a wrong rejection blocks a correct change and is worse than a slower correct one. Your tool budget is small — check the ONE fact your verdict depends on, not the whole codebase.
+
 Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[\"<issue1>\"],\"reason\":\"<15 words max>\"}"
 
     local review_raw=""
+    # Full agent audit, 2026-07-31 (same class as HEAL-BLIND): several of this
+    # reviewer's own rejection rules require checking a claim against the real
+    # codebase (stack/tech usage, TC-fact verifiability), but this call had no
+    # tool access at all — a live incident already occurred (rejected correct
+    # Contentstack advice for Metrolinx with no way to check the real stack).
+    # Reuses the same shared, read-only allowlist every other gate agent draws
+    # from, bounded the same way.
     review_raw=$(echo "$review_prompt" | \
         AI_PROVIDER="$gate_provider" \
         AI_MODEL="$gate_model" \
         EPAM_CLI="$EPAM_CLI" \
         EPAM_REASONING_EFFORT="high" \
         EPAM_TEMPERATURE="0.7" \
+        AI_GATE_ALLOW_TOOLS=1 \
+        EPAM_ALLOWED_TOOLS="${ORCH_GATE_ALLOWED_TOOLS:-bash,read_file,list_files,search}" \
+        EPAM_MAX_TOOL_CALLS="${PRD_CHANGE_REVIEWER_MAX_TOOL_CALLS:-6}" \
         bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \
         ${gate_model:+--model "$gate_model"} \
         2>/dev/null || echo '{"verdict":"pass","issues":[],"reason":"reviewer unavailable"}')
@@ -5778,13 +5790,30 @@ PYEOF
                         # Read last 3 existing KB entries to give reviewer dedup context
                         local _kb_last3=""
                         _kb_last3=$(tail -6 "$kb_file" 2>/dev/null || echo "")
+                        # Full agent audit, 2026-07-31: kb-change-reviewer's own rule
+                        # ("Entry contradicts the agentRole's profile in profiles.json")
+                        # was unenforceable — unlike the skill_note call site (whose
+                        # "before" IS the target profile text, since notes are appended
+                        # to it directly), this call only ever passed KB-file tail
+                        # lines, never the target role's actual profile.json text. Fetch
+                        # it the same way the skill_note branch does, so the reviewer
+                        # can actually check the rule instead of guessing or ignoring it.
+                        local _kb_target_role_profile=""
+                        if [ -f "$profiles_file" ]; then
+                            _kb_target_role_profile=$(jq -c --arg role "$story_role" '.[$role] // ""' "$profiles_file" 2>/dev/null)
+                        fi
+                        local _kb_review_before="KB entries so far:
+${_kb_last3}
+
+Target agentRole (${story_role}) profile, for the 'contradicts the agentRole's profile' rule:
+${_kb_target_role_profile}"
                         # KB reviewer gate — permanent entries must pass strict validation.
                         # Rejections get up to 3 summarize-and-resubmit rounds before being
                         # discarded (see run_change_with_reviewer_retry).
                         local _kb_review_verdict
                         _kb_review_verdict=$(run_change_with_reviewer_retry \
                             "$story_id" "kb_entry" \
-                            "$_kb_last3" \
+                            "$_kb_review_before" \
                             "$short_note" 3)
                         # See the skill_note call site above for why this file read is needed.
                         REVIEWER_RETRY_TEXT=$(cat "${TMPDIR:-/tmp}/.reviewer-retry-text-$$" 2>/dev/null || echo "$short_note")

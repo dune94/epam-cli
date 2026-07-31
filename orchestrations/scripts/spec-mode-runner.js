@@ -1074,6 +1074,26 @@ ${storiesPayload}
 
       payload.runId = runId;
 
+      // AMSD-2041 (2026-07-31): a content-quality rejection of the AC/
+      // description rewrite below reverts story.technicalNotes wholesale back
+      // to beforeSnapshot — but technicalNotes.files here is populated from
+      // payload.locationHint, which the code-graph-detective computed
+      // independently of whatever the reviewer objected to (a symptom-worded
+      // AC, a vague description). AMSD-2041's openspec rewrite was rejected
+      // 3/3 tries; the revert below erased the detective's grounded fix-site
+      // file list along with it, leaving the implementer a rich root-cause
+      // narrative (fixSiteAnalysis, which is NOT part of this snapshot and
+      // survives) naming exact files, but an empty "Files to Create/Modify"
+      // and no injected file content — 8 attempts across 2 ladder rungs spent
+      // rediscovering by hand what was already known, each attempt allowed
+      // more iterations than the last, ballooning input tokens 32K -> 339K.
+      // Re-merged after each revert below, reusing the exact same helper
+      // applySpecChanges itself uses, so a rejected AC rewrite can never take
+      // the file list down with it.
+      const _restoreDetectiveFiles = () => {
+        story.technicalNotes = mergeLocationHintFiles(story.technicalNotes, payload.locationHint);
+      };
+
       // Deterministic split-authority check (2026-07-13, user request):
       // speckit no longer owns splitting — openspec is the sole authority,
       // and checkSplitMandateViolation's forced-retry on openspec is the
@@ -1173,6 +1193,7 @@ ${storiesPayload}
           story.description = beforeSnapshot.description;
           story.title = beforeSnapshot.title;
           story.technicalNotes = beforeSnapshot.technicalNotes;
+          _restoreDetectiveFiles();
           if (newStories.length > newStoriesCountBefore) {
             newStories.splice(newStoriesCountBefore, newStories.length - newStoriesCountBefore);
           }
@@ -1196,6 +1217,7 @@ ${storiesPayload}
           story.description = beforeSnapshot.description;
           story.title = beforeSnapshot.title;
           story.technicalNotes = beforeSnapshot.technicalNotes;
+          _restoreDetectiveFiles();
           if (newStories.length > newStoriesCountBefore) {
             newStories.splice(newStoriesCountBefore, newStories.length - newStoriesCountBefore);
           }
@@ -1479,15 +1501,45 @@ ${storiesPayload}
     s => s.specification && s.specification.appliedAgents && s.specification.appliedAgents.length > 0
   );
   if (specifiedStories.length > 0) {
+    // Brownfield: no agent may split (any splitStories payload is dropped
+    // deterministically before this point — see the EPAM_BROWNFIELD guard in
+    // applySpecChanges' caller above), and preserveDefectAcceptanceCriteria
+    // forces story.acceptanceCriteria back to the ticket's immutable original
+    // on every merge regardless of what openspec/speckit proposed. So for a
+    // brownfield run, "are the ACs complete/non-overlapping" and "are splits
+    // logical" are both grading things the code already guarantees didn't
+    // happen — real agent audit, 2026-07-31 (mock1 cycle-time investigation:
+    // this call's wall time varied 17s-4m36s across otherwise-identical runs).
+    // Dropping the two moot criteria (and the always-empty splitChildren
+    // payload) narrows the prompt to what brownfield can actually judge —
+    // real technical-depth value-add and whether a story needs human eyes —
+    // without losing any judgment brownfield ever used.
+    const isBrownfieldReview = process.env.EPAM_BROWNFIELD === '1';
     const reviewPayload = JSON.stringify(specifiedStories.map(s => ({
       id: s.id,
       title: s.title,
       acceptanceCriteria: s.acceptanceCriteria,
       specification: s.specification,
-      splitChildren: (prd.stories || [])
-        .filter(c => c.specification && c.specification.createdFrom === s.id)
-        .map(c => ({ id: c.id, title: c.title, acceptanceCriteria: c.acceptanceCriteria }))
+      ...(isBrownfieldReview ? {} : {
+        splitChildren: (prd.stories || [])
+          .filter(c => c.specification && c.specification.createdFrom === s.id)
+          .map(c => ({ id: c.id, title: c.title, acceptanceCriteria: c.acceptanceCriteria }))
+      })
     })), null, 2);
+
+    const reviewCriteria = isBrownfieldReview
+      ? `For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Flag any story needing human review.
+
+(Brownfield tickets never split and their acceptance criteria are immutable —
+do not evaluate split quality or AC completeness; there is nothing there for
+either agent to have changed.)`
+      : `For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.`;
 
     const reviewPrompt = `${specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : ''}You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase ${opts.phase}.
 
@@ -1495,11 +1547,7 @@ Each story was processed by a sequential agent pipeline:
   1. openspec elaborated requirements (AC refinement, story splits, technical depth)
   2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
 
-For each story, evaluate the quality of the collaborative spec work:
-1. Did both agents add meaningful, non-overlapping value?
-2. Are the acceptance criteria complete, testable, and non-overlapping?
-3. Are story splits logical and properly scoped?
-4. Flag any story needing human review.
+${reviewCriteria}
 
 Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
 [
@@ -2087,8 +2135,17 @@ async function enforceVerificationCriteria(story, initialVc, opts = {}) {
 // Shared LLM call for the VC loop — ladder-escalates the model per cycle (base
 // HIGH model → kimi-k3), reusing runClaude's salvage + tight timeout (same
 // resilience as the detective, so a VC regen/review can't stall the pipeline).
-async function _vcLlmCall(prompt, cycle, logPath, storyId = '') {
-  const baseModel = process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH || process.env.ESCALATION_MODEL_HIGH || 'z-ai/glm-5.1';
+//
+// `role` selects which agent's model-tier env vars apply. Full agent audit,
+// 2026-07-31: this always resolved openspec's SPEC_MODE_OPENSPEC_MODEL_HIGH,
+// even when called FROM reviewVcViaSpeckit (speckit's own review role) —
+// speckit's dedicated SPEC_MODE_SPECKIT_MODEL_HIGH was silently never
+// consulted for VC review, despite existing and being used everywhere else
+// speckit runs (see the escalation ladder at line ~968).
+async function _vcLlmCall(prompt, cycle, logPath, storyId = '', role = 'openspec') {
+  const baseModel = role === 'speckit'
+    ? (process.env.SPEC_MODE_SPECKIT_MODEL_HIGH || process.env.SPEC_MODE_SPECKIT_MODEL || process.env.ESCALATION_MODEL_HIGH || 'z-ai/glm-5.1')
+    : (process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH || process.env.ESCALATION_MODEL_HIGH || 'z-ai/glm-5.1');
   const escalated = ladderNextModel(baseModel, process.env);
   const useEsc = cycle >= 2 && escalated;
   const model = useEsc ? escalated : baseModel;
@@ -2131,7 +2188,7 @@ ${VC_OBSERVABILITY_RULES}
 
 FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
 Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.`;
-  const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-review.log`) : null, story.id);
+  const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-review.log`) : null, story.id, 'speckit');
   const arr = _firstJsonArray(out);
   return Array.isArray(arr) ? arr.filter((x) => typeof x === 'string') : [];
 }
@@ -2664,27 +2721,52 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
   const { archaeologyBlock: brownfieldArchaeologyBlock, schemaLine: locationHintSchemaLine } =
     buildBrownfieldArchaeologyBlock(process.env);
 
-  const prompt = `${forcedRetryBlock}You are the ${agent} specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.${splitWarning}${priorGapsBlock}${sembleContext}${brownfieldArchaeologyBlock}
-Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
-{
-  "storyId":"${story.id}",
-  "agent":"${agent}",
-  "notes":"context",
-  "acceptanceCriteria":["..."],
-  "description":"...",
-  "title":"...",${locationHintSchemaLine}
-  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]
-}
-Use existing text when no change is needed.
-
-SPLIT RULES (mandatory, not optional — enforce these before refining AC):
+  // Cycle-time investigation, 2026-07-31 (mock1 comparison, same finding
+  // class as the coordinator-review fix above): storyRequiresSplit() already
+  // returns {required:false} for brownfield, so splitWarning above is
+  // correctly empty — but the SPLIT RULES block and the splitStories schema
+  // field below were never given the same treatment, even though the
+  // EPAM_BROWNFIELD guard in the Step-2 caller unconditionally deletes any
+  // splitStories payload from every agent, openspec included (brownfield
+  // stories are tickets and are never split; multi-codeline work is one
+  // story with N executions, not a split). Asking the model to reason
+  // through 6 split-decision rules and emit a splitStories array it can
+  // never use is pure wasted context/output for every brownfield call.
+  const isBrownfieldSpec = process.env.EPAM_BROWNFIELD === '1';
+  // locationHintSchemaLine (brownfield) ends in a trailing comma expecting a
+  // field after it — normally splitStories. When brownfield drops that field
+  // too, strip the dangling comma so the schema hint stays valid-looking JSON.
+  const splitSchemaField = isBrownfieldSpec
+    ? ''
+    : `\n  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]`;
+  const locationHintSchemaLineTrimmed = (isBrownfieldSpec && !splitSchemaField)
+    ? locationHintSchemaLine.replace(/,(\s*)$/, '$1')
+    : locationHintSchemaLine;
+  const splitRulesBlock = isBrownfieldSpec
+    ? ''
+    : `\n\nSPLIT RULES (mandatory, not optional — enforce these before refining AC):
 1. AC count > 12 → you MUST propose a split. Target ≤8 ACs per split child. Never leave a story with >12 ACs unsplit.
 2. Both implementation files AND test files in technicalNotes.files → split into one impl child (non-test files) and one test child (*.test.ts files). Assign agentRole "typescript-engineer" to impl, "test-engineer" to test.
 3. 3+ independent deliverable modules with no shared exports (e.g. client.ts, server.ts, cli.ts all in same story) → split per concern. Each split gets the files it owns.
 4. External API discovery + implementation in same story → split: first child discovers/documents the API contract, second child implements against that contract.
 5. technicalNotes.files contains BOTH frontend/template files (*.html, *.css, *.scss, *.jsx, *.tsx, *.vue, *.svelte) AND build/tooling files (vite.config.*, webpack.config.*, rollup.config.*, package.json, Makefile, Dockerfile, *.sh) → split: one child owns the frontend/template files, one child owns the build/tooling files. These have different runtime roles and different owners — bundling them causes token bloat and diffuse responsibility.
 6. Story covers multiple independent runtime roles in the same deliverable (e.g. HTTP server AND CLI binary AND HTML dashboard) → split by runtime role, one child per runtime target. Each child's agentRole should match what it produces (typescript-engineer for application code, test-engineer for test-only files).
-These rules apply only when splitDepth === 0. Never split a story that is already a split child.
+These rules apply only when splitDepth === 0. Never split a story that is already a split child.`;
+  const generateInstruction = isBrownfieldSpec
+    ? 'Generate refined acceptance criteria and optionally updated title/description. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:'
+    : 'Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:';
+
+  const prompt = `${forcedRetryBlock}You are the ${agent} specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.${splitWarning}${priorGapsBlock}${sembleContext}${brownfieldArchaeologyBlock}
+${generateInstruction}
+{
+  "storyId":"${story.id}",
+  "agent":"${agent}",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",${locationHintSchemaLineTrimmed}${splitSchemaField}
+}
+Use existing text when no change is needed.${splitRulesBlock}
 
 Story context:
 ${storyPayload}${publishedContracts(repoPath, story)}
@@ -2865,11 +2947,62 @@ function stripPrescriptiveACs(acceptanceCriteria, storyId) {
 }
 
 // speckit: second-pass review of openspec's output — the collaboration point
-async function runSpeckitReview({ promptExec, story, openspecOutput, phase, runId, logDir, forcedRetryNote }) {
+async function runSpeckitReview({ promptExec, story, openspecOutput, phase, runId, logDir, forcedRetryNote, refineExistingChildren = false }) {
   // Same primacy placement as runSpecAgent's forcedRetryBlock — highest-salience
   // position in the prompt for a same-session forced retry.
   const forcedRetryBlock = forcedRetryNote ? `${forcedRetryNote}\n\n` : '';
-  const prompt = `${forcedRetryBlock}You are the speckit specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.
+  // Full agent audit, 2026-07-31: `validateMidExecutionSplits` called this
+  // function expecting per-child AC refinement back via
+  // `result.payload.splitStories`, but every call site shared ONE prompt
+  // that unconditionally told speckit "ALWAYS omit splitStories... never
+  // propose split children of your own" — so that branch could never fire;
+  // the entire call there was a no-op (its parent-AC output is also
+  // discarded immediately after by the "Delegated to split children"
+  // placeholder). `refineExistingChildren` is an explicit, narrow opt-in —
+  // NOT inferred from `openspecOutput.splitStories` being present, since
+  // that field carries a different meaning at other call sites (openspec
+  // PROPOSING a split, not yet-created children) and conflating the two
+  // would silently change behavior there. Only validateMidExecutionSplits
+  // passes this true, for children it already created.
+  const prompt = refineExistingChildren
+    ? `${forcedRetryBlock}You are the speckit specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.
+
+This story was ALREADY split into the children listed below (openspec's decision, already applied — you are not creating or removing any child). Your job: review and refine EACH CHILD's acceptanceCriteria for testability and completeness, exactly as you would for an unsplit story.
+1. For each child, review its acceptanceCriteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria per child
+3. Flag any AC that are vague, untestable, or overlapping
+4. Do NOT add, remove, or rename any child — return one entry per child id below, using the SAME ids
+5. Do NOT remove or duplicate the existing work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+THE EXISTING CHILDREN (your input to review):
+${JSON.stringify(openspecOutput?.splitStories || [], null, 2)}
+
+ORIGINAL PARENT STORY CONTEXT:
+${JSON.stringify({
+  id: story.id,
+  title: story.title,
+  description: story.description,
+  originalAcceptanceCriteria: story.acceptanceCriteria,
+  technicalNotes: story.technicalNotes,
+  dependencies: story.dependencies || []
+}, null, 2)}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble):
+- "splitStories": array of {"id": "<same child id>", "acceptanceCriteria": [...], "notes": "what you changed and why"} — one entry per child id above, same ids, no new/removed ids.
+- "notes": overall summary of what you changed and why.
+
+You have NO tools in this request and cannot call any — do not emit a tool call in any
+syntax (<tool_call>, <tool_use>, <function_call>). Nothing executes them, so a response
+containing one is discarded in full and the work is lost. Everything you may use is
+already in this prompt.
+`
+    : `${forcedRetryBlock}You are the speckit specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.
 
 You are reviewing and building on the openspec agent's output for this story.
 Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
@@ -3015,7 +3148,22 @@ function captureStorySnapshot(story) {
       : [],
     description: story.description,
     title: story.title,
-    technicalNotes: story.technicalNotes || null
+    technicalNotes: story.technicalNotes || null,
+    // Cycle-time investigation, 2026-07-31 (mock1 run that hit the 45-minute
+    // test timeout): the prd-change-reviewer's own rule set says to reject
+    // when "verificationCriteria is empty while the description names
+    // concrete testable behaviour" — but this snapshot (the ONLY thing the
+    // reviewer is shown) never included the field, so from the reviewer's
+    // view it was ALWAYS absent regardless of the story's real state. That
+    // false "empty" reading fired on essentially every brownfield story with
+    // a concrete description, triggering the reviewer's 3-attempt retry loop
+    // (each attempt re-runs openspec + detective + the full VC enforcement
+    // loop) for a change the story never actually had. story.verificationCriteria
+    // is already set (by enforceVerificationCriteria, inside runSpecAgent)
+    // before afterSnapshot is captured, so this field is real, not a guess.
+    verificationCriteria: Array.isArray(story.verificationCriteria)
+      ? [...story.verificationCriteria]
+      : []
   };
 }
 
@@ -3533,6 +3681,24 @@ function capSplitACs(story, parentId) {
   }
 }
 
+// Merges locationHint's discovered file paths into technicalNotes.files
+// (additive, deduped) — extracted so the same merge can be re-applied after a
+// content-quality revert wipes technicalNotes back to its pre-spec-pass value
+// (see AMSD-2041, 2026-07-31: the revert path in run() erased a real,
+// detective-grounded file list along with a rejected AC rewrite it had
+// nothing to do with). Returns technicalNotes unchanged when locationHint is
+// empty/absent.
+function mergeLocationHintFiles(technicalNotes, locationHint) {
+  if (!Array.isArray(locationHint) || !locationHint.length) return technicalNotes;
+  const hintFiles = locationHint
+    .map(h => (h && typeof h === 'object' ? h.file : null))
+    .filter(f => typeof f === 'string' && f.trim().length > 0);
+  if (!hintFiles.length) return technicalNotes;
+  const existingFiles = Array.isArray(technicalNotes?.files) ? technicalNotes.files : [];
+  const mergedFiles = [...new Set([...existingFiles, ...hintFiles])];
+  return { ...(technicalNotes || {}), files: mergedFiles };
+}
+
 function applySpecChanges(story, payload, newStories, prd, phaseId, runId, logDir = null) {
   const result = { acceptanceChanged: false, splitCount: 0 };
   // AC IMMUTABILITY — UNIVERSAL BACKSTOP (brownfield only). Every spec-agent
@@ -3603,16 +3769,7 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId, logDi
   // auto-commit step then swept up as if it were the story's real output.
   // Merge (not overwrite) — technicalNotes may already carry other fields
   // (or files) from this same payload or an earlier pass.
-  if (Array.isArray(payload.locationHint) && payload.locationHint.length) {
-    const hintFiles = payload.locationHint
-      .map(h => (h && typeof h === 'object' ? h.file : null))
-      .filter(f => typeof f === 'string' && f.trim().length > 0);
-    if (hintFiles.length) {
-      const existingFiles = Array.isArray(story.technicalNotes?.files) ? story.technicalNotes.files : [];
-      const mergedFiles = [...new Set([...existingFiles, ...hintFiles])];
-      story.technicalNotes = { ...(story.technicalNotes || {}), files: mergedFiles };
-    }
-  }
+  story.technicalNotes = mergeLocationHintFiles(story.technicalNotes, payload.locationHint);
   if (Array.isArray(payload.splitStories) && payload.splitStories.length) {
     const currentDepth = splitDepth(story, prd);
     const maxSplitDepth = parseInt(process.env.SPEC_MAX_SPLIT_DEPTH || '2', 10);
@@ -4181,7 +4338,14 @@ function isValidModelString(model, currentModel, knownValidModels) {
 // run_prd_change_reviewer.
 function buildGateExec(aiRunnerCmd, env = process.env) {
   const provider = env.ORCH_GATE_PROVIDER || 'minimax';
-  const model = env.ORCH_GATE_MODEL || 'MiniMax-M3';
+  // Persistent writes (PRD/profiles.json) get the highest-quality model
+  // available, matching claude.sh's run_prd_change_reviewer precedence
+  // (`${ESCALATION_MODEL_HIGH:-${ORCH_GATE_MODEL:-MiniMax-M3}}`). Full agent
+  // audit, 2026-07-31: this path never honored ESCALATION_MODEL_HIGH, so the
+  // spec-pass call site silently ran a cheaper model tier than the
+  // claude.sh call site for the identical review job, despite both claiming
+  // "highest-quality model" intent.
+  const model = env.ESCALATION_MODEL_HIGH || env.ORCH_GATE_MODEL || 'MiniMax-M3';
   return { cmd: aiRunnerCmd, args: ['--provider', provider, '--model', model] };
 }
 
@@ -4266,12 +4430,25 @@ ${JSON.stringify(capReviewSnapshot(before))}
 AFTER:
 ${JSON.stringify(capReviewSnapshot(after))}
 
+You have read-only tools available (list/search/read files, run read-only shell commands). Several of your rejection rules ("introduces a technology this project does not already use," "TC fact cannot be verified by reading source code") require checking a claim against the real manifests/config/source of THIS codeline — do not judge those from the before/after snapshots alone. Verify before rejecting on that basis. Your tool budget is small — check the ONE fact your verdict depends on, not the whole codebase.
+
 Emit ONLY: {"verdict":"pass|fail","issues":["<issue1>"],"reason":"<15 words max>"}`;
 
   try {
     const gateExec = buildGateExec(aiRunnerCmd);
     const logPath = logDir ? path.join(logDir, `prd-reviewer-${storyId}-${changeType}.log`) : null;
-    const output = await runClaude(gateExec, prompt, logPath, {}, { costAgent: 'prd-change-reviewer', costStoryId: storyId });
+    // Full agent audit, 2026-07-31 (same class as HEAL-BLIND): zero tool
+    // access on this call despite the profile's own rules requiring
+    // real-codebase verification — a live incident already occurred (see
+    // reviewer-no-stack-hardcoding.test.ts) where the reviewer rejected
+    // correct guidance about the project's real CMS stack with no way to
+    // check it. Reuses the same shared read-only allowlist every other
+    // gate agent draws from.
+    const output = await runClaude(gateExec, prompt, logPath, {
+      AI_GATE_ALLOW_TOOLS: '1',
+      EPAM_ALLOWED_TOOLS: process.env.ORCH_GATE_ALLOWED_TOOLS || 'bash,read_file,list_files,search',
+      EPAM_MAX_TOOL_CALLS: process.env.PRD_CHANGE_REVIEWER_MAX_TOOL_CALLS || '6',
+    }, { costAgent: 'prd-change-reviewer', costStoryId: storyId });
     return parseReviewVerdict(output);
   } catch (err) {
     console.warn(`spec-mode: prd-change-reviewer call failed for ${storyId} (${err.message}) — defaulting to pass`);
@@ -4536,7 +4713,8 @@ async function validateMidExecutionSplits(prdFile, storyIdsCsv) {
         openspecOutput,
         phase,
         runId,
-        logDir
+        logDir,
+        refineExistingChildren: true
       });
     } catch (err) { speckitResult = null; }
 
@@ -4692,6 +4870,7 @@ module.exports = {
   isSplitDelegationOnlyChange,
   SPLIT_MANDATE_AC_THRESHOLD,
   applySpecChanges,
+  mergeLocationHintFiles,
   buildBrownfieldArchaeologyBlock,
   VC_OBSERVABILITY_RULES,
   preserveDefectAcceptanceCriteria,

@@ -73,12 +73,12 @@ describe('every content-based gate failure appends to _failing_logs (structural)
     },
     {
       label: 'review-ranger (verdict:fail)',
-      failLine: 'error "  Review-ranger: FAIL verdict — blocker findings detected"',
+      failLine: 'error "  Review-ranger: FAIL — confirmed blocker (codeSnippet verified against the real file)"',
       append: '_failing_logs+=("$review_log")',
     },
     {
       label: 'mutant-hunter (verdict:fail)',
-      failLine: 'error "  Mutant-hunter: FAIL verdict — mutation score below threshold"',
+      failLine: 'error "  Mutant-hunter: FAIL — confirmed surviving mutation (originalCode verified against the real file, survived count self-consistent)"',
       append: '_failing_logs+=("$mutant_log")',
     },
     {
@@ -88,7 +88,7 @@ describe('every content-based gate failure appends to _failing_logs (structural)
     },
     {
       label: 'perf-sentinel (pre-existing fix, still present)',
-      failLine: 'error "  Perf-sentinel: FAIL — confirmed performance blocker in analysed files"',
+      failLine: 'error "  Perf-sentinel: FAIL — confirmed performance blocker (codeSnippet verified against the real file)"',
       append: '_failing_logs+=("$perf_log")',
     },
   ];

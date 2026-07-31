@@ -148,7 +148,7 @@ describe('claude.sh — reviewer-retry wired into kb_entry and skill_note self-h
   it('kb) case calls run_change_with_reviewer_retry (not run_prd_change_reviewer directly) with max_retries=3', () => {
     const kbCaseIdx = claudeSrc.indexOf('_kb_review_verdict=$(run_change_with_reviewer_retry');
     expect(kbCaseIdx).toBeGreaterThan(-1);
-    const callBlock = claudeSrc.slice(kbCaseIdx, kbCaseIdx + 200);
+    const callBlock = claudeSrc.slice(kbCaseIdx, kbCaseIdx + 250);
     expect(callBlock).toMatch(/"kb_entry"/);
     expect(callBlock).toMatch(/3\)/);
   });

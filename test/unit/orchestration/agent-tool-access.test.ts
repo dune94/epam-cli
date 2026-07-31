@@ -103,8 +103,15 @@ const sites: Site[] = [
     label: 'run_prd_change_reviewer (validates AC/TC/skill_note/profile changes)',
     src: 'claude.sh',
     callAnchor: 'bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \\\n        ${gate_model:+--model "$gate_model"} \\\n        2>/dev/null || echo \'{"verdict":"pass"',
-    needsTools: false,
-    reason: 'BEFORE/AFTER JSON excerpts are injected directly into the prompt — reviewer never needs to read a file itself',
+    needsTools: true,
+    reason: 'REVISED 2026-07-31 (full agent audit, same class as HEAL-BLIND): the original ' +
+      'needsTools=false reasoning ("BEFORE/AFTER excerpts are injected directly") held only ' +
+      'for the AC/description/title rules — it did NOT hold for the profile_addendum and ' +
+      'profile_creation rules, which explicitly require judging "from the manifests, config ' +
+      'and source actually present in THIS codeline." Live incident already occurred: ' +
+      'rejected correct Contentstack advice for Metrolinx with no way to check the real ' +
+      'stack (see reviewer-no-stack-hardcoding.test.ts). Now reuses ORCH_GATE_ALLOWED_TOOLS ' +
+      '(read-only) with a bounded EPAM_MAX_TOOL_CALLS.',
   },
   {
     label: 'run_prd_change_summarizer (rewrites rejected self-heal text)',
@@ -163,16 +170,19 @@ const sites: Site[] = [
   {
     label: 'Step 3.5 post-parallel assessment',
     src: 'orch',
-    // Anchor updated (2026-07-12): the `if ... ; then success ...` wrapper
-    // was replaced with an explicit PIPESTATUS[0] capture (this script has
-    // no `set -o pipefail`, so `if cmd | tee file; then` always evaluated
-    // tee's exit status, never the real tool call's -- see the
-    // phase-assessment real-output-gate fix).
-    // Anchor updated (2026-07-22): story_id argument removed — see the matching
-    // note at Step 0.5 above.
-    callAnchor: 'run_orch_prompt_with_tools "$_pa_prompt" "team-lead-agent" 2>&1 | tee "$assessment_log"',
-    needsTools: true,
-    reason: 'prompt instructs writing a report file, updating PRD agentRole fields, and flock JSONL appends (FIXED 2026-07-08)',
+    // Anchor updated (2026-07-31, full agent audit / mock1 investigation):
+    // this call site was rewritten entirely. The cost-log dedup/PRD
+    // cross-reference/arithmetic that used to be the agent's own job (with
+    // only bash/read_file/list_files/search and no write_file, which is what
+    // caused a live 300s timeout in mock1) now happens deterministically in
+    // a python precompute block BEFORE this call, and the finished summary
+    // is injected into the prompt. The agent's job narrowed to pure
+    // judgment (notes/recommendations/role reassignments); the orchestrator,
+    // not the agent, performs every write afterward (deterministic-apply,
+    // same pattern as story-ac-remediator). No tools are needed or granted.
+    callAnchor: 'run_orch_prompt "$_pa_prompt" "team-lead-agent" > "$assessment_log" 2>&1',
+    needsTools: false,
+    reason: 'the agent no longer reads or writes any file itself — data is precomputed and injected, and the orchestrator applies the judgment deterministically afterward (FIXED 2026-07-31)',
   },
   {
     label: 'Step 0.6 hybrid pre-coordination',
@@ -269,6 +279,21 @@ const sites: Site[] = [
     needsTools: false,
     reason: 'BEFORE/AFTER excerpts are injected directly into the prompt — reviewer never reads a file itself',
   },
+  {
+    label: 'codeline-bridge-agent (cross-codeline contract extraction)',
+    src: 'orch',
+    callAnchor: 'run_orch_prompt "$_bridge_prompt" "codeline-bridge-agent" "$_bcl" || _bridge_rc=$?',
+    needsTools: true,
+    reason: 'FIXED 2026-07-31 (full agent audit, same class as HEAL-BLIND): profile ' +
+      'explicitly instructs reading real source files in BRIDGE_SRC_DIR and WriteFile-ing ' +
+      'the extracted contract to BRIDGE_OUT_FILE, but this call went through plain ' +
+      'run_orch_prompt with no tool grant at all — under the pipeline\'s actual qwen/openai ' +
+      'gate providers that means --no-tools. Live-corroborated: archived agent-activity.jsonl ' +
+      'shows repeated retry cost entries for the same story/lane, the signature of an agent ' +
+      'told to WriteFile with nothing to do it with. Now grants AI_GATE_ALLOW_TOOLS=1 with no ' +
+      'EPAM_ALLOWED_TOOLS restriction (needs write_file, unlike the read-only QA gates), ' +
+      'bounded with EPAM_MAX_TOOL_CALLS.',
+  },
 ];
 
 describe('agent tool-access wiring — every invocation site (structural)', () => {
@@ -312,23 +337,33 @@ describe('agent tool-access wiring — regression guards for the specific live b
     expect(idx).toBeGreaterThan(-1);
   });
 
-  it('run-agent-orchestration.sh Step 0.5/3.5 assessment calls use run_orch_prompt_with_tools, not plain run_orch_prompt', () => {
+  it('run-agent-orchestration.sh Step 0.5 pre-phase assessment call uses run_orch_prompt_with_tools, not plain run_orch_prompt', () => {
     // Step 0.5's call site variable was renamed from $assessment_prompt to
     // $_pfa_prompt_this_attempt (2026-07-13) when it was wrapped in a
     // 3-attempt retry loop that appends a corrective note per attempt —
     // still run_orch_prompt_with_tools, just a per-attempt prompt variable
-    // instead of the original single prompt. Step 3.5's own call site is
-    // unaffected and still uses $assessment_prompt directly.
-    // M5 retry fix (2026-07-19): Step 3.5 prompt var renamed from $assessment_prompt
-    // to $_pa_prompt when wrapped in a 2-attempt retry loop.
+    // instead of the original single prompt. This call site still reads raw
+    // files itself, so it still needs tools — unlike Step 3.5/24 below.
     const occurrences = [
-      ...orchSrc.matchAll(/run_orch_prompt(_with_tools)?\s*"\$assessment_prompt"\s*"team-lead-agent"/g),
       ...orchSrc.matchAll(/run_orch_prompt(_with_tools)?\s*"\$_pfa_prompt_this_attempt"\s*"team-lead-agent"/g),
-      ...orchSrc.matchAll(/run_orch_prompt(_with_tools)?\s*"\$_pa_prompt"\s*"team-lead-agent"/g),
     ];
-    expect(occurrences.length).toBeGreaterThanOrEqual(2);
+    expect(occurrences.length).toBeGreaterThanOrEqual(1);
     for (const m of occurrences) {
-      expect(m[1], 'found a plain run_orch_prompt call for the assessment agent — tool access regressed').toBe('_with_tools');
+      expect(m[1], 'found a plain run_orch_prompt call for the pre-phase assessment agent — tool access regressed').toBe('_with_tools');
+    }
+  });
+
+  it('run-agent-orchestration.sh Step 3.5/24 post-phase assessment call uses plain run_orch_prompt, no tools', () => {
+    // Full agent audit, 2026-07-31 (mock1 investigation): this call site was
+    // rewritten to precompute all cost/PRD data deterministically and inject
+    // it into the prompt, narrowing the agent to pure judgment — it no
+    // longer reads any file itself, so it correctly needs NO tools at all
+    // (same shape as openspec/speckit), unlike Step 0.5 above which still
+    // does its own file reading.
+    const occurrences = [...orchSrc.matchAll(/run_orch_prompt(_with_tools)?\s*"\$_pa_prompt"\s*"team-lead-agent"/g)];
+    expect(occurrences.length).toBeGreaterThanOrEqual(1);
+    for (const m of occurrences) {
+      expect(m[1], 'a tool grant reappeared for the post-phase assessment — the whole point of the fix was removing the need for tools').toBeUndefined();
     }
   });
 
@@ -345,15 +380,22 @@ describe('agent tool-access wiring — regression guards for the specific live b
   });
 
   it('no invocation site anywhere calls plain run_orch_prompt for a prompt that requires it (no other agent_type is missed)', () => {
-    // Every remaining plain run_orch_prompt call (not _with_tools) must be one
-    // of the confirmed no-tools-needed agent types from the table above.
-    const knownNoToolsAgentTypes = ['spec-coordinator', 'team-lead-agent'];
-    const plainCalls = [...orchSrc.matchAll(/(?<!_with_tools\s)run_orch_prompt\s+"\$[a-zA-Z_]+"\s+"([a-zA-Z0-9_:-]+)"/g)];
+    // Every remaining plain run_orch_prompt call (not _with_tools) must be
+    // either a confirmed no-tools-needed agent type, or (for team-lead-agent
+    // specifically) the one call site ($_pa_prompt, the post-phase
+    // assessment) that was deliberately converted to no-tools. Any OTHER
+    // plain team-lead-agent call (a different prompt var) would mean a
+    // tools-requiring call site regressed silently.
+    const knownNoToolsAgentTypes = ['spec-coordinator'];
+    const plainCalls = [...orchSrc.matchAll(/(?<!_with_tools\s)run_orch_prompt\s+"(\$[a-zA-Z_]+)"\s+"([a-zA-Z0-9_:-]+)"/g)];
     for (const m of plainCalls) {
-      // "assessment" and "spec-coordinator" now only appear via _with_tools
-      // (already asserted above) — any surviving plain-call match here for
-      // those specific labels means the fix regressed.
-      expect(knownNoToolsAgentTypes).not.toContain(m[1]);
+      const [, promptVar, agentType] = m;
+      if (agentType === 'team-lead-agent') {
+        expect(promptVar, `unexpected plain run_orch_prompt call for team-lead-agent with prompt var ${promptVar} — ` +
+          'only $_pa_prompt (the post-phase assessment) is meant to be tool-free').toBe('$_pa_prompt');
+        continue;
+      }
+      expect(knownNoToolsAgentTypes).not.toContain(agentType);
     }
   });
 });

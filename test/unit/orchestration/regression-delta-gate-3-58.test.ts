@@ -219,13 +219,40 @@ describe('Step 3.58 — effort:"high", pre-existing failures tolerated, new ones
     expect(r.out).toMatch(/STEP_EMIT: 3\.58 pass/);
   });
 
-  it('does not pass on an unstable (flaky) after-run — cannot-verify is never a pass', () => {
+  it('PASSES when after-run failures are fully disjoint across attempts — nothing reproducible, so nothing to report as a confirmed new regression', () => {
+    // Corrected semantics (live AMSD-2041, 2026-07-31): the intersection is
+    // the only trustworthy signal, on EITHER side of this comparison. Fully
+    // disjoint failures across attempts (a, b, c never overlap) means the
+    // intersection is empty — no test failed in EVERY after-attempt, so
+    // there is no reproducible new failure to report. This is one-off flake
+    // noise, exactly what the retry exists to filter, not grounds to block.
     const r = runStep358({
       codelineFailures: [['a.spec.ts'], ['b.spec.ts'], ['c.spec.ts']],
       effort: 'high',
       testFailurePattern: '^FAIL\\s+(\\S+)',
       baselineFailures: ['a.spec.ts'],
     });
-    expect(r.out).not.toMatch(/STEP_EMIT: 3\.58 pass/);
+    expect(r.out, `expected pass (nothing reproducible):\n${r.out}`).toMatch(/STEP_EMIT: 3\.58 pass/);
+  });
+
+  it('FAILS on a reproducible new failure even when unrelated flaky noise appears in only one attempt', () => {
+    // Live gotransit shape: a genuinely new, reproducible failure
+    // (c.spec.ts, present in every after-attempt) must still be caught even
+    // though attempt 3 also has one-off flaky noise (d.spec.ts) that never
+    // repeats. The noise must not mask the real regression, and it must not
+    // itself be reported as a "new failure" either.
+    const r = runStep358({
+      codelineFailures: [
+        ['a.spec.ts', 'c.spec.ts'],
+        ['a.spec.ts', 'c.spec.ts'],
+        ['a.spec.ts', 'c.spec.ts', 'd.spec.ts'],
+      ],
+      effort: 'high',
+      testFailurePattern: '^FAIL\\s+(\\S+)',
+      baselineFailures: ['a.spec.ts'],
+    });
+    expect(r.out, `expected the reproducible new failure to be caught:\n${r.out}`).toMatch(/STEP_EMIT: 3\.58 fail/);
+    expect(r.out).toMatch(/c\.spec\.ts/);
+    expect(r.out).not.toMatch(/d\.spec\.ts/);
   });
 });

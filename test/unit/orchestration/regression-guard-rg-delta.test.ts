@@ -66,7 +66,7 @@ function patternedCodeline(failuresByAttempt: string[][]) {
     `node -e '` +
       `const t=${table}; const n=${'process.argv[1]'};` +
       `const fails = t[Math.min(n-1, t.length-1)] || [];` +
-      `const allFiles=["a.spec.ts","b.spec.ts","c.spec.ts","d.spec.ts"];` +
+      `const allFiles=[...new Set(["a.spec.ts","b.spec.ts","c.spec.ts","d.spec.ts", ...t.flat()])];` +
       `for (const f of allFiles) console.log((fails.includes(f)?"FAIL ":"PASS ")+f);` +
       `console.log(fails.length?"Tests: "+fails.length+" failed":"Tests: 0 failed");` +
       `process.exit(fails.length?1:0);` +
@@ -173,17 +173,50 @@ describe('RG-DELTA present — stable pre-existing failures are tolerated', () =
     expect(r.out).toMatch(/2 pre-existing failure/);
   });
 
-  it('does NOT tolerate an UNSTABLE failing set — different tests failing per attempt still hard-fails', () => {
-    // The exact live gotransit shape this guards against reintroducing:
-    // failing test identity changes between attempts under interference.
+  it('hard-fails when the intersection across attempts is EMPTY — no test failed in every attempt, nothing reproducible to tolerate', () => {
+    // Fully disjoint failures every attempt (a, b, c never overlap) — the
+    // intersection is empty, so there is nothing stable/reproducible to fall
+    // back on. This must still hard-fail.
     const c = patternedCodeline([['a.spec.ts'], ['b.spec.ts'], ['c.spec.ts']]);
     const m = manifestDir('^FAIL\\s+(\\S+)');
     const r = runStep5(c, { EPAM_PROJECT_CONFIG_DIR: m });
-    expect(r.out, `an unstable failing set must not become a trusted baseline:\n${r.out}`)
+    expect(r.out, `an empty intersection must not become a trusted baseline:\n${r.out}`)
       .toMatch(/STEP_EMIT: 5 fail/);
     expect(r.code).not.toBe(0);
     expect(existsSync(join(r.logDir, 'regression-guard-baseline-core.json')),
-      'no baseline should be written for an untrustworthy set').toBe(false);
+      'no baseline should be written when nothing is reproducible').toBe(false);
+  });
+
+  it('TOLERATES the reproducible INTERSECTION even when extra tests flake in on just one attempt — live gotransit shape, 2026-07-31', () => {
+    // Real live shape that exposed an over-strict first version of this
+    // fix: schedules.spec.tsx failed in EVERY attempt (genuinely stable,
+    // reproducible — the backlog's own bar: "a failure surviving 3 runs is
+    // stable"), but attempt 3 ALSO had two unrelated tests flake in
+    // (ProductContainer.spec.tsx, Header.spec.tsx — interference under a
+    // large parallel suite, absent from attempts 1-2). The first version
+    // required the WHOLE set to be identical across all 3 attempts before
+    // tolerating ANYTHING — so this one extra attempt's noise poisoned the
+    // otherwise-clean, genuinely reproducible baseline and blocked a real
+    // Metrolinx launch outright. The backlog never asked for zero variance
+    // anywhere; it asked for the INTERSECTION (survives all 3) to be
+    // trustworthy — extra one-off noise outside that intersection is
+    // exactly the flakiness the retry exists to filter out, not grounds to
+    // distrust the reproducible core.
+    const c = patternedCodeline([
+      ['schedules.spec.ts'],
+      ['schedules.spec.ts'],
+      ['schedules.spec.ts', 'ProductContainer.spec.ts', 'Header.spec.ts'],
+    ]);
+    const m = manifestDir('^FAIL\\s+(\\S+)');
+    const r = runStep5(c, { EPAM_PROJECT_CONFIG_DIR: m });
+    expect(r.out, `expected the stable intersection to be tolerated:\n${r.out}`).toMatch(/STEP_EMIT: 5 pass/);
+    expect(r.code).toBe(0);
+    const baseline = JSON.parse(readFileSync(join(r.logDir, 'regression-guard-baseline-core.json'), 'utf8'));
+    // Only the test that failed in EVERY attempt is trusted as baseline —
+    // the one-off flaky extras are excluded, not silently added to the
+    // tolerated set (which would risk masking a real future regression in
+    // one of those files).
+    expect(baseline.failures).toEqual(['schedules.spec.ts']);
   });
 
   it('a genuinely green suite still passes without writing a baseline file (nothing to tolerate)', () => {

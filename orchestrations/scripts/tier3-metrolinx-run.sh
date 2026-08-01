@@ -49,6 +49,7 @@ trap 'rm -f "$TIER3_PID_FILE"' EXIT
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 info()    { echo -e "${YELLOW}[tier3-metrolinx]${NC} $*"; }
 success() { echo -e "${GREEN}[tier3-metrolinx] ✓${NC} $*"; }
+error()   { echo -e "${RED}[tier3-metrolinx] ✗${NC} $*" >&2; }
 # ── Run artefacts, on EVERY outcome ──────────────────────────────────────────
 # A failed run is the one you most need evidence from, and its artefacts are the
 # most perishable: the working PRD lives in /tmp, profiles.json is restored from

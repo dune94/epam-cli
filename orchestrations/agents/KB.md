@@ -284,3 +284,23 @@ The Contentstack SDK's `LivePreview` TypeScript interface requires a `host` prop
 **StoryRef:** AMSD-2041
 
 When a shared interface file (e.g. `ICommonContentstackConfig`) is outside your story's file scope, you can extend it locally using an intersection type (`OriginalInterface & { newField?: Type }`) in the file you CAN modify, rather than being blocked. This avoids module augmentation complexity and keeps the change minimal. Also, the Contentstack SDK's `.includeFallback()` method is the key call for live preview — it tells the SDK to return draft/unpublished content. It must be called on the query chain when `live_preview.enable` is true. The `live_preview` config on `contentstack.Stack()` initialization requires both `host` and `management_token` (not just `enable: true`) — without both, the SDK won't establish the preview connection.
+
+## KB-023 -- 2026-08-01
+
+**Category:** frontend
+**AgentRole:** implementer
+**Tags:** typescript, react, nextjs, module-resolution, file-shadowing
+**Trigger:** retry
+**StoryRef:** AMSD-2041
+
+When both `X.ts` and `X.tsx` exist in the same directory, TypeScript/Node resolution picks `X.ts` first, silently shadowing the `.tsx`. A stale `ContentstackContext.ts` (missing new `livePreview`/`setLivePreview` members) shadowed the updated `ContentstackContext.tsx`, producing TS2339 errors in `useContent.ts` that looked like an interface not being exported. Fix: delete the duplicate `.ts` file rather than editing either file's types. On retry of "property does not exist on type" errors where the property clearly IS declared, check `ls` for same-basename `.ts`/`.tsx` duplicates before touching code.
+
+## KB-024 -- 2026-08-01
+
+**Category:** backend
+**AgentRole:** fix
+**Tags:** typescript, contentstack, live-preview
+**Trigger:** retry
+**StoryRef:** AMSD-2041
+
+The Contentstack JS SDK's `LivePreview` interface requires three fields: `host` (string), `management_token` (string), and `enable` (boolean). Omitting `host` causes TS2741. When adding live_preview to the Stack config, always include `host` — the same API host used for `Stack.setHost()` (e.g. `CONTENTSTACK_API_HOST`) is the correct value.

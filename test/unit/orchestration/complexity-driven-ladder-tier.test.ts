@@ -47,7 +47,12 @@ describe('contextualize-stories.sh — CPA pre-pass derives INITIAL ladderTier f
   it('writes ladderTier into the same jq call that writes the rest of the CPA estimate (same reviewer gate, no new write path)', () => {
     const jqCallIdx = contextualizeSrc.indexOf('--arg ltier "$b_ladder_tier"');
     expect(jqCallIdx).toBeGreaterThan(-1);
-    const afterJq = contextualizeSrc.slice(jqCallIdx, jqCallIdx + 500);
+    // Generous window: this jq call has legitimately grown twice already as
+    // more CPA-derived signals were added (cpaEffortTier, cpaIterationEstimate)
+    // — a fixed tight window keeps drifting stale for the wrong reason (the
+    // call growing, not moving away from ladderTier). A wide window still
+    // proves the field is in the SAME jq call, which is the actual intent.
+    const afterJq = contextualizeSrc.slice(jqCallIdx, jqCallIdx + 900);
     expect(afterJq).toMatch(/ladderTier:\s*\$ltier/);
     expect(afterJq).toMatch(/cpaGate:\s*\$gate/); // same write, not a separate one
   });

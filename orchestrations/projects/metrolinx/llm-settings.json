@@ -1,0 +1,97 @@
+{
+  "$schema": "../../config/llm-settings.schema.json",
+  "temperatureFloor": 0,
+  "rungs": [
+    { "rung": 0, "retryRange": [0, 1], "reasoningEffort": "low", "temperature": 0, "iterationBump": 0, "outputTokenBump": null },
+    { "rung": 1, "retryRange": [2, 3], "reasoningEffort": "medium", "temperature": 0.2, "iterationBump": 10, "outputTokenBump": 8192 },
+    { "rung": 2, "retryRange": [4, 5], "reasoningEffort": "high", "temperature": 0.5, "iterationBump": 20, "outputTokenBump": 16384 },
+    { "rung": 3, "retryRange": [6, 7], "reasoningEffort": "high", "temperature": 0.7, "iterationBump": 30, "outputTokenBump": 24576 }
+  ],
+  "ladders": {
+    "high": {
+      "modelLadder": [
+        { "from": "MiniMax-M2.5", "to": "MiniMax-M3" },
+        { "from": "MiniMax-M3", "to": "z-ai/glm-5.2" },
+        { "from": "zhipuai/glm-z1-9b", "to": "zhipuai/glm-z1-32b" },
+        { "from": "zhipuai/glm-z1-32b", "to": "z-ai/glm-5.2" },
+        { "from": "z-ai/glm-5.1", "to": "z-ai/glm-5.2" },
+        { "from": "z-ai/glm-5.2", "to": "moonshotai/kimi-k2.5" },
+        { "from": "moonshotai/kimi-k2.5", "to": "moonshotai/kimi-k3" }
+      ]
+    },
+    "medium": {
+      "modelLadder": [
+        { "from": "MiniMax-M2.5", "to": "MiniMax-M3" },
+        { "from": "MiniMax-M3", "to": "z-ai/glm-5.2" },
+        { "from": "zhipuai/glm-z1-9b", "to": "zhipuai/glm-z1-32b" },
+        { "from": "zhipuai/glm-z1-32b", "to": "z-ai/glm-5.2" },
+        { "from": "z-ai/glm-5.1", "to": "z-ai/glm-5.2" }
+      ]
+    }
+  },
+  "modelOverrides": {
+    "minimax-m2.5": {
+      "matchOn": "model",
+      "matchSubstring": "MiniMax-M2.5",
+      "reasoningEffort": "medium",
+      "maxIterations": 45,
+      "autoCompressAt": 64000,
+      "autoCompressEveryNIterations": 15
+    },
+    "minimax-m3": {
+      "matchOn": "model",
+      "matchSubstring": "MiniMax-M3",
+      "reasoningEffort": "high",
+      "maxIterations": 120,
+      "autoCompressAt": 128000,
+      "autoCompressEveryNIterations": 25
+    },
+    "glm-5.2": {
+      "matchOn": "model",
+      "matchSubstring": "glm-5.2",
+      "reasoningEffort": "high",
+      "maxIterations": 120,
+      "autoCompressAt": 128000,
+      "autoCompressEveryNIterations": 20
+    },
+    "kimi-k2.5": {
+      "matchOn": "model",
+      "matchSubstring": "kimi-k2.5",
+      "temperature": 0.7,
+      "reasoningEffort": "medium",
+      "maxIterations": 60,
+      "autoCompressAt": 128000,
+      "autoCompressEveryNIterations": 20
+    },
+    "kimi-k3": {
+      "matchOn": "model",
+      "matchSubstring": "kimi-k3",
+      "temperature": 1,
+      "reasoningEffort": "high",
+      "maxIterations": 150,
+      "autoCompressAt": 400000,
+      "autoCompressEveryNIterations": 30
+    }
+  },
+  "retries": {
+    "maxRetries": 7,
+    "selfHeal": { "enabled": true, "extensionMax": 2 }
+  },
+  "timeouts": {
+    "storyTimeoutSecs": 1800,
+    "gateTimeoutSecs": 2400
+  },
+  "brownfield": {
+    "minOutputTokens": 24576,
+    "maxScaledIterations": 150
+  },
+  "compaction": {
+    "defaultAutoCompressAt": 80000,
+    "defaultAutoCompressEveryNIterations": 20
+  },
+  "costControls": {
+    "maxToolCallsPerStory": 300,
+    "storyBudgetWarningUsd": 3.50,
+    "storyBudgetHardLimitUsd": 8.00
+  }
+}

@@ -130,8 +130,13 @@ describe('claude.sh — _total_attempts fixes the amendment-injection gate for f
     const fnStart = claudeSrc.indexOf('implement_story() {');
     // Widened from 800 (2026-07-12): the retry-extension-coordinator's
     // MAX_RETRIES shadow-local + explanatory comment pushed this declaration
-    // further into the function.
-    const nearby = claudeSrc.slice(fnStart, fnStart + 1600);
+    // further into the function. Widened again from 1600 (2026-08-01): the
+    // repeat-rejection temperature-bump flag's declaration + comment did the
+    // same. Widened again from 2000 (2026-08-01): the
+    // LAST_VERIFIED_TOUCHED_FILES / LAST_ATTEMPT_TSC_PASSED global resets +
+    // comment did the same. Widened again from 2400 (2026-08-01):
+    // _last_attributed_rung's declaration + comment did the same.
+    const nearby = claudeSrc.slice(fnStart, fnStart + 2700);
     expect(nearby).toMatch(/local _total_attempts=0/);
     const loopIdx = claudeSrc.indexOf('while [ $retry_count -le $MAX_RETRIES ]; do');
     const afterLoop = claudeSrc.slice(loopIdx, loopIdx + 200);

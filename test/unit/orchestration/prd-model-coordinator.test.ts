@@ -288,7 +288,9 @@ describe('claude.sh — resolve_reasoning_effort_from_story wiring', () => {
   });
 
   it('is called after the "low" reset at story start, so PRD value wins', () => {
-    const resetIdx = claudeSrc.indexOf('export EPAM_REASONING_EFFORT="low"');
+    // Rung 0's reset is now env-overridable (EPAM_RUNG0_REASONING_EFFORT,
+    // default "low") — still a literal "low" default, just wrapped.
+    const resetIdx = claudeSrc.indexOf('export EPAM_REASONING_EFFORT="${EPAM_RUNG0_REASONING_EFFORT:-low}"');
     const callIdx = claudeSrc.indexOf('resolve_reasoning_effort_from_story "$story_id"');
     expect(resetIdx).toBeGreaterThan(-1);
     expect(callIdx).toBeGreaterThan(resetIdx);

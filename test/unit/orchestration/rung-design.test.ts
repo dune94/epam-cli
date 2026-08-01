@@ -190,7 +190,8 @@ describe('claude.sh — HEALING_BROKEN uses token-overlap matching to tolerate a
 // ── 6. EPAM_REASONING_EFFORT scoping ─────────────────────────────────────────
 describe('claude.sh — reasoning effort is scoped per-story (no leakage)', () => {
   it('effort is reset to "low" at the start of each story', () => {
-    expect(src).toMatch(/export EPAM_REASONING_EFFORT="low"/);
+    // Env-overridable via EPAM_RUNG0_REASONING_EFFORT — default is still "low".
+    expect(src).toMatch(/export EPAM_REASONING_EFFORT="\$\{EPAM_RUNG0_REASONING_EFFORT:-low\}"/);
   });
 
   it('effort is exported so ai-run.sh subprocess receives it', () => {

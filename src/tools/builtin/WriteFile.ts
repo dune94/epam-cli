@@ -94,6 +94,43 @@ export class WriteFileTool implements Tool {
           };
         }
       }
+      // LLM-settings guard: llm-settings.json drives real ladder/cost/model
+      // behavior (see orchestrations/config/llm-settings.schema.json) — a
+      // story implementer silently editing its own budget or ladder mid-run
+      // would be invisible to whoever is watching spend. Structural, not
+      // prose, same reasoning as the reuse-guard above: only the designated
+      // guardian role may write here, and every write that DOES happen is
+      // recorded to a co-located audit log a human can read without needing
+      // to diff git history mid-run.
+      if (path.basename(resolved) === 'llm-settings.json') {
+        const requiredRole = process.env.EPAM_LLM_SETTINGS_GUARDIAN_ROLE || 'llm-settings-guardian';
+        const callerRole = process.env.EPAM_AGENT_ROLE || '';
+        if (callerRole !== requiredRole) {
+          return {
+            toolUseId: '',
+            content:
+              `[settings-guard] Write blocked: ${resolved} may only be written by the ` +
+              `'${requiredRole}' role (this call ran as '${callerRole || 'unknown'}'). ` +
+              `LLM ladder/cost/model settings are not something a story implementer should ` +
+              `change as a side effect of its own task.`,
+            isError: true,
+          };
+        }
+        const previousContent = await fs.readFile(resolved, 'utf-8').catch(() => null);
+        const auditLogPath = process.env.EPAM_LLM_SETTINGS_AUDIT_LOG
+          || path.join(path.dirname(resolved), 'llm-settings-changes.jsonl');
+        const auditRecord = {
+          timestamp: new Date().toISOString(),
+          path: resolved,
+          agentRole: callerRole,
+          storyId: process.env.EPAM_STORY_ID || null,
+          previousContent,
+          newContent: content,
+        };
+        await ensureDir(path.dirname(auditLogPath));
+        await fs.appendFile(auditLogPath, JSON.stringify(auditRecord) + '\n', 'utf-8');
+      }
+
       // JSON integrity guard: refuse a write that would leave a .json file
       // containing invalid JSON. This catches the most common corruption mode
       // seen in practice — an agent appending a full replacement document onto

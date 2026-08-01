@@ -42,6 +42,8 @@ export interface ProjectConfig {
   /** Max tool calls before tools are withdrawn and a final answer is required. */
   maxToolCalls?: number;
   autoCompressAt?: number;
+  /** Compact conversation history every N iterations, regardless of token count. */
+  autoCompressEveryNIterations?: number;
   maxOutputTokens?: number;
   /** Priority-ordered list of LLM provider+model slots (up to 5) for failover. */
   llmChain?: LLMChainSlot[];
@@ -76,6 +78,8 @@ export interface ResolvedConfig {
   /** Max tool calls before tools are withdrawn; undefined = unlimited. */
   maxToolCalls?: number;
   autoCompressAt: number;
+  /** Compact conversation history every N iterations, regardless of token count. Undefined = disabled. */
+  autoCompressEveryNIterations?: number;
   /** Maximum output tokens per LLM response (default: 16384). */
   maxOutputTokens: number;
   projectRoot: string | null;

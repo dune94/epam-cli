@@ -314,12 +314,12 @@ describe('scope guard — EPAM_ALLOWED_WRITE_PATHS rewritten to worktree in work
 
   it('_allowed_write_paths rewrite appears AFTER jq extraction and BEFORE EPAM_ALLOWED_WRITE_PATHS export', () => {
     expect(sgCommentIdx).toBeGreaterThan(-1);
-    // Window widened twice: a fix-site-path union block, and then the reuse
-    // guard's symbol/scope derivation, now sit between the worktree rewrite and
+    // Window widened three times: a fix-site-path union block, the reuse
+    // guard's symbol/scope derivation, and then the model/provider-specific
+    // (minimax/kimi) override block, now sit between the worktree rewrite and
     // the env export. The ORDER asserted below is what matters; the window only
     // has to be wide enough to still contain the export.
-    // Measured, not guessed: the export currently sits ~4117 chars in.
-    const block = claudeSrc.slice(sgCommentIdx, sgCommentIdx + 6000);
+    const block = claudeSrc.slice(sgCommentIdx, sgCommentIdx + 9000);
     const jqIdx = block.indexOf('jq -r');
     const rewriteIdx = block.search(/_allowed_write_paths=.*\$\{_allowed_write_paths\/\//);
     const exportIdx = block.indexOf('EPAM_ALLOWED_WRITE_PATHS=');

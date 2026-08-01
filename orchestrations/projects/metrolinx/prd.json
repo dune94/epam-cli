@@ -1,8 +1,8 @@
 {
-  "id": "jira-sourced-1785530098257",
+  "id": "jira-sourced-1785608318187",
   "title": "Metrolinx Brownfield — Jira-sourced",
   "version": "1.0.0",
-  "lastUpdated": "2026-07-31",
+  "lastUpdated": "2026-08-01",
   "project": {
     "name": "metrolinx",
     "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
@@ -75,7 +75,7 @@
       "effort": "low",
       "estimate": 10,
       "acGateVerdict": "enrichable",
-      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). No acceptance criteria are provided and the description is too ambiguous — 'preview draft entries in CMS' could mean an iframe, a separate preview URL, inline rendering, or a side-by-side view, leading to fundamentally different implementations.",
+      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). No acceptance criteria are provided and the description is too vague for an agent to determine scope, behavior, or edge cases without human clarification.",
       "issueType": "Story",
       "codelines": [
         "gotransit",
@@ -83,114 +83,105 @@
         "metrolinx"
       ],
       "verificationCriteria": [
-        "When a content editor makes a change in the CMS and it, the change appears in the preview view of the page without the page performing a full reload",
-        "When a page is opened from the Contentstack preview (e.g. by clicking preview in the CMS), the rendered page shows the latest saved draft edits, including content not yet published",
-        "When the same page is opened normally outside preview mode (e.g. via its public URL), the rendered page shows the published version of the content, not unpublished draft edits",
-        "When a card's title, description, link, or image is edited in the CMS, the corresponding change is observable on that card as rendered on the previewed page",
-        "When a link, image, or table in the page content is edited in the CMS, the corresponding change is observable in the rendered links, images, and tables on the previewed page",
-        "During a single preview session, multiple successive content edits made in the CMS each appear in the previewed page in turn without requiring the page to be manually refreshed",
-        "When preview updates stop arriving (e.g. the preview connection drops), the page continues to display the most recently shown content without errors or a blank screen",
-        "Draft edits viewed during a preview session never appear on the live published site until the content is actually published in the CMS"
+        "The behavior described in the ticket is observed to be correct after the change: \"[GO, UP, MX] Live Preview of Content in CMS\".",
+        "Existing behavior related to this area is unchanged (no regression)."
       ],
-      "vcSource": "description",
-      "vcResolution": "regenerated",
+      "vcSource": "fallback",
+      "vcResolution": "fallback",
       "fixSiteAnalysis": [
         {
-          "file": "src/services/contentstack.ts",
-          "function": "getSingleEntry",
-          "reason": "This is the Contentstack SDK integration layer where content is fetched. Live Preview requires passing preview parameters to the Contentstack SDK Stack initialization and query calls. The function signature (confirmed at line 236) accepts contentTypeUid, entryUid, lang, referenceFieldPath, jsonRtePath, only, except — but no preview/draft parameter. The Stack object (confirmed exported from this file via test imports) also lacks live_preview config. This is the CAUSE: the data-fetching layer never requests draft/preview content from Contentstack, so the CMS can never show live previews regardless of what the presentation layer does.",
-          "fix": "Add live_preview configuration to the Contentstack Stack initialization (the Stack object exported from this file) with { host, enable: true } per Contentstack SDK docs. Then add an optional preview parameter (e.g. live_preview?: { enable: boolean; content_type_uid?: string; entry_uid?: string }) to IContentstackGetSingleEntry and to getEntry/getSingleEntry/getSingletonEntry. When preview is enabled, call .includeFallback() on the query chain (Contentstack SDK method for live preview drafts). In each page's getStaticProps, pass context.preview and context.previewData through to these service calls so draft content is fetched when the CMS requests it.",
+          "file": "src/context/ContentstackContext.tsx",
+          "function": "ContentstackProvider",
+          "reason": "This is the single chokepoint that feeds all content to the entire component tree (236 callers via useContent). Currently it accepts a static defaultContent prop and memoizes it with no reactivity — it has no mechanism to receive or respond to Contentstack Live Preview onEntryChange callbacks. Live Preview requires this provider to re-render the tree when the SDK pushes updated content, which means the provider itself must subscribe to the SDK's live preview events and merge incoming changes into the content it provides.",
+          "fix": "In ContentstackProvider, add a useState for content (initialized from defaultContent), subscribe to Contentstack SDK's livePreview.onEntryChange callback to merge preview updates into that state, and replace the static useMemo with the reactive state value. The provider already has the correct shape ({ content }) — only the source of the content value changes from a static memo to a state that the SDK callback can update. The Contentstack SDK's livePreview.onEntryChange returns the updated entry; merge it into the existing content object so useContent/getContentByKey consumers re-render with the previewed data. No existing helper in this repo was found for this transform — it requires wiring the SDK's own callback.",
           "helper": "",
-          "brokenLine": "({ contentTypeUid, entryUid, lang, referenceFieldPath, jsonRtePath, only, except, }: IContentstackGetSingleEntry): Promise<IContentstackPage>",
+          "brokenLine": "content: defaultContent,",
           "fixVerified": null,
           "evidenceVerified": true,
           "prescriptionNote": "",
           "prescriptionUnderspecified": false
         }
       ],
+      "fixSiteAnalysisCoverage": {
+        "complete": true,
+        "uncoveredVerificationCriteria": []
+      },
       "storyKind": "novel",
       "technicalNotes": {
         "files": [
           "src/hooks/useContent.ts",
-          "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+          "src/services/contentstack.ts",
           "src/interface/content/contentCard.ts",
-          "src/services/contentstack.ts"
+          "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+          "src/context/ContentstackContext.tsx"
         ]
       },
       "specification": {
-        "runId": "20260731T203406Z",
+        "runId": "20260801T181700Z",
         "assignedAgents": [
-          "openspec",
-          "speckit"
+          "openspec"
         ],
-        "coordinatorNotes": "Story has zero acceptance criteria and null spec. Live preview across GO, UP, MX implies cross-platform complexity with real-time rendering, auth, and cross-origin concerns. Openspec must elaborate requirements and propose ACs first; speckit then hardens with testability, security, and edge-case coverage.",
+        "coordinatorNotes": "Spec run already completed (runId 20260801T181700Z) with both openspec and speckit applied. Coordinator review verdict is needs_review (quality 0.65) — ACs were authored without source file visibility and openspec's architectural notes are unverified against actual code. Human review is required before development proceeds; no further automated spec work will resolve the flagged gaps without a human-in-the-loop file analysis first.",
         "status": "completed",
-        "updatedAt": "2026-07-31T20:42:35.309Z",
+        "updatedAt": "2026-08-01T18:42:15.607Z",
         "appliedAgents": [
-          "openspec",
-          "speckit"
+          "openspec"
         ],
         "agentContributions": [
           {
             "agent": "openspec",
             "applied": true,
-            "notes": "Live Preview is a novel capability — Contentstack's real-time preview SDK must be integrated into the existing content-fetching pipeline. The central attachment point is useContent (236 callers), which is the single gateway all Contentstack content flows through. If the hook (or the Contentstack client it wraps) transparently switches to preview mode and subscribes to live updates, the 236 consuming components need no changes. The Contentstack client initialization/config is a secondary attachment point not shown in the explored code. Acceptance criteria were empty; VCs derived from the description.",
+            "notes": "Story is a novel capability (live preview) with empty ACs and minimal description. The central attachment point is useContent (236 callers) — every Contentstack component routes through it via getContentByKey. The contentstack.ts service is the API boundary where preview/draft parameters must be passed to Contentstack. I could not see useContent.ts or contentstack.ts source; location hints are inferred from consumption patterns visible in the 4 provided files and the CodeGraph blast radius. Prior flags addressed: (1) ACs were empty at source — kept verbatim; (2) architectural note on useContent as central attachment point is verified by 236 callers visible in CodeGraph and confirmed by ContentstackLink/ContentstackImage/ContentstackTable all calling useContent().getContentByKey; (3) with empty ACs, VCs are derived solely from the description, which is sparse — they capture the minimal observable contract of live preview without prescribing mechanism.",
             "acceptanceChanged": false,
             "splitCount": 0,
-            "timestamp": "2026-07-31T20:41:33.140Z"
-          },
-          {
-            "agent": "speckit",
-            "applied": true,
-            "notes": "Openspec provided empty acceptance criteria with an architectural note identifying useContent as the central gateway (236 callers) and the Contentstack client initialization as a secondary attachment point. I created the full AC set from scratch based on the story title, description, and openspec's architectural insights. Key areas covered: (1) Core preview activation via URL parameters (AC-1, AC-3), (2) Real-time update delivery (AC-2, AC-8, AC-11), (3) Connection resilience — disconnect/reconnect (AC-4, AC-5), (4) Error handling for CMS errors and malformed params (AC-6, AC-14), (5) Zero-regression guarantee for existing consumers (AC-7), (6) Lifecycle cleanup — unmount and session exit (AC-9, AC-10), (7) Linked content preview (AC-13), (8) Locale/variant support (AC-12), (9) Navigation edge cases (AC-15), (10) Performance under slow connections (AC-16), (11) Loading state (AC-17), (12) SSR hydration consistency (AC-18), (13) Visual preview indicator with accessibility (AC-19, AC-20). CAVEAT: I did not have access to the file contents of useContent.ts, ContentstackLink.tsx, contentCard.ts, or contentstack.ts. The ACs are based on the story description and file paths alone. Reviewing the actual hook interface (return shape, parameters) and the Contentstack client configuration would allow refining AC-1, AC-6, AC-17, and AC-18 for precise observable outcomes.",
-            "acceptanceChanged": false,
-            "splitCount": 0,
-            "timestamp": "2026-07-31T20:42:35.309Z"
+            "timestamp": "2026-08-01T18:42:15.607Z"
           }
         ],
         "coordinatorReview": {
           "verdict": "needs_review",
-          "reviewNotes": "Both agents contributed but in a lopsided manner. Openspec correctly identified the architectural attachment point (useContent hook, 236 callers) and the Contentstack client as a secondary integration surface — meaningful context. However, openspec failed its primary mandate: the coordinator notes explicitly state 'Openspec must elaborate requirements and propose ACs first,' yet it produced zero acceptance criteria despite the story having none. Speckit compensated by generating 20 comprehensive ACs from scratch (activation, real-time updates, resilience, error handling, regression safety, lifecycle, SSR, accessibility), which is substantial value. The agents' contributions are non-overlapping but only because openspec under-delivered, forcing speckit into a role it was not assigned. Critically, speckit explicitly notes it lacked access to useContent.ts, ContentstackLink.tsx, contentCard.ts, and contentstack.ts — meaning all 20 ACs are inferred from the story title and file paths rather than verified against actual hook return shapes, client configuration, or SSR behavior. ACs referencing specific observable outcomes (AC-1, AC-6, AC-17, AC-18) may not match real interfaces. Human review should validate the AC set against source code before implementation.",
+          "reviewNotes": "Both agents contributed meaningful, non-overlapping value: openspec provided architectural insight (identifying useContent as the central attachment point with 236 callers and noting Contentstack is unreachable at test time), while speckit authored all 12 acceptance criteria from scratch covering normal flow, error states, security, performance, and edge cases. However, speckit explicitly could not review the four referenced source files (useContent.ts, contentstack.ts, contentCard.ts, ContentstackLink.tsx) and built ACs solely from the story title and file paths. This means the 12 criteria are unvalidated against actual codebase structures and data shapes. Openspec's own note acknowledges ACs may need adjustment once files are examined. Human review is required to verify the criteria align with real implementation details before proceeding to development.",
           "qualityScore": 0.65,
           "flags": [
-            "openspec_did_not_produce_acs",
-            "speckit_lacked_source_access",
-            "acs_unvalidated_against_source"
+            "acceptance_criteria_authored_without_source_file_visibility",
+            "openspec_architectural_note_unverified_against_code",
+            "speckit_self_flagged_potential_ac_adjustment_needed"
           ],
-          "reviewedAt": "2026-07-31T20:42:52.192Z"
+          "reviewedAt": "2026-08-01T18:24:54.789Z"
         }
       },
-      "estimatedAiMinutes": 3.61,
-      "estimatedCost": 0.0351,
-      "estimatedTokens": 136417,
-      "estimatedTurns": 8,
-      "estimatedHours": 0.0601,
-      "cpaConfidence": 0.75,
+      "estimatedAiMinutes": 4.5177,
+      "estimatedCost": 0.1403,
+      "estimatedTokens": 545670,
+      "estimatedTurns": 16,
+      "estimatedHours": 0.0752,
+      "cpaEffortTier": "medium",
+      "cpaConfidence": 0.7,
       "cpaGate": "pass",
       "ladderTier": "medium",
-      "model": "z-ai/glm-5.2",
-      "aiProvider": "qwen",
+      "cpaIterationEstimate": 1,
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
       "reasoningEffort": "low",
       "completedAt": null,
-      "actualCost": 6.5983069999999975,
+      "actualCost": 7.952107,
       "reviewStatus": "escalated",
       "perCodeline": {
         "gotransit": {
-          "status": "completed",
-          "completed": true,
-          "completedAt": "2026-07-31T21:18:29+00:00",
-          "reviewStatus": "escalated"
+          "status": "pending",
+          "completed": false,
+          "completedAt": null,
+          "reviewStatus": null
         },
         "upexpress": {
-          "status": "completed",
-          "completed": true,
-          "completedAt": "2026-07-31T20:53:25+00:00",
+          "status": "pending",
+          "completed": false,
+          "completedAt": null,
           "reviewStatus": null
         },
         "metrolinx": {
-          "status": "pending",
-          "completed": false,
-          "completedAt": "2026-07-31T21:12:54+00:00",
+          "status": "completed",
+          "completed": true,
+          "completedAt": "2026-08-01T18:48:08+00:00",
           "reviewStatus": "escalated"
         }
       }

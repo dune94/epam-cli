@@ -134,7 +134,7 @@ describe('classify_failure_class — REAL execution', () => {
           `story_id="${opts.storyId ?? 'SKY-TEST'}"`,
           opts.curlBehavior !== 'no-key' ? `OPENROUTER_API_KEY="fake-key-for-test"` : `unset OPENROUTER_API_KEY`,
           fnBody,
-          `classify_failure_class "${opts.rawContent !== undefined ? rawFile : join(dir, 'nonexistent-raw.json')}" "${opts.resultJson !== undefined ? resultFile : join(dir, 'nonexistent-result.json')}" "${opts.exitCode}"`,
+          `classify_failure_class "${opts.rawContent !== undefined ? rawFile : join(dir, 'nonexistent-raw.json')}" "${opts.resultJson !== undefined ? resultFile : join(dir, 'nonexistent-result.json')}" "${opts.exitCode}" "${opts.storyId ?? 'SKY-TEST'}"`,
           `echo "CLASS=$COORDINATOR_FAILURE_CLASS"`,
           `echo "ESCALATE=$COORDINATOR_ESCALATE"`,
           'echo "AMENDMENT=${COORDINATOR_PROMPT_AMENDMENT:-}"',
@@ -366,7 +366,7 @@ describe('classify_failure_class — REAL execution', () => {
             `story_id="SKY-DUP"`,
             `unset OPENROUTER_API_KEY`,
             fnBody,
-            `classify_failure_class "${join(dir, 'missing-raw')}" "${join(dir, 'missing-result')}" "0"`,
+            `classify_failure_class "${join(dir, 'missing-raw')}" "${join(dir, 'missing-result')}" "0" "SKY-DUP"`,
           ].join('\n'),
         );
         execFileSync('bash', [scriptPath], { encoding: 'utf8' });

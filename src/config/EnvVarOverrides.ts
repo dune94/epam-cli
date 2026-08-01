@@ -14,6 +14,8 @@ export interface EnvOverrides {
   budgetWarningAt?: number;
   budgetHardLimitAt?: number;
   maxOutputTokens?: number;
+  autoCompressAt?: number;
+  autoCompressEveryNIterations?: number;
 }
 
 export function readEnvOverrides(): EnvOverrides {
@@ -50,6 +52,14 @@ export function readEnvOverrides(): EnvOverrides {
   if (process.env.EPAM_MAX_TOOL_CALLS) {
     const n = parseInt(process.env.EPAM_MAX_TOOL_CALLS, 10);
     if (!isNaN(n)) overrides.maxToolCalls = n;
+  }
+  if (process.env.EPAM_AUTO_COMPRESS_AT) {
+    const n = parseInt(process.env.EPAM_AUTO_COMPRESS_AT, 10);
+    if (!isNaN(n)) overrides.autoCompressAt = n;
+  }
+  if (process.env.EPAM_AUTO_COMPRESS_EVERY_N_ITERATIONS) {
+    const n = parseInt(process.env.EPAM_AUTO_COMPRESS_EVERY_N_ITERATIONS, 10);
+    if (!isNaN(n)) overrides.autoCompressEveryNIterations = n;
   }
   if (process.env.EPAM_BUDGET_WARNING_AT) {
     const n = parseFloat(process.env.EPAM_BUDGET_WARNING_AT);

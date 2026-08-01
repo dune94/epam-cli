@@ -64,3 +64,89 @@ describe('WriteFileTool', () => {
     expect(JSON.parse(readFileSync(filePath, 'utf-8'))).toEqual([1, 2, 3]);
   });
 });
+
+describe('WriteFileTool — llm-settings.json settings-guard (2026-08-01)', () => {
+  let dir: string;
+  const ORIGINAL_ENV = { ...process.env };
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'write-file-settings-guard-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+    process.env = { ...ORIGINAL_ENV };
+  });
+
+  it('blocks a write from any role other than the guardian role', async () => {
+    delete process.env.EPAM_AGENT_ROLE;
+    process.env.EPAM_AGENT_ROLE = 'typescript-engineer';
+    const tool = new WriteFileTool();
+    const filePath = join(dir, 'llm-settings.json');
+    const result = await tool.execute({ path: filePath, content: '{"maxRetries":7}' });
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain('[settings-guard]');
+    expect(result.content).toContain('llm-settings-guardian');
+  });
+
+  it('blocks a write when EPAM_AGENT_ROLE is unset entirely', async () => {
+    delete process.env.EPAM_AGENT_ROLE;
+    const tool = new WriteFileTool();
+    const filePath = join(dir, 'llm-settings.json');
+    const result = await tool.execute({ path: filePath, content: '{}' });
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain('[settings-guard]');
+  });
+
+  it('allows the write when EPAM_AGENT_ROLE matches the guardian role, and records an audit entry', async () => {
+    process.env.EPAM_AGENT_ROLE = 'llm-settings-guardian';
+    process.env.EPAM_STORY_ID = 'AMSD-9999';
+    const tool = new WriteFileTool();
+    const filePath = join(dir, 'llm-settings.json');
+    const result = await tool.execute({ path: filePath, content: '{"maxRetries":8}' });
+    expect(result.isError).toBe(false);
+    expect(JSON.parse(readFileSync(filePath, 'utf-8'))).toEqual({ maxRetries: 8 });
+
+    const auditPath = join(dir, 'llm-settings-changes.jsonl');
+    const auditLines = readFileSync(auditPath, 'utf-8').trim().split('\n');
+    expect(auditLines).toHaveLength(1);
+    const record = JSON.parse(auditLines[0]);
+    expect(record.agentRole).toBe('llm-settings-guardian');
+    expect(record.storyId).toBe('AMSD-9999');
+    expect(record.previousContent).toBeNull(); // file didn't exist before
+    expect(JSON.parse(record.newContent)).toEqual({ maxRetries: 8 });
+    expect(typeof record.timestamp).toBe('string');
+  });
+
+  it('records the PREVIOUS content on a second change, so a human can see exactly what changed', async () => {
+    process.env.EPAM_AGENT_ROLE = 'llm-settings-guardian';
+    const tool = new WriteFileTool();
+    const filePath = join(dir, 'llm-settings.json');
+    await tool.execute({ path: filePath, content: '{"maxRetries":7}' });
+    await tool.execute({ path: filePath, content: '{"maxRetries":9}' });
+
+    const auditPath = join(dir, 'llm-settings-changes.jsonl');
+    const auditLines = readFileSync(auditPath, 'utf-8').trim().split('\n');
+    expect(auditLines).toHaveLength(2);
+    const second = JSON.parse(auditLines[1]);
+    expect(JSON.parse(second.previousContent)).toEqual({ maxRetries: 7 });
+    expect(JSON.parse(second.newContent)).toEqual({ maxRetries: 9 });
+  });
+
+  it('an overridden guardian role name (EPAM_LLM_SETTINGS_GUARDIAN_ROLE) is respected', async () => {
+    process.env.EPAM_LLM_SETTINGS_GUARDIAN_ROLE = 'custom-settings-agent';
+    process.env.EPAM_AGENT_ROLE = 'custom-settings-agent';
+    const tool = new WriteFileTool();
+    const filePath = join(dir, 'llm-settings.json');
+    const result = await tool.execute({ path: filePath, content: '{}' });
+    expect(result.isError).toBe(false);
+  });
+
+  it('does not apply the guard to other .json files, even ones with settings-like names', async () => {
+    process.env.EPAM_AGENT_ROLE = 'typescript-engineer';
+    const tool = new WriteFileTool();
+    const filePath = join(dir, 'other-llm-settings-backup.json');
+    const result = await tool.execute({ path: filePath, content: '{}' });
+    expect(result.isError).toBe(false);
+  });
+});

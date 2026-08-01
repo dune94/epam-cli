@@ -1,30 +1,19 @@
 {
-  "MOCK-HW-1": {
-    "verifiedAt": "2025-01-24T16:20:00.000Z",
-    "sourceFiles": ["src/hello.ts", ".codegraph/.gitignore"],
+  "MOCK-HW-1-test": {
+    "verifiedAt": "2025-01-01T00:00:00Z",
+    "sourceFiles": ["src/hello.ts"],
     "facts": [
-      "Function getGreeting() returns the exact string 'hello dolly'",
-      "Module exports a named function getGreeting with no parameters",
-      "Import path for the module under test is './hello' from src/",
-      "No async operations in the function",
-      "No dependencies to mock within hello.ts"
+      "getGreeting is exported from src/hello.ts as a named export",
+      "getGreeting takes no parameters and returns the string 'hello dolly'",
+      "The return value is exactly the string literal 'hello dolly' (all lowercase, single space)"
     ],
-    "mockStrategy": "No mocking required — hello.ts has no external dependencies",
+    "mockStrategy": "No mocks needed — getGreeting has no external dependencies; import directly from '../src/hello'",
     "bannedPatterns": [
-      "async",
-      "await",
-      "mock",
-      "jest",
       "@jest/globals",
-      "origin",
-      "destination",
-      "from",
-      "to",
-      "API",
-      "fetch",
-      "http",
-      "route",
-      "endpoint"
+      "getGreeting('",
+      "hello world",
+      "Hello Dolly",
+      "vi.mock"
     ]
   }
 }

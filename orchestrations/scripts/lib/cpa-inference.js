@@ -47,20 +47,22 @@ function readStdin() {
 // ── Build full prompt ──────────────────────────────────────────────────────
 function buildPrompt(input) {
   const { story, kbChunks = [], codebaseSignals = {}, formulaEstimate = {},
-          adjacentStories = [], systemPrompt = '' } = input;
+          adjacentStories = [], systemPrompt = '', manifest } = input;
 
   const storyJson = JSON.stringify({
-    id:                 story.id,
-    title:              story.title,
-    description:        story.description,
-    priority:           story.priority,
-    storyType:          story.storyType,
-    effort:             story.effort,
-    humanHours:         story.humanHours || story.estimatedHours,
-    dependencies:       story.dependencies,
-    acceptanceCriteria: story.acceptanceCriteria,
-    technicalNotes:     story.technicalNotes,
-    agentRole:          story.agentRole,
+    id:                  story.id,
+    title:               story.title,
+    description:         story.description,
+    priority:            story.priority,
+    storyType:           story.storyType,
+    storyKind:           story.storyKind,
+    effort:              story.effort,
+    humanHours:          story.humanHours || story.estimatedHours,
+    dependencies:        story.dependencies,
+    acceptanceCriteria:  story.acceptanceCriteria,
+    verificationCriteria: story.verificationCriteria,
+    technicalNotes:      story.technicalNotes,
+    agentRole:           story.agentRole,
   }, null, 2);
 
   const kbSection = kbChunks.length > 0
@@ -92,18 +94,70 @@ function buildPrompt(input) {
       ).join('\n')
     : '';
 
+  const manifestSection = manifest
+    ? `## Project Manifest\n\`\`\`json\n${JSON.stringify(manifest, null, 2)}\n\`\`\``
+    : '';
+
+  // Feeds the brownfield-only iterationEstimate judgment (see cpa-system.md).
+  // Without this, CPA never sees the detective's prescribed fix sites or the
+  // deterministic coverage verdict (checkFixSiteCoverage, spec-mode-runner.js)
+  // at all — it could not judge turn-count complexity from a signal it never
+  // receives.
+  const fixSiteAnalysis = Array.isArray(story.fixSiteAnalysis) ? story.fixSiteAnalysis : [];
+  const rcaSection = fixSiteAnalysis.length
+    ? `## Root Cause Analysis (detective's prescribed fix sites)\n\`\`\`json\n${JSON.stringify(fixSiteAnalysis, null, 2)}\n\`\`\`` +
+      (story.fixSiteAnalysisCoverage
+        ? `\n\nCoverage check: ${story.fixSiteAnalysisCoverage.complete
+            ? 'every verification criterion shares a term with at least one fix site.'
+            : `${story.fixSiteAnalysisCoverage.uncoveredVerificationCriteria.length} verification criterion/criteria share NO term with any fix site above — treat this as a signal the prescribed fix may be incomplete.`}`
+        : '')
+    : '';
+
   const userMessage = [
     `## Story Under Review\n\`\`\`json\n${storyJson}\n\`\`\``,
     `## Formula Baseline Estimate\n\`\`\`json\n${JSON.stringify(formulaEstimate, null, 2)}\n\`\`\``,
     kbSection,
     codeSection,
     adjSection,
+    manifestSection,
+    rcaSection,
     '---',
     'Respond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.',
   ].filter(Boolean).join('\n\n');
 
   // Combine system prompt + user message into a single prompt for --print mode
   return [systemPrompt, '', '---', '', userMessage].join('\n');
+}
+
+// ── Input validation ───────────────────────────────────────────────────────
+// Structural contract only — never blocks a run (CPA must always produce
+// SOME estimate). `warnings` flags cases the model can silently misjudge,
+// most importantly: nothing concrete to size complexity from at all.
+function validateInput(input) {
+  const errors = [];
+  const warnings = [];
+
+  if (!input || typeof input !== 'object') {
+    return { valid: false, errors: ['input must be an object'], warnings };
+  }
+
+  const { story } = input;
+  if (!story || typeof story !== 'object') {
+    errors.push('story is required');
+  } else {
+    if (!story.id) errors.push('story.id is required');
+    if (!story.title) errors.push('story.title is required');
+
+    const hasAC = Array.isArray(story.acceptanceCriteria) && story.acceptanceCriteria.length > 0;
+    const hasVC = Array.isArray(story.verificationCriteria) && story.verificationCriteria.length > 0;
+    if (!hasAC && !hasVC) {
+      warnings.push(
+        'story has nothing concrete to size from: acceptanceCriteria and verificationCriteria are both empty/absent'
+      );
+    }
+  }
+
+  return { valid: errors.length === 0, errors, warnings };
 }
 
 // ── JSON extraction ────────────────────────────────────────────────────────
@@ -155,6 +209,13 @@ async function main() {
     process.exit(1);
   }
 
+  const { valid, errors, warnings } = validateInput(input);
+  if (!valid) {
+    process.stderr.write(`ERROR: invalid CPA input: ${errors.join('; ')}\n`);
+    process.exit(1);
+  }
+  for (const w of warnings) process.stderr.write(`WARN: ${w}\n`);
+
   const { formulaEstimate = {} } = input;
   const fullPrompt = buildPrompt(input);
 
@@ -205,6 +266,17 @@ async function main() {
   // ── Clamp required fields ──────────────────────────────────────────────────
   reviewData.confidence           = Math.max(0, Math.min(1, parseFloat(reviewData.confidence) || 0.3));
   reviewData.complexityAdjustment = Math.max(0.5, Math.min(2.5, parseFloat(reviewData.complexityAdjustment) || 1.0));
+  // Brownfield-only ABSOLUTE iteration estimate (see cpa-system.md "Iteration
+  // Estimate" — a real turn count, not a multiplier: a 1.0-3.0x multiplier on
+  // an already-scaled base cannot span "5 for a bug fix" to "200 for a large
+  // multi-layer change," a ~40x real-world range). 1 (a floor that overrides
+  // nothing) when absent/invalid/greenfield — never silently inflates a
+  // story's real budget from a value the model didn't actually provide. 500
+  // is a sanity ceiling against a malformed/hallucinated value, not the real
+  // engine-side iteration cap (that's enforced separately in claude.sh).
+  reviewData.iterationEstimate = Math.round(
+    Math.max(1, Math.min(500, parseFloat(reviewData.iterationEstimate) || 1))
+  );
 
   // ── Estimate token counts from text length (1 token ≈ 4 chars) ────────────
   // claude CLI does not expose usage data in --print mode
@@ -231,4 +303,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { extractJSON, buildPrompt, skippedReview };
+module.exports = { extractJSON, buildPrompt, skippedReview, validateInput };

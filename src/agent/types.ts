@@ -36,6 +36,15 @@ export interface AgentRunOptions {
   history?: Message[];
   /** Token threshold at which the runner auto-compresses older messages. */
   autoCompressAt?: number;
+  /**
+   * Compact the conversation every N iterations, REGARDLESS of token count.
+   * The token-based autoCompressAt trigger alone misses a long-horizon run
+   * that stays under the token threshold on any single check but still
+   * accumulates real risk over many iterations (many short tool calls, each
+   * small, none individually crossing autoCompressAt). Unset = disabled
+   * (existing token-only behavior unchanged).
+   */
+  autoCompressEveryNIterations?: number;
   /** Max characters per tool result before truncation (default: 32768). */
   maxToolOutputChars?: number;
   /** Maximum output tokens per LLM response (default: 16384). */

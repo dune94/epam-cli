@@ -9,6 +9,7 @@ import { RalphWiggumLoop } from './RalphWiggumLoop.js';
 import type { BashToolResult, BashErrorClassification } from '../tools/builtin/Bash.js';
 import { logger } from '../utils/logger.js';
 import type { MemoryLoader } from '../memory/MemoryLoader.js';
+import { LoopDetector } from './LoopDetector.js';
 
 const DEFAULT_MAX_TOOL_OUTPUT_CHARS = 8_192;   // was 32768 — keeps tool results lean in history
 const DEFAULT_AUTO_COMPRESS_AT = 24_000;       // was 80000 — compress earlier to prevent history explosion
@@ -81,6 +82,9 @@ export class AgentRunner {
    * from the outside, and they need opposite fixes.
    */
   private timings: IterationTiming[] = [];
+  /** One instance = one story attempt (a fresh AgentRunner per `run()`), so
+   *  this needs no explicit per-attempt reset — see LoopDetector's docstring. */
+  private loopDetector = new LoopDetector();
 
   constructor(private options: AgentRunOptions) {
     const toolRunner = options.toolRunner ?? new ToolRunner(options.tools, options.dangerousSkipApproval ?? false);
@@ -96,6 +100,8 @@ export class AgentRunner {
   async run(): Promise<AgentRunResult> {
     const maxIterations = this.options.maxIterations ?? 20;
     const autoCompressAt = this.options.autoCompressAt ?? DEFAULT_AUTO_COMPRESS_AT;
+    const autoCompressEveryNIterations = this.options.autoCompressEveryNIterations;
+    let iterationAtLastCompress = 0;
 
     // Load memory and inject into system prompt on first run
     if (this.memoryLoader && !this.memoryPromptBlock) {
@@ -116,15 +122,29 @@ export class AgentRunner {
 
       logger.debug({ iteration: this.iterationCount }, 'Agent iteration');
 
-      // Auto-compress if history has grown past threshold
-      if (estimateTokens(messages) > autoCompressAt && messages.length > 6) {
+      // Auto-compress if history has grown past a TOKEN threshold, OR if a
+      // fixed ITERATION count has passed since the last compaction, whichever
+      // fires first. Token-only compaction misses a long-horizon run that
+      // stays under the token threshold on any single check but still
+      // accumulates real risk over many iterations — many short tool calls,
+      // each individually small, none crossing autoCompressAt on its own.
+      const iterationsSinceCompress = this.iterationCount - iterationAtLastCompress;
+      const iterationTriggerHit = typeof autoCompressEveryNIterations === 'number' &&
+        autoCompressEveryNIterations > 0 &&
+        iterationsSinceCompress >= autoCompressEveryNIterations;
+      const tokenTriggerHit = estimateTokens(messages) > autoCompressAt;
+      if ((tokenTriggerHit || iterationTriggerHit) && messages.length > 6) {
         try {
-          logger.debug('Auto-compressing conversation history');
+          logger.debug(
+            { trigger: iterationTriggerHit ? 'iteration-count' : 'token-threshold' },
+            'Auto-compressing conversation history',
+          );
           messages = await compressHistory(
             messages,
             this.options.provider,
             this.options.model,
           );
+          iterationAtLastCompress = this.iterationCount;
         } catch {
           logger.warn('Auto-compression failed, continuing with full history');
         }
@@ -341,10 +361,38 @@ export class AgentRunner {
         toolCallRequests[0]?.input ?? {}
       );
 
+      // Loop protection: block exact-repeat tool calls (same tool + same args
+      // seen too many times in the recent window) BEFORE they execute, so a
+      // stuck agent doesn't keep re-running an expensive test/build/patch
+      // that already failed the same way. Blocked calls never reach the
+      // executor — the model receives the intervention message as if it
+      // were the tool's own result, in place of running it again.
+      const blockedResults: (ToolCallRequest & { toolUseId: string; content: string; isError: boolean })[] = [];
+      const toExecute: ToolCallRequest[] = [];
+      for (const req of toolCallRequests) {
+        const { blocked, interventionMessage } = this.loopDetector.preToolCheck(req.name, req.input);
+        if (blocked) {
+          blockedResults.push({ ...req, toolUseId: req.id, content: interventionMessage ?? '', isError: true });
+        } else {
+          toExecute.push(req);
+        }
+      }
+
       // Execute tools with Ralph Wiggum Loop error recovery for bash failures
       const toolExecStart = Date.now();
-      const toolResults = await this.executeToolsWithRecovery(toolCallRequests);
+      const executedResults = toExecute.length > 0 ? await this.executeToolsWithRecovery(toExecute) : [];
       const toolExecMs = Date.now() - toolExecStart;
+
+      // Loop protection, part 2: an error that repeats the SAME fingerprint
+      // (normalized — see LoopDetector) gets a nudge appended to its real
+      // output, not replaced by it — the model still needs to see what
+      // actually happened, just with a push to change strategy.
+      for (const result of executedResults) {
+        const { repeating, feedbackMessage } = this.loopDetector.postToolCheck(result);
+        if (repeating && feedbackMessage) result.content += feedbackMessage;
+      }
+
+      const toolResults = [...executedResults, ...blockedResults];
       this.recordTiming(modelLatencyMs, toolExecMs, toolCallRequests.map(req => {
         const result = toolResults.find(r => r.toolUseId === req.id);
         return { name: req.name, resultBytes: result?.content.length ?? 0, isError: result?.isError ?? false };

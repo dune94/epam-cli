@@ -33,7 +33,8 @@ Respond with **ONLY** a valid JSON object. No prose before or after. No markdown
   "riskFlags": [<string>, ...],
   "missingKbCoverage": [<string>, ...],
   "citedSources": [<string>, ...],
-  "reasoning": <string>
+  "reasoning": <string>,
+  "iterationEstimate": <integer 5–200+, BROWNFIELD STORIES ONLY — see below>
 }
 ```
 
@@ -45,6 +46,38 @@ Field rules:
 - `missingKbCoverage`: Skills or topics required by the story with NO matching KB source
 - `citedSources`: Filenames from the KB sources section you actually used (not all provided, only used)
 - `reasoning`: 2–4 sentences. Cite specific signals: KB coverage, file existence, dependency state, skill complexity
+- `iterationEstimate`: **Brownfield stories only** (omit/ignore for greenfield). See "Iteration Estimate" below —
+  this is a DIFFERENT judgment than `complexityAdjustment`: it directly estimates the number of
+  distinct read/write ReAct turns the implementer will need, not how long the work will take.
+
+## Iteration Estimate (brownfield only)
+
+When the story includes a `## Root Cause Analysis` / `fixSiteAnalysis` section (the detective's
+prescribed fix sites) and/or a `## Project Manifest`, estimate the ABSOLUTE number of distinct
+turns of real work the implementer needs — installing a dependency, editing a file, wiring a new
+route, writing a test are each their own turn (and each often needs a read + a write + a
+verification turn, not just one). This is a real number, not a multiplier: a one-line bug fix
+genuinely needs far fewer turns than a multi-layer feature, and the gap between them is large —
+do not compress the estimate toward the middle of the range out of caution.
+
+| Signal | iterationEstimate |
+|--------|---------------------|
+| Single-expression bug fix, reuses an existing named helper, one file, no new dependency | 5–10 |
+| Single file, moderate logic change, or one new test file, no new dependency | 10–25 |
+| 2–3 files touched across a layer boundary (e.g. service + interface), no new dependency | 25–50 |
+| Multiple files across several layers, OR a new dependency to install, OR new tests across multiple files | 50–100 |
+| New dependency AND multiple files AND new tests AND a new route/API surface — a genuine multi-layer feature, not a fix | 100–200 |
+| Exceptionally broad brownfield work (many call sites, a cross-cutting refactor) — state this explicitly in `reasoning` | 200+ |
+
+Read the verification criteria against the prescribed fix sites: if criteria describe behavior
+(an installed package, a new route, tests passing) that NONE of the fix sites' `reason`/`fix` text
+addresses, that is a strong signal the prescription is incomplete and the real turn count is
+higher than the fix sites alone suggest — estimate toward the top of the appropriate band, and
+consider moving up a band entirely.
+
+Do not use this to express how RISKY or UNCERTAIN the story is — that is `confidence` and
+`riskFlags`. This is purely: how many distinct pieces of real work does the implementer have
+to individually address.
 
 ## Confidence Calibration
 

@@ -62,6 +62,16 @@ KB_DIR="$AUTOMATION_DIR/agents"   # KB.md and AGENTS.md live here
 # Extra docs fed into TF-IDF beyond the KB dir
 EXTRA_DOCS="$AUTOMATION_DIR/INSTRUCTIONS.md,$AUTOMATION_DIR/estimation.md,$AUTOMATION_DIR/README.md"
 
+# Project manifest (dependency-check.json) — fed to CPA so brownfield stories
+# with empty Jira ACs can still be sized from the project's declared deps/
+# stack facts instead of defaulting to effort:low on nothing. See CPA-BF.
+MANIFEST_FILE="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+if [ -f "$MANIFEST_FILE" ]; then
+  MANIFEST_JSON="$(cat "$MANIFEST_FILE")"
+else
+  MANIFEST_JSON="null"
+fi
+
 # Node 20 — honour project's nvm-pinned version
 NODE_CMD="${NODE_CMD:-${HOME}/.nvm/versions/node/v20.20.0/bin/node}"
 if [ ! -x "$NODE_CMD" ]; then
@@ -821,10 +831,11 @@ while IFS= read -r sid; do
     --argjson codebaseSignals "$codebase_signals" \
     --argjson formulaEstimate "$formula_est_json" \
     --argjson adjacentStories "$adjacent_json" \
+    --argjson manifest "$MANIFEST_JSON" \
     --arg systemPrompt "$SYSTEM_PROMPT" \
     '{story: $story, kbChunks: $kbChunks, codebaseSignals: $codebaseSignals,
       formulaEstimate: $formulaEstimate, adjacentStories: $adjacentStories,
-      systemPrompt: $systemPrompt}')
+      manifest: $manifest, systemPrompt: $systemPrompt}')
 
   t_start=$(date +%s%3N)
   cpa_raw=$(echo "$inference_input" | \
@@ -1176,6 +1187,12 @@ if [ "$APPLY_MODE" = true ] && [ "$DRY_RUN" != true ]; then
     b_eff=$(echo "$story_result"  | jq -r '.effort')
     b_conf=$(echo "$story_result" | jq '.confidence')
     b_gate=$(echo "$story_result" | jq -r '.gate')
+    # Brownfield-only ABSOLUTE iteration estimate — a real turn count (5 for a
+    # bug fix, up to 200+ for a multi-layer feature), not a multiplier
+    # (cpa-inference.js clamps to [1, 500] — see cpa-system.md "Iteration
+    # Estimate"). Redesigned 2026-08-01 from a 1.0-3.0x multiplier: that range
+    # cannot span the real ~40x gap between a trivial fix and a large change.
+    b_iter_estimate=$(echo "$story_result" | jq -r '.iterationEstimate // 1')
 
     # Set the story's INITIAL model-escalation ladder tier from complexity
     # signals CPA just computed — fully automated, no human override, no LLM
@@ -1196,7 +1213,20 @@ if [ "$APPLY_MODE" = true ] && [ "$DRY_RUN" != true ]; then
         ;;
     esac
 
-    _cpa_before=$(jq --arg id "$sid" '.stories[] | select(.id==$id) | {estimatedAiMinutes,estimatedCost,estimatedTokens,estimatedTurns,estimatedHours,effort,cpaConfidence,cpaGate,ladderTier}' "$backup" 2>/dev/null || echo '{}')
+    _cpa_before=$(jq --arg id "$sid" '.stories[] | select(.id==$id) | {estimatedAiMinutes,estimatedCost,estimatedTokens,estimatedTurns,estimatedHours,effort,cpaConfidence,cpaGate,ladderTier,cpaEffortTier}' "$backup" 2>/dev/null || echo '{}')
+
+    # cpaEffortTier: the SAME categorical signal already computed for
+    # b_ladder_tier (gate review|block -> high; else keyed off effort), but
+    # persisted as its own field so resolve_effort_settings() (claude.sh) can
+    # upgrade the story's REAL iteration/token budget from it — not just which
+    # model handles escalation retries. Found live AMSD-2041, 2026-08-01:
+    # complexityAdjustment=1.3x and gate="review" correctly flagged this story
+    # as underscoped, but that signal only ever reached ladderTier (model
+    # choice); the literal `effort` field it also gets applied here is just an
+    # echo-through of the INPUT effort (b_eff, unchanged by CPA's own
+    # judgment), so STORY_MAX_ITERATIONS stayed keyed to the pre-CPA "low"
+    # classification regardless of what CPA itself concluded.
+    b_cpa_effort_tier="$b_ladder_tier"
 
     jq --arg id "$sid" \
        --argjson aim "$b_min" \
@@ -1208,6 +1238,8 @@ if [ "$APPLY_MODE" = true ] && [ "$DRY_RUN" != true ]; then
        --argjson conf "$b_conf" \
        --arg gate "$b_gate" \
        --arg ltier "$b_ladder_tier" \
+       --arg cpaetier "$b_cpa_effort_tier" \
+       --argjson iterest "$b_iter_estimate" \
        '(.stories[] | select(.id==$id)) |=
          . + {
            estimatedAiMinutes: $aim,
@@ -1216,9 +1248,11 @@ if [ "$APPLY_MODE" = true ] && [ "$DRY_RUN" != true ]; then
            estimatedTurns: $turns,
            estimatedHours: $mhrs,
            effort: $efr,
+           cpaEffortTier: $cpaetier,
            cpaConfidence: $conf,
            cpaGate: $gate,
-           ladderTier: $ltier
+           ladderTier: $ltier,
+           cpaIterationEstimate: $iterest
          }' \
        "$PRD_FILE" > "${PRD_FILE}.tmp" && mv "${PRD_FILE}.tmp" "$PRD_FILE"
 

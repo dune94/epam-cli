@@ -288,7 +288,14 @@ export async function resolveConfig(flags: CLIFlagOverrides = {}): Promise<Resol
       projectConfig.maxIterations ??
       20,
 
-    autoCompressAt: projectConfig.autoCompressAt ?? 80000,
+    autoCompressAt:
+      envOverrides.autoCompressAt ??
+      projectConfig.autoCompressAt ??
+      80000,
+
+    autoCompressEveryNIterations:
+      envOverrides.autoCompressEveryNIterations ??
+      projectConfig.autoCompressEveryNIterations,
 
     maxOutputTokens:
       envOverrides.maxOutputTokens ??

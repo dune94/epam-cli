@@ -17,6 +17,13 @@
  *
  * Scope note: this guards ROUTING. Pricing tables keep their k2 entry so historical
  * cost data still reconciles, and test fixtures may name it as a past-tense example.
+ *
+ * kimi-k2.5 is a DIFFERENT, later, actively-maintained model (released
+ * 2026-01-27, before this repo's 2026-05-25 k2 discontinuation finding) — its
+ * OpenRouter listing shows live pricing/uptime and multiple routing providers
+ * (Balanced/Nitro/Exacto), the opposite of the single-provider dead-end this
+ * guard exists for. Excluded from the "kimi-k2" match via negative lookahead
+ * so it stays reachable while bare kimi-k2/kimi-k2-thinking stay blocked.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
@@ -43,7 +50,7 @@ describe('kimi-k2 is not reachable from any routing path', () => {
     for (const f of files(ORCH)) {
       if (PRICING.test(f)) continue;
       readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
-        if (!/kimi-k2/.test(line)) return;
+        if (!/kimi-k2(?!\.5)/.test(line)) return;
         // A past-tense comment explaining history is fine; a value is not.
         const isComment = /^\s*(#|\/\/|\*)/.test(line);
         if (isComment) return;

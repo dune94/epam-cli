@@ -314,6 +314,7 @@ export class Repl {
         maxToolCalls: config.maxToolCalls,
           history: this.messages.slice(0, -1),
           autoCompressAt: config.autoCompressAt,
+          autoCompressEveryNIterations: config.autoCompressEveryNIterations,
           maxOutputTokens: config.maxOutputTokens,
           dangerousSkipApproval: config.tools.dangerousSkipApproval,
           budgetGuard: this.budgetGuard,

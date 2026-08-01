@@ -68,7 +68,8 @@ describe('claude.sh — Rung 3 escalation logic', () => {
   });
 
   it('still sets reasoning effort to high regardless of which branch was taken', () => {
-    expect(rung3Body).toMatch(/EPAM_REASONING_EFFORT="high"/);
+    // Env-overridable via EPAM_RUNG3_REASONING_EFFORT — default is still "high".
+    expect(rung3Body).toMatch(/EPAM_REASONING_EFFORT="\$\{EPAM_RUNG3_REASONING_EFFORT:-high\}"/);
   });
 });
 

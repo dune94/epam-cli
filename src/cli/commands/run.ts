@@ -96,6 +96,7 @@ export function createRunCommand(): Command {
         maxIterations: config.maxIterations,
         maxToolCalls: config.maxToolCalls,
         autoCompressAt: config.autoCompressAt,
+          autoCompressEveryNIterations: config.autoCompressEveryNIterations,
         maxOutputTokens: config.maxOutputTokens,
         dangerousSkipApproval: config.tools.dangerousSkipApproval,
         onTextDelta: jsonMode ? undefined : delta => process.stdout.write(delta),

@@ -81,6 +81,77 @@ load_env_file "$PROJECT_ROOT/.env"
 unset _claude_pre_gate_provider _claude_pre_gate_model _claude_pre_orch_provider
 export ORCH_GATE_PROVIDER ORCH_GATE_MODEL EPAM_ORCHESTRATION_PROVIDER
 
+# Load EPAM_PROJECT_CONFIG_DIR/llm-settings.json (schema:
+# orchestrations/config/llm-settings.schema.json) as FALLBACK DEFAULTS for the
+# ladder/retry/self-heal/cost-control settings below — every value here only
+# fires when the corresponding EPAM_* var isn't already set (tier-script env,
+# a project .env file, or the launch shell all still win). This must run
+# before MAX_RETRIES is read a few lines down, so it's called immediately.
+load_llm_settings_json() {
+    local _settings_file="${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json"
+    [ -f "$_settings_file" ] || return 0
+
+    _get() { jq -r "$1 // empty" "$_settings_file" 2>/dev/null; }
+    local _v
+
+    _v=$(_get '.temperatureFloor'); [ -z "${EPAM_TEMPERATURE:-}" ] && [ -n "$_v" ] && export EPAM_TEMPERATURE="$_v"
+
+    _v=$(_get '.retries.maxRetries'); [ -z "${EPAM_MAX_RETRIES:-}" ] && [ -n "$_v" ] && export EPAM_MAX_RETRIES="$_v"
+    _v=$(_get 'if .retries.selfHeal.enabled == true then "1" elif .retries.selfHeal.enabled == false then "0" else empty end')
+    [ -z "${EPAM_RETRY_EXTENSION_ENABLED:-}" ] && [ -n "$_v" ] && export EPAM_RETRY_EXTENSION_ENABLED="$_v"
+    _v=$(_get '.retries.selfHeal.extensionMax'); [ -z "${EPAM_RETRY_EXTENSION_MAX:-}" ] && [ -n "$_v" ] && export EPAM_RETRY_EXTENSION_MAX="$_v"
+
+    _v=$(_get '.timeouts.storyTimeoutSecs'); [ -z "${EPAM_STORY_TIMEOUT_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_TIMEOUT_SECS="$_v"
+    _v=$(_get '.timeouts.gateTimeoutSecs'); [ -z "${EPAM_GATE_TIMEOUT_SECS:-}" ] && [ -n "$_v" ] && export EPAM_GATE_TIMEOUT_SECS="$_v"
+
+    _v=$(_get '.brownfield.minOutputTokens'); [ -z "${EPAM_BROWNFIELD_MIN_OUTPUT_TOKENS:-}" ] && [ -n "$_v" ] && export EPAM_BROWNFIELD_MIN_OUTPUT_TOKENS="$_v"
+    _v=$(_get '.brownfield.maxScaledIterations'); [ -z "${EPAM_BROWNFIELD_MAX_SCALED_ITERATIONS:-}" ] && [ -n "$_v" ] && export EPAM_BROWNFIELD_MAX_SCALED_ITERATIONS="$_v"
+
+    _v=$(_get '.compaction.defaultAutoCompressAt'); [ -z "${EPAM_AUTO_COMPRESS_AT:-}" ] && [ -n "$_v" ] && export EPAM_AUTO_COMPRESS_AT="$_v"
+    _v=$(_get '.compaction.defaultAutoCompressEveryNIterations'); [ -z "${EPAM_AUTO_COMPRESS_EVERY_N_ITERATIONS:-}" ] && [ -n "$_v" ] && export EPAM_AUTO_COMPRESS_EVERY_N_ITERATIONS="$_v"
+
+    # Per-rung temperature/effort overrides — rungs[] is shared by BOTH
+    # ladders (only the model each rung resolves to differs), so these env
+    # vars are read once, not per-ladder. iterationBump/outputTokenBump are
+    # NOT wired here — those are still hardcoded in the rung case statement
+    # (driven by CPA's iterationEstimate scaling and the brownfield output
+    # floor respectively), so the rungs[] entries for those two fields are
+    # documentation of current behavior only, not yet a configurable input.
+    _v=$(_get '.rungs[] | select(.rung==0) | .reasoningEffort'); [ -z "${EPAM_RUNG0_REASONING_EFFORT:-}" ] && [ -n "$_v" ] && export EPAM_RUNG0_REASONING_EFFORT="$_v"
+    _v=$(_get '.rungs[] | select(.rung==1) | .reasoningEffort'); [ -z "${EPAM_RUNG1_REASONING_EFFORT:-}" ] && [ -n "$_v" ] && export EPAM_RUNG1_REASONING_EFFORT="$_v"
+    _v=$(_get '.rungs[] | select(.rung==2) | .reasoningEffort'); [ -z "${EPAM_RUNG2_REASONING_EFFORT:-}" ] && [ -n "$_v" ] && export EPAM_RUNG2_REASONING_EFFORT="$_v"
+    _v=$(_get '.rungs[] | select(.rung==3) | .reasoningEffort'); [ -z "${EPAM_RUNG3_REASONING_EFFORT:-}" ] && [ -n "$_v" ] && export EPAM_RUNG3_REASONING_EFFORT="$_v"
+    _v=$(_get '.rungs[] | select(.rung==1) | .temperature'); [ -z "${EPAM_RUNG1_TEMPERATURE:-}" ] && [ -n "$_v" ] && export EPAM_RUNG1_TEMPERATURE="$_v"
+    _v=$(_get '.rungs[] | select(.rung==2) | .temperature'); [ -z "${EPAM_RUNG2_TEMPERATURE:-}" ] && [ -n "$_v" ] && export EPAM_RUNG2_TEMPERATURE="$_v"
+    _v=$(_get '.rungs[] | select(.rung==3) | .temperature'); [ -z "${EPAM_RUNG3_TEMPERATURE:-}" ] && [ -n "$_v" ] && export EPAM_RUNG3_TEMPERATURE="$_v"
+
+    # Model ladder chains: modelLadder[] -> "from=to|from2=to2" string, matching
+    # EPAM_MODEL_LADDER_HIGH/MEDIUM's existing format exactly (the format the
+    # ladder-step lookup function further below already parses) — this is a
+    # direct serialization, not a new format.
+    _v=$(_get '[.ladders.high.modelLadder[]? | "\(.from)=\(.to)"] | join("|")')
+    [ -z "${EPAM_MODEL_LADDER_HIGH:-}" ] && [ -n "$_v" ] && export EPAM_MODEL_LADDER_HIGH="$_v"
+    _v=$(_get '[.ladders.medium.modelLadder[]? | "\(.from)=\(.to)"] | join("|")')
+    [ -z "${EPAM_MODEL_LADDER_MEDIUM:-}" ] && [ -n "$_v" ] && export EPAM_MODEL_LADDER_MEDIUM="$_v"
+
+    # Model-specific overrides (modelOverrides.*) are NOT flattened into env
+    # vars here — there can be any number of entries (e.g. separate MiniMax-M2.5
+    # vs MiniMax-M3 tuning), so a fixed set of env var names can't represent
+    # them. They're read directly from $_settings_file at invocation time,
+    # per-attempt, against the FINAL resolved STORY_PROVIDER/STORY_MODEL — see
+    # the "Model-specific overrides" block in the provider-invocation code,
+    # ~line 7700.
+
+    # Cost controls
+    _v=$(_get '.costControls.maxToolCallsPerStory'); [ -z "${EPAM_STORY_MAX_TOOL_CALLS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_MAX_TOOL_CALLS="$_v"
+    _v=$(_get '.costControls.storyBudgetWarningUsd'); [ -z "${EPAM_STORY_BUDGET_WARNING_USD:-}" ] && [ -n "$_v" ] && export EPAM_STORY_BUDGET_WARNING_USD="$_v"
+    _v=$(_get '.costControls.storyBudgetHardLimitUsd'); [ -z "${EPAM_STORY_BUDGET_HARD_LIMIT_USD:-}" ] && [ -n "$_v" ] && export EPAM_STORY_BUDGET_HARD_LIMIT_USD="$_v"
+
+    unset -f _get
+    echo "  LLMSettings: loaded fallback defaults from $_settings_file" >&2
+}
+load_llm_settings_json
+
 # Git work root — the directory containing .git (defaults to PROJECT_ROOT)
 # Override when the git repo lives in a subdirectory (e.g., PROJECT_ROOT/application)
 GIT_WORK_ROOT="${GIT_WORK_ROOT:-$PROJECT_ROOT}"
@@ -120,9 +191,18 @@ INVOKE_PYTHON="${INVOKE_PYTHON:-$SCRIPT_DIR/.venv/bin/python3}"
 # Effort -> model + max-turns mapping
 # Stories carry an optional "effort" field: low | medium (default) | high
 # These map to a model and a max-turns cap for the Claude CLI invocation.
-EFFORT_MODEL_LOW="gpt-5-codex"
-EFFORT_MODEL_MEDIUM="gpt-5-codex"
-EFFORT_MODEL_HIGH="gpt-5-codex"
+# Env-overridable, not hardcoded to one provider's model: a project whose
+# story's aiProvider is never "codex" (e.g. Metrolinx, which routes brownfield
+# work through minimax/qwen) still got "gpt-5-codex" here as the CONFIG
+# DEFAULT resolve_model_from_story() falls back to before overriding from the
+# story's own .model field — harmless when the story sets .model, but a real
+# footgun for any invocation path that reaches this default without one
+# (found live, 2026-08-01: the writer sandbox test's first run invoked codex
+# via this exact default, 4 straight zero-token failures, no OPENAI_API_KEY
+# in the environment — this project never uses codex at all).
+EFFORT_MODEL_LOW="${EPAM_EFFORT_MODEL_LOW:-gpt-5-codex}"
+EFFORT_MODEL_MEDIUM="${EPAM_EFFORT_MODEL_MEDIUM:-gpt-5-codex}"
+EFFORT_MODEL_HIGH="${EPAM_EFFORT_MODEL_HIGH:-gpt-5-codex}"
 # Set by resolve_planner_settings; empty means single-invocation mode (no split)
 STORY_PLANNER_MODEL=""
 # Set by resolve_effort_settings; controls EPAM_MAX_ITERATIONS for epam-run stories.
@@ -160,6 +240,43 @@ resolve_effort_settings() {
             effort="$EPAM_EFFORT_TIER"
         elif [ "$_rank_new" -gt 0 ]; then
             log "  EffortTier[KB] -> IGNORING ${EPAM_EFFORT_TIER} (not an upgrade on ${effort}); budgets are increase-only"
+        fi
+    fi
+
+    # CPA's own complexity judgment (gate=review|block, complexityAdjustment)
+    # and the detective's coverage check (checkFixSiteCoverage, spec-mode-
+    # runner.js) each persist an upgrade-only effort signal onto the story —
+    # cpaEffortTier (contextualize-stories.sh) and
+    # fixSiteAnalysisCoverage.complete. Neither ever touched the REAL
+    # iteration/token budget before this fix: cpaEffortTier only fed
+    # ladderTier (which MODEL handles escalation retries, not how many turns
+    # the implementer gets), and coverage was not read here at all. Live
+    # AMSD-2041, 2026-08-01: CPA flagged gate="review"/1.3x and the
+    # detective's 2-site prescription left 4 verification criteria uncovered,
+    # but STORY_MAX_ITERATIONS stayed keyed to the story's untouched "low"
+    # input classification — the implementer got the smallest budget for a
+    # change every downstream signal had already flagged as underscoped.
+    # Same upgrade-only discipline as the EPAM_EFFORT_TIER block above: never
+    # take room away, only ever add it when a later signal says more is needed.
+    local _cpa_tier _cov_complete
+    _cpa_tier=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .cpaEffortTier // ""' "$prd_target" 2>/dev/null || echo "")
+    # NOTE: deliberately NOT `.fixSiteAnalysisCoverage.complete // true` — jq's
+    # `//` treats a literal `false` as falsy too, so that would silently turn
+    # every real "incomplete" (false) result into "true". Explicit null check.
+    _cov_complete=$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | (if .fixSiteAnalysisCoverage.complete == null then true else .fixSiteAnalysisCoverage.complete end)' "$prd_target" 2>/dev/null || echo "true")
+    local _proposed_tier="$_cpa_tier"
+    if [ "$_cov_complete" = "false" ]; then
+        # An incomplete prescription always needs at least "medium" — a gap in
+        # the detective's own coverage must never silently leave a story at "low".
+        case "$_proposed_tier" in high) : ;; *) _proposed_tier="medium" ;; esac
+    fi
+    if [ -n "$_proposed_tier" ]; then
+        local _rank_cur2 _rank_new2
+        case "$effort" in low) _rank_cur2=1 ;; high) _rank_cur2=3 ;; *) _rank_cur2=2 ;; esac
+        case "$_proposed_tier" in low) _rank_new2=1 ;; high) _rank_new2=3 ;; medium) _rank_new2=2 ;; *) _rank_new2=0 ;; esac
+        if [ "$_rank_new2" -gt "$_rank_cur2" ]; then
+            log "  EffortTier[CPA] -> upgrading ${effort} → ${_proposed_tier} (cpaEffortTier=${_cpa_tier:-none} coverageComplete=${_cov_complete})"
+            effort="$_proposed_tier"
         fi
     fi
 
@@ -289,12 +406,68 @@ resolve_brownfield_effort_floor() {
     # the accumulating conversation → input ballooned to ~169K (live 2026-07-24). Keep the
     # effort-tier default (do not inflate iterations) for a prescribed fix; the output-token
     # floor still applies (writing needs room). Env-overridable.
+    #
+    # But "a prescription exists" != "the prescription is minimal": the shortcut above
+    # was applied to ANY story with at least one helper-bearing finding, including
+    # multi-site fixes and fixes checkFixSiteCoverage (spec-mode-runner.js) flags as
+    # not addressing some of the story's own verification criteria. Live AMSD-2041,
+    # 2026-08-01: 2 fixSiteAnalysis entries + 4 uncovered VCs still got floor=6-12 —
+    # the same budget as a true one-file fix — for a change review confirmed needed
+    # 7-8 files touched (SDK install, service layer, interfaces, API route, tests).
+    # Only take the fast, low-iteration path for a GENUINE single-site, fully-covered
+    # fix; otherwise scale the floor with how much the detective actually left unsaid.
     local _prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
-    local _has_helper
+    # Ceiling, computed once regardless of which branch below fires: more
+    # iterations means more accumulated ReAct-conversation re-sent on every
+    # turn — the same mechanism that made 11 "wasted" iterations balloon
+    # input to ~169K tokens on a SIMPLE story (see the 2026-07-24 note
+    # above). Left unbounded, a large-enough story could trade
+    # "under-budgeted" for "runs into a real context-window limit mid-run"
+    # instead of a clean "reached maximum iterations". Capped, not silently
+    # — a story that hits the cap is still logged so this isn't invisible.
+    local _scaled_cap="${EPAM_BROWNFIELD_MAX_SCALED_ITERATIONS:-30}"
+    local _num_sites _has_helper _num_uncovered
+    _num_sites=$(jq -r --arg id "$story_id" '[.stories[] | select(.id==$id) | .fixSiteAnalysis[]?] | length' "$_prd_target" 2>/dev/null || echo 0)
     _has_helper=$(jq -r --arg id "$story_id" '[.stories[] | select(.id==$id) | .fixSiteAnalysis[]?.helper] | map(select(. != null and . != "")) | length' "$_prd_target" 2>/dev/null || echo 0)
-    if [ "${_has_helper:-0}" -gt 0 ]; then
+    _num_uncovered=$(jq -r --arg id "$story_id" '.stories[] | select(.id==$id) | (.fixSiteAnalysisCoverage.uncoveredVerificationCriteria // []) | length' "$_prd_target" 2>/dev/null || echo 0)
+    if [ "${_num_sites:-0}" -eq 1 ] && [ "${_has_helper:-0}" -gt 0 ] && [ "${_num_uncovered:-0}" -eq 0 ]; then
         _bf_min_iter="${EPAM_BROWNFIELD_PRESCRIBED_MIN_ITERATIONS:-6}"
+    elif [ "${_num_sites:-0}" -gt 0 ] || [ "${_num_uncovered:-0}" -gt 0 ]; then
+        local _scaled=$(( 8 + 4 * ${_num_sites:-0} + 3 * ${_num_uncovered:-0} ))
+        if [ "$_scaled" -gt "$_scaled_cap" ]; then
+            log "  BrownfieldEffortFloor: scaled iteration need (${_scaled}) exceeds cap (${_scaled_cap}) — capping. Story ${story_id} may be underscoped for a single implementation pass; consider a split."
+            _scaled="$_scaled_cap"
+        fi
+        [ "$_scaled" -gt "$_bf_min_iter" ] && _bf_min_iter="$_scaled"
     fi
+
+    # CPA's brownfield-only iterationEstimate — an ABSOLUTE turn-count
+    # estimate (1-500, clamped in cpa-inference.js; persisted as
+    # cpaIterationEstimate by contextualize-stories.sh — see cpa-system.md
+    # "Iteration Estimate"), not a multiplier on top of whichever floor was
+    # picked above. Redesigned 2026-08-01: a 1.0-3.0x multiplier on an
+    # already-scaled base cannot span "5 for a bug fix" to "200 for a large
+    # multi-layer change" — a real ~40x range. CPA sees the SAME
+    # fixSiteAnalysis + coverage verdict fed into its prompt, plus KB
+    # coverage, manifest facts, and the full verification criteria the
+    # heuristic above cannot weigh holistically — it can correct a case the
+    # naive single-site/helper/coverage-complete check misclassifies as
+    # trivial (found live, 2026-08-01, AMSD-2041/upexpress: 1 site, has a
+    # helper, coverage heuristic reported "complete" via a bag-of-words false
+    # positive). Only ever raises the floor — a default of 1 (CPA never ran,
+    # or genuinely found nothing extra) changes nothing.
+    local _cpa_iter_estimate
+    _cpa_iter_estimate=$(jq -r --arg id "$story_id" '.stories[] | select(.id==$id) | (.cpaIterationEstimate // 1)' "$_prd_target" 2>/dev/null || echo 1)
+    if [ "${_cpa_iter_estimate:-0}" -gt "$_bf_min_iter" ] 2>/dev/null; then
+        local _capped_estimate="$_cpa_iter_estimate"
+        if [ "$_capped_estimate" -gt "$_scaled_cap" ]; then
+            log "  BrownfieldEffortFloor: CPA iterationEstimate (${_cpa_iter_estimate}) exceeds cap (${_scaled_cap}) — capping."
+            _capped_estimate="$_scaled_cap"
+        fi
+        log "  BrownfieldEffortFloor: CPA iterationEstimate raises floor ${_bf_min_iter} -> ${_capped_estimate}"
+        _bf_min_iter="$_capped_estimate"
+    fi
+
     local _raised=0
     if [ "${STORY_MAX_OUTPUT_TOKENS:-0}" -lt "$_bf_min_out" ]; then
         STORY_MAX_OUTPUT_TOKENS="$_bf_min_out"; _raised=1
@@ -303,6 +476,254 @@ resolve_brownfield_effort_floor() {
         STORY_MAX_ITERATIONS="$_bf_min_iter"; _raised=1
     fi
     [ "$_raised" = "1" ] && log "  BrownfieldEffortFloor: reasoning-model headroom -> maxIter=${STORY_MAX_ITERATIONS} maxOutTok=${STORY_MAX_OUTPUT_TOKENS} (think + write must fit one response)"
+}
+
+# _cap_brownfield_iterations_ceiling <context-label>
+# The rung-based inference ladder adds +5 iterations on EVERY rung transition
+# (see the ladder case statement below), independent of and AFTER whatever
+# floor resolve_brownfield_effort_floor already established. A story whose
+# floor is already at the EPAM_BROWNFIELD_MAX_SCALED_ITERATIONS cap (e.g. 30)
+# could still reach 45 by rung 3 (30 + 5 + 5 + 5) — the exact context-window
+# risk that cap exists to prevent (found live, 2026-08-01, while reviewing
+# the ceiling added to resolve_brownfield_effort_floor: that cap only bounds
+# the STARTING budget, never the cumulative total after ladder escalation).
+# Brownfield-only, same env var, same discipline: log when the cap actually
+# trims something so this stays visible, never silent.
+_cap_brownfield_iterations_ceiling() {
+    [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
+    local _ceiling="${EPAM_BROWNFIELD_MAX_SCALED_ITERATIONS:-30}"
+    if [ "${STORY_MAX_ITERATIONS:-0}" -gt "$_ceiling" ]; then
+        log "  BrownfieldEffortFloor[$1]: ladder escalation pushed iterations to ${STORY_MAX_ITERATIONS}, exceeding cap (${_ceiling}) — capping."
+        STORY_MAX_ITERATIONS="$_ceiling"
+    fi
+}
+
+# _brownfield_rung_bump <story_id>
+# The ladder's rung-transition bump used to be a flat +5 regardless of the
+# story's actual complexity — a trivial retry and a genuinely complex one
+# got the same increment. CPA's brownfield-only iterationEstimate
+# (1-500, an ABSOLUTE turn count — cpa-system.md "Iteration Estimate")
+# already estimates exactly this per story. Scale the bump as 10% of that
+# estimate, floored at 5 (the unchanged default when CPA never ran, or
+# estimated something small): estimate 1 -> +5, estimate 200 -> +20. A story
+# CPA judges as needing 200 turns overall should not still get the SAME +5
+# nudge per rung as a 1-turn story — that was the multiplier design's own
+# blind spot, carried over. Greenfield (EPAM_BROWNFIELD unset) keeps the
+# flat +5 — this signal doesn't exist for greenfield stories.
+# _iteration_exhaustion_bump <story_id>
+# CPA's cpaIterationEstimate is the ladder's only iteration-scaling signal
+# (_brownfield_rung_bump above) — when CPA never populates it
+# (cpaIterationEstimate: null, confirmed live 2026-08-01 on AMSD-2041: a real
+# CMS live-preview integration story sat at the effort-tier default of 10-15
+# iterations and hit "capability failure (max iterations)" 11 times in one
+# run), that scaling produces almost nothing and the story is starved
+# regardless of its real complexity. This bump responds to the OBSERVED
+# symptom instead of trusting a single static estimate: every time
+# classify_failure_class() logs a capability failure (max iterations) for
+# THIS story, it appends an event to iteration-exhaustion.jsonl. Each prior
+# occurrence adds EPAM_ITERATION_EXHAUSTION_BUMP (default 30) on top of
+# whatever _brownfield_rung_bump already computed, capped at
+# EPAM_ITERATION_EXHAUSTION_MAX_BUMP (default 200) so a story failing for
+# OTHER reasons doesn't get an unbounded iteration budget.
+_iteration_exhaustion_bump() {
+    local story_id="$1"
+    local _log_file="${LOG_DIR}/iteration-exhaustion.jsonl"
+    [ -f "$_log_file" ] || { echo 0; return 0; }
+    local _count
+    _count=$(jq -s --arg id "$story_id" '[.[] | select(.story_id == $id)] | length' "$_log_file" 2>/dev/null || echo 0)
+    local _per_bump="${EPAM_ITERATION_EXHAUSTION_BUMP:-30}"
+    local _max_bump="${EPAM_ITERATION_EXHAUSTION_MAX_BUMP:-200}"
+    awk -v c="${_count:-0}" -v per="$_per_bump" -v maxb="$_max_bump" \
+        'BEGIN { bump = c * per; if (bump > maxb) bump = maxb; printf "%d", bump }'
+}
+
+# _selective_worktree_reset <story_id>
+# Rung escalations had zero git checkout/reset/clean between them — a failed
+# rung's half-applied edits, stray broken writes, or any other incidental
+# corruption sat on disk untouched and the next (usually stronger, costlier)
+# model inherited it silently.
+#
+# A per-file preserve-list (an earlier version of this function, keyed off
+# the story's DECLARED technicalNotes.files) turned out unsafe: a half-broken
+# write and a genuinely correct but UNDECLARED file are both indistinguishable
+# "has a diff from baseline" — restricting preservation to the declared set
+# risked silently destroying real work outside it. Restricting to "any file
+# with a diff" instead makes the reset a no-op (a broken file also has a
+# diff), which defeats the point.
+#
+# The signal that actually distinguishes them: LAST_ATTEMPT_TSC_PASSED (set
+# right after run_tsc_verification, above) is real, already-computed evidence
+# the WHOLE tree is at least type/syntax-correct — not a guess. If it passed,
+# preserve the entire diff wholesale, declared or not. If it failed, or never
+# ran because an earlier stage already failed first, there is no positive
+# evidence anything here is good — reset the whole tree to baseline rather
+# than gamble on which files are safe. Either way, LAST_VERIFIED_TOUCHED_FILES/
+# LAST_VERIFIED_UNCHANGED_FILES are cleared on a real reset so the NEXT
+# attempt's work-carryover prompt note (#112, above) never claims a file is
+# "already done" after this function just erased it.
+#
+# Brownfield-only (mirrors every other baseline-diff mechanism in this file);
+# no-ops silently when there's no git repo or no resolvable baseline ref, same
+# safe-fallback posture as verify_story_deliverables' own baseline check.
+_selective_worktree_reset() {
+    local story_id="$1"
+    [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
+    [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
+    local _baseline_ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+    git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1 || return 0
+
+    if [ "${LAST_ATTEMPT_TSC_PASSED:-false}" = true ]; then
+        log "  WorktreeReset[$story_id]: skipped — last attempt's tsc --noEmit passed, whole diff preserved as validated"
+        return 0
+    fi
+
+    # No positive evidence the tree is good — reset tracked files to baseline
+    # content, drop untracked/ignored cruft. Same "predictable teardown"
+    # primitive brownfield-preflight-reset.sh already applies between RUNS,
+    # applied here between RUNGS of one run.
+    git -C "$PROJECT_ROOT" checkout "$_baseline_ref" -- . 2>/dev/null || true
+    git -C "$PROJECT_ROOT" clean -fd -- . 2>/dev/null || true
+    LAST_VERIFIED_TOUCHED_FILES=""
+    LAST_VERIFIED_UNCHANGED_FILES=""
+    log "  WorktreeReset[$story_id]: reset to $_baseline_ref — last attempt had no validated (tsc-passed) state to preserve"
+}
+
+# _rung_snapshot_path <story_id>
+# One shared helper so the snapshot and attribution functions below always
+# agree on where the reference file lives.
+_rung_snapshot_path() {
+    echo "${LOG_DIR}/.rung-snapshot-${1//[^A-Za-z0-9_-]/_}"
+}
+
+# _rung_snapshot_hashes <story_id>
+# Records a content-hash of every file currently different from baseline
+# (tracked-modified + untracked-new) — the "start of the next rung" reference
+# _rung_attribute_changes compares against later to see what changed DURING
+# that rung. Brownfield-only, same safe-fallback posture as the other
+# baseline-diff mechanisms in this file.
+_rung_snapshot_hashes() {
+    local story_id="$1"
+    [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
+    [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
+    local _baseline_ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+    git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1 || return 0
+    local _snap_file
+    _snap_file=$(_rung_snapshot_path "$story_id")
+    {
+        git -C "$PROJECT_ROOT" diff --name-only "$_baseline_ref" -- . 2>/dev/null
+        git -C "$PROJECT_ROOT" ls-files --others --exclude-standard -- . 2>/dev/null
+    } | sort -u | while IFS= read -r _f; do
+        [ -n "$_f" ] && [ -f "$PROJECT_ROOT/$_f" ] || continue
+        local _hash
+        _hash=$(git -C "$PROJECT_ROOT" hash-object "$PROJECT_ROOT/$_f" 2>/dev/null) || continue
+        [ -n "$_hash" ] && printf '%s %s\n' "$_f" "$_hash"
+    done > "$_snap_file"
+}
+
+# _rung_attribute_changes <story_id> <rung> <model>
+# Compares the CURRENT tree against the snapshot taken at the start of the
+# rung that just finished (rung/model passed in — the ones active during
+# that rung, captured by the caller BEFORE it moved on). Any file whose hash
+# differs from the snapshot (or is new since it) gets logged as this rung's
+# contribution. A file whose hash is UNCHANGED since the snapshot is left
+# alone — it keeps whatever an EARLIER rung already logged for it, so credit
+# is never falsely reassigned to whichever rung happens to finish the story.
+# No snapshot yet (first-ever rung, nothing to compare against) is a silent
+# no-op — there's nothing prior to attribute against.
+_rung_attribute_changes() {
+    local story_id="$1" rung="$2" model="$3"
+    [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
+    [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
+    local _snap_file
+    _snap_file=$(_rung_snapshot_path "$story_id")
+    [ -f "$_snap_file" ] || return 0
+    local _baseline_ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+    git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1 || return 0
+    local _contribution_file="${LOG_DIR}/rung-contribution.jsonl"
+    {
+        git -C "$PROJECT_ROOT" diff --name-only "$_baseline_ref" -- . 2>/dev/null
+        git -C "$PROJECT_ROOT" ls-files --others --exclude-standard -- . 2>/dev/null
+    } | sort -u | while IFS= read -r _f; do
+        [ -n "$_f" ] && [ -f "$PROJECT_ROOT/$_f" ] || continue
+        local _hash
+        _hash=$(git -C "$PROJECT_ROOT" hash-object "$PROJECT_ROOT/$_f" 2>/dev/null) || continue
+        [ -z "$_hash" ] && continue
+        local _prev_hash
+        _prev_hash=$(awk -v f="$_f" '$1==f{print $2}' "$_snap_file" 2>/dev/null)
+        if [ "$_prev_hash" != "$_hash" ]; then
+            (
+                flock -w 5 300 2>/dev/null || true
+                jq -cn --arg sid "$story_id" --arg file "$_f" --arg rung "$rung" \
+                    --arg model "$model" --arg ts "$(date -Iseconds)" \
+                    '{story_id:$sid, file:$file, rung:$rung, model:$model, timestamp:$ts}' \
+                    >> "$_contribution_file"
+            ) 300>>"${_contribution_file}.lock"
+        fi
+    done
+}
+
+# _generate_rung_contribution_report <story_id>
+# Cross-references the story's FINAL committed diff against rung-contribution.jsonl
+# to answer "which rungs/models actually contributed surviving work" — a
+# file's attribution is only reported if it's genuinely present in the
+# current diff (a file whose rung got reset away by a later failed rung
+# correctly disappears from this report, even though it was legitimately
+# touched once — it did not survive to the final commit). Uses the LATEST
+# attribution record per file: a file touched by rung 1 and left unchanged by
+# rung 2 still credits rung 1, never silently reassigned to whichever rung
+# happened to finish the story.
+_generate_rung_contribution_report() {
+    local story_id="$1"
+    [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
+    [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
+    local _contribution_file="${LOG_DIR}/rung-contribution.jsonl"
+    [ -f "$_contribution_file" ] || return 0
+    local _baseline_ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
+    git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1 || return 0
+
+    # Same tracked-modified + untracked-new enumeration as
+    # _rung_snapshot_hashes/_rung_attribute_changes — git diff --name-only
+    # alone misses brand-new files that were never `git add`ed, which would
+    # silently drop e.g. a final rung's new file from this report entirely.
+    local _final_files
+    _final_files=$({
+        git -C "$PROJECT_ROOT" diff --name-only "$_baseline_ref" -- . 2>/dev/null
+        git -C "$PROJECT_ROOT" ls-files --others --exclude-standard -- . 2>/dev/null
+    } | sort -u)
+    [ -n "$_final_files" ] || return 0
+
+    local _report_file="${LOG_DIR}/rung-contribution-report-${story_id//[^A-Za-z0-9_-]/_}.json"
+    jq -s --arg sid "$story_id" --arg files "$_final_files" '
+        ($files | split("\n") | map(select(length > 0))) as $finalFiles
+        | map(select(.story_id == $sid))
+        | group_by(.file)
+        | map(max_by(.timestamp))
+        | map(select(.file as $f | $finalFiles | index($f) != null))
+        | group_by(.rung)
+        | map({rung: .[0].rung, model: .[0].model, files: (map(.file) | sort)})
+        | sort_by(.rung | tonumber? // .rung)
+    ' "$_contribution_file" > "$_report_file" 2>/dev/null
+
+    if [ -s "$_report_file" ] && [ "$(jq 'length' "$_report_file" 2>/dev/null || echo 0)" != "0" ]; then
+        local _rung_count
+        _rung_count=$(jq 'length' "$_report_file" 2>/dev/null || echo 0)
+        log "  RungContribution[$story_id]: $_rung_count rung(s) contributed to the final diff:"
+        while IFS= read -r _line; do
+            log "    $_line"
+        done < <(jq -r '.[] | "Rung \(.rung) (\(.model)): \(.files | join(", "))"' "$_report_file" 2>/dev/null)
+    fi
+}
+
+_brownfield_rung_bump() {
+    local story_id="$1"
+    if [ "${EPAM_BROWNFIELD:-0}" != "1" ]; then
+        echo 5
+        return 0
+    fi
+    local _prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    local _estimate
+    _estimate=$(jq -r --arg id "$story_id" '.stories[] | select(.id==$id) | (.cpaIterationEstimate // 1)' "$_prd_target" 2>/dev/null || echo 1)
+    awk -v est="$_estimate" 'BEGIN { if (est !~ /^[0-9.]+$/) est = 1; if (est < 1) est = 1; if (est > 500) est = 500; bump = int(est * 0.1 + 0.5); if (bump < 5) bump = 5; printf "%d", bump }'
 }
 
 # resolve_model_from_story <story_id>
@@ -1509,9 +1930,26 @@ Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:"
         # Full exploration block only when NO helper is prescribed (genuine novel work).
         local _prescribed_helper
         _prescribed_helper=$(echo "$story_json" | jq -r '[.fixSiteAnalysis[]?.helper] | map(select(. != null and . != "")) | .[0] // ""' 2>/dev/null)
-        if [ -n "$_prescribed_helper" ]; then
+        # This suppression must NOT fire blind to fixSiteAnalysisCoverage
+        # (checkFixSiteCoverage, spec-mode-runner.js). "A helper is named" only
+        # means SOME site is minimal — it says nothing about verification
+        # criteria the detective's findings never touched. Telling the model
+        # "do NOT explore... apply the prescribed fix... and stop" with only a
+        # soft escape hatch ("only search if you hit something the fix
+        # genuinely does not cover") relies on the model noticing a gap on its
+        # own — the exact judgment failure the coverage check exists to catch
+        # deterministically instead of hoping for.
+        local _cov_incomplete _uncovered_list
+        _cov_incomplete=$(echo "$story_json" | jq -r '(if .fixSiteAnalysisCoverage.complete == null then "false" elif .fixSiteAnalysisCoverage.complete == false then "true" else "false" end)' 2>/dev/null)
+        _uncovered_list=$(echo "$story_json" | jq -r '(.fixSiteAnalysisCoverage.uncoveredVerificationCriteria // []) | map("- " + .) | join("\n")' 2>/dev/null)
+        if [ -n "$_prescribed_helper" ] && [ "$_cov_incomplete" != "true" ]; then
             codegraph_tool_block="## The helper to reuse is ALREADY identified — do NOT search
 The Root Cause Analysis above names the exact existing helper to reuse (\`${_prescribed_helper}\`). Do NOT run CodeGraph or explore the codebase to re-find it — that wastes your turn budget. Import it, apply the prescribed minimal fix, write your file(s), and stop. Only search if you hit something the prescribed fix genuinely does not cover."
+        elif [ -n "$_prescribed_helper" ] && [ "$_cov_incomplete" = "true" ]; then
+            codegraph_tool_block="## The prescribed fix is KNOWN INCOMPLETE — explore for the rest
+The Root Cause Analysis above names an existing helper to reuse (\`${_prescribed_helper}\`) for its own site — apply that part directly, do NOT re-search for it. But the prescribed fix does NOT address every verification criterion. These are UNCOVERED and need your own investigation beyond the prescribed sites:
+${_uncovered_list}
+Use CodeGraph (PROJECT_ROOT=\"$PROJECT_ROOT\" bash \"$SCRIPT_DIR/codegraph-agent-query.sh\" helpers <domain nouns>) to find existing code for THESE before writing new logic — do not assume they are out of scope."
         else
             codegraph_tool_block="## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
 An existing-code search tool is available. Run it with the Bash tool to discover reusable functions instead of inventing new ones:
@@ -2061,9 +2499,11 @@ verify_story_deliverables() {
     fi
 
     local unchanged=()
+    local _declared_files=()
     while IFS= read -r file; do
         [ -n "$file" ] || continue
         declared=$((declared + 1))
+        _declared_files+=("$file")
         # Support both absolute paths and paths relative to PROJECT_ROOT.
         # In worktree mode, absolute paths in technicalNotes.files point to the main
         # repo (e.g. /skyscanner-app/src/foo.ts). Rewrite them to the worktree path
@@ -2153,6 +2593,29 @@ verify_story_deliverables() {
             error "  $file"
         done
         return 1
+    fi
+
+    # Persist which declared files got real work vs which sat untouched, so a
+    # RETRY (whatever the reason — tsc failure, review rejection, this
+    # function's own "all unchanged" verdict below) can tell the next attempt
+    # explicitly what's already done and what still needs it, instead of
+    # leaving that distinction to be re-derived from "## Existing File
+    # Contents" prose alone. Globals (not local), same pattern as
+    # STORY_REJECTION_KEY above — read by the retry loop after this function
+    # returns, from a different scope.
+    LAST_VERIFIED_TOUCHED_FILES=""
+    LAST_VERIFIED_UNCHANGED_FILES=""
+    if [ "$declared" -gt 0 ]; then
+        local _touched=()
+        local _f
+        for _f in "${_declared_files[@]}"; do
+            local _is_unchanged=false _is_missing=false
+            for file in "${unchanged[@]}"; do [ "$file" = "$_f" ] && _is_unchanged=true && break; done
+            for file in "${missing[@]}"; do [ "$file" = "$_f" ] && _is_missing=true && break; done
+            [ "$_is_unchanged" = false ] && [ "$_is_missing" = false ] && _touched+=("$_f")
+        done
+        LAST_VERIFIED_TOUCHED_FILES=$(printf '%s\n' "${_touched[@]}")
+        LAST_VERIFIED_UNCHANGED_FILES=$(printf '%s\n' "${unchanged[@]}")
     fi
 
     # Fail only when EVERY declared, pre-existing file is unchanged — that's
@@ -4395,6 +4858,7 @@ classify_failure_class() {
     local raw_file="${1:-}"
     local result_json="${2:-}"
     local exit_code="${3:-1}"
+    local story_id="${4:-}"
 
     COORDINATOR_FAILURE_CLASS="unknown"
     COORDINATOR_ESCALATE="yes"
@@ -4460,6 +4924,13 @@ classify_failure_class() {
             COORDINATOR_PROMPT_AMENDMENT="CRITICAL: The previous attempt exhausted all available turns without creating the required deliverable. Your FIRST action MUST be to call WriteFile to the exact absolute path listed under 'Files to Create/Modify' — do NOT read files, do NOT plan, do NOT investigate. Write the required file IMMEDIATELY as your very first action."
         fi
         log "  Coordinator[L1]: capability failure (max iterations) — escalation approved, write-first amendment injected"
+        if [ -n "$story_id" ] && [ -n "${LOG_DIR:-}" ]; then
+            (
+                flock -w 5 200 || true
+                jq -cn --arg id "$story_id" --arg ts "$(date -Iseconds)" \
+                    '{story_id:$id, timestamp:$ts}' >> "${LOG_DIR}/iteration-exhaustion.jsonl"
+            ) 200>"${LOG_DIR}/iteration-exhaustion.jsonl.lock"
+        fi
         return
     fi
 
@@ -6777,6 +7248,24 @@ implement_story() {
     # budget in the same claude.sh process.
     local MAX_RETRIES="$MAX_RETRIES"
     local _retry_extension_used=0
+    local _budget_warned=0
+    # Set by _rejection_repeat_check below when the SAME rejection fires twice
+    # in a row — same input, same wrong output is exactly what temperature
+    # exists to break out of. Read once, right after the rung case statement
+    # sets its own baseline temperature, so the bump applies on top regardless
+    # of which rung fired.
+    local _repeat_rejection_detected=false
+    # These are GLOBALS (set by verify_story_deliverables, no `local` there —
+    # same pattern as STORY_REJECTION_KEY), so a fresh story must not inherit
+    # whatever the PREVIOUS story's last verification call left behind before
+    # this story has ever called verify_story_deliverables itself.
+    LAST_VERIFIED_TOUCHED_FILES=""
+    LAST_VERIFIED_UNCHANGED_FILES=""
+    LAST_ATTEMPT_TSC_PASSED=false
+    # Which rung's contribution the NEXT attribution call should credit
+    # changes to (backlog #113) — updated every rung transition, read at the
+    # NEXT one and again at the story's own success path.
+    local _last_attributed_rung=0
     # Caps free retries granted for deterministic-check failures (see
     # DETERMINISTIC_CHECK_FAILURE) — these don't count against retry_count/the
     # ladder, but an unbounded free-retry loop is still a real risk if a check
@@ -6858,7 +7347,7 @@ implement_story() {
     # Capture original model so phase R3 can detect whether R2 escalated it
     STORY_MODEL_ORIGINAL="${STORY_MODEL:-}"
     # Reset reasoning effort to default at story start (previous story's setting must not leak)
-    export EPAM_REASONING_EFFORT="low"
+    export EPAM_REASONING_EFFORT="${EPAM_RUNG0_REASONING_EFFORT:-low}"
     # Reset temperature override at story start (previous story's FailureDiversity
     # or escalation-triggered override must not leak into an unrelated story) —
     # but restore the launcher-provided floor (_claude_temperature_floor, captured
@@ -6966,6 +7455,7 @@ BROWNFIELD SURGEON MODE — non-negotiable (applies to every story in this run):
             # to be structural rather than advisory (IMPL-PROSE). It stops paying
             # for the same refusal twice.
             if _rejection_repeat_check "$story_id" "${STORY_REJECTION_KEY:-}"; then
+                _repeat_rejection_detected=true
                 if [ "$_entering_rung" -ne 1 ]; then
                     log "  InferenceLadder[R${retry_count}]: identical rejection twice (${STORY_REJECTION_KEY}) — advancing the rung early rather than re-asking a model that already refused"
                     _entering_rung=1
@@ -6989,10 +7479,19 @@ BROWNFIELD SURGEON MODE — non-negotiable (applies to every story in this run):
             if [ "$_entering_rung" -eq 1 ]; then
                 case "$_rung" in
                     1)
-                        # Rung 1: same model, effort → medium, temperature stays 0
-                        export EPAM_REASONING_EFFORT="medium"
-                        export EPAM_TEMPERATURE="0"
-                        STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
+                        # Rung 1: same model, effort → medium. Temperature is
+                        # env-overridable (EPAM_RUNG1_TEMPERATURE), not a fixed
+                        # policy choice baked into the engine — a project may
+                        # find its models need a different value here (e.g.
+                        # GLM-5.1's own vendor guidance recommends 0.6-0.8 for
+                        # complex multi-file work to avoid instruction drift;
+                        # this project currently defaults lower). Default (0)
+                        # preserves existing behavior for anything that hasn't
+                        # opted in.
+                        export EPAM_REASONING_EFFORT="${EPAM_RUNG1_REASONING_EFFORT:-medium}"
+                        export EPAM_TEMPERATURE="${EPAM_RUNG1_TEMPERATURE:-0}"
+                        STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + $(_brownfield_rung_bump "$story_id") + $(_iteration_exhaustion_bump "$story_id") ))
+                        _cap_brownfield_iterations_ceiling "Rung1"
                         log "  InferenceLadder[Rung1/R${retry_count}]: model='${STORY_MODEL:-default}' unchanged — effort → medium"
                         ;;
                     2)
@@ -7064,9 +7563,10 @@ print(count)
                                 fi
                             fi
                         fi
-                        export EPAM_REASONING_EFFORT="medium"
-                        export EPAM_TEMPERATURE="0.3"
-                        STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
+                        export EPAM_REASONING_EFFORT="${EPAM_RUNG2_REASONING_EFFORT:-medium}"
+                        export EPAM_TEMPERATURE="${EPAM_RUNG2_TEMPERATURE:-0.3}"
+                        STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + $(_brownfield_rung_bump "$story_id") + $(_iteration_exhaustion_bump "$story_id") ))
+                        _cap_brownfield_iterations_ceiling "Rung2"
                         # Rung 2: bump output tokens to 8192 — a story that needed
                         # escalation is likely generating larger outputs than the
                         # baseline budget assumed; truncation at the original ceiling
@@ -7154,9 +7654,10 @@ print(count)
                                 fi
                             fi
                         fi
-                        export EPAM_REASONING_EFFORT="high"
-                        export EPAM_TEMPERATURE="0.7"
-                        STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + 5 ))
+                        export EPAM_REASONING_EFFORT="${EPAM_RUNG3_REASONING_EFFORT:-high}"
+                        export EPAM_TEMPERATURE="${EPAM_RUNG3_TEMPERATURE:-0.7}"
+                        STORY_MAX_ITERATIONS=$(( STORY_MAX_ITERATIONS + $(_brownfield_rung_bump "$story_id") + $(_iteration_exhaustion_bump "$story_id") ))
+                        _cap_brownfield_iterations_ceiling "Rung3"
                         # Rung 3: bump output tokens to 12288 — at the strongest
                         # configured model, full file rewrites are expected; any
                         # prior token ceiling that caused truncation must be lifted.
@@ -7164,6 +7665,47 @@ print(count)
                         log "  InferenceLadder[Rung3/R${retry_count}]: model='${STORY_MODEL:-default}' — effort → high"
                         ;;
                 esac
+                # Repeat-rejection temperature bump: the SAME model producing the
+                # SAME rejection twice (_rejection_repeat_check above) is direct
+                # evidence this exact input/temperature combination is stuck, not
+                # just "this is a new rung now" — applied on top of whatever the
+                # rung case above already set, additive and capped so it can't run
+                # away across many repeats of the same story. EPAM_REASONING_EFFORT
+                # is untouched: this targets sampling variance specifically, not effort.
+                if [ "$_repeat_rejection_detected" = true ]; then
+                    local _repeat_temp_bump="${EPAM_REPEAT_REJECTION_TEMPERATURE_BUMP:-0.2}"
+                    local _repeat_temp_max="${EPAM_REPEAT_REJECTION_TEMPERATURE_MAX:-1.0}"
+                    local _bumped_temp
+                    _bumped_temp=$(awk -v t="${EPAM_TEMPERATURE:-0}" -v b="$_repeat_temp_bump" -v m="$_repeat_temp_max" \
+                        'BEGIN { r = t + b; if (r > m) r = m; printf "%.2f", r }')
+                    log "  RepeatRejectionTempBump: ${EPAM_TEMPERATURE:-0} -> ${_bumped_temp} (identical rejection twice, model/temperature combination is stuck)"
+                    export EPAM_TEMPERATURE="$_bumped_temp"
+                fi
+                # Rung/model contribution attribution (backlog #113): BEFORE
+                # the reset decision below changes anything on disk,
+                # attribute whatever changed since the LAST snapshot to the
+                # rung/model that was JUST active — skipped on the story's
+                # very first rung entry (retry_count 0), since there's no
+                # PRIOR rung yet to attribute anything to.
+                if [ "$retry_count" -gt 0 ]; then
+                    _rung_attribute_changes "$story_id" "$_last_attributed_rung" "$_prev_model"
+                fi
+
+                # Selective worktree reset — only on a REAL rung transition
+                # after at least one real attempt (retry_count 0 is the
+                # story's very first attempt; there's nothing on disk yet to
+                # reset FROM, and no valid LAST_VERIFIED_TOUCHED_FILES for
+                # THIS story until verify_story_deliverables has run at least
+                # once). See _selective_worktree_reset's own docstring.
+                if [ "$retry_count" -gt 0 ]; then
+                    _selective_worktree_reset "$story_id"
+                fi
+
+                # Snapshot the state THIS rung is starting from (post-reset-
+                # decision) — the reference the NEXT transition's attribution
+                # call compares against to see what THIS rung contributed.
+                _rung_snapshot_hashes "$story_id"
+                _last_attributed_rung="$_rung"
                 # Emit ladder_rung event so agent-activity dashboard shows every escalation,
                 # including prev→new model transition for observability.
                 local _ladder_event_script="$SCRIPT_DIR/update-monitor.sh"
@@ -7407,6 +7949,14 @@ ${_trimmed_amendment}"
                     _epam_run_binary="$CLAUDE_CMD"
                     _epam_sandbox_target="node /opt/epam-cli/dist/epam.js"
                 fi
+                # Agent identity for WriteFile.ts's settings-guard (llm-settings.json may
+                # only be written by EPAM_LLM_SETTINGS_GUARDIAN_ROLE) and for the audit
+                # log/traces to attribute a change to the story that made it.
+                local _story_agent_role
+                _story_agent_role=$(jq -r --arg id "$story_id" \
+                    '.stories[] | select(.id == $id) | .agentRole // ""' \
+                    "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
+
                 # Scope guard: build EPAM_ALLOWED_WRITE_PATHS from the story's declared files.
                 # WriteFile.ts uses this to block TS writes outside the story's scope.
                 local _allowed_write_paths
@@ -7460,13 +8010,62 @@ ${_trimmed_amendment}"
                 if [ -n "$_req_symbols" ] && [ -n "$_req_scope" ]; then
                     log "  ReuseGuard: '${_req_symbols}' enforced at write time on ${_req_scope}"
                 fi
+                # Model-specific overrides: reasoning effort, temperature,
+                # iteration cap, custom compaction — read directly from
+                # llm-settings.json's modelOverrides (schema:
+                # orchestrations/config/llm-settings.schema.json), keyed by an
+                # arbitrary label but MATCHED against the FINAL resolved
+                # $STORY_PROVIDER/$STORY_MODEL for THIS attempt (novel-brownfield
+                # routing and ladder escalation both reassign these earlier —
+                # checked here, not earlier, so a story that escalated AWAY
+                # from a match correctly does NOT get these). Entries are
+                # checked in declaration order; the FIRST match wins, so e.g.
+                # MiniMax-M2.5 and MiniMax-M3 can carry different budgets
+                # despite sharing one provider. Unconditionally overrides the
+                # rung's own effort/temperature default, by design — that's
+                # the whole point of a model-specific override.
+                local _effective_max_iterations="${STORY_MAX_ITERATIONS:-6}"
+                local _effective_compress_at="${EPAM_AUTO_COMPRESS_AT:-}"
+                local _effective_compress_every_n="${EPAM_AUTO_COMPRESS_EVERY_N_ITERATIONS:-}"
+                local _model_override_settings_file="${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json"
+                if [ -f "$_model_override_settings_file" ]; then
+                    local _override_json
+                    _override_json=$(jq -c --arg provider "${STORY_PROVIDER:-}" --arg model "${STORY_MODEL:-}" '
+                        (.modelOverrides // {}) | to_entries
+                        | map(select(
+                            (.value.matchOn == "provider" and .value.matchValue == $provider)
+                            or (.value.matchOn == "model" and (.value.matchSubstring // null) != null
+                                and (.value.matchSubstring as $sub | $model | contains($sub)))
+                          ))
+                        | (.[0].value // empty)
+                    ' "$_model_override_settings_file" 2>/dev/null)
+                    if [ -n "$_override_json" ] && [ "$_override_json" != "null" ]; then
+                        local _ov_effort _ov_temp _ov_iter _ov_compress_at _ov_compress_n
+                        _ov_effort=$(jq -r '.reasoningEffort // empty' <<<"$_override_json")
+                        _ov_temp=$(jq -r '.temperature // empty' <<<"$_override_json")
+                        _ov_iter=$(jq -r '.maxIterations // empty' <<<"$_override_json")
+                        _ov_compress_at=$(jq -r '.autoCompressAt // empty' <<<"$_override_json")
+                        _ov_compress_n=$(jq -r '.autoCompressEveryNIterations // empty' <<<"$_override_json")
+                        [ -n "$_ov_effort" ] && export EPAM_REASONING_EFFORT="$_ov_effort"
+                        [ -n "$_ov_temp" ] && export EPAM_TEMPERATURE="$_ov_temp"
+                        [ -n "$_ov_iter" ] && _effective_max_iterations="$_ov_iter"
+                        [ -n "$_ov_compress_at" ] && _effective_compress_at="$_ov_compress_at"
+                        [ -n "$_ov_compress_n" ] && _effective_compress_every_n="$_ov_compress_n"
+                        log "  ModelOverride[${STORY_MODEL:-$STORY_PROVIDER}]: effort=${_ov_effort:-unchanged} temp=${_ov_temp:-unchanged} maxIter=${_effective_max_iterations} compaction=$([ -n "$_effective_compress_every_n" ] && echo "every ${_effective_compress_every_n} iter" || echo "token-threshold") (tokenThreshold=${_effective_compress_at:-none})"
+                    fi
+                fi
                 if echo "$prompt" | \
                         EPAM_DANGEROUS_SKIP_APPROVAL=1 \
+                        EPAM_AGENT_ROLE="${_story_agent_role}" \
+                        EPAM_STORY_ID="${story_id}" \
                         EPAM_REQUIRED_SYMBOLS="${_req_symbols}" \
                         EPAM_REQUIRED_SYMBOL_SCOPE="${_req_scope}" \
                         EPAM_ALLOWED_WRITE_PATHS="${_allowed_write_paths}" \
-                        EPAM_MAX_ITERATIONS="${STORY_MAX_ITERATIONS:-6}" \
+                        EPAM_MAX_ITERATIONS="${_effective_max_iterations}" \
+                        EPAM_AUTO_COMPRESS_AT="${_effective_compress_at}" \
+                        EPAM_AUTO_COMPRESS_EVERY_N_ITERATIONS="${_effective_compress_every_n}" \
                         EPAM_MAX_OUTPUT_TOKENS="${STORY_MAX_OUTPUT_TOKENS:-3072}" \
+                        EPAM_MAX_TOOL_CALLS="${EPAM_STORY_MAX_TOOL_CALLS:-}" \
                         OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-}" \
                         EPAM_API_KEY_OPENROUTER="${EPAM_API_KEY_OPENROUTER:-}" \
                         OPENROUTER_BASE_URL="${OPENROUTER_BASE_URL:-}" \
@@ -7567,6 +8166,41 @@ ${_trimmed_amendment}"
         # lets a per-story total be summed independently of that filter.
         append_cost_record "$story_id" "attempt" "$attempt_started_at" "$(date -Iseconds)" "$output_file" "$json_result_file" "$((retry_count + 1))"
 
+        # Cost controls. Sums this story's own real cost across every attempt
+        # recorded so far, since retries/ladder escalation on one story are
+        # exactly where spend can run away unnoticed.
+        if [ -n "${EPAM_STORY_BUDGET_WARNING_USD:-}" ] || [ -n "${EPAM_STORY_BUDGET_HARD_LIMIT_USD:-}" ]; then
+            local _cost_file="${PHASE_COST_FILE:-$LOG_DIR/phase-cost.jsonl}"
+            if [ -f "$_cost_file" ]; then
+                local _story_cost_so_far
+                _story_cost_so_far=$(jq -s --arg id "$story_id" \
+                    '[.[] | select(.story_id == $id) | (.task_cost_usd // 0)] | add // 0' \
+                    "$_cost_file" 2>/dev/null || echo 0)
+                # Warning: advisory only, logged once per story per run.
+                if [ "$_budget_warned" != "1" ] && [ -n "${EPAM_STORY_BUDGET_WARNING_USD:-}" ] \
+                   && awk -v c="$_story_cost_so_far" -v w="$EPAM_STORY_BUDGET_WARNING_USD" 'BEGIN{exit !(c > w)}'; then
+                    warning "Story $story_id has spent \$${_story_cost_so_far} so far, over its \$${EPAM_STORY_BUDGET_WARNING_USD} warning threshold"
+                    _budget_warned=1
+                fi
+                # Hard limit: stop granting this story further retries. The
+                # CURRENT attempt (already paid for) is allowed to finish
+                # normally — deliverables/TC-writer/external verification
+                # below still run, so a success already in flight isn't
+                # thrown away. _retry_extension_used=1 is set BEFORE forcing
+                # the loop past MAX_RETRIES specifically so
+                # run_retry_extension_coordinator() (which can GRANT MORE
+                # retries on the self-heal path right after this loop exits)
+                # is never consulted — without that, a budget-triggered stop
+                # could still be overridden into more spend by self-heal.
+                if [ -n "${EPAM_STORY_BUDGET_HARD_LIMIT_USD:-}" ] \
+                   && awk -v c="$_story_cost_so_far" -v w="$EPAM_STORY_BUDGET_HARD_LIMIT_USD" 'BEGIN{exit !(c >= w)}'; then
+                    error "Story $story_id has spent \$${_story_cost_so_far}, at or over its \$${EPAM_STORY_BUDGET_HARD_LIMIT_USD} hard limit — no further retries will be granted (self-heal extension skipped)"
+                    _retry_extension_used=1
+                    retry_count=$((MAX_RETRIES + 1))
+                fi
+            fi
+        fi
+
         # Vendor-dir guard: NOT unlocked here — run_vendor_integrity_check()
         # (called at the very start of run_external_verification, before
         # run_dependency_check's own sanctioned writes) needs the lock marker
@@ -7618,9 +8252,30 @@ ${_trimmed_amendment}"
         # self-healing treatment (failure analyst, InferenceLadder escalation)
         # as any other verification failure, rather than exiting the phase
         # with zero retries.
+        # LAST_ATTEMPT_TSC_PASSED is the "validated work" signal
+        # _selective_worktree_reset (below, next rung transition) uses to
+        # decide whether the CURRENT diff is safe to preserve wholesale —
+        # real, already-computed evidence (not a heuristic) that the tree is
+        # at least type/syntax-correct, not the specific-broken-half-write
+        # state the reset exists to protect against. Only true when tsc
+        # actually ran AND passed; false if it failed OR never ran (an
+        # earlier stage already failed first) — "no evidence it's good" and
+        # "evidence it's bad" are both reasons to not trust the diff.
+        #
+        # Captured via _invoke_success_before_tsc rather than restructuring
+        # the check below into its own if/else — that literal
+        # `[ "$invoke_success" = true ] && ! run_tsc_verification ...; then`
+        # shape (unchanged since 2026-07-12) is asserted on directly by
+        # tsc-retry-in-loop.test.ts and tsc-gate-test-engineer-blindspot.test.ts.
+        local _invoke_success_before_tsc="$invoke_success"
         if [ "$invoke_success" = true ] && ! run_tsc_verification "$story_id" "$output_file"; then
             warning "$story_cli deliverables written but tsc --noEmit failed"
             invoke_success=false
+        fi
+        if [ "$_invoke_success_before_tsc" = true ] && [ "$invoke_success" = true ]; then
+            LAST_ATTEMPT_TSC_PASSED=true
+        else
+            LAST_ATTEMPT_TSC_PASSED=false
         fi
 
         # External test verification — runs tests outside the agent loop so the
@@ -7640,6 +8295,12 @@ ${_trimmed_amendment}"
             success "$story_cli completed implementation for $story_id"
             update_monitor_status "complete" "$story_id" "Implementation succeeded"
             append_cost_record "$story_id" "completed" "$story_started_at" "$(date -Iseconds)" "$output_file" "$json_result_file"
+            # Attribute this FINAL rung's contribution (backlog #113) — no
+            # further rung transition will happen to trigger this otherwise,
+            # since the story just succeeded.
+            _rung_attribute_changes "$story_id" "$_rung" "${STORY_MODEL:-}"
+            _generate_rung_contribution_report "$story_id"
+            rm -f "$(_rung_snapshot_path "$story_id")" 2>/dev/null || true
             post_completion_message "$story_id" "completed"
             return 0
         else
@@ -7658,7 +8319,34 @@ ${_trimmed_amendment}"
             [ ! -f "$_raw_for_coord" ] && _raw_for_coord=""
 
             # Layer 1: rule-based triage (always runs)
-            classify_failure_class "$_raw_for_coord" "$json_result_file" "$exit_code"
+            classify_failure_class "$_raw_for_coord" "$json_result_file" "$exit_code" "$story_id"
+
+            # Work carryover: verify_story_deliverables() (called above, on
+            # whichever attempt last actually ran the agent) already knows
+            # which declared files got REAL work vs which still show no diff
+            # from baseline. Surfacing that split explicitly to the NEXT
+            # attempt — rather than leaving it to be re-derived from
+            # "## Existing File Contents" prose alone — means a rung
+            # escalation builds on what's already correct instead of risking
+            # a full rewrite of files that didn't need one. Appended, not
+            # overwritten: classify_failure_class above may have already set
+            # its own amendment for this failure class.
+            if [ -n "${LAST_VERIFIED_TOUCHED_FILES:-}" ] || [ -n "${LAST_VERIFIED_UNCHANGED_FILES:-}" ]; then
+                local _carryover_note="
+
+## Work Already Done (previous attempt)"
+                if [ -n "${LAST_VERIFIED_TOUCHED_FILES:-}" ]; then
+                    _carryover_note="${_carryover_note}
+These files already have real changes from the previous attempt — build on them, do NOT rewrite from scratch unless the review/test feedback specifically says one of them is wrong:
+$(echo "$LAST_VERIFIED_TOUCHED_FILES" | sed 's/^/- /')"
+                fi
+                if [ -n "${LAST_VERIFIED_UNCHANGED_FILES:-}" ]; then
+                    _carryover_note="${_carryover_note}
+These declared files still show NO changes since baseline — if the story needs them, you must actually write to them:
+$(echo "$LAST_VERIFIED_UNCHANGED_FILES" | sed 's/^/- /')"
+                fi
+                COORDINATOR_PROMPT_AMENDMENT="${COORDINATOR_PROMPT_AMENDMENT:-}${_carryover_note}"
+            fi
 
             # Layer 2: LLM gate (only for capability/quality failures, only when enabled)
             local _next_model
@@ -7880,6 +8568,7 @@ Apply the above diagnosis AND fix the deterministic check violation — both mus
     error "Failed to implement $story_id after $((MAX_RETRIES + 1)) attempts"
     update_monitor_status "fail" "$story_id" "Failed after $((MAX_RETRIES + 1)) attempts"
     append_cost_record "$story_id" "failed" "$story_started_at" "$(date -Iseconds)" "$output_file" "$json_result_file"
+    rm -f "$(_rung_snapshot_path "$story_id")" 2>/dev/null || true
     post_completion_message "$story_id" "failed"
     return 1
 }

@@ -2282,6 +2282,65 @@ function recordDetectiveRound(logDir, row) {
   } catch { /* telemetry must never break the pass */ }
 }
 
+// checkFixSiteCoverage(findings, verificationCriteria) — deterministic (no
+// LLM) check: does ANY finding's file/function/reason/fix text share a
+// meaningful term with each verification criterion, or does a VC describe
+// something no finding touches at all?
+//
+// The detective's prompt is single-causal-site framed ("PRESCRIBE THE
+// MINIMAL FIX" against a "bug ticket") — correct for a one-line defect, but
+// it under-scopes a multi-layer feature. Live AMSD-2041, 2026-08-01: the
+// detective named only 2 files (an SDK client's config + a context provider's
+// reactive rewiring) while team-lead review caught 6+ more blockers sharing
+// no term with either finding — an uninstalled dependency, new fields on
+// query/entry interfaces, a missing API route, missing page-level wiring, and
+// missing tests. None of that was ever flagged as missing; the implementer
+// was handed a prescription that was silently incomplete, then given the
+// tiny "prescribed fix" iteration floor on top of it (see
+// resolve_brownfield_effort_floor).
+//
+// This does not try to re-diagnose the story — it only flags VCs whose
+// wording is entirely absent from what the detective found, so downstream
+// budget/prompt logic can react to a known gap instead of an invisible one.
+function checkFixSiteCoverage(findings, verificationCriteria) {
+  const STOPWORDS = new Set([
+    'the', 'a', 'an', 'and', 'or', 'to', 'of', 'in', 'on', 'for', 'is', 'are',
+    'with', 'that', 'this', 'when', 'without', 'from', 'by', 'as', 'at', 'be',
+    'it', 'its', 'their', 'than', 'after', 'before', 'then', 'can', 'into',
+    'not', 'no', 'does', 'should', 'must', 'will', 'has', 'have', 'been',
+  ]);
+  const tokenize = (s) => (String(s || '').toLowerCase().match(/[a-z][a-z0-9]{3,}/g) || [])
+    .filter((t) => !STOPWORDS.has(t));
+
+  const findingList = Array.isArray(findings) ? findings : [];
+  const findingTermSets = findingList.map((f) =>
+    new Set(tokenize(`${f.file || ''} ${f.function || ''} ${f.reason || ''} ${f.fix || ''}`))
+  );
+  const numFindings = findingList.length;
+  const dfFindings = new Map();
+  for (const set of findingTermSets) for (const t of set) dfFindings.set(t, (dfFindings.get(t) || 0) + 1);
+  // A term present in EVERY finding is the prescription's own recurring topic
+  // vocabulary (e.g. the product/vendor name shows up in nearly every finding
+  // about the same integration) — it can't prove a SPECIFIC VC is addressed,
+  // since it would trivially match almost anything about the same product.
+  // Only applies once there are 2+ findings to compare.
+  const isTopicNoise = (t) => numFindings >= 2 && dfFindings.get(t) === numFindings;
+
+  const findingTerms = new Set();
+  for (const set of findingTermSets) for (const t of set) if (!isTopicNoise(t)) findingTerms.add(t);
+
+  const uncovered = [];
+  for (const vc of (Array.isArray(verificationCriteria) ? verificationCriteria : [])) {
+    const vcTerms = tokenize(vc).filter((t) => !isTopicNoise(t));
+    if (!vcTerms.length) continue;
+    const covered = vcTerms.some((t) =>
+      findingTerms.has(t) || [...findingTerms].some((ft) => ft.startsWith(t) || t.startsWith(ft))
+    );
+    if (!covered) uncovered.push(vc);
+  }
+  return { complete: uncovered.length === 0, uncoveredVerificationCriteria: uncovered };
+}
+
 // runCodeGraphDetective(story, logDir) — invokes the code-graph-detective
 // agent: a tool-using LLM (GLM-5.1, upper-tier ladder) that iterates CodeGraph
 // queries and traces callers to find the CAUSAL fix site for a symptom-worded
@@ -2868,6 +2927,18 @@ ${storyPayload}${publishedContracts(repoPath, story)}
       // claude.sh's build_implementation_prompt injects it verbatim.
       if (detectiveFindings.length) {
         story.fixSiteAnalysis = detectiveFindings.filter((f) => f.reason);
+      }
+      // Deterministic coverage check (see checkFixSiteCoverage) — flags VCs
+      // the detective's findings never touch, so the implementer's budget and
+      // prompt can react to a known-incomplete prescription instead of a
+      // silently-incomplete one.
+      story.fixSiteAnalysisCoverage = checkFixSiteCoverage(
+        story.fixSiteAnalysis || [], story.verificationCriteria || []
+      );
+      if (!story.fixSiteAnalysisCoverage.complete) {
+        console.warn(
+          `spec-mode: ⚠️ ${story.id} — fixSiteAnalysis does not cover ${story.fixSiteAnalysisCoverage.uncoveredVerificationCriteria.length} verification criterion/criteria (e.g. "${String(story.fixSiteAnalysisCoverage.uncoveredVerificationCriteria[0] || '').slice(0, 100)}"). The prescribed fix may be structurally incomplete.`
+        );
       }
       // Loud, spec-pass-level surface: a DEFECT that reaches implementation with
       // NO located fix site is the exact failure mode this whole subsystem
@@ -4881,6 +4952,7 @@ module.exports = {
   isThinContext,
   verifyDetectiveHelper,
   verifyDetectiveEvidence,
+  checkFixSiteCoverage,
   precomputeDetectiveExplore,
   ladderNextModel,
   runClaude,

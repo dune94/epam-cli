@@ -39,7 +39,8 @@ describe('claude.sh — retry ladder fires for any story in any phase', () => {
   });
 
   it('reasoning effort is reset to low at story start (no cross-story leakage)', () => {
-    expect(claudeSrc).toMatch(/export EPAM_REASONING_EFFORT="low"/);
+    // Env-overridable via EPAM_RUNG0_REASONING_EFFORT — default is still "low".
+    expect(claudeSrc).toMatch(/export EPAM_REASONING_EFFORT="\$\{EPAM_RUNG0_REASONING_EFFORT:-low\}"/);
   });
 
   it('ladder log lines do NOT contain "temp=" (reasoning effort ≠ temperature)', () => {

@@ -1,0 +1,10 @@
+{
+  "_comment": "Writer-prompt size budget, measured at tag v1.0 (359f7fa) — the last state in which the writer was known to work. Every byte here is re-sent on EVERY agent-loop iteration and, with no prompt caching on this pipeline, billed in full each time. Raising a baseline is a deliberate, reviewable act: state why in the commit.",
+  "measuredAtTag": "v1.0",
+  "measuredAtCommit": "359f7fa",
+  "allowancePct": 5,
+  "baselineBytes": {
+    "minimal": 2087,
+    "threeCodeline": 2292
+  }
+}

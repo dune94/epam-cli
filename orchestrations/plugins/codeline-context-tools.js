@@ -151,7 +151,13 @@ const codelineFactsTool = {
       }
       const raw = fs.readFileSync(factsPath, 'utf-8');
       const parsed = JSON.parse(raw);
-      const facts = Array.isArray(parsed) ? parsed : Array.isArray(parsed.facts) ? parsed.facts : [];
+      const rawFacts = Array.isArray(parsed) ? parsed : Array.isArray(parsed.facts) ? parsed.facts : [];
+      // A fact is either a bare string (legacy project configs) or {text, source}. Only
+      // the text is handed to the agent; the source exists so a human can re-check and
+      // expire the claim, not to spend prompt tokens on provenance on every call.
+      const facts = rawFacts
+        .map((f) => (f && typeof f === 'object' ? f.text : f))
+        .filter((t) => typeof t === 'string' && t.trim().length > 0);
       if (facts.length === 0) {
         return { toolUseId: '', content: 'Codeline facts file present but empty.', isError: false };
       }

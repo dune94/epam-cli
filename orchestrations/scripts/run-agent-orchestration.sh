@@ -55,6 +55,7 @@ source "$SCRIPT_DIR/lib/tc-writer-gate.sh"
 # shellcheck source=lib/story-guards.sh
 source "$SCRIPT_DIR/lib/story-guards.sh"
 source "$SCRIPT_DIR/lib/flags.sh"
+source "$SCRIPT_DIR/lib/run-checkpoint.sh"
 # shellcheck source=lib/git-ops.sh
 source "$SCRIPT_DIR/lib/git-ops.sh"
 
@@ -3787,6 +3788,26 @@ run_specification_pass() {
     fi
 }
 
+# ── Resume: start at implementation, not at the beginning ────────────────────
+# EPAM_RESUME_RUN=<run-id> restores the artefacts a previous run persisted after its
+# spec pass and skips the spec pass entirely. The spec pass is the expensive half of a
+# run (~12 agent calls, ~50 min observed); re-deriving it to retry implementation throws
+# that away and re-rolls the dice on a stage that already succeeded.
+#
+# A resume that cannot be honoured HALTS. Continuing would silently run implementation
+# against whatever stale PRD happened to be on disk — the failure mode this exists to
+# prevent.
+if [ -n "${EPAM_RESUME_RUN:-}" ]; then
+    if ! restore_run_checkpoint "$EPAM_RESUME_RUN"; then
+        error "[orch] cannot resume run '${EPAM_RESUME_RUN}' — refusing to continue against un-restored state."
+        error "[orch] available checkpoints: $(list_run_checkpoints | tr '\n' ' ' 2>/dev/null || echo none)"
+        exit 1
+    fi
+    success "[orch] RESUMED run ${EPAM_RESUME_RUN} — skipping the spec pass, starting at implementation"
+    EPAM_SPEC_MODE=0
+    export EPAM_SPEC_MODE
+fi
+
 if [ "$DRY_RUN" = true ]; then
     step_emit "1" "skip" "Step 1: Specification pass" "dry-run"
     step_emit "1a" "skip" "  openspec (elaboration)" "dry-run"
@@ -3804,6 +3825,40 @@ fi
 # Story-ID-loss invariant: snapshot the settled post-spec-pass story set for
 # this phase. See capture_story_ids_snapshot's own docstring above for why.
 capture_story_ids_snapshot "presplit"
+
+# ── Checkpoint: the spec pass's output is now settled ────────────────────────
+# Persist it UNCONDITIONALLY, whether or not we are pausing. Anything generated and not
+# written to disc is a project violation, and until now the spec pass's output existed
+# only as an in-place mutation of the runtime PRD — which pre-run-reset.sh's next launch
+# would overwrite. Saving costs one file copy and buys a resumable run.
+if _ckpt_path=$(save_run_checkpoint "$PHASE" 2>&1); then
+    info "[orch] checkpoint saved: ${_ckpt_path}"
+else
+    warning "[orch] could not save the post-spec checkpoint: ${_ckpt_path}"
+    warning "[orch] this run will NOT be resumable — a later failure costs a full spec pass to retry."
+fi
+
+# ── Pause before implementation ──────────────────────────────────────────────
+# EPAM_PAUSE_AFTER_SPEC=1 stops here, with everything reviewed and persisted, so the
+# implementation stage can be started deliberately (and repeatedly) against a fixed,
+# inspectable input rather than a freshly re-derived one.
+if is_truthy "${EPAM_PAUSE_AFTER_SPEC:-}"; then
+    echo ""
+    echo -e "${GREEN}╔════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║  PAUSED — spec pass complete, implementation NOT started           ║${NC}"
+    echo -e "${GREEN}╚════════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "  RUN NUMBER:  ${GREEN}${ORCH_RUN_ID}${NC}"
+    echo -e "  Phase:       ${PHASE}"
+    echo -e "  Stories:     $(jq -r '(.stories // []) | length' "$PRD_FILE" 2>/dev/null || echo '?')"
+    echo -e "  Artefacts:   ${_ckpt_path:-<not saved>}"
+    echo ""
+    echo -e "  Resume implementation with:"
+    echo -e "    ${GREEN}EPAM_RESUME_RUN=${ORCH_RUN_ID}${NC} <your launcher>"
+    echo ""
+    step_emit "1" "done" "Step 1: Specification pass" "paused after spec (EPAM_PAUSE_AFTER_SPEC)"
+    exit 0
+fi
 
 # ── Infra test gate ──────────────────────────────────────────────────────────
 # Block any phase that depends on infra_test (anything except infra_test itself)

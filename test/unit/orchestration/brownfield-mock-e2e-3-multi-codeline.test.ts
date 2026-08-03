@@ -37,7 +37,14 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const REPO_ROOT = join(__dirname, '../../../');
-const RUN_AGENT_ORCH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
+// Launch through the REAL launcher, never the orchestrator directly. Invoking
+// run-agent-orchestration.sh straight skips the entire launch sequence — setsid
+// isolation, PID file, profiles restore, codeline teardown, EPAM_PROJECT_CONFIG_DIR
+// (plugins/codeline-facts/llm-settings), CodeGraph preflight and artefact archiving.
+// A run that STARTS differently from the real one is not a rehearsal of it; that gap
+// is exactly what let a "successful" harness certify a broken pipeline (2026-08-03).
+// Guarded by mock-launcher-parity.test.ts.
+const MOCK_LAUNCHER = join(REPO_ROOT, 'orchestrations/scripts/tier3-mock-run.sh');
 const CANONICAL_PRD = join(REPO_ROOT, 'test/fixtures/mock-pipeline/hello-dolly-multicodeline.canonical.json');
 const PROFILES = join(REPO_ROOT, 'orchestrations/agents/profiles.json');
 const RUN_REAL = process.env.RUN_REAL_PIPELINE_MOCK === '1';
@@ -157,7 +164,12 @@ function runPipeline(prdPath: string, phase: string): Promise<{ stdout: string; 
   writeFileSync(transcript, `# mock3 ${phase} — PRD ${prdPath}\n`);
   const record = (chunk: string) => { try { appendFileSync(transcript, chunk); } catch { /* evidence is best-effort */ } };
   return new Promise((resolve) => {
-    const child = spawn('bash', [RUN_AGENT_ORCH, '--phase', phase, '--reset'], {
+    // --project-root MUST match the PRD's own project.outputDir (lane A). Passing
+    // the epam-cli repo root here is precisely what the PROJECT_ROOT guard exists to
+    // reject — it aborts the run in under a second, and worse, would point agents at
+    // this repo instead of the disposable codeline.
+    const laneRoot = JSON.parse(readFileSync(prdPath, 'utf8')).project.outputDir as string;
+    const child = spawn('bash', [MOCK_LAUNCHER, '--prd', prdPath, '--project-root', laneRoot, '--phase', phase], {
       cwd: REPO_ROOT,
       env: {
         ...process.env,

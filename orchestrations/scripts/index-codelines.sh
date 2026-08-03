@@ -16,7 +16,13 @@
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="${JIRA_CODELINE_ROOT:-/home/bradleyjerome/projects/metrolinx}"
+ROOT="${JIRA_CODELINE_ROOT:-}"
+# No client path default: an engine default pointing at one client's checkout is
+# hardcoding, and silently indexes the wrong tree when the var is forgotten.
+if [ -z "$ROOT" ]; then
+    echo "JIRA_CODELINE_ROOT is not set — cannot index codelines." >&2
+    exit 1
+fi
 FORCE=0
 MAX_PARALLEL=4
 BIN="${CODEGRAPH_BIN:-$(which codegraph 2>/dev/null || echo '')}"

@@ -24,7 +24,7 @@ const profiles = JSON.parse(fs.readFileSync(PROFILES, 'utf8'));
 describe('Self-healing: orch script three-agent pipeline', () => {
   it('SKIP_GATE_REMEDIATION env var gates the remediation path', () => {
     expect(orchSrc).toMatch(/SKIP_GATE_REMEDIATION/);
-    expect(orchSrc).toMatch(/SKIP_GATE_REMEDIATION.*!=.*1|!=.*SKIP_GATE_REMEDIATION/);
+    expect(orchSrc).toMatch(/is_truthy "\$\{SKIP_GATE_REMEDIATION:-\}"/);
   });
 
   it('collects failing gate logs from all 6 gates into _failing_logs array', () => {

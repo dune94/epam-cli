@@ -33,9 +33,13 @@ if [ ! -d ".git" ]; then
 fi
 
 # package.json
-cat > package.json <<'JSON'
+# App identity comes from the target directory (or APP_NAME), never a literal:
+# a client brand baked in here was emitted into EVERY project the engine
+# scaffolded, regardless of who that project was for.
+APP_NAME="${APP_NAME:-$(basename "$(pwd)")}"
+cat > package.json <<JSON
 {
-  "name": "skyscanner-app-frontend",
+  "name": "${APP_NAME}",
   "version": "0.1.0",
   "private": true,
   "scripts": {

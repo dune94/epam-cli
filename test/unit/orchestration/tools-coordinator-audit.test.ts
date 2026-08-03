@@ -39,7 +39,7 @@ describe('Step 1.66 wiring (static)', () => {
   });
 
   it('respects SKIP_TOOLS_AUDIT=1', () => {
-    expect(orchSrc).toMatch(/if \[ "\$\{SKIP_TOOLS_AUDIT:-0\}" = "1" \]; then/);
+    expect(orchSrc).toMatch(/if is_truthy "\$\{SKIP_TOOLS_AUDIT:-\}"; then/);
   });
 
   it('appends the "12" checklist row', () => {
@@ -194,7 +194,7 @@ describe('Step 1.66 — REAL execution: LLM only invoked when the scan flags a b
   }
 
   function extractStepBlock(): string {
-    const startMarker = 'if [ "${SKIP_TOOLS_AUDIT:-0}" = "1" ]; then';
+    const startMarker = 'if is_truthy "${SKIP_TOOLS_AUDIT:-}"; then';
     const start = orchSrc.indexOf(startMarker);
     const endMarker = 'step_emit "12" "pass" "Step 12: Tools coordinator audit"\nfi';
     const end = orchSrc.indexOf(endMarker, start) + endMarker.length;
@@ -218,6 +218,7 @@ describe('Step 1.66 — REAL execution: LLM only invoked when the scan flags a b
         stubPath,
         [
           '#!/usr/bin/env bash',
+          `source ${join(__dirname, '../../../orchestrations/scripts/lib/flags.sh')}`,
           'cat > /dev/null',
           `echo called >> ${JSON.stringify(callLog)}`,
           `printf '#!/usr/bin/env bash\\n# Installs vitest as a dev dependency\\nnpm install -D vitest\\n' > ${JSON.stringify(toolPath)}`,
@@ -247,6 +248,7 @@ describe('Step 1.66 — REAL execution: LLM only invoked when the scan flags a b
     const block = extractStepBlock();
     const script = [
       '#!/usr/bin/env bash',
+      `source ${join(__dirname, '../../../orchestrations/scripts/lib/flags.sh')}`,
       'set -uo pipefail',
       'step_emit() { :; }',
       'error() { echo "ERROR: $*"; }',

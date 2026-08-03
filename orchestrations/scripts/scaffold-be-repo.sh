@@ -33,9 +33,13 @@ if [ ! -d ".git" ]; then
 fi
 
 # package.json
-cat > package.json <<'JSON'
+# App identity comes from the target directory (or APP_NAME), never a literal:
+# a client brand baked in here was emitted into EVERY project the engine
+# scaffolded, regardless of who that project was for.
+APP_NAME="${APP_NAME:-$(basename "$(pwd)")}"
+cat > package.json <<JSON
 {
-  "name": "skyscanner-app",
+  "name": "${APP_NAME}",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -94,8 +98,8 @@ mkdir -p src/public
 cat > src/public/index.html <<'HTML'
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>Skyscanner App</title></head>
-<body><h1>Skyscanner Flight Search</h1><p>Dashboard placeholder — implemented by orchestration agents.</p></body>
+<head><meta charset="UTF-8"><title>${APP_NAME}</title></head>
+<body><h1>${APP_NAME}</h1><p>Dashboard placeholder — implemented by orchestration agents.</p></body>
 </html>
 HTML
 

@@ -2094,11 +2094,24 @@ function findVcMechanism(vc, storyId) {
 
 // Conservative, guaranteed-mechanism-free fallback VC derived purely from the
 // ticket symptom — the never-fail branch of the autonomous flag loop (no human).
-function safeFallbackVc(story) {
+//
+// `findings` (optional): the code-graph-detective's fixSiteAnalysis, already
+// available at the call site (runCodeGraphDetective runs BEFORE VC enforcement
+// specifically so downstream stages can ground on it — see the comment at its
+// call site). Before this fix, this was the one branch that never received it:
+// the regenerate path threads `findings` into regenerateVcViaOpenspec's prompt,
+// but the true last-resort fallback took only `story` (title/description) and
+// produced pure boilerplate even when the detective had already located a real
+// fix site with detailed reasoning, with zero reference to it in the persisted
+// VCs. A bare file-path parenthetical (no verb, no mechanism) keeps this
+// passing findVcMechanism — see vc-fallback-grounded-in-detective.test.ts.
+function safeFallbackVc(story, findings) {
   const subject = String((story && (story.title || story.description)) || 'the behavior described in the ticket')
     .replace(/\s+/g, ' ').trim().slice(0, 160);
+  const located = Array.isArray(findings) ? findings.find((f) => f && f.file) : null;
+  const locationNote = located ? ` (located near ${located.file}${located.function ? `, ${located.function}` : ''})` : '';
   return [
-    `The behavior described in the ticket is observed to be correct after the change: "${subject}".`,
+    `The behavior described in the ticket is observed to be correct after the change: "${subject}"${locationNote}.`,
     `Existing behavior related to this area is unchanged (no regression).`,
   ];
 }
@@ -2110,7 +2123,7 @@ function safeFallbackVc(story) {
 // and `reviewVc` are injected so the orchestration is unit-testable without an LLM.
 // Returns { vc, source: 'clean'|'regenerated'|'fallback', cycles, flags }.
 async function enforceVerificationCriteria(story, initialVc, opts = {}) {
-  const { regenerateVc = null, reviewVc = null, maxCycles = Number(process.env.VC_MAX_CYCLES || '2') } = opts;
+  const { regenerateVc = null, reviewVc = null, findings = null, maxCycles = Number(process.env.VC_MAX_CYCLES || '2') } = opts;
   let vc = Array.isArray(initialVc) ? initialVc.slice() : [];
   let lastFlags = [];
   for (let cycle = 1; cycle <= maxCycles; cycle++) {
@@ -2129,7 +2142,7 @@ async function enforceVerificationCriteria(story, initialVc, opts = {}) {
     vc = Array.isArray(regenerated) && regenerated.length ? regenerated : vc;
   }
   console.warn(`spec-mode: ⚠️ VC could not be made mechanism-free for ${story && story.id} after ${maxCycles} cycle(s) — using conservative fallback VC. Last flags: ${lastFlags.slice(0, 3).join(' | ')}`);
-  return { vc: safeFallbackVc(story), source: 'fallback', cycles: maxCycles, flags: lastFlags };
+  return { vc: safeFallbackVc(story, findings), source: 'fallback', cycles: maxCycles, flags: lastFlags };
 }
 
 // Shared LLM call for the VC loop — ladder-escalates the model per cycle (base
@@ -2891,6 +2904,7 @@ ${storyPayload}${publishedContracts(repoPath, story)}
               story, flags, cycle: nextCycle, logDir, findings: detectiveFindings,
             }),
             reviewVc: (vc, cycle) => reviewVcViaSpeckit({ story, vc, cycle, logDir }),
+            findings: detectiveFindings,
           });
           story.verificationCriteria = enforced.vc;
           story.vcSource = enforced.source === 'fallback'
@@ -3121,7 +3135,7 @@ Produce your refined output as raw JSON only (no XML tags, no markdown fences, n
 
 You have NO tools in this request and cannot call any — do not emit a tool call in any
 syntax (<tool_call>, <tool_use>, <function_call>). Nothing executes them, so a response
-containing one is discarded in full and the work is lost. Live AMSD-2041 (2026-07-28)
+containing one is discarded in full and the work is lost. Observed live (2026-07-28)
 died exactly this way: asked to review a story with an empty criteria list, the model
 requested the four files named above via <tool_call>read_file(...) and produced no answer
 at all. Everything you may use is already in this prompt. File PATHS are given without
@@ -3770,6 +3784,103 @@ function mergeLocationHintFiles(technicalNotes, locationHint) {
   return { ...(technicalNotes || {}), files: mergedFiles };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Resolve a declared path against ONE real checkout. Assumes no naming convention:
+// exact, then case variant, then same-stem/different-extension. The repository is the
+// authority — which is why no camelCase rule is needed or wanted. Mirrors
+// lib/story_manifest_schema.py's resolve_path so both sides agree on what "resolved"
+// means; the Python model is the schema source of truth, this is the runtime path.
+function _resolveInCodeline(declared, codelineRoot) {
+  const checked = [declared];
+  const abs = (p) => path.join(codelineRoot, p);
+  try {
+    if (fs.statSync(abs(declared)).isFile()) {
+      return { actual: declared, match: 'exact' };
+    }
+  } catch { /* fall through to variants */ }
+
+  const relDir = path.dirname(declared) === '.' ? '' : path.dirname(declared);
+  const base = path.basename(declared);
+  const ext = path.extname(base);
+  const stem = path.basename(base, ext);
+  const absDir = relDir ? abs(relDir) : codelineRoot;
+  const joinRel = (e) => (relDir ? path.join(relDir, e) : e);
+
+  let entries;
+  try {
+    entries = fs.readdirSync(absDir).sort();
+  } catch {
+    return { unresolved: { declared, candidates_checked: checked, reason: `directory '${relDir || '.'}' does not exist in this codeline` } };
+  }
+
+  for (const e of entries) {
+    if (e !== base && e.toLowerCase() === base.toLowerCase()) {
+      return { actual: joinRel(e), match: 'case_variant' };
+    }
+  }
+  for (const e of entries) {
+    const eExt = path.extname(e);
+    if (path.basename(e, eExt).toLowerCase() === stem.toLowerCase() && eExt !== ext) {
+      return { actual: joinRel(e), match: 'extension_variant' };
+    }
+  }
+  return {
+    unresolved: {
+      declared,
+      candidates_checked: checked.concat(entries.map(joinRel)),
+      reason: 'no exact, case-variant or extension-variant match exists in this codeline',
+    },
+  };
+}
+
+// buildPerCodelineManifest(story, prd) → { <codeline>: {files, resolved, unresolved} } | null
+//
+// A SINGLE shared technicalNotes.files array cannot be correct when the lanes are
+// separate repositories whose real filenames differ — at most one lane's path can be
+// right. Live 2026-08-03: the detective's own root-cause fix site was declared once for
+// three codelines that spell it three ways, so it resolved on one lane; two writers were
+// handed a path that does not exist, and a reviewer then blocked one of them for not
+// editing it.
+//
+// Codeline→checkout comes from the PRD's own project.outputDirs, so no client name
+// appears here. Returns null (never a guess) when there are no declared paths or no
+// codeline mapping to resolve against.
+function buildPerCodelineManifest(story, prd) {
+  const declared = Array.isArray(story?.technicalNotes?.files) ? story.technicalNotes.files : [];
+  if (!declared.length) return null;
+
+  const outputDirs = Array.isArray(prd?.project?.outputDirs) ? prd.project.outputDirs : [];
+  if (!outputDirs.length) return null;
+
+  const rootFor = new Map(
+    outputDirs.filter(o => o && o.codeline && o.path).map(o => [o.codeline, o.path]),
+  );
+  const codelines = Array.isArray(story.codelines) && story.codelines.length
+    ? story.codelines
+    : (story.codeline ? [story.codeline] : []);
+  if (!codelines.length) return null;
+
+  const out = {};
+  for (const cl of codelines) {
+    const root = rootFor.get(cl);
+    if (!root) continue;                       // no checkout declared — do not invent one
+    const files = [];
+    const resolved = [];
+    const unresolved = [];
+    for (const d of declared) {
+      const r = _resolveInCodeline(d, root);
+      if (r.unresolved) {
+        unresolved.push(r.unresolved);
+      } else {
+        files.push(r.actual);
+        resolved.push({ declared: d, actual: r.actual, match: r.match, verified_against: root });
+      }
+    }
+    out[cl] = { files, resolved, unresolved };
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 function applySpecChanges(story, payload, newStories, prd, phaseId, runId, logDir = null) {
   const result = { acceptanceChanged: false, splitCount: 0 };
   // AC IMMUTABILITY — UNIVERSAL BACKSTOP (brownfield only). Every spec-agent
@@ -3841,6 +3952,27 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId, logDi
   // Merge (not overwrite) — technicalNotes may already carry other fields
   // (or files) from this same payload or an earlier pass.
   story.technicalNotes = mergeLocationHintFiles(story.technicalNotes, payload.locationHint);
+
+  // Resolve the declared files against EACH codeline's own checkout and persist the
+  // per-codeline truth. The flat `files` array stays for backward compatibility, but a
+  // single array cannot be correct across repositories that spell the same file
+  // differently — live 2026-08-03 it resolved on one lane of three, and the two writers
+  // handed a non-existent path could not do the work they were then blocked for. An
+  // unresolvable entry is recorded WITH the candidates checked, so a wrong path is
+  // visible in the PRD at spec time instead of surfacing as a mystery at write time.
+  const _perCodeline = buildPerCodelineManifest(story, prd);
+  if (_perCodeline) {
+    story.technicalNotes = { ...story.technicalNotes, perCodeline: _perCodeline };
+    for (const [_cl, _entry] of Object.entries(_perCodeline)) {
+      if (_entry.unresolved.length) {
+        console.warn(
+          `spec-mode: ${story.id} — ${_entry.unresolved.length} declared file(s) do NOT exist in codeline '${_cl}': ` +
+          _entry.unresolved.map(u => u.declared).join(', '),
+        );
+      }
+    }
+  }
+
   if (Array.isArray(payload.splitStories) && payload.splitStories.length) {
     const currentDepth = splitDepth(story, prd);
     const maxSplitDepth = parseInt(process.env.SPEC_MAX_SPLIT_DEPTH || '2', 10);
@@ -4084,8 +4216,34 @@ function unwrapToolCallJson(text) {
   // Arg container tag varies by model/provider: <arguments> (glm), <input> (others),
   // <parameters>. Backref \1 keeps open/close matched. Found live 2026-07-24: speckit
   // used <arguments>, MODEL_REVIEW used <input>.
-  for (const m of text.matchAll(/<(arguments|input|parameters)>\s*([\s\S]*?)\s*<\/\1>/g)) candidates.push(m[2]);
-  candidates.push(text); // whole text may be a bare tool-call JSON object
+  // Models "answer" by emitting a tool invocation wrapped in an XML-ish tag. The tag NAME
+  // varies per provider and version — observed live: <arguments> (glm), <tool_call>
+  // (mock3 MODEL_REVIEW, 2026-08-03) and <function_calls> (metrolinx SPEC_ASSIGNMENTS,
+  // the same day, minutes after a fix that enumerated only <tool_call>). Enumerating
+  // names loses to whatever the next provider emits, and each miss silently DISCARDS a
+  // real decision.
+  //
+  // So match on SHAPE, not on a name list: every balanced <tag>…</tag> body becomes a
+  // candidate scope, peeled repeatedly so a nested wrapper cannot hide the payload from
+  // an outer match. A wrong guess costs nothing — a candidate is only accepted below if
+  // it actually parses as JSON — whereas a missing name costs the whole answer.
+  const scopes = [];
+  const seen = new Set();
+  let frontier = [text];
+  for (let depth = 0; depth < 4 && frontier.length; depth += 1) {
+    const next = [];
+    for (const scope of frontier) {
+      if (!scope || seen.has(scope)) continue;
+      seen.add(scope);
+      scopes.push(scope);
+      for (const m of scope.matchAll(/<([a-zA-Z_][\w.-]*)\b[^>]*>\s*([\s\S]*?)\s*<\/\1>/g)) {
+        if (m[2] && m[2] !== scope) next.push(m[2]);
+      }
+    }
+    frontier = next;
+  }
+  // Innermost bodies first: a nested payload is more specific than its wrapper.
+  for (const scope of scopes.slice().reverse()) candidates.push(scope);
   for (const raw of candidates) {
     let args;
     try { args = JSON.parse(String(raw).trim()); } catch { continue; }
@@ -4942,6 +5100,7 @@ module.exports = {
   SPLIT_MANDATE_AC_THRESHOLD,
   applySpecChanges,
   mergeLocationHintFiles,
+  buildPerCodelineManifest,
   buildBrownfieldArchaeologyBlock,
   VC_OBSERVABILITY_RULES,
   preserveDefectAcceptanceCriteria,

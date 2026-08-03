@@ -114,6 +114,7 @@ describe('run_diagnosis_groundedness_check() — REAL execution', () => {
         scriptPath,
         [
           '#!/usr/bin/env bash',
+          `source ${join(__dirname, '../../../orchestrations/scripts/lib/flags.sh')}`,
           `SCRIPT_DIR=${JSON.stringify(scriptDir)}`,
           `LOG_DIR=${JSON.stringify(logDir)}`,
           `VERIFICATION_FAILURE=${JSON.stringify('FAIL src/index.test.ts\\n  AssertionError: expected 4 to be 3')}`,

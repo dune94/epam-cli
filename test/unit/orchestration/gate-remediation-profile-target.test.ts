@@ -78,7 +78,7 @@ describe('gate-remediation — a successful profile update now triggers a retry 
 describe('gate-remediation — REAL execution: a profile-only fix (no new AC) now retries instead of hard-stopping', () => {
   function extractRemediationBlock(): string {
     const lines = orchSrc.split('\n');
-    const startIdx = lines.findIndex((l) => l.trim() === 'if [ "${SKIP_GATE_REMEDIATION:-0}" != "1" ] && [ ${#_failing_logs[@]} -gt 0 ]; then');
+    const startIdx = lines.findIndex((l) => l.trim() === 'if ! is_truthy "${SKIP_GATE_REMEDIATION:-}" && [ ${#_failing_logs[@]} -gt 0 ]; then');
     const endIdx = lines.findIndex((l, i) => i > startIdx && l.trim() === 'return 1');
     if (startIdx === -1 || endIdx === -1) throw new Error('Could not locate remediation block anchors');
     return lines.slice(startIdx, endIdx + 1).join('\n');
@@ -114,6 +114,7 @@ describe('gate-remediation — REAL execution: a profile-only fix (no new AC) no
       stubPath,
       [
         '#!/usr/bin/env bash',
+        `source ${join(__dirname, '../../../orchestrations/scripts/lib/flags.sh')}`,
         'prompt=$(cat)',
         `{ echo "=== CALL ==="; echo "$prompt"; } >> ${JSON.stringify(promptDumpPath)}`,
         'if echo "$prompt" | grep -q "Gate:"; then',
@@ -154,6 +155,7 @@ describe('gate-remediation — REAL execution: a profile-only fix (no new AC) no
     const block = extractRemediationBlock();
     const script = [
       '#!/usr/bin/env bash',
+      `source ${join(__dirname, '../../../orchestrations/scripts/lib/flags.sh')}`,
       'set -uo pipefail',
       'step_emit() { :; }',
       'error() { echo "ERROR: $*"; }',

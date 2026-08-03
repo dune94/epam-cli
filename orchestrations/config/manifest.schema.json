@@ -1,0 +1,235 @@
+{
+  "$defs": {
+    "Candidate": {
+      "additionalProperties": false,
+      "description": "A ranked search hit. Allowed to be unresolved; never a deliverable.",
+      "properties": {
+        "path": {
+          "discriminator": {
+            "mapping": {
+              "resolved": "#/$defs/ResolvedPath",
+              "unresolved": "#/$defs/UnresolvedPath"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ResolvedPath"
+            },
+            {
+              "$ref": "#/$defs/UnresolvedPath"
+            }
+          ],
+          "title": "Path"
+        },
+        "rank": {
+          "default": 0,
+          "title": "Rank",
+          "type": "integer"
+        },
+        "source": {
+          "enum": [
+            "codegraph",
+            "semble",
+            "deterministic",
+            "detective"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "source"
+      ],
+      "title": "Candidate",
+      "type": "object"
+    },
+    "CodelineManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "candidates": {
+          "items": {
+            "$ref": "#/$defs/Candidate"
+          },
+          "title": "Candidates",
+          "type": "array"
+        },
+        "codeline": {
+          "title": "Codeline",
+          "type": "string"
+        },
+        "deliverables": {
+          "items": {
+            "$ref": "#/$defs/ResolvedPath"
+          },
+          "title": "Deliverables",
+          "type": "array"
+        },
+        "fix_sites": {
+          "items": {
+            "$ref": "#/$defs/FixSite"
+          },
+          "title": "Fix Sites",
+          "type": "array"
+        }
+      },
+      "required": [
+        "codeline"
+      ],
+      "title": "CodelineManifest",
+      "type": "object"
+    },
+    "FixSite": {
+      "additionalProperties": false,
+      "description": "A prescribed change location. Its path MUST resolve \u2014 enforced by the type.",
+      "properties": {
+        "broken_line": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Broken Line"
+        },
+        "function": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Function"
+        },
+        "path": {
+          "$ref": "#/$defs/ResolvedPath"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "reason"
+      ],
+      "title": "FixSite",
+      "type": "object"
+    },
+    "ResolvedPath": {
+      "additionalProperties": false,
+      "description": "A path PROVEN to exist in a specific checkout.\n\n`verified_against` is required and has no default: an instance cannot exist without\nrecording the checkout it was proven against.",
+      "properties": {
+        "actual": {
+          "description": "The path that genuinely exists in this codeline.",
+          "title": "Actual",
+          "type": "string"
+        },
+        "declared": {
+          "description": "The path as originally requested (detective/search).",
+          "title": "Declared",
+          "type": "string"
+        },
+        "kind": {
+          "const": "resolved",
+          "default": "resolved",
+          "title": "Kind",
+          "type": "string"
+        },
+        "match": {
+          "enum": [
+            "exact",
+            "case_variant",
+            "extension_variant"
+          ],
+          "title": "Match",
+          "type": "string"
+        },
+        "verified_against": {
+          "description": "Codeline root the path was resolved in.",
+          "title": "Verified Against",
+          "type": "string"
+        }
+      },
+      "required": [
+        "declared",
+        "actual",
+        "match",
+        "verified_against"
+      ],
+      "title": "ResolvedPath",
+      "type": "object"
+    },
+    "UnresolvedPath": {
+      "additionalProperties": false,
+      "description": "A path that could NOT be proven. Never silently downgraded to a pass.",
+      "properties": {
+        "candidates_checked": {
+          "description": "What was actually looked at, as evidence.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Candidates Checked",
+          "type": "array"
+        },
+        "declared": {
+          "title": "Declared",
+          "type": "string"
+        },
+        "kind": {
+          "const": "unresolved",
+          "default": "unresolved",
+          "title": "Kind",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "declared",
+        "candidates_checked",
+        "reason"
+      ],
+      "title": "UnresolvedPath",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Per-codeline by construction \u2014 a single shared file list is not expressible.",
+  "properties": {
+    "codelines": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Codelines",
+      "type": "array"
+    },
+    "per_codeline": {
+      "additionalProperties": {
+        "$ref": "#/$defs/CodelineManifest"
+      },
+      "title": "Per Codeline",
+      "type": "object"
+    },
+    "story_id": {
+      "title": "Story Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "story_id",
+    "codelines",
+    "per_codeline"
+  ],
+  "title": "StoryManifest",
+  "type": "object"
+}

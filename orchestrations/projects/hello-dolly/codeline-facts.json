@@ -1,0 +1,15 @@
+{
+  "_comment": "Mock project. Facts carry a `source` for the same reason real projects do: a fact injected into an agent prompt as authoritative must say where it is observable, so it can be re-checked and expired.",
+  "hello-dolly": {
+    "facts": [
+      {
+        "text": "This is a disposable mock codeline created fresh per test run; it has no CI, no pre-commit hooks and no external services.",
+        "source": "orchestrations/scripts/tier3-mock-run.sh — the mock codeline is scaffolded from scratch on every run"
+      },
+      {
+        "text": "Tests run with vitest via the project's own `npm test` script.",
+        "source": "the generated mock codeline's package.json test script"
+      }
+    ]
+  }
+}

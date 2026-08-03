@@ -17,6 +17,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/flags.sh"
 
 # Files this run PRODUCED supersede the files it DECLARED.
 #
@@ -51,7 +52,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ "${SKIP_TC_WRITER:-0}" = "1" ]]; then
+if is_truthy "${SKIP_TC_WRITER:-}"; then
   echo "  [tc-writer] SKIP_TC_WRITER=1 — skipping gate"
   exit 0
 fi
@@ -332,7 +333,7 @@ Output format (one object, all story IDs as keys):
       "<exact query param names used: 'from' and 'to' not 'origin'/'destination'>",
       "<exact error shape: { error: string } with 400 status for missing params>"
     ],
-    "mockStrategy": "<exact mock setup: e.g. vi.mock('./skyscanner/client') with vi.hoisted constructor>",
+    "mockStrategy": "<exact mock setup: e.g. vi.mock('<real module path from the diff>') with vi.hoisted constructor>",
     "bannedPatterns": ["<string that must NOT appear in test file>"]
   }
 }
@@ -357,7 +358,7 @@ For each story above:
    - The correct import path for the module under test
 
 3. Write MOCK_STRATEGY as a single sentence describing exactly how to mock dependencies:
-   - Include the exact vi.mock() path (e.g. './skyscanner/client' not './client')
+   - Include the exact vi.mock() path (the real path as it appears in the code under test, not a shortened form)
    - State whether to use vi.stubGlobal, vi.hoisted, or constructor mock
    - State whether beforeEach uses clearAllMocks or resetAllMocks
 

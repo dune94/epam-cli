@@ -150,31 +150,40 @@ describe('agent write-first prompt — absolute paths rewritten in worktree mode
 // the main repo on every attempt. Only rewriting write_first_lines was insufficient.
 describe('build_implementation_prompt — full prompt text rewritten in worktree mode', () => {
   const implIdx = claudeSrc.indexOf('build_implementation_prompt()');
+  // Extract the WHOLE function body, not a fixed-size window. A byte-count window is a
+  // measurement artefact, not the contract: adding legitimate code near the top of the
+  // function silently pushed the worktree-rewrite block out of a 1500-char slice and
+  // failed these tests while the behaviour was entirely intact (2026-08-03). Widening
+  // the number would have been tuning the test to the code; reading the real body
+  // asserts what the test actually means.
+  const implBody = implIdx > -1
+    ? claudeSrc.slice(implIdx, claudeSrc.indexOf('\n}', implIdx) + 2)
+    : '';
 
   it('build_implementation_prompt rewrites acceptance_criteria paths', () => {
     expect(implIdx).toBeGreaterThan(-1);
-    const block = claudeSrc.slice(implIdx, implIdx + 1500);
+    const block = implBody;
     // Must replace MAIN_PROJECT_ROOT in acceptance_criteria string
     expect(block).toMatch(/acceptance_criteria.*MAIN_PROJECT_ROOT.*PROJECT_ROOT|acceptance_criteria=.*\$\{acceptance_criteria\/\//);
   });
 
   it('build_implementation_prompt rewrites technical_notes paths', () => {
-    const block = claudeSrc.slice(implIdx, implIdx + 1500);
+    const block = implBody;
     expect(block).toMatch(/technical_notes.*MAIN_PROJECT_ROOT.*PROJECT_ROOT|technical_notes=.*\$\{technical_notes\/\//);
   });
 
   it('build_implementation_prompt rewrites files variable paths', () => {
-    const block = claudeSrc.slice(implIdx, implIdx + 1500);
+    const block = implBody;
     expect(block).toMatch(/\bfiles=.*MAIN_PROJECT_ROOT.*PROJECT_ROOT|\bfiles=.*\$\{files\/\//);
   });
 
   it('build_implementation_prompt rewrites description paths', () => {
-    const block = claudeSrc.slice(implIdx, implIdx + 1500);
+    const block = implBody;
     expect(block).toMatch(/description.*MAIN_PROJECT_ROOT.*PROJECT_ROOT|description=.*\$\{description\/\//);
   });
 
   it('build_implementation_prompt rewrite is guarded by WORKTREE_MODE check', () => {
-    const block = claudeSrc.slice(implIdx, implIdx + 1500);
+    const block = implBody;
     expect(block).toContain('WORKTREE_MODE');
     expect(block).toContain('MAIN_PROJECT_ROOT');
   });

@@ -110,6 +110,7 @@ function runStep358(opts: {
   mkdirSync(bin, { recursive: true });
   writeFileSync(join(bin, 'npm'), [
     '#!/usr/bin/env bash',
+    `source ${join(__dirname, '../../../orchestrations/scripts/lib/flags.sh')}`,
     '[ "$1" = "test" ] || exit 0',
     'script=$(node -e \'try{const p=require(process.cwd()+"/package.json");process.stdout.write((p.scripts&&p.scripts.test)||"")}catch(e){}\')',
     '[ -n "$script" ] || exit 0',
@@ -120,6 +121,7 @@ function runStep358(opts: {
   const script = join(harness, 'drive.sh');
   writeFileSync(script, [
     '#!/usr/bin/env bash',
+    `source ${join(__dirname, '../../../orchestrations/scripts/lib/flags.sh')}`,
     'set -uo pipefail',
     `_rg_root=${JSON.stringify(root)}`,
     `_rg_node=${JSON.stringify(process.execPath)}`,

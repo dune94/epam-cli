@@ -82,6 +82,9 @@ describe('resolve_planner_settings — complexity-adaptive auto-trigger (REAL ex
       writeFileSync(
         scriptPath,
         [
+          // The extracted block calls is_truthy (lib/flags.sh owns every boolean
+          // flag decision), so the probe must source it exactly as the real script does.
+          `source ${JSON.stringify(join(__dirname, '../../../orchestrations/scripts/lib/flags.sh'))}`,
           `PRD_FILE="${prdFile}"`,
           `log() { :; }`,
           `warning() { :; }`,

@@ -64,7 +64,10 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 PRD_FILE="${1:?Usage: writer-retest.sh <PRD_FILE> [--project NAME]}"
 shift || true
-PROJECT_NAME="metrolinx"
+# No default project. This is a generic harness, not a per-project launcher: baking one
+# client's name in makes it silently wrong for the next project. The name is CONFIGURABLE
+# (--project / EPAM_PROJECT_NAME) or DETERMINABLE (read from the PRD), never a literal.
+PROJECT_NAME="${EPAM_PROJECT_NAME:-}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --project) PROJECT_NAME="${2:?}"; shift 2 ;;
@@ -73,6 +76,17 @@ while [ $# -gt 0 ]; do
 done
 
 [ -f "$PRD_FILE" ] || { echo "[writer-retest] PRD_FILE not found: $PRD_FILE" >&2; exit 1; }
+
+# DETERMINABLE: fall back to the project the PRD itself names. Failing loudly beats
+# silently retesting against some other project's config.
+if [ -z "$PROJECT_NAME" ]; then
+  PROJECT_NAME=$(jq -r '.project.name // .projectName // empty' "$PRD_FILE" 2>/dev/null || echo "")
+fi
+if [ -z "$PROJECT_NAME" ]; then
+  echo "[writer-retest] project name unknown — pass --project NAME, set EPAM_PROJECT_NAME," >&2
+  echo "[writer-retest] or give the PRD a .project.name. Refusing to guess." >&2
+  exit 2
+fi
 if ! python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$PRD_FILE" 2>/dev/null; then
   echo "[writer-retest] PRD_FILE is not valid JSON: $PRD_FILE" >&2
   exit 1

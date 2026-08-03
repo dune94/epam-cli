@@ -74,13 +74,13 @@ function candidateTestPaths(projectRoot, sourceFile) {
 }
 
 const resolveTestFileTool = {
-  name: 'metrolinx_resolve_test_file',
+  name: 'resolve_test_file',
   pluginApiVersion: PLUGIN_API_VERSION,
   description:
     'Given a source file path (relative to the project root), report which test file(s) ALREADY EXIST for it on disk, checked against this codeline\'s real conventions — co-located __tests__/, sibling .spec/.test files, and mirrored test/ directories. Use this BEFORE creating a new test file: extending an existing test file at its real, established path is almost always correct; inventing a new path/directory is almost always wrong.',
   permission: 'safe',
   definition: {
-    name: 'metrolinx_resolve_test_file',
+    name: 'resolve_test_file',
     description:
       'Report existing test file(s) for a given source file, checked against real filesystem state in this codeline.',
     inputSchema: {
@@ -129,13 +129,13 @@ const resolveTestFileTool = {
 };
 
 const codelineFactsTool = {
-  name: 'metrolinx_codeline_facts',
+  name: 'codeline_facts',
   pluginApiVersion: PLUGIN_API_VERSION,
   description:
     'Return known, real, project-operator-curated facts and gotchas about the codeline currently being worked in — e.g. required local environment variables, known dependency quirks, test-environment requirements. These are facts that could not otherwise be discovered by reading the code alone; check this before assuming local tooling (lint, tsc, pre-commit hooks) will behave the same as in a fully-configured environment.',
   permission: 'safe',
   definition: {
-    name: 'metrolinx_codeline_facts',
+    name: 'codeline_facts',
     description: 'Return curated facts/gotchas for the current codeline, if any are configured.',
     inputSchema: { type: 'object', properties: {}, required: [] },
   },
@@ -169,13 +169,13 @@ const codelineFactsTool = {
 };
 
 const gitStateTool = {
-  name: 'metrolinx_git_state',
+  name: 'git_state',
   pluginApiVersion: PLUGIN_API_VERSION,
   description:
     'Report the REAL current git state of this codeline: branch, HEAD SHA, and whether the working tree is dirty (with the list of changed files). Use this instead of assuming a clean baseline.',
   permission: 'safe',
   definition: {
-    name: 'metrolinx_git_state',
+    name: 'git_state',
     description: 'Report real git branch/HEAD/dirty-file state for the current codeline.',
     inputSchema: { type: 'object', properties: {}, required: [] },
   },
@@ -204,6 +204,86 @@ const gitStateTool = {
   },
 };
 
+const checkAntiPatternsTool = {
+  name: 'check_anti_patterns',
+  pluginApiVersion: PLUGIN_API_VERSION,
+  description:
+    'Check a piece of code you are about to write (or have just written) against this project\'s list of known, previously-diagnosed wrong patterns — rules operators have configured because a model has regressed to them before. Call this before finishing your implementation whenever you touch an area that might have a documented gotcha; it is advisory (nothing blocks you from writing), so treat any match as a real defect to fix, not a suggestion to weigh.',
+  permission: 'safe',
+  definition: {
+    name: 'check_anti_patterns',
+    description: 'Check code content against this project\'s configured anti-pattern rules; reports any matches.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        content: {
+          type: 'string',
+          description: 'The code content to check (e.g. the file you are about to write or just wrote).',
+        },
+        filePath: {
+          type: 'string',
+          description: 'Optional: the file path this content belongs to, included in the report for context.',
+        },
+      },
+      required: ['content'],
+    },
+  },
+  async execute(input) {
+    try {
+      const content = input && input.content;
+      if (typeof content !== 'string') {
+        return { toolUseId: '', content: 'Error: content (string) is required.', isError: true };
+      }
+      const filePath = (input && input.filePath) || '(unspecified file)';
+      const rulesPath = path.join(process.cwd(), '.epam', 'anti-patterns.json');
+      if (!fs.existsSync(rulesPath)) {
+        return {
+          toolUseId: '',
+          content: 'No anti-pattern rules are configured for this project.',
+          isError: false,
+        };
+      }
+      let rules;
+      try {
+        rules = JSON.parse(fs.readFileSync(rulesPath, 'utf-8'));
+      } catch (err) {
+        return {
+          toolUseId: '',
+          content: `anti-patterns.json is malformed and was skipped: ${err.message}`,
+          isError: false,
+        };
+      }
+      if (!Array.isArray(rules)) {
+        return { toolUseId: '', content: 'anti-patterns.json is present but not a rule array.', isError: false };
+      }
+      const violations = [];
+      for (const rule of rules) {
+        const pattern = rule && rule.matchPattern;
+        if (!pattern) continue;
+        let re;
+        try {
+          re = new RegExp(pattern);
+        } catch {
+          continue;
+        }
+        if (re.test(content)) {
+          violations.push({
+            id: rule.id || 'anti-pattern',
+            file: filePath,
+            message: rule.message || 'A known, previously-diagnosed wrong pattern was detected.',
+          });
+        }
+      }
+      if (violations.length === 0) {
+        return { toolUseId: '', content: 'No configured anti-pattern matched.', isError: false };
+      }
+      return { toolUseId: '', content: JSON.stringify({ violations }, null, 2), isError: false };
+    } catch (err) {
+      return { toolUseId: '', content: `Error checking anti-patterns: ${err.message}`, isError: true };
+    }
+  },
+};
+
 module.exports = {
-  tools: [resolveTestFileTool, codelineFactsTool, gitStateTool],
+  tools: [resolveTestFileTool, codelineFactsTool, gitStateTool, checkAntiPatternsTool],
 };

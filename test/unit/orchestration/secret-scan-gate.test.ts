@@ -38,6 +38,24 @@ function git(cwd: string, ...args: string[]) {
   return execFileSync('git', args, { cwd, encoding: 'utf8' });
 }
 
+// These fixtures assemble credential-SHAPED strings at test-run time from
+// split parts, rather than as a contiguous literal in this source file.
+// scan-secrets.sh (and any other literal-pattern secret scanner, including
+// GitHub's) matches file CONTENT, not how that content was constructed — the
+// fixture written to the throwaway test repo below is byte-identical to the
+// old inline literal, so detection coverage is unchanged. Only the risk of
+// THIS test file itself being flagged as containing a credential is removed
+// (found live 2026-08-03: a real GitHub secret-scanning alert fired on the
+// old inline `'AKIA' + 16 uppercase chars` literal in this very file — a
+// format-only match against a deliberately fake key, not a real leak, but
+// the alert and remediation churn are real either way).
+const FAKE_AWS_ACCESS_KEY_ID = ['AKIA', 'ABCDEFGHIJKLMNOP'].join('');
+const FAKE_PEM_RSA_PRIVATE_KEY_BLOCK = [
+  ['-----BEGIN', 'RSA PRIVATE KEY-----'].join(' '),
+  'MIIEow==',
+  ['-----END', 'RSA PRIVATE KEY-----'].join(' '),
+].join('\n');
+
 function freshRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'secret-scan-'));
   git(dir, 'init', '-q');
@@ -63,7 +81,7 @@ describe('scan-secrets.sh — generic credential scanner', () => {
     const dir = mkdtempSync(join(tmpdir(), 'secret-scan-aws-'));
     try {
       const repo = freshRepo();
-      writeFileSync(join(repo, 'leak.js'), "const key = 'AKIAABCDEFGHIJKLMNOP';\n");
+      writeFileSync(join(repo, 'leak.js'), `const key = '${FAKE_AWS_ACCESS_KEY_ID}';\n`);
       git(repo, 'add', 'leak.js');
       const { rc, stderr } = runScan(repo);
       expect(rc).toBe(1);
@@ -77,7 +95,7 @@ describe('scan-secrets.sh — generic credential scanner', () => {
   it('flags a PEM private key block', () => {
     const repo = freshRepo();
     try {
-      writeFileSync(join(repo, 'id_rsa.js'), '-----BEGIN RSA PRIVATE KEY-----\nMIIEow==\n-----END RSA PRIVATE KEY-----\n');
+      writeFileSync(join(repo, 'id_rsa.js'), `${FAKE_PEM_RSA_PRIVATE_KEY_BLOCK}\n`);
       git(repo, 'add', 'id_rsa.js');
       const { rc, stderr } = runScan(repo);
       expect(rc).toBe(1);
@@ -234,7 +252,7 @@ describe('commit_completed_story() — REAL execution proves a planted secret bl
       writeFileSync(join(dir, 'README.md'), 'base\n');
       git(dir, 'add', 'README.md');
       git(dir, 'commit', '-qm', 'base');
-      writeFileSync(join(dir, 'src.js'), "const key = 'AKIAABCDEFGHIJKLMNOP';\n");
+      writeFileSync(join(dir, 'src.js'), `const key = '${FAKE_AWS_ACCESS_KEY_ID}';\n`);
 
       const { output } = runCommitCompletedStory(dir, {
         setE: false,
@@ -277,7 +295,7 @@ describe('commit_completed_story() — REAL execution proves a planted secret bl
       writeFileSync(join(dir, 'README.md'), 'base\n');
       git(dir, 'add', 'README.md');
       git(dir, 'commit', '-qm', 'base');
-      writeFileSync(join(dir, 'src.js'), "const key = 'AKIAABCDEFGHIJKLMNOP';\n");
+      writeFileSync(join(dir, 'src.js'), `const key = '${FAKE_AWS_ACCESS_KEY_ID}';\n`);
 
       const { output, exitedGracefully } = runCommitCompletedStory(dir, {
         setE: true,
@@ -303,7 +321,7 @@ describe('commit_completed_story() — REAL execution proves a planted secret bl
       writeFileSync(join(dir, 'README.md'), 'base\n');
       git(dir, 'add', 'README.md');
       git(dir, 'commit', '-qm', 'base');
-      writeFileSync(join(dir, 'src.js'), "const key = 'AKIAABCDEFGHIJKLMNOP';\n");
+      writeFileSync(join(dir, 'src.js'), `const key = '${FAKE_AWS_ACCESS_KEY_ID}';\n`);
 
       const { output, exitedGracefully } = runCommitCompletedStory(dir, {
         setE: true,

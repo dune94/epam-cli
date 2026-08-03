@@ -1759,8 +1759,14 @@ build_implementation_prompt() {
     local _codeline_facts_file="${PROJECT_ROOT}/.epam/codeline-facts.json"
     if [ -f "$_codeline_facts_file" ]; then
         local _codeline_facts
+        # A fact is either a bare string (legacy project configs) or {text, source}.
+        # Only .text reaches the agent — the source exists so a human can re-check and
+        # expire the claim, not to spend prompt tokens on provenance every iteration.
         _codeline_facts=$(jq -r '
-          (if type == "array" then . else (.facts // []) end) | map("- " + .) | join("\n")
+          (if type == "array" then . else (.facts // []) end)
+          | map(if type == "object" then (.text // "") else . end)
+          | map(select(length > 0))
+          | map("- " + .) | join("\n")
         ' "$_codeline_facts_file" 2>/dev/null || echo "")
         [ -n "$_codeline_facts" ] && codeline_facts_block=$(printf '\n## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)\n%s\n' "$_codeline_facts")
     fi

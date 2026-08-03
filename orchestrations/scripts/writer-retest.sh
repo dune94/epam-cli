@@ -16,9 +16,15 @@
 # derive the manifest, agent profile, or VCs — those must already be present
 # in the PRD_FILE you pass in (technicalNotes.files = manifest,
 # agentRole + orchestrations/agents/profiles.json = profiles,
-# testCriteria.facts = VCs). Baking in real prior review feedback as
-# acceptanceCriteria bullets is the recommended way to stop a writer from
-# repeating a diagnosed mistake — see writer-only-prd.json for the pattern.
+# testCriteria.facts = VCs).
+#
+# The PRD you pass in MUST come from a real pipeline run. Do NOT hand-author
+# acceptanceCriteria for a retest. On 2026-08-03 a retest PRD was written by an
+# assistant session with six invented ACs that encoded the answer; the writer
+# "succeeded" on all three codelines and the result was reported as pipeline
+# validation. It validated nothing — the fixture contained the solution. That PRD
+# (writer-only-prd.json) has been deleted; recover it from git history only as
+# evidence of the failure, never as an input.
 #
 # What it skips (all real, already-completed pipeline steps for THIS story):
 #   Step 1  Specification pass   (EPAM_SPEC_MODE=0)

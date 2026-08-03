@@ -1,8 +1,0 @@
-[
-  {
-    "id": "contentstack-live-preview-wrong-token-key",
-    "matchPattern": "live_preview\\s*:\\s*\\{[^}]*management_token",
-    "textMatchPattern": "(?is)(live_preview|LivePreview)[\\s\\S]{0,120}management_token|management_token[\\s\\S]{0,120}(live_preview|LivePreview)",
-    "message": "Contentstack's live_preview config must use preview_token, not management_token — the delivery SDK reads preview_token; management_token is the wrong key and silently breaks preview. The npm package's own node_modules/contentstack/index.d.ts type declaration for LivePreview is STALE and incorrectly requires {host, management_token, enable} — the correct, reviewer-approved fix casts the real {enable, preview_token} shape through `as unknown as contentstack.LivePreview` rather than satisfying the wrong type structurally. A prior review already caught this exact defect (orchestrations/logs/review-agent-AMSD-2041.log)."
-  }
-]

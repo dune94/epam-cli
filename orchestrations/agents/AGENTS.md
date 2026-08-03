@@ -13836,3 +13836,15 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/AMSD-2041_*.log
 
+## MOCK-HW-1: getGreeting should return hello dolly
+- **Date**: 2026-08-03 17:20:11
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+
+## MOCK-HW-1: getGreeting should return hello dolly
+- **Date**: 2026-08-03 18:05:04
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/MOCK-HW-1_*.log
+

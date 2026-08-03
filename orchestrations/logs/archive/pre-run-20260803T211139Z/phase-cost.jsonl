@@ -1,0 +1,1 @@
+{"phase_id":"core","story_id":"core","agent_type":"spec-pass","resolvedModel":"z-ai/glm-5.1","started_at":"2026-08-03T17:05:54-04:00","ended_at":"2026-08-03T17:11:38-04:00","task_cost_usd":0.0007,"task_tokens_in":0,"task_tokens_out":0,"task_turns":1,"status":"completed","invokeMode":"cli"}

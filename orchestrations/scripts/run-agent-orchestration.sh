@@ -246,6 +246,13 @@ CONTROL_PLANE_LOG="$LOG_DIR/control-plane.log"
 export ORCH_RUN_ID="${ORCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
 CHECKPOINT_FILE="${LOG_DIR}/checkpoint-${PHASE:-main}-${ORCH_RUN_ID}.jsonl"
 
+# Announce the run id IMMEDIATELY, before any work. The operator needs it to resume,
+# to find the logs, and to refer to the run at all — printing it only at the end (or
+# only at a pause) means a run that is still going, or that died, has no usable handle.
+echo ""
+echo "  RUN NUMBER: ${ORCH_RUN_ID}"
+echo ""
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'

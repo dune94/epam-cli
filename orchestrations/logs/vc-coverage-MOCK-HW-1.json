@@ -1,0 +1,1 @@
+[{"covered":true,"case":"returns hello dolly","why":"The test asserts expect(getGreeting()).toBe('hello dolly'), which would fail if getGreeting() returned anything other than the string 'hello dolly'.","vc":"Calling getGreeting() returns the string \"hello dolly\""}]

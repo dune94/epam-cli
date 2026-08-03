@@ -34,13 +34,95 @@ checkpoint_dir() {
     printf '%s/runs/%s/checkpoint' "$_base" "$_rid"
 }
 
-# save_run_checkpoint <phase>
+# ── Pause stages ─────────────────────────────────────────────────────────────
+# Pause points are NAMED, not a growing pile of boolean flags. Each stage records how much
+# of the pipeline has already been paid for, which is what a resume needs in order to skip
+# exactly that much and no more.
+#
+#   post-spec   — after the specification pass. Cheapest place to stop.
+#   pre-writer  — after the CPA pre-pass, skill assessment and detective, before ANY story
+#                 is written. Everything the writer consumes is settled here, so this is
+#                 the point at which its inputs can be inspected before code is generated.
+#
+# Keep this list and the case in resume_skip_env in step.
+CHECKPOINT_STAGES="post-spec pre-writer"
+
+_is_known_stage() {
+    case " $CHECKPOINT_STAGES " in *" ${1:-} "*) return 0 ;; *) return 1 ;; esac
+}
+
+# should_pause_at <stage> — true when the operator asked to stop here.
+#
+# EPAM_PAUSE_AT names the stage. EPAM_PAUSE_AFTER_SPEC=1 is the original flag and still
+# works: it was proven on a live run and silently breaking it would be worse than the
+# duplication. An unrecognised EPAM_PAUSE_AT is reported rather than ignored — silently
+# never pausing is how an operator ends up waiting for a pause that will never come.
+should_pause_at() {
+    local _stage="${1:-}"
+    # "spec" is accepted as an operator-facing alias for the recorded stage name.
+    [ "$_stage" = "spec" ] && _stage="post-spec"
+
+    local _want="${EPAM_PAUSE_AT:-}"
+    [ "$_want" = "spec" ] && _want="post-spec"
+
+    if [ -n "$_want" ] && ! _is_known_stage "$_want"; then
+        echo "[checkpoint] unknown pause stage '${EPAM_PAUSE_AT}' — expected one of: ${CHECKPOINT_STAGES} (or 'spec')" >&2
+        return 1
+    fi
+
+    if [ -n "$_want" ]; then
+        [ "$_want" = "$_stage" ] && return 0
+        return 1
+    fi
+
+    # Back-compat: the original boolean pauses at the spec pass only.
+    if [ "$_stage" = "post-spec" ] && is_truthy "${EPAM_PAUSE_AFTER_SPEC:-}"; then
+        return 0
+    fi
+    return 1
+}
+
+# resume_skip_env <run-id> — emit the env assignments a resume must apply, derived from
+# the stage the checkpoint was actually taken at. Skipping too little wastes the pause;
+# skipping too much silently drops work that was never done.
+resume_skip_env() {
+    local _rid="${1:-}"
+    local _dir; _dir=$(checkpoint_dir "$_rid") || return 1
+    [ -f "$_dir/checkpoint.json" ] || {
+        echo "[checkpoint] no checkpoint for run '${_rid}'" >&2; return 1; }
+
+    local _stage; _stage=$(jq -r '.stage // empty' "$_dir/checkpoint.json" 2>/dev/null)
+    case "$_stage" in
+        post-spec)
+            echo "EPAM_SPEC_MODE=0"
+            ;;
+        pre-writer)
+            echo "EPAM_SPEC_MODE=0"
+            echo "SKIP_CPA=1"
+            echo "SKIP_SKILL_ASSESSMENT=1"
+            ;;
+        *)
+            echo "[checkpoint] checkpoint for run '${_rid}' records an unrecognised stage '${_stage}' — refusing to guess which steps to skip" >&2
+            return 1
+            ;;
+    esac
+    return 0
+}
+
+# save_run_checkpoint <phase> [stage]
 #
 # Persist everything a resume needs. Writes are staged into the final directory and the
 # metadata file is written LAST, so a checkpoint that advertises itself as complete
-# always has its payload already on disk.
+# always has its payload already on disk. Saving again later in the same run overwrites
+# the earlier checkpoint and advances its recorded stage — the newest one is the most
+# valuable, because it has paid for the most.
 save_run_checkpoint() {
     local _phase="${1:-${PHASE:-main}}"
+    local _stage="${2:-post-spec}"
+    if ! _is_known_stage "$_stage"; then
+        echo "[checkpoint] refusing to save an unknown stage '${_stage}'" >&2
+        return 1
+    fi
     local _dir; _dir=$(checkpoint_dir) || return 1
     local _rid="${ORCH_RUN_ID:-}"
 
@@ -72,7 +154,7 @@ save_run_checkpoint() {
     jq -n \
         --arg runId "$_rid" \
         --arg phase "$_phase" \
-        --arg stage "post-spec" \
+        --arg stage "$_stage" \
         --arg createdAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         --arg engineSha "$_sha" \
         --argjson storyCount "${_stories:-0}" \

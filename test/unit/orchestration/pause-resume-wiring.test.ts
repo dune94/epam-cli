@@ -70,7 +70,8 @@ function runBlock(body: string, w: ReturnType<typeof workspace>, extra: Record<s
       `source ${JSON.stringify(FLAGS)}`,
       `source ${JSON.stringify(LIB)}`,
       body,
-      'echo "REACHED_IMPLEMENTATION spec_mode=${EPAM_SPEC_MODE:-1}"',
+      'echo "REACHED_IMPLEMENTATION spec_mode=${EPAM_SPEC_MODE:-1}' +
+        ' skip_cpa=${SKIP_CPA:-0} skip_skill=${SKIP_SKILL_ASSESSMENT:-0}"',
     ].join('\n'),
   );
   const r = spawnSync('bash', [script], {
@@ -198,6 +199,135 @@ describe('resuming starts at implementation, not at the beginning', () => {
     const r = runBlock(RESUME_BLOCK(), w, {});
     expect(r.out).toContain('REACHED_IMPLEMENTATION');
     expect(r.out, 'a normal run must still do its spec pass').toContain('spec_mode=1');
+    expect(r.out).toContain('skip_cpa=0');
+  });
+
+  /**
+   * THE RECEIVER, NOT THE CALLER. resume_skip_env producing the right assignments proves
+   * nothing if the orchestrator does not APPLY them. A mutation that replaced the call
+   * with a hardcoded EPAM_SPEC_MODE=0 passed every test until these were added.
+   */
+  it('a post-spec resume skips the spec pass but NOT the CPA', () => {
+    const w = workspace();
+    const script = join(w.root, 'mk-post.sh');
+    writeFileSync(script, [
+      '#!/usr/bin/env bash', 'set -uo pipefail',
+      `source ${JSON.stringify(FLAGS)}`, `source ${JSON.stringify(LIB)}`,
+      'save_run_checkpoint core post-spec >/dev/null',
+    ].join('\n'));
+    spawnSync('bash', [script], {
+      env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: w.projectDir, PRD_FILE: w.prd,
+             LOG_DIR: w.logDir, ORCH_RUN_ID: '20260803T120000Z' }, encoding: 'utf8' });
+
+    const r = runBlock(RESUME_BLOCK(), w, { EPAM_RESUME_RUN: '20260803T120000Z' });
+    expect(r.out).toContain('spec_mode=0');
+    expect(r.out, 'a post-spec resume skipped the CPA, which it never actually ran')
+      .toContain('skip_cpa=0');
+  });
+
+  it('a PRE-WRITER resume also skips the CPA and the skill assessment', () => {
+    const w = workspace();
+    const script = join(w.root, 'mk-pre.sh');
+    writeFileSync(script, [
+      '#!/usr/bin/env bash', 'set -uo pipefail',
+      `source ${JSON.stringify(FLAGS)}`, `source ${JSON.stringify(LIB)}`,
+      'save_run_checkpoint core pre-writer >/dev/null',
+    ].join('\n'));
+    spawnSync('bash', [script], {
+      env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: w.projectDir, PRD_FILE: w.prd,
+             LOG_DIR: w.logDir, ORCH_RUN_ID: '20260803T120000Z' }, encoding: 'utf8' });
+
+    const r = runBlock(RESUME_BLOCK(), w, { EPAM_RESUME_RUN: '20260803T120000Z' });
+    expect(r.out).toContain('spec_mode=0');
+    expect(
+      r.out,
+      're-running the CPA throws away most of what pausing before the writer bought',
+    ).toContain('skip_cpa=1');
+    expect(r.out).toContain('skip_skill=1');
+  });
+});
+
+/**
+ * The PRE-WRITER pause, executed. This is the more useful stop: the spec pass, CPA, skill
+ * assessment and detective have all run, so everything the writer consumes is settled and
+ * inspectable — but no code has been generated yet.
+ */
+describe('the pre-writer pause stops before any story is written', () => {
+  const PRE_WRITER_BLOCK = () =>
+    block('if _ckpt_path=$(save_run_checkpoint "$PHASE" pre-writer', 'exit 0\n        fi') +
+    'exit 0\n        fi\n';
+
+  function runPreWriter(w: ReturnType<typeof workspace>, extra: Record<string, string> = {}) {
+    const script = join(w.root, `pw-${Object.keys(extra).join('')}.sh`);
+    writeFileSync(
+      script,
+      [
+        '#!/usr/bin/env bash',
+        'set -uo pipefail',
+        'GREEN=""; NC=""; RED=""',
+        'info(){ echo "[info] $*"; }; warning(){ echo "[warn] $*"; }',
+        'error(){ echo "[error] $*" >&2; }; success(){ echo "[ok] $*"; }',
+        'step_emit(){ :; }',
+        'non_review_main="ST-1"',
+        `source ${JSON.stringify(FLAGS)}`,
+        `source ${JSON.stringify(LIB)}`,
+        PRE_WRITER_BLOCK(),
+        'echo "WRITER_STARTED"',
+      ].join('\n'),
+    );
+    const r = spawnSync('bash', [script], {
+      encoding: 'utf8',
+      timeout: 30000,
+      env: {
+        ...process.env,
+        EPAM_PROJECT_CONFIG_DIR: w.projectDir,
+        PRD_FILE: w.prd,
+        LOG_DIR: w.logDir,
+        PHASE: 'core',
+        ORCH_RUN_ID: '20260803T120000Z',
+        ...extra,
+      },
+    });
+    return { status: r.status, out: `${r.stdout || ''}${r.stderr || ''}` };
+  }
+
+  it('EPAM_PAUSE_AT=pre-writer stops before the writer runs', () => {
+    const w = workspace();
+    const r = runPreWriter(w, { EPAM_PAUSE_AT: 'pre-writer' });
+    expect(r.status).toBe(0);
+    expect(r.out, 'the writer ran despite the pre-writer pause').not.toContain('WRITER_STARTED');
+  });
+
+  it('prints the run number and the resume command', () => {
+    const w = workspace();
+    const r = runPreWriter(w, { EPAM_PAUSE_AT: 'pre-writer' });
+    expect(r.out).toMatch(/RUN NUMBER/i);
+    expect(r.out).toContain('EPAM_RESUME_RUN=20260803T120000Z');
+  });
+
+  it('records the checkpoint AS pre-writer, so a resume skips the CPA too', () => {
+    const w = workspace();
+    runPreWriter(w, { EPAM_PAUSE_AT: 'pre-writer' });
+    const meta = JSON.parse(
+      readFileSync(join(w.projectDir, 'runs', '20260803T120000Z', 'checkpoint', 'checkpoint.json'), 'utf8'),
+    );
+    expect(meta.stage).toBe('pre-writer');
+  });
+
+  it('saves the checkpoint even when NOT pausing, and lets the writer run', () => {
+    const w = workspace();
+    const r = runPreWriter(w);
+    expect(r.out, 'a normal run must reach the writer').toContain('WRITER_STARTED');
+    expect(
+      existsSync(join(w.projectDir, 'runs', '20260803T120000Z', 'checkpoint', 'prd.json')),
+      'the pre-writer inputs were never persisted on a normal run',
+    ).toBe(true);
+  });
+
+  it('EPAM_PAUSE_AT=spec does NOT stop here — it would never reach the writer', () => {
+    const w = workspace();
+    const r = runPreWriter(w, { EPAM_PAUSE_AT: 'spec' });
+    expect(r.out).toContain('WRITER_STARTED');
   });
 });
 

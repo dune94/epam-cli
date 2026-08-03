@@ -1,3 +1,1 @@
-{"timestamp":"2026-08-03T22:03:36Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260803T213205Z","promptVersion":"2632197"}
-{"timestamp":"2026-08-03T22:04:48Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260803T213205Z","promptVersion":"2632197"}
-{"timestamp":"2026-08-03T22:12:18Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260803T213205Z","promptVersion":"2632197"}
+{"timestamp":"2026-08-03T23:21:21Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260803T223120Z","promptVersion":"10e2d27"}

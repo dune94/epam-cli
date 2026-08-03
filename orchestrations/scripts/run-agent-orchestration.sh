@@ -3810,9 +3810,19 @@ if [ -n "${EPAM_RESUME_RUN:-}" ]; then
         error "[orch] available checkpoints: $(list_run_checkpoints | tr '\n' ' ' 2>/dev/null || echo none)"
         exit 1
     fi
-    success "[orch] RESUMED run ${EPAM_RESUME_RUN} — skipping the spec pass, starting at implementation"
-    EPAM_SPEC_MODE=0
-    export EPAM_SPEC_MODE
+    # Skip exactly what this checkpoint already paid for — derived from the stage it was
+    # taken at, never assumed. Skipping too little wastes the pause; skipping too much
+    # silently drops work that was never done.
+    if ! _resume_env=$(resume_skip_env "$EPAM_RESUME_RUN"); then
+        error "[orch] cannot determine what to skip for run '${EPAM_RESUME_RUN}' — refusing to guess."
+        exit 1
+    fi
+    while IFS= read -r _assign; do
+        [ -n "$_assign" ] || continue
+        export "${_assign?}"
+        info "[orch]   resume: ${_assign}"
+    done <<< "$_resume_env"
+    success "[orch] RESUMED run ${EPAM_RESUME_RUN} — continuing from its checkpoint"
 fi
 
 if [ "$DRY_RUN" = true ]; then
@@ -3849,7 +3859,7 @@ fi
 # EPAM_PAUSE_AFTER_SPEC=1 stops here, with everything reviewed and persisted, so the
 # implementation stage can be started deliberately (and repeatedly) against a fixed,
 # inspectable input rather than a freshly re-derived one.
-if is_truthy "${EPAM_PAUSE_AFTER_SPEC:-}"; then
+if should_pause_at post-spec; then
     echo ""
     echo -e "${GREEN}╔════════════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${GREEN}║  PAUSED — spec pass complete, implementation NOT started           ║${NC}"
@@ -5535,6 +5545,35 @@ if [ -n "$main_stories" ]; then
             info "[CHECKPOINT] All $_ckpt_total stories already completed — skipping Step 1 for phase '${PHASE:-main}'"
             step_emit "8" "pass" "Step 8: Main-branch stories (all checkpointed)"
         else
+        # ── Checkpoint / pause: PRE-WRITER ───────────────────────────────────
+        # Everything the writer consumes is settled by now — the spec pass, the CPA
+        # pre-pass, the skill assessment and the detective have all run and written
+        # their output into the PRD. This is the last point at which those inputs can
+        # be inspected before any code is generated. Saved unconditionally: an artefact
+        # that exists only in memory is a project violation.
+        if _ckpt_path=$(save_run_checkpoint "$PHASE" pre-writer 2>&1); then
+            info "[orch] pre-writer checkpoint saved: ${_ckpt_path}"
+        else
+            warning "[orch] could not save the pre-writer checkpoint: ${_ckpt_path}"
+        fi
+        if should_pause_at pre-writer; then
+            echo ""
+            echo -e "${GREEN}╔════════════════════════════════════════════════════════════════════╗${NC}"
+            echo -e "${GREEN}║  PAUSED — inputs ready, writer NOT started                         ║${NC}"
+            echo -e "${GREEN}╚════════════════════════════════════════════════════════════════════╝${NC}"
+            echo ""
+            echo -e "  RUN NUMBER:  ${GREEN}${ORCH_RUN_ID}${NC}"
+            echo -e "  Phase:       ${PHASE}"
+            echo -e "  Stories:     $(printf '%s\n' "$non_review_main" | awk 'NF{n++} END{print n+0}') queued for the writer"
+            echo -e "  Artefacts:   ${_ckpt_path:-<not saved>}"
+            echo ""
+            echo -e "  Resume implementation with:"
+            echo -e "    ${GREEN}EPAM_RESUME_RUN=${ORCH_RUN_ID}${NC} <your launcher>"
+            echo ""
+            step_emit "8" "skip" "Step 8: Main-branch stories" "paused before the writer (EPAM_PAUSE_AT=pre-writer)"
+            exit 0
+        fi
+
         step_emit "8" "running" "Step 8: Main-branch stories"
     log "Step 8: Running main-branch stories..."
         # Capture baseline SHA before any story commits so the testing-gates

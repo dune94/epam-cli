@@ -191,7 +191,7 @@ describe('pipeline seams — producers and consumers in real order', () => {
       'export function match(a: string, b: string) {\n' +
       '  return parseKey(a).id === b; // the fix\n' +
       '}\n',
-      'story: complete BUG-1 (1 file(s))');
+      'BUG-1: story complete (1 file(s))');
 
     sh(`story_outputs_record ${JSON.stringify(fx.projectRoot)} ${JSON.stringify(fx.logDir)}`);
     expect(manifest(), 'the impl file never reached the manifest').toEqual(['src/discount.ts']);

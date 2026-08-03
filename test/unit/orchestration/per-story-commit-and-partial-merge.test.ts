@@ -35,12 +35,19 @@ import { tmpdir } from 'node:os';
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
+// commit_completed_story() itself moved to lib/git-ops.sh (2026-08-02 git-ops
+// consolidation) — single source of truth shared by claude.sh,
+// codemie-claude.sh, and run-agent-orchestration.sh. claudeSrc is still used
+// below for the CALL-SITE checks (claude.sh sources git-ops.sh and calls it).
+const GIT_OPS_SH = join(REPO_ROOT, 'orchestrations/scripts/lib/git-ops.sh');
 const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
 const orchSrc = readFileSync(ORCH_SH, 'utf8');
+const gitOpsSrc = readFileSync(GIT_OPS_SH, 'utf8');
 
 describe('claude.sh — commit_completed_story()', () => {
-  it('function is defined', () => {
-    expect(claudeSrc).toMatch(/commit_completed_story\s*\(\)/);
+  it('is defined in lib/git-ops.sh and sourced by claude.sh', () => {
+    expect(gitOpsSrc).toMatch(/commit_completed_story\s*\(\)/);
+    expect(claudeSrc).toMatch(/source\s+"\$SCRIPT_DIR\/lib\/git-ops\.sh"/);
   });
 
   it('is called immediately after a story is marked completed, inside the run_implementation loop', () => {
@@ -57,17 +64,17 @@ describe('claude.sh — commit_completed_story()', () => {
   });
 
   it('commits scoped to GIT_WORK_ROOT (the worktree checkout in --worktree mode)', () => {
-    const fnStart = claudeSrc.indexOf('commit_completed_story() {');
-    const fnEnd = claudeSrc.indexOf('\n}', fnStart);
-    const body = claudeSrc.slice(fnStart, fnEnd);
+    const fnStart = gitOpsSrc.indexOf('commit_completed_story() {');
+    const fnEnd = gitOpsSrc.indexOf('\n}', fnStart);
+    const body = gitOpsSrc.slice(fnStart, fnEnd);
     expect(body).toMatch(/GIT_WORK_ROOT/);
     expect(body).toMatch(/git -C "\$_commit_root"/);
   });
 
   it('is a no-op (does not fail the story) when there is nothing to commit', () => {
-    const fnStart = claudeSrc.indexOf('commit_completed_story() {');
-    const fnEnd = claudeSrc.indexOf('\n}', fnStart);
-    const body = claudeSrc.slice(fnStart, fnEnd);
+    const fnStart = gitOpsSrc.indexOf('commit_completed_story() {');
+    const fnEnd = gitOpsSrc.indexOf('\n}', fnStart);
+    const body = gitOpsSrc.slice(fnStart, fnEnd);
     expect(body).toMatch(/_changed_count.*-eq 0.*return 0|return 0/s);
   });
 });
@@ -145,9 +152,9 @@ describe('run_implementation() — diagnostic logging around post-story steps', 
 });
 
 describe('commit_completed_story() — bounded timeout on git operations (static)', () => {
-  const fnStart = claudeSrc.indexOf('commit_completed_story() {');
-  const fnEnd = claudeSrc.indexOf('\n}', fnStart);
-  const body = claudeSrc.slice(fnStart, fnEnd);
+  const fnStart = gitOpsSrc.indexOf('commit_completed_story() {');
+  const fnEnd = gitOpsSrc.indexOf('\n}', fnStart);
+  const body = gitOpsSrc.slice(fnStart, fnEnd);
 
   it('wraps git add, git diff --cached, and git commit with timeout', () => {
     expect(body).toMatch(/timeout "\$_git_timeout" git -C "\$_commit_root" add -A/);
@@ -174,9 +181,9 @@ describe('commit_completed_story() — REAL execution, proves the timeout actual
   function runCommitWithStubbedGit(gitStub: string): { stdout: string; exitCode: number; durationMs: number } {
     const dir = mkdtempSync(join(tmpdir(), 'commit-timeout-test-'));
     try {
-      const fnStart = claudeSrc.indexOf('commit_completed_story() {');
-      const fnEnd = claudeSrc.indexOf('\n}', fnStart);
-      const fnBody = claudeSrc.slice(fnStart, fnEnd + 2);
+      const fnStart = gitOpsSrc.indexOf('commit_completed_story() {');
+      const fnEnd = gitOpsSrc.indexOf('\n}', fnStart);
+      const fnBody = gitOpsSrc.slice(fnStart, fnEnd + 2);
       const binDir = join(dir, 'bin');
       mkdirSync(binDir, { recursive: true });
       // Stub out `git` on PATH so this test needs no real repo and can simulate

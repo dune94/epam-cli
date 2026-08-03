@@ -6,7 +6,7 @@
  * failure path: a gate fails mid-run, the bad commit is reset immediately.
  * This script is the backstop for the case that can't cover: a run KILLED
  * before story_tsc_gate ever runs (mid-story, no gate check reached), which
- * leaves either a dirty working tree or an unverified "story: complete"
+ * leaves either a dirty working tree or an unverified "X: story complete"
  * commit sitting on the codeline with nothing having reverted it.
  *
  * Source of truth: record_brownfield_verified_baseline() (story-guards.sh)
@@ -83,7 +83,7 @@ describe('brownfield-preflight-reset.sh — real git repos', () => {
     // that never reached story_tsc_gate (no self-heal ever ran for it).
     writeFileSync(join(dir, 'src', 'unverified-work.ts'), 'export const wip = 1;\n');
     execFileSync('git', ['add', '-A'], { cwd: dir });
-    execFileSync('git', ['commit', '-m', 'story: complete WIP-STORY (1 file(s))', '--quiet'], { cwd: dir });
+    execFileSync('git', ['commit', '-m', 'WIP-STORY: story complete (1 file(s))', '--quiet'], { cwd: dir });
     expect(currentSha(dir)).not.toBe(verifiedSha);
 
     const { stdout } = runPreflight(dir, stateDir);

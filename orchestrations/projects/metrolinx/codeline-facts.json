@@ -1,0 +1,24 @@
+{
+  "gotransit": {
+    "facts": [
+      "Local dev/pre-commit hooks require real Contentstack env vars (CONTENTSTACK_API_KEY, CONTENTSTACK_DELIVERY_TOKEN, CONTENTSTACK_ENVIRONMENT, CONTENTSTACK_BRANCH) to be set — next.config.js throws 'Missing required environment variables' at import time if they're absent, which breaks tsc/next-lint inside the husky pre-commit hook even when the source change itself is correct.",
+      "Date/locale tests assert UTC-rendered dates (this project's CI runs in UTC) — running with a non-UTC TZ produces off-by-one-day test failures unrelated to any real code change.",
+      "Contentstack Live Preview config uses live_preview: { enable, preview_token } — preview_token, NOT management_token. Host is set separately via Stack.setHost(), not as a field inside the live_preview block."
+    ]
+  },
+  "upexpress": {
+    "facts": [
+      "Local dev/pre-commit hooks require real Contentstack env vars (CONTENTSTACK_API_KEY, CONTENTSTACK_DELIVERY_TOKEN, CONTENTSTACK_ENVIRONMENT, CONTENTSTACK_BRANCH) to be set — next.config.js throws 'Missing required environment variables' at import time if they're absent, which breaks tsc/next-lint inside the husky pre-commit hook even when the source change itself is correct.",
+      "Date/locale tests assert UTC-rendered dates (this project's CI runs in UTC) — running with a non-UTC TZ produces off-by-one-day test failures unrelated to any real code change.",
+      "@metrolinx/cx-shared is resolved from a local override (npm pack + file: install) when the GitHub Packages registry is unreachable — a direct directory reference instead of a packed tarball pulls in cx-shared's own node_modules and causes a dual-React 'Invalid hook call' failure.",
+      "Contentstack Live Preview config uses live_preview: { enable, preview_token } — preview_token, NOT management_token. Host is set separately via Stack.setHost(), not as a field inside the live_preview block."
+    ]
+  },
+  "metrolinx": {
+    "facts": [
+      "Local dev/pre-commit hooks require real Contentstack env vars (CONTENTSTACK_API_KEY, CONTENTSTACK_DELIVERY_TOKEN, CONTENTSTACK_ENVIRONMENT, CONTENTSTACK_BRANCH) to be set — next.config.js throws 'Missing required environment variables' at import time if they're absent, which breaks tsc/next-lint inside the husky pre-commit hook even when the source change itself is correct.",
+      "Date/locale tests assert UTC-rendered dates (this project's CI runs in UTC) — running with a non-UTC TZ produces off-by-one-day test failures unrelated to any real code change.",
+      "Contentstack Live Preview config uses live_preview: { enable, preview_token } — preview_token, NOT management_token. Host is set separately via Stack.setHost(), not as a field inside the live_preview block."
+    ]
+  }
+}

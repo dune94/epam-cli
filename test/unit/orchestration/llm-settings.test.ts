@@ -153,7 +153,9 @@ describe('load_llm_settings_json() — applies JSON as fallback defaults', () =>
     const env = runLoader(METROLINX_SETTINGS);
     expect(env.EPAM_STORY_MAX_TOOL_CALLS).toBe('300');
     expect(env.EPAM_STORY_BUDGET_WARNING_USD).toBe('3.5');
-    expect(env.EPAM_STORY_BUDGET_HARD_LIMIT_USD).toBe('8');
+    // Bumped 8 -> 15 on 2026-08-01: the $8 cap killed a Writer Retest run mid-way
+    // through a real, correct fix (metrolinx needed ~$8.5 across its retry ladder).
+    expect(env.EPAM_STORY_BUDGET_HARD_LIMIT_USD).toBe('15');
   });
 
   it('an already-exported EPAM_* env var always wins over the JSON value', () => {
@@ -184,6 +186,32 @@ describe('load_llm_settings_json() — applies JSON as fallback defaults', () =>
       );
       const out = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
       expect(out.trim()).toBe('no-op ok');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('REPRODUCES a live sibling defect and proves the fix: a MALFORMED llm-settings.json must not crash the caller under set -e', () => {
+    // Live 2026-08-02, found while fixing the identical bug in the new
+    // _load_timeout_config() (lib/story-guards.sh): claude.sh runs under
+    // `set -e` from its very first line, and `_get()`'s `jq ... // empty`
+    // only rescues a valid-but-absent VALUE — a JSON PARSE error is a hard
+    // jq failure regardless, and every call site here is
+    // `_v=$(_get ...)`, a bare simple command whose failing exit status
+    // would otherwise kill claude.sh outright, silently contradicting this
+    // loader's own "malformed config never blocks" intent. `_get()` now
+    // ends in `|| true` to guarantee that.
+    const dir = mkdtempSync(join(tmpdir(), 'llm-settings-malformed-'));
+    try {
+      writeFileSync(join(dir, 'llm-settings.json'), '{ not valid json');
+      const fnBody = extractFunctionBody(claudeSrc, 'load_llm_settings_json');
+      const scriptPath = join(dir, 'run.sh');
+      writeFileSync(
+        scriptPath,
+        `set -e\nEPAM_PROJECT_CONFIG_DIR="${dir}"\n${fnBody}\nload_llm_settings_json\necho "no-op ok"\n`
+      );
+      const out = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
+      expect(out).toMatch(/no-op ok/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

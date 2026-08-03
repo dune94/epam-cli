@@ -58,10 +58,10 @@ describe('run-agent-orchestration.sh — REAL execution: reproduces the exact li
   function extractCategorizationBlock(): string {
     const idx = orchSrc.indexOf('# Categorize stories by agent group');
     const endIdx = orchSrc.indexOf(
-      "select(.agentRole == \"review-agent\" and .completed == false) | .id' \"$PRD_FILE\")",
+      "select(.agentRole == \"review-agent\" and (.completed // false) == false) | .id' \"$PRD_FILE\")",
       idx
     );
-    return orchSrc.slice(idx, endIdx + "select(.agentRole == \"review-agent\" and .completed == false) | .id' \"$PRD_FILE\")".length);
+    return orchSrc.slice(idx, endIdx + "select(.agentRole == \"review-agent\" and (.completed // false) == false) | .id' \"$PRD_FILE\")".length);
   }
 
   function categorize(phase: string, prdPath: string): Record<string, string[]> {

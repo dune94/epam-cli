@@ -1,5 +1,5 @@
 {
-  "id": "jira-sourced-1785608318187",
+  "id": "jira-sourced-1785623790436",
   "title": "Metrolinx Brownfield — Jira-sourced",
   "version": "1.0.0",
   "lastUpdated": "2026-08-01",
@@ -68,123 +68,20 @@
       "description": "[GO, UP, MX] Live Preview of Content in CMS",
       "acceptanceCriteria": [],
       "codeline": "gotransit",
-      "status": "in-progress",
+      "status": "pending",
       "completed": false,
       "agentRole": "typescript-engineer",
       "agentGroup": "main",
       "effort": "low",
       "estimate": 10,
       "acGateVerdict": "enrichable",
-      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). No acceptance criteria are provided and the description is too vague for an agent to determine scope, behavior, or edge cases without human clarification.",
+      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). Acceptance criteria are completely absent and the description is too vague — no specification of which content types, how preview is triggered, what the expected UX is, or how protected pages are handled — so different engineers would implement fundamentally different solutions.",
       "issueType": "Story",
       "codelines": [
         "gotransit",
         "upexpress",
         "metrolinx"
-      ],
-      "verificationCriteria": [
-        "The behavior described in the ticket is observed to be correct after the change: \"[GO, UP, MX] Live Preview of Content in CMS\".",
-        "Existing behavior related to this area is unchanged (no regression)."
-      ],
-      "vcSource": "fallback",
-      "vcResolution": "fallback",
-      "fixSiteAnalysis": [
-        {
-          "file": "src/context/ContentstackContext.tsx",
-          "function": "ContentstackProvider",
-          "reason": "This is the single chokepoint that feeds all content to the entire component tree (236 callers via useContent). Currently it accepts a static defaultContent prop and memoizes it with no reactivity — it has no mechanism to receive or respond to Contentstack Live Preview onEntryChange callbacks. Live Preview requires this provider to re-render the tree when the SDK pushes updated content, which means the provider itself must subscribe to the SDK's live preview events and merge incoming changes into the content it provides.",
-          "fix": "In ContentstackProvider, add a useState for content (initialized from defaultContent), subscribe to Contentstack SDK's livePreview.onEntryChange callback to merge preview updates into that state, and replace the static useMemo with the reactive state value. The provider already has the correct shape ({ content }) — only the source of the content value changes from a static memo to a state that the SDK callback can update. The Contentstack SDK's livePreview.onEntryChange returns the updated entry; merge it into the existing content object so useContent/getContentByKey consumers re-render with the previewed data. No existing helper in this repo was found for this transform — it requires wiring the SDK's own callback.",
-          "helper": "",
-          "brokenLine": "content: defaultContent,",
-          "fixVerified": null,
-          "evidenceVerified": true,
-          "prescriptionNote": "",
-          "prescriptionUnderspecified": false
-        }
-      ],
-      "fixSiteAnalysisCoverage": {
-        "complete": true,
-        "uncoveredVerificationCriteria": []
-      },
-      "storyKind": "novel",
-      "technicalNotes": {
-        "files": [
-          "src/hooks/useContent.ts",
-          "src/services/contentstack.ts",
-          "src/interface/content/contentCard.ts",
-          "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
-          "src/context/ContentstackContext.tsx"
-        ]
-      },
-      "specification": {
-        "runId": "20260801T181700Z",
-        "assignedAgents": [
-          "openspec"
-        ],
-        "coordinatorNotes": "Spec run already completed (runId 20260801T181700Z) with both openspec and speckit applied. Coordinator review verdict is needs_review (quality 0.65) — ACs were authored without source file visibility and openspec's architectural notes are unverified against actual code. Human review is required before development proceeds; no further automated spec work will resolve the flagged gaps without a human-in-the-loop file analysis first.",
-        "status": "completed",
-        "updatedAt": "2026-08-01T18:42:15.607Z",
-        "appliedAgents": [
-          "openspec"
-        ],
-        "agentContributions": [
-          {
-            "agent": "openspec",
-            "applied": true,
-            "notes": "Story is a novel capability (live preview) with empty ACs and minimal description. The central attachment point is useContent (236 callers) — every Contentstack component routes through it via getContentByKey. The contentstack.ts service is the API boundary where preview/draft parameters must be passed to Contentstack. I could not see useContent.ts or contentstack.ts source; location hints are inferred from consumption patterns visible in the 4 provided files and the CodeGraph blast radius. Prior flags addressed: (1) ACs were empty at source — kept verbatim; (2) architectural note on useContent as central attachment point is verified by 236 callers visible in CodeGraph and confirmed by ContentstackLink/ContentstackImage/ContentstackTable all calling useContent().getContentByKey; (3) with empty ACs, VCs are derived solely from the description, which is sparse — they capture the minimal observable contract of live preview without prescribing mechanism.",
-            "acceptanceChanged": false,
-            "splitCount": 0,
-            "timestamp": "2026-08-01T18:42:15.607Z"
-          }
-        ],
-        "coordinatorReview": {
-          "verdict": "needs_review",
-          "reviewNotes": "Both agents contributed meaningful, non-overlapping value: openspec provided architectural insight (identifying useContent as the central attachment point with 236 callers and noting Contentstack is unreachable at test time), while speckit authored all 12 acceptance criteria from scratch covering normal flow, error states, security, performance, and edge cases. However, speckit explicitly could not review the four referenced source files (useContent.ts, contentstack.ts, contentCard.ts, ContentstackLink.tsx) and built ACs solely from the story title and file paths. This means the 12 criteria are unvalidated against actual codebase structures and data shapes. Openspec's own note acknowledges ACs may need adjustment once files are examined. Human review is required to verify the criteria align with real implementation details before proceeding to development.",
-          "qualityScore": 0.65,
-          "flags": [
-            "acceptance_criteria_authored_without_source_file_visibility",
-            "openspec_architectural_note_unverified_against_code",
-            "speckit_self_flagged_potential_ac_adjustment_needed"
-          ],
-          "reviewedAt": "2026-08-01T18:24:54.789Z"
-        }
-      },
-      "estimatedAiMinutes": 4.5177,
-      "estimatedCost": 0.1403,
-      "estimatedTokens": 545670,
-      "estimatedTurns": 16,
-      "estimatedHours": 0.0752,
-      "cpaEffortTier": "medium",
-      "cpaConfidence": 0.7,
-      "cpaGate": "pass",
-      "ladderTier": "medium",
-      "cpaIterationEstimate": 1,
-      "model": "MiniMax-M3",
-      "aiProvider": "minimax",
-      "reasoningEffort": "low",
-      "completedAt": null,
-      "actualCost": 7.952107,
-      "reviewStatus": "escalated",
-      "perCodeline": {
-        "gotransit": {
-          "status": "pending",
-          "completed": false,
-          "completedAt": null,
-          "reviewStatus": null
-        },
-        "upexpress": {
-          "status": "pending",
-          "completed": false,
-          "completedAt": null,
-          "reviewStatus": null
-        },
-        "metrolinx": {
-          "status": "completed",
-          "completed": true,
-          "completedAt": "2026-08-01T18:48:08+00:00",
-          "reviewStatus": "escalated"
-        }
-      }
+      ]
     }
   ],
   "currentIteration": 8,

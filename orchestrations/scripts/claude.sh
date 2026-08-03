@@ -28,6 +28,8 @@ LOG_DIR="$AUTOMATION_DIR/logs"
 source "$SCRIPT_DIR/lib/tc-writer-gate.sh"
 # shellcheck source=lib/story-guards.sh
 source "$SCRIPT_DIR/lib/story-guards.sh"
+# shellcheck source=lib/git-ops.sh
+source "$SCRIPT_DIR/lib/git-ops.sh"
 PROGRESS_LOG="$LOG_DIR/progress.txt"
 AGENTS_FILE="$AUTOMATION_DIR/agents/AGENTS.md"
 CLAUDE_OUTPUT_DIR="$LOG_DIR/claude_outputs"
@@ -91,7 +93,14 @@ load_llm_settings_json() {
     local _settings_file="${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json"
     [ -f "$_settings_file" ] || return 0
 
-    _get() { jq -r "$1 // empty" "$_settings_file" 2>/dev/null; }
+    # `|| true` is load-bearing (found live, 2026-08-02): this function runs
+    # under `set -e` (claude.sh:18) — a malformed llm-settings.json makes jq
+    # exit non-zero on the PARSE error itself (the `// empty` fallback only
+    # covers a valid-but-absent VALUE, not a parse failure), and every call
+    # site here is `_v=$(_get ...)`, a bare simple command whose failing exit
+    # status would otherwise kill the whole script under set -e — silently
+    # contradicting this loader's own "malformed config never blocks" intent.
+    _get() { jq -r "$1 // empty" "$_settings_file" 2>/dev/null || true; }
     local _v
 
     _v=$(_get '.temperatureFloor'); [ -z "${EPAM_TEMPERATURE:-}" ] && [ -n "$_v" ] && export EPAM_TEMPERATURE="$_v"
@@ -586,6 +595,15 @@ _selective_worktree_reset() {
     LAST_VERIFIED_TOUCHED_FILES=""
     LAST_VERIFIED_UNCHANGED_FILES=""
     log "  WorktreeReset[$story_id]: reset to $_baseline_ref — last attempt had no validated (tsc-passed) state to preserve"
+
+    # Re-provision plugin config wiped by the git clean above (.epam/ is
+    # untracked, same as every other pipeline-written manifest). Found live
+    # 2026-08-02: a lane's first hard reset silently made the codeline-context
+    # plugin unavailable for every subsequent attempt on that lane — nothing
+    # re-provisioned it after the initial per-run setup. Shared with
+    # ensure_story_branch()'s own working-tree reset (lib/git-ops.sh) — one
+    # function instead of two independently drifting copies.
+    _provision_epam_plugin_config "$PROJECT_ROOT"
 }
 
 # _rung_snapshot_path <story_id>
@@ -1511,7 +1529,7 @@ get_story_phase() {
 
 # Get list of incomplete stories
 get_incomplete_stories() {
-    jq -r '.stories[] | select(.completed == false) | .id' "$PRD_FILE"
+    jq -r '.stories[] | select((.completed // false) == false) | .id' "$PRD_FILE"
 }
 
 # Get prioritized list of incomplete stories (respects phases, dependencies, priority)
@@ -1523,7 +1541,7 @@ get_prioritized_stories() {
 
     if [ -z "$phases" ]; then
         # No phases defined, fall back to all incomplete stories sorted by priority
-        jq -r '.stories[] | select(.completed == false) | "\(.priority // "medium")|\(.id)"' "$PRD_FILE" | \
+        jq -r '.stories[] | select((.completed // false) == false) | "\(.priority // "medium")|\(.id)"' "$PRD_FILE" | \
             sort -t'|' -k1,1 | cut -d'|' -f2
         return
     fi
@@ -1685,6 +1703,26 @@ build_implementation_prompt() {
     local verification_criteria
     verification_criteria=$(echo "$story_json" | jq -r '(.verificationCriteria // []) | map("- " + .) | join("\n")' 2>/dev/null || echo "")
 
+    # Codeline facts (real, project-operator-curated gotchas — see the
+    # Metrolinx codeline-context plugin's own docs) — injected DIRECTLY into
+    # the prompt rather than left as an optional tool call. Built 2026-08-02:
+    # the metrolinx_codeline_facts plugin tool existed and was correct, but
+    # across a full Writer Retest run the model called it exactly once
+    # (metrolinx_git_state) and never metrolinx_codeline_facts — the facts
+    # that would have told it the right token key never reached the model
+    # that needed them. Relying on the model to spontaneously discover an
+    # optional tool isn't working; injecting the same facts directly here
+    # means every invocation sees them regardless of tool-calling behavior.
+    local codeline_facts_block=""
+    local _codeline_facts_file="${PROJECT_ROOT}/.epam/codeline-facts.json"
+    if [ -f "$_codeline_facts_file" ]; then
+        local _codeline_facts
+        _codeline_facts=$(jq -r '
+          (if type == "array" then . else (.facts // []) end) | map("- " + .) | join("\n")
+        ' "$_codeline_facts_file" 2>/dev/null || echo "")
+        [ -n "$_codeline_facts" ] && codeline_facts_block=$(printf '\n## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)\n%s\n' "$_codeline_facts")
+    fi
+
     # REQUIRED bug-reproducing test (brownfield defect). The repro-gate (Step 3.55)
     # HARD-BLOCKS any brownfield change that ships no test which FAILS on the pre-fix
     # baseline and PASSES with the fix. For a single-agent defect story NOTHING else
@@ -1728,6 +1766,41 @@ build_implementation_prompt() {
             + (if (.file // "") != "" then " (" + .file + (if (.line // 0) > 0 then ":" + (.line|tostring) else "" end) + ")" else "" end)
             + (if (.suggestedFix // "") != "" then "\n  - Suggested fix: " + .suggestedFix else "" end)
           ) | join("\n")' "$_review_feedback_file" 2>/dev/null || echo "")
+    fi
+
+    # Persisted skill notes (cross-run learning — found live 2026-08-02):
+    # profiles.json's [Self-Heal] notes (both FailureAnalyst's tsc/test-failure
+    # diagnoses and Step 3.6's review-rejection lessons, see
+    # _persist_skill_note_simple() in lib/story-guards.sh) were being WRITTEN
+    # correctly but never READ back into this prompt — the only functions that
+    # ever consulted profiles.json's role text were the REVIEWER's own persona,
+    # FailureAnalyst's own diagnostic context (a different prompt, not this
+    # one), and duplicate-check gates before appending a NEW note. A brand new
+    # run's first attempt at a story never saw a single word of what a PRIOR
+    # run had already learned about it. Confirmed live: upexpress's writer
+    # reproduced the IDENTICAL dead-code live_preview-forwarding defect on a
+    # fresh relaunch despite two prior review rejections and a correctly
+    # persisted, file/line-precise note — this is the fix. review_feedback
+    # (above) covers the SAME-run retry loop; this covers what a prior, now-
+    # finished run already learned. Scoped to [Self-Heal] lines only — the
+    # rest of a role's profile text is its base persona/instructions, already
+    # a much larger, separate concern.
+    local skill_note_block=""
+    local story_role
+    story_role=$(echo "$story_json" | jq -r '.agentRole // ""' 2>/dev/null || echo "")
+    if [ -n "$story_role" ] && [ -f "$AGENT_PROFILES_FILE" ]; then
+        local _persisted_skill_notes
+        # Notes are persisted as \n\n-separated paragraphs (see
+        # _persist_skill_note_simple(), lib/story-guards.sh), each starting
+        # with "[Self-Heal] " — a plain-line grep only keeps the FIRST line of
+        # a multi-line note, silently truncating the actual diagnosis
+        # (e.g. the specific functions/ACs a real persisted note names).
+        # Paragraph-mode awk (RS="") keeps each whole note intact.
+        _persisted_skill_notes=$(jq -r --arg role "$story_role" '.[$role] // ""' "$AGENT_PROFILES_FILE" 2>/dev/null | \
+            awk -v RS='' -v ORS='\n\n' '/\[Self-Heal\]/' || true)
+        if [ -n "$_persisted_skill_notes" ]; then
+            skill_note_block=$(printf '\n## Lessons From Prior Runs (persisted — a previous attempt at this or a similar story already hit these problems)\n%s\n' "$_persisted_skill_notes")
+        fi
     fi
 
     # testCriteria — written by TC writer from actual source; ground truth for test stories.
@@ -1949,13 +2022,13 @@ The Root Cause Analysis above names the exact existing helper to reuse (\`${_pre
             codegraph_tool_block="## The prescribed fix is KNOWN INCOMPLETE — explore for the rest
 The Root Cause Analysis above names an existing helper to reuse (\`${_prescribed_helper}\`) for its own site — apply that part directly, do NOT re-search for it. But the prescribed fix does NOT address every verification criterion. These are UNCOVERED and need your own investigation beyond the prescribed sites:
 ${_uncovered_list}
-Use CodeGraph (PROJECT_ROOT=\"$PROJECT_ROOT\" bash \"$SCRIPT_DIR/codegraph-agent-query.sh\" helpers <domain nouns>) to find existing code for THESE before writing new logic — do not assume they are out of scope."
+Use the codegraph_query tool (mode=\"helpers\", args=\"<domain nouns>\") to find existing code for THESE before writing new logic — do not assume they are out of scope."
         else
             codegraph_tool_block="## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
-An existing-code search tool is available. Run it with the Bash tool to discover reusable functions instead of inventing new ones:
-  PROJECT_ROOT=\"$PROJECT_ROOT\" bash \"$SCRIPT_DIR/codegraph-agent-query.sh\" helpers <domain nouns>   # existing util/parser/formatter to REUSE (symbol + import path)
-  PROJECT_ROOT=\"$PROJECT_ROOT\" bash \"$SCRIPT_DIR/codegraph-agent-query.sh\" query <SymbolName>        # exact definition site of a symbol
-  PROJECT_ROOT=\"$PROJECT_ROOT\" bash \"$SCRIPT_DIR/codegraph-agent-query.sh\" callees <SymbolName>      # what a function already calls
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode=\"helpers\", args=\"<domain nouns>\")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode=\"query\", args=\"<SymbolName>\")       # exact definition site of a symbol
+  codegraph_query(mode=\"callees\", args=\"<SymbolName>\")     # what a function already calls
 RULE: Before you add ANY new function, run \`helpers\` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better."
         fi
     fi
@@ -2142,7 +2215,9 @@ $description
 $([ -n "$string_invariants_block" ] && printf '%s\n' "$string_invariants_block" || true)
 $([ -n "$fix_site_analysis" ] && printf '\n## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)\nA code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.\n\nThe Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.\n\nHARD RULES:\n- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.\n- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.\n%s\n' "$fix_site_analysis" || true)
 $([ -n "$review_feedback" ] && printf '\n## Reviewer Feedback — ADDRESS THESE (a prior code review requested changes)\nThe team-lead reviewer examined your previous attempt and requested the changes below. This is the highest priority: make the SMALLEST edits that resolve each point. If a point says the change is over-engineered or a more concise change/existing helper would do, REMOVE the excess and use the minimal approach — do not add more code.\n%s\n' "$review_feedback" || true)
+$([ -n "$skill_note_block" ] && printf '%s\n' "$skill_note_block" || true)
 $([ -n "$verification_criteria" ] && printf '\n## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)\nThese are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:\n%s\n' "$verification_criteria" || true)
+$([ -n "$codeline_facts_block" ] && printf '%s\n' "$codeline_facts_block" || true)
 $([ -n "$test_ownership_block" ] && printf '%s\n' "$test_ownership_block" || true)
 $([ -n "$codegraph_tool_block" ] && printf '\n%s\n' "$codegraph_tool_block" || true)
 $([ -n "$brownfield_test_policy" ] && printf '\n%s\n' "$brownfield_test_policy" || true)
@@ -3688,6 +3763,103 @@ PYEOF
 # story actually owns (technicalNotes.files, the same boundary scope-guard
 # already enforces) — never a file outside this attempt's own scope, (3) only
 # replaces the exact broken specifier text, preserving original quote style.
+# run_anti_pattern_check <project_root> <output_file> [story_id]
+# ─────────────────────────────────────────────────────────────────────────────
+# Deterministic, PROJECT-CONFIGURED check for a writer regressing to a
+# documented-wrong pattern — no pattern is ever hardcoded here. Rules come
+# from ${EPAM_PROJECT_CONFIG_DIR:-}/anti-patterns.json, a JSON array of
+# {id, matchPattern, message} objects (matchPattern: a Python regex, DOTALL
+# not needed since a negated character class already spans newlines). Absent
+# file = silent no-op — most projects configure nothing.
+#
+# Built 2026-08-02 after a live Writer Retest run: TWO separate lanes (of
+# three) regressed to `management_token` instead of the prescribed
+# `preview_token` in a Contentstack `live_preview` block — the EXACT defect a
+# prior team-lead review had already caught and the PRD's acceptanceCriteria
+# explicitly warned against. Relying on model compliance or a downstream LLM
+# review to catch a KNOWN, already-diagnosed wrong pattern is expensive and
+# unreliable; a cheap deterministic grep (same shape as
+# run_relative_import_check above) catches it on attempt 1 every time.
+#
+# Scoped to the story's OWN declared files (technicalNotes.files) only — same
+# scoping lesson as run_relative_import_check's fix, 2026-08-02: a pattern
+# that pre-exists in a file this story doesn't own is not this story's to fix
+# and must never block it.
+#
+# Returns 0 if no configured rule matches (or no rules are configured).
+# Returns 1 and sets VERIFICATION_FAILURE naming the exact rule violated.
+run_anti_pattern_check() {
+    local project_root="$1"
+    local output_file="${2:-/dev/null}"
+    local story_id="${3:-}"
+    local rules_file="${EPAM_PROJECT_CONFIG_DIR:-}/anti-patterns.json"
+    [ -f "$rules_file" ] || return 0
+
+    local owned_files_json="[]"
+    if [ -n "$story_id" ]; then
+        owned_files_json=$(jq -c --arg id "$story_id" \
+            '.stories[] | select(.id == $id) | .technicalNotes.files // []' \
+            "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "[]")
+        owned_files_json="${owned_files_json:-[]}"
+    fi
+
+    local result
+    result=$(python3 - "$project_root" "$rules_file" "$owned_files_json" << 'PYEOF'
+import os, re, sys, json
+
+project_root, rules_file, owned_files_raw = sys.argv[1], sys.argv[2], sys.argv[3]
+owned_files = [os.path.normpath(os.path.join(project_root, f) if not os.path.isabs(f) else f)
+               for f in json.loads(owned_files_raw)]
+
+try:
+    with open(rules_file, encoding='utf-8') as f:
+        rules = json.load(f)
+except Exception as e:
+    print("OK")  # a malformed config must never block a real story
+    sys.exit(0)
+
+violations = []
+for rel in owned_files:
+    fpath = os.path.normpath(os.path.join(project_root, rel) if not os.path.isabs(rel) else rel)
+    if not os.path.isfile(fpath):
+        continue
+    try:
+        with open(fpath, encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+    except OSError:
+        continue
+    rel_fpath = os.path.relpath(fpath, project_root)
+    for rule in rules:
+        pattern = rule.get('matchPattern')
+        if not pattern:
+            continue
+        if re.search(pattern, content):
+            violations.append(f"{rel_fpath}: {rule.get('message', rule.get('id', 'anti-pattern match'))}")
+
+if violations:
+    print("VIOLATION")
+    for line in violations:
+        print(line)
+else:
+    print("OK")
+PYEOF
+)
+
+    if [ "$(echo "$result" | head -1)" = "OK" ]; then
+        return 0
+    fi
+
+    local details
+    details=$(echo "$result" | tail -n +2)
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nA known, previously-diagnosed wrong pattern was detected — fix this before anything else:\n\n%s\n' "$details")
+    {
+        echo ""
+        echo "=== Anti-pattern check failed ==="
+        echo "$details"
+    } >> "$output_file"
+    return 1
+}
+
 # Returns 0 if all relative imports resolve (or all were auto-fixed). Returns
 # 1 and sets VERIFICATION_FAILURE with a suggestion for any that remain broken.
 run_relative_import_check() {
@@ -3696,21 +3868,44 @@ run_relative_import_check() {
     local story_id="${3:-}"
     local auto_fix="${EPAM_AUTO_FIX_RELATIVE_IMPORTS:-false}"
 
+    # owned_files/has_story_context now resolved UNCONDITIONALLY when a story_id
+    # is given (previously gated behind auto_fix=true, so it was only ever
+    # computed for auto-fix ELIGIBILITY, never for scoping which findings BLOCK
+    # the current story) — same fix already applied to run_named_import_check
+    # below, ported here 2026-08-02 after a live Writer Retest run: this check
+    # walks the ENTIRE project tree with no scope boundary, so a pre-existing,
+    # totally unrelated broken import (src/context/uniformContext.ts importing
+    # a nonexistent uniformManifest.json — nothing to do with the story being
+    # implemented) blocked AMSD-2041 for 3 straight attempts on a genuinely
+    # correct fix (verified: 19/19 tests passing, zero type errors) that this
+    # story was structurally incapable of ever "fixing", since it doesn't own
+    # that file. The sibling-escalation path below still fires when an owning
+    # story can be found, but previously STILL fell through to `return 1`
+    # regardless — out-of-scope findings must never block THIS story's turn.
     local owned_files_json="[]"
-    if [ -n "$story_id" ] && [ "$auto_fix" = "true" ]; then
+    local has_story_context="false"
+    if [ -n "$story_id" ]; then
+        has_story_context="true"
         owned_files_json=$(jq -c --arg id "$story_id" \
             '.stories[] | select(.id == $id) | .technicalNotes.files // []' \
             "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "[]")
+        # jq exits 0 with EMPTY output (not "[]") when story_id matches no
+        # story in the PRD — the `||` above only fires on a non-zero exit, so
+        # that case fell straight through as an empty string, which crashes
+        # Python's json.loads() downstream. Found live 2026-08-02 testing the
+        # relative-import-check port of this same pattern.
+        owned_files_json="${owned_files_json:-[]}"
     fi
 
     local result
-    result=$(python3 - "$project_root" "$auto_fix" "$owned_files_json" << 'PYEOF'
+    result=$(python3 - "$project_root" "$auto_fix" "$owned_files_json" "$has_story_context" << 'PYEOF'
 import os, re, sys, json
 
 project_root = sys.argv[1]
 auto_fix = sys.argv[2] == 'true'
 owned_files = set(os.path.normpath(os.path.join(project_root, f) if not os.path.isabs(f) else f)
                    for f in json.loads(sys.argv[3]))
+has_story_context = sys.argv[4] == 'true'
 SOURCE_EXTS = ('.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs')
 IMPORT_RE = re.compile(r"from\s+['\"](\.[^'\"]*)['\"]|require\(\s*['\"](\.[^'\"]*)['\"]\s*\)")
 
@@ -3751,6 +3946,7 @@ for root, dirs, files in os.walk(project_root):
             all_source_files.append(os.path.relpath(os.path.join(root, fname), project_root))
 
 broken = []
+out_of_scope = []
 auto_fixed = []
 for root, dirs, files in os.walk(project_root):
     dirs[:] = [d for d in dirs if d not in ('node_modules', 'dist', '.git', '__pycache__', '.venv', '.contracts')]
@@ -3812,13 +4008,24 @@ for root, dirs, files in os.walk(project_root):
                         file_changed = True
                         auto_fixed.append(f"{rel_fpath}: '{spec}' -> '{rel_from_importer}'")
                         break
-            else:
-                broken.append(f"{rel_fpath}: imports '{spec}' which does not exist.{suggestion}")
+            if not can_auto_fix:
+                line = f"{rel_fpath}: imports '{spec}' which does not exist.{suggestion}"
+                # Same scoping fix as run_named_import_check: a broken import
+                # in a file this story doesn't own can never be this story's
+                # to fix (scope-guard prevents it from ever touching that
+                # file) — report it as non-blocking visibility instead of
+                # burning the entire retry ladder on an impossible fix.
+                if has_story_context and os.path.normpath(fpath) not in owned_files:
+                    out_of_scope.append(line)
+                else:
+                    broken.append(line)
 
         if file_changed:
             with open(fpath, 'w', encoding='utf-8') as f:
                 f.write(fixed_content)
 
+for line in out_of_scope:
+    print("OUT_OF_SCOPE:" + line)
 if broken:
     print("BROKEN")
     for line in broken:
@@ -3840,36 +4047,34 @@ PYEOF
     fi
     result=$(echo "$result" | grep -v "^AUTOFIXED:" || true)
 
-    if [ "$(echo "$result" | head -1)" = "OK" ]; then
-        return 0
-    fi
+    # Findings in files this story doesn't own are surfaced (visibility) but
+    # never block this story's own turn — same pattern as run_named_import_check.
+    # A sibling-owning story, if one exists, still gets a REAL escalation file
+    # written (resolve_escalation() already knows how to consume it) — that
+    # part of the original design has real value — but writing it no longer
+    # gates whether THIS story's turn blocks. Previously, EVEN a successfully
+    # registered escalation still fell through to `return 1` below regardless,
+    # so out-of-scope breakage blocked the current story either way. Root
+    # cause this fixes (found live, 2026-08-02, Writer Retest run): a
+    # single-story PRD has no sibling to attribute an out-of-scope broken
+    # import to, so a totally unrelated, pre-existing broken import
+    # (uniformContext.ts -> a nonexistent uniformManifest.json) blocked a
+    # genuinely correct AMSD-2041 fix for 3 straight attempts — the ladder was
+    # burned on a bug the story could never have fixed, exactly the SAME
+    # failure shape the original sibling-escalation code was meant to solve
+    # but didn't, because it still blocked regardless of outcome.
+    local out_of_scope_lines
+    out_of_scope_lines=$(echo "$result" | grep "^OUT_OF_SCOPE:" || true)
+    if [ -n "$out_of_scope_lines" ]; then
+        while IFS= read -r _oos_line; do
+            [ -z "$_oos_line" ] && continue
+            warning "  [relative-import-check] Broken import outside this story's scope (not blocking): ${_oos_line#OUT_OF_SCOPE:}"
+        done <<< "$out_of_scope_lines"
 
-    local details
-    details=$(echo "$result" | tail -n +2)
-
-    # Root cause fix (found live, 2026-07-11, tier3-travel-app run): the
-    # broken import's IMPORTER file (not just the corrected-path suggestion)
-    # can belong to a DIFFERENT, already-completed sibling story —
-    # scope-guard correctly locks it read-only for the current story, so
-    # "fix the import path" is structurally impossible for this story to do.
-    # Deterministic checks skip the failure-analyst (a cost-efficiency
-    # optimization), so they never got a chance to register a sibling
-    # escalation the way an LLM-diagnosed cross-story defect would — this
-    # burned all 8 attempts on SKY-003-test, which was told every retry to
-    # fix a broken import in cli.ts, a file owned by the already-completed
-    # SKY-003-impl. Detect this and register the SAME escalation file
-    # resolve_escalation() already knows how to consume (it already runs at
-    # the top of every retry, see its call site's own docstring), instead of
-    # retrying the current story against a fix it structurally cannot apply.
-    if [ -n "$story_id" ]; then
-        local _first_broken_file
-        _first_broken_file=$(echo "$details" | head -1 | sed -E 's/^([^:]+):.*/\1/')
-        if [ -n "$_first_broken_file" ]; then
-            local _owns_file
-            _owns_file=$(jq -r --arg id "$story_id" --arg f "$_first_broken_file" \
-                '.stories[] | select(.id == $id) | (.technicalNotes.files // []) | map(. == $f or endswith("/" + $f)) | any' \
-                "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "false")
-            if [ "$_owns_file" != "true" ]; then
+        if [ -n "$story_id" ]; then
+            local _first_oos_file
+            _first_oos_file=$(echo "$out_of_scope_lines" | head -1 | sed -E 's/^OUT_OF_SCOPE:([^:]+):.*/\1/')
+            if [ -n "$_first_oos_file" ]; then
                 # BUG B FIX (found live, 2026-07-12, tier3-travel-app run): this
                 # lookup used to scan ALL stories with no deprecated-status
                 # filter and take the FIRST array match — a split PARENT marked
@@ -3888,25 +4093,33 @@ PYEOF
                     '.stories[] | select(.id == $id) | .specification.createdFrom // empty' \
                     "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null)
                 local _owner_id
-                _owner_id=$(jq -r --arg self "$story_id" --arg f "$_first_broken_file" --arg parent "$_self_parent" \
+                _owner_id=$(jq -r --arg self "$story_id" --arg f "$_first_oos_file" --arg parent "$_self_parent" \
                     '[.stories[] | select(.id != $self) | select(.status != "deprecated") | select((.technicalNotes.files // []) | map(. == $f or endswith("/" + $f)) | any) | select(($parent != "") and .specification.createdFrom == $parent)][0].id
                      // [.stories[] | select(.id != $self) | select(.status != "deprecated") | select((.technicalNotes.files // []) | map(. == $f or endswith("/" + $f)) | any)][0].id
                      // empty' \
                     "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null)
                 if [ -n "$_owner_id" ]; then
-                    local _first_broken_detail
-                    _first_broken_detail=$(echo "$details" | head -1)
+                    local _first_oos_detail
+                    _first_oos_detail=$(echo "$out_of_scope_lines" | head -1 | sed 's/^OUT_OF_SCOPE://')
                     mkdir -p "${PROJECT_ROOT}/.epam/escalations"
-                    jq -n --arg tf "$_first_broken_file" \
-                        --arg diag "Relative import in ${_first_broken_file} does not resolve to a real file (detected by deterministic check while implementing ${story_id})." \
-                        --arg fix "$_first_broken_detail" \
+                    jq -n --arg tf "$_first_oos_file" \
+                        --arg diag "Relative import in ${_first_oos_file} does not resolve to a real file (detected by deterministic check while implementing ${story_id})." \
+                        --arg fix "$_first_oos_detail" \
                         '{targetFile: $tf, diagnosis: $diag, requiredFix: $fix}' \
                         > "${PROJECT_ROOT}/.epam/escalations/${story_id}.json"
-                    log "  [relative-import-check] Broken import lives in ${_first_broken_file}, owned by ${_owner_id} (not ${story_id}) — registered sibling escalation instead of retrying an impossible fix"
+                    log "  [relative-import-check] Broken import lives in ${_first_oos_file}, owned by ${_owner_id} (not ${story_id}) — registered sibling escalation (informational; this story's turn is not blocked by it)"
                 fi
             fi
         fi
     fi
+    result=$(echo "$result" | grep -v "^OUT_OF_SCOPE:" || true)
+
+    if [ "$(echo "$result" | head -1)" = "OK" ]; then
+        return 0
+    fi
+
+    local details
+    details=$(echo "$result" | tail -n +2)
 
     VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nA relative import does not resolve to a real file — this will fail immediately when the test suite runs. Fix the import path before anything else:\n\n%s\n' "$details")
     {
@@ -3975,6 +4188,12 @@ run_named_import_check() {
         owned_files_json=$(jq -c --arg id "$story_id" \
             '.stories[] | select(.id == $id) | .technicalNotes.files // []' \
             "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "[]")
+        # jq exits 0 with EMPTY output (not "[]") when story_id matches no
+        # story in the PRD — the `||` above only fires on a non-zero exit, so
+        # that case fell straight through as an empty string, which crashes
+        # Python's json.loads() downstream. Found live 2026-08-02 testing the
+        # relative-import-check port of this same pattern.
+        owned_files_json="${owned_files_json:-[]}"
     fi
 
     local result
@@ -4381,6 +4600,16 @@ run_external_verification() {
     # misdiagnosed it as a default-vs-named export mismatch.
     if ! run_named_import_check "$PROJECT_ROOT" "$output_file" "$story_id"; then
         warning "  [named-import-check] Non-existent named import detected — skipping test run"
+        DETERMINISTIC_CHECK_FAILURE=1
+        export DETERMINISTIC_CHECK_FAILURE
+        return 1
+    fi
+
+    # Fail fast on a project-configured anti-pattern (e.g. a documented-wrong
+    # value a prior review already caught) — see run_anti_pattern_check's own
+    # docstring. Silent no-op for any project with no anti-patterns.json.
+    if ! run_anti_pattern_check "$PROJECT_ROOT" "$output_file" "$story_id"; then
+        warning "  [anti-pattern-check] Known wrong pattern detected — skipping test run"
         DETERMINISTIC_CHECK_FAILURE=1
         export DETERMINISTIC_CHECK_FAILURE
         return 1
@@ -6153,6 +6382,20 @@ PYEOF
                         log "  [FailureAnalyst] Injected skill guidance into retry prompt (${#skill_note} chars)"
                         # Persist skill note to profiles.json so future runs inherit this learning
                         if [ -f "$profiles_file" ]; then
+                            # Deterministic anti-pattern gate (found live, 2026-08-02): a skill
+                            # note can be a 100%-correct reading of a WRONG ground truth (e.g. a
+                            # stale SDK .d.ts file) — FailureAnalyst has no way to know that, and
+                            # neither does the LLM reviewer just below, since the same blind spot
+                            # applies to both. This project's own anti-patterns.json already
+                            # encodes the known-correct answer from a real prior review; a note
+                            # that contradicts it is refused here, before either LLM ever sees it,
+                            # so the same wrong belief can never be re-argued back into the
+                            # profile no matter how many times a model re-derives it.
+                            local _skill_anti_pattern_msg
+                            _skill_anti_pattern_msg=$(_text_violates_anti_pattern "$skill_note")
+                            if [ -n "$_skill_anti_pattern_msg" ]; then
+                                warning "  [FailureAnalyst] Skill note contradicts a known anti-pattern — refusing to persist: $_skill_anti_pattern_msg"
+                            else
                             local _current_role_profile
                             _current_role_profile=$(jq -c --arg role "$story_role" '.[$role] // ""' "$profiles_file" 2>/dev/null)
                             # Duplicate guard (fixed 2026-07-11, after a live run persisted an
@@ -6225,6 +6468,7 @@ else:
 PYEOF
                             ) 200>"${profiles_file}.lock"
                             _profile_updated="true"
+                            fi
                             fi
                         fi
                     else
@@ -9270,117 +9514,6 @@ generate_story_contract() {
     _generate_contract_from_files "$_commit_root" "$contract_file" "$files_json" "$story_id" "$config_file"
 }
 
-commit_completed_story() {
-    local story_id="$1"
-    local _commit_root="${GIT_WORK_ROOT:-$PROJECT_ROOT}"
-    # Bounded timeout on git operations (added 2026-07-06): a live run's story-
-    # level 600s watchdog killed the whole claude.sh subprocess with zero log
-    # output after a story succeeded — generate_story_contract()/
-    # commit_completed_story() were the only unlogged steps left, and neither
-    # had any bound on how long its git/python calls could take (e.g. a stale
-    # lock, a slow filesystem). 60s is generous for `git add`/`git commit` on
-    # this project's size; a hang here now fails fast and visibly instead of
-    # silently consuming the entire story-level watchdog budget.
-    local _git_timeout="${EPAM_COMMIT_TIMEOUT_SECS:-60}"
-
-    # set +e/-e around this block (found live, 2026-07-14, tier3-travel-app
-    # run — first time a worktree lane ran real multi-story work): under
-    # set -e (active for this whole script), `CMD1 || CMD2` as a bare
-    # statement DOES still abort the script if CMD2 (the last command in the
-    # || list) also fails — the fallback `git add -A` failing for ANY reason
-    # (not just the 124-timeout case this code checks for) silently killed
-    # the entire claude.sh process here, before `_add_rc=$?` was ever
-    # reached, with zero warning logged and every remaining story in this
-    # worktree lane (SKY-003-impl/-test, SKY-004 in the observed incident)
-    # never even attempted.
-    set +e
-    # Tool artifacts epam-cli writes into the target repo so its gates can read
-    # them. They must never be COMMITTED there: a client repo does not carry our
-    # manifests, indexes or telemetry.
-    #
-    # The list is the CLASS, not one instance. Excluding only .epam (as this first
-    # did) let .deepeval/.deepeval_telemetry.txt into a live metrolinx commit hours
-    # later — the same defect wearing a different filename. All four were verified
-    # absent from the client's baseline tree (origin/develop), so none is client
-    # content. Checking against HEAD would have been wrong: .deepeval appeared
-    # "tracked" there only because our own run had just committed it.
-    timeout "$_git_timeout" git -C "$_commit_root" add -A -- \
-        ':!orchestrations/logs/*' \
-        ':!*/node_modules/*' \
-        ':!*/build/*' \
-        ':!*/.next/*' \
-        ':!.epam/*' ':!*/.epam/*' \
-        ':!.deepeval/*' ':!*/.deepeval/*' \
-        ':!.codegraph/*' ':!*/.codegraph/*' \
-        ':!.contracts/*' ':!*/.contracts/*' \
-        2>/dev/null
-    local _add_rc=$?
-    if [ "$_add_rc" -ne 0 ]; then
-        timeout "$_git_timeout" git -C "$_commit_root" add -A 2>/dev/null
-        _add_rc=$?
-    fi
-    # Belt and braces: the fallback above has NO pathspec, so a failure of the
-    # exclusion form would silently put .epam back into the commit. Unstage it
-    # unconditionally — this holds whichever add path ran.
-    timeout "$_git_timeout" git -C "$_commit_root" reset -q -- \
-        '.epam' '.deepeval' '.codegraph' '.contracts' 2>/dev/null || true
-    set -e
-    if [ "$_add_rc" -ne 0 ]; then
-        if [ "$_add_rc" -eq 124 ]; then
-            warning "  [commit_completed_story] git add timed out after ${_git_timeout}s for ${story_id} — work remains staged/uncommitted"
-        else
-            warning "  [commit_completed_story] git add failed (exit ${_add_rc}) for ${story_id} — work remains staged/uncommitted"
-        fi
-        return 1
-    fi
-
-    local _changed_count
-    _changed_count=$(timeout "$_git_timeout" git -C "$_commit_root" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
-    if [ "${_changed_count:-0}" -eq 0 ]; then
-        return 0
-    fi
-
-    # Generic credential scan (flow-gap analysis finding #2, 2026-07-12): no
-    # commit site in this pipeline scanned staged changes for accidentally-
-    # committed secrets before this. SAST (Step 4.2) is the first thing that
-    # even looks at code content for this, and it runs long after this commit
-    # would already be in git history. scan-secrets.sh is generic and stack-
-    # agnostic (well-known credential formats only) — see its own header.
-    local _scan_sh="${SCRIPT_DIR}/scan-secrets.sh"
-    if [ "${SKIP_SECRET_SCAN:-true}" != "true" ] && [ -f "$_scan_sh" ]; then
-        local _scan_output _scan_rc
-        # set +e/-e (found live, 2026-07-14, same incident as the git-add fix
-        # above): `var=$(failing_cmd)` as a bare assignment statement is
-        # ALSO a set -e trigger — scan-secrets.sh exiting non-zero (its
-        # intentional, designed signal for "found a secret") killed the
-        # whole script on THIS line, one statement before `_scan_rc=$?` and
-        # the warning/return-1 handling below ever ran, so a real secret hit
-        # (or, per this incident, any other non-zero exit from the scan)
-        # silently took down every remaining story in the lane instead of
-        # gracefully unstaging and skipping just this one commit.
-        set +e
-        _scan_output=$(bash "$_scan_sh" "$_commit_root" 2>&1)
-        _scan_rc=$?
-        set -e
-        if [ "$_scan_rc" -ne 0 ]; then
-            warning "  [commit_completed_story] $_scan_output"
-            warning "  [commit_completed_story] Refusing to commit for ${story_id} — unstaging (SECRET_SCAN)"
-            timeout "$_git_timeout" git -C "$_commit_root" reset 2>/dev/null || true
-            return 1
-        fi
-    fi
-
-    if timeout "$_git_timeout" git -C "$_commit_root" commit -m "story: complete ${story_id} (${_changed_count} file(s))" >/dev/null 2>&1; then
-        log "  Committed ${_changed_count} file(s) for ${story_id}"
-    else
-        local _commit_rc=$?
-        if [ "$_commit_rc" -eq 124 ]; then
-            warning "  [commit_completed_story] git commit timed out after ${_git_timeout}s for ${story_id} — work remains staged/uncommitted"
-        else
-            warning "  Commit failed for ${story_id} — work remains staged/uncommitted"
-        fi
-    fi
-}
 
 run_implementation() {
     local stories=("$@")
@@ -9567,132 +9700,6 @@ run_implementation() {
     return 0
 }
 
-# Setup git worktrees for parallel execution
-# Runs git commands from GIT_WORK_ROOT (the directory containing .git)
-# Worktrees are created as siblings of GIT_WORK_ROOT
-setup_worktrees() {
-    local worktrees=("primary" "independent")
-    local git_root
-    git_root="$(cd "$GIT_WORK_ROOT" && pwd)"
-    local git_basename
-    git_basename="$(basename "$git_root")"
-
-    log "Setting up git worktrees (git root: $git_root)..."
-
-    # Validate GIT_WORK_ROOT is a git repo
-    if ! git -C "$git_root" rev-parse --is-inside-work-tree &>/dev/null; then
-        error "GIT_WORK_ROOT ($git_root) is not a git repository"
-        return 1
-    fi
-
-    for wt in "${worktrees[@]}"; do
-        local wt_path="$git_root/../${git_basename}-wt-$wt"
-        local wt_branch="wt-$wt"
-
-        # A directory existing at $wt_path is NOT sufficient proof of a usable
-        # worktree — a prior crash (or a raw `rm -rf` instead of `git worktree
-        # remove`) can leave a stale, non-git-tracked directory here, or a
-        # directory whose worktree registration was lost. Silently "continuing"
-        # on directory-existence alone left the CALLER believing a real
-        # worktree was set up when it wasn't — verify it's actually a
-        # registered, valid worktree of THIS repo before skipping creation.
-        if [ -d "$wt_path" ]; then
-            # `git worktree list --porcelain` reports canonicalized, resolved
-            # paths — $wt_path contains a literal `..` component, so a raw
-            # string comparison against the porcelain output NEVER matches
-            # even for a genuinely valid worktree. Resolve $wt_path the same
-            # way before comparing.
-            local wt_path_resolved
-            wt_path_resolved="$(cd "$wt_path" 2>/dev/null && pwd)"
-            if [ -n "$wt_path_resolved" ] && git -C "$git_root" worktree list --porcelain 2>/dev/null | grep -q "^worktree ${wt_path_resolved}$"; then
-                warning "Worktree already exists and is valid: $wt_path"
-                continue
-            fi
-            warning "Stale non-worktree directory found at $wt_path (not registered with git) — removing before recreating"
-            rm -rf "$wt_path"
-        fi
-
-        # Delete branch if it exists from previous run
-        if git -C "$git_root" show-ref --verify --quiet "refs/heads/$wt_branch"; then
-            info "Deleting existing branch: $wt_branch"
-            git -C "$git_root" branch -D "$wt_branch" 2>/dev/null || true
-        fi
-
-        # Create worktree with a new branch based on current HEAD
-        info "Creating worktree: $wt ($wt_path) on branch $wt_branch"
-        git -C "$git_root" worktree add -b "$wt_branch" "$wt_path" HEAD || {
-            error "Failed to create worktree: $wt"
-            return 1
-        }
-    done
-
-    success "Worktrees created successfully"
-    return 0
-}
-
-# Cleanup git worktrees
-cleanup_worktrees() {
-    local worktrees=("primary" "independent")
-    local git_root
-    git_root="$(cd "$GIT_WORK_ROOT" && pwd)"
-    local git_basename
-    git_basename="$(basename "$git_root")"
-
-    log "Cleaning up git worktrees..."
-
-    for wt in "${worktrees[@]}"; do
-        local wt_path="$git_root/../${git_basename}-wt-$wt"
-        local wt_branch="wt-$wt"
-
-        # Check if worktree exists
-        if [ ! -d "$wt_path" ]; then
-            info "Worktree does not exist: $wt_path (already removed)"
-        else
-            # Remove worktree — fall back to manual rm + prune if `git worktree
-            # remove` fails (e.g. the directory was already partially deleted
-            # out-of-band), so a failed removal never leaves the checkout
-            # behind for the next run to trip over.
-            info "Removing worktree: $wt ($wt_path)"
-            if ! git -C "$git_root" worktree remove "$wt_path" --force 2>/dev/null; then
-                warning "git worktree remove failed for $wt — falling back to manual rm + prune"
-                rm -rf "$wt_path"
-            fi
-        fi
-
-        # Prune BEFORE attempting the branch delete below — if the worktree
-        # directory was removed out-of-band (not via `git worktree remove`),
-        # git still considers the branch "checked out" by the orphaned admin
-        # metadata and silently refuses `git branch -D` until pruned. This bug
-        # was found live via this exact scenario in this function's own tests.
-        git -C "$git_root" worktree prune 2>/dev/null || true
-
-        # Delete the branch too — a worktree checkout being removed does NOT
-        # delete the branch it pointed to, and a leftover branch collides with
-        # the NEXT setup_worktrees() call's `git worktree add -b $wt_branch`
-        # (the exact "fatal: a branch named 'wt-primary' already exists" live
-        # failure this fixes). setup_worktrees() also deletes stale branches
-        # defensively, but cleanup should not rely on the next run to do it.
-        if git -C "$git_root" show-ref --verify --quiet "refs/heads/$wt_branch"; then
-            git -C "$git_root" branch -D "$wt_branch" 2>/dev/null || true
-        fi
-    done
-
-    # Prune worktree references
-    git -C "$git_root" worktree prune
-
-    # Final verification — a pristine cleanup MUST end with zero wt-* worktrees
-    # registered. Fail loudly instead of silently leaving a corrupt registry.
-    local remaining
-    remaining=$(git -C "$git_root" worktree list --porcelain 2>/dev/null | grep -c "^worktree .*-wt-\(primary\|independent\)$" || true)
-    if [ "${remaining:-0}" -gt 0 ]; then
-        error "Worktree cleanup incomplete — ${remaining} wt-* worktree(s) still registered"
-        git -C "$git_root" worktree list
-        return 1
-    fi
-
-    success "Worktrees cleaned up"
-    return 0
-}
 
 # Print usage
 usage() {

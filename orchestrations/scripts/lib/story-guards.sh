@@ -350,7 +350,7 @@ record_brownfield_verified_baseline() {
 # 200+ times until it succeeds, and contamination from a failed attempt must
 # never persist into the next one. Brownfield's own semantics for this
 # (confirmed 2026-07-22, not the same as reset-to-baseline.sh's greenfield
-# "last story:complete commit" model): hard-reset the codeline to
+# "last <id>: story complete commit" model): hard-reset the codeline to
 # phase-baseline-sha.txt — the SHA captured once, at the very start of this
 # run's phase, BEFORE any story in it touched anything (see
 # run-agent-orchestration.sh Step 8's capture just before the main-story
@@ -359,7 +359,7 @@ record_brownfield_verified_baseline() {
 #
 # Live bug this closes (AMSD-1820, 2026-07-22): commit_completed_story()
 # commits BEFORE story_tsc_gate runs. When the gate then failed, the commit
-# ("story: complete AMSD-1820 (7 file(s))") was left sitting on develop
+# ("AMSD-1820: story complete (7 file(s))") was left sitting on develop
 # permanently — nothing ever reverted it. It went on to actively poison
 # later Semble semantic-search results (its prose matched the bug title
 # better than the real fix file, outranking the actual code needing the fix)
@@ -391,4 +391,213 @@ reset_brownfield_story_commit() {
     warning "  [teardown] $_sid: resetting $PROJECT_ROOT to pre-run baseline $_baseline_sha — discarding this story's failed commit(s)"
     git -C "$PROJECT_ROOT" reset --hard "$_baseline_sha" >/dev/null 2>&1 \
         && success "  [teardown] $_sid: reset complete — repo is back to the exact state before this run started"
+}
+
+# ── _text_violates_anti_pattern moved here 2026-08-02 ──────────────────────
+# Moved from claude.sh so BOTH claude.sh (FailureAnalyst's skill-note path)
+# and run-agent-orchestration.sh (review-rejection skill-note path, below)
+# can call it — the same "shared, single source of truth" reasoning already
+# applied to lib/git-ops.sh.
+# _text_violates_anti_pattern <text>
+# A SEPARATE, purpose-built pattern per rule — `textMatchPattern`, distinct
+# from `matchPattern` — applied to an arbitrary piece of TEXT: specifically, a
+# self-heal skill note about to be persisted into profiles.json for every
+# future run to inherit. A rule with no `textMatchPattern` simply does not
+# apply here (silently skipped) — most anti-pattern rules are code-shape-only
+# and have no prose equivalent worth gating.
+#
+# Root cause this closes (found live, 2026-08-02, Writer Retest): FailureAnalyst
+# diagnosed a real TypeScript compile error (Config.live_preview missing
+# host/management_token) 100% correctly against the installed
+# node_modules/contentstack/index.d.ts type declaration — but that declaration
+# is itself STALE relative to the SDK's real runtime behavior (already
+# established via multiple real code reviews: the correct fix uses
+# preview_token, cast through `as unknown as contentstack.LivePreview` to
+# bypass the wrong type). FailureAnalyst has no way to know a TYPE FILE can be
+# wrong — it reasoned correctly from incorrect ground truth, and its own
+# reviewer-retry gate (an LLM judging another LLM's note) didn't catch it
+# either, since the same blind spot applies to both. The one thing that DOES
+# know the type file is wrong is this project's own anti-patterns.json
+# (already written after the first live rejection) — checking against it here
+# means a skill note contradicting a known-correct, already-reviewed fix
+# pattern is refused DETERMINISTICALLY, never re-argued into the profile no
+# matter how many times an LLM reasons its way back to the same wrong belief.
+#
+# `textMatchPattern` is DELIBERATELY separate from `matchPattern` (found live,
+# 2026-08-02, same day: the two were briefly the same shared, loosened pattern
+# — broadening it to catch prose in a skill note ALSO made
+# run_anti_pattern_check(), which scans real CODE FILES with `matchPattern`,
+# false-positive on a correct, review-approved comment explaining the exact
+# same contrast in prose ("reads `preview_token` (not `management_token`)").
+# That false positive blocked a real test run and cascaded into a
+# HealingBroken escalation — a genuine run regression traced back to sharing
+# one pattern across two consumers with different strictness needs. Never
+# reuse one regex across a code-scanner and a free-text scanner again — see
+# [[feedback_regex_100_percent_coverage]].
+#
+# Prints the matched rule's message on stdout when it matches; prints nothing
+# and returns 0 when clean (matches run_anti_pattern_check's "OK"/malformed
+# config = never block" posture).
+_text_violates_anti_pattern() {
+    local _text="$1"
+    local _rules_file="${EPAM_PROJECT_CONFIG_DIR:-}/anti-patterns.json"
+    [ -f "$_rules_file" ] || return 0
+
+    python3 - "$_rules_file" "$_text" << 'PYEOF'
+import json, re, sys
+rules_file, text = sys.argv[1], sys.argv[2]
+try:
+    with open(rules_file, encoding='utf-8') as f:
+        rules = json.load(f)
+except Exception:
+    sys.exit(0)
+for rule in rules:
+    pattern = rule.get('textMatchPattern')
+    if not pattern:
+        continue
+    try:
+        if re.search(pattern, text):
+            print(rule.get('message', rule.get('id', 'anti-pattern match')))
+            sys.exit(1)
+    except re.error:
+        continue
+sys.exit(0)
+PYEOF
+}
+
+
+# _persist_skill_note_simple <profiles_file> <role> <raw_text>
+# Lightweight skill-note persister for call sites that don't have access to
+# claude.sh's full LLM-invocation infrastructure (run_change_with_reviewer_retry,
+# which validates a note's WORDING via an LLM review pass before persisting) —
+# specifically, run-agent-orchestration.sh's review-rejection path (Step 3.6,
+# below). Applies the SAME deterministic anti-pattern gate and exact-duplicate
+# guard claude.sh's own FailureAnalyst skill-note persister uses, then writes
+# directly with no LLM wording-review sub-step — justified because the text
+# here is already reviewer-vetted content (a real code review's own blocker
+# description), unlike FailureAnalyst's raw, unvalidated model diagnosis text.
+#
+# Root cause this closes (found live, 2026-08-02): a story that repeatedly
+# fails REVIEW for the same reason (e.g. AMSD-2041's live_preview never
+# forwarded through public query functions) had NO mechanism to persist that
+# lesson for the writer across runs — only FailureAnalyst's tsc/test-failure
+# diagnoses fed the skill-note pipeline. The exact same defect could recur
+# indefinitely across runs with nothing ever accumulating for the writer to
+# learn from, unlike self-heal-diagnosed failures.
+#
+# Best-effort: never fails the caller (always returns 0), same posture as
+# run_anti_pattern_check()/_text_violates_anti_pattern().
+_persist_skill_note_simple() {
+    local _profiles_file="$1"
+    local _role="$2"
+    local _raw_text="$3"
+    [ -f "$_profiles_file" ] || return 0
+    [ -n "$_raw_text" ] || return 0
+
+    local _anti_pattern_msg
+    _anti_pattern_msg=$(_text_violates_anti_pattern "$_raw_text")
+    if [ -n "$_anti_pattern_msg" ]; then
+        warning "  [skill-note] Refusing to persist for [${_role}] — contradicts a known anti-pattern: $_anti_pattern_msg"
+        return 0
+    fi
+
+    local _current_role_profile
+    _current_role_profile=$(jq -c --arg role "$_role" '.[$role] // ""' "$_profiles_file" 2>/dev/null)
+    if echo "$_current_role_profile" | grep -qF -- "$_raw_text"; then
+        log "  [skill-note] Exact duplicate already present in [${_role}] — not persisting again"
+        return 0
+    fi
+
+    ( flock -w 10 200 || { error "  [skill-note] Could not acquire lock on $_profiles_file"; return 1; }
+    python3 - "$_raw_text" << PYEOF 2>&1 | while IFS= read -r line; do log "  [skill-note] $line"; done
+import json, sys, os
+profiles_path = '$_profiles_file'
+role = '$_role'
+note = '[Self-Heal] ' + sys.argv[1]
+with open(profiles_path) as f:
+    profiles = json.load(f)
+if role in profiles:
+    existing = profiles[role]
+    sep = '\n\n' if existing else ''
+    profiles[role] = existing + sep + note
+    _tmp_profiles_path = profiles_path + '.tmp'
+    with open(_tmp_profiles_path, 'w') as f:
+        json.dump(profiles, f, indent=2)
+    os.replace(_tmp_profiles_path, profiles_path)
+    print(f'Skill note appended to [{role}] profile — persisted for future runs')
+else:
+    print(f'Profile role [{role}] not found in profiles.json — skill note NOT persisted', file=sys.stderr)
+PYEOF
+    ) 200>"${_profiles_file}.lock"
+    return 0
+}
+
+
+# _load_timeout_config
+# Loads timeout-related fallback defaults from EPAM_PROJECT_CONFIG_DIR/
+# llm-settings.json — same "only export if the env var isn't already set"
+# posture as claude.sh's load_llm_settings_json(), and reads the SAME
+# storyTimeoutSecs/gateTimeoutSecs keys that function already reads, plus
+# three new ones (storyEffortTimeoutSecs, roleTimeoutMultipliers,
+# watchdogRetryMultiplier — see llm-settings.schema.json).
+#
+# Root cause this closes (found live, 2026-08-02, gotransit/upexpress digging):
+# run_story_with_watchdog() (run-agent-orchestration.sh) computes its timeout
+# from a hardcoded case statement, completely disconnected from
+# llm-settings.json — load_llm_settings_json() DOES export
+# EPAM_STORY_TIMEOUT_SECS, but run_story_with_watchdog() reads the unprefixed
+# STORY_TIMEOUT_SECS, so the two never connected (a naming mismatch, not a
+# missing feature). Worse: load_llm_settings_json() only runs INSIDE
+# claude.sh, which run_story_with_watchdog() itself invokes AS A SUBPROCESS —
+# by the time claude.sh could export anything, the watchdog's `timeout`
+# wrapper around that exact invocation has already been computed and applied.
+# A child process's exported env vars never propagate back to its parent, so
+# that channel could never have worked no matter what the var was named.
+# The fix is loading config in run-agent-orchestration.sh itself, BEFORE the
+# first call to run_story_with_watchdog() — this function, called once near
+# the top of that script, right after EPAM_PROJECT_CONFIG_DIR is available.
+#
+# Deliberately does NOT special-case gotransit's specific hung-API-call
+# failure (0 tokens, $0 cost, 11+ min, recurring 6 times) — that failure mode
+# is a dead/stuck connection, not "needs more time to finish work", and
+# raising its timeout would only make a hung run take longer to fail the same
+# way. This function makes the timeout MECHANISM configurable; it does not
+# and should not paper over a specific hang.
+#
+# Best-effort: malformed/absent config is silently skipped, same posture as
+# every other loader in this file.
+_load_timeout_config() {
+    local _settings_file="${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json"
+    [ -f "$_settings_file" ] || return 0
+
+    # `|| true` is load-bearing (found live, 2026-08-02): this runs under
+    # `set -e` (run-agent-orchestration.sh:12) — a malformed llm-settings.json
+    # makes jq exit non-zero on the PARSE error itself (`// empty` only
+    # covers a valid-but-absent VALUE, not a parse failure), and every call
+    # site is `_v=$(_lt_get ...)`, a bare simple command whose failing exit
+    # status would otherwise kill the whole orchestration script — see the
+    # identical fix and rationale in claude.sh's load_llm_settings_json().
+    _lt_get() { jq -r "$1 // empty" "$_settings_file" 2>/dev/null || true; }
+    local _v
+
+    _v=$(_lt_get '.timeouts.storyTimeoutSecs'); [ -z "${EPAM_STORY_TIMEOUT_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_TIMEOUT_SECS="$_v"
+    _v=$(_lt_get '.timeouts.gateTimeoutSecs'); [ -z "${EPAM_GATE_TIMEOUT_SECS:-}" ] && [ -n "$_v" ] && export EPAM_GATE_TIMEOUT_SECS="$_v"
+
+    _v=$(_lt_get '.timeouts.storyEffortTimeoutSecs.low'); [ -z "${EPAM_STORY_EFFORT_TIMEOUT_LOW_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_EFFORT_TIMEOUT_LOW_SECS="$_v"
+    _v=$(_lt_get '.timeouts.storyEffortTimeoutSecs.medium'); [ -z "${EPAM_STORY_EFFORT_TIMEOUT_MEDIUM_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_EFFORT_TIMEOUT_MEDIUM_SECS="$_v"
+    _v=$(_lt_get '.timeouts.storyEffortTimeoutSecs.high'); [ -z "${EPAM_STORY_EFFORT_TIMEOUT_HIGH_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_EFFORT_TIMEOUT_HIGH_SECS="$_v"
+    _v=$(_lt_get '.timeouts.storyEffortTimeoutSecs.default'); [ -z "${EPAM_STORY_EFFORT_TIMEOUT_DEFAULT_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_EFFORT_TIMEOUT_DEFAULT_SECS="$_v"
+
+    # roleTimeoutMultipliers is an arbitrary-keys object (unlike the fixed
+    # low/medium/high/default tiers above) — serialize it the same way
+    # load_llm_settings_json() serializes modelLadder[], into the
+    # "role=mult|role2=mult2" string resolve_role_timeout_multiplier() already
+    # parses via EPAM_ROLE_TIMEOUT_MULTIPLIER_MAP.
+    _v=$(_lt_get '(.timeouts.roleTimeoutMultipliers // {}) | to_entries | map("\(.key)=\(.value)") | join("|")')
+    [ -z "${EPAM_ROLE_TIMEOUT_MULTIPLIER_MAP:-}" ] && [ -n "$_v" ] && export EPAM_ROLE_TIMEOUT_MULTIPLIER_MAP="$_v"
+
+    _v=$(_lt_get '.timeouts.watchdogRetryMultiplier'); [ -z "${EPAM_WATCHDOG_RETRY_MULTIPLIER:-}" ] && [ -n "$_v" ] && export EPAM_WATCHDOG_RETRY_MULTIPLIER="$_v"
+
+    unset -f _lt_get
+    return 0
 }

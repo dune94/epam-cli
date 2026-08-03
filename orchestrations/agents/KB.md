@@ -304,3 +304,31 @@ When both `X.ts` and `X.tsx` exist in the same directory, TypeScript/Node resolu
 **StoryRef:** AMSD-2041
 
 The Contentstack JS SDK's `LivePreview` interface requires three fields: `host` (string), `management_token` (string), and `enable` (boolean). Omitting `host` causes TS2741. When adding live_preview to the Stack config, always include `host` — the same API host used for `Stack.setHost()` (e.g. `CONTENTSTACK_API_HOST`) is the correct value.
+
+## KB-025 -- 2026-08-02
+
+**Category:** backend
+**AgentRole:** implementer
+**Tags:** contentstack, live-preview, typescript, retry-pattern, scope-discipline
+**Trigger:** retry
+**StoryRef:** AMSD-2041
+
+For Contentstack delivery-SDK live preview, use `preview_token` (NOT `management_token`) — the AC explicitly contradict earlier KB entries (KB-022, KB-024) that claimed `host` and `management_token` are required. KB-024 was a false diagnosis: the delivery SDK's `live_preview` config reads `preview_token`; `host` is handled separately via `Stack.setHost(CONTENTSTACK_PREVIEW_HOST)`. Adding `host` inside the `live_preview` block (with a possibly-empty env var) breaks requests. Previous writer attempts refused to edit `src/interface/contentstack.ts` because they considered it out of scope — but THIS story explicitly puts that file in scope on every codeline. Make the edit; do not escalate. Also: deterministic checks that flag files outside scope (e.g. `uniformContext.ts` missing `uniformManifest.json`) are pre-existing issues with their own graceful try/catch handling; do NOT modify out-of-scope files in response to such warnings — that violates the explicit scope rule.
+## KB-026 -- 2026-08-02
+
+**Category:** tooling
+**AgentRole:** implementer
+**Tags:** patch-application, git-apply, file-editing, verification, md5, retry-pattern
+**Trigger:** retry
+**StoryRef:** AMSD-2041
+
+When applying a multi-edit rewrite (e.g. 4 files, hundreds of lines) via an in-process Python/bash loop that reads source, mutates, writes back, do NOT trust "OK" print statements between read and write — the script may crash on edit N AFTER printing "OK" for edits 1..N-1 but BEFORE the file is written, so nothing persists. The "OK" prints are misleading. Always verify post-condition with `git status` and `md5sum` against the canonical target. The reliable pattern when an upstream canonical diff is available is: (1) capture the canonical diff to a `.patch` file via `git diff <ref>`, (2) `git restore` any drift, (3) `git apply <patch-file>` — `git apply` is atomic per-file and exits non-zero with a clear hunk offset on failure, making the result easy to verify with `git diff <ref> -- <file>` and `md5sum`. This produced a byte-identical-to-canonical result (all 4 files matched `git show <ref>:<file>` md5s) on the first attempt, after the in-process anchor/replace approach had silently failed. Lesson: prefer `git apply` over in-process incremental rewriting whenever a canonical reference diff exists.
+## KB-027 -- 2026-08-02
+
+**Category:** backend
+**AgentRole:** implementer
+**Tags:** contentstack, live-preview, typescript, sdk-type-mismatch, jest-mocking
+**Trigger:** retry
+**StoryRef:** AMSD-2041
+
+The Contentstack delivery SDK's TypeScript `LivePreview` interface declares `management_token` as a required field, but at runtime the SDK actually reads `preview_token`. This type/runtime mismatch means you must cast the `live_preview` config object `as any` (or `as unknown as contentstack.Config['live_preview']`) to pass `preview_token` without a TS error. Do NOT add `host` inside the `live_preview` block — host is set separately via `Stack.setHost()`. To forward preview context through individual queries, call `query.livePreviewQuery({ live_preview, content_type_uid })` — the method exists on the query chain at runtime but is not in the SDK's public types, so it also requires a cast. In Jest tests, the `contentstack` module mock must include `livePreviewQuery: jest.fn().mockReturnThis()` in the Stack mock object, or spied calls will silently fail. The `setCommonConfig` method must destructure `contentTypeUid` out of the config object before spreading `...config` into query setters, otherwise it leaks into `only`/`except` iteration.

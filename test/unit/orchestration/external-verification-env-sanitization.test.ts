@@ -123,6 +123,7 @@ describe('run_external_verification — env sanitization REAL execution', () => 
       'run_dependency_check() { :; }',
       'run_relative_import_check() { return 0; }',
       'run_named_import_check() { return 0; }',
+      'run_anti_pattern_check() { return 0; }',
       'run_mock_completeness_check() { return 0; }',
       fnBody,
       'PRD_FILE=$(mktemp)',

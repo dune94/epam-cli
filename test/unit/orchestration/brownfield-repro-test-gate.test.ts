@@ -59,7 +59,7 @@ describe('brownfield-repro-test-gate', () => {
     git(['checkout', '-q', '-b', 'AI-X']);
     writeFileSync(join(repo, 'src', 'x.ts'), 'export const v = "FIXED";\n');       // the fix
     writeFileSync(join(repo, 'src', 'x.test.ts'), 'assert v === FIXED\n');         // the test
-    git(['add', '-A']); git(['commit', '-q', '-m', 'story: complete X']);
+    git(['add', '-A']); git(['commit', '-q', '-m', 'X: story complete']);
     const r = runGate();
     expect(r.code).toBe(0);
     expect(r.out).toMatch(/reproduces the bug/);
@@ -69,7 +69,7 @@ describe('brownfield-repro-test-gate', () => {
     writeStub('fix-dependent');
     git(['checkout', '-q', '-b', 'AI-X']);
     writeFileSync(join(repo, 'src', 'x.ts'), 'export const v = "FIXED";\n');       // fix only, no test
-    git(['add', '-A']); git(['commit', '-q', '-m', 'story: complete X (no test)']);
+    git(['add', '-A']); git(['commit', '-q', '-m', 'X: story complete (no test)']);
     const r = runGate();
     expect(r.code).toBe(1);
     expect(r.out).toMatch(/no test file accompanies the change/);
@@ -80,7 +80,7 @@ describe('brownfield-repro-test-gate', () => {
     git(['checkout', '-q', '-b', 'AI-X']);
     writeFileSync(join(repo, 'src', 'x.ts'), 'export const v = "FIXED";\n');
     writeFileSync(join(repo, 'src', 'x.test.ts'), 'always passes\n');
-    git(['add', '-A']); git(['commit', '-q', '-m', 'story: complete X (weak test)']);
+    git(['add', '-A']); git(['commit', '-q', '-m', 'X: story complete (weak test)']);
     const r = runGate();
     expect(r.code).toBe(1);
     expect(r.out).toMatch(/do NOT reproduce the bug/);
@@ -91,7 +91,7 @@ describe('brownfield-repro-test-gate', () => {
     git(['checkout', '-q', '-b', 'AI-X']);
     writeFileSync(join(repo, 'src', 'x.ts'), 'export const v = "FIXED";\n');
     writeFileSync(join(repo, 'src', 'x.test.ts'), 'assert v === FIXED\n');
-    git(['add', '-A']); git(['commit', '-q', '-m', 'story: complete X']);
+    git(['add', '-A']); git(['commit', '-q', '-m', 'X: story complete']);
     runGate();
     expect(git(['status', '--porcelain'])).toBe(''); // fix restored, tree clean
     expect(execFileSync('grep', ['-q', 'FIXED', join(repo, 'src', 'x.ts')], { encoding: 'utf8' })).toBeDefined();

@@ -61,7 +61,7 @@ describe('brownfield teardown resets to the baseline branch, not the accumulated
     // production), develop stays at the baseline; the marker is pinned to the fix.
     git(['checkout', '-q', '-b', 'AI-AMSD-1820']);
     writeFileSync(join(repo, 'src.ts'), 'const x = parseDispatchLineItemKey(lineItem.id).id === discount.lineItemId;\n');
-    git(['add', '-A']); git(['commit', '-q', '-m', 'story: complete AMSD-1820 (the fix)']);
+    git(['add', '-A']); git(['commit', '-q', '-m', 'AMSD-1820: story complete (the fix)']);
     const fixSha = git(['rev-parse', 'HEAD']);
     expect(fixSha).not.toBe(developSha);
     writeFileSync(markerPath(), fixSha + '\n');

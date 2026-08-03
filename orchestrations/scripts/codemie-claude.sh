@@ -22,6 +22,8 @@ AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
 LOG_DIR="$AUTOMATION_DIR/logs"
+# shellcheck source=lib/git-ops.sh
+source "$SCRIPT_DIR/lib/git-ops.sh"
 PROGRESS_LOG="$LOG_DIR/progress.txt"
 AGENTS_FILE="$AUTOMATION_DIR/agents/AGENTS.md"
 CLAUDE_OUTPUT_DIR="$LOG_DIR/claude_outputs"
@@ -1258,69 +1260,6 @@ run_implementation() {
     if [ $failed -gt 0 ]; then
         return 1
     fi
-    return 0
-}
-
-# Setup git worktrees for parallel execution
-setup_worktrees() {
-    local worktrees=("primary" "independent")
-
-    log "Setting up git worktrees..."
-
-    for wt in "${worktrees[@]}"; do
-        local wt_path="$PROJECT_ROOT/../$(basename "$PROJECT_ROOT")-wt-$wt"
-        local wt_branch="wt-$wt"
-
-        # Check if worktree already exists
-        if [ -d "$wt_path" ]; then
-            warning "Worktree already exists: $wt_path"
-            continue
-        fi
-
-        # Delete branch if it exists from previous run
-        if git show-ref --verify --quiet "refs/heads/$wt_branch"; then
-            info "Deleting existing branch: $wt_branch"
-            git branch -D "$wt_branch" 2>/dev/null || true
-        fi
-
-        # Create worktree with a new branch based on current HEAD
-        info "Creating worktree: $wt ($wt_path) on branch $wt_branch"
-        git worktree add -b "$wt_branch" "$wt_path" HEAD || {
-            error "Failed to create worktree: $wt"
-            return 1
-        }
-    done
-
-    success "Worktrees created successfully"
-    return 0
-}
-
-# Cleanup git worktrees
-cleanup_worktrees() {
-    local worktrees=("primary" "independent")
-
-    log "Cleaning up git worktrees..."
-
-    for wt in "${worktrees[@]}"; do
-        local wt_path="$PROJECT_ROOT/../$(basename "$PROJECT_ROOT")-wt-$wt"
-
-        # Check if worktree exists
-        if [ ! -d "$wt_path" ]; then
-            info "Worktree does not exist: $wt_path (already removed)"
-            continue
-        fi
-
-        # Remove worktree
-        info "Removing worktree: $wt ($wt_path)"
-        git worktree remove "$wt_path" --force || {
-            warning "Failed to remove worktree: $wt (may need manual cleanup)"
-        }
-    done
-
-    # Prune worktree references
-    git worktree prune
-
-    success "Worktrees cleaned up"
     return 0
 }
 

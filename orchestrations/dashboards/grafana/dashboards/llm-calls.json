@@ -1,0 +1,163 @@
+{
+  "uid": "epam-llm-calls",
+  "title": "LLM Calls (live)",
+  "tags": ["epam", "langfuse", "observability"],
+  "timezone": "browser",
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "type": "text",
+      "title": "What this shows",
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "Every LLM call the pipeline makes, newest first, refreshing every 10s. **`secs` empty = the call never returned** — that is a hang, and everything after it is stalled waiting on a request that will not finish. A call with tokens but no output produced nothing usable. Click a row's trace id in Langfuse to read the full prompt and response.\n\nFound the run-4 defect: the detective made 7 quick tool calls in ~65s, then one forced-answer turn hung and burned its remaining 5 minutes — which the log reported only as `timed out after 360000ms`."
+      }
+    },
+    {
+      "type": "table",
+      "title": "Model calls — newest first",
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "langfuse-infinity" },
+      "gridPos": { "h": 16, "w": 24, "x": 0, "y": 4 },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "/api/public/observations?limit=100&type=GENERATION",
+          "url_options": { "method": "GET" },
+          "root_selector": "data",
+          "columns": [
+            { "selector": "startTime", "text": "started", "type": "timestamp" },
+            { "selector": "model", "text": "model", "type": "string" },
+            { "selector": "latency", "text": "secs", "type": "number" },
+            { "selector": "usage.input", "text": "tokens in", "type": "number" },
+            { "selector": "usage.output", "text": "tokens out", "type": "number" },
+            { "selector": "calculatedTotalCost", "text": "cost $", "type": "number" },
+            { "selector": "traceId", "text": "trace", "type": "string" }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left", "filterable": true } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "secs" },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "orange", "value": 60 },
+                    { "color": "red", "value": 120 }
+                  ]
+                }
+              },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "noValue", "value": "NEVER RETURNED" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "cost $" },
+            "properties": [{ "id": "decimals", "value": 4 }]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [{ "displayName": "started", "desc": true }]
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Calls that never returned",
+      "description": "A hung request. The agent waiting on it is doing nothing until its outer timeout fires.",
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "langfuse-infinity" },
+      "gridPos": { "h": 5, "w": 8, "x": 0, "y": 20 },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "/api/public/observations?limit=100&type=GENERATION",
+          "root_selector": "data",
+          "filterExpression": "endTime === null",
+          "columns": [{ "selector": "id", "text": "id", "type": "string" }]
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["count"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Call latency over time",
+      "description": "Where the wall-clock actually goes. A spike is one slow call, not a slow model.",
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "langfuse-infinity" },
+      "gridPos": { "h": 5, "w": 16, "x": 8, "y": 20 },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "/api/public/observations?limit=100&type=GENERATION",
+          "root_selector": "data",
+          "columns": [
+            { "selector": "startTime", "text": "time", "type": "timestamp" },
+            { "selector": "latency", "text": "seconds", "type": "number" }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "drawStyle": "points", "pointSize": 6 }, "unit": "s" },
+        "overrides": []
+      }
+    },
+    {
+      "type": "table",
+      "title": "Runs (one session per pipeline run)",
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "langfuse-infinity" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 25 },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "/api/public/traces?limit=100",
+          "root_selector": "data",
+          "columns": [
+            { "selector": "timestamp", "text": "when", "type": "timestamp" },
+            { "selector": "sessionId", "text": "run", "type": "string" },
+            { "selector": "name", "text": "trace", "type": "string" },
+            { "selector": "id", "text": "id", "type": "string" }
+          ]
+        }
+      ],
+      "options": { "showHeader": true, "sortBy": [{ "displayName": "when", "desc": true }] }
+    }
+  ]
+}

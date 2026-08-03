@@ -12,7 +12,7 @@
 # phase-baseline-sha.txt). This script is the backstop for the case that
 # self-heal can't cover: a run that gets KILLED before story_tsc_gate ever
 # runs (mid-story, no gate check reached, no self-heal triggered) — leaving
-# either an uncommitted dirty working tree, or a "story: complete X" commit
+# either an uncommitted dirty working tree, or an "X: story complete" commit
 # that was NEVER actually gate-verified.
 #
 # Source of truth: record_brownfield_verified_baseline() (story-guards.sh)

@@ -353,7 +353,7 @@ describe('verify_story_deliverables — brownfield: ZERO declared files must sti
     mkdirSync(join(clone, '.epam'), { recursive: true });
     writeFileSync(join(clone, '.epam/dependency-check.json'), '{}');
     execFileSync('git', ['add', '-A'], { cwd: clone });
-    execFileSync('git', ['commit', '-m', 'story: complete SKY-TEST (2 file(s))', '--quiet'], { cwd: clone });
+    execFileSync('git', ['commit', '-m', 'SKY-TEST: story complete (2 file(s))', '--quiet'], { cwd: clone });
 
     const { rc, output } = run({ projectRoot: clone, declaredFiles: [] });
     expect(rc).not.toBe(0);

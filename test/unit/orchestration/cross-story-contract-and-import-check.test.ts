@@ -330,7 +330,7 @@ describe('run_relative_import_check — auto-fix (REAL execution)', () => {
     expect(output).toContain("[relative-import-check] Auto-corrected src/cli.ts: './skyscanner-client.js' -> './skyscanner/client'");
   });
 
-  it('opt-in enabled but the importing file is NOT in the story\'s owned files: does NOT rewrite, stays flagged', () => {
+  it('opt-in enabled but the importing file is NOT in the story\'s owned files: does NOT rewrite, and does NOT block (out of scope, 2026-08-02 fix)', () => {
     const { rc, fileContents } = runCheckWithAutoFix({
       files: {
         'src/skyscanner/client.ts': 'export class SkyscannerClient {}',
@@ -339,7 +339,10 @@ describe('run_relative_import_check — auto-fix (REAL execution)', () => {
       ownedFiles: ['src/some-other-file.ts'], // cli.ts NOT owned by this story
       autoFix: true,
     });
-    expect(rc).toBe(1);
+    // A broken import in a file this story doesn't own can never be this
+    // story's to fix — it must not block (see relative-import-sibling-escalation.test.ts),
+    // but it must also not be silently auto-fixed on this story's behalf.
+    expect(rc).toBe(0);
     expect(fileContents['src/cli.ts']).toContain('skyscanner-client.js');
   });
 

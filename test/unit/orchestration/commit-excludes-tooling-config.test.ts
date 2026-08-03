@@ -24,7 +24,10 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
+// commit_completed_story() moved to lib/git-ops.sh (2026-08-02 git-ops
+// consolidation) — single source of truth shared by claude.sh,
+// codemie-claude.sh, and run-agent-orchestration.sh.
+const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/lib/git-ops.sh');
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
@@ -48,6 +51,10 @@ function stageInSandbox() {
     ['.deepeval', '.deepeval_telemetry.txt'],
     ['.codegraph', 'index.json'],
     ['.contracts', 'generated.json'],
+    // Real leak, 2026-08-01 (Writer Retest dry run): orchestrations/agents/KB.md
+    // reached a live metrolinx codeline. Only orchestrations/logs/* had been
+    // excluded — the KB-scratchpad writer uses a different subpath.
+    ['orchestrations/agents', 'KB.md'],
   ]) {
     mkdirSync(join(repo, dir), { recursive: true });
     writeFileSync(join(repo, dir, file), '{}\n');
@@ -71,6 +78,8 @@ describe('the pathspec fallback cannot reintroduce it', () => {
     // enough — a failure of the pathspec form would put .epam straight back.
     expect(src, 'no unconditional unstage — the no-pathspec fallback reintroduces them')
       .toMatch(/reset -q --[\s\S]{0,80}'\.epam'[\s\S]{0,80}'\.deepeval'/);
+    expect(src, 'orchestrations is missing from the unconditional unstage fallback')
+      .toMatch(/reset -q --[\s\S]{0,120}'orchestrations'/);
   });
 });
 
@@ -82,7 +91,7 @@ describe('story commit excludes our own tooling config', () => {
   });
 
   it('does NOT stage ANY tool artifact — epam-cli output must not enter a client repo', () => {
-    const leaked = staged.filter(f => /^\.(epam|deepeval|codegraph|contracts)\//.test(f));
+    const leaked = staged.filter(f => /^(\.(epam|deepeval|codegraph|contracts)|orchestrations)\//.test(f));
     expect(leaked,
       'our dependency-check/contract manifests were committed into the client repo, ' +
       'burying the real fix and violating the no-client-repo-writes rule')

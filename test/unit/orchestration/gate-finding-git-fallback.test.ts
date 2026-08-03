@@ -10,7 +10,7 @@
  *
  * Fix: a deterministic fallback. Every file that was ever actually written
  * IS attributable via git — post-story commits always use the exact message
- * "story: complete <id> (N file(s))" (claude.sh's post-story commit step).
+ * "<id>: story complete (N file(s))" (claude.sh's post-story commit step).
  * When the LLM can't ground a finding, ask git who last touched the file
  * instead of skipping remediation outright.
  *
@@ -94,7 +94,7 @@ describe('gate-finding-analyst git-blame fallback — REAL execution', () => {
   it('attributes a shared config file (tsconfig.json) to the story whose commit last touched it', () => {
     const repo = makeGitFixture();
     try {
-      commitFile(repo, 'tsconfig.json', '{}', 'story: complete SKY-001-impl (3 file(s))');
+      commitFile(repo, 'tsconfig.json', '{}', 'SKY-001-impl: story complete (3 file(s))');
       const glog = JSON.stringify({
         findings: [{ severity: 'blocker', file: join(repo, 'tsconfig.json'), description: 'no inputs' }],
       });
@@ -109,8 +109,8 @@ describe('gate-finding-analyst git-blame fallback — REAL execution', () => {
   it('uses the MOST RECENT commit when a file was touched by multiple stories', () => {
     const repo = makeGitFixture();
     try {
-      commitFile(repo, 'package.json', '{"v":1}', 'story: complete SKY-001-impl (1 file(s))');
-      commitFile(repo, 'package.json', '{"v":2}', 'story: complete SKY-001-test (1 file(s))');
+      commitFile(repo, 'package.json', '{"v":1}', 'SKY-001-impl: story complete (1 file(s))');
+      commitFile(repo, 'package.json', '{"v":2}', 'SKY-001-test: story complete (1 file(s))');
       const glog = JSON.stringify({ findings: [{ file: join(repo, 'package.json') }] });
       const { storyId } = runFallback({ projectRoot: repo, glogContent: glog });
       expect(storyId).toBe('SKY-001-test');
@@ -119,7 +119,7 @@ describe('gate-finding-analyst git-blame fallback — REAL execution', () => {
     }
   });
 
-  it('falls through to skip when the file was never committed under a "story: complete" message', () => {
+  it('falls through to skip when the file was never committed under a "<id>: story complete" message', () => {
     const repo = makeGitFixture();
     try {
       commitFile(repo, 'README.md', 'hello', 'chore: unrelated commit');
@@ -158,7 +158,7 @@ describe('gate-finding-analyst git-blame fallback — REAL execution', () => {
   it('does NOT engage the fallback at all when the LLM already grounded a story_id (fallback is last-resort only)', () => {
     const repo = makeGitFixture();
     try {
-      commitFile(repo, 'tsconfig.json', '{}', 'story: complete SKY-999-should-not-be-used (1 file(s))');
+      commitFile(repo, 'tsconfig.json', '{}', 'SKY-999-should-not-be-used: story complete (1 file(s))');
       const glog = JSON.stringify({ findings: [{ file: join(repo, 'tsconfig.json') }] });
       const { storyId, skipped } = runFallback({ projectRoot: repo, glogContent: glog, initialStoryId: 'SKY-001-real' });
       expect(storyId).toBe('SKY-001-real');

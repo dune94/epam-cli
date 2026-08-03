@@ -1,6 +1,6 @@
 /**
  * reset-to-baseline.sh — resets a project's git state to the last
- * known-good ("story: complete") checkpoint.
+ * known-good ("<id>: story complete") checkpoint.
  *
  * Root cause this fixes (found live, 2026-07-06): a faster validation loop
  * (invoking run-agent-orchestration.sh directly against an already-scaffolded
@@ -13,7 +13,7 @@
  * test suite" external verification then failed for an EARLIER, otherwise-
  * passing story purely because a sibling story's stale broken test file was
  * still sitting in the tree. This script provides the missing teardown step
- * for that faster loop: reset to the last "story: complete" commit, remove
+ * for that faster loop: reset to the last "<id>: story complete" commit, remove
  * leftover worktrees/branches, and clean untracked files — found dynamically
  * via `git log --grep`, never a hardcoded SHA or story ID.
  */
@@ -42,11 +42,11 @@ function initRepoWithHistory(): string {
 
   writeFileSync(join(dir, 'src.ts'), 'export const scaffold = 1;');
   git(dir, 'add -A');
-  git(dir, 'commit --quiet -m "story: complete SKY-001 (1 file(s))"');
+  git(dir, 'commit --quiet -m "SKY-001: story complete (1 file(s))"');
 
   writeFileSync(join(dir, 'client.ts'), 'export class Client {}');
   git(dir, 'add -A');
-  git(dir, 'commit --quiet -m "story: complete SKY-002 (1 file(s))"');
+  git(dir, 'commit --quiet -m "SKY-002: story complete (1 file(s))"');
 
   return dir;
 }
@@ -67,7 +67,7 @@ describe('reset-to-baseline.sh — design', () => {
     }
   });
 
-  it('exits 1 when no "story: complete" commit exists anywhere in history (nothing safe to reset to)', () => {
+  it('exits 1 when no "<id>: story complete" commit exists anywhere in history (nothing safe to reset to)', () => {
     const dir = mkdtempSync(join(tmpdir(), 'reset-baseline-nobaseline-'));
     try {
       git(dir, 'init --quiet');
@@ -86,7 +86,7 @@ describe('reset-to-baseline.sh — design', () => {
         stderr = e.stderr?.toString() ?? '';
       }
       expect(exitCode).toBe(1);
-      expect(stderr).toMatch(/no 'story: complete' commit found/);
+      expect(stderr).toMatch(/no '<id>: story complete' commit found/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -94,13 +94,13 @@ describe('reset-to-baseline.sh — design', () => {
 
   it('never hardcodes a story ID or SHA — finds the baseline dynamically via git log --grep', () => {
     const src = readFileSync(SCRIPT, 'utf8');
-    expect(src).toMatch(/git log --grep='?\^?story: complete /);
+    expect(src).toMatch(/git log --grep='?\^?\[\^:\]\*: story complete /);
     expect(src).not.toMatch(/SKY-\d+/);
   });
 });
 
 describe('reset-to-baseline.sh — REAL execution against the exact live contamination scenario', () => {
-  it('REPRODUCES the fix: resets past a contaminating auto-commit back to the last "story: complete" checkpoint', () => {
+  it('REPRODUCES the fix: resets past a contaminating auto-commit back to the last "<id>: story complete" checkpoint', () => {
     const dir = initRepoWithHistory();
     try {
       // Simulate a failed story's leftover, auto-committed broken file —
@@ -117,8 +117,8 @@ describe('reset-to-baseline.sh — REAL execution against the exact live contami
       expect(existsSync(join(dir, 'broken.ts'))).toBe(false);
       expect(existsSync(join(dir, 'client.ts'))).toBe(true);
       const headSubject = git(dir, 'log -1 --format=%s').trim();
-      expect(headSubject).toBe('story: complete SKY-002 (1 file(s))');
-      expect(output).toContain('story: complete SKY-002');
+      expect(headSubject).toBe('SKY-002: story complete (1 file(s))');
+      expect(output).toContain('SKY-002: story complete');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -243,7 +243,7 @@ describe('reset-to-baseline.sh — REAL execution against the exact live contami
     }
   });
 
-  it('resets to the MOST RECENT "story: complete" commit when multiple exist, not the first one', () => {
+  it('resets to the MOST RECENT "<id>: story complete" commit when multiple exist, not the first one', () => {
     const dir = initRepoWithHistory();
     try {
       writeFileSync(join(dir, 'contamination.ts'), 'broken');
@@ -252,11 +252,11 @@ describe('reset-to-baseline.sh — REAL execution against the exact live contami
 
       execFileSync('bash', [SCRIPT, dir], { encoding: 'utf8' });
 
-      // Must land on SKY-002's commit (the latest "story: complete"), not
+      // Must land on SKY-002's commit (the latest "<id>: story complete"), not
       // SKY-001's (the first one git log --grep would find without -n 1
       // ordering by recency).
       const headSubject = git(dir, 'log -1 --format=%s').trim();
-      expect(headSubject).toBe('story: complete SKY-002 (1 file(s))');
+      expect(headSubject).toBe('SKY-002: story complete (1 file(s))');
       expect(existsSync(join(dir, 'client.ts'))).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });

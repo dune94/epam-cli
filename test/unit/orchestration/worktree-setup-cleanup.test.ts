@@ -28,7 +28,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const REPO_ROOT = join(__dirname, '../../../');
-const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
+// setup_worktrees()/cleanup_worktrees() moved to lib/git-ops.sh (2026-08-02
+// git-ops consolidation) — single source of truth shared by claude.sh,
+// codemie-claude.sh, and run-agent-orchestration.sh.
+const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/lib/git-ops.sh');
 const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
 
 function extractFunctionBody(name: string): string {

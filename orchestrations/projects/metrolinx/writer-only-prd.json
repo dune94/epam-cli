@@ -1,0 +1,128 @@
+{
+  "id": "writer-only-retest-amsd-2041",
+  "title": "Writer-only retest — AMSD-2041 Live Preview",
+  "version": "1.0.0",
+  "lastUpdated": "2026-08-01",
+  "project": {
+    "name": "metrolinx",
+    "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
+    "stack": {
+      "language": "TypeScript",
+      "runtime": "Node.js 20",
+      "framework": "Next.js",
+      "testing": "jest",
+      "cms": "Contentstack",
+      "devEnvironment": "Ubuntu WSL2"
+    },
+    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
+    "outputDirs": [
+      {
+        "codeline": "gotransit",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+      },
+      {
+        "codeline": "upexpress",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+      },
+      {
+        "codeline": "metrolinx",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+      }
+    ]
+  },
+  "configuration": {
+    "profilesPath": "profiles.json",
+    "autoCommit": false,
+    "requireTests": true,
+    "budget": 12,
+    "aiRuntime": {
+      "provider": "claude",
+      "defaultModel": "claude-sonnet-4-6"
+    }
+  },
+  "implementationOrder": {
+    "scaffold": [],
+    "core": [
+      "AMSD-2041"
+    ]
+  },
+  "phasesConfig": {
+    "core": {
+      "description": "Writer-only retest",
+      "parallelWorktrees": true
+    }
+  },
+  "stories": [
+    {
+      "id": "AMSD-2041",
+      "jiraKey": "AMSD-2041",
+      "title": "[GO, UP, MX] Live Preview of Content in CMS",
+      "description": "Add Contentstack Live Preview support so editors see draft content update in real time and linked/tabular references show draft values. RETEST: a prior attempt at this exact fix was rejected by team-lead review with specific, concrete defects — see 'Prior review feedback' below. Do not repeat them.",
+      "acceptanceCriteria": [
+        "Contentstack Stack options include a live_preview block with enable:true and preview_token set from CONTENTSTACK_PREVIEW_TOKEN (NOT management_token — the delivery SDK's live_preview config reads preview_token; management_token is the wrong key and silently breaks preview).",
+        "Do NOT add a `host` field inside the live_preview block. Host is handled separately via Stack.setHost(CONTENTSTACK_PREVIEW_HOST), which already exists and is correct — adding host inside live_preview with a possibly-empty value can break requests.",
+        "ICommonContentstackConfig (src/interface/contentstack.ts) gains an optional live_preview field so preview context (live_preview/preview_hash) can flow through to Contentstack queries in setCommonConfig — this file IS in scope for this story; do not escalate it to a separate ticket.",
+        "New/extended vitest unit tests exist at src/services/__tests__/contentstack.spec.ts (the file ALREADY EXISTS on every codeline — extend it, do not create a new file at a different path) covering: (1) live_preview block present with preview_token when CONTENTSTACK_PREVIEW_TOKEN is set, (2) live_preview absent when the token is unset, (3) setHost called with CONTENTSTACK_PREVIEW_HOST when set, taking priority over CONTENTSTACK_API_HOST.",
+        "PRIOR REVIEW FEEDBACK (verbatim from the real rejection on this exact fix, orchestrations/logs/review-agent-AMSD-2041.log): 'the live_preview block uses management_token instead of the prescribed preview_token, which will cause the SDK to not recognize the preview token and live preview will silently fail'; 'no vitest unit tests exist for this feature'; 'host was added inside the live_preview block with a default empty string value, which was not prescribed and may cause runtime issues'; 'query config interfaces lack live_preview fields to forward preview context through to Contentstack queries'.",
+        "On a sibling codeline, the previous writer attempt REFUSED to edit src/interface/contentstack.ts, calling it 'outside my scope' and returning prose instead of a code change. That file IS in scope for this story on every codeline — make the actual edit, do not escalate or describe it in prose."
+      ],
+      "codeline": "gotransit",
+      "agentRole": "typescript-engineer",
+      "agentGroup": "main",
+      "effort": "low",
+      "estimate": 10,
+      "issueType": "Story",
+      "codelines": [
+        "gotransit",
+        "upexpress",
+        "metrolinx"
+      ],
+      "technicalNotes": {
+        "files": [
+          "src/services/contentstack.ts",
+          "src/interface/contentstack.ts",
+          "src/services/__tests__/contentstack.spec.ts"
+        ],
+        "failureReason": "watchdog_timeout: story exceeded timeout twice and was skipped"
+      },
+      "testCriteria": {
+        "facts": [
+          "Editors see draft/unpublished Contentstack content update in real time when Live Preview is active (live_preview.enable=true, preview_token wired correctly).",
+          "Linked references and tabular/list content (e.g. content cards) render their DRAFT values under Live Preview, not just top-level fields — preview context must flow through query calls, not just the initial Stack options."
+        ]
+      },
+      "completed": true,
+      "status": "completed",
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
+      "reasoningEffort": "low",
+      "completedAt": "2026-08-03T00:57:57+00:00",
+      "actualCost": 5.645300000000001,
+      "perCodeline": {
+        "gotransit": {
+          "status": "completed",
+          "completed": true,
+          "completedAt": "2026-08-03T01:04:29+00:00",
+          "reviewStatus": null
+        },
+        "upexpress": {
+          "status": "completed",
+          "completed": true,
+          "completedAt": "2026-08-03T01:03:25+00:00",
+          "reviewStatus": null
+        },
+        "metrolinx": {
+          "status": "completed",
+          "completed": true,
+          "completedAt": "2026-08-03T00:57:57+00:00",
+          "reviewStatus": null
+        }
+      },
+      "reviewStatus": null,
+      "reproGate": "failed"
+    }
+  ],
+  "currentIteration": 1,
+  "source": "manual-writer-retest",
+  "sourceProject": "AMSD"
+}

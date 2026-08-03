@@ -26,8 +26,13 @@ const REPO_ROOT = join(__dirname, '../../../');
 const SCAN_SH = join(REPO_ROOT, 'orchestrations/scripts/scan-secrets.sh');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
+// commit_completed_story() itself moved to lib/git-ops.sh (2026-08-02 git-ops
+// consolidation) — single source of truth shared by claude.sh,
+// codemie-claude.sh, and run-agent-orchestration.sh.
+const GIT_OPS_SH = join(REPO_ROOT, 'orchestrations/scripts/lib/git-ops.sh');
 const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
 const orchSrc = readFileSync(ORCH_SH, 'utf8');
+const gitOpsSrc = readFileSync(GIT_OPS_SH, 'utf8');
 
 function git(cwd: string, ...args: string[]) {
   return execFileSync('git', args, { cwd, encoding: 'utf8' });
@@ -131,9 +136,9 @@ describe('scan-secrets.sh — generic credential scanner', () => {
 });
 
 describe('commit_completed_story() (claude.sh) — gated by scan-secrets.sh before commit', () => {
-  const fnStart = claudeSrc.indexOf('commit_completed_story() {');
-  const fnEnd = claudeSrc.indexOf('\n}', fnStart);
-  const body = claudeSrc.slice(fnStart, fnEnd);
+  const fnStart = gitOpsSrc.indexOf('commit_completed_story() {');
+  const fnEnd = gitOpsSrc.indexOf('\n}', fnStart);
+  const body = gitOpsSrc.slice(fnStart, fnEnd);
 
   it('calls scan-secrets.sh after staging (git add) and before the real commit', () => {
     const addIdx = body.indexOf('git -C "$_commit_root" add -A');
@@ -157,7 +162,7 @@ describe('commit_completed_story() (claude.sh) — gated by scan-secrets.sh befo
 describe('Step 1.5 auto-commit (run-agent-orchestration.sh) — gated by scan-secrets.sh', () => {
   it('calls scan-secrets.sh after `git add -A` and before the commit', () => {
     const stepIdx = orchSrc.indexOf('Step 9: Auto-committing main-branch deliverables');
-    const block = orchSrc.slice(stepIdx, stepIdx + 1200);
+    const block = orchSrc.slice(stepIdx, stepIdx + 2600);
     const addIdx = block.indexOf('git -C "$PROJECT_ROOT" add -A');
     const scanIdx = block.indexOf('scan-secrets.sh');
     const commitIdx = block.indexOf('git -C "$PROJECT_ROOT" commit');
@@ -182,9 +187,9 @@ describe('commit_completed_story() — REAL execution proves a planted secret bl
     dir: string,
     opts: { setE: boolean; callSite: string; skipSecretScan?: boolean },
   ): { output: string; exitedGracefully: boolean } {
-    const _fnStart = claudeSrc.indexOf('commit_completed_story() {');
-    const _fnEnd = claudeSrc.indexOf('\n}', _fnStart);
-    const fnBody = claudeSrc.slice(_fnStart, _fnEnd + 2);
+    const _fnStart = gitOpsSrc.indexOf('commit_completed_story() {');
+    const _fnEnd = gitOpsSrc.indexOf('\n}', _fnStart);
+    const fnBody = gitOpsSrc.slice(_fnStart, _fnEnd + 2);
     const scriptPath = join(dir, 'run.sh');
     writeFileSync(
       scriptPath,
@@ -237,7 +242,7 @@ describe('commit_completed_story() — REAL execution proves a planted secret bl
         skipSecretScan: false,
       });
       const log = git(dir, 'log', '--oneline');
-      expect(log).not.toMatch(/story: complete SKY-TEST/);
+      expect(log).not.toMatch(/SKY-TEST: story complete/);
       expect(output).toMatch(/SECRET_SCAN|secret/i);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -246,7 +251,7 @@ describe('commit_completed_story() — REAL execution proves a planted secret bl
 
   it('the real call site in run_implementation() (claude.sh) protects the call with || true, not a bare invocation', () => {
     const loopStart = claudeSrc.indexOf('for story_id in "${stories[@]}"; do');
-    const loopBody = claudeSrc.slice(loopStart, claudeSrc.indexOf('# Setup git worktrees for parallel execution', loopStart));
+    const loopBody = claudeSrc.slice(loopStart, claudeSrc.indexOf('EPAM CLI Orchestration Loop Complete', loopStart));
     expect(loopBody).toMatch(/commit_completed_story "\$story_id" \|\| true/);
   });
 
@@ -283,7 +288,7 @@ describe('commit_completed_story() — REAL execution proves a planted secret bl
       expect(output).toMatch(/REACHED_END rc=0/);
       expect(output).toMatch(/SECRET_SCAN|secret/i);
       const log = git(dir, 'log', '--oneline');
-      expect(log).not.toMatch(/story: complete SKY-TEST/);
+      expect(log).not.toMatch(/SKY-TEST: story complete/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -334,7 +339,7 @@ describe('commit_completed_story() — REAL execution proves a planted secret bl
       expect(exitedGracefully).toBe(true);
       expect(output).toMatch(/REACHED_END rc=0/);
       const log = git(dir, 'log', '--oneline');
-      expect(log).toMatch(/story: complete SKY-TEST/);
+      expect(log).toMatch(/SKY-TEST: story complete/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

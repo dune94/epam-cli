@@ -458,9 +458,37 @@ rm -f "$_ctx_file" 2>/dev/null || true
 if [ -f "$PROJECT_ROOT/$_target_rel" ] && [ "${_test_validated:-0}" = "1" ]; then
     git -C "$PROJECT_ROOT" add "$_target_rel" 2>/dev/null || true
     if ! git -C "$PROJECT_ROOT" diff --cached --quiet 2>/dev/null; then
-        git -C "$PROJECT_ROOT" commit -m "test: add bug-reproducing test for ${STORY_ID}" --quiet 2>/dev/null \
-            && log "committed reproducing test: $_target_rel" \
-            || log "commit failed (non-fatal) — repro-gate will report"
+        # Ticket-ID-first message (found live 2026-08-02, AMSD-2041 Writer
+        # Retest: gotransit AND upexpress both permanently HALTed at the
+        # repro-gate — the test file this writer produced was validated and
+        # staged correctly, but this commit silently failed every time
+        # because both codelines' commitlint (commitlint-plugin-jira-rules)
+        # requires the ticket ID as the FIRST token, and "test: ..." isn't
+        # one. Same root cause, same fix shape as commit_completed_story()'s
+        # 2026-08-02 fix (lib/git-ops.sh) — ticket-ID-first is the standard
+        # shape most commit-message linters expect, not Jira-specific
+        # knowledge baked in here. This call site was missed when that fix
+        # was applied because it's a separate, independent `git commit`, not
+        # a shared helper.
+        # Capture real stderr instead of discarding it (found live 2026-08-02,
+        # same investigation as the message-format fix above): a swallowed
+        # "(non-fatal)" log line gave zero signal about WHY a commit failed —
+        # a client repo's commit-msg hook can reject for ANY reason (a
+        # different commitlint rule, a totally unrelated lint-staged/husky
+        # check, etc.), and guessing at every possible hook's exact rule set
+        # in advance is not something this pipeline can or should hardcode
+        # per project. Surfacing the hook's own output is the generic fix:
+        # whatever the real reason is, it's now visible in the log instead of
+        # requiring live-run archaeology to rediscover. Same pattern as
+        # commit_completed_story()'s 2026-08-01 fix (lib/git-ops.sh).
+        _commit_output=$(git -C "$PROJECT_ROOT" commit -m "${STORY_ID}: add bug-reproducing test" --quiet 2>&1)
+        _commit_rc=$?
+        if [ "$_commit_rc" -eq 0 ]; then
+            log "committed reproducing test: $_target_rel"
+        else
+            warning "commit failed — repro-gate will report. Output:"
+            warning "$_commit_output"
+        fi
     fi
     _emit_tw "spec_update" "repro-test-writer committed reproducing test: ${_target_rel}"
 

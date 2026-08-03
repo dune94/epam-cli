@@ -19,24 +19,35 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SCRIPT = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
+// ensure_story_branch() itself now lives in lib/git-ops.sh (2026-08-02 git-ops
+// consolidation — single source of truth shared by claude.sh, codemie-claude.sh,
+// and run-agent-orchestration.sh); the wiring check below still reads
+// ORCH_SCRIPT to confirm the CALL SITE.
+const GIT_OPS_SH = join(REPO_ROOT, 'orchestrations/scripts/lib/git-ops.sh');
 
 const cleanupDirs: string[] = [];
 afterEach(() => {
   for (const d of cleanupDirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-function extractFn(): string {
-  const src = require('node:fs').readFileSync(ORCH_SCRIPT, 'utf8');
-  const start = src.indexOf('ensure_story_branch() {');
+function extractGitOpsFn(name: string): string {
+  const src = require('node:fs').readFileSync(GIT_OPS_SH, 'utf8');
+  const start = src.indexOf(`${name}() {`);
   const end = src.indexOf('\n}', start) + 2;
   expect(start).toBeGreaterThan(-1);
   return src.slice(start, end);
+}
+
+// ensure_story_branch() calls _provision_epam_plugin_config() (2026-08-02) —
+// both must be present for a standalone run.
+function extractFn(): string {
+  return [extractGitOpsFn('_provision_epam_plugin_config'), extractGitOpsFn('ensure_story_branch')].join('\n');
 }
 
 const LOG_STUBS = `
@@ -72,7 +83,12 @@ function makeFixture(): { bareOrigin: string; clone: string } {
   return { bareOrigin, clone };
 }
 
-function runFn(codelineRoot: string, storyId: string, baselineBranch = 'develop'): { stdout: string; exitCode: number } {
+function runFn(
+  codelineRoot: string,
+  storyId: string,
+  baselineBranch = 'develop',
+  branchPrefix?: string,
+): { stdout: string; exitCode: number } {
   const dir = mkdtempSync(join(tmpdir(), 'ensure-story-branch-run-'));
   try {
     const scriptPath = join(dir, 'run.sh');
@@ -85,7 +101,11 @@ function runFn(codelineRoot: string, storyId: string, baselineBranch = 'develop'
     ].join('\n'));
     const result = spawnSync('bash', [scriptPath], {
       encoding: 'utf8',
-      env: { ...process.env, EPAM_BROWNFIELD: '1' },
+      env: {
+        ...process.env,
+        EPAM_BROWNFIELD: '1',
+        ...(branchPrefix !== undefined ? { EPAM_BRANCH_PREFIX: branchPrefix } : {}),
+      },
       timeout: 30000,
     });
     const combined = (result.stdout || '') + (result.stderr || '');
@@ -135,6 +155,77 @@ describe('ensure_story_branch — real git repos, no mocking', () => {
     expect(existsSync(join(clone, 'garbage.txt'))).toBe(false);
     const originTip = execFileSync('git', ['rev-parse', 'develop'], { cwd: bareOrigin, encoding: 'utf8' }).trim();
     expect(sha(clone)).toBe(originTip);
+  });
+
+  it('REPRODUCES the live incident and confirms the fix: dirty MODIFICATIONS to a tracked file (identical between old and new branch tip, so checkout -B alone leaves them untouched) are discarded by the working-tree hard reset', () => {
+    const { clone } = makeFixture();
+    runFn(clone, 'STORY-DIRTY-TRACKED');
+    // Modify a tracked file WITHOUT committing — exactly the leftover state
+    // from a killed/interrupted prior attempt (confirmed live, 2026-08-02,
+    // metrolinx AMSD-2041: a modified-but-uncommitted contentstack.ts
+    // survived an earlier ensure_story_branch call intact).
+    writeFileSync(join(clone, 'file.txt'), 'dirty uncommitted edit\n');
+    expect(execFileSync('git', ['status', '--porcelain'], { cwd: clone, encoding: 'utf8' }).trim()).not.toBe('');
+
+    const { exitCode } = runFn(clone, 'STORY-DIRTY-TRACKED');
+    expect(exitCode).toBe(0);
+    expect(execFileSync('git', ['status', '--porcelain'], { cwd: clone, encoding: 'utf8' }).trim()).toBe('');
+    expect(readFileSync(join(clone, 'file.txt'), 'utf8')).toBe('v1\n');
+  });
+
+  it('REPRODUCES the live incident and confirms the fix: untracked stray files (leftover from a killed prior attempt) are removed by the working-tree clean', () => {
+    const { clone } = makeFixture();
+    runFn(clone, 'STORY-DIRTY-UNTRACKED');
+    writeFileSync(join(clone, 'stray-leftover.ts'), 'never committed, never should have been there\n');
+
+    const { exitCode } = runFn(clone, 'STORY-DIRTY-UNTRACKED');
+    expect(exitCode).toBe(0);
+    expect(existsSync(join(clone, 'stray-leftover.ts'))).toBe(false);
+  });
+
+  it('re-provisions .epam/settings.json and .epam/codeline-facts.json (wiped by the working-tree clean) from the project config', () => {
+    const { clone } = makeFixture();
+    const configDir = mkdtempSync(join(tmpdir(), 'ensure-story-branch-cfg-'));
+    cleanupDirs.push(configDir);
+    writeFileSync(join(configDir, 'plugins.json'), JSON.stringify({ tools: ['/abs/plugin.js'] }));
+    writeFileSync(join(configDir, 'codeline-facts.json'), JSON.stringify({ mycl: { facts: ['fact-a'] } }));
+    const prdPath = join(configDir, 'prd.json');
+    writeFileSync(
+      prdPath,
+      JSON.stringify({ project: { outputDirs: [{ codeline: 'mycl', path: clone }] } }),
+    );
+
+    // Leave stray junk in .epam/ from a "prior attempt" — must be wiped and
+    // replaced with the real config, not left as-is.
+    mkdirSync(join(clone, '.epam'), { recursive: true });
+    writeFileSync(join(clone, '.epam/settings.json'), JSON.stringify({ tools: ['/stale/junk.js'] }));
+
+    const dir = mkdtempSync(join(tmpdir(), 'ensure-story-branch-run-'));
+    try {
+      const scriptPath = join(dir, 'run.sh');
+      writeFileSync(scriptPath, [
+        '#!/usr/bin/env bash',
+        LOG_STUBS,
+        `EPAM_PROJECT_CONFIG_DIR=${JSON.stringify(configDir)}`,
+        `PRD_FILE=${JSON.stringify(prdPath)}`,
+        extractFn(),
+        `ensure_story_branch "${clone}" "STORY-PROVISION" "develop"`,
+        'echo "EXIT_MARKER:$?"',
+      ].join('\n'));
+      const result = spawnSync('bash', [scriptPath], {
+        encoding: 'utf8',
+        env: { ...process.env, EPAM_BROWNFIELD: '1' },
+        timeout: 30000,
+      });
+      expect((result.stdout || '') + (result.stderr || '')).toMatch(/EXIT_MARKER:0/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+
+    const settings = JSON.parse(readFileSync(join(clone, '.epam/settings.json'), 'utf8'));
+    expect(settings).toEqual({ tools: ['/abs/plugin.js'] });
+    const facts = JSON.parse(readFileSync(join(clone, '.epam/codeline-facts.json'), 'utf8'));
+    expect(facts).toEqual({ facts: ['fact-a'] });
   });
 
   it('reproduces and fixes the exact live bug: a stale/orphaned local commit never affects the new story branch, because the base always comes live from origin, not a cached SHA', () => {
@@ -222,6 +313,20 @@ describe('ensure_story_branch — real git repos, no mocking', () => {
     );
     expect(failures, `${failures.length}/${RUNS} failed: ${JSON.stringify(outcomes)}`).toHaveLength(0);
   }, 60000);
+
+  it('defaults to plain "AI-<story_id>" when EPAM_BRANCH_PREFIX is unset (no hardcoded client convention)', () => {
+    const { clone } = makeFixture();
+    const { exitCode } = runFn(clone, 'STORY-NOPREFIX');
+    expect(exitCode).toBe(0);
+    expect(currentBranch(clone)).toBe('AI-STORY-NOPREFIX');
+  });
+
+  it('prepends EPAM_BRANCH_PREFIX when a project config sets it (e.g. a client husky hook requiring bugfix/ etc.)', () => {
+    const { clone } = makeFixture();
+    const { exitCode } = runFn(clone, 'STORY-PREFIXED', 'develop', 'bugfix/');
+    expect(exitCode).toBe(0);
+    expect(currentBranch(clone)).toBe('bugfix/AI-STORY-PREFIXED');
+  });
 });
 
 describe('run-agent-orchestration.sh — story loop wiring', () => {

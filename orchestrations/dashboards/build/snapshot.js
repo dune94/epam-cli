@@ -392,8 +392,9 @@ function deriveSpecCoverage(stories) {
 
 // storyCommits — "what did each story actually produce" (real git commits,
 // not a status label). Each completed story's implementation loop commits
-// with the message "story: complete <id> (<N> file(s))" (see
-// run-agent-orchestration.sh's post-story commit step) — a real, verifiable
+// with the message "<id>: story complete (<N> file(s))" — ticket ID leads,
+// colon-separated, so it satisfies commit-message linters that require it
+// there (see claude.sh's commit_completed_story()) — a real, verifiable
 // artifact, distinct from PRD status which is just the pipeline's own
 // bookkeeping. Reads the WHOLE commit log once (one git process) and matches
 // subjects locally rather than shelling out per story.
@@ -414,9 +415,9 @@ function computeStoryCommits(prd, projectRoot) {
   let log = '';
   try {
     // One line per commit (no --name-only — the commit SUBJECT itself already
-    // states the file count, "story: complete <id> (<N> file(s))", written by
-    // run-agent-orchestration.sh's post-story commit step, so there's no need
-    // to parse a separate per-commit file list at all).
+    // states the file count, "<id>: story complete (<N> file(s))", written by
+    // claude.sh's commit_completed_story(), so there's no need to parse a
+    // separate per-commit file list at all).
     log = execFileSync(
       'git',
       ['log', '--format=%H\x1f%cI\x1f%s'],
@@ -433,7 +434,7 @@ function computeStoryCommits(prd, projectRoot) {
   const storyIds = (prd.stories || []).map((s) => s.id).filter(Boolean);
 
   for (const id of storyIds) {
-    const marker = `story: complete ${id} (`;
+    const marker = `${id}: story complete (`;
     // Newest-first log order — first match wins.
     const hit = commits.find((c) => c.subject && c.subject.startsWith(marker));
     if (!hit) continue;

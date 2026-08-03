@@ -83,7 +83,7 @@ function runStoryTscGateWithTeardown(
   // story_tsc_gate ever runs.
   writeFileSync(join(projectRoot, 'src', 'story-work.ts'), 'const y: number = "broken by this story";\n');
   execFileSync('git', ['add', '-A'], { cwd: projectRoot });
-  execFileSync('git', ['commit', '-m', 'story: complete TEST-STORY (1 file(s))', '--quiet'], { cwd: projectRoot });
+  execFileSync('git', ['commit', '-m', 'TEST-STORY: story complete (1 file(s))', '--quiet'], { cwd: projectRoot });
   const badCommitSha = currentSha(projectRoot);
 
   const gateFn = extractFunction('story_tsc_gate');

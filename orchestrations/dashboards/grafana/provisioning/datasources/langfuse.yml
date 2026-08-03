@@ -1,0 +1,36 @@
+# Langfuse datasource — the per-call view of a run.
+#
+# Langfuse already records every LLM call the pipeline makes: the full prompt,
+# the response, latency, tokens and cost. None of that was reachable without
+# opening traces one at a time in the Langfuse UI, whose list view shows every
+# trace as `llm-stream` with null input and no agent name.
+#
+# That gap had a real cost. On 2026-07-26 the code-graph-detective "timed out
+# after 360000ms", which read as "the cheap model is too slow". The traces said
+# otherwise: seven quick, productive tool calls in ~65 seconds, then a single
+# forced-answer turn that never returned and burned the remaining five minutes.
+# Completely different diagnosis, completely different fix — and it was sitting
+# in Langfuse the whole time, unreadable.
+#
+# Same Infinity plugin the pipeline dashboards already use, so no new
+# infrastructure. Reached by docker-compose service name on the shared network.
+apiVersion: 1
+
+datasources:
+  - name: Langfuse (Infinity)
+    uid: langfuse-infinity
+    type: yesoreyeram-infinity-datasource
+    access: proxy
+    isDefault: false
+    editable: true
+    jsonData:
+      auth_method: basicAuth
+      # Dev bootstrap credentials, same as docker-compose.observability.yml.
+      # Fine for a localhost instance; replace before this is exposed anywhere.
+      httpHeaderName1: X-Langfuse-Client
+    secureJsonData:
+      basicAuthPassword: sk-lf-epam-dev
+      httpHeaderValue1: epam-cli-dashboard
+    basicAuth: true
+    basicAuthUser: pk-lf-epam-dev
+    url: http://langfuse-server:3000

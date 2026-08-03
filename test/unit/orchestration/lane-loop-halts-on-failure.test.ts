@@ -49,10 +49,10 @@ const NODE_BIN = process.execPath;
  * string mid-quote and bash failed to parse the harness at all. So the end is
  * the LAST column-0 `}` before the next top-level function definition.
  */
-function extractLoopFn(): string {
+function extractFnByName(fnStart: string): string {
   const lines = SRC.split('\n');
-  const start = lines.findIndex((l) => l.startsWith('_run_codeline_loop() {'));
-  if (start === -1) throw new Error('_run_codeline_loop not found');
+  const start = lines.findIndex((l) => l.startsWith(fnStart));
+  if (start === -1) throw new Error(`${fnStart} not found`);
   let nextFn = lines.length;
   for (let i = start + 1; i < lines.length; i++) {
     if (/^[A-Za-z_][A-Za-z0-9_]*\(\)\s*\{/.test(lines[i])) { nextFn = i; break; }
@@ -61,10 +61,20 @@ function extractLoopFn(): string {
   for (let i = nextFn - 1; i > start; i--) {
     if (/^\}\s*$/.test(lines[i])) { end = i; break; }
   }
-  if (end === -1) throw new Error('_run_codeline_loop has no closing brace at column 0');
+  if (end === -1) throw new Error(`${fnStart} has no closing brace at column 0`);
   return lines.slice(start, end + 1).join('\n');
 }
+function extractLoopFn(): string {
+  return extractFnByName('_run_codeline_loop() {');
+}
 const LOOP_FN = extractLoopFn();
+// _run_codeline_loop calls _kill_lane_tree (a SEPARATE function) to actually
+// stop a lane's real descendant process tree — without extracting the real
+// definition too, the harness's stub had no such function at all, so every
+// kill attempt failed with "command not found" and silently no-op'd. This
+// means the ORIGINAL cascade-abort behavior was never actually verified to
+// kill anything by this suite either — only its log message was checked.
+const KILL_LANE_TREE_FN = extractFnByName('_kill_lane_tree() {');
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
@@ -73,8 +83,16 @@ afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, f
  * Run the real loop over two lanes. `failing` is the codeline whose pipeline
  * invocation exits non-zero after its retries are spent.
  */
-function runLanes(failing: string, opts: { markDelivered?: string; parallel?: boolean } = {}):
-  { entered: string[]; exit: number; out: string; prd: string } {
+function runLanes(
+  failing: string,
+  opts: {
+    markDelivered?: string;
+    parallel?: boolean;
+    slowLane?: string;
+    slowDelaySecs?: number;
+    cascadeAbort?: boolean;
+  } = {},
+): { entered: string[]; exit: number; out: string; prd: string } {
   const dir = mkdtempSync(join(tmpdir(), 'lane-halt-'));
   dirs.push(dir);
 
@@ -117,6 +135,13 @@ if [ "\${1:-}" = "--reset" ]; then
     printf '{"story_id":"T-1","codeline":"%s","task_cost_usd":0.25}\n' "\$_cl" \
       >> "\$LOG_DIR/phase-cost.jsonl"
   fi
+  # A deliberately slow lane: still "running" when a sibling has already
+  # failed, so the cascade-abort/let-finish behavior actually has something
+  # to differ on. Without this every lane finishes near-instantly and the
+  # poll never observes real overlap either way.
+  if [ "\$_cl" = "${opts.slowLane || '__none__'}" ]; then
+    sleep ${opts.slowDelaySecs ?? 0}
+  fi
   # A lane that DELIVERS marks the story complete in its own filtered PRD,
   # exactly as claude.sh does during a real run. This is what makes the
   # partial-success case reachable: one lane genuinely succeeded.
@@ -148,8 +173,11 @@ export SKIP_CODELINE_HEALTH=1
 log()   { echo "[log] \$*"; }
 error() { echo "[ERROR] \$*"; }
 warn()  { echo "[WARN] \$*"; }
+warning() { echo "[WARN] \$*"; }
 info()  { echo "[info] \$*"; }
 _run_codeline_bridge() { :; }
+
+${KILL_LANE_TREE_FN}
 
 ${LOOP_FN}
 
@@ -160,7 +188,11 @@ echo "LOOP_EXIT=\$?"
 
   const r = spawnSync('bash', [harness], {
     encoding: 'utf8', timeout: 120000, cwd: dir,
-    env: { ...process.env, EPAM_PARALLEL_CODELINES: opts.parallel === false ? '0' : '1' },
+    env: {
+      ...process.env,
+      EPAM_PARALLEL_CODELINES: opts.parallel === false ? '0' : '1',
+      ...(opts.cascadeAbort ? { EPAM_CASCADE_ABORT_ON_LANE_FAILURE: '1' } : {}),
+    },
   });
   const out = `${r.stdout || ''}${r.stderr || ''}`;
   const entered = existsSync(marker)
@@ -294,6 +326,47 @@ describe('parallel lanes — the same guarantees, differently enforced', () => {
       'a story delivered in one of two lanes was accepted as complete')
       .not.toBe(true);
     expect(exit).not.toBe(0);
+  });
+});
+
+describe('cross-lane cascade: a failed lane must not kill a sibling still doing real work', () => {
+  // Live Writer Retest run, 2026-08-02 (AMSD-2041): gotransit failed on a
+  // deterministic gate's FALSE positive (an unrelated, pre-existing broken
+  // import — see run_relative_import_check's scope fix, same incident).
+  // That failure SIGTERM'd upexpress and metrolinx mid-attempt, discarding
+  // real, valid, independent work those lanes were still producing. The
+  // overall-failure contract (tested above) must survive unchanged; what
+  // changes is whether a lane that is still genuinely working gets to
+  // finish. lane-b sleeps past at least one 5s poll cycle so there is a
+  // real window where the OLD code would have killed it mid-flight.
+  it('by DEFAULT, lets a still-running sibling finish and record its real delivery', () => {
+    const { prd, out } = runLanes('lane-a', {
+      slowLane: 'lane-b', slowDelaySecs: 8, markDelivered: 'lane-b', parallel: true,
+    });
+    const story = JSON.parse(readFileSync(prd, 'utf8')).stories
+      .find((s: { id: string }) => s.id === 'T-1');
+    expect(story.perCodeline?.['lane-b']?.completed,
+      `lane-b was still running when lane-a failed but never got to finish:\n${out.slice(-2000)}`)
+      .toBe(true);
+  });
+
+  it('with EPAM_CASCADE_ABORT_ON_LANE_FAILURE=1, restores the old behavior — the still-running sibling is killed before it can deliver', () => {
+    const { prd, out } = runLanes('lane-a', {
+      slowLane: 'lane-b', slowDelaySecs: 8, markDelivered: 'lane-b', parallel: true, cascadeAbort: true,
+    });
+    const story = JSON.parse(readFileSync(prd, 'utf8')).stories
+      .find((s: { id: string }) => s.id === 'T-1');
+    expect(story.perCodeline?.['lane-b']?.completed,
+      `expected the opt-in to still kill lane-b, but it delivered anyway:\n${out.slice(-2000)}`)
+      .not.toBe(true);
+    expect(out).toMatch(/HALT: a codeline failed after its retries and self-heal completed/);
+  });
+
+  it('the overall-failure contract is unchanged by either mode: a failed lane always fails the run', () => {
+    expect(runLanes('lane-a', { slowLane: 'lane-b', slowDelaySecs: 8, parallel: true }).exit).not.toBe(0);
+    expect(
+      runLanes('lane-a', { slowLane: 'lane-b', slowDelaySecs: 8, parallel: true, cascadeAbort: true }).exit,
+    ).not.toBe(0);
   });
 });
 

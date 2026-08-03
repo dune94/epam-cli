@@ -138,9 +138,21 @@ fi
 
 if [ -n "$_dirty" ]; then
     git -C "$PROJECT_ROOT" add -- $(printf '%s\n' "$_dirty" | tr '\n' ' ') 2>/dev/null || true
-    git -C "$PROJECT_ROOT" commit -m "test: update tests invalidated by the ${STORY_ID} fix" --quiet 2>/dev/null \
-        && log "committed updated test(s) — suite green" \
-        || log "commit failed (non-fatal)"
+    # Ticket-ID-first message — same commitlint-compatibility fix as
+    # brownfield-repro-test-writer.sh's identical commit call (found live
+    # 2026-08-02, AMSD-2041 Writer Retest); see that file's comment for the
+    # full root cause. Real stderr is captured (not discarded) instead of a
+    # generic "(non-fatal)" log line — a client repo's commit-msg hook can
+    # reject for ANY reason, and this pipeline cannot and should not
+    # hardcode every possible hook's exact rule set per project; surfacing
+    # the hook's own output is the generic fix.
+    _commit_output=$(git -C "$PROJECT_ROOT" commit -m "${STORY_ID}: update tests invalidated by the fix" --quiet 2>&1)
+    _commit_rc=$?
+    if [ "$_commit_rc" -eq 0 ]; then
+        log "committed updated test(s) — suite green"
+    else
+        log "commit failed. Output: $_commit_output"
+    fi
 else
     log "suite went green with no test edits"
 fi

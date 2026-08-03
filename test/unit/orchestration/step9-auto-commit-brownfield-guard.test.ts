@@ -14,16 +14,25 @@
  * session via ensure_story_branch (there wasn't even a dedicated branch
  * involved here).
  *
- * Fix: gate on `$main_stories` actually being non-empty (Step 8's own
- * condition) — if Step 8 had nothing to run, any dirtiness is pipeline
- * noise, not a deliverable to preserve.
+ * That fix gated on `$main_stories` non-empty, but ALSO kept requiring
+ * worktree-bound stories to exist — introducing a second, opposite bug
+ * (found live 2026-08-02, AMSD-2041 Writer Retest): a phase with ONLY
+ * main-branch stories and ZERO worktree lanes never got committed at all.
+ * `implement_story` marks the story completed in the PRD regardless, so the
+ * missing commit went unnoticed until the brownfield repro-gate (which
+ * diffs committed HEAD, never the working tree) permanently blocked with
+ * "no test file accompanies the change" — every retry re-implemented the
+ * same real fix and never landed it. Fix: drop the worktree-existence
+ * requirement entirely — gate on `$main_stories` non-empty (Step 8's own
+ * condition) and a dirty tree, regardless of whether any worktree lane
+ * also exists this phase.
  *
  * Real git repos throughout, no mocking.
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -37,7 +46,7 @@ afterEach(() => {
 });
 
 function extractStep9Block(): string {
-  const start = orchSrc.indexOf('# Step 1.5: Auto-commit any main-branch story output');
+  const start = orchSrc.indexOf('# Step 1.5: Auto-commit main-branch story output.');
   const end = orchSrc.indexOf('# Step 10 (TC writer gate) has moved', start);
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
@@ -144,17 +153,32 @@ describe('Step 9 auto-commit — brownfield guard against committing pipeline no
     const status = execFileSync('git', ['status', '--porcelain'], { cwd: repo, encoding: 'utf8' });
     expect(status.trim()).toBe(''); // clean — committed
     const log = execFileSync('git', ['log', '-1', '--format=%s'], { cwd: repo, encoding: 'utf8' }).trim();
-    expect(log).toBe('chore: auto-commit main-branch story output for phase core');
+    // Ticket-ID-first (found live 2026-08-02, same day: a client repo's
+    // commitlint rejects a bare "chore:" subject with no ticket ID as the
+    // first token — see repro-test-writer-commit-message-format.test.ts for
+    // the sibling defect this same fix shape addresses).
+    expect(log).toBe('STORY-REAL: auto-commit main-branch output (phase core)');
   });
 
-  it('is a no-op when there are no worktree-bound stories at all, regardless of main_stories', () => {
+  it('REPRODUCES the live incident and confirms the fix: commits real main-branch output even with ZERO worktree-bound stories (pure main-only phase)', () => {
     const repo = makeRepo();
     const before = currentBranchHead(repo);
-    writeFileSync(join(repo, 'stray.txt'), 'noise\n');
+    // A real brownfield fix + its test file, exactly the AMSD-2041 shape:
+    // agentGroup="main", no primary/independent lanes at all this phase.
+    writeFileSync(join(repo, 'src-fix.ts'), 'export const fixed = true;\n');
+    writeFileSync(join(repo, 'src-fix.spec.ts'), 'test("fixed", () => {});\n');
 
-    const { exitCode } = runStep9(repo, { mainStories: 'STORY-X', primaryStories: '', independentStories: '' });
+    const { stdout, exitCode } = runStep9(repo, {
+      mainStories: 'STORY-X',
+      primaryStories: '',
+      independentStories: '',
+    });
+
     expect(exitCode).toBe(0);
-    expect(currentBranchHead(repo)).toBe(before);
+    expect(stdout).toMatch(/Committed main-branch output/);
+    expect(currentBranchHead(repo)).not.toBe(before);
+    const status = execFileSync('git', ['status', '--porcelain'], { cwd: repo, encoding: 'utf8' });
+    expect(status.trim()).toBe(''); // clean — committed, not left dangling for repro-gate to never see
   });
 
   it('is a no-op when the tree is already clean, even with worktree stories and main_stories present', () => {
@@ -185,4 +209,42 @@ describe('Step 9 auto-commit — brownfield guard against committing pipeline no
     const failures = outcomes.filter(o => o.exitCode !== 0 || !o.headUnchanged);
     expect(failures, `${failures.length}/${RUNS} failed: ${JSON.stringify(outcomes)}`).toHaveLength(0);
   }, 30000);
+});
+
+/**
+ * The ticket-ID-first message (see step9's own comment above) is a
+ * best-effort default, not a guarantee every possible client repo's
+ * commit-msg hook accepts it — this pipeline cannot and must not hardcode
+ * a specific hook's exact rule set per project. What it must do, for ANY
+ * hook and ANY rejection reason, is surface the hook's real output AND
+ * not misreport a genuine rejection as "nothing to commit" (which
+ * previously looked identical to a truly clean tree — actively
+ * misleading, since files remain staged in one case but not the other).
+ */
+describe('Step 9 auto-commit — surfaces the REAL hook output on ANY commit rejection, distinct from "nothing to commit"', () => {
+  it('a hook that rejects for a completely unrelated, made-up reason logs the real message and does NOT claim "nothing to commit"', () => {
+    const repo = makeRepo();
+    const before = currentBranchHead(repo);
+    writeFileSync(join(repo, 'src-output.ts'), 'export const real = true;\n');
+    const hooksDir = join(repo, '.git', 'hooks');
+    mkdirSync(hooksDir, { recursive: true });
+    writeFileSync(
+      join(hooksDir, 'commit-msg'),
+      `#!/usr/bin/env bash\necho "ARBITRARY_REJECTION_MARKER_71ae: needs a work-order tag" >&2\nexit 1\n`,
+    );
+    chmodSync(join(hooksDir, 'commit-msg'), 0o755);
+
+    const { stdout, exitCode } = runStep9(repo, {
+      mainStories: 'STORY-REAL',
+      primaryStories: 'STORY-A',
+      independentStories: '',
+    });
+
+    expect(exitCode).toBe(0); // Step 9 itself doesn't abort the phase on a rejected commit
+    expect(stdout).toMatch(/ARBITRARY_REJECTION_MARKER_71ae/);
+    expect(stdout).not.toMatch(/Nothing new to commit \(working tree already clean\)/);
+    expect(currentBranchHead(repo)).toBe(before); // nothing landed
+    const status = execFileSync('git', ['status', '--porcelain'], { cwd: repo, encoding: 'utf8' });
+    expect(status).toMatch(/src-output\.ts/); // still staged, not lost
+  });
 });

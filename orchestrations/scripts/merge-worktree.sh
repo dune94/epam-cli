@@ -144,7 +144,7 @@ if grep -qi "CONFLICT\|Automatic merge failed" "$merge_output"; then
     timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     conflict_files=$(git diff --name-only --diff-filter=U 2>/dev/null || echo "unknown")
 
-    jq -n \
+    jq -nc \
         --arg lane "$LANE" \
         --arg branch "$BRANCH_NAME" \
         --arg phase "$PHASE_ID" \
@@ -209,7 +209,7 @@ if [ "$tests_passed" = false ]; then
 
     # Log test failure
     timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    jq -n \
+    jq -nc \
         --arg lane "$LANE" \
         --arg branch "$BRANCH_NAME" \
         --arg phase "$PHASE_ID" \
@@ -262,7 +262,7 @@ fi
 timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 commit_sha=$(git rev-parse HEAD)
 
-jq -n \
+jq -nc \
     --arg lane "$LANE" \
     --arg branch "$BRANCH_NAME" \
     --arg phase "$PHASE_ID" \

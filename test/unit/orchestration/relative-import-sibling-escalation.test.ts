@@ -1,8 +1,7 @@
 /**
- * run_relative_import_check — when the broken import lives in a file owned
- * by a DIFFERENT, already-completed sibling story, register an escalation
- * instead of retrying the current story against a fix it structurally
- * cannot apply.
+ * run_relative_import_check — when the broken import lives in a file the
+ * current story does NOT own, it must never block the current story's turn
+ * — whether or not an owning sibling story can be identified.
  *
  * Root cause this fixes (found live, 2026-07-11, tier3-travel-app run):
  * SKY-003-test burned all 8 attempts (exhausting the full model-escalation
@@ -13,20 +12,23 @@
  * was structurally impossible for that story to do, guaranteeing every one
  * of the 8 attempts failed identically.
  *
- * There's already a mechanism for exactly this shape of problem —
- * resolve_escalation()/escalate_defect_to_sibling_story — but it only fires
- * when the LLM FailureAnalyst flags a cross-story defect. Deterministic
- * checks (like this one) skip the failure-analyst entirely for cost
- * efficiency, so they never got a chance to trigger that escalation path
- * either. Fix: when the broken import's IMPORTER file isn't owned by the
- * current story but IS owned by another story in the PRD, write the SAME
- * .epam/escalations/<story_id>.json file resolve_escalation() already knows
- * how to consume.
+ * UPDATED 2026-08-02 (found live, Writer Retest run): the FIRST fix here
+ * only wrote a sibling-escalation file when an owning story could be
+ * found — but even then, the function still fell through to `return 1`
+ * regardless, so out-of-scope breakage blocked the current story either
+ * way. A single-story PRD has no sibling to attribute an out-of-scope
+ * import to at all, so a totally unrelated, pre-existing broken import
+ * (nothing to do with the story) blocked a genuinely correct fix for 3
+ * straight attempts. The escalation file is still written (real value,
+ * resolve_escalation() still consumes it) when an owner can be found — but
+ * it is now purely informational: out-of-scope findings NEVER block this
+ * story's own turn, matching the pattern already proven in
+ * run_named_import_check.
  */
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -86,12 +88,14 @@ describe('run_relative_import_check — REAL execution: sibling escalation', () 
           `PRD_FILE=${JSON.stringify(prdPath)}`,
           `PROJECT_ROOT=${JSON.stringify(dir)}`,
           'log() { echo "LOG: $*" >&2; }',
+          'warning() { echo "WARN: $*" >&2; }',
           fnBody,
           `run_relative_import_check ${JSON.stringify(dir)} ${JSON.stringify(outLog)} ${JSON.stringify(opts.storyId)}`,
           'echo "RC=$?"',
         ].join('\n'),
       );
-      const output = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
+      const result = spawnSync('bash', [scriptPath], { encoding: 'utf8' });
+      const output = (result.stdout || '') + (result.stderr || '');
       const rc = parseInt(output.match(/RC=(\d+)/)?.[1] ?? '-1', 10);
       let escalation: any = null;
       try {
@@ -105,8 +109,8 @@ describe('run_relative_import_check — REAL execution: sibling escalation', () 
     }
   }
 
-  it('REPRODUCES the exact live defect and proves the fix: a broken import in a SIBLING-owned file registers an escalation instead of retrying the impossible fix', () => {
-    const { rc, escalation } = runCheck({
+  it('REPRODUCES the exact live defect and proves the fix: a broken import in a SIBLING-owned file registers an escalation AND does not block this story', () => {
+    const { rc, output, escalation } = runCheck({
       files: {
         'src/skyscanner/client.ts': 'export class SkyscannerClient {}',
         'src/cli.ts': "import { SkyscannerClient } from './skyscanner-client.js';",
@@ -117,14 +121,15 @@ describe('run_relative_import_check — REAL execution: sibling escalation', () 
         { id: 'SKY-003-test', status: 'pending', technicalNotes: { files: ['src/cli.test.ts'] } },
       ],
     });
-    expect(rc).toBe(1);
+    expect(rc).toBe(0);
+    expect(output).toMatch(/outside this story's scope \(not blocking\)/);
     expect(escalation).not.toBeNull();
     expect(escalation.targetFile).toBe('src/cli.ts');
     expect(escalation.requiredFix).toContain("imports './skyscanner-client.js' which does not exist");
     expect(escalation.diagnosis).toContain('SKY-003-test');
   });
 
-  it('does NOT register an escalation when the current story itself owns the broken file (no regression)', () => {
+  it('still blocks (rc=1) and does NOT register an escalation when the current story itself owns the broken file (no regression)', () => {
     const { rc, escalation } = runCheck({
       files: {
         'src/skyscanner/client.ts': 'export class SkyscannerClient {}',
@@ -140,19 +145,20 @@ describe('run_relative_import_check — REAL execution: sibling escalation', () 
     expect(escalation).toBeNull();
   });
 
-  it('does NOT register an escalation when no OTHER story owns the broken file either (nothing to escalate to)', () => {
-    const { rc, escalation } = runCheck({
+  it('REPRODUCES the exact live Writer Retest defect: no escalation possible (single-story PRD) still must NOT block', () => {
+    const { rc, output, escalation } = runCheck({
       files: {
         'src/index.ts': "import { z } from './totally-nonexistent-module';",
       },
       storyId: 'SKY-003-test',
       prdStories: [{ id: 'SKY-003-test', status: 'pending', technicalNotes: { files: ['src/cli.test.ts'] } }],
     });
-    expect(rc).toBe(1);
+    expect(rc).toBe(0);
+    expect(output).toMatch(/outside this story's scope \(not blocking\)/);
     expect(escalation).toBeNull();
   });
 
-  it('still returns 1 and sets VERIFICATION_FAILURE even when an escalation is registered (the immediate attempt still fails)', () => {
+  it('sets VERIFICATION_FAILURE and blocks only when the broken import is genuinely in-scope (owned by this story)', () => {
     const dir = mkdtempSync(join(tmpdir(), 'rel-import-escalation-vf-'));
     try {
       const files = {
@@ -168,10 +174,7 @@ describe('run_relative_import_check — REAL execution: sibling escalation', () 
       writeFileSync(
         prdPath,
         JSON.stringify({
-          stories: [
-            { id: 'SKY-003-impl', status: 'completed', technicalNotes: { files: ['src/cli.ts'] } },
-            { id: 'SKY-003-test', status: 'pending', technicalNotes: { files: ['src/cli.test.ts'] } },
-          ],
+          stories: [{ id: 'SKY-003-impl', status: 'pending', technicalNotes: { files: ['src/cli.ts'] } }],
         }),
       );
       const fnBody = extractFunctionBody('run_relative_import_check');
@@ -185,7 +188,7 @@ describe('run_relative_import_check — REAL execution: sibling escalation', () 
           `PROJECT_ROOT=${JSON.stringify(dir)}`,
           'log() { :; }',
           fnBody,
-          `run_relative_import_check ${JSON.stringify(dir)} ${JSON.stringify(outLog)} "SKY-003-test"`,
+          `run_relative_import_check ${JSON.stringify(dir)} ${JSON.stringify(outLog)} "SKY-003-impl"`,
           'echo "RC=$?"',
           'echo "VF=$VERIFICATION_FAILURE"',
         ].join('\n'),

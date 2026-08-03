@@ -68,8 +68,25 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "storyTimeoutSecs": { "type": "integer", "minimum": 1, "description": "EPAM_STORY_TIMEOUT_SECS — wall-clock kill per story attempt. Wraps BOTH the plan pass (tool-free, capped separately at EPAM_PLAN_TIMEOUT_SECS, default 90) and the implementation pass — a deadline sized for the implementation pass alone would kill agents that used to finish comfortably, so this value should generally exceed EPAM_PLAN_TIMEOUT_SECS by that much headroom." },
-        "gateTimeoutSecs": { "type": "integer", "minimum": 1, "description": "EPAM_GATE_TIMEOUT_SECS — wall-clock kill per QA testing-gate invocation." }
+        "storyTimeoutSecs": { "type": "integer", "minimum": 1, "description": "EPAM_STORY_TIMEOUT_SECS — wall-clock kill per story attempt. Wraps BOTH the plan pass (tool-free, capped separately at EPAM_PLAN_TIMEOUT_SECS, default 90) and the implementation pass — a deadline sized for the implementation pass alone would kill agents that used to finish comfortably, so this value should generally exceed EPAM_PLAN_TIMEOUT_SECS by that much headroom. Also read by run-agent-orchestration.sh's run_story_with_watchdog() as a flat override (skips storyEffortTimeoutSecs scaling below) — loaded there by _load_timeout_config() (lib/story-guards.sh), NOT by claude.sh's load_llm_settings_json(), since claude.sh runs too late (as a subprocess of run_story_with_watchdog itself) to influence its own wrapping timeout." },
+        "gateTimeoutSecs": { "type": "integer", "minimum": 1, "description": "EPAM_GATE_TIMEOUT_SECS — wall-clock kill per QA testing-gate invocation." },
+        "storyEffortTimeoutSecs": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Per-effort-tier base timeout (seconds), read by run-agent-orchestration.sh's run_story_with_watchdog() before scaling by roleTimeoutMultipliers. Replaces the previously-hardcoded case statement (low=600/medium=1200/high=2400/default=900) with a configurable, project-tunable one — no project-specific fact should be baked into pipeline code. Any tier left unset keeps its hardcoded default.",
+          "properties": {
+            "low": { "type": "integer", "minimum": 1, "description": "EPAM_STORY_EFFORT_TIMEOUT_LOW_SECS. Default when unset: 600." },
+            "medium": { "type": "integer", "minimum": 1, "description": "EPAM_STORY_EFFORT_TIMEOUT_MEDIUM_SECS. Default when unset: 1200." },
+            "high": { "type": "integer", "minimum": 1, "description": "EPAM_STORY_EFFORT_TIMEOUT_HIGH_SECS. Default when unset: 2400." },
+            "default": { "type": "integer", "minimum": 1, "description": "EPAM_STORY_EFFORT_TIMEOUT_DEFAULT_SECS — used when a story's effort field is missing/unrecognized. Default when unset: 900." }
+          }
+        },
+        "roleTimeoutMultipliers": {
+          "type": "object",
+          "description": "Per-agentRole multiplier applied to the effort-tier base timeout, keyed by whatever agentRole value the pipeline itself assigned in prd.json (Step 0.5/0.9) — never a hardcoded role name. Serialized 1:1 into EPAM_ROLE_TIMEOUT_MULTIPLIER_MAP's 'role=mult|role2=mult2' string (the format resolve_role_timeout_multiplier() already parses). An unlisted role gets multiplier 1.0. Default when unset: {\"test-engineer\": 1.5}, matching the prior hardcoded default.",
+          "additionalProperties": { "type": "number", "minimum": 0 }
+        },
+        "watchdogRetryMultiplier": { "type": "number", "minimum": 0, "description": "EPAM_WATCHDOG_RETRY_MULTIPLIER — scales the timeout on a retry after a story timed out once (rationale: a story that already burned self-heal attempts within one budget has a larger cumulative prompt on retry, so the same flat budget that already proved insufficient is the wrong one to hand it again). Default when unset: 1.5. Set to 1 to restore flat-timeout-on-retry behavior." }
       }
     },
     "brownfield": {

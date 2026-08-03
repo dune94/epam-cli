@@ -16,11 +16,14 @@
 # because a sibling story's stale broken test file was still sitting in the
 # tree. This is a workspace-hygiene bug, not a story-implementation bug.
 #
-# "Baseline" = the most recent commit whose message matches `^story: complete `
-# (the exact message commit_completed_story() in claude.sh already writes for
-# every genuinely completed story) — found dynamically via `git log --grep`,
-# never a hardcoded SHA or story ID, so this works identically for any project
-# and any number of completed stories.
+# "Baseline" = the most recent commit whose message matches
+# `^<story_id>: story complete ` (the exact shape commit_completed_story() in
+# claude.sh already writes for every genuinely completed story — ticket ID
+# leads the message, colon-separated, to satisfy commit-message linters that
+# require it there; "story complete" is the stable marker regardless of
+# story_id) — found dynamically via `git log --grep`, never a hardcoded SHA
+# or story ID, so this works identically for any project and any number of
+# completed stories.
 #
 # Usage:
 #   reset-to-baseline.sh <project_root>
@@ -41,14 +44,14 @@ fi
 
 cd "$PROJECT_ROOT"
 
-# Find the most recent "story: complete <ID>" commit — the last point at which
+# Find the most recent "<ID>: story complete" commit — the last point at which
 # the working tree was known to be genuinely clean (not a contaminated
 # auto-commit from a failed attempt, which always uses a DIFFERENT message:
 # "chore(wt-<lane>): auto-commit agent output" or "merge: phase <phase> ...").
-baseline_sha=$(git log --grep='^story: complete ' --format='%H' -n 1 2>/dev/null || true)
+baseline_sha=$(git log --grep='^[^:]*: story complete ' --format='%H' -n 1 2>/dev/null || true)
 
 if [ -z "$baseline_sha" ]; then
-    echo "reset-to-baseline: no 'story: complete' commit found in history — nothing safe to reset to (caller should fall back to full teardown)" >&2
+    echo "reset-to-baseline: no '<id>: story complete' commit found in history — nothing safe to reset to (caller should fall back to full teardown)" >&2
     exit 1
 fi
 

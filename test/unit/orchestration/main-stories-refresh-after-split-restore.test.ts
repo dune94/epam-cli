@@ -73,7 +73,7 @@ describe('Step 1 main_stories refresh — wiring (static)', () => {
     const idx = orchSrc.indexOf('_main_stories_current=$(jq -r --arg phase "$PHASE"');
     const block = orchSrc.slice(idx, idx + 500);
     expect(block).toMatch(/select\(\.status != "deprecated"\)/);
-    expect(block).toMatch(/\.completed == false/);
+    expect(block).toMatch(/\(\.completed \/\/ false\) == false/);
     expect(block).toMatch(/agentRole != "review-agent"/);
     expect(block).toMatch(/\$g == "main" or \$g == "preflight" or \$g == "primary" or \$g == "independent"/);
   });

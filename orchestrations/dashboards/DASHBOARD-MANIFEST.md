@@ -75,7 +75,7 @@ step timeline, and per-story deliverables (commit SHA, file count, branch).
   none of the providers/models a real run actually used.
 - Story "commit" info requires `build-info.json`'s `metrics.storyCommits`,
   which requires the project directory to be a real git repo with commits
-  matching `"story: complete <id> (<N> file(s))"` — empty for PRD-only
+  matching `"<id>: story complete (<N> file(s))"` — empty for PRD-only
   preview/dry-run states.
 - `agent-status.json`'s `startedAt` is reset to `null` by every
   `pre-run-reset.sh` call — hero "Elapsed" falls back to the earliest

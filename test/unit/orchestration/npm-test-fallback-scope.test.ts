@@ -111,6 +111,7 @@ describe('run_external_verification() — REAL execution, scope-aware npm-test f
           `run_dependency_check() { :; }`,
           `run_relative_import_check() { return 0; }`,
           `run_named_import_check() { return 0; }`,
+          `run_anti_pattern_check() { return 0; }`,
           `run_vendor_integrity_check() { return 0; }`,
           `run_dynamic_tools_in_unlocked_window() { :; }`,
           `_vendor_unlock() { :; }`,

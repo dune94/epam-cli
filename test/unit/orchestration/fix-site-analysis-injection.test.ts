@@ -114,7 +114,7 @@ describe('fix-site-analysis injection (real jq from claude.sh)', () => {
     // The agent must be able to discover an existing helper (e.g. a key parser)
     // instead of hand-rolling new logic — the exact miss in the live failure.
     expect(src).toContain('codegraph_tool_block');
-    expect(src).toContain('codegraph-agent-query.sh');
-    expect(src).toMatch(/helpers <domain nouns>/);
+    expect(src).toContain('codegraph_query');
+    expect(src).toMatch(/mode=\\"helpers\\"/);
   });
 });

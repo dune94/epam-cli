@@ -13374,3 +13374,465 @@ Every future project must keep these three roles registered in `orchestrations/a
 - **Status**: completed
 - **Log**: logs/claude_outputs/AMSD-2041_*.log
 
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-01 22:46:30
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-01 22:50:37
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-01 22:51:31
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-01 22:59:11
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-01 19:33:34
+- **Phase**: core
+- **Status**: failed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-01 19:54:42
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-01 19:57:05
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## SPAN-1: Change the greeting from hello world to hello dolly in every affected codeline
+- **Date**: 2026-08-02 00:31:12
+- **Phase**: mock3_core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SPAN-1_*.log
+
+## SPAN-1: Change the greeting from hello world to hello dolly in every affected codeline
+- **Date**: 2026-08-02 00:32:32
+- **Phase**: mock3_core
+- **Status**: completed
+- **Log**: logs/claude_outputs/SPAN-1_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 01:30:59
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 01:42:52
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 02:50:14
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 02:52:56
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 02:57:41
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 02:59:52
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 03:03:34
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 03:07:45
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 09:59:21
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 10:11:58
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 10:16:12
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 10:27:54
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 11:52:28
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 11:54:33
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 11:54:48
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 11:57:41
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 12:01:15
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 12:16:12
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 17:00:44
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 17:03:49
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 18:15:25
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 18:21:37
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 18:22:52
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 18:24:27
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 18:30:29
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 18:41:46
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 19:37:56
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 19:42:01
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 19:57:59
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 20:04:52
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 20:43:47
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 20:46:50
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 20:51:25
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 21:00:03
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 21:03:24
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 22:12:41
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 22:14:43
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 22:16:42
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 22:17:28
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 22:19:32
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 22:22:21
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 22:29:41
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 22:31:21
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 22:35:13
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 23:19:31
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 23:21:14
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 23:25:30
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 23:31:22
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 23:32:30
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 23:32:41
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 23:34:57
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 23:39:26
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-02 23:42:15
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-03 00:05:20
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-03 00:05:43
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-03 00:06:59
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-03 00:14:52
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-03 00:18:51
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-03 00:19:54
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-03 00:22:39
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-03 00:24:14
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-03 00:28:11
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-03 00:55:14
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-03 00:57:57
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-03 00:59:03
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-03 00:59:59
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-03 01:03:25
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+
+## AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+- **Date**: 2026-08-03 01:04:29
+- **Phase**: core
+- **Status**: completed
+- **Log**: logs/claude_outputs/AMSD-2041_*.log
+

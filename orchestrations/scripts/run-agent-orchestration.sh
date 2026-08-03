@@ -54,6 +54,16 @@ export NODE_BIN
 source "$SCRIPT_DIR/lib/tc-writer-gate.sh"
 # shellcheck source=lib/story-guards.sh
 source "$SCRIPT_DIR/lib/story-guards.sh"
+# shellcheck source=lib/git-ops.sh
+source "$SCRIPT_DIR/lib/git-ops.sh"
+
+# Load timeout config from EPAM_PROJECT_CONFIG_DIR/llm-settings.json BEFORE
+# any call to the watchdog wrapper defined further below — its `timeout`
+# wrapper is computed synchronously the moment it's called, so this must run
+# here, in THIS process, not inside claude.sh (which the watchdog invokes as
+# a subprocess — too late by construction; see _load_timeout_config()'s
+# docstring in lib/story-guards.sh).
+_load_timeout_config
 
 # Load project .env so API keys are available to all subprocesses (worktrees, epam-run, etc.)
 # Preserve caller-set gate overrides so tier scripts can override .env defaults.
@@ -744,55 +754,6 @@ ensure_node_modules_healthy() {
     detect_and_install_dependencies "$codeline_root" "$node_bin"
 }
 
-# ensure_story_branch <codeline_root> <story_id> [baseline_branch]
-# Every story commits to its OWN dedicated branch ("AI-<story_id>", derived
-# entirely from the story ID in flight — never a hardcoded name), freshly
-# created off origin/<baseline_branch> every single time via `checkout -B`
-# (which resets the branch to that start-point if it already exists,
-# discarding any prior half-done local attempt — same "clean slate every
-# run" principle already applied elsewhere in this pipeline).
-#
-# Live bug this eliminates (2026-07-22): the previous design committed
-# directly onto the shared baseline branch (develop) and relied on a durable
-# local marker (record_brownfield_verified_baseline / brownfield-preflight-
-# reset.sh) to know what "last known good" state to reset back to before each
-# run. That marker only updates when a story genuinely passes story_tsc_gate
-# — a manual correction to the branch (e.g. a human running `git reset --hard
-# origin/develop`) doesn't update it, so it can point at an already-discarded,
-# orphaned commit. The next run then trusts that stale marker and resets the
-# shared branch BACKWARD onto abandoned history, and a new story commit lands
-# on top of the wrong base — confirmed live: a discarded commit
-# (.epam/setup-deps.sh cruft) got silently reintroduced this way, and the
-# story commit built on top of it.
-#
-# Branching per story removes the entire problem class: there is no shared
-# mutable branch state to protect via a local marker. Every story always
-# starts from the ACTUAL current origin/<baseline_branch> tip, live, via
-# `git fetch` — never a cached/remembered SHA that can go stale.
-ensure_story_branch() {
-    local codeline_root="$1"
-    local story_id="$2"
-    local baseline_branch="${3:-${JIRA_BASELINE_BRANCH:-main}}"
-
-    [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
-    [ -d "$codeline_root/.git" ] || return 0
-    [ -n "$story_id" ] || return 0
-
-    local _branch="AI-${story_id}"
-
-    if ! git -C "$codeline_root" fetch origin "$baseline_branch" --quiet 2>/dev/null; then
-        warning "  [story-branch] $story_id: could not fetch origin/${baseline_branch} — proceeding on current branch state"
-        return 1
-    fi
-
-    if git -C "$codeline_root" checkout -B "$_branch" "origin/${baseline_branch}" --quiet 2>/dev/null; then
-        success "  [story-branch] $story_id: on branch '${_branch}', freshly based on origin/${baseline_branch}"
-        return 0
-    fi
-
-    warning "  [story-branch] $story_id: could not create/reset branch '${_branch}' off origin/${baseline_branch} — proceeding on current branch"
-    return 1
-}
 
 resolve_prompt_provider() {
     if [ -n "${EPAM_ORCHESTRATION_PROVIDER:-}" ]; then
@@ -1793,16 +1754,23 @@ if m: print(m.group(1)); sys.exit(0)
 }
 
 #
-# Effort-based defaults (overridden by STORY_TIMEOUT_SECS):
-#   low    → 600s  (10 min)
-#   medium → 1200s (20 min)
-#   high   → 2400s (40 min)
-#   *      → 900s  (15 min)
+# Effort-based defaults (overridden by STORY_TIMEOUT_SECS or
+# EPAM_STORY_TIMEOUT_SECS — the latter is what a project's llm-settings.json
+# storyTimeoutSecs actually loads via _load_timeout_config(), see
+# lib/story-guards.sh):
+#   low    → 600s  (10 min) — EPAM_STORY_EFFORT_TIMEOUT_LOW_SECS
+#   medium → 1200s (20 min) — EPAM_STORY_EFFORT_TIMEOUT_MEDIUM_SECS
+#   high   → 2400s (40 min) — EPAM_STORY_EFFORT_TIMEOUT_HIGH_SECS
+#   *      → 900s  (15 min) — EPAM_STORY_EFFORT_TIMEOUT_DEFAULT_SECS
+# Each tier is config-driven (llm-settings.json's timeouts.storyEffortTimeoutSecs)
+# with the values above as the fallback when a project sets none — no
+# project-specific fact should be baked into pipeline code as a bare literal.
 # The effort-derived value is then scaled by a per-agentRole multiplier
-# (EPAM_ROLE_TIMEOUT_MULTIPLIER_MAP, default "test-engineer=1.5") — role
-# names come from whatever the pipeline itself assigned to the story in
-# prd.json (Step 0.5/0.9), never hardcoded to a specific project's stack;
-# an unmatched role gets multiplier 1.0 (today's exact behavior).
+# (EPAM_ROLE_TIMEOUT_MULTIPLIER_MAP, default "test-engineer=1.5", also
+# config-driven via timeouts.roleTimeoutMultipliers) — role names come from
+# whatever the pipeline itself assigned to the story in prd.json (Step
+# 0.5/0.9), never hardcoded to a specific project's stack; an unmatched role
+# gets multiplier 1.0 (today's exact behavior).
 resolve_role_timeout_multiplier() {
     local story_id="$1"
     local role
@@ -1828,20 +1796,26 @@ run_story_with_watchdog() {
     local log_file="$2"
     local _rc=0
 
-    # Determine timeout: explicit override wins, else scale by effort
+    # Determine timeout: explicit override wins (STORY_TIMEOUT_SECS, a manual
+    # per-invocation env var, takes priority over EPAM_STORY_TIMEOUT_SECS, the
+    # project-config-loaded fallback — same "manual env var beats project
+    # config" precedence load_llm_settings_json() already uses elsewhere),
+    # else scale by effort.
     local timeout_secs
     if [ -n "${STORY_TIMEOUT_SECS:-}" ]; then
         timeout_secs="$STORY_TIMEOUT_SECS"
+    elif [ -n "${EPAM_STORY_TIMEOUT_SECS:-}" ]; then
+        timeout_secs="$EPAM_STORY_TIMEOUT_SECS"
     else
         local story_effort
         story_effort=$(jq -r --arg id "$story_id" \
             '.stories[] | select(.id == $id) | .effort // "medium"' \
             "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "medium")
         case "$story_effort" in
-            low)    timeout_secs=600  ;;
-            medium) timeout_secs=1200 ;;
-            high)   timeout_secs=2400 ;;
-            *)      timeout_secs=900  ;;
+            low)    timeout_secs="${EPAM_STORY_EFFORT_TIMEOUT_LOW_SECS:-600}"     ;;
+            medium) timeout_secs="${EPAM_STORY_EFFORT_TIMEOUT_MEDIUM_SECS:-1200}" ;;
+            high)   timeout_secs="${EPAM_STORY_EFFORT_TIMEOUT_HIGH_SECS:-2400}"   ;;
+            *)      timeout_secs="${EPAM_STORY_EFFORT_TIMEOUT_DEFAULT_SECS:-900}" ;;
         esac
         local role_multiplier
         role_multiplier=$(resolve_role_timeout_multiplier "$story_id")
@@ -2704,6 +2678,70 @@ CONTRACTGEN_EOF
 KNOWNFIXES_EOF
       log "[orch] Wrote .epam/ manifests to ${_wt} (dependency-check, contract-generation, known-fixes)"
     fi
+
+    # ── Plugin provisioning: config-driven, zero project-specific hardcoding ──
+    # This script has no idea what a "plugin" IS or does, with ONE exception:
+    # CodeGraph's query tool (orchestrations/plugins/codegraph-tools.js) ships
+    # with epam-cli itself — the same way ReadFile/Bash are always available
+    # regardless of project — so it's provisioned for EVERY codeline
+    # unconditionally, merged with whatever the project's own plugins.json
+    # adds on top (never overwritten, never required to list it manually).
+    # Everything else remains purely config-driven: EPAM_PROJECT_CONFIG_DIR/
+    # codeline-facts.json (keyed by codeline name) has its entry for THIS
+    # codeline extracted into .epam/codeline-facts.json. Adding, removing, or
+    # repointing a PROJECT-specific plugin is purely a config edit in the
+    # project's own directory — never a change to this script.
+    local _project_tools_json="[]"
+    if [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] && [ -f "${EPAM_PROJECT_CONFIG_DIR}/plugins.json" ]; then
+      _project_tools_json=$(jq -c '.tools // []' "${EPAM_PROJECT_CONFIG_DIR}/plugins.json" 2>/dev/null || echo "[]")
+    fi
+    local _codegraph_plugin_abs=""
+    local _codegraph_plugin_src="${SCRIPT_DIR}/../plugins/codegraph-tools.js"
+    if [ -f "$_codegraph_plugin_src" ]; then
+      _codegraph_plugin_abs="$(cd "$(dirname "$_codegraph_plugin_src")" 2>/dev/null && pwd)/$(basename "$_codegraph_plugin_src")"
+    fi
+    if [ -n "$_codegraph_plugin_abs" ] || [ "$_project_tools_json" != "[]" ]; then
+      mkdir -p "$_wt/.epam"
+      jq -n --argjson project "$_project_tools_json" --arg cg "$_codegraph_plugin_abs" \
+        '{tools: (((if $cg != "" then [$cg] else [] end) + $project) | unique)}' \
+        > "$_wt/.epam/settings.json"
+      log "[orch] Provisioned .epam/settings.json (plugins, incl. built-in CodeGraph tool) for '${_cl}'"
+    fi
+
+    if [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ]; then
+      local _facts_cfg="${EPAM_PROJECT_CONFIG_DIR}/codeline-facts.json"
+      if [ -f "$_facts_cfg" ]; then
+        local _cl_facts
+        _cl_facts=$(jq -c --arg cl "$_cl" '.[$cl] // empty' "$_facts_cfg" 2>/dev/null)
+        if [ -n "$_cl_facts" ]; then
+          mkdir -p "$_wt/.epam"
+          echo "$_cl_facts" > "$_wt/.epam/codeline-facts.json"
+          log "[orch] Provisioned .epam/codeline-facts.json for '${_cl}' from ${_facts_cfg}"
+        fi
+      fi
+
+      # env-vars.json (optional, per-project): keyed by codeline name, each
+      # value a flat {KEY: "value"} map written verbatim as a git-ignored
+      # .env.local in the codeline root. This script has no idea what the
+      # keys mean or why a codeline needs them — some client apps throw at
+      # config-load time (e.g. a CMS SDK guard) when an expected env var is
+      # merely ABSENT, well before any network call is made, which blocks
+      # local tooling (type-check/lint run via a pre-commit hook) even though
+      # nothing here ever talks to the real service. Values therefore only
+      # need to be present, never real credentials — the project config
+      # supplies whatever placeholder its own app requires. .env* is
+      # universally gitignored by convention, so this is never part of a
+      # story's diff and is never committed.
+      local _envvars_cfg="${EPAM_PROJECT_CONFIG_DIR}/env-vars.json"
+      if [ -f "$_envvars_cfg" ]; then
+        local _cl_envvars
+        _cl_envvars=$(jq -r --arg cl "$_cl" '.[$cl] // {} | to_entries[] | "\(.key)=\(.value)"' "$_envvars_cfg" 2>/dev/null)
+        if [ -n "$_cl_envvars" ]; then
+          printf '%s\n' "$_cl_envvars" > "$_wt/.env.local"
+          log "[orch] Provisioned .env.local for '${_cl}' from ${_envvars_cfg}"
+        fi
+      fi
+    fi
   done
 
   # Per-codeline execution loop
@@ -2919,10 +2957,24 @@ KNOWNFIXES_EOF
           _p_any_failed=1
         fi
       done
-      if [ "$_p_any_failed" = "1" ] && [ "$_p_running" = "1" ]; then
+      # Default: let sibling lanes run to natural completion even after one
+      # lane has failed. Found live 2026-08-02 (Writer Retest, AMSD-2041):
+      # gotransit failed on a deterministic gate blocking on a pre-existing,
+      # unrelated broken import (see run_relative_import_check's scope fix,
+      # same incident) — a FALSE failure — which killed upexpress and
+      # metrolinx mid-attempt via SIGTERM, discarding real, valid,
+      # independent work those lanes were producing. The per-lane fold-back
+      # logic below already records each lane's own outcome independently
+      # (a spanning story is complete only when NO lane is outstanding) —
+      # nothing downstream needed the early kill. Set
+      # EPAM_CASCADE_ABORT_ON_LANE_FAILURE=1 to restore the old behavior
+      # (stop spending immediately once any lane's outcome is known to have
+      # failed) for cost-conscious runs where sibling lanes' work has no
+      # independent value once one lane is lost.
+      if [ "${EPAM_CASCADE_ABORT_ON_LANE_FAILURE:-0}" = "1" ] && [ "$_p_any_failed" = "1" ] && [ "$_p_running" = "1" ]; then
         error "[orch] HALT: a codeline failed after its retries and self-heal completed."
-        error "[orch]   Aborting the codeline(s) still running — recovery is exhausted, so"
-        error "[orch]   letting them finish would spend on a run already decided."
+        error "[orch]   Aborting the codeline(s) still running (EPAM_CASCADE_ABORT_ON_LANE_FAILURE=1) —"
+        error "[orch]   recovery is exhausted, so letting them finish would spend on a run already decided."
         for _pid in "${_p_pids[@]}"; do _kill_lane_tree "$_pid"; done
         break
       fi
@@ -3543,22 +3595,29 @@ if [ "${RESET_STORIES:-false}" = "true" ]; then
     # of every --reset invocation) was the primary repeat offender after an
     # earlier pass fixed 5 other mktemp-based PRD writes but missed this one.
     chmod 644 "$local_tmp" 2>/dev/null
+    # "in-progress" included alongside "completed"/"failed" (found live
+    # 2026-08-02 alongside the Step 9 auto-commit fix): a story left
+    # mid-execution across a retry boundary (e.g. a later gate blocked
+    # before the story's own commit landed) never had its status flipped to
+    # "completed" or "failed", so it silently survived every reset as
+    # "in-progress" — a transient state that must never persist past a
+    # --reset boundary.
     if [ -n "${PHASE:-}" ]; then
         # Scoped reset: only touch stories in implementationOrder[PHASE]
         jq --arg phase "$PHASE" '
           (.implementationOrder[$phase] // []) as $ids |
           (.stories[]? | select(.id as $id | $ids | index($id) != null)
-            | select(.completed == true or .status == "failed"))
+            | select(.completed == true or .status == "failed" or .status == "in-progress"))
             |= (.completed = false | .status = "pending") |
           (.phases[]?.stories[]? | select(.id as $id | $ids | index($id) != null)
-            | select(.completed == true or .status == "failed"))
+            | select(.completed == true or .status == "failed" or .status == "in-progress"))
             |= (.completed = false | .status = "pending")' \
             "$PRD_FILE" > "$local_tmp" && mv "$local_tmp" "$PRD_FILE"
         success "Stories reset to pending (phase: $PHASE)"
     else
         # Global reset: no phase scoping
-        jq '(.stories[]? | select(.completed == true or .status == "failed")) |= (.completed = false | .status = "pending") |
-            (.phases[]?.stories[]? | select(.completed == true or .status == "failed")) |= (.completed = false | .status = "pending")' \
+        jq '(.stories[]? | select(.completed == true or .status == "failed" or .status == "in-progress")) |= (.completed = false | .status = "pending") |
+            (.phases[]?.stories[]? | select(.completed == true or .status == "failed" or .status == "in-progress")) |= (.completed = false | .status = "pending")' \
             "$PRD_FILE" > "$local_tmp" && mv "$local_tmp" "$PRD_FILE"
         success "Stories reset to pending (all phases)"
     fi
@@ -3870,25 +3929,25 @@ main_stories=$(jq -r --arg phase "$PHASE" \
     '(.implementationOrder[$phase] // []) as $ids |
      .stories[] | select(.id as $id | $ids | index($id)) |
      select(.status != "deprecated") |
-     select((.agentGroup == "main" or .agentGroup == "preflight") and .completed == false) | .id' "$PRD_FILE")
+     select((.agentGroup == "main" or .agentGroup == "preflight") and (.completed // false) == false) | .id' "$PRD_FILE")
 
 primary_stories=$(jq -r --arg phase "$PHASE" \
     '(.implementationOrder[$phase] // []) as $ids |
      .stories[] | select(.id as $id | $ids | index($id)) |
      select(.status != "deprecated") |
-     select(.agentGroup == "primary" and .completed == false) | .id' "$PRD_FILE")
+     select(.agentGroup == "primary" and (.completed // false) == false) | .id' "$PRD_FILE")
 
 independent_stories=$(jq -r --arg phase "$PHASE" \
     '(.implementationOrder[$phase] // []) as $ids |
      .stories[] | select(.id as $id | $ids | index($id)) |
      select(.status != "deprecated") |
-     select(.agentGroup == "independent" and .completed == false) | .id' "$PRD_FILE")
+     select(.agentGroup == "independent" and (.completed // false) == false) | .id' "$PRD_FILE")
 
 review_stories=$(jq -r --arg phase "$PHASE" \
     '(.implementationOrder[$phase] // []) as $ids |
      .stories[] | select(.id as $id | $ids | index($id)) |
      select(.status != "deprecated") |
-     select(.agentRole == "review-agent" and .completed == false) | .id' "$PRD_FILE")
+     select(.agentRole == "review-agent" and (.completed // false) == false) | .id' "$PRD_FILE")
 
 # Apply dependency-graph ordering within each group
 main_stories=$(topo_sort_stories "$main_stories")
@@ -5345,7 +5404,7 @@ _main_stories_current=$(jq -r --arg phase "$PHASE" \
     '(.implementationOrder[$phase] // []) as $ids |
      .stories[] | select(.id as $id | $ids | index($id)) |
      select(.status != "deprecated") |
-     select(.completed == false) |
+     select((.completed // false) == false) |
      select(.agentRole != "review-agent") |
      select((.agentGroup // "main") as $g | $g == "main" or $g == "preflight" or $g == "primary" or $g == "independent") |
      [.id, (.agentGroup // "main")] | @tsv' \
@@ -5582,29 +5641,39 @@ else
 fi
 
 # ──────────────────────────────────────────────
-# Step 1.5: Auto-commit any main-branch story output so worktrees inherit it.
-# Real agents may commit via git tools, but mock/epam-run agents only write files.
-# Without this commit, worktrees created from HEAD lack the main-branch deliverables,
-# causing tests that import shared code (e.g. greet.ts) to fail in the worktrees.
+# Step 1.5: Auto-commit main-branch story output.
+# Real agents may commit via git tools, but mock/epam-run agents only write files,
+# and `_run_one_main_story` itself never commits (only the worktree-lane loop in
+# claude.sh calls commit_completed_story()). Without this, a main-branch story's
+# real output — including a brownfield fix's test file — never lands in git.
 #
 # Live bug (2026-07-22): this fired whenever there were worktree-bound
 # stories AND the tree was dirty — with NO check that Step 8 actually ran
 # any main-branch stories. A parallel-only run (all stories routed to
 # worktrees, zero in the main lane — "no stories in lane" logged) still has
 # a dirty tree from incidental pipeline writes (CodeGraph indexing,
-# dependency-check manifests), which is NOT genuine story output. This
-# committed that noise directly onto the shared baseline branch (develop)
-# with zero branch protection — worse than the Step 8 story-commit bug this
-# session already fixed via ensure_story_branch, since there's no dedicated
-# branch involved here at all. Gate on `$main_stories` actually being
-# non-empty (Step 8's own condition, line ~4062) — if Step 8 had nothing to
-# run, any dirtiness here is pipeline noise, not a deliverable to preserve.
+# dependency-check manifests), which is NOT genuine story output. That fix
+# gated on `$main_stories` also being non-empty, but LEFT the worktree-
+# existence check in place as an ADDITIONAL required condition — which
+# introduced a second, opposite bug: a phase with ONLY main-branch stories
+# and ZERO worktree lanes (e.g. writer-retest.sh's single-story PRD) never
+# gets committed AT ALL, no matter how real Step 8's output is. `implement_story`
+# marks the story `completed:true` in the PRD regardless, so nothing downstream
+# ever notices the missing commit — until the brownfield repro-gate (which
+# diffs committed HEAD, never the working tree) permanently blocks with
+# "no test file accompanies the change", because nothing was ever committed
+# for it to see. Found live 2026-08-02 (AMSD-2041 Writer Retest: 3 codelines,
+# all agentGroup=main, zero worktree lanes — every retry re-implemented the
+# same fix, never landed it, forever).
+#
+# Fix: the worktree-existence check was never actually about whether Step 8
+# needs a commit — drop it. Gate on `$main_stories` non-empty (Step 8's own
+# condition, line ~4062) and a dirty tree; that's the complete, correct
+# signal regardless of whether any worktree lane also exists this phase.
 # When $main_stories WAS non-empty, the tree is already on the last story's
 # ensure_story_branch branch (set inside the Step 8 loop above), so this
 # commit correctly lands there too — no additional branch logic needed here.
-_has_worktree_stories=false
-{ [ -n "${primary_stories:-}" ] || [ -n "${independent_stories:-}" ]; } && _has_worktree_stories=true
-if [ "$_has_worktree_stories" = true ] && [ -n "${main_stories:-}" ] && \
+if [ -n "${main_stories:-}" ] && \
    [ -n "$(git -C "$PROJECT_ROOT" status --porcelain 2>/dev/null)" ]; then
     step_emit "9" "running" "Step 9: Auto-commit"
     log "Step 9: Auto-committing main-branch deliverables before worktree creation..."
@@ -5617,10 +5686,43 @@ if [ "$_has_worktree_stories" = true ] && [ -n "${main_stories:-}" ] && \
         error "Step 9: Refusing to auto-commit — unstaging (SECRET_SCAN)"
         git -C "$PROJECT_ROOT" reset 2>/dev/null || true
     else
-        git -C "$PROJECT_ROOT" commit -m "chore: auto-commit main-branch story output for phase $PHASE" \
-            2>/dev/null \
-            && { step_emit "9" "pass" "Step 9: Auto-commit"; success "Step 9: Committed main-branch output"; } \
-            || { step_emit "9" "skip" "Step 9: Auto-commit" "nothing to commit"; warning "Step 9: Nothing new to commit (working tree already clean)"; }
+        # Ticket-ID-first message — same commitlint-compatibility fix as
+        # commit_completed_story()'s 2026-08-02 fix (lib/git-ops.sh) and
+        # brownfield-repro-test-writer.sh's identical issue found the same
+        # day. Leads with the first main-branch story's ID (usually the
+        # only one) rather than a bare "chore:" prefix, which a client
+        # repo's commitlint (e.g. commitlint-plugin-jira-rules) can reject
+        # outright for having no ticket ID as the first token.
+        _step9_commit_lead="$(printf '%s\n' "$main_stories" | head -1)"
+        _step9_commit_msg="${_step9_commit_lead}: auto-commit main-branch output (phase $PHASE)"
+        # Real stderr is captured (not discarded) instead of collapsing every
+        # failure into "nothing to commit" — a client repo's commit-msg hook
+        # rejecting the message for its OWN reason (any reason; this
+        # pipeline cannot and should not hardcode a specific hook's rule set
+        # per project) previously looked identical to "the tree was already
+        # clean", which is actively misleading: files remain staged in the
+        # first case but not the second. Distinguish them by checking
+        # whether anything is still staged after the failed attempt.
+        # set +e/-e: this whole script runs under `set -e` (line 12) — a bare
+        # `_step9_commit_output=$(failing_cmd)` assignment would abort the
+        # script immediately on a real commit failure, silently
+        # reintroducing the exact defect this capture exists to fix (same
+        # guard commit_completed_story() uses, lib/git-ops.sh).
+        set +e
+        _step9_commit_output=$(git -C "$PROJECT_ROOT" commit -m "$_step9_commit_msg" 2>&1)
+        _step9_commit_rc=$?
+        set -e
+        if [ "$_step9_commit_rc" -eq 0 ]; then
+            step_emit "9" "pass" "Step 9: Auto-commit"
+            success "Step 9: Committed main-branch output"
+        elif [ -n "$(git -C "$PROJECT_ROOT" diff --cached --name-only 2>/dev/null)" ]; then
+            step_emit "9" "fail" "Step 9: Auto-commit" "commit rejected"
+            error "Step 9: Commit failed — work remains staged/uncommitted. Output:"
+            error "$_step9_commit_output"
+        else
+            step_emit "9" "skip" "Step 9: Auto-commit" "nothing to commit"
+            warning "Step 9: Nothing new to commit (working tree already clean)"
+        fi
     fi
 else
     if [ -z "${main_stories:-}" ]; then
@@ -7022,6 +7124,21 @@ _review_escalated=0
 while true; do
     if "$SCRIPT_DIR/team-lead-review.sh" "$PHASE"; then
         success "Team Lead code review APPROVED for phase '$PHASE' (cycle $_review_cycle)"
+        # Clear a reviewStatus:"escalated" tag left by an EARLIER cycle of
+        # this same phase-retry sequence — found live 2026-08-02 (Writer
+        # Retest run): a phase-level retry (after an unrelated later gate
+        # failure) re-ran Step 3.6 from scratch; its first pass escalated
+        # after 2 cycles (tagging reviewStatus:escalated), a LATER retry's
+        # review then genuinely APPROVED the same story, but the hard-block
+        # check below still found the stale tag from the earlier escalation
+        # and blocked a change the reviewer HAD approved. Nothing ever
+        # cleared it on a subsequent real approval — scoped to this phase's
+        # own story IDs, same scoping the hard-block check itself uses.
+        _tmp_prd_clear="$(mktemp)"; jq --arg phase "$PHASE" \
+            '(.implementationOrder[$phase] // []) as $ids |
+             .stories |= map(if (.id as $id | $ids | index($id) != null) and .reviewStatus == "escalated"
+                              then . + {reviewStatus: null} else . end)' \
+            "$PRD_FILE" > "$_tmp_prd_clear" 2>/dev/null && mv "$_tmp_prd_clear" "$PRD_FILE" || rm -f "$_tmp_prd_clear"
         _emit_agent complete "review-agent" "Code review approved"
         break
     fi
@@ -7037,6 +7154,21 @@ while true; do
             mkdir -p "$LOG_DIR/kb-scratchpad" 2>/dev/null || true
             jq -r '.issues[]? | select((.severity // "") == "blocker") | "- " + (.description // "")' "$_fb" \
                 >> "$LOG_DIR/kb-scratchpad/KB-review-agent.md" 2>/dev/null || true
+            # Also persist the SAME lesson to the WRITER's own profile (found
+            # live, 2026-08-02: only the reviewer's own KB got this — nothing
+            # ever told the WRITER across runs, so a story that repeatedly
+            # fails review for the identical reason had no accumulating
+            # guidance, unlike FailureAnalyst's tsc/test-failure diagnoses,
+            # which already persist via _persist_skill_note_simple's stricter
+            # cousin in claude.sh). Gated through the same deterministic
+            # anti-pattern check (lib/story-guards.sh) for consistency/safety.
+            _fb_role=$(jq -r --arg id "$_fb_story" '.stories[] | select(.id == $id) | .agentRole // ""' "$PRD_FILE" 2>/dev/null)
+            _fb_blockers=$(jq -r '.issues[]? | select((.severity // "") == "blocker") | "- " + (.description // "")' "$_fb" 2>/dev/null)
+            if [ -n "$_fb_role" ] && [ -n "$_fb_blockers" ]; then
+                _persist_skill_note_simple "$AGENT_PROFILES_FILE" "$_fb_role" \
+                    "Review REPEATEDLY rejected ${_fb_story} (unresolved after ${_review_max_cycles} cycles) for:
+${_fb_blockers}"
+            fi
             _tmp_prd="$(mktemp)"; jq --arg id "$_fb_story" \
                 '(.stories[] | select(.id == $id)) |= (. + {reviewStatus: "escalated"})' \
                 "$PRD_FILE" > "$_tmp_prd" 2>/dev/null && mv "$_tmp_prd" "$PRD_FILE" || rm -f "$_tmp_prd"
@@ -9342,15 +9474,17 @@ for m in re.finditer(r'\{[^{}]*\"story_id\"[^{}]*\}', txt, re.DOTALL):
                     # that no single story "owns" on paper. But every file that
                     # was ever actually written IS attributable, deterministically,
                     # via git: post-story commits always use the exact message
-                    # "story: complete <id> (N file(s))" (see claude.sh's
-                    # post-story commit step). Ask git who last touched the
-                    # finding's file instead of asking the LLM to guess.
+                    # "<id>: story complete (N file(s))" — ticket ID leads,
+                    # colon-separated, to satisfy commit-message linters that
+                    # require it there (see claude.sh's post-story commit
+                    # step). Ask git who last touched the finding's file
+                    # instead of asking the LLM to guess.
                     local _gf_file
                     _gf_file=$(grep -o '"file"[[:space:]]*:[[:space:]]*"[^"]*"' "$_glog" 2>/dev/null | head -1 | sed -E 's/.*:[[:space:]]*"([^"]*)"/\1/')
                     if [ -n "$_gf_file" ] && [ -f "$_gf_file" ]; then
                         local _gf_commit_subject
                         _gf_commit_subject=$(git -C "$PROJECT_ROOT" log --follow -1 --format=%s -- "$_gf_file" 2>/dev/null || echo "")
-                        _story_id=$(echo "$_gf_commit_subject" | grep -oP 'story: complete \K\S+' 2>/dev/null || echo "")
+                        _story_id=$(echo "$_gf_commit_subject" | grep -oP '^\K[^:]+(?=: story complete)' 2>/dev/null || echo "")
                     fi
                     if [ -z "$_story_id" ]; then
                         warning "  [gate-finding-analyst] No grounded finding for ${_glabel} — skipping remediation for this gate"

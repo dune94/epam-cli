@@ -92,6 +92,6 @@
   "costControls": {
     "maxToolCallsPerStory": 300,
     "storyBudgetWarningUsd": 3.50,
-    "storyBudgetHardLimitUsd": 8.00
+    "storyBudgetHardLimitUsd": 15.00
   }
 }

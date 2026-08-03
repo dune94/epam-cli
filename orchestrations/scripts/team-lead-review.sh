@@ -421,7 +421,7 @@ $STORY_DIFF
 \`\`\`
 
 PROJECT ROOT: $PROJECT_ROOT
-$([ -n "$_review_codegraph_tool" ] && printf '\nEXISTING-CODE TOOL (use the Bash tool to check whether a helper already exists before accepting hand-rolled logic):\n  PROJECT_ROOT="%s" bash "%s" helpers <domain nouns>   # existing util/parser/formatter (symbol + import path)\n  PROJECT_ROOT="%s" bash "%s" query <SymbolName>        # exact definition site\n' "$PROJECT_ROOT" "$_review_codegraph_tool" "$PROJECT_ROOT" "$_review_codegraph_tool" || true)
+$([ -n "$_review_codegraph_tool" ] && printf '\nEXISTING-CODE TOOL (call the codegraph_query tool directly, NOT via Bash, to check whether a helper already exists before accepting hand-rolled logic):\n  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter (symbol + import path)\n  codegraph_query(mode="query", args="<SymbolName>")        # exact definition site\n' || true)
 
 Review the implementation against each acceptance criterion above.
 Check: TypeScript strict compliance, test coverage, error handling, security (OWASP).
@@ -431,6 +431,24 @@ CONCISION & REUSE (blocker-level checks):
 - If a MORE CONCISE change (fewer lines) would achieve the same acceptance criteria, request changes and name the smaller change. Fewer lines of code is always better.
 - If the diff hand-rolls logic that an EXISTING function/helper already provides (verify with the tool above), that is a 'blocker' — request changes and name the helper to reuse instead.
 - Do NOT approve an over-engineered fix just because it satisfies the AC wording.
+
+TEST COVERAGE VERIFICATION (grounded, not a visual skim — found live 2026-08-03,
+AMSD-2041: the reviewer claimed 2 of 3 required test scenarios were missing,
+TWICE in a row, against a diff that unambiguously contained all 3 as clearly-
+named \`it(...)\` blocks — a real, reproducible failure to verify a claim the
+tools below could have confirmed in one call):
+- Before flagging ANY acceptance-criteria test scenario as missing or absent, use
+  the search tool to grep the diff above (or read_file on the test file under
+  PROJECT_ROOT) for an \`it(\`/\`test(\` block whose name or body plausibly covers
+  that scenario. A large diff is easy to skim past a matching block — search for
+  it, do not judge from a visual read alone.
+- If your search finds a plausible match, do NOT flag that scenario as missing —
+  if the test's assertions are wrong or incomplete, say so specifically (quote
+  the test name and what it fails to assert); 'missing' and 'inadequate' are
+  different findings and must not be conflated.
+- If your search finds nothing, name the exact search you ran (tool + query) in
+  the issue description, so a genuinely absent test is distinguishable from an
+  unverified guess.
 Do NOT read from external URLs.
 $([ -n "$_review_kb" ] && printf '\nLEARNED REVIEW RULES (from prior runs — apply these):\n%s\n' "$_review_kb" || true)
 

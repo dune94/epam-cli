@@ -44,3 +44,21 @@
 - All 42 tests must pass before any PR: `~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run`
 - TypeScript must be clean: `npx tsc --noEmit`
 - Do not add tests for internal implementation details — test public behavior and contract
+
+### Test the code AND the impact of the code
+- **Execute the unit and assert on the artifact it produces** — the rendered prompt,
+  the written file, the emitted JSON. Never assert only that a string appears in a
+  source file. A `readFileSync(script)` + `toMatch(/name/)` test passes on a comment,
+  a dead branch, or a deleted call site, and proves nothing about behavior.
+- Shell functions are testable: extract the function body and run it under
+  `spawnSync('bash', ...)` with fixtures. This is the established pattern in
+  `test/unit/orchestration/`.
+- **Write the negative assertion.** Presence tests ("is it wired?") cannot catch
+  over-inclusion ("what else got in?"). Prompt leaks are always over-inclusion.
+- **Guard against vacuous passes.** If the harness renders nothing, every
+  `not.toContain` passes while proving nothing — assert the artifact is non-empty
+  and did not fall through to a fallback branch.
+- **Mutation-verify**, with an md5 check before/after: a mutation that did not
+  actually apply proves nothing.
+- Anything the pipeline generates must be written to disk at generation time, in a
+  location teardown/`pre-run-reset` cannot delete. Un-persisted output is a defect.

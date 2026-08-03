@@ -1653,6 +1653,46 @@ EOF
 }
 
 # Build prompt for Claude to implement a story
+# WHICH LANE AM I? A story may SPAN codelines, and _filtered_prd() copies such a story
+# WHOLE into every lane's PRD — .codeline/.codelines are left untouched — so the story
+# itself cannot say which lane is executing it. The only per-lane signal the orchestrator
+# writes is project.outputDir (set to that lane's checkout), so the lane name is recovered
+# by matching it back against project.outputDirs[]. Single-codeline PRDs carry no
+# outputDirs: the result is empty and every caller degrades to its previous behaviour.
+_current_lane() {
+    local _story_json="${1:-}"
+    local _l="${CODELINE_NAME:-}"
+    if [ -z "$_l" ] && [ -n "${PRD_FILE:-}" ] && [ -f "${PRD_FILE}" ]; then
+        _l=$(jq -r '.project as $p | (($p.outputDirs // []) | map(select(.path == $p.outputDir)) | .[0].codeline) // empty' \
+            "$PRD_FILE" 2>/dev/null)
+    fi
+    [ -n "$_l" ] || _l=$(echo "$_story_json" | jq -r '.codeline // empty' 2>/dev/null)
+    printf '%s' "$_l"
+}
+
+# Render technicalNotes for ONE lane.
+#
+# technicalNotes is rendered by dumping every key, so ANY per-codeline structure stored
+# there reaches the agent in full — every lane's paths, and the fact that they diverge.
+# Live 2026-08-03: a per-codeline manifest stored here handed a gotransit-scoped writer
+# the maps for all three repos; it went cross-repo and one call billed in=1,916,632
+# out=40,859 ($0.624, 11.58 min) producing nothing.
+#
+# The projection is SHAPE-based, never keyed to a field name: any object that has the
+# current lane as a key collapses to that lane's entry. Excluding one known field by name
+# would leave the next per-codeline field leaking, in a different file, forever.
+_render_technical_notes() {
+    local _notes="${1:-}" _cl="${2:-}"
+    if [ -z "$_notes" ]; then echo "None specified"; return 0; fi
+    echo "$_notes" | jq -r --arg cl "$_cl" '
+        to_entries
+        | map(if (.value | type) == "object" and ($cl | length) > 0 and (.value | has($cl))
+              then {key: .key, value: (.value[$cl])}
+              else . end)
+        | map("- \(.key): \(.value)")
+        | join("\n")' 2>/dev/null || echo "None specified"
+}
+
 build_implementation_prompt() {
     local story_id=$1
     local story_json=$(get_story_details "$story_id")
@@ -1661,6 +1701,8 @@ build_implementation_prompt() {
     local description=$(echo "$story_json" | jq -r '.description')
     local acceptance_criteria=$(echo "$story_json" | jq -r '.acceptanceCriteria | join("\n- ")')
     local technical_notes=$(echo "$story_json" | jq -r '.technicalNotes // empty')
+    local _lane=$(_current_lane "$story_json")
+
     local files=$(echo "$story_json" | jq -r '.technicalNotes.files // [] | join(", ")')
     local dependencies=$(echo "$story_json" | jq -r \
         '(.dependencies // .technicalNotes.dependsOn // []) | join(", ")')
@@ -2227,7 +2269,7 @@ $([ -n "$tc_mock_strategy" ] && printf '\n## Mock Strategy\n%s\n' "$tc_mock_stra
 $([ -n "$tc_banned" ] && printf '\n## Banned Patterns (must NOT appear in your file)\n%s\n' "$tc_banned" || true)
 
 ## Technical Notes
-$([ -n "$technical_notes" ] && echo "$technical_notes" | jq -r 'to_entries | map("- \(.key): \(.value)") | join("\n")' 2>/dev/null || echo "None specified")
+$(_render_technical_notes "$technical_notes" "$_lane")
 $([ -n "$existing_file_contents" ] && printf '\n## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)\n%s\n' "$existing_file_contents" || true)
 
 ## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
@@ -2269,6 +2311,7 @@ build_generator_prompt() {
     local description=$(echo "$story_json" | jq -r '.description')
     local acceptance_criteria=$(echo "$story_json" | jq -r '.acceptanceCriteria | join("\n- ")')
     local technical_notes=$(echo "$story_json" | jq -r '.technicalNotes // empty')
+    local _lane=$(_current_lane "$story_json")
     local files=$(echo "$story_json" | jq -r '.technicalNotes.files // [] | join(", ")')
     local dependencies=$(echo "$story_json" | jq -r \
         '(.dependencies // .technicalNotes.dependsOn // []) | join(", ")')
@@ -2291,7 +2334,7 @@ $description
 - $acceptance_criteria
 
 ## Technical Notes
-$([ -n "$technical_notes" ] && echo "$technical_notes" | jq -r 'to_entries | map("- \(.key): \(.value)") | join("\n")' 2>/dev/null || echo "None specified")
+$(_render_technical_notes "$technical_notes" "$_lane")
 
 ## Files to Create
 $files

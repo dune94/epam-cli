@@ -3855,27 +3855,6 @@ else
     warning "[orch] this run will NOT be resumable — a later failure costs a full spec pass to retry."
 fi
 
-# ── Pause before implementation ──────────────────────────────────────────────
-# EPAM_PAUSE_AFTER_SPEC=1 stops here, with everything reviewed and persisted, so the
-# implementation stage can be started deliberately (and repeatedly) against a fixed,
-# inspectable input rather than a freshly re-derived one.
-if should_pause_at post-spec; then
-    echo ""
-    echo -e "${GREEN}╔════════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║  PAUSED — spec pass complete, implementation NOT started           ║${NC}"
-    echo -e "${GREEN}╚════════════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
-    echo -e "  RUN NUMBER:  ${GREEN}${ORCH_RUN_ID}${NC}"
-    echo -e "  Phase:       ${PHASE}"
-    echo -e "  Stories:     $(jq -r '(.stories // []) | length' "$PRD_FILE" 2>/dev/null || echo '?')"
-    echo -e "  Artefacts:   ${_ckpt_path:-<not saved>}"
-    echo ""
-    echo -e "  Resume implementation with:"
-    echo -e "    ${GREEN}EPAM_RESUME_RUN=${ORCH_RUN_ID}${NC} <your launcher>"
-    echo ""
-    step_emit "1" "done" "Step 1: Specification pass" "paused after spec (EPAM_PAUSE_AFTER_SPEC)"
-    exit 0
-fi
 
 # ── Infra test gate ──────────────────────────────────────────────────────────
 # Block any phase that depends on infra_test (anything except infra_test itself)
@@ -5556,7 +5535,7 @@ if [ -n "$main_stories" ]; then
         else
             warning "[orch] could not save the pre-writer checkpoint: ${_ckpt_path}"
         fi
-        if should_pause_at pre-writer; then
+        if should_pause_before_writer; then
             echo ""
             echo -e "${GREEN}╔════════════════════════════════════════════════════════════════════╗${NC}"
             echo -e "${GREEN}║  PAUSED — inputs ready, writer NOT started                         ║${NC}"
@@ -5570,7 +5549,7 @@ if [ -n "$main_stories" ]; then
             echo -e "  Resume implementation with:"
             echo -e "    ${GREEN}EPAM_RESUME_RUN=${ORCH_RUN_ID}${NC} <your launcher>"
             echo ""
-            step_emit "8" "skip" "Step 8: Main-branch stories" "paused before the writer (EPAM_PAUSE_AT=pre-writer)"
+            step_emit "8" "skip" "Step 8: Main-branch stories" "paused before the writer (EPAM_PAUSE_BEFORE_WRITER)"
             exit 0
         fi
 

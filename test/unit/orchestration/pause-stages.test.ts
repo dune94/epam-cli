@@ -86,66 +86,55 @@ describe('a checkpoint records WHICH stage it was taken at', () => {
   });
 });
 
-describe('should_pause_at — which stage stops the run', () => {
+describe('ONE pause setting: EPAM_PAUSE_BEFORE_WRITER', () => {
   const w = () => workspace();
 
-  it('EPAM_PAUSE_AT=spec pauses at spec, not at pre-writer', () => {
-    const ws = w();
-    expect(sh('should_pause_at spec && echo STOP || echo GO', ws, { EPAM_PAUSE_AT: 'spec' }).out)
-      .toContain('STOP');
-    expect(sh('should_pause_at pre-writer && echo STOP || echo GO', ws, { EPAM_PAUSE_AT: 'spec' }).out)
-      .toContain('GO');
-  });
-
-  it('EPAM_PAUSE_AT=pre-writer pauses before the writer, not at spec', () => {
-    const ws = w();
-    expect(sh('should_pause_at pre-writer && echo STOP || echo GO', ws, { EPAM_PAUSE_AT: 'pre-writer' }).out)
-      .toContain('STOP');
+  it('stops before the writer when set', () => {
     expect(
-      sh('should_pause_at spec && echo STOP || echo GO', ws, { EPAM_PAUSE_AT: 'pre-writer' }).out,
-      'pausing before the writer must NOT also stop at the spec pass — that would never reach the writer',
-    ).toContain('GO');
-  });
-
-  it('unset means never pause — a normal run is unaffected', () => {
-    const ws = w();
-    for (const stage of ['spec', 'pre-writer']) {
-      expect(sh(`should_pause_at ${stage} && echo STOP || echo GO`, ws).out).toContain('GO');
-    }
-  });
-
-  it('BACK-COMPAT: EPAM_PAUSE_AFTER_SPEC=1 still pauses at spec', () => {
-    const ws = w();
-    expect(
-      sh('should_pause_at spec && echo STOP || echo GO', ws, { EPAM_PAUSE_AFTER_SPEC: '1' }).out,
-      'the already-proven flag was silently broken',
+      sh('should_pause_before_writer && echo STOP || echo GO', w(), { EPAM_PAUSE_BEFORE_WRITER: '1' }).out,
     ).toContain('STOP');
   });
 
-  it('BACK-COMPAT: the old flag accepts any truthy spelling', () => {
-    const ws = w();
-    for (const v of ['1', 'true', 'yes', 'ON']) {
-      expect(sh('should_pause_at spec && echo STOP || echo GO', ws, { EPAM_PAUSE_AFTER_SPEC: v }).out)
-        .toContain('STOP');
+  it('does NOT stop when unset — a normal run is unaffected', () => {
+    expect(sh('should_pause_before_writer && echo STOP || echo GO', w()).out).toContain('GO');
+  });
+
+  it('accepts any truthy spelling', () => {
+    for (const v of ['1', 'true', 'yes', 'ON', 'On']) {
+      expect(
+        sh('should_pause_before_writer && echo STOP || echo GO', w(), { EPAM_PAUSE_BEFORE_WRITER: v }).out,
+        `EPAM_PAUSE_BEFORE_WRITER=${v} did not pause`,
+      ).toContain('STOP');
     }
   });
 
-  it('an unknown stage name never pauses — a typo must not silently stop the pipeline', () => {
-    const ws = w();
-    expect(
-      sh('should_pause_at spec && echo STOP || echo GO', ws, { EPAM_PAUSE_AT: 'sepc' }).out,
-      'a misspelled stage silently changed behaviour somewhere',
-    ).toContain('GO');
+  it('treats falsey spellings as no pause', () => {
+    for (const v of ['', '0', 'false', 'no', 'off']) {
+      expect(
+        sh('should_pause_before_writer && echo STOP || echo GO', w(), { EPAM_PAUSE_BEFORE_WRITER: v }).out,
+        `EPAM_PAUSE_BEFORE_WRITER=${v} paused when it should not`,
+      ).toContain('GO');
+    }
   });
 
-  it('rejects an unrecognised EPAM_PAUSE_AT loudly rather than ignoring it', () => {
-    const ws = w();
-    const r = sh('should_pause_at spec; echo "rc=$?"', ws, { EPAM_PAUSE_AT: 'nonsense' });
-    expect(
-      r.out,
-      'a typo in EPAM_PAUSE_AT must be reported — silently never pausing is how an ' +
-        'operator waits forever for a pause that will not come',
-    ).toMatch(/unknown pause stage|nonsense/i);
+  /**
+   * THE OLD SETTINGS ARE GONE. Two pause points meant a run could stop somewhere the
+   * operator did not intend, and the spec-pass pause stops before the CPA, skill
+   * assessment and detective have run — so its checkpoint holds none of what the writer
+   * actually consumes. One setting, one place.
+   */
+  it('the removed spec-pass settings no longer pause anything', () => {
+    for (const env of [{ EPAM_PAUSE_AFTER_SPEC: '1' }, { EPAM_PAUSE_AT: 'spec' }]) {
+      expect(
+        sh('should_pause_before_writer && echo STOP || echo GO', w(), env).out,
+        `${JSON.stringify(env)} still influences pausing — there must be exactly one setting`,
+      ).toContain('GO');
+    }
+  });
+
+  it('no pause helper other than the single one is exported', () => {
+    const r = sh('type should_pause_at >/dev/null 2>&1 && echo PRESENT || echo GONE', w());
+    expect(r.out, 'a second pause entry point still exists').toContain('GONE');
   });
 });
 

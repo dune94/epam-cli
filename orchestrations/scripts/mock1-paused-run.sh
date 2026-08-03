@@ -8,7 +8,8 @@
 # This script is the workflow:
 #
 #   1. START — prints the RUN NUMBER immediately, before any work, then runs the real
-#      pipeline up to the end of the spec pass and STOPS. It does not resume. It does not
+#      pipeline up to the point just BEFORE the writer and STOPS. Everything the writer
+#      consumes is settled by then. It does not resume. It does not
 #      ask. It exits and leaves the checkpoint on disk.
 #   2. RESUME — a separate, later invocation, given that run number, starts at
 #      implementation. Repeatable: the same run number can be resumed as often as needed.
@@ -18,7 +19,7 @@
 # the same codeline it paused against.
 #
 # Usage:
-#   mock1-paused-run.sh                 # start; pauses after the spec pass
+#   mock1-paused-run.sh                 # start; pauses just before the writer
 #   mock1-paused-run.sh --resume <id>   # continue that run at implementation
 #   mock1-paused-run.sh --list          # run numbers that can be resumed
 
@@ -122,7 +123,7 @@ echo "════════════════════════�
 if [ -n "$RESUME_ID" ]; then
   echo "  mock1-paused — RESUMING at implementation"
 else
-  echo "  mock1-paused — STARTING (will stop after the spec pass)"
+  echo "  mock1-paused — STARTING (will stop just before the writer)"
 fi
 echo "  RUN NUMBER:  ${ORCH_RUN_ID}"
 echo "  Workspace:   ${WORKSPACE}"
@@ -259,9 +260,9 @@ export ORCH_GATE_MODEL="z-ai/glm-5.1"
 
 if [ -n "$RESUME_ID" ]; then
   export EPAM_RESUME_RUN="$ORCH_RUN_ID"
-  unset EPAM_PAUSE_AFTER_SPEC
+  unset EPAM_PAUSE_BEFORE_WRITER
 else
-  export EPAM_PAUSE_AFTER_SPEC=1
+  export EPAM_PAUSE_BEFORE_WRITER=1
 fi
 
 bash "$SCRIPT_DIR/tier3-mock-run.sh" \
@@ -274,7 +275,7 @@ if [ -n "$RESUME_ID" ]; then
   echo "[mock1-paused] greeting now: $(grep -o "return '[^']*'" "$CLONE/src/hello.ts" 2>/dev/null || echo '?')"
 else
   echo "════════════════════════════════════════════════════════════════════"
-  echo "  STOPPED after the spec pass. Nothing else will happen."
+  echo "  STOPPED before the writer. Nothing else will happen."
   echo ""
   echo "  RUN NUMBER:  ${ORCH_RUN_ID}"
   echo "  Checkpoint:  ${RUN_DIR}/checkpoint"

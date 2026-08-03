@@ -284,10 +284,10 @@ describe('a resume is distinguishable from a fresh start', () => {
   it('a resume sets EPAM_RESUME_RUN and clears the pause flag', () => {
     expect(src).toMatch(/export EPAM_RESUME_RUN/);
     expect(src, 'resuming while still asking to pause would stop again immediately')
-      .toMatch(/unset EPAM_PAUSE_AFTER_SPEC/);
+      .toMatch(/unset EPAM_PAUSE_BEFORE_WRITER/);
   });
 
   it('a fresh start sets the pause flag', () => {
-    expect(src).toMatch(/export EPAM_PAUSE_AFTER_SPEC=1/);
+    expect(src).toMatch(/export EPAM_PAUSE_BEFORE_WRITER=1/);
   });
 });

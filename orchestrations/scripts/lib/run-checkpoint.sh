@@ -51,35 +51,18 @@ _is_known_stage() {
     case " $CHECKPOINT_STAGES " in *" ${1:-} "*) return 0 ;; *) return 1 ;; esac
 }
 
-# should_pause_at <stage> — true when the operator asked to stop here.
+# should_pause_before_writer — the ONE pause setting.
 #
-# EPAM_PAUSE_AT names the stage. EPAM_PAUSE_AFTER_SPEC=1 is the original flag and still
-# works: it was proven on a live run and silently breaking it would be worse than the
-# duplication. An unrecognised EPAM_PAUSE_AT is reported rather than ignored — silently
-# never pausing is how an operator ends up waiting for a pause that will never come.
-should_pause_at() {
-    local _stage="${1:-}"
-    # "spec" is accepted as an operator-facing alias for the recorded stage name.
-    [ "$_stage" = "spec" ] && _stage="post-spec"
-
-    local _want="${EPAM_PAUSE_AT:-}"
-    [ "$_want" = "spec" ] && _want="post-spec"
-
-    if [ -n "$_want" ] && ! _is_known_stage "$_want"; then
-        echo "[checkpoint] unknown pause stage '${EPAM_PAUSE_AT}' — expected one of: ${CHECKPOINT_STAGES} (or 'spec')" >&2
-        return 1
-    fi
-
-    if [ -n "$_want" ]; then
-        [ "$_want" = "$_stage" ] && return 0
-        return 1
-    fi
-
-    # Back-compat: the original boolean pauses at the spec pass only.
-    if [ "$_stage" = "post-spec" ] && is_truthy "${EPAM_PAUSE_AFTER_SPEC:-}"; then
-        return 0
-    fi
-    return 1
+# EPAM_PAUSE_BEFORE_WRITER stops the run after the spec pass, CPA pre-pass, skill
+# assessment and detective have all completed, and before any story is written. That is
+# the only point worth stopping at: everything the writer consumes is settled and
+# inspectable, and no code has been generated yet.
+#
+# There is deliberately no second pause point. An earlier stop (after the spec pass) has
+# a checkpoint holding none of what the writer actually consumes, and two settings meant
+# a run could halt somewhere the operator did not intend.
+should_pause_before_writer() {
+    is_truthy "${EPAM_PAUSE_BEFORE_WRITER:-}"
 }
 
 # resume_skip_env <run-id> — emit the env assignments a resume must apply, derived from

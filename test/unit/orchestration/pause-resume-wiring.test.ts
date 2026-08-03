@@ -38,8 +38,9 @@ function block(startAnchor: string, endAnchor: string): string {
 }
 
 const RESUME_BLOCK = () => block('if [ -n "${EPAM_RESUME_RUN:-}" ]; then', 'if [ "$DRY_RUN" = true ]');
-const PAUSE_BLOCK = () =>
-  block('if _ckpt_path=$(save_run_checkpoint', 'exit 0\nfi') + 'exit 0\nfi\n';
+/** The post-spec SAVE. The pause that used to follow it was removed: one setting only. */
+const SAVE_BLOCK = () =>
+  block('if _ckpt_path=$(save_run_checkpoint "$PHASE" 2>&1); then', '# ── Infra test gate');
 
 function workspace() {
   const root = mkdtempSync(join(tmpdir(), 'pauseres-'));
@@ -90,74 +91,40 @@ function runBlock(body: string, w: ReturnType<typeof workspace>, extra: Record<s
   return { status: r.status, out: `${r.stdout || ''}${r.stderr || ''}` };
 }
 
-describe('the checkpoint is saved regardless of pausing', () => {
-  it('saves even when NOT pausing — un-persisted spec output is the violation', () => {
+describe('the spec-pass output is persisted, but does NOT pause', () => {
+  it('saves after the spec pass and CONTINUES — there is only one pause point', () => {
     const w = workspace();
-    const r = runBlock(PAUSE_BLOCK(), w, { EPAM_PAUSE_AFTER_SPEC: '' });
+    const r = runBlock(SAVE_BLOCK(), w, { EPAM_PAUSE_BEFORE_WRITER: '1' });
     expect(
       existsSync(join(w.projectDir, 'runs', '20260803T120000Z', 'checkpoint', 'prd.json')),
-      'a normal run left the spec pass output un-persisted',
+      'the spec pass output was left un-persisted',
     ).toBe(true);
-    expect(r.out, 'a non-paused run must continue into implementation').toContain(
-      'REACHED_IMPLEMENTATION',
-    );
+    expect(
+      r.out,
+      'the run stopped after the spec pass. The only pause point is before the writer — ' +
+        'a spec-pass checkpoint holds none of what the writer consumes.',
+    ).toContain('REACHED_IMPLEMENTATION');
   });
 
-  it('a failed save warns loudly and does not silently continue as if resumable', () => {
+  it('the removed spec-pass flags do not stop it either', () => {
     const w = workspace();
-    const r = runBlock(PAUSE_BLOCK(), w, { EPAM_PROJECT_CONFIG_DIR: '' });
+    for (const env of [{ EPAM_PAUSE_AFTER_SPEC: '1' }, { EPAM_PAUSE_AT: 'spec' }]) {
+      const r = runBlock(SAVE_BLOCK(), w, env);
+      expect(r.out, `${JSON.stringify(env)} still halts the run`).toContain('REACHED_IMPLEMENTATION');
+    }
+  });
+
+  it('a failed save warns loudly rather than pretending the run is resumable', () => {
+    const w = workspace();
+    const r = runBlock(SAVE_BLOCK(), w, { EPAM_PROJECT_CONFIG_DIR: '' });
     expect(r.out).toMatch(/could not save|NOT be resumable/i);
-  });
-});
-
-describe('pausing stops before implementation and reports the run number', () => {
-  it('exits 0 and never reaches implementation', () => {
-    const w = workspace();
-    const r = runBlock(PAUSE_BLOCK(), w, { EPAM_PAUSE_AFTER_SPEC: '1' });
-    expect(r.status).toBe(0);
-    expect(r.out, 'the run continued into implementation despite the pause').not.toContain(
-      'REACHED_IMPLEMENTATION',
-    );
-  });
-
-  it('prints the RUN NUMBER the operator needs', () => {
-    const w = workspace();
-    const r = runBlock(PAUSE_BLOCK(), w, { EPAM_PAUSE_AFTER_SPEC: '1' });
-    expect(r.out).toContain('20260803T120000Z');
-    expect(r.out).toMatch(/RUN NUMBER/i);
-  });
-
-  it('tells the operator exactly how to resume', () => {
-    const w = workspace();
-    const r = runBlock(PAUSE_BLOCK(), w, { EPAM_PAUSE_AFTER_SPEC: '1' });
-    expect(r.out).toContain('EPAM_RESUME_RUN=20260803T120000Z');
-  });
-
-  it('accepts any truthy spelling of the flag, not just "1"', () => {
-    for (const v of ['1', 'true', 'yes', 'TRUE']) {
-      const w = workspace();
-      const r = runBlock(PAUSE_BLOCK(), w, { EPAM_PAUSE_AFTER_SPEC: v });
-      expect(r.out, `EPAM_PAUSE_AFTER_SPEC=${v} did not pause`).not.toContain(
-        'REACHED_IMPLEMENTATION',
-      );
-    }
-  });
-
-  it('does NOT pause when the flag is unset or falsey', () => {
-    for (const v of ['', '0', 'false', 'no']) {
-      const w = workspace();
-      const r = runBlock(PAUSE_BLOCK(), w, { EPAM_PAUSE_AFTER_SPEC: v });
-      expect(r.out, `EPAM_PAUSE_AFTER_SPEC=${v} paused when it should not`).toContain(
-        'REACHED_IMPLEMENTATION',
-      );
-    }
   });
 });
 
 describe('resuming starts at implementation, not at the beginning', () => {
   function withCheckpoint() {
     const w = workspace();
-    runBlock(PAUSE_BLOCK(), w, { EPAM_PAUSE_AFTER_SPEC: '1' });
+    runBlock(SAVE_BLOCK(), w, {});
     return w;
   }
 
@@ -291,23 +258,23 @@ describe('the pre-writer pause stops before any story is written', () => {
     return { status: r.status, out: `${r.stdout || ''}${r.stderr || ''}` };
   }
 
-  it('EPAM_PAUSE_AT=pre-writer stops before the writer runs', () => {
+  it('EPAM_PAUSE_BEFORE_WRITER stops before the writer runs', () => {
     const w = workspace();
-    const r = runPreWriter(w, { EPAM_PAUSE_AT: 'pre-writer' });
+    const r = runPreWriter(w, { EPAM_PAUSE_BEFORE_WRITER: '1' });
     expect(r.status).toBe(0);
     expect(r.out, 'the writer ran despite the pre-writer pause').not.toContain('WRITER_STARTED');
   });
 
   it('prints the run number and the resume command', () => {
     const w = workspace();
-    const r = runPreWriter(w, { EPAM_PAUSE_AT: 'pre-writer' });
+    const r = runPreWriter(w, { EPAM_PAUSE_BEFORE_WRITER: '1' });
     expect(r.out).toMatch(/RUN NUMBER/i);
     expect(r.out).toContain('EPAM_RESUME_RUN=20260803T120000Z');
   });
 
   it('records the checkpoint AS pre-writer, so a resume skips the CPA too', () => {
     const w = workspace();
-    runPreWriter(w, { EPAM_PAUSE_AT: 'pre-writer' });
+    runPreWriter(w, { EPAM_PAUSE_BEFORE_WRITER: '1' });
     const meta = JSON.parse(
       readFileSync(join(w.projectDir, 'runs', '20260803T120000Z', 'checkpoint', 'checkpoint.json'), 'utf8'),
     );
@@ -324,10 +291,11 @@ describe('the pre-writer pause stops before any story is written', () => {
     ).toBe(true);
   });
 
-  it('EPAM_PAUSE_AT=spec does NOT stop here — it would never reach the writer', () => {
+  it('the removed spec flags do not stop here either', () => {
     const w = workspace();
-    const r = runPreWriter(w, { EPAM_PAUSE_AT: 'spec' });
-    expect(r.out).toContain('WRITER_STARTED');
+    for (const env of [{ EPAM_PAUSE_AFTER_SPEC: '1' }, { EPAM_PAUSE_AT: 'spec' }]) {
+      expect(runPreWriter(w, env).out, `${JSON.stringify(env)} still pauses`).toContain('WRITER_STARTED');
+    }
   });
 });
 
@@ -341,7 +309,7 @@ describe('an un-honourable resume HALTS', () => {
 
   it('names the checkpoints that DO exist, so the operator can correct the id', () => {
     const w = workspace();
-    runBlock(PAUSE_BLOCK(), w, { EPAM_PAUSE_AFTER_SPEC: '1' });
+    runBlock(SAVE_BLOCK(), w, {});
     const r = runBlock(RESUME_BLOCK(), w, { EPAM_RESUME_RUN: '19990101T000000Z' });
     expect(r.out).toContain('20260803T120000Z');
   });

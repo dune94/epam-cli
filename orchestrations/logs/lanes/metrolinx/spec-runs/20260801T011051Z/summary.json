@@ -1,0 +1,55 @@
+{
+  "runId": "20260801T011051Z",
+  "phase": "core",
+  "startedAt": "2026-08-01T01:26:56.951Z",
+  "stories": [
+    {
+      "storyId": "AMSD-2041",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "appliedAgents": [
+        "openspec"
+      ],
+      "notes": "Spec run already completed (status: completed) with both openspec and speckit applied. Coordinator review verdict is needs_review (quality 0.55) due to openspec thin contribution and speckit inferred API contract without reading code. Remaining gaps require human validation against actual Contentstack SDK and codebase, not re-running spec agents. No further automated spec work needed.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Novel story — Live Preview is a new capability. The codebase already has partial scaffolding: contentstack.ts configures live_preview with host/management_token/enable (conditional on CONTENTSTACK_PREVIEW_TOKEN), and useContent (236 callers) is the universal content retrieval hook. The attachment points are useContent (where preview data must flow) and contentstack.ts (where SDK live_preview config is initialized). ContentstackContext.tsx is listed in technical notes as the context provider but source was not available for review. VCs derived from description since ACs are empty. All VCs stop at the Contentstack service boundary — they assume a mocked/controlled Contentstack response rather than asserting real service behavior.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-01T01:35:26.385Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "needs_review",
+        "reviewNotes": "Only openspec is recorded in agentContributions despite coordinatorNotes claiming both agents were applied — speckit's contribution is referenced in coordinatorReview.reviewNotes but absent from the formal contribution record, creating a data integrity gap. openspec's contribution is thin: it identified attachment points (useContent hook with 236 callers, contentstack.ts) and derived VCs from the description, but produced no concrete elaboration for a novel cross-platform (GO, UP, MX) feature. The coordinatorReview notes that speckit inferred the Contentstack Live Preview API contract without reading actual code and attempted AC authoring on an immutable brownfield ticket. While the system correctly blocked AC mutation (acceptanceChanged: false), the unvalidated API assumptions in a cross-platform feature require human validation against the real Contentstack SDK and codebase before implementation proceeds. Brownfield ticket — no split or AC completeness evaluation per policy.",
+        "qualityScore": 0.55,
+        "flags": [
+          "openspec_thin_contribution",
+          "speckit_inferred_api_contract_without_code_review",
+          "speckit_attempted_ac_authoring_on_immutable_brownfield",
+          "missing_speckit_agent_contribution_record"
+        ],
+        "reviewedAt": "2026-08-01T01:35:35.133Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 1,
+    "coordinatorReviewCompleted": true,
+    "approved": 0,
+    "needsReview": 1
+  },
+  "completedAt": "2026-08-01T01:35:43.631Z",
+  "storyCount": 1
+}

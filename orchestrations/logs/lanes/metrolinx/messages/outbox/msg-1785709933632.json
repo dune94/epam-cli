@@ -1,0 +1,56 @@
+{
+  "message_id": "msg-1785709933632",
+  "timestamp": "2026-08-02T22:32:13+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 78,
+          "description": "The live_preview config object is cast to `as any` without an explanatory comment: `{ live_preview: { enable: true, preview_token: CONTENTSTACK_PREVIEW_TOKEN } as any }`. TypeScript strict compliance rules require that any untyped `any` be accompanied by an explanatory comment. The cast is likely needed because `contentstack.Config` does not include `live_preview` in its type definition, but the reason is not documented.",
+          "suggestedFix": "Add an explanatory comment such as `// contentstack.Config type does not include live_preview; cast required until SDK types are updated` or use module augmentation to extend the `contentstack.Config` type with `live_preview?: { enable?: boolean; preview_token?: string }`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/interface/contentstack.ts",
+          "line": 12,
+          "description": "The `live_preview` interface field only includes `enable` and `preview_token`, but AC 3 prescribes that `preview_hash` context should flow through to Contentstack queries. The `setCommonConfig` method forwards `preview_token` (the SDK initialization token) as the query param value via `query.addParam(\"live_preview\", live_preview.preview_token)`, but Contentstack live preview queries expect the `preview_hash` from the URL, not the `preview_token`. This means draft content will never be fetched even with this change.",
+          "suggestedFix": "Add `preview_hash?: string` to the `live_preview` field in `ICommonContentstackConfig`, and in `setCommonConfig` forward `preview_hash` instead of `preview_token`: `if (live_preview?.preview_hash) { query.addParam(\"live_preview\", live_preview.preview_hash); }`",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 289,
+          "description": "No test verifies that `setCommonConfig` forwards `live_preview` context to Contentstack queries via `query.addParam`. The contentstack mock does not include `addParam`, so if any test passed `live_preview` config to a query, it would throw a runtime error. AC 4 and learned review rules require coverage for live_preview context forwarding through to queries, not just Stack-level configuration.",
+          "suggestedFix": "Add `addParam: jest.fn().mockReturnThis()` to the contentstack mock object, and add a test that calls `getEntry` or `getSingleEntry` with a `live_preview` config and asserts `addParam` was called with the correct preview hash value.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 159,
+          "description": "`live_preview.preview_token as string` is an unsafe cast. The interface defines `preview_token` as `string | undefined`. If `live_preview` is truthy but `preview_token` is undefined, this passes `undefined` to `addParam`, which could cause unexpected behavior.",
+          "suggestedFix": "Guard with `if (live_preview?.preview_token)` (or `preview_hash` per the major fix above) before calling `addParam`, eliminating the need for the `as string` cast.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

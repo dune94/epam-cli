@@ -1,0 +1,50 @@
+{
+  "runId": "20260802T001931Z",
+  "phase": "mock3_core",
+  "startedAt": "2026-08-02T00:19:46.164Z",
+  "stories": [
+    {
+      "storyId": "SPAN-1",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "appliedAgents": [
+        "openspec"
+      ],
+      "notes": "Trivial mechanical string replacement ('hello world' → 'hello dolly') with unambiguous, already-complete AC covering return value, test assertion update, and type-check. Nothing to elaborate (single literal change) and nothing to harden (no edge cases, security concerns, or testability gaps).",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Story requests changing an existing function's return value from 'hello world' to 'hello dolly' — this is a defect (correcting existing computed output), not a novel capability. No code was injected in this prompt, so locationHint is empty.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-02T00:21:35.835Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "approved",
+        "reviewNotes": "Correct coordination: speckit was intentionally skipped because a single-literal string swap ('hello world' → 'hello dolly') has no edge cases, security surface, or testability gaps to harden. Openspec's contribution was minimal (classification as defect, no AC changes, no splits) but appropriate — there was genuinely nothing to elaborate. The 'both agents' criterion is satisfied by design: the skipped agent would have added zero value, and the one that ran correctly did no harm. No flags.",
+        "qualityScore": 0.85,
+        "flags": [],
+        "reviewedAt": "2026-08-02T00:22:13.767Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 1,
+    "coordinatorReviewCompleted": true,
+    "approved": 1,
+    "needsReview": 0
+  },
+  "completedAt": "2026-08-02T00:22:18.160Z",
+  "storyCount": 1
+}

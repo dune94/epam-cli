@@ -1,0 +1,56 @@
+{
+  "message_id": "msg-1785716792944",
+  "timestamp": "2026-08-03T00:26:32+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 477,
+          "description": "AC#4 requires tests covering: (1) live_preview block present with preview_token when CONTENTSTACK_PREVIEW_TOKEN is set, (2) live_preview absent when the token is unset. The diff only adds one test (forwarding preview_hash through getEntry to addParam). The setHost priority test (AC#4 scenario 3) appears to already exist at ~line 476, but no tests for scenarios (1) and (2) are visible in the diff or in the first ~300 lines of the test file. Prior review feedback explicitly flagged these as missing. Without these tests, AC#4 is not met.",
+          "suggestedFix": "Add two tests: (1) set CONTENTSTACK_PREVIEW_TOKEN in process.env, require the module, and assert options.live_preview equals { enable: true, preview_token: '<token>' }; (2) unset CONTENTSTACK_PREVIEW_TOKEN, require the module, and assert options does not have a live_preview property (use expect(options).not.toHaveProperty('live_preview')).",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 480,
+          "description": "The forwarding test only covers getEntry. While getEntry, getSingleEntry, getAllContentTypeEntries, and findSingletonEntry all destructure and forward live_preview (verified in contentstack.ts), the test only exercises one path. A regression that removes forwarding from any other public function would not be caught. Prior review rules require proof that preview context flows through public functions to setCommonConfig.",
+          "suggestedFix": "Add at least one additional test that calls getSingleEntry (or another public function) with a live_preview parameter and asserts addParam was called with the correct preview_hash value. This proves the forwarding pattern works end-to-end across multiple call paths.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 141,
+          "description": "Cannot verify getSingletonEntry forwards live_preview — file was truncated at line ~410. The learned review rules specifically flag getSingletonEntry as one of the public functions that must destructure and forward live_preview. If it does not, AC#3 is not met (preview context cannot flow through all public query paths).",
+          "suggestedFix": "Verify getSingletonEntry destructures live_preview from its parameters and forwards it to createContentTypeQuery or createContentTypeEntryQuery. If it does not, add live_preview to its destructuring and pass it through to the factory method call.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 480,
+          "description": "jest.spyOn(Stack, \"addParam\" as any) uses an explicit `as any` cast. While the source file has an eslint-disable for no-explicit-any, the test file does not. This is a TypeScript strict compliance concern.",
+          "suggestedFix": "Type the spy properly or add an eslint-disable comment with explanation, consistent with the codebase pattern.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

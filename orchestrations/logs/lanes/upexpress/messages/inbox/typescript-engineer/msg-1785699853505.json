@@ -1,0 +1,64 @@
+{
+  "message_id": "msg-1785699853505",
+  "timestamp": "2026-08-02T19:44:13+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 184,
+          "description": "`live_preview` was removed from the destructuring of all public functions (getEntry, getSingleEntry, getAllContentTypeEntries, findSingletonEntry, getSingletonEntry) and from their createContentTypeQuery/createContentTypeEntryQuery calls. This makes the live_preview handling in setCommonConfig (lines 110-112) dead code — preview context can never reach setCommonConfig because no caller forwards it. AC#3 requires that preview context 'can flow through to Contentstack queries in setCommonConfig'. The diff actively removes the forwarding that previously existed, which is a regression.",
+          "suggestedFix": "Restore `live_preview` to the destructuring of each public function and pass it through to createContentTypeQuery/createContentTypeEntryQuery calls, e.g. in getEntry: destructure `live_preview` from IContentstackGetEntry and include it in the factory.createContentTypeQuery({ ... live_preview }) call. Do the same for getSingleEntry, getAllContentTypeEntries, findSingletonEntry, and getSingletonEntry.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 76,
+          "description": "`as any` on the live_preview block in options has no explanatory comment. The previous code had a comment explaining that the SDK's TypeScript types declare `live_preview.management_token` but the delivery SDK reads `preview_token`. This comment was removed, violating the TypeScript strict compliance criterion requiring explanatory comments for any usage.",
+          "suggestedFix": "Add an inline comment explaining why `as any` is needed, e.g.: `// SDK types declare management_token but delivery SDK reads preview_token` before the `as any` cast, or better yet cast to the IContentstackLivePreviewContext interface.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 112,
+          "description": "The code uses `query.addQuery(\"live_preview\", ...)` but the Contentstack delivery SDK's Query class may not have an `addQuery` method. The previous implementation used `query.addParam(\"live_preview\", ...)`. If `addQuery` does not exist on the SDK's Query type, this will throw at runtime when live_preview is forwarded.",
+          "suggestedFix": "Verify that `addQuery` exists on the Contentstack SDK's Query class. If it does not, revert to using `addParam` or the SDK's documented method for adding custom query parameters for live preview.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 112,
+          "description": "`as any` on `live_preview.preview_hash as any` lacks an explanatory comment, violating TypeScript strict compliance criteria.",
+          "suggestedFix": "Add a brief comment explaining the cast, or properly type the addQuery/addParam parameter.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 12,
+          "description": "The contentstack mock does not include an `addQuery` method. If live_preview forwarding were exercised in tests (once the blocker is fixed and live_preview is actually forwarded), the mock would need an `addQuery` spy to verify the behavior.",
+          "suggestedFix": "Add `addQuery: jest.fn().mockReturnThis()` to the Stack mock object.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

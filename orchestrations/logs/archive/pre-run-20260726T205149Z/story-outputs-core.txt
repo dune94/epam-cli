@@ -1,0 +1,10 @@
+.attempts
+.deepeval/.deepeval_telemetry.txt
+attempts.txt
+node_modules/.bin/vitest
+prd.json
+src/services/submit-reservations/apply-report-discounts.service.spec.ts
+src/services/submit-reservations/apply-report-discounts.service.ts
+stub-ai-run.sh
+stub-retry.sh
+stub.sh

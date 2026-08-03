@@ -1,0 +1,20 @@
+{
+  "message_id": "msg-1785664953517",
+  "timestamp": "2026-08-02T10:02:33+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "approval",
+  "priority": "normal",
+  "subject": "Code review approved: AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review passed for story AMSD-2041. No issues found. Ready to proceed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {}
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

@@ -1,0 +1,88 @@
+{
+  "message_id": "msg-1785531401494",
+  "timestamp": "2026-07-31T20:56:41+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/pages/[[...slug]].tsx",
+          "line": 42,
+          "description": "The Page component destructures only { content, contentTypeUid } from IPageProps and never passes previewConfig to ContentstackProvider. The previewConfig is computed in getStaticProps and included in the returned props, but it is never consumed by the page component or threaded into the provider. This means ContentstackProvider always receives previewConfig as undefined, so isPreviewEnabled is always false, and live preview never activates.",
+          "suggestedFix": "Destructure previewConfig in the Page component and pass it to ContentstackProvider (or to the Layout/wrapper that renders ContentstackProvider). For example: const Page = ({ content, contentTypeUid, previewConfig }) => { ... } and ensure previewConfig is passed as a prop to ContentstackProvider alongside defaultContent={content}.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 0,
+          "description": "No vitest unit tests exist for the live preview functionality. Grep across test/unit/ for 'live_preview', 'livePreview', 'includeDraft', 'include_draft', 'ContentstackContext', 'ContentstackProvider' returned zero matches. Per review criteria, new features must have corresponding vitest unit tests in test/unit/ mirroring the src/ path. There are no tests verifying that setContent updates the context value, that the initial state matches defaultContent, that hashchange triggers a refetch, or that isPreviewEnabled correctly gates preview behavior.",
+          "suggestedFix": "Add test/unit/context/ContentstackContext.test.tsx (or .test.ts) with tests covering: (1) initial content matches defaultContent when preview is disabled, (2) isPreviewEnabled reflects previewConfig.enable, (3) fetchLivePreviewContent is called on mount when preview is enabled, (4) hashchange event triggers refetch, (5) liveContent overrides defaultContent when set.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 86,
+          "description": "The live preview fetch only updates the 'page' field of IContentstackContent. When a CMS edit changes header, footer, serviceAlerts, staticUpdates, globalDictionary, or any other content type, the preview will not reflect those changes. The setLiveContent call only merges 'page' entries: setLiveContent((prev) => ({ ...(prev || defaultContent), page: entries?.length ? entries : prev?.page || defaultContent?.page })). This fails the acceptance criterion: 'on-screen components that render that content — headings, body text, and images from the edited entry — display the updated values' for any content type other than 'page'.",
+          "suggestedFix": "The fetchLivePreviewContent function should fetch and merge all relevant content types based on content_type_uid, or use the Contentstack SDK's live preview callback to receive the specific entry that changed and merge it into the correct field of the content object.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 60,
+          "description": "A new contentstack.Stack instance is created inside fetchLivePreviewContent on every invocation (every hashchange event). This is wasteful and may cause connection leaks. The prescribed fix states the provider should accept a contentstack client via props so getStaticProps can pass it through, rather than constructing a new SDK client on each fetch.",
+          "suggestedFix": "Accept a contentstack Stack client instance via props (e.g., previewStack?: contentstack.Stack) or initialize it once via useMemo/useState. Reuse the same instance across all fetch calls. Alternatively, initialize the Stack once in _app.tsx and pass it through context.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 95,
+          "description": "The implementation relies on window 'hashchange' events for real-time updates instead of registering the Contentstack SDK's built-in livePreview callback (Stack.livePreview.onContentUpdate or equivalent). The prescribed fix states: 'The livePreview callback (registered via Stack.livePreview from the Contentstack SDK) then calls setContent with the updated content object.' Contentstack's Live Preview SDK uses postMessage/WebSocket for real-time updates, not URL hash changes. Relying solely on hashchange may miss updates that don't change the hash, failing the acceptance criterion: 'the preview page reflects the change without the tester performing a full page reload.'",
+          "suggestedFix": "Register the SDK's live preview callback (e.g., stack.livePreview.onContentUpdate((data) => { setLiveContent(prev => mergeContent(prev, data)); })) in the useEffect, and clean it up on unmount. Keep the hashchange listener as a fallback if desired, but the primary update mechanism should be the SDK callback.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 72,
+          "description": "Error handling uses console.error instead of proper error handling. Per review criteria, errors should use appropriate error subclasses (or at minimum be surfaced to the UI). A silent console.error means the tester sees a stale page with no indication that live preview failed.",
+          "suggestedFix": "Surface preview fetch errors to the UI (e.g., set an error state that renders a preview-unavailable banner) or throw a typed error that the error boundary can catch.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 23,
+          "description": "The getLivePreviewParams function only checks window.location.hash for live_preview and content_type_uid params. Contentstack Live Preview may also use query parameters or cookies depending on the SDK version and configuration. If the preview link uses query params instead of hash params, preview mode will not be detected.",
+          "suggestedFix": "Check both window.location.search and window.location.hash for live_preview parameters, or use the Contentstack SDK's built-in preview detection utility if available.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 12,
+          "description": "The IContentstackContent interface uses [any] for header and footer types (header?: [any]; footer?: [any]). While these may be pre-existing, the new IContentstackPreviewConfig interface is properly typed. Consider adding a TODO or proper types for header/footer as part of this change since the provider now actively manipulates content objects.",
+          "suggestedFix": "Define minimal interfaces for header and footer content, or add a more specific TODO referencing this story.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

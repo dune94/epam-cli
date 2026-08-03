@@ -1,0 +1,1 @@
+{"ts":"2026-07-29T19:10:48Z","story_id":"AMSD-2041","retry":0,"rung":0,"target":"none","diagnosis":"live_preview config missing required management_token field per Contentstack SDK's LivePreview type","patches_applied":0,"profile_updated":false}

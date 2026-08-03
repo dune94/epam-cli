@@ -1,0 +1,48 @@
+{
+  "message_id": "msg-1785713648477",
+  "timestamp": "2026-08-02T23:34:08+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 192,
+          "description": "AC#3 NOT MET — live_preview is dead code. setCommonConfig (lines 113-116) destructures live_preview and calls (query as any).addParam('live_preview', live_preview.preview_hash), but NONE of the 5 public functions (getEntry line 192, getSingleEntry line 252, getAllContentTypeEntries line 293, findSingletonEntry line 338, getSingletonEntry line 385) destructure or forward live_preview to createContentTypeQuery/createContentTypeEntryQuery. They all use explicit destructuring (e.g., { contentTypeUid, referenceFieldPath, jsonRtePath, only, lang, includeFields }) without a rest operator, so live_preview is silently dropped at every call site. The parameter types (IContentstackGetEntry etc.) extend ICommonContentstackConfig and thus allow live_preview, but the functions never pass it through. setCommonConfig's live_preview handling is unreachable dead code — preview context can never flow through to Contentstack queries, directly contradicting AC#3 and prior review feedback: 'query config interfaces lack live_preview fields to forward preview context through to Contentstack queries'.",
+          "suggestedFix": "Add live_preview to the destructuring of each public function and pass it through to the factory method call. For getEntry: destructure { contentTypeUid, referenceFieldPath, jsonRtePath, only, lang, includeFields, live_preview } and include live_preview in the createContentTypeQuery call object. Repeat for getSingleEntry, getAllContentTypeEntries, findSingletonEntry, and getSingletonEntry.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 440,
+          "description": "No test verifies that live_preview context actually flows through a public function (getEntry, getSingleEntry, etc.) to the Contentstack query's addParam method. The 3 new tests (lines 440-477) only check the options object and setHost behavior. Since the forwarding code in setCommonConfig is dead code (see blocker above), no test catches this regression. A test that calls getEntry (or similar) with a live_preview parameter and asserts that the mock's addParam method was called with the correct value is required to prove AC#3 is met.",
+          "suggestedFix": "Add a test that calls getEntry (or getSingleEntry) with a live_preview: { preview_hash: 'test-hash' } parameter and asserts that the query mock's addParam was called with ('live_preview', 'test-hash'). Also add addParam: jest.fn().mockReturnThis() to the contentstack mock at line 14, since the mock currently lacks this method and any test exercising the live_preview path would crash with 'addParam is not a function'.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 14,
+          "description": "The contentstack mock object lacks an addParam method. setCommonConfig calls (query as any).addParam('live_preview', live_preview.preview_hash) (line 116). If the forwarding blocker is fixed and any test passes live_preview through a public function to setCommonConfig, the test will crash with 'addParam is not a function' because the mock object has no such method.",
+          "suggestedFix": "Add addParam: jest.fn().mockReturnThis() to the jest.mock('contentstack') Stack factory mock object, alongside the existing except, only, where, etc. mocks.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

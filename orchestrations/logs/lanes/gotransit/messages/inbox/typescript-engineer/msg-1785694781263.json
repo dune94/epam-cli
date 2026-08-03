@@ -1,0 +1,80 @@
+{
+  "message_id": "msg-1785694781263",
+  "timestamp": "2026-08-02T18:19:41+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 148,
+          "description": "`content_type_uid` is extracted from the query object via an unsafe cast to `contentstack.Entry`, but the query at this point is a `contentstack.Query` (after `.toJSON()`). The `content_type_uid` property is not guaranteed to exist on the query object after `.toJSON()`. If it is undefined, the `if (contentTypeUid)` guard silently skips `livePreviewQuery`, meaning live preview context never reaches Contentstack queries for linked/tabular references — failing AC3. The test passes only because the mock manually adds `content_type_uid` to the fake query. The `contentTypeUid` is already available as a parameter in `createContentTypeQuery` (line 162) and `createContentTypeEntryQuery` (line 180) and should be passed to `setCommonConfig` directly.",
+          "suggestedFix": "Add `contentTypeUid` as a parameter to `setCommonConfig` and pass it from `createContentTypeQuery`/`createContentTypeEntryQuery` where it is already in scope: `this.setCommonConfig({ query, contentTypeUid, ...commonConfig })`. Then use it directly instead of extracting from the query object.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 151,
+          "description": "Concision violation: The change from `query.query({ live_preview: hash })` (the documented Contentstack SDK approach, 2 lines) to `this.stack.livePreviewQuery({ live_preview, content_type_uid })` (7 lines) is more complex, requires extracting `content_type_uid` from the query object (fragile), and uses a method (`livePreviewQuery`) that may not exist in the Contentstack Delivery SDK. The previous approach was simpler, more concise, and did not require `content_type_uid`. The `as any` cast on `this.stack` suppresses the TypeScript error that would otherwise catch a non-existent method. Even if `livePreviewQuery` exists, the previous approach was more concise and correct.",
+          "suggestedFix": "Revert to the simpler approach: `if (live_preview?.preview_hash) { (query as any).query({ live_preview: live_preview.preview_hash }); }`. This is 3 lines vs 7, requires no `content_type_uid` extraction, and uses the documented SDK API.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 98,
+          "description": "`ContentstackFactory` was changed from `export class` to `class`, removing its export. This is a potential breaking change if any other module imports `ContentstackFactory`. The diff provides no justification for this change.",
+          "suggestedFix": "Restore `export class ContentstackFactory` or verify no consumers import it and document why the export was removed.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/interface/contentstack.ts",
+          "line": 6,
+          "description": "The well-documented `IContentstackLivePreview` interface was removed and replaced with a confusing inline type: `live_preview?: { live_preview?: string; preview_hash?: string; }`. Having `live_preview` nested inside `live_preview` is error-prone and reduces readability. The previous interface had clear JSDoc explaining the purpose of each field.",
+          "suggestedFix": "Restore the `IContentstackLivePreview` interface with `enable`, `preview_token`, and `preview_hash` fields and use it on `ICommonContentstackConfig`. Or at minimum, rename the inner `live_preview` field to avoid the confusing nesting.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 99,
+          "description": "The `isContentstackQuery` type guard was removed, reducing type safety. The new code casts directly to `contentstack.Entry` to access `content_type_uid`, bypassing the type system. The type guard previously ensured that `query.query()` was only called on Query objects (not Entry objects), which was correct and type-safe.",
+          "suggestedFix": "Restore the `isContentstackQuery` type guard and use it to narrow the query type before accessing Query-specific methods.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 173,
+          "description": "Test count decreased: 5 live preview tests were removed and only 4 were added. The removed tests included direct verification of `setCommonConfig` behavior (both positive and negative cases for `query.query()`). The new test only covers the positive case through `getEntry`. Per review criteria, the total test count must not decrease.",
+          "suggestedFix": "Add a test verifying that `livePreviewQuery` (or `query.query`) is NOT called when `live_preview` is absent from the config, restoring parity with the removed negative-case test.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 148,
+          "description": "The condition `if (live_preview?.preview_hash && live_preview?.live_preview)` requires BOTH `preview_hash` AND `live_preview` fields to be present. AC3 states preview context (live_preview/preview_hash) should flow through — requiring both is overly restrictive. A caller providing only `preview_hash` would have their preview context silently dropped.",
+          "suggestedFix": "Use `if (live_preview?.preview_hash)` as the sole condition, since `preview_hash` is the meaningful field for forwarding preview context.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

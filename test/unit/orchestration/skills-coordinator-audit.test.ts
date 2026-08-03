@@ -36,7 +36,7 @@ describe('Step 1.65 wiring (static)', () => {
   });
 
   it('respects SKIP_SKILLS_AUDIT=1', () => {
-    const idx = orchSrc.indexOf('if [ "${SKIP_SKILLS_AUDIT:-0}" = "1" ]; then');
+    const idx = orchSrc.indexOf('if is_truthy "${SKIP_SKILLS_AUDIT:-}"; then');
     expect(idx).toBeGreaterThan(-1);
   });
 
@@ -158,7 +158,7 @@ describe('run_skills_audit_scan — REAL execution', () => {
 
 describe('Step 1.65 — REAL execution: LLM only invoked when the deterministic scan flags something', () => {
   function extractStepBlock(): string {
-    const startMarker = 'if [ "${SKIP_SKILLS_AUDIT:-0}" = "1" ]; then';
+    const startMarker = 'if is_truthy "${SKIP_SKILLS_AUDIT:-}"; then';
     const start = orchSrc.indexOf(startMarker);
     const endMarker = 'step_emit "11" "pass" "Step 11: Skills coordinator audit"\nfi';
     const end = orchSrc.indexOf(endMarker, start) + endMarker.length;
@@ -187,6 +187,7 @@ describe('Step 1.65 — REAL execution: LLM only invoked when the deterministic 
         stubPath,
         [
           '#!/usr/bin/env bash',
+          `source ${join(__dirname, '../../../orchestrations/scripts/lib/flags.sh')}`,
           'cat > /dev/null',
           `echo called >> ${JSON.stringify(callLog)}`,
           `echo 'not valid json{{{' > ${JSON.stringify(profilesPath)}`,
@@ -219,6 +220,7 @@ describe('Step 1.65 — REAL execution: LLM only invoked when the deterministic 
         stubPath,
         [
           '#!/usr/bin/env bash',
+          `source ${join(__dirname, '../../../orchestrations/scripts/lib/flags.sh')}`,
           'cat > /dev/null',
           `echo called >> ${JSON.stringify(callLog)}`,
           `python3 ${JSON.stringify(rewritePyPath)} ${JSON.stringify(profilesPath)}`,
@@ -245,6 +247,7 @@ describe('Step 1.65 — REAL execution: LLM only invoked when the deterministic 
     const block = extractStepBlock();
     const script = [
       '#!/usr/bin/env bash',
+      `source ${join(__dirname, '../../../orchestrations/scripts/lib/flags.sh')}`,
       'set -uo pipefail',
       'step_emit() { :; }',
       'error() { echo "ERROR: $*"; }',

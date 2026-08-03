@@ -1,0 +1,72 @@
+{
+  "message_id": "msg-1785625190684",
+  "timestamp": "2026-08-01T22:59:50+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 60,
+          "description": "The `live_preview` block uses `management_token` instead of `preview_token` as prescribed in the RCA. The prescribed fix explicitly states `preview_token: CONTENTSTACK_PREVIEW_TOKEN`. The Contentstack delivery SDK's live_preview config expects `preview_token`, not `management_token`. Using the wrong key will cause the SDK to ignore the preview token entirely, meaning live preview will never function.",
+          "suggestedFix": "Change `management_token: CONTENTSTACK_PREVIEW_TOKEN` to `preview_token: CONTENTSTACK_PREVIEW_TOKEN` inside the `live_preview` options block to match the prescribed minimal fix.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 63,
+          "description": "The `live_preview` block includes `host: CONTENTSTACK_PREVIEW_HOST`, which defaults to an empty string (`\"\"`) when the env var is unset. The RCA did not prescribe adding `host` inside the `live_preview` block — it prescribed handling the host separately via `Stack.setHost()`. Passing an empty string as `host` inside `live_preview` may cause the SDK to attempt requests against an empty host, breaking live preview.",
+          "suggestedFix": "Remove `host: CONTENTSTACK_PREVIEW_HOST` from the `live_preview` block. The host is already handled correctly via the `Stack.setHost(CONTENTSTACK_PREVIEW_HOST)` call on lines 77-79, which the RCA prescribed.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/services/contentstack.test.ts",
+          "line": 0,
+          "description": "No vitest unit tests exist for the Live Preview feature. The `test/unit/` directory does not exist at all. Review criteria require new features to have corresponding vitest unit tests mirroring the src/ path. At minimum, tests should verify that the Stack options include a `live_preview` block with `enable: true` and `preview_token` when `CONTENTSTACK_PREVIEW_TOKEN` is set, and that `setHost` is called with `CONTENTSTACK_PREVIEW_HOST` when it is set (and takes priority over `CONTENTSTACK_API_HOST`).",
+          "suggestedFix": "Create `test/unit/services/contentstack.test.ts` with tests verifying: (1) the `options` object includes `live_preview: { enable: true, preview_token: CONTENTSTACK_PREVIEW_TOKEN }` when the env var is set, (2) `live_preview` is absent when `CONTENTSTACK_PREVIEW_TOKEN` is unset, (3) `Stack.setHost` is called with `CONTENTSTACK_PREVIEW_HOST` when set, (4) `CONTENTSTACK_PREVIEW_HOST` takes priority over `CONTENTSTACK_API_HOST` in the `setHost` call.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 60,
+          "description": "The `live_preview` block is spread into `options` unconditionally including `host: CONTENTSTACK_PREVIEW_HOST` even when `CONTENTSTACK_PREVIEW_HOST` is empty. The prescribed fix uses a conditional pattern matching the existing `CONTENTSTACK_FETCH_TIMEOUT` pattern. The `host` field inside `live_preview` should either be omitted entirely (per the RCA, which only prescribes `setHost` on the Stack instance) or conditionally included only when `CONTENTSTACK_PREVIEW_HOST` is non-empty.",
+          "suggestedFix": "Remove `host` from the `live_preview` block entirely as prescribed, or conditionally include it: `...(CONTENTSTACK_PREVIEW_HOST ? { host: CONTENTSTACK_PREVIEW_HOST } : {})`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/interface/contentstack.ts",
+          "line": 1,
+          "description": "`ICommonContentstackConfig`, `ICreateQueryConfig`, and `ICreateEntryConfig` were not updated with an optional `live_preview` parameter. While the prescribed minimal fix focuses on the Stack options, for the third verification criterion (linked references, images, tabular data shown with draft values) to work, live preview hash data must flow through to Contentstack queries. Without a `live_preview` field in the query config interfaces, downstream query calls cannot forward preview context.",
+          "suggestedFix": "Add an optional `live_preview?: { live_preview?: string; preview_hash?: string }` field to `ICommonContentstackConfig` so it propagates to `ICreateQueryConfig` and `ICreateEntryConfig`, and forward it in `setCommonConfig` if present.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 77,
+          "description": "The `if/else if` pattern for `setHost` correctly gives `CONTENTSTACK_PREVIEW_HOST` priority over `CONTENTSTACK_API_HOST`, matching the RCA requirement. This is correct. No change needed, noting for completeness.",
+          "suggestedFix": "No fix needed — this implementation is correct.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

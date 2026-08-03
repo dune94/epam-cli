@@ -1,0 +1,80 @@
+{
+  "message_id": "msg-1785547484545",
+  "timestamp": "2026-08-01T01:24:44+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.ts",
+          "line": 5,
+          "description": "useContent calls useContext(ContentstackContext) which returns a static value. There is no reactive Provider component with useState/useEffect subscribing to LivePreview.onEntryChange(). Without a reactive state mechanism, no downstream consumer (236+ components using useContent) can receive live preview updates. AC2 ('card visibly shows updated text without manually reloading') and AC3 ('link displays updated label and navigates to updated destination') are unmet.",
+          "suggestedFix": "Create a ContentstackProvider component that wraps ContentstackContext.Provider with useState for content and useEffect subscribing to @contentstack/live-preview-utils onEntryChange(), calling setState to merge updated entry data. The provider must be used in _app.tsx or the page components to supply reactive content.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "package.json",
+          "line": 0,
+          "description": "The @contentstack/live-preview-utils dependency is not installed anywhere in the project. No import of this package exists in the codebase. Without this SDK, no WebSocket-based Live Preview subscription can be established on the client side, making real-time updates impossible.",
+          "suggestedFix": "Add @contentstack/live-preview-utils to package.json dependencies and import LivePreview from it in the ContentstackProvider to subscribe to onEntryChange events.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 17,
+          "description": "ContentstackContext is created with createContext<IContentstackContext>({}) — a static empty object. No Provider component exists that supplies reactive content updates. The context value never changes after initial render, so useContent will always return the static value passed at render time. Every acceptance criterion for real-time updates without manual reload is unmet.",
+          "suggestedFix": "Create a ContentstackProvider component using useState for content and useEffect subscribing to onEntryChange, wrapping ContentstackContext.Provider with the reactive state value. Mount it in _app.tsx or page-level components.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/interface/contentstack.ts",
+          "line": 0,
+          "description": "ICreateQueryConfig and ICreateEntryConfig interfaces were not updated with an optional live_preview parameter. The Contentstack SDK's includeFallback() method should be called when live_preview context is present to fetch draft/preview content. Without this, queries will not include fallback data for preview entries, so draft content cannot be fetched even with live_preview enabled in Stack options.",
+          "suggestedFix": "Add an optional live_preview field (e.g., { content_type_uid: string; entry_uid: string }) to ICreateQueryConfig and ICreateEntryConfig. In createContentTypeQuery and createContentTypeEntryQuery, call query.includeFallback() when live_preview is provided.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 0,
+          "description": "No vitest unit tests exist for the live_preview feature. The existing contentstack.spec.ts has no tests verifying that live_preview config is present in options, that CONTENTSTACK_PREVIEW_TOKEN enables live_preview, or that CONTENTSTACK_PREVIEW_HOST overrides the default host. No tests exist for reactive content updates or onEntryChange callback behavior. The test count has not increased to cover this new feature, violating the requirement that new features have corresponding vitest unit tests.",
+          "suggestedFix": "Add tests to contentstack.spec.ts verifying: (1) options.live_preview.management_token equals CONTENTSTACK_PREVIEW_TOKEN, (2) options.live_preview.enable is true when CONTENTSTACK_PREVIEW_TOKEN is set, (3) options.live_preview.host defaults to 'api.contentstack.io' when CONTENTSTACK_PREVIEW_HOST is absent. Add tests for the ContentstackProvider verifying onEntryChange triggers state updates.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 80,
+          "description": "Hardcoded endpoint URL 'api.contentstack.io' as a fallback string. The review criteria require no hardcoded strings for endpoint URLs — all should use named constants.",
+          "suggestedFix": "Extract 'api.contentstack.io' to a named constant (e.g., DEFAULT_CONTENTSTACK_PREVIEW_HOST) at the top of the file or in a constants file.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 69,
+          "description": "Uses generic 'throw new Error(\"Missing required environment variables\")' instead of a specific error subclass. The project has HttpError available (imported on line 4) which should be used for consistent error handling.",
+          "suggestedFix": "Replace 'throw new Error(...)' with 'throw new HttpError(\"Missing required environment variables\", { status: HttpStatusCode.INTERNAL_SERVER_ERROR })' or an appropriate error subclass.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

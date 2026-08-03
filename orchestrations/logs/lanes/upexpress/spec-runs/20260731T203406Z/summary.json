@@ -1,0 +1,65 @@
+{
+  "runId": "20260731T203406Z",
+  "phase": "core",
+  "startedAt": "2026-07-31T20:35:14.384Z",
+  "stories": [
+    {
+      "storyId": "AMSD-2041",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "notes": "Story has no acceptance criteria and null spec. Live Preview across GO, UP, MX markets implies complex rendering, state sync, and multi-locale handling. Openspec must elaborate requirements and define AC first; speckit then hardens testability, edge cases, and security review.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Novel capability — Live Preview does not exist in the codebase. The useContent hook (236+ callers) is the single integration point; updating it to accept and serve live-preview content means all downstream Contentstack components (ContentstackLink, ContentstackImage, ContentstackTable, ContentstackContentCards, etc.) receive preview data without individual changes. VCs derived solely from description since ACs are empty. Contentstack API is unreachable at test time, so VCs are written to the boundary — what our code sends, receives, and renders given a known mock response.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-31T20:38:28.948Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided empty acceptance criteria, so all ACs are authored from scratch based on the story title, description, and technical notes. Key design decisions: (1) AC-1/AC-2 establish the core toggle between preview and published content. (2) AC-3/AC-4 ensure real-time updates propagate through useContent to all 236+ downstream consumers without per-component changes. (3) AC-5 covers the three locales (GO, UP, MX) named in the story title. (4) AC-6/AC-7/AC-8 cover error-handling and resilience — connection drops, malformed payloads, and session termination. (5) AC-9 addresses security: draft content must never leak to unauthenticated/unauthorized users. (6) AC-10 covers the rapid-update debounce edge case. (7) AC-11 covers nested reference resolution within preview context. (8) AC-12 covers the mismatch case where a requested entry isn't part of the active preview. CAVEAT: File contents for useContent.ts, contentstack.ts, contentCard.ts, and ContentstackLink.tsx were unavailable; ACs are derived from paths, title, and description alone. If the existing useContent hook has specific return-shape contracts or middleware patterns, some ACs may need adjustment to match those contracts.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-31T20:39:11.689Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "needs_review",
+        "reviewNotes": "Both agents added non-overlapping value: openspec provided critical technical analysis (identifying useContent as the 236+ caller integration point, boundary-level VC strategy due to unreachable Contentstack API), while speckit authored 12 comprehensive ACs covering toggle, propagation, multi-locale, error handling, security, debounce, nested references, and mismatch cases. However, openspec did not fulfill its primary mandate of AC elaboration — it left acceptance criteria empty and speckit had to author all ACs from scratch. More critically, speckit explicitly flagged that source files (useContent.ts, contentstack.ts, contentCard.ts, ContentstackLink.tsx) were unavailable, meaning ACs were derived from paths and title alone. If the existing useContent hook has specific return-shape contracts or middleware patterns, ACs may need adjustment. Human review needed to validate ACs against actual codebase contracts before implementation.",
+        "qualityScore": 0.65,
+        "flags": [
+          "openspec_did_not_produce_acs",
+          "source_files_unavailable_during_spec",
+          "acs_not_validated_against_existing_contracts"
+        ],
+        "reviewedAt": "2026-07-31T20:39:27.833Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1,
+      "speckit": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 2,
+    "coordinatorReviewCompleted": true,
+    "approved": 0,
+    "needsReview": 1
+  },
+  "completedAt": "2026-07-31T20:39:33.452Z",
+  "storyCount": 1
+}

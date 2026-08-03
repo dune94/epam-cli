@@ -1,0 +1,5 @@
+{"storyId":"MOCK-HW-1-impl","phase":"core","status":"attempt","elapsedMinutes":0.13,"costUsd":0.0029,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-26T22:18:37Z"}
+{"storyId":"MOCK-HW-1-impl","phase":"core","status":"completed","elapsedMinutes":0.25,"costUsd":0.0029,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-26T22:18:38Z"}
+{"storyId":"MOCK-HW-1-test","phase":"core","status":"attempt","elapsedMinutes":0.41,"costUsd":0.0106,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-26T22:19:26Z"}
+{"storyId":"MOCK-HW-1-test","phase":"core","status":"attempt","elapsedMinutes":0.58,"costUsd":0.0122,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-26T22:20:06Z"}
+{"storyId":"MOCK-HW-1-test","phase":"core","status":"completed","elapsedMinutes":1.16,"costUsd":0.0122,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-26T22:20:07Z"}

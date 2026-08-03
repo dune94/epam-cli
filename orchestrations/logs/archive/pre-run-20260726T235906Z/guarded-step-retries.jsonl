@@ -1,0 +1,3 @@
+{"timestamp":"2026-07-26T23:33:33.957Z","step":"ac-review","storyId":"MOCK-HW-1","runId":"20260726T233056Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"5b150ec"}
+{"timestamp":"2026-07-26T23:40:34Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260726T233056Z","promptVersion":"5b150ec"}
+{"timestamp":"2026-07-26T23:41:24Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260726T233056Z","promptVersion":"5b150ec"}

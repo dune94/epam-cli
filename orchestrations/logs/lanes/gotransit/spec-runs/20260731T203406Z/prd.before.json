@@ -1,0 +1,193 @@
+{
+  "id": "jira-sourced-1785530098257",
+  "title": "Metrolinx Brownfield — Jira-sourced",
+  "version": "1.0.0",
+  "lastUpdated": "2026-07-31",
+  "project": {
+    "name": "metrolinx",
+    "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
+    "stack": {
+      "language": "TypeScript",
+      "runtime": "Node.js 20",
+      "framework": "Next.js",
+      "testing": "jest",
+      "cms": "Contentstack",
+      "devEnvironment": "Ubuntu WSL2"
+    },
+    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
+    "outputDirs": [
+      {
+        "codeline": "gotransit",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+      },
+      {
+        "codeline": "upexpress",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+      },
+      {
+        "codeline": "metrolinx",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+      }
+    ]
+  },
+  "configuration": {
+    "profilesPath": "profiles.json",
+    "autoCommit": false,
+    "requireTests": true,
+    "budget": 12,
+    "aiRuntime": {
+      "provider": "claude",
+      "defaultModel": "claude-sonnet-4-6"
+    }
+  },
+  "implementationOrder": {
+    "core": [
+      "AMSD-2041"
+    ]
+  },
+  "phasesConfig": {
+    "scaffold": {
+      "description": "Project scaffolding and TypeScript configuration",
+      "parallelWorktrees": false
+    },
+    "core": {
+      "description": "API client, CLI, and Express server implementation",
+      "parallelWorktrees": true
+    },
+    "ui_and_review": {
+      "description": "HTML dashboard and code review",
+      "parallelWorktrees": true
+    }
+  },
+  "stories": [
+    {
+      "id": "AMSD-2041",
+      "jiraKey": "AMSD-2041",
+      "title": "[GO, UP, MX] Live Preview of Content in CMS",
+      "description": "[GO, UP, MX] Live Preview of Content in CMS",
+      "acceptanceCriteria": [],
+      "codeline": "gotransit",
+      "status": "pending",
+      "completed": false,
+      "agentRole": "typescript-engineer",
+      "agentGroup": "main",
+      "effort": "low",
+      "estimate": 10,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). No acceptance criteria are provided and the description is too ambiguous — 'preview draft entries in CMS' could mean an iframe, a separate preview URL, inline rendering, or a side-by-side view, leading to fundamentally different implementations.",
+      "issueType": "Story",
+      "codelines": [
+        "gotransit",
+        "upexpress",
+        "metrolinx"
+      ],
+      "verificationCriteria": [
+        "When a tester opens a page via its preview link, the page renders successfully in the browser rather than showing an error page or a stale build.",
+        "With preview mode active, the page displays the current live content from the CMS, including entries or edits that are not present in the last published build.",
+        "When content is edited and saved in the CMS while the preview page is open, the preview page reflects the change without the tester performing a full page reload.",
+        "After a CMS edit, the on-screen components that render that content — headings, body text, and images from the edited entry — display the updated values.",
+        "A tester can confirm live preview end-to-end in a standard browser by making an edit in the CMS and observing the preview page update, with no test harness, mocks, or code inspection required.",
+        "When the same page is visited outside preview mode, it continues to serve the normal published static content unchanged."
+      ],
+      "vcSource": "description",
+      "vcResolution": "regenerated",
+      "fixSiteAnalysis": [
+        {
+          "file": "src/context/ContentstackContext.tsx",
+          "function": "ContentstackProvider",
+          "reason": "This is where all CMS content is resolved and provided to the React tree. Currently it only passes through static defaultContent from getStaticProps (build-time filesystem cache). For Contentstack Live Preview to work, this provider must detect preview mode and fetch content live from the Contentstack Preview API instead of using the baked-in static content. Every component downstream (via useContent) gets its data from here, so enabling live preview here propagates to the entire app.",
+          "fix": "In ContentstackProvider, detect Contentstack Live Preview mode (check for live_preview hash/cookie in window location or Next.js preview context). When in preview mode, use the Contentstack SDK's livePreviewQuery to fetch content directly from the Contentstack Preview API and store it in state (useState/useEffect) instead of using the static defaultContent. The provider should accept a contentstack client or preview config via props, and when preview is active, override the static content with live-fetched content that updates on each preview change. The IContentStackProviderProps interface needs a new optional field for the Contentstack SDK client instance (or preview config) so getStaticProps can pass it through.",
+          "helper": "",
+          "brokenLine": "content: defaultContent,",
+          "fixVerified": null,
+          "evidenceVerified": true,
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false
+        },
+        {
+          "file": "src/pages/[[...slug]].tsx",
+          "function": "getStaticProps",
+          "reason": "This is the main page entry point that assembles all content from the filesystem cache (readFromFs) and passes it as props to ContentstackProvider. For Live Preview, this function must also detect Next.js preview mode (context.preview) and when active, pass the Contentstack SDK client or preview configuration through to ContentstackProvider so it can fetch live content instead of using the cached data.",
+          "fix": "When context.preview is true (Next.js preview mode), pass a contentstackPreview flag or SDK client instance through props alongside the static content, so ContentstackProvider knows to activate live preview fetching. The static content can still be passed as fallback. This requires adding the preview config to IPageProps and threading it through to ContentstackProvider.",
+          "helper": "",
+          "brokenLine": "content: refineClientData(",
+          "fixVerified": null,
+          "evidenceVerified": true,
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false
+        }
+      ],
+      "storyKind": "novel",
+      "technicalNotes": {
+        "files": [
+          "src/hooks/useContent.ts",
+          "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+          "src/context/ContentstackContext.tsx",
+          "src/pages/[[...slug]].tsx",
+          "src/interface/content/contentCard.ts"
+        ]
+      },
+      "specification": {
+        "runId": "20260731T203406Z",
+        "assignedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "coordinatorNotes": "Story has empty acceptance criteria and no existing spec. Live Preview is a complex, cross-cutting feature (GO/UP/MX tags suggest multi-platform scope) requiring both requirement elaboration and test/security hardening. Openspec runs first to define AC and technical depth; speckit follows to add testability, edge cases, and security review.",
+        "status": "completed",
+        "updatedAt": "2026-07-31T20:40:14.849Z",
+        "appliedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": true,
+            "notes": "Live Preview is a new capability — Contentstack's Live Preview SDK must be integrated so that content edits in the CMS are reflected in real-time on the preview surface. The central attachment point is useContent (236 callers); wiring Live Preview there propagates to all Contentstack components automatically. No existing code shows Live Preview SDK integration.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-07-31T20:38:41.078Z"
+          },
+          {
+            "agent": "speckit",
+            "applied": true,
+            "notes": "Openspec provided an empty acceptance criteria list, so all criteria were created from scratch based on the story title, description, and listed technical files. Key design decisions: (1) AC-2 and AC-3 separate the end-to-end preview behavior from the useContent hook integration, since useContent is the central attachment point with 236 callers; (2) AC-4 and AC-9 ensure backward compatibility — the app must work identically when Live Preview is not configured; (3) AC-5 and AC-6 cover error resilience for disconnection and malformed data; (4) AC-7 addresses security — Live Preview tokens must not leak; (5) AC-8 addresses accessibility — screen readers must be notified of dynamic content changes; (6) AC-10 and AC-11 cover granularity of updates — single entry and nested field scenarios; (7) AC-12 covers URL parameter handling for entering Live Preview mode; (8) AC-13 ties to ContentstackContext.tsx from the file list; (9) AC-14 covers session termination. IMPORTANT CAVEAT: I could not read the actual file contents (src/hooks/useContent.ts, src/context/ContentstackContext.tsx, etc.), so criteria are based on the story context and file names alone. The implementer should verify these align with the actual code structure.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-07-31T20:40:14.848Z"
+          }
+        ],
+        "coordinatorReview": {
+          "verdict": "needs_review",
+          "reviewNotes": "Role inversion in the pipeline: openspec was assigned to elaborate requirements and produce acceptance criteria but delivered only contextual analysis (identifying useContent as the integration point with 236 callers and confirming no existing Live Preview SDK code) without generating any ACs (acceptanceChanged: false, splitCount: 0). Speckit then compensated by creating 14 ACs from scratch — performing openspec's job rather than its own review/hardening function. Critically, speckit explicitly states it could not read the actual source files (useContent.ts, ContentstackContext.tsx, etc.), so all criteria are inferred from file names and story title alone and are unvalidated against real code structure. The collaborative pipeline did not function as designed: openspec failed its primary elaboration responsibility, and speckit's output, while thorough in coverage (security, accessibility, backward compatibility, error resilience, session lifecycle), cannot be trusted as implementation-ready without human verification against the actual codebase. A re-run with openspec producing ACs first, followed by speckit reviewing with file access, is recommended.",
+          "qualityScore": 0.45,
+          "flags": [
+            "role_inversion_openspec_did_not_produce_acs",
+            "speckit_unable_to_read_source_files",
+            "acs_unvalidated_against_actual_code_structure",
+            "speckit_performed_openspec_job"
+          ],
+          "reviewedAt": "2026-07-31T20:40:35.736Z"
+        }
+      },
+      "estimatedAiMinutes": 3.9756,
+      "estimatedCost": 0.1236,
+      "estimatedTokens": 218267,
+      "estimatedTurns": 9,
+      "estimatedHours": 0.0662,
+      "cpaConfidence": 0.72,
+      "cpaGate": "review",
+      "ladderTier": "high",
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
+      "reasoningEffort": "low",
+      "completedAt": "2026-07-31T20:55:31+00:00",
+      "actualCost": 3.6226710000000004,
+      "reviewStatus": "escalated"
+    }
+  ],
+  "currentIteration": 10,
+  "source": "jira",
+  "sourceProject": "AMSD"
+}

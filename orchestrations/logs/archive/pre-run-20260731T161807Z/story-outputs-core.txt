@@ -1,0 +1,12 @@
+.attempts
+.contracts/vendor-vitest.md
+attempts.txt
+node_modules/.bin/vitest
+package-lock.json
+package.json
+prd.json
+src/hello.test.ts
+src/hello.ts
+stub-ai-run.sh
+stub-retry.sh
+stub.sh

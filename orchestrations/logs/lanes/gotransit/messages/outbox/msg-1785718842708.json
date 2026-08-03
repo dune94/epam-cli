@@ -1,0 +1,40 @@
+{
+  "message_id": "msg-1785718842708",
+  "timestamp": "2026-08-03T01:00:42+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 0,
+          "description": "AC4 requires three specific test scenarios: (1) live_preview block present with preview_token when CONTENTSTACK_PREVIEW_TOKEN is set, (2) live_preview absent when token unset, (3) setHost called with CONTENTSTACK_PREVIEW_HOST taking priority over CONTENTSTACK_API_HOST. I read the first ~250 of 484 lines via read_file and found no `it()` or `describe()` block covering these scenarios. The visible portion contains tests for missing env vars, fetch timeout, and getEntry — but no live_preview options tests. The remaining ~234 lines may contain them, but I could not verify due to file truncation and tool budget exhaustion. The 'contentstack fetch timeout' describe block (visible at ~line 155) tests the `options` object via `require('../contentstack.ts')` and `testedModule.options` — the exact pattern needed for live_preview option tests, but no such tests appear nearby. Search performed: read_file on src/services/__tests__/contentstack.spec.ts (truncated at ~250 of 484 lines).",
+          "suggestedFix": "Add a describe block (e.g., 'live_preview configuration') with three it() blocks: (1) set CONTENTSTACK_PREVIEW_TOKEN='test_token', require module, assert options.live_preview equals { enable: true, preview_token: 'test_token' }; (2) unset CONTENTSTACK_PREVIEW_TOKEN, require module, assert options does not have live_preview key (use not.objectContaining); (3) set both CONTENTSTACK_PREVIEW_HOST and CONTENTSTACK_API_HOST, require module, spy on Stack.setHost, assert called with CONTENTSTACK_PREVIEW_HOST value. Follow the existing 'contentstack fetch timeout' describe block pattern.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 295,
+          "description": "findSingletonEntry and getSingletonEntry do not destructure `live_preview` from their IContentstackGetSingletonEntry params and do not pass it to createContentTypeQuery. Since IContentstackGetSingletonEntry extends ICommonContentstackConfig (which now has live_preview), a caller can pass live_preview but it will be silently ignored — preview context never reaches setCommonConfig through these two functions. This means singleton content types (e.g., header, footer, global config) cannot show draft values in live preview, undermining the story goal that 'linked/tabular references show draft values.'",
+          "suggestedFix": "Add `live_preview` to the destructured params of both findSingletonEntry and getSingletonEntry, and pass it through to the createContentTypeQuery call, mirroring how getEntry already does it: `const query = new ContentstackFactory({ stack: Stack }).createContentTypeQuery({ contentTypeUid, referenceFieldPath, only, except, where, lang, limit: 1, live_preview });`",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

@@ -1,0 +1,50 @@
+{
+  "runId": "20260730T023828Z",
+  "phase": "mock3_core",
+  "startedAt": "2026-07-30T02:39:07.289Z",
+  "stories": [
+    {
+      "storyId": "SPAN-1",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "appliedAgents": [
+        "openspec"
+      ],
+      "notes": "Trivial string literal replacement with precise, testable AC and no architectural complexity, security surface, or edge-case ambiguity. Neither openspec nor speckit would add value.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Classified as defect: existing function returns wrong value. No code block was injected, so locationHint is empty to avoid fabrication. VCs derived directly from acceptance criteria which are already concrete and observable.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-30T02:42:15.481Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "approved",
+        "reviewNotes": "Trivial string-literal defect correctly classified by openspec with no unnecessary inflation. Speckit was appropriately skipped — no security surface, edge-case ambiguity, or testability concern exists here. The three ACs are complete, testable, and non-overlapping: (1) functional return value, (2) test maintenance, (3) type safety. No splits needed for a single-concern change. openspec's contribution was meaningful precisely in its restraint — confirming ACs were already concrete and not fabricating content. Minor observation: the title says 'every affected codeline' but ACs only reference getGreeting(); if other modules also referenced 'hello world' they'd be uncovered, but for this scope the function is the sole surface, so this is acceptable.",
+        "qualityScore": 0.9,
+        "flags": [],
+        "reviewedAt": "2026-07-30T02:42:30.256Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 1,
+    "coordinatorReviewCompleted": true,
+    "approved": 1,
+    "needsReview": 0
+  },
+  "completedAt": "2026-07-30T02:42:42.951Z",
+  "storyCount": 1
+}

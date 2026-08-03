@@ -1,0 +1,179 @@
+{
+  "id": "jira-sourced-1785546733653",
+  "title": "Metrolinx Brownfield — Jira-sourced",
+  "version": "1.0.0",
+  "lastUpdated": "2026-08-01",
+  "project": {
+    "name": "metrolinx",
+    "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
+    "stack": {
+      "language": "TypeScript",
+      "runtime": "Node.js 20",
+      "framework": "Next.js",
+      "testing": "jest",
+      "cms": "Contentstack",
+      "devEnvironment": "Ubuntu WSL2"
+    },
+    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
+    "outputDirs": [
+      {
+        "codeline": "gotransit",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+      },
+      {
+        "codeline": "upexpress",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+      },
+      {
+        "codeline": "metrolinx",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+      }
+    ]
+  },
+  "configuration": {
+    "profilesPath": "profiles.json",
+    "autoCommit": false,
+    "requireTests": true,
+    "budget": 12,
+    "aiRuntime": {
+      "provider": "claude",
+      "defaultModel": "claude-sonnet-4-6"
+    }
+  },
+  "implementationOrder": {
+    "core": [
+      "AMSD-2041"
+    ]
+  },
+  "phasesConfig": {
+    "scaffold": {
+      "description": "Project scaffolding and TypeScript configuration",
+      "parallelWorktrees": false
+    },
+    "core": {
+      "description": "API client, CLI, and Express server implementation",
+      "parallelWorktrees": true
+    },
+    "ui_and_review": {
+      "description": "HTML dashboard and code review",
+      "parallelWorktrees": true
+    }
+  },
+  "stories": [
+    {
+      "id": "AMSD-2041",
+      "jiraKey": "AMSD-2041",
+      "title": "[GO, UP, MX] Live Preview of Content in CMS",
+      "description": "[GO, UP, MX] Live Preview of Content in CMS",
+      "acceptanceCriteria": [],
+      "codeline": "gotransit",
+      "status": "pending",
+      "completed": false,
+      "agentRole": "typescript-engineer",
+      "agentGroup": "main",
+      "effort": "low",
+      "estimate": 10,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). No acceptance criteria are provided and the description is too vague for an agent to determine scope, behavior, or integration points without human clarification.",
+      "issueType": "Story",
+      "codelines": [
+        "gotransit",
+        "upexpress",
+        "metrolinx"
+      ],
+      "verificationCriteria": [
+        "A CMS editor opening an unpublished draft entry in Contentstack sees the draft content rendered in the site preview panel, not the last published version.",
+        "When a CMS editor changes a field value in an entry, the previewed page updates to show the new value without the editor publishing the entry.",
+        "The draft preview behaviour is observable for content on each of the GO, UP, and MX sites/locales named in the ticket.",
+        "When the draft preview cannot be displayed, the editor sees a clear error or unavailable state in the preview area rather than published content being silently shown as if it were the draft.",
+        "A tester can confirm, using only the CMS interface and the previewed site, that content visible in the preview matches the draft state the editor is currently editing."
+      ],
+      "vcSource": "description",
+      "vcResolution": "regenerated",
+      "fixSiteAnalysis": [
+        {
+          "file": "src/services/contentstack.ts",
+          "function": "options",
+          "reason": "This is where the Contentstack SDK Stack is initialized. The `options` object passed to `contentstack.Stack()` lacks the `live_preview` configuration required for Contentstack Live Preview to function. Without `live_preview: { management_token, enable }` in the Stack options, the SDK never connects to the preview service, so CMS editors cannot see live previews of draft content. This is the CAUSE — the computation/fetch layer — not a presentation symptom.",
+          "fix": "Add `live_preview` config to the `options` object after line 59. Add a new env var `CONTENTSTACK_PREVIEW_TOKEN` in the destructuring block (lines 17-24), then add `live_preview: { management_token: CONTENTSTACK_PREVIEW_TOKEN, enable: true }` to the options object after `branch: CONTENTSTACK_BRANCH,`. The Contentstack SDK `Stack()` constructor accepts this property natively — no new helper needed.",
+          "helper": "",
+          "brokenLine": "branch: CONTENTSTACK_BRANCH,",
+          "fixVerified": null,
+          "evidenceVerified": true,
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false
+        }
+      ],
+      "storyKind": "novel",
+      "technicalNotes": {
+        "files": [
+          "src/hooks/useContent.ts",
+          "src/services/contentstack.ts",
+          "src/interface/content/contentCard.ts",
+          "src/components/contentstack/ContentstackLink/ContentstackLink.tsx"
+        ]
+      },
+      "specification": {
+        "runId": "20260801T011051Z",
+        "assignedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "coordinatorNotes": "Story has empty acceptance criteria and null spec, yet spans three markets (GO, UP, MX) implying complex real-time preview behavior with market-specific rendering. Openspec must first elaborate AC and assess whether story splits are needed; speckit then hardens testability, security (e.g. XSS in preview iframe), and edge cases (concurrent edits, latency, fallback).",
+        "status": "completed",
+        "updatedAt": "2026-08-01T01:17:31.113Z",
+        "appliedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": true,
+            "notes": "Story requests Live Preview of Content in CMS for GO, UP, MX — a novel capability. No live preview mechanism exists in the codebase. The central attachment point is useContent (236 callers), the universal content accessor every consumer flows through. VCs derived from description since ACs are empty.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-08-01T01:16:18.259Z"
+          },
+          {
+            "agent": "speckit",
+            "applied": true,
+            "notes": "Openspec produced an empty AC array with only a contextual note. All 12 criteria are new. I derived them from the story title (Live Preview of Content in CMS for GO, UP, MX), the listed file paths (useContent as the central accessor, contentstack service, contentCard interface, ContentstackLink component), and standard CMS live-preview concerns. Key areas covered: core preview rendering (AC-1), preview indicator with accessibility (AC-2), real-time update reflection (AC-3), three-market parity (AC-4), ContentstackLink draft resolution (AC-5), API failure handling (AC-6), missing-content fallback (AC-7), session teardown/return to published (AC-8), authorization gating (AC-9), WCAG compliance (AC-10), session isolation (AC-11), and reload persistence (AC-12). I could not inspect the actual file contents; if useContent.ts already has preview-related hooks or contentstack.ts already supports draft queries, some criteria may already be partially satisfied and could be narrowed.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-08-01T01:17:31.113Z"
+          }
+        ],
+        "coordinatorReview": {
+          "verdict": "needs_review",
+          "reviewNotes": "Both agents contributed but asymmetrically. Openspec correctly identified the story as a novel capability, flagged useContent (236 callers) as the central attachment point, and noted the empty-AC risk — but produced no draft acceptance criteria, leaving only a contextual note. Speckit then compensated by deriving all 12 ACs from scratch using the title, file paths, and standard CMS live-preview concerns. The contributions are non-overlapping (openspec: context/risk; speckit: actionable criteria) but the pipeline's intended division of labor broke down: openspec should have produced at least draft ACs for speckit to harden, not leave speckit to elaborate from a contextual note alone. Additionally, neither agent could inspect actual file contents, so the 12 speckit-derived criteria may partially duplicate existing functionality or misalign with stakeholder intent for a three-market (GO, UP, MX) feature. Human review needed to validate the derived ACs against real requirements and codebase state.",
+          "qualityScore": 0.65,
+          "flags": [
+            "openspec_produced_no_draft_acs",
+            "speckit_derived_all_criteria_without_codebase_inspection",
+            "three_market_scope_insufficiently_decomposed",
+            "ac_elaboration_not_stakeholder_validated"
+          ],
+          "reviewedAt": "2026-08-01T01:17:54.724Z"
+        }
+      },
+      "estimatedAiMinutes": 4.8816,
+      "estimatedCost": 0.1508,
+      "estimatedTokens": 327415,
+      "estimatedTurns": 13,
+      "estimatedHours": 0.0813,
+      "cpaConfidence": 0.68,
+      "cpaGate": "review",
+      "ladderTier": "high",
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
+      "reasoningEffort": "low",
+      "completedAt": "2026-08-01T01:28:53+00:00",
+      "actualCost": 4.074471,
+      "reviewStatus": "escalated"
+    }
+  ],
+  "currentIteration": 10,
+  "source": "jira",
+  "sourceProject": "AMSD"
+}

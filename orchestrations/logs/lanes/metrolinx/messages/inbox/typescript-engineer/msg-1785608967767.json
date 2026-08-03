@@ -1,0 +1,80 @@
+{
+  "message_id": "msg-1785608967767",
+  "timestamp": "2026-08-01T18:29:27+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 74,
+          "description": "The `options` object passed to `contentstack.Stack(options)` does NOT include a `live_preview` configuration block. The prescribed root-cause fix requires adding `live_preview: { management_token: CONTENTSTACK_MANAGEMENT_TOKEN, enable: true }` to the options object. Without this, the Contentstack SDK never activates live preview capability for any query through this Stack instance, so no downstream component can participate in live preview regardless of client-side wiring. This is the root cause identified in the RCA and it remains completely unaddressed.",
+          "suggestedFix": "Add `live_preview: { management_token: CONTENTSTACK_MANAGEMENT_TOKEN, enable: true }` to the `options` object (after the `branch` property, around line 74). The Contentstack JS SDK reads this property at Stack initialization to activate live preview for all queries through that Stack instance.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 48,
+          "description": "The env validation for `CONTENTSTACK_MANAGEMENT_TOKEN` is incorrectly nested INSIDE the `if (!CONTENTSTACK_BRANCH)` block (lines 47-50). This means the management token missing-error is only logged when the branch is ALSO missing. If the branch is present but the management token is absent, no validation error is raised. The prescribed fix requires adding `CONTENTSTACK_MANAGEMENT_TOKEN` to the env validation block following the same pattern as the other required env vars — as a top-level check, not nested.",
+          "suggestedFix": "Move the `if (!CONTENTSTACK_MANAGEMENT_TOKEN) { logger.error('Contentstack management token not provided'); }` check outside and after the `if (!CONTENTSTACK_BRANCH)` block so it is evaluated independently. Also add `|| !CONTENTSTACK_MANAGEMENT_TOKEN` to the final throw condition on line 53.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.ts",
+          "line": 5,
+          "description": "`useContent` calls `useContext(ContentstackContext)` but there is no reactive Provider component supplying a changing value. The hook always returns the static SSR-provided default content and cannot propagate live preview updates to the 236+ consumers. Even if Contentstack live preview events fired, there is no state setter to trigger re-renders. The prescribed fix requires a `ContentstackProvider` component that initializes the Live Preview SDK and subscribes to `onEntryChange` events, merging incoming preview data into context state.",
+          "suggestedFix": "Create a `ContentstackProvider` component that wraps the app, initializes `@contentstack/live-preview-utils`, subscribes to `onEntryChange`, and uses `useState` to merge incoming preview data into context value. Wrap the application tree with this provider so `useContent` consumers receive reactive updates.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "package.json",
+          "line": 0,
+          "description": "The `@contentstack/live-preview-utils` dependency is not installed anywhere in the project. No import of this package exists in the codebase. Without this SDK, no client-side WebSocket-based Live Preview subscription can be established, making real-time content updates impossible.",
+          "suggestedFix": "Add `@contentstack/live-preview-utils` as a dependency in package.json and import it in the ContentstackProvider component to initialize live preview on the client side.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 0,
+          "description": "`ICommonContentstackConfig`, `ICreateQueryConfig`, and `ICreateEntryConfig` interfaces were not updated with an optional `live_preview` parameter. The prescribed fix requires adding an optional `live_preview` field so that live preview hash data can flow through to Contentstack queries. Without it, queries will always return published content even if the Stack is configured for live preview.",
+          "suggestedFix": "Add an optional `live_preview?: { [key: string]: string }` field to `ICommonContentstackConfig` (or to `ICreateQueryConfig` and `ICreateEntryConfig` directly). In `createContentTypeQuery` and `createContentTypeEntryQuery`, pass the `live_preview` hash to the Contentstack query chain (e.g., `query.includeFallback()` or `.live_preview(previewData)`).",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/",
+          "line": 0,
+          "description": "No vitest unit tests exist for the Live Preview feature. There are no tests mirroring src/context/ for a ContentstackProvider, no tests for `live_preview` config in Stack options, no tests for `includeFallback()` behavior, and no tests verifying reactive content updates via `onEntryChange`. The test count has not increased to cover this new feature, violating the requirement that new features have corresponding vitest unit tests.",
+          "suggestedFix": "Add vitest unit tests in test/unit/ mirroring the src/ path structure: tests for the `live_preview` config block in Stack options, tests for the ContentstackProvider reactive state updates, and tests for `includeFallback()` / `live_preview` query parameter forwarding.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 0,
+          "description": "`getStaticProps` (in page components) does not forward `context.preview` or `context.previewData` (or a `live_preview` URL param) to Contentstack service calls (`getSingleEntry`, `getEntry`, `findSingletonEntry`). No `pages/api/preview.ts` route exists to enable Next.js draft mode. Even if the service layer supported `live_preview`, draft content would never be fetched because the page-level code doesn't pass preview context through.",
+          "suggestedFix": "Create a `pages/api/preview.ts` route that enables Next.js draft mode. In `getStaticProps`, forward `context.preview` / `context.previewData` / `live_preview` URL params to all Contentstack service calls so draft content is fetched during preview sessions.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

@@ -1,0 +1,56 @@
+{
+  "message_id": "msg-1785756178551",
+  "timestamp": "2026-08-03T11:22:58+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 0,
+          "description": "No test coverage exists for the live_preview feature. I searched the test file for 'preview', 'PREVIEW', 'live_preview', 'setHost', and 'live' — zero matches were returned. The learned rules explicitly require tests for: (1) live_preview block present with preview_token when CONTENTSTACK_PREVIEW_TOKEN is set, (2) live_preview absent when token is unset, (3) setHost called with CONTENTSTACK_PREVIEW_HOST when set. None of these exist. The test file only covers fetch timeout, missing env vars, and existing getEntry/getSingleEntry behavior.",
+          "suggestedFix": "Add a describe('live_preview configuration') block with at minimum 3 it() blocks: (1) set CONTENTSTACK_PREVIEW_TOKEN in process.env, require the module, assert options.live_preview exists with enable:true and the correct token; (2) leave CONTENTSTACK_PREVIEW_TOKEN unset, assert options has no live_preview key; (3) set CONTENTSTACK_PREVIEW_HOST, require the module, assert Stack.setHost was called with the preview host value.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 70,
+          "description": "The diff uses 'management_token' as the key inside the live_preview config object, but the prescribed minimal fix explicitly specifies 'preview_token'. The Contentstack SDK live_preview configuration (per the documented API at the URL in the RCA) uses 'preview_token' as the key name. Using the wrong key name means the SDK will not receive the token and live preview will not function — the token will be silently ignored.",
+          "suggestedFix": "Change 'management_token: CONTENTSTACK_PREVIEW_TOKEN' to 'preview_token: CONTENTSTACK_PREVIEW_TOKEN' inside the live_preview config object to match the prescribed fix and the Contentstack SDK documentation.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 86,
+          "description": "The diff adds 'host: CONTENTSTACK_PREVIEW_HOST' inside the live_preview config object AND a separate 'Stack.setHost(CONTENTSTACK_PREVIEW_HOST)' call. The prescribed fix does not include 'host' inside the live_preview object — it only specifies preview_token and enable. Additionally, the separate Stack.setHost(CONTENTSTACK_PREVIEW_HOST) call executes AFTER Stack.setHost(CONTENTSTACK_API_HOST), meaning when both env vars are set, the preview host overrides the API host for ALL requests (including normal delivery), not just preview requests. This would break non-preview content delivery in any environment where both hosts are configured.",
+          "suggestedFix": "Remove the 'host: CONTENTSTACK_PREVIEW_HOST' line from inside the live_preview config object. For the setHost call, the Contentstack SDK's live_preview.host config (if the SDK supports it) should handle routing preview requests to the preview host without overriding the global Stack host. If the SDK does not support host inside live_preview, consider conditionally setting only one host based on whether preview mode is active, or verify that the SDK's setHost can be called per-request rather than globally.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 1,
+          "description": "The file has '/* eslint-disable @typescript-eslint/no-explicit-any */' at the top, and the renderOption uses untyped 'any' for node children and next callback parameters. While this is pre-existing, the diff does not address it. Per TypeScript strict compliance criteria, untyped 'any' should have explanatory comments.",
+          "suggestedFix": "Add typed interfaces for the renderOption span node and next callback, or add an inline comment explaining why 'any' is necessary here (Contentstack SDK does not export proper types for renderOption callbacks).",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

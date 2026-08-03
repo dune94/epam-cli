@@ -1,0 +1,56 @@
+{
+  "message_id": "msg-1785699626518",
+  "timestamp": "2026-08-02T19:40:26+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 184,
+          "description": "live_preview parameter was removed from ALL public function signatures (getEntry, getSingleEntry, getAllContentTypeEntries, findSingletonEntry, getSingletonEntry). While ICommonContentstackConfig has the live_preview field and setCommonConfig correctly handles preview_hash via query.addQuery, none of the public API functions accept or forward live_preview to createContentTypeQuery/createContentTypeEntryQuery. This means preview context (preview_hash) cannot flow through to Contentstack queries via the public API, violating AC3 which requires 'preview context (live_preview/preview_hash) can flow through to Contentstack queries in setCommonConfig.' The old code forwarded live_preview through all public functions; the new code dropped it entirely, making the setCommonConfig handling dead code.",
+          "suggestedFix": "Re-add live_preview to the destructured parameters of each public function (getEntry, getSingleEntry, getAllContentTypeEntries, findSingletonEntry, getSingletonEntry) and pass it through to createContentTypeQuery/createContentTypeEntryQuery calls. The interfaces already inherit live_preview from ICommonContentstackConfig, so only the destructuring and forwarding needs restoring.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 74,
+          "description": "The live_preview object is cast with `as any` without an explanatory comment: `live_preview: { enable: true, preview_token: CONTENTSTACK_PREVIEW_TOKEN } as any`. The old code had a comment explaining the SDK type mismatch (delivery SDK reads preview_token but TS types declare management_token). The comment was removed while the `as any` was kept, violating TypeScript strict compliance rules requiring explanatory comments for any casts.",
+          "suggestedFix": "Restore the explanatory comment, e.g.: `// SDK types declare management_token but delivery SDK reads preview_token for Live Preview` before the `as any` cast, or properly type the object to satisfy the SDK's types.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 113,
+          "description": "`query.addQuery(\"live_preview\", live_preview.preview_hash as any)` uses `as any` without an explanatory comment. The SDK's addQuery type signature may not accept a plain string for this parameter, but the cast reason should be documented.",
+          "suggestedFix": "Add an inline comment explaining why the cast is needed, e.g.: `// addQuery type expects a specific type but preview_hash is a string` or use a proper type assertion.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 181,
+          "description": "Tests removed jest.isolateModules() wrappers that were present in the prior version. While jest.resetModules() in beforeEach provides some module cache clearing, the removal of isolateModules makes the live preview tests less robust against module caching issues — particularly for the setHost test which previously used jest.doMock inside isolateModules to inject a fresh spy. The new setHost test relies on the top-level mock's setHost which may reference a stale module instance after resetModules.",
+          "suggestedFix": "Restore jest.isolateModules() wrappers in the live preview tests, or ensure the mock factory properly creates fresh jest.fn() instances for setHost on each module reload.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

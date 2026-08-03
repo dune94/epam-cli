@@ -1,0 +1,189 @@
+{
+  "id": "jira-sourced-1785459994427",
+  "title": "Metrolinx Brownfield — Jira-sourced",
+  "version": "1.0.0",
+  "lastUpdated": "2026-07-31",
+  "project": {
+    "name": "metrolinx",
+    "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
+    "stack": {
+      "language": "TypeScript",
+      "runtime": "Node.js 20",
+      "framework": "Next.js",
+      "testing": "jest",
+      "cms": "Contentstack",
+      "devEnvironment": "Ubuntu WSL2"
+    },
+    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
+    "outputDirs": [
+      {
+        "codeline": "gotransit",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+      },
+      {
+        "codeline": "upexpress",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+      },
+      {
+        "codeline": "metrolinx",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+      }
+    ]
+  },
+  "configuration": {
+    "profilesPath": "profiles.json",
+    "autoCommit": false,
+    "requireTests": true,
+    "budget": 12,
+    "aiRuntime": {
+      "provider": "claude",
+      "defaultModel": "claude-sonnet-4-6"
+    }
+  },
+  "implementationOrder": {
+    "core": [
+      "AMSD-2041"
+    ]
+  },
+  "phasesConfig": {
+    "scaffold": {
+      "description": "Project scaffolding and TypeScript configuration",
+      "parallelWorktrees": false
+    },
+    "core": {
+      "description": "API client, CLI, and Express server implementation",
+      "parallelWorktrees": true
+    },
+    "ui_and_review": {
+      "description": "HTML dashboard and code review",
+      "parallelWorktrees": true
+    }
+  },
+  "stories": [
+    {
+      "id": "AMSD-2041",
+      "jiraKey": "AMSD-2041",
+      "title": "[GO, UP, MX] Live Preview of Content in CMS",
+      "description": "[GO, UP, MX] Live Preview of Content in CMS",
+      "acceptanceCriteria": [],
+      "codeline": "gotransit",
+      "status": "pending",
+      "completed": false,
+      "agentRole": "typescript-engineer",
+      "agentGroup": "main",
+      "effort": "low",
+      "estimate": 10,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). Acceptance criteria are entirely absent and the description is too vague — no definition of what 'preview' means, which content types are in scope, or how error/edge cases are handled — so different engineers would implement fundamentally different solutions.",
+      "issueType": "Story",
+      "codelines": [
+        "gotransit",
+        "upexpress",
+        "metrolinx"
+      ],
+      "verificationCriteria": [
+        "A tester opens the preview site, edits an unpublished draft entry in the CMS, and observes the edited content appear on the rendered preview page without publishing the entry.",
+        "A tester edits an entry in the CMS while a preview page is open and observes the change appear on that page without performing a full browser reload.",
+        "A tester editing content in the CMS observes the update reflected on the GO Transit preview site.",
+        "A tester editing content in the CMS observes the update reflected on the UP Express preview site.",
+        "A tester editing content in the CMS observes the update reflected on the MX preview site.",
+        "A tester makes several successive edits to the same entry in the CMS and observes each successive change appear on the preview page in turn.",
+        "Text, images, and other entry fields rendered anywhere on a preview page reflect the latest CMS edit without a page reload.",
+        "Content that was not edited in the CMS continues to render correctly on the preview page after other entries have been live-updated.",
+        "A tester observes that an entry which has not been published still renders on the preview site with its latest in-progress edits, while the published content remains unchanged on the live site."
+      ],
+      "vcSource": "description",
+      "vcResolution": "regenerated",
+      "fixSiteAnalysis": [
+        {
+          "file": "src/services/contentstack.ts",
+          "function": "Stack",
+          "reason": "This is where the Contentstack SDK Stack is initialized. Live preview requires the SDK to be configured with live_preview options (enable:true, host) at Stack creation time. Without this, no downstream component can receive live preview events — the SDK itself won't subscribe to the preview delivery stream. Every content fetch flows through this Stack instance.",
+          "fix": "Add live_preview configuration to the options object before it is passed to contentstack.Stack() on line 69. The options object (defined above the gap around lines 30-68) needs a live_preview key: live_preview: { enable: true, host: CONTENTSTACK_PREVIEW_HOST } where CONTENTSTACK_PREVIEW_HOST is read from process.env (add it alongside the existing CONTENTSTACK_API_HOST env var destructuring around line 23). This enables the Contentstack SDK's built-in live preview websocket subscription.",
+          "helper": "",
+          "brokenLine": "export const Stack = contentstack.Stack(options);",
+          "fixVerified": null,
+          "evidenceVerified": true,
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false
+        },
+        {
+          "file": "src/context/ContentstackContext.tsx",
+          "function": "ContentstackProvider",
+          "reason": "The provider currently memoizes defaultContent once and never updates it. For live preview, the context must react to Contentstack SDK live-preview events and push updated content to all consumers (236+ components via useContent). This is the runtime side of live preview: the SDK fires livePreviewUpdate callbacks, and the provider must listen and re-render with the new content.",
+          "fix": "Replace the static useMemo with useState(defaultContent) for content, and add a useEffect that subscribes to the Contentstack SDK's live preview update events (Stack.live_preview.on('update', callback) or the @contentstack/live-preview-utils onEntryUpdate helper). On each event, merge the updated entry into the existing content state so all useContent consumers re-render with fresh data. The subscription should be cleaned up on unmount.",
+          "helper": "",
+          "brokenLine": "content: defaultContent,",
+          "fixVerified": null,
+          "evidenceVerified": true,
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false
+        }
+      ],
+      "storyKind": "novel",
+      "technicalNotes": null,
+      "specification": {
+        "runId": "20260731T010549Z",
+        "assignedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "coordinatorNotes": "Empty acceptance criteria and null spec on a complex cross-platform CMS live-preview feature. Openspec needed first to elaborate AC across GO, UP, and MX contexts; speckit then to harden for edge cases, security, and testability. No prior hand-curation detected.",
+        "status": "completed",
+        "updatedAt": "2026-07-31T01:24:38.388Z",
+        "appliedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": true,
+            "notes": "Novel capability — live preview does not exist in the codebase. Attachment points are the content delivery pipeline (useContent hook, ContentstackContext provider, contentstack service). VCs derived from description since ACs are empty. All Contentstack-dependent criteria are framed at our boundary with explicit mock assumptions.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-07-31T01:24:02.019Z"
+          },
+          {
+            "agent": "speckit",
+            "applied": true,
+            "notes": "Openspec provided empty acceptance criteria, so all 16 criteria are authored from scratch based on the story title '[GO, UP, MX] Live Preview of Content in CMS' and the architectural hints in openspec's notes (useContent hook, ContentstackContext, contentstack service). Coverage: core real-time update behavior (AC 1-3), error handling and reconnection (AC 4-6), concurrent editing (AC 7), rich content (AC 8), performance (AC 9), session longevity (AC 10), security/auth (AC 11-12), accessibility (AC 13), resource cleanup (AC 14), unsupported content types (AC 15), and locale/variant switching (AC 16). All criteria are framed as observable outcomes without prescribing implementation. IMPORTANT CAVEAT: The story description is extremely minimal and no file contents were available for review. These criteria are inferred and may need adjustment once the actual codebase and CMS integration contract are examined. The 5-second latency threshold in AC 1 is a reasonable starting assumption but should be validated against the CMS's actual preview webhook/polling capabilities.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-07-31T01:24:38.388Z"
+          }
+        ],
+        "coordinatorReview": {
+          "verdict": "needs_review",
+          "reviewNotes": "Pipeline breakdown: openspec did not produce acceptance criteria (acceptanceChanged: false, splitCount: 0) despite its stated mandate to elaborate ACs for an empty-criteria story. Speckit compensated by authoring all 16 criteria from scratch with no codebase access, self-flagging output as inferred and unvalidated. Agents did not add non-overlapping value — openspec contributed nothing actionable; speckit performed both roles. The 16 criteria cover broad dimensions (real-time updates, error handling, concurrent editing, security, accessibility, resource cleanup) but rest on ungrounded assumptions (e.g., 5-second latency threshold, Contentstack integration contract). No story splits were produced despite the cross-platform complexity (GO, UP, MX) suggesting decomposition is warranted. Human review needed to validate criteria against actual CMS contracts and determine if the story should be split.",
+          "qualityScore": 0.35,
+          "flags": [
+            "openspec_failed_primary_task",
+            "speckit_compensated_for_openspec",
+            "unvalidated_assumptions_in_acs",
+            "no_story_splits_for_complex_cross_platform_feature",
+            "minimal_story_description_insufficient_for_inference"
+          ],
+          "reviewedAt": "2026-07-31T01:25:05.431Z"
+        }
+      },
+      "estimatedAiMinutes": 3.7916,
+      "estimatedCost": 0.0561,
+      "estimatedTokens": 218267,
+      "estimatedTurns": 9,
+      "estimatedHours": 0.0631,
+      "cpaConfidence": 0.72,
+      "cpaGate": "pass",
+      "ladderTier": "medium",
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
+      "reasoningEffort": "low",
+      "completedAt": "2026-07-31T01:40:24+00:00",
+      "actualCost": 2.8212710000000003,
+      "reviewStatus": "escalated"
+    }
+  ],
+  "currentIteration": 10,
+  "source": "jira",
+  "sourceProject": "AMSD"
+}

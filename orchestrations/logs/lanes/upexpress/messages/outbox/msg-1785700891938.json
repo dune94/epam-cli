@@ -1,0 +1,72 @@
+{
+  "message_id": "msg-1785700891938",
+  "timestamp": "2026-08-02T20:01:31+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 113,
+          "description": "AC3 requires that preview context (live_preview/preview_hash) can flow through to Contentstack queries in setCommonConfig. While ICommonContentstackConfig now has a live_preview field and setCommonConfig handles it, NONE of the public functions (getEntry, getSingleEntry, getAllContentTypeEntries, findSingletonEntry, getSingletonEntry) destructure or forward live_preview to createContentTypeQuery/createContentTypeEntryQuery. Each function explicitly lists its fields and omits live_preview, so it is silently dropped. This makes the setCommonConfig live_preview handling (lines 128-133) dead code — preview context can never reach it.",
+          "suggestedFix": "Add live_preview to the destructuring of each public function and forward it in the createContentTypeQuery/createContentTypeEntryQuery call. For example, in getEntry: destructure `live_preview` from params and include it in the factory.createContentTypeQuery({...}) call. Alternatively, use rest spread (`...rest`) to capture all ICommonContentstackConfig fields and forward them.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/interface/contentstack.ts",
+          "line": 7,
+          "description": "The diff removed the well-typed IContentstackLivePreviewContext interface (which documented enable, preview_token, preview_hash fields) and replaced it with Record<string, string>. This is a significant loss of type safety — Record<string, string> provides no documentation of expected keys and makes all property accesses type-safe even for non-existent keys (TS infers `string` not `string | undefined`). The setCommonConfig code accesses live_preview.live_preview and live_preview.preview_hash, but neither key is documented in the type.",
+          "suggestedFix": "Restore a proper interface for the live_preview query config, e.g.: interface IContentstackLivePreviewQueryConfig { live_preview?: string; preview_hash?: string; }. Or keep IContentstackLivePreviewContext but adapt it for query-level config (distinct from Stack options config).",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 83,
+          "description": "`contentstack.Stack(options as any)` uses an untyped `any` cast without an explanatory comment. While the file has a top-level eslint-disable for no-explicit-any, the review criteria requires explanatory comments for `any` usage. The old code had `as any` on the live_preview block specifically; the new code broadened it to the entire options object.",
+          "suggestedFix": "Add an explanatory comment (e.g., `// Contentstack SDK types do not include live_preview in StackOptions`) or create a proper type declaration that extends the SDK's StackOptions interface.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 130,
+          "description": "Two instances of `(query as any).addParam(...)` use untyped casts without explanatory comments. The Contentstack SDK's Query type may not expose addParam, but the cast should be documented.",
+          "suggestedFix": "Add a comment explaining why the cast is needed (e.g., `// addParam exists on the runtime Query object but is not in the SDK type definitions`), or extend the SDK type declaration to include addParam.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 439,
+          "description": "The three live preview tests only cover Stack options configuration and setHost behavior. No test verifies that live_preview context is actually forwarded through to queries via addParam when passed to getEntry/getSingleEntry/etc. Since setCommonConfig now calls query.addParam('live_preview', ...) and query.addParam('preview_hash', ...), these code paths are untested.",
+          "suggestedFix": "Add a test that calls getEntry (or similar) with a live_preview parameter and asserts that the addParam mock was called with the expected arguments.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 458,
+          "description": "The setHost priority test only verifies that setHost was called with CONTENTSTACK_PREVIEW_HOST. It does not verify that setHost was NOT called with CONTENTSTACK_API_HOST, which would strengthen the priority assertion.",
+          "suggestedFix": "Add an assertion: `expect(testedModule.Stack.setHost).not.toHaveBeenCalledWith('api.example.com')` or verify call count is exactly 1.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

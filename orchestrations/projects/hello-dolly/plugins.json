@@ -1,0 +1,6 @@
+{
+  "_comment": "Mock project plugin registration. Deliberately does NOT register any client's project-specific plugin \u2014 the point is to exercise the SAME provisioning code path with this project's own data. dependency-contract-tools.js ships with the engine and is generic, so it is a legitimate registration here.",
+  "tools": [
+    "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/plugins/dependency-contract-tools.js"
+  ]
+}

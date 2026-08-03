@@ -1,0 +1,72 @@
+{
+  "message_id": "msg-1785532559050",
+  "timestamp": "2026-07-31T21:15:59+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 55,
+          "description": "The @contentstack/live-preview-utils package is not installed in the project (no reference in package.json or src/). Without this SDK, no WebSocket-based Live Preview subscription can be established on the client side. The service-layer fix (live_preview config in Stack options, includeFallback() calls) is correctly implemented, but the client-side real-time update mechanism required by multiple acceptance criteria ('change appears in preview without full reload', 'multiple successive edits appear in turn without manual refresh') is entirely absent.",
+          "suggestedFix": "Install @contentstack/live-preview-utils, create a ContentstackProvider component that calls LivePreview.onEntryChange() with a useState setter, and wrap pages with this provider instead of the raw ContentstackContext.Provider with a static value.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.ts",
+          "line": 4,
+          "description": "useContent calls useContext(ContentstackContext) but there is no reactive Provider component in the codebase. The hook will always return the static value passed at render time. Even if Contentstack live preview events fired, there is no state setter to trigger re-renders of the 236+ consumers. The hook cannot propagate live preview updates as-is. No ContentstackProvider, onEntryChange, or LivePreview references exist anywhere in src/.",
+          "suggestedFix": "Create src/context/ContentstackProvider.tsx with useState for content and useEffect subscribing to LivePreview.onEntryChange(). Replace raw ContentstackContext.Provider usage in page components with <ContentstackProvider>.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/",
+          "line": 0,
+          "description": "No vitest unit tests exist for the Live Preview feature. There are no tests mirroring src/context/ for a ContentstackProvider, no tests for live_preview config in Stack options, no tests for includeFallback() behavior, and no tests verifying reactive content updates. The test count has not increased to cover this new feature, violating the requirement that new features have corresponding vitest unit tests.",
+          "suggestedFix": "Add vitest tests in test/unit/ mirroring src/ paths: test live_preview config presence in options, test includeFallback() is called when live_preview.enable is true, test ContentstackProvider state updates on onEntryChange callback, test useContent returns updated content after provider state change.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 152,
+          "description": "Unable to verify that getStaticProps in page components passes context.preview and context.previewData through to getSingleEntry/getEntry service calls. The service layer correctly accepts live_preview parameter, but if page-level getStaticProps does not pass Next.js preview context through, draft content will never be fetched even though the service layer supports it. This is part of the prescribed minimal fix.",
+          "suggestedFix": "In each page's getStaticProps, check context.preview and pass live_preview: { enable: true, content_type_uid, entry_uid } from context.previewData to getSingleEntry/getEntry calls. Verify this is done in all page components.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 76,
+          "description": "TypeScript strict compliance violation: renderOption uses untyped 'any' — node: { children: any } and next: (arg0: any) => any — without explanatory comments. Also result: any on line 152 in getEntry. These violate the strict typing requirement.",
+          "suggestedFix": "Define proper types for the renderOption callback parameters, e.g. node: { children: React.ReactNode } and next: (children: React.ReactNode) => string. Replace result: any with a properly typed generic or unknown with type narrowing.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+          "line": 18,
+          "description": "Uses type assertion {} as IContentstackLink as a default value. While not a strict violation, this bypasses type safety — an empty object does not structurally satisfy IContentstackLink which requires href and title properties.",
+          "suggestedFix": "Use a properly typed default object: { href: '', title: '' } as IContentstackLink, or handle the undefined case explicitly with optional chaining.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

@@ -1,0 +1,180 @@
+{
+  "id": "jira-sourced-1785426466834",
+  "title": "Metrolinx Brownfield — Jira-sourced",
+  "version": "1.0.0",
+  "lastUpdated": "2026-07-30",
+  "project": {
+    "name": "metrolinx",
+    "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
+    "stack": {
+      "language": "TypeScript",
+      "runtime": "Node.js 20",
+      "framework": "Next.js",
+      "testing": "jest",
+      "cms": "Contentstack",
+      "devEnvironment": "Ubuntu WSL2"
+    },
+    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
+    "outputDirs": [
+      {
+        "codeline": "gotransit",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+      },
+      {
+        "codeline": "upexpress",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+      },
+      {
+        "codeline": "metrolinx",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+      }
+    ]
+  },
+  "configuration": {
+    "profilesPath": "profiles.json",
+    "autoCommit": false,
+    "requireTests": true,
+    "budget": 12,
+    "aiRuntime": {
+      "provider": "claude",
+      "defaultModel": "claude-sonnet-4-6"
+    }
+  },
+  "implementationOrder": {
+    "core": [
+      "AMSD-2041"
+    ]
+  },
+  "phasesConfig": {
+    "scaffold": {
+      "description": "Project scaffolding and TypeScript configuration",
+      "parallelWorktrees": false
+    },
+    "core": {
+      "description": "API client, CLI, and Express server implementation",
+      "parallelWorktrees": true
+    },
+    "ui_and_review": {
+      "description": "HTML dashboard and code review",
+      "parallelWorktrees": true
+    }
+  },
+  "stories": [
+    {
+      "id": "AMSD-2041",
+      "jiraKey": "AMSD-2041",
+      "title": "[GO, UP, MX] Live Preview of Content in CMS",
+      "description": "[GO, UP, MX] Live Preview of Content in CMS — Enable content editors using Contentstack CMS to see real-time updates to content on the preview site without manual page refresh, so that edits made in the CMS are immediately reflected in the live preview experience.",
+      "acceptanceCriteria": [],
+      "codeline": "gotransit",
+      "status": "pending",
+      "completed": false,
+      "agentRole": "typescript-engineer",
+      "agentGroup": "main",
+      "effort": "low",
+      "estimate": 10,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). No acceptance criteria are provided (literally none), and the description is too vague for an agent to determine what preview mechanism, content types, or behaviors are expected.",
+      "issueType": "Story",
+      "codelines": [
+        "gotransit",
+        "upexpress",
+        "metrolinx"
+      ],
+      "verificationCriteria": [
+        "With the preview site open, a content editor changes a text field of a content entry in the Contentstack CMS and saves it; the tester observes the corresponding rendered text on the open preview page update to the new value without the tester reloading or navigating the browser page.",
+        "The updated content appears on the preview page promptly after the CMS edit is saved — the tester does not need to perform a manual refresh, hard reload, or navigation to a different page for the new content to become visible.",
+        "With two or more distinct pieces of content visible on the same preview page, the editor modifies only one of them in the CMS; the tester observes that piece's rendered output update to the new value while the other pieces continue to display their existing content.",
+        "While an edit is applied to the preview page, content the editor did not change continues to render without flickering, blanking out, disappearing, or otherwise visibly disrupting the page.",
+        "The real-time update behaviour described above is observed on each of the GO, UP, and MX preview site variants when content for that variant is edited in the CMS.",
+        "After the editor saves a change in the CMS, the preview page shows the new content with no error message, broken/empty content area, or reversion to the previously displayed (stale) value."
+      ],
+      "vcSource": "description",
+      "vcResolution": "regenerated",
+      "fixSiteAnalysis": [
+        {
+          "file": "src/context/ContentstackContext.tsx",
+          "function": "ContentstackProvider",
+          "reason": "This is the single source of truth for all CMS content consumed by 236+ components via useContent. Currently it holds content as a static memoized value from getStaticProps — it never updates after initial render. Enabling Contentstack live preview requires this provider to become reactive: it must subscribe to Contentstack SDK live preview events and update the context value when the CMS pushes changes, so all downstream consumers re-render with fresh data without a page reload.",
+          "fix": "Replace the static useMemo with useState initialized from defaultContent, then add a useEffect that initializes the Contentstack live preview listener (Stack.livePreview with the app's existing SDK config) and calls the state setter on each preview callback. This makes the entire content tree reactive to CMS edits. The Contentstack SDK's live_preview config and Stack.livePreview.on('entryUpdate', ...) callback are provided by the @contentstack/delivery-sdk already used by this repo's getStaticProps helpers (getSingletonEntry/getSingleEntry).",
+          "helper": "",
+          "brokenLine": "const context = useMemo(",
+          "fixVerified": null,
+          "evidenceVerified": true,
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false
+        }
+      ],
+      "storyKind": "novel",
+      "technicalNotes": {
+        "files": [
+          "src/context/ContentstackContext.tsx",
+          "src/hooks/useContent.ts",
+          "src/interface/content/contentCard.ts",
+          "src/components/contentstack/ContentstackLink/ContentstackLink.tsx"
+        ]
+      },
+      "specification": {
+        "runId": "20260730T154706Z",
+        "assignedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "coordinatorNotes": "Empty AC and null spec on a complex multi-platform live preview feature. Openspec needed first to elaborate requirements and define AC; speckit then hardens for testability, security, and edge cases (e.g., real-time sync, auth/permissions across GO/UP/MX, preview state lifecycle).",
+        "status": "completed",
+        "updatedAt": "2026-07-30T16:01:30.579Z",
+        "appliedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": true,
+            "notes": "Novel capability — live preview requires plugging real-time content update logic into the existing ContentstackContext/useContent pipeline. Verification criteria derived from description since ACs are empty. Criteria stop at the Contentstack boundary (mocked client) per unreachable-service rule.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-07-30T16:00:17.864Z"
+          },
+          {
+            "agent": "speckit",
+            "applied": true,
+            "notes": "Openspec provided empty acceptanceCriteria, so all 11 criteria are new. Criteria are derived from the story description (real-time preview without manual refresh) and the file paths (ContentstackContext, useContent hook, contentCard interface, ContentstackLink component). Without file contents I inferred that ContentstackContext/useContent form the data pipeline and ContentstackLink renders linked entries — AC-7 covers multi-type updates accordingly. AC-3 and AC-4 address reconnection and graceful degradation. AC-5 covers rapid-edit debouncing/coalescing as an edge case. AC-8 addresses security (credential leakage). AC-9 addresses memory leak from uncleaned subscriptions. AC-10 covers deletion/unpublish. AC-11 covers multi-tab scenarios. All criteria are observable outcomes with no implementation instructions. If file contents reveal architectural constraints (e.g., SSR-only rendering, specific Contentstack SDK version), some criteria may need adjustment.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-07-30T16:01:30.579Z"
+          }
+        ],
+        "coordinatorReview": {
+          "verdict": "needs_review",
+          "reviewNotes": "Both agents contributed meaningful, non-overlapping value: openspec established foundational requirements from an empty AC by deriving verification criteria from the story description, and speckit hardened with 11 testable criteria covering edge cases (reconnection, debouncing, credential leakage, memory leaks, deletion/unpublish, multi-tab). However, three concerns require human review. (1) All 11 criteria were inferred from the description and file paths rather than refined from pre-existing AC — speckit explicitly acknowledges that without file contents, architectural assumptions were made that may need adjustment if constraints like SSR-only rendering or specific SDK versions are discovered. (2) Data inconsistency: both agents report acceptanceChanged=false, yet speckit added 11 new criteria to an empty acceptanceCriteria array. Adding criteria to an empty array is a change; this flag should be true or the semantic meaning of the field needs clarification. (3) No story split was proposed (splitCount=0) despite this being a complex multi-platform (GO/UP/MX) feature with real-time sync, cross-platform auth/permissions, and preview state lifecycle — this scope may warrant decomposition into smaller stories. The collaborative work is solid as a first pass but carries elevated risk due to the inferred nature of the criteria.",
+          "qualityScore": 0.7,
+          "flags": [
+            "inferred_criteria_from_description_not_existing_ac",
+            "acceptanceChanged_false_contradicts_added_criteria",
+            "architectural_assumptions_without_file_contents",
+            "no_split_proposed_for_complex_multi_platform_feature"
+          ],
+          "reviewedAt": "2026-07-30T16:02:26.143Z"
+        }
+      },
+      "estimatedAiMinutes": 3.9756,
+      "estimatedCost": 0.1236,
+      "estimatedTokens": 480190,
+      "estimatedTurns": 14,
+      "estimatedHours": 0.0662,
+      "cpaConfidence": 0.72,
+      "cpaGate": "pass",
+      "ladderTier": "medium",
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
+      "reasoningEffort": "low",
+      "completedAt": "2026-07-30T16:07:16+00:00",
+      "actualCost": 1.1953000000000003,
+      "reviewStatus": "escalated"
+    }
+  ],
+  "currentIteration": 9,
+  "source": "jira",
+  "sourceProject": "AMSD"
+}

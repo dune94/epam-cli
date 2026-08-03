@@ -1,0 +1,48 @@
+{
+  "message_id": "msg-1785665835584",
+  "timestamp": "2026-08-02T10:17:15+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 148,
+          "description": "AC3 requires that the live_preview field on ICommonContentstackConfig allows preview context (live_preview/preview_hash) to flow through to Contentstack queries in setCommonConfig. The interface field was added to src/interface/contentstack.ts (lines 9-14), but setCommonConfig (lines 148-175) destructures only { referenceFieldPath, only, except } from config — the live_preview field is silently dropped and never forwarded to the query object. Without this, per-query preview context (e.g. preview_hash) cannot reach Contentstack, meaning linked/tabular references will not show draft values, failing the story's core description: 'linked/tabular references show draft values'.",
+          "suggestedFix": "In setCommonConfig, destructure live_preview from config and forward it to the query. The Contentstack SDK's Query/Entry objects accept preview context via query.addParam('live_preview', JSON.stringify(live_preview)) or by chaining the preview config. At minimum add: if (live_preview) { query.addParam('live_preview', JSON.stringify(live_preview)); }. Also add a unit test verifying that when live_preview is passed in the config, setCommonConfig forwards it to the query.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 82,
+          "description": "The diff changes contentstack.Stack(options) to contentstack.Stack(options as any). This untyped any cast bypasses TypeScript strict compliance because the contentstack SDK types do not include live_preview. While the file has an eslint-disable for no-explicit-any at the top, the review criteria require no untyped any without an explanatory comment. The cast has no comment explaining why it is needed.",
+          "suggestedFix": "Add an explanatory comment next to the cast, e.g.: // contentstack SDK types do not include live_preview; cast is required until SDK types are updated. Alternatively, extend the SDK's StackConfig type via declaration merging instead of using as any.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 240,
+          "description": "The third live-preview test ('should call setHost with CONTENTSTACK_PREVIEW_HOST...') uses jest.doMock inside the test body after a top-level jest.mock('contentstack', ...) already exists. While the test passes, this pattern is fragile — jest.doMock combined with jest.resetModules() inside an individual test can lead to inconsistent mock state across the suite if test ordering changes.",
+          "suggestedFix": "Move the jest.doMock into a beforeAll within a dedicated describe block for the setHost-priority test, ensuring the mock lifecycle is clearly scoped.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

@@ -1,0 +1,6 @@
+{"storyId":"AMSD-2041","phase":"core","status":"attempt","elapsedMinutes":0.81,"costUsd":0.0492,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-29T13:05:36Z"}
+{"storyId":"AMSD-2041","phase":"core","status":"completed","elapsedMinutes":0.81,"costUsd":0.0492,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-29T13:05:37Z"}
+{"storyId":"SPAN-1","phase":"mock3_core","status":"attempt","elapsedMinutes":0.21,"costUsd":0.0028,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-29T13:17:50Z"}
+{"storyId":"SPAN-1","phase":"mock3_core","status":"completed","elapsedMinutes":0.36,"costUsd":0.0028,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-29T13:17:51Z"}
+{"storyId":"SPAN-1","phase":"mock3_core","status":"attempt","elapsedMinutes":0.26,"costUsd":0.0072,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-29T13:18:31Z"}
+{"storyId":"SPAN-1","phase":"mock3_core","status":"completed","elapsedMinutes":0.33,"costUsd":0.0072,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-29T13:18:32Z"}

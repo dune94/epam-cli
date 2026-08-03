@@ -1,0 +1,178 @@
+{
+  "id": "jira-sourced-1785546733653",
+  "title": "Metrolinx Brownfield — Jira-sourced",
+  "version": "1.0.0",
+  "lastUpdated": "2026-08-01",
+  "project": {
+    "name": "metrolinx",
+    "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
+    "stack": {
+      "language": "TypeScript",
+      "runtime": "Node.js 20",
+      "framework": "Next.js",
+      "testing": "jest",
+      "cms": "Contentstack",
+      "devEnvironment": "Ubuntu WSL2"
+    },
+    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
+    "outputDirs": [
+      {
+        "codeline": "gotransit",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+      },
+      {
+        "codeline": "upexpress",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+      },
+      {
+        "codeline": "metrolinx",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+      }
+    ]
+  },
+  "configuration": {
+    "profilesPath": "profiles.json",
+    "autoCommit": false,
+    "requireTests": true,
+    "budget": 12,
+    "aiRuntime": {
+      "provider": "claude",
+      "defaultModel": "claude-sonnet-4-6"
+    }
+  },
+  "implementationOrder": {
+    "core": [
+      "AMSD-2041"
+    ]
+  },
+  "phasesConfig": {
+    "scaffold": {
+      "description": "Project scaffolding and TypeScript configuration",
+      "parallelWorktrees": false
+    },
+    "core": {
+      "description": "API client, CLI, and Express server implementation",
+      "parallelWorktrees": true
+    },
+    "ui_and_review": {
+      "description": "HTML dashboard and code review",
+      "parallelWorktrees": true
+    }
+  },
+  "stories": [
+    {
+      "id": "AMSD-2041",
+      "jiraKey": "AMSD-2041",
+      "title": "[GO, UP, MX] Live Preview of Content in CMS",
+      "description": "[GO, UP, MX] Live Preview of Content in CMS",
+      "acceptanceCriteria": [],
+      "codeline": "gotransit",
+      "status": "pending",
+      "completed": false,
+      "agentRole": "typescript-engineer",
+      "agentGroup": "main",
+      "effort": "low",
+      "estimate": 10,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). No acceptance criteria are provided and the description is too vague for an agent to determine scope, behavior, or integration points without human clarification.",
+      "issueType": "Story",
+      "codelines": [
+        "gotransit",
+        "upexpress",
+        "metrolinx"
+      ],
+      "verificationCriteria": [
+        "When a content editor opens the CMS Live Preview for a page, the previewed page displays the draft (unpublished) version of the edited content rather than the currently published version.",
+        "When a content editor changes the text of a content card in the CMS, the corresponding card on the previewed page visibly shows the updated text without the editor manually reloading the page.",
+        "When a content editor changes a link's label or destination URL in the CMS, the link shown on the previewed page displays the updated label and navigates to the updated destination.",
+        "Content on the previewed page that has not been edited in the CMS continues to display its correct published values.",
+        "When a content editor updates one piece of content in the CMS, all other content visible on the previewed page remains displayed correctly and unchanged."
+      ],
+      "vcSource": "description",
+      "vcResolution": "regenerated",
+      "fixSiteAnalysis": [
+        {
+          "file": "src/services/contentstack.ts",
+          "function": "options",
+          "reason": "This is where the ContentStack SDK Stack is initialized (line 69: contentstack.Stack(options)). The options object (lines 55-67) configures only delivery-token mode (api_key, delivery_token, environment, branch). Live Preview requires adding a live_preview config block here and conditionally using a preview/management token instead of delivery_token when the CMS sends preview parameters. This is the CAUSE — the SDK never initializes with preview capability, so no downstream component can ever render draft content.",
+          "fix": "Add live_preview configuration to the options object and conditionally swap delivery_token for a preview token when CONTENTSTACK_PREVIEW_TOKEN env var is present. Change the options object to include: live_preview: { management_token: CONTENTSTACK_PREVIEW_TOKEN, host: CONTENTSTACK_PREVIEW_HOST || 'api.contentstack.io', enable: !!CONTENTSTACK_PREVIEW_TOKEN }. Also add CONTENTSTACK_PREVIEW_TOKEN and CONTENTSTACK_PREVIEW_HOST to the destructured env vars at lines 17-24. When live_preview.enable is true, the contentstack SDK will fetch draft entries instead of only published ones, enabling CMS live preview. The existing contentstack Stack initialization on line 69 (contentstack.Stack(options)) needs no change — it already passes the full options object, so adding the live_preview key to options is sufficient for the SDK to activate preview mode.",
+          "helper": "",
+          "brokenLine": "export const options = {\n  api_key: CONTENTSTACK_API_KEY,\n  delivery_token: CONTENTSTACK_DELIVERY_TOKEN,\n  environment: CONTENTSTACK_ENVIRONMENT,\n  branch: CONTENTSTACK_BRANCH,\n  ...(CONTENTSTACK_FETCH_TIMEOUT\n    ? {\n        fetchOptions: {\n          timeout: Number(CONTENTSTACK_FETCH_TIMEOUT),\n        },\n      }\n    : {}),\n};",
+          "fixVerified": null,
+          "evidenceVerified": true,
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false
+        }
+      ],
+      "storyKind": "novel",
+      "technicalNotes": {
+        "files": [
+          "src/hooks/useContent.ts",
+          "src/services/contentstack.ts",
+          "src/interface/content/contentCard.ts",
+          "src/components/contentstack/ContentstackLink/ContentstackLink.tsx"
+        ]
+      },
+      "specification": {
+        "runId": "20260801T011051Z",
+        "assignedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "coordinatorNotes": "Cross-platform feature (GO, UP, MX) with empty acceptance criteria and no existing spec. Complex real-time preview requires openspec to elaborate ACs, define preview architecture, and propose platform-specific story splits; speckit to harden testability, flag edge cases around real-time sync, preview endpoint auth, and content-state consistency. Priority high due to multi-platform scope and zero baseline.",
+        "status": "completed",
+        "updatedAt": "2026-08-01T01:19:41.561Z",
+        "appliedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": true,
+            "notes": "Novel story — Live Preview is a new CMS capability. Attachment point is useContent hook (236 callers). VCs derived from description since ACs are empty. Previous rejection required measurable, specific VCs rather than generic boilerplate.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-08-01T01:18:21.972Z"
+          },
+          {
+            "agent": "speckit",
+            "applied": true,
+            "notes": "Openspec provided empty ACs (no criteria to review), so I authored the full list. ACs are derived from the story title, description, and the four file paths which indicate the feature spans a content hook, the Contentstack service layer, a content interface, and a link component. Key design decisions: (1) I assumed Contentstack's standard live-preview mechanism (query parameter/hash) since no API contract was provided — this may need adjustment once actual Contentstack SDK integration details are known. (2) AC-9 addresses authorization since serving draft content to anonymous visitors is a security risk. (3) AC-10 ensures preview code has zero cost on the published-path. (4) AC-8 and AC-12 cover schema-mismatch and structural-change edge cases common when real-time preview serves in-flight edits. (5) AC-11 specifically exercises ContentstackLink since it was listed as a touched file. CAVEAT: Without reading the actual file contents I am inferring the Contentstack Live Preview API contract and current code architecture; the exact parameter names and behavior should be validated against the Contentstack SDK docs and existing code.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-08-01T01:19:41.560Z"
+          }
+        ],
+        "coordinatorReview": {
+          "verdict": "needs_review",
+          "reviewNotes": "Both agents added non-overlapping value: openspec identified the attachment point (useContent hook, 236 callers) and derived VCs from the description, providing architectural context; speckit proposed detailed ACs covering security (draft auth), performance (zero-cost on published path), and edge cases (schema mismatch, structural changes). However, two concerns warrant human review. First, openspec's contribution is thin — mostly contextual notes with no concrete elaboration output beyond identifying the hook and rejection history. Second, speckit explicitly admits it did not read actual file contents and inferred the Contentstack Live Preview API contract, introducing unvalidated assumptions into a cross-platform (GO, UP, MX) feature. While the system correctly blocked AC mutation (acceptanceChanged: false on both agents), speckit's attempt to author ACs on an immutable brownfield ticket — even if advisory — means the proposed criteria need validation against the real Contentstack SDK and existing code before any implementation proceeds.",
+          "qualityScore": 0.55,
+          "flags": [
+            "openspec_thin_contribution",
+            "speckit_inferred_api_contract_without_code_review",
+            "speckit_attempted_ac_authoring_on_immutable_brownfield"
+          ],
+          "reviewedAt": "2026-08-01T01:19:55.593Z"
+        }
+      },
+      "estimatedAiMinutes": 3.84,
+      "estimatedCost": 0.119,
+      "estimatedTokens": 136417,
+      "estimatedTurns": 8,
+      "estimatedHours": 0.064,
+      "cpaConfidence": 0.78,
+      "cpaGate": "pass",
+      "ladderTier": "medium",
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
+      "reasoningEffort": "low",
+      "completedAt": "2026-08-01T01:25:45+00:00",
+      "actualCost": 6.8773069999999965,
+      "reviewStatus": "escalated"
+    }
+  ],
+  "currentIteration": 10,
+  "source": "jira",
+  "sourceProject": "AMSD"
+}

@@ -1,0 +1,80 @@
+{
+  "message_id": "msg-1785405132503",
+  "timestamp": "2026-07-30T09:52:12+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 72,
+          "description": "The implementation hand-rolls a window 'message' event listener and a custom extractDraftContent parser instead of using the Contentstack Live Preview SDK's onLivePreview callback as prescribed in the root cause analysis. The SDK already handles message filtering, payload parsing, and content extraction. The custom extractDraftContent guesses at payload shape with chained optional access (payload?.data?.entry ?? payload?.entry ?? payload?.content ?? payload?.data?.content) which is fragile and not guaranteed to match the SDK's actual message format.",
+          "suggestedFix": "Replace the hand-rolled message listener with the Contentstack Live Preview SDK's onLivePreview callback. Import the SDK and call its onLivePreview method inside the useEffect, passing a callback that receives the already-parsed draft content and calls setLiveContent. Remove extractDraftContent entirely.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 38,
+          "description": "isLivePreviewEnabled uses window.self !== window.top as a fallback iframe detection, which is a generic iframe check — not specific to the Contentstack CMS editor. This could enable live preview message handling in any iframe context (e.g., social media embeds, third-party iframe wrappers), not just the CMS editor. The prescribed fix says to use the SDK's isLivePreviewEnabled or window.__CONTENTSTACK_LIVE_PREVIEW__ only.",
+          "suggestedFix": "Remove the window.self !== window.top fallback. Only check window.__CONTENTSTACK_LIVE_PREVIEW__ (or the SDK's isLivePreviewEnabled if available). If the SDK provides an isLivePreviewEnabled function, use that instead of reimplementing detection.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/context/ContentstackContext.test.tsx",
+          "line": 0,
+          "description": "No unit tests exist for the modified ContentstackProvider. The review criteria require new features to have corresponding vitest unit tests in test/unit/ mirroring the src/ path. The live preview subscription logic, isLivePreviewEnabled detection, and content merging behavior are all untested.",
+          "suggestedFix": "Add test/unit/context/ContentstackContext.test.tsx with tests covering: (1) provider initializes with default content, (2) live preview events update content when isLivePreviewEnabled is true, (3) live preview events are ignored when not in CMS editor, (4) malformed message payloads don't crash the provider, (5) content prop changes sync to state.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 48,
+          "description": "extractDraftContent uses untyped 'any' via Record<string, any> without an explanatory comment, violating TypeScript strict compliance. The function parameter is typed as 'unknown' (good) but internally casts to Record<string, any> and accesses properties with untyped any, losing type safety.",
+          "suggestedFix": "If keeping this function (though it should be replaced by SDK usage per blocker above), define an interface for the expected message payload shape and use type narrowing instead of Record<string, any>. Add explanatory comments for any remaining 'any' usage.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 65,
+          "description": "The useEffect that syncs the content prop to state (setLiveContent(content)) can overwrite live preview draft updates. If the parent re-renders and passes the same or updated published content prop while a live preview session is active, this effect fires and replaces the draft content with published content, causing a flicker or revert. The prescribed fix says content should be mutable via live-preview events — this sync effect contradicts that.",
+          "suggestedFix": "Remove the content-to-state sync useEffect. Initialize state with the content prop once (useState already does this). If the content prop can change at runtime (e.g., page navigation), handle that separately with a guard that only syncs when NOT in live preview mode, or use a key-based remount strategy.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 88,
+          "description": "The useMemo wrapping liveContent is redundant: const value = useMemo(() => liveContent, [liveContent]) adds no memoization benefit since liveContent is already a state value that only changes when setLiveContent is called. The context provider will re-render consumers whenever liveContent changes regardless of this useMemo.",
+          "suggestedFix": "Pass liveContent directly to the Provider: <ContentstackContext.Provider value={liveContent}>. Remove the useMemo import if no longer used elsewhere.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 15,
+          "description": "The global Window interface declares __CONTENTSTACK_LIVE_PREVIEW__ as 'unknown' type. Since it's only used in a boolean context (truthiness check), typing it as 'unknown' works but is imprecise. The Contentstack SDK likely types this as a specific object or boolean.",
+          "suggestedFix": "Type __CONTENTSTACK_LIVE_PREVIEW__ as the SDK's defined type (e.g., boolean or a specific config object interface) if the SDK provides types, or at minimum use 'boolean | object | undefined' to be more precise than 'unknown'.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

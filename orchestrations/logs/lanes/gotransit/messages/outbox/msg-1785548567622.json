@@ -1,0 +1,64 @@
+{
+  "message_id": "msg-1785548567622",
+  "timestamp": "2026-08-01T01:42:47+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 38,
+          "description": "ContentstackProvider still uses useMemo to freeze defaultContent at initial render time. No useState/useEffect was added, and no live preview callback (e.g., Stack.livePreview.onContentUpdate) is registered anywhere in the codebase. The context value never updates after mount, so none of the 236+ useContent consumers can receive live preview updates. This fails every acceptance criterion related to real-time edits appearing without a page reload (criteria 3, 5).",
+          "suggestedFix": "Replace useMemo with useState initialized to defaultContent. Add a useEffect that registers Stack.livePreview.onContentUpdate (or @contentstack/live-preview-utils onEntryUpdate) to call setContent with the updated entry, merging it into the existing content state. Clean up the listener on unmount.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/interface/contentstack.ts",
+          "line": 1,
+          "description": "No includeDraft field exists on IContentstackGetEntry, IContentstackGetSingleEntry, IContentstackGetSingletonEntry, ICreateQueryConfig, or ICreateEntryConfig. The public-facing functions (getEntry, getSingleEntry, getSingletonEntry, findSingletonEntry) do not accept or propagate includeDraft to the factory. Without this, draft content can never be fetched — the preview site will only show published content, failing the core acceptance criterion that unpublished draft entries render on the preview site (criteria 1, 5).",
+          "suggestedFix": "Add includeDraft?: boolean to IContentstackPageConfig (or ICommonContentstackConfig). In each service function, when includeDraft is true, call query.addParam('include_draft', 'true') on the query before find/fetch. Thread includeDraft from page-level getStaticProps through to these service calls.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 23,
+          "description": "No page-level getStaticProps (or any caller) passes context.preview or live_preview through to contentstack service calls. Grep across src/ for 'preview', 'livePreview', 'includeDraft', 'include_draft' returned zero results outside the options object. Without this propagation, activating preview mode cannot trigger draft content fetching — the preview flag never reaches the query layer, failing criteria 1 and 5.",
+          "suggestedFix": "In getStaticProps (or wherever content is fetched), detect the live_preview query parameter from the request/context, set includeDraft: true when present, and pass it through to getEntry/getSingleEntry/getSingletonEntry calls.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/",
+          "line": 0,
+          "description": "No vitest unit tests were added for the live preview / includeDraft functionality. Grep across test/ for 'live_preview', 'livePreview', 'includeDraft', 'include_draft', 'ContentstackContext', 'ContentstackProvider' returned zero matches. Per review criteria, new features must have corresponding vitest unit tests mirroring the src/ path. There are zero tests verifying that the options object includes live_preview with correct host/management_token/enable, that includeDraft: true causes addParam('include_draft', 'true'), or that setContent updates the context and triggers re-renders.",
+          "suggestedFix": "Add test files mirroring src/ paths: test/unit/services/contentstack.spec.ts (verify live_preview config: host=CONTENTSTACK_PREVIEW_HOST, management_token=CONTENTSTACK_PREVIEW_TOKEN, enable=true when token set, enable=false when empty) and test/unit/context/ContentstackContext.spec.tsx (verify initial state matches defaultContent, setContent updates context, live preview callback registration triggers re-render).",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 59,
+          "description": "When CONTENTSTACK_PREVIEW_TOKEN is empty, live preview is silently disabled (enable evaluates to false) with no warning or error logged. The existing code logs errors for missing CONTENTSTACK_API_KEY, CONTENTSTACK_DELIVERY_TOKEN, CONTENTSTACK_ENVIRONMENT, and CONTENTSTACK_BRANCH, but no equivalent warning exists for the missing preview token. An operator or editor will see published content with no indication that draft preview is unavailable, failing the acceptance criterion about graceful fallback with clear state (criterion 6).",
+          "suggestedFix": "Add a logger.warn('Contentstack preview token not provided; live preview disabled') when CONTENTSTACK_PREVIEW_TOKEN is empty and isTestEnv() is false, similar to the existing pattern for other missing env vars.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

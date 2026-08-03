@@ -1,0 +1,50 @@
+{
+  "runId": "20260730T121613Z",
+  "phase": "mock3_core",
+  "startedAt": "2026-07-30T12:16:27.816Z",
+  "stories": [
+    {
+      "storyId": "SPAN-1",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "appliedAgents": [
+        "openspec"
+      ],
+      "notes": "Trivial string replacement with unambiguous AC — no elaboration needed, no testability/security gaps to harden",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Classified as defect: existing function returns wrong value. No code was injected in this prompt, so locationHint is empty — cannot fabricate unseen file paths. VCs derived directly from the 3 well-formed ACs; no split needed (AC count 3, single runtime role, no frontend/build or impl/test split).",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-30T12:18:27.050Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "approved",
+        "reviewNotes": "Coordinator correctly identified this as a trivial string replacement requiring only openspec. Openspec added meaningful value: classified as defect, confirmed no split needed (3 ACs, single runtime role), refused to fabricate file paths, and preserved original ACs without mutation. Speckit was appropriately skipped — no testability/security/edge-case concerns exist for a greeting string change. The three ACs are complete (functional return value, test assertion update, type-check), testable (deterministic assertions), and non-overlapping (distinct concerns). No human review needed.",
+        "qualityScore": 0.95,
+        "flags": [],
+        "reviewedAt": "2026-07-30T12:19:04.273Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 1,
+    "coordinatorReviewCompleted": true,
+    "approved": 1,
+    "needsReview": 0
+  },
+  "completedAt": "2026-07-30T12:19:09.963Z",
+  "storyCount": 1
+}

@@ -1,0 +1,56 @@
+{
+  "message_id": "msg-1785704018457",
+  "timestamp": "2026-08-02T20:53:38+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 147,
+          "description": "AC#3 requires preview context to 'flow through to Contentstack queries in setCommonConfig'. While ICommonContentstackConfig now has the live_preview field and setCommonConfig calls (query as any).live_preview(live_preview), this is dead code — none of the public functions (getEntry, getSingleEntry, getAllContentTypeEntries, findSingletonEntry) destructure or forward live_preview to createContentTypeQuery/createContentTypeEntryQuery. They use explicit destructuring without a rest operator, so live_preview is silently dropped at every call site. A caller can pass live_preview (the type allows it) but it will never reach setCommonConfig. This directly contradicts AC#3 and the prior review feedback item: 'query config interfaces lack live_preview fields to forward preview context through to Contentstack queries'.",
+          "suggestedFix": "Add live_preview to the destructuring of each public function and pass it through to the query builder call. For example, in getEntry: add `live_preview` to the destructured params and include `live_preview` in the createContentTypeQuery call object. Do the same for getSingleEntry, getAllContentTypeEntries, findSingletonEntry, and getSingletonEntry.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 33,
+          "description": "The mock for contentstack Stack had `addParam` removed (line 34 in the diff) but no `live_preview` mock method was added. The new setCommonConfig implementation calls `(query as any).live_preview(live_preview)`. If the forwarding blocker above is fixed and any test passes live_preview through to setCommonConfig, the test will crash with 'live_preview is not a function' because the mock object has no such method.",
+          "suggestedFix": "Add `live_preview: jest.fn().mockReturnThis()` to the jest.mock('contentstack') Stack factory mock object, alongside the existing methods like `where`, `only`, etc.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 181,
+          "description": "No test verifies that live_preview context actually flows through a public function (getEntry, getSingleEntry, etc.) to the query via setCommonConfig. AC#4 and AC#3 require that preview context 'can flow through to Contentstack queries in setCommonConfig'. The existing tests only verify Stack-level options and setHost behavior, not query-level forwarding.",
+          "suggestedFix": "Add a test that calls getEntry (or another public function) with a live_preview parameter and asserts that the query's live_preview method was called with the correct object (e.g., { enable: true, preview_hash: 'test-hash' }).",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 120,
+          "description": "`(query as any).live_preview(live_preview)` uses an untyped `any` cast without an explanatory comment. While the file has a top-level `/* eslint-disable @typescript-eslint/no-explicit-any */`, the review criteria require an explanatory comment for any usage. The Contentstack SDK's Query type doesn't expose live_preview in its TypeScript definitions, which should be documented.",
+          "suggestedFix": "Add an inline comment: `// Contentstack SDK Query type does not expose live_preview in its TS definitions` next to the cast.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

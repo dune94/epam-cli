@@ -1,0 +1,64 @@
+{
+  "message_id": "msg-1785695537623",
+  "timestamp": "2026-08-02T18:32:17+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 436,
+          "description": "Test count decreased: 5 live preview tests were removed and only 3 re-added (net -2, total dropped from 22 to 20). The removed tests 'should call setHost with CONTENTSTACK_API_HOST when CONTENTSTACK_PREVIEW_HOST is unset' and 'should not call setHost when neither CONTENTSTACK_PREVIEW_HOST nor CONTENTSTACK_API_HOST is set' covered important fallback behavior. Review criteria explicitly requires the total test count not decrease.",
+          "suggestedFix": "Re-add the two removed tests for setHost fallback to CONTENTSTACK_API_HOST and for no setHost call when neither host env var is set. These cover edge cases that the 3 retained tests do not.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 471,
+          "description": "No test verifies that setCommonConfig forwards live_preview/preview_hash to Contentstack queries via addParam. The addParam mock was added to the mock Stack (line 34) but is never asserted against in any test. AC #3 requires that 'preview context (live_preview/preview_hash) can flow through to Contentstack queries in setCommonConfig' — this code path is completely untested.",
+          "suggestedFix": "Add a test that calls getEntry or getSingleEntry with a live_preview config (e.g., { live_preview: { enable: true, preview_hash: 'abc123' } }) and asserts that query.addParam was called with ('live_preview', 'true') and ('preview_hash', 'abc123').",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 82,
+          "description": "contentstack.Stack(options as any) introduces an untyped 'any' cast without an explanatory comment. While the file has a top-level /* eslint-disable @typescript-eslint/no-explicit-any */, the new 'as any' on the Stack constructor bypasses all type checking on the entire options object. The previous code used a more targeted 'as unknown as contentstack.LivePreview' cast only on the live_preview spread.",
+          "suggestedFix": "Either type the options object to match contentstack.Stack's expected Config type, or use a targeted cast with an inline comment explaining the type mismatch (e.g., '// Contentstack SDK types do not include live_preview in Config'). Avoid casting the entire options object to any.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 117,
+          "description": "(query as any).addParam(...) uses untyped 'any' casts (twice) to call addParam, which is not in the contentstack.Query type. This hand-rolls parameter forwarding instead of using any SDK-provided method. If addParam is not in the SDK types, the cast should include an explanatory comment per TypeScript strict compliance rules.",
+          "suggestedFix": "Add an inline comment explaining why the cast is needed (e.g., '// addParam is available at runtime but not in SDK type definitions'). Alternatively, check if the Contentstack SDK provides a typed method for adding preview parameters.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/interface/contentstack.ts",
+          "line": 8,
+          "description": "Interface shape change removes the 'live_preview?: string' property from ICommonContentstackConfig.live_preview, replacing it with 'enable?: boolean'. The old shape { live_preview?: string; preview_hash?: string } allowed callers to forward a live_preview hash string; the new shape { enable?: boolean; preview_hash?: string } drops that capability. setCommonConfig now hardcodes addParam('live_preview', 'true') instead of reading a value from config. Any external callers passing the old shape will fail to compile.",
+          "suggestedFix": "If this is intentional, document the breaking change. If backward compatibility is needed, consider keeping live_preview?: string alongside enable?: boolean and preview_hash?: string.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

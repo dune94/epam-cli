@@ -1,0 +1,56 @@
+{
+  "runId": "20260803T180646Z",
+  "phase": "core",
+  "startedAt": "2026-08-03T18:25:19.991Z",
+  "stories": [
+    {
+      "storyId": "AMSD-2041",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "appliedAgents": [
+        "openspec"
+      ],
+      "notes": "Spec status is 'completed' with both openspec and speckit already applied. Coordinator review flagged needs_review due to speckit being unable to read actual file contents and deriving ACs from assumptions. Re-running the same agents would reproduce the same file-access limitation. This story requires human validation against the actual codebase, not additional spec agent runs.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Novel capability — no Live Preview SDK client-side integration exists. contentstack.ts has partial live_preview config at SDK init (enable flag, host, management_token) but no client-side SDK wiring, no hash-based content resolution, no real-time update subscription. useContent is the 236-caller central hook that must integrate preview content resolution. All 4 prior flags addressed: (1) file contents read from CodeGraph/Semble blocks above; (2) ACs and VCs derived from actual code patterns seen (useContent.getContentByKey, contentstack.ts live_preview config); (3) cross-platform scope [GO, UP, MX] reflected in attachment points that exist identically across all 3 codelines per technicalNotes; (4) human validation enabled by grounding every location hint in verifiable code paths.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-03T18:31:46.307Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "needs_review",
+        "reviewNotes": "openspec added meaningful, grounded value: architecture discovery identifying useContent as the 236-caller central hook, confirming no existing client-side Live Preview SDK wiring, and locating partial live_preview config in contentstack.ts. However, the pipeline is incomplete — agentContributions and appliedAgents list only openspec, yet coordinatorReview references speckit-derived ACs (14 ACs covering rendering, real-time updates, security, etc.). This speckit work was never recorded as applied, creating an inconsistency between the review narrative and the actual agentContributions. Additionally, the coordinator review itself flags that speckit could not read actual file contents and based ACs on assumptions rather than the real codebase. As a brownfield ticket, AC immutability and split quality are not evaluated. Human review is required to: (1) resolve the missing speckit application record, (2) validate any derived ACs against the actual codebase, and (3) confirm cross-platform [GO, UP, MX] scope assumptions.",
+        "qualityScore": 0.6,
+        "flags": [
+          "speckit_not_recorded_in_agent_contributions",
+          "coordinator_review_references_unrecorded_speckit_work",
+          "acs_based_on_assumptions_not_code",
+          "cross_platform_scope_go_up_mx",
+          "human_validation_needed_against_actual_codebase"
+        ],
+        "reviewedAt": "2026-08-03T18:32:01.423Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 1,
+    "coordinatorReviewCompleted": true,
+    "approved": 0,
+    "needsReview": 1
+  },
+  "completedAt": "2026-08-03T18:32:24.112Z",
+  "storyCount": 1
+}

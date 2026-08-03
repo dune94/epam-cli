@@ -1,0 +1,1 @@
+{"ts":"2026-07-26T19:44:02Z","story_id":"AMSD-1820","retry":1,"rung":0,"target":"none","diagnosis":"Missing closing parenthesis at line 73 of apply-report-discounts.service.ts causing TS1005 syntax error.","patches_applied":0,"profile_updated":false}

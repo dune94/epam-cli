@@ -1,0 +1,53 @@
+{
+  "runId": "20260730T024910Z",
+  "phase": "mock3_core",
+  "startedAt": "2026-07-30T02:49:38.471Z",
+  "stories": [
+    {
+      "storyId": "SPAN-1",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "appliedAgents": [
+        "openspec"
+      ],
+      "notes": "Trivial string literal replacement with precise, fully-testable AC and no architectural complexity, security concerns, or ambiguity. No elaboration or hardening required.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Classified as defect: getGreeting() exists but returns the wrong string. No code was injected, so locationHint is empty to avoid fabrication. VCs are black-box observable checks derived from both ACs and description.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-30T02:51:45.017Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "approved",
+        "reviewNotes": "Single-atom string literal replacement. ACs are complete, black-box testable, and non-overlapping (functional output, test assertion alignment, type safety). Speckit was correctly skipped — no security surface, edge cases, or architectural complexity to harden. Openspec contributed classification only (no AC changes, no splits), which is appropriate for a defect-level change but yields marginal elaboration value; the coordinator's decision to run even openspec was conservative and defensible. No acceptance criteria were mutated (acceptanceChanged: false). No story split needed or produced. No flags requiring human intervention.",
+        "qualityScore": 0.85,
+        "flags": [
+          "speckit_skipped_intentional",
+          "openspec_value_marginal"
+        ],
+        "reviewedAt": "2026-07-30T02:52:25.786Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 1,
+    "coordinatorReviewCompleted": true,
+    "approved": 1,
+    "needsReview": 0
+  },
+  "completedAt": "2026-07-30T02:52:40.124Z",
+  "storyCount": 1
+}

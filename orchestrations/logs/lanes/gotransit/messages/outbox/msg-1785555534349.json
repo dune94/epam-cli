@@ -1,0 +1,96 @@
+{
+  "message_id": "msg-1785555534349",
+  "timestamp": "2026-08-01T03:38:54+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 27,
+          "description": "The `options` object passed to `contentstack.Stack(options)` has no `live_preview` key. Without this, the Contentstack SDK never initializes its live preview subsystem, so `Stack.livePreview` is undefined and the `onEntryChange` subscription in ContentstackContext.tsx (line 118) will never fire. Every acceptance criterion depends on this SDK-level configuration being present.",
+          "suggestedFix": "Add a `live_preview` key to the options object: `live_preview: { management_token: CONTENTSTACK_PREVIEW_TOKEN, enable: !!CONTENTSTACK_PREVIEW_TOKEN, host: CONTENTSTACK_PREVIEW_HOST }`. Read CONTENTSTACK_PREVIEW_TOKEN and CONTENTSTACK_PREVIEW_HOST from process.env with appropriate validation/logging.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/interface/contentstack.ts",
+          "line": 1,
+          "description": "No `includeDraft` field exists on IContentstackGetEntry, IContentstackGetSingleEntry, IContentstackGetSingletonEntry, ICreateQueryConfig, or ICreateEntryConfig. The public-facing functions (getEntry, getSingleEntry, getSingletonEntry, findSingletonEntry) do not accept or propagate includeDraft to the factory. This means draft content can never be fetched — the preview site will only show published content, failing the core acceptance criterion that draft entries render on the preview site.",
+          "suggestedFix": "Add `includeDraft?: boolean` to ICommonContentstackConfig (or each relevant interface). In ContentstackFactory.setCommonConfig or createContentTypeQuery, when includeDraft is true, call `query.addParam('include_draft', 'true')`. Propagate the flag through getEntry, getSingleEntry, getSingletonEntry, and findSingletonEntry.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 115,
+          "description": "The `onEntryChange` subscription casts `data as Partial<IContentstackContent>` without any runtime validation or type narrowing. The callback parameter is typed as `unknown`, but the cast to `Partial<IContentstackContent>` is an unsafe type assertion that bypasses TypeScript strict compliance. The actual shape of Contentstack's live preview callback data is not verified to match IContentstackContent's structure.",
+          "suggestedFix": "Define an explicit interface for the Contentstack live preview callback payload (e.g., `IContentstackLivePreviewEvent`), type the callback parameter accordingly, and validate/sanitize the incoming data before merging it into state. At minimum, add an explanatory comment justifying the cast if the SDK's types are insufficient.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 81,
+          "description": "`process.env.CONTENTSTACK_LIVE_PREVIEW` and `process.env.CONTENTSTACK_PREVIEW_KEY` are read directly inside the component body. Per review criteria, no hardcoded strings for configuration values — environment variable names should use named constants. Additionally, reading process.env in a React component is a Next.js anti-pattern that can cause issues with client-side rendering.",
+          "suggestedFix": "Extract environment variable names to constants in src/config/constants.ts. For Next.js, these should be read at build time via next.config or passed as props from getStaticProps/getServerSideProps.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/",
+          "line": 0,
+          "description": "No vitest unit tests were added for the live preview functionality. The test/unit/ directory does not exist. Per review criteria, new features must have corresponding vitest unit tests mirroring the src/ path. There are zero tests verifying that setContent updates the context value, that the initial state matches defaultContent, that onEntryChange triggers updateContent, or that includeDraft propagates correctly.",
+          "suggestedFix": "Create test/unit/context/ContentstackContext.spec.tsx testing: (1) initial state matches defaultContent, (2) updateContent merges partial updates, (3) onEntryChange subscription calls updateContent when livePreview.enabled is true, (4) onEntryChange is not subscribed when livePreview.enabled is false. Also create test/unit/services/contentstack.spec.ts testing includeDraft propagation.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+          "line": 29,
+          "description": "ContentstackLink now reads livePreview from context and appends `live_preview` query params to hrefs. This is scope beyond the prescribed minimal fix — the root cause analysis prescribes changes only to ContentstackProvider (useState + onEntryChange) and contentstack.ts (live_preview SDK config). Adding preview params to links is a separate concern that adds complexity without addressing the core live preview mechanism.",
+          "suggestedFix": "Remove the ContentstackLink changes unless they are explicitly required by a separate acceptance criterion. The prescribed minimal fix achieves live preview through context state updates, not URL parameter appending.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/interface/content/contentCard.ts",
+          "line": 14,
+          "description": "`previewId`, `isPreview`, and `previewTimestamp` fields were added to IContentCard. These fields are not part of the prescribed minimal fix and appear to be unused by any component in the reviewed files. This is over-engineering beyond what the acceptance criteria require.",
+          "suggestedFix": "Remove these fields unless they are consumed by a component that needs them. The prescribed fix achieves live preview through the context provider's state management, not through per-entry preview metadata.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 95,
+          "description": "The useEffect that syncs defaultContent into state on every defaultContent prop change (lines 95-101) is redundant with the useState initializer on line 80. If defaultContent changes, the useState initializer already handles the first render, and this effect causes unnecessary re-renders and potential content overwrites when live preview has already updated the state. This can clobber live preview updates if the parent re-renders with the same defaultContent reference.",
+          "suggestedFix": "Remove this useEffect. If defaultContent truly needs to be re-synced when it changes, use a ref to track the previous defaultContent and only update when the reference actually changes, but the prescribed fix does not require this.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 68,
+          "description": "`useContentstackContext` throws a generic `Error` when context is null. Per review criteria, proper EpamError subclasses (or project-equivalent error subclasses) should be used rather than generic Error throws.",
+          "suggestedFix": "Use a project-specific error class (e.g., ConfigError or a ContextError) instead of generic Error.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

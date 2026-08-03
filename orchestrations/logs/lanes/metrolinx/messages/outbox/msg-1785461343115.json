@@ -1,0 +1,72 @@
+{
+  "message_id": "msg-1785461343115",
+  "timestamp": "2026-07-31T01:29:03+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 55,
+          "description": "The prescribed root cause fix was NOT implemented. The `options` object (lines 55-67) lacks the `live_preview` configuration required by Contentstack's Live Preview SDK. There is no `live_preview: { enable: CONTENTSTACK_LIVE_PREVIEW === 'true', preview_timestamp: CONTENTSTACK_PREVIEW_TOKEN }` property, no env var reading for CONTENTSTACK_LIVE_PREVIEW or CONTENTSTACK_PREVIEW_TOKEN, and no `Stack.livePreview(options)` call after Stack creation (after line 72). Without this, no downstream component can receive real-time preview data — this is the root cause.",
+          "suggestedFix": "Add `CONTENTSTACK_LIVE_PREVIEW = ''` and `CONTENTSTACK_PREVIEW_TOKEN = ''` to the process.env destructuring (lines 17-24). Add `live_preview: { enable: CONTENTSTACK_LIVE_PREVIEW === 'true', preview_timestamp: CONTENTSTACK_PREVIEW_TOKEN }` to the `options` object (lines 55-67). After `export const Stack = contentstack.Stack(options);` (line 72), call `Stack.livePreview(options);` per Contentstack Live Preview SDK docs.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 0,
+          "description": "The file does not exist. The prescribed ContentstackProvider component with useState for reactive content and useEffect subscribing to LivePreview.onEntryChange() was never created. Without a reactive state mechanism, no downstream consumer (236+ components using useContent) can ever receive live preview updates. Every acceptance criterion — real-time update without reload, consecutive edits appearing live, in-place rendering — is unmet because the reactivity mechanism is entirely absent.",
+          "suggestedFix": "Create src/context/ContentstackContext.tsx with a ContentstackProvider component that: (1) imports and initializes @contentstack/live-preview-utils (LivePreview) at module level with the same Stack config; (2) uses useState for content initialized from defaultContent; (3) uses useEffect that calls LivePreview.onEntryChange(callback) to update content state whenever Contentstack emits a preview change; (4) provides the reactive content value via ContentstackContext.Provider.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "package.json",
+          "line": 0,
+          "description": "The @contentstack/live-preview-utils dependency is not installed anywhere in the project. No import of this package exists in the codebase. Without the SDK, no Live Preview subscription can be established.",
+          "suggestedFix": "Add @contentstack/live-preview-utils as a dependency in package.json and import it in the ContentstackProvider component.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.ts",
+          "line": 0,
+          "description": "The useContent hook file does not exist at the expected path. The hook that 236+ components rely on to consume content cannot propagate live preview updates without a reactive Provider component feeding it context. Even if the hook exists elsewhere, without the ContentstackProvider supplying reactive state, useContent will always return a static value.",
+          "suggestedFix": "Ensure useContent calls useContext(ContentstackContext) and that ContentstackContext is supplied by the new reactive ContentstackProvider component, not a raw Context.Provider with a static value.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/interface/content/contentCard.ts",
+          "line": 0,
+          "description": "The file does not exist at the expected path. TypeScript strict compliance cannot be verified for the content card interface, and the live preview feature requires properly typed content interfaces.",
+          "suggestedFix": "Create or locate the content card interface file with properly typed interfaces — no untyped `any` without explanatory comments.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/",
+          "line": 0,
+          "description": "No vitest unit tests were found for the Live Preview feature. There are no tests mirroring src/context/ for the ContentstackProvider, no tests for onEntryChange callback behavior, and no tests verifying reactive content updates. The test count has not increased to cover this new feature, violating the requirement that new features have corresponding vitest unit tests.",
+          "suggestedFix": "Add vitest unit tests in test/unit/ mirroring the src/ path: tests for ContentstackProvider initial state, LivePreview.onEntryChange callback triggering state update, and content propagation to useContent consumers.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

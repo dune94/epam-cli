@@ -1,0 +1,64 @@
+{
+  "message_id": "msg-1785695297343",
+  "timestamp": "2026-08-02T18:28:17+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 436,
+          "description": "Test count decreased: the old 'contentstack live preview' describe block had 5 tests; the new 'live preview' block has only 3. Two setHost fallback tests were dropped: (1) 'should call setHost with CONTENTSTACK_API_HOST when CONTENTSTACK_PREVIEW_HOST is unset' and (2) 'should not call setHost when neither CONTENTSTACK_PREVIEW_HOST nor CONTENTSTACK_API_HOST is set'. Review criterion (2) requires the total test count not decrease. These dropped tests covered important fallback behavior that is now unverified.",
+          "suggestedFix": "Re-add the two missing tests: one verifying setHost falls back to CONTENTSTACK_API_HOST when CONTENTSTACK_PREVIEW_HOST is unset, and one verifying setHost is not called when neither host env var is set.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 78,
+          "description": "contentstack.Stack(options as any) widens the `any` cast to the entire options object without an explanatory comment. The original code used a narrower `as unknown as contentstack.LivePreview` cast only on the live_preview property. Casting the whole options object to `any` suppresses all type checking on api_key, delivery_token, environment, branch, and fetchOptions — a TypeScript strict compliance regression.",
+          "suggestedFix": "Remove the `as any` from the Stack constructor call. Instead, type the live_preview property correctly. If the contentstack SDK types don't include preview_token on LivePreview, use a narrow cast only on that property (e.g. `live_preview: { enable: true, preview_token: CONTENTSTACK_PREVIEW_TOKEN } as unknown as contentstack.LivePreview`) with an explanatory comment, or extend the SDK type declaration.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 114,
+          "description": "(query as any).addParam(\"live_preview\", \"true\") and (query as any).addParam(\"preview_hash\", ...) use untyped `any` without an explanatory comment. While the file has a top-level eslint-disable for no-explicit-any, review criteria require an explanatory comment for each `any` usage.",
+          "suggestedFix": "Add an inline comment explaining why the cast is necessary (e.g. `// Contentstack SDK query type doesn't expose addParam in its TypeScript definitions`), or cast to a narrower interface that includes addParam.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 113,
+          "description": "The `enable` field in ICommonContentstackConfig.live_preview is dead code — it is never read in setCommonConfig. The code hardcodes addParam(\"live_preview\", \"true\") unconditionally whenever any live_preview object is present, rather than gating on live_preview.enable. This means a caller passing { enable: false, preview_hash: 'x' } would still get live_preview=true added to the query.",
+          "suggestedFix": "Gate the addParam call on enable: `if (live_preview?.enable) { (query as any).addParam(\"live_preview\", \"true\"); ... }`. Alternatively, remove `enable` from the interface if it is not intended to be forwarded.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 114,
+          "description": "The new code replaces the SDK's livePreviewQuery method with raw addParam calls, hand-rolling query parameter logic that the Contentstack SDK provides natively. While the old livePreviewQuery call was also broken (it referenced live_preview.live_preview which no longer exists in the interface, and query.content_type_uid which is not a standard query property), the correct fix is to use livePreviewQuery with the updated interface shape, not to bypass the SDK entirely with low-level addParam calls.",
+          "suggestedFix": "Use the SDK's livePreviewQuery method with the correct parameters from the updated interface, e.g. `if (live_preview?.preview_hash) { (query as any).livePreviewQuery({ live_preview: live_preview.preview_hash, content_type_uid: contentTypeUid }); }`. If addParam is intentionally the correct approach for this SDK version, add a comment explaining why livePreviewQuery is not used.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

@@ -1,0 +1,177 @@
+{
+  "id": "jira-sourced-1785442705571",
+  "title": "Metrolinx Brownfield — Jira-sourced",
+  "version": "1.0.0",
+  "lastUpdated": "2026-07-30",
+  "project": {
+    "name": "metrolinx",
+    "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
+    "stack": {
+      "language": "TypeScript",
+      "runtime": "Node.js 20",
+      "framework": "Next.js",
+      "testing": "jest",
+      "cms": "Contentstack",
+      "devEnvironment": "Ubuntu WSL2"
+    },
+    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
+    "outputDirs": [
+      {
+        "codeline": "gotransit",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+      },
+      {
+        "codeline": "upexpress",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+      },
+      {
+        "codeline": "metrolinx",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+      }
+    ]
+  },
+  "configuration": {
+    "profilesPath": "profiles.json",
+    "autoCommit": false,
+    "requireTests": true,
+    "budget": 12,
+    "aiRuntime": {
+      "provider": "claude",
+      "defaultModel": "claude-sonnet-4-6"
+    }
+  },
+  "implementationOrder": {
+    "core": [
+      "AMSD-2041"
+    ]
+  },
+  "phasesConfig": {
+    "scaffold": {
+      "description": "Project scaffolding and TypeScript configuration",
+      "parallelWorktrees": false
+    },
+    "core": {
+      "description": "API client, CLI, and Express server implementation",
+      "parallelWorktrees": true
+    },
+    "ui_and_review": {
+      "description": "HTML dashboard and code review",
+      "parallelWorktrees": true
+    }
+  },
+  "stories": [
+    {
+      "id": "AMSD-2041",
+      "jiraKey": "AMSD-2041",
+      "title": "[GO, UP, MX] Live Preview of Content in CMS",
+      "description": "[GO, UP, MX] Live Preview of Content in CMS",
+      "acceptanceCriteria": [],
+      "codeline": "gotransit",
+      "status": "pending",
+      "completed": false,
+      "agentRole": "typescript-engineer",
+      "agentGroup": "main",
+      "effort": "low",
+      "estimate": 10,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). No acceptance criteria are present at all — the AC field is literally '(none)', making this story unimplementable without human clarification.",
+      "issueType": "Story",
+      "codelines": [
+        "gotransit",
+        "upexpress",
+        "metrolinx"
+      ],
+      "verificationCriteria": [
+        "When preview mode is active, the rendered page displays draft (unpublished) content from the CMS in place of the published version, visible to the tester on the page itself.",
+        "When preview mode is not active, the rendered page displays the published content from the CMS.",
+        "While preview mode is active, content edits saved in the CMS are reflected on the previewed page without the tester changing any application code or configuration.",
+        "After a draft entry is updated in the CMS, reloading the preview page displays the updated draft content.",
+        "When preview mode is deactivated, the page displays the published content rather than the previously previewed draft content.",
+        "Upon deactivation of preview mode, the published content is displayed immediately on the next page view, with no stale draft content remaining visible.",
+        "On the GO brand site, activating preview mode displays draft CMS content on the rendered page, and deactivating it restores the published content.",
+        "On the UP brand site, activating preview mode displays draft CMS content on the rendered page, and deactivating it restores the published content.",
+        "On the MX brand site, activating preview mode displays draft CMS content on the rendered page, and deactivating it restores the published content.",
+        "Previewed draft content is rendered across all CMS-driven elements on the page — links, images, and tables — not just a single element type."
+      ],
+      "vcSource": "description",
+      "vcResolution": "regenerated",
+      "fixSiteAnalysis": [
+        {
+          "file": "src/context/ContentstackContext.tsx",
+          "function": "ContentstackProvider",
+          "reason": "This is the single entry point where all CMS content flows into the React tree. All 236+ consumers of useContent depend on this provider. It currently creates a static memoized context from defaultContent that never updates reactively — the exact gap that prevents Contentstack Live Preview from pushing real-time edits into the app. The provider must become reactive to live preview callbacks.",
+          "fix": "Replace the static useMemo with useState initialized from defaultContent, and expose a setContent updater in the context value so that a Contentstack livePreview callback (registered at app bootstrap) can push updated content into the tree. Change: `const [content, setContent] = useState<IContentstackContent>(defaultContent);` and set context value to `{ content, setContent }`. Also update the IContentstackContent context type in the createContext call to include `setContent: (c: IContentstackContent) => void`. The livePreview callback (registered via Stack.livePreview from the Contentstack SDK at _app.tsx or equivalent bootstrap) then calls setContent with the updated content object, causing all useContent consumers to re-render with live-edited data.",
+          "helper": "",
+          "brokenLine": "const context = useMemo(\n    () => ({\n      content: defaultContent,\n    }),\n    [defaultContent],\n  );",
+          "fixVerified": null,
+          "evidenceVerified": true,
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false
+        }
+      ],
+      "storyKind": "novel",
+      "technicalNotes": null,
+      "specification": {
+        "runId": "20260730T201745Z",
+        "assignedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "coordinatorNotes": "Empty acceptance criteria on a complex cross-platform live preview feature. openspec needed first to elaborate requirements and define ACs; speckit then to harden for testability, iframe security, XSS, concurrent edits, and network failure edge cases. Spec is null and ACs are empty — not hand-curated, so full spec run is warranted.",
+        "status": "completed",
+        "updatedAt": "2026-07-30T20:36:47.137Z",
+        "appliedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": true,
+            "notes": "",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-07-30T20:36:10.936Z"
+          },
+          {
+            "agent": "speckit",
+            "applied": true,
+            "notes": "Openspec returned empty acceptance criteria, so all criteria above were created from scratch based on the story title '[GO, UP, MX] Live Preview of Content in CMS.' The feature was inferred to be a real-time preview mechanism in a CMS editor that renders content as the author edits it, covering GO, UP, and MX markets. Key areas covered: real-time sync (AC-1, AC-2), baseline rendering (AC-3), error handling (AC-4, AC-6), media handling (AC-5), UI toggle persistence (AC-7), unsaved changes guard (AC-8), accessibility (AC-9), locale/market specificity (AC-10), empty state (AC-11), concurrent editing conflict (AC-12), XSS security (AC-13), and slow-network UX (AC-14). CAVEAT: Without detailed requirements documents or file contents, these criteria are best-effort inferences. If the actual feature scope differs (e.g., the preview is a separate URL, or involves a different rendering pipeline), some criteria may need adjustment.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-07-30T20:36:47.137Z"
+          }
+        ],
+        "coordinatorReview": {
+          "verdict": "needs_review",
+          "reviewNotes": "Pipeline breakdown: OpenSpec contributed zero value — empty notes, no ACs, no splits, acceptanceChanged=false. Speckit compensated by creating 14 ACs from scratch based solely on the story title, with an explicit caveat that these are 'best-effort inferences' without requirements documents. The intended sequential pipeline (openspec elaborates → speckit hardens) did not function; speckit did all the work with no source material to review. While the 14 ACs appear reasonably comprehensive (real-time sync, XSS, accessibility, concurrent editing, error handling, locale specificity), they lack requirements traceability and may not reflect true feature scope. Human review needed to validate inferred ACs against actual requirements and to investigate why OpenSpec produced no output.",
+          "qualityScore": 0.4,
+          "flags": [
+            "openspec_pipeline_failure",
+            "requirements_inferred_from_title",
+            "no_requirements_traceability",
+            "speckit_caveat_acknowledged"
+          ],
+          "reviewedAt": "2026-07-30T20:37:00.076Z"
+        }
+      },
+      "estimatedAiMinutes": 4.759,
+      "estimatedCost": 0.0842,
+      "estimatedTokens": 327415,
+      "estimatedTurns": 12,
+      "estimatedHours": 0.0793,
+      "cpaConfidence": 0.68,
+      "cpaGate": "review",
+      "ladderTier": "high",
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
+      "reasoningEffort": "low",
+      "completedAt": "2026-07-30T20:52:56+00:00",
+      "actualCost": 2.041771,
+      "reviewStatus": "escalated"
+    }
+  ],
+  "currentIteration": 10,
+  "source": "jira",
+  "sourceProject": "AMSD"
+}

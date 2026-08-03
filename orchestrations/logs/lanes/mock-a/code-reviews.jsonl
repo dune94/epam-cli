@@ -1,0 +1,24 @@
+{
+  "phase_id": "mock3_core",
+  "timestamp": "2026-07-30T03:05:41+00:00",
+  "review_status": "approved",
+  "issues_found": 0,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "mock3_core",
+  "timestamp": "2026-08-02T00:33:25+00:00",
+  "review_status": "approved",
+  "issues_found": 0,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "mock3_core",
+  "timestamp": "2026-08-03T15:59:15+00:00",
+  "review_status": "approved",
+  "issues_found": 0,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}

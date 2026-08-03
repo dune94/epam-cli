@@ -1,0 +1,8 @@
+{
+  "hello-dolly": {
+    "facts": [
+      "This is a disposable mock codeline created fresh per test run; it has no CI, no pre-commit hooks and no external services.",
+      "Tests run with vitest via the project's own `npm test` script."
+    ]
+  }
+}

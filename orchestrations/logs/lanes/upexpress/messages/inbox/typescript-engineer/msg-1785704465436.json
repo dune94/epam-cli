@@ -1,0 +1,56 @@
+{
+  "message_id": "msg-1785704465436",
+  "timestamp": "2026-08-02T21:01:05+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 180,
+          "description": "AC#3 NOT MET: live_preview is dead code — no public function forwards it to setCommonConfig. getEntry (line ~180) destructures {contentTypeUid, referenceFieldPath, jsonRtePath, only, lang, includeFields} — live_preview is silently dropped. Same for getSingleEntry, getAllContentTypeEntries, and findSingletonEntry — all use explicit destructuring without live_preview, so it never reaches createContentTypeQuery/createContentTypeEntryQuery, and the live_preview handling in setCommonConfig (line ~132) is unreachable at runtime. The type allows live_preview on IContentstackGetEntry (via IContentstackPageConfig → ICommonContentstackConfig), but every public function silently discards it.",
+          "suggestedFix": "Add live_preview to the destructuring of each public function and forward it to createContentTypeQuery/createContentTypeEntryQuery. E.g. in getEntry: destructure `live_preview` and include it in the createContentTypeQuery call. Alternatively, use rest operator in public functions to capture all ICommonContentstackConfig fields and forward them.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 181,
+          "description": "Test count decreased from 22 to 20 (net -2). Two tests were removed: 'should fall back to CONTENTSTACK_API_HOST when CONTENTSTACK_PREVIEW_HOST is missing' and 'should not call setHost when neither CONTENTSTACK_PREVIEW_HOST nor CONTENTSTACK_API_HOST is set'. These covered important fallback behaviors. Review criteria explicitly requires total test count not decrease.",
+          "suggestedFix": "Restore the two removed tests: (1) verify setHost is called with CONTENTSTACK_API_HOST when CONTENTSTACK_PREVIEW_HOST is unset, and (2) verify setHost is not called when neither host env var is set.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/interface/contentstack.ts",
+          "line": 4,
+          "description": "IContentstackLivePreviewConfig was renamed to IContentstackLivePreview with fields changed from {enable?: boolean; preview_hash?: string} to {live_preview?: string; preview_hash?: string}. The nested live_preview key within an IContentstackLivePreview object (itself accessed via ICommonContentstackConfig.live_preview) is confusing and error-prone. The enable field was removed, making the interface incompatible with the Stack-level options shape. While query-level config may differ from Stack-level config, the naming creates ambiguity about which shape applies where.",
+          "suggestedFix": "Keep the interface name IContentstackLivePreviewConfig or use a clearer name like IContentstackLivePreviewQueryConfig. Document that this is query-level config (distinct from Stack options). Consider whether live_preview as a string key within the interface is the correct SDK parameter name.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 132,
+          "description": "(query as any).live_preview(livePreview) uses an untyped any cast without an explanatory comment. While the file has a top-level eslint-disable for no-explicit-any, the review criteria requires an explanatory comment for any usage. The cast is needed because the contentstack SDK types don't expose live_preview on Query/Entry, but this should be documented.",
+          "suggestedFix": "Add an inline comment explaining why the cast is necessary, e.g.: // SDK types don't expose live_preview on Query; cast required for preview query parameter",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

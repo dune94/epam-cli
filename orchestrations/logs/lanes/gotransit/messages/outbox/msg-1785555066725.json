@@ -1,0 +1,88 @@
+{
+  "message_id": "msg-1785555066725",
+  "timestamp": "2026-08-01T03:31:06+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 30,
+          "description": "The `options` object passed to `contentstack.Stack(options)` has no `live_preview` configuration key. Without `live_preview: { management_token, host, enable }` in the SDK options, the Contentstack SDK never initializes its live preview subsystem. Consequently, `Stack.livePreview.onEntryChange` (subscribed in ContentstackContext.tsx) will never fire — the subscription is dead code. Every acceptance criterion requiring real-time draft content updates is unmet.",
+          "suggestedFix": "Add `live_preview: { management_token: process.env.CONTENTSTACK_PREVIEW_TOKEN || '', host: process.env.CONTENTSTACK_PREVIEW_HOST || '', enable: !!(process.env.CONTENTSTACK_PREVIEW_TOKEN) }` to the `options` object. Also destructure CONTENTSTACK_PREVIEW_TOKEN and CONTENTSTACK_PREVIEW_HOST from process.env and log a warning if the token is missing when live preview is expected.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/interface/contentstack.ts",
+          "line": 1,
+          "description": "No `includeDraft` field exists on IContentstackGetEntry, IContentstackGetSingleEntry, IContentstackGetSingletonEntry, ICreateQueryConfig, or ICreateEntryConfig. The public-facing service functions (getEntry, getSingleEntry, getSingletonEntry, findSingletonEntry) do not accept or propagate `includeDraft` to the factory/query layer. Without this, draft content can never be fetched — the preview site will only show published content, failing the core acceptance criterion that unpublished draft entries render on the preview site.",
+          "suggestedFix": "Add `includeDraft?: boolean` to ICommonContentstackConfig (so it propagates to all derived interfaces). In ContentstackFactory.setCommonConfig, when includeDraft is true, call `query.addParam('include_draft', 'true')`. Pass includeDraft through from each public function's config to the factory.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 86,
+          "description": "The `onEntryChange` callback casts incoming data as `Partial<IContentstackContent>` and merges it via shallow spread. Contentstack's live preview callback delivers a single entry object (with fields like `entry`, `content_type_uid`), not a partial of IContentstackContent. The data shape does not match — `updateContent` would spread raw SDK payload fields (e.g., `entry`, `content_type_uid`) into the content state, corrupting it rather than merging the updated entry into the correct content-type key (e.g., `page`, `header`, `footer`).",
+          "suggestedFix": "Map the incoming live preview event to the correct IContentstackContent key based on `content_type_uid`. For example: if the event's content_type_uid matches a page type, set `content.page` to the updated entry array; if it matches header, set `content.header`, etc. Do not blindly spread the SDK payload.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/",
+          "line": 0,
+          "description": "No vitest unit tests were added for the live preview / includeDraft functionality. Grep across test/ for 'live_preview', 'livePreview', 'includeDraft', 'include_draft', 'ContentstackContext', 'ContentstackProvider' returned zero results. Per review criteria, new features must have corresponding vitest unit tests in test/unit/ mirroring the src/ path. There are zero tests verifying that updateContent merges into state, that the initial state matches defaultContent, that onEntryChange is registered when livePreview.enabled is true, or that includeDraft: true causes addParam('include_draft', 'true').",
+          "suggestedFix": "Add test/unit/context/ContentstackContext.spec.tsx testing: (1) initial content state equals defaultContent, (2) updateContent merges partial updates and triggers re-render, (3) onEntryChange subscription is registered when enabled, (4) onEntryChange is NOT registered when disabled. Add test/unit/services/contentstack.spec.ts testing: (1) options include live_preview config when token is present, (2) includeDraft: true adds include_draft param to query.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/interface/content/contentCard.ts",
+          "line": 15,
+          "description": "Added `previewId`, `isPreview`, `previewTimestamp` fields to IContentCard — these are not part of the prescribed minimal fix and add unnecessary surface area. The prescribed fix is: replace useMemo with useState + add onEntryChange listener in the provider. No interface changes to content card types are needed. This is over-engineering that violates the concision requirement.",
+          "suggestedFix": "Remove `previewId`, `isPreview`, and `previewTimestamp` from IContentCard. The live preview mechanism works through the context provider's state update — no per-card preview metadata is needed.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+          "line": 30,
+          "description": "Added `previewMode` prop and `livePreview` context usage to append `live_preview` query params to link hrefs. This is not part of the prescribed minimal fix and adds unnecessary complexity. The prescribed fix is solely: provider uses useState + onEntryChange listener. Link-level preview param injection is a separate concern not required by any acceptance criterion. A more concise change (zero changes to ContentstackLink) meets the same ACs.",
+          "suggestedFix": "Remove the `previewMode` prop, the `useContentstackContext` call for `livePreview`, and the preview param logic. Revert ContentstackLink to its original implementation. Live preview content updates flow through the context provider — link components do not need modification.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 78,
+          "description": "The `Stack as unknown as { livePreview?: ... }` cast is untyped and fragile. If the Contentstack SDK's live preview API shape changes, this will silently fail (the `typeof` check returns false and no listener is registered) with no error or warning logged. This violates the TypeScript strict compliance criterion — the cast to `unknown` then to a hand-rolled interface bypasses the SDK's actual types.",
+          "suggestedFix": "Import the proper type from the Contentstack SDK (e.g., `import contentstack from 'contentstack'` and use `contentstack.Stack['livePreview']`), or create a properly typed wrapper. At minimum, add a `console.warn` or `logger.warn` in the else branch when `onEntryChange` is not a function so silent failure is observable.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 63,
+          "description": "The `useEffect` that syncs `defaultContent` into state on every `defaultContent` change will overwrite live preview updates. If a parent re-renders and passes the same `defaultContent` reference (or a shallow-changed one), the effect fires and spreads `defaultContent` over `previousContent`, potentially clobbering draft entries that were merged via `updateContent`. This creates a race condition between live preview updates and parent-driven content resets.",
+          "suggestedFix": "Only initialize state from `defaultContent` on mount (empty dependency array), or use a ref to track whether the initial sync has occurred and skip subsequent syncs. Alternatively, merge `defaultContent` only for keys not already present in state.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

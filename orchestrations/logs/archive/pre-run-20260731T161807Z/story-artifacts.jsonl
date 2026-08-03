@@ -1,0 +1,8 @@
+{"storyId":"MOCK-HW-1","phase":"core","status":"attempt","elapsedMinutes":0.26,"costUsd":0.0033,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-31T15:42:53Z"}
+{"storyId":"MOCK-HW-1","phase":"core","status":"completed","elapsedMinutes":0.41,"costUsd":0.0033,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-31T15:42:54Z"}
+{"storyId":"MOCK-HW-1","phase":"core","status":"attempt","elapsedMinutes":0.46,"costUsd":0.0057,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-31T15:46:30Z"}
+{"storyId":"MOCK-HW-1","phase":"core","status":"completed","elapsedMinutes":0.48,"costUsd":0.0057,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-31T15:46:31Z"}
+{"storyId":"MOCK-HW-1","phase":"core","status":"attempt","elapsedMinutes":0.25,"costUsd":0.0038,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-31T15:58:02Z"}
+{"storyId":"MOCK-HW-1","phase":"core","status":"completed","elapsedMinutes":0.38,"costUsd":0.0038,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-31T15:58:03Z"}
+{"storyId":"MOCK-HW-1","phase":"core","status":"attempt","elapsedMinutes":0.40,"costUsd":0.0037,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-31T16:04:40Z"}
+{"storyId":"MOCK-HW-1","phase":"core","status":"completed","elapsedMinutes":0.41,"costUsd":0.0037,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-31T16:04:40Z"}

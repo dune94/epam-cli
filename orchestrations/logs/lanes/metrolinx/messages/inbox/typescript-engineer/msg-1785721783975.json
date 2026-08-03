@@ -1,0 +1,64 @@
+{
+  "message_id": "msg-1785721783975",
+  "timestamp": "2026-08-03T01:49:43+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 55,
+          "description": "The Stack options object (lines 55-67) does NOT include a `live_preview` config block. The prescribed root-cause fix requires adding `live_preview: { enable: CONTENTSTACK_PREVIEW_ENABLE === 'true', preview_token: CONTENTSTACK_PREVIEW_TOKEN, host: CONTENTSTACK_PREVIEW_HOST }` (conditionally spread, like fetchOptions). A search for `live_preview` across src/ returned zero matches. Without this, the Contentstack SDK never processes live preview data — every downstream consumer is starved of preview content. The entire committed diff for AMSD-2041 (commit 2cd28a9c) only adds two `.epam/` metadata files; zero source code was changed.",
+          "suggestedFix": "Add `CONTENTSTACK_PREVIEW_ENABLE`, `CONTENTSTACK_PREVIEW_TOKEN`, and `CONTENTSTACK_PREVIEW_HOST` to the destructured env vars, then conditionally spread `live_preview` into the options object before `contentstack.Stack(options)`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 21,
+          "description": "The file exports a bare `createContext<IContentstackContext>({})` with NO ContentstackProvider component, NO useState, NO useEffect, and NO onEntryChange/onLiveUpdate subscription. The prescribed client-side fix requires a ContentstackProvider that uses `useState(defaultContent)` and a `useEffect` subscribing to Contentstack live preview events, calling `setContent` with merged preview data. Without a reactive Provider, the useContent hook (consumed by 236+ components) always returns static SSR-provided content — no real-time preview updates can reach any consumer.",
+          "suggestedFix": "Create a ContentstackProvider component wrapping children, using `useState(defaultContent)` for content, and a `useEffect` that subscribes to Contentstack live preview events and calls `setContent` with merged preview data. Export the provider alongside the context.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/interface/contentstack.ts",
+          "line": 1,
+          "description": "`ICommonContentstackConfig`, `ICreateQueryConfig`, and `ICreateEntryConfig` interfaces do not include an optional `live_preview` field. The prescribed fix requires adding optional `live_preview` fields so live preview hash data can flow through to Contentstack queries. Without it, queries always return published content even if the Stack is configured for live preview.",
+          "suggestedFix": "Add `live_preview?: { enable?: boolean; preview_token?: string; host?: string }` to `ICommonContentstackConfig` (or to `ICreateQueryConfig` and `ICreateEntryConfig`). Then forward the `live_preview` parameter to the Contentstack query chain in `createContentTypeQuery` and `createContentTypeEntryQuery`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/",
+          "line": 0,
+          "description": "No vitest unit tests exist for the Live Preview feature. `list_files(pattern='test/unit/**/*')` returned zero results. The review criteria require new features to have corresponding vitest unit tests mirroring the src/ path. At minimum, tests should verify: (1) Stack options include a `live_preview` block with `enable: true` and `preview_token` when env vars are set; (2) ContentstackProvider re-renders consumers when live preview events fire; (3) content state merges incoming preview data correctly.",
+          "suggestedFix": "Create test/unit/ tests mirroring src/services/contentstack.ts and src/context/contentstackContext.tsx, covering the three scenarios above.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": ".epam/codeline-facts.json",
+          "line": 0,
+          "description": "The entire committed diff for AMSD-2041 (commit 2cd28a9c) only adds two `.epam/` metadata files (`.epam/codeline-facts.json` and `.epam/settings.json`) — zero source code changes. None of the prescribed minimal fixes were implemented. All four acceptance criteria (single field update, multiple field update, error/invalid content handling, brand-agnostic editing) are unmet because no implementation exists at any layer.",
+          "suggestedFix": "Implement the prescribed minimal fix in src/services/contentstack.ts (live_preview in Stack options), src/context/contentstackContext.tsx (reactive Provider with useState/useEffect), and src/interface/contentstack.ts (live_preview on query interfaces), then add corresponding vitest unit tests.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

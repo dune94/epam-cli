@@ -1,0 +1,32 @@
+{
+  "message_id": "msg-1785716007619",
+  "timestamp": "2026-08-03T00:13:27+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 228,
+          "description": "findSingletonEntry does not destructure or forward the live_preview parameter to createContentTypeQuery, even though IContentstackGetSingletonEntry (via ICommonContentstackConfig) accepts it. This silently drops preview context (preview_hash) for all callers of findSingletonEntry, meaning linked/tabular references fetched through this path will not show draft values — a core requirement of the story. The same defect exists in getSingletonEntry (line ~260), which also destructures only { contentTypeUid, lang, referenceFieldPath, jsonRtePath, only, except, where } and omits live_preview from the createContentTypeQuery call. getEntry and getSingleEntry correctly forward live_preview, making the omission inconsistent.",
+          "suggestedFix": "Add live_preview to the destructured parameters of both findSingletonEntry and getSingletonEntry, and pass it through to the createContentTypeQuery call: `}).createContentTypeQuery({ contentTypeUid, referenceFieldPath, only, except, where, lang, limit: 1, live_preview });` Do the same for getSingletonEntry's createContentTypeQuery call.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

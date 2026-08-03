@@ -1,0 +1,48 @@
+{
+  "message_id": "msg-1785755772551",
+  "timestamp": "2026-08-03T11:16:12+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 69,
+          "description": "The `live_preview` config uses `management_token` instead of `preview_token`. The prescribed fix explicitly specifies `preview_token: CONTENTSTACK_PREVIEW_TOKEN`, and the Contentstack SDK live_preview config expects `preview_token` as the key (see https://www.contentstack.com/docs/developers/set-up-live-preview). Using `management_token` will cause the SDK to not recognize the preview token, meaning live preview will not function — content modifications will NOT be visible on the preview page, failing all three verification criteria.",
+          "suggestedFix": "Replace `management_token: CONTENTSTACK_PREVIEW_TOKEN` with `preview_token: CONTENTSTACK_PREVIEW_TOKEN` in the `live_preview` config object inside `options`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 0,
+          "description": "No vitest unit tests exist for the live_preview feature. A search for 'live_preview|preview|PREVIEW' across all .spec.ts files under src/services returned zero matches. Required test scenarios: (1) live_preview block present in `options` with preview_token when CONTENTSTACK_PREVIEW_TOKEN is set, (2) live_preview absent from `options` when the token is unset, (3) Stack.setHost called with CONTENTSTACK_PREVIEW_HOST when set. None of these exist. Per review criteria, new features must have corresponding vitest unit tests mirroring the src/ path.",
+          "suggestedFix": "Add tests to src/services/__tests__/contentstack.spec.ts covering: (1) that `options.live_preview` is present with correct `preview_token` and `enable: true` when CONTENTSTACK_PREVIEW_TOKEN is set, (2) that `options.live_preview` is absent when CONTENTSTACK_PREVIEW_TOKEN is unset, (3) that `Stack.setHost` is called with CONTENTSTACK_PREVIEW_HOST when set.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 86,
+          "description": "`Stack.setHost(CONTENTSTACK_PREVIEW_HOST)` is called after `Stack.setHost(CONTENTSTACK_API_HOST)`. The Contentstack SDK's `setHost` sets the host for all API calls — the second call overrides the first. If both env vars are set, the preview host replaces the delivery API host, potentially breaking normal (non-preview) content delivery. The `live_preview.host` property in the options object already directs preview-specific requests to the preview host, making this `setHost` call redundant and potentially harmful.",
+          "suggestedFix": "Remove the `Stack.setHost(CONTENTSTACK_PREVIEW_HOST)` block. The `host` property inside the `live_preview` config object already handles routing preview requests to the correct host. If `setHost` must be called for preview, use a conditional that only sets the preview host when no API host is configured, or verify the SDK supports separate host configuration for preview vs delivery.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

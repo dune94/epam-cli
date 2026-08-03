@@ -1,0 +1,50 @@
+{
+  "runId": "20260730T134104Z",
+  "phase": "mock3_core",
+  "startedAt": "2026-07-30T13:41:19.497Z",
+  "stories": [
+    {
+      "storyId": "SPAN-1",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "appliedAgents": [
+        "openspec"
+      ],
+      "notes": "Trivial string literal change ('hello world' → 'hello dolly') with unambiguous AC. No requirement elaboration needed — openspec adds nothing. No security surfaces, edge cases, or testability gaps — speckit adds nothing. Each codeline is independent and AC already covers all verification points.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Classified as defect: existing getGreeting() returns wrong value. No code was injected into this prompt, so locationHint is empty per the no-fabrication rule.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-30T13:43:34.135Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "approved",
+        "reviewNotes": "Trivial string literal replacement correctly handled with minimal agent intervention. Coordinator correctly assigned only openspec and skipped speckit — no security surfaces or testability gaps exist for a greeting string swap. Openspec appropriately classified the defect and followed the no-fabrication rule (no invented locationHint). It did not bloat AC or manufacture unnecessary splits, which is correct restraint, not a gap. The three ACs are complete (return value correctness, test assertion update+pass, typecheck pass), non-overlapping, and all mechanically verifiable. No split was needed — single-purpose, single-location change. No flags for human review.",
+        "qualityScore": 0.9,
+        "flags": [],
+        "reviewedAt": "2026-07-30T13:44:14.842Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 1,
+    "coordinatorReviewCompleted": true,
+    "approved": 1,
+    "needsReview": 0
+  },
+  "completedAt": "2026-07-30T13:44:39.998Z",
+  "storyCount": 1
+}

@@ -1,0 +1,96 @@
+{
+  "message_id": "msg-1785462472405",
+  "timestamp": "2026-07-31T01:47:52+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 55,
+          "description": "The prescribed root cause fix was NOT implemented. The `options` object (lines 55-67) is missing the `live_preview` configuration required for Contentstack Live Preview. There is no `live_preview: { enable: true, host: CONTENTSTACK_PREVIEW_HOST }` property in the options passed to `contentstack.Stack(options)`. Without this, the SDK will never include preview parameters in queries and no downstream consumer can receive real-time content updates. Every acceptance criterion related to real-time updates without reload is unmet.",
+          "suggestedFix": "(1) Add CONTENTSTACK_PREVIEW_HOST and CONTENTSTACK_PREVIEW_TOKEN to the env destructuring block (lines 17-25). (2) Add `live_preview: { enable: true, host: CONTENTSTACK_PREVIEW_HOST, ...(CONTENTSTACK_PREVIEW_TOKEN ? { preview_token: CONTENTSTACK_PREVIEW_TOKEN } : {}) }` to the options object before passing to contentstack.Stack().",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 126,
+          "description": "createContentTypeQuery does not call `query.includeFallback()` when live_preview context is present. The prescribed fix requires accepting an optional live_preview param (content_type_uid, entry_uid) in ICreateQueryConfig and calling includeFallback() so the SDK fetches draft/preview content.",
+          "suggestedFix": "Add an optional `live_preview?: { content_type_uid: string; entry_uid: string }` field to ICreateQueryConfig, and in createContentTypeQuery call `query.includeFallback()` when live_preview is provided.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 158,
+          "description": "createContentTypeEntryQuery does not call `query.includeFallback()` when live_preview context is present. Same prescribed fix needed here as in createContentTypeQuery.",
+          "suggestedFix": "Add an optional `live_preview?: { content_type_uid: string; entry_uid: string }` field to ICreateEntryConfig, and in createContentTypeEntryQuery call `query.includeFallback()` when live_preview is provided.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/interface/contentstack.ts",
+          "line": 36,
+          "description": "ICreateQueryConfig interface was not updated with the live_preview parameter. The prescribed fix requires adding an optional live_preview field to this interface.",
+          "suggestedFix": "Add `live_preview?: { content_type_uid: string; entry_uid: string }` to ICreateQueryConfig interface.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/interface/contentstack.ts",
+          "line": 44,
+          "description": "ICreateEntryConfig interface was not updated with the live_preview parameter. The prescribed fix requires adding an optional live_preview field to this interface.",
+          "suggestedFix": "Add `live_preview?: { content_type_uid: string; entry_uid: string }` to ICreateEntryConfig interface.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 0,
+          "description": "The file does not exist. There is no reactive Provider component with useState for content and useEffect subscribing to live preview events. Without a reactive state mechanism, no downstream consumer (236+ components using useContent) can ever receive live preview updates. Every acceptance criterion for real-time updates is unmet.",
+          "suggestedFix": "Create a ContentstackProvider component that wraps ContentstackContext.Provider, uses useState to hold content, and uses useEffect to subscribe to Contentstack live preview events (e.g., onEntryChange), updating state when preview data arrives.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.ts",
+          "line": 5,
+          "description": "useContent calls useContext(ContentstackContext) but there is no reactive Provider component supplying a changing value. The hook will always return a static value and cannot propagate live preview updates to the 236+ consumers.",
+          "suggestedFix": "Ensure useContent consumes a ContentstackProvider that supplies reactive content state, not a static context value.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "package.json",
+          "line": 0,
+          "description": "The @contentstack/live-preview-utils dependency is not installed anywhere in the project. No import of this package exists in the codebase. Without the SDK, no Live Preview subscription can be established.",
+          "suggestedFix": "Install @contentstack/live-preview-utils and import it in the ContentstackProvider to subscribe to live preview events.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/",
+          "line": 0,
+          "description": "No vitest unit tests were found for the Live Preview feature. There are no tests mirroring src/context/ for a ContentstackProvider, no tests for live_preview config in options, no tests for includeFallback() behavior, and no tests verifying reactive content updates. The test count has not increased to cover this new feature.",
+          "suggestedFix": "Add vitest unit tests in test/unit/ mirroring the src/ paths: tests for ContentstackProvider reactive behavior, tests verifying live_preview is in Stack options, tests verifying includeFallback() is called when live_preview context is present.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

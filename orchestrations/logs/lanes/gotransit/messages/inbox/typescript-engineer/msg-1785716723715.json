@@ -1,0 +1,40 @@
+{
+  "message_id": "msg-1785716723715",
+  "timestamp": "2026-08-03T00:25:23+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 305,
+          "description": "findSingletonEntry destructures { contentTypeUid, lang, referenceFieldPath, jsonRtePath, only, except, where } but does NOT destructure or forward `live_preview` to createContentTypeQuery. Since IContentstackGetSingletonEntry extends ICommonContentstackConfig (which now has live_preview), callers can pass live_preview but it is silently dropped. This means linked/tabular references fetched via findSingletonEntry will not show draft values, partially undermining the story's core goal.",
+          "suggestedFix": "Add `live_preview` to the destructured params of findSingletonEntry and pass it to createContentTypeQuery: `createContentTypeQuery({ contentTypeUid, referenceFieldPath, only, except, where, lang, limit: 1, live_preview })`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 354,
+          "description": "getSingletonEntry has the same gap as findSingletonEntry — it destructures { contentTypeUid, lang, referenceFieldPath, jsonRtePath, only, except, where } but does NOT destructure or forward `live_preview` to createContentTypeQuery. Draft preview context is silently dropped for this code path.",
+          "suggestedFix": "Add `live_preview` to the destructured params of getSingletonEntry and pass it to createContentTypeQuery: `createContentTypeQuery({ contentTypeUid, referenceFieldPath, only, except, where, lang, live_preview })`.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

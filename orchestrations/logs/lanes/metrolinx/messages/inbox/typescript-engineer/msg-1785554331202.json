@@ -1,0 +1,64 @@
+{
+  "message_id": "msg-1785554331202",
+  "timestamp": "2026-08-01T03:18:51+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "package.json",
+          "line": 0,
+          "description": "The @contentstack/live-preview-utils dependency is not installed anywhere in the project. No import of this package exists in the codebase. Without the SDK, no Live Preview subscription can be established on the client side.",
+          "suggestedFix": "Add @contentstack/live-preview-utils to package.json dependencies and install it.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 0,
+          "description": "The prescribed minimal fix was not implemented. A project-wide search for 'onEntryChange', 'live_preview', and 'LivePreview' returned zero matches. The Provider does not use useState for reactive content and does not subscribe to Contentstack Live Preview SDK events. Without a reactive state mechanism, no downstream consumer (236+ components using useContent) can ever receive live preview updates.",
+          "suggestedFix": "Replace the static useMemo with useState initialized from defaultContent, and add a useEffect that calls LivePreview.onEntryChange() to merge incoming live-preview data into content state reactively.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.ts",
+          "line": 5,
+          "description": "useContent calls useContext(ContentstackContext) but there is no reactive Provider component supplying a changing value. The hook will always return a static value and cannot propagate live preview updates to consumers.",
+          "suggestedFix": "This is resolved once the Provider in contentstackContext.tsx is made reactive with useState + onEntryChange — the hook itself needs no change, but it cannot function without the reactive provider.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/interface/content/contentCard.ts",
+          "line": 0,
+          "description": "No changes to support live preview. The ICreateQueryConfig and ICreateEntryConfig interfaces (or equivalent query/entry config interfaces) were not updated with an optional live_preview parameter. Without this, live preview hash data cannot flow through to Contentstack queries.",
+          "suggestedFix": "Add an optional live_preview field to the query and entry config interfaces so that live preview context can be forwarded to Contentstack API calls.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/",
+          "line": 0,
+          "description": "No vitest unit tests exist for the Live Preview feature. There are no tests mirroring src/context/ for a reactive ContentstackProvider, no tests for onEntryChange callback behavior, and no tests verifying reactive content updates. The test count has not increased to cover this new feature.",
+          "suggestedFix": "Add vitest unit tests in test/unit/context/ mirroring src/context/contentstackContext.tsx, covering: initial state from defaultContent, onEntryChange subscription setup, and reactive content updates propagating to consumers.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

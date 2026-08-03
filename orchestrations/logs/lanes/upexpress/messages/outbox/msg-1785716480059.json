@@ -1,0 +1,48 @@
+{
+  "message_id": "msg-1785716480059",
+  "timestamp": "2026-08-03T00:21:20+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 477,
+          "description": "AC#4 requires three specific tests: (1) live_preview block present with preview_token when CONTENTSTACK_PREVIEW_TOKEN is set, (2) live_preview absent when the token is unset, (3) setHost called with CONTENTSTACK_PREVIEW_HOST when set, taking priority over CONTENTSTACK_API_HOST. The diff only adds ONE test (the forwarding test at line 477) and the addParam mock at line 30. Test (3) appears to already exist near line 470-476 (visible in diff context: `expect(testedModule.Stack.setHost).toHaveBeenCalledWith(\"preview.example.com\")`). However, tests (1) and (2) — which verify the `options` object contains/omits the `live_preview` block based on `CONTENTSTACK_PREVIEW_TOKEN` — are NOT in the diff and are NOT visible in the readable portion of the test file. The 'contentstack fetch timeout' describe block tests `options.fetchOptions` but no describe block tests `options.live_preview`. Prior review feedback explicitly flagged missing tests as a rejection reason, and the learned rules confirm prior attempts also lacked these tests.",
+          "suggestedFix": "Add two tests in a new describe block (e.g., 'contentstack live preview'): (1) Set `process.env.CONTENTSTACK_PREVIEW_TOKEN = 'test-preview-token'`, require the module, and assert `testedModule.options.live_preview` equals `{ enable: true, preview_token: 'test-preview-token' }`. (2) Set `process.env.CONTENTSTACK_PREVIEW_TOKEN = undefined`, require the module, and assert `testedModule.options` does not have a `live_preview` property (use `expect(testedModule.options).not.toHaveProperty('live_preview')`).",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 30,
+          "description": "The Contentstack Stack mock includes `addParam: jest.fn().mockReturnThis()` (added in this diff), which correctly supports the `setCommonConfig` call `(query as any).addParam(\"live_preview\", live_preview.preview_hash)`. However, the mock's chained methods all return `mockReturnThis()`, meaning `addParam` returns the same mock object. The forwarding test at line 477 spies on `Stack.addParam` directly, but the actual call path is `Stack.ContentType().Query().language().toJSON().addParam()` — the spy on `Stack.addParam` may not capture the call since `addParam` is called on the chained return value (which is the same mock object due to `mockReturnThis`). If the test passes, it's because the mock returns `this` for all methods, but this is fragile. Verify the test actually passes and the spy captures the correct call.",
+          "suggestedFix": "Run the vitest suite to confirm the forwarding test passes. If it fails, spy on the chained query object instead of `Stack.addParam` directly, or restructure the mock to track `addParam` calls through the chain.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 0,
+          "description": "Test count verification could not be performed (tool budget exhausted). The learned rules flag that prior attempts decreased the test count (e.g., '5 live preview tests were removed and only 3 re-added, net -2, total dropped from 22 to 20'). The current diff adds only 1 test (the forwarding test). If prior tests for setHost fallback behavior ('should call setHost with CONTENTSTACK_API_HOST when CONTENTSTACK_PREVIEW_HOST is unset' and 'should not call setHost when neither host is set') were removed in a prior commit and not restored, the total test count may have decreased, violating review criterion #2.",
+          "suggestedFix": "Run `~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run src/services/__tests__/contentstack.spec.ts` and verify the total test count is >= the pre-change count. If tests were removed, restore them.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

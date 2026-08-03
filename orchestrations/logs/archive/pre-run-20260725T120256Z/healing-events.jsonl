@@ -1,0 +1,1 @@
+{"ts":"2026-07-25T08:46:33Z","story_id":"AMSD-1820","retry":0,"rung":0,"target":"none","diagnosis":"Missing closing brace in apply-report-discounts.service.ts line 77 causing TS1005 syntax error.","patches_applied":0,"profile_updated":false}

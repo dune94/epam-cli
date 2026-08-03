@@ -1,0 +1,344 @@
+{
+  "phase_id": "core",
+  "timestamp": "2026-07-30T09:55:20+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 3,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-07-30T09:55:59+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 3,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-07-30T16:15:07+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 4,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-07-30T16:18:22+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 4,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-07-30T18:06:49+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 6,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-07-30T18:08:15+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 7,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-07-30T19:02:17+00:00",
+  "review_status": "approved",
+  "issues_found": 0,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-07-31T01:25:11+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 8,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-07-31T01:29:03+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 6,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-07-31T01:46:43+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 10,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-07-31T01:47:52+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 9,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-07-31T21:11:11+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 9,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-07-31T21:15:59+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 6,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-01T01:24:44+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 7,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-01T01:26:22+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 5,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-01T01:43:45+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 8,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-01T01:45:01+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 9,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-01T03:18:51+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 5,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-01T03:20:54+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 7,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-01T03:33:41+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 8,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-01T03:39:07+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 8,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-01T18:29:27+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 7,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-01T18:36:33+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 4,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-01T18:47:27+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 8,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-01T18:48:54+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 6,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-01T22:51:40+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 5,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-01T22:59:50+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 6,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-02T10:02:33+00:00",
+  "review_status": "approved",
+  "issues_found": 0,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-02T12:17:41+00:00",
+  "review_status": "approved",
+  "issues_found": 0,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-02T14:20:23+00:00",
+  "review_status": "approved",
+  "issues_found": 0,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-02T16:35:39+00:00",
+  "review_status": "approved",
+  "issues_found": 0,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-02T18:25:08+00:00",
+  "review_status": "approved",
+  "issues_found": 0,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-02T20:46:20+00:00",
+  "review_status": "approved",
+  "issues_found": 0,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-02T22:32:13+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 4,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-02T22:37:53+00:00",
+  "review_status": "approved",
+  "issues_found": 0,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-02T23:34:40+00:00",
+  "review_status": "approved",
+  "issues_found": 0,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-03T00:14:20+00:00",
+  "review_status": "approved",
+  "issues_found": 0,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-03T00:59:27+00:00",
+  "review_status": "approved",
+  "issues_found": 0,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-03T01:49:43+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 5,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-03T01:55:16+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 7,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-03T11:17:17+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 6,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-03T18:23:45+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 6,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}
+{
+  "phase_id": "core",
+  "timestamp": "2026-08-03T18:32:46+00:00",
+  "review_status": "changes_requested",
+  "issues_found": 5,
+  "stories_reviewed": 1,
+  "reviewer": "team-lead-agent"
+}

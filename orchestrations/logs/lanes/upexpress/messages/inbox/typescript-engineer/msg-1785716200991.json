@@ -1,0 +1,56 @@
+{
+  "message_id": "msg-1785716200991",
+  "timestamp": "2026-08-03T00:16:40+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 1,
+          "description": "AC#4 NOT MET — The live preview tests (live_preview block with preview_token, live_preview absent when token unset, setHost priority) exist ONLY in contentstack.spec.ts.bak, NOT in the actual test file contentstack.spec.ts. A search for 'live', 'preview', 'setHost', and 'PREVIEW' in contentstack.spec.ts returned zero matches. AC#4 explicitly requires tests at src/services/__tests__/contentstack.spec.ts (the actual test file), not a .bak backup. The diff shows no changes to contentstack.spec.ts at all — only a new .bak file was created.",
+          "suggestedFix": "Move the 3 live preview test cases from contentstack.spec.ts.bak into contentstack.spec.ts (the actual test file). Delete the .bak file.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 13,
+          "description": "The contentstack mock in the actual test file does not include an `addParam` method. setCommonConfig calls `(query as any).addParam('live_preview', live_preview.preview_hash)` when live_preview.preview_hash is present. If the live preview tests are moved into this file and any test passes live_preview through a public function (getEntry, etc.), the test will crash with 'addParam is not a function'.",
+          "suggestedFix": "Add `addParam: jest.fn().mockReturnThis(),` to the mock Stack object in the jest.mock factory function.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 1,
+          "description": "No test verifies that live_preview context flows through a public function (getEntry, getSingleEntry, etc.) to the Contentstack query's addParam method. The implementation in contentstack.ts correctly destructures live_preview in all 5 public functions and forwards it via rest operators to setCommonConfig, which calls addParam('live_preview', preview_hash). But without an end-to-end test, a regression that removes the forwarding would not be caught. AC#3 requires that preview context 'can flow through to Contentstack queries in setCommonConfig' — this must be tested, not just implemented.",
+          "suggestedFix": "Add a test that calls getEntry (or similar) with a live_preview parameter containing preview_hash and asserts that the mock's addParam method was called with ('live_preview', '<hash value>').",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/__tests__/contentstack.spec.ts.bak",
+          "line": 1,
+          "description": "A .bak backup file is committed to the repository and tracked by git. This is dead weight — it's a duplicate of the old test file with live preview tests added. It should not be in version control.",
+          "suggestedFix": "Delete src/services/__tests__/contentstack.spec.ts.bak from the repository (git rm).",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

@@ -1,0 +1,292 @@
+{
+  "id": "jira-sourced-1785780507474",
+  "title": "Metrolinx Brownfield — Jira-sourced",
+  "version": "1.0.0",
+  "lastUpdated": "2026-08-03",
+  "project": {
+    "name": "metrolinx",
+    "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
+    "stack": {
+      "language": "TypeScript",
+      "runtime": "Node.js 20",
+      "framework": "Next.js",
+      "testing": "jest",
+      "cms": "Contentstack",
+      "devEnvironment": "Ubuntu WSL2"
+    },
+    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
+    "outputDirs": [
+      {
+        "codeline": "gotransit",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+      },
+      {
+        "codeline": "upexpress",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+      },
+      {
+        "codeline": "metrolinx",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+      }
+    ]
+  },
+  "configuration": {
+    "profilesPath": "profiles.json",
+    "autoCommit": false,
+    "requireTests": true,
+    "budget": 12,
+    "aiRuntime": {
+      "provider": "claude",
+      "defaultModel": "claude-sonnet-4-6"
+    }
+  },
+  "implementationOrder": {
+    "core": [
+      "AMSD-2041"
+    ]
+  },
+  "phasesConfig": {
+    "scaffold": {
+      "description": "Project scaffolding and TypeScript configuration",
+      "parallelWorktrees": false
+    },
+    "core": {
+      "description": "API client, CLI, and Express server implementation",
+      "parallelWorktrees": true
+    },
+    "ui_and_review": {
+      "description": "HTML dashboard and code review",
+      "parallelWorktrees": true
+    }
+  },
+  "stories": [
+    {
+      "id": "AMSD-2041",
+      "jiraKey": "AMSD-2041",
+      "title": "[GO, UP, MX] Live Preview of Content in CMS",
+      "description": "[GO, UP, MX] Live Preview of Content in CMS",
+      "acceptanceCriteria": [],
+      "codeline": "gotransit",
+      "status": "pending",
+      "completed": false,
+      "agentRole": "typescript-engineer",
+      "agentGroup": "main",
+      "effort": "low",
+      "estimate": 10,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). No acceptance criteria are provided and the description is a single vague user story with no behavioral detail, testable conditions, or error/edge case coverage.",
+      "issueType": "Story",
+      "codelines": [
+        "gotransit",
+        "upexpress",
+        "metrolinx"
+      ],
+      "verificationCriteria": [
+        "When content is edited in the CMS while Live Preview is active, the page displays the edited content.",
+        "When content is changed in the CMS while Live Preview is active, the page reflects the updated content without requiring a manual page reload.",
+        "When Live Preview is not active, the page displays the published version of the content.",
+        "When content is edited in the CMS while Live Preview is active, all areas of the page that display the edited content show the updated values.",
+        "When content is edited in the CMS while Live Preview is active, no area of the page continues to display the previous version of the content after the edit."
+      ],
+      "vcSource": "description",
+      "vcResolution": "regenerated",
+      "fixSiteAnalysis": [
+        {
+          "file": "src/context/ContentstackContext.tsx",
+          "function": "ContentstackProvider",
+          "reason": "This is the React context provider that holds all Contentstack content and distributes it to every component via useContent. Currently it wraps defaultContent in a static useMemo — it has NO mechanism to receive or react to Contentstack Live Preview SDK updates (onEntryChange). Live Preview requires this provider to subscribe to real-time content changes and update the context reactively, which is the root cause of the feature gap.",
+          "fix": "Replace the static useMemo with useState(initialContent) + useEffect that subscribes to Contentstack Live Preview SDK's onEntryChange callback. The effect should call onEntryChange(() => setContent(livePreviewData)) so that when the CMS pushes a preview update, the context re-renders all consumers. Also add live_preview config to the Stack initialization in src/services/contentstack.ts (the Stack object used by ContentstackFactory) to enable the preview endpoint — add live_preview: { management_token, enable: true } to the Stack initialization options so the SDK knows to poll/websocket for preview changes.",
+          "helper": "",
+          "brokenLine": "const context = useMemo(",
+          "fixVerified": null,
+          "evidenceVerified": true,
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false
+        }
+      ],
+      "fixSiteAnalysisCoverage": {
+        "complete": true,
+        "uncoveredVerificationCriteria": []
+      },
+      "storyKind": "novel",
+      "technicalNotes": {
+        "files": [
+          "src/hooks/useContent.ts",
+          "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+          "src/context/ContentstackContext.tsx",
+          "src/interface/content/contentCard.ts"
+        ],
+        "perCodeline": {
+          "gotransit": {
+            "files": [
+              "src/hooks/useContent.ts",
+              "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+              "src/context/ContentstackContext.tsx",
+              "src/interface/content/contentCard.ts"
+            ],
+            "resolved": [
+              {
+                "declared": "src/hooks/useContent.ts",
+                "actual": "src/hooks/useContent.ts",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+              },
+              {
+                "declared": "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+                "actual": "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+              },
+              {
+                "declared": "src/context/ContentstackContext.tsx",
+                "actual": "src/context/ContentstackContext.tsx",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+              },
+              {
+                "declared": "src/interface/content/contentCard.ts",
+                "actual": "src/interface/content/contentCard.ts",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+              }
+            ],
+            "unresolved": []
+          },
+          "upexpress": {
+            "files": [
+              "src/hooks/useContent.ts",
+              "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+              "src/context/ContentstackContext.ts",
+              "src/interface/content/contentCard.ts"
+            ],
+            "resolved": [
+              {
+                "declared": "src/hooks/useContent.ts",
+                "actual": "src/hooks/useContent.ts",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+              },
+              {
+                "declared": "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+                "actual": "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+              },
+              {
+                "declared": "src/context/ContentstackContext.tsx",
+                "actual": "src/context/ContentstackContext.ts",
+                "match": "extension_variant",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+              },
+              {
+                "declared": "src/interface/content/contentCard.ts",
+                "actual": "src/interface/content/contentCard.ts",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+              }
+            ],
+            "unresolved": []
+          },
+          "metrolinx": {
+            "files": [
+              "src/hooks/useContent.ts",
+              "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+              "src/context/contentstackContext.tsx",
+              "src/interface/content/contentCard.ts"
+            ],
+            "resolved": [
+              {
+                "declared": "src/hooks/useContent.ts",
+                "actual": "src/hooks/useContent.ts",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+              },
+              {
+                "declared": "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+                "actual": "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+              },
+              {
+                "declared": "src/context/ContentstackContext.tsx",
+                "actual": "src/context/contentstackContext.tsx",
+                "match": "case_variant",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+              },
+              {
+                "declared": "src/interface/content/contentCard.ts",
+                "actual": "src/interface/content/contentCard.ts",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+              }
+            ],
+            "unresolved": []
+          }
+        }
+      },
+      "specification": {
+        "runId": "20260803T180646Z",
+        "assignedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "coordinatorNotes": "Story has zero acceptance criteria and null spec. Live Preview across GO/UP/MX is complex — real-time rendering, multi-context state sync, and potential XSS/security surface. openspec must elaborate AC and technical design first; speckit then hardens testability, security, and edge cases.",
+        "status": "completed",
+        "updatedAt": "2026-08-03T18:12:53.967Z",
+        "appliedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": true,
+            "notes": "Novel capability — Live Preview does not exist. useContent (236 callers) is the primary attachment point; every Contentstack component flows through getContentByKey. Live preview integration must plug into this hook and/or its provider to propagate draft/preview content to all consumers without per-component changes. Secondary attachment: the page-level data-fetching/provider layer that hydrates useContent's context, where preview tokens and draft flags are typically resolved.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-08-03T18:11:45.433Z"
+          },
+          {
+            "agent": "speckit",
+            "applied": true,
+            "notes": "Openspec provided an empty acceptanceCriteria list with valuable architectural notes identifying useContent (236 callers) and ContentstackContext as the primary attachment points. I authored all 16 ACs from scratch, building on their insight. Key design decisions: (1) AC-1/AC-2/AC-3 establish the core happy-path — draft rendering, token propagation, and published-content fallback — directly reflecting openspec's observation that the hook and provider are the integration points. (2) AC-4 addresses real-time updates, the defining UX of 'live preview.' (3) AC-5/AC-7 cover error handling for API failures and invalid/expired tokens. (4) AC-6 is a security gate — no draft content must ever leak to unauthenticated production users. (5) AC-8 ensures cross-site (GO/UP/MX) consistency per the story's [GO, UP, MX] tag. (6) AC-9 prevents the classic pitfall of preview infrastructure degrading normal-path performance. (7) AC-10/AC-11 address the ContentstackLink and contentCard interface files specifically called out in technical notes. (8) AC-12 prevents flash-of-published-content, a common live-preview UX bug. (9) AC-13 covers session lifecycle cleanup. (10) AC-14 ensures accessibility parity. (11) AC-15 ensures the API contract is observable. (12) AC-16 prevents partial-update inconsistency across multiple useContent consumers on one page. CAVEAT: I could not read the actual source files (useContent.ts, ContentstackContext.tsx, etc.), so my ACs are inferred from the story title, file paths, and openspec's notes rather than verified against implementation details. If the actual hook/provider API differs from what I assumed, AC-2 and AC-12 in particular may need adjustment.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-08-03T18:12:53.967Z"
+          }
+        ],
+        "coordinatorReview": {
+          "verdict": "needs_review",
+          "reviewNotes": "Both agents contributed meaningful, non-overlapping value: openspec identified the primary architectural attachment points (useContent hook with 236 callers, ContentstackContext provider) and the integration strategy for propagating draft/preview content; speckit leveraged that insight to author 16 comprehensive ACs covering happy path, security (no draft leakage to production), error handling, cross-site (GO/UP/MX) consistency, performance, accessibility, flash-of-published-content, and session lifecycle. However, the pipeline operated in a role inversion: the coordinator explicitly tasked openspec to 'elaborate AC and technical design first,' yet openspec set acceptanceChanged=false and splitCount=0 — it produced architectural notes but no ACs. Speckit compensated by writing all ACs from scratch, which is not its intended role (harden/review, not author from zero). Additionally, speckit flagged it could not read the actual source files (useContent.ts, ContentstackContext.tsx, etc.), so ACs are inferred from story title and openspec's notes rather than verified against the real hook/provider API. AC-2 (token propagation) and AC-12 (flash-of-published-content prevention) are specifically called out as potentially mismatched. Human review should validate the ACs against the actual implementation surface before implementation begins.",
+          "qualityScore": 0.75,
+          "flags": [
+            "role_inversion_openspec_did_not_elaborate_ACs",
+            "speckit_authored_all_ACs_from_scratch",
+            "ACs_unverified_against_actual_source_files",
+            "AC-2_and_AC-12_may_not_match_real_hook_provider_API"
+          ],
+          "reviewedAt": "2026-08-03T18:13:17.835Z"
+        }
+      },
+      "estimatedAiMinutes": 5.4236,
+      "estimatedCost": 0.1721,
+      "estimatedTokens": 654804,
+      "estimatedTurns": 19,
+      "estimatedHours": 0.0903,
+      "cpaEffortTier": "high",
+      "cpaConfidence": 0.72,
+      "cpaGate": "review",
+      "ladderTier": "high",
+      "cpaIterationEstimate": 1,
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
+      "reasoningEffort": "low",
+      "completedAt": "2026-08-03T18:30:16+00:00",
+      "actualCost": 8.858899999999998,
+      "reviewStatus": "escalated"
+    }
+  ],
+  "currentIteration": 10,
+  "source": "jira",
+  "sourceProject": "AMSD"
+}

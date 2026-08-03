@@ -1,0 +1,7 @@
+[
+  {
+    "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+    "function": "applyReportDiscountsService",
+    "reason": "The discount-to-dispatch matching on line 16-18 compares dispatch.lineItems[].id (which is 'originalId#return' for return trips, set by getDispatchLineItemKey in mapOrderDispatchesToMozioDispatches) against discount.lineItemId (which is the raw 'originalId' from getUniqDiscounts). For return trip tickets, these IDs never match, so discounts are never applied to return-trip dispatches. Additionally, even if IDs matched, getUniqDiscounts stores the full discount amount from the line item, but mapDispatchPriceReport already halves the selling price (multiplier=0.5) for return tickets — the discount amount also needs to be halved to be proportional."
+  }
+]

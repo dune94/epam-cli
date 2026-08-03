@@ -1,0 +1,50 @@
+{
+  "runId": "20260803T154735Z",
+  "phase": "mock3_core",
+  "startedAt": "2026-08-03T15:48:06.316Z",
+  "stories": [
+    {
+      "storyId": "SPAN-1",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "appliedAgents": [
+        "openspec"
+      ],
+      "notes": "Trivial string replacement with already-clear, testable AC — no elaboration or hardening needed",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: getGreeting() computes the wrong string. No code block was injected, so locationHint is empty per rules.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-03T15:53:32.043Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "approved",
+        "reviewNotes": "Only openspec was assigned (coordinator correctly skipped speckit for this trivial string replacement). Openspec's contribution was minimal — defect identification only, no code block, no AC changes, no splits — which is proportionate for a brownfield trivial story. No noise injected, no overcomplication. Single-agent assignment was appropriate given the story's simplicity; speckit would have added no meaningful value here.",
+        "qualityScore": 0.8,
+        "flags": [],
+        "reviewedAt": "2026-08-03T15:53:43.567Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 1,
+    "coordinatorReviewCompleted": true,
+    "approved": 1,
+    "needsReview": 0
+  },
+  "completedAt": "2026-08-03T15:53:50.659Z",
+  "storyCount": 1
+}

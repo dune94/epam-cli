@@ -1,0 +1,40 @@
+{
+  "message_id": "msg-1785718811540",
+  "timestamp": "2026-08-03T01:00:11+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 1,
+          "description": "The test suite fails to execute at all: `Cannot find package 'services/logger' imported from src/services/__tests__/contentstack.spec.ts`. Vitest cannot resolve the `services/logger` path alias, causing 0 tests to run (exit code 1). This means AC#4 cannot be verified — no test evidence exists that any test passes. This may be a pre-existing vitest alias configuration issue, but it must be resolved so the required test scenarios can actually execute.",
+          "suggestedFix": "Ensure vitest config (vitest.config.ts or vite.config.ts) includes path aliases for `services/*` and `utils/*` matching tsconfig paths, or change the import to a relative path (e.g., `../logger`). Run `npx vitest run src/services/__tests__/contentstack.spec.ts` and confirm all tests pass with exit code 0.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 0,
+          "description": "AC#4 requires three specific test scenarios: (1) live_preview block present with preview_token when CONTENTSTACK_PREVIEW_TOKEN is set, (2) live_preview absent when the token is unset, (3) setHost called with CONTENTSTACK_PREVIEW_HOST when set, taking priority over CONTENTSTACK_API_HOST. I was only able to read the first ~8,192 of 19,319 chars of the test file. The visible portion (lines 1–~200) contains tests for missing env vars, fetch timeout, and getEntry behavior — none of the three required live_preview test scenarios are visible. The remaining ~11,127 chars may contain them, but I could not search or read that portion due to tool budget constraints. I ran `read_file` on the test file but it was truncated. Per the test coverage verification rules, I am flagging this as unverified rather than confirmed missing — but it must be confirmed that all three scenarios exist as `it(...)` or `test(...)` blocks in the actual test file (not a .bak file).",
+          "suggestedFix": "Add or confirm the following three `it(...)` blocks in `src/services/__tests__/contentstack.spec.ts`: (1) set CONTENTSTACK_PREVIEW_TOKEN, require the module, assert `options.live_preview` equals `{ enable: true, preview_token: <value> }`; (2) unset CONTENTSTACK_PREVIEW_TOKEN, require the module, assert `options.live_preview` is undefined; (3) set both CONTENTSTACK_PREVIEW_HOST and CONTENTSTACK_API_HOST, assert `Stack.setHost` was called with CONTENTSTACK_PREVIEW_HOST, not CONTENTSTACK_API_HOST. Also add an end-to-end test calling `getEntry` (or similar) with a `live_preview` parameter containing `preview_hash` and assert the mock's `addParam` was called with `('live_preview', '<hash value>')`.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

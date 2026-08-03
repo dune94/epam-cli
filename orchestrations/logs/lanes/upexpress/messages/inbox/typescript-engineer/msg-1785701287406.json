@@ -1,0 +1,80 @@
+{
+  "message_id": "msg-1785701287406",
+  "timestamp": "2026-08-02T20:08:07+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 132,
+          "description": "AC#3 requires that preview context 'can flow through to Contentstack queries in setCommonConfig'. However, none of the public functions (getEntry, getSingleEntry, getAllContentTypeEntries, findSingletonEntry) destructure or forward `live_preview` to createContentTypeQuery/createContentTypeEntryQuery. They use explicit destructuring without a rest operator, so `live_preview` is silently dropped from every call path. The `live_preview` handling in setCommonConfig (lines 132-136) is dead code — it can never be reached at runtime.",
+          "suggestedFix": "Add `live_preview` to the destructuring of each public function and forward it in the config object passed to createContentTypeQuery/createContentTypeEntryQuery. For example, in getEntry: destructure `live_preview` from the input and include it in the factory.createContentTypeQuery({ ... }) call. Do the same for getSingleEntry, getAllContentTypeEntries, and findSingletonEntry.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 133,
+          "description": "`live_preview.live_preview` accesses a key named 'live_preview' within the Record<string, string>. The live_preview config object (as constructed in `options`) has keys `enable`, `preview_token`, and `preview_hash` — there is no `live_preview` key. This will pass `undefined` to addParam, which is incorrect. The old code correctly used `live_preview.preview_hash` as the value for the live_preview query parameter.",
+          "suggestedFix": "Use `live_preview.preview_hash` as the value for the `live_preview` query parameter (as the prior code did), or pass the entire live_preview object if the SDK expects that. For example: `(query as any).addParam('live_preview', live_preview.preview_hash);` — or clarify the intended shape of the Record and access the correct key.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/interface/contentstack.ts",
+          "line": 8,
+          "description": "The typed `IContentstackLivePreviewContext` interface (with `enable?: boolean`, `preview_token?: string`, `preview_hash?: string`) was removed and replaced with `Record<string, string>`. This is a type-safety regression — `enable` was a boolean and is now constrained to string, and the known keys are no longer documented or enforced by the compiler.",
+          "suggestedFix": "Restore `IContentstackLivePreviewContext` (or an equivalent typed interface) and use it for the `live_preview` field in `ICommonContentstackConfig`. If the query-context shape differs from the Stack-options shape, define a separate interface for each.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 439,
+          "description": "No tests verify that `live_preview` context actually flows through public functions (getEntry, getSingleEntry, etc.) to setCommonConfig and ultimately to `query.addParam`. The tests only check the `options` object and `setHost` behavior. AC#3 requires that preview context 'can flow through to Contentstack queries in setCommonConfig' — this must be tested.",
+          "suggestedFix": "Add a test that calls getEntry (or getSingleEntry) with a `live_preview` config and asserts that `addParam` was called on the query with the expected parameters.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 475,
+          "description": "Missing test for setHost fallback behavior: when CONTENTSTACK_PREVIEW_HOST is unset but CONTENTSTACK_API_HOST is set, setHost should be called with CONTENTSTACK_API_HOST. The code has this fallback path (lines 84-86) but it is untested. Learned review rules indicate this test previously existed and was removed, contributing to a test count decrease (22→20).",
+          "suggestedFix": "Add a test: 'should call setHost with CONTENTSTACK_API_HOST when CONTENTSTACK_PREVIEW_HOST is unset' that verifies Stack.setHost is called with the API host value. Also add: 'should not call setHost when neither PREVIEW_HOST nor API_HOST is set'.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 82,
+          "description": "`contentstack.Stack(options as any)` uses an untyped `any` cast without a per-use explanatory comment. While the file has a blanket `/* eslint-disable @typescript-eslint/no-explicit-any */`, the review criteria require explanatory comments for `any` usage.",
+          "suggestedFix": "Add an inline comment explaining why the cast is necessary (e.g., Contentstack SDK types don't include live_preview in StackOptions), or extend the SDK's type definition via declaration merging.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 133,
+          "description": "`(query as any).addParam(...)` uses untyped `any` casts on lines 133 and 135 without explanatory comments. The Contentstack SDK's Query type may not expose `addParam` in its TypeScript definitions.",
+          "suggestedFix": "Add an inline comment explaining the SDK type gap, or create a typed wrapper/declaration that extends the Query type with `addParam`.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

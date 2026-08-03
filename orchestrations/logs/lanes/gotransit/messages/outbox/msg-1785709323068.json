@@ -1,0 +1,56 @@
+{
+  "message_id": "msg-1785709323068",
+  "timestamp": "2026-08-02T22:22:03+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 114,
+          "description": "AC3 not met: `live_preview` is destructured from config in `setCommonConfig` but immediately discarded with `void live_preview;`. The acceptance criterion explicitly requires that preview context (live_preview/preview_hash) can 'flow through to Contentstack queries in setCommonConfig'. The interface field was added (AC3) but the value never reaches the query object — it is silently dropped. This is the exact defect called out in prior review feedback: 'query config interfaces lack live_preview fields to forward preview context through to Contentstack queries'. The comment explaining SDK 3.17.2 limitations does not satisfy the AC; if the SDK supports `query.addParam('live_preview', preview_hash)` or similar, that should be used. If not, the AC cannot be met by this approach alone.",
+          "suggestedFix": "Forward the preview_hash to the query object. For Contentstack SDK 3.x, this is typically done via `query.addParam('live_preview', live_preview.preview_hash)` or by passing it as part of the query configuration. Replace `void live_preview;` with: `if (live_preview?.preview_hash) { (query as any).addParam('live_preview', live_preview.preview_hash); }` — or whichever SDK method the installed version exposes. Add a unit test verifying the query receives the preview_hash.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 57,
+          "description": "`export const options: any = {` introduces an explicit `any` type annotation without an explanatory comment, violating TypeScript strict compliance rules. The original code used implicit typing (`export const options = {`). The change to `any` was made to accommodate the conditional spread of `live_preview`, but a proper interface or `Record<string, unknown>` with a comment would be preferable.",
+          "suggestedFix": "Define a typed interface for the Stack options (e.g., `IContentstackStackOptions`) or revert to implicit typing (which was already correctly inferred). If `any` is truly needed for SDK compatibility, add an inline comment: `// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Contentstack SDK options type is incomplete`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 397,
+          "description": "The test 'should not set live_preview when CONTENTSTACK_PREVIEW_TOKEN is missing' sets `process.env.CONTENTSTACK_PREVIEW_TOKEN = undefined`. While this works in Node.js (setting to undefined deletes the property), using `delete process.env.CONTENTSTACK_PREVIEW_TOKEN` is more explicit and robust across environments.",
+          "suggestedFix": "Replace `process.env.CONTENTSTACK_PREVIEW_TOKEN = undefined;` with `delete process.env.CONTENTSTACK_PREVIEW_TOKEN;`",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/interface/contentstack.ts",
+          "line": 9,
+          "description": "The `live_preview` field on `ICommonContentstackConfig` defines `enable?: boolean` and `preview_hash?: string`, but these fields are never populated by any caller in the codebase. A grep across `src/` for `live_preview`, `livePreview`, `preview_hash`, and `previewHash` in non-test files returns zero matches outside of `contentstack.ts` and `contentstack.spec.ts`. No `getStaticProps`, page component, or service call passes preview context through `ICommonContentstackConfig`. Without callers populating this field, the interface addition is dead code.",
+          "suggestedFix": "Either add a follow-up ticket to wire preview context from Next.js preview mode through to Contentstack service calls (e.g., threading `context.preview` from `getStaticProps` into `getEntry`/`getSingleEntry` calls), or document in the PR description that caller-side wiring is intentionally deferred.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

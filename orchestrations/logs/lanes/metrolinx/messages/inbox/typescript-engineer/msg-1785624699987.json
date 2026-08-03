@@ -1,0 +1,64 @@
+{
+  "message_id": "msg-1785624699987",
+  "timestamp": "2026-08-01T22:51:39+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 93,
+          "description": "The `live_preview` config block uses `management_token` instead of the prescribed `preview_token`. The RCA explicitly prescribes `live_preview: { enable: true, preview_token: CONTENTSTACK_PREVIEW_TOKEN }`. The Contentstack delivery SDK expects `preview_token` for live preview processing — `management_token` is for the Management API, not delivery-side live preview. This deviation means the SDK will not correctly process live preview data, so all three acceptance criteria (draft display, real-time update, full content preview) remain unmet.",
+          "suggestedFix": "Change `management_token: CONTENTSTACK_PREVIEW_TOKEN` to `preview_token: CONTENTSTACK_PREVIEW_TOKEN` to match the prescribed fix and the Contentstack delivery SDK's expected configuration.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/",
+          "line": 0,
+          "description": "No vitest unit tests exist for the Live Preview feature. The `test/unit/` directory does not exist. Review criteria require new features to have corresponding vitest unit tests mirroring the src/ path. At minimum, tests should verify that Stack options include `live_preview` with `enable: true` and `preview_token` when `CONTENTSTACK_PREVIEW_TOKEN` is set, and that `CONTENTSTACK_PREVIEW_HOST` takes priority over `CONTENTSTACK_API_HOST` in `setHost`.",
+          "suggestedFix": "Create `test/unit/services/contentstack.test.ts` (or equivalent mirroring path) with tests asserting: (1) options.live_preview.enable is true and options.live_preview.preview_token equals the env var when set; (2) options.live_preview is absent when CONTENTSTACK_PREVIEW_TOKEN is unset; (3) Stack.setHost is called with CONTENTSTACK_PREVIEW_HOST when both preview and API host are set.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 95,
+          "description": "`host: CONTENTSTACK_PREVIEW_HOST` is unconditionally included inside the `live_preview` block even when `CONTENTSTACK_PREVIEW_HOST` is an empty string. The prescribed fix does not include `host` inside the `live_preview` block — it uses `Stack.setHost()` separately (lines 100-104). Passing an empty string as `host` inside the live_preview config may cause the SDK to attempt connections to an invalid host.",
+          "suggestedFix": "Remove `host: CONTENTSTACK_PREVIEW_HOST` from the `live_preview` block. The separate `Stack.setHost(CONTENTSTACK_PREVIEW_HOST)` call on line 101 already handles host configuration. Alternatively, conditionally include `host` only when `CONTENTSTACK_PREVIEW_HOST` is non-empty.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/hooks/useContent.ts",
+          "line": 5,
+          "description": "The `useContent` hook calls `useContext(ContentstackContext)` but there is no reactive Provider component supplying a changing value. AC 2 requires that when a content editor modifies a field value, the preview surface updates without requiring a publish action. Without a Provider with `useState`/`useEffect` and an `onEntryChange` subscription (from `@contentstack/live-preview-utils`, which is not installed), the hook will always return the static SSR-provided default content. Even with the Stack configured for live preview, no real-time update can propagate to the 236+ consumers of this hook. While the RCA prescribes only the service-layer fix, this AC is not demonstrably met.",
+          "suggestedFix": "If real-time client-side updates are required by AC 2, install `@contentstack/live-preview-utils` and implement a `ContentstackProvider` that subscribes to `onEntryChange` events, merges incoming preview data into state via `setContent`, and supplies the reactive value through `ContentstackContext`. If the prescribed minimal fix is intentionally limited to server-side draft content fetching, document why AC 2 is considered met without client-side reactivity.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 100,
+          "description": "The `else if` structure for `setHost` means `CONTENTSTACK_API_HOST` is silently ignored when `CONTENTSTACK_PREVIEW_HOST` is set (even if empty string). Since `CONTENTSTACK_PREVIEW_HOST` defaults to `''` (line 24), an empty string is truthy in the `if` check on line 100, causing `Stack.setHost('')` to be called when no preview host is configured but the `live_preview` block is active (because `CONTENTSTACK_PREVIEW_TOKEN` is set).",
+          "suggestedFix": "Change the condition to `if (CONTENTSTACK_PREVIEW_HOST)` — it already checks truthiness, but since the default is `''`, this is actually fine. However, consider adding a comment explaining the priority logic: preview host takes precedence over API host when both are set.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

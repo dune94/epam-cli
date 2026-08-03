@@ -1,0 +1,56 @@
+{
+  "message_id": "msg-1785444711494",
+  "timestamp": "2026-07-30T20:51:51+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/pages/_app.tsx",
+          "line": 0,
+          "description": "No Contentstack livePreview callback is registered anywhere in the application. The prescribed fix requires that Stack.livePreview (from the Contentstack SDK) be registered at _app.tsx or equivalent bootstrap to call setContent with updated content. The diff only modifies ContentstackContext.tsx to expose setContent, but nothing ever calls it — setContent is dead code. Without this callback, live preview edits will never flow into the React tree, and all acceptance criteria related to draft content appearing in preview mode are unmet.",
+          "suggestedFix": "In _app.tsx (or equivalent bootstrap), register the Contentstack SDK livePreview callback: Stack.livePreview({ callback: (data) => { setContent(data) } }) or equivalent, wiring it to the setContent exposed by ContentstackContext. Import useContentstackContext or pass setContent via a ref to access it at the app level.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 0,
+          "description": "No includeDraft propagation exists anywhere in the codebase. Searched for 'includeDraft' and 'include_draft' across all src/ files — zero results. Per learned review rules, the includeDraft flag must be added to public-facing contentstack service functions (getEntry, getSingleEntry, getSingletonEntry) and their interfaces, and page-level getStaticProps must pass context.preview through as includeDraft: true. Without this, draft content will never be fetched from Contentstack even if the livePreview callback is wired.",
+          "suggestedFix": "Add includeDraft?: boolean to IContentstackGetEntry, IContentstackGetSingleEntry, IContentstackGetSingletonEntry interfaces and propagate it through to ContentstackFactory where addParam('include_draft', 'true') is called. In page getStaticProps functions, read context.preview and pass includeDraft: context.preview to contentstack service calls.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/",
+          "line": 0,
+          "description": "No vitest unit tests were added for the live preview / setContent functionality. The diff only modifies src/context/ContentstackContext.tsx and migration scripts — zero test files. Per review criteria, new features must have corresponding vitest unit tests in test/unit/ mirroring the src/ path. There are no tests verifying that setContent updates the context value, that the livePreview callback triggers re-renders, or that includeDraft:true causes draft content to be fetched.",
+          "suggestedFix": "Add test/unit/context/ContentstackContext.test.tsx (or .test.ts) with tests verifying: (1) setContent updates content in context, (2) consumers re-render after setContent is called, (3) default content is used when setContent is not called. Also add tests for includeDraft propagation in the contentstack service layer.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 11,
+          "description": "TypeScript strict compliance: header?: [any] and footer?: [any] use untyped any without explanatory comment. While pre-existing, the diff touches this file and these should be addressed.",
+          "suggestedFix": "Replace [any] with proper typed arrays or add an explanatory comment per TypeScript strict compliance rules.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

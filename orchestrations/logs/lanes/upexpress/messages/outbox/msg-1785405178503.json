@@ -1,0 +1,64 @@
+{
+  "message_id": "msg-1785405178503",
+  "timestamp": "2026-07-30T09:52:58+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 67,
+          "description": "The prescribed fix says to call the Contentstack Live Preview SDK's onLivePreview callback to receive draft content. Instead, the implementation hand-rolls a raw window.addEventListener('message', ...) listener with a fragile extractDraftContent function that guesses at payload shape (payload?.data?.entry ?? payload?.entry ?? payload?.content ?? payload?.data?.content). This does not use the SDK's documented API and is likely to break when the SDK changes its message format. The prescribed root cause fix is not correctly implemented.",
+          "suggestedFix": "Import and use the Contentstack Live Preview SDK's onLivePreview (or equivalent) callback as specified in the root cause analysis. Remove the hand-rolled message listener and extractDraftContent helper.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 40,
+          "description": "extractDraftContent uses untyped 'any' (Record<string, any>) without an explanatory comment, violating TypeScript strict compliance. The function also unsafely casts arbitrary JSON to Partial<IContentstackContext> without validation.",
+          "suggestedFix": "If a custom parser is truly needed, define an interface for the expected SDK message payload and use type guards. Better yet, use the SDK's onLivePreview callback which provides typed draft content, eliminating the need for this function entirely.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 0,
+          "description": "No unit tests exist for this change. No test files matching 'contentstack', 'livepreview', or 'preview' were found. The acceptance criteria require verification of: draft vs published content, successive edits, multi-instance updates, connection-loss resilience, and entry switching — none of these are covered by tests.",
+          "suggestedFix": "Add vitest unit tests in test/unit/ mirroring the src/ path. Test that: (1) outside CMS editor, content stays as published default; (2) inside CMS editor, draft events update context; (3) successive edits each update; (4) malformed/missing event data does not crash (connection loss resilience); (5) entry switching updates content.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 30,
+          "description": "isLivePreviewEnabled is hand-rolled instead of using the Contentstack SDK's own detection. The prescribed fix says to detect via 'the SDK's isLivePreviewEnabled or window.__CONTENTSTACK_LIVE_PREVIEW__'. This implementation creates a new function that checks window.__CONTENTSTACK_LIVE_PREVIEW__ OR window.self !== window.top, which may not match the SDK's own logic and could enable live-preview behavior outside the CMS editor (e.g., any iframe context).",
+          "suggestedFix": "Use the Contentstack Live Preview SDK's built-in detection method if available. If window.__CONTENTSTACK_LIVE_PREVIEW__ is the only signal, check only that — do not add the window.self !== window.top fallback which could false-positive in non-CMS iframes.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 85,
+          "description": "value = useMemo(() => liveContent, [liveContent]) is redundant — wrapping a state variable in useMemo with itself as the sole dependency provides no memoization benefit. The prescribed fix says to replace useMemo with useState; this useMemo should be removed and liveContent passed directly to the Provider.",
+          "suggestedFix": "Pass liveContent directly: <ContentstackContext.Provider value={liveContent}>.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

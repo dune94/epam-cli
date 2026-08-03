@@ -1,0 +1,64 @@
+{
+  "message_id": "msg-1785547582014",
+  "timestamp": "2026-08-01T01:26:22+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 55,
+          "description": "The live_preview config block IS present in the options object (management_token, host, enable), which correctly addresses the prescribed root-cause fix for server-side draft content fetching. However, no client-side real-time update mechanism exists anywhere in the codebase. There is no @contentstack/live-preview-utils dependency in package.json, no onEntryChange subscription, and no reactive Provider component. The useContent hook calls useContext(ContentstackContext) but without a provider that re-renders on entry-change events, the hook always returns static content. Acceptance criteria 2, 3, and 5 (real-time updates without manual reload) are unmet — the editor changing text, link labels, or URLs in the CMS will not visibly update the previewed page without a reload.",
+          "suggestedFix": "Install @contentstack/live-preview-utils, create a ContentstackProvider component that subscribes to LivePreview.onEntryChange() and updates React state, and wrap the application with it so useContent consumers receive reactive updates.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 1,
+          "description": "No vitest/jest unit tests exist for the Live Preview feature. There are no tests verifying live_preview config in options, no tests for onEntryChange callback behavior, no tests for reactive content updates, and no tests mirroring src/context/ for a ContentstackProvider. The test count has not increased to cover this new feature, violating the requirement that new features have corresponding unit tests.",
+          "suggestedFix": "Add unit tests in test/unit/ (or __tests__/ matching the project's jest convention) that verify: (1) the live_preview config is present in options when CONTENTSTACK_PREVIEW_TOKEN is set, (2) the ContentstackProvider reacts to onEntryChange events, (3) useContent returns updated content after an entry change event fires.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 85,
+          "description": "TypeScript strict compliance violation: untyped 'any' without explanatory comment. The renderOption object uses 'any' types: span: (node: { children: any }, next: (arg0: any) => any). Also, getEntry uses 'const result: any = []' (line ~140) and catch blocks use 'catch (e: any)' in multiple locations (getEntry, getSingleEntry). The retryCondition callback parameter 'error' has no explicit type.",
+          "suggestedFix": "Type the renderOption span callback parameters properly (e.g., node: { children: unknown }, next: (arg: unknown) => unknown). Type result as T[] instead of any[]. Use 'catch (e: unknown)' and narrow with isContentstackApiError or instanceof checks. Add explicit type for retryCondition's error parameter.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/hooks/useContent.ts",
+          "line": 5,
+          "description": "useContent calls useContext(ContentstackContext) but there is no evidence that ContentstackContext provides a reactive value that changes when CMS content is edited. Without a Provider that supplies a new context value on entry-change events, the hook will always return the static content from the initial render. This means 236+ components using useContent cannot propagate live preview updates.",
+          "suggestedFix": "Ensure ContentstackContext is backed by a Provider that holds content in useState and updates it via a useEffect subscribing to @contentstack/live-preview-utils onEntryChange. The context value must be a new object reference on each update to trigger consumer re-renders.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 55,
+          "description": "The live_preview.host fallback uses a hardcoded string 'api.contentstack.io'. While this is a Contentstack default endpoint, the review criteria require no hardcoded endpoint URLs — all should use named constants from a constants file.",
+          "suggestedFix": "Extract 'api.contentstack.io' to a named constant (e.g., CONTENTSTACK_DEFAULT_PREVIEW_HOST) in src/config/constants.ts or a contentstack constants file.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

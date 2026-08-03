@@ -1,0 +1,56 @@
+{
+  "message_id": "msg-1785672138134",
+  "timestamp": "2026-08-02T12:02:18+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 112,
+          "description": "setCommonConfig accesses (query as any).content_type_uid to pass content_type_uid to livePreviewQuery. In the mock this works because all chained methods return the same `this` object, but in the real Contentstack SDK, ContentType(uid).Query() returns a separate Query instance that does not expose content_type_uid. This means livePreviewQuery will receive content_type_uid: undefined in production, causing the preview hash to not be properly scoped to the content type.",
+          "suggestedFix": "Pass contentTypeUid explicitly from createContentTypeQuery and createContentTypeEntryQuery into setCommonConfig (add it as a parameter on the config object or as a separate argument) instead of extracting it from the query object via unsafe cast.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 226,
+          "description": "The pagination while-loop inside getEntry calls createContentTypeQuery a second time without passing live_preview. This means subsequent page fetches (pages 2+) will not include the preview hash, so paginated draft content will show published values instead of draft values — failing the story's core requirement that linked/tabular references show draft values.",
+          "suggestedFix": "Add live_preview to the second createContentTypeQuery call inside the while loop, mirroring the first call's parameters.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 78,
+          "description": "contentstack.Stack(options as any) uses an untyped any cast without an explanatory comment. Per TypeScript strict compliance rules, any usage of any must include a comment explaining why.",
+          "suggestedFix": "Add an inline comment such as: // Cast required because contentstack SDK types do not include live_preview field",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/interface/contentstack.ts",
+          "line": 14,
+          "description": "The live_preview field on ICommonContentstackConfig includes preview_token, but setCommonConfig only uses preview_hash — preview_token is never read in the query-forwarding path. Including it on the query config interface is misleading since callers should not need to set it per-query (it is already on the Stack options).",
+          "suggestedFix": "Remove preview_token from the live_preview field on ICommonContentstackConfig, keeping only preview_hash which is the per-query context that needs forwarding.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

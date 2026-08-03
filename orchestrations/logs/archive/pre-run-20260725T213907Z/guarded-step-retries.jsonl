@@ -1,0 +1,2 @@
+{"timestamp":"2026-07-25T21:07:18.864Z","step":"ac-review","storyId":"MOCK-HW-1","runId":"20260725T210216Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"11fbee8"}
+{"timestamp":"2026-07-25T21:12:32Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260725T210216Z","promptVersion":"11fbee8"}

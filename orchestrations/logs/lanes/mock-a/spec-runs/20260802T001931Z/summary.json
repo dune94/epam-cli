@@ -1,0 +1,64 @@
+{
+  "runId": "20260802T001931Z",
+  "phase": "mock3_core",
+  "startedAt": "2026-08-02T00:19:45.817Z",
+  "stories": [
+    {
+      "storyId": "SPAN-1",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "notes": "Trivial string replacement with clear, testable AC — no elaboration needed. Speckit assigned solely to scan for stray 'hello world' references beyond getGreeting() and confirm edge-case coverage (e.g., exports, constants, README). Low-risk mechanical change; openspec adds no value here.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: existing getGreeting() returns wrong value. No code block injected so locationHint is empty. VCs derived from both ACs and description — the description adds the multi-codeline scope not captured in the ACs.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-02T00:21:42.306Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Added AC4 to catch stale 'hello world' references that could be missed if only the function body and test assertion are updated — the description explicitly scopes this to 'every affected codeline' and a grep-level check ensures completeness. Added AC5 to guard against edge-case regressions where a function might return the correct value once then diverge (e.g., accidental closure over mutable state). Flagged the multi-codeline scope gap: the description says 'each codeline named on this story' and 'codelines do not share code,' but no AC enumerates which codelines must be verified, making it impossible to confirm completeness without external knowledge of the codeline list.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-02T00:22:07.603Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "approved",
+        "reviewNotes": "Speckit provided meaningful, distinct value: AC4 (grep-level stale reference check) directly addresses the 'every affected codeline' scope, AC5 (idempotency guard) is a reasonable edge-case for a string-returning function, and the scope-enumeration gap flag is substantive. Openspec's contribution was thin — it classified the story as a defect and restated the multi-codeline scope gap that speckit also flagged, providing minimal elaboration beyond what the coordinator already anticipated. Minor overlap on the scope gap observation. No ACs were mutated (acceptanceChanged: false), consistent with brownfield immutability. Low-risk mechanical change; no human intervention required.",
+        "qualityScore": 0.7,
+        "flags": [
+          "openspec_low_value_add",
+          "minor_overlap_on_scope_gap"
+        ],
+        "reviewedAt": "2026-08-02T00:22:38.605Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1,
+      "speckit": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 2,
+    "coordinatorReviewCompleted": true,
+    "approved": 1,
+    "needsReview": 0
+  },
+  "completedAt": "2026-08-02T00:22:47.928Z",
+  "storyCount": 1
+}

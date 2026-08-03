@@ -1,0 +1,40 @@
+{
+  "runId": "20260801T181700Z",
+  "phase": "core",
+  "startedAt": "2026-08-01T18:37:05.041Z",
+  "stories": [
+    {
+      "storyId": "AMSD-2041",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "appliedAgents": [
+        "openspec"
+      ],
+      "notes": "Spec run already completed (runId 20260801T181700Z) with both openspec and speckit applied. Coordinator review verdict is needs_review (quality 0.65) — ACs were authored without source file visibility and openspec's architectural notes are unverified against actual code. Human review is required before development proceeds; no further automated spec work will resolve the flagged gaps without a human-in-the-loop file analysis first.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Story is a novel capability (live preview) with empty ACs and minimal description. The central attachment point is useContent (236 callers) — every Contentstack component routes through it via getContentByKey. The contentstack.ts service is the API boundary where preview/draft parameters must be passed to Contentstack. I could not see useContent.ts or contentstack.ts source; location hints are inferred from consumption patterns visible in the 4 provided files and the CodeGraph blast radius. Prior flags addressed: (1) ACs were empty at source — kept verbatim; (2) architectural note on useContent as central attachment point is verified by 236 callers visible in CodeGraph and confirmed by ContentstackLink/ContentstackImage/ContentstackTable all calling useContent().getContentByKey; (3) with empty ACs, VCs are derived solely from the description, which is sparse — they capture the minimal observable contract of live preview without prescribing mechanism.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-01T18:42:15.607Z"
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 1
+  },
+  "completedAt": "2026-08-01T18:42:55.806Z",
+  "storyCount": 1
+}

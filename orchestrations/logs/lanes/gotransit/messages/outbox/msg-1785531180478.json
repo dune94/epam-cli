@@ -1,0 +1,96 @@
+{
+  "message_id": "msg-1785531180478",
+  "timestamp": "2026-07-31T20:53:00+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 67,
+          "description": "Security: CONTENTSTACK_MANAGEMENT_TOKEN is passed to the client-side and used in the browser via process.env inside a client component. Management tokens are sensitive credentials that must never be exposed to the browser bundle. Next.js inlines process.env references at build time, so this token will be embedded in client-side JavaScript.",
+          "suggestedFix": "Use a server-side API route (e.g., /api/preview-content) that holds the management token server-side and returns preview content. The client-side provider should call this API endpoint instead of creating a Stack directly with credentials.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 55,
+          "description": "Only the 'page' content field is updated by fetchLivePreviewContent. setLiveContent merges with defaultContent but only overrides page. If a CMS edit targets header, footer, serviceAlerts, globalDictionary, or any other content type, the preview will not reflect those changes. Acceptance criterion 'on-screen components that render that content — headings, body text, and images from the edited entry — display the updated values' is only partially met.",
+          "suggestedFix": "Use the content_type_uid from the preview params to determine which content slice to update, and merge the fetched entry into the correct field of the content object (e.g., if content_type_uid is 'header', update content.header).",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/",
+          "line": 0,
+          "description": "No vitest unit tests were added for the live preview functionality. Per review criteria, new features must have corresponding vitest unit tests in test/unit/ mirroring the src/ path. There are zero tests verifying: (a) that previewConfig.enable=true activates live preview fetching, (b) that hashchange triggers re-fetch, (c) that non-preview mode falls back to defaultContent, (d) that getLivePreviewParams correctly parses hash params.",
+          "suggestedFix": "Add test/unit/context/ContentstackContext.test.tsx with vitest tests covering: initial state matches defaultContent, setContent updates context and triggers re-render, preview mode activates live fetching, non-preview mode uses static content, hashchange event triggers re-fetch.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 58,
+          "description": "A new contentstack.Stack() instance is created inside fetchLivePreviewContent on every invocation, including every hashchange event. This is inefficient, may leak resources, and is not the prescribed approach. The prescribed fix states to register the Stack.livePreview callback (via Stack.livePreview.onContentUpdate) once, which then calls setContent with updated content — no per-event Stack creation needed.",
+          "suggestedFix": "Create the Stack instance once (e.g., in a useRef or module scope) and register the SDK's live preview callback (Stack.livePreview.onContentUpdate) to call setLiveContent. Use the hashchange listener only as a fallback if the SDK callback is unavailable.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/pages/[[...slug]].tsx",
+          "line": 21,
+          "description": "The previewConfig type in IPageProps is duplicated inline ({ enable: boolean; host?: string; management_token?: string }) instead of importing and reusing IContentstackPreviewConfig from ContentstackContext.tsx. This violates DRY and risks type drift if the interface changes.",
+          "suggestedFix": "Import IContentstackPreviewConfig from src/context/ContentstackContext.tsx and use it in IPageProps: `previewConfig?: IContentstackPreviewConfig;`",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 42,
+          "description": "getLivePreviewParams has an empty catch block that silently swallows all errors. Per review criteria, errors should be handled properly, not silently ignored.",
+          "suggestedFix": "At minimum, log the error with console.warn. Ideally, throw a typed error or set an error state that the UI can display to the tester.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 85,
+          "description": "fetchLivePreviewContent uses console.error for error handling. While this is a Next.js project (not epam-cli), the error handling is insufficient — the user sees no feedback when preview fetching fails, and the error is not surfaced to any error boundary or state.",
+          "suggestedFix": "Add an error state (useState) that is set when fetch fails, and display a user-facing message or pass it to an error boundary so the tester knows preview is not working.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 15,
+          "description": "header?: [any] and footer?: [any] use untyped any without explanatory comments (the TODO on line 14 covers the block but not each field). This is pre-existing but the file was modified.",
+          "suggestedFix": "Add inline comments or replace with proper types.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/pages/[[...slug]].tsx",
+          "line": 14,
+          "description": "session: any in IPageProps is an untyped any. This is pre-existing but the file was modified.",
+          "suggestedFix": "Replace with a proper session type or add an explanatory comment.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

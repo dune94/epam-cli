@@ -1,0 +1,65 @@
+{
+  "runId": "20260731T191615Z",
+  "phase": "core",
+  "startedAt": "2026-07-31T19:17:07.081Z",
+  "stories": [
+    {
+      "storyId": "AMSD-2041",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "notes": "Story has empty acceptance criteria and no existing spec. Live Preview across GO, UP, MX is a complex cross-platform feature requiring full elaboration (openspec) followed by testability and edge-case hardening (speckit).",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Novel capability — Contentstack Live Preview integration. The central attachment point is useContent (236 callers); all content flows through getContentByKey. Live Preview SDK must plug into this hook so CMS editor changes propagate to the preview surface in real-time. No existing Live Preview wiring found in the codebase.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-31T19:21:05.717Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided an empty acceptanceCriteria array with valuable architectural context: useContent (236 callers) is the central hook, getContentByKey is the content flow path, and Live Preview SDK must plug into this hook. I created all 11 ACs from scratch based on that context plus the story title, description, and listed files. Key areas covered: (1) core real-time propagation behavior, (2) non-preview mode parity / no regression, (3) getContentByKey integration point, (4-5) coverage of content cards and ContentstackLink specifically (the two component types named in technical notes), (6-7) error handling for SDK failures and invalid tokens, (8) non-preview performance guarantee, (9) reconnection resilience, (10) credential exposure constraint, (11) concurrent edit isolation. IMPORTANT CAVEAT: I did not have access to the actual file contents of useContent.ts, ContentstackLink.tsx, contentstack.ts, or contentCard.ts. Criteria may need refinement once the actual hook API shape, existing error handling patterns, and Contentstack SDK integration points are reviewed against the code.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-31T19:22:22.265Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "needs_review",
+        "reviewNotes": "Both agents contributed non-overlapping value: OpenSpec provided architectural context (useContent as central hook with 236 callers, getContentByKey as content flow path, no existing Live Preview wiring) and Speckit created 11 acceptance criteria from scratch covering real-time propagation, non-preview parity, error handling, reconnection, credential security, and concurrent edit isolation. However, the pipeline did not function as designed — OpenSpec was expected to perform 'full elaboration' per coordinatorNotes but left the AC array empty, forcing Speckit to invert its role from reviewer to primary elaborator. Additionally, Speckit explicitly flagged that it never read the actual file contents (useContent.ts, ContentstackLink.tsx, contentstack.ts, contentCard.ts), meaning all 11 ACs are based on assumptions about API shapes and existing patterns that may not match the codebase. Human review is needed to verify the generated ACs against actual file contents and to confirm the criteria are implementable as written.",
+        "qualityScore": 0.55,
+        "flags": [
+          "pipeline_inversion_openspec_did_not_elaborate",
+          "speckit_created_acs_without_file_access",
+          "ac_validity_unverified_against_codebase"
+        ],
+        "reviewedAt": "2026-07-31T19:22:34.458Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1,
+      "speckit": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 2,
+    "coordinatorReviewCompleted": true,
+    "approved": 0,
+    "needsReview": 1
+  },
+  "completedAt": "2026-07-31T19:22:45.066Z",
+  "storyCount": 1
+}

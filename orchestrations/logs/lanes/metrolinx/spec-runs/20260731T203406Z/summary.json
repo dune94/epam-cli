@@ -1,0 +1,65 @@
+{
+  "runId": "20260731T203406Z",
+  "phase": "core",
+  "startedAt": "2026-07-31T20:35:11.675Z",
+  "stories": [
+    {
+      "storyId": "AMSD-2041",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "notes": "Story has zero acceptance criteria and null spec. Live preview across GO, UP, MX implies cross-platform complexity with real-time rendering, auth, and cross-origin concerns. Openspec must elaborate requirements and propose ACs first; speckit then hardens with testability, security, and edge-case coverage.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Live Preview is a novel capability — Contentstack's real-time preview SDK must be integrated into the existing content-fetching pipeline. The central attachment point is useContent (236 callers), which is the single gateway all Contentstack content flows through. If the hook (or the Contentstack client it wraps) transparently switches to preview mode and subscribes to live updates, the 236 consuming components need no changes. The Contentstack client initialization/config is a secondary attachment point not shown in the explored code. Acceptance criteria were empty; VCs derived from the description.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-31T20:41:33.140Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided empty acceptance criteria with an architectural note identifying useContent as the central gateway (236 callers) and the Contentstack client initialization as a secondary attachment point. I created the full AC set from scratch based on the story title, description, and openspec's architectural insights. Key areas covered: (1) Core preview activation via URL parameters (AC-1, AC-3), (2) Real-time update delivery (AC-2, AC-8, AC-11), (3) Connection resilience — disconnect/reconnect (AC-4, AC-5), (4) Error handling for CMS errors and malformed params (AC-6, AC-14), (5) Zero-regression guarantee for existing consumers (AC-7), (6) Lifecycle cleanup — unmount and session exit (AC-9, AC-10), (7) Linked content preview (AC-13), (8) Locale/variant support (AC-12), (9) Navigation edge cases (AC-15), (10) Performance under slow connections (AC-16), (11) Loading state (AC-17), (12) SSR hydration consistency (AC-18), (13) Visual preview indicator with accessibility (AC-19, AC-20). CAVEAT: I did not have access to the file contents of useContent.ts, ContentstackLink.tsx, contentCard.ts, or contentstack.ts. The ACs are based on the story description and file paths alone. Reviewing the actual hook interface (return shape, parameters) and the Contentstack client configuration would allow refining AC-1, AC-6, AC-17, and AC-18 for precise observable outcomes.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-31T20:42:35.309Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "needs_review",
+        "reviewNotes": "Both agents contributed but in a lopsided manner. Openspec correctly identified the architectural attachment point (useContent hook, 236 callers) and the Contentstack client as a secondary integration surface — meaningful context. However, openspec failed its primary mandate: the coordinator notes explicitly state 'Openspec must elaborate requirements and propose ACs first,' yet it produced zero acceptance criteria despite the story having none. Speckit compensated by generating 20 comprehensive ACs from scratch (activation, real-time updates, resilience, error handling, regression safety, lifecycle, SSR, accessibility), which is substantial value. The agents' contributions are non-overlapping but only because openspec under-delivered, forcing speckit into a role it was not assigned. Critically, speckit explicitly notes it lacked access to useContent.ts, ContentstackLink.tsx, contentCard.ts, and contentstack.ts — meaning all 20 ACs are inferred from the story title and file paths rather than verified against actual hook return shapes, client configuration, or SSR behavior. ACs referencing specific observable outcomes (AC-1, AC-6, AC-17, AC-18) may not match real interfaces. Human review should validate the AC set against source code before implementation.",
+        "qualityScore": 0.65,
+        "flags": [
+          "openspec_did_not_produce_acs",
+          "speckit_lacked_source_access",
+          "acs_unvalidated_against_source"
+        ],
+        "reviewedAt": "2026-07-31T20:42:52.192Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1,
+      "speckit": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 2,
+    "coordinatorReviewCompleted": true,
+    "approved": 0,
+    "needsReview": 1
+  },
+  "completedAt": "2026-07-31T20:42:58.092Z",
+  "storyCount": 1
+}

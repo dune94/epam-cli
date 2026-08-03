@@ -58,7 +58,13 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 PRD_FILE="${1:?Usage: writer-retest.sh <PRD_FILE> [--project NAME]}"
 shift || true
-PROJECT_NAME="metrolinx"
+# Which project to retest is an input, never a literal — this harness must work
+# for any project that has an orchestrations/projects/<name>/ directory.
+PROJECT_NAME="${PROJECT_NAME:-${EPAM_PROJECT_NAME:-}}"
+if [ -z "$PROJECT_NAME" ]; then
+    echo "PROJECT_NAME is not set (e.g. PROJECT_NAME=<project> $0 ...)" >&2
+    exit 1
+fi
 while [ $# -gt 0 ]; do
   case "$1" in
     --project) PROJECT_NAME="${2:?}"; shift 2 ;;

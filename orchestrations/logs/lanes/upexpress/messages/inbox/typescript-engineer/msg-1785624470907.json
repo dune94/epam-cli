@@ -1,0 +1,64 @@
+{
+  "message_id": "msg-1785624470907",
+  "timestamp": "2026-08-01T22:47:50+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 57,
+          "description": "The prescribed root cause fix is not implemented. CONTENTSTACK_PREVIEW_TOKEN is destructured from env (line 24) but never used. The `options` object (lines 57-68) does not include `live_preview` configuration. Without this, the Contentstack SDK Stack always queries the Delivery API (published content only) and can never fetch draft/preview content. None of the acceptance criteria can be met without this change.",
+          "suggestedFix": "Add the live_preview config to the options object after `branch`: `...(CONTENTSTACK_PREVIEW_TOKEN ? { live_preview: { management_token: CONTENTSTACK_PREVIEW_TOKEN, enable: true } } : {})`. This is the minimal fix from the prescribed root cause analysis.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 57,
+          "description": "Concision & Reuse: The change does not address the prescribed root cause. The env var was added but the actual wiring into the SDK options — the one-line conditional spread — is missing. This is a 1-line addition that would enable Live Preview; without it, the entire feature is non-functional.",
+          "suggestedFix": "Add the single conditional spread into the options object as described above.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/",
+          "line": 0,
+          "description": "No preview indicator or draft content rendering logic exists anywhere in the codebase. Searches for 'preview', 'draft', 'live_preview', 'onLivePreview', 'extractDraftContent', and 'addEventListener.*message' in src/ returned zero matches. Acceptance criteria 1-5 (display draft content, show visual indicator, hide indicator outside preview, support GO/UP/MX brands, render when no draft available) are entirely unaddressed.",
+          "suggestedFix": "Implement the Contentstack Live Preview SDK's onLivePreview callback (or equivalent SDK-documented API) to receive draft content updates and render a visual preview indicator. Do not hand-roll a window.addEventListener('message') listener — use the SDK's documented callback.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/",
+          "line": 0,
+          "description": "No unit tests exist for this change. No test files matching 'contentstack', 'livepreview', or 'preview' were found. The acceptance criteria require verification of draft vs published content display, preview indicator visibility, multi-brand support, and fallback behavior — none are covered by tests.",
+          "suggestedFix": "Add vitest unit tests in test/unit/ mirroring the src/ path, covering: (1) draft content displayed in preview mode, (2) preview indicator shown in preview mode, (3) preview indicator hidden outside preview mode, (4) draft content for GO, UP, MX brands, (5) published content rendered when no draft is available.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 1,
+          "description": "The file has `/* eslint-disable @typescript-eslint/no-explicit-any */` at the top, broadly suppressing any-type warnings across the entire file. This violates TypeScript strict compliance — any usage should be individually justified with explanatory comments.",
+          "suggestedFix": "Remove the blanket eslint-disable and address each `any` usage individually with explanatory comments or proper typing.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

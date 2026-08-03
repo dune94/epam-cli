@@ -1,0 +1,56 @@
+{
+  "message_id": "msg-1785712941288",
+  "timestamp": "2026-08-02T23:22:21+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 160,
+          "description": "AC#3 NOT MET — live_preview is dead code. setCommonConfig destructures live_preview and calls (query as any).addParam(\"live_preview\", live_preview), but NONE of the public functions (getEntry, getSingleEntry, getAllContentTypeEntries, findSingletonEntry, getSingletonEntry) destructure or forward live_preview to createContentTypeQuery/createContentTypeEntryQuery. They all use explicit destructuring (e.g., getEntry destructures { contentTypeUid, referenceFieldPath, jsonRtePath, only, lang, includeFields }) without a rest operator, so live_preview is silently dropped at every call site. The setCommonConfig live_preview handling is unreachable dead code — preview context can never flow through to Contentstack queries, directly contradicting AC#3 and prior review feedback: 'query config interfaces lack live_preview fields to forward preview context through to Contentstack queries'.",
+          "suggestedFix": "Add live_preview to the destructuring of each public function and forward it to createContentTypeQuery/createContentTypeEntryQuery. For example, in getEntry: add live_preview to the destructuring and to the factory.createContentTypeQuery call. Repeat for getSingleEntry, getAllContentTypeEntries, findSingletonEntry, and getSingletonEntry. Alternatively, use rest-spread (...rest) in each public function's destructuring to capture all ICommonContentstackConfig fields and forward them.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 439,
+          "description": "No test verifies that live_preview context actually flows through a public function (getEntry, getSingleEntry, etc.) to the Contentstack query's addParam method. The 3 new tests only check the options object and setHost behavior. Since the forwarding code in setCommonConfig is dead code (see blocker above), no test can catch this regression. A test that calls getEntry (or similar) with a live_preview parameter and asserts that the mock's addParam method was called with the correct value is required to prove AC#3 is met.",
+          "suggestedFix": "Add a test that calls getEntry (or another public function) with a live_preview value and asserts that the mock's addParam was called with ('live_preview', <value>). For example: const addParamSpy = jest.spyOn(Stack, 'addParam'); await getEntry({ contentTypeUid: 'contentType', lang: ContentstackLocales.EN, live_preview: 'test-hash' } as any); expect(addParamSpy).toHaveBeenCalledWith('live_preview', 'test-hash');",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 8,
+          "description": "The contentstack mock lacks an addParam method. The setCommonConfig implementation calls (query as any).addParam('live_preview', live_preview). If the forwarding blocker is fixed and any test passes live_preview through to setCommonConfig, the test will crash with TypeError: addParam is not a function because the mock object has no such method.",
+          "suggestedFix": "Add addParam: jest.fn().mockReturnThis() to the jest.mock('contentstack') factory's returned Stack object, alongside the existing methods like except, only, where, etc.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 113,
+          "description": "TypeScript strict compliance: (query as any).addParam(...) uses an untyped any cast without an explanatory comment specific to this usage. While the file has a top-level eslint-disable for no-explicit-any, the review criteria require explanatory comments for any usage. The cast is needed because the Contentstack SDK types don't expose addParam on Query/Entry, but this should be documented.",
+          "suggestedFix": "Add an inline comment explaining why the cast is necessary, e.g.: // Contentstack SDK types don't expose addParam; cast to any to call the runtime method for live preview query parameter injection.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

@@ -1,0 +1,64 @@
+{
+  "message_id": "msg-1785547840083",
+  "timestamp": "2026-08-01T01:30:40+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 62,
+          "description": "No unit tests were added for the new live_preview configuration. The diff adds 7 lines to src/services/contentstack.ts but no corresponding test file (e.g., src/services/__tests__/contentstack.spec.ts) verifies that the options object includes live_preview with the correct management_token, host, and enable fields. Per review criteria, new features must have corresponding unit tests mirroring the src/ path. There are zero tests verifying that live_preview.management_token equals CONTENTSTACK_PREVIEW_TOKEN, that enable is true when the token is set, or that enable is false when the token is empty.",
+          "suggestedFix": "Add test cases to src/services/__tests__/contentstack.spec.ts verifying: (1) options.live_preview.management_token equals CONTENTSTACK_PREVIEW_TOKEN, (2) options.live_preview.enable is true when token is set, (3) options.live_preview.enable is false when token is empty, (4) options.live_preview.host equals CONTENTSTACK_PREVIEW_HOST.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 62,
+          "description": "When CONTENTSTACK_PREVIEW_TOKEN is empty, live preview is silently disabled (enable evaluates to false) with no warning or error logged. The acceptance criterion states: 'When the draft preview cannot be displayed, the editor sees a clear error or unavailable state in the preview area rather than published content being silently shown as if it were the draft.' The existing code logs errors for missing CONTENTSTACK_API_KEY, CONTENTSTACK_DELIVERY_TOKEN, CONTENTSTACK_ENVIRONMENT, and CONTENTSTACK_BRANCH, but no equivalent warning exists for the missing preview token. An operator or editor will see published content with no indication that draft preview is unavailable.",
+          "suggestedFix": "Add a logger.warn() when CONTENTSTACK_PREVIEW_TOKEN is empty, similar to the existing pattern for other missing env vars. Example: if (!CONTENTSTACK_PREVIEW_TOKEN) { logger.warn('Contentstack preview token not provided — live preview disabled'); }",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 47,
+          "description": "The ContentstackProvider still uses useMemo to freeze content at initial render time. Even with the SDK-level live_preview config now correctly added to the Stack options, the React context never updates after mount. The Contentstack SDK's live preview mechanism sends updated content via callbacks/events, but nothing in the codebase registers a listener (e.g., Stack.livePreview.onContentUpdate) to call a setContent function and trigger re-renders. Without this, acceptance criterion 2 ('previewed page updates to show the new value without the editor publishing the entry') and criterion 5 ('content visible in the preview matches the draft state the editor is currently editing') are unmet. The prescribed minimal fix only covers the SDK options layer; however, the acceptance criteria explicitly require real-time reactive updates, which the SDK config alone cannot deliver without a React-side listener.",
+          "suggestedFix": "Replace useMemo with useState in ContentstackProvider to hold content state. Register the Contentstack SDK's livePreview callback (Stack.livePreview.onContentUpdate or equivalent from @contentstack/live-preview-utils) to call setContent with updated content when the CMS editor changes a field. Pass the updated content through the context so all 236+ consumers via useContent re-render with draft content.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": ".env.local.sample",
+          "line": 163,
+          "description": "The new environment variables CONTENTSTACK_PREVIEW_TOKEN and CONTENTSTACK_PREVIEW_HOST are not documented in .env.local.sample. The diff to .env.local.sample only adds AKAMAI_CACHE_ENABLED and AKAMAI_MAX_CACHE_SECONDS (from a different story). The two new preview-related env vars are missing entirely, making it difficult for developers to discover and configure live preview.",
+          "suggestedFix": "Add CONTENTSTACK_PREVIEW_TOKEN=\"\" and CONTENTSTACK_PREVIEW_HOST=\"\" to .env.local.sample alongside the existing CONTENTSTACK_* entries.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 62,
+          "description": "The ternary `CONTENTSTACK_PREVIEW_TOKEN ? true : false` can be simplified to `!!CONTENTSTACK_PREVIEW_TOKEN` for conciseness. This is a style nit.",
+          "suggestedFix": "Replace `enable: CONTENTSTACK_PREVIEW_TOKEN ? true : false` with `enable: !!CONTENTSTACK_PREVIEW_TOKEN`.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

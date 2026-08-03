@@ -1,0 +1,56 @@
+{
+  "runId": "20260803T180646Z",
+  "phase": "core",
+  "startedAt": "2026-08-03T18:33:28.994Z",
+  "stories": [
+    {
+      "storyId": "AMSD-2041",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "appliedAgents": [
+        "openspec"
+      ],
+      "notes": "Spec run already completed (status: completed) with both openspec and speckit applied. Coordinator review verdict is needs_review due to role inversion (openspec did not elaborate ACs, speckit authored all 16 from scratch) and ACs unverified against actual source files (useContent.ts, ContentstackContext.tsx). Re-running agents would duplicate completed work; story requires human review of existing ACs before implementation begins.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Novel story — Live Preview is a new capability. Attachment points are useContent hook (236 callers) and the per-codeline context that already parses the live_preview hash. VCs are strictly black-box: what a tester observes on the rendered page. No internal file, provider, or service name appears in any VC. src/services/contentstack.ts and ContentstackProvider are NOT referenced in VCs. The real useContent API (getContentByKey) anchors the observable behavior.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-03T18:55:33.621Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "needs_review",
+        "reviewNotes": "Both agents contributed meaningful, non-overlapping value: openspec identified architectural attachment points (useContent hook with 236 callers, ContentstackContext provider, live_preview hash parsing) and integration strategy for draft/preview content propagation; speckit leveraged that foundation to produce 16 comprehensive ACs spanning happy path, security (no draft leakage to production), error handling, cross-site GO/UP/MX consistency, performance, accessibility, flash-of-published-content, and session lifecycle. However, the pipeline operated with a role inversion: openspec was tasked to elaborate ACs but produced only architectural notes (acceptanceChanged=false, splitCount=0), while speckit — intended to harden and review — authored all 16 ACs from scratch. Additionally, speckit could not read actual source files (useContent.ts, ContentstackContext.tsx), so ACs are inferred rather than verified, with AC-2 (token propagation) and AC-12 (flash-of-published-content prevention) specifically called out as potentially mismatched against the real hook/provider API. A further process gap: speckit's contribution is not recorded in appliedAgents or agentContributions despite the coordinatorReview referencing its work, suggesting incomplete pipeline tracking. Human review must validate the ACs against the actual implementation surface before implementation begins.",
+        "qualityScore": 0.75,
+        "flags": [
+          "role_inversion_openspec_did_not_elaborate_ACs",
+          "speckit_authored_all_ACs_from_scratch",
+          "ACs_unverified_against_actual_source_files",
+          "AC-2_and_AC-12_may_not_match_real_hook_provider_API",
+          "speckit_contribution_not_recorded_in_appliedAgents_or_agentContributions"
+        ],
+        "reviewedAt": "2026-08-03T18:55:56.128Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 1,
+    "coordinatorReviewCompleted": true,
+    "approved": 0,
+    "needsReview": 1
+  },
+  "completedAt": "2026-08-03T18:56:16.693Z",
+  "storyCount": 1
+}

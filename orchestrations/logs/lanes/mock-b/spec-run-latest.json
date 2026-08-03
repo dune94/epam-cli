@@ -1,0 +1,7 @@
+{
+  "runId": "20260803T154735Z",
+  "phase": "mock3_core",
+  "baseline": "spec-runs/20260803T154735Z/prd.before.json",
+  "baselineCopy": "spec-baseline.json",
+  "createdAt": "2026-08-03T15:47:39.282Z"
+}

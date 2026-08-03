@@ -1,0 +1,72 @@
+{
+  "message_id": "msg-1785713106222",
+  "timestamp": "2026-08-02T23:25:06+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 133,
+          "description": "AC3 not met: setCommonConfig calls `query.includeReference(\"live_preview\")` which is the wrong SDK method. `includeReference` is for including referenced entries (content type references), not for forwarding live preview context (preview_hash) to the Contentstack API. This means linked/tabular references will NOT show draft values — the core story requirement. The correct approach is to pass the preview hash as a query parameter, e.g. `query.addParam('live_preview', live_preview.preview_hash)` or the SDK's equivalent `query.livePreview(live_preview.preview_hash)` method.",
+          "suggestedFix": "Replace `query.includeReference(\"live_preview\")` with the correct SDK call to forward the preview hash. For Contentstack Delivery SDK 3.x, use `if (live_preview?.preview_hash) { query.addParam('live_preview', live_preview.preview_hash); }` or the SDK's dedicated live preview query method.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 375,
+          "description": "Tests are fundamentally broken due to Node.js module caching. All five tests call `require(\"../contentstack.ts\")` but Node caches the module after the first require. Test 1 sets CONTENTSTACK_PREVIEW_TOKEN='preview-token-value' and loads the module. Tests 2–5 modify process.env and call require again, but receive the cached module from test 1's environment. Test 2 ('live_preview absent when token unset') will fail because the cached module's options still contain the live_preview block. Tests 3–5 (setHost behavior) will fail because setHost was already called at the first module load with test 1's env vars, not the modified ones.",
+          "suggestedFix": "Add `afterEach(() => { vi.resetModules(); vi.restoreAllMocks(); });` (or beforeEach) to reset the module registry between tests so each `require` re-evaluates the module with the current process.env values. Alternatively, use dynamic `import()` with `vi.resetModules()`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 402,
+          "description": "`Stack.setHost` is checked with `toHaveBeenCalledWith` but it is a real Contentstack SDK method, not a vi.fn() spy — unless the contentstack module is globally mocked at the top of the file. If it IS mocked, then `testedModule.options` and `testedModule.Stack` are mock values, not the real computed options, making the options assertions meaningless. If it is NOT mocked, `toHaveBeenCalledWith` will throw because setHost is not a spy. Either way, the setHost tests cannot pass as written.",
+          "suggestedFix": "If testing the real module: mock `contentstack.Stack` with `vi.mock('contentstack', () => ({ Stack: vi.fn(() => ({ setHost: vi.fn(), ... })) }))` so setHost is a spy. Ensure the mock is compatible with both the options assertions and the setHost call assertions. Use `vi.resetModules()` between tests.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 372,
+          "description": "No test verifies AC3 — that setCommonConfig properly forwards live_preview context (preview_hash) to Contentstack queries. AC4 requires tests covering the live preview functionality, and AC3 specifically requires preview context to flow through to queries in setCommonConfig. The five added tests only cover the Stack options object and setHost calls, not the query-level forwarding.",
+          "suggestedFix": "Add a test that creates a ContentstackFactory instance, calls createContentTypeQuery with a config containing `live_preview: { preview_hash: 'test-hash' }`, and asserts that the query object received the preview hash (e.g., `expect(query.addParam).toHaveBeenCalledWith('live_preview', 'test-hash')` or equivalent).",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/interface/contentstack.ts",
+          "line": 6,
+          "description": "`preview_token` was REMOVED from `IContentstackLivePreviewConfig` interface, but the `options` object in contentstack.ts still includes `preview_token: CONTENTSTACK_PREVIEW_TOKEN` in the live_preview block. This creates an interface/data mismatch. If `IContentstackLivePreviewConfig` is used to type the live_preview field anywhere, the preview_token property would be untyped. Additionally, AC3 requires ICommonContentstackConfig to 'gain an optional live_preview field' — the diff does not show this field being added to ICommonContentstackConfig, only a removal from IContentstackLivePreviewConfig. If ICommonContentstackConfig lacks the field, the destructuring `const { ..., live_preview } = config` in setCommonConfig is a TypeScript strict violation.",
+          "suggestedFix": "Restore `preview_token?: string` to `IContentstackLivePreviewConfig`. Ensure `ICommonContentstackConfig` has `live_preview?: IContentstackLivePreviewConfig` (add it if not present). Verify TypeScript strict compilation passes.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 133,
+          "description": "The `if (live_preview)` guard checks only that the live_preview object is truthy, but does not check for the presence of `preview_hash`. A live_preview object with `enable: true` but no `preview_hash` would still trigger the (incorrect) includeReference call. The guard should check `if (live_preview?.preview_hash)` to ensure the hash is present before attempting to forward it.",
+          "suggestedFix": "Change to `if (live_preview?.preview_hash) { query.addParam('live_preview', live_preview.preview_hash); }`",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

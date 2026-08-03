@@ -54,6 +54,7 @@ export NODE_BIN
 source "$SCRIPT_DIR/lib/tc-writer-gate.sh"
 # shellcheck source=lib/story-guards.sh
 source "$SCRIPT_DIR/lib/story-guards.sh"
+source "$SCRIPT_DIR/lib/flags.sh"
 # shellcheck source=lib/git-ops.sh
 source "$SCRIPT_DIR/lib/git-ops.sh"
 
@@ -400,32 +401,32 @@ print_step_checklist() {
     _checklist_row "1"    "Specification pass"       "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "EPAM_SPEC_MODE=0"
     _checklist_row "1a"   "  openspec (elaboration)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "${SPEC_MODE_OPENSPEC_MODEL:-z-ai/glm-5.2}"
     _checklist_row "1b"   "  speckit (verification)" "$([ "${EPAM_SPEC_MODE:-1}" = "0" ] && echo SKIP || echo ACTIVE)" "${SPEC_MODE_SPECKIT_MODEL:-z-ai/glm-5.2}"
-    _checklist_row "2"  "CPA pre-pass"             "$([ "${SKIP_CPA:-0}" = "1" ] && echo SKIP || echo ACTIVE)"           "SKIP_CPA=1"
-    _checklist_row "3"  "Pre-phase skill assess"   "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP_SKILL_ASSESSMENT=1 || true)"
+    _checklist_row "2"  "CPA pre-pass"             "$(is_truthy "${SKIP_CPA:-}" && echo SKIP || echo ACTIVE)"           "SKIP_CPA=1"
+    _checklist_row "3"  "Pre-phase skill assess"   "$(is_truthy "${SKIP_SKILL_ASSESSMENT:-}" && echo SKIP || echo ACTIVE)" "$(is_truthy "${SKIP_SKILL_ASSESSMENT:-}" && echo SKIP_SKILL_ASSESSMENT=1 || true)"
     _checklist_row "4"  "Hybrid pre-coord"         "$([ "${RESOLVED_ORCH_MODE:-bash}" = "hybrid" ] && echo ACTIVE || echo SKIP)" "ORCH_MODE≠hybrid"
-    _checklist_row "5"  "Regression guard"         "$([ "${SKIP_REGRESSION_GUARD:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_REGRESSION_GUARD=true"
+    _checklist_row "5"  "Regression guard"         "$(is_truthy "${SKIP_REGRESSION_GUARD:-}" && echo SKIP || echo ACTIVE)" "SKIP_REGRESSION_GUARD=true"
     _checklist_row "6"  "mkdir src/ dirs"          "ACTIVE"
-    _checklist_row "7"  "PRD model coordinator"    "$([ "${SKIP_PRD_MODEL_COORDINATOR:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "$([ "${SKIP_PRD_MODEL_COORDINATOR:-0}" = "1" ] && echo SKIP_PRD_MODEL_COORDINATOR=1 || true)"
+    _checklist_row "7"  "PRD model coordinator"    "$(is_truthy "${SKIP_PRD_MODEL_COORDINATOR:-}" && echo SKIP || echo ACTIVE)" "$(is_truthy "${SKIP_PRD_MODEL_COORDINATOR:-}" && echo SKIP_PRD_MODEL_COORDINATOR=1 || true)"
     _checklist_row "8"    "Main-branch stories"      "ACTIVE"
     _checklist_row "9"  "Auto-commit"              "COND"  "if uncommitted changes"
-    _checklist_row "10"  "TC writer gate"           "$([ "${SKIP_TC_WRITER:-0}" = "1" ] && echo SKIP || echo COND)" "SKIP_TC_WRITER=1 or no test stories"
-    _checklist_row "11" "Skills coordinator audit" "$([ "${SKIP_SKILLS_AUDIT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "SKIP_SKILLS_AUDIT=1"
-    _checklist_row "12" "Tools coordinator audit"  "$([ "${SKIP_TOOLS_AUDIT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "SKIP_TOOLS_AUDIT=1"
+    _checklist_row "10"  "TC writer gate"           "$(is_truthy "${SKIP_TC_WRITER:-}" && echo SKIP || echo COND)" "SKIP_TC_WRITER=1 or no test stories"
+    _checklist_row "11" "Skills coordinator audit" "$(is_truthy "${SKIP_SKILLS_AUDIT:-}" && echo SKIP || echo ACTIVE)" "SKIP_SKILLS_AUDIT=1"
+    _checklist_row "12" "Tools coordinator audit"  "$(is_truthy "${SKIP_TOOLS_AUDIT:-}" && echo SKIP || echo ACTIVE)" "SKIP_TOOLS_AUDIT=1"
     _checklist_row "13"    "Create worktrees"         "COND"  "if parallel stories exist"
     _checklist_row "14"   "Primary agent"            "COND"  "if primary stories"
     _checklist_row "15"   "Independent agent"        "COND"  "if independent stories"
     _checklist_row "16"  "Worktree health check"    "COND"  "if worktrees created"
     _checklist_row "17"  "Merge worktrees"          "COND"  "if worktrees created"
-    _checklist_row "18"  "Post-parallel assessment" "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP || echo ACTIVE)" "$([ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ] && echo SKIP_SKILL_ASSESSMENT=1 || true)"
-    _checklist_row "19"  "Pre-review gate"          "$([ "${SKIP_PRE_REVIEW_GATE:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_PRE_REVIEW_GATE=true"
-    _checklist_row "20"  "Lint gate"                "$([ "${SKIP_LINT_GATE:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_LINT_GATE=true"
+    _checklist_row "18"  "Post-parallel assessment" "$(is_truthy "${SKIP_SKILL_ASSESSMENT:-}" && echo SKIP || echo ACTIVE)" "$(is_truthy "${SKIP_SKILL_ASSESSMENT:-}" && echo SKIP_SKILL_ASSESSMENT=1 || true)"
+    _checklist_row "19"  "Pre-review gate"          "$(is_truthy "${SKIP_PRE_REVIEW_GATE:-}" && echo SKIP || echo ACTIVE)" "SKIP_PRE_REVIEW_GATE=true"
+    _checklist_row "20"  "Lint gate"                "$(is_truthy "${SKIP_LINT_GATE:-}" && echo SKIP || echo ACTIVE)" "SKIP_LINT_GATE=true"
     _checklist_row "21"    "Review stories"           "COND"  "if review stories exist"
-    _checklist_row "22a" "SAST sentinel"            "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
-    _checklist_row "22b" "Spec validator"           "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
-    _checklist_row "22c" "Review ranger"            "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
-    _checklist_row "22d" "Mutant hunter"            "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
-    _checklist_row "22e" "Fuzz-weaver"              "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
-    _checklist_row "22f" "Perf sentinel"            "$([ "${SKIP_TESTING_GATES:-false}" = "true" ] && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
+    _checklist_row "22a" "SAST sentinel"            "$(is_truthy "${SKIP_TESTING_GATES:-}" && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
+    _checklist_row "22b" "Spec validator"           "$(is_truthy "${SKIP_TESTING_GATES:-}" && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
+    _checklist_row "22c" "Review ranger"            "$(is_truthy "${SKIP_TESTING_GATES:-}" && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
+    _checklist_row "22d" "Mutant hunter"            "$(is_truthy "${SKIP_TESTING_GATES:-}" && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
+    _checklist_row "22e" "Fuzz-weaver"              "$(is_truthy "${SKIP_TESTING_GATES:-}" && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
+    _checklist_row "22f" "Perf sentinel"            "$(is_truthy "${SKIP_TESTING_GATES:-}" && echo SKIP || echo ACTIVE)" "SKIP_TESTING_GATES=true"
     _checklist_row "23"  "Browser E2E routing"     "$([ "${SKIP_BROWSER_E2E_ROUTING:-false}" = "true" ] && echo SKIP || echo COND)" "SKIP_BROWSER_E2E_ROUTING=true"
 
     local skips=0
@@ -2741,6 +2742,18 @@ KNOWNFIXES_EOF
           log "[orch] Provisioned .env.local for '${_cl}' from ${_envvars_cfg}"
         fi
       fi
+
+      # anti-patterns.json (optional, per-project): not keyed by codeline —
+      # copied whole into .epam/ so the check_anti_patterns plugin tool (and
+      # run_anti_pattern_check's deterministic gate) both read the same,
+      # already-provisioned file instead of reaching across worktree
+      # boundaries into EPAM_PROJECT_CONFIG_DIR directly.
+      local _antipatterns_cfg="${EPAM_PROJECT_CONFIG_DIR}/anti-patterns.json"
+      if [ -f "$_antipatterns_cfg" ]; then
+        mkdir -p "$_wt/.epam"
+        cp "$_antipatterns_cfg" "$_wt/.epam/anti-patterns.json"
+        log "[orch] Provisioned .epam/anti-patterns.json for '${_cl}' from ${_antipatterns_cfg}"
+      fi
     fi
   done
 
@@ -3844,7 +3857,7 @@ mkdir -p "$LOG_DIR"
 # ─────────────────────────────────────────────────────────────────────────────
 CPA_SCRIPT="$SCRIPT_DIR/contextualize-stories.sh"
 
-if [ "${SKIP_CPA:-0}" != "1" ] && [ -f "$CPA_SCRIPT" ]; then
+if ! is_truthy "${SKIP_CPA:-}" && [ -f "$CPA_SCRIPT" ]; then
     step_emit "2" "running" "Step 2: CPA pre-pass"
     log "Step 2: Running CPA pre-pass for phase '$PHASE'..."
 
@@ -3901,7 +3914,7 @@ if [ "${SKIP_CPA:-0}" != "1" ] && [ -f "$CPA_SCRIPT" ]; then
             ;;
     esac
 else
-    if [ "${SKIP_CPA:-0}" = "1" ]; then
+    if is_truthy "${SKIP_CPA:-}"; then
         step_emit "2" "skip" "Step 2: CPA pre-pass" "SKIP_CPA=1"
         info "Step 2: CPA pre-pass skipped (SKIP_CPA=1)"
     else
@@ -4708,7 +4721,7 @@ print(json.dumps(types))
 
 step_emit "3" "running" "Step 3: Skill assessment"
 log "Step 3: Running pre-phase skill assessment..."
-if [ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ]; then
+if is_truthy "${SKIP_SKILL_ASSESSMENT:-}"; then
     step_emit "3" "skip" "Step 3: Skill assessment" "SKIP_SKILL_ASSESSMENT=1"
     log "Step 3: Skipped (SKIP_SKILL_ASSESSMENT=1)"
 else
@@ -4826,7 +4839,7 @@ fi
 # introduced by the previous phase. Blocks on failure.
 # Skip with: SKIP_REGRESSION_GUARD=true
 # ──────────────────────────────────────────────
-if [ "${SKIP_REGRESSION_GUARD:-false}" != "true" ]; then
+if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
     # Brownfield: run tests in the codeline directory, not PROJECT_ROOT.
     # The codeline has its own node_modules with its own test runner.
     _rg_root="$PROJECT_ROOT"
@@ -5107,7 +5120,9 @@ fi
 # without relying on the model creating the directory first.
 # ──────────────────────────────────────────────
 step_emit "6" "running" "Step 6: mkdir src/ dirs"
-mkdir -p "$PROJECT_ROOT/src" "$PROJECT_ROOT/src/skyscanner" "$PROJECT_ROOT/public" "$PROJECT_ROOT/review" 2>/dev/null || true
+# Only generic scaffolding dirs. A client-named subdirectory here was created in
+    # EVERY project the engine ran, regardless of what that project is.
+    mkdir -p "$PROJECT_ROOT/src" "$PROJECT_ROOT/public" "$PROJECT_ROOT/review" 2>/dev/null || true
 step_emit "6" "pass" "Step 6: mkdir src/ dirs"
 
 # ──────────────────────────────────────────────
@@ -5121,7 +5136,7 @@ step_emit "6" "pass" "Step 6: mkdir src/ dirs"
 # ──────────────────────────────────────────────
 step_emit "7" "running" "Step 7: PRD model coordinator"
 _emit_agent start "prd-model-coordinator" "PRD Model Coordinator"
-if [ "${SKIP_PRD_MODEL_COORDINATOR:-0}" = "1" ]; then
+if is_truthy "${SKIP_PRD_MODEL_COORDINATOR:-}"; then
     info "  [prd-model-coordinator] Skipped (SKIP_PRD_MODEL_COORDINATOR=1)"
     _emit_agent complete "prd-model-coordinator" "skipped"
     step_emit "7" "skip" "Step 7: PRD model coordinator" "SKIP_PRD_MODEL_COORDINATOR=1"
@@ -5981,7 +5996,7 @@ fi
 # "all files" like the inline gate, since combo stories legitimately benefit
 # from real TC generation once they're done (this is the original,
 # unmodified behavior this gate always had).
-if [ "${SKIP_TC_WRITER:-0}" = "1" ]; then
+if is_truthy "${SKIP_TC_WRITER:-}"; then
     step_emit "10" "skip" "Step 10: TC writer gate" "SKIP_TC_WRITER=1"
     info "Step 10: TC writer gate skipped (SKIP_TC_WRITER=1)"
     _tc_writer_needed=0
@@ -6172,7 +6187,7 @@ PYEOF
     ) 200>"${profiles_file}.lock"
 }
 
-if [ "${SKIP_SKILLS_AUDIT:-0}" = "1" ]; then
+if is_truthy "${SKIP_SKILLS_AUDIT:-}"; then
     step_emit "11" "skip" "Step 11: Skills coordinator audit" "SKIP_SKILLS_AUDIT=1"
 else
     step_emit "11" "running" "Step 11: Skills coordinator audit"
@@ -6307,7 +6322,7 @@ print(json.dumps(result))
 PYEOF
 }
 
-if [ "${SKIP_TOOLS_AUDIT:-0}" = "1" ]; then
+if is_truthy "${SKIP_TOOLS_AUDIT:-}"; then
     step_emit "12" "skip" "Step 12: Tools coordinator audit" "SKIP_TOOLS_AUDIT=1"
 else
     step_emit "12" "running" "Step 12: Tools coordinator audit"
@@ -6798,7 +6813,7 @@ ASSESS_APPLY_PY
 capture_story_ids_snapshot "post-parallel"
 
 # Only run assessment if cost tracking data exists
-if [ "${SKIP_SKILL_ASSESSMENT:-0}" = "1" ]; then
+if is_truthy "${SKIP_SKILL_ASSESSMENT:-}"; then
     step_emit "18" "skip" "Step 18: Post-parallel assessment" "SKIP_SKILL_ASSESSMENT=1"
     info "Step 18: Skipped (SKIP_SKILL_ASSESSMENT=1)"
 elif [ -s "$LOG_DIR/phase-cost.jsonl" ]; then
@@ -6971,7 +6986,7 @@ fi
 # Same fallback semantics as Step 5: no testFailurePattern configured, or no
 # effort:"high" story in this phase, or SKIP_REGRESSION_GUARD=true, and this
 # step is a no-op — never changes behavior for a project that hasn't opted in.
-if [ "${SKIP_REGRESSION_GUARD:-false}" != "true" ]; then
+if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
     _rgd_pattern=""
     if [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] && [ -f "${EPAM_PROJECT_CONFIG_DIR}/dependency-check.json" ]; then
         _rgd_pattern=$(jq -r '.testFailurePattern // empty' "${EPAM_PROJECT_CONFIG_DIR}/dependency-check.json" 2>/dev/null)
@@ -7152,7 +7167,12 @@ while true; do
             # Persist a reusable review lesson to the review-agent KB (reviewer
             # self-heal: it improves across runs) and mark the story escalated.
             mkdir -p "$LOG_DIR/kb-scratchpad" 2>/dev/null || true
-            jq -r '.issues[]? | select((.severity // "") == "blocker") | "- " + (.description // "")' "$_fb" \
+            # Stamp provenance. A blocker sentence written once becomes a standing
+            # "LEARNED REVIEW RULE" applied to all later work, so it must say which
+            # story and run produced it — otherwise a rule learned from a bad input is
+            # indistinguishable from a well-founded one, and neither can be expired.
+            jq -r --arg sid "$_fb_story" --arg run "${ORCH_RUN_ID:-unknown}" \
+                '.issues[]? | select((.severity // "") == "blocker") | "- [" + $sid + " @" + $run + "] " + (.description // "")' "$_fb" \
                 >> "$LOG_DIR/kb-scratchpad/KB-review-agent.md" 2>/dev/null || true
             # Also persist the SAME lesson to the WRITER's own profile (found
             # live, 2026-08-02: only the reviewer's own KB got this — nothing
@@ -7233,7 +7253,7 @@ fi
 # Runs vitest + tsc unconditionally before review agents see the code.
 # Blocks review if tests fail. Skip with SKIP_PRE_REVIEW_GATE=true.
 # ──────────────────────────────────────────────
-if [ "${SKIP_PRE_REVIEW_GATE:-false}" != "true" ] && [ -f "$PROJECT_ROOT/package.json" ]; then
+if ! is_truthy "${SKIP_PRE_REVIEW_GATE:-}" && [ -f "$PROJECT_ROOT/package.json" ]; then
     step_emit "19" "running" "Step 19: Pre-review gate"
     log "Step 19: Pre-review build gate (vitest + tsc)..."
     _pre_review_log="$LOG_DIR/pre-review-gate-${PHASE}.log"
@@ -7323,7 +7343,7 @@ if [ "${SKIP_PRE_REVIEW_GATE:-false}" != "true" ] && [ -f "$PROJECT_ROOT/package
             success "Step 19: Pre-review gate PASSED"
     fi
 else
-    [ "${SKIP_PRE_REVIEW_GATE:-false}" = "true" ] && \
+    is_truthy "${SKIP_PRE_REVIEW_GATE:-}" && \
         step_emit "19" "skip" "Step 19: Pre-review gate" "SKIP_PRE_REVIEW_GATE=true"
         info "Step 19: Pre-review gate skipped (SKIP_PRE_REVIEW_GATE=true)"
 fi
@@ -7335,7 +7355,7 @@ fi
 # don't propagate to expensive quality gates (SAST, perf-sentinel, etc.).
 # Bypass: SKIP_LINT_GATE=true
 # ──────────────────────────────────────────────
-if [ "${SKIP_LINT_GATE:-false}" != "true" ] && [ -n "$_node_bin" ] && [ -x "$_node_bin" ]; then
+if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin" ]; then
     step_emit "20" "running" "Step 20: Lint gate"
     log "Step 20: Lint gate (tsc + eslint)..."
     _lint_log="$LOG_DIR/lint-gate-${PHASE}.log"
@@ -7448,7 +7468,7 @@ if [ "${SKIP_LINT_GATE:-false}" != "true" ] && [ -n "$_node_bin" ] && [ -x "$_no
         _lint_rem_log="$LOG_DIR/lint-remediation-${PHASE}.log"
         _profiles_file="${AUTOMATION_DIR}/agents/profiles.json"
 
-        if [ "${SKIP_GATE_REMEDIATION:-0}" != "1" ] && [ -f "$_lint_log" ]; then
+        if ! is_truthy "${SKIP_GATE_REMEDIATION:-}" && [ -f "$_lint_log" ]; then
             # ── Self-heal KB (episodic tier) ─────────────────────────────────
             # The lint log is tsc --noEmit + eslint output — deterministic tool
             # signal, exactly what the signature must be derived from. Recorded
@@ -7661,7 +7681,7 @@ LINT_AC_PY
     step_emit "20" "pass" "Step 20: Lint gate"
     success "Step 20: Lint gate PASSED"
 else
-    if [ "${SKIP_LINT_GATE:-false}" = "true" ]; then
+    if is_truthy "${SKIP_LINT_GATE:-}"; then
         step_emit "20" "skip" "Step 20: Lint gate" "SKIP_LINT_GATE=true"
         info "Step 20: Lint gate skipped (SKIP_LINT_GATE=true)"
     else
@@ -7742,7 +7762,7 @@ run_testing_gates() {
         routing_reason="env_override"
     fi
 
-    if [ "${SKIP_TESTING_GATES:-false}" = "true" ]; then
+    if is_truthy "${SKIP_TESTING_GATES:-}"; then
         step_emit "22a" "skip" "Step 22a: SAST sentinel" "SKIP_TESTING_GATES=true"
 step_emit "22b" "skip" "Step 22b: Spec validator" "SKIP_TESTING_GATES=true"
 step_emit "22c" "skip" "Step 22c: Review ranger" "SKIP_TESTING_GATES=true"
@@ -9383,7 +9403,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
 
         local _profiles_file="${AUTOMATION_DIR}/agents/profiles.json"
 
-        if [ "${SKIP_GATE_REMEDIATION:-0}" != "1" ] && [ ${#_failing_logs[@]} -gt 0 ]; then
+        if ! is_truthy "${SKIP_GATE_REMEDIATION:-}" && [ ${#_failing_logs[@]} -gt 0 ]; then
             warning "Step 4.2: Testing gates FAILED — running self-healing remediation pipeline..."
             local _remediation_applied=0
             # Set when profile-augmentor successfully (reviewer-approved) updates
@@ -10047,7 +10067,7 @@ run_unit_tests_gate() {
     local gate_log="$LOG_DIR/unit-test-gate-${phase_id}.log"
     local bug_depth="${UNIT_TEST_BUG_DEPTH:-0}"
 
-    if [ "${SKIP_UNIT_TEST_GATE:-false}" = "true" ]; then
+    if is_truthy "${SKIP_UNIT_TEST_GATE:-}"; then
         info "Step 4.5: Unit test gate skipped (SKIP_UNIT_TEST_GATE=true)"
         return 0
     fi
@@ -10267,7 +10287,7 @@ case $gate_result in
         run_interstitial_e2e_phase "$PHASE"
 
         # Step 5.8: Auto-create PR if gh is available and there are commits ahead of origin
-        if [ "${SKIP_AUTO_PR:-false}" != "true" ] && command -v gh >/dev/null 2>&1; then
+        if ! is_truthy "${SKIP_AUTO_PR:-}" && command -v gh >/dev/null 2>&1; then
             _current_branch=$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
             _default_branch=$(git -C "$PROJECT_ROOT" remote show origin 2>/dev/null | awk '/HEAD branch/ {print $NF}' || echo "main")
             _commits_ahead=$(git -C "$PROJECT_ROOT" rev-list --count "origin/${_default_branch}...HEAD" 2>/dev/null || echo 0)

@@ -1,0 +1,52 @@
+{
+  "runId": "20260730T121613Z",
+  "phase": "mock3_core",
+  "startedAt": "2026-07-30T12:16:25.705Z",
+  "stories": [
+    {
+      "storyId": "SPAN-1",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "appliedAgents": [
+        "openspec"
+      ],
+      "notes": "Trivial mechanical string replacement ('hello world' → 'hello dolly') with unambiguous AC, no security surface, no edge cases, no cross-codeline dependencies. Nothing for openspec to elaborate or speckit to harden.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect story: getGreeting() returns the wrong value. No code block was injected, so locationHint is empty — no file paths can be confirmed. VCs derived from both the acceptance criteria and the description since the description adds context about independent codelines.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-30T12:18:12.850Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "approved",
+        "reviewNotes": "Trivial mechanical string-replacement story. Coordinator correctly skipped speckit (no security surface, no edge cases). Openspec correctly recognized nothing to elaborate — no AC changes, no splits, which is appropriate. The three AC are complete, testable, and non-overlapping (return value, test alignment, typecheck). Minor observation: the title says 'in every affected codeline' but AC only scope a single function and its test — if 'hello world' appears elsewhere (README, config, comments), those aren't covered. Not blocking for this scope but worth noting if the codebase has broader references. Pipeline added minimal value, which is the correct outcome for a defect this simple.",
+        "qualityScore": 0.82,
+        "flags": [
+          "title_scope_mismatch: title implies all codelines but AC only cover getGreeting() and its test — potential gap if other files reference 'hello world'"
+        ],
+        "reviewedAt": "2026-07-30T12:18:51.579Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 1,
+    "coordinatorReviewCompleted": true,
+    "approved": 1,
+    "needsReview": 0
+  },
+  "completedAt": "2026-07-30T12:19:13.946Z",
+  "storyCount": 1
+}

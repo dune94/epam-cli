@@ -1,0 +1,40 @@
+{
+  "message_id": "msg-1785781456566",
+  "timestamp": "2026-08-03T18:24:16+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 0,
+          "description": "No unit tests were added for the new live_preview configuration. The existing test file already tests the `options` object (e.g., the 'contentstack fetch timeout' describe block at ~line 155 uses `require('../contentstack.ts')` and asserts on `testedModule.options`), but a search for 'live_preview|CONTENTSTACK_PREVIEW|livePreview' across the test file returned zero matches. Per review criterion 2, new features must have corresponding vitest unit tests. Three test scenarios are expected: (1) live_preview block present with enable=true, host, and management_token when CONTENTSTACK_PREVIEW_ENABLE='true' and CONTENTSTACK_PREVIEW_MANAGEMENT_TOKEN is set; (2) live_preview absent from options when CONTENTSTACK_PREVIEW_ENABLE is not 'true'; (3) live_preview.host uses CONTENTSTACK_PREVIEW_HOST when set, falling back to the default when unset.",
+          "suggestedFix": "Add a new describe block (e.g., 'contentstack live_preview') to src/services/__tests__/contentstack.spec.ts that sets process.env.CONTENTSTACK_PREVIEW_ENABLE, CONTENTSTACK_PREVIEW_HOST, and CONTENTSTACK_PREVIEW_MANAGEMENT_TOKEN, requires the module, and asserts on testedModule.options.live_preview — following the exact pattern already used by the 'contentstack fetch timeout' tests.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 63,
+          "description": "Hardcoded endpoint URL 'api.contentstack.io' used as fallback for CONTENTSTACK_PREVIEW_HOST. Per review criterion 6, no hardcoded strings for endpoint URLs — all must use named constants from src/config/constants.ts. A search of src/config for 'api.contentstack.io' returned no matches, confirming this string is not already defined as a constant.",
+          "suggestedFix": "Add a named constant (e.g., CONTENTSTACK_DEFAULT_PREVIEW_HOST = 'api.contentstack.io') to src/config/constants.ts and import it in contentstack.ts, replacing the inline string literal.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

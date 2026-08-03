@@ -1,0 +1,64 @@
+{
+  "message_id": "msg-1785781665749",
+  "timestamp": "2026-08-03T18:27:45+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 134,
+          "description": "AC#1 & AC#2 NOT MET — The prescribed fix requires conditionally calling `.includeDraft()` on the query in `createContentTypeQuery` when a live_preview parameter is present. The diff only adds the Stack-level `live_preview` config to `options` (lines 62-69) but does NOT add `.includeDraft()` or any equivalent query-level draft-inclusion logic anywhere. Without this, the Stack may be configured for preview but all queries will still return only published content — draft content edited in the CMS will never appear on the rendered page.",
+          "suggestedFix": "Add a `live_preview` parameter to `ICreateQueryConfig` and `ICreateEntryConfig` interfaces, forward it through `createContentTypeQuery`/`createContentTypeEntryQuery`, and conditionally call `.includeDraft()` on the query when `live_preview` is present. Alternatively, if the Contentstack SDK's `live_preview` Stack config alone is sufficient for draft content retrieval (without per-query `.includeDraft()`), verify this with the SDK docs and add a comment explaining why no query-level call is needed.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/interface/contentstack.ts",
+          "line": 4,
+          "description": "AC#1 & AC#2 NOT MET — No `live_preview` field exists in `ICommonContentstackConfig`, `ICreateQueryConfig`, `ICreateEntryConfig`, or any of the public function parameter interfaces (`IContentstackGetEntry`, `IContentstackGetSingleEntry`, `IContentstackGetSingletonEntry`). None of the public functions (`getEntry`, `getSingleEntry`, `getAllContentTypeEntries`, `findSingletonEntry`, `getSingletonEntry`) accept or forward a `live_preview` parameter. Even if `.includeDraft()` were added to `createContentTypeQuery`, there is no way for a caller (e.g., a page component receiving a preview URL query param) to pass preview context through to the query layer. Preview context is silently dropped at every call site.",
+          "suggestedFix": "Add `live_preview?: { enable: boolean; management_token: string; host: string }` (or a simpler boolean/string flag) to `ICommonContentstackConfig` so it propagates to all derived interfaces. Then update each public function to destructure and forward `live_preview` to `createContentTypeQuery`/`createContentTypeEntryQuery`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 1,
+          "description": "AC#4 NOT MET — No test coverage exists for the live_preview feature. A search for 'live_preview|preview|PREVIEW|includeDraft|setHost' in contentstack.spec.ts returned zero matches. Required test scenarios: (1) `live_preview` block present in `options` with `management_token` when `CONTENTSTACK_PREVIEW_TOKEN` and `CONTENTSTACK_PREVIEW_HOST` are set, (2) `live_preview` block absent when the token is unset, (3) if `.includeDraft()` is added, a test that calls a public function (e.g., `getEntry`) with a `live_preview` parameter and asserts the mock's `includeDraft` method was called.",
+          "suggestedFix": "Add test cases to `src/services/__tests__/contentstack.spec.ts` covering: (1) options includes `live_preview` when env vars are set, (2) options excludes `live_preview` when env vars are absent, (3) end-to-end forwarding of preview context through a public function to the query's `.includeDraft()` call. Add `includeDraft: jest.fn().mockReturnThis()` to the Stack mock.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 62,
+          "description": "The `live_preview` config uses `management_token` as the key. The dependency_contract tool confirms `management_token` IS consumed by contentstack v3.17.2, while `preview_token` is absent. However, the prescribed fix specified `preview_token`. The implementer should verify that `management_token` is the correct key for the Live Preview feature (not just the Management API), as the SDK may distinguish between preview and management authentication.",
+          "suggestedFix": "Confirm with Contentstack SDK documentation that `management_token` is the correct key for `live_preview` config. The dependency_contract tool shows it is consumed by the runtime, so this is likely correct — but verify the SDK actually uses it for preview (not just management) operations.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 72,
+          "description": "The `CONTENTSTACK_PREVIEW_HOST` is only passed inside the `live_preview` config object but is NOT wired to `Stack.setHost()`. The existing `setHost` call (line 73-75) only uses `CONTENTSTACK_API_HOST`. If the Contentstack SDK does not automatically use `live_preview.host` for preview API requests, preview calls may go to the wrong host.",
+          "suggestedFix": "Verify that the Contentstack SDK's `live_preview.host` config is sufficient for routing preview requests. If not, add conditional logic to call `Stack.setHost(CONTENTSTACK_PREVIEW_HOST)` when preview is active.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

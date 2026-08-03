@@ -1,0 +1,2 @@
+{"storyId":"MOCK-HW-1","phase":"core","status":"attempt","elapsedMinutes":0.30,"costUsd":0.0028,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-28T02:00:00Z"}
+{"storyId":"MOCK-HW-1","phase":"core","status":"completed","elapsedMinutes":0.38,"costUsd":0.0028,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-28T02:00:01Z"}

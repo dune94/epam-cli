@@ -1,0 +1,88 @@
+{
+  "message_id": "msg-1785548625966",
+  "timestamp": "2026-08-01T01:43:45+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/interface/contentstack.ts",
+          "line": 0,
+          "description": "ICreateQueryConfig and ICreateEntryConfig interfaces were not updated with a live_preview parameter. The prescribed fix requires adding an optional live_preview field (containing content_type_uid and entry_uid) to both interfaces so that query functions can forward preview context to the Contentstack SDK.",
+          "suggestedFix": "Add `live_preview?: { content_type_uid: string; entry_uid: string }` to ICreateQueryConfig and ICreateEntryConfig. Also add `live_preview?: { content_type_uid: string; entry_uid: string }` to IContentstackGetEntry, IContentstackGetSingleEntry, and IContentstackGetSingletonEntry so callers can pass preview context through.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 0,
+          "description": "createContentTypeQuery and createContentTypeEntryQuery do not call query.includeFallback() or pass live_preview params when preview context is present. Even though the Stack is initialized with live_preview config, queries always return published content because the live_preview hash from URL params is never forwarded to the query chain. This is the core of the prescribed root cause fix and it is not implemented.",
+          "suggestedFix": "In createContentTypeQuery and createContentTypeEntryQuery, accept the live_preview param from config and call `query.includeFallback()` (or set the live_preview query parameter) before returning the query. In getEntry, getSingleEntry, and findSingletonEntry, accept and forward the live_preview param from their interfaces to the factory methods.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 0,
+          "description": "The file does not exist. No ContentstackProvider component with reactive state (useState) and useEffect subscribing to Contentstack live preview events (onEntryChange) was created. Without a reactive state mechanism, no downstream consumer (236+ components using useContent) can ever receive live preview updates. Every acceptance criterion related to real-time updates is unmet.",
+          "suggestedFix": "Create src/context/ContentstackContext.tsx with a ContentstackProvider that uses useState for content, initializes @contentstack/live-preview-utils LivePreview.init(), subscribes to onEntryChange to re-fetch content with the live_preview hash, and updates context state so all useContent consumers re-render with draft content.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "package.json",
+          "line": 0,
+          "description": "The @contentstack/live-preview-utils dependency is not installed anywhere in the project. No import of this package exists in the codebase. Without the SDK, no WebSocket-based Live Preview subscription can be established on the client side, making real-time preview updates impossible.",
+          "suggestedFix": "Add @contentstack/live-preview-utils to package.json dependencies and import it in the ContentstackProvider to initialize LivePreview and subscribe to onEntryChange events.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.ts",
+          "line": 0,
+          "description": "useContent calls useContext(ContentstackContext) but there is no reactive Provider component supplying a changing value. The hook will always return a static value and cannot propagate live preview updates to the 236+ consumers. The context import points to 'context/contentstackContext' (lowercase) but no provider component exists to feed reactive state.",
+          "suggestedFix": "Once ContentstackProvider is created with useState and onEntryChange subscription, wrap the application (or page-level components) with the provider so useContext receives reactive content that updates on CMS edits.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/pages/[[...slug]].tsx",
+          "line": 0,
+          "description": "Unable to verify that getStaticProps in page components reads context.preview or the live_preview URL param and forwards it through to getSingleEntry/getEntry service calls. The service layer does not even accept a live_preview parameter yet, so even if getStaticProps tried to pass it, there is no interface support. This is part of the prescribed minimal fix.",
+          "suggestedFix": "In getStaticProps, read context.preview and/or the live_preview URL query param, and pass it through to getSingleEntry/getEntry/findSingletonEntry calls. Also create pages/api/preview.ts to enable Next.js draft mode so getStaticProps re-runs on CMS edits.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/",
+          "line": 0,
+          "description": "No vitest unit tests exist for the Live Preview feature. There are no tests mirroring src/context/ for a ContentstackProvider, no tests for live_preview config in options, no tests for includeFallback() behavior, and no tests verifying reactive content updates. The test count has not increased to cover this new feature, violating the requirement that new features have corresponding vitest unit tests.",
+          "suggestedFix": "Add vitest unit tests in test/unit/ mirroring src/context/ for ContentstackProvider, testing onEntryChange callback behavior, live_preview config in Stack options, includeFallback() calls in query factory, and reactive content updates propagating through useContent.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 0,
+          "description": "The live_preview config block IS present in the options object (management_token, host, enable), which partially addresses the prescribed root-cause fix for server-side draft content fetching. However, without the query-level includeFallback() calls and without the client-side real-time update mechanism, this alone is insufficient. The enable flag is gated on !!CONTENTSTACK_PREVIEW_TOKEN which is correct, but the host defaults to 'api.contentstack.io' hardcoded rather than using a named constant from config/constants.ts.",
+          "suggestedFix": "Move the fallback host string 'api.contentstack.io' to a named constant in src/config/constants.ts (or the existing constants file) to comply with the no-hardcoded-strings rule for endpoint URLs.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

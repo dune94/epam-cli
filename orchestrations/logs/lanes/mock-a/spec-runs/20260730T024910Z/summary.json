@@ -1,0 +1,52 @@
+{
+  "runId": "20260730T024910Z",
+  "phase": "mock3_core",
+  "startedAt": "2026-07-30T02:49:40.309Z",
+  "stories": [
+    {
+      "storyId": "SPAN-1",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "appliedAgents": [
+        "openspec"
+      ],
+      "notes": "Trivial string literal replacement with no ambiguity, no security surface, and no architectural complexity. AC already specifies exact return value, test update requirement under vitest, and tsc --noEmit gate. Openspec would add no meaningful elaboration; speckit would find no gaps to fill. No spec work needed.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Classified as defect: getGreeting() computes the wrong value. No code was injected in this prompt so locationHint is empty — cannot fabricate a file path I cannot see.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-30T02:52:48.957Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "approved",
+        "reviewNotes": "Trivial string-literal replacement; the 3 ACs (exact return value, test alignment under vitest, tsc --noEmit gate) are complete, testable, and non-overlapping. No split is correct for a single-line change. Speckit was correctly skipped—no security surface or edge-case depth to mine. Openspec was applied despite coordinator noting no spec work was needed; its contribution was a benign classification with no elaboration, which is appropriate for this story's simplicity. Minor inconsistency: coordinator said 'no spec work needed' yet openspec was still in assignedAgents and appliedAgents—harmless here but worth noting for process hygiene.",
+        "qualityScore": 0.9,
+        "flags": [
+          "coordinator_assigned_openspec_despite_noting_unnecessary"
+        ],
+        "reviewedAt": "2026-07-30T02:53:53.829Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 1,
+    "coordinatorReviewCompleted": true,
+    "approved": 1,
+    "needsReview": 0
+  },
+  "completedAt": "2026-07-30T02:54:15.232Z",
+  "storyCount": 1
+}

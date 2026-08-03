@@ -42,7 +42,7 @@ function scratch(prefix: string) {
 
 /** The real Step 5 block, from its SKIP guard to the closing fi. */
 function step5Block(): string {
-  const start = orchSrc.indexOf('if [ "${SKIP_REGRESSION_GUARD:-false}" != "true" ]; then');
+  const start = orchSrc.indexOf('if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then');
   expect(start, 'Step 5 block not found').toBeGreaterThan(-1);
   const marker = 'Step 5: Regression guard skipped (SKIP_REGRESSION_GUARD=true)';
   const end = orchSrc.indexOf(marker, start);
@@ -103,6 +103,7 @@ function runStep5(root: string, env: Record<string, string> = {}) {
   mkdirSync(bin, { recursive: true });
   writeFileSync(join(bin, 'npm'), [
     '#!/usr/bin/env bash',
+    `source ${join(__dirname, '../../../orchestrations/scripts/lib/flags.sh')}`,
     '[ "$1" = "test" ] || exit 0',
     'script=$(node -e \'try{const p=require(process.cwd()+"/package.json");process.stdout.write((p.scripts&&p.scripts.test)||"")}catch(e){}\')',
     '[ -n "$script" ] || exit 0',
@@ -113,6 +114,7 @@ function runStep5(root: string, env: Record<string, string> = {}) {
   const script = join(harness, 'drive.sh');
   writeFileSync(script, [
     '#!/usr/bin/env bash',
+    `source ${join(__dirname, '../../../orchestrations/scripts/lib/flags.sh')}`,
     'set -uo pipefail',
     `PROJECT_ROOT=${JSON.stringify(root)}`,
     `LOG_DIR=${JSON.stringify(logDir)}`,

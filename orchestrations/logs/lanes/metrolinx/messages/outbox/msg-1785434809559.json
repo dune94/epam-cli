@@ -1,0 +1,72 @@
+{
+  "message_id": "msg-1785434809559",
+  "timestamp": "2026-07-30T18:06:49+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 1,
+          "description": "The prescribed root cause fix was NOT implemented. The file is still a bare createContext with a static default value {}. There is no ContentstackProvider component, no useState for reactive content, no useEffect subscribing to ContentstackLivePreview.onEntryChange, no import of @contentstack/live-preview-utils, and no deep-merge of incoming live preview data. Without these, the context value never changes after initial render, so no downstream consumer (236+ components using useContent) can ever receive live preview updates. Every acceptance criterion — real-time text update without reload, all display locations updating, partial update of only changed content, no preview artifacts in normal view, published content when not in preview mode — is unmet because the reactivity mechanism is entirely absent.",
+          "suggestedFix": "Implement the prescribed minimal fix: add useState initialized from defaultContent, a useEffect that calls ContentstackLivePreview.init() and subscribes to onEntryChange to deep-merge incoming data and call setContent, and export a ContentstackProvider component wrapping children. Replace the static createContext default with the reactive provider. Example: const [content, setContent] = useState<IContentstackContext>({}); useEffect(() => { const unsub = ContentstackLivePreview.onEntryChange((liveData) => { setContent(prev => deepMerge(prev, liveData)); }); return unsub; }, []); Export ContentstackContext.Provider wrapped in a provider component.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/pages/[[...slug]].tsx",
+          "line": 36,
+          "description": "ContentstackContext.Provider is used with value={content} where content is a static prop from getStaticProps. Even if the context file had a reactive provider, this page-level Provider overrides it with a static value, preventing any live preview updates from propagating. The provider must be the reactive one from the context module, not a raw Provider with static props.",
+          "suggestedFix": "Either wrap the tree with the new reactive ContentstackProvider component (which manages its own state and subscription), or pass the initial content into the provider and let it manage updates internally via onEntryChange. Do not use raw ContentstackContext.Provider with static props.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.ts",
+          "line": 1,
+          "description": "useContent calls useContext(ContentstackContext) but there is no reactive Provider component supplying a dynamic value. The hook will always return the static default {} from createContext, meaning getContentByKey will always return defaultValue. No live preview can propagate through this hook as-is.",
+          "suggestedFix": "Once the reactive ContentstackProvider is implemented in contentstackContext.tsx, ensure the app root (or page) wraps the tree with it so useContext returns the reactive content state. No change needed to useContent itself if the provider supplies the correct value.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 12,
+          "description": "TypeScript strict compliance violation: the interface uses untyped `any` — `footer?: [any]` — without an explanatory comment. This violates the strict typing requirement.",
+          "suggestedFix": "Replace `[any]` with a proper typed interface (e.g., `[IContentstackFooter]`) or add an explanatory comment if the type is genuinely unknown: `// eslint-disable-next-line @typescript-eslint/no-explicit-any -- footer type not yet defined`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 1,
+          "description": "No unit tests exist for the live preview feature. There are no test files in test/unit/ mirroring src/context/contentstackContext.tsx that verify the provider subscribes to onEntryChange, deep-merges incoming data, and triggers re-renders. The total test count has not increased to cover this new feature.",
+          "suggestedFix": "Add vitest unit tests in test/unit/context/contentstackContext.test.tsx that: (1) mock @contentstack/live-preview-utils, (2) verify ContentstackLivePreview.onEntryChange is called on mount, (3) verify setContent is called with deep-merged data when the callback fires, (4) verify cleanup unsubscribes on unmount.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 1,
+          "description": "No existing deepMerge utility was verified to exist in the repo. The prescribed fix mentions reusing an existing deepMerge if available. Without checking, the implementer may hand-roll merge logic that duplicates an existing helper.",
+          "suggestedFix": "Run the codegraph helper query for 'deepMerge' or 'merge' utilities. If one exists (e.g., in utils/), import and reuse it. If not, use a simple spread-based merge or lodash.merge, but do not hand-roll a deep merge from scratch if a utility already exists.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

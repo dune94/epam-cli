@@ -332,3 +332,13 @@ When applying a multi-edit rewrite (e.g. 4 files, hundreds of lines) via an in-p
 **StoryRef:** AMSD-2041
 
 The Contentstack delivery SDK's TypeScript `LivePreview` interface declares `management_token` as a required field, but at runtime the SDK actually reads `preview_token`. This type/runtime mismatch means you must cast the `live_preview` config object `as any` (or `as unknown as contentstack.Config['live_preview']`) to pass `preview_token` without a TS error. Do NOT add `host` inside the `live_preview` block — host is set separately via `Stack.setHost()`. To forward preview context through individual queries, call `query.livePreviewQuery({ live_preview, content_type_uid })` — the method exists on the query chain at runtime but is not in the SDK's public types, so it also requires a cast. In Jest tests, the `contentstack` module mock must include `livePreviewQuery: jest.fn().mockReturnThis()` in the Stack mock object, or spied calls will silently fail. The `setCommonConfig` method must destructure `contentTypeUid` out of the config object before spreading `...config` into query setters, otherwise it leaks into `only`/`except` iteration.
+
+## KB-028 -- 2026-08-03
+
+**Category:** backend
+**AgentRole:** implementer
+**Tags:** contentstack, live-preview, typescript, sdk-type, retry
+**Trigger:** retry
+**StoryRef:** AMSD-2041
+
+Authoritative resolution of the `preview_token` vs `management_token` contradiction in the project's KB: the SDK source at `node_modules/contentstack/index.d.ts` (lines 74-78) declares `LivePreview = { host: string; management_token: string; enable: boolean }`. There is NO `preview_token` field in the type. Prior KB entries (KB-022, KB-024, KB-027) claiming `preview_token` is correct are wrong — they likely observed runtime behavior under `as any` casts that bypassed the type checker. When `tsc --noEmit` fails with TS2345 on the `Stack(options)` call because `preview_token` is not assignable to `Config.live_preview`, the fix is to use `management_token: <env-var>` and `host: CONTENTSTACK_PREVIEW_HOST` inside the `live_preview` block (host is still set on the Stack via `Stack.setHost(CONTENTSTACK_PREVIEW_HOST)`, but the type also requires it in the config object). Do NOT cast to `any` to keep `preview_token` — that defeats the purpose of TypeScript and contradicts the SDK's own type. The minimal edit is ~3 lines inside the existing `...(CONTENTSTACK_PREVIEW_TOKEN ? { ... } : {})` spread.

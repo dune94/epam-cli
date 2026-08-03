@@ -51,13 +51,14 @@ async function runTool(name: string, repo: string, input: Record<string, unknown
 }
 
 describe('plugin module — loads via the real PluginLoader contract', () => {
-  it('exports exactly the 3 expected tools, each pluginApiVersion 1.0.0', () => {
+  it('exports exactly the 4 expected tools, each pluginApiVersion 1.0.0', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { tools } = require(PLUGIN_PATH) as { tools: Array<{ name: string; pluginApiVersion: string }> };
     expect(tools.map((t) => t.name).sort()).toEqual([
-      'metrolinx_codeline_facts',
-      'metrolinx_git_state',
-      'metrolinx_resolve_test_file',
+      'check_anti_patterns',
+      'codeline_facts',
+      'git_state',
+      'resolve_test_file',
     ]);
     expect(tools.every((t) => t.pluginApiVersion === '1.0.0')).toBe(true);
   });
@@ -74,14 +75,14 @@ describe('plugin module — loads via the real PluginLoader contract', () => {
   });
 });
 
-describe('metrolinx_resolve_test_file', () => {
+describe('resolve_test_file', () => {
   it('recommends the co-located __tests__ convention when it is the only one that exists', async () => {
     const repo = makeRepo();
     mkdirSync(join(repo, 'src/services/__tests__'), { recursive: true });
     writeFileSync(join(repo, 'src/services/contentstack.ts'), 'export const x = 1;\n');
     writeFileSync(join(repo, 'src/services/__tests__/contentstack.spec.ts'), 'describe("x", () => {});\n');
 
-    const result = await runTool('metrolinx_resolve_test_file', repo, { sourceFile: 'src/services/contentstack.ts' });
+    const result = await runTool('resolve_test_file', repo, { sourceFile: 'src/services/contentstack.ts' });
     const parsed = JSON.parse(result.content);
 
     expect(result.isError).toBe(false);
@@ -97,7 +98,7 @@ describe('metrolinx_resolve_test_file', () => {
     writeFileSync(join(repo, 'src/services/__tests__/contentstack.spec.ts'), 'describe("real", () => {});\n');
     writeFileSync(join(repo, 'test/unit/services/contentstack.test.ts'), 'describe("wrong-path", () => {});\n');
 
-    const result = await runTool('metrolinx_resolve_test_file', repo, { sourceFile: 'src/services/contentstack.ts' });
+    const result = await runTool('resolve_test_file', repo, { sourceFile: 'src/services/contentstack.ts' });
     const parsed = JSON.parse(result.content);
 
     expect(parsed.existingTestFiles).toHaveLength(2);
@@ -112,7 +113,7 @@ describe('metrolinx_resolve_test_file', () => {
     mkdirSync(join(repo, 'src/utils'), { recursive: true });
     writeFileSync(join(repo, 'src/utils/brandNew.ts'), 'export const x = 1;\n');
 
-    const result = await runTool('metrolinx_resolve_test_file', repo, { sourceFile: 'src/utils/brandNew.ts' });
+    const result = await runTool('resolve_test_file', repo, { sourceFile: 'src/utils/brandNew.ts' });
     const parsed = JSON.parse(result.content);
 
     expect(parsed.existingTestFiles).toEqual([]);
@@ -122,13 +123,13 @@ describe('metrolinx_resolve_test_file', () => {
 
   it('returns an error result when sourceFile is missing', async () => {
     const repo = makeRepo();
-    const result = await runTool('metrolinx_resolve_test_file', repo, {});
+    const result = await runTool('resolve_test_file', repo, {});
     expect(result.isError).toBe(true);
     expect(result.content).toContain('sourceFile');
   });
 });
 
-describe('metrolinx_codeline_facts', () => {
+describe('codeline_facts', () => {
   it('returns a real, curated facts list when .epam/codeline-facts.json exists', async () => {
     const repo = makeRepo();
     mkdirSync(join(repo, '.epam'), { recursive: true });
@@ -137,7 +138,7 @@ describe('metrolinx_codeline_facts', () => {
       JSON.stringify({ facts: ['fact one', 'fact two'] }),
     );
 
-    const result = await runTool('metrolinx_codeline_facts', repo);
+    const result = await runTool('codeline_facts', repo);
     const parsed = JSON.parse(result.content);
 
     expect(result.isError).toBe(false);
@@ -146,20 +147,20 @@ describe('metrolinx_codeline_facts', () => {
 
   it('reports no facts configured when the file is absent (silent, not an error)', async () => {
     const repo = makeRepo();
-    const result = await runTool('metrolinx_codeline_facts', repo);
+    const result = await runTool('codeline_facts', repo);
     expect(result.isError).toBe(false);
     expect(result.content).toMatch(/no codeline-specific facts/i);
   });
 });
 
-describe('metrolinx_git_state', () => {
+describe('git_state', () => {
   it('reports the real branch, HEAD, and clean status', async () => {
     const repo = makeRepo();
     writeFileSync(join(repo, 'f.txt'), 'x\n');
     execFileSync('git', ['add', '-A'], { cwd: repo });
     execFileSync('git', ['commit', '-m', 'seed', '--quiet'], { cwd: repo });
 
-    const result = await runTool('metrolinx_git_state', repo);
+    const result = await runTool('git_state', repo);
     const parsed = JSON.parse(result.content);
 
     expect(result.isError).toBe(false);
@@ -177,7 +178,7 @@ describe('metrolinx_git_state', () => {
     writeFileSync(join(repo, 'f.txt'), 'changed\n');
     writeFileSync(join(repo, 'new.txt'), 'new\n');
 
-    const result = await runTool('metrolinx_git_state', repo);
+    const result = await runTool('git_state', repo);
     const parsed = JSON.parse(result.content);
 
     expect(parsed.dirty).toBe(true);
@@ -187,7 +188,69 @@ describe('metrolinx_git_state', () => {
   it('returns an error result when run outside a git repository', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'codeline-ctx-nogit-'));
     cleanupDirs.push(dir);
-    const result = await runTool('metrolinx_git_state', dir);
+    const result = await runTool('git_state', dir);
+    expect(result.isError).toBe(true);
+  });
+});
+
+describe('check_anti_patterns', () => {
+  const RULES = JSON.stringify([
+    {
+      id: 'example-wrong-key',
+      matchPattern: 'wrongOption\\s*:\\s*\\{[^}]*wrongKey',
+      message: 'Use rightKey, not wrongKey, inside wrongOption.',
+    },
+  ]);
+
+  it('reports no rules configured when .epam/anti-patterns.json is absent (silent, not an error)', async () => {
+    const repo = makeRepo();
+    const result = await runTool('check_anti_patterns', repo, { content: 'anything' });
+    expect(result.isError).toBe(false);
+    expect(result.content).toMatch(/no anti-pattern rules/i);
+  });
+
+  it('reports a violation when content matches a configured rule', async () => {
+    const repo = makeRepo();
+    mkdirSync(join(repo, '.epam'), { recursive: true });
+    writeFileSync(join(repo, '.epam/anti-patterns.json'), RULES);
+
+    const result = await runTool('check_anti_patterns', repo, {
+      content: 'wrongOption: { wrongKey: 1 }',
+      filePath: 'src/x.ts',
+    });
+    const parsed = JSON.parse(result.content);
+
+    expect(result.isError).toBe(false);
+    expect(parsed.violations).toHaveLength(1);
+    expect(parsed.violations[0].file).toBe('src/x.ts');
+    expect(parsed.violations[0].message).toMatch(/rightKey/);
+  });
+
+  it('reports no violations when content does not match any configured rule', async () => {
+    const repo = makeRepo();
+    mkdirSync(join(repo, '.epam'), { recursive: true });
+    writeFileSync(join(repo, '.epam/anti-patterns.json'), RULES);
+
+    const result = await runTool('check_anti_patterns', repo, {
+      content: 'wrongOption: { rightKey: 1 }',
+    });
+
+    expect(result.isError).toBe(false);
+    expect(result.content).toMatch(/no configured anti-pattern matched/i);
+  });
+
+  it('never blocks (isError:false) when anti-patterns.json is malformed', async () => {
+    const repo = makeRepo();
+    mkdirSync(join(repo, '.epam'), { recursive: true });
+    writeFileSync(join(repo, '.epam/anti-patterns.json'), '{ not valid json');
+
+    const result = await runTool('check_anti_patterns', repo, { content: 'anything' });
+    expect(result.isError).toBe(false);
+  });
+
+  it('returns an error result when content is missing', async () => {
+    const repo = makeRepo();
+    const result = await runTool('check_anti_patterns', repo, {} as any);
     expect(result.isError).toBe(true);
   });
 });

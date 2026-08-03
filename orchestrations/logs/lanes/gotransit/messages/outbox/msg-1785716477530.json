@@ -1,0 +1,48 @@
+{
+  "message_id": "msg-1785716477530",
+  "timestamp": "2026-08-03T00:21:17+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 0,
+          "description": "AC4 requires three specific test cases that could not be verified in the visible portion of the test file: (1) live_preview block present with preview_token when CONTENTSTACK_PREVIEW_TOKEN is set, (2) live_preview absent when the token is unset, (3) setHost called with CONTENTSTACK_PREVIEW_HOST when set, taking priority over CONTENTSTACK_API_HOST. The visible tests cover addParam forwarding for getEntry (e.g., 'should forward live_preview.preview_hash to the query via addParam') but no tests were found that assert the `options` object contains `live_preview: { enable: true, preview_token: ... }` when CONTENTSTACK_PREVIEW_TOKEN is set, that `live_preview` is absent from `options` when the token is unset, or that `Stack.setHost` is called with CONTENTSTACK_PREVIEW_HOST taking priority over CONTENTSTACK_API_HOST. The existing 'contentstack fetch timeout' describe block tests the `options` object in this exact pattern — similar tests for live_preview options and setHost priority are expected but absent.",
+          "suggestedFix": "Add a describe block (e.g., 'live_preview configuration') with three tests mirroring the 'contentstack fetch timeout' pattern: (1) set process.env.CONTENTSTACK_PREVIEW_TOKEN='test_preview_token', require the module, and assert `options.live_preview` equals `{ enable: true, preview_token: 'test_preview_token' }`; (2) unset CONTENTSTACK_PREVIEW_TOKEN, require the module, and assert `options` does not have a `live_preview` key; (3) set both CONTENTSTACK_PREVIEW_HOST and CONTENTSTACK_API_HOST, require the module, and assert `Stack.setHost` was called with CONTENTSTACK_PREVIEW_HOST (not CONTENTSTACK_API_HOST).",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 196,
+          "description": "findSingletonEntry accepts IContentstackGetSingletonEntry (which extends ICommonContentstackConfig and therefore includes the optional live_preview field) but does not destructure or forward live_preview to createContentTypeQuery. The preview context is silently dropped for all singleton entry queries, meaning draft content will not be fetched for singleton content types during live preview.",
+          "suggestedFix": "Destructure live_preview from the function parameters and pass it to createContentTypeQuery: `const { contentTypeUid, lang, referenceFieldPath, jsonRtePath, only, except, where, live_preview } = ...` then add `live_preview` to the createContentTypeQuery call.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 224,
+          "description": "getSingletonEntry has the same gap as findSingletonEntry — it accepts IContentstackGetSingletonEntry (which includes live_preview via ICommonContentstackConfig) but does not destructure or forward live_preview to createContentTypeQuery. Preview context is silently dropped.",
+          "suggestedFix": "Destructure live_preview from the function parameters and pass it to createContentTypeQuery, identical to the fix for findSingletonEntry.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

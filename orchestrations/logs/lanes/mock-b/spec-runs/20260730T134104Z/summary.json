@@ -1,0 +1,50 @@
+{
+  "runId": "20260730T134104Z",
+  "phase": "mock3_core",
+  "startedAt": "2026-07-30T13:41:25.045Z",
+  "stories": [
+    {
+      "storyId": "SPAN-1",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "appliedAgents": [
+        "openspec"
+      ],
+      "notes": "Trivial string replacement ('hello world' → 'hello dolly') with clear, complete, and testable AC. No elaboration needed (nothing to decompose or refine) and no hardening needed (no security/edge-case surface for a literal string swap).",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: existing getGreeting() returns wrong string. No code block was injected, so locationHint is empty to avoid fabrication.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-30T13:42:49.369Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "approved",
+        "reviewNotes": "Openspec exercised appropriate restraint: no fabricated code blocks or locationHints, no unnecessary AC changes, no forced splits for a trivial single-location string swap. Speckit was correctly skipped per coordinator notes (no security/edge-case surface). Three AC are independently verifiable and non-overlapping (return value, test assertion, type-check). No story split is warranted. No invented IDs or AC mutations detected.",
+        "qualityScore": 0.9,
+        "flags": [],
+        "reviewedAt": "2026-07-30T13:43:20.769Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 1,
+    "coordinatorReviewCompleted": true,
+    "approved": 1,
+    "needsReview": 0
+  },
+  "completedAt": "2026-07-30T13:43:40.671Z",
+  "storyCount": 1
+}

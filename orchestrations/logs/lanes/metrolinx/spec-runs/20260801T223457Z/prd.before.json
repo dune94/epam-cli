@@ -1,0 +1,184 @@
+{
+  "id": "jira-sourced-1785623790436",
+  "title": "Metrolinx Brownfield — Jira-sourced",
+  "version": "1.0.0",
+  "lastUpdated": "2026-08-01",
+  "project": {
+    "name": "metrolinx",
+    "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
+    "stack": {
+      "language": "TypeScript",
+      "runtime": "Node.js 20",
+      "framework": "Next.js",
+      "testing": "jest",
+      "cms": "Contentstack",
+      "devEnvironment": "Ubuntu WSL2"
+    },
+    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
+    "outputDirs": [
+      {
+        "codeline": "gotransit",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+      },
+      {
+        "codeline": "upexpress",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+      },
+      {
+        "codeline": "metrolinx",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+      }
+    ]
+  },
+  "configuration": {
+    "profilesPath": "profiles.json",
+    "autoCommit": false,
+    "requireTests": true,
+    "budget": 12,
+    "aiRuntime": {
+      "provider": "claude",
+      "defaultModel": "claude-sonnet-4-6"
+    }
+  },
+  "implementationOrder": {
+    "core": [
+      "AMSD-2041"
+    ]
+  },
+  "phasesConfig": {
+    "scaffold": {
+      "description": "Project scaffolding and TypeScript configuration",
+      "parallelWorktrees": false
+    },
+    "core": {
+      "description": "API client, CLI, and Express server implementation",
+      "parallelWorktrees": true
+    },
+    "ui_and_review": {
+      "description": "HTML dashboard and code review",
+      "parallelWorktrees": true
+    }
+  },
+  "stories": [
+    {
+      "id": "AMSD-2041",
+      "jiraKey": "AMSD-2041",
+      "title": "[GO, UP, MX] Live Preview of Content in CMS",
+      "description": "[GO, UP, MX] Live Preview of Content in CMS",
+      "acceptanceCriteria": [],
+      "codeline": "gotransit",
+      "status": "pending",
+      "completed": false,
+      "agentRole": "typescript-engineer",
+      "agentGroup": "main",
+      "effort": "low",
+      "estimate": 10,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). Acceptance criteria are completely absent and the description is too vague — no specification of which content types, how preview is triggered, what the expected UX is, or how protected pages are handled — so different engineers would implement fundamentally different solutions.",
+      "issueType": "Story",
+      "codelines": [
+        "gotransit",
+        "upexpress",
+        "metrolinx"
+      ],
+      "verificationCriteria": [
+        "When a content editor opens Live Preview in the CMS, the preview surface displays the current draft version of the content rather than only the last published version.",
+        "When a content editor modifies a field value in the CMS editor while Live Preview is active, the preview surface updates to show the modified value without requiring a publish action.",
+        "The preview surface shows all content — including linked references, images, and tabular data — with their draft values when Live Preview is active."
+      ],
+      "vcSource": "description",
+      "vcResolution": "regenerated",
+      "fixSiteAnalysis": [
+        {
+          "file": "src/services/contentstack.ts",
+          "function": "options",
+          "reason": "This is where the Contentstack SDK Stack is configured. The options object lacks the `live_preview` configuration needed for CMS Live Preview — it only configures delivery (published) content via api_key/delivery_token/environment. Without `live_preview` enabled here, the Stack never fetches draft/preview content, so no downstream component can ever render preview data regardless of presentation-layer changes.",
+          "fix": "Add CONTENTSTACK_PREVIEW_TOKEN and CONTENTSTACK_PREVIEW_HOST to the env destructuring (lines 17-24), then add a `live_preview` property to the options object (after line 58) conditionally when CONTENTSTACK_PREVIEW_TOKEN is set: `...(CONTENTSTACK_PREVIEW_TOKEN ? { live_preview: { enable: true, preview_token: CONTENTSTACK_PREVIEW_TOKEN } } : {})`. Also add after the existing setHost block (line 71-73): `if (CONTENTSTACK_PREVIEW_HOST) { Stack.setHost(CONTENTSTACK_PREVIEW_HOST); }` — but place the preview host check BEFORE the existing CONTENTSTACK_API_HOST check so preview host takes priority when both are set. This follows the same conditional pattern already used for CONTENTSTACK_FETCH_TIMEOUT (lines 60-66) and CONTENTSTACK_API_HOST (lines 71-73), reusing the existing `setHost` mechanism on the Stack instance.",
+          "helper": "",
+          "brokenLine": "export const options = {",
+          "fixVerified": null,
+          "evidenceVerified": true,
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false
+        }
+      ],
+      "fixSiteAnalysisCoverage": {
+        "complete": true,
+        "uncoveredVerificationCriteria": []
+      },
+      "storyKind": "novel",
+      "technicalNotes": {
+        "files": [
+          "src/hooks/useContent.ts",
+          "src/services/contentstack.ts",
+          "src/interface/content/contentCard.ts",
+          "src/components/contentstack/ContentstackLink/ContentstackLink.tsx"
+        ]
+      },
+      "specification": {
+        "runId": "20260801T223457Z",
+        "assignedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "coordinatorNotes": "Complex cross-platform (GO, UP, MX) live preview story with empty acceptance criteria and null spec. OpenSpec must first elaborate requirements and define AC for real-time rendering, content synchronization, and cross-platform concerns. Speckit then hardens with testability criteria, security checks, and edge cases such as preview latency, stale content, and permission boundaries.",
+        "status": "completed",
+        "updatedAt": "2026-08-01T22:43:35.398Z",
+        "appliedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": true,
+            "notes": "Live Preview is a new capability — no Live Preview SDK wiring, real-time listener, or preview initialization exists in the current codebase. useContent is the single attachment point (236 callers). Verification criteria are derived solely from the description since acceptance criteria are empty, and are scoped to our side of the Contentstack boundary.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-08-01T22:42:59.533Z"
+          },
+          {
+            "agent": "speckit",
+            "applied": true,
+            "notes": "Openspec provided empty acceptance criteria with a valuable note about useContent being the single attachment point (236 callers) and no existing LP wiring. I derived all 12 criteria from the story title/description, the four file paths, and standard Contentstack Live Preview integration patterns. CAVEAT: I was unable to read the actual file contents (src/hooks/useContent.ts, src/services/contentstack.ts, src/interface/content/contentCard.ts, src/components/contentstack/ContentstackLink/ContentstackLink.tsx). If those files contain existing patterns, error-handling conventions, or Contentstack SDK version specifics, some criteria may need adjustment. Key design decisions reflected in the criteria: (1) AC-2 ensures zero regression for the 236 existing callers — the highest risk; (2) AC-8 addresses security/bundle-size by ensuring LP code doesn't ship to production; (3) AC-4, AC-11 cover error resilience for the two most likely failure modes (connection loss and init failure); (4) AC-5 prevents memory leaks from dangling listeners; (5) AC-9 prevents LP signal cross-contamination; (6) AC-12 specifically covers ContentstackLink since it was listed as a touched file and LP URL context preservation is a known concern.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-08-01T22:43:35.398Z"
+          }
+        ],
+        "coordinatorReview": {
+          "verdict": "needs_review",
+          "reviewNotes": "Both agents added non-overlapping value: OpenSpec provided architectural reconnaissance (no existing LP wiring, useContent as sole 236-caller attachment point), while Speckit derived 12 testability/security/edge-case criteria on top of that foundation. However, two significant concerns require human review. (1) Speckit explicitly states it was 'unable to read the actual file contents' of four key source files, meaning all 12 criteria were derived from assumptions and standard patterns rather than codebase reality — criteria may not align with existing error-handling conventions, SDK version specifics, or established patterns. (2) Both agents report acceptanceChanged: false with splitCount: 0, so the original empty acceptance criteria array remains unchanged; the 12 criteria Speckit describes appear to exist only in agent notes, not in the story's formal AC field. For a complex cross-platform (GO, UP, MX) live-preview feature, this leaves the story without verified, formally persisted acceptance criteria. A human should confirm whether the criteria were persisted elsewhere and validate them against the actual codebase.",
+          "qualityScore": 0.6,
+          "flags": [
+            "speckit_file_access_failure",
+            "acceptance_criteria_not_persisted",
+            "criteria_unverified_against_codebase",
+            "empty_ac_remains_unchanged"
+          ],
+          "reviewedAt": "2026-08-01T22:43:45.245Z"
+        }
+      },
+      "estimatedAiMinutes": 4.9989,
+      "estimatedCost": 0.1561,
+      "estimatedTokens": 603871,
+      "estimatedTurns": 18,
+      "estimatedHours": 0.0833,
+      "cpaEffortTier": "high",
+      "cpaConfidence": 0.68,
+      "cpaGate": "review",
+      "ladderTier": "high",
+      "cpaIterationEstimate": 1,
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
+      "reasoningEffort": "low",
+      "completedAt": "2026-08-01T22:50:37+00:00",
+      "actualCost": 8.060107,
+      "lastAttempt": "2026-08-01T22:59:11+00:00",
+      "reviewStatus": "escalated"
+    }
+  ],
+  "currentIteration": 10,
+  "source": "jira",
+  "sourceProject": "AMSD"
+}

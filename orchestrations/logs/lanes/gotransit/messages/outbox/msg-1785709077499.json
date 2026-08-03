@@ -1,0 +1,48 @@
+{
+  "message_id": "msg-1785709077499",
+  "timestamp": "2026-08-02T22:17:57+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 122,
+          "description": "AC3 requires that the live_preview field on ICommonContentstackConfig allows preview context (live_preview/preview_hash) to flow through to Contentstack queries in setCommonConfig. The implementation destructures live_preview from config but explicitly discards it with `void live_preview;`. The comment acknowledges this is 'reserved for future SDK versions' but AC3 explicitly states this IS in scope — preview context must reach queries so linked/tabular references show draft values. The interface field was added (satisfying the letter of the AC) but the actual forwarding logic is absent, making the field dead code.",
+          "suggestedFix": "Forward the preview_hash to the query object. For Contentstack SDK 3.17.2, use `query.addParam('live_preview', live_preview.preview_hash)` or `query.includeDraft()` when preview_hash is present. Example: `if (live_preview?.preview_hash) { (query as any).addParam('live_preview', live_preview.preview_hash); }`. Remove the `void live_preview;` line.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 376,
+          "description": "No test verifies that live_preview context from ICommonContentstackConfig is forwarded to Contentstack queries in setCommonConfig. AC4 requires tests covering the live preview feature, and AC3 explicitly requires preview context to flow through to queries. The three added tests only cover Stack-level options (live_preview block presence/absence, setHost priority) — none test that a preview_hash passed via ICommonContentstackConfig reaches the query object.",
+          "suggestedFix": "Add a test that calls getEntry (or createContentTypeQuery) with live_preview: { preview_hash: 'test-hash' } in the config and asserts that the query received the preview parameter (e.g., spy on query.addParam or equivalent).",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 57,
+          "description": "The diff explicitly widened the type of `options` from inferred to `any` (`export const options: any = {`). This violates TypeScript strict compliance — no untyped `any` without an explanatory comment. While the file has a top-level eslint-disable for @typescript-eslint/no-explicit-any, the review criteria require no untyped `any` without an explanatory comment, and this change introduced a regression from the previously inferred type.",
+          "suggestedFix": "Define a proper interface for the Stack options (e.g., `IContentstackStackOptions`) that includes api_key, delivery_token, environment, branch, fetchOptions?, and live_preview? fields, and type `options` with it. Alternatively, revert to `export const options = {` and let TypeScript infer the type.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

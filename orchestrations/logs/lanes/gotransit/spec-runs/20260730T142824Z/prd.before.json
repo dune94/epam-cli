@@ -1,0 +1,171 @@
+{
+  "id": "jira-sourced-1785421736132",
+  "title": "Metrolinx Brownfield — Jira-sourced",
+  "version": "1.0.0",
+  "lastUpdated": "2026-07-30",
+  "project": {
+    "name": "metrolinx",
+    "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
+    "stack": {
+      "language": "TypeScript",
+      "runtime": "Node.js 20",
+      "framework": "Next.js",
+      "testing": "jest",
+      "cms": "Contentstack",
+      "devEnvironment": "Ubuntu WSL2"
+    },
+    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
+    "outputDirs": [
+      {
+        "codeline": "gotransit",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+      },
+      {
+        "codeline": "upexpress",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+      },
+      {
+        "codeline": "metrolinx",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+      }
+    ]
+  },
+  "configuration": {
+    "profilesPath": "profiles.json",
+    "autoCommit": false,
+    "requireTests": true,
+    "budget": 12,
+    "aiRuntime": {
+      "provider": "claude",
+      "defaultModel": "claude-sonnet-4-6"
+    }
+  },
+  "implementationOrder": {
+    "core": [
+      "AMSD-2041"
+    ]
+  },
+  "phasesConfig": {
+    "scaffold": {
+      "description": "Project scaffolding and TypeScript configuration",
+      "parallelWorktrees": false
+    },
+    "core": {
+      "description": "API client, CLI, and Express server implementation",
+      "parallelWorktrees": true
+    },
+    "ui_and_review": {
+      "description": "HTML dashboard and code review",
+      "parallelWorktrees": true
+    }
+  },
+  "stories": [
+    {
+      "id": "AMSD-2041",
+      "jiraKey": "AMSD-2041",
+      "title": "[GO, UP, MX] Live Preview of Content in CMS",
+      "description": "[GO, UP, MX] Live Preview of Content in CMS",
+      "acceptanceCriteria": [],
+      "codeline": "gotransit",
+      "status": "pending",
+      "completed": false,
+      "agentRole": "typescript-engineer",
+      "agentGroup": "main",
+      "effort": "low",
+      "estimate": 10,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). The story has no acceptance criteria at all — the AC field says '(none)' — leaving an agent with no testable, specific conditions to implement against.",
+      "issueType": "Story",
+      "codelines": [
+        "gotransit",
+        "upexpress",
+        "metrolinx"
+      ],
+      "verificationCriteria": [
+        "Given a content editor has saved changes to an entry without publishing them, when the editor opens the affected page through the CMS preview experience, then the rendered page displays the draft values (e.g., the edited title and body text) in place of the previously published text.",
+        "Given a page is open in the CMS preview experience, when the editor makes and saves a further change to the entry, then the rendered page updates to display the newly edited draft content without requiring a rebuild or redeploy of the application.",
+        "Given a visitor opens the same page outside of the CMS preview experience, then the rendered page displays the published content values (the published title and body text) present and correct."
+      ],
+      "vcSource": "description",
+      "vcResolution": "regenerated",
+      "fixSiteAnalysis": [
+        {
+          "file": "src/services/contentstack.ts",
+          "function": "ContentstackFactory",
+          "reason": "This is where ALL Contentstack queries are constructed (createContentTypeQuery, createContentTypeEntryQuery). None of these methods call .includeDraft() or pass live_preview parameters, so draft/unpublished content can never be served regardless of preview mode. Every page's getStaticProps flows through this factory, making it the single computation site that determines whether published or draft content is returned.",
+          "fix": "In both createContentTypeQuery (line 134) and createContentTypeEntryQuery (line 163), after building the query and before .toJSON(), conditionally call .includeDraft() when preview mode is active. Add a preview config parameter (e.g. includeDraft?: boolean) to ICreateQueryConfig and ICreateEntryConfig, and when truthy, call query.includeDraft() before .toJSON(). The Stack initialization at module top must also accept live_preview config from the Contentstack Live Preview SDK (reading preview hash/content_type_uid/uid from request query params). Propagate preview flag from getStaticProps context (context.preview) through to these factory methods. The Contentstack SDK's .includeDraft() is the existing mechanism — no new helper needed.",
+          "helper": "",
+          "brokenLine": "const query = this.stack.ContentType(contentTypeUid).Query().language(lang).toJSON();",
+          "fixVerified": null,
+          "evidenceVerified": true,
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false
+        }
+      ],
+      "storyKind": "novel",
+      "technicalNotes": null,
+      "specification": {
+        "runId": "20260730T142824Z",
+        "assignedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "coordinatorNotes": "Story has empty acceptance criteria and null spec — needs full elaboration and hardening. Live Preview is a complex cross-platform real-time feature (GO, UP, MX) requiring technical depth on preview rendering, state synchronization, and multi-platform considerations. openspec runs first to define AC and propose story splits; speckit then reviews for testability, security, and edge cases.",
+        "status": "completed",
+        "updatedAt": "2026-07-30T14:44:55.878Z",
+        "appliedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": true,
+            "notes": "Novel capability — Contentstack Live Preview integration. No existing preview/draft rendering path found in the provided code; useContent and ContentstackContext are the attachment points where the Live Preview SDK plugs in. VCs derived from description since ACs are empty. Contentstack is unreachable at test time, so VCs are scoped to our side of the boundary with explicit mock assumptions.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-07-30T14:44:18.462Z"
+          },
+          {
+            "agent": "speckit",
+            "applied": true,
+            "notes": "Openspec provided empty acceptanceCriteria, so all criteria are new. I derived them from the story title ('Live Preview of Content in CMS'), the description, and openspec's notes identifying Contentstack Live Preview SDK, useContent, and ContentstackContext as attachment points. Key areas covered: (1) real-time draft rendering (AC-1, AC-3), (2) published-only fallback outside preview (AC-2, AC-12), (3) SDK failure resilience (AC-4), (4) edge cases — empty/null content (AC-5), malformed data (AC-6), connection loss (AC-10), (5) security — no draft leakage (AC-7), (6) accessibility (AC-8), (7) multi-entry navigation (AC-9), (8) locale handling (AC-11). I could not review the actual source files (useContent, ContentstackContext, etc.) so these criteria are based solely on the story context and openspec's notes. If the codebase has existing patterns for error boundaries, locale handling, or connection status, some criteria may need adjustment.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-07-30T14:44:55.878Z"
+          }
+        ],
+        "coordinatorReview": {
+          "verdict": "needs_review",
+          "reviewNotes": "Pipeline breakdown: openspec failed to produce acceptance criteria or propose story splits despite being assigned full elaboration for a complex cross-platform feature. speckit compensated by deriving 12 ACs from scratch, but this inverts the intended pipeline — speckit should harden and review, not author baseline ACs. The resulting ACs cover real-time rendering, fallback behavior, SDK failure resilience, edge cases (empty/null, malformed, connection loss), draft leakage security, accessibility, navigation, and locale handling — breadth is good. However, no source files were reviewed by either agent, so ACs are unvalidated against actual codebase patterns (useContent, ContentstackContext, error boundaries, locale handling). No story splits were produced despite coordinator notes flagging this as a complex multi-platform (GO, UP, MX) feature warranting decomposition. Human review needed to: (1) validate ACs against actual source code, (2) determine if story should be split by platform or concern, (3) confirm Contentstack Live Preview SDK integration approach.",
+          "qualityScore": 0.55,
+          "flags": [
+            "openspec_did_not_produce_acs",
+            "speckit_authored_acs_instead_of_reviewing",
+            "no_story_splits_despite_complexity",
+            "source_files_not_reviewed",
+            "acs_unvalidated_against_codebase"
+          ],
+          "reviewedAt": "2026-07-30T14:46:36.696Z"
+        }
+      },
+      "estimatedAiMinutes": 5.4214,
+      "estimatedCost": 0.1685,
+      "estimatedTokens": 654804,
+      "estimatedTurns": 19,
+      "estimatedHours": 0.0903,
+      "cpaConfidence": 0.55,
+      "cpaGate": "review",
+      "ladderTier": "high",
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
+      "reasoningEffort": "low",
+      "completedAt": "2026-07-30T14:56:57+00:00",
+      "actualCost": 0.5946,
+      "reviewStatus": "escalated"
+    }
+  ],
+  "currentIteration": 9,
+  "source": "jira",
+  "sourceProject": "AMSD"
+}

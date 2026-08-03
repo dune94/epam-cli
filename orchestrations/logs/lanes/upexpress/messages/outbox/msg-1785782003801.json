@@ -1,0 +1,80 @@
+{
+  "message_id": "msg-1785782003801",
+  "timestamp": "2026-08-03T18:33:23+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 62,
+          "description": "The live_preview config object uses `management_token` as the key for CONTENTSTACK_PREVIEW_TOKEN. The prescribed minimal fix and the Contentstack SDK documentation specify `preview_token` as the correct key name. Using `management_token` means the SDK will not receive the preview token and live preview will silently not function.",
+          "suggestedFix": "Change `management_token: CONTENTSTACK_PREVIEW_TOKEN` to `preview_token: CONTENTSTACK_PREVIEW_TOKEN` in the live_preview config object.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 196,
+          "description": "Dead code: `livePreview` parameter is added to `createContentTypeQuery` and `createContentTypeEntryQuery`, but NONE of the public functions (getEntry, getSingleEntry, getAllContentTypeEntries, findSingletonEntry) destructure or forward `livePreview` to these factory methods. They all use explicit destructuring without a rest operator (e.g., getEntry destructures `{ contentTypeUid, referenceFieldPath, jsonRtePath, only, lang, includeFields }`), so `livePreview` is silently dropped at every call site. The `livePreview` handling in the factory methods is unreachable dead code — preview context can never flow through to Contentstack queries. This directly contradicts the acceptance criteria that draft content must be visible on the rendered page.",
+          "suggestedFix": "Add `livePreview?: string` to the public function interfaces (IContentstackGetEntry, IContentstackGetSingleEntry, IContentstackGetSingletonEntry), destructure `livePreview` in each public function, and forward it to `createContentTypeQuery`/`createContentTypeEntryQuery` calls.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 1,
+          "description": "No test coverage exists for the live_preview feature. Searched the test file for 'preview', 'PREVIEW', 'live_preview', 'livePreview', 'live' — zero matches. Required tests: (1) live_preview block present in options when CONTENTSTACK_PREVIEW_TOKEN and CONTENTSTACK_PREVIEW_HOST are set, (2) live_preview absent from options when the token is unset, (3) livePreview context flows through a public function (e.g., getEntry) to the Contentstack query's livePreviewQuery method. Without these tests, the feature cannot be verified against the acceptance criteria.",
+          "suggestedFix": "Add vitest tests covering: options.live_preview presence/absence based on env vars, and an end-to-end test calling getEntry (or getSingleEntry) with a livePreview parameter and asserting that the mock's livePreviewQuery method was called with the correct value.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 5,
+          "description": "The Contentstack Stack mock does not include a `livePreviewQuery` method. The implementation calls `this.stack.livePreviewQuery(...)` when livePreview is truthy. If the forwarding blocker is fixed and any test passes livePreview through a public function, the test will crash with 'livePreviewQuery is not a function' because the mock object has no such method.",
+          "suggestedFix": "Add `livePreviewQuery: jest.fn().mockReturnThis()` to the jest.mock Stack factory object.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 138,
+          "description": "The `livePreview` parameter is added via inline type intersection (`ICreateQueryConfig & { livePreview?: string }`) rather than updating the `ICreateQueryConfig` interface in src/interface/contentstack.ts. This is inconsistent with the codebase pattern and makes the parameter invisible to consumers of the interface. The same applies to `ICreateEntryConfig & { livePreview?: string }`.",
+          "suggestedFix": "Add `livePreview?: string` directly to the `ICreateQueryConfig` and `ICreateEntryConfig` interfaces in src/interface/contentstack.ts, and remove the inline intersection types.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 59,
+          "description": "The live_preview config only conditionally includes the preview block when both CONTENTSTACK_PREVIEW_TOKEN and CONTENTSTACK_PREVIEW_HOST are set, but does not set the preview host on the Stack via setHost. The existing code calls `Stack.setHost(CONTENTSTACK_API_HOST)` only when CONTENTSTACK_API_HOST is set. The Contentstack SDK live_preview host is set in the options object, but if the preview host differs from the API host, the Stack's primary host may not be updated for preview requests. Verify that the SDK's live_preview.host option is sufficient, or add `Stack.setHost(CONTENTSTACK_PREVIEW_HOST)` when in preview mode.",
+          "suggestedFix": "Verify via the Contentstack SDK documentation whether `live_preview.host` in the Stack options is sufficient for preview API calls, or whether `setHost` must also be called with the preview host. If setHost is needed, add a conditional block after the Stack creation.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 24,
+          "description": "The env var destructuring for CONTENTSTACK_PREVIEW_TOKEN and CONTENTSTACK_PREVIEW_HOST follows the existing pattern but these values are not validated or logged when missing, unlike the required env vars (API_KEY, DELIVERY_TOKEN, etc.). While they are optional, a debug log when preview is partially configured (token set but host missing, or vice versa) would help operators diagnose misconfiguration.",
+          "suggestedFix": "Add an optional logger.warn when only one of CONTENTSTACK_PREVIEW_TOKEN or CONTENTSTACK_PREVIEW_HOST is set (not both), indicating incomplete preview configuration.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

@@ -220,3 +220,32 @@ describe('plugin provisioning wiring — env-vars.json (git-ignored .env.local)'
     expect(out).not.toContain('Provisioned');
   });
 });
+
+describe('plugin provisioning wiring — anti-patterns.json (feeds check_anti_patterns)', () => {
+  it('copies anti-patterns.json verbatim into .epam/ (not keyed by codeline, unlike codeline-facts.json)', () => {
+    const { wt, configDir } = makeFixture();
+    const rules = JSON.stringify([{ id: 'example', matchPattern: 'foo', message: 'bar' }]);
+    writeFileSync(join(configDir, 'anti-patterns.json'), rules);
+
+    const out = runSnippet('gotransit', wt, configDir);
+
+    const provisioned = join(wt, '.epam/anti-patterns.json');
+    expect(existsSync(provisioned)).toBe(true);
+    expect(readFileSync(provisioned, 'utf8')).toBe(rules);
+    expect(out).toContain("Provisioned .epam/anti-patterns.json for 'gotransit'");
+  });
+
+  it('is a silent no-op when anti-patterns.json does not exist', () => {
+    const { wt, configDir } = makeFixture();
+    const out = runSnippet('gotransit', wt, configDir);
+    expect(existsSync(join(wt, '.epam/anti-patterns.json'))).toBe(false);
+    expect(out).not.toContain('Provisioned .epam/anti-patterns.json');
+  });
+
+  it('is a silent no-op when EPAM_PROJECT_CONFIG_DIR is unset', () => {
+    const { wt } = makeFixture();
+    const out = runSnippet('gotransit', wt, null);
+    expect(existsSync(join(wt, '.epam/anti-patterns.json'))).toBe(false);
+    expect(out).not.toContain('Provisioned .epam/anti-patterns.json');
+  });
+});

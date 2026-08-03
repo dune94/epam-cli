@@ -1,0 +1,64 @@
+{
+  "message_id": "msg-1785781966535",
+  "timestamp": "2026-08-03T18:32:46+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 1,
+          "description": "The diff contains NO changes to any source file — only .epam/codeline-facts.json and .epam/settings.json (tooling metadata) were added. The prescribed root-cause fix (replace static useMemo with useState + useEffect subscribing to Contentstack Live Preview onEntryChange, add a ContentstackProvider component) was not implemented at all. A search for onEntryChange|onLiveUpdate|live_preview|live-preview-utils|LivePreview|onLivePreview across all of src/ returned zero matches. Without a reactive Provider, useContent (consumed by 236+ components) always returns static SSR content — none of the five verification criteria can be met.",
+          "suggestedFix": "Implement the prescribed minimal fix: add a ContentstackProvider component using useState(defaultContent) + useEffect that subscribes to onEntryChange(() => setContent(livePreviewData)). Export it and wrap the app with it.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 46,
+          "description": "The options object passed to contentstack.Stack(options) contains api_key, delivery_token, environment, branch, and fetchOptions only — no live_preview configuration block. The prescribed fix requires adding live_preview: { management_token, enable: true } to the Stack initialization options so the SDK polls/websockets for preview changes. Without this, the Contentstack SDK never processes live preview data and every downstream consumer is starved of preview content. This is the root cause identified in the RCA and it remains completely unaddressed.",
+          "suggestedFix": "Add live_preview: { management_token: CONTENTSTACK_MANAGEMENT_TOKEN, enable: true } to the options object (conditionally spread like fetchOptions). Destructure CONTENTSTACK_MANAGEMENT_TOKEN from process.env and validate it in the env-check block.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.ts",
+          "line": 4,
+          "description": "useContent calls useContext(ContentstackContext) but there is no reactive Provider component supplying a changing value. The hook will always return the static value passed at render time. Even if Contentstack live preview events fired, there is no state setter to trigger re-renders of the 236+ consumers. The hook cannot propagate live preview updates as-is — this is a direct consequence of the missing ContentstackProvider.",
+          "suggestedFix": "This resolves automatically once the ContentstackProvider with useState/setContent is implemented and wraps the application. No direct change needed here if the Provider is correct.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/",
+          "line": 0,
+          "description": "No vitest unit tests exist for the Live Preview feature. The test/unit/ directory does not exist at all (confirmed via list_files — zero files returned). Review criteria require new features to have corresponding vitest unit tests mirroring the src/ path. At minimum, tests should verify: (1) Stack options include a live_preview block with enable=true and management_token, (2) ContentstackProvider re-renders consumers when onEntryChange fires, (3) content state merges incoming preview data correctly, (4) when Live Preview is not active, the page displays published content.",
+          "suggestedFix": "Create test/unit/context/contentstackContext.test.tsx (or mirrored path per project convention) with vitest tests covering the four scenarios above. Use resolve_test_file to find the correct co-located path before creating.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": ".epam/codeline-facts.json",
+          "line": 1,
+          "description": "The entire diff consists of only two .epam/ metadata files (codeline-facts.json and settings.json). No source code, no tests, no config changes were made. This change does not address the prescribed root cause in any way — it is tooling metadata only. Per the CONCISION & REUSE rules, a change that does not address the prescribed root cause is a blocker regardless of what else it does.",
+          "suggestedFix": "Remove the .epam/ metadata files from this PR (or move them to a separate tooling PR) and implement the actual prescribed minimal fix in src/context/contentstackContext.tsx and src/services/contentstack.ts.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

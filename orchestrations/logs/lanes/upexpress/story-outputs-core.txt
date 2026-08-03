@@ -1,0 +1,6 @@
+review-AMSD-2041.json
+src/interface/contentstack.spec.ts
+src/interface/contentstack.ts
+src/services/__tests__/contentstack.spec.ts
+src/services/contentstack.spec.ts
+src/services/contentstack.ts

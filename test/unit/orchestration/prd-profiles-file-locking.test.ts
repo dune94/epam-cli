@@ -313,3 +313,47 @@ describe('spec-mode-runner.js acquireFileLock/releaseFileLock — REAL execution
     }
   });
 });
+
+/**
+ * LOCK SCOPE — the intent documented at the top of this file was never asserted.
+ *
+ * The lock must wrap ONLY the disk write, never the slow agent call that precedes it.
+ * Widen it by a few lines and correctness tests all still pass — mutual exclusion still
+ * holds, no writes interleave — while every parallel lane silently queues behind whichever
+ * lane is mid-LLM-call. A 3-lane spec pass then costs 3× its wall time and looks, from
+ * every existing assertion, entirely healthy.
+ *
+ * This is the shape that cost a 48-minute spec pass to diagnose by hand (2026-08-03).
+ * The lock turned out NOT to be the cause there — it is correctly scoped today — but
+ * nothing was stopping it from becoming the cause tomorrow.
+ */
+describe('lock SCOPE — never held across an agent call', () => {
+  const specSrc = readFileSync(
+    join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'), 'utf8');
+
+  it('every acquireFileLock/releaseFileLock region contains no agent invocation', () => {
+    const offenders: string[] = [];
+    // Slow operations that must never sit inside a held lock.
+    const SLOW = /\b(await\s+run(Claude|AgentForJson|SpecAgent)|runCodeGraphDetective|regenerateVcViaOpenspec|reviewVcViaSpeckit|execSync\(\s*['"`][^'"`]*epam)/;
+    let idx = specSrc.indexOf('acquireFileLock(');
+    while (idx > -1) {
+      const release = specSrc.indexOf('releaseFileLock(', idx);
+      if (release > -1) {
+        const region = specSrc.slice(idx, release);
+        const hit = SLOW.exec(region);
+        if (hit) {
+          const line = specSrc.slice(0, idx).split('\n').length;
+          offenders.push(`  spec-mode-runner.js:${line} holds the lock across '${hit[1]}'`);
+        }
+      }
+      idx = specSrc.indexOf('acquireFileLock(', idx + 1);
+    }
+    expect(
+      offenders,
+      'A lock held across an agent call serialises every parallel lane while every ' +
+        'correctness assertion still passes — the failure is invisible except as wall time:\n' +
+        offenders.join('\n'),
+    ).toEqual([]);
+  });
+
+});

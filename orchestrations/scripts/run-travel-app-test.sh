@@ -23,7 +23,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 PRD_FILE="$AUTOMATION_DIR/travel-app-prd.json"
-OUTPUT_DIR="/tmp/skyscanner-app"
+# Target app is an input, never a literal client path.
+APP_NAME="${APP_NAME:-orchestration-test-app}"
+OUTPUT_DIR="${OUTPUT_DIR:-/tmp/${APP_NAME}}"
 
 if [ ! -f "$PRD_FILE" ]; then
     echo "ERROR: $PRD_FILE not found" >&2
@@ -45,7 +47,7 @@ mkdir -p "$OUTPUT_DIR"
 
 echo ""
 echo "============================================"
-echo "  Skyscanner Mini-App Orchestration Test"
+echo "  ${APP_NAME} Orchestration Test"
 echo "  Phase: $PHASE"
 echo "  Output: $OUTPUT_DIR"
 echo "============================================"
@@ -53,7 +55,7 @@ echo ""
 
 export RESET_STORIES=true
 export PRD_FILE="$PRD_FILE"
-export OUTPUT_LOGS="$AUTOMATION_DIR/logs/skyscanner"
+export OUTPUT_LOGS="$AUTOMATION_DIR/logs/${APP_NAME}"
 # Autonomous test run — never pause indefinitely waiting for operator intervention.
 # A timed-out story is skipped and logged; the run continues.
 export EPAM_PAUSE_ON_TIMEOUT=false

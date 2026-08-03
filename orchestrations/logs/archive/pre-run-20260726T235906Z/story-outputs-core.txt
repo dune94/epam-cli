@@ -1,0 +1,6 @@
+orchestrations/logs/phase-improvements/pre-core.md
+orchestrations/logs/profiles-audit.jsonl
+package-lock.json
+package.json
+src/hello.test.ts
+src/hello.ts

@@ -1,0 +1,72 @@
+{
+  "message_id": "msg-1785423995620",
+  "timestamp": "2026-07-30T15:06:35+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 134,
+          "description": "The public API functions (getEntry, getSingleEntry, getSingletonEntry, findSingletonEntry) do not accept or propagate the `includeDraft` flag. While `ICreateQueryConfig` and `ICreateEntryConfig` have the field, the public interfaces `IContentstackGetEntry`, `IContentstackGetSingleEntry`, and `IContentstackGetSingletonEntry` do not include `includeDraft`, and none of the public functions pass it through to the factory. The flag is unreachable from any call site — the feature is dead code.",
+          "suggestedFix": "Add `includeDraft?: boolean` to `IContentstackGetEntry` (and by extension its descendants). In each public function (getEntry, getSingleEntry, getSingletonEntry, findSingletonEntry), destructure `includeDraft` and pass it through to `factory.createContentTypeQuery({ ..., includeDraft })` / `createContentTypeEntryQuery({ ..., includeDraft })`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 134,
+          "description": "No `getStaticProps` integration found — search for `context.preview` / `previewData` returned zero matches across the entire `src/` tree. The prescribed fix requires propagating `context.preview` from Next.js getStaticProps through to the factory methods. Without this, no page can ever activate draft mode, so all three acceptance criteria fail: draft content will never be served in preview, and the 'update without rebuild' criterion is untestable.",
+          "suggestedFix": "In each page's getStaticProps (or a shared getStaticProps helper), read `context.preview` (and/or `context.previewData`) and pass `includeDraft: !!context.preview` through to the content-fetching calls (getEntry/getSingleEntry/getSingletonEntry/findSingletonEntry).",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 136,
+          "description": "Uses `query.addParam(\"include_draft\", \"true\")` instead of the Contentstack SDK's native `query.includeDraft()` method as prescribed. The SDK's `.includeDraft()` is the documented, supported mechanism for draft content retrieval and may perform additional internal logic beyond a raw param. Hand-rolling the param is both a deviation from the prescribed fix and a fragility risk if the SDK changes its internal param naming.",
+          "suggestedFix": "Replace `query.addParam(\"include_draft\", \"true\")` with `query.includeDraft()` in both `createContentTypeQuery` and `createContentTypeEntryQuery`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 62,
+          "description": "Stack initialization reads `live_preview` config from env vars only (management_token + host). The prescribed fix requires also reading preview hash, content_type_uid, and uid from request query params (provided by the Contentstack Live Preview SDK). Without these runtime params, the SDK cannot correlate the preview session with the correct draft entry, so live preview updates (AC #2: 'updates without requiring a rebuild') will not work.",
+          "suggestedFix": "Integrate the Live Preview SDK's `live_preview` config to accept runtime query params (preview_hash/content_type_uid/entry_uid). This typically involves passing request query params through to the Stack or using the Contentstack Live Preview SDK's `getLivePreview` / middleware to inject them.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/services/contentstack.test.ts",
+          "line": 0,
+          "description": "No unit tests found for the contentstack service — no test file mirrors `src/services/contentstack`. The review criteria require new features to have corresponding vitest unit tests in test/unit/ mirroring the src/ path. None of the three verification criteria (draft in preview, update without rebuild, published outside preview) are covered by tests.",
+          "suggestedFix": "Add `test/unit/services/contentstack.test.ts` with tests verifying: (1) when `includeDraft` is true, the query calls `.includeDraft()` (or equivalent); (2) when `includeDraft` is false/absent, `.includeDraft()` is NOT called; (3) the public functions propagate `includeDraft` through to the factory. Mock the Stack/Query to assert the call.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 134,
+          "description": "In `createContentTypeQuery`, `query.toJSON()` is called immediately after the `includeDraft` check but BEFORE `setCommonConfig`, `where`, `skip`, `limit`, and `count` are applied. The original code had `toJSON()` before these too, but the ordering means `includeDraft()` (or addParam) is called before `toJSON()`. If the SDK's `.includeDraft()` must be chained after `.toJSON()`, this could silently fail. Verify SDK documentation for correct chaining order.",
+          "suggestedFix": "Verify the Contentstack SDK's expected method chaining order. If `.includeDraft()` should be called after `.toJSON()`, move it. If order doesn't matter, add a comment confirming this.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

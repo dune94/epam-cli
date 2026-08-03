@@ -1,6 +1,6 @@
 {
   "phase": "core",
-  "updatedAt": "2026-07-31T12:31:32-04:00",
+  "updatedAt": "2026-08-03T11:24:32-04:00",
   "steps": [
     {"id":"1","label":"Step 1: Specification pass","status":"pass","detail":""},
     {"id":"1a","label":"  openspec (elaboration)","status":"pass","detail":"z-ai/glm-5.2, 1 stor(y/ies)"},
@@ -12,7 +12,7 @@
     {"id":"6","label":"Step 6: mkdir src/ dirs","status":"pass","detail":""},
     {"id":"7","label":"Step 7: PRD model coordinator","status":"pass","detail":""},
     {"id":"8","label":"Step 8: Main-branch stories","status":"pass","detail":""},
-    {"id":"9","label":"Step 9: Auto-commit","status":"skip","detail":"already clean"},
+    {"id":"9","label":"Step 9: Auto-commit","status":"pass","detail":""},
     {"id":"10","label":"Step 10: TC writer gate","status":"skip","detail":"brownfield — VCs + bug-reproduction gate instead"},
     {"id":"11","label":"Step 11: Skills coordinator audit","status":"pass","detail":""},
     {"id":"12","label":"Step 12: Tools coordinator audit","status":"pass","detail":""},

@@ -28,6 +28,8 @@ LOG_DIR="$AUTOMATION_DIR/logs"
 source "$SCRIPT_DIR/lib/tc-writer-gate.sh"
 # shellcheck source=lib/story-guards.sh
 source "$SCRIPT_DIR/lib/story-guards.sh"
+source "$SCRIPT_DIR/lib/flags.sh"
+source "$SCRIPT_DIR/lib/project-tools.sh"
 # shellcheck source=lib/git-ops.sh
 source "$SCRIPT_DIR/lib/git-ops.sh"
 PROGRESS_LOG="$LOG_DIR/progress.txt"
@@ -929,7 +931,7 @@ resolve_planner_settings() {
         return
     fi
 
-    [ "${SKIP_PLAN_THEN_EXECUTE:-false}" = "true" ] && return
+    is_truthy "${SKIP_PLAN_THEN_EXECUTE:-}" && return
 
     local _tier
     _tier=$(classify_ladder_tier "$story_id")
@@ -1308,7 +1310,7 @@ check_plan_mode_required() {
     local story_id="$1"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
 
-    [ "${SKIP_PLAN_MODE:-false}" = "true" ] && return 1
+    is_truthy "${SKIP_PLAN_MODE:-}" && return 1
 
     local estimated_hours dep_count plan_flag
     estimated_hours=$(jq -r --arg id "$story_id" \
@@ -1661,7 +1663,20 @@ build_implementation_prompt() {
     local description=$(echo "$story_json" | jq -r '.description')
     local acceptance_criteria=$(echo "$story_json" | jq -r '.acceptanceCriteria | join("\n- ")')
     local technical_notes=$(echo "$story_json" | jq -r '.technicalNotes // empty')
-    local files=$(echo "$story_json" | jq -r '.technicalNotes.files // [] | join(", ")')
+    # Prefer THIS lane's resolved paths. The flat technicalNotes.files array is shared
+    # by every codeline, but separate repositories spell the same file differently —
+    # live 2026-08-03 the detective's root-cause fix site resolved on one lane of three,
+    # and the two writers handed a non-existent path could not do the work they were
+    # then blocked for. spec-mode-runner resolves each declared path against each
+    # codeline's own checkout and persists technicalNotes.perCodeline.<codeline>.files;
+    # falling back to the flat array keeps older PRDs working unchanged.
+    local _cl_name="${CODELINE_NAME:-$(echo "$story_json" | jq -r '.codeline // empty')}"
+    local files=""
+    if [ -n "$_cl_name" ]; then
+        files=$(echo "$story_json" | jq -r --arg cl "$_cl_name" \
+            '(.technicalNotes.perCodeline[$cl].files // []) | join(", ")')
+    fi
+    [ -n "$files" ] || files=$(echo "$story_json" | jq -r '.technicalNotes.files // [] | join(", ")')
     local dependencies=$(echo "$story_json" | jq -r \
         '(.dependencies // .technicalNotes.dependsOn // []) | join(", ")')
 
@@ -1706,13 +1721,19 @@ build_implementation_prompt() {
     # Codeline facts (real, project-operator-curated gotchas — see the
     # Metrolinx codeline-context plugin's own docs) — injected DIRECTLY into
     # the prompt rather than left as an optional tool call. Built 2026-08-02:
-    # the metrolinx_codeline_facts plugin tool existed and was correct, but
+    # the codeline_facts plugin tool existed and was correct, but
     # across a full Writer Retest run the model called it exactly once
-    # (metrolinx_git_state) and never metrolinx_codeline_facts — the facts
+    # (git_state) and never codeline_facts — the facts
     # that would have told it the right token key never reached the model
     # that needed them. Relying on the model to spontaneously discover an
     # optional tool isn't working; injecting the same facts directly here
     # means every invocation sees them regardless of tool-calling behavior.
+    # Advertise whatever plugin tools THIS codeline registered (runtime discovery — no
+    # client tool name lives in this engine). Without this the tools are loaded and
+    # callable but the model is never shown them, so it never calls them.
+    local project_tools_block
+    project_tools_block=$(build_project_tools_block "$PROJECT_ROOT")
+
     local codeline_facts_block=""
     local _codeline_facts_file="${PROJECT_ROOT}/.epam/codeline-facts.json"
     if [ -f "$_codeline_facts_file" ]; then
@@ -2218,6 +2239,7 @@ $([ -n "$review_feedback" ] && printf '\n## Reviewer Feedback — ADDRESS THESE 
 $([ -n "$skill_note_block" ] && printf '%s\n' "$skill_note_block" || true)
 $([ -n "$verification_criteria" ] && printf '\n## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)\nThese are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:\n%s\n' "$verification_criteria" || true)
 $([ -n "$codeline_facts_block" ] && printf '%s\n' "$codeline_facts_block" || true)
+$([ -n "$project_tools_block" ] && printf '%s\n' "$project_tools_block" || true)
 $([ -n "$test_ownership_block" ] && printf '%s\n' "$test_ownership_block" || true)
 $([ -n "$codegraph_tool_block" ] && printf '\n%s\n' "$codegraph_tool_block" || true)
 $([ -n "$brownfield_test_policy" ] && printf '\n%s\n' "$brownfield_test_policy" || true)
@@ -4697,7 +4719,7 @@ $_test_tail"
 run_tsc_verification() {
     local story_id="$1"
     local output_file="${2:-/dev/null}"
-    [ "${SKIP_STORY_TSC_GATE:-0}" = "1" ] && return 0
+    is_truthy "${SKIP_STORY_TSC_GATE:-}" && return 0
     [ ! -f "$PROJECT_ROOT/tsconfig.json" ] && return 0
 
     # Skip when no .ts source files exist yet (scaffold phase creates structure but no source)
@@ -5891,7 +5913,7 @@ run_change_with_reviewer_retry() {
 run_diagnosis_groundedness_check() {
     local story_id="$1"
     local diagnosis="$2"
-    [ "${SKIP_DIAGNOSIS_GROUNDEDNESS_CHECK:-0}" = "1" ] && return 0
+    is_truthy "${SKIP_DIAGNOSIS_GROUNDEDNESS_CHECK:-}" && return 0
 
     local _dgc_script="${SCRIPT_DIR}/tools/diagnosis-groundedness-check.py"
     local _dgc_venv_python="${SCRIPT_DIR}/tools/.venv-deepeval/bin/python"
@@ -8461,7 +8483,7 @@ ${_trimmed_amendment}"
         # external test. Generates testCriteria in the PRD for sibling test
         # stories so the test agent has precise facts, not just abstract ACs.
         # Skipped for test stories themselves (they don't generate TCs).
-        if [ "$invoke_success" = true ] && [ "${SKIP_TC_WRITER:-0}" != "1" ]; then
+        if [ "$invoke_success" = true ] && ! is_truthy "${SKIP_TC_WRITER:-}"; then
             local _story_files_are_tests
             # grep -c ALREADY prints "0" on zero matches (its own count) while
             # also exiting 1 — combining that with `|| echo 0` double-prints
@@ -9936,7 +9958,7 @@ main() {
 
     # Step 0.5: Pre-phase skill assessment (main process only, not worktree subprocesses)
     # Skip when phase_filter is empty — per-story invocations have no phase context
-    [ -z "$WORKTREE_MODE" ] && [ "${SKIP_SKILL_ASSESSMENT:-0}" != "1" ] && [ -n "$phase_filter" ] && run_pre_phase_assessment "$phase_filter"
+    [ -z "$WORKTREE_MODE" ] && ! is_truthy "${SKIP_SKILL_ASSESSMENT:-}" && [ -n "$phase_filter" ] && run_pre_phase_assessment "$phase_filter"
 
     # -- Parallel lane execution --
     # When not already in worktree mode, partition stories by agentGroup.

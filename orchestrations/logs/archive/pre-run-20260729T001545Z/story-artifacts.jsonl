@@ -1,0 +1,2 @@
+{"storyId":"SPAN-1","phase":"mock3_core","status":"attempt","elapsedMinutes":0.40,"costUsd":0.0128,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-28T23:04:50Z"}
+{"storyId":"SPAN-1","phase":"mock3_core","status":"completed","elapsedMinutes":0.51,"costUsd":0.0128,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-07-28T23:04:51Z"}

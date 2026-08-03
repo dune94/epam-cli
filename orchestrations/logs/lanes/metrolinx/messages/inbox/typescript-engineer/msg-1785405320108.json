@@ -1,0 +1,48 @@
+{
+  "message_id": "msg-1785405320108",
+  "timestamp": "2026-07-30T09:55:20+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 0,
+          "description": "No unit tests were added for the new ContentstackProvider component. The review criteria require that new features have corresponding unit tests mirroring the src/ path. The ContentstackProvider introduces live preview initialization, state management, and SDK callback subscription — all untested. The diff modified 30+ existing test files (import path changes only) but added zero new test files.",
+          "suggestedFix": "Add a test file (e.g., src/context/__tests__/ContentstackContext.spec.tsx) that verifies: (1) the provider renders children, (2) initial content is passed through context, (3) onEntryChange callback triggers a state update and re-render with new content, (4) cleanup calls unsubscribeOnEntryChange on unmount, (5) init failure is silently caught. Mock @contentstack/live-preview-utils with vi.fn()/jest.fn() for onEntryChange, unsubscribeOnEntryChange, and init.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 13,
+          "description": "The useEffect that syncs defaultContent into state (lines 30-32) can overwrite live preview updates. If the parent component re-renders and passes a new defaultContent object reference (even with identical content), setContent(defaultContent) will replace the live-preview-patched content with the stale SSR/SSG content, discarding any in-flight live edits. This directly undermines acceptance criterion 5 (subsequent updates continue to arrive over time).",
+          "suggestedFix": "Remove the useEffect that syncs defaultContent on prop change, or guard it so it only runs on mount. Since useState already initializes with defaultContent, the only scenario where re-syncing is needed is if defaultContent genuinely changes after mount — in which case consider using a ref to track whether live preview has already applied updates and skip the overwrite.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 10,
+          "description": "footer?: [any] uses untyped any without an explanatory comment, violating TypeScript strict compliance. This was pre-existing in the old contentstackContext.tsx but is carried forward into the new file.",
+          "suggestedFix": "Replace [any] with a proper type (e.g., [IContentstackFooter] if such an interface exists) or add an inline comment explaining why any is used: footer?: [any]; // TODO: define IContentstackFooter interface.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

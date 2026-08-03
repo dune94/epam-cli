@@ -1,0 +1,48 @@
+{
+  "message_id": "msg-1785665669904",
+  "timestamp": "2026-08-02T10:14:29+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 106,
+          "description": "setCommonConfig does not forward live_preview to Contentstack queries. AC3 explicitly states the ICommonContentstackConfig.live_preview field exists 'so preview context (live_preview/preview_hash) can flow through to Contentstack queries in setCommonConfig.' The interface field was added but setCommonConfig only destructures { referenceFieldPath, only, except } — live_preview is never read or passed to the query object. The field is dead code: preview context can never reach a Contentstack query, defeating the purpose of AC3.",
+          "suggestedFix": "In setCommonConfig, destructure live_preview from config and pass it to the query. For example: `const { referenceFieldPath, only, except, live_preview } = config;` then `if (live_preview) { query.addParam('live_preview', JSON.stringify(live_preview)); }` (or whatever the Contentstack SDK query API expects for preview context propagation). Add a corresponding unit test verifying that when live_preview is passed in config, it reaches the query.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 78,
+          "description": "`options as any` is an untyped any without an explanatory comment, violating TypeScript strict compliance. The cast was added because the contentstack SDK's TypeScript types likely don't include live_preview in its Stack options type, but per review criteria any untyped any requires an explanatory comment.",
+          "suggestedFix": "Replace `options as any` with a properly typed cast or add an inline comment explaining why the cast is necessary, e.g. `// contentstack SDK types don't include live_preview; cast to satisfy TS` or define a local type extension: `contentstack.Stack(options as Parameters<typeof contentstack.Stack>[0] & { live_preview?: { enable: boolean; preview_token: string } })`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/interface/contentstack.ts",
+          "line": 9,
+          "description": "The live_preview type in ICommonContentstackConfig includes enable, preview_hash, live_preview, and content_type_uid — but not preview_token. While query-level preview context may differ from Stack-init options, this creates an inconsistency: the options object's live_preview has preview_token but the interface's live_preview does not. If preview_token ever needs to flow through queries, it would require another interface change.",
+          "suggestedFix": "Add `preview_token?: string` to the live_preview type in ICommonContentstackConfig for completeness and consistency, or document why it's intentionally excluded at the query level.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

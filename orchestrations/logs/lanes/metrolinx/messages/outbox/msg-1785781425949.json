@@ -1,0 +1,72 @@
+{
+  "message_id": "msg-1785781425949",
+  "timestamp": "2026-08-03T18:23:45+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 71,
+          "description": "The `options` object passed to `contentstack.Stack(options)` does NOT include a `live_preview` configuration block. The prescribed root-cause fix requires adding `live_preview: { enable: true, management_token: CONTENTSTACK_MANAGEMENT_TOKEN }` (conditionally spread) so the Contentstack SDK polls/receives preview updates. Without this, the SDK never processes live preview data and every downstream consumer is starved of preview content. Confirmed by reading the file — options contains only api_key, delivery_token, environment, branch, and fetchOptions. A search for `live_preview` across the entire codebase returned zero matches.",
+          "suggestedFix": "Add a `live_preview` block to the Stack options: `...(CONTENTSTACK_MANAGEMENT_TOKEN ? { live_preview: { management_token: CONTENTSTACK_MANAGEMENT_TOKEN, enable: true } } : {})`. Read CONTENTSTACK_MANAGEMENT_TOKEN from process.env alongside the other env vars.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.ts",
+          "line": 1,
+          "description": "`useContent` calls `useContext(ContentstackContext)` but there is no reactive Provider component supplying a changing value. The hook will always return the static SSR-provided default content. Even if Contentstack live preview events fired, there is no state setter to trigger re-renders of the 236+ consumers. The hook cannot propagate live preview updates as-is. Confirmed by reading the file — it imports from `context/contentstackContext` and uses `useContext` with no reactive source.",
+          "suggestedFix": "Create a `ContentstackProvider` component that wraps `useState(defaultContent)` and a `useEffect` subscribing to Contentstack Live Preview SDK's `onEntryChange` callback, calling `setContent(livePreviewData)` on each event. Wrap the app with this Provider so `useContext` returns reactive state.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 1,
+          "description": "The prescribed fix requires a `ContentstackProvider` component with `useState(defaultContent)` + `useEffect` subscribing to `onEntryChange`. The file does not exist at `src/context/ContentstackContext.tsx`. The actual context file (`contentstackContext`) exports a bare `createContext` with no Provider, no `useState`, no `useEffect`, and no `onEntryChange` subscription. A search for `onEntryChange`, `onLiveUpdate`, `LivePreview`, and `live-preview-utils` across the entire `src/` directory returned zero matches. Without a reactive Provider, none of the five acceptance criteria related to real-time content display can be met.",
+          "suggestedFix": "Implement the ContentstackProvider as prescribed: `const [content, setContent] = useState(defaultContent); useEffect(() => { onEntryChange(() => setContent(livePreviewData)); }, []);` Export both the context and the Provider component.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "package.json",
+          "line": 0,
+          "description": "The `@contentstack/live-preview-utils` dependency is not installed anywhere in the project. A search for `live-preview-utils`, `livePreviewUtils`, and `onEntryChange` across the entire project returned zero matches. Without this SDK, no client-side WebSocket-based Live Preview subscription can be established, making real-time content updates impossible.",
+          "suggestedFix": "Add `@contentstack/live-preview-utils` to package.json dependencies and import its `onEntryChange` (or equivalent) in the ContentstackProvider to subscribe to preview update events.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/",
+          "line": 0,
+          "description": "No vitest unit tests exist for the Live Preview feature. The `test/unit/` directory does not exist. Review criteria require new features to have corresponding vitest unit tests mirroring the src/ path. At minimum, tests should verify: (1) Stack options include a `live_preview` block with `enable: true` and `management_token`, (2) ContentstackProvider re-renders consumers when `onEntryChange` fires, (3) content state merges incoming preview data correctly, (4) the page renders published content when Live Preview is not active.",
+          "suggestedFix": "Create `test/unit/context/ContentstackContext.test.tsx` and `test/unit/services/contentstack.test.ts` with vitest tests covering the scenarios above. Ensure the total test count does not decrease.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "GIT DIFF",
+          "line": 0,
+          "description": "The diff does not address the prescribed root cause. The GIT DIFF contains only `.epam/codeline-facts.json` and `.epam/settings.json` — tooling config files. None of the four relevant source files (src/context/ContentstackContext.tsx, src/hooks/useContent.ts, src/services/contentstack.ts, src/interface/content/contentCard.ts) were modified. git_state confirms the working tree is clean with no changed files. The prescribed minimal fix — replacing the static useMemo with useState + useEffect subscribing to onEntryChange, and adding live_preview config to the Stack initialization — was not implemented at all.",
+          "suggestedFix": "Implement the prescribed minimal fix: (1) Add `live_preview: { management_token, enable: true }` to the Stack options in src/services/contentstack.ts, (2) Create a ContentstackProvider with useState + useEffect + onEntryChange subscription in src/context/ContentstackContext.tsx, (3) Add corresponding vitest unit tests.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

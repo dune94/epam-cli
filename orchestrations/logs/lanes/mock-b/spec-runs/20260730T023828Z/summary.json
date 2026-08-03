@@ -1,0 +1,65 @@
+{
+  "runId": "20260730T023828Z",
+  "phase": "mock3_core",
+  "startedAt": "2026-07-30T02:38:58.394Z",
+  "stories": [
+    {
+      "storyId": "SPAN-1",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "notes": "Trivial string replacement with clear AC — no elaboration needed. Speckit should verify no other consumers reference 'hello world', no snapshot tests or docs would break, and consider whether the value should be a named constant. OpenSpec adds no value here.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: getGreeting() returns wrong value. No code block injected, so locationHint is empty. VCs derived from both ACs and description; implementation-prescribing language in AC2 ('updated to match') is replaced with the observable outcome (tests pass).",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-30T02:41:19.403Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Modified AC2: removed implementation-prescribing phrase 'updated to match the new value' and replaced with the observable outcome (test passes). Added AC4: the description requires changing from 'hello world' to 'hello dolly' in every affected codeline; an AC ensuring no stale 'hello world' remains catches missed updates. Flagged that the description references 'each codeline named on this story' but no codelines are enumerated in the story context — this ambiguity means verification cannot confirm completeness across codelines.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-30T02:41:44.972Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "needs_review",
+        "reviewNotes": "Speckit provided meaningful value: cleaned prescriptive language from AC2, added AC4 (no stale 'hello world' remains) which directly addresses the 'every affected codeline' requirement, and correctly flagged the critical scope ambiguity — the story references codelines that are not enumerated, making completeness verification impossible. OpenSpec added negligible value on this trivial story (coordinator predicted this). No overlap between agents. However, a key discrepancy exists: Speckit claims it modified AC2 to remove implementation-prescribing language, yet acceptanceChanged is false — the AC text may still contain 'updated to match the new value'. More importantly, the scope ambiguity Speckit identified cannot be resolved by spec agents; a human must enumerate which codelines are in scope before AC4 can be verified. Without that, the story's core requirement ('every affected codeline') is untestable.",
+        "qualityScore": 0.72,
+        "flags": [
+          "scope_ambiguity: story requires changing greeting 'in every affected codeline' but no codelines are enumerated — verification cannot confirm completeness",
+          "agent_contribution_mismatch: speckit reports modifying AC2 but acceptanceChanged is false — delta application may have failed or notes are inaccurate",
+          "openspec_low_value: coordinator correctly predicted OpenSpec would add no value; consider skipping for similarly trivial stories to save tokens"
+        ],
+        "reviewedAt": "2026-07-30T02:42:04.281Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1,
+      "speckit": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 2,
+    "coordinatorReviewCompleted": true,
+    "approved": 0,
+    "needsReview": 1
+  },
+  "completedAt": "2026-07-30T02:42:14.968Z",
+  "storyCount": 1
+}

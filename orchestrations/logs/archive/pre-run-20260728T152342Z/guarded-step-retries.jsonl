@@ -1,0 +1,4 @@
+{"timestamp":"2026-07-28T13:31:07.832Z","step":"ac-review","storyId":"AMSD-2041","runId":"20260728T131424Z","agent":"openspec","attempts":3,"outcome":"reverted","reason":"Description promises real-time preview behavior but acceptanceCriteria is empty — add measurable ACs matching the described functionality","violationTypes":["content_quality"],"promptVersion":"4767d56"}
+{"timestamp":"2026-07-28T13:33:40Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260728T131424Z","promptVersion":"4767d56"}
+{"timestamp":"2026-07-28T13:46:41.584Z","step":"ac-review","storyId":"AMSD-2041","runId":"20260728T131424Z","agent":"openspec","attempts":2,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"4767d56"}
+{"timestamp":"2026-07-28T13:52:16Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260728T131424Z","promptVersion":"4767d56"}

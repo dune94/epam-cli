@@ -1,0 +1,32 @@
+{
+  "message_id": "msg-1785781406128",
+  "timestamp": "2026-08-03T18:23:26+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 1,
+          "description": "No unit tests were added for the new live_preview configuration. The diff adds 7 lines of new functionality to src/services/contentstack.ts (the conditional live_preview options block) but the existing test file has zero tests covering it. Search for 'live_preview', 'CONTENTSTACK_PREVIEW', and 'livePreview' in the test file returned no matches. The test file already has a 'contentstack fetch timeout' describe block that tests the options object via require('../contentstack.ts') and testedModule.options — the exact pattern needed for live_preview option tests. Per review criteria #2, new features must have corresponding unit tests. At minimum, three test scenarios are required: (1) live_preview block present with correct management_token, host, and enable=true when CONTENTSTACK_PREVIEW_ENABLE='true'; (2) live_preview absent from options when CONTENTSTACK_PREVIEW_ENABLE is not 'true'; (3) live_preview.host uses CONTENTSTACK_PREVIEW_HOST when provided, falling back to 'api.contentstack.io' when empty.",
+          "suggestedFix": "Add a 'contentstack live preview' describe block to src/services/__tests__/contentstack.spec.ts mirroring the existing 'contentstack fetch timeout' pattern. Add tests: (1) set CONTENTSTACK_PREVIEW_ENABLE='true', CONTENTSTACK_PREVIEW_HOST='preview.contentstack.io', CONTENTSTACK_PREVIEW_MANAGEMENT_TOKEN='mgmt_token', require the module, assert testedModule.options.live_preview equals { enable: true, host: 'preview.contentstack.io', management_token: 'mgmt_token' }; (2) set CONTENTSTACK_PREVIEW_ENABLE='' (or unset), require the module, assert testedModule.options does not contain live_preview; (3) set CONTENTSTACK_PREVIEW_ENABLE='true', CONTENTSTACK_PREVIEW_HOST='', CONTENTSTACK_PREVIEW_MANAGEMENT_TOKEN='token', require the module, assert testedModule.options.live_preview.host equals 'api.contentstack.io' (the fallback).",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

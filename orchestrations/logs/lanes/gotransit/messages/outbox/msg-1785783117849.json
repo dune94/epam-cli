@@ -1,0 +1,72 @@
+{
+  "message_id": "msg-1785783117849",
+  "timestamp": "2026-08-03T18:51:57+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 96,
+          "description": "The ContentstackProvider calls applyLivePreviewQuery on hash/message change but NEVER re-fetches content or calls setContent with updated data. applyLivePreviewQuery only calls Stack.livePreviewQuery() — it does not retrieve new content. The only setContent call is in the separate useEffect that syncs defaultContent prop changes. As a result, the context value never updates with draft/preview content, and all 236+ useContent consumers continue rendering the original published content. This fails all three verification criteria: (1) draft content is never displayed during a live-preview session, (2) published content is shown (but only because nothing changes, not because of a deliberate fallback), and (3) subsequent edits never appear without a page reload. The prescribed fix explicitly states: 'call the Stack query again with Stack.livePreviewQuery() applied, and setContent with the result.'",
+          "suggestedFix": "After calling applyLivePreviewQuery, re-fetch content from the Stack (e.g., re-invoke the same queries used to populate defaultContent, or call the Contentstack SDK's live preview callback to receive updated content) and call setContent with the result so the context propagates draft content to all consumers.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 86,
+          "description": "The 'message' event listener calls handleHashChange, which re-parses window.location.hash. Contentstack's Live Preview SDK sends real-time updates via postMessage with content data in the message payload — it does NOT change window.location.hash. So this listener will re-parse the same hash and produce no update. The prescribed fix states the provider should detect URL parameter changes AND re-fetch via the Stack; the message listener as implemented does neither correctly.",
+          "suggestedFix": "Either register the Contentstack SDK's built-in live preview callback (e.g., Stack.livePreview.onContentUpdate) to receive updated content and call setContent, or parse the message event's data payload (event.data) for Contentstack preview content rather than re-reading window.location.hash.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 60,
+          "description": "parseLivePreviewHash hand-rolls URL query-string parsing using URLSearchParams. An existing helper, parseQueryString (src/utils/url/parseQueryString.ts:15), already parses query strings and is used elsewhere in the codebase. Per concision-and-reuse rules, the existing helper should be reused instead of writing new parsing logic.",
+          "suggestedFix": "Reuse parseQueryString from utils/url/parseQueryString — pass the stripped hash string (without '#') to it, or adapt it if needed. Remove the custom parseLivePreviewHash implementation.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 103,
+          "description": "(Stack as any).livePreviewQuery(...) uses an untyped any cast without an explanatory comment. Per TypeScript strict compliance criteria, no untyped any is allowed without a comment explaining why. The Contentstack SDK types may not expose livePreviewQuery, but the cast should be documented.",
+          "suggestedFix": "Add an explanatory comment (e.g., '// Contentstack SDK types do not expose livePreviewQuery; cast required') or extend the module augmentation for the contentstack types.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 1,
+          "description": "No unit tests were added for the ContentstackContext.tsx changes. There are no tests verifying parseLivePreviewHash correctly extracts live_preview and content_type_uid from various hash formats, that ContentstackProvider calls applyLivePreviewQuery on hashchange, or that setContent is called with updated content. Per review criterion 2, new features must have corresponding unit tests mirroring the src/ path.",
+          "suggestedFix": "Add test file src/context/__tests__/ContentstackContext.spec.tsx covering parseLivePreviewHash variants, provider initialization, hashchange/message event handling, and content state updates.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 32,
+          "description": "CONTENTSTACK_PREVIEW_DEFAULT_HOST = 'api.contentstack.io' is a hardcoded endpoint URL defined in contentstack.ts. Per review criterion 6, all endpoint URLs must use named constants from src/config/constants.ts, not inline or service-level definitions.",
+          "suggestedFix": "Move CONTENTSTACK_PREVIEW_DEFAULT_HOST to src/config/constants.ts and import it in contentstack.ts.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

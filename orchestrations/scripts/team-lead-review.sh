@@ -48,6 +48,7 @@ AUTO_APPROVE="${AUTO_APPROVE:-false}"
 REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
 AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
+source "$SCRIPT_DIR/lib/project-tools.sh"
 ORCH_GATE_MODEL="${ORCH_GATE_MODEL:-z-ai/glm-5.2}"
 
 # Look up a model's HIGH-ladder successor (EPAM_MODEL_LADDER_HIGH is "from=to|...",
@@ -148,7 +149,7 @@ run_review_prompt() {
         EPAM_CLI="${EPAM_CLI:-epam}" \
         ORCH_JSON_RESULT="$_review_json_result" \
         AI_GATE_ALLOW_TOOLS=1 \
-        EPAM_ALLOWED_TOOLS="bash,read_file,list_files,search" \
+        EPAM_ALLOWED_TOOLS="bash,read_file,list_files,search${_review_plugin_tools:+,${_review_plugin_tools}}" \
         EPAM_MAX_TOOL_CALLS="${REVIEW_MAX_TOOL_CALLS:-8}" \
         EPAM_MAX_ITERATIONS="${REVIEW_MAX_ITERATIONS:-25}" \
         EPAM_REASONING_EFFORT="${REVIEW_REASONING_EFFORT:-high}" \
@@ -399,6 +400,14 @@ while IFS= read -r story_id; do
         _review_codegraph_tool="$SCRIPT_DIR/codegraph-agent-query.sh"
     fi
 
+    # The plugin tools THIS codeline registered — discovered, never listed inline.
+    # Both halves are required: the BLOCK tells the reviewer the tools exist, and the
+    # NAMES extend EPAM_ALLOWED_TOOLS so applyToolAllowlist() does not filter them out
+    # before the model sees them. Advertising without permitting (or permitting without
+    # advertising) leaves the tool exactly as dead as it was.
+    _review_project_tools_block="$(build_project_tools_block "$PROJECT_ROOT")"
+    _review_plugin_tools="$(project_tool_names "$PROJECT_ROOT")"
+
     # Build review prompt
     REVIEW_PROMPT="${REVIEW_PROFILE}
 
@@ -433,7 +442,7 @@ CONCISION & REUSE (blocker-level checks):
 - Do NOT approve an over-engineered fix just because it satisfies the AC wording.
 
 TEST COVERAGE VERIFICATION (grounded, not a visual skim — found live 2026-08-03,
-AMSD-2041: the reviewer claimed 2 of 3 required test scenarios were missing,
+Observed live: the reviewer claimed 2 of 3 required test scenarios were missing,
 TWICE in a row, against a diff that unambiguously contained all 3 as clearly-
 named \`it(...)\` blocks — a real, reproducible failure to verify a claim the
 tools below could have confirmed in one call):
@@ -451,6 +460,7 @@ tools below could have confirmed in one call):
   unverified guess.
 Do NOT read from external URLs.
 $([ -n "$_review_kb" ] && printf '\nLEARNED REVIEW RULES (from prior runs — apply these):\n%s\n' "$_review_kb" || true)
+$([ -n "${_review_project_tools_block:-}" ] && printf '%s\n' "${_review_project_tools_block}" || true)
 
 Respond with ONLY a JSON object (no markdown fences):
 {\"verdict\":\"approved\",\"issues\":[],\"summary\":\"...\"}

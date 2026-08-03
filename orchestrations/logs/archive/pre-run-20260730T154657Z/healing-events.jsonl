@@ -1,0 +1,3 @@
+{"ts":"2026-07-30T14:53:09Z","story_id":"AMSD-2041","retry":0,"rung":0,"target":"none","diagnosis":"Object passed to Contentstack SDK includes fields not in the SDK's Config type, causing TS2345.","patches_applied":0,"profile_updated":false}
+{"ts":"2026-07-30T14:55:22Z","story_id":"AMSD-2041","retry":1,"rung":0,"target":"none","diagnosis":"Missing closing brace in contentstack.ts line 385 causes TS1005 syntax error during tsc --noEmit.","patches_applied":0,"profile_updated":false}
+{"ts":"2026-07-30T15:09:22Z","story_id":"AMSD-2041","retry":3,"rung":1,"target":"none","diagnosis":"Import path casing mismatch: useContent.ts imports lowercase contentstackContext.tsx but file is ContentstackContext.tsx.","patches_applied":0,"profile_updated":false}

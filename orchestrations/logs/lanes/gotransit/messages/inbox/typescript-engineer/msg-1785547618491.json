@@ -1,0 +1,80 @@
+{
+  "message_id": "msg-1785547618491",
+  "timestamp": "2026-08-01T01:26:58+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 48,
+          "description": "ContentstackProvider still uses useMemo to freeze defaultContent at initial render. The context never updates after mount, so no consumer (236+ components via useContent) can receive live preview updates. The prescribed fix requires replacing useMemo with useState + useEffect that subscribes to Stack.livePreview.onContentUpdate and calls setContent with the updated content object. Without this, all acceptance criteria related to real-time draft preview are unmet.",
+          "suggestedFix": "Replace useMemo with useState for content state. Add a useEffect that registers Stack.livePreview.onContentUpdate (or equivalent SDK callback) to call setContent with the updated entry. Expose setContent if needed for external trigger.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/interface/contentstack.ts",
+          "line": 0,
+          "description": "No includeDraft field exists on IContentstackGetEntry, IContentstackGetSingleEntry, IContentstackGetSingletonEntry, ICreateQueryConfig, or ICreateEntryConfig. The public-facing service functions (getEntry, getSingleEntry, getSingletonEntry, findSingletonEntry) do not accept or propagate includeDraft to the factory. Without this, draft content can never be fetched — the preview site will only show published content, failing the core acceptance criterion that unpublished draft entries render in the preview.",
+          "suggestedFix": "Add includeDraft?: boolean to IContentstackPageConfig (or each relevant interface). In the service functions, when includeDraft is true, call query.addParam('include_draft', 'true') on the query before find/fetch.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 0,
+          "description": "No livePreview callback registration exists anywhere in the codebase. The live_preview config is present in the options object (partially addressing the SDK initialization root cause), but nothing registers Stack.livePreview.onContentUpdate or @contentstack/live-preview-utils onEntryUpdate to actually call setContent. Without this registration, the context never updates reactively, and all acceptance criteria related to live preview displaying real-time edits are unmet.",
+          "suggestedFix": "Register the Contentstack SDK's livePreview callback at the application bootstrap level (e.g., _app.tsx or ContentstackProvider). The callback should call setContent with the updated content object so consumers re-render with draft content.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/",
+          "line": 0,
+          "description": "No vitest unit tests were added for the live preview / includeDraft functionality. Grep across test/unit/ for 'live_preview', 'livePreview', 'includeDraft', 'include_draft', 'ContentstackContext', 'ContentstackProvider' returned zero matches. Per review criteria, new features must have corresponding vitest unit tests in test/unit/ mirroring the src/ path. There are zero tests verifying that includeDraft: true causes addParam('include_draft', 'true'), that setContent updates the context and triggers re-renders, or that the initial state matches defaultContent.",
+          "suggestedFix": "Add test/unit/services/contentstack.test.ts verifying includeDraft propagation. Add test/unit/context/ContentstackContext.test.ts verifying setContent updates context, initial state matches defaultContent, and livePreview callback triggers re-render.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 62,
+          "description": "The live_preview.enable is conditionally set via CONTENTSTACK_PREVIEW_TOKEN ? true : false. While this is reasonable, the CONTENTSTACK_PREVIEW_HOST is included in the config but there is no validation that it is set when preview is enabled. If the token is present but the host is empty, the SDK may silently fail to connect to the preview service, violating the acceptance criterion that editors see a clear error when draft preview cannot be displayed.",
+          "suggestedFix": "Add a validation check: if CONTENTSTACK_PREVIEW_TOKEN is set but CONTENTSTACK_PREVIEW_HOST is empty, log a warning or throw a ConfigError so the misconfiguration is visible.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 38,
+          "description": "The context interface only exposes { content: IContentstackContent } with no setContent or isPreviewEnabled. Even if the provider were updated to use useState, consumers cannot trigger content updates or check whether preview mode is active. This limits the ability to display a clear error/unavailable state when draft preview cannot be displayed (acceptance criterion 4).",
+          "suggestedFix": "Extend the context to include isPreviewEnabled: boolean and optionally setContent, so consumers can conditionally render preview status indicators.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 1,
+          "description": "The file has eslint-disable for @typescript-eslint/no-explicit-any at the top level. While this is a pre-existing issue, the catch blocks (lines ~150, ~180, ~210) use `catch (e: any)` without an explanatory comment, which violates the TypeScript strict compliance criterion requiring no untyped any without an explanatory comment.",
+          "suggestedFix": "Type catch blocks as `catch (e: unknown)` and use `e instanceof Error` checks, or add an explanatory comment justifying the use of any.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

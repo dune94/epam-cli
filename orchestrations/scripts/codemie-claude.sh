@@ -18,6 +18,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/flags.sh"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
@@ -325,7 +326,7 @@ check_plan_mode_required() {
     local story_id="$1"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
 
-    [ "${SKIP_PLAN_MODE:-false}" = "true" ] && return 1
+    is_truthy "${SKIP_PLAN_MODE:-}" && return 1
 
     local estimated_hours dep_count plan_flag
     estimated_hours=$(jq -r --arg id "$story_id" \
@@ -1488,7 +1489,7 @@ main() {
     fi
 
     # Step 0.5: Pre-phase skill assessment (main process only, not worktree subprocesses)
-    [ -z "$WORKTREE_MODE" ] && [ "${SKIP_SKILL_ASSESSMENT:-0}" != "1" ] && run_pre_phase_assessment "$phase_filter"
+    [ -z "$WORKTREE_MODE" ] && ! is_truthy "${SKIP_SKILL_ASSESSMENT:-}" && run_pre_phase_assessment "$phase_filter"
 
     # -- Parallel lane execution --
     # When not already in worktree mode, partition stories by agentGroup.

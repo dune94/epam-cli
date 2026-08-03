@@ -1,0 +1,179 @@
+{
+  "id": "jira-sourced-1785553416419",
+  "title": "Metrolinx Brownfield — Jira-sourced",
+  "version": "1.0.0",
+  "lastUpdated": "2026-08-01",
+  "project": {
+    "name": "metrolinx",
+    "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
+    "stack": {
+      "language": "TypeScript",
+      "runtime": "Node.js 20",
+      "framework": "Next.js",
+      "testing": "jest",
+      "cms": "Contentstack",
+      "devEnvironment": "Ubuntu WSL2"
+    },
+    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
+    "outputDirs": [
+      {
+        "codeline": "gotransit",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+      },
+      {
+        "codeline": "upexpress",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+      },
+      {
+        "codeline": "metrolinx",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+      }
+    ]
+  },
+  "configuration": {
+    "profilesPath": "profiles.json",
+    "autoCommit": false,
+    "requireTests": true,
+    "budget": 12,
+    "aiRuntime": {
+      "provider": "claude",
+      "defaultModel": "claude-sonnet-4-6"
+    }
+  },
+  "implementationOrder": {
+    "core": [
+      "AMSD-2041"
+    ]
+  },
+  "phasesConfig": {
+    "scaffold": {
+      "description": "Project scaffolding and TypeScript configuration",
+      "parallelWorktrees": false
+    },
+    "core": {
+      "description": "API client, CLI, and Express server implementation",
+      "parallelWorktrees": true
+    },
+    "ui_and_review": {
+      "description": "HTML dashboard and code review",
+      "parallelWorktrees": true
+    }
+  },
+  "stories": [
+    {
+      "id": "AMSD-2041",
+      "jiraKey": "AMSD-2041",
+      "title": "[GO, UP, MX] Live Preview of Content in CMS",
+      "description": "[GO, UP, MX] Live Preview of Content in CMS",
+      "acceptanceCriteria": [],
+      "codeline": "gotransit",
+      "status": "pending",
+      "completed": false,
+      "agentRole": "typescript-engineer",
+      "agentGroup": "main",
+      "effort": "low",
+      "estimate": 10,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). No acceptance criteria are provided and the description is too vague for an AI agent to implement without human clarification on preview mechanism, content scope, and protected-page behavior.",
+      "issueType": "Story",
+      "codelines": [
+        "gotransit",
+        "upexpress",
+        "metrolinx"
+      ],
+      "verificationCriteria": [
+        "A tester edits a draft content entry in the Contentstack CMS and, without reloading or restarting the running application, sees the updated text rendered on the application page where that content is displayed.",
+        "After a draft change is saved in the CMS, the updated content becomes visible in the application without requiring a new build, redeploy, or manual refresh by the user.",
+        "Every location in the running application that displays the edited piece of content shows the updated draft version, not just a single page or component.",
+        "Content entries that have not been edited in the CMS continue to display their previously published text unchanged in the running application.",
+        "A tester navigating between pages of the running application continues to see the latest draft content displayed consistently across those pages.",
+        "While live preview is active, the application continues to render all CMS-provided content without blank sections, errors, or missing text on the displayed screens."
+      ],
+      "vcSource": "description",
+      "vcResolution": "regenerated",
+      "fixSiteAnalysis": [
+        {
+          "file": "src/context/ContentstackContext.tsx",
+          "function": "ContentstackProvider",
+          "reason": "This is the single provider that feeds ALL content to the React tree (236+ consumers via useContent → useContentstackContext). Currently it only accepts static defaultContent via props and freezes it with useMemo — there is no mechanism to receive or merge live/draft content updates from Contentstack's preview API. Live preview requires this provider to support dynamic content updates that flow to every consumer automatically.",
+          "fix": "Replace the useMemo-only approach with useState initialized from defaultContent, and add a Contentstack live-preview listener (onEntryChange from the Contentstack SDK) that merges incoming preview data into state. The existing ContentstackFactory in src/services/contentstack.ts already wraps the Contentstack SDK client — add the live preview initialization there (via client.livePreview or Stack.livePreview) and expose an onEntryChange callback. In ContentstackProvider, subscribe to that callback and call setContent to merge the updated entry into the existing content object. This way all 236+ useContent consumers automatically receive live preview updates without any component-level changes.",
+          "helper": "ContentstackFactory",
+          "brokenLine": "const context = useMemo(",
+          "fixVerified": true,
+          "evidenceVerified": true,
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false
+        }
+      ],
+      "storyKind": "novel",
+      "technicalNotes": {
+        "files": [
+          "src/hooks/useContent.ts",
+          "src/context/ContentstackContext.tsx",
+          "src/interface/content/contentCard.ts",
+          "src/components/contentstack/ContentstackLink/ContentstackLink.tsx"
+        ]
+      },
+      "specification": {
+        "runId": "20260801T030212Z",
+        "assignedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "coordinatorNotes": "Empty acceptance criteria and no existing spec — story needs full requirements elaboration before hardening. Cross-platform (GO, UP, MX) live preview is complex and high-risk: openspec must refine AC and propose technical depth first, then speckit adds testability, security, and edge-case coverage. No prior hand-curation detected.",
+        "status": "completed",
+        "updatedAt": "2026-08-01T03:11:40.593Z",
+        "appliedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": true,
+            "notes": "Novel story — Live Preview of Content in CMS does not exist in the codebase. The central attachment point is useContent, which 236+ components call via getContentByKey. Live Preview must integrate there to propagate real-time content updates to all consumers without modifying each component. Contentstack.io is unreachable at test time, so VCs are written to the boundary of our code.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-08-01T03:09:57.523Z"
+          },
+          {
+            "agent": "speckit",
+            "applied": true,
+            "notes": "Openspec provided empty acceptance criteria with a valuable architectural note about useContent/getContentByKey (236+ consumers) and ContentstackContext as the integration point. I generated all 16 criteria from scratch based on the story title, file paths, and openspec's architectural note. I could NOT read the four listed files (src/hooks/useContent.ts, src/context/ContentstackContext.tsx, src/interface/content/contentCard.ts, src/components/contentstack/ContentstackLink/ContentstackLink.tsx), so these criteria are based on reasonable assumptions about their roles. Criteria may need adjustment once file contents are visible — particularly AC-10 (nested contentCard fields) and AC-16 (type compatibility). I included AC-9 to ensure live-preview does not activate outside the CMS preview environment, which is a common pitfall. AC-11/AC-12 cover security. AC-13 covers accessibility. AC-14 covers rapid-event debouncing. AC-15 covers resource cleanup.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-08-01T03:11:40.592Z"
+          }
+        ],
+        "coordinatorReview": {
+          "verdict": "needs_review",
+          "reviewNotes": "Both agents added meaningful, non-overlapping value: openspec identified the novel story, pinpointed useContent/getContentByKey (236+ consumers) as the central integration point, and flagged ContentstackContext as the boundary — valuable architectural context that speckit then built upon. Speckit generated 16 acceptance criteria from scratch covering testability, security (AC-11/12), accessibility (AC-13), debouncing (AC-14), and resource cleanup (AC-15). No redundancy between the two contributions. However, speckit explicitly could not read the four listed source files (useContent.ts, ContentstackContext.tsx, contentCard.ts, ContentstackLink.tsx), meaning all 16 criteria are based on assumptions about file structure and roles. This is a significant gap — criteria may not align with actual code, particularly AC-10 (nested contentCard fields) and AC-16 (type compatibility). Human review is required to verify criteria against the real source files before implementation begins.",
+          "qualityScore": 0.65,
+          "flags": [
+            "speckit_unable_to_read_source_files",
+            "criteria_based_on_assumptions",
+            "ac10_and_ac16_need_verification_against_code"
+          ],
+          "reviewedAt": "2026-08-01T03:11:51.571Z"
+        }
+      },
+      "estimatedAiMinutes": 4.698,
+      "estimatedCost": 0.146,
+      "estimatedTokens": 567491,
+      "estimatedTurns": 16,
+      "estimatedHours": 0.0783,
+      "cpaConfidence": 0.62,
+      "cpaGate": "review",
+      "ladderTier": "high",
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
+      "reasoningEffort": "low",
+      "completedAt": "2026-08-01T03:36:35+00:00",
+      "actualCost": 5.098170999999999,
+      "reviewStatus": "escalated"
+    }
+  ],
+  "currentIteration": 10,
+  "source": "jira",
+  "sourceProject": "AMSD"
+}

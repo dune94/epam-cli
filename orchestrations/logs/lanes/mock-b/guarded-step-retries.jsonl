@@ -1,0 +1,18 @@
+{"timestamp":"2026-07-30T02:41:19.382Z","step":"ac-review","storyId":"SPAN-1","runId":"20260730T023828Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"b70a992"}
+{"timestamp":"2026-07-30T02:47:00Z","step":"0.5","phaseId":"mock3_core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260730T023828Z","promptVersion":"b70a992"}
+{"timestamp":"2026-07-30T02:48:19Z","step":"0.9","phaseId":"mock3_core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260730T023828Z","promptVersion":"b70a992"}
+{"timestamp":"2026-07-30T02:51:44.996Z","step":"ac-review","storyId":"SPAN-1","runId":"20260730T024910Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"b70a992"}
+{"timestamp":"2026-07-30T02:55:47Z","step":"0.5","phaseId":"mock3_core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260730T024910Z","promptVersion":"b70a992"}
+{"timestamp":"2026-07-30T02:56:43Z","step":"0.9","phaseId":"mock3_core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260730T024910Z","promptVersion":"b70a992"}
+{"timestamp":"2026-07-30T12:18:27.027Z","step":"ac-review","storyId":"SPAN-1","runId":"20260730T121613Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"3e4b285"}
+{"timestamp":"2026-07-30T12:30:19Z","step":"0.5","phaseId":"mock3_core","attempts":3,"outcome":"reverted","reason":"profiles.json content was rejected by the reviewer (bad/vague skill rule content); ","violationTypes":["profiles_content_rejected"],"runId":"20260730T121613Z","promptVersion":"3e4b285"}
+{"timestamp":"2026-07-30T12:31:31Z","step":"0.9","phaseId":"mock3_core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260730T121613Z","promptVersion":"3e4b285"}
+{"timestamp":"2026-07-30T13:42:49.347Z","step":"ac-review","storyId":"SPAN-1","runId":"20260730T134104Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"3190da5"}
+{"timestamp":"2026-07-30T13:47:14Z","step":"0.5","phaseId":"mock3_core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260730T134104Z","promptVersion":"3190da5"}
+{"timestamp":"2026-07-30T13:47:56Z","step":"0.9","phaseId":"mock3_core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260730T134104Z","promptVersion":"3190da5"}
+{"timestamp":"2026-08-02T00:21:35.813Z","step":"ac-review","storyId":"SPAN-1","runId":"20260802T001931Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"c0caeb5"}
+{"timestamp":"2026-08-02T00:31:33Z","step":"0.5","phaseId":"mock3_core","attempts":3,"outcome":"reverted","reason":"profiles.json content was rejected by the reviewer (bad/vague skill rule content); ","violationTypes":["profiles_content_rejected"],"runId":"20260802T001931Z","promptVersion":"c0caeb5"}
+{"timestamp":"2026-08-02T00:32:14Z","step":"0.9","phaseId":"mock3_core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260802T001931Z","promptVersion":"c0caeb5"}
+{"timestamp":"2026-08-03T15:53:32.019Z","step":"ac-review","storyId":"SPAN-1","runId":"20260803T154735Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"dc0b7a4"}
+{"timestamp":"2026-08-03T15:57:46Z","step":"0.5","phaseId":"mock3_core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260803T154735Z","promptVersion":"dc0b7a4"}
+{"timestamp":"2026-08-03T15:58:33Z","step":"0.9","phaseId":"mock3_core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260803T154735Z","promptVersion":"dc0b7a4"}

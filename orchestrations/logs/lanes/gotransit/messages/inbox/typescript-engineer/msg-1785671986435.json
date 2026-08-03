@@ -1,0 +1,48 @@
+{
+  "message_id": "msg-1785671986435",
+  "timestamp": "2026-08-02T11:59:46+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 119,
+          "description": "setCommonConfig extracts content_type_uid from the query object via `(query as any).content_type_uid`. The test passes only because the mock was modified to set `this.content_type_uid = uid` on the Stack object (which is also the query object since all mock chains return `this`). In the real Contentstack delivery SDK, `ContentType(uid).Query()` returns a Query instance that stores the content type UID internally as `_content_type_uid` (with underscore prefix), not as a public `content_type_uid` property. In production, `(query as any).content_type_uid` will be `undefined`, so `livePreviewQuery` receives `content_type_uid: undefined`, silently breaking live preview for all queries. This directly undermines AC3's requirement that preview context flow through to Contentstack queries.",
+          "suggestedFix": "Pass `contentTypeUid` explicitly to `setCommonConfig` instead of extracting it from the query object. In `createContentTypeQuery` and `createContentTypeEntryQuery`, `contentTypeUid` is already available as a parameter — include it in the `setCommonConfig` call, e.g. `this.setCommonConfig({ query, contentTypeUid, ...commonConfig })` and update `setCommonConfig`'s signature to accept `contentTypeUid: string`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 233,
+          "description": "The pagination while-loop inside `getEntry` creates subsequent queries via `factory.createContentTypeQuery(...)` but does NOT pass `live_preview` to the paginated request. When live preview is active and results span multiple pages, all entries beyond the first page will be fetched without the preview hash, showing published content instead of draft content. This partially undermines the story's core goal that linked/tabular references show draft values.",
+          "suggestedFix": "Add `live_preview` to the `createContentTypeQuery` call inside the while-loop, mirroring the initial query call above it.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 87,
+          "description": "`contentstack.Stack(options as any)` uses an untyped `any` cast without an explanatory comment. Per review criteria, no untyped `any` without an explanatory comment. The file has a blanket `/* eslint-disable @typescript-eslint/no-explicit-any */` but that is not a per-use explanatory comment.",
+          "suggestedFix": "Either type the `options` object to match the Contentstack SDK's expected Stack config type, or add an inline comment explaining why the cast is necessary (e.g. `// SDK type does not include live_preview field`).",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

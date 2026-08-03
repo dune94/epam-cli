@@ -1,0 +1,64 @@
+{
+  "message_id": "msg-1785715862342",
+  "timestamp": "2026-08-03T00:11:02+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 10,
+          "description": "The Contentstack Stack mock does not include an `addParam` method. The `setCommonConfig` implementation in contentstack.ts calls `(query as any).addParam(\"live_preview\", live_preview.preview_hash)` when a preview_hash is present. Any test that passes `live_preview` with a `preview_hash` through a public function (getEntry, getSingleEntry, etc.) will crash with 'addParam is not a function' because the mock object has no such method. This prevents verification that live_preview context actually flows through to Contentstack queries (AC#3).",
+          "suggestedFix": "Add `addParam: jest.fn().mockReturnThis()` to the Contentstack Stack mock object inside `jest.mock(\"contentstack\", () => ({ Stack: () => ({ ... }) }))`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 1,
+          "description": "AC#4 requires vitest unit tests covering: (1) live_preview block present with preview_token when CONTENTSTACK_PREVIEW_TOKEN is set, (2) live_preview absent when the token is unset, (3) setHost called with CONTENTSTACK_PREVIEW_HOST when set, taking priority over CONTENTSTACK_API_HOST. In the visible portion of the test file (approximately lines 1-400 of 480), no such tests were found. The existing test suites cover missing env vars, fetch timeout, getEntry, getSingleEntry, getAllContentTypeEntries, and getSingletonEntry — but none exercise the live_preview options block or setHost priority behavior. Prior review feedback explicitly flagged missing tests as a rejection reason. If tests exist in the unseen ~80 lines (400-480), they would still fail for the setHost/forwarding cases due to the missing addParam mock.",
+          "suggestedFix": "Add a `describe('live_preview configuration')` block with tests that: (1) set CONTENTSTACK_PREVIEW_TOKEN and assert `options.live_preview` equals `{ enable: true, preview_token: <value> }`; (2) unset CONTENTSTACK_PREVIEW_TOKEN and assert `options` does not have a `live_preview` key; (3) set both CONTENTSTACK_PREVIEW_HOST and CONTENTSTACK_API_HOST, then assert `Stack.setHost` was called with CONTENTSTACK_PREVIEW_HOST (not API_HOST). Use `jest.resetModules()` + `require('../contentstack')` to re-evaluate the module with different env vars.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 1,
+          "description": "No test verifies that live_preview context actually flows through a public function (getEntry, getSingleEntry, getAllContentTypeEntries, findSingletonEntry) to the Contentstack query's `addParam` method. AC#3 requires that preview context 'can flow through to Contentstack queries in setCommonConfig'. While the implementation code correctly destructures `live_preview` in all public functions and forwards it via rest operators through createContentTypeQuery/createContentTypeEntryQuery to setCommonConfig, there is no test that calls e.g. `getEntry({ ..., live_preview: { preview_hash: 'test-hash' } })` and asserts that the mock's `addParam` was called with `('live_preview', 'test-hash')`. Without this test, the forwarding chain is unverified and a future regression that drops `live_preview` from destructuring would go undetected.",
+          "suggestedFix": "Add a test (e.g., in the `describe('getEntry')` block) that calls `getEntry({ contentTypeUid: 'test', lang: ContentstackLocales.EN, live_preview: { preview_hash: 'preview-hash-123' } })` and asserts `expect(Stack.addParam).toHaveBeenCalledWith('live_preview', 'preview-hash-123')`. Requires the addParam mock fix from the first blocker above.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 108,
+          "description": "The `(query as any).addParam(...)` cast uses `any` without an explanatory comment at the call site. While the file has a top-level `/* eslint-disable @typescript-eslint/no-explicit-any */`, the review criteria require that untyped `any` usage include an explanatory comment. The `as any` is necessary because the contentstack SDK type definitions for `Query | Entry` do not include `addParam`, but this context should be documented.",
+          "suggestedFix": "Add an inline comment: `// contentstack SDK types omit addParam; cast required to call live_preview query param method` next to the `(query as any).addParam` line.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/interface/contentstack.ts",
+          "line": 6,
+          "description": "The `live_preview` field in `ICommonContentstackConfig` includes `enable?: boolean` and `preview_hash?: string` but does not include `preview_token?: string`. While `preview_token` is only needed in the Stack options (not query config), including it in the interface would make the type more consistent with the live_preview config object shape used in `options`. This is optional since the query path only needs `preview_hash`.",
+          "suggestedFix": "Consider adding `preview_token?: string` to the `live_preview` field type for completeness, or leave as-is if the team prefers to keep query config and Stack options types separate.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

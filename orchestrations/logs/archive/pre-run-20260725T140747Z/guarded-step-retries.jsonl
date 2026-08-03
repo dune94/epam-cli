@@ -1,0 +1,1 @@
+{"timestamp":"2026-07-25T12:12:19.997Z","step":"ac-review","storyId":"AMSD-1820","runId":"20260725T120900Z","agent":"openspec","attempts":2,"outcome":"reverted","reason":"","violationTypes":["content_quality"],"promptVersion":"a8d6be1"}

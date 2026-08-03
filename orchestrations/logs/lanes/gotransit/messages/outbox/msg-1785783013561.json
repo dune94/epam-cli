@@ -1,0 +1,88 @@
+{
+  "message_id": "msg-1785783013561",
+  "timestamp": "2026-08-03T18:50:13+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 80,
+          "description": "The ContentstackProvider calls applyLivePreviewQuery() on hashchange/message events but NEVER re-fetches content and NEVER calls setContent with new data. applyLivePreviewQuery only calls Stack.livePreviewQuery() which sets internal SDK state — nothing triggers a new Stack query or updates the React context. The setContent(defaultContent) effect only fires when the defaultContent prop changes (page navigation), not on hashchange. Therefore the UI will never display draft/preview content. This fails all three acceptance criteria: (1) modified draft content is never displayed during a live-preview session, (2) the published version is shown not because of correct fallback logic but because live preview is entirely non-functional, and (3) subsequent edits never appear without a page reload because no re-fetch mechanism exists. The prescribed minimal fix explicitly states: 'call the Stack query again with Stack.livePreviewQuery() applied, and setContent with the result.' The diff omits the critical re-fetch and setContent steps.",
+          "suggestedFix": "Inside the hashchange/message handler, after calling applyLivePreviewQuery(), re-fetch the page content via the existing Stack query functions (e.g., getEntry or getSingleEntry) and call setContent with the result. For example: const liveContent = await getEntry({ contentTypeUid: content_type_uid, lang: currentLocale, ... }); setContent(prev => ({ ...prev, [content_type_uid]: liveContent }));",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 99,
+          "description": "The 'message' event listener calls handleHashChange which only reads window.location.hash — it does not read event.data. A postMessage from the Contentstack editor does not change window.location.hash, so the handler will re-parse the same hash and do nothing. The comment says 'Contentstack's editor posts a message on preview; re-parse on receipt' but the implementation cannot deliver real-time updates via this mechanism. Contentstack's Live Preview SDK uses postMessage/WebSocket for real-time content updates, not URL hash changes. Relying solely on hashchange may miss updates that don't change the hash, failing AC3: 'subsequent content edits made in the CMS appear in the rendered UI without requiring a full page reload.'",
+          "suggestedFix": "Either (a) register the Contentstack SDK's built-in live preview callback (e.g., Stack.livePreview.onContentUpdate or equivalent) to trigger a re-fetch and setContent, or (b) if using the message listener, parse event.data for the preview payload (not window.location.hash) and re-fetch content accordingly. The current approach of re-reading window.location.hash on a message event cannot work.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 102,
+          "description": "Untyped 'any' cast: (Stack as any).livePreviewQuery({ live_preview, content_type_uid }) has no explanatory comment. Per review criteria, no untyped 'any' without an explanatory comment. The file has a top-level eslint-disable for no-explicit-any but the review criteria require an inline comment explaining why 'any' is necessary here.",
+          "suggestedFix": "Add an inline comment explaining the cast (e.g., '// contentstack 3.17.2 types do not expose livePreviewQuery on the Stack interface') or extend the contentstack module augmentation to declare livePreviewQuery on the Stack type.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 106,
+          "description": "catch (e: any) uses untyped 'any' for the catch parameter. Per TypeScript strict compliance, catch parameters should be typed as 'unknown' and narrowed. The code then accesses e?.message which is unsafe on 'any' and would be type-checked on 'unknown'.",
+          "suggestedFix": "Change to 'catch (e: unknown)' and narrow with 'if (e instanceof Error) { logger.error(e.message, ...) } else { logger.error(\"Failed to apply live preview query\", ...) }'.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 30,
+          "description": "When CONTENTSTACK_PREVIEW_ENABLE is not 'true' or CONTENTSTACK_PREVIEW_MANAGEMENT_TOKEN is missing, live preview is silently disabled with no warning or error logged. The existing code logs errors for missing CONTENTSTACK_API_KEY, CONTENTSTACK_DELIVERY_TOKEN, CONTENTSTACK_ENVIRONMENT, and CONTENTSTACK_BRANCH, but there is no equivalent warning for the missing preview configuration. An operator or editor will see published content with no indication that draft preview is unavailable.",
+          "suggestedFix": "Add a logger.warn() when CONTENTSTACK_PREVIEW_ENABLE === 'true' but CONTENTSTACK_PREVIEW_MANAGEMENT_TOKEN is missing, e.g.: if (CONTENTSTACK_PREVIEW_ENABLE === 'true' && !CONTENTSTACK_PREVIEW_MANAGEMENT_TOKEN) { logger.warn('Contentstack Live Preview enabled but CONTENTSTACK_PREVIEW_MANAGEMENT_TOKEN is missing — preview will show published content only.'); }",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 40,
+          "description": "No unit tests exist for the ContentstackProvider live preview behavior. The test file src/services/__tests__/contentstack.spec.ts covers the SDK options and applyLivePreviewQuery, but there are zero tests verifying that: (1) the provider initializes content from defaultContent, (2) the provider calls applyLivePreviewQuery on hashchange, (3) the provider re-fetches and calls setContent with draft content when the preview hash changes, or (4) the provider cleans up event listeners on unmount. Per review criterion 2, new features must have corresponding unit tests mirroring the src/ path.",
+          "suggestedFix": "Add tests in a co-located test file (e.g., src/context/__tests__/ContentstackContext.spec.tsx) that mount the provider, simulate hashchange events, and assert that applyLivePreviewQuery is called and that content state updates with re-fetched data.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 27,
+          "description": "The constant CONTENTSTACK_PREVIEW_DEFAULT_HOST is defined in src/services/contentstack.ts rather than src/config/constants.ts. Per review criterion 6, all named constants should be in src/config/constants.ts to maintain a single source of truth for configuration values.",
+          "suggestedFix": "Move CONTENTSTACK_PREVIEW_DEFAULT_HOST to src/config/constants.ts and import it in contentstack.ts.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 383,
+          "description": "Tests use (process.env as any).NODE_ENV = 'production' — untyped 'any' cast without explanatory comment. Per review criteria, no untyped 'any' without an explanatory comment.",
+          "suggestedFix": "Use 'process.env.NODE_ENV = \"production\" as string' or add an inline comment explaining the cast is necessary because NODE_ENV is typed as string | undefined in the NodeJS.ProcessEnv interface.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

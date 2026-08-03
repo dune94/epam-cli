@@ -1,0 +1,4 @@
+.contracts/AMSD-2041.md
+.contracts/vendor-contentstack.md
+src/interface/contentstack.spec.ts
+src/interface/contentstack.ts

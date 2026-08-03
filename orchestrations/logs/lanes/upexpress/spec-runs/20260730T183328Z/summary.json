@@ -1,0 +1,67 @@
+{
+  "runId": "20260730T183328Z",
+  "phase": "core",
+  "startedAt": "2026-07-30T18:37:07.238Z",
+  "stories": [
+    {
+      "storyId": "AMSD-2041",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "notes": "Complex multi-platform (GO, UP, MX) live preview feature with empty acceptance criteria and no existing spec. Openspec needed first to elaborate requirements and define AC; speckit then to harden testability, security (iframe sandboxing, XSS), and edge cases (concurrent edits, network latency, platform-specific rendering).",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Novel story — live preview does not exist in the codebase. Attachment points are useContent (236+ consumers), ContentstackContext (provider), and contentstack service (API layer). VCs derived entirely from description since ACs are empty. All VCs stop at our side of the Contentstack boundary (mocked client) per unreachable-service constraint.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-30T18:54:11.610Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided empty acceptance criteria, so all 18 ACs are new. Criteria were derived from the story description (real-time preview for GO/UP/MX sites) and the identified attachment points (useContent, ContentstackContext, contentstack service, ContentstackLink). AC-01/02 cover core real-time update behavior. AC-03/04/05 cover multi-site differentiation. AC-06/07/08 cover error handling (disconnection, reconnection, service errors). AC-09 covers debouncing of rapid edits. AC-10 covers resource cleanup on teardown. AC-11 covers authorization. AC-12/13 cover accessibility (screen reader announcements). AC-14/15 cover reference resolution and useContent integration. AC-16 covers null/empty edge case. AC-17 covers entry switching. AC-18 covers schema version mismatch. CAVEAT: File contents were not available for review; criteria are based solely on the story description and file paths. Implementation may reveal additional edge cases around Contentstack's live preview SDK specifics, webhook vs. WebSocket delivery, and content type schema handling that would refine these criteria further.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-30T18:54:44.560Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "needs_review",
+        "reviewNotes": "Pipeline did not function as designed. Openspec's primary mandate was to elaborate requirements and define ACs for a story with empty acceptance criteria, but it reported acceptanceChanged: false and splitCount: 0 — it identified attachment points and constraints but did not produce any acceptance criteria. Speckit then compensated by creating all 18 ACs from scratch, effectively performing openspec's job rather than reviewing and hardening openspec's output. The agents did not add complementary, non-overlapping value. Additionally, speckit explicitly caveats that file contents were not available for review, meaning all 18 criteria are derived solely from the story description — a significant gap for a complex multi-platform feature touching 236+ consumers (useContent) with iframe sandboxing, XSS, accessibility, and concurrent-edit concerns. The 18 ACs themselves appear well-structured (core real-time behavior, multi-site differentiation, error handling, debouncing, cleanup, auth, accessibility, edge cases) but their grounding in actual codebase patterns is unverified. No story split was considered despite the feature spanning three platforms (GO, UP, MX) with distinct rendering concerns — a split into per-platform stories or a core-vs-platform split may be warranted. Human review should: (1) re-run openspec with file access to properly elaborate ACs, (2) verify the 18 ACs against actual codebase patterns, (3) evaluate whether a story split is needed for this scope.",
+        "qualityScore": 0.55,
+        "flags": [
+          "openspec_underperformed",
+          "speckit_compensated_for_openspec",
+          "missing_file_access_during_review",
+          "no_split_analysis_for_complex_multi_platform_feature",
+          "acceptance_criteria_not_grounded_in_codebase"
+        ],
+        "reviewedAt": "2026-07-30T18:55:18.453Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1,
+      "speckit": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 2,
+    "coordinatorReviewCompleted": true,
+    "approved": 0,
+    "needsReview": 1
+  },
+  "completedAt": "2026-07-30T18:55:29.884Z",
+  "storyCount": 1
+}

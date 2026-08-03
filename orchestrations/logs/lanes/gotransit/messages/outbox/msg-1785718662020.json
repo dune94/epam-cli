@@ -1,0 +1,40 @@
+{
+  "message_id": "msg-1785718662020",
+  "timestamp": "2026-08-03T00:57:42+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 484,
+          "description": "AC4 requires three specific test scenarios in this file: (1) live_preview block present with preview_token when CONTENTSTACK_PREVIEW_TOKEN is set, (2) live_preview absent when the token is unset, (3) setHost called with CONTENTSTACK_PREVIEW_HOST taking priority over CONTENTSTACK_API_HOST. A grep search for 'live_preview|preview_token|setHost|PREVIEW' across the entire 484-line file returned ZERO matches. None of the three required test scenarios exist. This is the exact defect called out in prior review feedback ('no vitest unit tests exist for this feature') and is explicitly required by AC4.",
+          "suggestedFix": "Add a new describe block (e.g., 'live preview configuration') with three it() blocks: (1) set CONTENTSTACK_PREVIEW_TOKEN='test_preview_token', require the module, and assert options.live_preview equals { enable: true, preview_token: 'test_preview_token' }; (2) set CONTENTSTACK_PREVIEW_TOKEN=undefined, require the module, and assert options does not have a live_preview key; (3) set CONTENTSTACK_PREVIEW_HOST='preview.example.com' and CONTENTSTACK_API_HOST='api.example.com', require the module, and assert Stack.setHost was called with 'preview.example.com'.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 296,
+          "description": "findSingletonEntry and getSingletonEntry accept IContentstackGetSingletonEntry (which includes live_preview via ICommonContentstackConfig) but do not destructure live_preview from their parameters nor pass it to createContentTypeQuery. This means preview context (preview_hash) is silently dropped for these two query paths — live preview will not show draft values for singleton entries. getEntry (line 192) and getSingleEntry (line 261) correctly forward live_preview, but these two functions do not.",
+          "suggestedFix": "Add live_preview to the destructured parameters of both findSingletonEntry and getSingletonEntry, and pass it through to createContentTypeQuery: createContentTypeQuery({ contentTypeUid, referenceFieldPath, only, except, where, lang, limit: 1, live_preview }).",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

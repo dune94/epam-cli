@@ -74,7 +74,7 @@ describe('cannot-verify is reported as its own outcome, not as pass', () => {
     writeFileSync(join(bin, 'npm'), '#!/usr/bin/env bash\nexit 0\n');
     chmodSync(join(bin, 'npm'), 0o755);
 
-    const start = SRC.indexOf('if [ "${SKIP_REGRESSION_GUARD:-false}" != "true" ]; then');
+    const start = SRC.indexOf('if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then');
     const marker = 'Step 5: Regression guard skipped (SKIP_REGRESSION_GUARD=true)';
     const end = SRC.indexOf('\nfi', SRC.indexOf(marker, start)) + 3;
     const block = SRC.slice(start, end);
@@ -82,6 +82,7 @@ describe('cannot-verify is reported as its own outcome, not as pass', () => {
     const script = join(dir, 'drive.sh');
     writeFileSync(script, [
       '#!/usr/bin/env bash',
+      `source ${join(__dirname, '../../../orchestrations/scripts/lib/flags.sh')}`,
       'set -uo pipefail',
       `PROJECT_ROOT=${JSON.stringify(root)}`,
       `LOG_DIR=${JSON.stringify(logDir)}`,

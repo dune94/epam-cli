@@ -1,0 +1,196 @@
+{
+  "id": "jira-sourced-1785721162205",
+  "title": "Metrolinx Brownfield — Jira-sourced",
+  "version": "1.0.0",
+  "lastUpdated": "2026-08-03",
+  "project": {
+    "name": "metrolinx",
+    "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
+    "stack": {
+      "language": "TypeScript",
+      "runtime": "Node.js 20",
+      "framework": "Next.js",
+      "testing": "jest",
+      "cms": "Contentstack",
+      "devEnvironment": "Ubuntu WSL2"
+    },
+    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
+    "outputDirs": [
+      {
+        "codeline": "gotransit",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+      },
+      {
+        "codeline": "upexpress",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+      },
+      {
+        "codeline": "metrolinx",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+      }
+    ]
+  },
+  "configuration": {
+    "profilesPath": "profiles.json",
+    "autoCommit": false,
+    "requireTests": true,
+    "budget": 12,
+    "aiRuntime": {
+      "provider": "claude",
+      "defaultModel": "claude-sonnet-4-6"
+    }
+  },
+  "implementationOrder": {
+    "core": [
+      "AMSD-2041"
+    ]
+  },
+  "phasesConfig": {
+    "scaffold": {
+      "description": "Project scaffolding and TypeScript configuration",
+      "parallelWorktrees": false
+    },
+    "core": {
+      "description": "API client, CLI, and Express server implementation",
+      "parallelWorktrees": true
+    },
+    "ui_and_review": {
+      "description": "HTML dashboard and code review",
+      "parallelWorktrees": true
+    }
+  },
+  "stories": [
+    {
+      "id": "AMSD-2041",
+      "jiraKey": "AMSD-2041",
+      "title": "[GO, UP, MX] Live Preview of Content in CMS",
+      "description": "[GO, UP, MX] Live Preview of Content in CMS",
+      "acceptanceCriteria": [],
+      "codeline": "gotransit",
+      "status": "pending",
+      "completed": false,
+      "agentRole": "typescript-engineer",
+      "agentGroup": "main",
+      "effort": "low",
+      "estimate": 10,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). Acceptance criteria are completely absent, and the description is too vague for an AI agent to implement without knowing the CMS platform, preview mechanism, content types in scope, and per-codeline differences.",
+      "issueType": "Story",
+      "codelines": [
+        "gotransit",
+        "upexpress",
+        "metrolinx"
+      ],
+      "verificationCriteria": [
+        "When a CMS editor modifies a content field in live preview mode, the page displays the updated value for that field without requiring a full page reload.",
+        "When a CMS editor modifies multiple content fields in live preview mode, the page displays the updated values for all modified fields.",
+        "When CMS live preview provides invalid or errored content, the page renders without errors and displays the expected content.",
+        "When a CMS editor edits content in live preview mode, the page displays the edited content regardless of which brand the content belongs to."
+      ],
+      "vcSource": "description",
+      "vcResolution": "regenerated",
+      "fixSiteAnalysis": [
+        {
+          "file": "src/services/contentstack.ts",
+          "function": "Stack",
+          "reason": "This is where the Contentstack SDK Stack is initialized. The options object passed to contentstack.Stack() lacks the live_preview config, so the SDK never enables live preview — no preview data can flow to any downstream consumer (useContent, ContentstackProvider, 236+ components) until this initialization includes live_preview.",
+          "fix": "Add a live_preview property to the options object (lines 55-67) before the Stack is created. Read from new env vars CONTENTSTACK_PREVIEW_ENABLE, CONTENTSTACK_PREVIEW_TOKEN, CONTENTSTACK_PREVIEW_HOST. The options object should include: live_preview: { enable: CONTENTSTACK_PREVIEW_ENABLE === 'true', preview_token: CONTENTSTACK_PREVIEW_TOKEN, host: CONTENTSTACK_PREVIEW_HOST } (conditionally spread, like fetchOptions is today). This is the Contentstack SDK's documented mechanism — the same contentstack package already imported at line 3 provides live preview support when Stack is initialized with this config.",
+          "helper": "",
+          "brokenLine": "export const Stack = contentstack.Stack(options);",
+          "fixVerified": null,
+          "evidenceVerified": true,
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false
+        },
+        {
+          "file": "src/context/ContentstackContext.tsx",
+          "function": "ContentstackProvider",
+          "reason": "After Stack is initialized with live_preview, the provider must update its context value when preview content changes. Currently it stores defaultContent as a static useMemo with no update path — even if the SDK receives preview data, the provider never re-renders consumers. This is the second half of the cause: the content pipeline is read-only.",
+          "fix": "Replace the static useMemo with useState(defaultContent) as the content source, and add a useEffect that subscribes to Contentstack live preview events (Stack.onLivePreview or window message listener per Contentstack SDK docs) and calls setContent with the merged preview data. The existing useContentstackContext hook and useContent hook need no changes — they already read from context.content, so updating the state in the provider automatically propagates preview content to all 236+ consumers.",
+          "helper": "",
+          "brokenLine": "const context = useMemo(",
+          "fixVerified": null,
+          "evidenceVerified": true,
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false
+        }
+      ],
+      "fixSiteAnalysisCoverage": {
+        "complete": true,
+        "uncoveredVerificationCriteria": []
+      },
+      "storyKind": "novel",
+      "technicalNotes": {
+        "files": [
+          "src/hooks/useContent.ts",
+          "src/interface/content/contentCard.ts",
+          "src/services/contentstack.ts",
+          "src/context/ContentstackContext.tsx",
+          "src/components/contentstack/ContentstackLink/ContentstackLink.tsx"
+        ]
+      },
+      "specification": {
+        "runId": "20260803T013808Z",
+        "assignedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "coordinatorNotes": "Story has empty acceptance criteria and no prior spec work. Live Preview of Content in CMS is a complex feature involving real-time rendering, multi-locale support (GO, UP, MX), and preview-vs-published state synchronization. Openspec needed to elaborate AC and technical depth; speckit needed to harden testability, security (preview access auth), and edge cases.",
+        "status": "completed",
+        "updatedAt": "2026-08-03T01:44:32.494Z",
+        "appliedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": true,
+            "notes": "Novel capability — no live preview integration exists. All content flows through useContent (236 callers), making it the single attachment point. Components like ContentstackLink, ContentstackImage, ContentstackTable, and ContentstackContentCards all consume content via getContentByKey and would inherit live preview support automatically if the hook is enhanced. VCs derived from description since ACs are empty.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-08-03T01:43:54.500Z"
+          },
+          {
+            "agent": "speckit",
+            "applied": true,
+            "notes": "Openspec produced empty acceptance criteria, so all ACs are authored from scratch based on the story title, the architectural insight that useContent (236 callers) is the single attachment point, and the listed component/service files. CAVEAT: File contents were unavailable during this review — criteria are inferred from naming conventions, Contentstack's documented live-preview patterns, and the architectural notes. If the actual codebase uses a fundamentally different preview mechanism (e.g., polling vs. WebSocket, or a different token scheme), some criteria may need adjustment. Key design decisions reflected: (1) AC-1/AC-4/AC-8 establish the preview-mode boundary — must be opt-in via valid CMS token only; (2) AC-2/AC-3 define the real-time refresh contract with a 5-second SLA; (3) AC-6/AC-7/AC-13 cover disconnection and error resilience; (4) AC-9 ensures the hook-level integration means zero per-component changes; (5) AC-5 guards against performance regression in non-preview mode; (6) AC-12 ensures SPA navigation preserves preview state; (7) AC-14 provides author UX clarity; (8) AC-15 covers nested/referenced content which is a common gap in live-preview implementations.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-08-03T01:44:32.494Z"
+          }
+        ],
+        "coordinatorReview": {
+          "verdict": "needs_review",
+          "reviewNotes": "Both agents added non-overlapping value: openspec provided critical architectural insight (useContent as the single attachment point with 236 callers, downstream components inheriting preview support), while speckit authored 15 acceptance criteria from scratch covering preview-mode boundaries, real-time refresh SLAs, error resilience, performance guards, and nested content edge cases. However, two significant concerns emerge. First, openspec under-delivered on its core AC-elaboration mandate — acceptanceChanged is false and splitCount is 0, meaning it produced architectural notes but no actual acceptance criteria for a story that started with empty ACs. Second, and more critically, speckit explicitly states file contents were unavailable during review, so all 15 ACs were inferred from naming conventions and documented Contentstack patterns rather than validated against the actual codebase. For a complex real-time, multi-locale (GO, UP, MX) live-preview feature involving WebSocket vs polling mechanisms, token schemes, and preview-vs-published state synchronization, this unvalidated inference is high-risk. The collaborative pipeline structure was correct and the agents complemented each other, but the output needs human validation against the real codebase before implementation.",
+          "qualityScore": 0.65,
+          "flags": [
+            "ac_authored_without_codebase_access",
+            "openspec_insufficient_elaboration",
+            "complex_realtime_feature_requires_validation"
+          ],
+          "reviewedAt": "2026-08-03T01:44:40.675Z"
+        }
+      },
+      "estimatedAiMinutes": 5.1216,
+      "estimatedCost": 0.159,
+      "estimatedTokens": 618421,
+      "estimatedTurns": 18,
+      "estimatedHours": 0.0853,
+      "cpaEffortTier": "high",
+      "cpaConfidence": 0.68,
+      "cpaGate": "review",
+      "ladderTier": "high",
+      "cpaIterationEstimate": 1,
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
+      "reasoningEffort": "low",
+      "completedAt": "2026-08-03T01:53:05+00:00",
+      "actualCost": 5.9679,
+      "reviewStatus": "escalated"
+    }
+  ],
+  "currentIteration": 10,
+  "source": "jira",
+  "sourceProject": "AMSD"
+}

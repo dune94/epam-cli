@@ -1,0 +1,50 @@
+{
+  "runId": "20260803T154735Z",
+  "phase": "mock3_core",
+  "startedAt": "2026-08-03T15:47:44.329Z",
+  "stories": [
+    {
+      "storyId": "SPAN-1",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "appliedAgents": [
+        "openspec"
+      ],
+      "notes": "Trivial string replacement with unambiguous AC — no elaboration or hardening needed. Return value, test update, and typecheck criteria are clear and testable as-is. No security, edge-case, or complexity concerns.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: existing getGreeting() returns wrong value. No code block was injected, so locationHint is empty to avoid fabrication.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-03T15:49:21.036Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "approved",
+        "reviewNotes": "Only openspec was assigned; speckit skip was justified — trivial string replacement carries no security, edge-case, or testability surface needing hardening. openspec correctly avoided fabricating code blocks, left immutable AC untouched, and produced no splits (brownfield ticket). Both the assignment decision and openspec's restraint are sound. No meaningful gap exists for a human to fill.",
+        "qualityScore": 0.95,
+        "flags": [],
+        "reviewedAt": "2026-08-03T15:49:31.678Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 1,
+    "coordinatorReviewCompleted": true,
+    "approved": 1,
+    "needsReview": 0
+  },
+  "completedAt": "2026-08-03T15:49:41.099Z",
+  "storyCount": 1
+}

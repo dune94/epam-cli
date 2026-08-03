@@ -1,0 +1,5 @@
+.attempts
+node_modules/.bin/vitest
+prd.json
+stub-ai-run.sh
+stub.sh

@@ -1,0 +1,96 @@
+{
+  "message_id": "msg-1785532271902",
+  "timestamp": "2026-07-31T21:11:11+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.ts",
+          "line": 5,
+          "description": "useContent calls useContext(ContentstackContext) but there is no reactive Provider component in the codebase. The hook will always return the static value passed at render time. Even if Contentstack live preview events fired, there is no state setter to trigger re-renders of the 236+ consumers. Acceptance criteria requiring real-time updates without page reload ('change appears in the preview view without full reload', 'multiple successive edits appear in turn without manual refresh') are unmet.",
+          "suggestedFix": "Create a ContentstackProvider component that wraps the app, uses useState for content, and subscribes to live preview events via @contentstack/live-preview-utils LivePreview.onEntryChange(). Replace the raw Context.Provider usage in the page component with this reactive Provider.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "package.json",
+          "line": 0,
+          "description": "The @contentstack/live-preview-utils dependency is not installed anywhere in the project. Without this SDK, no client-side Live Preview subscription can be established, making real-time preview updates impossible.",
+          "suggestedFix": "Install @contentstack/live-preview-utils and initialize it with the Stack config. Call LivePreview.init() in the provider component and subscribe to onEntryChange callbacks.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 0,
+          "description": "No vitest unit tests were found for the Live Preview feature. There are no tests mirroring src/context/ for a ContentstackProvider, no tests for live_preview config in options, no tests for includeFallback() behavior, and no tests verifying reactive content updates. The test count has not increased to cover this new feature.",
+          "suggestedFix": "Add vitest unit tests in test/unit/ mirroring the src/ paths: test the live_preview config in Stack options, test that includeFallback() is called when live_preview.enable is true, test that it is NOT called when disabled, and test the reactive Provider's onEntryChange callback behavior.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 72,
+          "description": "Stack.livePreview(options) is never called after Stack creation. The Contentstack SDK requires this call to initialize the live preview subsystem on the client side. Without it, even with live_preview in the config object, the SDK will not establish the preview websocket/polling connection needed for real-time updates.",
+          "suggestedFix": "After `export const Stack = contentstack.Stack(options);`, add `Stack.livePreview(options);` to initialize the live preview client.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 155,
+          "description": "TypeScript strict compliance violation: `const result: any = []` uses untyped any without an explanatory comment. This violates the strict typing requirement.",
+          "suggestedFix": "Type the result array explicitly, e.g. `const result: T[] = []` or use the generic type parameter.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 191,
+          "description": "TypeScript strict compliance violation: catch block uses `e: any` without an explanatory comment. Multiple instances at lines 191 and 227.",
+          "suggestedFix": "Use `e: unknown` and narrow with instanceof checks, or add an explanatory comment if any is truly needed.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 82,
+          "description": "TypeScript strict compliance violation: renderOption uses `node: { children: any }` and `next: (arg0: any) => any` with untyped any without explanatory comments.",
+          "suggestedFix": "Define proper types for the node and next callback, or add explanatory comments for the any usage.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 120,
+          "description": "The getEntry function's while-loop pagination does not pass live_preview to subsequent query calls in the same way — it does pass live_preview, but the second query inside the while loop omits cachePolicy. This is inconsistent and could cause cache-related preview issues where draft content is served from cache instead of fresh from the CMS.",
+          "suggestedFix": "Pass cachePolicy to the paginated query inside the while loop, consistent with the initial query.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 113,
+          "description": "The `except: excludedFields` is passed as the `except` parameter but `excludedFields` is also already applied inside setCommonConfig when no only/except arrays are provided. This means excludedFields may be applied twice — once via the parameter and once via the internal default logic.",
+          "suggestedFix": "Remove the explicit `except: excludedFields` from the getEntry call since setCommonConfig already handles default field exclusion, or remove the default exclusion logic to avoid duplication.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

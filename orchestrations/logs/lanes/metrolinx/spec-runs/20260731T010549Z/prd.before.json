@@ -1,0 +1,193 @@
+{
+  "id": "jira-sourced-1785459994427",
+  "title": "Metrolinx Brownfield — Jira-sourced",
+  "version": "1.0.0",
+  "lastUpdated": "2026-07-31",
+  "project": {
+    "name": "metrolinx",
+    "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
+    "stack": {
+      "language": "TypeScript",
+      "runtime": "Node.js 20",
+      "framework": "Next.js",
+      "testing": "jest",
+      "cms": "Contentstack",
+      "devEnvironment": "Ubuntu WSL2"
+    },
+    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
+    "outputDirs": [
+      {
+        "codeline": "gotransit",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+      },
+      {
+        "codeline": "upexpress",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+      },
+      {
+        "codeline": "metrolinx",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+      }
+    ]
+  },
+  "configuration": {
+    "profilesPath": "profiles.json",
+    "autoCommit": false,
+    "requireTests": true,
+    "budget": 12,
+    "aiRuntime": {
+      "provider": "claude",
+      "defaultModel": "claude-sonnet-4-6"
+    }
+  },
+  "implementationOrder": {
+    "core": [
+      "AMSD-2041"
+    ]
+  },
+  "phasesConfig": {
+    "scaffold": {
+      "description": "Project scaffolding and TypeScript configuration",
+      "parallelWorktrees": false
+    },
+    "core": {
+      "description": "API client, CLI, and Express server implementation",
+      "parallelWorktrees": true
+    },
+    "ui_and_review": {
+      "description": "HTML dashboard and code review",
+      "parallelWorktrees": true
+    }
+  },
+  "stories": [
+    {
+      "id": "AMSD-2041",
+      "jiraKey": "AMSD-2041",
+      "title": "[GO, UP, MX] Live Preview of Content in CMS",
+      "description": "[GO, UP, MX] Live Preview of Content in CMS — enable content editors to see real-time updates to Contentstack content within the application without requiring a full page reload, by integrating Contentstack's Live Preview capability into the existing content delivery pipeline.",
+      "acceptanceCriteria": [],
+      "codeline": "gotransit",
+      "status": "pending",
+      "completed": false,
+      "agentRole": "typescript-engineer",
+      "agentGroup": "main",
+      "effort": "low",
+      "estimate": 10,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). Acceptance criteria are entirely absent and the description is too vague — no definition of what 'preview' means, which content types are in scope, or how error/edge cases are handled — so different engineers would implement fundamentally different solutions.",
+      "issueType": "Story",
+      "codelines": [
+        "gotransit",
+        "upexpress",
+        "metrolinx"
+      ],
+      "verificationCriteria": [
+        "With the application running in preview mode, a tester edits a field of an entry in the Contentstack CMS and observes the corresponding content on the rendered page update to the new value without manually refreshing the browser.",
+        "When the edited content appears on screen, the tester observes that no full page reload occurs — the browser shows no reload/navigation event and in-page state such as scroll position is preserved.",
+        "The tester observes the updated content rendered in place within the application's normal pages and components — visible on the user-facing screen itself, not only in a console, network log, or preview panel.",
+        "The tester makes several consecutive edits in the CMS and observes each one appear live in the application, confirming the real-time update behaviour persists rather than working only once.",
+        "A tester viewing the application outside of preview mode observes that pages continue to render published content normally, with no errors or blank regions introduced by the live preview capability."
+      ],
+      "vcSource": "description",
+      "vcResolution": "regenerated",
+      "fixSiteAnalysis": [
+        {
+          "file": "src/services/contentstack.ts",
+          "function": "options",
+          "reason": "This is where the Contentstack SDK Stack client is initialized (line 69: contentstack.Stack(options)). The options object (lines 55-67) lacks the live_preview configuration required by Contentstack's Live Preview SDK. Without live_preview config here, no downstream component can receive real-time preview data — this is the root cause, not any presentation-layer component.",
+          "fix": "Add a live_preview property to the options object (lines 55-67), reading CONTENTSTACK_LIVE_PREVIEW and CONTENTSTACK_PREVIEW_TOKEN from process.env (following the existing pattern on lines 17-24). The options object should include: live_preview: { enable: CONTENTSTACK_LIVE_PREVIEW === 'true', preview_timestamp: CONTENTSTACK_PREVIEW_TOKEN }. Then after Stack creation (after line 72), call Stack.livePreview(options) per Contentstack Live Preview SDK docs. This enables the Stack to receive preview content — all 236+ callers of useContent will then be able to serve live-previewed data without any component-level changes.",
+          "helper": "",
+          "brokenLine": "export const Stack = contentstack.Stack(options);",
+          "fixVerified": null,
+          "evidenceVerified": true,
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false
+        },
+        {
+          "file": "src/context/ContentstackContext.tsx",
+          "function": "ContentstackProvider",
+          "reason": "This is where content is provided to the entire React tree via context. After the Stack is configured for Live Preview on the server side, the client-side ContentstackProvider must integrate @contentstack/live-preview-utils to listen for real-time content edits and update the context value, enabling components to re-render with preview content without a full page reload.",
+          "fix": "Import and initialize @contentstack/live-preview-utils (LivePreview) at module level with the same Stack config. Inside ContentstackProvider, replace the static useMemo with a useState+useEffect pattern: useState for content initialized from defaultContent, and useEffect that calls LivePreview.onEntryChange(callback) to update the content state whenever Contentstack emits a preview change. This makes the context reactive to live preview edits, propagating updates to all 236+ useContent consumers without page reload.",
+          "helper": "",
+          "brokenLine": "const context = useMemo(\n    () => ({\n      content: defaultContent,\n    }),\n    [defaultContent],\n  );",
+          "fixVerified": null,
+          "evidenceVerified": true,
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false
+        }
+      ],
+      "storyKind": "novel",
+      "technicalNotes": {
+        "files": [
+          "src/hooks/useContent.ts",
+          "src/context/ContentstackContext.tsx",
+          "src/services/contentstack.ts",
+          "src/interface/content/contentCard.ts",
+          "src/components/contentstack/ContentstackLink/ContentstackLink.tsx"
+        ]
+      },
+      "specification": {
+        "runId": "20260731T010549Z",
+        "assignedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "coordinatorNotes": "Story has empty acceptance criteria and null spec — full requirements elaboration needed before implementation. Live Preview across three markets (GO, UP, MX) is a complex, cross-cutting feature involving real-time rendering, multi-market configuration, and likely iframe/proxy infrastructure. Openspec runs first to elaborate AC and propose story splits; speckit then hardens for testability, security (iframe sandboxing, XSS surface), and edge cases (market-specific overrides, preview latency, auth context).",
+        "status": "completed",
+        "updatedAt": "2026-07-31T01:16:39.168Z",
+        "appliedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": true,
+            "notes": "Novel story — Contentstack Live Preview is a new capability. Attachment points are useContent hook and ContentstackContext, which form the content delivery pipeline the Live Preview SDK must integrate with. VCs derived from the description's concrete behavior ('real-time content updates without page reload') since ACs are empty. Contentstack hosts are unreachable at test time, so VCs state the mock assumption explicitly and verify only our side of the boundary.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-07-31T01:15:42.845Z"
+          },
+          {
+            "agent": "speckit",
+            "applied": true,
+            "notes": "Openspec provided empty acceptance criteria, so all 14 ACs are new. Criteria are derived from the story description ('real-time content updates without page reload') and the listed attachment points (useContent, ContentstackContext, contentstack service, contentCard interface, ContentstackLink). AC-1/AC-2 cover mode detection and initialization. AC-3/AC-4/AC-5/AC-6/AC-12 cover the core real-time update behavior across each integration point. AC-7/AC-8/AC-9 cover error handling and reconnection. AC-10 covers security (credential leakage). AC-11 covers accessibility. AC-13 ensures no regression in non-preview mode. AC-14 covers rapid-update edge case. CAVEAT: File contents were not available for review; criteria are based solely on the story description, title, and file paths. If the actual implementations of useContent, ContentstackContext, or contentstack service have specific contracts or constraints, some ACs may need adjustment.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-07-31T01:16:39.167Z"
+          }
+        ],
+        "coordinatorReview": {
+          "verdict": "needs_review",
+          "reviewNotes": "Both agents ran but the collaborative output has significant gaps. Openspec was assigned to elaborate ACs from an empty starting point, yet acceptanceChanged=false and splitCount=0 — it provided context notes (identifying attachment points and mock assumptions) but did not produce actual acceptance criteria. Speckit then generated 14 ACs from scratch based solely on the story description, but flagged that file contents were unavailable, meaning the ACs were written blind to the real contracts of useContent, ContentstackContext, contentstack service, contentCard interface, and ContentstackLink. This creates substantial alignment risk: criteria may reference behaviors or interfaces that don't match actual implementations. Additionally, speckit's acceptanceChanged=false contradicts its own notes claiming 'all 14 ACs are new,' suggesting a pipeline data integrity issue. The 14 proposed ACs cover reasonable surface area (mode detection, initialization, real-time updates, error handling, reconnection, security, accessibility, non-regression, rapid updates) but their testability and completeness cannot be confirmed without validating against source code. A human reviewer should: (1) verify the 14 ACs against actual implementation contracts, (2) confirm whether openspec failed to deliver or if its output was lost, (3) reconcile the acceptanceChanged flag discrepancy, and (4) determine if story splits are warranted given the cross-market (GO, UP, MX) complexity.",
+          "qualityScore": 0.5,
+          "flags": [
+            "openspec_did_not_produce_acs",
+            "speckit_wrote_acs_without_source_access",
+            "acceptanceChanged_flag_inconsistency",
+            "no_story_splits_despite_cross_market_complexity",
+            "requires_validation_against_implementation_contracts"
+          ],
+          "reviewedAt": "2026-07-31T01:17:04.165Z"
+        }
+      },
+      "estimatedAiMinutes": 3.84,
+      "estimatedCost": 0.0351,
+      "estimatedTokens": 136417,
+      "estimatedTurns": 8,
+      "estimatedHours": 0.064,
+      "cpaConfidence": 0.75,
+      "cpaGate": "review",
+      "ladderTier": "high",
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
+      "reasoningEffort": "low",
+      "completedAt": "2026-07-31T01:26:59+00:00",
+      "actualCost": 5.131707,
+      "reviewStatus": "escalated"
+    }
+  ],
+  "currentIteration": 10,
+  "source": "jira",
+  "sourceProject": "AMSD"
+}

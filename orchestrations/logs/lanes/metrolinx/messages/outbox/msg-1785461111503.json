@@ -1,0 +1,88 @@
+{
+  "message_id": "msg-1785461111503",
+  "timestamp": "2026-07-31T01:25:11+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 55,
+          "description": "The prescribed root cause fix was NOT implemented. The `options` object (the `contentstack.Config` passed to `contentstack.Stack(options)`) lacks the `live_preview` configuration property. There is no `live_preview: { enable: CONTENTSTACK_LIVE_PREVIEW === 'true', preview_timestamp: CONTENTSTACK_PREVIEW_TOKEN }` in the options, and no `CONTENTSTACK_LIVE_PREVIEW` or `CONTENTSTACK_PREVIEW_TOKEN` env var destructuring. Without this, the Contentstack Stack client cannot receive live preview data from the CMS, so no downstream component can ever display real-time previewed content. Every acceptance criterion is unmet.",
+          "suggestedFix": "Add `CONTENTSTACK_LIVE_PREVIEW` and `CONTENTSTACK_PREVIEW_TOKEN` to the `process.env` destructuring block (following the existing pattern). Then add `live_preview: { enable: CONTENTSTACK_LIVE_PREVIEW === 'true', preview_timestamp: CONTENTSTACK_PREVIEW_TOKEN }` to the `options` object. After `const Stack = contentstack.Stack(options);`, call `Stack.livePreview(options);` per the Contentstack Live Preview SDK docs.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 0,
+          "description": "The file does not exist at the expected path (src/context/ContentstackContext.tsx). The import in useContent.ts references `context/contentstackContext` (lowercase). Based on prior investigation, the context is a bare `createContext` with a static default value — there is no `ContentstackProvider` component, no `useState` for reactive content, no `useEffect` subscribing to `LivePreview.onEntryChange`, and no state setter. Without a reactive state mechanism, the context value never changes after initial render, so none of the 236+ `useContent` consumers can receive live preview updates. Every acceptance criterion — real-time update without reload, consecutive edits appearing live, in-place rendering — is unmet because the reactivity mechanism is entirely absent.",
+          "suggestedFix": "Create a `ContentstackProvider` component that wraps `ContentstackContext.Provider`. Use `useState` initialized from `defaultContent`. Use `useEffect` to call `LivePreview.onEntryChange(callback)` from `@contentstack/live-preview-utils` to update content state on preview changes. Replace any raw `ContentstackContext.Provider` usage in page components (e.g., `[[...slug]].tsx`) with this `ContentstackProvider`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "package.json",
+          "line": 0,
+          "description": "The `@contentstack/live-preview-utils` dependency is not installed in the project. Without this SDK package, no Live Preview event subscription can be established on the client side, making real-time content updates impossible.",
+          "suggestedFix": "Add `@contentstack/live-preview-utils` as a dependency in package.json and install it. Import and initialize `LivePreview` at module level in the ContentstackProvider file with the same Stack config used server-side.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.ts",
+          "line": 4,
+          "description": "The `useContent` hook calls `useContext(ContentstackContext)` but there is no reactive Provider component supplying a dynamic value. The hook will always return the static value from `createContext`, meaning `getContentByKey` always returns `defaultValue`. No live preview update can propagate through this hook. Additionally, the `useContent` function lacks an explicit return type annotation.",
+          "suggestedFix": "Once the `ContentstackProvider` with reactive `useState` is implemented and wraps the app tree, `useContext` will receive updated values. Add an explicit return type: `export const useContent = (): { getContentByKey: <T>(path: string, defaultValue: T) => T } => { ... }`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/",
+          "line": 0,
+          "description": "No vitest unit tests were found for the Live Preview feature. There are no tests mirroring src/context/ for the ContentstackProvider, no tests for `onEntryChange` callback behavior, and no tests verifying that context state updates on preview events. The test count has not increased to cover this new feature, violating the requirement that new features have corresponding vitest unit tests.",
+          "suggestedFix": "Add unit tests in test/unit/context/ContentstackContext.test.tsx (or mirroring path) that: (1) verify the provider initializes with default content, (2) simulate an `onEntryChange` event and assert the context value updates, (3) verify child components re-render with updated content. Add tests for the contentstack.ts service verifying `live_preview` config is included when env vars are set.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 69,
+          "description": "The `renderOption` object uses untyped `any` — `span: (node: { children: any }, next: (arg0: any) => any)` — without an explanatory comment. This violates TypeScript strict compliance requirements.",
+          "suggestedFix": "Replace `any` with proper types or add an explanatory comment: `// Contentstack SDK does not export types for render option node/next callbacks`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 120,
+          "description": "Multiple `any` types used without explanatory comments: `const result: any = []` in `getEntry`, `const [response]: any = await _query.find()`, and `catch (e: any)` in multiple catch blocks. These violate the TypeScript strict compliance requirement that no untyped `any` exists without an explanatory comment.",
+          "suggestedFix": "Replace `result: any` with `T[]` (the generic type parameter). Replace `response: any` with `T[]`. For catch blocks, use `catch (e: unknown)` and narrow with `instanceof Error` or the existing `isContentstackApiError` helper.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/hooks/useContent.ts",
+          "line": 4,
+          "description": "The `useContent` hook imports from `context/contentstackContext` using a lowercase path. If the file is named `ContentstackContext.tsx`, this may fail on case-sensitive filesystems. Verify the import path matches the actual filename casing.",
+          "suggestedFix": "Ensure the import path casing matches the actual file: `import { ContentstackContext } from \"context/ContentstackContext\";`.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

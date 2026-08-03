@@ -1,0 +1,56 @@
+{
+  "message_id": "msg-1785609393515",
+  "timestamp": "2026-08-01T18:36:33+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "test/unit/",
+          "line": 0,
+          "description": "No vitest unit tests exist for the Live Preview feature. The test/unit/ directory does not exist. The review criteria require new features to have corresponding vitest unit tests mirroring the src/ path. At minimum, tests should verify that the Contentstack Stack options include a live_preview block with enable=true and a management_token, and that CONTENTSTACK_MANAGEMENT_TOKEN is validated in the env-check block.",
+          "suggestedFix": "Create test/unit/services/contentstack.test.ts (or similar) asserting: (1) options.live_preview.enable === true, (2) options.live_preview.management_token is sourced from process.env.CONTENTSTACK_MANAGEMENT_TOKEN, (3) the env validation block throws when CONTENTSTACK_MANAGEMENT_TOKEN is missing. Run with `~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run` to confirm passing.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 85,
+          "description": "The live_preview config block includes `host: CONTENTSTACK_API_HOST`, which is not part of the prescribed minimal fix. The RCA prescribes only `management_token` and `enable`. While the Contentstack SDK may accept a `host` property in live_preview, reusing the delivery API host for the preview host may be incorrect — Contentstack live preview typically requires a separate preview host endpoint. If the SDK uses this host for WebSocket or polling connections, pointing it at the delivery API host could cause silent failures.",
+          "suggestedFix": "Either remove `host` from the live_preview block (matching the prescribed fix exactly), or introduce a dedicated `CONTENTSTACK_PREVIEW_HOST` env var and named constant if a separate preview host is genuinely needed. Verify against Contentstack SDK documentation that `host` is a valid live_preview property and what value it expects.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 64,
+          "description": "CONTENTSTACK_MANAGEMENT_TOKEN was added to the mandatory env validation block that throws on startup. This is a potential regression: existing deployments (CI, staging, production) that do not have CONTENTSTACK_MANAGEMENT_TOKEN set will now crash on boot with 'Missing required environment variables'. The verification criteria require 'Existing behavior related to this area is unchanged (no regression).'",
+          "suggestedFix": "If live preview is optional (can be toggled off when the token is absent), make the validation conditional: only require CONTENTSTACK_MANAGEMENT_TOKEN when live preview is enabled (e.g., via a CONTENTSTACK_LIVE_PREVIEW_ENABLED flag). Alternatively, coordinate with DevOps to ensure the env var is deployed before merging. At minimum, document the new required env var in the project's README or .env.example.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 83,
+          "description": "The `live_preview` config uses `host: CONTENTSTACK_API_HOST` which is a named constant — good. However, `CONTENTSTACK_MANAGEMENT_TOKEN` is destructured from process.env at the module top level (line 28) rather than being explicitly validated before use. If process.env is undefined (edge case in some test runners), the destructuring `const { ... CONTENTSTACK_MANAGEMENT_TOKEN = '' } = process?.env || {}` safely defaults to empty string, but the validation block only logs the error rather than providing a descriptive message about which token is missing.",
+          "suggestedFix": "Enhance the error logging to specify 'Contentstack management token not provided' (already done at line 64-65) — this is adequate. No change needed unless the generic throw message at line 70 should list all missing vars. Optional improvement only.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

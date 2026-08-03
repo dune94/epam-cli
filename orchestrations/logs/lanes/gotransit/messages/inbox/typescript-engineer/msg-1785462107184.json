@@ -1,0 +1,72 @@
+{
+  "message_id": "msg-1785462107184",
+  "timestamp": "2026-07-31T01:41:47+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 69,
+          "description": "The prescribed minimal fix was not applied. CONTENTSTACK_PREVIEW_HOST is destructed from process.env (line 23) but never used. The options object passed to contentstack.Stack(options) has no live_preview key. Without this, the Contentstack SDK will never subscribe to the preview delivery stream, so no downstream component can receive live preview events. Every acceptance criterion depends on this SDK-level configuration being present.",
+          "suggestedFix": "Add live_preview to the options object before it is passed to contentstack.Stack(): `live_preview: { enable: true, host: CONTENTSTACK_PREVIEW_HOST }`. Ensure CONTENTSTACK_PREVIEW_HOST has a fallback or validation similar to the other env vars.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 55,
+          "description": "The provider still uses useMemo to freeze defaultContent — it was not replaced with useState + useEffect as prescribed. The context never updates after initial render, so no consumer (236+ components via useContent) can receive live preview updates. All acceptance criteria related to real-time edits appearing without a page reload are unmet.",
+          "suggestedFix": "Replace `const context = useMemo(() => ({ content: defaultContent }), [defaultContent])` with `const [content, setContent] = useState(defaultContent)`. Add a useEffect that subscribes to the Contentstack SDK's live preview update events (e.g., Stack.live_preview.on('update', callback) or @contentstack/live-preview-utils onEntryUpdate). On each event, merge the updated entry into the existing content state. Clean up the subscription on unmount.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/interface/contentstack.ts",
+          "line": 5,
+          "description": "No includeDraft field exists on IContentstackGetEntry, IContentstackGetSingleEntry, IContentstackGetSingletonEntry, ICreateQueryConfig, or ICreateEntryConfig. The public-facing functions (getEntry, getSingleEntry, getSingletonEntry, findSingletonEntry) do not accept or propagate includeDraft to the factory. This means draft content can never be fetched — the preview site will only show published content, failing the core acceptance criterion that unpublished draft entries render on the preview site.",
+          "suggestedFix": "Add `includeDraft?: boolean` to IContentstackGetEntry, IContentstackGetSingleEntry, IContentstackGetSingletonEntry, ICreateQueryConfig, and ICreateEntryConfig. In ContentstackFactory.createContentTypeQuery and createContentTypeEntryQuery, when includeDraft is true, call `query.addParam('include_draft', 'true')`. Propagate the parameter through all public-facing functions.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 0,
+          "description": "No page-level getStaticProps (or any caller) passes context.preview through to contentstack service calls. Grep across src/ and pages/ for 'preview', 'livePreview', 'includeDraft', 'include_draft' returned zero results. Without this propagation, activating preview mode cannot trigger draft content fetching — the preview flag never reaches the query layer.",
+          "suggestedFix": "In pages that use getStaticProps, read context.preview from the Next.js context parameter and pass includeDraft: true to getEntry/getSingleEntry/getSingletonEntry when preview is active. Alternatively, use getServerSideProps for preview routes.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "test/unit/",
+          "line": 0,
+          "description": "No vitest unit tests were added for the live preview / includeDraft functionality. Grep across test/unit/ for 'live_preview', 'livePreview', 'includeDraft', 'include_draft', 'ContentstackContext', 'ContentstackProvider' returned zero results. Per review criteria, new features must have corresponding vitest unit tests in test/unit/ mirroring the src/ path. There are zero tests verifying that includeDraft: true causes addParam('include_draft', 'true'), that setContent updates the context and triggers re-renders, or that the initial state matches defaultContent.",
+          "suggestedFix": "Add test/unit/services/contentstack.test.ts verifying includeDraft propagation to the query layer. Add test/unit/context/ContentstackContext.test.tsx verifying that setContent updates the context value, that the initial state matches defaultContent, and that the live preview event subscription is registered and cleaned up on unmount.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.tsx",
+          "line": 0,
+          "description": "No livePreview callback registration exists anywhere in the codebase. Even if the provider were changed to use useState, nothing registers Stack.live_preview.on('update') or @contentstack/live-preview-utils onEntryUpdate to actually call setContent. Without this registration, the context never updates reactively, and all acceptance criteria related to live preview displaying real-time edits are unmet.",
+          "suggestedFix": "Register the live preview callback in the useEffect added to ContentstackProvider (or in _app.tsx bootstrap). The callback should receive the updated entry from the SDK and call setContent to merge it into the existing content state, triggering re-renders of all useContent consumers.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

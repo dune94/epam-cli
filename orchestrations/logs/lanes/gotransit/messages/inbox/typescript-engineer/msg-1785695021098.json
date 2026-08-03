@@ -1,0 +1,72 @@
+{
+  "message_id": "msg-1785695021098",
+  "timestamp": "2026-08-02T18:23:41+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 148,
+          "description": "setCommonConfig extracts content_type_uid from the query object via an unsafe cast to contentstack.Entry: `(query as contentstack.Entry).content_type_uid`. Query objects in the Contentstack SDK do not expose `content_type_uid` as a public property — it is an Entry field. At runtime this will be undefined, the `if (contentTypeUid)` guard will fail, and `livePreviewQuery` will never be called. Live preview forwarding silently fails for every query path. The contentTypeUid is already available as a parameter in createContentTypeQuery/createContentTypeEntryQuery — pass it through to setCommonConfig explicitly instead of extracting it from the query via a wrong-type cast.",
+          "suggestedFix": "Add `contentTypeUid?: string` to the setCommonConfig parameter type and pass it from createContentTypeQuery/createContentTypeEntryQuery. Then use that parameter directly instead of casting the query: `if (live_preview?.preview_hash && contentTypeUid) { this.stack.livePreviewQuery({ live_preview: live_preview.preview_hash, content_type_uid: contentTypeUid }); }`. This is fewer lines and actually works at runtime.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 147,
+          "description": "The live_preview forwarding condition requires BOTH `live_preview?.preview_hash` AND `live_preview?.live_preview` to be truthy: `if (live_preview?.preview_hash && live_preview?.live_preview)`. This is redundant — the test itself sets both to the same value (`live_preview: 'hash123', preview_hash: 'hash123'`). Any caller that provides only `preview_hash` (the standard Contentstack preview context field) will not trigger livePreviewQuery. This defeats the purpose of the interface field. The condition should check only `preview_hash` (or whichever single field carries the hash).",
+          "suggestedFix": "Simplify to `if (live_preview?.preview_hash) { ... }` and remove the `live_preview` inner field from the interface and all call sites. This is fewer lines and less confusing.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/interface/contentstack.ts",
+          "line": 6,
+          "description": "The previously well-documented IContentstackLivePreview interface (with enable, preview_token, preview_hash fields and JSDoc) was replaced with a confusing inline type `{ live_preview?: string; preview_hash?: string }` that has a nested `live_preview` property inside the `live_preview` property — no documentation, poor readability. The AC says the interface should allow preview context to flow through; it does not prescribe this confusing shape.",
+          "suggestedFix": "Restore a named interface (e.g. IContentstackLivePreviewContext) with a clear JSDoc comment, or at minimum inline-document why the shape is `{ live_preview?: string; preview_hash?: string }`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 82,
+          "description": "`export` was removed from `class ContentstackFactory` and the exported `isContentstackQuery` function was deleted entirely. If any other module imports either symbol, this is a breaking change. The diff provides no evidence that these exports were confirmed unused across the codebase.",
+          "suggestedFix": "Verify no other files import `ContentstackFactory` or `isContentstackQuery`. If any do, either keep the exports or update all consumers. If confirmed unused, the removal is fine but should be noted in the PR description.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 82,
+          "description": "`contentstack.Stack(options as any)` — the `as any` cast remains but the explanatory comment that justified it was deleted. Per TypeScript strict compliance rules, untyped `any` without an explanatory comment is a violation.",
+          "suggestedFix": "Restore the comment explaining why the cast is necessary (SDK type mismatch on live_preview fields), or use a more specific type assertion.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 387,
+          "description": "New live preview tests use `require('../contentstack.ts')` with the `.ts` extension. The existing tests in the same file use `require('../contentstack')` without the extension. The `.ts` extension is non-standard for jest module resolution and may fail in configurations that don't resolve TypeScript extensions directly.",
+          "suggestedFix": "Use `require('../contentstack')` without the `.ts` extension for consistency with the rest of the file.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

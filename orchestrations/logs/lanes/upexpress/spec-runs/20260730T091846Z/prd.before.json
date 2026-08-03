@@ -1,0 +1,175 @@
+{
+  "id": "jira-sourced-1785403233215",
+  "title": "Metrolinx Brownfield — Jira-sourced",
+  "version": "1.0.0",
+  "lastUpdated": "2026-07-30",
+  "project": {
+    "name": "metrolinx",
+    "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
+    "stack": {
+      "language": "TypeScript",
+      "runtime": "Node.js 20",
+      "framework": "Next.js",
+      "testing": "jest",
+      "cms": "Contentstack",
+      "devEnvironment": "Ubuntu WSL2"
+    },
+    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com",
+    "outputDirs": [
+      {
+        "codeline": "gotransit",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+      },
+      {
+        "codeline": "upexpress",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+      },
+      {
+        "codeline": "metrolinx",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+      }
+    ]
+  },
+  "configuration": {
+    "profilesPath": "profiles.json",
+    "autoCommit": false,
+    "requireTests": true,
+    "budget": 12,
+    "aiRuntime": {
+      "provider": "claude",
+      "defaultModel": "claude-sonnet-4-6"
+    }
+  },
+  "implementationOrder": {
+    "core": [
+      "AMSD-2041"
+    ]
+  },
+  "phasesConfig": {
+    "scaffold": {
+      "description": "Project scaffolding and TypeScript configuration",
+      "parallelWorktrees": false
+    },
+    "core": {
+      "description": "API client, CLI, and Express server implementation",
+      "parallelWorktrees": true
+    },
+    "ui_and_review": {
+      "description": "HTML dashboard and code review",
+      "parallelWorktrees": true
+    }
+  },
+  "stories": [
+    {
+      "id": "AMSD-2041",
+      "jiraKey": "AMSD-2041",
+      "title": "[GO, UP, MX] Live Preview of Content in CMS",
+      "description": "[GO, UP, MX] Live Preview of Content in CMS",
+      "acceptanceCriteria": [],
+      "codeline": "gotransit",
+      "status": "pending",
+      "completed": false,
+      "agentRole": "typescript-engineer",
+      "agentGroup": "main",
+      "effort": "low",
+      "estimate": 10,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). The acceptance criteria field is literally '(none)' — there are no testable conditions for an AI agent to implement against.",
+      "issueType": "Story",
+      "codelines": [
+        "gotransit",
+        "upexpress",
+        "metrolinx"
+      ],
+      "verificationCriteria": [
+        "When the application page is opened inside the Contentstack CMS editor's preview panel, the rendered page displays the draft (unpublished) version of the content being edited, not the last published version.",
+        "When the application page is opened outside the CMS editor (e.g., in a normal browser tab), the rendered page displays the published content, with no draft or unpublished changes visible.",
+        "While the page is open in the CMS editor's preview panel, when a content author edits a text field in the CMS, the edited text appears on the rendered page without the author publishing the entry or manually reloading the page.",
+        "While the page is open in the CMS editor's preview panel, when a content author makes several successive edits to content, each successive change becomes visible on the rendered page, reflecting the latest edit.",
+        "When a content author edits content that appears in multiple places on the rendered page, every visible instance of that content on the page shows the updated draft text.",
+        "When the page is open in the CMS editor's preview panel and the live connection to the CMS is lost (e.g., network interruption), the rendered page continues to display the most recently shown content without crashing, going blank, or showing an error screen.",
+        "When the page is open in the CMS editor's preview panel and the author switches between different entries or content items in the CMS, the rendered page updates to show the content of the item currently being edited."
+      ],
+      "vcSource": "both",
+      "vcResolution": "regenerated",
+      "fixSiteAnalysis": [
+        {
+          "file": "src/context/ContentstackContext.tsx",
+          "function": "ContentstackProvider",
+          "reason": "This is where content is PROVIDED to all 236 useContent consumers. It currently creates a STATIC context value from defaultContent via useMemo — content never updates after initial render. For Live Preview to deliver draft content in real-time, this provider must subscribe to Contentstack Live Preview SDK events and update the content state when they fire. All downstream consumers (useContent → getContentByKey) read from this single context, so fixing the provider fixes delivery to every consumer.",
+          "fix": "Replace the useMemo with useState(initialized from defaultContent) so content can be updated at runtime. Add a useEffect that, only when running inside the CMS editor iframe (detect via Contentstack Live Preview SDK's isLivePreviewEnabled or window.__CONTENTSTACK_LIVE_PREVIEW__), calls the SDK's onLivePreview callback to setState with the incoming draft content. The provider already receives defaultContent and wraps it in context — the only change is making that context value mutable via live-preview events instead of frozen via useMemo. The useContent hook and all 236 consumers require zero changes because they already read from ContentstackContext.",
+          "helper": "",
+          "brokenLine": "const context = useMemo(\n    () => ({\n      content: defaultContent,\n    }),\n    [defaultContent],\n  );",
+          "fixVerified": null,
+          "evidenceVerified": true,
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false
+        }
+      ],
+      "storyKind": "novel",
+      "technicalNotes": null,
+      "specification": {
+        "runId": "20260730T091846Z",
+        "assignedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "coordinatorNotes": "Complex cross-platform (GO, UP, MX) live preview feature with empty acceptance criteria and no existing spec. Openspec needed first to elaborate AC and add technical depth for real-time content rendering and CMS integration. Speckit then hardens with testability, security (untrusted content rendering), and edge-case coverage. Priority high due to complexity and multi-platform scope.",
+        "status": "completed",
+        "updatedAt": "2026-07-30T09:36:10.482Z",
+        "appliedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": true,
+            "notes": "Description described 4 concrete behaviors (real-time preview, CMS-editor-only sessions, draft content delivery, integration via ContentstackContext+useContent) but acceptanceCriteria was empty — added measurable ACs that verify each described behavior so description and ACs no longer contradict. VCs derived from description since ACs were originally empty.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-07-30T09:34:43.505Z"
+          },
+          {
+            "agent": "speckit",
+            "applied": true,
+            "notes": "Openspec returned empty acceptanceCriteria, so all ACs are new. I derived them from the story title '[GO, UP, MX] Live Preview of Content in CMS' and the description's implied behaviors. AC-1/AC-2 cover core real-time preview and draft rendering. AC-3 addresses security (unauthorized access). AC-4/AC-5 cover error handling (connectivity loss, broken assets). AC-6 covers concurrent editing edge case. AC-7/AC-8 cover state transitions. AC-9 addresses the multi-market (GO, UP, MX) locale requirement. AC-10 covers accessibility. AC-11 covers performance edge case with large content. AC-12 covers unsupported content types. The original description and title were minimal, so these ACs may need refinement once detailed requirements or design specs are available — flagged below.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-07-30T09:36:10.482Z"
+          }
+        ],
+        "coordinatorReview": {
+          "verdict": "needs_review",
+          "reviewNotes": "Both agents describe meaningful, non-overlapping contributions — openspec elaborated requirements from the description's implied behaviors, and speckit hardened with security (unauthorized access), edge cases (connectivity loss, broken assets, concurrent editing, large content, unsupported types), accessibility, and multi-market locale coverage. The conceptual collaboration is sound. However, there is a critical persistence failure: the story's acceptanceCriteria array remains empty [] despite both agents claiming to have added ACs (openspec: 'added measurable ACs'; speckit: 'all ACs are new' with AC-1 through AC-12 described). Both agents report acceptancedChanged: false, which directly contradicts their notes. The 12 ACs described in speckit's notes were never written back to the story object. Additionally, no story splits occurred (splitCount: 0) despite the multi-platform scope (GO, UP, MX) which may warrant separate per-market stories or at least explicit cross-platform ACs. Speckit self-flags that ACs may need refinement once detailed requirements are available. A human must verify whether the ACs were persisted to a separate spec file or need to be re-applied, and confirm the acceptancedChanged flag discrepancy is a tooling bug rather than a silent data loss.",
+          "qualityScore": 0.45,
+          "flags": [
+            "acceptance_criteria_not_persisted",
+            "acceptanceChanged_flag_contradicts_agent_notes",
+            "no_story_split_despite_multi_platform_scope",
+            "speckit_self_flagged_ac_refinement_needed",
+            "empty_acceptanceCriteria_after_both_agents_completed"
+          ],
+          "reviewedAt": "2026-07-30T09:36:30.948Z"
+        }
+      },
+      "estimatedAiMinutes": 4.1563,
+      "estimatedCost": 0.0842,
+      "estimatedTokens": 327415,
+      "estimatedTurns": 11,
+      "estimatedHours": 0.0692,
+      "cpaConfidence": 0.68,
+      "cpaGate": "review",
+      "ladderTier": "high",
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
+      "reasoningEffort": "low",
+      "completedAt": "2026-07-30T09:47:37+00:00",
+      "actualCost": 1.0574000000000001,
+      "reviewStatus": "escalated"
+    }
+  ],
+  "currentIteration": 9,
+  "source": "jira",
+  "sourceProject": "AMSD"
+}

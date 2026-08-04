@@ -19,7 +19,29 @@
 # codeline, client or ticket key — the engine must run on the next unknown project
 # unmodified.
 
+# WHICH LANE AM I? A story may SPAN codelines and every lane of a run shares one
+# ORCH_RUN_ID, so a checkpoint keyed on the run id alone is shared by all of them. The
+# orchestrator does not export the lane name (it is a local in the lane loop); the only
+# per-lane signal written is project.outputDir, recovered by matching it back against
+# project.outputDirs[] — the same derivation claude.sh's _current_lane() uses.
+_checkpoint_lane() {
+    local _l="${CODELINE_NAME:-}"
+    if [ -z "$_l" ] && [ -n "${PRD_FILE:-}" ] && [ -f "${PRD_FILE}" ]; then
+        _l=$(jq -r '.project as $p | (($p.outputDirs // []) | map(select(.path == $p.outputDir)) | .[0].codeline) // empty' \
+            "$PRD_FILE" 2>/dev/null)
+    fi
+    printf '%s' "$_l"
+}
+
 # Resolve the durable checkpoint directory for a run id (default: the current run).
+#
+# PER LANE. Live 2026-08-04, run 20260804T003327Z: this returned
+# runs/<run-id>/checkpoint with no codeline in it, so all three metrolinx lanes wrote to
+# one directory and overwrote each other. Two lanes reached pre-writer and a third lane's
+# earlier post-spec save clobbered both, leaving one lane's stage marker on another lane's
+# PRD. Resuming that would have restored a single codeline's artefacts into every lane.
+#
+# Single-codeline runs resolve no lane and keep the original flat path, unchanged.
 checkpoint_dir() {
     local _rid="${1:-${ORCH_RUN_ID:-}}"
     local _base="${EPAM_PROJECT_CONFIG_DIR:-${PROJECT_CONFIG_DIR:-}}"
@@ -31,7 +53,12 @@ checkpoint_dir() {
         echo "[checkpoint] no run id (ORCH_RUN_ID unset and none passed)" >&2
         return 1
     fi
-    printf '%s/runs/%s/checkpoint' "$_base" "$_rid"
+    local _lane; _lane=$(_checkpoint_lane)
+    if [ -n "$_lane" ]; then
+        printf '%s/runs/%s/lanes/%s/checkpoint' "$_base" "$_rid" "$_lane"
+    else
+        printf '%s/runs/%s/checkpoint' "$_base" "$_rid"
+    fi
 }
 
 # ── Pause stages ─────────────────────────────────────────────────────────────
@@ -196,9 +223,14 @@ list_run_checkpoints() {
     local _base="${EPAM_PROJECT_CONFIG_DIR:-${PROJECT_CONFIG_DIR:-}}"
     [ -n "$_base" ] && [ -d "$_base/runs" ] || return 0
     local _d
-    for _d in "$_base"/runs/*/checkpoint; do
+    # Flat (single-codeline) and per-lane layouts both count. A multi-lane run is ONE run
+    # to the operator, so the id is reported once however many lanes it has.
+    for _d in "$_base"/runs/*/checkpoint "$_base"/runs/*/lanes/*/checkpoint; do
         [ -f "$_d/prd.json" ] || continue
-        basename "$(dirname "$_d")"
-    done | sort
+        case "$_d" in
+            */lanes/*/checkpoint) basename "$(dirname "$(dirname "$(dirname "$_d")")")" ;;
+            *)                    basename "$(dirname "$_d")" ;;
+        esac
+    done | sort -u
     return 0
 }

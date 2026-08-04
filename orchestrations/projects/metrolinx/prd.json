@@ -1,8 +1,8 @@
 {
-  "id": "jira-sourced-1785623790436",
+  "id": "jira-sourced-1785803682811",
   "title": "Metrolinx Brownfield — Jira-sourced",
   "version": "1.0.0",
-  "lastUpdated": "2026-08-01",
+  "lastUpdated": "2026-08-04",
   "project": {
     "name": "metrolinx",
     "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
@@ -75,7 +75,7 @@
       "effort": "low",
       "estimate": 10,
       "acGateVerdict": "enrichable",
-      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). Acceptance criteria are completely absent and the description is too vague — no specification of which content types, how preview is triggered, what the expected UX is, or how protected pages are handled — so different engineers would implement fundamentally different solutions.",
+      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). Acceptance criteria are completely absent, and the description is too vague for an AI agent to implement without human clarification on content types, preview UX, trigger mechanism, and codeline-specific requirements.",
       "issueType": "Story",
       "codelines": [
         "gotransit",

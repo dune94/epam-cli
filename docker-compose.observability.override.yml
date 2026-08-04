@@ -1,5 +1,5 @@
 services:
   agent-monitor:
     volumes:
-      - /home/bradleyjerome/.epam/mock1-paused/20260803T223120Z/workspace:/prd-dir:ro
+      - /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/metrolinx:/prd-dir:ro
       - /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs:/logs-dir:ro

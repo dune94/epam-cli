@@ -1,0 +1,2 @@
+{"storyId":"AMSD-2041","attempt":1,"maxAttempts":3,"model":"z-ai/glm-5.1","escalated":false,"elapsedSec":52,"maxToolCalls":7,"phase1Findings":1,"phase2Used":false,"findings":1,"exploreChars":1384,"hitIterationCap":false,"timestamp":"2026-08-04T00:36:19.664Z"}
+{"storyId":"AMSD-2041","attempt":1,"maxAttempts":3,"model":"z-ai/glm-5.1","escalated":false,"elapsedSec":147,"maxToolCalls":7,"phase1Findings":1,"phase2Used":false,"findings":1,"exploreChars":1387,"hitIterationCap":false,"timestamp":"2026-08-04T00:41:36.233Z"}

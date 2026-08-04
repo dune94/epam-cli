@@ -1,0 +1,1 @@
+{"phase_id": "core", "phase_name": "core", "actual_minutes": 0.283, "forecast_minutes": 2.71, "actual_cost_usd": 0.0034, "forecast_cost_usd": 0.0351, "variance_minutes": -2.427, "variance_cost_usd": -0.0317, "over_threshold": false, "agent_recommendations": [], "notes": "No improvements needed."}

@@ -37,16 +37,43 @@ const RUNNER = join(__dirname, '../../../orchestrations/scripts/spec-mode-runner
 const src = readFileSync(RUNNER, 'utf8');
 
 describe('the detective grounds VC generation', () => {
-  it('runs BEFORE the VC enforcement block', () => {
-    const detective = src.indexOf('await runCodeGraphDetective(story, logDir)');
+  /**
+   * NOW ASSERTED BY EXECUTION, AND THE BAR IS HIGHER.
+   *
+   * This used to compare source-string indexes for `await runCodeGraphDetective(story,
+   * logDir)` versus `await enforceVerificationCriteria(...)`. It broke the moment the call
+   * became injectable (`runDetective`) — while the invariant it protects became STRICTLY
+   * STRONGER: the detective now runs before the producer's model call, which is itself
+   * before enforcement. A test comparing source offsets asserts where characters sit in a
+   * file, not what the program does.
+   *
+   * The ordering is observed for real in vc-producer-grounding.test.ts, which spawns a stub
+   * runner that records whether the detective's marker already existed when the model was
+   * invoked. Here we keep the weaker structural guarantee that both stages exist and that
+   * enforcement still receives the findings.
+   */
+  it('the detective\'s findings reach VC enforcement', () => {
     const enforce = src.indexOf('await enforceVerificationCriteria(story, rawVc');
-    expect(detective, 'detective call not found').toBeGreaterThan(-1);
     expect(enforce, 'VC enforcement not found').toBeGreaterThan(-1);
-    expect(detective,
-      'the detective still runs AFTER VC enforcement — the VC generator cannot ' +
-      'see the fix site, so it specifies observable behaviour for code it has ' +
-      'never been shown')
-      .toBeLessThan(enforce);
+    const block = src.slice(enforce, enforce + 700);
+    expect(
+      block,
+      'enforcement no longer receives the located fix site, so the fallback and the ' +
+        'regeneration path both lose their anchor',
+    ).toMatch(/findings:\s*detectiveFindings/);
+  });
+
+  it('the producer is grounded BEFORE it writes — the detective is not left until after', () => {
+    const i = src.indexOf('async function runSpecAgent');
+    expect(i).toBeGreaterThan(-1);
+    const fn = src.slice(i, src.indexOf('const prompt = `${forcedRetryBlock}', i));
+    expect(
+      fn,
+      'the detective runs AFTER the producer\'s model call again — first-pass VCs are ' +
+        'written for code that has never been located. Live 20260804T162414Z: the only ' +
+        'lane that reached the grounded (regeneration) path kept all 5 criteria; the two ' +
+        'that kept first-pass output went partial, one down to a single criterion.',
+    ).toMatch(/await runDetective\(story, logDir\)/);
   });
 
   it('regeneration receives the fix site, not just ticket prose', () => {

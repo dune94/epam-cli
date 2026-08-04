@@ -23,10 +23,13 @@
  * CONFIGURABLE, NOT HARDCODED: SPEC_MODE_ALLOWED_TOOLS overrides the default, so a
  * project needing something else changes config, not this engine.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { specAgentEnv } = require('../../../orchestrations/scripts/spec-mode-runner.js');
+const { specAgentEnv, manifestEvidence } = require('../../../orchestrations/scripts/spec-mode-runner.js');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const SRC = require('node:fs').readFileSync(
   require('node:path').join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'), 'utf8');
@@ -78,31 +81,122 @@ describe('spec-pass agents can see the repository', () => {
 });
 
 /**
- * BOTH HALVES. team-lead-review.sh's own note: "the BLOCK tells the reviewer the tools
- * exist, and the [instruction] makes it use them." Granting tools without requiring their
- * use leaves a reviewer that MAY look — and sometimes will not.
+ * GRANTING TOOLS WAS NOT ENOUGH — AND THE LIVE CALL PROVED IT.
+ *
+ * The env above really does grant read_file/list_files, and the prompt really did require
+ * their use. Live (test/integration/spec-reviewer-live.test.ts, first run) the reviewer
+ * answered with 87 bytes:
+ *
+ *     <tool_call>list_files path="."</arg_value><tool_call>list_files path="src"</arg_value>
+ *
+ * No <SPEC_REVIEW> at all. ai-run.sh is a single-shot text call with NO tool-execution
+ * loop: nothing runs a tool the model asks for, so requiring verification-before-verdict
+ * asked for a turn that never comes. The grant set an env var; it did not put the reviewer
+ * on a tool-executing path.
+ *
+ * So the path facts are gathered DETERMINISTICALLY by manifestEvidence() and handed to the
+ * reviewer in its prompt. fs.existsSync cannot hallucinate, costs no tokens, and cannot
+ * stall. The reviewer then judges what evidence cannot: testability and plausibility.
+ * (The tool grant stays — the detective and other spec agents run on paths that do execute
+ * tools, and read-only access is correct for them.)
+ *
+ * These tests EXECUTE manifestEvidence against real files on disk, rather than asserting
+ * the instruction text exists. A source-grep would pass on a comment or a dead branch.
  */
-describe('the reviewer is REQUIRED to verify, not merely able to', () => {
-  it('the review prompt carries the grounding block', () => {
+describe('manifestEvidence — the path facts are gathered, not asked for', () => {
+  let dir = '';
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'manifest-evidence-'));
+    mkdirSync(join(dir, 'src'), { recursive: true });
+    writeFileSync(join(dir, 'src', 'RealFile.ts'), 'export const x = 1;\n');
+    writeFileSync(join(dir, 'src', 'other.tsx'), 'export const y = 2;\n');
+  });
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  const prd = () => ({ project: { outputDir: dir } });
+  const story = (files: string[]) => [{ id: 'ST-1', technicalNotes: { files } }];
+
+  it('reports a path that EXISTS', () => {
+    const out = manifestEvidence(story(['src/RealFile.ts']), prd());
+    expect(out).toMatch(/ST-1: EXISTS\s+src\/RealFile\.ts/);
+  });
+
+  it('reports a path that does NOT exist as MISSING', () => {
+    const out = manifestEvidence(story(['src/nope-not-here.ts']), prd());
+    expect(out).toMatch(/ST-1: MISSING/);
+    expect(out).toContain('src/nope-not-here.ts');
+  });
+
+  it('THE ~2M-TOKEN CASE: a wrong-cased path names the real neighbour on disk', () => {
+    const out = manifestEvidence(story(['src/realfile.ts']), prd());
     expect(
-      SRC.includes('${MANIFEST_GROUNDING_BLOCK}'),
-      'tools were granted but the prompt never tells the reviewer to use them',
-    ).toBe(true);
+      out,
+      'a bare "MISSING" is not actionable — naming the file that IS there is what lets ' +
+        'the reviewer report something a human can act on',
+    ).toContain('RealFile.ts');
+    expect(out).toMatch(/MISSING/);
   });
 
-  it('it requires checking EVERY declared path exists', () => {
-    expect(SRC).toMatch(/confirm it EXISTS/);
-    expect(SRC).toMatch(/list_files/);
+  it('a wrong EXTENSION also names the real neighbour', () => {
+    const out = manifestEvidence(story(['src/other.ts']), prd());
+    expect(out).toContain('other.tsx');
   });
 
-  it('a non-existent path must be reported as a BLOCKER, not quietly fixed', () => {
-    expect(SRC).toMatch(/BLOCKER/);
-    expect(SRC).toMatch(/Never silently correct a path/);
+  it('a story declaring NO files is reported — silence is not evidence', () => {
+    const out = manifestEvidence(story([]), prd());
+    expect(out).toMatch(/NO FILES DECLARED/);
+  });
+
+  it('an unreadable directory degrades to MISSING instead of throwing', () => {
+    const out = manifestEvidence(story(['no/such/dir/file.ts']), prd());
+    expect(out).toMatch(/MISSING/);
+  });
+
+  it('evidence is gathered against the LANE\'s outputDir, not the engine repo', () => {
+    // package.json exists in the engine repo but not in this fixture: if the resolver
+    // ignored outputDir, this would wrongly read EXISTS.
+    const out = manifestEvidence(story(['package.json']), prd());
+    expect(out).toMatch(/MISSING/);
+  });
+});
+
+describe('the reviewer is told to answer now, with the evidence it was given', () => {
+  const block = SRC.slice(
+    SRC.indexOf('const MANIFEST_GROUNDING_BLOCK'),
+    SRC.indexOf('].join', SRC.indexOf('const MANIFEST_GROUNDING_BLOCK')),
+  );
+
+  it('the review prompt carries the grounding block', () => {
+    expect(SRC.includes('${MANIFEST_GROUNDING_BLOCK}')).toBe(true);
+  });
+
+  it('the review prompt carries the gathered EVIDENCE, not just the instruction', () => {
+    expect(
+      SRC,
+      'the instruction refers to evidence "above" — if the evidence is never injected, ' +
+        'the reviewer is told to rely on something that is not there',
+    ).toMatch(/MANIFEST EVIDENCE[\s\S]{0,200}manifestEvidence\(/);
+  });
+
+  it('it forbids deferring the verdict — the exact live failure', () => {
+    expect(block).toMatch(/ANSWER IN THIS RESPONSE/);
+    expect(block).toMatch(/no later turn|NO tools/i);
+  });
+
+  it('it does NOT ask for tool calls, which nothing would execute', () => {
+    expect(
+      block,
+      'asking a single-shot call to run list_files produced 87 bytes of tool calls and no verdict',
+    ).not.toMatch(/use (your )?(read-only )?tools|call list_files|search the repository/i);
+  });
+
+  it('a missing path must be reported, not quietly fixed', () => {
+    expect(block).toMatch(/needs_review/);
+    expect(block).toMatch(/missing_manifest_path/);
+    expect(block).toMatch(/Never silently correct a path/);
   });
 
   it('the instruction names no project, codeline or vendor', () => {
-    const i = SRC.indexOf('const MANIFEST_GROUNDING_BLOCK');
-    const block = SRC.slice(i, SRC.indexOf('].join', i));
     expect(block).not.toMatch(/metrolinx|gotransit|upexpress|contentstack/i);
   });
 });

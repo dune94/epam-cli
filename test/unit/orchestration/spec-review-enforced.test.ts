@@ -10,7 +10,7 @@
  *
  * Two of those lanes had a manifest naming a file that does not exist — the condition
  * that sent a writer into a 120-iteration, ~2M-token loop. The reviewer caught it. The
- * pipeline recorded the verdict into story.specReview, counted it in summary.stats, and
+ * pipeline recorded the verdict into story.specification.coordinatorReview, counted it in summary.stats, and
  * proceeded to implementation.
  *
  * The only verdict the code ever branches on is 'fail', which the review schema
@@ -50,7 +50,16 @@ function runGuard(reviews: (Review | null)[], env: Record<string, string> = {}) 
       stories: reviews.map((r, i) => ({
         id: `ST-${i + 1}`,
         status: 'pending',
-        ...(r ? { specReview: r } : {}),
+        // THE PRODUCER'S PATH, not the gate's. This fixture originally wrote
+        // `specReview: r` — the same invented field the gate read — so test and gate
+        // agreed with each other while both disagreed with spec-mode-runner.js, which
+        // persists to story.specification.coordinatorReview. Every assertion passed and
+        // the gate was dead on arrival (live run 20260804T130402Z: three lanes returned
+        // needs_review at 0.45 and all three sailed through). A fixture authored from the
+        // consumer's assumption can only ever confirm that assumption. See
+        // gate-reads-what-the-producer-writes.test.ts, which derives the path from the
+        // producer's own assignment so the two cannot drift again.
+        ...(r ? { specification: { coordinatorReview: r } } : {}),
       })),
     }),
   );

@@ -64,11 +64,27 @@ describe('spec coordinator-review — brownfield-aware criteria (cycle-time fix)
     expect(greenfieldBranch).toMatch(/Flag any story needing human review/);
   });
 
+  /**
+   * EXECUTED, not grepped. This used to slice the source for
+   * `const reviewPayload = JSON.stringify(` and match a regex against the surrounding
+   * text — so it broke the moment that construction was extracted into
+   * buildReviewPayload(), while the BEHAVIOUR it cares about was unchanged. A test that
+   * reads source text asserts how code is written, not what it does. It now builds a real
+   * payload and inspects it.
+   */
   it('omits the always-empty splitChildren field from the payload in brownfield (never populated there anyway)', () => {
-    const payloadIdx = block.indexOf('const reviewPayload = JSON.stringify(');
-    const payloadBlock = block.slice(payloadIdx, payloadIdx + 700);
-    expect(payloadBlock).toMatch(/isBrownfieldReview\s*\?\s*\{\}\s*:\s*\{/);
-    expect(payloadBlock).toMatch(/splitChildren:/);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { buildReviewPayload } = require('../../../orchestrations/scripts/spec-mode-runner.js');
+    const parent = { id: 'P1', title: 't', acceptanceCriteria: [], specification: {} };
+    const child = { id: 'C1', title: 'c', acceptanceCriteria: ['a'], specification: { createdFrom: 'P1' } };
+
+    const brownfield = JSON.parse(buildReviewPayload([parent], true, [parent, child]));
+    expect(brownfield[0]).not.toHaveProperty('splitChildren');
+
+    const greenfield = JSON.parse(buildReviewPayload([parent], false, [parent, child]));
+    expect(greenfield[0].splitChildren, 'greenfield must still receive its split children')
+      .toHaveLength(1);
+    expect(greenfield[0].splitChildren[0].id).toBe('C1');
   });
 
   it('the prompt still interpolates whichever criteria list was selected', () => {

@@ -3841,14 +3841,23 @@ PYEOF
 # not needed since a negated character class already spans newlines). Absent
 # file = silent no-op — most projects configure nothing.
 #
-# Built 2026-08-02 after a live Writer Retest run: TWO separate lanes (of
-# three) regressed to `management_token` instead of the prescribed
-# `preview_token` in a Contentstack `live_preview` block — the EXACT defect a
-# prior team-lead review had already caught and the PRD's acceptanceCriteria
-# explicitly warned against. Relying on model compliance or a downstream LLM
-# review to catch a KNOWN, already-diagnosed wrong pattern is expensive and
-# unreliable; a cheap deterministic grep (same shape as
-# run_relative_import_check above) catches it on attempt 1 every time.
+# Built 2026-08-02 after a live Writer Retest run, to catch a KNOWN wrong
+# pattern deterministically on attempt 1 rather than paying for a downstream
+# LLM review to notice it (same shape as run_relative_import_check above).
+#
+# WHAT THAT ORIGINAL RULE GOT WRONG, recorded so it is not rebuilt: it encoded
+# a VENDOR API FACT asserted from memory — that one SDK config key was correct
+# and another wrong. Discovery against the INSTALLED package (the
+# dependency_contract plugin) later contradicted it: the "wrong" key is the one
+# the runtime actually reads, and the "prescribed" key appears nowhere in the
+# package, so a writer obeying the rule would have shipped a key that silently
+# does nothing. The rule would have blocked the correct implementation on every
+# run. See test/unit/orchestration/no-hand-authored-vendor-rules.test.ts.
+#
+# So: this mechanism is for rules that could have been written BEFORE any
+# failure was observed, from the project's standing setup. A claim about what a
+# third-party package consumes is DETERMINABLE — discover it, never transcribe
+# it here or into a project's anti-patterns.json.
 #
 # Scoped to the story's OWN declared files (technicalNotes.files) only — same
 # scoping lesson as run_relative_import_check's fix, 2026-08-02: a pattern

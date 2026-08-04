@@ -682,17 +682,205 @@ async function callMiniMaxWithTool(prompt, toolDef, logPath, itemsKey) {
  * Every declared path is machine-checkable, so the reviewer is required to check rather
  * than judge. Nothing here names a project, codeline or filename.
  */
+/**
+ * Path existence is DETERMINISTIC — so a script answers it, not a model.
+ *
+ * The reviewer was given EPAM_ALLOWED_TOOLS and told to verify paths with list_files.
+ * That set an env var; it did not put the reviewer on a tool-executing path.
+ * runAgentForJson's direct-exec route is a single-shot text call with no tool loop, so the
+ * model emitted tool calls that nobody ran and never produced a verdict at all:
+ *
+ *     <tool_call>list_files path="."</arg_value><tool_call>list_files path="src"</arg_value>
+ *
+ * 87 bytes, no <SPEC_REVIEW>. Three consecutive live runs lost their review that way, and
+ * the spec-review gate downstream guarded nothing.
+ *
+ * So the facts are computed HERE and handed to the reviewer as evidence. It judges what a
+ * script cannot — whether the ACs are testable, whether the manifest is plausible for the
+ * change — and never has to discover what the filesystem already knows.
+ */
+/**
+ * Stat every declared path once. ONE source of truth for both the evidence text the
+ * reviewer reads and the missing-path list the gate enforces — two independent
+ * implementations would eventually disagree, and the gate would be enforcing something
+ * different from what the reviewer was shown.
+ *
+ * Returns [{ storyId, file, exists, neighbour, unreadable }].
+ */
+function manifestPathStatus(stories, prd) {
+  const root = (prd && prd.project && prd.project.outputDir) || process.env.PROJECT_ROOT || '.';
+  const out = [];
+  for (const story of stories || []) {
+    const files = (story.technicalNotes && story.technicalNotes.files) || [];
+    for (const f of files) {
+      const abs = path.isAbsolute(f) ? f : path.join(root, f);
+      const rec = { storyId: story.id, file: f, exists: false, neighbour: null, unreadable: false };
+      try {
+        if (fs.existsSync(abs)) rec.exists = true;
+        else {
+          // Name the real neighbour when one differs only by case or extension — that is
+          // the actionable half of a missing-path report.
+          const dir = path.dirname(abs);
+          const base = path.basename(abs).toLowerCase();
+          const stem = base.replace(/\.[^.]+$/, '');
+          rec.neighbour = fs.existsSync(dir)
+            ? (fs.readdirSync(dir).find((e) => {
+              const el = e.toLowerCase();
+              return el === base || el.replace(/\.[^.]+$/, '') === stem;
+            }) || null)
+            : null;
+        }
+      } catch { rec.unreadable = true; }
+      out.push(rec);
+    }
+  }
+  return out;
+}
+
+/**
+ * The paths that genuinely are not there — computed, never asserted by a model.
+ *
+ * Measured 2026-08-04: in one of four samples the reviewer returned the flag
+ * "missing_manifest_path" while the evidence block listed EXISTS for every path. That flag
+ * is a hard blocker, so a hallucination would halt a run whose manifest was perfectly
+ * valid, indistinguishable from a real defect. fs.existsSync cannot hallucinate, so the
+ * gate enforces THIS and treats the model's flag as corroboration.
+ */
+function manifestMissingPaths(stories, prd) {
+  return manifestPathStatus(stories, prd)
+    .filter((r) => !r.exists)
+    .map((r) => ({ storyId: r.storyId, file: r.file }));
+}
+
+/**
+ * The CONTENTS of the files a story declares, for the agent that has to reason about them.
+ *
+ * The spec agent used to receive file NAMES and a call graph, never the code. Its own
+ * output said so on every lane — "could not read the actual file contents", flagged as
+ * speckit_unread_files_caveat / derived_without_source_inspection — and it is why the VC
+ * producer wrote criteria naming mechanisms it could only guess at, which the observability
+ * guard then correctly rejected. Live 20260804T162414Z, one lane lost 4 of its 5 criteria
+ * that way.
+ *
+ * We already resolve and stat exactly these paths for manifestEvidence; reading them is the
+ * same operation.
+ *
+ * BUDGETED, because a prompt is not free. Per-file and total byte caps are configurable and
+ * a zero budget switches the block off entirely:
+ *   SPEC_FILE_EXCERPT_BYTES        per file   (default 4000)
+ *   SPEC_FILE_EXCERPT_TOTAL_BYTES  all files  (default 24000)
+ * `opts` overrides the environment, for callers that know better.
+ */
+function manifestFileExcerpts(story, prd, opts = {}, env = process.env) {
+  const perFile = opts.perFileBytes !== undefined
+    ? Number(opts.perFileBytes)
+    : Number(env.SPEC_FILE_EXCERPT_BYTES !== undefined ? env.SPEC_FILE_EXCERPT_BYTES : 4000);
+  const total = opts.totalBytes !== undefined
+    ? Number(opts.totalBytes)
+    : Number(env.SPEC_FILE_EXCERPT_TOTAL_BYTES !== undefined ? env.SPEC_FILE_EXCERPT_TOTAL_BYTES : 24000);
+  if (!(perFile > 0) || !(total > 0)) return '';
+
+  const files = (story && story.technicalNotes && story.technicalNotes.files) || [];
+  if (!files.length) return '';
+
+  const root = (prd && prd.project && prd.project.outputDir) || env.PROJECT_ROOT || '.';
+  const parts = [];
+  let spent = 0;
+  const seen = new Set();
+  for (const f of files) {
+    if (spent >= total) break;
+    if (seen.has(f)) continue;
+    seen.add(f);
+    const abs = path.isAbsolute(f) ? f : path.join(root, f);
+    let body;
+    try {
+      if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) continue;
+      body = fs.readFileSync(abs, 'utf8');
+    } catch { continue; }
+    const budget = Math.min(perFile, total - spent);
+    let excerpt = body;
+    let truncated = false;
+    if (excerpt.length > budget) { excerpt = excerpt.slice(0, budget); truncated = true; }
+    spent += excerpt.length;
+    parts.push(`--- ${f}${truncated ? ' (truncated)' : ''}\n${excerpt}`);
+  }
+  if (!parts.length) return '';
+  return '\n\nDECLARED FILES — the actual contents of the files this story names. Base every '
+    + 'observable criterion on what THIS code does, not on what the title suggests:\n'
+    + parts.join('\n') + '\n';
+}
+
+function manifestEvidence(stories, prd) {
+  const status = manifestPathStatus(stories, prd);
+  const lines = [];
+  for (const story of stories || []) {
+    const mine = status.filter((r) => r.storyId === story.id);
+    if (!mine.length) {
+      lines.push(`  ${story.id}: NO FILES DECLARED — nothing for a writer to change`);
+      continue;
+    }
+    for (const r of mine) {
+      let mark;
+      if (r.exists) mark = 'EXISTS';
+      else if (r.unreadable) mark = 'MISSING — could not read the directory';
+      else if (r.neighbour) mark = `MISSING — the directory holds "${r.neighbour}" instead`;
+      else mark = 'MISSING';
+      lines.push(`  ${story.id}: ${mark}  ${r.file}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+/**
+ * What the coordinator is shown for each story.
+ *
+ * verificationCriteria USED TO BE ABSENT. They live on the story root, not inside
+ * .specification, so the reviewer received {id, title, acceptanceCriteria, specification}
+ * — and on a brownfield ticket the AC array is empty BY POLICY. It was being asked to
+ * score a specification while the only substantive artefact in it was invisible. The
+ * reviewer reported this itself: one lane's flag was "vc_not_visible_in_notes".
+ *
+ * Measured effect of adding them, same prompt four times: score spread 0.17 -> 0.08, mean
+ * 0.65 -> 0.70.
+ */
+function buildReviewPayload(stories, isBrownfieldReview, allStories = []) {
+  return JSON.stringify((stories || []).map((s) => ({
+    id: s.id,
+    title: s.title,
+    acceptanceCriteria: s.acceptanceCriteria,
+    // The observable checks — on brownfield these ARE the deliverable under review.
+    verificationCriteria: s.verificationCriteria || [],
+    // The manifest is part of what is being reviewed; the evidence block above the prompt
+    // reports whether each of these exists.
+    technicalNotes: s.technicalNotes,
+    specification: s.specification,
+    ...(isBrownfieldReview ? {} : {
+      splitChildren: (allStories || [])
+        .filter((c) => c.specification && c.specification.createdFrom === s.id)
+        .map((c) => ({ id: c.id, title: c.title, acceptanceCriteria: c.acceptanceCriteria })),
+    }),
+  })), null, 2);
+}
+
 const MANIFEST_GROUNDING_BLOCK = [
-  'VERIFY THE MANIFEST AGAINST THE REPOSITORY — do not judge it by eye.',
-  'You have read-only tools (read_file, list_files, search). Before you approve any story:',
-  '  1. For EVERY path in that story\'s technicalNotes.files, confirm it EXISTS, using list_files',
-  '     on its directory. A path that looks plausible is not evidence that it exists.',
-  '  2. Report a path that does not exist as a BLOCKER naming the exact path, and — when the',
-  '     directory holds a file differing only in case or extension — the real name you found.',
-  '  3. Never silently correct a path in your verdict. The manifest is the artefact under',
-  '     review; a correction that lives only in your prose reaches nobody.',
-  'A story whose manifest names a file the repository does not have cannot be implemented:',
-  'the writer is sent to edit something absent, and every retry reproduces that.',
+  'ANSWER IN THIS RESPONSE. This is a single-shot call: there is no later turn, and you',
+  'have NO tools. Do not emit tool calls and do not say you will verify first — an empty',
+  '<SPEC_REVIEW></SPEC_REVIEW> is discarded and the review does not happen.',
+  '',
+  'MANIFEST EVIDENCE has already been gathered from the repository for you and appears',
+  'above. You do not need to check the filesystem; it has been checked.',
+  '  - A story with any MISSING path CANNOT be implemented: the writer is sent to edit a',
+  '    file that is not there, and every retry reproduces that. Mark it needs_review, name',
+  '    the exact path in reviewNotes, and add the flag "missing_manifest_path".',
+  '  - Where the evidence names a real neighbour ("the directory holds X instead"), say so',
+  '    — that is what makes the report actionable.',
+  '  - Never silently correct a path. The manifest is the artefact under review; a',
+  '    correction living only in your prose reaches nobody.',
+  '',
+  'Judge what the evidence cannot: are the acceptance criteria testable, is the declared',
+  'file set plausible for this change, is anything obviously missing. If you are unsure,',
+  'lower qualityScore and add a flag — do not withhold the verdict. A missing review is',
+  'worse than an uncertain one: it means nothing was checked at all.',
 ].join('\n');
 
 function specAgentEnv(env = process.env) {
@@ -1585,17 +1773,7 @@ ${storiesPayload}
     // real technical-depth value-add and whether a story needs human eyes —
     // without losing any judgment brownfield ever used.
     const isBrownfieldReview = process.env.EPAM_BROWNFIELD === '1';
-    const reviewPayload = JSON.stringify(specifiedStories.map(s => ({
-      id: s.id,
-      title: s.title,
-      acceptanceCriteria: s.acceptanceCriteria,
-      specification: s.specification,
-      ...(isBrownfieldReview ? {} : {
-        splitChildren: (prd.stories || [])
-          .filter(c => c.specification && c.specification.createdFrom === s.id)
-          .map(c => ({ id: c.id, title: c.title, acceptanceCriteria: c.acceptanceCriteria }))
-      })
-    })), null, 2);
+    const reviewPayload = buildReviewPayload(specifiedStories, isBrownfieldReview, prd.stories || []);
 
     const reviewCriteria = isBrownfieldReview
       ? `For each story, evaluate the quality of the collaborative spec work:
@@ -1604,7 +1782,16 @@ ${storiesPayload}
 
 (Brownfield tickets never split and their acceptance criteria are immutable —
 do not evaluate split quality or AC completeness; there is nothing there for
-either agent to have changed.)`
+either agent to have changed.
+
+EXPECTED, NOT A DEFECT: an agent's notes may describe acceptance criteria it
+authored while the story's acceptanceCriteria array is empty, and report
+acceptanceChanged=false. That is this pipeline REDACTING them on purpose: on a
+brownfield ticket the ACs are the ticket's own, and a thin ticket legitimately
+has none. The observable checks live in verificationCriteria — judge THOSE.
+Do not report the mismatch as a hallucination, a persistence failure or a
+metadata inconsistency, and do not lower qualityScore for it. An empty
+acceptanceCriteria array on a brownfield story is correct by policy.)`
       : `For each story, evaluate the quality of the collaborative spec work:
 1. Did both agents add meaningful, non-overlapping value?
 2. Are the acceptance criteria complete, testable, and non-overlapping?
@@ -1619,7 +1806,22 @@ Each story was processed by a sequential agent pipeline:
 
 ${reviewCriteria}
 
+MANIFEST EVIDENCE (checked against the repository, not asserted):
+${manifestEvidence(specifiedStories, prd)}
+
 ${MANIFEST_GROUNDING_BLOCK}
+
+QUALITY SCORE — what the number has to mean. It is enforced: below 0.7 halts the run
+before implementation, so an unanchored guess stops real work.
+  0.9-1.0  the spec is ready to implement; criteria are observable and the file set fits.
+  0.7-0.89 ready to implement, with ordinary open questions a competent writer resolves.
+  0.5-0.69 NOT ready: something concrete is wrong or missing — criteria that cannot be
+           observed, a file set that cannot deliver what is described, contradictions.
+  below 0.5 the spec would send a writer somewhere useless.
+Score what IS in front of you. Do NOT lower the score because an agent could not read the
+source files, or because a human "might want to check" — that is true of every ticket and
+is not a defect in this spec. If your notes cannot name something concretely wrong, the
+score belongs at 0.7 or above.
 
 Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
 [
@@ -1652,6 +1854,14 @@ ${reviewPayload}
       for (const story of specifiedStories) {
         const review = reviewMap.get(story.id);
         if (review) {
+          // The computed truth about the manifest, recorded next to the verdict. The gate
+          // blocks on THIS; the model's missing_manifest_path flag is corroboration only
+          // (measured: hallucinated in 1 of 4 samples against an all-EXISTS evidence
+          // block). Persisted, not merely logged — a fact the gate needs must be on disk.
+          story.specification.manifestCheck = {
+            missing: manifestMissingPaths([story], prd),
+            checkedAt: new Date().toISOString()
+          };
           story.specification.coordinatorReview = {
             verdict: review.verdict || 'approved',
             reviewNotes: review.reviewNotes || '',
@@ -2188,6 +2398,52 @@ function safeFallbackVc(story, findings) {
   ];
 }
 
+// Attribute each flag to the criterion it names, so a partly-flagged set can keep its
+// clean criteria instead of being discarded whole.
+//
+// WHY. The enforcement loop was all-or-nothing: one surviving flag replaced every
+// criterion with safeFallbackVc()'s two lines. Live 2026-08-04 (all three lanes) a set of
+// six lost five clean, detective-grounded criteria to punish the sixth, and the writer got
+// two tautologies that cannot fail.
+//
+// THE MAPPING IS THE REVIEWER'S OWN DECLARED FORMAT, not a guess. reviewVcViaSpeckit's
+// prompt says: `Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes
+// halving — ..."]`, and numbers the criteria `${i + 1}. ${v}` — so "VC <n>" is the
+// contract and n is 1-based. findVcMechanism's flags instead carry the criterion text
+// quoted (first 80 chars), so both forms are attributable.
+//
+// A flag matching NEITHER form is a set-level objection ("the criteria do not cover the
+// acceptance criterion"). It names no criterion, so nothing can be safely retained:
+// `unattributable` is reported and the caller falls back. Guessing there would let a real
+// coverage gap through, which is the failure this guard exists to prevent.
+function partitionFlaggedVc(vc, flags) {
+  const list = Array.isArray(vc) ? vc : [];
+  const drop = new Set();
+  let unattributable = false;
+  for (const f of (Array.isArray(flags) ? flags : [])) {
+    const s = String(f || '');
+    const byIndex = s.match(/\bVC\s*#?\s*(\d+)/i);
+    if (byIndex) {
+      const i = Number(byIndex[1]) - 1;                 // 1-based, as the prompt numbers them
+      if (i >= 0 && i < list.length) { drop.add(i); continue; }
+      unattributable = true;                            // out of range names no real criterion
+      continue;
+    }
+    // The deterministic guard's form: the criterion itself, quoted and truncated.
+    const quoted = s.match(/"([^"]{8,})"/);
+    const idx = quoted ? list.findIndex((c) => String(c).startsWith(quoted[1])) : -1;
+    if (idx >= 0) drop.add(idx); else unattributable = true;
+  }
+  if (unattributable) {
+    return { clean: [], flagged: list.slice(), unattributable: true };
+  }
+  return {
+    clean: list.filter((_, i) => !drop.has(i)),
+    flagged: list.filter((_, i) => drop.has(i)),
+    unattributable: false,
+  };
+}
+
 // Enforce clean, mechanism-free VCs with an AUTONOMOUS loop (no human):
 // deterministic guard + speckit strict review → if flagged, regenerate (with the
 // flag reasons; the caller ladder-escalates the model per cycle) → re-check → up
@@ -2213,7 +2469,52 @@ async function enforceVerificationCriteria(story, initialVc, opts = {}) {
     try { regenerated = await regenerateVc(lastFlags, cycle + 1); } catch { regenerated = null; }
     vc = Array.isArray(regenerated) && regenerated.length ? regenerated : vc;
   }
-  console.warn(`spec-mode: ⚠️ VC could not be made mechanism-free for ${story && story.id} after ${maxCycles} cycle(s) — using conservative fallback VC. Last flags: ${lastFlags.slice(0, 3).join(' | ')}`);
+  // PARTIAL RETENTION before the last resort. Discarding criteria that were never flagged
+  // costs more than it protects: the fallback's two lines are tautologies the writer
+  // cannot fail, so a whole-set discard leaves the story effectively unverified.
+  //
+  // TWO CLASSES OF FLAG, AND THEY ARE NOT EQUAL.
+  //
+  // findVcMechanism is deterministic: what it flags IS mechanism, and it is always dropped.
+  // The LLM reviewer adds judgement a regex cannot, so its flags are ADVISORY — and
+  // measured live 2026-08-04, six full loops over four criteria the deterministic guard
+  // certified clean, one run had the reviewer flag THREE of the four (including "When
+  // preview mode is active, the page displays the draft version of the entry" — plainly
+  // observable) and retention kept a single criterion.
+  //
+  // A review that condemns most of a set is far more likely to be an outlier than the set
+  // is to be worthless. So advisory drops are applied only while the surviving set stays
+  // above a usable floor; below it, the deterministically-clean work is KEPT and the
+  // dispute recorded for a human. This never rescues a criterion the guard rejected.
+  //
+  // CONFIGURABLE: VC_MIN_RETAINED (absolute floor, default 2),
+  //               VC_MIN_RETAINED_FRACTION (share of the original set, default 0.5).
+  const mechCriteria = findVcMechanism(vc).map((f) => f.criterion);
+  const guardClean = vc.filter((c) => !mechCriteria.includes(c));
+
+  const { clean, flagged, unattributable } = partitionFlaggedVc(vc, lastFlags);
+  const absFloor = Number(process.env.VC_MIN_RETAINED || '2');
+  const fraction = Number(process.env.VC_MIN_RETAINED_FRACTION || '0.5');
+  const floor = Math.max(Math.min(absFloor, vc.length), Math.ceil(fraction * vc.length));
+
+  if (!unattributable && clean.length >= floor && clean.length < vc.length) {
+    console.warn(`spec-mode: ⚠️ VC still flagged for ${story && story.id} after ${maxCycles} cycle(s) — dropping ${flagged.length} flagged criterion/criteria, retaining ${clean.length} clean. Dropped: ${flagged.map((c) => `"${String(c).slice(0, 60)}"`).join(' | ')}`);
+    return { vc: clean, source: 'partial', cycles: maxCycles, flags: lastFlags, dropped: flagged };
+  }
+
+  // Acting on the advisory flags would take the set below the floor (or they could not be
+  // attributed at all). Keep what the deterministic guard certified, and say so loudly.
+  if (guardClean.length) {
+    console.warn(`spec-mode: ⚠️ VC review DISPUTED for ${story && story.id} — the reviewer's flags would leave ${clean.length}/${vc.length} criteria, below the floor of ${floor}. Keeping the ${guardClean.length} the deterministic guard certified; a review that condemns most of a set is treated as an outlier. Flags: ${lastFlags.slice(0, 3).join(' | ')}`);
+    return {
+      vc: guardClean,
+      source: 'disputed',
+      cycles: maxCycles,
+      flags: lastFlags,
+      dropped: vc.filter((c) => !guardClean.includes(c)),
+    };
+  }
+  console.warn(`spec-mode: ⚠️ VC could not be made mechanism-free for ${story && story.id} after ${maxCycles} cycle(s) — using conservative fallback VC${unattributable ? ' (a flag named no specific criterion, so nothing could be safely retained)' : ''}. Last flags: ${lastFlags.slice(0, 3).join(' | ')}`);
   return { vc: safeFallbackVc(story, findings), source: 'fallback', cycles: maxCycles, flags: lastFlags };
 }
 
@@ -2800,7 +3101,8 @@ function automationDirFromLogDir(logDir) {
 }
 
 // openspec: first-pass elaboration
-async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, forcedRetryNote }) {
+async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, forcedRetryNote,
+  runDetective = runCodeGraphDetective, prd = null }) {
   const acCount = Array.isArray(story.acceptanceCriteria) ? story.acceptanceCriteria.length : 0;
   const splitDepthVal = story.specification?.splitDepth ?? 0;
 
@@ -2900,7 +3202,31 @@ These rules apply only when splitDepth === 0. Never split a story that is alread
     ? 'Generate refined acceptance criteria and optionally updated title/description. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:'
     : 'Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:';
 
-  const prompt = `${forcedRetryBlock}You are the ${agent} specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.${splitWarning}${priorGapsBlock}${sembleContext}${brownfieldArchaeologyBlock}
+  // GROUND THE PRODUCER BEFORE IT WRITES, not after.
+  //
+  // The detective used to run AFTER this model call — so the first-pass verification
+  // criteria were written with no located fix site and no file contents, and only the
+  // REGENERATE path (which does receive findings) was ever grounded. Live
+  // 20260804T162414Z: the one lane that reached regeneration produced 5 clean criteria;
+  // the two that kept first-pass output went partial, one down to a single criterion.
+  //
+  // The detective reads only story title/description/acceptanceCriteria and the repo path
+  // — none of which this model call produces — so it gets byte-identical input here.
+  // Grounding is an ENHANCEMENT: if it fails, the spec pass continues without it.
+  let detectiveFindings = [];
+  try {
+    detectiveFindings = (await runDetective(story, logDir)) || [];
+  } catch (err) {
+    console.warn(`spec-mode: code-graph-detective unavailable for ${story.id} (${err && err.message}) — continuing ungrounded`);
+    detectiveFindings = [];
+  }
+  const fixSiteBlock = detectiveFindings.length
+    ? `\n\nLOCATED FIX SITE(S) — traced in this repository before you were asked. Anchor every criterion to the behaviour THIS code produces:\n`
+      + detectiveFindings.slice(0, 5).map((f) => `- ${f.file}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${f.reason}` : ''}`).join('\n') + '\n'
+    : '';
+  const declaredFileBlock = manifestFileExcerpts(story, prd);
+
+  const prompt = `${forcedRetryBlock}You are the ${agent} specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.${splitWarning}${priorGapsBlock}${sembleContext}${fixSiteBlock}${declaredFileBlock}${brownfieldArchaeologyBlock}
 ${generateInstruction}
 {
   "storyId":"${story.id}",
@@ -2962,7 +3288,7 @@ ${storyPayload}${publishedContracts(repoPath, story)}
       // to anything. The detective's own prompt states the intent: "You run early
       // (during the specification pass) and your output grounds every downstream
       // agent."
-      const detectiveFindings = await runCodeGraphDetective(story, logDir);
+      // (detectiveFindings was computed above, BEFORE the prompt — see the grounding note.)
 
       if (process.env.EPAM_BROWNFIELD === '1') {
         const rawVc = normalizeVerificationCriteria(payload);
@@ -2979,11 +3305,19 @@ ${storyPayload}${publishedContracts(repoPath, story)}
             findings: detectiveFindings,
           });
           story.verificationCriteria = enforced.vc;
+          // 'disputed' is NOT fallback: the criteria are the author's real ones, kept
+          // because acting on an outlier review would have left the story under-verified.
           story.vcSource = enforced.source === 'fallback'
             ? 'fallback'
             : ((typeof payload.vcSource === 'string' && payload.vcSource) || 'acceptance');
           // Persist a small provenance record for observability in the PRD.
-          story.vcResolution = enforced.source; // clean | regenerated | fallback
+          story.vcResolution = enforced.source; // clean | regenerated | partial | disputed | fallback
+          // A dropped criterion is a decision the pipeline made about what will NOT be
+          // verified. Recording it only in a console warning would lose it with the
+          // console; it belongs on the story, in the PRD, on disk.
+          if (Array.isArray(enforced.dropped) && enforced.dropped.length) {
+            story.vcDropped = enforced.dropped;
+          }
           console.log(`spec-mode: ${story.id} — ${enforced.vc.length} verification criteria persisted (source: ${story.vcSource}, resolution: ${enforced.source})`);
         }
       }
@@ -5213,6 +5547,17 @@ module.exports = {
   normalizeVerificationCriteria,
   findVcMechanism,
   safeFallbackVc,
+  partitionFlaggedVc,
+  // The two LLM-calling stages of the VC flow. Unexported until 2026-08-04, which is
+  // exactly why the flow had no live coverage: only the pure functions around them could
+  // be tested, and every defect in it lived in what the real model actually returns.
+  reviewVcViaSpeckit,
+  regenerateVcViaOpenspec,
+  manifestEvidence,
+  manifestFileExcerpts,
+  manifestPathStatus,
+  manifestMissingPaths,
+  buildReviewPayload,
   enforceVerificationCriteria,
   isThinContext,
   verifyDetectiveHelper,

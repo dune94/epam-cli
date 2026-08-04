@@ -74,6 +74,28 @@ checkpoint_dir() {
 # Keep this list and the case in resume_skip_env in step.
 CHECKPOINT_STAGES="post-spec pre-writer"
 
+# The ENGINE's commit — resolved against this library's own location, never against the
+# current working directory.
+#
+# This used to be a bare `git rev-parse --short HEAD`, which resolves wherever the caller
+# happens to be standing. A worktree lane saves its checkpoint with cwd inside the CLIENT
+# codeline, so live run 20260804T152722Z recorded next.upexpress.com's HEAD (1f79748) and
+# next.metrolinx.com's HEAD (42b81c44) as the "engine" version on two of three lanes —
+# valid-looking short SHAs from entirely different repositories. Only the lane that
+# happened to save from the engine's own cwd was right, and only by luck.
+#
+# engineSha exists so a resume can tell whether the engine moved underneath a checkpoint.
+# A value from another repository makes that judgement impossible while looking correct.
+#
+# BASH_SOURCE[0] is this file, wherever it was sourced from, so the answer is the same for
+# every lane and does not depend on cwd being a git repository at all.
+_engine_sha() {
+    local _here
+    _here="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || {
+        echo "unknown"; return 0; }
+    git -C "$_here" rev-parse --short HEAD 2>/dev/null || echo "unknown"
+}
+
 _is_known_stage() {
     case " $CHECKPOINT_STAGES " in *" ${1:-} "*) return 0 ;; *) return 1 ;; esac
 }
@@ -157,7 +179,7 @@ save_run_checkpoint() {
         done
     fi
 
-    local _sha; _sha=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    local _sha; _sha=$(_engine_sha)
     local _stories; _stories=$(jq -r '(.stories // []) | length' "$_dir/prd.json" 2>/dev/null || echo 0)
 
     # Written last — see above.

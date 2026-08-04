@@ -407,28 +407,34 @@ reset_brownfield_story_commit() {
 # and have no prose equivalent worth gating.
 #
 # Root cause this closes (found live, 2026-08-02, Writer Retest): FailureAnalyst
-# diagnosed a real TypeScript compile error (Config.live_preview missing
-# host/management_token) 100% correctly against the installed
-# node_modules/contentstack/index.d.ts type declaration — but that declaration
-# is itself STALE relative to the SDK's real runtime behavior (already
-# established via multiple real code reviews: the correct fix uses
-# preview_token, cast through `as unknown as contentstack.LivePreview` to
-# bypass the wrong type). FailureAnalyst has no way to know a TYPE FILE can be
-# wrong — it reasoned correctly from incorrect ground truth, and its own
-# reviewer-retry gate (an LLM judging another LLM's note) didn't catch it
-# either, since the same blind spot applies to both. The one thing that DOES
-# know the type file is wrong is this project's own anti-patterns.json
-# (already written after the first live rejection) — checking against it here
-# means a skill note contradicting a known-correct, already-reviewed fix
-# pattern is refused DETERMINISTICALLY, never re-argued into the profile no
-# matter how many times an LLM reasons its way back to the same wrong belief.
+# diagnosed a TypeScript compile error from an SDK's installed .d.ts and wrote
+# a skill note prescribing a config key from it. A type declaration can
+# disagree with what the package's runtime actually reads, in either direction,
+# and FailureAnalyst has no way to know that — nor does its reviewer-retry gate,
+# an LLM judging another LLM's note, since the same blind spot applies to both.
+# Vetting the note here stops a wrong belief being persisted into a profile for
+# every future run to inherit.
+#
+# WHAT THIS MUST NOT BECOME, learned the hard way 2026-08-04: the original
+# version of this vetting leaned on a hand-written anti-patterns.json rule
+# asserting which SDK key was correct — a VENDOR API FACT written from memory
+# after watching one ticket fail. Discovery against the INSTALLED package (the
+# dependency_contract plugin) later showed the assertion was backwards: the
+# "wrong" key is the one the runtime reads, and the "prescribed" one appears
+# nowhere in the package. The rule would have refused correct guidance and
+# forced writers toward a key that silently does nothing.
+#
+# So a rule vetted here must be one that could have been written BEFORE any
+# failure was observed. What a third-party package consumes is DETERMINABLE —
+# have the agent call dependency_contract; never transcribe the answer into a
+# rule file. See test/unit/orchestration/no-hand-authored-vendor-rules.test.ts.
 #
 # `textMatchPattern` is DELIBERATELY separate from `matchPattern` (found live,
 # 2026-08-02, same day: the two were briefly the same shared, loosened pattern
 # — broadening it to catch prose in a skill note ALSO made
 # run_anti_pattern_check(), which scans real CODE FILES with `matchPattern`,
 # false-positive on a correct, review-approved comment explaining the exact
-# same contrast in prose ("reads `preview_token` (not `management_token`)").
+# same contrast in prose (a comment naming one SDK key "not" another).
 # That false positive blocked a real test run and cascaded into a
 # HealingBroken escalation — a genuine run regression traced back to sharing
 # one pattern across two consumers with different strictness needs. Never
@@ -610,7 +616,7 @@ _load_timeout_config() {
 # list_files to check each manifest against the repository, and returned needs_review on
 # every one — qualityScore 0.45 on the worst. Two of those lanes had a manifest naming a
 # file that does not exist, the condition that sent a writer into a 120-iteration,
-# ~2M-token loop. The verdict was written to story.specReview, counted in summary.stats,
+# ~2M-token loop. The verdict was written to story.specification.coordinatorReview,
 # and then ignored: the only verdict the code branched on was 'fail', which the review
 # schema (approved|needs_review) never emits. The reviewer knew, on every lane, and had
 # no word that stopped anything.
@@ -622,7 +628,7 @@ _load_timeout_config() {
 #   SPEC_REVIEW_ENFORCE=0        turn the gate off deliberately (default: on)
 #   SPEC_REVIEW_MIN_QUALITY=0.7  the bar a score must clear (default: 0.7)
 #
-# Deliberately NOT blocking: a story with no specReview at all. A resumed run skips the
+# Deliberately NOT blocking: a story with no coordinatorReview at all. A resumed run skips the
 # spec pass, so an absent review is expected and must not halt it. Absent is not zero —
 # a null qualityScore does not block either, or a reviewer that omitted the field would
 # fail every story.
@@ -641,17 +647,105 @@ spec_review_gate() {
     fi
 
     local _min="${SPEC_REVIEW_MIN_QUALITY:-0.7}"
-    local _blockers
-    _blockers=$(jq -r --argjson min "$_min" '
-        [ .stories[]?
-          | select(.status != "deprecated")
-          | select(.specReview != null)
-          | select(
-              ((.specReview.verdict // "approved") != "approved")
-              or ((.specReview.qualityScore != null) and (.specReview.qualityScore < $min))
-            )
-          | "\(.id)\tverdict=\(.specReview.verdict // "?")\tquality=\(.specReview.qualityScore // "n/a")"
-        ] | .[]' "$_prd" 2>/dev/null)
+    # WHAT BLOCKS, AND WHAT MERELY WARNS.
+    #
+    # This gate used to halt on any verdict != approved. Live run 20260804T145419Z it
+    # stopped all three lanes at qualityScore 0.78, 0.72 and 0.65 — two of them ABOVE the
+    # bar, with positive notes ("all four manifest paths verified as EXISTS", "both agents
+    # added meaningful, non-overlapping value"). Their flags were advisory:
+    # blind_authoring, api_shape_uncertainty, human_review_recommended_by_agent — speckit
+    # could not read the source, so a human might want to look. On a brownfield ticket that
+    # uncertainty is always present, so the reviewer effectively never says "approved" and
+    # the gate blocked 100% of runs. This pipeline's VC loop is explicitly AUTONOMOUS (no
+    # human); a gate demanding sign-off cannot run unattended.
+    #
+    # The condition worth halting for is the one that cost a 120-iteration ~2M-token loop:
+    # a manifest naming a file that does not exist. That arrives as a FLAG, not a verdict.
+    # So: block on a low score, or on a declared blocking flag. A bare needs_review at good
+    # quality is reported loudly and allowed through.
+    # THE MODEL'S FLAG IS NOT A FACT.
+    #
+    # missing_manifest_path used to be a hard blocker on the reviewer's say-so. Measured
+    # 2026-08-04 against an evidence block listing EXISTS for every path, the model
+    # returned that flag anyway in 1 of 4 samples — a hallucination that would halt a run
+    # with a perfectly valid manifest, looking exactly like a real defect.
+    #
+    # spec-mode-runner.js now stats every declared path with fs.existsSync and records the
+    # result to story.specification.manifestCheck.missing. That cannot hallucinate, so it
+    # is what blocks here. The model's flag stays visible as an advisory — a reviewer
+    # contradicting the filesystem is worth seeing, but it is not grounds to stop.
+    #
+    # Default blocking flag list is now EMPTY: the one flag that used to be here is
+    # enforced deterministically instead. Projects may still declare their own.
+    local _blocking_flags="${SPEC_REVIEW_BLOCKING_FLAGS-}"
+    local _blockers _advisories _manifest_blockers
+    # THE PATH IS THE PRODUCER'S, NOT AN INVENTED ONE. This gate originally queried
+    # `.specReview` — a field nothing in the pipeline has ever written. spec-mode-runner.js
+    # persists the coordinator's verdict to `.specification.coordinatorReview`, so the gate
+    # read null on every story and passed everything. Live run 20260804T130402Z: all three
+    # lanes returned needs_review at qualityScore 0.45 and every one sailed through.
+    # gate-reads-what-the-producer-writes.test.ts now derives this path from the producer's
+    # own assignment, so the two cannot drift apart again.
+    local _jq_common='
+        ($bf | ascii_downcase | split(",") | map(gsub("^[[:space:]]+|[[:space:]]+$";""))
+             | map(select(length > 0))) as $blocking
+        | [ .stories[]?
+            | select(.status != "deprecated")
+            | . as $s
+            | (.specification.coordinatorReview) as $r
+            | select($r != null)
+            | (($r.flags // []) | map(select(type == "string") | ascii_downcase)) as $f
+            | [ $f[] | select(. as $x | $blocking | index($x)) ] as $hit
+            | (($r.qualityScore != null) and ($r.qualityScore < $min)) as $lowq
+            | {s: $s, r: $r, hit: $hit, lowq: $lowq}
+          ]'
+
+    _blockers=$(jq -r --argjson min "$_min" --arg bf "$_blocking_flags" "
+        $_jq_common
+        | .[] | select(.lowq or ((.hit | length) > 0))
+        | \"\(.s.id)\tverdict=\(.r.verdict // \"?\")\tquality=\(.r.qualityScore // \"n/a\")\treason=\(if (.hit | length) > 0 then \"blocking flag: \" + (.hit | join(\",\")) else \"quality below \" + (\$min | tostring) end)\"
+        " "$_prd" 2>/dev/null)
+
+    # A needs_review that does NOT block is still the reviewer telling us something. It is
+    # reported every time — an advisory nobody sees is a silent failure.
+    _advisories=$(jq -r --argjson min "$_min" --arg bf "$_blocking_flags" "
+        $_jq_common
+        | .[] | select((.lowq | not) and ((.hit | length) == 0))
+        | select((.r.verdict // \"approved\") != \"approved\")
+        | \"\(.s.id)\tverdict=\(.r.verdict)\tquality=\(.r.qualityScore // \"n/a\")\tflags=\((.r.flags // []) | join(\",\"))\"
+        " "$_prd" 2>/dev/null)
+
+    if [ -n "$_advisories" ]; then
+        warning "[spec-review-gate] the reviewer flagged these for human attention (advisory — not blocking):"
+        printf '%s\n' "$_advisories" | while IFS= read -r _a; do
+            [ -n "$_a" ] && warning "[spec-review-gate]   $_a"
+        done
+        warning "[spec-review-gate] They cleared the quality bar (${_min}) and carry no blocking flag."
+        warning "[spec-review-gate] Blocking flags: ${_blocking_flags:-(none)} — set SPEC_REVIEW_BLOCKING_FLAGS to change."
+    fi
+
+    # The computed missing-path list — the one manifest fact worth halting for. Absent
+    # manifestCheck does not block: a resumed run skips the spec pass, and absent is not
+    # zero (same rule the quality score already follows).
+    _manifest_blockers=$(jq -r '
+        .stories[]?
+        | select(.status != "deprecated")
+        | . as $s
+        | (.specification.manifestCheck.missing // []) as $m
+        | select(($m | length) > 0)
+        | $m[]
+        | "\($s.id)\tMISSING declared path: \(.file // .)"
+        ' "$_prd" 2>/dev/null)
+
+    if [ -n "$_manifest_blockers" ]; then
+        error "[spec-review-gate] the manifest names files that are NOT in the repository:"
+        printf '%s\n' "$_manifest_blockers" | while IFS= read -r _m; do
+            [ -n "$_m" ] && error "[spec-review-gate]   $_m"
+        done
+        error "[spec-review-gate] A writer sent to edit a file that is not there cannot succeed,"
+        error "[spec-review-gate] and every retry reproduces it. Fix the manifest before implementing."
+        return 1
+    fi
 
     if [ -z "$_blockers" ]; then
         return 0

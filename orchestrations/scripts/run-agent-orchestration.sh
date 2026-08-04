@@ -5567,6 +5567,18 @@ if [ -n "$main_stories" ]; then
             info "[CHECKPOINT] All $_ckpt_total stories already completed — skipping Step 1 for phase '${PHASE:-main}'"
             step_emit "8" "pass" "Step 8: Main-branch stories (all checkpointed)"
         else
+        # ── Gate: the specification review must have cleared these stories ───
+        # The reviewer runs with filesystem access and checks each manifest against the
+        # repository. Live 2026-08-04 it returned needs_review on all three lanes — two of
+        # which had a manifest naming a file that does not exist — and the pipeline went
+        # straight to implementation, because the only verdict the code branched on was
+        # 'fail' and the schema never emits it. Enforced here, before the writer spends
+        # anything. SPEC_REVIEW_ENFORCE=0 overrides deliberately.
+        if ! spec_review_gate "$PRD_FILE"; then
+            error "[orch] Halting phase '${PHASE}' before implementation — the spec review did not clear."
+            exit 1
+        fi
+
         # ── Checkpoint / pause: PRE-WRITER ───────────────────────────────────
         # Everything the writer consumes is settled by now — the spec pass, the CPA
         # pre-pass, the skill assessment and the detective have all run and written

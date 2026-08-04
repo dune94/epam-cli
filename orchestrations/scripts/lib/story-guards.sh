@@ -601,3 +601,69 @@ _load_timeout_config() {
     unset -f _lt_get
     return 0
 }
+
+# spec_review_gate <prd-file>
+#
+# A REVIEW THAT CANNOT STOP ANYTHING IS NOT A GATE.
+#
+# Live 2026-08-04 (run 20260804T035435Z): the coordinator reviewed all three lanes, used
+# list_files to check each manifest against the repository, and returned needs_review on
+# every one — qualityScore 0.45 on the worst. Two of those lanes had a manifest naming a
+# file that does not exist, the condition that sent a writer into a 120-iteration,
+# ~2M-token loop. The verdict was written to story.specReview, counted in summary.stats,
+# and then ignored: the only verdict the code branched on was 'fail', which the review
+# schema (approved|needs_review) never emits. The reviewer knew, on every lane, and had
+# no word that stopped anything.
+#
+# Enforced here, deterministically, from the PRD the spec pass wrote — at the pre-writer
+# boundary, before a single token is spent on implementation.
+#
+# CONFIGURABLE, never hardcoded:
+#   SPEC_REVIEW_ENFORCE=0        turn the gate off deliberately (default: on)
+#   SPEC_REVIEW_MIN_QUALITY=0.7  the bar a score must clear (default: 0.7)
+#
+# Deliberately NOT blocking: a story with no specReview at all. A resumed run skips the
+# spec pass, so an absent review is expected and must not halt it. Absent is not zero —
+# a null qualityScore does not block either, or a reviewer that omitted the field would
+# fail every story.
+spec_review_gate() {
+    local _prd="${1:-${PRD_FILE:-}}"
+    if [ "${SPEC_REVIEW_ENFORCE:-1}" = "0" ]; then
+        return 0
+    fi
+    if [ -z "$_prd" ] || [ ! -f "$_prd" ]; then
+        warning "[spec-review-gate] no PRD to check (${_prd:-unset}) — cannot verify the spec review"
+        return 1
+    fi
+    if ! jq -e . "$_prd" >/dev/null 2>&1; then
+        error "[spec-review-gate] PRD is not valid JSON — refusing to pass a gate it cannot read"
+        return 1
+    fi
+
+    local _min="${SPEC_REVIEW_MIN_QUALITY:-0.7}"
+    local _blockers
+    _blockers=$(jq -r --argjson min "$_min" '
+        [ .stories[]?
+          | select(.status != "deprecated")
+          | select(.specReview != null)
+          | select(
+              ((.specReview.verdict // "approved") != "approved")
+              or ((.specReview.qualityScore != null) and (.specReview.qualityScore < $min))
+            )
+          | "\(.id)\tverdict=\(.specReview.verdict // "?")\tquality=\(.specReview.qualityScore // "n/a")"
+        ] | .[]' "$_prd" 2>/dev/null)
+
+    if [ -z "$_blockers" ]; then
+        return 0
+    fi
+
+    error "[spec-review-gate] the specification review did not clear these stories:"
+    printf '%s\n' "$_blockers" | while IFS= read -r _b; do
+        [ -n "$_b" ] && error "[spec-review-gate]   $_b"
+    done
+    error "[spec-review-gate] The reviewer examined the repository and was not satisfied."
+    error "[spec-review-gate] Implementing anyway spends the writer's budget on a spec the"
+    error "[spec-review-gate] reviewer already flagged. Fix the spec, or set"
+    error "[spec-review-gate] SPEC_REVIEW_ENFORCE=0 to proceed deliberately (min quality: ${_min})."
+    return 1
+}

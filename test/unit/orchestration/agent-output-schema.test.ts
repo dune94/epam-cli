@@ -176,3 +176,51 @@ describe('the validator is wired into the tag-parse seam', () => {
     expect(SRC).toMatch(/console\.warn\(`spec-mode: \$\{v\.reason\}`\)/);
   });
 });
+
+/**
+ * A VALIDATOR BUG MUST NEVER HALT A RUN.
+ *
+ * I put an unproven validator in the fatal path and it killed two live runs in one hour:
+ *  - run 20260804T111540Z: demanded `agentRole`; the contract says `agents`. Valid
+ *    coordinator output rejected on every lane, every attempt.
+ *  - run 20260804T113729Z: demanded SPEC_AGENT.acceptanceCriteria. spec-mode-runner.js
+ *    :1574 forces acceptanceCriteria back to the ticket's immutable original "regardless
+ *    of what openspec/speckit proposed" — so an omitted array is survivable BY DESIGN.
+ *    Two lanes HALTED on a condition the pipeline recovers from.
+ *
+ * The blast radius of a wrong validator is larger than the defect it guards. So a
+ * refusal WARNS and records the reason, and the parsed object still flows: the pipeline's
+ * own recovery decides what to do. EPAM_SCHEMA_STRICT=1 opts into hard failure once a
+ * contract is proven.
+ *
+ * This does NOT weaken the review fix: when a reviewer answers in prose, extractTaggedJson
+ * already returns null upstream. The validator's job there is to SAY SO — a null answer is
+ * still null whether validation is fatal or not.
+ */
+describe('a schema refusal is diagnostic, not fatal', () => {
+  it('a non-conforming object is still RETURNED by default, with the reason surfaced', () => {
+    const r = validateTaggedOutput('SPEC_AGENT', { storyId: 'S1', agent: 'x' });
+    expect(r.ok, 'the shape genuinely does not conform').toBe(false);
+    expect(r.fatal, 'a shape mismatch must not be fatal by default — it halted two live runs')
+      .not.toBe(true);
+  });
+
+  it('null is ALWAYS fatal — no answer is no answer, strict or not', () => {
+    expect(validateTaggedOutput('SPEC_REVIEW', null).fatal).toBe(true);
+  });
+
+  it('EPAM_SCHEMA_STRICT=1 opts into hard failure for a proven contract', () => {
+    const prev = process.env.EPAM_SCHEMA_STRICT;
+    process.env.EPAM_SCHEMA_STRICT = '1';
+    try {
+      expect(validateTaggedOutput('SPEC_AGENT', { storyId: 'S1', agent: 'x' }).fatal).toBe(true);
+    } finally {
+      if (prev === undefined) delete process.env.EPAM_SCHEMA_STRICT; else process.env.EPAM_SCHEMA_STRICT = prev;
+    }
+  });
+
+  it('a conforming object is never fatal', () => {
+    const good = { storyId: 'S1', agent: 'x', acceptanceCriteria: ['a'] };
+    expect(validateTaggedOutput('SPEC_AGENT', good).fatal).not.toBe(true);
+  });
+});

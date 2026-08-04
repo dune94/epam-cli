@@ -723,7 +723,10 @@ function _validatedOrNull(parsed, tag) {
   }
   if (v.ok) return parsed;
   console.warn(`spec-mode: ${v.reason}`);
-  return null;
+  // Diagnostic by default: a shape mismatch is reported and the payload still flows, so
+  // the pipeline's own recovery decides. Only a FATAL refusal (no parseable answer, or
+  // EPAM_SCHEMA_STRICT=1) drops it — an unproven validator must not halt a run.
+  return v.fatal ? null : parsed;
 }
 
 async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey, storyId = '') {

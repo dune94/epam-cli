@@ -40,7 +40,25 @@
  * Nothing here knows any project, codeline or vendor.
  */
 
-const fail = (reason) => ({ ok: false, reason });
+// A REFUSAL IS DIAGNOSTIC, NOT FATAL, BY DEFAULT.
+//
+// An unproven validator in the fatal path killed two live runs in one hour: one demanded
+// `agentRole` where the contract says `agents`; the next demanded
+// SPEC_AGENT.acceptanceCriteria, which spec-mode-runner.js:1574 forces back to the
+// ticket's immutable original "regardless of what openspec/speckit proposed" — a
+// condition the pipeline recovers from by design. Two lanes HALTED on it.
+//
+// The blast radius of a WRONG validator exceeds the defect it guards. So a shape mismatch
+// warns, records the reason, and lets the parsed object flow: the pipeline's own recovery
+// decides. EPAM_SCHEMA_STRICT=1 opts into hard failure once a contract is proven.
+//
+// A null answer is ALWAYS fatal, strict or not — no answer is no answer, and that is the
+// case the review failure actually was.
+const fail = (reason, fatal = false) => ({
+  ok: false,
+  reason,
+  fatal: fatal || process.env.EPAM_SCHEMA_STRICT === '1',
+});
 const pass = () => ({ ok: true, reason: null });
 
 /**
@@ -116,7 +134,7 @@ function checkItem(item, schema, tag, index) {
  */
 function validateTaggedOutput(tag, parsed) {
   if (parsed === null || parsed === undefined) {
-    return fail(`${tag}: no parseable output — the tag was missing, empty, or contained prose instead of JSON`);
+    return fail(`${tag}: no parseable output — the tag was missing, empty, or contained prose instead of JSON`, true);
   }
   const schema = itemSchemaFor(tag);
   if (!schema) return pass();  // unknown tag, or nothing declared to enforce

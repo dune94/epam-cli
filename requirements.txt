@@ -1,0 +1,11 @@
+# Python dependencies for the orchestration pipeline's schema validators.
+#
+# These were UNDECLARED until 2026-08-04. orchestrations/scripts/lib/manifest_schema.py,
+# kb_schema.py and story_manifest_schema.py all import pydantic, pydantic was never
+# installed, and all three crashed on import. Nothing noticed, because nothing executed
+# them — they looked like validation and validated nothing.
+#
+# Install:  pip3 install --user -r requirements.txt
+# (On a PEP 668 "externally managed" system add --break-system-packages; --user keeps it
+# in ~/.local rather than touching OS packages.)
+pydantic>=2.0

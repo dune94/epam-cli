@@ -702,6 +702,30 @@ function specAgentEnv(env = process.env) {
   return out;
 }
 
+/**
+ * Refuse an answer that does not have the shape its tag promised, and say why.
+ *
+ * runAgentForJson's direct-exec path tag-parses the model's text; nothing checked the
+ * result conformed. Live 2026-08-04 a reviewer answered in prose inside an empty
+ * <SPEC_REVIEW></SPEC_REVIEW>, the parse returned null, the review was discarded, and all
+ * three retries reproduced it because nothing told the model it had failed. The reason
+ * this returns is the only thing that makes attempt 2 different from attempt 1.
+ */
+function _validatedOrNull(parsed, tag) {
+  let v;
+  try {
+    // eslint-disable-next-line global-require
+    v = require('./lib/agent-output-schema.js').validateTaggedOutput(tag, parsed);
+  } catch (e) {
+    // A missing validator must not silently disable validation — say so, loudly.
+    console.warn(`spec-mode: output validator unavailable (${e.message}) — ${tag} NOT validated`);
+    return parsed;
+  }
+  if (v.ok) return parsed;
+  console.warn(`spec-mode: ${v.reason}`);
+  return null;
+}
+
 async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey, storyId = '') {
   const provider = (process.env.AI_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || '').toLowerCase();
   const ladderProvider = (process.env.SPEC_PASS_LADDER_PROVIDER || 'qwen').toLowerCase();
@@ -730,7 +754,7 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     // SPEC_MODE_MAX_OUTPUT_TOKENS is spec-only; it doesn't affect implementation runs.
     const specEnv = specAgentEnv();
     const output = await runClaude(directExec, prompt, logPath, specEnv, { costAgent: tag, costStoryId: storyId });
-    return extractTaggedJson(output, tag);
+    return _validatedOrNull(extractTaggedJson(output, tag), tag);
   }
 
   if (provider === 'minimax') {
@@ -761,12 +785,12 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
       runClaude(ladderExec, prompt, logPath, {}, { costAgent: tag, costStoryId: storyId }),
       new Promise((_, reject) => setTimeout(() => reject(new Error(`ladder hard-timeout after ${ladderTimeout}ms`)), ladderTimeout + 5000))
     ]);
-    return extractTaggedJson(output, tag);
+    return _validatedOrNull(extractTaggedJson(output, tag), tag);
   }
 
   // Non-minimax: existing raw text path with tag extraction + jsonrepair
   const output = await runClaude(execSpec, prompt, logPath, {}, { costAgent: tag, costStoryId: storyId });
-  return extractTaggedJson(output, tag);
+  return _validatedOrNull(extractTaggedJson(output, tag), tag);
 }
 
 const args = process.argv.slice(2);

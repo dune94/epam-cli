@@ -58,6 +58,8 @@ const REAL_FNS = [
   'get_story_details',
   '_current_lane',
   '_render_technical_notes',
+  '_resolve_deliverable_path',
+  '_resolve_declared_files',
   'build_implementation_prompt',
 ];
 

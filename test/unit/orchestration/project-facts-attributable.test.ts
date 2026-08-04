@@ -157,3 +157,87 @@ describe('no stray client data is committed to the engine repo', () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * THE SAME FABRICATION, IN THE PLACES THIS SUITE DID NOT LOOK.
+ *
+ * The guard above scans orchestrations/projects/* only. The identical claim — "live_preview
+ * uses preview_token, NOT management_token" — also lives in the agent KNOWLEDGE BASE and in
+ * engine source comments, and neither was covered. So on 2026-08-04 it was read, believed,
+ * and re-encoded into a new hard gate within a day of the original incident. The relapse
+ * did not come from project config; it came from here.
+ *
+ * DISPROVEN BY DISCOVERY, not by opinion. dependency_contract, run against the installed
+ * package in the codeline, reports with file:line evidence:
+ *
+ *   live_preview      consumed   contentstack/config.js:13
+ *   enable            consumed   contentstack/config.js:14
+ *   host              consumed   contentstack/config.js:3
+ *   management_token  consumed   contentstack/dist/web/contentstack.js:2
+ *   preview_token     ABSENT     — appears nowhere in the package
+ *
+ * `preview_token` would compile, look right, and silently do nothing at runtime — the exact
+ * failure mode the dependency_contract tool exists to prevent. The writer used
+ * management_token and was CORRECT; the reviewer confirmed it against the same tool.
+ *
+ * KB.md matters most of the three: it is injected into agent prompts, so a false entry
+ * there actively teaches every future writer the wrong answer.
+ *
+ * The rule is not "never mention this key". It is: do not ASSERT a vendor's API contract
+ * from memory. State it as discoverable, or point at the tool that discovers it.
+ */
+describe('the fabricated live-preview claim is not taught anywhere', () => {
+  const SOURCES = [
+    'orchestrations/agents/KB.md',
+    'orchestrations/scripts/claude.sh',
+    'orchestrations/scripts/lib/story-guards.sh',
+  ];
+
+  /** A prescriptive claim that one key is right and the other wrong. */
+  const PRESCRIPTIVE = [
+    /use\s+`?preview_token`?\s*\(\s*NOT\s+`?management_token`?/i,
+    /`?preview_token`?\s*,?\s*not\s+`?management_token`?/i,
+    /the\s+correct\s+fix\s+uses\s+`?preview_token`?/i,
+    /at\s+runtime\s+the\s+SDK\s+actually\s+reads\s+`?preview_token`?/i,
+    /prescribed\s+`?preview_token`?/i,
+  ];
+
+  it('the sources exist (guard against a vacuous pass)', () => {
+    for (const rel of SOURCES) {
+      expect(existsSync(join(REPO_ROOT, rel)), `${rel} not found — the scan proves nothing`)
+        .toBe(true);
+    }
+  });
+
+  /**
+   * Comment prose WRAPS. "…instead of the prescribed\n# `preview_token`…" is one claim
+   * split across two comment lines, and a naive \s+ will not bridge the "# ". An earlier
+   * version of this test matched KB.md (unwrapped markdown) and silently passed both shell
+   * files that carried the identical assertion — a green run that proved nothing.
+   */
+  const normalise = (t: string) =>
+    t.replace(/\r/g, '').split('\n').map((l) => l.replace(/^\s*#\s?/, '')).join(' ')
+      .replace(/\s+/g, ' ');
+
+  it.each(SOURCES)('%s does not assert preview_token over management_token', (rel) => {
+    const text = normalise(readFileSync(join(REPO_ROOT, rel), 'utf8'));
+    const hits = PRESCRIPTIVE.filter((re) => re.test(text)).map((re) => String(re));
+    expect(
+      hits,
+      `${rel} states a vendor API fact that dependency_contract disproves: preview_token is ` +
+        'ABSENT from the installed package, management_token is consumed ' +
+        '(contentstack/dist/web/contentstack.js:2). An agent reading this is taught to write ' +
+        'a key that silently does nothing. Say it is discoverable, or name the tool that ' +
+        `discovers it.\nmatched: ${hits.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  it('the knowledge base does not brand the correct answer a "false diagnosis"', () => {
+    const kb = readFileSync(join(REPO_ROOT, 'orchestrations/agents/KB.md'), 'utf8');
+    expect(
+      /false\s+diagnosis[\s\S]{0,200}management_token|management_token[\s\S]{0,200}false\s+diagnosis/i.test(kb),
+      'KB.md calls the management_token finding a false diagnosis. It is the key the ' +
+        'installed SDK actually reads; the entry inverts the truth for every future agent.',
+    ).toBe(false);
+  });
+});

@@ -1,0 +1,64 @@
+{
+  "runId": "20260804T152722Z",
+  "phase": "core",
+  "startedAt": "2026-08-04T15:30:02.411Z",
+  "stories": [
+    {
+      "storyId": "AMSD-2041",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "notes": "Story has empty acceptance criteria, no existing spec, and covers live preview across multiple contexts (GO, UP, MX) — a complex feature requiring real-time rendering, sandboxing, and state synchronization. Both agents needed: openspec to elaborate AC and technical depth, speckit to harden testability, security, and edge cases. Openspec runs first, then speckit reviews.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Story requests Live Preview of Content in CMS (Contentstack) for GO, UP, MX brands — a new capability. The codebase currently fetches content via `useContent` (236 callers) which wraps the Contentstack delivery API. Live Preview requires that hook (or the client it wraps) to also support Contentstack's preview endpoint when in preview mode, and optionally the Live Preview SDK for real-time updates. No ACs provided; VCs derived from description.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-04T15:34:26.180Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec produced an empty AC list, so all 15 criteria are new. I derived them from the story title ('Live Preview of Content in CMS'), the technical notes pointing to useContent.ts, ContentstackContext, ContentstackLink, and contentCard.ts, and the note about 236 callers of useContent. Key areas covered: (1) Core preview/delivery switching (AC-1, AC-2), (2) Real-time updates (AC-3, AC-14), (3) Error handling for preview failures (AC-4, AC-8, AC-13, AC-15), (4) Security/isolation of preview from production (AC-5, AC-6), (5) Cross-brand consistency (AC-7), (6) Data shape compatibility (AC-9), (7) Runtime mode switching (AC-10), (8) Context propagation (AC-11), (9) No regression for existing consumers (AC-12). CAVEAT: File contents were not available for review, so AC precision around ContentstackContext shape, ContentstackLink behavior, and contentCard interface is based on naming conventions and common Contentstack Live Preview SDK patterns. Review of the actual source files may reveal additional edge cases or required adjustments.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-04T15:35:11.847Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "needs_review",
+        "reviewNotes": "Both agents added meaningful, non-overlapping value: openspec mapped the technical landscape (useContent wrapping Contentstack delivery API, 236 callers, need for preview endpoint and Live Preview SDK), while speckit derived 15 structured criteria covering preview/delivery switching, real-time updates, error handling, security/isolation, cross-brand consistency, data-shape compatibility, context propagation, and regression safety. However, speckit's own caveat is significant: 'File contents were not available for review, so AC precision around ContentstackContext shape, ContentstackLink behavior, and contentCard interface is based on naming conventions and common Contentstack Live Preview SDK patterns.' All four manifest paths exist and are plausible for this change, but neither agent inspected the actual source files before deriving criteria. The 15 verification criteria are described only by category in the notes — the individual VC text is not visible, making it impossible to confirm testability or precision. A human reviewer should verify that the persisted VCs are concrete and testable, and that the assumptions about ContentstackContext shape and ContentstackLink behavior match the actual codebase. Brownfield context: empty acceptanceCriteria array and acceptanceChanged=false on both agents are correct by policy — no defect there.",
+        "qualityScore": 0.65,
+        "flags": [
+          "vc_not_visible_in_notes",
+          "derived_without_source_inspection"
+        ],
+        "reviewedAt": "2026-08-04T15:35:27.976Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1,
+      "speckit": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 2,
+    "coordinatorReviewCompleted": true,
+    "approved": 0,
+    "needsReview": 1
+  },
+  "completedAt": "2026-08-04T15:35:36.294Z",
+  "storyCount": 1
+}

@@ -1,0 +1,51 @@
+{
+  "runId": "20260804T115608Z",
+  "phase": "core",
+  "startedAt": "2026-08-04T11:59:41.358Z",
+  "stories": [
+    {
+      "storyId": "AMSD-2041",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "notes": "Empty acceptance criteria and null spec require full requirements elaboration first. Live preview across GO, UP, and MX implies real-time rendering, multi-platform content synchronization, and potential preview endpoint security concerns — both elaboration and hardening are warranted. Openspec runs first to define AC and technical depth; speckit follows to add testability criteria, security checks, and edge case coverage.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Novel capability — no preview/draft content path exists in the codebase. The useContent hook (236+ callers) is the single attachment point: all Contentstack components funnel through it. Live preview must plug in here so every downstream component automatically serves preview content without individual changes. Contentstack APIs are unreachable at test time, so VCs assert what our code requests and renders given known responses, not what Contentstack returns.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-04T12:04:49.204Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided zero acceptance criteria, so all 23 criteria are newly authored. I structured them into six groups: (1) Preview activation/deactivation — criteria 1-2, 18; (2) Content rendering and propagation — criteria 3-6, 15-17, 19; (3) Security — criteria 7-8; (4) Error handling — criteria 9-10; (5) Non-functional safeguards — criteria 11-14; (6) Multi-codeline consistency — criteria 21-23. Key design decisions: Criterion 9 explicitly requires that a failed preview API call must NOT silently fall back to published content (editors must know their preview broke). Criterion 11 prevents stale preview caching. Criterion 13 ensures no performance overhead on production traffic. Criterion 14 addresses the Next.js static-generation bypass that live preview requires. Criterion 19 captures the core value proposition — real-time edit reflection. Criterion 20 ensures accessibility is not degraded in preview. Criteria 21-23 verify per-codeline behavior, noting the case-variant context file names (ContentstackContext.tsx vs contentstackContext.tsx) across codelines. IMPORTANT CAVEAT: File contents were not available — I authored these criteria from the story title, description, technical notes, and file paths only. If the actual contents of useContent.ts, the Contentstack context provider, or [[...slug]].tsx reveal existing preview-related logic, specific Contentstack SDK patterns, or constraints not visible from paths alone, some criteria may need refinement. The criteria intentionally avoid naming libraries, mock patterns, or implementation details per the what-not-how rule.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-04T12:07:07.349Z"
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1,
+      "speckit": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 2
+  },
+  "completedAt": "2026-08-04T12:07:32.349Z",
+  "storyCount": 1
+}

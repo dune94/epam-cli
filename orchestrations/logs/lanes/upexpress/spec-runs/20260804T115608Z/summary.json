@@ -1,0 +1,51 @@
+{
+  "runId": "20260804T115608Z",
+  "phase": "core",
+  "startedAt": "2026-08-04T11:59:06.931Z",
+  "stories": [
+    {
+      "storyId": "AMSD-2041",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "notes": "Story has zero acceptance criteria and no existing spec. Live preview across three platforms (GO, UP, MX) is a complex feature requiring full elaboration (AC definition, technical depth, story split proposals) followed by hardening (testability, security, edge cases). Openspec runs first, speckit reviews its output.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Live Preview is a new capability — the app must accept Contentstack preview parameters and route content fetching to the draft/preview API. useContent is the single funnel (236+ callers) where this branching must be injected; all Contentstack components (Link, Image, Table, ContentCards, etc.) delegate to it via getContentByKey.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-04T12:02:52.233Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided an empty acceptanceCriteria array with a valuable note identifying useContent as the single funnel (236+ callers) where preview/published branching must occur, and that all Contentstack components delegate to it via getContentByKey. I authored all 14 criteria from scratch based on the story title, description, technical-notes file paths, and openspec's note. Criteria 1–2 cover core activation and non-preview regression. Criteria 3–4 pin the funnel behavior at useContent specifically (since openspec identified it as the critical injection point). Criteria 5–6 verify that downstream components (Link, Image, Table, ContentCards) actually render draft values — not just that useContent returns them. Criterion 7 covers preview-state persistence across client-side navigation. Criteria 8–10 cover error handling and security edge cases (malformed params, API failure, invalid/expired tokens). Criterion 11 addresses draft-content leakage prevention — a critical security concern with a shared-content cache. Criterion 12 ensures cross-codeline consistency given the verified file-path variants (ContentstackContext.ts vs .tsx, case-variant contentstackContext.tsx vs ContentstackContext.tsx). Criteria 13–14 address real-time refresh and visual indication — both flagged for human confirmation on scope. CAVEAT: I could not read the actual file contents (useContent.ts, ContentstackContext.tsx, contentCard.ts, ContentstackLink.tsx) because no tools were available in this turn. My criteria are inferred from paths, title, and openspec's note. If the actual implementation uses a different mechanism for receiving preview parameters (e.g., postMessage from Contentstack iframe vs URL query params) or a different API endpoint pattern, criteria 1 and 13 may need adjustment to match the actual integration contract.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-04T12:04:24.259Z"
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1,
+      "speckit": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 2
+  },
+  "completedAt": "2026-08-04T12:08:15.223Z",
+  "storyCount": 1
+}

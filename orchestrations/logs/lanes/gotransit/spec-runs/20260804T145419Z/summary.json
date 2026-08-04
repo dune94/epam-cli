@@ -1,0 +1,64 @@
+{
+  "runId": "20260804T145419Z",
+  "phase": "core",
+  "startedAt": "2026-08-04T14:56:37.101Z",
+  "stories": [
+    {
+      "storyId": "AMSD-2041",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "notes": "Empty acceptance criteria, null spec, and cross-platform (GO, UP, MX) live preview feature — high complexity and high risk. Openspec must elaborate requirements and draft AC first; speckit then hardens with testability, security, and edge-case coverage (concurrent edits, stale preview state, auth/permissions across platforms). Not hand-curated, so not eligible for skip.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Live Preview is a novel capability. The primary attachment point is useContent (236+ callers) — every Contentstack component funnels through getContentByKey. Adding preview mode means this hook/provider must detect preview signals (query params, headers) and route to Contentstack's preview/draft API instead of the published content API. The IContentstackLink deprecation comment pointing to cx-shared may indicate preview patterns already exist in the shared library to reuse.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-04T15:01:02.903Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided an empty acceptanceCriteria array, so all 13 criteria are new. Key design decisions: (1) AC-1/AC-2 ensure preview is opt-in via query param, preserving current behavior as default; (2) AC-4 addresses ContentstackLink specifically since it's a listed file; (3) AC-5/AC-6 cover error and timeout handling; (4) AC-7 is a security gate preventing draft content leakage to unauthenticated users; (5) AC-8 covers nested reference resolution, a common gap in preview implementations; (6) AC-9 addresses token expiry/removal without reload; (7) AC-10 ensures cross-site consistency for GO/UP/MX; (8) AC-11 handles the edge case where draft doesn't exist yet; (9) AC-12 ensures SSR compatibility so preview isn't client-only; (10) AC-13 provides a visual safety net. IMPORTANT CAVEAT: I could not read the actual file contents. Openspec's notes mention cx-shared may already contain preview patterns — if so, some criteria (especially AC-1, AC-8, AC-12) may need adjustment to align with existing shared-library conventions. Implementers should verify assumptions against actual code.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-04T15:02:39.992Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "needs_review",
+        "reviewNotes": "Both agents added meaningful, non-overlapping value. Openspec identified the primary integration point (useContent hook, 236+ callers) and the architectural approach (detect preview signals, route to Contentstack preview/draft API), plus flagged the IContentstackLink deprecation comment pointing to cx-shared as a potential source of existing preview patterns. Speckit then authored 13 verification criteria covering opt-in query params, security gates for draft content leakage, nested reference resolution, token expiry handling, SSR compatibility, cross-site GO/UP/MX consistency, and visual safety nets — all concrete and testable on their face. The contributions are complementary, not duplicative. Manifest evidence confirms all 4 declared paths exist; no missing paths. However, speckit explicitly states it could not read actual file contents and that criteria (especially AC-1, AC-8, AC-12) may need adjustment if cx-shared already contains preview patterns. Openspec raised the same uncertainty. For a high-complexity cross-platform live-preview feature, 13 verification criteria authored blind against the codebase is a real risk — a human should validate the criteria against actual code, particularly the cx-shared library, before implementation begins.",
+        "qualityScore": 0.78,
+        "flags": [
+          "blind_authoring",
+          "unverified_cx_shared_assumptions"
+        ],
+        "reviewedAt": "2026-08-04T15:03:15.291Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1,
+      "speckit": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 2,
+    "coordinatorReviewCompleted": true,
+    "approved": 0,
+    "needsReview": 1
+  },
+  "completedAt": "2026-08-04T15:03:25.316Z",
+  "storyCount": 1
+}

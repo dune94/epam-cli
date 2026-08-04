@@ -1,0 +1,40 @@
+{
+  "message_id": "msg-1785871662598",
+  "timestamp": "2026-08-04T19:27:42+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "major",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 0,
+          "description": "No unit tests were added for the new live_preview configuration. The existing test file already tests the options object (e.g., the 'contentstack fetch timeout' describe block verifies fetchOptions), but no test verifies that options includes live_preview with enable: true and the correct host from CONTENTSTACK_PREVIEW_HOST. The diff introduces a new feature (live preview support) but adds zero tests. Per review criterion (2), new features must have corresponding vitest unit tests.",
+          "suggestedFix": "Add a test in src/services/__tests__/contentstack.spec.ts that verifies the options object includes live_preview: { enable: true, host: <expected value> } when CONTENTSTACK_PREVIEW_HOST is set, and that host defaults to empty string when the env var is absent. Follow the existing pattern used for the fetch timeout tests (require('../contentstack.ts') then assert on testedModule.options with expect.objectContaining).",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 68,
+          "description": "The management_token: \"\" property is not part of the prescribed minimal fix, which specifies only { enable: true, host: CONTENTSTACK_PREVIEW_HOST || '' }. The dependency_contract confirms management_token is consumed by the SDK runtime, so providing an empty string may cause the SDK to attempt authenticated preview API calls that fail silently. Either remove it to match the prescribed fix, or source it from an env var (e.g., CONTENTSTACK_MANAGEMENT_TOKEN) if the SDK requires a valid token for live preview to function.",
+          "suggestedFix": "Remove management_token: \"\" from the live_preview config to match the prescribed minimal fix: live_preview: { enable: true, host: CONTENTSTACK_PREVIEW_HOST || \"\" }. If the SDK requires a management token, add a CONTENTSTACK_MANAGEMENT_TOKEN env var and reference it here.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

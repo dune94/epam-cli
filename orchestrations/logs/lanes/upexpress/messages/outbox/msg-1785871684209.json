@@ -1,0 +1,40 @@
+{
+  "message_id": "msg-1785871684209",
+  "timestamp": "2026-08-04T19:28:04+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 67,
+          "description": "No unit test coverage for the new live_preview config. The existing test file (src/services/__tests__/contentstack.spec.ts) has tests for CONTENTSTACK_FETCH_TIMEOUT config but none verify that live_preview is correctly populated from CONTENTSTACK_PREVIEW_HOST / CONTENTSTACK_PREVIEW_TOKEN env vars, or that enable is false when the host is absent. The total test count is not increased to cover this new feature.",
+          "suggestedFix": "Add test cases to src/services/__tests__/contentstack.spec.ts (in a new describe('live_preview config') block) that: (1) set CONTENTSTACK_PREVIEW_HOST and CONTENTSTACK_PREVIEW_TOKEN, require the module, and assert options.live_preview.enable is true with correct host and management_token values; (2) leave them unset and assert options.live_preview.enable is false.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 70,
+          "description": "management_token is always present in the live_preview object even when CONTENTSTACK_PREVIEW_TOKEN is an empty string. While harmless when enable is false, it is cleaner to conditionally include it only when a token exists, matching the pattern already used for CONTENTSTACK_FETCH_TIMEOUT (conditional spread).",
+          "suggestedFix": "Use conditional spread: live_preview: { enable: Boolean(CONTENTSTACK_PREVIEW_HOST), host: CONTENTSTACK_PREVIEW_HOST, ...(CONTENTSTACK_PREVIEW_TOKEN ? { management_token: CONTENTSTACK_PREVIEW_TOKEN } : {}) }",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

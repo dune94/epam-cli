@@ -1,0 +1,51 @@
+{
+  "runId": "20260804T115608Z",
+  "phase": "core",
+  "startedAt": "2026-08-04T11:59:42.860Z",
+  "stories": [
+    {
+      "storyId": "AMSD-2041",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "notes": "Story has no acceptance criteria, no dependencies, and null spec — full elaboration needed. Live Preview of Content in CMS is a complex, cross-cutting feature spanning GO, UP, and MX layers. OpenSpec runs first to draft AC and add technical depth; speckit follows to harden testability, security, and edge-case coverage.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Live Preview is a novel capability — no preview/draft content rendering exists in the current codebase. The primary attachment point is the useContent hook (236+ consumers) which all content flows through. Removed reference to src/services/contentstack.ts per reviewer rejection — it was not confirmed in CodeGraph output. VCs derived from description since acceptanceCriteria is empty; all VCs are black-box observable and stop at the Contentstack API boundary.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-04T12:15:15.353Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided an empty acceptanceCriteria array, so all 14 criteria are new. Key design decisions: (1) AC-1/AC-2 establish the core preview vs. published dichotomy as a security boundary. (2) AC-3/4/5 ensure all three codelines are covered individually rather than a single combined criterion, since file paths differ across codelines (e.g., ContentstackContext.tsx vs .ts vs contentstackContext.tsx casing). (3) AC-6/7/8 cover edge cases: no draft exists, expired/invalid token, API failure — all with graceful fallback to published content. (4) AC-9 addresses referenced/linked content, which is critical because ContentstackLink is a key file and reference resolution is a common failure point in live preview implementations. (5) AC-10 is a security criterion preventing unauthorized preview access via parameter injection. (6) AC-11 ensures preview session persistence across navigation. (7) AC-12 ensures visual parity so preview is trustworthy. (8) AC-13 addresses the useContent hook (236+ consumers) as the primary integration point — observable outcome is that hook consumers work unchanged in either mode. (9) AC-14 addresses cache poisoning risk where draft content could leak via CDN. CAVEAT: Without reading the actual source files, I cannot confirm the exact Contentstack Live Preview API integration pattern (e.g., whether it uses live_preview query param, a specific SDK method, or webhook-based push). These criteria assume the standard Contentstack Live Preview mechanism but should be validated against the actual implementation approach chosen.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-04T12:16:28.742Z"
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1,
+      "speckit": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 2
+  },
+  "completedAt": "2026-08-04T12:16:51.801Z",
+  "storyCount": 1
+}

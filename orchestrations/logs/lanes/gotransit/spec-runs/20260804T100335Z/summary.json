@@ -1,0 +1,51 @@
+{
+  "runId": "20260804T100335Z",
+  "phase": "core",
+  "startedAt": "2026-08-04T10:05:42.199Z",
+  "stories": [
+    {
+      "storyId": "AMSD-2041",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "notes": "Live Preview is a complex, user-facing, cross-locale (GO, UP, MX) CMS feature with zero acceptance criteria and no existing spec. Assigning both agents: openspec first to elaborate requirements, define AC, and propose technical depth for real-time rendering and multi-locale preview; then speckit to harden with testability criteria, security checks, and edge-case coverage (e.g., locale fallback, preview latency, concurrent edits, iframe sandboxing).",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Novel capability — live preview does not exist in current codebase. useContent (236 callers) and ContentstackContext are the attachment points. ACs were empty; VCs derived entirely from description. All VCs stop at the Contentstack boundary since that service is unreachable at test time.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-04T10:13:46.058Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec produced an empty AC list, noting this is a novel capability with no existing live-preview code. All 12 ACs are new and derived from the story description, title, and the listed attachment-point files (useContent, ContentstackContext, contentCard, ContentstackLink, contentstack service). CAVEAT: I could not read the source files, so AC-6 (atomic multi-field updates) and AC-12 (ContentstackLink re-rendering) may need adjustment once the actual data-flow and component structure is known. AC-8 and AC-10 address backwards-compatibility and SPA navigation edge cases that were not mentioned in the description but are critical for a non-breaking integration. AC-9 covers malformed payloads — essential because live-preview streams are inherently less stable than published API responses. AC-11 addresses out-of-order delivery, a common issue with real-time event streams.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-04T10:16:27.746Z"
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1,
+      "speckit": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 2
+  },
+  "completedAt": "2026-08-04T10:17:04.476Z",
+  "storyCount": 1
+}

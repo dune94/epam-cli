@@ -761,3 +761,48 @@ spec_review_gate() {
     error "[spec-review-gate] SPEC_REVIEW_ENFORCE=0 to proceed deliberately (min quality: ${_min})."
     return 1
 }
+
+# ── Brownfield story selection: two questions, two names ────────────────────
+#
+# These were ONE jq snippet, copy-pasted into two loops that ask different
+# questions. fe5d6cb (2026-07-29) narrowed it with `storyKind != "novel"` to fix
+# the GATE — correctly, a novel story has no bug to reproduce — and the same
+# filter landed on the test WRITER, which never needed it. Step 10's TC writer is
+# skipped for all brownfield, so the writer at Step 3.54 is the ONLY step that
+# authors a test in this path; excluding novel left those stories with no test
+# author at all, while team-lead-review.sh still enforces test coverage. Live run
+# 20260804T202338Z deadlocked all three lanes on exactly that.
+#
+# Two names so a future copy-paste cannot silently re-conflate them.
+
+# Every story in this phase. Who gets a test written for them (Step 3.54), and
+# whose VC coverage is reported (Step 3.55). Test authoring is not conditional on
+# there having been a bug: the writer works from the committed fix diff and the
+# story's verificationCriteria.
+phase_stories_brownfield_scope() {
+    local _prd="${1:-${PRD_FILE:-}}" _phase="${2:-${PHASE:-}}"
+    [ -n "$_prd" ] && [ -f "$_prd" ] || return 0
+    jq -r --arg phase "$_phase" \
+        '(.implementationOrder[$phase] // []) as $ids |
+         .stories[]? | select(.id != null)
+                     | select(.id as $id | $ids | index($id) != null)
+                     | .id' "$_prd" 2>/dev/null || true
+    return 0
+}
+
+# Strictly narrower, and narrower ON PURPOSE: only stories that have a bug to
+# reproduce. The repro gate proves RED→GREEN against a pre-fix baseline, which a
+# story with no prior bug can never satisfy — it was blocking AMSD-2041 on an
+# unsatisfiable bar. An UNCLASSIFIED story is still gated: absent classification
+# defaults to the safe side.
+phase_stories_for_repro_gate() {
+    local _prd="${1:-${PRD_FILE:-}}" _phase="${2:-${PHASE:-}}"
+    [ -n "$_prd" ] && [ -f "$_prd" ] || return 0
+    jq -r --arg phase "$_phase" \
+        '(.implementationOrder[$phase] // []) as $ids |
+         .stories[]? | select(.id != null)
+                     | select(.id as $id | $ids | index($id) != null)
+                     | select((.storyKind // "") != "novel")
+                     | .id' "$_prd" 2>/dev/null || true
+    return 0
+}

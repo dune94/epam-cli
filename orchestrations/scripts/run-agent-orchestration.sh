@@ -6984,11 +6984,12 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/brownfield-repro-test-
         PROJECT_ROOT="$PROJECT_ROOT" PRD_FILE="$PRD_FILE" LOG_DIR="$LOG_DIR" \
         JIRA_BASELINE_BRANCH="${JIRA_BASELINE_BRANCH:-develop}" \
             bash "$SCRIPT_DIR/brownfield-repro-test-writer.sh" "$_tw_story" 2>&1 | tee -a "$LOG_DIR/repro-test-writer-${PHASE}.log"
-    done < <(jq -r --arg phase "$PHASE" \
-        '(.implementationOrder[$phase] // []) as $ids |
-         .stories[] | select(.id as $id | $ids | index($id) != null)
-                    | select((.storyKind // "") != "novel") | .id' \
-        "$PRD_FILE" 2>/dev/null)
+    # EVERY story in the phase, novel included. This selector was narrowed to
+    # exclude novel by fe5d6cb, which was fixing the GATE below — the writer was
+    # collateral. It does not need a bug: it reads the committed fix diff and the
+    # story's verificationCriteria, and validates that its test PASSES against the
+    # fix. See lib/story-guards.sh for the full history.
+    done < <(phase_stories_brownfield_scope "$PRD_FILE" "$PHASE")
 fi
 
 # ──────────────────────────────────────────────
@@ -7059,46 +7060,53 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/brownfield-repro-test-
             _tmp_prd="$(mktemp)"; jq --arg id "$_rg_story" \
                 '(.stories[] | select(.id == $id)) |= (. + {reviewStatus: "escalated", reproGate: "failed"})' \
                 "$PRD_FILE" > "$_tmp_prd" 2>/dev/null && mv "$_tmp_prd" "$PRD_FILE" || rm -f "$_tmp_prd"
-        else
-            # The test is proven to reproduce the bug. Separate question: does it
-            # cover every verification criterion the story was accepted against?
-            # Run 7 covered two of three and silently skipped the negative case —
-            # the repro gate cannot see that, because it only asks whether the
-            # test fails before the fix and passes after.
-            #
-            # ADVISORY: reports, never blocks. The change is already proven by
-            # execution, which is stronger evidence than a coverage opinion.
-            if [ -x "$SCRIPT_DIR/vc-coverage-check.sh" ]; then
-                # story_outputs_tests lives in lib/story-outputs.sh, which is
-                # otherwise only sourced inside _brownfield_gate_scope — so at
-                # this point in the run it may not exist yet. Run 8: it did not,
-                # the call failed into /dev/null, and the check vanished without
-                # a word.
-                [ -f "$SCRIPT_DIR/lib/story-outputs.sh" ] && . "$SCRIPT_DIR/lib/story-outputs.sh"
-                _vc_test_file=$(story_outputs_tests "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null | head -1)
-                if [ -n "$_vc_test_file" ]; then
-                    bash "$SCRIPT_DIR/vc-coverage-check.sh" \
-                        --prd "$PRD_FILE" --story "$_rg_story" \
-                        --test-file "$PROJECT_ROOT/$_vc_test_file" \
-                        --out "$LOG_DIR/vc-coverage-${_rg_story}.json" 2>&1 \
-                        | tee -a "$LOG_DIR/vc-coverage-${PHASE}.log" || true
-                else
-                    # Never silent: "no test to check" and "everything covered"
-                    # must not look the same in the report.
-                    warning "  [vc-coverage] no test file in the writer manifest — coverage NOT checked"
-                fi
-            fi
         fi
-    done < <(jq -r --arg phase "$PHASE" \
-        '(.implementationOrder[$phase] // []) as $ids |
-         .stories[] | select(.id as $id | $ids | index($id) != null)
-                    | select((.storyKind // "") != "novel") | .id' \
-        "$PRD_FILE" 2>/dev/null)
+    # Only stories with a bug to reproduce. A novel story cannot satisfy
+    # fail-on-baseline and is deliberately not gated here (fe5d6cb).
+    done < <(phase_stories_for_repro_gate "$PRD_FILE" "$PHASE")
     if [ "$_repro_blocked" -eq 1 ]; then
         error "Step 3.55: one or more stories failed the bug-reproduction test gate — the fix does not ship a test that reproduces the bug. Blocking before review."
         exit 2
     fi
     success "Step 3.55: bug-reproduction test gate passed for all phase stories"
+fi
+
+# ──────────────────────────────────────────────
+# Step 3.56: Verification-criteria coverage report (brownfield, advisory).
+# Does the story's test cover every verification criterion it was accepted
+# against? Run 7 covered two of three and silently skipped the negative case —
+# the repro gate cannot see that, because it only asks whether the test fails
+# before the fix and passes after.
+#
+# ADVISORY: reports, never blocks.
+#
+# Runs over the FULL brownfield scope, not the repro gate's narrower set. This
+# lived inside the gate's success branch, so a novel story — which the gate never
+# selects — skipped coverage reporting as silently as it skipped test authoring.
+# A novel story is precisely the case where VCs are the only definition of done,
+# so it is the last one that should go unreported.
+# ──────────────────────────────────────────────
+if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -x "$SCRIPT_DIR/vc-coverage-check.sh" ]; then
+    # story_outputs_tests lives in lib/story-outputs.sh, which is otherwise only
+    # sourced inside _brownfield_gate_scope — so at this point in the run it may
+    # not exist yet. Run 8: it did not, the call failed into /dev/null, and the
+    # check vanished without a word.
+    [ -f "$SCRIPT_DIR/lib/story-outputs.sh" ] && . "$SCRIPT_DIR/lib/story-outputs.sh"
+    while IFS= read -r _vc_story; do
+        [ -z "$_vc_story" ] && continue
+        _vc_test_file=$(story_outputs_tests "$PROJECT_ROOT" "$LOG_DIR" 2>/dev/null | head -1)
+        if [ -n "$_vc_test_file" ]; then
+            bash "$SCRIPT_DIR/vc-coverage-check.sh" \
+                --prd "$PRD_FILE" --story "$_vc_story" \
+                --test-file "$PROJECT_ROOT/$_vc_test_file" \
+                --out "$LOG_DIR/vc-coverage-${_vc_story}.json" 2>&1 \
+                | tee -a "$LOG_DIR/vc-coverage-${PHASE}.log" || true
+        else
+            # Never silent: "no test to check" and "everything covered" must not
+            # look the same in the report.
+            warning "  [vc-coverage] no test file in the writer manifest for ${_vc_story} — coverage NOT checked"
+        fi
+    done < <(phase_stories_brownfield_scope "$PRD_FILE" "$PHASE")
 fi
 
 # Step 3.58: Regression delta gate (RG-DELTA) — the "after" half of the

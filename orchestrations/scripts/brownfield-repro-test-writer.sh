@@ -135,7 +135,34 @@ _vcs=$("$NODE_BIN" -e '
     process.stdout.write((s.verificationCriteria||[]).map(v=>"- "+v).join("\n"));
   } catch(e){}' "$PRD_FILE" "$STORY_ID" 2>/dev/null)
 
-log "writing reproducing test for $STORY_ID → $_target_rel (convention: .$_ext, example: ${_example_rel:-none})"
+# ── What kind of proof does this story need? ────────────────────────────────
+# A DEFECT is proved by reproduction: the test must fail on the pre-fix baseline
+# and pass with the fix (the repro-gate then verifies exactly that). A NOVEL story
+# has no prior bug and no failing baseline behaviour, so "write a test that
+# reproduces the bug" is an instruction it cannot satisfy — the same impossible
+# demand fe5d6cb removed from the gate one step later. Its proof is the
+# verification criteria: assert the observable outcome the change now produces.
+#
+# storyKind is set by the spec pass and anchored to Jira ground truth (issueType
+# "Bug" forces defect). Absent/unknown classification defaults to the defect
+# wording, matching the gate's own safe-side default.
+_story_kind=$(jq -r --arg id "$STORY_ID" \
+    '.stories[]? | select(.id == $id) | .storyKind // ""' "$PRD_FILE" 2>/dev/null || echo "")
+if [ "$_story_kind" = "novel" ]; then
+    _prompt_role="write ONE test that proves a change which has ALREADY been implemented and committed"
+    _diff_heading="The change that was just made (diff vs baseline)"
+    _req_proof="3. The test MUST prove the verification criteria above against the committed change. Assert the observable outcome the change now produces — not the mechanism, and not that some prior behaviour was broken. This is a NEW capability: there is no pre-fix failure to reproduce, and a test written as though there were will be rejected. It MUST PASS with the change in place."
+    _log_noun="test"
+    _commit_noun="test"
+else
+    _prompt_role="write ONE bug-reproducing test for a fix that has ALREADY been implemented and committed"
+    _diff_heading="The fix that was just made (diff vs baseline)"
+    _req_proof="3. The test MUST genuinely REPRODUCE the bug: it must FAIL against the pre-fix code and PASS with the fix. Assert the corrected observable value — a test that passes regardless of the fix is worthless and will be rejected."
+    _log_noun="reproducing test"
+    _commit_noun="bug-reproducing test"
+fi
+
+log "writing ${_log_noun} for $STORY_ID (kind: ${_story_kind:-unclassified}) → $_target_rel (convention: .$_ext, example: ${_example_rel:-none})"
 
 # Activity emit — the test-writer is a first-class agent and MUST be visible in
 # agent-activity.html like every other agent (found 2026-07-24: it emitted nothing).
@@ -144,14 +171,14 @@ _emit_tw "spec_update" "repro-test-writer started for ${STORY_ID} → ${_target_
 
 # ── Build the dedicated test-writer prompt ──────────────────────────────────
 read -r -d '' _prompt <<PROMPT || true
-You are a TEST ENGINEER. Your ONLY job in this turn is to write ONE bug-reproducing test for a fix that has ALREADY been implemented and committed. Do NOT modify any source file — write ONLY the test file.
+You are a TEST ENGINEER. Your ONLY job in this turn is to ${_prompt_role}. Do NOT modify any source file — write ONLY the test file.
 
 ## VERIFY IT COMPILES BEFORE YOU FINISH
 Your test must TYPECHECK, not merely run — a spec that passes the test runner but fails tsc blocks the whole pipeline five steps later. Mock objects are the usual cause: they must satisfy the FULL type, with every required property, and no property the type does not declare. After writing the file, run:
   cd "${PROJECT_ROOT}" && ./node_modules/.bin/tsc --noEmit 2>&1 | grep "${_target_rel}"
 If that prints anything, FIX YOUR FILE and re-check before finishing.
 
-## The fix that was just made (diff vs baseline)
+## ${_diff_heading}
 \`\`\`diff
 ${_fix_diff}
 \`\`\`
@@ -168,7 +195,7 @@ Over-exploring here is the #1 failure mode — do the MINIMUM lookup, then Write
 ## HARD REQUIREMENTS
 1. Write the test to EXACTLY this path (nothing else, no other files): ${PROJECT_ROOT}/${_target_rel}
 2. Use the SAME test framework, import style, and mocking approach as the example above (this repo uses .${_ext}). The test MUST be runnable by the repo's existing test runner — match its conventions so it is picked up.
-3. The test MUST genuinely REPRODUCE the bug: it must FAIL against the pre-fix code and PASS with the fix. Assert the corrected observable value (e.g. the return-trip discount is present/correct) — a test that passes regardless of the fix is worthless and will be rejected.
+${_req_proof}
 4. Write REAL arrange/act/assert cases. Do NOT paste source code into the test. Do NOT use a bare filename like 'test'. Do NOT put a newline or space in the path.
 5. Call WriteFile ONCE with the full test content at the path above, then stop.
 PROMPT
@@ -320,8 +347,8 @@ _validate_written_test() {
             _assertion_feedback="
 
 ## YOUR TEST FAILED AGAINST THE FIX THAT IS ALREADY COMMITTED
-The fix for this story is ALREADY in the working tree. Your test ran but ${_failed} of ${total} assertion(s) FAILED, which means your test contradicts the implemented fix — not that it reproduces the bug.
-Read the fix diff above again and assert the behaviour it ACTUALLY produces.
+The change for this story is ALREADY in the working tree. Your test ran but ${_failed} of ${total} assertion(s) FAILED, which means your test contradicts the implemented change.
+Read the diff above again and assert the behaviour it ACTUALLY produces.
 \`\`\`
 $(printf '%s' "$json" | head -c 1200)
 \`\`\`"
@@ -481,7 +508,7 @@ if [ -f "$PROJECT_ROOT/$_target_rel" ] && [ "${_test_validated:-0}" = "1" ]; the
         # whatever the real reason is, it's now visible in the log instead of
         # requiring live-run archaeology to rediscover. Same pattern as
         # commit_completed_story()'s 2026-08-01 fix (lib/git-ops.sh).
-        _commit_output=$(git -C "$PROJECT_ROOT" commit -m "${STORY_ID}: add bug-reproducing test" --quiet 2>&1)
+        _commit_output=$(git -C "$PROJECT_ROOT" commit -m "${STORY_ID}: add ${_commit_noun}" --quiet 2>&1)
         _commit_rc=$?
         if [ "$_commit_rc" -eq 0 ]; then
             log "committed reproducing test: $_target_rel"

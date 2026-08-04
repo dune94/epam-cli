@@ -1,0 +1,80 @@
+{
+  "message_id": "msg-1785812409559",
+  "timestamp": "2026-08-04T03:00:09+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 0,
+          "description": "ROOT CAUSE NOT ADDRESSED: The prescribed minimal fix requires modifying ContentstackProvider in src/context/contentstackContext.tsx — replacing the static useMemo with React.useState and wiring the @contentstack/live-preview-utils onEntryChange callback so CMS preview edits propagate to the React tree. The diff does NOT touch this file at all. Instead, the diff adds a useLivePreview hook that reads isLivePreview and previewToken from ContentstackContext, but since the context file was never modified, these properties do not exist on the context interface — this is a TypeScript error and the hook will return undefined at runtime. The entire change set is tangential to the root cause: the provider still freezes content on mount and no live preview update can ever reach the UI.",
+          "suggestedFix": "Implement the prescribed fix in src/context/contentstackContext.tsx: (1) Add @contentstack/live-preview-utils as a dependency. (2) Replace the static useMemo that freezes defaultContent with React.useState initialized to defaultContent. (3) Call onEntryChange from the Live Preview SDK and update state in the callback so the entire context tree re-renders with preview content. (4) Add live_preview_hash param to the server-side Contentstack API fetch calls so draft/preview entries are returned. Then the useLivePreview hook can read isLivePreview/previewToken from the context if you add them to the context value.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.ts",
+          "line": 26,
+          "description": "useLivePreview destructures { isLivePreview, previewToken } from useContext(ContentstackContext), but the context interface was never updated to include these properties. This is a TypeScript strict-mode error (Property 'isLivePreview' does not exist on the context type). The hook is non-functional.",
+          "suggestedFix": "Either add isLivePreview and previewToken to the ContentstackContext interface and provider value (as part of the prescribed provider fix), or remove this hook entirely if the provider fix makes it unnecessary.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+          "line": 12,
+          "description": "withPreviewFlag hand-rolls URL query-parameter manipulation (splitting on '#', checking for '?', string concatenation). This is reinventing URL parsing logic that the project likely already has a helper for. Additionally, the function does not handle edge cases properly: if the URL already contains a 'preview' parameter, it appends a duplicate; it does not use the URL API which is the standard, safe approach. The prescribed fix does not call for URL decoration on ContentstackLink at all — the live_preview_hash param belongs on the server-side Contentstack API fetch, not on rendered anchor hrefs.",
+          "suggestedFix": "Remove withPreviewFlag and the isPreview prop/badge from ContentstackLink entirely — they are not part of the prescribed minimal fix. The live preview reactivity should be handled at the provider level (ContentstackProvider), not by decorating individual link components.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/interface/content/contentCard.ts",
+          "line": 14,
+          "description": "isPreview and previewTimestamp fields added to IContentCard are not part of the prescribed fix and have no consumers in the diff. The prescribed fix explicitly states 'The context shape (IContentstackContent) does not need to change.' Adding unused fields to unrelated interfaces is scope creep that increases maintenance surface without addressing the root cause.",
+          "suggestedFix": "Remove isPreview and previewTimestamp from IContentCard. They are not needed for the live preview fix.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.ts",
+          "line": 24,
+          "description": "NO TESTS: The new useLivePreview hook has no corresponding vitest unit tests. The new withPreviewFlag helper in ContentstackLink.tsx also has no tests. Per review criteria, new features must have corresponding tests in test/unit/ mirroring the src/ path, and the total test count must not decrease.",
+          "suggestedFix": "Add unit tests for any code that remains after implementing the prescribed fix. If useLivePreview and withPreviewFlag are removed (as recommended), this is moot. If the provider fix is implemented, add tests verifying that onEntryChange callback updates context state and triggers re-render.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/hooks/useContent.ts",
+          "line": 24,
+          "description": "useLivePreview function lacks an explicit return type annotation. Per TypeScript strict compliance criteria, all function return types should be explicitly typed.",
+          "suggestedFix": "Add an explicit return type, e.g.: export const useLivePreview = (): { isLivePreview: boolean; previewToken: string } => { ... }",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+          "line": 37,
+          "description": "Hardcoded string 'Live Preview' and 'contentstack-link__preview-badge' class name. Per review criteria, hardcoded strings should use named constants. However, since this code should be removed per the prescribed fix, this is moot if removed.",
+          "suggestedFix": "Remove this code as it is not part of the prescribed minimal fix.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

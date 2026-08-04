@@ -2848,6 +2848,30 @@ KNOWNFIXES_EOF
           ? s.codelines.includes(cl)
           : (s.codeline === cl || (!s.codeline && cl === dcl)))
       );
+      // THE LANE'S MANIFEST IS AUTHORITATIVE IN THE LANE'S PRD.
+      //
+      // buildPerCodelineManifest() already resolved every declared path against this
+      // codeline's real checkout and stored it in technicalNotes.perCodeline.<lane>.files.
+      // Copying the story verbatim left the DECLARED spelling in technicalNotes.files, so
+      // every downstream consumer — writer, reviewer, gates, TC writer, failure analyst —
+      // read a path this lane may not have, with the corrected one sitting beside it.
+      //
+      // Live 2026-08-04: the writer saw one file under two spellings 9 times each,
+      // assumed two files existed, created the phantom, deleted it, declared the REAL one
+      // out of scope, and every retry then failed tsc on fields its own edits required —
+      // 120 iterations, ~2M input tokens, 4 writes.
+      //
+      // Correct it ONCE, here, where the lane's PRD is built. The declared list is
+      // replaced, not annotated: two spellings in one document is the defect itself. A
+      // story with no entry for this lane keeps what it had rather than being blanked.
+      for (const s of stories) {
+        const per = s.technicalNotes && s.technicalNotes.perCodeline;
+        const mine = per && per[cl];
+        if (mine && Array.isArray(mine.files) && mine.files.length) {
+          s.technicalNotes = { ...s.technicalNotes, files: mine.files };
+          delete s.technicalNotes.perCodeline;
+        }
+      }
       const ids = new Set(stories.map(s => s.id));
       const order = {};
       for (const [phase, list] of Object.entries(prd.implementationOrder||{})) {

@@ -1696,37 +1696,6 @@ _render_technical_notes() {
         | join("\n")' 2>/dev/null || echo "None specified"
 }
 
-# Map every DECLARED deliverable to the name that actually exists on disk.
-#
-# _resolve_deliverable_path() already finds the real file, but only the injected file
-# CONTENTS used it — the file LIST and the raw technicalNotes dump carried the declared
-# spelling, so the prompt showed both. Live 2026-08-04 the writer saw one file under two
-# names nine times each, concluded there were two, created the phantom, deleted it,
-# declared the real one out of scope and escalated; every retry then failed tsc on fields
-# its own edits required. 120 iterations, ~2M input tokens, 4 writes.
-#
-# A path the filesystem does not agree exists must never reach the agent. Nothing here
-# knows any project, vendor or filename — it asks the repository and reports the answer.
-_resolve_declared_files() {
-    local _root="${1:-$PROJECT_ROOT}" _rel _abs _res
-    while IFS= read -r _rel; do
-        [ -n "$_rel" ] || continue
-        case "$_rel" in
-            /*) _abs="$_rel" ;;
-            *)  _abs="${_root%/}/$_rel" ;;
-        esac
-        if _res="$(_resolve_deliverable_path "$_abs" 2>/dev/null)" && [ -n "$_res" ]; then
-            # Report it back the way it came in: relative stays relative.
-            case "$_rel" in
-                /*) printf '%s\n' "$_res" ;;
-                *)  printf '%s\n' "${_res#${_root%/}/}" ;;
-            esac
-        else
-            printf '%s\n' "$_rel"
-        fi
-    done
-}
-
 build_implementation_prompt() {
     local story_id=$1
     local story_json=$(get_story_details "$story_id")
@@ -1751,23 +1720,6 @@ build_implementation_prompt() {
     fi
     [ -n "$files" ] || files=$(echo "$story_json" | jq -r '.technicalNotes.files // [] | join(", ")')
 
-    # Replace every declared name with the one that exists on disk, so the writer is
-    # never shown two spellings of one file. See _resolve_declared_files for what that
-    # cost live. Both the FILE LIST and the technicalNotes dump are rewritten, because
-    # the agent reads both and a mismatch between them is the contradiction itself.
-    if [ -n "$files" ]; then
-        _resolved_files=$(printf '%s\n' "$files" | tr ',' '\n' | sed 's/^ *//; s/ *$//' \
-            | _resolve_declared_files "$PROJECT_ROOT" | paste -sd, - | sed 's/,/, /g')
-        [ -n "$_resolved_files" ] && files="$_resolved_files"
-    fi
-    if [ -n "$technical_notes" ]; then
-        _tn_resolved=$(echo "$technical_notes" | jq -r '(.files // [])[]' 2>/dev/null \
-            | _resolve_declared_files "$PROJECT_ROOT" | jq -R . | jq -sc .)
-        if [ -n "$_tn_resolved" ] && [ "$_tn_resolved" != "[]" ]; then
-            technical_notes=$(echo "$technical_notes" | jq -c --argjson f "$_tn_resolved" \
-                'if has("files") then .files = $f else . end' 2>/dev/null || printf '%s' "$technical_notes")
-        fi
-    fi
     local dependencies=$(echo "$story_json" | jq -r \
         '(.dependencies // .technicalNotes.dependsOn // []) | join(", ")')
 

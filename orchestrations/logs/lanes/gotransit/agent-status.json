@@ -1,11 +1,11 @@
 {
-  "startedAt": "2026-08-04T01:23:38+00:00",
+  "startedAt": "2026-08-04T02:49:13+00:00",
   "phase": "core",
   "orchMode": "bash",
   "lanes": {
     "main": {
       "status": "running",
-      "currentStory": null,
+      "currentStory": "failure-analyst",
       "storiesCompleted": 1,
       "storiesFailed": 0
     },
@@ -24,14 +24,6 @@
   },
   "events": [
     {
-      "type": "pre_phase_assessment",
-      "story": "",
-      "lane": "main",
-      "role": "team-lead-agent",
-      "message": "Pre-phase assessment completed",
-      "timestamp": "2026-08-04T01:23:42+00:00"
-    },
-    {
       "type": "story_start",
       "story": "",
       "lane": "main",
@@ -39,7 +31,7 @@
       "provider": "qwen",
       "model": "z-ai/glm-5.2",
       "message": "Starting PRD Model Coordinator",
-      "timestamp": "2026-08-04T01:25:26+00:00"
+      "timestamp": "2026-08-04T02:49:14+00:00"
     },
     {
       "type": "story_complete",
@@ -47,16 +39,46 @@
       "lane": "main",
       "role": "prd-model-coordinator",
       "message": "Completed PRD model assignments done",
-      "timestamp": "2026-08-04T01:26:27+00:00"
+      "timestamp": "2026-08-04T02:49:14+00:00"
+    },
+    {
+      "type": "story_start",
+      "story": "AMSD-2041",
+      "lane": "main",
+      "role": "typescript-engineer",
+      "provider": "claude",
+      "model": "MiniMax-M3",
+      "message": "Starting ",
+      "timestamp": "2026-08-04T02:49:15+00:00"
+    },
+    {
+      "type": "story_start",
+      "story": "failure-analyst",
+      "lane": "main",
+      "role": "failure-analyst",
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "message": "Starting Failure Analyst: AMSD-2041",
+      "timestamp": "2026-08-04T03:01:12+00:00"
+    },
+    {
+      "type": "self_heal_start",
+      "story": "AMSD-2041",
+      "lane": "main",
+      "role": "failure-analyst",
+      "message": "Self-heal started for AMSD-2041 (attempt 0, gate=z-ai/glm-5.2)",
+      "timestamp": "2026-08-04T03:01:12+00:00"
     }
   ],
   "stories": {
     "AMSD-2041": {
-      "status": "pending",
+      "status": "start",
       "lane": "main",
       "role": "typescript-engineer",
-      "title": "[GO, UP, MX] Live Preview of Content in CMS",
-      "updatedAt": null
+      "title": "",
+      "provider": "claude",
+      "model": "MiniMax-M3",
+      "updatedAt": "2026-08-04T02:49:15+00:00"
     },
     "": {
       "status": "complete",
@@ -65,7 +87,16 @@
       "title": "PRD Model Coordinator",
       "provider": "qwen",
       "model": "z-ai/glm-5.2",
-      "updatedAt": "2026-08-04T01:26:27+00:00"
+      "updatedAt": "2026-08-04T02:49:14+00:00"
+    },
+    "failure-analyst": {
+      "status": "start",
+      "lane": "main",
+      "role": "failure-analyst",
+      "title": "Failure Analyst: AMSD-2041",
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "updatedAt": "2026-08-04T03:01:12+00:00"
     }
   }
 }

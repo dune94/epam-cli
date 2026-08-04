@@ -1,5 +1,5 @@
 {
-  "id": "jira-sourced-1785806253253",
+  "id": "jira-sourced-1785811749572",
   "title": "Metrolinx Brownfield — Jira-sourced",
   "version": "1.0.0",
   "lastUpdated": "2026-08-04",
@@ -75,7 +75,7 @@
       "effort": "low",
       "estimate": 10,
       "acGateVerdict": "enrichable",
-      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). Acceptance criteria are entirely absent and the one-line description is too vague to determine scope, content types, preview mechanism, or per-codeline behavior across three codelines.",
+      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). No acceptance criteria are present and the one-line description is too ambiguous for an AI agent to implement without specifying what content types, what preview mechanism, or how protected pages are handled.",
       "issueType": "Story",
       "codelines": [
         "gotransit",

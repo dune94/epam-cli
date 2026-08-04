@@ -1,0 +1,32 @@
+{
+  "message_id": "msg-1785812497723",
+  "timestamp": "2026-08-04T03:01:37+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "major",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 1,
+          "description": "No unit tests were added for the new live_preview configuration. The existing test file already tests the analogous conditional-spread pattern for CONTENTSTACK_FETCH_TIMEOUT (two tests: one verifying options include fetchOptions when the env var is set, one verifying it's absent when the env var is missing). The new live_preview config follows the same pattern but has zero test coverage — no test verifies that options.live_preview is populated when CONTENTSTACK_PREVIEW_HOST is set, nor that it's absent when the env var is missing.",
+          "suggestedFix": "Add two test cases mirroring the existing CONTENTSTACK_FETCH_TIMEOUT tests: (1) set CONTENTSTACK_PREVIEW_HOST and CONTENTSTACK_PREVIEW_TOKEN, require the module, and assert options.live_preview equals { enable: true, host: <value>, management_token: <value> }; (2) leave CONTENTSTACK_PREVIEW_HOST unset and assert options does not contain live_preview.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

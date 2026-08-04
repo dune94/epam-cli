@@ -4008,6 +4008,30 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId, logDi
   const _perCodeline = buildPerCodelineManifest(story, prd);
   if (_perCodeline) {
     story.technicalNotes = { ...story.technicalNotes, perCodeline: _perCodeline };
+
+    // THE FLAT LIST IS WHAT EVERYTHING READS. perCodeline was correct from the day it
+    // was added and nothing consumed it: technicalNotes.files kept the DECLARED spelling,
+    // and that is the list rendered into the writer prompt, handed to the reviewer, and
+    // checked by the gates.
+    //
+    // Live 2026-08-04 (run 20260804T035435Z) two of three lanes paused with a manifest
+    // naming a file that does not exist: one checkout held an extension variant of the
+    // declared path, another a case variant, and both lanes declared a third spelling. The
+    // writer is then sent to a path its checkout does not have; it assumes a second file
+    // exists, creates it, deletes it, declares the real one out of scope, and every retry
+    // reproduces the same tsc failure. 120 iterations, ~2M input tokens, 4 writes.
+    //
+    // The spec pass runs PER LANE on that lane's own filtered PRD, so the flat list can
+    // and must be this lane's resolved list. The lane is derived the way it is everywhere
+    // else in the engine: project.outputDir matched back against project.outputDirs[].
+    // No lane derivable (single-codeline runs) leaves the declared list untouched.
+    const _outDir = prd && prd.project && prd.project.outputDir;
+    const _dirs = (prd && prd.project && prd.project.outputDirs) || [];
+    const _thisLane = _outDir ? (_dirs.find((d) => d && d.path === _outDir) || {}).codeline : null;
+    const _mine = _thisLane && _perCodeline[_thisLane];
+    if (_mine && Array.isArray(_mine.files) && _mine.files.length) {
+      story.technicalNotes = { ...story.technicalNotes, files: _mine.files };
+    }
     for (const [_cl, _entry] of Object.entries(_perCodeline)) {
       if (_entry.unresolved.length) {
         console.warn(

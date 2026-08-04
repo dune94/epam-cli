@@ -657,6 +657,51 @@ async function callMiniMaxWithTool(prompt, toolDef, logPath, itemsKey) {
 //   SPEC_MODE_MODEL          — fallback for all other spec-mode calls (default: z-ai/glm-5.2)
 // storyId: cost attribution. Without it every cost_snapshot carried storyId:''
 // and spend could not be grouped by story (backlog B6).
+/**
+ * Environment for a spec-pass agent.
+ *
+ * FILESYSTEM ACCESS. openspec/speckit/coordinator decide the manifest — which files a
+ * story will touch — and then review it. They had no tools at all, so they reviewed a
+ * list of paths having never seen the repository: a manifest naming a file that does not
+ * exist reads as a perfectly reasonable path, and the reviewer can only agree. That is
+ * how a wrong-cased path reached the writer on 2026-08-04 and cost a ~2M-input-token
+ * non-converging loop. No reviewer missed it; no reviewer could look.
+ *
+ * READ-ONLY. The question a spec reviewer must answer — does this path exist, is it the
+ * right file — needs reading, not shell. Withholding bash/write keeps a review pass from
+ * mutating what it reviews. Gate agents get bash because they run checks; reviewers do not.
+ *
+ * CONFIGURABLE: SPEC_MODE_ALLOWED_TOOLS overrides the default, so a project that needs a
+ * different set changes config rather than this engine.
+ */
+/**
+ * Telling a reviewer the tools exist is only half of it — team-lead-review.sh's own note:
+ * "Both halves are required: the BLOCK tells the reviewer the tools exist, and the
+ * [instruction] makes it use them." A reviewer that MAY look will sometimes not.
+ *
+ * Every declared path is machine-checkable, so the reviewer is required to check rather
+ * than judge. Nothing here names a project, codeline or filename.
+ */
+const MANIFEST_GROUNDING_BLOCK = [
+  'VERIFY THE MANIFEST AGAINST THE REPOSITORY — do not judge it by eye.',
+  'You have read-only tools (read_file, list_files, search). Before you approve any story:',
+  '  1. For EVERY path in that story\'s technicalNotes.files, confirm it EXISTS, using list_files',
+  '     on its directory. A path that looks plausible is not evidence that it exists.',
+  '  2. Report a path that does not exist as a BLOCKER naming the exact path, and — when the',
+  '     directory holds a file differing only in case or extension — the real name you found.',
+  '  3. Never silently correct a path in your verdict. The manifest is the artefact under',
+  '     review; a correction that lives only in your prose reaches nobody.',
+  'A story whose manifest names a file the repository does not have cannot be implemented:',
+  'the writer is sent to edit something absent, and every retry reproduces that.',
+].join('\n');
+
+function specAgentEnv(env = process.env) {
+  const out = {};
+  if (env.SPEC_MODE_MAX_OUTPUT_TOKENS) out.EPAM_MAX_OUTPUT_TOKENS = env.SPEC_MODE_MAX_OUTPUT_TOKENS;
+  out.EPAM_ALLOWED_TOOLS = env.SPEC_MODE_ALLOWED_TOOLS || 'read_file,list_files,search';
+  return out;
+}
+
 async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey, storyId = '') {
   const provider = (process.env.AI_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || '').toLowerCase();
   const ladderProvider = (process.env.SPEC_PASS_LADDER_PROVIDER || 'qwen').toLowerCase();
@@ -683,9 +728,7 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     // Spec-mode responses are large JSON blobs — use a higher output-token budget
     // than the implementation default (4096) so speckit never truncates mid-JSON.
     // SPEC_MODE_MAX_OUTPUT_TOKENS is spec-only; it doesn't affect implementation runs.
-    const specEnv = process.env.SPEC_MODE_MAX_OUTPUT_TOKENS
-      ? { EPAM_MAX_OUTPUT_TOKENS: process.env.SPEC_MODE_MAX_OUTPUT_TOKENS }
-      : {};
+    const specEnv = specAgentEnv();
     const output = await runClaude(directExec, prompt, logPath, specEnv, { costAgent: tag, costStoryId: storyId });
     return extractTaggedJson(output, tag);
   }
@@ -1548,6 +1591,8 @@ Each story was processed by a sequential agent pipeline:
   2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
 
 ${reviewCriteria}
+
+${MANIFEST_GROUNDING_BLOCK}
 
 Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
 [
@@ -5076,6 +5121,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  specAgentEnv,
   recordDetectiveRound,
   classifySpecFailure,
   specCorrectiveNote,

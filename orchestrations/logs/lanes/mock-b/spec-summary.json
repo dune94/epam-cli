@@ -1,0 +1,50 @@
+{
+  "runId": "20260804T005635Z",
+  "phase": "mock3_core",
+  "startedAt": "2026-08-04T00:57:01.779Z",
+  "stories": [
+    {
+      "storyId": "SPAN-1",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "appliedAgents": [
+        "openspec"
+      ],
+      "notes": "Trivial string literal swap ('hello world' → 'hello dolly') with matching test update. AC is already specific, testable, and unambiguous. No elaboration needed (openspec), no security/edge-case surface to harden (speckit). Codelines are independent — no coordination complexity.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: existing getGreeting() returns wrong value. No code block injected; locationHint empty per rule against fabrication. VCs derived from both ACs and description (codeline-independence context).",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-04T00:58:34.539Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "approved",
+        "reviewNotes": "Brownfield trivial string-literal swap. Coordinator correctly assigned only openspec and skipped speckit (no security/edge-case surface). Openspec showed appropriate restraint: acceptanceChanged=false, splitCount=0, no fabricated code blocks — all correct per brownfield rules. The incremental value openspec added is thin (derived VCs essentially restate the already-specific ACs), but disciplined non-overreach on a trivial task is itself a quality signal. No overlap issue since speckit was correctly omitted. No human intervention needed.",
+        "qualityScore": 0.7,
+        "flags": [],
+        "reviewedAt": "2026-08-04T00:59:18.883Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 1,
+    "coordinatorReviewCompleted": true,
+    "approved": 1,
+    "needsReview": 0
+  },
+  "completedAt": "2026-08-04T00:59:27.847Z",
+  "storyCount": 1
+}

@@ -1,0 +1,4 @@
+{"storyId":"SPAN-1","phase":"mock3_core","status":"attempt","elapsedMinutes":0.21,"costUsd":0.0039,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-04T01:02:45Z"}
+{"storyId":"SPAN-1","phase":"mock3_core","status":"completed","elapsedMinutes":0.25,"costUsd":0.0039,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-04T01:02:45Z"}
+{"storyId":"SPAN-1","phase":"mock3_core","status":"attempt","elapsedMinutes":0.53,"costUsd":0.0102,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-04T01:04:57Z"}
+{"storyId":"SPAN-1","phase":"mock3_core","status":"completed","elapsedMinutes":0.53,"costUsd":0.0102,"turns":0,"outputSchema":null,"structuredOutput":null,"timestamp":"2026-08-04T01:04:57Z"}

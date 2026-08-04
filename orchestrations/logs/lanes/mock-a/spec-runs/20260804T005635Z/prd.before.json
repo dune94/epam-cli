@@ -1,0 +1,59 @@
+{
+  "id": "mock3-multi-codeline",
+  "version": 1,
+  "currentIteration": 1,
+  "source": "canonical-fixture",
+  "project": {
+    "name": "mock-multi-codeline",
+    "description": "Two disposable mock codelines for real full-pipeline integration tests (mock3 — multi-codeline lane loop). project.outputDirs is injected at runtime because the codeline paths are temporary directories; nothing else in this file is generated.",
+    "outputDirs": [
+      {
+        "codeline": "mock-a",
+        "path": "/tmp/brownfield-mock3-a-TuHv4w/clone"
+      },
+      {
+        "codeline": "mock-b",
+        "path": "/tmp/brownfield-mock3-b-PPI8Tg/clone"
+      }
+    ],
+    "outputDir": "/tmp/brownfield-mock3-a-TuHv4w/clone"
+  },
+  "configuration": {
+    "budget": 5,
+    "aiRuntime": {
+      "provider": "qwen",
+      "defaultModel": "z-ai/glm-5.1"
+    }
+  },
+  "phasesConfig": {},
+  "implementationOrder": {
+    "mock3_core": [
+      "SPAN-1"
+    ]
+  },
+  "stories": [
+    {
+      "id": "SPAN-1",
+      "jiraKey": "SPAN-1",
+      "title": "Change the greeting from hello world to hello dolly in every affected codeline",
+      "description": "The getGreeting() function currently returns the string 'hello world'. It should instead return 'hello dolly'. Update any test that asserts the old value to match the new one. This change is required independently in each codeline named on this story — the codelines do not share code.",
+      "acceptanceCriteria": [
+        "getGreeting() returns exactly 'hello dolly'",
+        "The existing test file's assertion on the return value is updated to match the new value and passes under vitest",
+        "tsc --noEmit exits 0"
+      ],
+      "codelines": [
+        "mock-a",
+        "mock-b"
+      ],
+      "status": "pending",
+      "completed": false,
+      "agentRole": "typescript-engineer",
+      "agentGroup": "main",
+      "effort": "low",
+      "estimate": 1,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "No file location is provided — the agent must locate the existing getGreeting() implementation itself, in each codeline."
+    }
+  ]
+}

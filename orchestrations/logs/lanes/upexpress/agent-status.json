@@ -48,6 +48,102 @@
       "role": "prd-model-coordinator",
       "message": "Completed PRD model assignments done",
       "timestamp": "2026-08-04T00:40:08+00:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "AMSD-2041",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on AMSD-2041 ([GO, UP, MX] Live Preview of Content in CMS)",
+      "timestamp": "2026-08-04T01:17:42+00:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "AMSD-2041",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on AMSD-2041 — tracing the causal fix site",
+      "timestamp": "2026-08-04T01:18:11+00:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "AMSD-2041",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/services/contentstack.ts",
+      "timestamp": "2026-08-04T01:19:36+00:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "AMSD-2041",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on AMSD-2041 — tracing the causal fix site",
+      "timestamp": "2026-08-04T01:22:42+00:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "AMSD-2041",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/pages/[[...slug]].tsx (reuse getEntry)",
+      "timestamp": "2026-08-04T01:23:39+00:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "AMSD-2041",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on AMSD-2041 — tracing the causal fix site",
+      "timestamp": "2026-08-04T01:27:51+00:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "AMSD-2041",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/services/contentstack.ts",
+      "timestamp": "2026-08-04T01:28:25+00:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "AMSD-2041",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec updated AMSD-2041 acChanged=no splitCount=0",
+      "timestamp": "2026-08-04T01:31:52+00:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "AMSD-2041",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit started on AMSD-2041 (Render Contentstack draft entries via preview token for CMS live preview (GO, UP, MX))",
+      "timestamp": "2026-08-04T01:31:52+00:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "AMSD-2041",
+      "lane": "main",
+      "role": "speckit",
+      "message": "[core] speckit updated AMSD-2041 acChanged=no splitCount=0",
+      "timestamp": "2026-08-04T01:33:13+00:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "",
+      "lane": "main",
+      "role": "spec-coordinator",
+      "message": "[core] specification completed run=20260804T011537Z stories=1",
+      "timestamp": "2026-08-04T01:33:31+00:00"
+    },
+    {
+      "type": "specification_pass",
+      "story": "",
+      "lane": "main",
+      "role": "spec-coordinator",
+      "message": "Specification agents completed (OpenSpec/Speckit)",
+      "timestamp": "2026-08-04T01:33:31+00:00"
     }
   ],
   "stories": {

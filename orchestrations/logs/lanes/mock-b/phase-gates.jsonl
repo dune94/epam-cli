@@ -1,0 +1,1 @@
+{"phase_id":"mock3_core","timestamp":"2026-08-04T01:09:02+00:00","decision":"go","criteria":{"stories_complete":true,"deliverables_present":true,"tests_passing":true,"cost_variance_pct":-76.00,"cost_tier":"ok","gate_warn_threshold":30,"gate_escalate_threshold":150},"decision_maker":"check-phase-gate.sh","issues":[],"notes":"All criteria met"}

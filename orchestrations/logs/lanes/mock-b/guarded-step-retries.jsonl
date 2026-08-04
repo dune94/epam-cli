@@ -1,0 +1,3 @@
+{"timestamp":"2026-08-04T00:58:34.517Z","step":"ac-review","storyId":"SPAN-1","runId":"20260804T005635Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"b76e414"}
+{"timestamp":"2026-08-04T01:03:33Z","step":"0.5","phaseId":"mock3_core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260804T005635Z","promptVersion":"b76e414"}
+{"timestamp":"2026-08-04T01:04:25Z","step":"0.9","phaseId":"mock3_core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260804T005635Z","promptVersion":"b76e414"}

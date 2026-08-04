@@ -1,0 +1,342 @@
+{
+  "startedAt": "2026-08-04T01:00:04+00:00",
+  "phase": "mock3_core",
+  "orchMode": "bash",
+  "lanes": {
+    "main": {
+      "status": "done",
+      "currentStory": null,
+      "storiesCompleted": 11,
+      "storiesFailed": 0
+    },
+    "primary": {
+      "status": "done",
+      "currentStory": null,
+      "storiesCompleted": 0,
+      "storiesFailed": 0
+    },
+    "independent": {
+      "status": "done",
+      "currentStory": null,
+      "storiesCompleted": 0,
+      "storiesFailed": 0
+    }
+  },
+  "events": [
+    {
+      "type": "pre_phase_assessment",
+      "story": "",
+      "lane": "main",
+      "role": "team-lead-agent",
+      "message": "Pre-phase assessment completed",
+      "timestamp": "2026-08-04T01:02:44+00:00"
+    },
+    {
+      "type": "story_start",
+      "story": "",
+      "lane": "main",
+      "role": "prd-model-coordinator",
+      "provider": "qwen",
+      "model": "z-ai/glm-5.1",
+      "message": "Starting PRD Model Coordinator",
+      "timestamp": "2026-08-04T01:03:33+00:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "",
+      "lane": "main",
+      "role": "prd-model-coordinator",
+      "message": "Completed PRD model assignments done",
+      "timestamp": "2026-08-04T01:04:25+00:00"
+    },
+    {
+      "type": "story_start",
+      "story": "SPAN-1",
+      "lane": "main",
+      "role": "typescript-engineer",
+      "provider": "claude",
+      "model": "MiniMax-M3",
+      "message": "Starting ",
+      "timestamp": "2026-08-04T01:04:25+00:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "SPAN-1",
+      "lane": "main",
+      "role": "typescript-engineer",
+      "message": "Completed ",
+      "timestamp": "2026-08-04T01:04:59+00:00"
+    },
+    {
+      "type": "story_start",
+      "story": "SPAN-1",
+      "lane": "main",
+      "role": "typescript-engineer",
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "message": "Starting Change the greeting from hello world to hello dolly in every affected codeline",
+      "timestamp": "2026-08-04T01:04:59+00:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "SPAN-1",
+      "lane": "main",
+      "role": "typescript-engineer",
+      "message": "Completed Change the greeting from hello world to hello dolly in every affected codeline",
+      "timestamp": "2026-08-04T01:04:59+00:00"
+    },
+    {
+      "type": "story_start",
+      "story": "SPAN-1",
+      "lane": "main",
+      "role": "typescript-engineer",
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "message": "Starting Change the greeting from hello world to hello dolly in every affected codeline",
+      "timestamp": "2026-08-04T01:04:59+00:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "SPAN-1",
+      "lane": "main",
+      "role": "typescript-engineer",
+      "message": "Completed Change the greeting from hello world to hello dolly in every affected codeline",
+      "timestamp": "2026-08-04T01:04:59+00:00"
+    },
+    {
+      "type": "phase_assessment",
+      "story": "",
+      "lane": "main",
+      "role": "team-lead-agent",
+      "message": "Running post-phase assessment",
+      "timestamp": "2026-08-04T01:05:11+00:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "SPAN-1",
+      "lane": "main",
+      "role": "repro-test-writer",
+      "message": "repro-test-writer started for SPAN-1 → src/hello.test.ts",
+      "timestamp": "2026-08-04T01:05:11+00:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "SPAN-1",
+      "lane": "main",
+      "role": "repro-test-writer",
+      "message": "repro-test-writer committed reproducing test: src/hello.test.ts",
+      "timestamp": "2026-08-04T01:05:43+00:00"
+    },
+    {
+      "type": "story_start",
+      "story": "",
+      "lane": "main",
+      "role": "review-agent",
+      "provider": "qwen",
+      "model": "z-ai/glm-5.1",
+      "message": "Starting Team Lead Code Review",
+      "timestamp": "2026-08-04T01:06:49+00:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "",
+      "lane": "main",
+      "role": "review-agent",
+      "message": "Completed Code review approved",
+      "timestamp": "2026-08-04T01:07:11+00:00"
+    },
+    {
+      "type": "pre_review_test_pass",
+      "story": "",
+      "lane": "main",
+      "role": "unit-test-runner",
+      "message": "Pre-review vitest passed for mock3_core",
+      "timestamp": "2026-08-04T01:07:11+00:00"
+    },
+    {
+      "type": "testing_gate_start",
+      "story": "",
+      "lane": "main",
+      "role": "test-coordinator-agent",
+      "message": "Starting testing gates for mock3_core",
+      "timestamp": "2026-08-04T01:07:13+00:00"
+    },
+    {
+      "type": "story_start",
+      "story": "",
+      "lane": "main",
+      "role": "sast-sentinel",
+      "provider": "qwen",
+      "model": "z-ai/glm-5.1",
+      "message": "Starting SAST Sentinel",
+      "timestamp": "2026-08-04T01:07:13+00:00"
+    },
+    {
+      "type": "story_start",
+      "story": "",
+      "lane": "main",
+      "role": "spec-validator",
+      "provider": "qwen",
+      "model": "z-ai/glm-5.1",
+      "message": "Starting Spec Validator",
+      "timestamp": "2026-08-04T01:07:13+00:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "",
+      "lane": "main",
+      "role": "spec-validator",
+      "message": "Completed ",
+      "timestamp": "2026-08-04T01:07:33+00:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "",
+      "lane": "main",
+      "role": "spec-validator",
+      "message": "Completed ",
+      "timestamp": "2026-08-04T01:07:34+00:00"
+    },
+    {
+      "type": "story_start",
+      "story": "",
+      "lane": "main",
+      "role": "review-ranger",
+      "provider": "qwen",
+      "model": "z-ai/glm-5.1",
+      "message": "Starting Review Ranger",
+      "timestamp": "2026-08-04T01:07:34+00:00"
+    },
+    {
+      "type": "story_start",
+      "story": "",
+      "lane": "main",
+      "role": "mutant-hunter",
+      "provider": "qwen",
+      "model": "z-ai/glm-5.1",
+      "message": "Starting Mutant Hunter",
+      "timestamp": "2026-08-04T01:07:34+00:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "",
+      "lane": "main",
+      "role": "mutant-hunter",
+      "message": "Completed ",
+      "timestamp": "2026-08-04T01:07:51+00:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "",
+      "lane": "main",
+      "role": "mutant-hunter",
+      "message": "Completed ",
+      "timestamp": "2026-08-04T01:08:01+00:00"
+    },
+    {
+      "type": "story_start",
+      "story": "",
+      "lane": "main",
+      "role": "fuzz-weaver",
+      "provider": "qwen",
+      "model": "z-ai/glm-5.1",
+      "message": "Starting Fuzz Weaver",
+      "timestamp": "2026-08-04T01:08:01+00:00"
+    },
+    {
+      "type": "story_start",
+      "story": "",
+      "lane": "main",
+      "role": "perf-sentinel",
+      "provider": "qwen",
+      "model": "z-ai/glm-5.1",
+      "message": "Starting Perf Sentinel",
+      "timestamp": "2026-08-04T01:08:01+00:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "",
+      "lane": "main",
+      "role": "perf-sentinel",
+      "message": "Completed ",
+      "timestamp": "2026-08-04T01:08:32+00:00"
+    },
+    {
+      "type": "story_complete",
+      "story": "",
+      "lane": "main",
+      "role": "perf-sentinel",
+      "message": "Completed ",
+      "timestamp": "2026-08-04T01:08:32+00:00"
+    },
+    {
+      "type": "e2e_route",
+      "story": "SPAN-1",
+      "lane": "main",
+      "role": "test-coordinator-agent",
+      "message": "Routed SPAN-1 to lightpanda-agent (score=1, reason=complexity_low_or_medium)",
+      "timestamp": "2026-08-04T01:08:32+00:00"
+    },
+    {
+      "type": "testing_gate_pass",
+      "story": "",
+      "lane": "main",
+      "role": "test-coordinator-agent",
+      "message": "Testing gates pass for mock3_core (109254ms)",
+      "timestamp": "2026-08-04T01:09:02+00:00"
+    },
+    {
+      "type": "phase_gate_check",
+      "story": "",
+      "lane": "main",
+      "role": "team-lead-agent",
+      "message": "Checking phase gate for mock3_core",
+      "timestamp": "2026-08-04T01:09:02+00:00"
+    },
+    {
+      "type": "phase_gate_pass",
+      "story": "",
+      "lane": "main",
+      "role": "team-lead-agent",
+      "message": "Phase gate passed for mock3_core",
+      "timestamp": "2026-08-04T01:09:02+00:00"
+    },
+    {
+      "type": "orchestration_complete",
+      "story": "",
+      "lane": "main",
+      "role": "",
+      "message": "All steps finished - 11 stories completed",
+      "timestamp": "2026-08-04T01:09:23+00:00"
+    },
+    {
+      "type": "orchestration_complete",
+      "story": "",
+      "lane": "main",
+      "role": "",
+      "message": "All steps finished",
+      "timestamp": "2026-08-04T01:09:23+00:00"
+    }
+  ],
+  "stories": {
+    "SPAN-1": {
+      "status": "complete",
+      "lane": "main",
+      "role": "typescript-engineer",
+      "title": "Change the greeting from hello world to hello dolly in every affected codeline",
+      "provider": "minimax",
+      "model": "MiniMax-M3",
+      "updatedAt": "2026-08-04T01:04:59+00:00"
+    },
+    "": {
+      "status": "complete",
+      "lane": "main",
+      "role": "perf-sentinel",
+      "title": "Perf Sentinel",
+      "provider": "qwen",
+      "model": "z-ai/glm-5.1",
+      "updatedAt": "2026-08-04T01:08:32+00:00"
+    }
+  },
+  "completedAt": "2026-08-04T01:09:23+00:00"
+}

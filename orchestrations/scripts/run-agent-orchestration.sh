@@ -227,7 +227,50 @@ DASHBOARD_WATCH_PID_FILE="$LOG_DIR/dashboards-watch.pid"
 DASHBOARD_WATCH_LOG="$LOG_DIR/dashboards-watch.log"
 DASHBOARD_WATCH_PID=""
 DASHBOARD_WATCH_OWNED=false
-CONTROL_PLANE_PORT="${CONTROL_PLANE_PORT:-8094}"
+# PER-LANE CONTROL-PLANE PORT.
+#
+# Live 2026-08-04 (run 20260804T011537Z, three metrolinx lanes): this was a bare
+# `${CONTROL_PLANE_PORT:-8094}`, so every lane started a control plane on 8094. The first
+# bound it and the rest exited ("port already in use"), leaving those lanes with no
+# control plane — and because the startup path KILLS whatever holds the port first, a
+# later lane reaped the running lane's control plane. Three "Killing stale process on
+# port 8094" warnings in one run were lanes destroying each other.
+#
+# Same shape as the checkpoint collision (b76e414): a per-lane resource keyed on a
+# run-global value. The lane is derived exactly as the checkpoint's is — CODELINE_NAME
+# when set, otherwise project.outputDir matched back against project.outputDirs[], since
+# the orchestrator keeps the lane name as a local and never exports it.
+#
+# The offset is the lane's INDEX in outputDirs, so it is stable across restarts (a resume
+# must find its own control plane) and bounded by the number of codelines. A single-
+# codeline run resolves no lane and keeps the base port, unchanged.
+CONTROL_PLANE_BASE_PORT="${CONTROL_PLANE_BASE_PORT:-8094}"
+_resolve_control_plane_port() {
+    # Self-contained: reads only the environment, so it can be tested in isolation.
+    local _base="${CONTROL_PLANE_BASE_PORT:-8094}"
+    # An explicit override always wins — the operator can pin a port.
+    if [ -n "${CONTROL_PLANE_PORT:-}" ]; then
+        printf '%s' "$CONTROL_PLANE_PORT"; return 0
+    fi
+    local _lane="${CODELINE_NAME:-}"
+    if [ -z "$_lane" ] && [ -n "${PRD_FILE:-}" ] && [ -f "${PRD_FILE}" ]; then
+        _lane=$(jq -r '.project as $p | (($p.outputDirs // []) | map(select(.path == $p.outputDir)) | .[0].codeline) // empty' \
+            "$PRD_FILE" 2>/dev/null)
+    fi
+    if [ -z "$_lane" ]; then
+        printf '%s' "$_base"; return 0
+    fi
+    local _idx=""
+    if [ -n "${PRD_FILE:-}" ] && [ -f "${PRD_FILE}" ]; then
+        _idx=$(jq -r --arg cl "$_lane" '((.project.outputDirs // []) | map(.codeline) | index($cl)) // empty' \
+            "$PRD_FILE" 2>/dev/null)
+    fi
+    if [ -z "$_idx" ] || [ "$_idx" = "null" ]; then
+        _idx=$(printf '%s' "$_lane" | cksum | awk '{print $1 % 64}')
+    fi
+    printf '%s' "$(( _base + _idx ))"
+}
+CONTROL_PLANE_PORT="$(_resolve_control_plane_port)"
 CONTROL_PLANE_PID=""
 CONTROL_PLANE_LOG="$LOG_DIR/control-plane.log"
 
@@ -1351,13 +1394,13 @@ start_control_plane() {
     rm -f "$LOG_DIR/PAUSED"
     # Kill any stale process holding the control plane port from a previous run
     local _stale_pid
-    _stale_pid=$(lsof -ti "tcp:${CONTROL_PLANE_PORT:-8094}" 2>/dev/null || true)
+    _stale_pid=$(lsof -ti "tcp:${CONTROL_PLANE_PORT}" 2>/dev/null || true)
     if [ -n "$_stale_pid" ]; then
-        warning "Killing stale process on port ${CONTROL_PLANE_PORT:-8094} (PID $_stale_pid)"
+        warning "Killing stale process on port ${CONTROL_PLANE_PORT} (PID $_stale_pid)"
         kill "$_stale_pid" 2>/dev/null || true
         sleep 0.3
     fi
-    CONTROL_PLANE_PORT="${CONTROL_PLANE_PORT:-8094}" \
+    CONTROL_PLANE_PORT="${CONTROL_PLANE_PORT}" \
     LOG_DIR="$LOG_DIR" \
         "$_node_bin" "$cp_script" >> "$CONTROL_PLANE_LOG" 2>&1 &
     CONTROL_PLANE_PID=$!

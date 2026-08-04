@@ -1,12 +1,12 @@
 {
   "phase": "core",
-  "updatedAt": "2026-08-04T00:43:13+00:00",
+  "updatedAt": "2026-08-04T01:28:58+00:00",
   "steps": [
     {"id":"1","label":"Step 1: Specification pass","status":"pass","detail":""},
     {"id":"1a","label":"  openspec (elaboration)","status":"pass","detail":"z-ai/glm-5.2, 1 stor(y/ies)"},
     {"id":"1b","label":"  speckit (verification)","status":"pass","detail":"z-ai/glm-5.1, 1 stor(y/ies)"},
     {"id":"2","label":"Step 2: CPA pre-pass","status":"pass","detail":""},
-    {"id":"3","label":"Step 3: Skill assessment","status":"pass","detail":""},
+    {"id":"3","label":"Step 3: Skill assessment","status":"warn","detail":"non-critical"},
     {"id":"4","label":"Step 4: Hybrid pre-coord","status":"skip","detail":"ORCH_MODE=bash"},
     {"id":"5","label":"Step 5: Regression guard","status":"pass","detail":""},
     {"id":"6","label":"Step 6: mkdir src/ dirs","status":"pass","detail":""},

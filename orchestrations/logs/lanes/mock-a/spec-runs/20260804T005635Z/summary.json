@@ -1,0 +1,50 @@
+{
+  "runId": "20260804T005635Z",
+  "phase": "mock3_core",
+  "startedAt": "2026-08-04T00:56:48.321Z",
+  "stories": [
+    {
+      "storyId": "SPAN-1",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "appliedAgents": [
+        "openspec"
+      ],
+      "notes": "Trivial string replacement ('hello world' → 'hello dolly') with precise, complete AC. No elaboration needed (openspec adds no value) and no security/edge-case/testability gaps to harden (speckit adds no value). Risk is near-zero; no dependencies; change is atomic and well-bounded.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: getGreeting() returns wrong string. No code blocks were injected, so locationHint is empty to avoid fabrication.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-04T00:58:11.774Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "approved",
+        "reviewNotes": "Trivial string replacement with precise, complete AC. Coordinator correctly assigned only openspec and skipped speckit — neither agent could add meaningful value. Openspec appropriately avoided fabricating elaborations or code blocks; its minimal contribution (noting the defect with no injections) is the correct output for a near-zero-risk, atomic change. No gaps, no overlaps, no unnecessary noise.",
+        "qualityScore": 0.9,
+        "flags": [],
+        "reviewedAt": "2026-08-04T00:58:39.160Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 1,
+    "coordinatorReviewCompleted": true,
+    "approved": 1,
+    "needsReview": 0
+  },
+  "completedAt": "2026-08-04T00:59:13.131Z",
+  "storyCount": 1
+}

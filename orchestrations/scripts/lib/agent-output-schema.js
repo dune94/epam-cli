@@ -1,37 +1,41 @@
 #!/usr/bin/env node
 'use strict';
 /**
- * agent-output-schema.js — does a tagged agent answer actually have the promised shape?
+ * agent-output-schema.js — does a tagged agent answer match the shape its OWN tool
+ * definition declares?
  *
- * Four structured contracts had no enforcement at all. SPEC_AGENT, SPEC_ASSIGNMENTS,
- * SPEC_REVIEW and MODEL_REVIEW each declare a JSON shape in prose and each pass a toolDef
- * to runAgentForJson — so they LOOK bound. But runAgentForJson has two paths, and the
- * direct-exec path simply tag-parses the model's text. Nothing checked the parsed object
- * conformed.
+ * WHY THIS EXISTS. SPEC_AGENT, SPEC_ASSIGNMENTS, SPEC_REVIEW and MODEL_REVIEW each pass a
+ * toolDef to runAgentForJson, so they LOOK bound. runAgentForJson has two paths, and the
+ * direct-exec path simply tag-parses the model's text — nothing checked the parsed object
+ * conformed. Live 2026-08-04 a reviewer answered in prose inside an empty
+ * <SPEC_REVIEW></SPEC_REVIEW>; the parse returned null, the review was discarded, and all
+ * three retries reproduced it because nothing told the model it had failed. The
+ * spec-review gate downstream then guarded nothing.
  *
- * LIVE COST (run 20260804T100335Z). The coordinator answered in prose —
- *   "I cannot write the final output yet — I must first verify the referenced file paths
- *    against the repository using my read-only tools."
- * — and emitted an EMPTY <SPEC_REVIEW></SPEC_REVIEW>. The parse returned null, the review
- * was discarded, and all three retries reproduced the identical prose because nothing told
- * the model it had failed. The spec-review gate downstream then guarded nothing. The one
- * lane that did answer scored 0.35 and flagged the case-variant filename risk — it had
- * found the real defect.
+ * WHY IT IS DERIVED, NOT WRITTEN. The first version of this file hand-wrote the shapes and
+ * was wrong on THREE of four within the hour: it required `agentRole` where the contract
+ * says `agents`, `verdict` where MODEL_REVIEW says `finalModel`, and accepted any object
+ * at all for SPEC_AGENT. It rejected VALID coordinator output on a live run — three
+ * lanes, every attempt. A validator that restates a contract is a second copy that
+ * drifts, and a drifted validator is worse than none: it fails work that was correct.
  *
- * WHY NOT PROVIDER-SIDE STRICT SCHEMA. gate_verdict_schema.py's docstring records it:
- * strict json_schema mode suppresses tool calling, and these reviewers now need tools to
- * check paths against the repository. Validating AFTER the call keeps the tools, refuses a
- * malformed answer anyway, and produces a REASON — so a retry can be told what was wrong
- * instead of merely being handed a bigger model.
+ * So required fields and types come FROM the tool definitions (TOOL_DEFINITIONS, exported
+ * by spec-mode-runner.js), which already carry JSON Schema. One source of truth: changing
+ * a tool definition changes what is enforced, automatically.
+ *
+ * WHY NOT PROVIDER-SIDE STRICT SCHEMA. gate_verdict_schema.py records it — strict
+ * json_schema mode SUPPRESSES TOOL CALLING, and these reviewers need tools to check paths
+ * against the repository. Validating after the call keeps the tools, refuses a malformed
+ * answer anyway, and yields a REASON, which is the only thing that makes attempt 2 differ
+ * from attempt 1.
  *
  * DESIGN RULES
- * - Unknown tags PASS. Refusing a shape this file has never heard of would break every
- *   agent added later; the registry is additive, not a gate on existence.
+ * - Unknown tags PASS: refusing a shape never heard of would break every agent added
+ *   later. The registry is additive, not a gate on existence.
  * - null NEVER passes, known tag or not. No answer is no answer.
- * - Absent optional fields are valid. Absent is not invalid — a reviewer that omits an
- *   optional score has still reviewed.
- * - Every refusal carries a reason naming the offending value, because the reason is the
- *   only thing that makes attempt 2 different from attempt 1.
+ * - Only DECLARED-required fields are enforced. An absent optional field is valid.
+ * - Every refusal names the tag, the story and the field, because the reason is what
+ *   makes a retry different.
  *
  * Nothing here knows any project, codeline or vendor.
  */
@@ -39,80 +43,93 @@
 const fail = (reason) => ({ ok: false, reason });
 const pass = () => ({ ok: true, reason: null });
 
-/** Shared: a non-empty array of objects. */
-function requireEntries(value, tag) {
-  if (!Array.isArray(value)) return fail(`${tag}: expected an array of entries, got ${typeof value}`);
-  if (!value.length) return fail(`${tag}: the array is empty — a report about nothing is not a report`);
-  return null;
-}
-
-function checkSpecReview(value) {
-  const bad = requireEntries(value, 'SPEC_REVIEW');
-  if (bad) return bad;
-  const allowed = ['approved', 'needs_review'];
-  for (const e of value) {
-    if (!e || typeof e !== 'object') return fail('SPEC_REVIEW: an entry is not an object');
-    if (!e.storyId) return fail('SPEC_REVIEW: an entry has no storyId — a verdict about nothing cannot be applied');
-    if (!e.verdict) return fail(`SPEC_REVIEW: story ${e.storyId} has no verdict`);
-    if (!allowed.includes(e.verdict)) {
-      return fail(`SPEC_REVIEW: story ${e.storyId} has verdict "${e.verdict}" — expected one of ${allowed.join(', ')}`);
-    }
-    if (e.qualityScore !== undefined && e.qualityScore !== null) {
-      const q = e.qualityScore;
-      if (typeof q !== 'number' || Number.isNaN(q) || q < 0 || q > 1) {
-        return fail(`SPEC_REVIEW: story ${e.storyId} has qualityScore ${q} — expected a number between 0 and 1`);
-      }
-    }
-  }
-  return pass();
-}
-
-function checkSpecAssignments(value) {
-  const bad = requireEntries(value, 'SPEC_ASSIGNMENTS');
-  if (bad) return bad;
-  for (const e of value) {
-    if (!e || typeof e !== 'object') return fail('SPEC_ASSIGNMENTS: an entry is not an object');
-    if (!e.storyId) return fail('SPEC_ASSIGNMENTS: an entry has no storyId');
-    if (!e.agentRole) return fail(`SPEC_ASSIGNMENTS: story ${e.storyId} has no agentRole — nothing can be dispatched`);
-  }
-  return pass();
-}
-
-function checkModelReview(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return fail('MODEL_REVIEW: expected an object with a verdict');
-  }
-  if (!value.verdict) return fail('MODEL_REVIEW: no verdict field');
-  return pass();
-}
-
-function checkSpecAgent(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return fail('SPEC_AGENT: expected an object payload, got ' + (value === null ? 'null' : typeof value));
-  }
-  return pass();
-}
-
-const REGISTRY = {
-  SPEC_REVIEW: checkSpecReview,
-  SPEC_ASSIGNMENTS: checkSpecAssignments,
-  MODEL_REVIEW: checkModelReview,
-  SPEC_AGENT: checkSpecAgent,
+/**
+ * Which tag carries which tool definition, and which property holds the item array.
+ * extractTaggedJson returns the items the caller asked for, not the tool wrapper.
+ */
+const TAG_TO_TOOL = {
+  SPEC_ASSIGNMENTS: { tool: 'TOOL_SPEC_ASSIGNMENTS', itemsKey: 'assignments' },
+  SPEC_AGENT: { tool: 'TOOL_SPEC_AGENT', itemsKey: null },
+  SPEC_REVIEW: { tool: 'TOOL_SPEC_REVIEW', itemsKey: 'items' },
+  MODEL_REVIEW: { tool: 'TOOL_MODEL_REVIEW', itemsKey: 'items' },
 };
+
+// Lazy + cached: this module is required BY spec-mode-runner.js, so the require must not
+// run at load time. By the time a validation happens, the runner's exports are complete.
+let _defs = null;
+function toolDefs() {
+  if (_defs) return _defs;
+  try {
+    _defs = require('../spec-mode-runner.js').TOOL_DEFINITIONS || {};
+  } catch {
+    _defs = {};
+  }
+  return _defs;
+}
+
+/** The schema ONE item of this tag must satisfy, read from the live tool definition. */
+function itemSchemaFor(tag) {
+  const map = TAG_TO_TOOL[tag];
+  if (!map) return null;
+  const def = toolDefs()[map.tool];
+  const params = def && def.parameters;
+  if (!params || !params.properties) return null;
+  if (!map.itemsKey) return params;            // the payload IS the object (SPEC_AGENT)
+  const arr = params.properties[map.itemsKey];
+  return (arr && arr.items) || null;
+}
+
+const typeOk = (v, t) => {
+  switch (t) {
+    case 'string': return typeof v === 'string';
+    case 'number': return typeof v === 'number' && !Number.isNaN(v);
+    case 'boolean': return typeof v === 'boolean';
+    case 'array': return Array.isArray(v);
+    case 'object': return v !== null && typeof v === 'object' && !Array.isArray(v);
+    default: return true;
+  }
+};
+
+function checkItem(item, schema, tag, index) {
+  const where = index === null ? tag : `${tag}[${index}]`;
+  if (!item || typeof item !== 'object' || Array.isArray(item)) {
+    return fail(`${where}: expected an object, got ${item === null ? 'null' : typeof item}`);
+  }
+  for (const key of schema.required || []) {
+    const v = item[key];
+    if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) {
+      const id = item.storyId ? ` (story ${item.storyId})` : '';
+      return fail(`${where}${id}: missing required field "${key}" — required by its own tool definition`);
+    }
+    const declared = (schema.properties || {})[key];
+    if (declared && declared.type && !typeOk(v, declared.type)) {
+      return fail(`${where}: field "${key}" should be ${declared.type}, got ${Array.isArray(v) ? 'array' : typeof v}`);
+    }
+  }
+  return pass();
+}
 
 /**
  * validateTaggedOutput(tag, parsed) -> { ok, reason }
- *
- * `parsed` is whatever extractTaggedJson produced — null when the tag was missing, empty
- * or unparseable, which is the live failure this exists to catch.
+ * `parsed` is whatever extractTaggedJson produced — null when the tag was missing, empty,
+ * or held prose instead of JSON, which is the live failure this exists to catch.
  */
 function validateTaggedOutput(tag, parsed) {
   if (parsed === null || parsed === undefined) {
     return fail(`${tag}: no parseable output — the tag was missing, empty, or contained prose instead of JSON`);
   }
-  const check = REGISTRY[tag];
-  if (!check) return pass(); // additive registry: an unknown tag is not an error
-  return check(parsed);
+  const schema = itemSchemaFor(tag);
+  if (!schema) return pass();  // unknown tag, or nothing declared to enforce
+
+  if (Array.isArray(parsed)) {
+    if (!parsed.length) return fail(`${tag}: the array is empty — a report about nothing is not a report`);
+    for (let i = 0; i < parsed.length; i += 1) {
+      const r = checkItem(parsed[i], schema, tag, i);
+      if (!r.ok) return r;
+    }
+    return pass();
+  }
+  return checkItem(parsed, schema, tag, null);
 }
 
-module.exports = { validateTaggedOutput, REGISTRY };
+module.exports = { validateTaggedOutput, TAG_TO_TOOL, itemSchemaFor };

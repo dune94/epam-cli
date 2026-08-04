@@ -30,87 +30,96 @@ const { validateTaggedOutput } = require('../../../orchestrations/scripts/lib/ag
 const ok = (tag: string, obj: unknown) => validateTaggedOutput(tag, obj).ok;
 const why = (tag: string, obj: unknown) => validateTaggedOutput(tag, obj).reason || '';
 
-describe('SPEC_REVIEW — the contract that failed live', () => {
-  const good = [{ storyId: 'ST-1', verdict: 'approved', qualityScore: 0.9 }];
+/**
+ * DERIVED, NOT RESTATED. The first version of the validator hand-wrote the shapes and was
+ * wrong on three of four within the hour — it required `agentRole` where the contract says
+ * `agents`, `verdict` where MODEL_REVIEW says `finalModel`, and accepted any object for
+ * SPEC_AGENT. It rejected VALID coordinator output on a live run, on every lane, every
+ * attempt.
+ *
+ * So these tests read the SAME tool definitions the validator reads. If a contract
+ * changes, both move together; neither can drift into rejecting correct work.
+ */
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { TOOL_DEFINITIONS } = require('../../../orchestrations/scripts/spec-mode-runner.js');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { TAG_TO_TOOL, itemSchemaFor } = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
 
-  it('accepts a well-formed review', () => {
-    expect(ok('SPEC_REVIEW', good)).toBe(true);
+const TAGS = Object.keys(TAG_TO_TOOL) as string[];
+
+/** Build a minimal VALID item straight from the declared schema. */
+function validItem(tag: string): Record<string, unknown> {
+  const schema = itemSchemaFor(tag);
+  const item: Record<string, unknown> = {};
+  for (const key of schema.required || []) {
+    const t = ((schema.properties || {})[key] || {}).type;
+    item[key] = t === 'array' ? ['x'] : t === 'number' ? 0.5 : t === 'boolean' ? true : 'x';
+  }
+  return item;
+}
+
+const wrap = (tag: string, item: unknown) =>
+  TAG_TO_TOOL[tag].itemsKey ? [item] : item;
+
+describe('every tagged contract is enforced from its OWN tool definition', () => {
+  it('all four tags resolve to a declared schema (guard against a vacuous pass)', () => {
+    expect(TAGS.length).toBeGreaterThan(0);
+    for (const tag of TAGS) {
+      expect(itemSchemaFor(tag), `${tag} has no declared item schema`).toBeTruthy();
+      expect((itemSchemaFor(tag).required || []).length, `${tag} declares no required fields`)
+        .toBeGreaterThan(0);
+    }
   });
 
-  it('REPRODUCES THE LIVE FAILURE: null (what an empty tag parses to) is refused', () => {
+  it.each(TAGS)('%s accepts an item built from its declared schema', (tag) => {
+    expect(ok(tag, wrap(tag, validItem(tag))), why(tag, wrap(tag, validItem(tag)))).toBe(true);
+  });
+
+  it.each(TAGS)('%s refuses an item missing each declared-required field', (tag) => {
+    const schema = itemSchemaFor(tag);
+    for (const key of schema.required) {
+      const item = validItem(tag);
+      delete item[key];
+      expect(ok(tag, wrap(tag, item)), `${tag} accepted an item with no "${key}"`).toBe(false);
+      expect(why(tag, wrap(tag, item)), 'the reason must name the missing field').toContain(key);
+    }
+  });
+
+  it.each(TAGS)('%s refuses null — no answer is no answer', (tag) => {
+    expect(ok(tag, null)).toBe(false);
+    expect(why(tag, null)).toMatch(/no parseable output/i);
+  });
+
+  it.each(TAGS.filter((t) => TAG_TO_TOOL[t].itemsKey))('%s refuses an empty array', (tag) => {
+    expect(ok(tag, [])).toBe(false);
+  });
+
+  /**
+   * THE LIVE REGRESSION, named. The hand-written validator demanded `agentRole`; the
+   * contract says `agents`. Three lanes of valid coordinator output were rejected.
+   */
+  it('SPEC_ASSIGNMENTS accepts the DECLARED field name, not the invented one', () => {
+    expect(TOOL_DEFINITIONS.TOOL_SPEC_ASSIGNMENTS.parameters.properties.assignments.items.required)
+      .toContain('agents');
+    expect(ok('SPEC_ASSIGNMENTS', [{ storyId: 'S1', agents: ['typescript-engineer'] }])).toBe(true);
     expect(
-      ok('SPEC_REVIEW', null),
-      'an empty <SPEC_REVIEW></SPEC_REVIEW> was silently discarded and the gate guarded nothing',
+      ok('SPEC_ASSIGNMENTS', [{ storyId: 'S1', agentRole: 'typescript-engineer' }]),
+      'agentRole is not the contract — a validator that demands it fails valid work',
     ).toBe(false);
-    expect(why('SPEC_REVIEW', null)).toMatch(/no .*output|empty|null/i);
   });
 
-  it('refuses an empty array — a review of nothing is not a review', () => {
-    expect(ok('SPEC_REVIEW', [])).toBe(false);
+  it('MODEL_REVIEW requires finalModel, not verdict', () => {
+    expect(ok('MODEL_REVIEW', [{ storyId: 'S1', finalModel: 'some-model' }])).toBe(true);
+    expect(ok('MODEL_REVIEW', [{ storyId: 'S1', verdict: 'approved' }])).toBe(false);
   });
 
-  it('refuses an entry with no verdict', () => {
-    expect(ok('SPEC_REVIEW', [{ storyId: 'ST-1', qualityScore: 0.9 }])).toBe(false);
-    expect(why('SPEC_REVIEW', [{ storyId: 'ST-1' }])).toMatch(/verdict/i);
+  it('an optional field absent is still valid', () => {
+    // qualityScore is optional on SPEC_REVIEW; its absence must not fail a real review.
+    expect(ok('SPEC_REVIEW', [{ storyId: 'S1', verdict: 'approved' }])).toBe(true);
   });
 
-  it('refuses a verdict outside the allowed set', () => {
-    expect(ok('SPEC_REVIEW', [{ storyId: 'ST-1', verdict: 'maybe' }])).toBe(false);
-    expect(why('SPEC_REVIEW', [{ storyId: 'ST-1', verdict: 'maybe' }])).toMatch(/maybe/);
-  });
-
-  it('refuses a qualityScore outside 0..1', () => {
-    expect(ok('SPEC_REVIEW', [{ storyId: 'ST-1', verdict: 'approved', qualityScore: 7 }])).toBe(false);
-  });
-
-  it('allows an ABSENT qualityScore — absent is not invalid', () => {
-    expect(ok('SPEC_REVIEW', [{ storyId: 'ST-1', verdict: 'approved' }])).toBe(true);
-  });
-
-  it('refuses an entry with no storyId — a verdict about nothing cannot be applied', () => {
-    expect(ok('SPEC_REVIEW', [{ verdict: 'approved' }])).toBe(false);
-  });
-
-  it('the reason NAMES what was wrong, so a retry can be told', () => {
-    const r = why('SPEC_REVIEW', [{ storyId: 'ST-1', verdict: 'maybe' }]);
-    expect(r.length, 'a refusal with no reason cannot improve attempt 2').toBeGreaterThan(10);
-  });
-});
-
-describe('SPEC_ASSIGNMENTS', () => {
-  it('accepts a well-formed assignment', () => {
-    expect(ok('SPEC_ASSIGNMENTS', [{ storyId: 'ST-1', agentRole: 'typescript-engineer' }])).toBe(true);
-  });
-  it('refuses an entry with no agentRole', () => {
-    expect(ok('SPEC_ASSIGNMENTS', [{ storyId: 'ST-1' }])).toBe(false);
-  });
-  it('refuses null and empty', () => {
-    expect(ok('SPEC_ASSIGNMENTS', null)).toBe(false);
-    expect(ok('SPEC_ASSIGNMENTS', [])).toBe(false);
-  });
-});
-
-describe('MODEL_REVIEW', () => {
-  it('accepts a verdict', () => {
-    expect(ok('MODEL_REVIEW', { verdict: 'approved' })).toBe(true);
-  });
-  it('refuses a missing verdict', () => {
-    expect(ok('MODEL_REVIEW', { note: 'looks fine' })).toBe(false);
-  });
-  it('refuses null', () => {
-    expect(ok('MODEL_REVIEW', null)).toBe(false);
-  });
-});
-
-describe('SPEC_AGENT', () => {
-  it('accepts an elaboration payload', () => {
-    expect(ok('SPEC_AGENT', { acceptanceCriteria: ['A'], storyKind: 'defect' })).toBe(true);
-  });
-  it('refuses null — an empty spec payload silently drops the elaboration', () => {
-    expect(ok('SPEC_AGENT', null)).toBe(false);
-  });
-  it('refuses a non-object', () => {
-    expect(ok('SPEC_AGENT', 'I need to read the PRD first')).toBe(false);
+  it('a declared type mismatch is refused', () => {
+    expect(ok('SPEC_ASSIGNMENTS', [{ storyId: 'S1', agents: 'not-an-array' }])).toBe(false);
   });
 });
 

@@ -5169,6 +5169,15 @@ if (require.main === module) {
 }
 
 module.exports = {
+  // The tool definitions ARE the contract. Exported so lib/agent-output-schema.js can
+  // validate answers against them instead of restating the shapes — a restated copy
+  // drifted within hours and rejected valid coordinator output on a live run.
+  TOOL_DEFINITIONS: {
+    TOOL_SPEC_ASSIGNMENTS,
+    TOOL_SPEC_AGENT,
+    TOOL_SPEC_REVIEW,
+    TOOL_MODEL_REVIEW,
+  },
   specAgentEnv,
   recordDetectiveRound,
   classifySpecFailure,

@@ -131,7 +131,12 @@ if [ -n "$_example_rel" ] && [ -f "$PROJECT_ROOT/$_example_rel" ]; then
 fi
 
 # ── Gather the fix diff + the verification criteria ─────────────────────────
-_fix_diff=$(git -C "$PROJECT_ROOT" diff "$BASELINE_SHA" HEAD -- "${FIX_FILES[@]}" 2>/dev/null | head -300)
+# NOT truncated. This diff is the ONLY description of what the fix did, and the test is
+# derived from it: a cap meant the writer saw a partial fix and wrote a test for the
+# visible part, with nothing saying the rest existed. team-lead-review.sh solved the same
+# problem honestly — it bounds the diff AND marks the truncation in the prompt ("do not
+# assume the omitted tail is defect-free"). Silent cutting is the defect, not length.
+_fix_diff=$(git -C "$PROJECT_ROOT" diff "$BASELINE_SHA" HEAD -- "${FIX_FILES[@]}" 2>/dev/null)
 _vcs=$("$NODE_BIN" -e '
   const fs=require("fs");
   try { const p=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));

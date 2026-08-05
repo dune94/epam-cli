@@ -34,6 +34,9 @@ const AI_PROVIDER = process.env.AI_PROVIDER
 const TIMEOUT_MS = parseInt(process.env.CPA_TIMEOUT_MS || '120000', 10);
 
 // ── Read stdin ─────────────────────────────────────────────────────────────
+// Retrieved source chunks reach the estimator whole. They were cut at 800/1200 chars —
+// numbers unrelated to the model, the content or any budget — so the estimate was formed
+// from a partial view with nothing recording that.
 function readStdin() {
   return new Promise((resolve, reject) => {
     let buf = '';
@@ -68,14 +71,14 @@ function buildPrompt(input) {
   const kbSection = kbChunks.length > 0
     ? `## Knowledge Base (${kbChunks.length} retrieved sources)\n\n` +
       kbChunks.map((c, i) =>
-        `### Source ${i + 1}: \`${c.source}\` (relevance: ${c.score})\n\`\`\`\n${c.chunk.slice(0, 800)}\n\`\`\``
+        `### Source ${i + 1}: \`${c.source}\` (relevance: ${c.score})\n\`\`\`\n${c.chunk}\n\`\`\``
       ).join('\n\n')
     : '## Knowledge Base\n_No matching KB sources found for this story\'s required skills._';
 
   const snippets = (codebaseSignals.fileSnippets || []);
   const snippetSection = snippets.length > 0
     ? snippets.map(s =>
-        `### \`${s.path}\` (${s.lines} lines)\n\`\`\`\n${(s.snippet || '').slice(0, 1200)}\n\`\`\``
+        `### \`${s.path}\` (${s.lines} lines)\n\`\`\`\n${s.snippet || ''}\n\`\`\``
       ).join('\n\n')
     : '';
 

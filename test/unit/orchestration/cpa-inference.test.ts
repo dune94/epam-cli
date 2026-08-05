@@ -162,16 +162,19 @@ describe('buildPrompt', () => {
     expect(prompt).toContain('Estimate small stories at 30min.');
   });
 
-  it('truncates KB chunks to 800 chars', () => {
+  it('passes KB chunks through WHOLE — a silent cut hides the evidence the estimate rests on', () => {
+    // Was: sliced to 800 chars. 800 related to nothing — not the model, not a token budget,
+    // not the content — and nothing in the prompt said anything had been removed, so the
+    // estimate was formed from a partial view that looked complete. The models in play
+    // carry 200K-400K context windows. Where a bound is genuinely needed it is the model's
+    // own window (derivable), and it must ANNOUNCE itself, as team-lead-review.sh does.
     const longChunk = 'x'.repeat(2000);
     const input = {
       ...minimalInput,
       kbChunks: [{ source: 'big.md', score: 0.5, chunk: longChunk }],
     };
     const prompt = buildPrompt(input);
-    // The chunk is sliced to 800 chars before inclusion
-    expect(prompt).toContain('x'.repeat(800));
-    expect(prompt).not.toContain('x'.repeat(801));
+    expect(prompt, 'the chunk reached the prompt truncated').toContain(longChunk);
   });
 
   it('includes adjacent stories when provided', () => {

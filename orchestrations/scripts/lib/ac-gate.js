@@ -147,7 +147,7 @@ to implement it without human clarification.
 STORY: ${issue.jiraKey} — ${issue.title}
 
 DESCRIPTION:
-${(issue.description || '(none)').slice(0, 1500)}
+${(issue.description || '(none)')}
 
 ACCEPTANCE CRITERIA:
 ${acsText}
@@ -265,7 +265,7 @@ function classifyCodelineOnly(issue, knownCodelines) {
 STORY: ${issue.jiraKey} — ${issue.title || ''}
 
 DESCRIPTION:
-${(issue.description || '').slice(0, 4000)}
+${(issue.description || '')}
 
 CODELINES:
 ${codelineList}
@@ -316,7 +316,7 @@ so that an AI agent can implement the change without human clarification.
 STORY: ${issue.jiraKey} — ${issue.title}
 
 DESCRIPTION:
-${(issue.description || '(none)').slice(0, 2000)}
+${(issue.description || '(none)')}
 
 Rules:
 1. Each AC must be specific and testable (observable in UI, API response, or logs).

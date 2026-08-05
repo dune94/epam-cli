@@ -1942,7 +1942,7 @@ ${reviewPayload}
         return {
           id: s.id,
           title: s.title,
-          description: (s.description || '').slice(0, 400),
+          description: (s.description || ''),
           acCount: Array.isArray(s.acceptanceCriteria) ? s.acceptanceCriteria.length : 0,
           outputFiles: (s.technicalNotes?.files || []).filter((f) => !f.endsWith('.test.ts') && !f.endsWith('.spec.ts')),
           currentModel: s.model,
@@ -2564,7 +2564,7 @@ async function reviewVcViaSpeckit({ story, vc, cycle, logDir }) {
 
 Acceptance criteria (IMMUTABLE ticket intent):
 ${(story.acceptanceCriteria || []).map((a) => '- ' + a).join('\n') || '- (none)'}
-Description: ${String(story.description || '').slice(0, 1000)}
+Description: ${String(story.description || '')}
 
 Proposed verification criteria:
 ${vc.map((v, i) => `${i + 1}. ${v}`).join('\n')}
@@ -2599,7 +2599,7 @@ ${siteBlock}
 
 Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
 ${(story.acceptanceCriteria || []).map((a) => '- ' + a).join('\n') || '- (none)'}
-Description: ${String(story.description || '').slice(0, 1000)}
+Description: ${String(story.description || '')}
 
 ${VC_OBSERVABILITY_RULES}
 

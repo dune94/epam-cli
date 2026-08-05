@@ -39,7 +39,12 @@ fi
 
 resolve_baseline() {
   local ref
-  for ref in "$BASELINE_REF_ARG" "main" "origin/main" "master" "origin/master"; do
+  # The candidate list used to be a guessed set of branch names. Ask the repository
+  # instead: origin/HEAD names the default branch, and JIRA_BASELINE_BRANCH overrides it
+  # when the project's integration branch differs. Neither is written down here.
+  local _default_ref=""
+  _default_ref=$(git -C "$REPO_PATH" symbolic-ref --short --quiet refs/remotes/origin/HEAD 2>/dev/null)
+  for ref in "$BASELINE_REF_ARG" "${JIRA_BASELINE_BRANCH:-}" "origin/${JIRA_BASELINE_BRANCH:-}" "$_default_ref"; do
     [ -z "$ref" ] && continue
     if git -C "$REPO_PATH" rev-parse --verify --quiet "$ref" >/dev/null; then
       echo "$ref"

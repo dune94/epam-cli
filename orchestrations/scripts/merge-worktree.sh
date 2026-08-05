@@ -73,14 +73,34 @@ if ! git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
     exit 3
 fi
 
-# Ensure we're on main branch
+# Ensure we're on the integration branch.
+#
+# This said `git checkout main`. A project whose trunk is develop, trunk or release/* was
+# switched onto a branch that may not exist, and the merge either failed or landed on the
+# wrong base. The branch is CONFIGURATION (JIRA_BASELINE_BRANCH) and, failing that,
+# DETERMINABLE — the remote's own HEAD says what the default branch is. Never a literal.
 cd "$PROJECT_ROOT"
+_integration_branch="${JIRA_BASELINE_BRANCH:-}"
+if [ -z "$_integration_branch" ]; then
+    # origin/HEAD -> origin/<default>; ask the repository rather than assume a name.
+    # `|| true`: under `set -euo pipefail` a failing symbolic-ref makes the whole pipeline
+    # non-zero, and a BARE assignment from a failed substitution aborts the script — the
+    # same set -e trap documented elsewhere in this pipeline. A repo with no origin is an
+    # ordinary case here, not an error.
+    _integration_branch=$(git symbolic-ref --short --quiet refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||' || true)
+fi
 current_branch=$(git branch --show-current)
-if [ "$current_branch" != "main" ]; then
-    warning "Not on main branch (currently on $current_branch)"
-    log "Switching to main..."
-    git checkout main || {
-        error "Failed to checkout main"
+if [ -z "$_integration_branch" ]; then
+    # No config and no remote HEAD to ask: a repository with no origin is already ON its
+    # integration branch, so stay put rather than guess a name. Failing here would break
+    # every local/offline repo; guessing "main" was the original defect.
+    _integration_branch="$current_branch"
+fi
+if [ "$current_branch" != "$_integration_branch" ]; then
+    warning "Not on ${_integration_branch} (currently on $current_branch)"
+    log "Switching to ${_integration_branch}..."
+    git checkout "$_integration_branch" || {
+        error "Failed to checkout ${_integration_branch}"
         exit 3
     }
 fi

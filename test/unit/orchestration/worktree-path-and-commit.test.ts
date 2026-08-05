@@ -265,13 +265,13 @@ describe('Step 3.2 merge — branch must have commits ahead of main', () => {
   it('Step 3.2 checks _ahead count before merging', () => {
     const mergeIdx = orchSrc.indexOf('Step 17: Merging');
     expect(mergeIdx).toBeGreaterThan(-1);
-    const block = orchSrc.slice(mergeIdx, mergeIdx + 1000);
+    const block = orchSrc.slice(mergeIdx, mergeIdx + 1600);
     expect(block).toMatch(/_ahead|rev-list.*count/);
   });
 
   it('Step 3.2 errors if branch has no new commits (not silently skips)', () => {
     const mergeIdx = orchSrc.indexOf('Step 17: Merging');
-    const block = orchSrc.slice(mergeIdx, mergeIdx + 1000);
+    const block = orchSrc.slice(mergeIdx, mergeIdx + 1600);
     expect(block).toMatch(/no new commits|ahead.*0|_ahead.*-eq 0/);
     expect(block).toMatch(/error|ERROR|MERGE_FAILED/);
   });

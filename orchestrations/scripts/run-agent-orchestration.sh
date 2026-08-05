@@ -6014,7 +6014,10 @@ if [ "$need_worktrees" = true ]; then
 
     # Resolve the git root and current branch
     _merge_git_root="${GIT_WORK_ROOT:-$PROJECT_ROOT}"
-    _merge_current_branch=$(git -C "$_merge_git_root" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "master")
+    # If HEAD cannot be read, fall back to the CONFIGURED integration branch — never to a
+    # guessed name. `|| echo "master"` meant a repo whose trunk is develop silently merged
+    # against a branch that may not exist.
+    _merge_current_branch=$(git -C "$_merge_git_root" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "${JIRA_BASELINE_BRANCH:-}")
 
     MERGE_FAILED=false
 
@@ -10436,7 +10439,12 @@ case $gate_result in
         # Step 5.8: Auto-create PR if gh is available and there are commits ahead of origin
         if ! is_truthy "${SKIP_AUTO_PR:-}" && command -v gh >/dev/null 2>&1; then
             _current_branch=$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
-            _default_branch=$(git -C "$PROJECT_ROOT" remote show origin 2>/dev/null | awk '/HEAD branch/ {print $NF}' || echo "main")
+            # The remote's own HEAD is the answer; when it cannot be read, use the
+            # CONFIGURED branch rather than guessing a name. A wrong guess here compares
+            # against a nonexistent ref, so _commits_ahead comes back 0 and the PR step
+            # silently does nothing.
+            _default_branch=$(git -C "$PROJECT_ROOT" remote show origin 2>/dev/null | awk '/HEAD branch/ {print $NF}')
+            [ -n "$_default_branch" ] || _default_branch="${JIRA_BASELINE_BRANCH:-}"
             _commits_ahead=$(git -C "$PROJECT_ROOT" rev-list --count "origin/${_default_branch}...HEAD" 2>/dev/null || echo 0)
             if [ "${_commits_ahead:-0}" -gt 0 ] && [ "${_current_branch}" != "${_default_branch}" ]; then
                 log "Step 5.8: Creating PR for phase '$PHASE' (${_commits_ahead} commits ahead of origin/${_default_branch})..."

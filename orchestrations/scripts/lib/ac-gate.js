@@ -43,6 +43,8 @@ const argv    = process.argv.slice(2);
 const getArg  = (flag, def = '') => { const i = argv.indexOf(flag); return i !== -1 ? argv[i + 1] : def; };
 const DRY_RUN           = argv.includes('--dry-run') || process.env.AC_GATE_DRY_RUN === '1';
 const AUTO_ELABORATE     = process.env.AC_GATE_AUTO_ELABORATE === '1';
+const BROWNFIELD         = process.env.EPAM_BROWNFIELD === '1';
+const DEFAULT_CODELINE   = process.env.JIRA_DEFAULT_CODELINE || '';
 // Explicit provider. These called ai-run.sh with --model but NO --provider, so
 // provider came only from ambient env — e.g. `--provider qwen --model claude-haiku`.
 const PROVIDER = getArg('--provider', process.env.ORCH_GATE_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || 'qwen');
@@ -327,7 +329,34 @@ Respond with JSON only — no markdown, no preamble:
   for (const issue of issues) {
     process.stderr.write(`[ac-gate]   ${issue.jiraKey} — ${(issue.title || '').slice(0, 60)}\n`);
 
-    const classification = classifyWithLLM(issue, knownCodelines);
+    // THE RULE (2026-08-05): a story that HAS acceptance criteria goes through AC
+    // processing as designed — brownfield or greenfield alike, because the ticket carries
+    // a real contract to assess. A BROWNFIELD story with NO ACs skips it entirely: ACs are
+    // immutable in brownfield and the VCs are derived from the DESCRIPTION instead (see
+    // ingest-jira-tickets.sh, which already logs exactly that), so every model call here
+    // judges a field nothing will read.
+    //
+    // Measured before this guard: 4 model calls per story — a planning pass, an answer
+    // pass, and with AC_GATE_AUTO_ELABORATE a further elaboration that GENERATES criteria.
+    // That elaboration is how 8 fabricated ACs came to be frozen into a PRD template for a
+    // ticket whose Jira record never had any.
+    //
+    // The codeline half of the classification IS load-bearing (it routes the story to its
+    // lanes), so this skip must still produce one — taken from the ticket's own label,
+    // which is where a brownfield codeline comes from anyway. Never a model call for it.
+    const hasAcs = Array.isArray(issue.acceptanceCriteria) && issue.acceptanceCriteria.length > 0;
+    const skipAcProcessing = BROWNFIELD && !hasAcs;
+
+    const classification = skipAcProcessing
+      ? {
+          verdict: 'enrichable',
+          reason: 'brownfield story with no acceptance criteria — AC processing skipped; ' +
+                  'VCs are derived from the description (no model call made)',
+          gaps: [],
+          enrichedAcs: [],
+          codeline: issue.codeline || DEFAULT_CODELINE,
+        }
+      : classifyWithLLM(issue, knownCodelines);
     let verdict = classification.verdict || 'enrichable';
 
     process.stderr.write(`[ac-gate]     verdict: ${verdict} — ${classification.reason}\n`);
@@ -335,7 +364,7 @@ Respond with JSON only — no markdown, no preamble:
     // AUTO_ELABORATE: when verdict is insufficient, generate ACs locally from
     // description and override to enrichable so the pipeline continues.
     // No Jira write occurs — ACs land in prd.json only.
-    if (verdict === 'insufficient' && AUTO_ELABORATE) {
+    if (verdict === 'insufficient' && AUTO_ELABORATE && !skipAcProcessing) {
       process.stderr.write(`[ac-gate]     AUTO_ELABORATE: generating ACs from description (no Jira write)...\n`);
       const generated = elaborateAcs(issue);
       classification.enrichedAcs = generated;

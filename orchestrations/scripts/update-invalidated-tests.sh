@@ -69,8 +69,11 @@ if [ -n "$_baseline_sha" ]; then
                     | grep -iE '\.(test|spec)\.[tj]sx?$|__tests__/' || true)"
 fi
 
+# The committed fix, whole. Cut at 6000 bytes it was a partial account of what changed,
+# with nothing in the prompt saying so — and this agent's job is to decide which tests the
+# fix legitimately invalidated, which cannot be judged from part of the diff.
 _fix_diff="$(git -C "$PROJECT_ROOT" diff "${_baseline_sha:-HEAD~1}" HEAD -- . 2>/dev/null \
-             | grep -viE '^\+\+\+|^---' | head -c 6000 || true)"
+             | grep -viE '^\+\+\+|^---' || true)"
 
 read -r -d '' _prompt <<PROMPT || true
 You are updating tests that a COMMITTED bug fix has legitimately invalidated.
@@ -98,7 +101,7 @@ ${STORY_VERIFICATION_CRITERIA:-(not supplied)}
 ${_fix_diff:-(unavailable)}
 
 === FAILING TEST OUTPUT ===
-$(printf '%s' "$_out" | head -c 6000)
+$(printf '%s' "$_out")
 PROMPT
 
 _agent_log="${LOG_DIR:-$(dirname "$SCRIPT_DIR")/logs}/update-invalidated-tests-${STORY_ID}.log"

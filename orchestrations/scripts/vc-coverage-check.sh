@@ -58,7 +58,12 @@ _vc_count=$(printf '%s' "$_vcs_json" | jq 'length' 2>/dev/null || echo 0)
 
 # The whole test, not an extract. Reading it is the point: a summary would put
 # the model back to guessing, which is what the discarded version did.
-_test_src=$(cat "$TEST_FILE" 2>/dev/null | head -c 24000)
+#
+# The comment said that while the code did `head -c 24000` — silently. Real test files in
+# these codelines reach 59-65KB, so the tail of a large test was judged ABSENT rather than
+# unread, and this step is what decides whether a verification criterion is covered. A cap
+# here manufactures the "uncovered VC" verdicts it exists to report.
+_test_src=$(cat "$TEST_FILE" 2>/dev/null)
 [ -n "$_test_src" ] || { log "test file unreadable — skipping"; exit 0; }
 
 _uncovered=0

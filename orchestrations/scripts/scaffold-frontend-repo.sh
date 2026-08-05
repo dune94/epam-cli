@@ -15,8 +15,11 @@ if [ -z "$TARGET" ]; then
 fi
 
 NODE_BIN="${NODE_BIN:-$(command -v node 2>/dev/null || echo 'node')}"
-[ -x "/home/bradleyjerome/.nvm/versions/node/v20.20.0/bin/node" ] && \
-  NODE_BIN="/home/bradleyjerome/.nvm/versions/node/v20.20.0/bin/node"
+# Resolved, never pinned: package.json declares the requirement (engines.node) and
+# lib/node-bin.sh finds an interpreter that meets it. The path that was here was
+# valid on one machine, for one nvm install, until that version was upgraded.
+. "$(dirname "${BASH_SOURCE[0]}")/lib/node-bin.sh" 2>/dev/null || . "$(dirname "${BASH_SOURCE[0]}")/../lib/node-bin.sh"
+NODE_BIN="$(resolve_node_bin)"
 NPM_BIN="$(dirname "$NODE_BIN")/npm"
 
 GREEN='\033[0;32m'; NC='\033[0m'

@@ -60,8 +60,10 @@ if (!ISSUES_PATH && !argv.includes('--help')) {
 
 const SCRIPT_DIR  = path.join(__dirname, '..');
 const AI_RUN_SH   = path.join(SCRIPT_DIR, 'ai-run.sh');
-const NODE_BIN    = process.env.NODE_BIN ||
-  '/home/bradleyjerome/.nvm/versions/node/v20.20.0/bin/node';
+// process.execPath IS a node that satisfies this repo's requirement — it is the one
+// currently executing this file. The path that was here was valid on one machine, for one
+// nvm install, until that version was upgraded.
+const NODE_BIN    = process.env.NODE_BIN || process.execPath;
 const SPLIT_VALUE = process.env.JIRA_SPLIT_CODELINE || 'both';
 
 // ── Codeline registry ──────────────────────────────────────────────────────

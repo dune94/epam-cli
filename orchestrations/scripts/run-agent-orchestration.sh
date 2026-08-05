@@ -103,7 +103,7 @@ _repo_root="$(cd "$AUTOMATION_DIR/.." && pwd)"
 if [ "$PROJECT_ROOT" = "$_repo_root" ]; then
   echo "ERROR: PROJECT_ROOT resolves to the epam-cli repo root ('$_repo_root')." >&2
   echo "       Set project.outputDir in your PRD to an external test-app directory." >&2
-  echo "       Convention: /home/bradleyjerome/projects/ai/epam-test-apps/<app-name>" >&2
+  echo "       Convention: any directory OUTSIDE this repository — the engine must never write into itself." >&2
   exit 1
 fi
 

@@ -28,7 +28,11 @@ BASELINE_BRANCH="${JIRA_BASELINE_BRANCH:-develop}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 NODE_BIN="${NODE_BIN:-node}"
-[ -x "/home/bradleyjerome/.nvm/versions/node/v20.20.0/bin/node" ] && NODE_BIN="/home/bradleyjerome/.nvm/versions/node/v20.20.0/bin/node"
+# Resolved, never pinned: package.json declares the requirement (engines.node) and
+# lib/node-bin.sh finds an interpreter that meets it. The path that was here was
+# valid on one machine, for one nvm install, until that version was upgraded.
+. "$(dirname "${BASH_SOURCE[0]}")/lib/node-bin.sh" 2>/dev/null || . "$(dirname "${BASH_SOURCE[0]}")/../lib/node-bin.sh"
+NODE_BIN="$(resolve_node_bin)"
 
 log()  { echo "[repro-test-writer] $*"; }
 # Both B30 (analyst failed) and B31 (no ladder escalation) called `warning`, which

@@ -293,6 +293,16 @@ if [ -d "$KB_DIR" ]; then
   fi
 fi
 
+# ── Step 3b: Restore the KB to its canonical state ──────────────────────────
+# The scratchpad above is per-run attempt notes. This is the KB ITSELF, which had no
+# canonical to restore from and therefore accumulated across every run — and it is
+# injected into writer prompts, so a wrong entry teaches every later agent. See
+# lib/kb-canonical.sh. Self-heal still writes the KB freely DURING a run; nothing carries
+# it into the next one.
+# shellcheck source=lib/kb-canonical.sh
+. "$SCRIPT_DIR/lib/kb-canonical.sh"
+kb_restore_canonical "$REPO_ROOT/orchestrations"
+
 # ── Step 4: Reset agent-status.json ──────────────────────────────────────────
 info "Resetting agent-status.json..."
 echo '{"startedAt":null,"phase":null,"orchMode":null,"lanes":{},"events":[],"stories":{},"completedAt":null}' \

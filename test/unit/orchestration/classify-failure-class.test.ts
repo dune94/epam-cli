@@ -73,6 +73,7 @@ describe('classify_failure_class — REAL execution', () => {
     curlBehavior?: 'valid' | 'invalid' | 'unreachable' | 'no-key';
     storyFailures?: Array<{ storyId: string; failureClass: string }>;
     kbFileExists?: boolean;
+    crossRunSynthesis?: boolean;
   }): { failureClass: string; escalate: string; amendment: string; stderr: string; kbContent: string } {
     const dir = mkdtempSync(join(tmpdir(), 'classify-failure-test-'));
     try {
@@ -131,6 +132,10 @@ describe('classify_failure_class — REAL execution', () => {
           `LOG_DIR="${logDir}"`,
           `AUTOMATION_DIR="${automationDir}"`,
           `MAIN_PRD_FILE="${prdFile}"`,
+          // Cross-run KB synthesis is OFF by default (2026-08-04): it grows the KB for
+          // FUTURE runs, and the KB is injected into writer prompts. Tests that exercise
+          // the synthesis must opt in, exactly as an operator would.
+          `EPAM_KB_CROSS_RUN_SYNTHESIS=${opts.crossRunSynthesis ? 1 : 0}`,
           `story_id="${opts.storyId ?? 'SKY-TEST'}"`,
           opts.curlBehavior !== 'no-key' ? `OPENROUTER_API_KEY="fake-key-for-test"` : `unset OPENROUTER_API_KEY`,
           fnBody,
@@ -314,8 +319,9 @@ describe('classify_failure_class — REAL execution', () => {
       expect(failureClass).toBe('unknown');
     });
 
-    it('3+ prior capability failures synthesizes a KB decomposition-suggestion entry', () => {
+    it('3+ prior capability failures synthesizes a KB entry WHEN cross-run synthesis is enabled', () => {
       const { kbContent } = run({
+        crossRunSynthesis: true,
         rawContent: 'some output',
         exitCode: 0,
         storyId: 'SKY-BIG',
@@ -328,6 +334,25 @@ describe('classify_failure_class — REAL execution', () => {
       expect(kbContent).toContain('KB-PERSIST-SKY-BIG');
       expect(kbContent).toContain('decomposed into smaller children');
       expect(kbContent).toContain('3 times with capability class');
+    });
+
+    it('writes NOTHING to the KB by default — cross-run growth is off until the pipeline is stable', () => {
+      const { kbContent } = run({
+        rawContent: 'some output',
+        exitCode: 0,
+        storyId: 'SKY-BIG',
+        storyFailures: [
+          { storyId: 'SKY-BIG', failureClass: 'capability' },
+          { storyId: 'SKY-BIG', failureClass: 'capability' },
+          { storyId: 'SKY-BIG', failureClass: 'capability' },
+        ],
+      });
+      expect(
+        kbContent,
+        'the KB is injected into writer prompts, so an entry written here teaches every ' +
+          'later agent. lib/kb-canonical.sh resets the KB each run, so this entry would ' +
+          'be discarded anyway while the log claimed "future runs benefit".',
+      ).not.toContain('KB-PERSIST-SKY-BIG');
     });
 
     it('does not duplicate the KB entry if one already exists for this story (de-dup marker check)', () => {

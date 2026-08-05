@@ -5288,6 +5288,15 @@ classify_failure_class() {
             log "  Coordinator[L1]: story $story_id has ${_prior_cap_count} prior capability failures — story may need decomposition (too many ACs for any single invocation)"
             # Cross-run KB synthesis: emit a pattern entry after 3+ capability failures
             # so future runs benefit from the accumulated failure pattern.
+            #
+            # OFF BY DEFAULT (2026-08-04). This is cross-run GROWTH by design, and the KB
+            # is injected into writer prompts — so an entry written here teaches every
+            # later agent. Until the pipeline is stable the KB starts fresh every run
+            # (lib/kb-canonical.sh restores it from KB.md.original), which would discard
+            # this entry anyway; writing it while claiming "future runs benefit" would be
+            # a false claim in the log. Re-enable deliberately with
+            # EPAM_KB_CROSS_RUN_SYNTHESIS=1 once cross-run learning is wanted again.
+            if [ "${EPAM_KB_CROSS_RUN_SYNTHESIS:-0}" = "1" ]; then
             local _kb_file="$AUTOMATION_DIR/agents/KB.md"
             local _today; _today=$(date +'%Y-%m-%d')
             local _kb_entry_marker="KB-PERSIST-${story_id}"
@@ -5309,6 +5318,9 @@ classify_failure_class() {
                     printf 'OpenSpec/SpecKit should split this story at Step 0 in the next pipeline run.\n'
                 } >> "$_kb_file" 2>/dev/null || true
                 log "  Coordinator[L1]: cross-run KB entry written for $story_id (${_prior_cap_count} capability failures)"
+            fi
+            else
+                log "  Coordinator[L1]: cross-run KB synthesis disabled (EPAM_KB_CROSS_RUN_SYNTHESIS=0) — $story_id has ${_prior_cap_count} capability failures, not persisted to the KB"
             fi
         fi
     fi

@@ -1,11 +1,11 @@
 {
   "id": "jira-sourced-1784688012737",
-  "title": "Metrolinx Brownfield — Jira-sourced",
+  "title": "Metrolinx Brownfield \u2014 Jira-sourced",
   "version": "1.0.0",
   "lastUpdated": "2026-07-22",
   "project": {
     "name": "metrolinx",
-    "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
+    "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira \u2014 defects AND new features.",
     "stack": {
       "language": "TypeScript",
       "runtime": "Node.js 20",
@@ -34,9 +34,7 @@
   },
   "implementationOrder": {
     "scaffold": [],
-    "core": [
-      "AMSD-1820"
-    ]
+    "core": []
   },
   "phasesConfig": {
     "scaffold": {
@@ -52,33 +50,7 @@
       "parallelWorktrees": true
     }
   },
-  "stories": [
-    {
-      "id": "AMSD-1820",
-      "jiraKey": "AMSD-1820",
-      "title": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
-      "description": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
-      "acceptanceCriteria": [
-        "The system displays the promo code discount amount for both the outbound and return trip line items in the Mozio email confirmation when a promo code is applied to a return trip order.",
-        "The system calculates the promo code discount amount for the return trip line item using the same logic applied to the outbound trip line item, ensuring both legs reflect the correct discounted total.",
-        "The Mozio email confirmation renders the promo code amount in the same format and position for the return trip as it does for the outbound trip (e.g., line-item-level discount line showing the promo code label and amount).",
-        "When a return trip order contains multiple line items with different fromStation/toStation pairs (e.g., AJ→UN and UN→AJ), the system applies and displays the promo code discount for each line item independently.",
-        "When a promo code applies only to the outbound leg and not the return leg (per promo code configuration), the system does not display a promo discount amount for the return trip line item, and the email confirmation reflects this without error.",
-        "When the promo code discount amount is zero or the promo code is not applicable to the return trip, the system either omits the promo discount line for the return trip or displays a zero-amount entry consistently with how zero-discount outbound legs are handled.",
-        "The system includes the promo code discount amount for return trip line items in the order payload data that feeds the Mozio email confirmation template, matching the structure used for outbound trip line items.",
-        "The system correctly handles return trip orders where dateFrom and dateTo span different calendar dates (e.g., 2026-02-25 to 2026-03-05) and still displays the promo code discount amount for both legs in the email confirmation."
-      ],
-      "codeline": "cdts",
-      "status": "pending",
-      "completed": false,
-      "agentRole": "typescript-engineer",
-      "agentGroup": "primary",
-      "effort": "medium",
-      "estimate": 10,
-      "acGateVerdict": "enrichable",
-      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). No acceptance criteria are provided and the description lacks specifics on expected email format, data pipeline, and template structure needed for an agent to implement without ambiguity."
-    }
-  ],
+  "stories": [],
   "currentIteration": 7,
   "source": "jira",
   "sourceProject": "AMSD"

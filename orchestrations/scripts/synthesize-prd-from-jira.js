@@ -57,7 +57,7 @@ if (!CLASSIFICATIONS_PATH) {
 
 // ── Load inputs ────────────────────────────────────────────────────────────
 
-const classifications = JSON.parse(fs.readFileSync(CLASSIFICATIONS_PATH, 'utf8'));
+let classifications = JSON.parse(fs.readFileSync(CLASSIFICATIONS_PATH, 'utf8'));
 const template        = JSON.parse(fs.readFileSync(TEMPLATE_PATH, 'utf8'));
 
 // ── Codeline discovery ─────────────────────────────────────────────────────
@@ -87,6 +87,55 @@ if (allCodelines.length === 0 && process.env.JIRA_CODELINES) {
 if (allCodelines.length === 0) {
   process.stderr.write('[synthesize-prd] No codelines found in classifications. Check Jira codeline labels or set JIRA_DEFAULT_CODELINE.\n');
   process.exit(1);
+}
+
+// ── Optional single/subset codeline run ────────────────────────────────────
+// EPAM_CODELINE_FILTER=<name>[,<name>...] runs only those codelines. Unset or empty
+// means ALL — existing projects are untouched, which is why the no-op path is asserted
+// first in test/unit/orchestration/codeline-filter.test.ts.
+//
+// Why here: every lane fact downstream derives from exactly two lists — allCodelines
+// (project.outputDirs, and the per-codeline split of a spanning story) and classifications
+// (the per-codeline stories). Narrowing BOTH at this single point yields a PRD that is
+// coherently single-lane. Filtering only one of them, or filtering later in the
+// orchestrator, would leave a PRD claiming N lanes while one ran — and 18 downstream
+// consumers read project.outputDirs, so that partial state is a bug generator rather than
+// a smaller run.
+//
+// No codeline name appears here: the value is configuration, and the names come from the
+// data, exactly as the rest of this script derives them.
+const CODELINE_FILTER = (process.env.EPAM_CODELINE_FILTER || '')
+  .split(',')
+  .map(x => x.trim())
+  .filter(Boolean);
+
+if (CODELINE_FILTER.length) {
+  const availableCodelines = allCodelines;
+  allCodelines = availableCodelines.filter(cl => CODELINE_FILTER.includes(cl));
+
+  if (allCodelines.length === 0) {
+    // Loud, never silent. Running ALL lanes would spend several times what was asked for;
+    // running NONE would look like a clean no-op. Both are worse than stopping, and the
+    // message names the typo and the real options so it is fixable without reading code.
+    process.stderr.write(
+      `[synthesize-prd] EPAM_CODELINE_FILTER='${CODELINE_FILTER.join(',')}' matched none of ` +
+      `the available codelines: ${availableCodelines.join(', ')}. Refusing to guess whether ` +
+      `you meant all of them or none.\n`);
+    process.exit(1);
+  }
+
+  // Drop stories belonging to codelines that are filtered out. A SPLIT_VALUE story is kept
+  // whole: it spans codelines and is split across the NARROWED list below, so it needs no
+  // filtering of its own.
+  const beforeStories = classifications.length;
+  classifications = classifications.filter(
+    c => c.codeline === SPLIT_VALUE || allCodelines.includes(c.codeline || DEFAULT_CODELINE)
+  );
+
+  process.stderr.write(
+    `[synthesize-prd] EPAM_CODELINE_FILTER active: running ${allCodelines.join(', ')} ` +
+    `(of ${availableCodelines.join(', ')}); ${classifications.length} of ${beforeStories} ` +
+    `classification(s) retained.\n`);
 }
 
 // ── Worktree path helper ───────────────────────────────────────────────────

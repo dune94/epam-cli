@@ -34,15 +34,18 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const DEP_CONFIG = join(REPO_ROOT, 'orchestrations/projects/metrolinx/dependency-check.json');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
 
-const NODE20_BIN = '/home/bradleyjerome/.nvm/versions/node/v20.20.0/bin';
+// DERIVED, never hardcoded: the interpreter running these tests is the one whose npm we
+// want on PATH. A machine-specific path passes only on one machine, which is the same
+// defect as any other hardcoded fact.
+const NODE_BIN_DIR = dirname(process.execPath);
 const npmPath = () =>
-  existsSync(join(NODE20_BIN, 'npm')) ? `${NODE20_BIN}:${process.env.PATH}` : process.env.PATH;
+  existsSync(join(NODE_BIN_DIR, 'npm')) ? `${NODE_BIN_DIR}:${process.env.PATH}` : process.env.PATH;
 const haveNpm = () =>
   spawnSync('npm', ['--version'], { env: { ...process.env, PATH: npmPath() } }).status === 0;
 

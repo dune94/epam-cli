@@ -230,6 +230,162 @@ const dependencyContractTool = {
   },
 };
 
+/**
+ * dependency_available — "can this codeline actually use these packages?"
+ *
+ * The sibling tool above answers what an INSTALLED package consumes. This one answers the
+ * question that comes first and had no answer at all: is the package here, and is it
+ * DECLARED?
+ *
+ * The defect class, stated with no vendor in it: a plan prescribes work that depends on a
+ * package the codeline does not have. Nothing carries that fact — the writer-output
+ * manifest lists files, the project manifest lists what IS declared, and the requirement
+ * lives only as prose inside the plan. So it surfaces at the worst possible moment, inside
+ * the writer's turn, where the agent's only options are to fake it or burn its retry
+ * ladder. Live AMSD-2041, 2026-08-04: it faked it, and the reviewer called the result
+ * "dead code from a runtime perspective".
+ *
+ * Four states, deliberately distinguished — collapsing them is how this stayed invisible:
+ *
+ *   available             declared in the manifest AND present in a vendor dir
+ *   installed_undeclared  present in a vendor dir, ABSENT from the manifest. Builds green,
+ *                         type-checks green, and fails for a real user because nothing
+ *                         declares it. This is exactly what `npm install --no-save`
+ *                         produces, and it must never read as "available".
+ *   declared_not_installed  the manifest promises it, the tree does not have it
+ *   absent                nowhere — a plan naming this cannot be implemented as written
+ *
+ * Configuration-driven, never assumed: manifestFile, manifestKeys and vendorDirs come from
+ * the project's own dependency-check.json. With no config it falls back to the ecosystem
+ * defaults and still reports honestly rather than guessing.
+ */
+const dependencyAvailableTool = {
+  name: 'dependency_available',
+  pluginApiVersion: PLUGIN_API_VERSION,
+  description:
+    'Check whether packages are usable in THIS codeline before prescribing or writing work that needs them. ' +
+    'Reports per package: "available" (declared in the manifest and installed), "installed_undeclared" ' +
+    '(present in node_modules but MISSING from the manifest — the build passes and real users break, never ' +
+    'treat this as usable), "declared_not_installed", or "absent" (nowhere — a plan that requires this cannot ' +
+    'be implemented as written; say so instead of working around it). Call this before proposing a fix that ' +
+    'depends on any third-party package.',
+  permission: 'safe',
+  definition: {
+    name: 'dependency_available',
+    description:
+      'Report whether each named package is declared and installed in this codeline, with evidence.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        packages: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Package names to check, e.g. ["some-sdk", "@scope/pkg"].',
+        },
+      },
+      required: ['packages'],
+    },
+  },
+
+  async execute(input, context) {
+    try {
+      const packages = Array.isArray(input && input.packages) ? input.packages : [];
+      const projectRoot = (context && context.cwd) || process.cwd();
+
+      // Config first, defaults only as a fallback — and the fallback is reported so a
+      // missing config never looks like a configured answer.
+      let cfg = {};
+      let cfgSource = 'defaults (no .epam/dependency-check.json)';
+      const cfgPath = path.join(projectRoot, '.epam', 'dependency-check.json');
+      try {
+        cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+        cfgSource = cfgPath;
+      } catch {
+        /* fall through to defaults */
+      }
+      const manifestFile = cfg.manifestFile || 'package.json';
+      const manifestKeys =
+        Array.isArray(cfg.manifestKeys) && cfg.manifestKeys.length
+          ? cfg.manifestKeys
+          : ['dependencies', 'devDependencies'];
+      const vendorDirs =
+        Array.isArray(cfg.vendorDirs) && cfg.vendorDirs.length ? cfg.vendorDirs : ['node_modules'];
+
+      let manifest = {};
+      let manifestRead = false;
+      try {
+        manifest = JSON.parse(fs.readFileSync(path.join(projectRoot, manifestFile), 'utf8'));
+        manifestRead = true;
+      } catch {
+        /* reported below via manifestRead */
+      }
+
+      const declaredSet = new Set();
+      for (const key of manifestKeys) {
+        const section = manifest[key];
+        if (section && typeof section === 'object') {
+          for (const name of Object.keys(section)) declaredSet.add(name);
+        }
+      }
+
+      const results = packages.map((packageName) => {
+        const declared = declaredSet.has(packageName);
+        let installedAt = null;
+        for (const vendorDir of vendorDirs) {
+          const candidate = path.join(projectRoot, vendorDir, ...packageName.split('/'));
+          try {
+            if (fs.statSync(candidate).isDirectory()) {
+              installedAt = path.join(vendorDir, packageName);
+              break;
+            }
+          } catch {
+            /* not here — try the next vendor dir */
+          }
+        }
+        const installed = installedAt !== null;
+
+        let verdict;
+        if (declared && installed) verdict = 'available';
+        else if (!declared && installed) verdict = 'installed_undeclared';
+        else if (declared && !installed) verdict = 'declared_not_installed';
+        else verdict = 'absent';
+
+        return {
+          package: packageName,
+          verdict,
+          declared,
+          installed,
+          installedAt,
+          note:
+            verdict === 'available'
+              ? `declared in ${manifestFile} and present under ${installedAt}`
+              : verdict === 'installed_undeclared'
+                ? `present under ${installedAt} but NOT declared in ${manifestFile} — the build will pass and a real user will fail. Add it to the manifest rather than relying on what happens to be on disk.`
+                : verdict === 'declared_not_installed'
+                  ? `declared in ${manifestFile} but not present under ${vendorDirs.join(', ')} — install it before relying on it.`
+                  : `not declared in ${manifestFile} and not present under ${vendorDirs.join(', ')}. Work that requires this package cannot be implemented as written — report that rather than substituting an approach that avoids it.`,
+        };
+      });
+
+      return {
+        toolUseId: '',
+        content: JSON.stringify(
+          { projectRoot, manifestFile, manifestRead, manifestKeys, vendorDirs, configSource: cfgSource, results },
+          null,
+          2,
+        ),
+        isError: false,
+      };
+    } catch (err) {
+      return {
+        toolUseId: '',
+        content: `Error checking dependency availability: ${err.message}`,
+        isError: true,
+      };
+    }
+  },
+};
+
 module.exports = {
-  tools: [dependencyContractTool],
+  tools: [dependencyContractTool, dependencyAvailableTool],
 };

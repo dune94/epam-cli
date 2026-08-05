@@ -60,13 +60,22 @@ function stageInSandbox() {
     writeFileSync(join(repo, dir, file), '{}\n');
   }
 
-  // Pull the exact pathspec the pipeline uses, so this tracks the real code.
-  const src = readFileSync(CLAUDE_SH, 'utf8');
-  const m = src.match(/git -C "\$_commit_root" add -A -- \\\n([\s\S]*?)\n\s*2>\/dev\/null/);
-  expect(m, 'staging pathspec not found in commit_completed_story').toBeTruthy();
-  const specs = (m![1].match(/':![^']*'/g) || []).map(s => s.replace(/'/g, ''));
-
-  execFileSync('git', ['add', '-A', '--', ...specs], { cwd: repo, encoding: 'utf8' });
+  // EXECUTE the real staging helper rather than scraping its pathspec out of the source.
+  // The list moved into git_add_client_outputs (lib/git-ops.sh) when the three drifting
+  // copies were consolidated, and a regex anchored on the old inline `git add -A --` form
+  // silently found nothing — which fails the suite at COLLECTION time, not as an
+  // assertion, so it does not appear in a "×" filter of the run output.
+  const runner = join(mkdtempSync(join(tmpdir(), 'stage-')), 'run.sh');
+  writeFileSync(
+    runner,
+    [
+      'set -uo pipefail',
+      'log(){ :; }; info(){ :; }; warning(){ :; }; error(){ :; }; success(){ :; }',
+      `source ${JSON.stringify(CLAUDE_SH)}`,
+      `git_add_client_outputs ${JSON.stringify(repo)}`,
+    ].join('\n'),
+  );
+  execFileSync('bash', [runner], { encoding: 'utf8' });
   return execFileSync('git', ['diff', '--cached', '--name-only'], { cwd: repo, encoding: 'utf8' })
     .split('\n').filter(Boolean);
 }
@@ -76,10 +85,15 @@ describe('the pathspec fallback cannot reintroduce it', () => {
     const src = readFileSync(CLAUDE_SH, 'utf8');
     // The fallback `git add -A` carries no pathspec, so exclusion alone is not
     // enough — a failure of the pathspec form would put .epam straight back.
+    // The dir names now come from _ENGINE_OWNED_DIRS (lib/engine-paths.sh), one shared
+    // definition, so assert the unstage runs over that list rather than re-listing them.
     expect(src, 'no unconditional unstage — the no-pathspec fallback reintroduces them')
-      .toMatch(/reset -q --[\s\S]{0,80}'\.epam'[\s\S]{0,80}'\.deepeval'/);
-    expect(src, 'orchestrations is missing from the unconditional unstage fallback')
-      .toMatch(/reset -q --[\s\S]{0,120}'orchestrations'/);
+      .toMatch(/reset -q -- "\$\{_resets\[@\]\}"/);
+    const engineDirs = readFileSync(
+      join(__dirname, '../../../orchestrations/scripts/lib/engine-paths.sh'), 'utf8');
+    for (const d of ['orchestrations', '.epam', '.deepeval', '.codegraph', '.contracts']) {
+      expect(engineDirs, `${d} missing from the shared engine-owned list`).toContain(`'${d}'`);
+    }
   });
 });
 

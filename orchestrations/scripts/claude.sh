@@ -9200,22 +9200,21 @@ build_kb_prompt_section() {
         printf 'No prior KB entries match your agent role yet.\n'
     fi
 
-    printf '\n## Knowledge Base Contribution (do this LAST — after writing all implementation files)\n'
-    printf 'Your assigned KB entry ID for this run: **%s**\n' "$next_kb_id"
-    [ -n "$retry_note" ] && printf '%s\n' "$retry_note"
-    printf '\nIMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.\n'
+    # The anti-read protection SURVIVES the removal below. Issue 2b: M3 burned every
+    # iteration reading KB.md instead of writing code. The relevant entries are injected
+    # above, so there is never a reason to open the file.
     printf 'Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.\n\n'
-    printf 'If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:\n\n'
-    printf '```markdown\n'
-    printf '## %s -- %s\n\n' "$next_kb_id" "$today"
-    printf '**Category:** <backend|frontend|infrastructure|testing|orchestration>\n'
-    printf '**AgentRole:** <your agentRole from the story>\n'
-    printf '**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>\n'
-    printf '**Trigger:** <retry|first-success>\n'
-    printf '**StoryRef:** %s\n\n' "$story_id"
-    printf '<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>\n'
-    printf '```\n\n'
-    printf 'Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.\n'
+
+    # KB CONTRIBUTION REMOVED (2026-08-04). The agent was told to "append one entry to
+    # `orchestrations/agents/KB.md`" — a RELATIVE path — while its cwd is the CLIENT
+    # codeline, so it created the engine's KB inside the customer's repository. Live
+    # metrolinx 20260804T225443Z: that file entered the upexpress lane's writer-output
+    # manifest as though the writer had produced it, and Step 9's bare `git add -A`
+    # staged it for commit.
+    #
+    # Agents do not write the KB. Self-heal does, engine-side, against an absolute path.
+    # WriteFileTool now refuses engine paths outright (src/config/enginePaths.ts), so this
+    # instruction could only ask the agent to do something it will be blocked from doing.
 
     # Surface any dynamic tools the self-heal loop has written for this project.
     # These are small shell scripts synthesized by the failure analyst (target=tool)

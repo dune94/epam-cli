@@ -159,7 +159,9 @@ describe('commit_completed_story() (claude.sh) — gated by scan-secrets.sh befo
   const body = gitOpsSrc.slice(fnStart, fnEnd);
 
   it('calls scan-secrets.sh after staging (git add) and before the real commit', () => {
-    const addIdx = body.indexOf('git -C "$_commit_root" add -A');
+    // Staging moved into git_add_client_outputs (the one shared engine-artefact
+    // exclusion rule). The ORDER invariant is unchanged and is what this asserts.
+    const addIdx = body.indexOf('git_add_client_outputs');
     const scanIdx = body.indexOf('scan-secrets.sh');
     const commitIdx = body.indexOf('git -C "$_commit_root" commit');
     expect(addIdx).toBeGreaterThan(-1);
@@ -180,8 +182,10 @@ describe('commit_completed_story() (claude.sh) — gated by scan-secrets.sh befo
 describe('Step 1.5 auto-commit (run-agent-orchestration.sh) — gated by scan-secrets.sh', () => {
   it('calls scan-secrets.sh after `git add -A` and before the commit', () => {
     const stepIdx = orchSrc.indexOf('Step 9: Auto-committing main-branch deliverables');
-    const block = orchSrc.slice(stepIdx, stepIdx + 2600);
-    const addIdx = block.indexOf('git -C "$PROJECT_ROOT" add -A');
+    const block = orchSrc.slice(stepIdx, stepIdx + 3600);
+    // Step 9 used a bare `git add -A` and now calls the shared helper; the
+    // stage -> scan -> commit order is the invariant.
+    const addIdx = block.indexOf('git_add_client_outputs');
     const scanIdx = block.indexOf('scan-secrets.sh');
     const commitIdx = block.indexOf('git -C "$PROJECT_ROOT" commit');
     expect(addIdx).toBeGreaterThan(-1);
@@ -205,9 +209,12 @@ describe('commit_completed_story() — REAL execution proves a planted secret bl
     dir: string,
     opts: { setE: boolean; callSite: string; skipSecretScan?: boolean },
   ): { output: string; exitedGracefully: boolean } {
-    const _fnStart = gitOpsSrc.indexOf('commit_completed_story() {');
-    const _fnEnd = gitOpsSrc.indexOf('\n}', _fnStart);
-    const fnBody = gitOpsSrc.slice(_fnStart, _fnEnd + 2);
+    // Source the REAL lib rather than slicing one function out of it. commit_completed_story
+    // now delegates staging to git_add_client_outputs (the shared engine-artefact exclusion
+    // rule), and a single-function slice left that helper undefined — every `git add` then
+    // failed with 127 and the function returned before it ever reached the scan. A harness
+    // that can silently lose a callee proves nothing about the caller.
+    const fnBody = `source ${JSON.stringify(GIT_OPS_SH)}`;
     const scriptPath = join(dir, 'run.sh');
     writeFileSync(
       scriptPath,

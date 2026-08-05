@@ -85,6 +85,10 @@ function runStep9(
       'warning() { echo "WARN: $*"; }',
       'error()   { echo "ERROR: $*"; }',
       'success() { echo "OK: $*"; }',
+      // Step 9 stages via git_add_client_outputs (lib/git-ops.sh) — the one shared
+      // engine-artefact exclusion rule. Without sourcing it the call is a 127 and the
+      // block silently stages nothing.
+      `source ${JSON.stringify(join(REPO_ROOT, 'orchestrations/scripts/lib/git-ops.sh'))}`,
       `PROJECT_ROOT=${JSON.stringify(projectRoot)}`,
       `SCRIPT_DIR=${JSON.stringify(join(REPO_ROOT, 'orchestrations/scripts'))}`,
       'PHASE=core',

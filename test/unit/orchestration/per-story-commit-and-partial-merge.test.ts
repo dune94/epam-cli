@@ -157,7 +157,11 @@ describe('commit_completed_story() — bounded timeout on git operations (static
   const body = gitOpsSrc.slice(fnStart, fnEnd);
 
   it('wraps git add, git diff --cached, and git commit with timeout', () => {
-    expect(body).toMatch(/timeout "\$_git_timeout" git -C "\$_commit_root" add -A/);
+    // Staging moved into git_add_client_outputs (lib/git-ops.sh), which applies the same
+    // timeout internally — assert it there rather than dropping the guarantee.
+    expect(body).toMatch(/git_add_client_outputs "\$_commit_root" "\$_git_timeout"/);
+    const helper = gitOpsSrc.slice(gitOpsSrc.indexOf('git_add_client_outputs() {'));
+    expect(helper).toMatch(/timeout "\$_timeout" git -C "\$_repo" add -A/);
     expect(body).toMatch(/timeout "\$_git_timeout" git -C "\$_commit_root" diff --cached/);
     expect(body).toMatch(/timeout "\$_git_timeout" git -C "\$_commit_root" commit/);
   });
@@ -183,7 +187,15 @@ describe('commit_completed_story() — REAL execution, proves the timeout actual
     try {
       const fnStart = gitOpsSrc.indexOf('commit_completed_story() {');
       const fnEnd = gitOpsSrc.indexOf('\n}', fnStart);
-      const fnBody = gitOpsSrc.slice(fnStart, fnEnd + 2);
+      // Source the REAL lib instead of slicing one function: commit_completed_story now
+      // delegates staging to git_add_client_outputs, and a single-function slice left that
+      // callee undefined — `git add` became a 127 and the function returned before the
+      // timeout path it is supposed to be proving ever ran.
+      const fnBody = `source ${JSON.stringify(GIT_OPS_SH)}`;
+      // git_add_client_outputs refuses to stage anything that is not a git repo. The stub
+      // below replaces the git BINARY, so the marker directory still has to exist for the
+      // fixture to represent a real working tree.
+      mkdirSync(join(dir, '.git'), { recursive: true });
       const binDir = join(dir, 'bin');
       mkdirSync(binDir, { recursive: true });
       // Stub out `git` on PATH so this test needs no real repo and can simulate

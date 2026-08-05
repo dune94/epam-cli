@@ -17,6 +17,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# git_add_client_outputs — the one staging rule. This script used to carry its own,
+# weaker copy of the engine-artefact exclusions.
+# shellcheck source=lib/git-ops.sh
+source "$SCRIPT_DIR/lib/git-ops.sh"
 PROJECT_ROOT="${GIT_WORK_ROOT:-${PROJECT_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}}"
 PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd)"
 
@@ -139,16 +143,10 @@ _auto_commit_worktree() {
 
     # Stage everything (agent code lives in src/ or similar -- not orchestrations/)
     # We deliberately exclude certain build artifact patterns
-    git -C "$wt_path" add \
-        -- src/ lib/ packages/ \
-        2>/dev/null || \
-    git -C "$wt_path" add -A -- \
-        ':!orchestrations/logs/*' \
-        ':!*/node_modules/*' \
-        ':!*/build/*' \
-        ':!*/.next/*' \
-        2>/dev/null || \
-    git -C "$wt_path" add -A
+    # Was a third copy of the exclusion list, and the weakest: it excluded only
+    # orchestrations/logs/*, so orchestrations/agents/KB.md passed straight through — and
+    # it fell back to a bare `git add -A` that discarded even that. One implementation now.
+    git_add_client_outputs "$wt_path"
 
     local changed_count
     changed_count=$(git -C "$wt_path" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')

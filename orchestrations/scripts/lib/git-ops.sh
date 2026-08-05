@@ -99,6 +99,60 @@ _provision_epam_plugin_config() {
     fi
 }
 
+# ── The engine's perimeter at the staging seam ──────────────────────────────
+#
+# Directories epam-cli writes into a client codeline so its gates can read them. They
+# are never client content and must never be committed there.
+#
+# The list is the CLASS, not one instance. Excluding only .epam (as this first did) let
+# .deepeval/.deepeval_telemetry.txt into a live metrolinx commit hours later — the same
+# defect wearing a different filename. orchestrations/ was added 2026-08-01 after the KB
+# writer dropped orchestrations/agents/KB.md into a client repo; only orchestrations/logs/*
+# had been excluded, so the "excluded one instance, not the class" gap reappeared under a
+# new path. All were verified absent from the client baseline tree (origin/develop).
+#
+# Kept in sync with src/config/enginePaths.ts, which enforces the same perimeter at the
+# WRITE seam — where it actually belongs. This is defence in depth: by the time a file
+# reaches staging it already exists in the customer's working tree, where the writer-output
+# manifest picks it up as though the writer produced it (live 20260804T225443Z).
+_ENGINE_OWNED_DIRS=( 'orchestrations' '.epam' '.deepeval' '.codegraph' '.contracts' )
+
+# git_add_client_outputs <repo> [timeout_secs]
+# Stage every client change, never an engine artefact. Returns git's exit code.
+#
+# There is deliberately NO fallback that stages without the exclusions. Every previous
+# call site had `... || git add -A`, which discarded the whole rule the moment the
+# pathspec form returned non-zero — and `git add -A -- :!x` returns non-zero in ordinary
+# situations (e.g. a repo with no HEAD). The exclusions existed at two of three sites and
+# were bypassable at all three.
+git_add_client_outputs() {
+    local _repo="$1"
+    local _timeout="${2:-${EPAM_COMMIT_TIMEOUT_SECS:-60}}"
+    [ -n "$_repo" ] && [ -d "$_repo/.git" ] || return 0
+
+    local _excludes=() _resets=() _d
+    for _d in "${_ENGINE_OWNED_DIRS[@]}"; do
+        _excludes+=( ":!${_d}/*" ":!*/${_d}/*" )
+        _resets+=( "$_d" )
+    done
+    # Build artefacts are not engine state, but staging them is never right either.
+    # BOTH forms are required: `:!*/node_modules/*` matches only a NESTED node_modules —
+    # a top-level one (the usual case) needs `:!node_modules/*`. The original list carried
+    # only the nested form, so a repo without node_modules in .gitignore staged the lot.
+    for _d in 'node_modules' 'build' '.next'; do
+        _excludes+=( ":!${_d}/*" ":!*/${_d}/*" )
+    done
+
+    timeout "$_timeout" git -C "$_repo" add -A -- "${_excludes[@]}" 2>/dev/null
+    local _rc=$?
+
+    # Belt and braces, run unconditionally: if the pathspec form above failed for any
+    # reason, anything engine-owned that slipped into the index comes straight back out.
+    # This is what makes the no-fallback rule safe rather than merely strict.
+    timeout "$_timeout" git -C "$_repo" reset -q -- "${_resets[@]}" 2>/dev/null || true
+    return $_rc
+}
+
 ensure_story_branch() {
     local codeline_root="$1"
     local story_id="$2"
@@ -178,42 +232,14 @@ commit_completed_story() {
     # reached, with zero warning logged and every remaining story in this
     # worktree lane (SKY-003-impl/-test, SKY-004 in the observed incident)
     # never even attempted.
+    # ONE staging rule, one implementation. This block used to be duplicated in
+    # worktree-health-check.sh (which excluded only orchestrations/logs/*, so
+    # orchestrations/agents/KB.md passed straight through) and absent entirely from
+    # run-agent-orchestration.sh's Step 9 (a bare `git add -A`). Three copies is how a
+    # rule drifts; see git_add_client_outputs for the full history.
     set +e
-    # Tool artifacts epam-cli writes into the target repo so its gates can read
-    # them. They must never be COMMITTED there: a client repo does not carry our
-    # manifests, indexes or telemetry.
-    #
-    # The list is the CLASS, not one instance. Excluding only .epam (as this first
-    # did) let .deepeval/.deepeval_telemetry.txt into a live metrolinx commit hours
-    # later — the same defect wearing a different filename. All four were verified
-    # absent from the client's baseline tree (origin/develop), so none is client
-    # content. Checking against HEAD would have been wrong: .deepeval appeared
-    # "tracked" there only because our own run had just committed it.
-    #
-    # orchestrations/ added 2026-08-01 (Writer Retest dry run): the KB scratchpad
-    # writer dropped orchestrations/agents/KB.md into a client repo. Only
-    # orchestrations/logs/* had been excluded — the whole tree wasn't, so the
-    # same "excluded one instance, not the class" gap reappeared under a new path.
-    timeout "$_git_timeout" git -C "$_commit_root" add -A -- \
-        ':!orchestrations/*' ':!*/orchestrations/*' \
-        ':!*/node_modules/*' \
-        ':!*/build/*' \
-        ':!*/.next/*' \
-        ':!.epam/*' ':!*/.epam/*' \
-        ':!.deepeval/*' ':!*/.deepeval/*' \
-        ':!.codegraph/*' ':!*/.codegraph/*' \
-        ':!.contracts/*' ':!*/.contracts/*' \
-        2>/dev/null
+    git_add_client_outputs "$_commit_root" "$_git_timeout"
     local _add_rc=$?
-    if [ "$_add_rc" -ne 0 ]; then
-        timeout "$_git_timeout" git -C "$_commit_root" add -A 2>/dev/null
-        _add_rc=$?
-    fi
-    # Belt and braces: the fallback above has NO pathspec, so a failure of the
-    # exclusion form would silently put .epam back into the commit. Unstage it
-    # unconditionally — this holds whichever add path ran.
-    timeout "$_git_timeout" git -C "$_commit_root" reset -q -- \
-        '.epam' '.deepeval' '.codegraph' '.contracts' 'orchestrations' 2>/dev/null || true
     set -e
     if [ "$_add_rc" -ne 0 ]; then
         if [ "$_add_rc" -eq 124 ]; then

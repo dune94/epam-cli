@@ -167,9 +167,24 @@ describe('Issue 2b — KB prompt does not cause M3 to read KB.md before writing'
   const kbFnEnd = claudeSrc.indexOf('\n# Update AGENTS.md', kbFnStart);
   const kbFn = claudeSrc.slice(kbFnStart, kbFnEnd);
 
-  it('KB prompt instructs agent to write implementation files FIRST', () => {
-    expect(kbFn).toContain('do this LAST');
-    expect(kbFn).toContain('Write ALL implementation files first');
+  // The "do this LAST / write all implementation files first" ordering existed only to
+  // sequence the agent's own KB-append step, which was REMOVED 2026-08-04: the agent was
+  // told to append to the relative path `orchestrations/agents/KB.md` while its cwd is the
+  // CLIENT codeline, so it created the engine's KB inside the customer's repository (live
+  // metrolinx 20260804T225443Z). Agents no longer write the KB at all — self-heal does,
+  // engine-side — so there is no longer a step to order.
+  it('KB prompt does NOT ask the agent to write the engine KB', () => {
+    // Match what the function EMITS, not its source: the comment recording why this was
+    // removed necessarily quotes the instruction it replaced.
+    const emitted = kbFn
+      .split('\n')
+      .filter((l) => !l.trim().startsWith('#'))
+      .join('\n');
+    expect(
+      emitted,
+      'an agent instructed to append to a relative orchestrations/ path writes it into ' +
+        'whatever repo it is standing in, which is the client codeline',
+    ).not.toMatch(/append (one|exactly one) entry/);
   });
 
   it('KB prompt explicitly forbids reading KB.md before writing', () => {

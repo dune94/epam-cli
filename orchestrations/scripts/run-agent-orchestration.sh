@@ -5827,7 +5827,11 @@ if [ -n "${main_stories:-}" ] && \
    [ -n "$(git -C "$PROJECT_ROOT" status --porcelain 2>/dev/null)" ]; then
     step_emit "9" "running" "Step 9: Auto-commit"
     log "Step 9: Auto-committing main-branch deliverables before worktree creation..."
-    git -C "$PROJECT_ROOT" add -A 2>/dev/null || true
+    # Was a bare `git add -A`. lib/git-ops.sh had carried the engine-artefact exclusions
+    # since 2026-08-01 — this site never received them, so Step 9 staged
+    # orchestrations/agents/KB.md and .epam/* into the client repo (live 20260804T225443Z,
+    # where it also tripped SECRET_SCAN and blocked the commit on two lanes).
+    git_add_client_outputs "$PROJECT_ROOT" || true
     # Generic credential scan (flow-gap analysis finding #2, 2026-07-12): see
     # orchestrations/scripts/scan-secrets.sh for rationale/patterns.
     if [ -f "$SCRIPT_DIR/scan-secrets.sh" ] && ! _scan_output=$(bash "$SCRIPT_DIR/scan-secrets.sh" "$PROJECT_ROOT" 2>&1); then

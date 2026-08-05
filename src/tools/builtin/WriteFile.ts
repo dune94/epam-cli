@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import type { Tool, ToolResult } from '../types.js';
 import { ensureDir } from '../../utils/fs.js';
+import { ENGINE_OWNED_DIRS, breachesEnginePerimeter } from '../../config/enginePaths.js';
 
 export class WriteFileTool implements Tool {
   /**
@@ -79,11 +80,41 @@ export class WriteFileTool implements Tool {
         }
       }
 
-      // Scope guard: when EPAM_ALLOWED_WRITE_PATHS is set, block writes to TypeScript
-      // source files outside the story's declared scope. This prevents scaffold agents
-      // from overwriting core-phase implementations with incompatible stubs.
+      // Engine perimeter: the pipeline's own state may never be created inside the repo
+      // an agent is working in. UNCONDITIONAL — not gated on file type, and not waivable
+      // by widening EPAM_ALLOWED_WRITE_PATHS, because neither of those is a reason for
+      // the engine's KB to exist in a customer's tree.
+      //
+      // Live metrolinx 20260804T225443Z: the writer prompt asks the agent to "append one
+      // entry to `orchestrations/agents/KB.md`" — relative — while its cwd is the client
+      // codeline, so the agent created the engine's KB inside the client repo. The scope
+      // guard below existed and did not fire: it was gated on .ts/.tsx, and KB.md is
+      // Markdown. Every non-TS write was unpoliced.
+      //
+      // Enforced here, at the write, rather than by unstaging later: a commit-seam filter
+      // still leaves the file on disk, where the manifest picks it up as writer output.
+      if (breachesEnginePerimeter(resolved)) {
+        return {
+          toolUseId: '',
+          content:
+            `[engine-perimeter] Write blocked: ${resolved} is an epam-cli engine path ` +
+            `(${ENGINE_OWNED_DIRS.join(', ')}) and must never be created inside this ` +
+            `repository. The engine's knowledge base, profiles, logs and indexes live in ` +
+            `the engine's own installation, not in the codeline you are working on. If you ` +
+            `were asked to record a note, skip it — do not write it here.`,
+          isError: true,
+        };
+      }
+
+      // Scope guard: when EPAM_ALLOWED_WRITE_PATHS is set, block writes outside the
+      // story's declared scope. This prevents scaffold agents from overwriting core-phase
+      // implementations with incompatible stubs.
+      //
+      // Applies to EVERY file type. It was gated on .ts/.tsx, which left .md/.json/.yml
+      // writes entirely unchecked — the same hole the engine-perimeter guard above closes
+      // for engine paths, but out-of-scope client files were escaping it too.
       const allowedPathsEnv = process.env.EPAM_ALLOWED_WRITE_PATHS;
-      if (allowedPathsEnv && (resolved.endsWith('.ts') || resolved.endsWith('.tsx'))) {
+      if (allowedPathsEnv) {
         const allowed = allowedPathsEnv.split(':').filter(Boolean).map(p => path.resolve(p));
         const inScope = allowed.some(a => resolved === a || resolved.startsWith(a + path.sep));
         if (!inScope) {

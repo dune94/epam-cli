@@ -26,12 +26,14 @@ const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/lib/git-ops.sh');
 const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
 
 function extractFunctionBody(name: string): string {
+  // Source the whole lib rather than slicing one function out of it.
+  // commit_completed_story delegates staging to git_add_client_outputs (the shared
+  // engine-artefact exclusion rule); a single-function slice left that callee undefined,
+  // so `git add` returned 127 and the function bailed before reaching the commit whose
+  // stderr this file exists to prove is surfaced.
   const defRe = new RegExp(`^\\s*${name}\\(\\)\\s*\\{`, 'm');
-  const defMatch = defRe.exec(claudeSrc);
-  if (!defMatch) throw new Error(`No function definition found for ${name}()`);
-  const start = defMatch.index;
-  const end = claudeSrc.indexOf('\n}', start) + 2;
-  return claudeSrc.slice(start, end);
+  if (!defRe.exec(claudeSrc)) throw new Error(`No function definition found for ${name}()`);
+  return `source ${JSON.stringify(CLAUDE_SH)}`;
 }
 
 const FN_BODY = extractFunctionBody('commit_completed_story');

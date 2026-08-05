@@ -1012,20 +1012,10 @@ build_kb_prompt_section() {
         printf 'No prior KB entries match your agent role yet.\n'
     fi
 
-    printf '\n## Knowledge Base Contribution\n'
-    printf 'Your assigned KB entry ID for this run: **%s**\n' "$next_kb_id"
-    [ -n "$retry_note" ] && printf '%s\n' "$retry_note"
-    printf '\nIf you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:\n\n'
-    printf '```markdown\n'
-    printf '## %s -- %s\n\n' "$next_kb_id" "$today"
-    printf '**Category:** <backend|frontend|infrastructure|testing|orchestration>\n'
-    printf '**AgentRole:** <your agentRole from the story>\n'
-    printf '**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>\n'
-    printf '**Trigger:** <retry|first-success>\n'
-    printf '**StoryRef:** %s\n\n' "$story_id"
-    printf '<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>\n'
-    printf '```\n\n'
-    printf 'Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.\n'
+    # KB CONTRIBUTION REMOVED (2026-08-04) — same defect as claude.sh's copy. The agent
+    # was asked to append to the RELATIVE path `orchestrations/agents/KB.md` while its cwd
+    # is the CLIENT codeline, creating the engine's KB inside the customer's repository.
+    # Agents do not write the KB; self-heal does, engine-side, via an absolute path.
 }
 
 # Update AGENTS.md with implementation record

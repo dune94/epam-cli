@@ -259,6 +259,108 @@ const dependencyContractTool = {
  * the project's own dependency-check.json. With no config it falls back to the ecosystem
  * defaults and still reports honestly rather than guessing.
  */
+/**
+ * checkPackageAvailability(projectRoot, packages) — the pure fact, with no agent plumbing.
+ *
+ * Exported so the PIPELINE gate and the AGENT tool compute availability the same way. Two
+ * implementations of "is this package usable here" is exactly how the answer an agent acts
+ * on and the answer a gate enforces drift apart.
+ *
+ * Returns { projectRoot, manifestFile, manifestRead, manifestKeys, vendorDirs,
+ *           configSource, results, unavailable, allAvailable }.
+ */
+function checkPackageAvailability(projectRoot, packages) {
+  const list = Array.isArray(packages) ? packages : [];
+
+  // Config first, defaults only as a fallback — and the fallback is REPORTED, so a missing
+  // config never reads as a configured answer.
+  let cfg = {};
+  let cfgSource = 'defaults (no .epam/dependency-check.json)';
+  const cfgPath = path.join(projectRoot, '.epam', 'dependency-check.json');
+  try {
+    cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    cfgSource = cfgPath;
+  } catch {
+    /* defaults */
+  }
+  const manifestFile = cfg.manifestFile || 'package.json';
+  const manifestKeys =
+    Array.isArray(cfg.manifestKeys) && cfg.manifestKeys.length
+      ? cfg.manifestKeys
+      : ['dependencies', 'devDependencies'];
+  const vendorDirs =
+    Array.isArray(cfg.vendorDirs) && cfg.vendorDirs.length ? cfg.vendorDirs : ['node_modules'];
+
+  let manifest = {};
+  let manifestRead = false;
+  try {
+    manifest = JSON.parse(fs.readFileSync(path.join(projectRoot, manifestFile), 'utf8'));
+    manifestRead = true;
+  } catch {
+    /* reported via manifestRead */
+  }
+
+  const declaredSet = new Set();
+  for (const key of manifestKeys) {
+    const section = manifest[key];
+    if (section && typeof section === 'object') {
+      for (const name of Object.keys(section)) declaredSet.add(name);
+    }
+  }
+
+  const results = list.map((packageName) => {
+    const declared = declaredSet.has(packageName);
+    let installedAt = null;
+    for (const vendorDir of vendorDirs) {
+      const candidate = path.join(projectRoot, vendorDir, ...packageName.split('/'));
+      try {
+        if (fs.statSync(candidate).isDirectory()) {
+          installedAt = path.join(vendorDir, packageName);
+          break;
+        }
+      } catch {
+        /* try the next vendor dir */
+      }
+    }
+    const installed = installedAt !== null;
+
+    let verdict;
+    if (declared && installed) verdict = 'available';
+    else if (!declared && installed) verdict = 'installed_undeclared';
+    else if (declared && !installed) verdict = 'declared_not_installed';
+    else verdict = 'absent';
+
+    return {
+      package: packageName,
+      verdict,
+      declared,
+      installed,
+      installedAt,
+      note:
+        verdict === 'available'
+          ? `declared in ${manifestFile} and present under ${installedAt}`
+          : verdict === 'installed_undeclared'
+            ? `present under ${installedAt} but NOT declared in ${manifestFile} — the build will pass and a real user will fail. Add it to the manifest rather than relying on what happens to be on disk.`
+            : verdict === 'declared_not_installed'
+              ? `declared in ${manifestFile} but not present under ${vendorDirs.join(', ')} — install it before relying on it.`
+              : `not declared in ${manifestFile} and not present under ${vendorDirs.join(', ')}. Work that requires this package cannot be implemented as written — report that rather than substituting an approach that avoids it.`,
+    };
+  });
+
+  const unavailable = results.filter((r) => r.verdict !== 'available');
+  return {
+    projectRoot,
+    manifestFile,
+    manifestRead,
+    manifestKeys,
+    vendorDirs,
+    configSource: cfgSource,
+    results,
+    unavailable,
+    allAvailable: unavailable.length === 0,
+  };
+}
+
 const dependencyAvailableTool = {
   name: 'dependency_available',
   pluginApiVersion: PLUGIN_API_VERSION,
@@ -289,93 +391,9 @@ const dependencyAvailableTool = {
 
   async execute(input, context) {
     try {
-      const packages = Array.isArray(input && input.packages) ? input.packages : [];
       const projectRoot = (context && context.cwd) || process.cwd();
-
-      // Config first, defaults only as a fallback — and the fallback is reported so a
-      // missing config never looks like a configured answer.
-      let cfg = {};
-      let cfgSource = 'defaults (no .epam/dependency-check.json)';
-      const cfgPath = path.join(projectRoot, '.epam', 'dependency-check.json');
-      try {
-        cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-        cfgSource = cfgPath;
-      } catch {
-        /* fall through to defaults */
-      }
-      const manifestFile = cfg.manifestFile || 'package.json';
-      const manifestKeys =
-        Array.isArray(cfg.manifestKeys) && cfg.manifestKeys.length
-          ? cfg.manifestKeys
-          : ['dependencies', 'devDependencies'];
-      const vendorDirs =
-        Array.isArray(cfg.vendorDirs) && cfg.vendorDirs.length ? cfg.vendorDirs : ['node_modules'];
-
-      let manifest = {};
-      let manifestRead = false;
-      try {
-        manifest = JSON.parse(fs.readFileSync(path.join(projectRoot, manifestFile), 'utf8'));
-        manifestRead = true;
-      } catch {
-        /* reported below via manifestRead */
-      }
-
-      const declaredSet = new Set();
-      for (const key of manifestKeys) {
-        const section = manifest[key];
-        if (section && typeof section === 'object') {
-          for (const name of Object.keys(section)) declaredSet.add(name);
-        }
-      }
-
-      const results = packages.map((packageName) => {
-        const declared = declaredSet.has(packageName);
-        let installedAt = null;
-        for (const vendorDir of vendorDirs) {
-          const candidate = path.join(projectRoot, vendorDir, ...packageName.split('/'));
-          try {
-            if (fs.statSync(candidate).isDirectory()) {
-              installedAt = path.join(vendorDir, packageName);
-              break;
-            }
-          } catch {
-            /* not here — try the next vendor dir */
-          }
-        }
-        const installed = installedAt !== null;
-
-        let verdict;
-        if (declared && installed) verdict = 'available';
-        else if (!declared && installed) verdict = 'installed_undeclared';
-        else if (declared && !installed) verdict = 'declared_not_installed';
-        else verdict = 'absent';
-
-        return {
-          package: packageName,
-          verdict,
-          declared,
-          installed,
-          installedAt,
-          note:
-            verdict === 'available'
-              ? `declared in ${manifestFile} and present under ${installedAt}`
-              : verdict === 'installed_undeclared'
-                ? `present under ${installedAt} but NOT declared in ${manifestFile} — the build will pass and a real user will fail. Add it to the manifest rather than relying on what happens to be on disk.`
-                : verdict === 'declared_not_installed'
-                  ? `declared in ${manifestFile} but not present under ${vendorDirs.join(', ')} — install it before relying on it.`
-                  : `not declared in ${manifestFile} and not present under ${vendorDirs.join(', ')}. Work that requires this package cannot be implemented as written — report that rather than substituting an approach that avoids it.`,
-        };
-      });
-
-      return {
-        toolUseId: '',
-        content: JSON.stringify(
-          { projectRoot, manifestFile, manifestRead, manifestKeys, vendorDirs, configSource: cfgSource, results },
-          null,
-          2,
-        ),
-        isError: false,
-      };
+      const report = checkPackageAvailability(projectRoot, (input && input.packages) || []);
+      return { toolUseId: '', content: JSON.stringify(report, null, 2), isError: false };
     } catch (err) {
       return {
         toolUseId: '',
@@ -388,4 +406,6 @@ const dependencyAvailableTool = {
 
 module.exports = {
   tools: [dependencyContractTool, dependencyAvailableTool],
+  // Exported for the pipeline's own deterministic gate — one implementation, not two.
+  checkPackageAvailability,
 };

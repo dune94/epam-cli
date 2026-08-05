@@ -2812,8 +2812,10 @@ PREFER THE PARSER OVER THE WRITER. If a helper CONSTRUCTS the value (getX/buildX
 
 SHOW THE BROKEN CODE — "brokenLine" is REQUIRED and is machine-verified. Quote the EXACT source expression, copied verbatim from the file you name, that is wrong today. It is checked against that file's real contents: if what you quote is not in the file, your answer is rejected as ungrounded and you will be asked again. This is the difference between a diagnosis and a guess — a confident story about code that is not there reads exactly like a correct one until this check runs. If you cannot point at a real line that is wrong, you have not found the cause yet: go back to the tool and trace further.
 
+DECLARE ANY PACKAGE YOUR FIX NEEDS — "requiredPackages" is REQUIRED and is machine-verified. List the BARE package names, exactly as they appear in this project's manifest (e.g. "some-sdk", "@scope/pkg"), for every third-party package your fix imports or configures. Use [] when the fix needs none — that is the common case and is not a failure. Each name is checked against what this codeline actually declares and installs: a package that is not there means your fix CANNOT be implemented as written, and prescribing it produces a change that type-checks, passes tests, and fails for a real user. Prefer a fix built on what is already installed; if the work genuinely requires a package this project does not have, still declare it — that is the honest answer and the pipeline needs to see it, whereas an approach invented to avoid naming it is the failure this field exists to prevent.
+
 Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" field is REQUIRED and must be a concrete, minimal instruction naming the exact change and any existing helper to reuse. The "helper" field must be the BARE SYMBOL NAME of the existing function you are telling the implementer to reuse (so it can be machine-verified to actually exist) — leave it "" if the fix genuinely needs no existing helper. Do NOT invent a helper name; only put a symbol you actually saw in the tool output:
-[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the value, not just displays it>","brokenLine":"<the exact existing expression that is wrong, copied verbatim from that file>","fix":"<the exact minimal change: which line/expression to change, to what, and which EXISTING helper (symbol + import path) to reuse — never 'write a new function' if one already exists>","helper":"<bare existing symbol name to reuse, or empty>"}]`;
+[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the value, not just displays it>","brokenLine":"<the exact existing expression that is wrong, copied verbatim from that file>","fix":"<the exact minimal change: which line/expression to change, to what, and which EXISTING helper (symbol + import path) to reuse — never 'write a new function' if one already exists>","helper":"<bare existing symbol name to reuse, or empty>","requiredPackages":["<bare package name this fix needs>"]}]`;
 
   // Model ladder — cohesive with openspec/speckit (which escalate to their HIGH
   // model on retry). Attempt 1 uses the base HIGH model (glm-5.1); a retry
@@ -3359,6 +3361,49 @@ ${storyPayload}${publishedContracts(repoPath, story)}
         console.warn(
           `spec-mode: ⚠️ ${story.id} — fixSiteAnalysis does not cover ${story.fixSiteAnalysisCoverage.uncoveredVerificationCriteria.length} verification criterion/criteria (e.g. "${String(story.fixSiteAnalysisCoverage.uncoveredVerificationCriteria[0] || '').slice(0, 100)}"). The prescribed fix may be structurally incomplete.`
         );
+      }
+      // Deterministic dependency check on the PLAN, beside the coverage check above and
+      // for the same reason: a prescription the codeline cannot satisfy is incomplete, and
+      // the pipeline should know before the writer spends rather than after.
+      //
+      // Live, four consecutive runs of one story: the prescribed fix flipped between a
+      // config change on an ALREADY-INSTALLED package and installing a live-preview SDK
+      // no codeline declares. The requirement existed only as prose inside `fix`/`reason`,
+      // so nothing could check it — the writer discovered it mid-turn, had no way to
+      // report a blockage, and shipped a workaround the reviewer called "dead code from a
+      // runtime perspective". Seven self-heal diagnoses later, HealingBroken fired.
+      //
+      // Nothing here is hardcoded: the package names come from the plan's own
+      // requiredPackages declaration, and availability is computed from the project's own
+      // dependency-check.json (manifestFile / manifestKeys / vendorDirs) by the SAME pure
+      // function the dependency_available agent tool uses, so gate and agent cannot drift.
+      try {
+        const declaredPkgs = [
+          ...new Set(
+            (story.fixSiteAnalysis || [])
+              .flatMap((f) => (Array.isArray(f.requiredPackages) ? f.requiredPackages : []))
+              .filter((n) => typeof n === 'string' && n.trim())
+              .map((n) => n.trim())
+          ),
+        ];
+        if (declaredPkgs.length) {
+          // eslint-disable-next-line global-require
+          const { checkPackageAvailability } = require('../plugins/dependency-contract-tools.js');
+          const projectRoot = process.env.PROJECT_ROOT || process.cwd();
+          story.requiredPackagesCheck = checkPackageAvailability(projectRoot, declaredPkgs);
+          if (!story.requiredPackagesCheck.allAvailable) {
+            const worst = story.requiredPackagesCheck.unavailable
+              .map((r) => `${r.package}=${r.verdict}`)
+              .join(', ');
+            console.warn(
+              `spec-mode: ⛔ ${story.id} — the prescribed fix requires ${story.requiredPackagesCheck.unavailable.length} package(s) this codeline cannot satisfy: ${worst}. The plan CANNOT be implemented as written; an implementer given it will either fake a workaround or burn its retry ladder. Prefer a fix built on what is installed, or add the dependency deliberately.`
+            );
+          }
+        }
+      } catch (err) {
+        // Never fail the spec pass on the check itself — report and continue, so a broken
+        // gate degrades to "unchecked", never to "silently passed".
+        console.warn(`spec-mode: requiredPackages check could not run for ${story.id}: ${err.message}`);
       }
       // Loud, spec-pass-level surface: a DEFECT that reaches implementation with
       // NO located fix site is the exact failure mode this whole subsystem

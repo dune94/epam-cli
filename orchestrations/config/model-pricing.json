@@ -1,0 +1,318 @@
+{
+  "$comment": "Model prices in USD per 1M tokens. EDIT THIS FILE to update a price — no code change and no rebuild. Update asOf when you check them against the providers. Used by the CLI cost display; the pipeline ledger records what the provider itself reports. A model with null prices is a KNOWN unknown: present so the gap is visible, never filled with a guess.",
+  "asOf": "2026-08",
+  "models": {
+    "claude-opus-4-6": {
+      "inputPerMillion": 15,
+      "outputPerMillion": 75
+    },
+    "claude-opus-4-5": {
+      "inputPerMillion": 15,
+      "outputPerMillion": 75
+    },
+    "claude-opus-4-6-fast": {
+      "inputPerMillion": 15,
+      "outputPerMillion": 75
+    },
+    "claude-sonnet-4-6": {
+      "inputPerMillion": 3,
+      "outputPerMillion": 15
+    },
+    "claude-sonnet-4-5": {
+      "inputPerMillion": 3,
+      "outputPerMillion": 15
+    },
+    "claude-sonnet-4": {
+      "inputPerMillion": 3,
+      "outputPerMillion": 15
+    },
+    "claude-3-7-sonnet-20250219": {
+      "inputPerMillion": 3,
+      "outputPerMillion": 15
+    },
+    "claude-3-5-sonnet-20241022": {
+      "inputPerMillion": 3,
+      "outputPerMillion": 15
+    },
+    "claude-haiku-4-5": {
+      "inputPerMillion": 0.8,
+      "outputPerMillion": 4
+    },
+    "claude-haiku-4-5-20251001": {
+      "inputPerMillion": 0.8,
+      "outputPerMillion": 4
+    },
+    "claude-3-5-haiku-20241022": {
+      "inputPerMillion": 0.8,
+      "outputPerMillion": 4
+    },
+    "gpt-4o": {
+      "inputPerMillion": 2.5,
+      "outputPerMillion": 10
+    },
+    "gpt-4o-mini": {
+      "inputPerMillion": 0.15,
+      "outputPerMillion": 0.6
+    },
+    "gpt-4-turbo": {
+      "inputPerMillion": 10,
+      "outputPerMillion": 30
+    },
+    "gpt-4.1": {
+      "inputPerMillion": 2,
+      "outputPerMillion": 8
+    },
+    "gpt-4.1-mini": {
+      "inputPerMillion": 0.4,
+      "outputPerMillion": 1.6
+    },
+    "gpt-4.1-nano": {
+      "inputPerMillion": 0.1,
+      "outputPerMillion": 0.4
+    },
+    "gpt-5": {
+      "inputPerMillion": 10,
+      "outputPerMillion": 40
+    },
+    "gpt-5-mini": {
+      "inputPerMillion": 0.15,
+      "outputPerMillion": 0.6
+    },
+    "o1": {
+      "inputPerMillion": 15,
+      "outputPerMillion": 60
+    },
+    "o1-mini": {
+      "inputPerMillion": 3,
+      "outputPerMillion": 12
+    },
+    "o3": {
+      "inputPerMillion": 10,
+      "outputPerMillion": 40
+    },
+    "o3-mini": {
+      "inputPerMillion": 1.1,
+      "outputPerMillion": 4.4
+    },
+    "o4-mini": {
+      "inputPerMillion": 1.1,
+      "outputPerMillion": 4.4
+    },
+    "gpt-5-codex": {
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
+    },
+    "gpt-5.1": {
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
+    },
+    "gpt-5.1-codex": {
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
+    },
+    "gpt-5.1-codex-max": {
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
+    },
+    "gpt-5.1-codex-mini": {
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
+    },
+    "gpt-5.2": {
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
+    },
+    "gpt-5.2-codex": {
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
+    },
+    "gpt-5.3-codex": {
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
+    },
+    "gemini-2.5-pro": {
+      "inputPerMillion": 1.25,
+      "outputPerMillion": 5
+    },
+    "gemini-2.5-flash": {
+      "inputPerMillion": 0.15,
+      "outputPerMillion": 0.6
+    },
+    "gemini-2.0-flash": {
+      "inputPerMillion": 0.1,
+      "outputPerMillion": 0.4
+    },
+    "gemini-2.0-flash-lite": {
+      "inputPerMillion": 0.075,
+      "outputPerMillion": 0.3
+    },
+    "gemini-2.0-flash-thinking": {
+      "inputPerMillion": 0.15,
+      "outputPerMillion": 0.6
+    },
+    "gemini-1.5-pro": {
+      "inputPerMillion": 1.25,
+      "outputPerMillion": 5
+    },
+    "gemini-1.5-flash": {
+      "inputPerMillion": 0.075,
+      "outputPerMillion": 0.3
+    },
+    "gemini-1.5-flash-8b": {
+      "inputPerMillion": 0.0375,
+      "outputPerMillion": 0.15
+    },
+    "gemini-3-pro-preview": {
+      "inputPerMillion": 1.25,
+      "outputPerMillion": 5
+    },
+    "qwen/qwen3.7-max": {
+      "inputPerMillion": 1.25,
+      "outputPerMillion": 3.75
+    },
+    "qwen/qwen3.7-plus": {
+      "inputPerMillion": 0.4,
+      "outputPerMillion": 1.6
+    },
+    "qwen/qwen3.6-flash": {
+      "inputPerMillion": 0.1875,
+      "outputPerMillion": 1.125
+    },
+    "qwen/qwen3-coder": {
+      "inputPerMillion": 0.22,
+      "outputPerMillion": 1.8
+    },
+    "qwen-max": {
+      "inputPerMillion": 2,
+      "outputPerMillion": 8
+    },
+    "qwen-plus": {
+      "inputPerMillion": 0.5,
+      "outputPerMillion": 2
+    },
+    "qwen-turbo": {
+      "inputPerMillion": 0.1,
+      "outputPerMillion": 0.4
+    },
+    "qwen-2.5-72b": {
+      "inputPerMillion": 0.4,
+      "outputPerMillion": 1.6
+    },
+    "qwen/qwen-2.5-72b-instruct": {
+      "inputPerMillion": 0.4,
+      "outputPerMillion": 1.6
+    },
+    "qwen/qwen-2.5-7b-instruct": {
+      "inputPerMillion": 0.04,
+      "outputPerMillion": 0.12
+    },
+    "qwen/qwq-32b": {
+      "inputPerMillion": 0.2,
+      "outputPerMillion": 0.6
+    },
+    "qwen/qwen3-235b-a22b": {
+      "inputPerMillion": 0.6,
+      "outputPerMillion": 2.4
+    },
+    "qwen/qwen3-72b": {
+      "inputPerMillion": 0.4,
+      "outputPerMillion": 1.6
+    },
+    "qwen/qwen3-32b": {
+      "inputPerMillion": 0.18,
+      "outputPerMillion": 0.9
+    },
+    "qwen/qwen3-14b": {
+      "inputPerMillion": 0.1,
+      "outputPerMillion": 0.5
+    },
+    "qwen/qwen3-8b": {
+      "inputPerMillion": 0.06,
+      "outputPerMillion": 0.3
+    },
+    "deepseek/deepseek-r1": {
+      "inputPerMillion": 0.55,
+      "outputPerMillion": 2.19
+    },
+    "deepseek/deepseek-chat": {
+      "inputPerMillion": 0.27,
+      "outputPerMillion": 1.1
+    },
+    "meta-llama/llama-3.3-70b-instruct": {
+      "inputPerMillion": 0.12,
+      "outputPerMillion": 0.12
+    },
+    "meta-llama/llama-4-scout": {
+      "inputPerMillion": 0.17,
+      "outputPerMillion": 0.17
+    },
+    "mistral/mistral-large-2411": {
+      "inputPerMillion": 2,
+      "outputPerMillion": 6
+    },
+    "mistral/mistral-small-3.1": {
+      "inputPerMillion": 0.1,
+      "outputPerMillion": 0.3
+    },
+    "moonshotai/kimi-k2": {
+      "inputPerMillion": 0.57,
+      "outputPerMillion": 2.3
+    },
+    "z-ai/glm-5.2": {
+      "inputPerMillion": 0.93,
+      "outputPerMillion": 3
+    },
+    "z-ai/glm-5.1": {
+      "inputPerMillion": 0.966,
+      "outputPerMillion": 3.036
+    },
+    "z-ai/glm-4.7": {
+      "inputPerMillion": 0.4,
+      "outputPerMillion": 1.75
+    },
+    "MiniMax-M3": {
+      "inputPerMillion": 0.3,
+      "outputPerMillion": 1.2
+    },
+    "MiniMax-M2.7": {
+      "inputPerMillion": 0.25,
+      "outputPerMillion": 1
+    },
+    "MiniMax-M2.7-highspeed": {
+      "inputPerMillion": 0.6,
+      "outputPerMillion": 2.4
+    },
+    "MiniMax-M2.5": {
+      "inputPerMillion": 0.15,
+      "outputPerMillion": 0.9
+    },
+    "MiniMax-M2.1": {
+      "inputPerMillion": 0.29,
+      "outputPerMillion": 0.95
+    },
+    "MiniMax-M2": {
+      "inputPerMillion": 0.26,
+      "outputPerMillion": 1
+    },
+    "zhipuai/glm-z1-9b": {
+      "inputPerMillion": null,
+      "outputPerMillion": null,
+      "note": "PRICE NOT CHECKED. Listed because a configured ladder can escalate to this model. Left null deliberately rather than guessed — an invented price is worse than a visible gap."
+    },
+    "zhipuai/glm-z1-32b": {
+      "inputPerMillion": null,
+      "outputPerMillion": null,
+      "note": "PRICE NOT CHECKED. Listed because a configured ladder can escalate to this model. Left null deliberately rather than guessed — an invented price is worse than a visible gap."
+    },
+    "moonshotai/kimi-k2.5": {
+      "inputPerMillion": null,
+      "outputPerMillion": null,
+      "note": "PRICE NOT CHECKED. Listed because a configured ladder can escalate to this model. Left null deliberately rather than guessed — an invented price is worse than a visible gap."
+    },
+    "moonshotai/kimi-k3": {
+      "inputPerMillion": null,
+      "outputPerMillion": null,
+      "note": "PRICE NOT CHECKED. Listed because a configured ladder can escalate to this model. Left null deliberately rather than guessed — an invented price is worse than a visible gap."
+    }
+  }
+}

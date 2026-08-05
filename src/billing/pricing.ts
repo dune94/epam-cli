@@ -1,103 +1,64 @@
+import { existsSync, readFileSync } from 'fs';
+import { dirname, join } from 'path';
 export interface ModelPricing {
   inputPerMillion: number;  // USD per 1M input tokens
   outputPerMillion: number; // USD per 1M output tokens
 }
 
-// Prices as of early 2026 — update as providers change
-export const MODEL_PRICING: Record<string, ModelPricing> = {
-  // ─── Anthropic ────────────────────────────────────────────────────────────
-  'claude-opus-4-6':              { inputPerMillion: 15.00, outputPerMillion: 75.00 },
-  'claude-opus-4-5':              { inputPerMillion: 15.00, outputPerMillion: 75.00 },
-  'claude-opus-4-6-fast':         { inputPerMillion: 15.00, outputPerMillion: 75.00 },
-  'claude-sonnet-4-6':            { inputPerMillion: 3.00,  outputPerMillion: 15.00 },
-  'claude-sonnet-4-5':            { inputPerMillion: 3.00,  outputPerMillion: 15.00 },
-  'claude-sonnet-4':              { inputPerMillion: 3.00,  outputPerMillion: 15.00 },
-  'claude-3-7-sonnet-20250219':   { inputPerMillion: 3.00,  outputPerMillion: 15.00 },
-  'claude-3-5-sonnet-20241022':   { inputPerMillion: 3.00,  outputPerMillion: 15.00 },
-  'claude-haiku-4-5':             { inputPerMillion: 0.80,  outputPerMillion: 4.00  },
-  'claude-haiku-4-5-20251001':    { inputPerMillion: 0.80,  outputPerMillion: 4.00  },
-  'claude-3-5-haiku-20241022':    { inputPerMillion: 0.80,  outputPerMillion: 4.00  },
-  // ─── OpenAI ───────────────────────────────────────────────────────────────
-  'gpt-4o':                       { inputPerMillion: 2.50,  outputPerMillion: 10.00 },
-  'gpt-4o-mini':                  { inputPerMillion: 0.15,  outputPerMillion: 0.60  },
-  'gpt-4-turbo':                  { inputPerMillion: 10.00, outputPerMillion: 30.00 },
-  'gpt-4.1':                      { inputPerMillion: 2.00,  outputPerMillion: 8.00  },
-  'gpt-4.1-mini':                 { inputPerMillion: 0.40,  outputPerMillion: 1.60  },
-  'gpt-4.1-nano':                 { inputPerMillion: 0.10,  outputPerMillion: 0.40  },
-  'gpt-5':                        { inputPerMillion: 10.00, outputPerMillion: 40.00 },
-  'gpt-5-mini':                   { inputPerMillion: 0.15,  outputPerMillion: 0.60  },
-  'o1':                           { inputPerMillion: 15.00, outputPerMillion: 60.00 },
-  'o1-mini':                      { inputPerMillion: 3.00,  outputPerMillion: 12.00 },
-  'o3':                           { inputPerMillion: 10.00, outputPerMillion: 40.00 },
-  'o3-mini':                      { inputPerMillion: 1.10,  outputPerMillion: 4.40  },
-  'o4-mini':                      { inputPerMillion: 1.10,  outputPerMillion: 4.40  },
-  // Codex / Copilot models (via GitHub)
-  'gpt-5-codex':                  { inputPerMillion: 0.00,  outputPerMillion: 0.00  },
-  'gpt-5.1':                      { inputPerMillion: 0.00,  outputPerMillion: 0.00  },
-  'gpt-5.1-codex':                { inputPerMillion: 0.00,  outputPerMillion: 0.00  },
-  'gpt-5.1-codex-max':            { inputPerMillion: 0.00,  outputPerMillion: 0.00  },
-  'gpt-5.1-codex-mini':           { inputPerMillion: 0.00,  outputPerMillion: 0.00  },
-  'gpt-5.2':                      { inputPerMillion: 0.00,  outputPerMillion: 0.00  },
-  'gpt-5.2-codex':                { inputPerMillion: 0.00,  outputPerMillion: 0.00  },
-  'gpt-5.3-codex':                { inputPerMillion: 0.00,  outputPerMillion: 0.00  },
-  // ─── Gemini ───────────────────────────────────────────────────────────────
-  'gemini-2.5-pro':               { inputPerMillion: 1.25,  outputPerMillion: 5.00  },
-  'gemini-2.5-flash':             { inputPerMillion: 0.15,  outputPerMillion: 0.60  },
-  'gemini-2.0-flash':             { inputPerMillion: 0.10,  outputPerMillion: 0.40  },
-  'gemini-2.0-flash-lite':        { inputPerMillion: 0.075, outputPerMillion: 0.30  },
-  'gemini-2.0-flash-thinking':    { inputPerMillion: 0.15,  outputPerMillion: 0.60  },
-  'gemini-1.5-pro':               { inputPerMillion: 1.25,  outputPerMillion: 5.00  },
-  'gemini-1.5-flash':             { inputPerMillion: 0.075, outputPerMillion: 0.30  },
-  'gemini-1.5-flash-8b':          { inputPerMillion: 0.0375,outputPerMillion: 0.15  },
-  'gemini-3-pro-preview':         { inputPerMillion: 1.25,  outputPerMillion: 5.00  },
-  // ─── Qwen / OpenRouter ────────────────────────────────────────────────────
-  'qwen/qwen3.7-max':             { inputPerMillion: 1.25,  outputPerMillion: 3.75  },
-  'qwen/qwen3.7-plus':            { inputPerMillion: 0.40,  outputPerMillion: 1.60  },
-  'qwen/qwen3.6-flash':           { inputPerMillion: 0.1875,outputPerMillion: 1.125 },
-  'qwen/qwen3-coder':             { inputPerMillion: 0.22,  outputPerMillion: 1.80  },
-  'qwen-max':                     { inputPerMillion: 2.00,  outputPerMillion: 8.00  },
-  'qwen-plus':                    { inputPerMillion: 0.50,  outputPerMillion: 2.00  },
-  'qwen-turbo':                   { inputPerMillion: 0.10,  outputPerMillion: 0.40  },
-  'qwen-2.5-72b':                 { inputPerMillion: 0.40,  outputPerMillion: 1.60  },
-  'qwen/qwen-2.5-72b-instruct':   { inputPerMillion: 0.40,  outputPerMillion: 1.60  },
-  'qwen/qwen-2.5-7b-instruct':    { inputPerMillion: 0.04,  outputPerMillion: 0.12  },
-  'qwen/qwq-32b':                 { inputPerMillion: 0.20,  outputPerMillion: 0.60  },
-  'qwen/qwen3-235b-a22b':         { inputPerMillion: 0.60,  outputPerMillion: 2.40  },
-  'qwen/qwen3-72b':               { inputPerMillion: 0.40,  outputPerMillion: 1.60  },
-  'qwen/qwen3-32b':               { inputPerMillion: 0.18,  outputPerMillion: 0.90  },
-  'qwen/qwen3-14b':               { inputPerMillion: 0.10,  outputPerMillion: 0.50  },
-  'qwen/qwen3-8b':                { inputPerMillion: 0.06,  outputPerMillion: 0.30  },
-  // ─── DeepSeek (via OpenRouter / Qwen provider) ────────────────────────────
-  'deepseek/deepseek-r1':         { inputPerMillion: 0.55,  outputPerMillion: 2.19  },
-  'deepseek/deepseek-chat':       { inputPerMillion: 0.27,  outputPerMillion: 1.10  },
-  // ─── Meta Llama (via OpenRouter / Qwen provider) ──────────────────────────
-  'meta-llama/llama-3.3-70b-instruct': { inputPerMillion: 0.12, outputPerMillion: 0.12 },
-  'meta-llama/llama-4-scout':     { inputPerMillion: 0.17,  outputPerMillion: 0.17  },
-  // ─── Mistral (via OpenRouter / Qwen provider) ─────────────────────────────
-  'mistral/mistral-large-2411':   { inputPerMillion: 2.00,  outputPerMillion: 6.00  },
-  'mistral/mistral-small-3.1':    { inputPerMillion: 0.10,  outputPerMillion: 0.30  },
-  // ─── MoonshotAI / Z-AI / MiniMax (via OpenRouter / Qwen provider, or
-  // MiniMax direct) — FALLBACK ONLY. These are consulted only when the
-  // provider's own response didn't include real cost (usage.costUsd unset);
-  // see calculateCost's callers and feedback_real_cost_tracking_critical.
-  // Found live 2026-07-13: this table previously had NO entries for these
-  // three model families at all — every call to any of them silently
-  // computed cost_usd=0 here, forcing claude.sh's own separate bash-side
-  // pricing table (orchestrations/scripts/model-pricing.json) to estimate
-  // instead, with no coordination between the two tables. z-ai/glm-5.1's
-  // rate below is verified against OpenRouter's live pricing page
-  // (2026-07-13); the rest are carried over from that same bash-side table.
-  'moonshotai/kimi-k2':           { inputPerMillion: 0.57,  outputPerMillion: 2.30  },
-  'z-ai/glm-5.2':                 { inputPerMillion: 0.93,  outputPerMillion: 3.00  },
-  'z-ai/glm-5.1':                 { inputPerMillion: 0.966, outputPerMillion: 3.036 },
-  'z-ai/glm-4.7':                 { inputPerMillion: 0.40,  outputPerMillion: 1.75  },
-  'MiniMax-M3':                   { inputPerMillion: 0.30,  outputPerMillion: 1.20  },
-  'MiniMax-M2.7':                 { inputPerMillion: 0.25,  outputPerMillion: 1.00  },
-  'MiniMax-M2.7-highspeed':       { inputPerMillion: 0.60,  outputPerMillion: 2.40  },
-  'MiniMax-M2.5':                 { inputPerMillion: 0.15,  outputPerMillion: 0.90  },
-  'MiniMax-M2.1':                 { inputPerMillion: 0.29,  outputPerMillion: 0.95  },
-  'MiniMax-M2':                   { inputPerMillion: 0.26,  outputPerMillion: 1.00  },
-};
+/**
+ * Prices are CONFIGURATION, not code: orchestrations/config/model-pricing.json.
+ *
+ * They lived here as a literal table whose entire maintenance policy was the comment
+ * "Prices as of early 2026 — update as providers change". Changing a price meant editing
+ * TypeScript and rebuilding, nothing expired the table, and whoever needs to update a price
+ * is the least likely person to be reading src/billing. A value that changes outside our
+ * control, hidden where nobody looks, is stale by default and silently so.
+ *
+ * Read at runtime and cached, so an edit takes effect without a build.
+ */
+const PRICING_CONFIG_REL = 'orchestrations/config/model-pricing.json';
+
+function findPricingConfig(): string | null {
+  // Walk up from this module to the package root — the same derivation used for the engine
+  // perimeter, so it holds for src/ and for the bundled dist/.
+  let dir = __dirname;
+  for (let i = 0; i < 10; i++) {
+    const candidate = join(dir, PRICING_CONFIG_REL);
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+interface PricingFile {
+  asOf?: string;
+  models?: Record<string, ModelPricing>;
+}
+
+const _loaded: PricingFile = (() => {
+  const file = findPricingConfig();
+  if (!file) {
+    // Never invent prices. An empty table makes getPricing return null, which callers
+    // already handle as "unknown" — a wrong number would be worse than no number.
+    process.emitWarning?.(
+      `[pricing] ${PRICING_CONFIG_REL} not found — model prices unavailable. Cost display will be empty.`,
+    );
+    return {};
+  }
+  try {
+    return JSON.parse(readFileSync(file, 'utf8')) as PricingFile;
+  } catch (e) {
+    process.emitWarning?.(`[pricing] ${file} is unreadable: ${(e as Error).message}`);
+    return {};
+  }
+})();
+
+/** When these prices were last checked against the providers. */
+export const PRICING_AS_OF: string = _loaded.asOf ?? 'unknown';
+
+export const MODEL_PRICING: Record<string, ModelPricing> = _loaded.models ?? {};
 
 export function calculateCost(model: string, inputTokens: number, outputTokens: number): number {
   const pricing = MODEL_PRICING[model];

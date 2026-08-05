@@ -22,7 +22,11 @@
 # own scope is indistinguishable from one that is broken.
 
 # Paths the pipeline writes into a client repo. Never story output.
-_STORY_OUTPUTS_INCIDENTAL_RE='^(\.codegraph/|\.epam/)'
+# Was a two-entry regex ('^(\.codegraph/|\.epam/)') that missed orchestrations/,
+# .deepeval/ and .contracts/ — which is how orchestrations/agents/KB.md was recorded as
+# upexpress's writer output on run 20260804T225443Z. One shared definition now.
+# shellcheck source=engine-paths.sh
+. "$(dirname "${BASH_SOURCE[0]}")/engine-paths.sh"
 
 # Test-file conventions. Deliberately broad: mutant-hunter used to look only for
 # `*.test.ts` and therefore found nothing on the live metrolinx codeline, whose
@@ -52,22 +56,69 @@ story_outputs_record() {
     [ -n "$log_dir" ] || return 0
     [ -n "$project_root" ] && [ -d "$project_root/.git" ] || return 0
 
-    local _ref=""
-    if [ -f "$log_dir/phase-baseline-sha.txt" ]; then
-        _ref=$(tr -d '[:space:]' < "$log_dir/phase-baseline-sha.txt" 2>/dev/null)
-    fi
-    [ -n "$_ref" ] || _ref="origin/${JIRA_BASELINE_BRANCH:-develop}"
-    git -C "$project_root" rev-parse --verify "$_ref" >/dev/null 2>&1 || return 0
+    # THE BASELINE SHA IS THE LANE'S IDENTITY. It resolves only in that lane's own repo
+    # (verified against all three live metrolinx lanes), so requiring it makes git's object
+    # database the identity oracle — no path comparison, no configuration.
+    #
+    # The `origin/${JIRA_BASELINE_BRANCH:-develop}` fallback this replaces is the silent
+    # wrong-scope shape this file's own header complains about: any repo that happens to
+    # have that ref satisfies it, including the engine's own.
+    local _ref
+    _ref=$(story_outputs_baseline_ref "$log_dir") || return 0
+    [ -n "$_ref" ] || return 0
+    git -C "$project_root" rev-parse --verify --quiet "${_ref}^{commit}" >/dev/null 2>&1 || return 0
 
     local _manifest="$log_dir/story-outputs-${PHASE:-core}.txt"
+    # --diff-filter=ACMRT: Added/Copied/Modified/Renamed/Typechanged. DELETED paths are
+    # excluded deliberately — a path handed to a reviewer as "writer output" must exist, or
+    # story_outputs_tests nominates a test that cannot run. Deletions are reported
+    # separately by story_outputs_deleted, because a writer removing 10 tests is exactly
+    # what a gate needs to see and the old manifest lost it entirely.
     local _produced
-    _produced=$( { git -C "$project_root" diff --name-only "$_ref" 2>/dev/null
+    _produced=$( { git -C "$project_root" diff --name-only --diff-filter=ACMRT "$_ref" 2>/dev/null
                    git -C "$project_root" ls-files --others --exclude-standard 2>/dev/null; } | \
-                 grep -v -E "$_STORY_OUTPUTS_INCIDENTAL_RE" | sort -u )
-    [ -n "$_produced" ] || return 0
+                 engine_paths_filter | grep -v '^$' | sort -u )
 
-    { [ -f "$_manifest" ] && cat "$_manifest"; printf '%s\n' "$_produced"; } 2>/dev/null | \
-        grep -v '^$' | sort -u > "${_manifest}.tmp" && mv "${_manifest}.tmp" "$_manifest"
+    # OVERWRITE, never union. The previous form was
+    #   { cat "$_manifest"; printf '%s' "$_produced"; } | sort -u
+    # which can only ever grow: a file the writer reverted, or one recorded when a wrong
+    # root was passed, stayed listed forever with no provenance to say when it entered.
+    # The union was also unnecessary — the diff is against the PHASE BASELINE, so work a
+    # LATE producer committed (the repro-test-writer commits its spec after the story loop)
+    # is already included by recomputing.
+    #
+    # Written even when empty: with a valid baseline, "nothing was produced" is a FACT and
+    # the manifest should say so. ABSENT still means "no baseline — fall back and say so".
+    printf '%s\n' "$_produced" | grep -v '^$' > "${_manifest}.tmp" 2>/dev/null || true
+    mv "${_manifest}.tmp" "$_manifest" 2>/dev/null || rm -f "${_manifest}.tmp"
+    return 0
+}
+
+# story_outputs_baseline_ref <log_dir> — the phase baseline SHA, or non-zero if unknown.
+story_outputs_baseline_ref() {
+    local _log_dir="$1"
+    [ -f "$_log_dir/phase-baseline-sha.txt" ] || return 1
+    local _sha
+    _sha=$(tr -d '[:space:]' < "$_log_dir/phase-baseline-sha.txt" 2>/dev/null)
+    [ -n "$_sha" ] || return 1
+    printf '%s' "$_sha"
+}
+
+# story_outputs_deleted <project_root> <log_dir> — paths this phase REMOVED.
+#
+# The reviewer on run 20260804T225443Z reported the writer had deleted a 179-line test file
+# containing 10 tests, with no replacement. No manifest showed it: the producer recorded
+# deletions as though they were outputs, and every consumer then filtered them out as
+# missing files. Test count going DOWN is a gate-relevant fact and now has a channel.
+story_outputs_deleted() {
+    local project_root="$1"
+    local log_dir="$2"
+    [ -n "$project_root" ] && [ -d "$project_root/.git" ] || return 0
+    local _ref
+    _ref=$(story_outputs_baseline_ref "$log_dir") || return 0
+    git -C "$project_root" rev-parse --verify --quiet "${_ref}^{commit}" >/dev/null 2>&1 || return 0
+    git -C "$project_root" diff --name-only --diff-filter=D "$_ref" 2>/dev/null | \
+        engine_paths_filter | grep -v '^$' | sort -u
     return 0
 }
 
@@ -82,7 +133,9 @@ story_outputs_files() {
 
     local manifest="$log_dir/story-outputs-${PHASE:-core}.txt"
     local raw=""
-    if [ -s "$manifest" ]; then
+    # -f, not -s: an EMPTY manifest is a real answer ("the writers produced nothing"),
+    # distinct from an ABSENT one ("no baseline — fall back and say so").
+    if [ -f "$manifest" ]; then
         STORY_OUTPUTS_SOURCE="manifest"
         raw=$(cat "$manifest" 2>/dev/null)
     else
@@ -99,11 +152,11 @@ story_outputs_files() {
         command -v warning >/dev/null 2>&1 && \
             warning "  no writer-output manifest at $manifest — falling back to the baseline diff for scope"
         STORY_OUTPUTS_SOURCE="baseline diff"
-        raw=$( { git -C "$project_root" diff --name-only "$baseline" 2>/dev/null
+        raw=$( { git -C "$project_root" diff --name-only --diff-filter=ACMRT "$baseline" 2>/dev/null
                  git -C "$project_root" ls-files --others --exclude-standard 2>/dev/null; } )
     fi
 
-    printf '%s\n' "$raw" | grep -v '^$' | grep -v -E "$_STORY_OUTPUTS_INCIDENTAL_RE" | sort -u
+    printf '%s\n' "$raw" | grep -v '^$' | engine_paths_filter | sort -u
     return 0
 }
 

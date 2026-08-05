@@ -115,7 +115,8 @@ _provision_epam_plugin_config() {
 # WRITE seam — where it actually belongs. This is defence in depth: by the time a file
 # reaches staging it already exists in the customer's working tree, where the writer-output
 # manifest picks it up as though the writer produced it (live 20260804T225443Z).
-_ENGINE_OWNED_DIRS=( 'orchestrations' '.epam' '.deepeval' '.codegraph' '.contracts' )
+# shellcheck source=engine-paths.sh
+. "$(dirname "${BASH_SOURCE[0]}")/engine-paths.sh"
 
 # git_add_client_outputs <repo> [timeout_secs]
 # Stage every client change, never an engine artefact. Returns git's exit code.

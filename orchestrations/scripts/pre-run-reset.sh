@@ -249,10 +249,24 @@ done
 # truncate-in-place above because dashboards read those paths live and expect them
 # to exist.
 _ARCHIVED_LOGS=0
+# RECURSIVE, and the relative path is preserved in the archive.
+#
+# This swept with `-maxdepth 1`, so it only ever reached $LOG_DIR's top level. Every
+# per-lane writer-output manifest lives at $LOG_DIR/lanes/<lane>/story-outputs-<phase>.txt
+# — depth 3 — and was therefore NEVER wiped: it survived every run and unioned with the
+# next one indefinitely. Live metrolinx 20260804T225443Z: upexpress's manifest still listed
+# orchestrations/agents/KB.md, with no way to tell which run had put it there.
+#
+# The path must be preserved rather than flattened: all three lanes produce a file named
+# story-outputs-core.txt, and moving them into one flat directory would have two of them
+# silently overwrite the third.
 while IFS= read -r _lf; do
     [ -f "$_lf" ] || continue
-    mv "$_lf" "$ARCHIVE_DIR/" 2>/dev/null && _ARCHIVED_LOGS=$((_ARCHIVED_LOGS+1)) || true
-done < <(find "$LOG_DIR" -maxdepth 1 -type f \( -name '*.log' -o -name 'story-outputs-*.txt' -o -name 'eslint-baseline-*.json' \) 2>/dev/null || true)
+    _rel="${_lf#"$LOG_DIR"/}"
+    _dest="$ARCHIVE_DIR/$_rel"
+    mkdir -p "$(dirname "$_dest")" 2>/dev/null || true
+    mv "$_lf" "$_dest" 2>/dev/null && _ARCHIVED_LOGS=$((_ARCHIVED_LOGS+1)) || true
+done < <(find "$LOG_DIR" -type f \( -name '*.log' -o -name 'story-outputs-*.txt' -o -name 'eslint-baseline-*.json' \) -not -path "$ARCHIVE_DIR/*" -not -path "$LOG_DIR/archive/*" 2>/dev/null || true)
 [ "$_ARCHIVED_LOGS" -gt 0 ] \
   && success "Moved $_ARCHIVED_LOGS stale *.log / manifest / baseline-cache file(s) → $ARCHIVE_DIR (absence now means 'this run did not write it')" \
   || info "  No stale .log files to move"

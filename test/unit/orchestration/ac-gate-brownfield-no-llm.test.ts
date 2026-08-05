@@ -45,10 +45,12 @@ function runGate(env: Record<string, string>, issue: Record<string, unknown>) {
   const bin = join(dir, 'bin');
   mkdirSync(bin, { recursive: true });
   const stub = join(bin, 'epam');
+  const prompts = join(dir, 'prompts.txt');
   writeFileSync(
     stub,
     `#!/usr/bin/env bash\n` +
       `echo "$@" >> ${JSON.stringify(calls)}\n` +
+      `cat >> ${JSON.stringify(prompts)}\n` +
       `printf '%s' '{"verdict":"enrichable","reason":"stub","gaps":[],"enrichedAcs":[],"codeline":"both"}'\n`,
   );
   chmodSync(stub, 0o755);
@@ -56,12 +58,16 @@ function runGate(env: Record<string, string>, issue: Record<string, unknown>) {
   const r = spawnSync(process.execPath, [GATE, '--issues', issues, '--out', out], {
     encoding: 'utf8',
     timeout: 60000,
-    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, EPAM_CLI: stub, ...env },
+    // JIRA_DEFAULT_CODELINE is a LAST-RESORT fallback in the gate. Inheriting it masked a
+    // dropped routing decision — the mutation that reproduces the live failure still passed.
+    // Cleared so the classifier's own output is what these assertions see.
+    env: { ...process.env, JIRA_DEFAULT_CODELINE: '', PATH: `${bin}:${process.env.PATH}`, EPAM_CLI: stub, ...env },
   });
   return {
     status: r.status,
     out: `${r.stdout || ''}${r.stderr || ''}`,
     llmCalls: existsSync(calls) ? readFileSync(calls, 'utf8').split('\n').filter(Boolean).length : 0,
+    prompts: existsSync(prompts) ? readFileSync(prompts, 'utf8') : '',
     result: existsSync(out) ? JSON.parse(readFileSync(out, 'utf8')) : null,
   };
 }
@@ -72,7 +78,9 @@ const THIN_ISSUE = {
   title: 'Live Preview of Content in CMS',
   description: 'AS a Content Author, I WANT to preview draft entries, SO THAT I can see how content will be shown.',
   acceptanceCriteria: [],
-  codeline: 'both',
+  // NO codeline field — a Jira issue does not carry one. The gate's classification is what
+  // assigns it. My first fixture set it by hand, which hid the fact that skipping the call
+  // left the story unroutable: "Codeline 'metrolinx': no stories — skipping".
 };
 
 /** A brownfield ticket that DOES carry acceptance criteria — must be processed as designed. */
@@ -85,18 +93,34 @@ const ISSUE_WITH_ACS = {
     'The displayed amount matches the discount applied to the outbound leg.',
     'A booking with no discount shows no discount line on either leg.',
   ],
-  codeline: 'both',
 };
 
 describe('brownfield with NO ACs spends nothing on acceptance criteria', () => {
-  it('THE WASTE: no LLM call is made for AC sufficiency or elaboration', () => {
-    const r = runGate({ EPAM_BROWNFIELD: '1', AC_GATE_AUTO_ELABORATE: '1' }, THIN_ISSUE);
+  it('THE WASTE: the model is never asked to judge acceptance criteria', () => {
+    const skipped = runGate({ EPAM_BROWNFIELD: '1', AC_GATE_AUTO_ELABORATE: '1' }, THIN_ISSUE);
+    // Call COUNT is the wrong measure: ai-run.sh does a plan+answer pass either way. What
+    // matters is what the model is ASKED to do — the tokens are in the prompt.
     expect(
-      r.llmCalls,
-      `the gate made ${r.llmCalls} model call(s) to judge acceptance criteria that ` +
-        `brownfield never reads — and with auto-elaborate, to GENERATE criteria, which is ` +
-        `how 8 fabricated ACs ended up frozen into a PRD template. Output:\n${r.out}`,
-    ).toBe(0);
+      skipped.prompts,
+      `brownfield still sent acceptance-criteria reasoning to the model:\n` +
+        skipped.prompts.slice(0, 400),
+    ).not.toMatch(/sufficiency gate|acceptance criteria are sufficient|enrichedAcs|gaps/i);
+    expect(skipped.prompts, 'the codeline question must still be asked').toMatch(/codeline/i);
+  });
+
+  it('greenfield IS asked to judge them — the skip must not leak', () => {
+    const g = runGate({ EPAM_BROWNFIELD: '0', AC_GATE_AUTO_ELABORATE: '1' }, THIN_ISSUE);
+    expect(g.prompts).toMatch(/sufficiency|acceptance criteria/i);
+  });
+
+  it('ROUTING SURVIVES: the story still gets a codeline, so it reaches a lane', () => {
+    const r = runGate({ EPAM_BROWNFIELD: '1' }, THIN_ISSUE);
+    const story = (r.result || [])[0] || {};
+    expect(
+      story.codeline,
+      'a Jira issue carries no codeline — the gate assigns it. Skipping that left the ' +
+        'story unroutable and the live run logged "Codeline: no stories — skipping".',
+    ).toBeTruthy();
   });
 
   it('never fabricates acceptance criteria, even with auto-elaborate on', () => {

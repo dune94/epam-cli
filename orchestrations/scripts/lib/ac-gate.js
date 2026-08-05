@@ -242,6 +242,60 @@ function classifyWithLLM(issue, knownCodelines) {
   }
 }
 
+// ── Codeline-only classification (brownfield, no ACs) ─────────────────────
+//
+// Same routing decision as the full classifier, without any acceptance-criteria work:
+// no sufficiency verdict to reason about, no gaps, no per-codeline AC split, no
+// elaboration. Brownfield derives its VCs from the description, so every token spent
+// judging ACs here buys nothing — but the story still has to reach a lane.
+function classifyCodelineOnly(issue, knownCodelines) {
+  const verdict = 'enrichable';
+  const reason = 'brownfield story with no acceptance criteria — AC processing skipped ' +
+                 '(VCs are derived from the description); codeline classified only';
+
+  if (DRY_RUN) {
+    return { verdict, reason, gaps: [], enrichedAcs: [], codeline: SPLIT_VALUE };
+  }
+
+  const codelineList = knownCodelines.map((cl) => `- "${cl}" — ${codelineDesc(cl)}`).join('\n');
+  const prompt = `Assign this Jira story to a codeline. Answer with JSON only — no prose, no markdown fences.
+
+STORY: ${issue.jiraKey} — ${issue.title || ''}
+
+DESCRIPTION:
+${(issue.description || '').slice(0, 4000)}
+
+CODELINES:
+${codelineList}
+- "${SPLIT_VALUE}" — the work spans multiple codelines
+
+Choose exactly one. Answer:
+{"codeline": "<one of the values above>"}
+`;
+
+  const tmpPrompt = `/tmp/ac-gate-codeline-${issue.jiraKey}.txt`;
+  fs.writeFileSync(tmpPrompt, prompt);
+  try {
+    const cmd = `bash ${AI_RUN_SH} --provider ${PROVIDER} --model ${MODEL} < ${tmpPrompt} 2>/dev/null`;
+    const raw = execSync(cmd, {
+      encoding: 'utf8',
+      timeout: Number(process.env.AC_GATE_TIMEOUT_MS || 360000),
+      env: { ...process.env, EPAM_AGENT_NAME: 'ac-gate-codeline' },
+    }).trim();
+    if (!raw) throw new Error('Empty response from ai-run.sh');
+    const parsed = parseLooseJson(raw, 'codeline classification');
+    return { verdict, reason, gaps: [], enrichedAcs: [], codeline: parsed.codeline || SPLIT_VALUE };
+  } catch (e) {
+    // A failed call is not a routing decision. SPLIT_VALUE is the inclusive fallback —
+    // the story spans every codeline rather than silently reaching none, which is the
+    // failure this whole change caused once already.
+    process.stderr.write(`[ac-gate] codeline classification failed for ${issue.jiraKey}: ${e.message}\n`);
+    return { verdict, reason, gaps: [], enrichedAcs: [], codeline: SPLIT_VALUE };
+  } finally {
+    try { fs.unlinkSync(tmpPrompt); } catch { /* best effort */ }
+  }
+}
+
 // ── AC elaboration (AC_GATE_AUTO_ELABORATE=1) ──────────────────────────────
 // When a story has no ACs (verdict=insufficient), generate testable ACs from
 // the description and title so the pipeline can continue without Jira intervention.
@@ -341,21 +395,17 @@ Respond with JSON only — no markdown, no preamble:
     // That elaboration is how 8 fabricated ACs came to be frozen into a PRD template for a
     // ticket whose Jira record never had any.
     //
-    // The codeline half of the classification IS load-bearing (it routes the story to its
-    // lanes), so this skip must still produce one — taken from the ticket's own label,
-    // which is where a brownfield codeline comes from anyway. Never a model call for it.
+    // The codeline half of the classification IS load-bearing: it routes the story to its
+    // lanes, and a Jira issue does NOT carry a codeline — the model assigns it. My first
+    // attempt at this skip read `issue.codeline`, which is always empty, so the story
+    // became unroutable and the live run logged "Codeline 'metrolinx': no stories —
+    // skipping". The skip therefore still classifies the CODELINE; it drops only the
+    // acceptance-criteria reasoning and the elaboration.
     const hasAcs = Array.isArray(issue.acceptanceCriteria) && issue.acceptanceCriteria.length > 0;
     const skipAcProcessing = BROWNFIELD && !hasAcs;
 
     const classification = skipAcProcessing
-      ? {
-          verdict: 'enrichable',
-          reason: 'brownfield story with no acceptance criteria — AC processing skipped; ' +
-                  'VCs are derived from the description (no model call made)',
-          gaps: [],
-          enrichedAcs: [],
-          codeline: issue.codeline || DEFAULT_CODELINE,
-        }
+      ? classifyCodelineOnly(issue, knownCodelines)
       : classifyWithLLM(issue, knownCodelines);
     let verdict = classification.verdict || 'enrichable';
 

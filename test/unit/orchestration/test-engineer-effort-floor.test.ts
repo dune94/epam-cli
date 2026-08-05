@@ -37,6 +37,11 @@ const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
 const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
 
+// These budgets moved to orchestrations/config/llm-defaults.json, so a harness that runs the
+// extracted function ALONE leaves them unset. Run the real loader first, as the pipeline
+// does — this keeps the test measuring its own logic rather than missing configuration.
+const _AUTOMATION = join(__dirname, '../../../orchestrations');
+
 function extractFunctionByBraceCount(name: string): string {
   const start = claudeSrc.indexOf(`${name}() {`);
   if (start === -1) throw new Error(`Function ${name} not found`);
@@ -51,6 +56,8 @@ function extractFunctionByBraceCount(name: string): string {
   }
   throw new Error(`Could not find end of function ${name}`);
 }
+
+const _loaderFn = extractFunctionByBraceCount('load_llm_settings_json');
 
 describe('resolve_test_engineer_effort_floor — wiring (static)', () => {
   it('is defined', () => {
@@ -90,6 +97,9 @@ describe('resolve_test_engineer_effort_floor — REAL execution', () => {
         [
           'log() { :; }',
           `PRD_FILE=${JSON.stringify(prdPath)}`,
+          `AUTOMATION_DIR=${JSON.stringify(_AUTOMATION)}`,
+          _loaderFn,
+          'load_llm_settings_json',
           'STORY_MAX_ITERATIONS=6',
           'STORY_MAX_OUTPUT_TOKENS=3072',
           fnBody,
@@ -148,6 +158,9 @@ describe('resolve_test_engineer_effort_floor — REAL execution', () => {
         [
           'log() { :; }',
           `PRD_FILE=${JSON.stringify(prdPath)}`,
+          `AUTOMATION_DIR=${JSON.stringify(_AUTOMATION)}`,
+          _loaderFn,
+          'load_llm_settings_json',
           'STORY_MAX_ITERATIONS=6',
           'STORY_MAX_OUTPUT_TOKENS=3072',
           fnBody,

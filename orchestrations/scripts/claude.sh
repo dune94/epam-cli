@@ -93,7 +93,10 @@ export ORCH_GATE_PROVIDER ORCH_GATE_MODEL EPAM_ORCHESTRATION_PROVIDER
 # before MAX_RETRIES is read a few lines down, so it's called immediately.
 load_llm_settings_json() {
     local _settings_file="${EPAM_PROJECT_CONFIG_DIR:-}/llm-settings.json"
-    [ -f "$_settings_file" ] || return 0
+    # NOTE: no early return when the project has no settings file. The engine-wide budget
+    # defaults below must still be applied — returning here left every budget unset and the
+    # literals in the case statement were the only thing filling them in.
+    [ -f "$_settings_file" ] || _settings_file="/dev/null"
 
     # `|| true` is load-bearing (found live, 2026-08-02): this function runs
     # under `set -e` (claude.sh:18) — a malformed llm-settings.json makes jq
@@ -104,6 +107,33 @@ load_llm_settings_json() {
     # contradicting this loader's own "malformed config never blocks" intent.
     _get() { jq -r "$1 // empty" "$_settings_file" 2>/dev/null || true; }
     local _v
+
+    # Per-story BUDGETS: engine-wide defaults, project overrides. Two tiers so a project
+    # states only what it changes. These were literals in the effort-tier case statement
+    # below — the exact knobs an operator tunes, invisible and uneditable without a code
+    # change. `|| true` for the same set -e reason documented above.
+    local _defaults_file="${EPAM_LLM_DEFAULTS_FILE:-$AUTOMATION_DIR/config/llm-defaults.json}"
+    _getd() { jq -r "$1 // empty" "$_defaults_file" 2>/dev/null || true; }
+    _budget() {  # <jq-path> <env-var>: project value wins, else engine default
+        local _path="$1" _var="$2" _val
+        _val=$(_get "$_path"); [ -n "$_val" ] || _val=$(_getd "$_path")
+        [ -n "$_val" ] && [ -z "${!_var:-}" ] && export "$_var=$_val"
+        # ALWAYS succeed. A trailing false test makes this function return 1, and under
+        # `set -e` that propagates out of load_llm_settings_json and kills the caller — the
+        # same trap this file documents for the git-add and scan-secrets blocks. "No value
+        # to apply" is the normal case, not an error.
+        return 0
+    }
+    local _tier
+    for _tier in low medium high; do
+        _budget ".effortTiers.${_tier}.maxIterations"   "EPAM_EFFORT_$(printf '%s' "$_tier" | tr '[:lower:]' '[:upper:]')_MAX_ITERATIONS"
+        _budget ".effortTiers.${_tier}.maxOutputTokens" "EPAM_EFFORT_$(printf '%s' "$_tier" | tr '[:lower:]' '[:upper:]')_MAX_OUTPUT_TOKENS"
+    done
+    _budget '.roleOverrides.generator.maxIterations'   'EPAM_ROLE_GENERATOR_MAX_ITERATIONS'
+    _budget '.roleOverrides.generator.maxOutputTokens' 'EPAM_ROLE_GENERATOR_MAX_OUTPUT_TOKENS'
+    _budget '.outputTokenFloors.planning' 'EPAM_OUTPUT_FLOOR_PLANNING'
+    _budget '.outputTokenFloors.review'   'EPAM_OUTPUT_FLOOR_REVIEW'
+    _budget '.outputTokenFloors.mutation' 'EPAM_OUTPUT_FLOOR_MUTATION'
 
     _v=$(_get '.temperatureFloor'); [ -z "${EPAM_TEMPERATURE:-}" ] && [ -n "$_v" ] && export EPAM_TEMPERATURE="$_v"
 
@@ -218,9 +248,9 @@ EFFORT_MODEL_HIGH="${EPAM_EFFORT_MODEL_HIGH:-gpt-5-codex}"
 STORY_PLANNER_MODEL=""
 # Set by resolve_effort_settings; controls EPAM_MAX_ITERATIONS for epam-run stories.
 # Low=6 (write 2 files + tsc + vitest + one fix), medium=10, high=15
-STORY_MAX_ITERATIONS=6
+STORY_MAX_ITERATIONS="${EPAM_EFFORT_LOW_MAX_ITERATIONS}"
 # Set by resolve_effort_settings; controls EPAM_MAX_OUTPUT_TOKENS for epam-run stories.
-STORY_MAX_OUTPUT_TOKENS=3072
+STORY_MAX_OUTPUT_TOKENS="${EPAM_EFFORT_LOW_MAX_OUTPUT_TOKENS}"
 # Set by resolve_generator_settings; true when agentRole=generator (pure file creation, no context reads).
 STORY_GENERATOR_MODE=""
 
@@ -295,20 +325,20 @@ resolve_effort_settings() {
         low)
             STORY_MODEL="$EFFORT_MODEL_LOW"
             STORY_MAX_TURNS=""
-            STORY_MAX_ITERATIONS=6
-            STORY_MAX_OUTPUT_TOKENS=3072
+            STORY_MAX_ITERATIONS="${EPAM_EFFORT_LOW_MAX_ITERATIONS}"
+            STORY_MAX_OUTPUT_TOKENS="${EPAM_EFFORT_LOW_MAX_OUTPUT_TOKENS}"
             ;;
         high)
             STORY_MODEL="$EFFORT_MODEL_HIGH"
             STORY_MAX_TURNS=""
-            STORY_MAX_ITERATIONS=15
-            STORY_MAX_OUTPUT_TOKENS=6144
+            STORY_MAX_ITERATIONS="${EPAM_EFFORT_HIGH_MAX_ITERATIONS}"
+            STORY_MAX_OUTPUT_TOKENS="${EPAM_EFFORT_MEDIUM_MAX_OUTPUT_TOKENS}"
             ;;
         *)  # medium (default)
             STORY_MODEL="$EFFORT_MODEL_MEDIUM"
             STORY_MAX_TURNS=""
-            STORY_MAX_ITERATIONS=10
-            STORY_MAX_OUTPUT_TOKENS=6144
+            STORY_MAX_ITERATIONS="${EPAM_EFFORT_MEDIUM_MAX_ITERATIONS}"
+            STORY_MAX_OUTPUT_TOKENS="${EPAM_EFFORT_MEDIUM_MAX_OUTPUT_TOKENS}"
             ;;
     esac
     # NOTE: deliberately does NOT log the model here (found live, 2026-07-10):
@@ -337,8 +367,8 @@ resolve_generator_settings() {
         "$prd_target" 2>/dev/null || echo "")
     if [ "$role" = "generator" ]; then
         STORY_GENERATOR_MODE="true"
-        STORY_MAX_ITERATIONS=3
-        STORY_MAX_OUTPUT_TOKENS=16384
+        STORY_MAX_ITERATIONS="${EPAM_ROLE_GENERATOR_MAX_ITERATIONS}"
+        STORY_MAX_OUTPUT_TOKENS="${EPAM_ROLE_GENERATOR_MAX_OUTPUT_TOKENS}"
         log "  GeneratorMode: enabled (agentRole=generator) — maxIter=3 maxOutTok=16384"
     fi
 }
@@ -372,13 +402,13 @@ resolve_test_engineer_effort_floor() {
         "$prd_target" 2>/dev/null || echo "medium")
     case "$effort" in
         low)
-            STORY_MAX_ITERATIONS=10
-            STORY_MAX_OUTPUT_TOKENS=6144
+            STORY_MAX_ITERATIONS="${EPAM_EFFORT_MEDIUM_MAX_ITERATIONS}"
+            STORY_MAX_OUTPUT_TOKENS="${EPAM_EFFORT_MEDIUM_MAX_OUTPUT_TOKENS}"
             log "  TestEngineerEffortFloor: low -> medium (maxIter=10 maxOutTok=6144) -- test-writing needs more research/verification turns than impl at the same tier"
             ;;
         medium)
-            STORY_MAX_ITERATIONS=15
-            STORY_MAX_OUTPUT_TOKENS=6144
+            STORY_MAX_ITERATIONS="${EPAM_EFFORT_HIGH_MAX_ITERATIONS}"
+            STORY_MAX_OUTPUT_TOKENS="${EPAM_EFFORT_MEDIUM_MAX_OUTPUT_TOKENS}"
             log "  TestEngineerEffortFloor: medium -> high (maxIter=15 maxOutTok=6144)"
             ;;
         *) : ;;  # high already has the largest budget -- nothing to bump
@@ -7906,7 +7936,7 @@ print(count)
                         # baseline budget assumed; truncation at the original ceiling
                         # causes the same syntax error on every retry regardless of
                         # model capability (confirmed live: SKY-003-test-tc2 2026-07-18).
-                        [ "${STORY_MAX_OUTPUT_TOKENS:-0}" -lt 8192 ] && STORY_MAX_OUTPUT_TOKENS=8192
+                        [ "${STORY_MAX_OUTPUT_TOKENS:-0}" -lt "${EPAM_OUTPUT_FLOOR_PLANNING}" ] && STORY_MAX_OUTPUT_TOKENS="${EPAM_OUTPUT_FLOOR_PLANNING}"
                         ;;
                     *)
                         # Rung 3+: escalate to the strongest configured model, effort → high (maximum).
@@ -7995,7 +8025,7 @@ print(count)
                         # Rung 3: bump output tokens to 12288 — at the strongest
                         # configured model, full file rewrites are expected; any
                         # prior token ceiling that caused truncation must be lifted.
-                        [ "${STORY_MAX_OUTPUT_TOKENS:-0}" -lt 12288 ] && STORY_MAX_OUTPUT_TOKENS=12288
+                        [ "${STORY_MAX_OUTPUT_TOKENS:-0}" -lt "${EPAM_OUTPUT_FLOOR_REVIEW}" ] && STORY_MAX_OUTPUT_TOKENS="${EPAM_OUTPUT_FLOOR_REVIEW}"
                         log "  InferenceLadder[Rung3/R${retry_count}]: model='${STORY_MODEL:-default}' — effort → high"
                         ;;
                 esac
@@ -8892,7 +8922,7 @@ Apply the above diagnosis AND fix the deterministic check violation — both mus
             # to generator-level (16384) — at this point the story has exhausted
             # the standard ladder and is receiving the strongest available model;
             # any remaining token budget constraint must not be the failure mode.
-            [ "${STORY_MAX_OUTPUT_TOKENS:-0}" -lt 16384 ] && STORY_MAX_OUTPUT_TOKENS=16384
+            [ "${STORY_MAX_OUTPUT_TOKENS:-0}" -lt 16384 ] && STORY_MAX_OUTPUT_TOKENS="${EPAM_ROLE_GENERATOR_MAX_OUTPUT_TOKENS}"
             continue
         fi
     fi

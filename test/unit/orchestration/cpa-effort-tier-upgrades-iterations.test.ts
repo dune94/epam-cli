@@ -37,6 +37,13 @@ function extractFn(name: string): string {
   return CLAUDE_SH.slice(start, end + 2);
 }
 const fn = extractFn('resolve_effort_settings');
+const loaderFn = extractFn('load_llm_settings_json');
+// resolve_effort_settings no longer carries literal budgets: the tiers moved to
+// orchestrations/config/llm-defaults.json (project-overridable in llm-settings.json), so a
+// harness that runs the function ALONE leaves every budget unset. Running the real loader
+// first is what the pipeline does, and keeps this test measuring the upgrade logic rather
+// than the absence of configuration.
+const AUTOMATION = join(__dirname, '../../../orchestrations');
 
 function iterationsFor(story: Record<string, unknown>): { iter: number; log: string } {
   const dir = mkdtempSync(join(tmpdir(), 'effort-tier-'));
@@ -47,6 +54,9 @@ function iterationsFor(story: Record<string, unknown>): { iter: number; log: str
 LOG_FILE=$(mktemp)
 log() { echo "$1" >> "$LOG_FILE"; }
 export PRD_FILE='${prd}'
+AUTOMATION_DIR='${AUTOMATION}'
+${loaderFn}
+load_llm_settings_json
 ${fn}
 resolve_effort_settings AMSD-2041
 echo "ITER=$STORY_MAX_ITERATIONS"
@@ -88,6 +98,9 @@ describe('resolve_effort_settings — CPA gate/complexityAdjustment and coverage
     const script = `
 log() { :; }
 export PRD_FILE='${prd}'
+AUTOMATION_DIR='${AUTOMATION}'
+${loaderFn}
+load_llm_settings_json
 ${fn}
 resolve_effort_settings AMSD-2041
 echo "$STORY_MAX_ITERATIONS"

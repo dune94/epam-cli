@@ -26,6 +26,12 @@ function extractFunctionBody(name: string): string {
   return claudeSrc.slice(start, end);
 }
 
+// Budgets moved to orchestrations/config/llm-defaults.json — the loader must run before the
+// extracted function, or it sees no configuration. Declared before first use (const is not
+// hoisted: declaring these below the harness gave a temporal-dead-zone ReferenceError).
+const _loaderFn = extractFunctionBody('load_llm_settings_json');
+const _AUTOMATION = join(__dirname, '../../../orchestrations');
+
 function makePrd(stories: Array<{ id: string; agentRole: string; title?: string; files?: string[] }>): string {
   const dir = mkdtempSync(join(tmpdir(), 'generator-budget-prd-'));
   const prdPath = join(dir, 'prd.json');
@@ -50,6 +56,9 @@ function runResolveGeneratorSettings(prdPath: string, storyId: string): Record<s
   try {
     const script = `
 MAIN_PRD_FILE="${prdPath}"
+AUTOMATION_DIR="${_AUTOMATION}"
+${_loaderFn}
+load_llm_settings_json
 log() { :; }
 ${extractFunctionBody('resolve_generator_settings')}
 resolve_generator_settings "${storyId}"
@@ -74,7 +83,10 @@ echo "STORY_MAX_OUTPUT_TOKENS=$STORY_MAX_OUTPUT_TOKENS"
 function runBuildGeneratorPrompt(prdPath: string, storyId: string): string {
   const dir = mkdtempSync(join(tmpdir(), 'generator-prompt-run-'));
   try {
-    const getStoryDetails = extractFunctionBody('get_story_details');
+    // These budgets moved to orchestrations/config/llm-defaults.json, so a harness that runs
+// the extracted function ALONE leaves them unset. Run the real loader first, as the
+// pipeline does — this keeps the test measuring its own logic, not missing config.
+const getStoryDetails = extractFunctionBody('get_story_details');
     const buildPrompt = extractFunctionBody('build_generator_prompt');
     const script = `
 PRD_FILE="${prdPath}"

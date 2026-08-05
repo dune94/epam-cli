@@ -1,0 +1,21 @@
+{
+  "$comment": "ENGINE-WIDE defaults for per-story budgets. A project overrides any of these in its own llm-settings.json and need not restate the rest. These are the knobs an operator reaches for when a run burns its budget or a model truncates its answer — they were literals inside a case statement in a 10,000-line shell script, changeable only by editing code.",
+  "effortTiers": {
+    "low":    { "maxIterations": 6,  "maxOutputTokens": 3072 },
+    "medium": { "maxIterations": 10, "maxOutputTokens": 6144 },
+    "high":   { "maxIterations": 15, "maxOutputTokens": 6144 }
+  },
+  "roleOverrides": {
+    "generator": {
+      "maxIterations": 3,
+      "maxOutputTokens": 16384,
+      "description": "a generator writes one large artefact in few turns — the inverse budget of an implementer"
+    }
+  },
+  "outputTokenFloors": {
+    "$comment": "Minimum output budget raised at specific steps that must not be truncated. Applied as a floor: the larger of the tier budget and this value wins.",
+    "planning": 8192,
+    "review": 12288,
+    "mutation": 16384
+  }
+}

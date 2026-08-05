@@ -50,6 +50,9 @@ function runPipeline(story: Record<string, unknown>, env: NodeJS.ProcessEnv = {}
   const script = `
 log() { :; }
 export PRD_FILE='${prd}'
+AUTOMATION_DIR='${_AUTOMATION}'
+${_loaderFn}
+load_llm_settings_json
 ${FNS}
 resolve_effort_settings AMSD-2041
 resolve_generator_settings AMSD-2041
@@ -62,6 +65,11 @@ echo "$STORY_MAX_ITERATIONS $STORY_MAX_OUTPUT_TOKENS"
   }).trim().split(/\s+/).map(Number);
   return { iter: out[0], outTok: out[1] };
 }
+
+// Budgets moved to orchestrations/config/llm-defaults.json — run the real loader first,
+// as the pipeline does, or the extracted functions see no configuration at all.
+const _AUTOMATION = join(__dirname, '../../../orchestrations');
+const _loaderFn = extractFn('load_llm_settings_json');
 
 describe('full effort-budget pipeline, real call order — AMSD-2041 shapes', () => {
   it('the PRE-FIX shape (effort:low, no cpaEffortTier, no coverage data) reproduces the exact live under-budget (6-12 iter)', () => {

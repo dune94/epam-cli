@@ -468,7 +468,7 @@ run_phase() {
   echo ""
 
   local phase_exit=0
-  bash orchestrations/scripts/run-agent-orchestration.sh \
+  bash "$SCRIPT_DIR/run-agent-orchestration.sh" \
     --phase "$phase" \
     --reset \
     2>&1 | tee -a "$LOG_FILE" || phase_exit=${PIPESTATUS[0]}
@@ -482,7 +482,7 @@ run_phase() {
     fi
     echo ""
     phase_exit=0
-    SKIP_GATE_REMEDIATION=1 bash orchestrations/scripts/run-agent-orchestration.sh \
+    SKIP_GATE_REMEDIATION=1 bash "$SCRIPT_DIR/run-agent-orchestration.sh" \
       --phase "$phase" \
       --reset \
       2>&1 | tee -a "$LOG_FILE" || phase_exit=${PIPESTATUS[0]}

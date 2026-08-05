@@ -75,7 +75,7 @@ EPAM_RALPH_WIGGUM_ENABLED=0 \
 EPAM_STORY_TIMEOUT_SECS=180 \
 EPAM_MAX_RETRIES=1 \
 SKIP_BROWSER_E2E_ROUTING=true \
-  bash orchestrations/scripts/run-agent-orchestration.sh \
+  bash "$SCRIPT_DIR/run-agent-orchestration.sh" \
     --phase hello_world_test \
     --reset \
     2>&1 | tee "$LOG_FILE"

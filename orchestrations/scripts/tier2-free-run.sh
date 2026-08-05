@@ -81,7 +81,7 @@ OPENROUTER_API_KEY="$OPENROUTER_API_KEY" \
 EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY" \
 PRD_FILE="$PRD_FILE" \
 SKIP_REGRESSION_GUARD=true \
-  bash orchestrations/scripts/run-agent-orchestration.sh \
+  bash "$SCRIPT_DIR/run-agent-orchestration.sh" \
     --phase hello_world_test \
     --reset \
     2>&1 | tee "$LOG_FILE"

@@ -92,7 +92,7 @@ SKIP_TESTING_GATES=true \
 SKIP_SKILL_ASSESSMENT=1 \
 EPAM_RALPH_WIGGUM_AGENTS=1 \
 EPAM_RALPH_WIGGUM_TIMEOUT_MS=300000 \
-  bash orchestrations/scripts/run-agent-orchestration.sh \
+  bash "$SCRIPT_DIR/run-agent-orchestration.sh" \
     --phase hello_world_test \
     --reset \
     2>&1 | tee "$LOG_FILE"

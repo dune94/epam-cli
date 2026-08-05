@@ -55,13 +55,13 @@ SKILL_NOTE_NORMALIZATION_OPENER="${SKILL_NOTE_NORMALIZATION_OPENER:-Always}"
 export MONITOR_FILE="$MONITOR_STATUS_FILE"
 export ACTIVITY_FILE="${ACTIVITY_FILE:-$LOG_DIR/agent-activity.jsonl}"
 
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
+
+# Delegates to lib/env-file.sh: loading configuration must not EXECUTE it. This function
+# used to `. "$env_file"`, and a bare `cd` on line 1 of the repo's .env sent this script —
+# the agent invoker — to $HOME every time it started.
 load_env_file() {
-    local env_file="$1"
-    [ -f "$env_file" ] || return 0
-    set -a
-    # shellcheck disable=SC1090
-    . "$env_file"
-    set +a
+    load_env_file_safe "$1"
 }
 
 # Save caller-set gate overrides BEFORE loading .env so tier-script values survive.

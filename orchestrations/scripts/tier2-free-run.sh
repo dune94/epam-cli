@@ -25,6 +25,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# Config files are DATA: load them without executing them. See lib/env-file.sh.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
 LOG_FILE="/tmp/tier2-free-run-$(date +%Y%m%dT%H%M%S).log"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
@@ -34,7 +36,7 @@ fail()    { echo -e "${RED}[tier2] ✗${NC} $*"; exit 1; }
 
 # Source .env if not already set
 if [ -z "${OPENROUTER_API_KEY:-}" ] && [ -f "$REPO_ROOT/.env" ]; then
-  set -a; source "$REPO_ROOT/.env"; set +a
+  load_env_file_safe "$REPO_ROOT/.env"
 fi
 
 if [ -z "${OPENROUTER_API_KEY:-}" ]; then
@@ -49,6 +51,14 @@ FREE_MODEL="qwen/qwen3-coder:free"
 info "Tier 2 free-model run"
 info "  Model: $FREE_MODEL (zero credits)"
 info "  Log:   $LOG_FILE"
+echo ""
+
+# ── Pre-flight assessment ─────────────────────────────────────────────────────
+# Every launcher runs this. It was wired into two of eight, and the two being run daily
+# were not among them — see lib/preflight.sh.
+# shellcheck source=lib/preflight.sh
+. "$SCRIPT_DIR/lib/preflight.sh"
+require_preflight || exit 1
 echo ""
 
 cd "$REPO_ROOT"

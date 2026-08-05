@@ -1,0 +1,22 @@
+{
+  "$comment": "Synthesis template for this project. Without it, synthesize-prd-from-jira.js falls back to ANOTHER project's canonical and this project inherits its project block — hello-dolly runs were labelled project.name: skyscanner-app (observed 2026-08-05). Carries project scaffolding only; stories come from the ingest.",
+  "id": "hello-dolly",
+  "title": "hello-dolly (mock harness)",
+  "version": 1,
+  "currentIteration": 0,
+  "source": "jira",
+  "sourceProject": "MOCK",
+  "project": {
+    "name": "hello-dolly",
+    "description": "Mock brownfield harness used by mock1-paused-run.sh",
+    "stack": "typescript",
+    "outputDir": "",
+    "outputDirs": []
+  },
+  "configuration": {},
+  "phasesConfig": {},
+  "implementationOrder": {
+    "core": []
+  },
+  "stories": []
+}

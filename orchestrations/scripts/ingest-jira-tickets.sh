@@ -61,7 +61,9 @@ done
 
 # Source main project .env so API keys reach ac-gate subprocess
 REPO_ROOT_INGEST="$(cd "$SCRIPT_DIR/../.." && pwd)"
-[ -f "$REPO_ROOT_INGEST/.env" ] && { set -a; source "$REPO_ROOT_INGEST/.env"; set +a; }
+# Config files are DATA: load them without executing them. See lib/env-file.sh.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
+load_env_file_safe "$REPO_ROOT_INGEST/.env"
 
 TMPDIR_INGEST="$(mktemp -d /tmp/ingest-XXXXXX)"
 ISSUES_JSON="$TMPDIR_INGEST/issues.json"

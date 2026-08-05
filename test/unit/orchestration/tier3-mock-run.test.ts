@@ -18,6 +18,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const REPO_ROOT = join(__dirname, '../../../');
+const REAL_SCRIPTS = join(REPO_ROOT, 'orchestrations/scripts');
 const REAL_WRAPPER = join(REPO_ROOT, 'orchestrations/scripts/tier3-mock-run.sh');
 
 const cleanupDirs: string[] = [];
@@ -32,11 +33,23 @@ function makeStubbedRepo(opts: {
   cleanupDirs.push(repoRoot);
   const scriptsDir = join(repoRoot, 'orchestrations/scripts');
   mkdirSync(scriptsDir, { recursive: true });
+  const callLogPath = join(repoRoot, 'calls.log');
 
   copyFileSync(REAL_WRAPPER, join(scriptsDir, 'tier3-mock-run.sh'));
   chmodSync(join(scriptsDir, 'tier3-mock-run.sh'), 0o755);
 
-  const callLogPath = join(repoRoot, 'calls.log');
+  // The REAL preflight helper, not a stub: the launcher must abort when the pre-flight
+  // fails, and stubbing the helper would test nothing about that. Only the CHECK itself is
+  // stubbed, since a temp fixture is not a repo with a dist/, a project config or a
+  // dashboard to assess.
+  const libDir = join(scriptsDir, 'lib');
+  mkdirSync(libDir, { recursive: true });
+  copyFileSync(join(REAL_SCRIPTS, 'lib/preflight.sh'), join(libDir, 'preflight.sh'));
+  writeFileSync(
+    join(scriptsDir, 'preflight-check.sh'),
+    `#!/usr/bin/env bash\necho "preflight-check.sh $*" >> ${JSON.stringify(callLogPath)}\nexit \${PREFLIGHT_EXIT:-0}\n`,
+  );
+  chmodSync(join(scriptsDir, 'preflight-check.sh'), 0o755);
 
   writeFileSync(
     join(scriptsDir, 'pre-run-reset.sh'),
@@ -66,9 +79,17 @@ function makeStubbedRepo(opts: {
   return { repoRoot, callLogPath };
 }
 
-function runWrapper(repoRoot: string, args: string[]): { rc: number; output: string } {
+function runWrapper(
+  repoRoot: string,
+  args: string[],
+  extraEnv: Record<string, string> = {},
+): { rc: number; output: string } {
   const wrapperPath = join(repoRoot, 'orchestrations/scripts/tier3-mock-run.sh');
-  const result = spawnSync('bash', [wrapperPath, ...args], { encoding: 'utf8', timeout: 15000 });
+  const result = spawnSync('bash', [wrapperPath, ...args], {
+    encoding: 'utf8',
+    timeout: 15000,
+    env: { ...process.env, ...extraEnv },
+  });
   return { rc: result.status ?? -1, output: (result.stdout || '') + (result.stderr || '') };
 }
 
@@ -82,8 +103,13 @@ describe('tier3-mock-run.sh — real execution, exact call sequence vs stubbed d
     ]);
     expect(rc, output).toBe(0);
     const calls = readFileSync(callLogPath, 'utf8').trim().split('\n');
+    // The pre-flight assessment runs FIRST, ahead of the reset: assessing a project after
+    // tearing its state down assesses the wrong thing.
     expect(calls[0]).toMatch(/^pre-run-reset\.sh --prd \/tmp\/fake-prd\.json$/);
-    expect(calls[1]).toMatch(/^run-agent-orchestration\.sh --phase test_phase --reset$/);
+    // The pre-flight assessment sits between the reset and the pipeline, so it assesses the
+    // state the run will actually start from.
+    expect(calls[1]).toMatch(/^preflight-check\.sh /);
+    expect(calls[2]).toMatch(/^run-agent-orchestration\.sh --phase test_phase --reset$/);
   });
 
   it('exports PRD_FILE and PROJECT_ROOT from the --prd/--project-root args before invoking run-agent-orchestration.sh', () => {
@@ -227,5 +253,38 @@ describe('tier3-mock-run.sh — real execution, exact call sequence vs stubbed d
     const missingPhase = runWrapper(repoRoot, ['--prd', '/tmp/x.json', '--project-root', '/tmp/x']);
     expect(missingPhase.rc).not.toBe(0);
     expect(missingPhase.output).toMatch(/--phase <phase> is required/);
+  });
+});
+
+/**
+ * The pre-flight must GATE the launch, not merely precede it. Wiring it into every launcher
+ * (2026-08-05) is worth nothing if a failing assessment still lets the run spend.
+ */
+describe('the pre-flight gates the launch', () => {
+  it('runs the pre-flight before invoking the orchestration script', () => {
+    const { repoRoot, callLogPath } = makeStubbedRepo({ runAgentOrchExitCode: 0 });
+    runWrapper(repoRoot, ['--prd', '/tmp/fake-prd.json', '--project-root', '/tmp/fake-project', '--phase', 'core']);
+    const calls = readFileSync(callLogPath, 'utf8').trim().split('\n');
+    const pre = calls.findIndex((c) => c.startsWith('preflight-check.sh'));
+    const orch = calls.findIndex((c) => c.startsWith('run-agent-orchestration.sh'));
+    expect(pre, 'the launcher never ran the pre-flight').toBeGreaterThanOrEqual(0);
+    expect(orch, 'the launcher never ran the pipeline').toBeGreaterThanOrEqual(0);
+    expect(pre, 'assessing AFTER launching assesses nothing').toBeLessThan(orch);
+  });
+
+  it('THE POINT: a failing pre-flight aborts before the pipeline is invoked', () => {
+    const { repoRoot, callLogPath } = makeStubbedRepo({ runAgentOrchExitCode: 0 });
+    const { rc } = runWrapper(
+      repoRoot,
+      ['--prd', '/tmp/fake-prd.json', '--project-root', '/tmp/fake-project', '--phase', 'core'],
+      { PREFLIGHT_EXIT: '1' },
+    );
+    const calls = readFileSync(callLogPath, 'utf8').trim().split('\n');
+    expect(
+      calls.some((c) => c.startsWith('run-agent-orchestration.sh')),
+      'the pipeline ran despite a failed assessment — every launch failure on 2026-08-05 ' +
+        'was of exactly this shape: something checkable was wrong and the run spent anyway',
+    ).toBe(false);
+    expect(rc, 'a launcher that aborts must say so with a non-zero exit').not.toBe(0);
   });
 });

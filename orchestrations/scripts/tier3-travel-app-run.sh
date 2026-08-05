@@ -42,6 +42,8 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# Config files are DATA: load them without executing them. See lib/env-file.sh.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
 LOG_FILE="/tmp/tier3-travel-app-run-$(date +%Y%m%dT%H%M%S).log"
 
 # Record our own PID (== the process-group ID after the setsid re-exec above)
@@ -59,7 +61,7 @@ fail()    { echo -e "${RED}[tier3-travel] ✗${NC} $*"; exit 1; }
 
 # Load .env if any required key is missing
 if [ -z "${MINIMAX_API_KEY:-}" ] || [ -z "${OPENROUTER_API_KEY:-}" ]; then
-  [ -f "$REPO_ROOT/.env" ] && { set -a; source "$REPO_ROOT/.env"; set +a; }
+  load_env_file_safe "$REPO_ROOT/.env"
 fi
 
 [ -z "${MINIMAX_API_KEY:-}" ]    && fail "MINIMAX_API_KEY is not set. Export it or add it to .env"
@@ -389,12 +391,9 @@ fi
 echo ""
 
 # ── Pre-flight validation ─────────────────────────────────────────────────────
-if ! bash orchestrations/scripts/preflight-check.sh \
-     --runner tier3-travel-app-run.sh \
-     --prd "$PRD_FILE"; then
-  fail "Pre-flight checks failed — aborting run. Fix issues above first."
-  exit 1
-fi
+# shellcheck source=lib/preflight.sh
+. "$SCRIPT_DIR/lib/preflight.sh"
+require_preflight || exit 1
 echo ""
 
 # ── Wire the dashboard to this run's live PRD + logs ─────────────────────────

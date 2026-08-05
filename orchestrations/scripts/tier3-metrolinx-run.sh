@@ -34,6 +34,8 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# Config files are DATA: load them without executing them. See lib/env-file.sh.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
 LOG_FILE="/tmp/tier3-metrolinx-jira-$(date +%Y%m%dT%H%M%S)-$$.log"
 # One identifier for the whole run. Previously only the CHILD orchestration
 # script set this, so the parent could not name anything after it — the run
@@ -89,7 +91,7 @@ fail()    {
 }
 
 # ── Load .env then metrolinx project env ─────────────────────────────────────
-[ -f "$REPO_ROOT/.env" ] && { set -a; source "$REPO_ROOT/.env"; set +a; }
+load_env_file_safe "$REPO_ROOT/.env"
 ENV_FILE="$SCRIPT_DIR/../jira/metrolinx.env"
 [ -f "$ENV_FILE" ] && { set -a; source "$ENV_FILE"; set +a; } || fail "metrolinx.env not found at $ENV_FILE"
 # Project-level config (pipeline flags, semble, AC gate settings)
@@ -304,6 +306,14 @@ else
   fail "CodeGraph preflight failed — one or more codelines could not be indexed. Aborting before codeline discovery ever runs."
 fi
 rm -f /tmp/codegraph-preflight-$$.log
+echo ""
+
+# ── Pre-flight assessment ─────────────────────────────────────────────────────
+# Every launcher runs this. It was wired into two of eight, and the two being run daily
+# were not among them — see lib/preflight.sh.
+# shellcheck source=lib/preflight.sh
+. "$SCRIPT_DIR/lib/preflight.sh"
+require_preflight || exit 1
 echo ""
 
 # ── run_phase: invoke orch script with self-healing retry on exit 2 ───────────

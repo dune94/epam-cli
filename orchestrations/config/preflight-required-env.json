@@ -1,0 +1,12 @@
+{
+  "$comment": "What the pre-flight requires to be RESOLVED in the launcher's environment at the moment it launches. Previously preflight-check.sh grepped the launcher's SOURCE for 'export VAR', which is the anti-pattern CLAUDE.md names outright: a string in a file proves nothing about the environment the pipeline gets. It also produced false failures — tier3-metrolinx-run.sh exports ORCH_GATE_MODEL on a shared 'export A B C' line the grep could not see, and sets OUTPUT_DIR/PROJECT_ROOT PER LANE inside run-agent-orchestration.sh, where they belong. A pre-flight that blocks a healthy launcher gets disabled, and then it protects nothing.",
+  "required": {
+    "PRD_FILE": "the PRD the run executes; every launcher resolves one before launching"
+  },
+  "advisory": {
+    "OUTPUT_DIR": "set per lane by run-agent-orchestration.sh for multi-codeline projects; absent in the launcher is normal there",
+    "PROJECT_ROOT": "same — per lane for multi-codeline projects",
+    "ORCH_GATE_MODEL": "gate model; falls back to llm-settings.json when unset",
+    "ORCH_GATE_PROVIDER": "gate provider; falls back to llm-settings.json when unset"
+  }
+}

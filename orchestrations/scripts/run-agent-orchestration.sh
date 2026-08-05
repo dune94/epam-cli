@@ -13,6 +13,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
+# Config files are DATA: load them without executing them. See lib/env-file.sh.
+. "$AUTOMATION_DIR/scripts/lib/env-file.sh"
 
 # Early-load Jira env only when Jira mode is already externally activated
 # (JIRA_PIPELINE=1 set by the caller — e.g. `source jira/.env` before running).
@@ -24,7 +26,7 @@ AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 # with whatever stale/wrong project is in jira/.env.
 if [ "${JIRA_PIPELINE:-0}" = "1" ] && [ -z "${JIRA_CODELINE_RUN:-}" ] && \
    [ -z "${JIRA_URL:-}" ] && [ -f "$AUTOMATION_DIR/jira/.env" ]; then
-  set -a; source "$AUTOMATION_DIR/jira/.env"; set +a
+  load_env_file_safe "$AUTOMATION_DIR/jira/.env"
 fi
 
 # Setsid guard: re-exec under a new session so parent SIGTERM doesn't propagate
@@ -3341,7 +3343,14 @@ KNOWNFIXES_EOF
     fi
   fi
 
-  rm -f "${_cl_prds[@]}" "$_cross_prd" 2>/dev/null || true
+  # NOT deleted. This `rm -f` was /tmp hygiene: the lane PRDs used to live in a shared,
+  # machine-global namespace and had to be swept. They now live in this run's OWN directory
+  # (<project-config>/runs/<run-id>/work/), which makes them run EVIDENCE — the archiver
+  # reads the working PRD from there, and deleting it first is why working-prd.json came
+  # back "missing" on run 20260805T182214Z after the isolation fix.
+  #
+  # The cross-lane scratch file has no evidentiary value and is still removed.
+  rm -f "$_cross_prd" 2>/dev/null || true
   unset CROSS_CODELINE_PRD
 
   [ "$_overall" = "0" ] \

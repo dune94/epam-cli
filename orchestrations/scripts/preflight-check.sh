@@ -16,14 +16,22 @@ _DASH="$(service_url dashboard)"
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# Config files are DATA: load them without executing them. See lib/env-file.sh.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
 
 # ── Args ─────────────────────────────────────────────────────────────────────
-RUNNER_SCRIPT=""
-PRD_FILE=""
+# Inherit from the launching environment when present: a launcher that already resolved
+# PRD_FILE should not have to pass it again, and blanking it here made the pre-flight
+# report "PRD_FILE is unset" about an environment where it was plainly set.
+RUNNER_SCRIPT="${RUNNER_SCRIPT:-}"
+PRD_FILE="${PRD_FILE:-}"
+PROJECT_CONFIG_DIR="${EPAM_PROJECT_CONFIG_DIR:-}"
 while [[ $# -gt 0 ]]; do
   case $1 in
     --runner) RUNNER_SCRIPT="$SCRIPT_DIR/$2"; shift 2 ;;
     --prd)    PRD_FILE="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"; shift 2 ;;
+    --project-config) PROJECT_CONFIG_DIR="$2"; shift 2 ;;
     *) echo "Unknown arg: $1" >&2; exit 1 ;;
   esac
 done
@@ -54,16 +62,28 @@ else
   fi
 fi
 
-# ── 2. Runner exports critical vars ──────────────────────────────────────────
-echo "[ Critical exports in runner ]"
-if [[ -f "$RUNNER_SCRIPT" ]]; then
-  for var in OUTPUT_DIR PROJECT_ROOT PRD_FILE ORCH_GATE_MODEL ORCH_GATE_PROVIDER; do
-    if grep -q "export ${var}" "$RUNNER_SCRIPT"; then
-      ok "export $var present"
+# ── 2. Critical variables RESOLVE in the launching environment ───────────────
+# This used to grep the launcher's source for "export VAR". A string in a file is not an
+# environment: it missed tier3-metrolinx-run.sh's shared `export A B C` line and demanded
+# OUTPUT_DIR/PROJECT_ROOT from a launcher that correctly sets them per lane downstream.
+# Which variables matter is declared in config, not here.
+echo "[ Critical variables ]"
+_req_cfg="$REPO_ROOT/orchestrations/config/preflight-required-env.json"
+if [ -f "$_req_cfg" ]; then
+  while IFS=$'\t' read -r _var _why; do
+    [ -n "$_var" ] || continue
+    if [ -n "${!_var:-}" ]; then
+      ok "$_var is resolved"
     else
-      fail "export $var MISSING in $(basename "$RUNNER_SCRIPT")"
+      fail "$_var is unset — $_why"
     fi
-  done
+  done < <(jq -r '.required | to_entries[] | "\(.key)\t\(.value)"' "$_req_cfg" 2>/dev/null)
+  while IFS=$'\t' read -r _var _why; do
+    [ -n "$_var" ] || continue
+    [ -n "${!_var:-}" ] && ok "$_var is resolved" || echo "  – $_var unset — $_why"
+  done < <(jq -r '.advisory | to_entries[] | "\(.key)\t\(.value)"' "$_req_cfg" 2>/dev/null)
+else
+  fail "preflight-required-env.json missing — cannot tell which variables this run needs"
 fi
 
 # ── 3. PRD integrity gate ────────────────────────────────────────────────────
@@ -140,13 +160,19 @@ else
     fail "PRD project.outputDir is NOT set — deliverables check will use wrong path"
   fi
 
-  # Runner OUTPUT_DIR must match PRD outputDir
-  if [[ -f "$RUNNER_SCRIPT" && -n "$OUTPUT_DIR_VAL" ]]; then
-    RUNNER_OUTPUT=$(grep 'OUTPUT_DIR=' "$RUNNER_SCRIPT" | grep -v '^#' | head -1 | sed 's/.*OUTPUT_DIR="\?\([^"]*\)"\?.*/\1/' | sed 's/\${\([A-Z_]*\):-\(.*\)}/\2/')
-    if [[ "$RUNNER_OUTPUT" == "$OUTPUT_DIR_VAL" ]]; then
-      ok "Runner OUTPUT_DIR matches PRD outputDir ($OUTPUT_DIR_VAL)"
+  # The RESOLVED OUTPUT_DIR must agree with the PRD's. This used to scrape `OUTPUT_DIR=`
+  # out of the launcher's SOURCE with grep+sed, which is the same anti-pattern as the export
+  # check above and failed the same way: tier3-mock-run.sh takes its output directory from
+  # --project-root and never spells OUTPUT_DIR= at all, so the scrape produced '' and the
+  # pre-flight declared a mismatch against a perfectly correct launcher. A launcher that
+  # resolves the directory per lane has nothing to compare here, and saying so is honest.
+  if [[ -n "$OUTPUT_DIR_VAL" ]]; then
+    if [[ -z "${OUTPUT_DIR:-}" ]]; then
+      echo "  – OUTPUT_DIR not resolved in this environment (set per lane downstream) — nothing to compare"
+    elif [[ "${OUTPUT_DIR}" == "$OUTPUT_DIR_VAL" ]]; then
+      ok "OUTPUT_DIR agrees with PRD outputDir ($OUTPUT_DIR_VAL)"
     else
-      fail "Runner OUTPUT_DIR='$RUNNER_OUTPUT' does NOT match PRD outputDir='$OUTPUT_DIR_VAL'"
+      fail "OUTPUT_DIR='${OUTPUT_DIR}' does NOT match PRD outputDir='$OUTPUT_DIR_VAL' — deliverables would be checked in the wrong place"
     fi
   fi
 
@@ -197,7 +223,7 @@ fi
 # ── 4. Required API keys ──────────────────────────────────────────────────────
 echo "[ API keys ]"
 # Load .env if present
-[[ -f .env ]] && set -a && source .env 2>/dev/null && set +a || true
+load_env_file_safe "$REPO_ROOT/.env"
 
 for key in OPENROUTER_API_KEY OPENAI_API_KEY; do
   if [[ -n "${!key:-}" ]]; then
@@ -212,7 +238,24 @@ if [[ -z "${RAPIDAPI_KEY:-}" ]]; then
   echo "  ⚠ RAPIDAPI_KEY not set — API contract discovery story may fail"
 fi
 
+# ── Machine-environment checks: on by default ────────────────────────────────
+# Sections 5 and 6 and the service probes in 7 assess THIS MACHINE — is the dashboard up,
+# is the snapshot watcher alive, is Langfuse answering. A real launch must pass them.
+#
+# EPAM_PREFLIGHT_ENVIRONMENT=0 assesses the PROJECT only. It exists for callers that invoke
+# a launcher without launching on the machine's behalf — mock-launcher-parity.test.ts drives
+# the real launcher into a forced-failure phase to prove a failed run still archives its
+# evidence, and would otherwise pass or fail with whether a watcher happened to be running.
+# It cannot hide a project defect: every project-readiness check still runs and still blocks.
+_assess_environment="${EPAM_PREFLIGHT_ENVIRONMENT:-1}"
+if [ "$_assess_environment" = "0" ]; then
+  echo "[ Machine environment ]"
+  echo "  – SKIPPED by EPAM_PREFLIGHT_ENVIRONMENT=0 — project checks below still apply"
+  echo ""
+fi
+
 # ── 5. Dashboard is up ───────────────────────────────────────────────────────
+if [ "$_assess_environment" != "0" ]; then
 echo "[ Dashboard ]"
 if curl -sf ${_DASH}/prd.json >/dev/null 2>&1; then
   ok "Dashboard serving prd.json at ${_DASH}"
@@ -302,6 +345,61 @@ except Exception as e:
 else
   fail "build-info.json missing generatedAt field — snapshot watcher may be writing corrupted output"
 fi
+
+fi
+
+# ── 7. PROJECT READINESS ─────────────────────────────────────────────────────
+# Added 2026-08-05. Four launches that day died on conditions nothing checked before
+# spending: a stale dist (twice, caught by a phase gate AFTER the run started), a dead
+# observability stack, and a project with no synthesis template that silently ran under
+# ANOTHER project's identity. A pre-flight that does not assess the PROJECT is not
+# assessing what actually breaks.
+echo "[ Project readiness ]"
+
+# dist/ must be newer than src/ — the pipeline executes dist/epam.js, so a stale bundle
+# means the code under test is not the code that runs.
+_newest_src=$(find "$REPO_ROOT/src" -name '*.ts' -newer "$REPO_ROOT/dist/epam.js" -print -quit 2>/dev/null)
+if [ ! -f "$REPO_ROOT/dist/epam.js" ]; then
+  fail "dist/epam.js missing — the pipeline runs dist, not src. Build with: node ./node_modules/.bin/tsup"
+elif [ -n "$_newest_src" ]; then
+  fail "dist/ is STALE (e.g. $(basename "$_newest_src")) — source changes would NOT execute. Rebuild with tsup."
+else
+  ok "dist/ is newer than src/"
+fi
+
+# The project must own its synthesis template. Without one, synthesize-prd-from-jira.js
+# falls back to another project's canonical and inherits ITS project block — observed
+# 2026-08-05: hello-dolly runs were labelled project.name: skyscanner-app.
+if [ -n "${PROJECT_CONFIG_DIR:-}" ]; then
+  if [ -f "${PROJECT_CONFIG_DIR}/prd.canonical.json" ]; then
+    ok "project has its own prd.canonical.json (no borrowed identity)"
+  else
+    fail "no prd.canonical.json in ${PROJECT_CONFIG_DIR} — synthesis will fall back to ANOTHER project's template and this run will be labelled with that project's name"
+  fi
+else
+  echo "  – project config dir not given (--project-config); skipping template check"
+fi
+
+# Observability: a run aborts at the tier launcher's own preflight when these are down, so
+# finding out here costs nothing and saves a launch cycle.
+if [ "${EPAM_PREFLIGHT_SKIP_NETWORK:-0}" != "1" ] && [ "$_assess_environment" != "0" ]; then
+  for _svc in langfuse grafana; do
+    _url=""
+    if [ -f "$SCRIPT_DIR/lib/service-urls.sh" ]; then
+      # shellcheck source=lib/service-urls.sh
+      . "$SCRIPT_DIR/lib/service-urls.sh" 2>/dev/null || true
+      _url="$(service_url "$_svc" 2>/dev/null || true)"
+    fi
+    [ -n "$_url" ] || continue
+    _code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$_url" 2>/dev/null || echo "000")
+    if [ "$_code" = "000" ]; then
+      fail "${_svc} NOT serving at ${_url} — the run will abort at the observability preflight"
+    else
+      ok "${_svc} serving (HTTP ${_code})"
+    fi
+  done
+fi
+echo ""
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""

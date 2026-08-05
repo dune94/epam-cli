@@ -124,7 +124,16 @@ describe('archiving on failure is proven by EXECUTION, not by a string being pre
     const lane = join(tmp, 'lane');
     mkdirSync(configDir, { recursive: true });
     mkdirSync(lane, { recursive: true });
-    writeFileSync(join(lane, 'prd.json'), '{}');
+    // Minimally VALID rather than empty: the pre-flight rejects a PRD with no
+    // project.outputDir, and rightly so — the deliverables check would look in the wrong
+    // place. `{}` only ever passed because nothing assessed it.
+    writeFileSync(
+      join(lane, 'prd.json'),
+      JSON.stringify({ project: { name: 'parity', outputDir: lane }, stories: [] }),
+    );
+    // Every project owns its synthesis template; without one the pre-flight correctly
+    // refuses to launch, because the run would inherit another project's identity.
+    writeFileSync(join(configDir, 'prd.canonical.json'), JSON.stringify({ project: { name: 'parity' }, stories: [] }));
 
     const r = spawnSync('bash', [
       join(SCRIPTS, 'tier3-mock-run.sh'),
@@ -141,6 +150,12 @@ describe('archiving on failure is proven by EXECUTION, not by a string being pre
         ORCH_RUN_ID: 'parity-test-run',
         EPAM_DANGEROUS_SKIP_APPROVAL: '1',
         JIRA_CODELINE_ROOT: '',           // skip teardown; not what this asserts
+        // This drives the real launcher into a forced-failure phase to prove a FAILED run
+        // still archives its evidence. It is not launching on this machine's behalf, so the
+        // machine-environment checks (dashboard up, snapshot watcher alive, Langfuse
+        // answering) do not apply — otherwise this assertion would pass or fail with
+        // whether a watcher happened to be running. Project readiness still blocks.
+        EPAM_PREFLIGHT_ENVIRONMENT: '0',
       },
     });
 

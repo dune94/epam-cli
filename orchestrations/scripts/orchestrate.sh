@@ -20,6 +20,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# Config files are DATA: load them without executing them. See lib/env-file.sh.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
 
 # ── Parse args ────────────────────────────────────────────────────────────────
 # Save original args BEFORE shift loop — setsid re-exec needs the raw list.
@@ -57,7 +59,7 @@ fi
 # clobbered by global .env or shared secrets files that may contain stale/wrong
 # Jira connection vars for a different project.
 # Pass 1: global .env + project config → get SECRETS_FILE path
-[ -f "$REPO_ROOT/.env" ] && { set -a; source "$REPO_ROOT/.env"; set +a; }
+load_env_file_safe "$REPO_ROOT/.env"
 set -a; source "$CONFIG"; set +a
 # Pass 2: source secrets file (tokens, not connection config) if declared
 [ -n "${SECRETS_FILE:-}" ] && [ -f "${SECRETS_FILE}" ] && { set -a; source "${SECRETS_FILE}"; set +a; }

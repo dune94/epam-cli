@@ -57,6 +57,14 @@ success "Ollama ready with model $OLLAMA_MODEL"
 
 # ── 2. Build epam dist ────────────────────────────────────────────────────────
 info "Building epam CLI..."
+# ── Pre-flight assessment ─────────────────────────────────────────────────────
+# Every launcher runs this. It was wired into two of eight, and the two being run daily
+# were not among them — see lib/preflight.sh.
+# shellcheck source=lib/preflight.sh
+. "$SCRIPT_DIR/lib/preflight.sh"
+require_preflight || exit 1
+echo ""
+
 cd "$REPO_ROOT"
 ~/.local/share/fnm/node-versions/v24.14.1/installation/bin/node \
   ./node_modules/.bin/tsup 2>&1 | grep -E "success|error|warn|ERR" || true

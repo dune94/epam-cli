@@ -77,6 +77,14 @@ info "Launching pipeline (log: $LOG_FILE)..."
 info "  OPENROUTER_BASE_URL=$MOCK_URL (story agents → mock)"
 info "  ORCH_GATE_PROVIDER=qwen (coordinator calls → mock, all skipped anyway)"
 
+# ── Pre-flight assessment ─────────────────────────────────────────────────────
+# Every launcher runs this. It was wired into two of eight, and the two being run daily
+# were not among them — see lib/preflight.sh.
+# shellcheck source=lib/preflight.sh
+. "$SCRIPT_DIR/lib/preflight.sh"
+require_preflight || exit 1
+echo ""
+
 cd "$REPO_ROOT"
 OPENROUTER_API_KEY="mock-key" \
 OPENROUTER_BASE_URL="$MOCK_URL" \

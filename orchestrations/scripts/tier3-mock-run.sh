@@ -171,6 +171,14 @@ if [ -n "${JIRA_CODELINE_ROOT:-}" ] && [ -x "$SCRIPT_DIR/codegraph-preflight-ind
     || info "  CodeGraph preflight reported a problem — continuing (non-fatal, matching the real launcher)"
 fi
 
+# ── Pre-flight assessment ─────────────────────────────────────────────────────
+# Every launcher runs this. It was wired into two of eight, and the two being run daily
+# were not among them — see lib/preflight.sh.
+# shellcheck source=lib/preflight.sh
+. "$SCRIPT_DIR/lib/preflight.sh"
+require_preflight || exit 1
+echo ""
+
 # ── Step 2: run_phase — copied verbatim from tier3-metrolinx-run.sh's own
 # self-healing retry on exit 2 (gate remediation), not a simplified stand-in.
 run_phase() {

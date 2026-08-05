@@ -1,4 +1,8 @@
 #!/bin/bash
+# Service endpoints come from orchestrations/config/services.json — one place to change
+# a port, instead of the 20+ copies these URLs used to have across the pipeline.
+. "$(dirname "${BASH_SOURCE[0]}")/lib/service-urls.sh"
+
 # Dashboard Health Check
 # Verifies all orchestration dashboard pages and data endpoints are serving correctly.
 #
@@ -17,7 +21,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 COMPOSE_FILE="$PROJECT_ROOT/docker-compose.epam-cli.yml"
-DASHBOARD_BASE="http://localhost:8092"
+DASHBOARD_BASE="$(service_url dashboard)"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

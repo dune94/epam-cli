@@ -39,6 +39,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# Service endpoints come from orchestrations/config/services.json — one place to change
+# a port, instead of the 20+ copies these URLs used to have across the pipeline.
+. "$(dirname "${BASH_SOURCE[0]}")/lib/service-urls.sh"
+
 COMPOSE_BASE="$REPO_ROOT/docker-compose.observability.yml"
 # B29: overridable so a TEST can point this at a throwaway path. Hardcoding it
 # meant any test invoking this script rewrote the repo's own git-tracked override
@@ -314,8 +318,8 @@ echo ""
 success "Pre-run reset complete."
 echo "  PRD:         $PRD_FILE"
 echo "  Log dir:     $LOG_DIR"
-echo "  Dashboard:   http://localhost:8092/monitor.html"
-echo "  PRD Viewer:  http://localhost:8092/prd-viewer.html"
-echo "  Langfuse:    http://localhost:3100"
+echo "  Dashboard:   $(service_url dashboard)/monitor.html"
+echo "  PRD Viewer:  $(service_url dashboard)/prd-viewer.html"
+echo "  Langfuse:    $(service_url langfuse)"
 echo ""
 

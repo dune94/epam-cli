@@ -1,0 +1,35 @@
+{
+  "$comment": "Endpoints of services the pipeline talks to. EDIT HERE — no code change, no rebuild. Each entry is overridable at runtime by its env var, so a machine running a service on a different port needs no edit at all. Ports were previously written into 20+ code sites, so moving one meant finding every copy.",
+  "services": {
+    "dashboard": {
+      "url": "http://localhost:8092",
+      "env": "EPAM_DASHBOARD_URL",
+      "description": "agent-monitor dashboard (nginx container serving live run logs)"
+    },
+    "langfuse": {
+      "url": "http://localhost:3100",
+      "env": "LANGFUSE_BASE_URL",
+      "description": "LLM tracing — the observability preflight aborts a run when this is not serving"
+    },
+    "grafana": {
+      "url": "http://localhost:3001",
+      "env": "EPAM_GRAFANA_URL",
+      "description": "metrics dashboards — also checked by the observability preflight"
+    },
+    "storyApi": {
+      "url": "http://localhost:8090",
+      "env": "EPAM_STORY_API_URL",
+      "description": "story status API used by operator curl examples"
+    },
+    "phaseGraph": {
+      "url": "http://localhost:7474",
+      "env": "EPAM_PHASE_GRAPH_URL",
+      "description": "graph browser for the phase dependency graph"
+    },
+    "remoteSession": {
+      "url": "http://localhost:8080",
+      "env": "EPAM_REMOTE_SESSION_URL",
+      "description": "remote session store for QR-based mobile handoff"
+    }
+  }
+}

@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# Service endpoints come from orchestrations/config/services.json — one place to change
+# a port, instead of the 20+ copies these URLs used to have across the pipeline.
+. "$(dirname "${BASH_SOURCE[0]}")/lib/service-urls.sh"
+_DASH="$(service_url dashboard)"
+
 # preflight-check.sh — validates everything before a paid pipeline run.
 # Catches missing exports, bad PRD config, missing API keys, and wrong paths.
 # Called automatically by pre-run-reset.sh, or run standalone.
@@ -209,8 +214,8 @@ fi
 
 # ── 5. Dashboard is up ───────────────────────────────────────────────────────
 echo "[ Dashboard ]"
-if curl -sf http://localhost:8092/prd.json >/dev/null 2>&1; then
-  ok "Dashboard serving prd.json at http://localhost:8092"
+if curl -sf ${_DASH}/prd.json >/dev/null 2>&1; then
+  ok "Dashboard serving prd.json at ${_DASH}"
 else
   fail "Dashboard not responding — run pre-run-reset.sh first"
 fi
@@ -241,14 +246,14 @@ else
 fi
 
 # 6c. Dashboard /logs/healing-events.jsonl is served by nginx (routing sanity)
-if curl -sf http://localhost:8092/logs/healing-events.jsonl >/dev/null 2>&1; then
+if curl -sf ${_DASH}/logs/healing-events.jsonl >/dev/null 2>&1; then
   ok "nginx serves /logs/healing-events.jsonl — agent-activity.html and health.html will read it"
 else
   fail "nginx /logs/healing-events.jsonl not reachable — docker /logs-dir mount may be wrong; run pre-run-reset.sh"
 fi
 
 # 6d. build-info.json is fresh and contains selfHealing (health.html depends on it)
-if curl -sf "http://localhost:8092/build-info.json" 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); assert 'selfHealing' in d.get('metrics',{}), 'selfHealing missing'" 2>/dev/null; then
+if curl -sf "${_DASH}/build-info.json" 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); assert 'selfHealing' in d.get('metrics',{}), 'selfHealing missing'" 2>/dev/null; then
   ok "build-info.json has metrics.selfHealing — health.html will render correctly"
 else
   fail "build-info.json missing or lacks metrics.selfHealing — health.html will show nothing; check snapshot-watch.js process"
@@ -277,7 +282,7 @@ fi
 
 # 6f. build-info.json was generated recently (within 120s) — proves the watcher
 # is actively refreshing, not just present-but-stalled.
-_generated_at=$(curl -sf "http://localhost:8092/build-info.json" 2>/dev/null \
+_generated_at=$(curl -sf "${_DASH}/build-info.json" 2>/dev/null \
   | python3 -c "import json,sys; print(json.load(sys.stdin).get('generatedAt',''))" 2>/dev/null || echo '')
 if [[ -n "$_generated_at" ]]; then
   _age_s=$(python3 -c "

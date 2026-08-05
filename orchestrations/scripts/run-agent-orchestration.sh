@@ -2555,6 +2555,25 @@ _kill_lane_tree() {
 # $1 — path to PRD to route (synthesized or canonical)
 # $2 — log file path (optional; defaults to a new tmp file)
 
+# ── Run-scoped working directory ────────────────────────────────────────────
+# Lane working files (per-codeline PRDs, cross-lane state) used to be written to a FLAT
+# machine-global namespace: /tmp/orch-<codeline>-prd-<pid>.json. Every project and every
+# concurrent run shared it, and archive-run-artifacts.sh then picked "the newest matching
+# file" — so a clean mock1 run archived metrolinx's PRD, describing the wrong project, the
+# wrong story and the wrong day (live 2026-08-05).
+#
+# Scoped to THIS run instead. Falls back to a private mktemp -d rather than the shared
+# namespace when no run directory can be derived: a temp dir nobody else can glob is still
+# isolated, which the old path never was.
+_run_work_dir() {
+    local _base="${EPAM_PROJECT_CONFIG_DIR:-}"
+    if [ -n "$_base" ] && [ -n "${ORCH_RUN_ID:-}" ]; then
+        local _d="$_base/runs/$ORCH_RUN_ID/work"
+        mkdir -p "$_d" 2>/dev/null && { printf '%s' "$_d"; return 0; }
+    fi
+    mktemp -d "${TMPDIR:-/tmp}/orch-run-XXXXXX"
+}
+
 _run_codeline_loop() {
   local _prd_path="$1"
   local _log_file="${2:-/tmp/orch-$(date +%Y%m%dT%H%M%S).log}"
@@ -2808,8 +2827,11 @@ KNOWNFIXES_EOF
     fi
   done
 
+
+
   # Per-codeline execution loop
-  local _overall=0 _completed_list="" _cross_prd="/tmp/orch-cross-$$.json"
+  local _work_dir; _work_dir="$(_run_work_dir)"
+  local _overall=0 _completed_list="" _cross_prd="$_work_dir/cross.json"
   local _cl_prds=()
 
 
@@ -2900,7 +2922,7 @@ KNOWNFIXES_EOF
 
     for _entry in "${_cl_entries[@]}"; do
       local _cl="${_entry%%:*}" _wt="${_entry#*:}"
-      local _cl_prd="/tmp/orch-${_cl}-prd-$$.json"
+      local _cl_prd="$_work_dir/${_cl}-prd.json"
       _cl_prds+=("$_cl_prd")
       local _n_stories
       _n_stories=$(_filtered_prd "$_cl" "$_cl_prd" "$_prd_path")
@@ -3135,7 +3157,7 @@ KNOWNFIXES_EOF
   else
   for _entry in "${_cl_entries[@]}"; do
     local _cl="${_entry%%:*}" _wt="${_entry#*:}"
-    local _cl_prd="/tmp/orch-${_cl}-prd-$$.json"
+    local _cl_prd="$_work_dir/${_cl}-prd.json"
     _cl_prds+=("$_cl_prd")
 
     local _n_stories

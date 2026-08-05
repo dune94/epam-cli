@@ -65,7 +65,11 @@ function extractFnByName(fnStart: string): string {
   return lines.slice(start, end + 1).join('\n');
 }
 function extractLoopFn(): string {
-  return extractFnByName('_run_codeline_loop() {');
+  // _run_codeline_loop now calls _run_work_dir, which scopes lane working files to THIS
+  // run instead of a machine-global /tmp namespace shared by every project. A harness that
+  // extracts the loop ALONE loses that callee, every lane PRD path comes out empty and no
+  // lane runs — the harness would then "prove" a halt that never happened.
+  return `${extractFnByName('_run_work_dir() {')}\n${extractFnByName('_run_codeline_loop() {')}`;
 }
 const LOOP_FN = extractLoopFn();
 // _run_codeline_loop calls _kill_lane_tree (a SEPARATE function) to actually
@@ -123,8 +127,10 @@ function runLanes(
 set -uo pipefail
 
 if [ "\${1:-}" = "--reset" ]; then
-  # Callee: which lane is this? PRD_FILE is /tmp/orch-<codeline>-prd-<pid>.json
-  _cl=\$(basename "\${PRD_FILE:-}" | sed -E 's/^orch-(.*)-prd-[0-9]+\\.json$/\\1/')
+  # Callee: which lane is this? The lane PRD is <run-work-dir>/<codeline>-prd.json.
+  # It used to be /tmp/orch-<codeline>-prd-<pid>.json — a flat, machine-global namespace
+  # every project shared, which is how one run's archiver picked up another project's PRD.
+  _cl=\$(basename "\${PRD_FILE:-}" | sed -E 's/^(.*)-prd\\.json$/\\1/')
   echo "\$_cl" >> "${marker}"
   # Record the LOG_DIR this lane was handed, and write a baseline SHA into it —
   # the file that corrupted across lanes live on 2026-07-29.

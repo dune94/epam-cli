@@ -122,7 +122,14 @@ describe('a successful run archives what explains it', () => {
       'the self-heal scratchpad was not kept').toBe(true);
     expect(existsSync(at(fx, 'kb/constraints.json')),
       'the compiled constraints were not kept').toBe(true);
-    expect(existsSync(at(fx, 'kb/healing-events.jsonl'))).toBe(true);
+    // healing-events.jsonl is the ENGINE-WIDE store, accumulating across every project and
+    // run. It is now filtered to THIS run (entries at/after the instant ORCH_RUN_ID
+    // encodes), because copying it whole put another project's previous-day history into a
+    // clean run's evidence. Captured when this run has events; honestly reported as
+    // missing when it has none — never another project's.
+    const manifest = JSON.parse(readFileSync(at(fx, 'artifacts.json'), 'utf8'));
+    const kbListed = [...manifest.captured, ...manifest.missing].includes('kb/healing-events.jsonl');
+    expect(kbListed, 'healing-events must appear in the manifest either way').toBe(true);
   });
 
   it('writes a manifest saying what was captured and from where', () => {

@@ -52,9 +52,19 @@ _take() {   # _take <src> <dest-rel> <label>
 # The working PRD: verification criteria, test criteria, fix-site analysis.
 _prd="${WORKING_PRD:-}"
 if [ -z "$_prd" ]; then
-    # The orchestration script names it orch-<codeline>-prd-<pid>.json; take the
-    # newest, which is this run's.
-    _prd=$(ls -t /tmp/orch-*-prd-*.json 2>/dev/null | head -1)
+    # Look ONLY inside this run's own working directory. The previous version took
+    # `ls -t /tmp/orch-*-prd-*.json | head -1`, commented "the newest, which is this run's"
+    # — it is the newest from ANY project on the machine. Live 2026-08-05: a clean mock1
+    # run (hello-dolly / MOCK-HW-1) archived metrolinx's AMSD-2041 PRD, so its evidence
+    # named the wrong project, the wrong story and the wrong day.
+    #
+    # No cross-run glob and no fallback to a shared namespace. If this run's PRD cannot be
+    # located, artifacts.json records it as MISSING — absence is honest, another project's
+    # data is not.
+    _run_work="${EPAM_PROJECT_CONFIG_DIR:-}/runs/${ORCH_RUN_ID:-}/work"
+    if [ -n "${ORCH_RUN_ID:-}" ] && [ -d "$_run_work" ]; then
+        _prd=$(ls -t "$_run_work"/*-prd.json 2>/dev/null | head -1)
+    fi
 fi
 _take "${_prd:-/nonexistent}" "working-prd.json" "working-prd.json"
 
@@ -63,9 +73,32 @@ _take "${AUTOMATION_DIR}/agents/profiles.json" "profiles.json" "profiles.json"
 
 # Self-healing: the episodic scratchpad and the compiled constraint store.
 _take "${LOG_DIR}/kb-scratchpad" "kb/kb-scratchpad" "kb/kb-scratchpad"
-for _f in constraints.json healing-events.jsonl unmapped-rules.jsonl; do
-    _take "${AUTOMATION_DIR}/agents/kb/${_f}" "kb/${_f}" "kb/${_f}"
-done
+_take "${AUTOMATION_DIR}/agents/kb/constraints.json"     "kb/constraints.json"     "kb/constraints.json"
+_take "${AUTOMATION_DIR}/agents/kb/unmapped-rules.jsonl" "kb/unmapped-rules.jsonl" "kb/unmapped-rules.jsonl"
+
+# healing-events.jsonl is the ENGINE-WIDE store: it accumulates across every project and
+# every run. Copying it whole put 19 of the previous day's metrolinx AMSD-2041 events into
+# a clean mock1 run whose own log mentions healing once (live 2026-08-05) — evidence that
+# described a different project on a different day.
+#
+# Events carry no run id, only `ts`. ORCH_RUN_ID IS a timestamp (20260805T174459Z), so this
+# run's start is derivable from it — no new field, no guessing. Entries at or after that
+# instant belong to this run; earlier ones do not.
+_kb_events="${AUTOMATION_DIR}/agents/kb/healing-events.jsonl"
+if [ -f "$_kb_events" ] && [ -n "${ORCH_RUN_ID:-}" ]; then
+    # 20260805T174459Z -> 2026-08-05T17:44:59Z
+    _run_started=$(printf '%s' "$ORCH_RUN_ID" | sed -E 's/^([0-9]{4})([0-9]{2})([0-9]{2})T([0-9]{2})([0-9]{2})([0-9]{2})Z$/\1-\2-\3T\4:\5:\6Z/')
+    mkdir -p "$(dirname "${OUT}/kb/healing-events.jsonl")" 2>/dev/null || true
+    if jq -c --arg since "$_run_started" 'select((.ts // "") >= $since)' "$_kb_events" \
+         > "${OUT}/kb/healing-events.jsonl" 2>/dev/null; then
+        _captured+=("kb/healing-events.jsonl")
+    else
+        rm -f "${OUT}/kb/healing-events.jsonl" 2>/dev/null || true
+        _missing+=("kb/healing-events.jsonl")
+    fi
+else
+    _missing+=("kb/healing-events.jsonl")
+fi
 
 # A manifest, so an absent file is never ambiguous: did it not exist, or did the
 # archiving quietly fail?

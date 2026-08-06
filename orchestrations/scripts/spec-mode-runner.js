@@ -938,19 +938,24 @@ function specAgentEnv(env = process.env, repoPath = '') {
   const out = {};
   if (env.SPEC_MODE_MAX_OUTPUT_TOKENS) out.EPAM_MAX_OUTPUT_TOKENS = env.SPEC_MODE_MAX_OUTPUT_TOKENS;
   out.EPAM_ALLOWED_TOOLS = env.SPEC_MODE_ALLOWED_TOOLS || 'read_file,list_files,search';
-  // Granted to EVERY spec-mode agent, unconditionally. An earlier cut gated this
-  // on repoPath, which silently excluded the phase-level calls (SPEC_ASSIGNMENTS,
-  // SPEC_REVIEW, MODEL_REVIEW) — narrower than what was approved, and not
-  // disclosed. A tool list without AI_GATE_ALLOW_TOOLS is the original defect
-  // (ai-run.sh defaults to --no-tools), so granting the list and withholding the
-  // switch reproduces exactly the "told tools exist, given none" state that made
-  // agents fabricate <tool_result> blocks.
+  // Granted to every spec-mode agent. An agent told a tool list without
+  // AI_GATE_ALLOW_TOOLS runs with --no-tools underneath it (ai-run.sh's
+  // default) — it believes it can look, cannot, and fabricates
+  // <tool_call>/<tool_result> text describing files it never read. That is
+  // what produced invented source contents in a vc-agent plan.
+  //
+  // Writes are NOT prevented here. They are prevented at the filesystem by
+  // lib/codeline-write-perimeter.sh: a codeline on its baseline branch is
+  // chmod'd read-only, and only agents whose job is to author code may write
+  // at all. That holds for `bash` and for any tool added later, which a
+  // per-tool allowlist cannot. Removing tools from these agents was tried as
+  // an incident response and was the wrong layer — six other agents hold
+  // `bash` against the same repo.
   out.AI_GATE_ALLOW_TOOLS = env.SPEC_MODE_ALLOW_TOOLS || '1';
   out.EPAM_MAX_TOOL_CALLS = env.SPEC_MODE_MAX_TOOL_CALLS || '8';
-  // The tools resolve paths against the process cwd (see the spawn-cwd note in
-  // runClaude). A single-story call knows its codeline; a phase-level call spans
-  // stories, so it falls back to the run's codeline root — which is the correct
-  // scope for a call that reviews several codelines at once.
+  // Tools resolve paths against the process cwd (see runClaude's spawn cwd).
+  // A single-story call knows its codeline; a phase-level call spans stories,
+  // so it falls back to the run's codeline root.
   const root = repoPath || env.PROJECT_ROOT || env.JIRA_CODELINE_ROOT || '';
   if (root) out.PROJECT_ROOT = root;
   return out;
@@ -2644,11 +2649,9 @@ async function _vcLlmCall(prompt, cycle, logPath, storyId = '', role = 'openspec
   const model = useEsc ? escalated : baseModel;
   const provider = useEsc ? (resolveModelProvider(model, process.env) || resolvePromptProvider(process.env)) : resolvePromptProvider(process.env);
   const exec = { cmd: process.env.AI_RUNNER_CMD || path.join(__dirname, 'ai-run.sh'), args: ['--provider', provider, '--model', model] };
-  // Same fix as specAgentEnv (2026-08-06): real tools + correct cwd, only
-  // when a single story's repoPath is resolvable (brownfield, real
-  // codeline) — see specAgentEnv's docstring for why this can't be
-  // unconditional. This is what let a vc-agent plan invent a source file's
-  // contents wholesale instead of reading the real one.
+  // Real tools + correct cwd when a single story's codeline resolves. Writes
+  // are prevented by the filesystem perimeter, not by withholding tools —
+  // see specAgentEnv's docstring.
   const toolEnv = repoPath ? {
     AI_GATE_ALLOW_TOOLS: process.env.SPEC_MODE_ALLOW_TOOLS || '1',
     EPAM_ALLOWED_TOOLS: process.env.SPEC_MODE_ALLOWED_TOOLS || 'read_file,list_files,search',

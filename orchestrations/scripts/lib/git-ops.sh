@@ -117,6 +117,7 @@ _provision_epam_plugin_config() {
 # manifest picks it up as though the writer produced it (live 20260804T225443Z).
 # shellcheck source=engine-paths.sh
 . "$(dirname "${BASH_SOURCE[0]}")/engine-paths.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/codeline-write-perimeter.sh"
 
 # git_add_client_outputs <repo> [timeout_secs]
 # Stage every client change, never an engine artefact. Returns git's exit code.
@@ -196,6 +197,12 @@ ensure_story_branch() {
         git -C "$codeline_root" reset --hard "origin/${baseline_branch}" --quiet 2>/dev/null || true
         git -C "$codeline_root" clean -fd --quiet 2>/dev/null || true
         _provision_epam_plugin_config "$codeline_root"
+        # The repo is now on a story branch, which is where edits are allowed to
+        # land — reopen it. While it sat on the baseline branch it was chmod'd
+        # read-only (see lib/codeline-write-perimeter.sh): a spec-pass agent
+        # rewrote ~1050 lines of client source there before any writer ran, and
+        # a per-tool allowlist cannot stop that because `bash` bypasses it.
+        perimeter_apply "$codeline_root"
         success "  [story-branch] $story_id: on branch '${_branch}', freshly based on origin/${baseline_branch} (working tree hard-reset + cleaned)"
         return 0
     fi

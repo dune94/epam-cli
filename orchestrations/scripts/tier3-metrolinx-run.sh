@@ -212,6 +212,27 @@ for _cl_dir in "$JIRA_CODELINE_ROOT"/*/; do
 done
 echo ""
 
+# ── Write perimeter: client source is READ-ONLY until a story branch exists ──
+# Applied to every candidate codeline, before any agent runs. A repo sitting on
+# its baseline branch is chmod'd read-only; ensure_story_branch reopens it once
+# the repo is genuinely on that story's own branch, which is the only place
+# edits may land.
+#
+# This is enforced at the filesystem because a per-tool allowlist cannot hold:
+# WriteFile.ts has a scope guard, Bash.ts has none — no cwd restriction, no
+# command filtering — and six agents hold `bash` against these repos. Live
+# 20260806T113101Z: ~1050 lines across five files were rewritten during the
+# SPEC PASS, before the writer had run at all.
+#
+# .epam/ and .codegraph/ are deliberately left writable: the engine writes its
+# own state there mid-run. See lib/codeline-write-perimeter.sh.
+. "$SCRIPT_DIR/lib/codeline-write-perimeter.sh"
+for _cl_dir in "$JIRA_CODELINE_ROOT"/*/; do
+  [ -e "${_cl_dir}.git" ] || continue
+  perimeter_apply "${_cl_dir%/}" || true
+done
+echo ""
+
 # ── Wire the dashboard to this run's live PRD + logs ─────────────────────────
 # MUST run BEFORE CodeGraph preflight below: pre-run-reset.sh resets
 # agent-status.json. Emitting preflight events before that reset would have

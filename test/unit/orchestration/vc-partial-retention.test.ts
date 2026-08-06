@@ -41,6 +41,28 @@ import { join } from 'node:path';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const spec = require('../../../orchestrations/scripts/spec-mode-runner.js');
+
+/**
+ * The guard holds NO content of its own (2026-08-06): what counts as mechanism is derived
+ * per story by the guard-vocabulary agent and passed in. These suites test the RETENTION
+ * and FALLBACK behaviour, not the vocabulary, so they arm the guard explicitly rather than
+ * relying on terms that used to be hardcoded in the engine.
+ */
+const _ARM_GUARD = {
+  deriveVocabulary: async () => ({
+    blacklist: [
+      { term: 'is polled', reason: 'describes how the value is obtained' },
+      { term: 'webhook handler', reason: 'names the internal component' },
+      { term: 'split', reason: 'prescribes an approach' },
+      { term: 'halved', reason: 'prescribes an approach' },
+      { term: 'per segment', reason: 'prescribes an approach' },
+      { term: 'independently', reason: 'prescribes an approach' },
+      { term: 'line item', reason: 'prescribes an approach' },
+    ],
+    whitelist: [],
+  }),
+};
+
 const { partitionFlaggedVc, enforceVerificationCriteria, safeFallbackVc, findVcMechanism } = spec;
 
 const STORY = { id: 'ST-1', title: 'A capability described in the ticket' };
@@ -111,7 +133,7 @@ describe('enforceVerificationCriteria retains the clean criteria instead of disc
   const alwaysFlagsThird = async () => ['VC 3 references internal CMS structure — restate it'];
 
   it('THE LIVE DEFECT: one flagged criterion out of six no longer costs all six', async () => {
-    const r = await enforceVerificationCriteria(STORY, SIX, {
+    const r = await enforceVerificationCriteria(STORY, SIX, { ..._ARM_GUARD,
       reviewVc: alwaysFlagsThird,
       regenerateVc: async () => null, // regeneration cannot converge, as it could not live
       maxCycles: 2,
@@ -127,14 +149,14 @@ describe('enforceVerificationCriteria retains the clean criteria instead of disc
   });
 
   it('the retained criteria are the ORIGINAL text, not regenerated or paraphrased', async () => {
-    const r = await enforceVerificationCriteria(STORY, SIX, {
+    const r = await enforceVerificationCriteria(STORY, SIX, { ..._ARM_GUARD,
       reviewVc: alwaysFlagsThird, regenerateVc: async () => null, maxCycles: 2,
     });
     for (const c of r.vc) expect(SIX).toContain(c);
   });
 
   it('what is retained is itself mechanism-free — retention must not smuggle a flagged VC through', async () => {
-    const r = await enforceVerificationCriteria(STORY, SIX, {
+    const r = await enforceVerificationCriteria(STORY, SIX, { ..._ARM_GUARD,
       reviewVc: alwaysFlagsThird, regenerateVc: async () => null, maxCycles: 2,
     });
     expect(findVcMechanism(r.vc)).toEqual([]);
@@ -154,7 +176,7 @@ describe('enforceVerificationCriteria retains the clean criteria instead of disc
    */
   it('EVERY criterion flagged by the LLM keeps the guard-certified work, and says so', async () => {
     const flagsAll = async () => SIX.map((_, i) => `VC ${i + 1} prescribes an implementation`);
-    const r = await enforceVerificationCriteria(STORY, SIX, {
+    const r = await enforceVerificationCriteria(STORY, SIX, { ..._ARM_GUARD,
       reviewVc: flagsAll, regenerateVc: async () => null, maxCycles: 2,
     });
     expect(r.source).toBe('disputed');
@@ -166,7 +188,7 @@ describe('enforceVerificationCriteria retains the clean criteria instead of disc
   it('a SET-LEVEL objection is not partitioned away — nothing is silently dropped', async () => {
     // An unattributable flag names no criterion, so no criterion may be singled out. It no
     // longer means "discard everything": the guard-certified set is kept and disputed.
-    const r = await enforceVerificationCriteria(STORY, SIX, {
+    const r = await enforceVerificationCriteria(STORY, SIX, { ..._ARM_GUARD,
       reviewVc: async () => ['the criteria do not cover the acceptance criterion'],
       regenerateVc: async () => null,
       maxCycles: 2,
@@ -181,7 +203,7 @@ describe('enforceVerificationCriteria retains the clean criteria instead of disc
     process.env.VC_MIN_RETAINED = '4';
     try {
       // flag three of six → only 3 survive, below the floor of 4
-      const r = await enforceVerificationCriteria(STORY, SIX, {
+      const r = await enforceVerificationCriteria(STORY, SIX, { ..._ARM_GUARD,
         reviewVc: async () => ['VC 1 bad', 'VC 2 bad', 'VC 3 bad'],
         regenerateVc: async () => null,
         maxCycles: 2,
@@ -198,7 +220,7 @@ describe('enforceVerificationCriteria retains the clean criteria instead of disc
   });
 
   it('a CLEAN set is still reported clean — the happy path is untouched', async () => {
-    const r = await enforceVerificationCriteria(STORY, SIX, {
+    const r = await enforceVerificationCriteria(STORY, SIX, { ..._ARM_GUARD,
       reviewVc: async () => [], regenerateVc: async () => null, maxCycles: 2,
     });
     expect(r.source).toBe('clean');
@@ -207,7 +229,7 @@ describe('enforceVerificationCriteria retains the clean criteria instead of disc
 
   it('a successful REGENERATION is still reported regenerated, not partial', async () => {
     let cycle = 0;
-    const r = await enforceVerificationCriteria(STORY, SIX, {
+    const r = await enforceVerificationCriteria(STORY, SIX, { ..._ARM_GUARD,
       reviewVc: async () => (++cycle === 1 ? ['VC 3 bad'] : []),
       regenerateVc: async () => SIX.slice(0, 4),
       maxCycles: 3,
@@ -216,7 +238,7 @@ describe('enforceVerificationCriteria retains the clean criteria instead of disc
   });
 
   it('the partial outcome carries the flags, so the retention is auditable', async () => {
-    const r = await enforceVerificationCriteria(STORY, SIX, {
+    const r = await enforceVerificationCriteria(STORY, SIX, { ..._ARM_GUARD,
       reviewVc: alwaysFlagsThird, regenerateVc: async () => null, maxCycles: 2,
     });
     expect(r.flags.length, 'a silent partition would hide which criterion was dropped')
@@ -273,7 +295,7 @@ describe('the retention decision is persisted, not just logged', () => {
   });
 
   it('enforceVerificationCriteria returns `dropped` for the call site to persist', async () => {
-    const r = await enforceVerificationCriteria(STORY, SIX, {
+    const r = await enforceVerificationCriteria(STORY, SIX, { ..._ARM_GUARD,
       reviewVc: async () => ['VC 3 references internal structure'],
       regenerateVc: async () => null,
       maxCycles: 2,
@@ -321,7 +343,7 @@ describe('an outlier LLM review cannot strip a deterministically-clean set', () 
   });
 
   it('THE LIVE DEFECT: a reviewer flagging 3 of 4 does NOT leave one criterion', async () => {
-    const r = await enforceVerificationCriteria(STORY, FOUR, {
+    const r = await enforceVerificationCriteria(STORY, FOUR, { ..._ARM_GUARD,
       reviewVc: async () => ['VC 1 too vague', 'VC 2 too vague', 'VC 4 too vague'],
       regenerateVc: async () => null,
       maxCycles: 2,
@@ -336,7 +358,7 @@ describe('an outlier LLM review cannot strip a deterministically-clean set', () 
   });
 
   it('records the dispute rather than hiding it', async () => {
-    const r = await enforceVerificationCriteria(STORY, FOUR, {
+    const r = await enforceVerificationCriteria(STORY, FOUR, { ..._ARM_GUARD,
       reviewVc: async () => ['VC 1 too vague', 'VC 2 too vague', 'VC 4 too vague'],
       regenerateVc: async () => null,
       maxCycles: 2,
@@ -348,7 +370,7 @@ describe('an outlier LLM review cannot strip a deterministically-clean set', () 
 
   it('a MECHANISM flag is still authoritative — the guard is never overruled', async () => {
     const withMech = [...FOUR, 'The discount is halved (×0.5) per leg.'];
-    const r = await enforceVerificationCriteria(STORY, withMech, {
+    const r = await enforceVerificationCriteria(STORY, withMech, { ..._ARM_GUARD,
       reviewVc: async () => [],
       regenerateVc: async () => null,
       maxCycles: 2,
@@ -362,7 +384,7 @@ describe('an outlier LLM review cannot strip a deterministically-clean set', () 
   });
 
   it('a MODEST advisory drop is still honoured — this is not "ignore the reviewer"', async () => {
-    const r = await enforceVerificationCriteria(STORY, FOUR, {
+    const r = await enforceVerificationCriteria(STORY, FOUR, { ..._ARM_GUARD,
       reviewVc: async () => ['VC 3 references an internal payload'],
       regenerateVc: async () => null,
       maxCycles: 2,
@@ -376,7 +398,7 @@ describe('an outlier LLM review cannot strip a deterministically-clean set', () 
     const prev = process.env.VC_MIN_RETAINED_FRACTION;
     process.env.VC_MIN_RETAINED_FRACTION = '0.9';   // demand 4 of 4 survive
     try {
-      const r = await enforceVerificationCriteria(STORY, FOUR, {
+      const r = await enforceVerificationCriteria(STORY, FOUR, { ..._ARM_GUARD,
         reviewVc: async () => ['VC 3 references an internal payload'],
         regenerateVc: async () => null,
         maxCycles: 2,
@@ -389,7 +411,7 @@ describe('an outlier LLM review cannot strip a deterministically-clean set', () 
   });
 
   it('everything flagged AND nothing deterministically wrong still keeps the work', async () => {
-    const r = await enforceVerificationCriteria(STORY, FOUR, {
+    const r = await enforceVerificationCriteria(STORY, FOUR, { ..._ARM_GUARD,
       reviewVc: async () => FOUR.map((_, i) => `VC ${i + 1} is unsatisfactory`),
       regenerateVc: async () => null,
       maxCycles: 2,
@@ -404,7 +426,7 @@ describe('an outlier LLM review cannot strip a deterministically-clean set', () 
 
   it('when EVERY criterion is genuine mechanism, it still falls back', async () => {
     const allBad = ['The value is halved (×0.5).', 'Each leg is calculated independently.'];
-    const r = await enforceVerificationCriteria(STORY, allBad, {
+    const r = await enforceVerificationCriteria(STORY, allBad, { ..._ARM_GUARD,
       reviewVc: async () => [], regenerateVc: async () => null, maxCycles: 2,
     });
     expect(r.source).toBe('fallback');

@@ -70,6 +70,10 @@ const TAG_TO_TOOL = {
   SPEC_AGENT: { tool: 'TOOL_SPEC_AGENT', itemsKey: null },
   SPEC_REVIEW: { tool: 'TOOL_SPEC_REVIEW', itemsKey: 'items' },
   MODEL_REVIEW: { tool: 'TOOL_MODEL_REVIEW', itemsKey: 'items' },
+  // The guard-vocabulary agent derives what a deterministic guard checks, so its
+  // answer must be schema-bound: a prose reply leaves the guard with nothing to
+  // apply, and an unvalidated one puts arbitrary text into an enforcement path.
+  GUARD_VOCABULARY: { tool: 'TOOL_GUARD_VOCABULARY', itemsKey: null },
 };
 
 // Lazy + cached: this module is required BY spec-mode-runner.js, so the require must not

@@ -25,6 +25,28 @@
 import { describe, it, expect } from 'vitest';
 
 const spec = require('../../../orchestrations/scripts/spec-mode-runner.js');
+
+/**
+ * The guard holds NO content of its own (2026-08-06): what counts as mechanism is derived
+ * per story by the guard-vocabulary agent and passed in. These suites test the RETENTION
+ * and FALLBACK behaviour, not the vocabulary, so they arm the guard explicitly rather than
+ * relying on terms that used to be hardcoded in the engine.
+ */
+const _ARM_GUARD = {
+  deriveVocabulary: async () => ({
+    blacklist: [
+      { term: 'is polled', reason: 'describes how the value is obtained' },
+      { term: 'webhook handler', reason: 'names the internal component' },
+      { term: 'split', reason: 'prescribes an approach' },
+      { term: 'halved', reason: 'prescribes an approach' },
+      { term: 'per segment', reason: 'prescribes an approach' },
+      { term: 'independently', reason: 'prescribes an approach' },
+      { term: 'line item', reason: 'prescribes an approach' },
+    ],
+    whitelist: [],
+  }),
+};
+
 const { findVcMechanism, safeFallbackVc, enforceVerificationCriteria } = spec;
 
 const STORY = { id: 'AMSD-2041', title: '[GO, UP, MX] Live Preview of Content in CMS' };
@@ -62,7 +84,7 @@ describe('safeFallbackVc — grounded in detective findings when available', () 
 
 describe('enforceVerificationCriteria — threads findings through to the fallback branch, not just regenerate', () => {
   it('a regenerator that never converges still ends grounded in findings, not generic boilerplate', async () => {
-    const r = await enforceVerificationCriteria(STORY, ['Split it per field.'], {
+    const r = await enforceVerificationCriteria(STORY, ['Split it per field.'], { ..._ARM_GUARD,
       regenerateVc: async () => ['Still split it per field.'], // never clean
       maxCycles: 2,
       findings: FINDINGS,

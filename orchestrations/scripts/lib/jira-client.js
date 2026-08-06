@@ -170,6 +170,47 @@ async function getBoardIssues(boardId, status = null) {
   return (result.issues || []).map(normalizeIssue);
 }
 
+
+// ── ADF: text AND links ──────────────────────────────────────────────────────
+// Atlassian Document Format stores a hyperlink as TEXT plus a `link` MARK holding the href,
+// and a pasted URL as an `inlineCard` node whose address is in attrs.url with no text child.
+// The original flattener read only content[].content[].text, so every URL in every comment
+// was destroyed at ingest while its anchor text survived.
+//
+// Live cost (AMSD-2041): two vendor documentation links were the only artefacts in a
+// twelve-comment thread that settled the ticket — one stating the SDK callback takes no
+// argument (the pipeline's criteria asserted the opposite), one stating the feature is
+// configured in the vendor UI and needs no application code. Both rendered as
+// "Updated <vendor> docs link - " with nothing after. Two runs were spent building
+// against assumptions the ticket itself refuted.
+//
+// Walks the whole node tree rather than a fixed two-level shape: ADF nests (lists, panels,
+// tables) and a two-level reader silently misses anything deeper.
+function _adfWalk(node, out) {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) { for (const n of node) _adfWalk(n, out); return; }
+  if (typeof node.text === 'string') out.text.push(node.text);
+  for (const m of (Array.isArray(node.marks) ? node.marks : [])) {
+    const href = m && m.attrs && m.attrs.href;
+    if (href) out.urls.push(String(href));
+  }
+  const cardUrl = node.attrs && (node.attrs.url || node.attrs.href);
+  if (cardUrl && /^https?:\/\//i.test(String(cardUrl))) out.urls.push(String(cardUrl));
+  if (Array.isArray(node.content)) _adfWalk(node.content, out);
+}
+
+// Returns { text, urls } for a value that may be an ADF document or a plain string.
+function adfExtract(body) {
+  const out = { text: [], urls: [] };
+  if (typeof body === 'string') out.text.push(body);
+  else _adfWalk(body, out);
+  const text = out.text.join(' ').replace(/\s+/g, ' ').trim();
+  // A bare URL typed as plain text carries no mark — catch it from the text too.
+  for (const m of text.matchAll(/https?:\/\/[^\s<>()\[\]"']+/g)) out.urls.push(m[0]);
+  const urls = [...new Set(out.urls.map((u) => u.replace(/[.,;)]+$/, '')))];
+  return { text, urls };
+}
+
 function normalizeIssue(issue) {
   const f = issue.fields || {};
   const descText = typeof f.description === 'string'
@@ -190,12 +231,36 @@ function normalizeIssue(issue) {
   // to the ticket. This project never posts these itself, but still reads
   // them if a human chooses to add one — the marker is just a parse target.
   const comments = f.comment && Array.isArray(f.comment.comments) ? f.comment.comments : [];
+  // Preserved for JUDGEMENT (scope statements like "no code changes are needed"), NOT for
+  // the code-search query: comment prose is mostly coordination noise, and its rare tokens
+  // (release names, "cc", "please confirm") are AMPLIFIED by IDF, dragging search away
+  // from real code.
+  const commentRecords = [];
+  const linkRecords = [];
+  const seenUrls = new Set();
+  const pushLinks = (urls, context, author, created) => {
+    for (const url of urls) {
+      if (seenUrls.has(url)) continue;
+      seenUrls.add(url);
+      linkRecords.push({ url, context: String(context || '').slice(0, 300), author: author || null, created: created || null });
+    }
+  };
+  // The description carries links too — a spec URL is as load-bearing as one in a comment.
+  try {
+    const d = adfExtract(f.description);
+    pushLinks(d.urls, d.text, null, null);
+  } catch { /* a malformed description must not stop ingest */ }
+
   for (const comment of comments) {
-    const ctext = typeof comment.body === 'string'
-      ? comment.body
-      : comment.body && Array.isArray(comment.body.content)
-        ? comment.body.content.flatMap(n => (n.content || []).map(t => t.text || '')).join(' ')
-        : '';
+    let ctext = '';
+    try {
+      const ex = adfExtract(comment && comment.body);
+      ctext = ex.text;
+      const author = (comment && comment.author && comment.author.displayName) || null;
+      const created = (comment && comment.created) || null;
+      if (ctext) commentRecords.push({ text: ctext, author, created });
+      pushLinks(ex.urls, ctext, author, created);
+    } catch { ctext = ''; }
     const match = ctext.match(/\[EPAM-AC-ADDITION\]\s*(\{[\s\S]*?\})\s*$/);
     if (match) {
       try {
@@ -228,6 +293,11 @@ function normalizeIssue(issue) {
     // anchor the brownfield defect/novel classification so a bug ticket is
     // treated as a defect regardless of the spec model's own judgment.
     issueType:          (f.issuetype && f.issuetype.name) || null,
+    // Comment prose, for judgement about scope and viability. Never routed into code search.
+    comments:           commentRecords,
+    // Every URL found in the description or any comment, with provenance so a human — or
+    // an agent — can judge relevance and re-check the source.
+    commentLinks:       linkRecords,
   };
 }
 

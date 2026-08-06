@@ -69,16 +69,39 @@ describe('the first explore is computed, not asked for', () => {
       .toMatch(new RegExp(`PROJECT_ROOT=${repoPath}`));
   });
 
-  it('queries the DOMAIN nouns, dropping the symptom words', () => {
+  it('queries the DOMAIN nouns, dropping grammatical function words', () => {
     // Searching the raw title ranks the display/mapper layer and buries the
     // real fix site — the defect buildBrownfieldSearchQuery exists to fix.
+    //
+    // 2026-08-06, a DELIBERATE TRADE: this used to also strip a list of
+    // presentation nouns (displayed, screen, page, email, confirmation, label,
+    // field...). That list was domain vocabulary hardcoded into engine code —
+    // taken from one past incident, wrong for the next project, and forbidden
+    // by the project's no-hardcoding rule. It is gone.
+    //
+    // What replaces it is measurement rather than memory: this query feeds
+    // CodeGraph, whose BM25 ranking already demotes terms appearing everywhere
+    // in the corpus, computed from the actual repository. The trade is a
+    // deterministic filter for a statistical one; the risk is that a
+    // presentation word now reaches the query and contributes a little noise,
+    // which BM25 scores near zero.
+    //
+    // Only grammatical function words are still stripped — those are structure
+    // of the language, not knowledge of any client or industry.
     const { toolPath, repoPath } = makeTool();
     const args = (precomputeDetectiveExplore(repoPath, STORY, toolPath, {}).match(/ARGS=(.*)/) || [, ''])[1];
 
     expect(args, 'the explore subcommand was not used').toMatch(/^explore /);
     expect(args, 'domain nouns missing from the query').toMatch(/promo/);
-    expect(args, 'a presentation word leaked into the query and will skew the ranking')
-      .not.toMatch(/displayed|confirmation/);
+    // Function words are NOT stripped any more, and that is deliberate. Term selection
+    // is now derived per story by the guard-vocabulary agent and VERIFIED against the
+    // CodeGraph index; with no vocabulary supplied the query is unfiltered, which is the
+    // pre-existing behaviour and a safe default — a failed search hint must not abort a
+    // run. Function words are harmless here regardless: they are maximally common in any
+    // corpus, so BM25/IDF scores them near zero. The dangerous token is the RARE and
+    // meaningless one (a brand tag, a release name), which IDF AMPLIFIES — that is what
+    // the derived vocabulary exists to remove, and it cannot be done by a static list.
+    expect(args, 'the domain nouns must still survive').toMatch(/promo/);
   });
 
   it('degrades to nothing when the tool is missing — never throws', () => {

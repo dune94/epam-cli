@@ -1,0 +1,180 @@
+/**
+ * A deterministic guard may hold NO content of its own.
+ *
+ * WHAT WAS WRONG
+ * --------------
+ * Every guard encoded its checks as a literal list in engine code, each reverse-engineered
+ * from one past incident:
+ *
+ *   VC_MECHANISM_PATTERNS      6 regexes from 5 sentences in a fare-discount bug, carrying
+ *                              client-domain nouns (segment, leg, line-item)
+ *   VC_OBSERVABILITY_RULES     the same 5 sentences again, as prose examples
+ *   vc-guard-and-loop.test.ts  the same 5 sentences again, as the test FIXTURE — which is
+ *                              why the guard could never fail and nobody noticed
+ *   PRESCRIPTIVE_AC_PATTERNS   11 regexes naming specific JS test libraries
+ *
+ * Live consequence: two verification criteria that plainly prescribe mechanism —
+ * "the SDK is initialized and its onEntryChange callback is registered" and "the
+ * initialization call includes the correct stack details" — passed a guard whose entire
+ * vocabulary was about splitting and halving. The run log reported the guard clean.
+ *
+ * THE PROPERTY THESE TESTS LOCK
+ * -----------------------------
+ * The applier is pure: give it a vocabulary and it flags accordingly; give it a DIFFERENT
+ * vocabulary and its behaviour changes completely. It cannot flag anything on its own,
+ * because it knows nothing on its own.
+ *
+ * Crucially these tests use vocabularies from domains the code was never built for. A test
+ * that feeds a guard the terms its own patterns were derived from proves only that the
+ * incident is remembered — that is exactly the test that hid this for months.
+ */
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const gv = require('../../../orchestrations/scripts/lib/guard-vocabulary.js');
+
+const SRC = readFileSync(
+  join(__dirname, '../../../orchestrations/scripts/lib/guard-vocabulary.js'), 'utf8');
+
+/** A vocabulary from a domain nothing in this repo was built around. */
+const AUTH_VOCAB = {
+  blacklist: [
+    { term: 'bcrypt', reason: 'names the hashing implementation', kind: 'implementation_noun' },
+    { term: 'is hashed', reason: 'describes how the value is produced', kind: 'construction_verb' },
+    { term: 'session table', reason: 'an internal structure feeding the surface', kind: 'internal_structure' },
+  ],
+  whitelist: [{ term: 'sign-in page' }, { term: 'error message' }],
+};
+
+describe('the applier holds no content of its own', () => {
+  it('flags nothing when handed an empty vocabulary — it cannot invent a rule', () => {
+    expect(gv.applyVocabulary(
+      ['The password is hashed with bcrypt before the session table is written'],
+      { blacklist: [], whitelist: [] },
+    )).toEqual([]);
+  });
+
+  it('flags a violation from a domain this code was never built for', () => {
+    const flagged = gv.applyVocabulary(
+      ['The password is hashed with bcrypt before the row is written'],
+      AUTH_VOCAB,
+    );
+    expect(flagged.length).toBeGreaterThan(0);
+    expect(flagged[0].reason).toMatch(/hashing implementation|how the value is produced/);
+  });
+
+  it('the SAME statement is clean under a vocabulary that does not name it', () => {
+    // Proof the behaviour comes from the vocabulary, not from the module.
+    expect(gv.applyVocabulary(
+      ['The password is hashed with bcrypt'],
+      { blacklist: [{ term: 'invoice total', reason: 'x' }], whitelist: [] },
+    )).toEqual([]);
+  });
+
+  it('THE LIVE MISS: the real VCs that slipped through are caught by a derived vocabulary', () => {
+    const realVcs = [
+      'When the application is loaded with Live Preview enabled, the SDK is initialized and its onEntryChange callback is registered before any content is rendered.',
+      'Given the client is mocked, the initialization call includes the correct stack details (stack API key, environment, and host configuration).',
+      'When the application is loaded without Live Preview enabled, pages load and display exactly as they do today.',
+    ];
+    const derived = {
+      blacklist: [
+        { term: 'onentrychange', reason: 'names the SDK entry point', kind: 'implementation_noun' },
+        { term: 'is initialized', reason: 'describes how the behaviour is set up', kind: 'construction_verb' },
+        { term: 'the initialization call includes', reason: 'asserts on an internal call', kind: 'internal_structure' },
+      ],
+      whitelist: [{ term: 'pages load and display' }],
+    };
+    const flagged = gv.applyVocabulary(realVcs, derived);
+    expect(flagged.length, 'the two prescriptive VCs were not caught').toBe(2);
+    expect(flagged.map((f: any) => f.item).join(' ')).not.toMatch(/exactly as they do today/);
+  });
+});
+
+describe('whitelist wins — the observable surface is never flagged', () => {
+  it('a statement naming the observable surface survives a blacklisted word', () => {
+    expect(gv.applyVocabulary(
+      ['The sign-in page shows an error message when bcrypt rejects the password'],
+      AUTH_VOCAB,
+    ), 'the observable surface was flagged as mechanism').toEqual([]);
+  });
+});
+
+describe('matching is whole-term — a guard nobody trusts is a guard nobody reads', () => {
+  it('does not fire on a substring of an unrelated word', () => {
+    expect(gv.applyVocabulary(
+      ['The user selects a subscription plan'],
+      { blacklist: [{ term: 'script', reason: 'x' }], whitelist: [] },
+    ), '"script" matched inside "subscription"').toEqual([]);
+  });
+
+  it('matches across punctuation boundaries', () => {
+    expect(gv.applyVocabulary(
+      ['Calls onEntryChange(), then re-renders.'],
+      { blacklist: [{ term: 'onentrychange', reason: 'x' }], whitelist: [] },
+    ).length).toBe(1);
+  });
+
+  it('is case-insensitive', () => {
+    expect(gv.applyVocabulary(
+      ['The SDK is INITIALIZED at boot'],
+      { blacklist: [{ term: 'is initialized', reason: 'x' }], whitelist: [] },
+    ).length).toBe(1);
+  });
+});
+
+describe('a failed derivation must never look like a clean result', () => {
+  it('isVocabularyUsable is false for an empty or malformed vocabulary', () => {
+    expect(gv.isVocabularyUsable(null)).toBe(false);
+    expect(gv.isVocabularyUsable({})).toBe(false);
+    expect(gv.isVocabularyUsable({ blacklist: [] })).toBe(false);
+  });
+
+  it('isVocabularyUsable is true once terms exist', () => {
+    expect(gv.isVocabularyUsable(AUTH_VOCAB)).toBe(true);
+  });
+});
+
+describe('normaliseVocabulary — a malformed payload cannot corrupt the guard', () => {
+  it('drops entries with no term, and lowercases/trims the rest', () => {
+    const v = gv.normaliseVocabulary({
+      blacklist: [{ term: '  Bcrypt  ', reason: 'r' }, { reason: 'no term' }, { term: '' }],
+      whitelist: [{ term: 'Sign-In Page' }],
+    });
+    expect(v.blacklist).toEqual([{ term: 'bcrypt', reason: 'r' }]);
+    expect(v.whitelist).toEqual([{ term: 'sign-in page', reason: '' }]);
+  });
+
+  it('dedupes repeated terms', () => {
+    const v = gv.normaliseVocabulary({
+      blacklist: [{ term: 'a', reason: '1' }, { term: 'A', reason: '2' }], whitelist: [],
+    });
+    expect(v.blacklist.length).toBe(1);
+  });
+
+  it('a non-object payload yields empty lists rather than throwing', () => {
+    expect(gv.normaliseVocabulary('nonsense')).toEqual({ blacklist: [], whitelist: [] });
+    expect(gv.normaliseVocabulary(undefined)).toEqual({ blacklist: [], whitelist: [] });
+  });
+});
+
+describe('the module itself contains no hardcoded vocabulary', () => {
+  it('names no client, product, vendor or industry noun', () => {
+    expect(SRC.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n'))
+      .not.toMatch(/metrolinx|gotransit|upexpress|contentstack|mozio|segment|line[- ]?item/i);
+  });
+
+  it('declares no term list, pattern list or stopword set', () => {
+    const code = SRC.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+    expect(code, 'a literal list of terms is the defect this module exists to remove')
+      .not.toMatch(/(PATTERNS|STOPWORDS|KEYWORDS|VOCAB\w*)\s*=\s*(\[|new Set)/);
+  });
+
+  it('the schema forbids prose — the agent must fill a structured shape', () => {
+    expect(gv.TOOL_GUARD_VOCABULARY.parameters.required).toEqual(['blacklist', 'whitelist']);
+    const bl = gv.TOOL_GUARD_VOCABULARY.parameters.properties.blacklist;
+    expect(bl.items.required).toEqual(expect.arrayContaining(['term', 'reason']));
+  });
+});

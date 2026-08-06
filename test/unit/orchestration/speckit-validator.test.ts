@@ -205,7 +205,10 @@ describe('speckit prompt — describes WHAT not HOW', () => {
   // refineExistingChildren ternary (two prompt variants), pushing the
   // post-prompt processing code (stripPrescriptiveACs etc.) further from
   // the function start than before.
-  const speckitSection = src.slice(speckitFnStart, speckitFnStart + 8000);
+  // Widened from 8000 (2026-08-06): the AC guard is now ARMED before it is applied —
+  // the vocabulary it checks is derived per story rather than hardcoded — and that
+  // arming block sits between the prompt and the strip call.
+  const speckitSection = src.slice(speckitFnStart, speckitFnStart + 11000);
 
   it('speckit prompt has an explicit WHAT-NOT-HOW rule heading', () => {
     expect(speckitSection).toContain('WHAT-NOT-HOW');

@@ -17,6 +17,18 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { spawn, execSync } = require('node:child_process');
+// Lazily loaded: this file is executed from an ISOLATED COPY by some callers
+// (see guarded-step-retry-history.test.ts), so a hard top-level require of a
+// sibling lib would break them at load time rather than at use.
+let _gv = null;
+function _guardVocabLib() {
+  if (!_gv) _gv = require('./lib/guard-vocabulary');
+  return _gv;
+}
+const TOOL_GUARD_VOCABULARY = (() => { try { return require('./lib/guard-vocabulary').TOOL_GUARD_VOCABULARY; } catch { return null; } })();
+const normaliseVocabulary = (...a) => _guardVocabLib().normaliseVocabulary(...a);
+const isVocabularyUsable  = (...a) => _guardVocabLib().isVocabularyUsable(...a);
+const applyVocabulary     = (...a) => _guardVocabLib().applyVocabulary(...a);
 // Cost emission for every agent this file drives — see lib/cost-emitter.js for
 // why (spec-mode previously emitted no cost at all, hiding ~68% of run spend).
 // Loaded DEFENSIVELY: cost tracking is observability, never a hard dependency of
@@ -151,34 +163,60 @@ function fetchSembleContext(story) {
 // domain terms — never by the presentation verb ("displayed"/"shown") that
 // only the symptom uses.
 const SYMPTOM_STOPWORDS = new Set([
-  // grammatical
+  // GRAMMATICAL FUNCTION WORDS ONLY — articles, prepositions, conjunctions, auxiliaries.
+  // These are structure of the language the tickets are written in, not knowledge of any
+  // client, product or industry, and they carry no discriminating signal in any corpus.
+  //
+  // A second half used to live here: presentation/symptom nouns (displayed, screen, page,
+  // email, confirmation, label, field, value...) taken from one past incident. That was
+  // domain vocabulary hardcoded into engine code — wrong for the next project, and
+  // redundant: this query feeds CodeGraph, whose BM25 ranking already demotes terms that
+  // appear everywhere in the corpus, measured from the actual repository rather than from
+  // a list somebody maintains. Removed 2026-08-06.
   'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'not',
   'for', 'in', 'of', 'and', 'or', 'to', 'as', 'at', 'by', 'it', 'its', 'that',
   'this', 'with', 'on', 'from', 'when', 'if', 'but', 'per', 'via', 'into',
-  // presentation / symptom noise — describe how a bug LOOKS, never where it's caused
-  'displayed', 'display', 'displays', 'shown', 'show', 'shows', 'showing',
-  'rendered', 'render', 'renders', 'appear', 'appears', 'appearing', 'visible',
-  'expected', 'correctly', 'incorrectly', 'properly', 'improperly', 'wrong',
-  'screen', 'page', 'ui', 'view', 'email', 'confirmation', 'message', 'text',
-  'label', 'field', 'value', 'output', 'result', 'issue', 'bug', 'problem',
 ]);
-function buildBrownfieldSearchQuery(story) {
-  const raw = [story.title || '', ...(Array.isArray(story.acceptanceCriteria) ? story.acceptanceCriteria.slice(0, 3) : [])].join(' ');
-  const domainTerms = raw
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]+/g, ' ')      // strip punctuation/brackets like "[Mozio]"
-    .split(/\s+/)
-    .filter((w) => w.length > 1 && !SYMPTOM_STOPWORDS.has(w));
-  // De-dupe while preserving order (keeps the most salient domain terms first).
+function buildBrownfieldSearchQuery(story, vocabulary) {
+  // Seeds the code-graph detective's FIRST `explore` — the query that starts the whole
+  // chain (fix sites -> manifest -> ACs -> VCs). Everything downstream inherits it.
+  //
+  // READS EVERYTHING THE STORY CARRIES. It used to read the title and the first three
+  // acceptance criteria. In brownfield the ACs are empty by design (the AC gate skips them
+  // and says "VCs are derived from the description") and technicalNotes does not exist yet,
+  // so the query was built from a headline alone while the description — the only
+  // substantive content a brownfield ticket has — was never read. Live 20260806T134550Z the
+  // detective was seeded with "go up mx live preview of content in cms".
+  //
+  // TERM SELECTION IS NOT DONE HERE. A hardcoded stopword list used to filter these tokens;
+  // it is gone. But removing filtering altogether is worse, not better: BM25/IDF demotes
+  // terms that are COMMON in the corpus and AMPLIFIES terms that are RARE, so a bracketed
+  // brand tag like "mx" — rare in any codebase — is promoted to a top discriminator.
+  // Frequency cannot separate "rare and meaningful" from "rare and meaningless".
+  //
+  // So the caller supplies a vocabulary derived by the guard-vocabulary agent and verified
+  // against the CodeGraph index (a candidate resolving to no symbol is noise however rare).
+  // With no vocabulary the query is unfiltered — this function makes no judgement of its own.
+  const parts = [story.title, story.description, ...(Array.isArray(story.acceptanceCriteria) ? story.acceptanceCriteria : [])];
+  const raw = parts.filter(Boolean).join(' ');
+  const tokens = raw.toLowerCase().replace(/[^a-z0-9\s]+/g, ' ').split(/\s+/).filter(Boolean);
+
+  const excluded = new Set(
+    (vocabulary && Array.isArray(vocabulary.blacklist) ? vocabulary.blacklist : [])
+      .map((b) => String((b && b.term) || '').toLowerCase()).filter(Boolean));
+
+  // De-dupe, preserving order. Not a judgement — it just avoids sending a token twice.
   const seen = new Set();
   const ordered = [];
-  for (const w of domainTerms) {
-    if (!seen.has(w)) { seen.add(w); ordered.push(w); }
+  for (const w of tokens) {
+    if (excluded.has(w) || seen.has(w)) continue;
+    seen.add(w); ordered.push(w);
   }
-  const query = ordered.join(' ').slice(0, 400);
-  // Safety net: if stripping removed everything (degenerate title), fall back
-  // to the raw title so we never send an empty query.
-  return query || (story.title || '').slice(0, 400);
+  // Bounded by the search backend's own query limit, not by a number picked here.
+  const cap = Number(process.env.CODEGRAPH_QUERY_MAX_CHARS || '2000');
+  let query = ordered.join(' ');
+  if (query.length > cap) query = query.slice(0, cap);
+  return query || (story.title || '');
 }
 
 function getDeterministicCandidateFiles(story, topN = 3) {
@@ -2336,11 +2374,11 @@ function verifyDetectiveHelper(helper, repoPath) {
 // tool, a broken index or a slow query degrades to "no pre-seed" and never
 // breaks the spec pass.
 const DETECTIVE_PRESEED_MAX_CHARS = 8000;
-function precomputeDetectiveExplore(repoPath, story, toolPath, env = process.env) {
+function precomputeDetectiveExplore(repoPath, story, toolPath, env = process.env, vocabulary = null) {
   if (env.CODEGRAPH_DETECTIVE_PRESEED === '0') return '';
   if (!repoPath || !toolPath || !story) return '';
   let query = '';
-  try { query = buildBrownfieldSearchQuery(story) || ''; } catch { return ''; }
+  try { query = buildBrownfieldSearchQuery(story, vocabulary) || ''; } catch { return ''; }
   const terms = String(query).trim().split(/\s+/).filter(Boolean);
   if (!terms.length) return '';
   try {
@@ -2433,11 +2471,17 @@ function preserveDefectAcceptanceCriteria(payload, story, env = process.env) {
 // about what counts as "observable" — the disagreement that made AMSD-1820 loop
 // forever (producer emitted an internal "confirmation data" response field as a VC;
 // reviewer flagged that same field as a mechanism; regen re-emitted it; → fallback).
-const VC_OBSERVABILITY_RULES = `A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+const AC_PRESCRIPTIVENESS_RULE = `An acceptance criterion states WHAT MUST BE TRUE for the story to be done, observed from outside the implementation. It NEVER dictates the code that produces it.
+An acceptance criterion is FORBIDDEN if it names a specific library, framework, test double, API call, import, or code construct the implementation must use. Naming a required OUTCOME is correct; naming the machinery that achieves it is not.`;
+
+const SEARCH_TERM_RULE = `A search term is USEFUL when it names something that exists in the repository being searched — a symbol, function, file, module, or a domain noun the code itself uses. It is NOISE when it names the ticket's packaging rather than its subject: routing tags, brand or product labels, ticket prefixes, status words, people, or generic prose.
+Return as BLACKLIST every candidate that names packaging rather than subject, or that resolves to nothing in the index. Return as WHITELIST the terms that name the capability or code under discussion.`;
+
+const VC_OBSERVABILITY_RULES = `A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
 A verification criterion is FORBIDDEN if it:
-- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
-- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
-- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
 Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.`;
 
 // Validate + normalize the verification criteria openspec produced: an array of
@@ -2464,23 +2508,24 @@ function isThinContext(story, env = process.env) {
 // a tester observes, never HOW to implement it. These patterns catch the exact
 // domain-mechanism phrasing that misdirected the fix live (AMSD-1820: "split",
 // "halve/×0.5", "calculate independently", "per segment/leg") plus new-code-
-// structure directives. Distinct from PRESCRIPTIVE_AC_PATTERNS (which catches
+// structure directives. Distinct from the AC prescriptiveness guard (which catches
 // test/code mechanics like vi.mock/import). Returns the flagged VCs with reasons.
-const VC_MECHANISM_PATTERNS = [
-  { pattern: /\bsplit(s|ting)?\b/i,                          reason: 'prescribes splitting (an implementation, not an observable outcome)' },
-  { pattern: /\bhalv(e|ed|es|ing)\b|[×*]\s*0?\.5|by\s+0?\.5/i, reason: 'prescribes halving/×0.5 (an implementation)' },
-  { pattern: /\bindependent(ly)?\b/i,                        reason: 'prescribes an independent calculation (an implementation)' },
-  { pattern: /\bper\s+(segment|leg|line[- ]?item)\b/i,       reason: 'prescribes per-segment logic (an implementation)' },
-  { pattern: /\bfor\s+each\s+line[- ]?item\b/i,              reason: 'prescribes per-line-item logic (an implementation)' },
-  { pattern: /\b(add|introduce|create)\s+(a\s+)?(new\s+)?(\w+\s+){0,2}(field|flag|column|property|service|abstraction|helper|method|function|endpoint)\b/i, reason: 'prescribes a new code structure (an implementation)' },
-];
-function findVcMechanism(vc, storyId) {
-  const flagged = [];
-  for (const c of (Array.isArray(vc) ? vc : [])) {
-    const hit = VC_MECHANISM_PATTERNS.find(({ pattern }) => pattern.test(String(c)));
-    if (hit) {
-      flagged.push({ criterion: c, reason: hit.reason });
-      if (storyId) console.warn(`spec-mode: VC guard flagged mechanism in ${storyId} VC: [${hit.reason}] "${String(c).slice(0, 80)}"`);
+function findVcMechanism(vc, storyId, vocabulary) {
+  // PURE APPLIER — holds no terms, no patterns, no domain nouns, no stack assumptions.
+  // What counts as a violation is DERIVED per story by the guard-vocabulary agent
+  // (deriveGuardVocabulary) from VC_OBSERVABILITY_RULES plus the detective's real file
+  // reads, and persisted so a re-run applies the identical vocabulary.
+  //
+  // A hardcoded list used to live here: six regexes reverse-engineered from five sentences
+  // in one fare-discount bug, carrying client-domain nouns. It reported "clean" on VCs that
+  // plainly prescribed mechanism, because its vocabulary was about splitting and halving.
+  //
+  // NO VOCABULARY IS NOT "NOTHING TO FLAG". The caller must have aborted before reaching
+  // here; returning [] would recreate the exact silence that hid the old guard.
+  const flagged = applyVocabulary(vc, vocabulary).map((f) => ({ criterion: f.item, reason: f.reason }));
+  if (storyId) {
+    for (const f of flagged) {
+      console.warn(`spec-mode: VC guard flagged mechanism in ${storyId} VC: [${f.reason}] "${String(f.criterion).slice(0, 80)}"`);
     }
   }
   return flagged;
@@ -2562,12 +2607,118 @@ function partitionFlaggedVc(vc, flags) {
 // to maxCycles → if still flagged, a conservative safe-fallback VC. `regenerateVc`
 // and `reviewVc` are injected so the orchestration is unit-testable without an LLM.
 // Returns { vc, source: 'clean'|'regenerated'|'fallback', cycles, flags }.
+// deriveGuardVocabulary — the guard-vocabulary agent, invoked at a guard seam.
+//
+// Replaces the literal term lists guards used to carry. See lib/guard-vocabulary.js for
+// the full rationale; the short version is that a hardcoded list catches exactly the one
+// incident it was built from while reporting "clean" forever.
+//
+// INPUTS ARE STATE-DEPENDENT AND MANDATORY. A guard agent that is not shown what the guard
+// will actually check cannot derive anything real — it guesses from the ticket, which is
+// how fabricated file contents entered the pipeline before. For the VC guard that means
+// the criteria themselves AND the story's declared manifest, plus the detective's real
+// file findings as ground truth. Callers at other seams must pass their own equivalents.
+//
+// Runs through runAgentForJson, so it inherits exactly what every other agent gets: model
+// ladder escalation across attempts, retries, provider fallback and self-heal. Nothing
+// about resilience is re-implemented here.
+//
+// Returns a normalised vocabulary, or null. NULL IS NOT "NOTHING TO FLAG" — callers must
+// treat it as "the guard could not be armed" and say so loudly.
+async function deriveGuardVocabulary({ promptExec, rule, statements, story, findings, manifestFiles, logDir, seam, repoPath, codegraphTool }) {
+  const _statements = (Array.isArray(statements) ? statements : []).filter(Boolean);
+  if (!_statements.length) return null;
+
+  const evidence = (Array.isArray(findings) ? findings : []).slice(0, 8)
+    .map((f) => `- ${f.file || ''}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${String(f.reason).slice(0, 300)}` : ''}${f.helper ? ` [existing helper: ${f.helper}]` : ''}`)
+    .join('\n');
+  const manifest = (Array.isArray(manifestFiles) ? manifestFiles : []).map((f) => `- ${f}`).join('\n');
+
+  const profiles = (() => {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(automationDirFromLogDir(logDir), 'agents', 'profiles.json'), 'utf8'));
+    } catch { return {}; }
+  })();
+  const persona = profiles['guard-vocabulary-agent'] || '';
+
+  const prompt = `${persona ? persona + '\n\n' : ''}GUARD SEAM: ${seam || 'unspecified'}
+
+THE RULE THIS GUARD ENFORCES:
+${rule}
+
+THE STATEMENTS THE GUARD WILL CHECK:
+${_statements.map((c, i) => `${i + 1}. ${c}`).join('\n')}
+
+DECLARED MANIFEST (the files this story says it will touch):
+${manifest || '- (none declared)'}
+
+CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
+${evidence || '- (none available)'}
+
+STORY CONTEXT:
+Title: ${(story && story.title) || ''}
+Description: ${String((story && story.description) || '')}
+${codegraphTool && repoPath ? `
+VERIFY BEFORE YOU ANSWER — you have a real index of this repository.
+
+  PROJECT_ROOT="${repoPath}" bash "${codegraphTool}" query <SymbolName>
+  PROJECT_ROOT="${repoPath}" bash "${codegraphTool}" explore <terms>
+
+Run it via Bash. A candidate term that resolves to NOTHING in this index is noise and
+belongs in the blacklist, however unusual the word looks. Do not assert that a term is
+meaningful — check it.
+
+WHY THIS MATTERS HERE: the list you return feeds a BM25/IDF ranker. That ranker DEMOTES
+terms which are common in the corpus and AMPLIFIES terms which are rare. So a rare,
+meaningless token — a bracketed brand tag, a ticket label, a person's name — is not
+diluted, it is promoted to a top discriminator and drags the search away from the real
+code. Rare-and-meaningless is the failure mode you exist to prevent; do not mistake
+rarity for signal.
+` : ''}`;
+
+  // Real tools when there is a repo to check against — the agent must VERIFY a candidate
+  // term, not assert it. Inherits ladder/retry/self-heal from runAgentForJson like every
+  // other agent; nothing about resilience is re-implemented here.
+  const _repo = repoPath || resolveCodelinePath(story);
+  const payload = await runAgentForJson(
+    promptExec, prompt, TOOL_GUARD_VOCABULARY, 'GUARD_VOCABULARY',
+    logDir ? path.join(logDir, `${(story && story.id) || 'phase'}-guard-vocabulary.log`) : null,
+    null, (story && story.id) || '', _repo,
+  );
+  if (!payload) return null;
+  const vocab = normaliseVocabulary(payload);
+  return isVocabularyUsable(vocab) ? vocab : null;
+}
+
 async function enforceVerificationCriteria(story, initialVc, opts = {}) {
-  const { regenerateVc = null, reviewVc = null, findings = null, maxCycles = Number(process.env.VC_MAX_CYCLES || '2') } = opts;
+  const { regenerateVc = null, reviewVc = null, findings = null, deriveVocabulary = null,
+          maxCycles = Number(process.env.VC_MAX_CYCLES || '2') } = opts;
   let vc = Array.isArray(initialVc) ? initialVc.slice() : [];
   let lastFlags = [];
+
+  // ARM THE GUARD, OR ABORT. The vocabulary this guard applies is derived per story; it is
+  // not written down anywhere. If derivation fails the guard cannot check anything, and a
+  // guard that silently checks nothing is worse than no guard — it reports "clean" and
+  // nobody looks again. That is precisely how the previous hardcoded guard passed VCs
+  // which plainly prescribed mechanism. So: no vocabulary, no run.
+  let vocabulary = null;
+  if (deriveVocabulary) {
+    try { vocabulary = await deriveVocabulary(vc); } catch (err) {
+      throw new Error(`VC guard could not be armed for ${(story && story.id) || 'story'}: guard-vocabulary agent failed (${err && err.message}). A guard with no vocabulary checks nothing; refusing to proceed.`);
+    }
+  }
+  if (!isVocabularyUsable(vocabulary)) {
+    throw new Error(`VC guard could not be armed for ${(story && story.id) || 'story'}: the guard-vocabulary agent returned no usable terms after its full retry/ladder budget. A guard with no vocabulary checks nothing; refusing to proceed.`);
+  }
+  // Persisted so a re-run applies the identical vocabulary — derivation is agentic,
+  // enforcement is reproducible.
+  if (story) {
+    story.specification = story.specification || {};
+    story.specification.guardVocabulary = vocabulary;
+  }
+
   for (let cycle = 1; cycle <= maxCycles; cycle++) {
-    const mech = findVcMechanism(vc, story && story.id).map((f) => f.reason + `: "${String(f.criterion).slice(0, 80)}"`);
+    const mech = findVcMechanism(vc, story && story.id, vocabulary).map((f) => f.reason + `: "${String(f.criterion).slice(0, 80)}"`);
     let speckitFlags = [];
     if (reviewVc) {
       try { speckitFlags = (await reviewVc(vc, cycle)) || []; } catch { speckitFlags = []; }
@@ -2601,7 +2752,7 @@ async function enforceVerificationCriteria(story, initialVc, opts = {}) {
   //
   // CONFIGURABLE: VC_MIN_RETAINED (absolute floor, default 2),
   //               VC_MIN_RETAINED_FRACTION (share of the original set, default 0.5).
-  const mechCriteria = findVcMechanism(vc).map((f) => f.criterion);
+  const mechCriteria = findVcMechanism(vc, null, vocabulary).map((f) => f.criterion);
   const guardClean = vc.filter((c) => !mechCriteria.includes(c));
 
   const { clean, flagged, unattributable } = partitionFlaggedVc(vc, lastFlags);
@@ -2998,7 +3149,31 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
   // precomputeDetectiveExplore(). Spending a scarce iteration on a query we can
   // compute deterministically is pure waste on a model that keeps exhausting
   // its budget.
-  const preseed = precomputeDetectiveExplore(repoPath, story, toolPath, process.env);
+  // Derive the search vocabulary before seeding: the agent proposes candidate terms from
+  // the ticket and VERIFIES each against this repo's CodeGraph index, so a rare-but-
+  // meaningless token (a brand tag, a label) cannot be amplified by IDF into a top
+  // discriminator. Best-effort at THIS seam only: unlike the VC/AC guards, a missing
+  // vocabulary here does not check nothing — it means an unfiltered query, which is the
+  // pre-existing behaviour. Aborting a run because a search hint could not be refined
+  // would be a worse failure than a noisier first explore.
+  let _searchVocab = null;
+  try {
+    _searchVocab = await deriveGuardVocabulary({
+      promptExec: opts.promptExec || null,
+      rule: SEARCH_TERM_RULE,
+      statements: [story.title || '', String(story.description || '')].filter(Boolean),
+      story,
+      findings: [],
+      manifestFiles: [],
+      logDir,
+      seam: 'search-query',
+      repoPath,
+      codegraphTool: toolPath,
+    });
+  } catch (err) {
+    console.warn(`spec-mode: search-term vocabulary unavailable for ${story.id} (${err && err.message}) — seeding with an unfiltered query`);
+  }
+  const preseed = precomputeDetectiveExplore(repoPath, story, toolPath, process.env, _searchVocab);
   const preseedBlock = preseed
     ? `\nYOUR FIRST \`explore\` HAS ALREADY BEEN RUN FOR YOU — these are its real results (domain nouns only, symptom/presentation words stripped). Treat this as call 1 of your budget; do NOT re-run it. Start from step 2: decide whether the top hit COMPUTES the wrong value or only READS it, and trace from there.\n\n=== PRE-COMPUTED \`explore\` RESULTS ===\n${preseed}\n=== END PRE-COMPUTED RESULTS ===\n`
     : '';
@@ -3575,6 +3750,21 @@ ${storyPayload}${publishedContracts(repoPath, story)}
             }),
             reviewVc: (vc, cycle) => reviewVcViaSpeckit({ story, vc, cycle, logDir }),
             findings: detectiveFindings,
+            // The guard's vocabulary is derived here, from the criteria it will check
+            // PLUS the story's declared manifest PLUS the detective's real file reads.
+            // Inputs are state-dependent by design: an agent not shown what the guard
+            // checks can only guess from the ticket, which is how invented file contents
+            // reached the pipeline before.
+            deriveVocabulary: (vcToCheck) => deriveGuardVocabulary({
+              promptExec,
+              rule: VC_OBSERVABILITY_RULES,
+              statements: vcToCheck,
+              story,
+              findings: detectiveFindings,
+              manifestFiles: (story && story.technicalNotes && story.technicalNotes.files) || [],
+              logDir,
+              seam: 'verification-criteria',
+            }),
           });
           story.verificationCriteria = enforced.vc;
           // 'disputed' is NOT fallback: the criteria are the author's real ones, kept
@@ -3718,35 +3908,24 @@ ${storyPayload}${publishedContracts(repoPath, story)}
 }
 
 // ─── Speckit AC validator (runtime version mirrors test/unit/orchestration/speckit-validator.test.ts)
-const PRESCRIPTIVE_AC_PATTERNS = [
-  { pattern: /vi\.mock\s*\(/i,              reason: 'prescribes vi.mock() call' },
-  { pattern: /vi\.spyOn\s*\(/i,             reason: 'prescribes vi.spyOn() call' },
-  { pattern: /jest\.mock\s*\(/i,            reason: 'prescribes jest.mock() call' },
-  { pattern: /jest\.fn\s*\(/i,              reason: 'prescribes jest.fn() call' },
-  { pattern: /\.?mockReturnValue[\s(]/i,    reason: 'prescribes mockReturnValue' },
-  { pattern: /\.?mockResolvedValue[\s(]/i,  reason: 'prescribes mockResolvedValue' },
-  { pattern: /\.?mockImplementation[\s(]/i, reason: 'prescribes mockImplementation' },
-  { pattern: /import\s+\{[^}]+\}\s+from/i, reason: 'prescribes exact import statement' },
-  { pattern: /require\s*\(\s*['"`]/i,       reason: 'prescribes require() call' },
-  { pattern: /^use supertest/i,             reason: 'prescribes supertest usage' },
-  { pattern: /^import\s+/i,                reason: 'prescribes import statement' },
-];
 
-function stripPrescriptiveACs(acceptanceCriteria, storyId) {
-  const clean = [];
-  const flagged = [];
-  for (const ac of (acceptanceCriteria || [])) {
-    // Speckit output is LLM-shaped and occasionally non-string (an object / null /
-    // number) — coerce for the pattern test so a malformed item never throws
-    // (`ac.trim is not a function`, live 2026-07-24). Keep the ORIGINAL value in
-    // clean/flagged so we never corrupt or drop it.
-    const acStr = typeof ac === 'string' ? ac : (ac == null ? '' : JSON.stringify(ac));
-    const hit = PRESCRIPTIVE_AC_PATTERNS.find(({ pattern }) => pattern.test(acStr.trim()));
-    if (hit) {
-      console.warn(`spec-mode: speckit validator stripped prescriptive AC from ${storyId}: [${hit.reason}] "${acStr.slice(0, 80)}"`);
-      flagged.push({ criterion: ac, flag: `speckit-validator: ${hit.reason} — describes HOW not WHAT` });
-    } else {
-      clean.push(ac);
+function stripPrescriptiveACs(acceptanceCriteria, storyId, vocabulary) {
+  // PURE APPLIER — no patterns, no library names, no language assumptions.
+  // A hardcoded list used to live here: eleven regexes naming specific JS test
+  // libraries, so a codeline in any other language received no protection at all
+  // while the guard still reported clean. What counts as prescriptive for THIS
+  // story is derived by the guard-vocabulary agent from the same rule the
+  // reviewer reads, grounded in the detective's real file evidence.
+  //
+  // NO VOCABULARY IS NOT "NOTHING TO STRIP" — the caller aborts before here.
+  const acs = Array.isArray(acceptanceCriteria) ? acceptanceCriteria : [];
+  const hits = applyVocabulary(acs, vocabulary);
+  const flaggedItems = new Set(hits.map((h) => h.item));
+  const clean = acs.filter((ac) => !flaggedItems.has(ac));
+  const flagged = hits.map((h) => ({ criterion: h.item, reason: h.reason }));
+  if (storyId) {
+    for (const f of flagged) {
+      console.warn(`spec-mode: AC guard stripped prescriptive AC in ${storyId}: [${f.reason}] "${String(f.criterion).slice(0, 80)}"`);
     }
   }
   return { clean, flagged };
@@ -3878,8 +4057,24 @@ story that got no answer at all).
     );
     if (payload) {
       payload.agent = 'speckit';
-      // Post-process: strip any prescriptive HOW-to-implement ACs the model still produced
-      const { clean, flagged } = stripPrescriptiveACs(payload.acceptanceCriteria, story.id);
+      // Post-process: strip any prescriptive HOW-to-implement ACs the model still produced.
+      // ARM OR ABORT — the vocabulary is derived per story; a guard with none checks
+      // nothing while reporting clean, which is the failure this replaced.
+      const _acVocab = await deriveGuardVocabulary({
+        promptExec,
+        rule: AC_PRESCRIPTIVENESS_RULE,
+        statements: payload.acceptanceCriteria,
+        story,
+        findings: (story && story.fixSiteAnalysis) || [],
+        manifestFiles: (story && story.technicalNotes && story.technicalNotes.files) || [],
+        logDir,
+        seam: 'acceptance-criteria',
+      });
+      if (Array.isArray(payload.acceptanceCriteria) && payload.acceptanceCriteria.length
+          && !isVocabularyUsable(_acVocab)) {
+        throw new Error(`AC guard could not be armed for ${story.id}: the guard-vocabulary agent returned no usable terms after its full retry/ladder budget. Refusing to proceed with an unarmed guard.`);
+      }
+      const { clean, flagged } = stripPrescriptiveACs(payload.acceptanceCriteria, story.id, _acVocab);
       if (flagged.length > 0) {
         payload.acceptanceCriteria = clean;
         payload.acFlagged = [...(payload.acFlagged || []), ...flagged];
@@ -3889,7 +4084,7 @@ story that got no answer at all).
       if (Array.isArray(payload.splitStories)) {
         for (const child of payload.splitStories) {
           if (!child.acceptanceCriteria) continue;
-          const { clean: childClean, flagged: childFlagged } = stripPrescriptiveACs(child.acceptanceCriteria, `${story.id}/${child.id}`);
+          const { clean: childClean, flagged: childFlagged } = stripPrescriptiveACs(child.acceptanceCriteria, `${story.id}/${child.id}`, _acVocab);
           if (childFlagged.length > 0) {
             child.acceptanceCriteria = childClean;
             child.acFlagged = [...(child.acFlagged || []), ...childFlagged];
@@ -5720,7 +5915,22 @@ async function validateMidExecutionSplits(prdFile, storyIdsCsv) {
       for (const sc of speckitResult.payload.splitStories) {
         const child = children.find(c => c.id === sc.id);
         if (child && Array.isArray(sc.acceptanceCriteria) && sc.acceptanceCriteria.length) {
-          const { clean } = stripPrescriptiveACs(sc.acceptanceCriteria, child.id);
+          // Split-child ACs, mid-execution. Same armed-or-abort contract as every
+          // other guard seam: derived vocabulary, or the run stops.
+          const _childVocab = await deriveGuardVocabulary({
+            promptExec,
+            rule: AC_PRESCRIPTIVENESS_RULE,
+            statements: sc.acceptanceCriteria,
+            story: child,
+            findings: (child && child.fixSiteAnalysis) || [],
+            manifestFiles: (child && child.technicalNotes && child.technicalNotes.files) || [],
+            logDir,
+            seam: 'acceptance-criteria:split-child',
+          });
+          if (!isVocabularyUsable(_childVocab)) {
+            throw new Error(`AC guard could not be armed for split child ${child.id}: no usable vocabulary after the full retry/ladder budget. Refusing to proceed with an unarmed guard.`);
+          }
+          const { clean } = stripPrescriptiveACs(sc.acceptanceCriteria, child.id, _childVocab);
           child.acceptanceCriteria = clean.slice(0, MAX_ACS_PER_STORY);
         }
         if (child && sc.notes) {
@@ -5852,6 +6062,7 @@ module.exports = {
     TOOL_SPEC_AGENT,
     TOOL_SPEC_REVIEW,
     TOOL_MODEL_REVIEW,
+    TOOL_GUARD_VOCABULARY,
   },
   specAgentEnv,
   advanceAgentLadderEscalation,

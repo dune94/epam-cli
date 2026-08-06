@@ -50,7 +50,12 @@ describe('buildBrownfieldArchaeologyBlock — brownfield classification', () => 
   it('forbids any implementation mechanism in a VC (the AC-quality guard)', () => {
     // Sourced from the shared VC_OBSERVABILITY_RULES constant (2026-07-24 hardening).
     expect(archaeologyBlock).toMatch(/prescribes HOW to implement/);
-    expect(archaeologyBlock).toMatch(/split.*halve.*calculate independently/is);
+    // 2026-08-06: the rule no longer enumerates example phrasings — those were five
+    // sentences from one past incident, carrying client-domain nouns. What a violation
+    // looks like for a given story is derived per story by the guard-vocabulary agent.
+    // The PRINCIPLE is what must survive, and that is what is asserted now.
+    expect(archaeologyBlock).toMatch(/prescribes HOW to implement/i);
+    expect(archaeologyBlock, 'the rule enumerates remembered examples again').not.toMatch(/halve|per segment|for each line item/i);
     expect(archaeologyBlock).toMatch(/CROSS-COMPARISON that presumes a mechanism/);
   });
 

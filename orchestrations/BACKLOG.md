@@ -808,3 +808,37 @@ Superseded by GAP-P14 (Sandboxing / security isolation) which re-scopes to rootl
 
 ### GAP-P3 — SWE-bench benchmark harness
 **Status: done** (2026-06-03). 5 bundled TypeScript tasks + harness (`scripts/run-swe-bench.sh`) + `swe-bench.html` dashboard wired into Eleventy. Run: `bash scripts/run-swe-bench.sh`. Results aggregate into `benchmarks/results/` and render in the dashboard. Extend by adding tasks to `benchmarks/tasks/` following the existing format.
+
+---
+
+## Greenfield: hardcoded gates (deferred 2026-08-06)
+
+**Priority:** medium — greenfield paths are not currently exercised; brownfield was fixed first.
+
+Guards on greenfield-only code paths still carry hardcoded content, in violation of the
+project's no-hardcoding rule. Found during the brownfield guard sweep and deliberately
+deferred so the brownfield fix could ship.
+
+### Sites
+- `orchestrate.sh:275-284` — **scope-guard snapshot**. Hardcodes both the source directory
+  (`src`) and the language (`find src -name "*.ts"`). A greenfield Python or Go project
+  snapshots ZERO files and the guard still logs success: "0 files backed up" and "backed up
+  everything" are indistinguishable. Same silent-nullity failure class as the old VC guard.
+- `claude.sh:769-773` — `_brownfield_rung_bump` returns a bare literal `5` on the greenfield
+  branch. The brownfield branch derives its bump from `cpaIterationEstimate`; greenfield gets
+  a number somebody picked.
+- `scaffold-be-repo.sh`, `scaffold-fe-repo.sh`, `scaffold-frontend-repo.sh`,
+  `analyze_scaffold_phase.py` — named for a fixed backend/frontend split, itself a hardcoded
+  project shape. Not yet inspected line by line.
+
+### Approach
+Same as the brownfield fix: the guard becomes a pure applier holding no content; what it
+checks is derived per project by the `guard-vocabulary-agent` (schema-bound, inherits
+ladder/retry/self-heal via `runAgentForJson`) and persisted for reproducibility. If the
+vocabulary cannot be derived, the run aborts — an unarmed guard must never report clean.
+For the scope-guard specifically, the file set should come from the repository itself
+(`git ls-files`) rather than a hardcoded directory and extension, exactly as
+`codeline-write-perimeter.sh` already does.
+
+### Verified clean (no action needed)
+- `prd-remediate.sh` — no pattern lists, no domain vocabulary.

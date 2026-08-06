@@ -198,6 +198,21 @@ function classificationToStory(c, totalStoryCount) {
     // Carry the Jira ticket type through to the PRD story so the spec pass can
     // anchor its defect/novel classification to ground truth (Bug → defect).
     issueType:          c.issueType || null,
+    // The tracker's OWN statement of which product areas this ticket touches.
+    // Dropped here until 2026-08-06: codeline-discovery calls components "the
+    // strongest evidence", and it was present in Jira but null on every story in
+    // the PRD, so nothing downstream of ingest could act on it.
+    components:         Array.isArray(c.components) ? c.components : [],
+    // Comment prose, kept for JUDGEMENT about scope and viability — never routed
+    // into the code-search query, where its rare tokens (release names, "cc")
+    // would be amplified by IDF and drag the search away from real code. Live
+    // AMSD-2041: a stakeholder wrote "no code changes are needed and its more of
+    // configure and use" six weeks before two runs built an implementation.
+    ticketComments:     Array.isArray(c.comments) ? c.comments : [],
+    // URLs found in the description and comments, with provenance. Two vendor
+    // docs here refuted the story's central assumption and were destroyed at
+    // ingest by an ADF flattener that read text and dropped link marks.
+    ticketLinks:        Array.isArray(c.commentLinks) ? c.commentLinks : [],
   };
 }
 

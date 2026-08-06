@@ -262,7 +262,23 @@ function normalizeIssue(issue) {
       ctext = ex.text;
       const author = (comment && comment.author && comment.author.displayName) || null;
       const created = (comment && comment.created) || null;
-      if (ctext) commentRecords.push({ text: ctext, author, created });
+      // ONLY COMMENTS CARRYING A LINK ENTER THE PIPELINE.
+      //
+      // A Jira thread is where people speculate. On AMSD-2041 one comment read "Its
+      // possible, no code changes are needed and its more of configure and use" — a guess
+      // offered while waiting for a vendor demo, and wrong: the vendor's implementation
+      // guide requires an SDK install, an init() call and onEntryChange wiring, and the
+      // codeline has none of it (@contentstack/live-preview-utils absent, `live_preview`
+      // nowhere in src/). Carried in as ticket content, that sentence invites an agent to
+      // conclude the story needs no code, against the evidence.
+      //
+      // A LINK is different in kind: it points at a document that can be fetched, quoted and
+      // checked. So the link is the artefact worth ingesting, and the prose around it
+      // survives only as provenance — already recorded on the link itself, as `context`.
+      //
+      // The contract remains the description and the acceptance criteria. Neither is a
+      // colleague's opinion mid-thread.
+      if (ctext && ex.urls.length) commentRecords.push({ text: ctext, author, created });
       pushLinks(ex.urls, ctext, author, created);
     } catch { ctext = ''; }
     const match = ctext.match(/\[EPAM-AC-ADDITION\]\s*(\{[\s\S]*?\})\s*$/);

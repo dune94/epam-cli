@@ -44,7 +44,7 @@ const TOOL_TICKET_LINKS = {
         type: 'array',
         items: {
           type: 'object',
-          required: ['url', 'classification', 'relevant'],
+          required: ['url', 'classification', 'relevant', 'fetchStatus', 'quotes'],
           properties: {
             url: { type: 'string' },
             classification: {
@@ -53,9 +53,24 @@ const TOOL_TICKET_LINKS = {
                      'meeting_or_email', 'source_code', 'unreachable', 'unknown'],
             },
             relevant: { type: 'boolean', description: 'Does it bear on THIS story?' },
+            // WHETHER IT WAS ACTUALLY OPENED. Without this, "I read it and it says nothing
+            // relevant" and "I never opened it" are the same answer — and on 2026-08-06 a
+            // bound reply returned two bare classifications that read exactly like a
+            // completed review. An agent that could not reach a page must say so.
+            fetchStatus: {
+              type: 'string',
+              enum: ['fetched', 'unreachable', 'not_attempted'],
+              description:
+                'Did you actually open this URL? "fetched" means you read the document and '
+                + 'the quotes below come from it. Never say "fetched" for a page you did not read.',
+            },
             reason: { type: 'string', description: 'Why relevant or not — one clause.' },
             quotes: {
               type: 'array',
+              // AT LEAST ONE. Optional quotes let a strict binding return two URLs and
+              // nothing else — structurally perfect, evidentially empty. A fetched document
+              // must yield a quote; an unreachable one must say why here.
+              minItems: 1,
               description:
                 'VERBATIM quotes from the document that bear on the implementation — the real ' +
                 'signature or contract of an API the story depends on, required configuration, ' +
@@ -874,8 +889,32 @@ function manifestFileExcerpts(story, prd, opts = {}, env = process.env) {
     : Number(env.SPEC_FILE_EXCERPT_TOTAL_BYTES !== undefined ? env.SPEC_FILE_EXCERPT_TOTAL_BYTES : 24000);
   if (!(perFile > 0) || !(total > 0)) return '';
 
-  const files = (story && story.technicalNotes && story.technicalNotes.files) || [];
+  // WHERE THE FILE LIST COMES FROM.
+  //
+  // This read story.technicalNotes.files only — which is populated from the spec agent's OWN
+  // answer (mergeLocationHintFiles(payload.locationHint), further down this file). So on a
+  // first pass the list is empty and this block never renders: the mechanism for showing an
+  // agent the code it must reason about only worked after that agent had already reasoned
+  // about it. Measured on run 20260806T213050Z — DECLARED FILES absent from both agents'
+  // prompts, while 92% of the prompt was an undifferentiated CodeGraph dump.
+  //
+  // The DETECTIVE runs BEFORE the spec agent and has already located the fix site, so its
+  // findings are a first-pass source. Declared files come first when they exist; located
+  // files fill the gap when they do not.
+  const declared = (story && story.technicalNotes && story.technicalNotes.files) || [];
+  // opts.located — the detective's findings, passed IN by the caller.
+  //
+  // This first read story.fixSiteAnalysis, which is assigned ~160 lines AFTER the prompt is
+  // built (guarded by `if (detectiveFindings.length)`), so at prompt time it is empty and the
+  // block still never rendered. The unit test passed because its fixture handed the function
+  // a story that already had the field — more convenient than reality. Third time in one
+  // session that reading a later-populated field produced a green test and a dead feature.
+  const located = ((opts.located && opts.located.length ? opts.located : (story && story.fixSiteAnalysis)) || [])
+    .map((f) => (typeof f === 'string' ? f : f && f.file))
+    .filter((f) => typeof f === 'string' && f);
+  const files = [...declared, ...located];
   if (!files.length) return '';
+  const unreadable = [];
 
   const root = (prd && prd.project && prd.project.outputDir) || env.PROJECT_ROOT || '.';
   const parts = [];
@@ -888,9 +927,12 @@ function manifestFileExcerpts(story, prd, opts = {}, env = process.env) {
     const abs = path.isAbsolute(f) ? f : path.join(root, f);
     let body;
     try {
-      if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) continue;
+      // REPORTED, never silently skipped. A `continue` here is how an empty DECLARED FILES
+      // block went unnoticed: the prompt simply had no section, which reads identically to
+      // "this story declares no files".
+      if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) { unreadable.push(f); continue; }
       body = fs.readFileSync(abs, 'utf8');
-    } catch { continue; }
+    } catch { unreadable.push(f); continue; }
     const budget = Math.min(perFile, total - spent);
     let excerpt = body;
     let truncated = false;
@@ -898,10 +940,15 @@ function manifestFileExcerpts(story, prd, opts = {}, env = process.env) {
     spent += excerpt.length;
     parts.push(`--- ${f}${truncated ? ' (truncated)' : ''}\n${excerpt}`);
   }
-  if (!parts.length) return '';
-  return '\n\nDECLARED FILES — the actual contents of the files this story names. Base every '
-    + 'observable criterion on what THIS code does, not on what the title suggests:\n'
-    + parts.join('\n') + '\n';
+  const missingNote = unreadable.length
+    ? `\n(could not be read at the stated path — do not reason about them: ${unreadable.join(', ')})\n`
+    : '';
+  if (!parts.length) return unreadable.length
+    ? `\n\nDECLARED FILES — nothing available.${missingNote}`
+    : '';
+  return '\n\nDECLARED FILES — the actual contents of the files this story names or the detective located. '
+    + 'Base every observable criterion on what THIS code does, not on what the title suggests:\n'
+    + parts.join('\n') + missingNote + '\n';
 }
 
 function manifestEvidence(stories, prd) {
@@ -1135,7 +1182,7 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
       return null;
     }
     console.warn(`spec-mode: minimax returned null — laddering to ${ladderProvider}`);
-    const ladderTimeout = parseInt(process.env.SPEC_PASS_LADDER_TIMEOUT_MS || String(RUNCLAUDE_TIMEOUT_MS), 10);
+    const ladderTimeout = parseInt(process.env.SPEC_PASS_LADDER_TIMEOUT_MS || String(runClaudeTimeoutMs()), 10);
     // FIX: build a new execSpec for the ladder. The original execSpec has
     // '--provider minimax' baked into its args. Passing AI_PROVIDER=openai via
     // env overrides is insufficient — ai-run.sh reads the --provider CLI flag,
@@ -2747,10 +2794,17 @@ rarity for signal.
   // term, not assert it. Inherits ladder/retry/self-heal from runAgentForJson like every
   // other agent; nothing about resilience is re-implemented here.
   const _repo = repoPath || resolveCodelinePath(story);
+  // BIND THE SHAPE. This agent's answers came back as `submit_guard_vocabulary\n{...}` and
+  // as `<tool_call>` markup on the live run of 2026-08-06 — unparseable, so the guard
+  // reported "no usable terms after its full retry/ladder budget" and ABORTED the spec pass
+  // on every lane. The guards are right to refuse to run unarmed; the answer should never
+  // have been lost in the first place. The schema the agent is asked for is now the schema
+  // the provider enforces, from the same object.
   const payload = await runAgentForJson(
     promptExec, prompt, TOOL_GUARD_VOCABULARY, 'GUARD_VOCABULARY',
     logDir ? path.join(logDir, `${(story && story.id) || 'phase'}-guard-vocabulary.log`) : null,
     null, (story && story.id) || '', _repo,
+    { EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_GUARD_VOCABULARY) },
   );
   if (!payload) return null;
   const vocab = normaliseVocabulary(payload);
@@ -2952,10 +3006,50 @@ Output ONLY a JSON array of verification-criterion strings. No prose, no markdow
   return cleaned.length ? cleaned : null;
 }
 
-function buildBrownfieldArchaeologyBlock(env = process.env) {
+/**
+ * opts.hasAcceptanceCriteria / opts.hasReferencedDocs — what this STORY actually has.
+ *
+ * STEP 3 used to open with three sentences about acceptance criteria unconditionally. A
+ * brownfield ticket has none — the AC gate skips them by design and records "VCs are derived
+ * from the description" — so the model was given ceremony about an empty array and then told
+ * to derive verification from a description that, on AMSD-2041, was 395 characters including
+ * estimate boilerplate. Four thin criteria came out.
+ *
+ * Meanwhile the same prompt carries the documentation fetched from the ticket's own links,
+ * under a header calling it "authoritative over assumption". STEP 3 never named it, so it
+ * informed the implementation and not the verification. The instruction predates that source
+ * by months; nothing updated it when the source arrived.
+ *
+ * A prompt should name the sources this story HAS. Nothing else.
+ */
+function buildBrownfieldArchaeologyBlock(env = process.env, opts = {}) {
   const isBrownfield = env.EPAM_BROWNFIELD === '1';
+  const hasAcs = opts.hasAcceptanceCriteria !== false;
+  const hasDocs = opts.hasReferencedDocs === true;
+
+  // Only sources that exist are offered. Inviting derivation from documents that were never
+  // fetched, or from criteria the ticket never had, is an invitation to invent one.
+  const _sources = [
+    hasAcs ? 'the acceptance criteria' : '',
+    'the description',
+    hasDocs ? 'the REFERENCED DOCUMENTATION quoted above (authoritative: where a linked document states what the system does observably, derive the check from THAT rather than from a one-line description)' : '',
+  ].filter(Boolean);
+  const _vcSourceValues = [hasAcs ? 'acceptance' : '', 'description', hasDocs ? 'documentation' : '', 'both']
+    .filter(Boolean).join('|');
+  const _acPreamble = hasAcs
+    ? `STEP 3 — VERIFICATION CRITERIA (do NOT touch the acceptance criteria).
+The acceptanceCriteria are the IMMUTABLE ticket intent — copy the existing array through VERBATIM: never reword, split, add, remove, re-scope, or inject any implementation mechanism into them.
+Instead, PRODUCE`
+    // Silence, not a disclaimer. Saying "this ticket has no acceptance criteria" is still a
+    // dependency on them: it spends the model's attention on an absent artefact and invites
+    // it to compensate. A prompt names what exists.
+    : `STEP 3 — VERIFICATION CRITERIA.
+PRODUCE`;
   const archaeologyBlock = isBrownfield
-    ? `\n\nBROWNFIELD MODE — output JSON only, no tools, no search.
+    ? `\n\nBROWNFIELD MODE — answer as JSON.
+You MAY use read_file on any path named in this prompt (declared files, located fix sites, and any
+document persisted under the run's docs/ directory) when you need more than the excerpt shown.
+Looking is allowed; inventing is not — a file you have neither been shown nor read is a fabrication.
 
 STEP 1 — CLASSIFY THIS STORY. Set "storyKind":
 - "defect" if it reports that EXISTING behavior is wrong, broken, or produces an incorrect/missing result (a bug).
@@ -2970,16 +3064,14 @@ Use ONLY the EXISTING CODE block already present in this prompt (injected above 
 Set "locationHint" to [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this location — the fix site for a defect, the attachment point for a novel story>"}].
 If no relevant code appears above, set locationHint to []. Do NOT invent a plausible file: a named file whose contents you cannot see in this prompt is a fabrication, and an empty locationHint is a usable answer while a fabricated one is not.
 
-STEP 3 — VERIFICATION CRITERIA (do NOT touch the acceptance criteria).
-The acceptanceCriteria are the IMMUTABLE ticket intent — copy the existing array through VERBATIM: never reword, split, add, remove, re-scope, or inject any implementation mechanism into them.
-Instead, PRODUCE a "verificationCriteria" array — concrete, OBSERVABLE checks that confirm the change is correct — derived from the acceptance criteria AND the description (lean on the description when the ACs are sparse or missing). Apply these rules to EVERY verification criterion (a strict reviewer holds you to this SAME text, so a VC that breaks any rule will be flagged and rejected):
+${_acPreamble} a "verificationCriteria" array — concrete, OBSERVABLE checks that confirm the change is correct — derived from ${_sources.join(' AND ')}. Apply these rules to EVERY verification criterion (a strict reviewer holds you to this SAME text, so a VC that breaks any rule will be flagged and rejected):
 ${VC_OBSERVABILITY_RULES}
 - If the ticket describes a SYMPTOM, the VCs verify that symptom is resolved AND that related existing behavior does not regress.
-Set "vcSource" to "acceptance", "description", or "both" — where you derived the VCs from (use "description" when the ACs were too sparse to derive from).${unreachableExternalsConstraint()}
+Set "vcSource" to one of ${_vcSourceValues.split('|').map((v) => `"${v}"`).join(', ')} — where you actually derived the VCs from.${unreachableExternalsConstraint()}
 `
     : '';
   const schemaLine = isBrownfield
-    ? `\n  "storyKind":"defect|novel",\n  "verificationCriteria":["<observable check a tester can confirm>"],\n  "vcSource":"acceptance|description|both",\n  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this location — the fix site for a defect, the attachment point it integrates with for a novel story"}],`
+    ? `\n  "storyKind":"defect|novel",\n  "verificationCriteria":["<observable check a tester can confirm>"],\n  "vcSource":"${_vcSourceValues}",\n  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this location — the fix site for a defect, the attachment point it integrates with for a novel story"}],`
     : '';
   return { archaeologyBlock, schemaLine };
 }
@@ -3630,7 +3722,221 @@ function automationDirFromLogDir(logDir) {
 // NEVER BLOCKS. Documentation lookup is evidence-gathering, not a gate: an unreachable
 // network, a slow fetch or a refusing agent must degrade to "no docs" and let the spec pass
 // continue. Returns [] on any failure.
-async function reviewTicketLinks({ promptExec, story, logDir }) {
+/**
+ * Take the link agent's answer in whatever shape it arrived, and return the reviewed links.
+ *
+ * Live 2026-08-06, all three lanes: the agent DID the work — it fetched both vendor pages,
+ * quoted their code verbatim, judged that the guide targets CSR + App Router, and found that
+ * the ticket's own comment ("no code changes are needed and its more of configure and use")
+ * is contradicted by the vendor's implementation guide. Every word of that was discarded,
+ * because `payload.links` did not exist: the model had keyed the payload under the TOOL'S OWN
+ * NAME and used its own field names.
+ *
+ *   {"submit_ticket_links": {"links": [{ relevance:"relevant", document_scope:…,
+ *                                        key_findings:[{quote,note}],
+ *                                        contradictions_with_ticket:[…] }]}}
+ *
+ * Demanding exact key names throws away correct work over vocabulary. The schema stays the
+ * contract for what the agent is ASKED for; this is the tolerant reader on the way back in.
+ * It renames nothing it cannot recognise and invents nothing: a link with no URL is dropped.
+ */
+/**
+ * A tool definition, rendered as the env var that binds a provider's output space.
+ *
+ * One source of truth: the schema the agent is ASKED for and the schema the provider
+ * ENFORCES are the same object. A second copy would drift, and a drifted binding rejects
+ * correct work — the failure mode agent-output-schema.js was written to avoid.
+ */
+function schemaEnv(toolDef) {
+  try {
+    if (!toolDef || !toolDef.parameters) return '';
+    return JSON.stringify({ name: toolDef.name, schema: toolDef.parameters });
+  } catch { return ''; }
+}
+
+/**
+ * persistReferencedDocs(docs, dir) -> [written paths]
+ *
+ * Write each FETCHED document's body under the run, so a later agent can read more of it than
+ * the handful of quotes the link agent chose.
+ *
+ * Without this the document exists only inside the ticket-link agent's process. Measured on
+ * run 20260806T213050Z: the spec agent received four quote lines from two vendor guides, had
+ * no fetch tool, and the bodies were nowhere on disk — so "use the documentation" was an
+ * instruction it could not act on beyond those four lines.
+ *
+ * Only `fetched` documents are written. A document that could not be opened has nothing to
+ * persist, and writing an empty file for it would look like a document that says nothing.
+ *
+ * Never throws: evidence-writing must not be able to fail a spec pass.
+ */
+/**
+ * fetchTicketDocuments(links, dir) -> [{ url, fetchStatus, path }]
+ *
+ * The ENGINE opens every document linked on the ticket, before any agent runs.
+ *
+ * The ticket-link agent used to be the only thing that fetched, inside its own process, and
+ * only the quotes it chose came back. The page itself died with that process, so no later
+ * agent could read past those quotes — on run 20260806T213050Z the spec agent received four
+ * quote lines from two vendor guides and had no way to see more. Putting the body in the
+ * agent's schema would push a 16KB page back through the model as billed output tokens.
+ *
+ * Fetching here is deterministic: no model call, no tool budget, and no chance of a model
+ * declining to look. Every agent then reads the SAME text via read_file rather than one
+ * agent's selection from it.
+ *
+ * It uses the SHIPPED FetchUrlTool from dist/sdk.js — the same implementation the agents'
+ * fetch_url uses, so the HTML-to-text extraction and the size cap cannot drift from a second
+ * copy written here.
+ *
+ * A URL that cannot be opened is recorded as `unreachable` with no file. An empty file would
+ * read as a document that says nothing, which is a different and much worse claim.
+ */
+/**
+ * Where a run's artefacts live, derived from logDir the same way profiles.json already is.
+ * Documents go beside the rest of the run's evidence rather than into a temp directory that
+ * teardown deletes — the mistake made with discovery-vocabulary.json.
+ */
+function runArtifactDirFor(logDir) {
+  try {
+    if (logDir && fs.existsSync(logDir)) return logDir;
+  } catch { /* fall through */ }
+  return path.join(__dirname, '..', 'logs');
+}
+
+async function fetchTicketDocuments(links, dir) {
+  const out = [];
+  const list = Array.isArray(links) ? links : [];
+  if (!list.length) return out;
+  let FetchUrlTool;
+  try {
+    ({ FetchUrlTool } = require(path.join(__dirname, '..', '..', 'dist', 'sdk.js')));
+  } catch (err) {
+    console.warn(`spec-mode: cannot load the fetch tool (${err && err.message}) — ticket documents not retrieved`);
+    return out;
+  }
+  const tool = new FetchUrlTool();
+  const seen = new Set();
+  for (const l of list) {
+    const url = l && typeof l.url === 'string' ? l.url : '';
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    let body = '';
+    try {
+      const r = await tool.execute({ url });
+      if (!r || r.isError) throw new Error((r && String(r.content || '').slice(0, 200)) || 'fetch failed');
+      body = String(r.content || '');
+    } catch (err) {
+      console.warn(`spec-mode: could not fetch ${url} (${err && err.message})`);
+      out.push({ url, fetchStatus: 'unreachable', path: '' });
+      continue;
+    }
+    const [written] = persistReferencedDocs([{ url, fetchStatus: 'fetched', body }], dir);
+    out.push({ url, fetchStatus: written ? 'fetched' : 'unreachable', path: written || '' });
+  }
+  return out;
+}
+
+function persistReferencedDocs(docs, dir) {
+  const written = [];
+  try {
+    const list = Array.isArray(docs) ? docs : [];
+    if (!list.length || !dir) return written;
+    const target = path.join(dir, 'docs');
+    fs.mkdirSync(target, { recursive: true });
+    for (const d of list) {
+      if (!d || d.fetchStatus !== 'fetched') continue;
+      const body = typeof d.body === 'string' ? d.body : '';
+      if (!body) continue;
+      // Named from the URL so an agent reading a citation can find the file it names.
+      const slug = String(d.url || 'document')
+        .replace(/^https?:\/\//, '')
+        .replace(/[^a-zA-Z0-9._-]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(-120) || 'document';
+      const file = path.join(target, `${slug}.txt`);
+      fs.writeFileSync(file, `SOURCE: ${d.url || ''}\n\n${body}`);
+      written.push(file);
+    }
+  } catch { /* evidence writing never changes the outcome of a spec pass */ }
+  return written;
+}
+
+function normaliseTicketLinks(payload) {
+  if (!payload || typeof payload !== 'object') return [];
+  // The array may sit at the top level, under the tool's own name, or under any single
+  // object-valued key the model chose as a wrapper.
+  const findLinks = (node, depth = 0) => {
+    if (!node || typeof node !== 'object' || depth > 4) return null;
+    if (Array.isArray(node)) return node.some((e) => e && typeof e === 'object') ? node : null;
+    // The array's key comes from the TOOL DEFINITION, not from a list of guesses. A written
+    // down set of likely aliases ('links','documents','items','results') is a vocabulary in
+    // engine code: wrong for the next tool, and maintained by nobody.
+    const declaredKey = Object.keys((TOOL_TICKET_LINKS.parameters || {}).properties || {})
+      .find((k) => ((TOOL_TICKET_LINKS.parameters.properties[k] || {}).type) === 'array');
+    if (declaredKey && Array.isArray(node[declaredKey])) return node[declaredKey];
+    // Otherwise: whatever single array of objects this object holds, whatever it is called.
+    const arrays = Object.values(node).filter((v) => Array.isArray(v) && v.some((e) => e && typeof e === 'object'));
+    if (arrays.length === 1) return arrays[0];
+    for (const v of Object.values(node)) {
+      const found = findLinks(v, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  };
+  const raw = findLinks(payload);
+  if (!Array.isArray(raw)) return [];
+
+  const firstString = (...vals) => {
+    for (const v of vals) {
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+    return '';
+  };
+  // Quotes may be a flat array of strings, or objects carrying the quote plus a note.
+  const quotesOf = (l) => {
+    const src = [l.quotes, l.key_findings, l.findings, l.excerpts].find(Array.isArray) || [];
+    return src.map((q) => (typeof q === 'string' ? q : firstString(q && q.quote, q && q.text, q && q.excerpt)))
+      .filter(Boolean);
+  };
+  // A contradiction may be a sentence or a list of {ticket_says, document_says, explanation}.
+  const contradictionOf = (l) => {
+    const direct = firstString(l.contradictsStory, l.contradiction, l.contradicts);
+    if (direct) return direct;
+    const list = [l.contradictions_with_ticket, l.contradictions].find(Array.isArray) || [];
+    return list.map((c) => (typeof c === 'string' ? c
+      : [c && c.ticket_says && `ticket says: ${c.ticket_says}`,
+         c && c.document_says && `document says: ${c.document_says}`,
+         c && c.explanation].filter(Boolean).join(' — '))).filter(Boolean).join(' | ');
+  };
+  // `relevant` may be a boolean, or a word like "relevant" / "not relevant".
+  const relevanceOf = (l) => {
+    if (typeof l.relevant === 'boolean') return l.relevant;
+    const word = firstString(l.relevance, l.relevant, l.is_relevant).toLowerCase();
+    if (!word) return true;   // it was returned at all; absence of a verdict is not a denial
+    return !/\b(not|non|ir)\s*-?\s*relevant\b|^no$|^false$/.test(word);
+  };
+
+  return raw
+    .map((l) => (l && typeof l === 'object' ? l : null))
+    .filter(Boolean)
+    .map((l) => ({
+      url: firstString(l.url, l.link, l.href),
+      classification: firstString(l.classification, l.type, l.category) || 'unknown',
+      relevant: relevanceOf(l),
+      reason: firstString(l.reason, l.note, l.summary, l.rationale),
+      quotes: quotesOf(l),
+      scopeCaveat: firstString(l.scopeCaveat, l.document_scope, l.scope, l.caveat),
+      // Whether the agent could actually open the page. Carried through so a downstream
+      // reader can tell an empty review from an unread one — the distinction the schema now
+      // forces the agent to make.
+      fetchStatus: firstString(l.fetchStatus, l.fetch_status, l.status) || 'not_attempted',
+      contradictsStory: contradictionOf(l),
+    }))
+    .filter((l) => l.url);
+}
+
+async function reviewTicketLinks({ promptExec, story, logDir, docPaths = [] }) {
   // No links on the ticket means nothing to review — return before spending a model call.
   const links = Array.isArray(story && story.ticketLinks) && story.ticketLinks.length ? story.ticketLinks : [];
   if (!links.length) return [];
@@ -3669,7 +3975,12 @@ ${linkBlock}
 
 COMMENT THREAD (context for judging relevance — a link's surrounding discussion often says why it was posted):
 ${commentBlock || '(none)'}
-`;
+${Array.isArray(docPaths) && docPaths.length ? `
+ALREADY RETRIEVED — these documents have been fetched for you and written to disk. Read them
+with read_file rather than fetching them again; the text is the same and it costs you nothing:
+${docPaths.map((p) => `- ${p}`).join('\n')}
+A document listed here that you did not read is a document you cannot quote.
+` : ''}`;
 
   // THE AGENT MUST BE ABLE TO OPEN THE LINK.
   //
@@ -3687,6 +3998,16 @@ ${commentBlock || '(none)'}
     AI_GATE_ALLOW_TOOLS: process.env.TICKET_LINK_ALLOW_TOOLS || '1',
     EPAM_ALLOWED_TOOLS: process.env.TICKET_LINK_ALLOWED_TOOLS || 'fetch_url,read_file,list_files,search',
     EPAM_MAX_TOOL_CALLS: process.env.TICKET_LINK_MAX_TOOL_CALLS || String(Math.min(links.length + 2, 12)),
+    EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_TICKET_LINKS),
+    // BIND THE SHAPE, DO NOT ASK FOR IT. The prompt said "structured output only; do not
+    // answer in prose" and across three live runs the model answered three different ways —
+    // keyed under its own tool name, prose-then-JSON, then pure markdown. Each time it had
+    // fetched both vendor pages and found the contradiction, and each time the answer was
+    // discarded. A request is declinable; a bound output space is not.
+    //
+    // Tools survive: AgentRunner applies the binding only on the turn where tools are
+    // withheld, so the research turns still fetch and the answer turn cannot be prose.
+
   };
   try {
     const payload = await runAgentForJson(
@@ -3694,8 +4015,7 @@ ${commentBlock || '(none)'}
       logDir ? path.join(logDir, `${(story && story.id) || 'phase'}-ticket-links.log`) : null,
       'links', (story && story.id) || '', resolveCodelinePath(story), _linkTools,
     );
-    const out = payload && Array.isArray(payload.links) ? payload.links : [];
-    return out.filter((l) => l && typeof l.url === 'string');
+    return normaliseTicketLinks(payload);
   } catch (err) {
     console.warn(`spec-mode: ticket-link review unavailable for ${story && story.id} (${err && err.message}) — proceeding without documentation evidence`);
     return [];
@@ -3787,8 +4107,6 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
   // and 8 real agent attempts never found the actual fix site. sembleContext
   // (the CodeGraph/Semble-injected existing code, above) is already computed
   // unconditionally regardless of which agent runs, so it's available either way.
-  const { archaeologyBlock: brownfieldArchaeologyBlock, schemaLine: locationHintSchemaLine } =
-    buildBrownfieldArchaeologyBlock(process.env);
 
   // Cycle-time investigation, 2026-07-31 (mock1 comparison, same finding
   // class as the coordinator-review fix above): storyRequiresSplit() already
@@ -3808,9 +4126,6 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
   const splitSchemaField = isBrownfieldSpec
     ? ''
     : `\n  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]`;
-  const locationHintSchemaLineTrimmed = (isBrownfieldSpec && !splitSchemaField)
-    ? locationHintSchemaLine.replace(/,(\s*)$/, '$1')
-    : locationHintSchemaLine;
   const splitRulesBlock = isBrownfieldSpec
     ? ''
     : `\n\nSPLIT RULES (mandatory, not optional — enforce these before refining AC):
@@ -3839,9 +4154,25 @@ These rules apply only when splitDepth === 0. Never split a story that is alread
   // Read any documentation the ticket itself links to, BEFORE specifying. A vendor doc that
   // states the real contract of an API this story depends on outranks any assumption the
   // spec agents would otherwise make — and on the live ticket it refuted the story outright.
+  // THE ENGINE FETCHES FIRST. Every document linked on the ticket is retrieved and written
+  // under the run before any agent is asked about it, so the ticket-link agent reviews text
+  // that is already on disk and every later agent can read the same file rather than one
+  // agent's selection of quotes from a page nobody else can see.
+  let ticketDocPaths = [];
+  try {
+    const _docDir = runArtifactDirFor(logDir);
+    const _fetched = await fetchTicketDocuments((story && story.ticketLinks) || [], _docDir);
+    ticketDocPaths = _fetched.filter((d) => d.path).map((d) => d.path);
+    if (_fetched.length) {
+      console.log(`spec-mode: ${story.id} — ticket documents: ${_fetched.filter((d) => d.fetchStatus === 'fetched').length}/${_fetched.length} fetched into ${_docDir}/docs`);
+    }
+  } catch (err) {
+    console.warn(`spec-mode: ticket document retrieval failed for ${story.id} (${err && err.message}) — agents will have quotes only`);
+  }
+
   let referencedDocs = [];
   try {
-    referencedDocs = await reviewTicketLinks({ promptExec, story, logDir });
+    referencedDocs = await reviewTicketLinks({ promptExec, story, logDir, docPaths: ticketDocPaths });
     if (referencedDocs.length) {
       story.specification = story.specification || {};
       story.specification.referencedDocs = referencedDocs;
@@ -3866,7 +4197,29 @@ These rules apply only when splitDepth === 0. Never split a story that is alread
     ? `\n\nLOCATED FIX SITE(S) — traced in this repository before you were asked. Anchor every criterion to the behaviour THIS code produces:\n`
       + detectiveFindings.slice(0, 5).map((f) => `- ${f.file}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${f.reason}` : ''}`).join('\n') + '\n'
     : '';
-  const declaredFileBlock = manifestFileExcerpts(story, prd);
+  // detectiveFindings, not story.fixSiteAnalysis: the field is not set until later.
+  const declaredFileBlock = manifestFileExcerpts(story, prd, { located: detectiveFindings });
+
+  // Built HERE, after referencedDocs is populated — not at the top of the function.
+  // `referencedDocs` is declared with `let` further down, so reading it earlier is a
+  // temporal-dead-zone ReferenceError that would crash every brownfield spec call, and
+  // even with the declaration hoisted it would always have been empty: the block would
+  // have silently stopped offering documentation as a verification source, which is the
+  // whole point of passing it.
+  const { archaeologyBlock: brownfieldArchaeologyBlock, schemaLine: locationHintSchemaLine } =
+    buildBrownfieldArchaeologyBlock(process.env, {
+      // What THIS story actually has. The block names only sources that exist: a ticket with
+      // no acceptance criteria is not told about acceptance criteria, and documentation is
+      // offered as a source of verification only when documents were really fetched.
+      hasAcceptanceCriteria: Array.isArray(story.acceptanceCriteria) && story.acceptanceCriteria.length > 0,
+      hasReferencedDocs: Array.isArray(referencedDocs) && referencedDocs.some((d) => d && Array.isArray(d.quotes) && d.quotes.length),
+    });
+  // Derived from locationHintSchemaLine, so it has to follow it. It used to sit ~70 lines
+  // higher; moving the block below referencedDocs left this reading the name before its
+  // declaration — a second temporal-dead-zone crash, introduced while fixing the first.
+  const locationHintSchemaLineTrimmed = (isBrownfieldSpec && !splitSchemaField)
+    ? locationHintSchemaLine.replace(/,(\s*)$/, '$1')
+    : locationHintSchemaLine;
 
   const prompt = `${forcedRetryBlock}You are the ${agent} specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.${splitWarning}${priorGapsBlock}${sembleContext}${referencedDocsEvidence}${fixSiteBlock}${declaredFileBlock}${brownfieldArchaeologyBlock}
 ${generateInstruction}
@@ -4252,22 +4605,44 @@ story that got no answer at all).
     );
     if (payload) {
       payload.agent = 'speckit';
-      // Post-process: strip any prescriptive HOW-to-implement ACs the model still produced.
-      // ARM OR ABORT — the vocabulary is derived per story; a guard with none checks
-      // nothing while reporting clean, which is the failure this replaced.
-      const _acVocab = await deriveGuardVocabulary({
-        promptExec,
-        rule: AC_PRESCRIPTIVENESS_RULE,
-        statements: payload.acceptanceCriteria,
-        story,
-        findings: (story && story.fixSiteAnalysis) || [],
-        manifestFiles: (story && story.technicalNotes && story.technicalNotes.files) || [],
-        logDir,
-        seam: 'acceptance-criteria',
-      });
-      if (Array.isArray(payload.acceptanceCriteria) && payload.acceptanceCriteria.length
-          && !isVocabularyUsable(_acVocab)) {
-        throw new Error(`AC guard could not be armed for ${story.id}: the guard-vocabulary agent returned no usable terms after its full retry/ladder budget. Refusing to proceed with an unarmed guard.`);
+      // ACCEPTANCE CRITERIA ARE NOT IN SCOPE IN BROWNFIELD.
+      //
+      // A brownfield ticket's ACs are immutable and usually absent — the AC gate says so
+      // itself, skipping AC processing and recording "VCs are derived from the
+      // description". So there is nothing here for an AC guard to protect: any criteria in
+      // this payload were INVENTED by the spec agent, and guarding invented criteria spends
+      // a model call to police a field nothing downstream reads.
+      //
+      // It was not merely wasted. Live 2026-08-06, metrolinx: speckit produced ACs for a
+      // brownfield story, the AC guard armed against them, the vocabulary agent's answer
+      // failed to parse, and this threw — failing the spec pass on all three lanes over
+      // acceptance criteria the ticket never had.
+      //
+      // Greenfield is unchanged: there the ACs are the contract, and the guard still
+      // arms-or-aborts.
+      const _brownfield = process.env.EPAM_BROWNFIELD === '1';
+      let _acVocab = null;
+      if (_brownfield) {
+        if (Array.isArray(payload.acceptanceCriteria) && payload.acceptanceCriteria.length) {
+          console.log(`spec-mode: brownfield — ignoring ${payload.acceptanceCriteria.length} AC(s) speckit produced for ${story.id}; ACs are out of scope and VCs come from the description`);
+        }
+      } else {
+        // ARM OR ABORT — the vocabulary is derived per story; a guard with none checks
+        // nothing while reporting clean, which is the failure this replaced.
+        _acVocab = await deriveGuardVocabulary({
+          promptExec,
+          rule: AC_PRESCRIPTIVENESS_RULE,
+          statements: payload.acceptanceCriteria,
+          story,
+          findings: (story && story.fixSiteAnalysis) || [],
+          manifestFiles: (story && story.technicalNotes && story.technicalNotes.files) || [],
+          logDir,
+          seam: 'acceptance-criteria',
+        });
+        if (Array.isArray(payload.acceptanceCriteria) && payload.acceptanceCriteria.length
+            && !isVocabularyUsable(_acVocab)) {
+          throw new Error(`AC guard could not be armed for ${story.id}: the guard-vocabulary agent returned no usable terms after its full retry/ladder budget. Refusing to proceed with an unarmed guard.`);
+        }
       }
       const { clean, flagged } = stripPrescriptiveACs(payload.acceptanceCriteria, story.id, _acVocab);
       if (flagged.length > 0) {
@@ -5400,6 +5775,67 @@ function unwrapToolCallJson(text) {
     const keys = Object.keys(args).filter((k) => !['path', 'server_name', 'tool_name', 'content'].includes(k));
     if (keys.length > 0) return args;
   }
+
+  // LAST RESORT: the JSON is in there, but not inside a balanced tag.
+  //
+  // Everything above requires <tag>…</tag> to close. Live 2026-08-06, on the metrolinx
+  // run, the three shapes that actually arrived were none of those:
+  //
+  //   submit_guard_vocabulary\n{"blacklist":[…]}   ← bare tool NAME, then the payload
+  //   <tool_call>{"name":…                         ← never closed (truncated mid-answer)
+  //   Both documents describe … {"links":[…]}      ← prose first, then the payload
+  //
+  // Each one discarded a real answer. The guard-vocabulary agent then reported "no usable
+  // terms after its full retry/ladder budget" and aborted the spec pass on all three
+  // lanes — a run lost to punctuation, not to a model that could not do the work.
+  //
+  // So scan for the first balanced JSON OBJECT anywhere in the text, tracking string
+  // state so a brace inside a quoted value cannot end it early. This cannot produce a
+  // false positive: the result still has to parse, and the caller still validates it
+  // against the tool definition.
+  const obj = firstBalancedJsonObject(text);
+  if (obj) {
+    let args = obj;
+    if (args.arguments && typeof args.arguments === 'object') args = args.arguments;
+    if (typeof args.content === 'string') {
+      try { const inner = JSON.parse(args.content); if (inner && typeof inner === 'object') return inner; } catch { /* not JSON */ }
+    }
+    const keys = Object.keys(args).filter((k) => !['path', 'server_name', 'tool_name', 'name', 'content'].includes(k));
+    if (keys.length > 0) return args;
+  }
+  return null;
+}
+
+/**
+ * The first complete `{...}` in a string, parsed — or null.
+ *
+ * Brace counting alone is wrong: a `{` or `}` inside a quoted value ends the object early
+ * and yields malformed JSON. This tracks whether it is inside a string and honours
+ * backslash escapes, so a reason like "use {} for an empty set" cannot truncate the answer.
+ */
+function firstBalancedJsonObject(text) {
+  const s = String(text || '');
+  for (let start = s.indexOf('{'); start !== -1; start = s.indexOf('{', start + 1)) {
+    let depth = 0, inStr = false, esc = false;
+    for (let i = start; i < s.length; i += 1) {
+      const c = s[i];
+      if (esc) { esc = false; continue; }
+      if (c === '\\') { esc = true; continue; }
+      if (c === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (c === '{') depth += 1;
+      else if (c === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          try {
+            const parsed = JSON.parse(s.slice(start, i + 1));
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+          } catch { /* try the next opening brace */ }
+          break;
+        }
+      }
+    }
+  }
   return null;
 }
 
@@ -5524,7 +5960,18 @@ function extractTaggedJson(text, tag) {
   return null;
 }
 
-const RUNCLAUDE_TIMEOUT_MS = parseInt(process.env.RUNCLAUDE_TIMEOUT_MS || '360000', 10);
+// READ AT CALL TIME, not at module load.
+//
+// This was a module-level const, so the value was fixed when the file was first required and
+// no later assignment could change it. That made the budget un-tunable in practice: an agent
+// could not be given its own, and a caller setting RUNCLAUDE_TIMEOUT_MS after import was
+// silently ignored. When the guard-vocabulary agent timed out at 360s on 2026-08-06 and took
+// the specification pass with it, there was no lever to pull — the number had been baked in
+// at import.
+function runClaudeTimeoutMs() {
+  const v = parseInt(process.env.RUNCLAUDE_TIMEOUT_MS || '', 10);
+  return Number.isFinite(v) && v > 0 ? v : 360000;
+}
 
 function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
   return new Promise((resolve, reject) => {
@@ -5611,7 +6058,7 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
     // other callers keep their strict reject-on-failure semantics.
     const finishOutput = () => `${stdout}\n${stderr}`.trim();
 
-    const timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : RUNCLAUDE_TIMEOUT_MS;
+    const timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : runClaudeTimeoutMs();
     const killTimer = setTimeout(() => {
       if (settled) return;
       settled = true;
@@ -6262,6 +6709,12 @@ module.exports = {
   },
   specAgentEnv,
   reviewTicketLinks,
+  normaliseTicketLinks,
+  persistReferencedDocs,
+  fetchTicketDocuments,
+  manifestFileExcerpts,
+  deriveGuardVocabulary,
+  schemaEnv,
   referencedDocsBlock,
   advanceAgentLadderEscalation,
   recordDetectiveRound,

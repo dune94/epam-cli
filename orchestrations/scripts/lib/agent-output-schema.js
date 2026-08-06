@@ -120,6 +120,12 @@ function checkItem(item, schema, tag, index) {
     return fail(`${where}: expected an object, got ${item === null ? 'null' : typeof item}`);
   }
   for (const key of schema.required || []) {
+    // ACs ARE NOT IN SCOPE IN BROWNFIELD. The AC gate skips acceptance-criteria processing
+    // for a brownfield ticket entirely and records that verification criteria come from the
+    // description instead, so a brownfield answer legitimately has none. Demanding the field
+    // flagged every brownfield SPEC_AGENT answer on every run — noise today, and fatal the
+    // moment EPAM_SCHEMA_STRICT=1 is switched on, which is the whole point of this file.
+    if (key === 'acceptanceCriteria' && process.env.EPAM_BROWNFIELD === '1') continue;
     const v = item[key];
     if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) {
       const id = item.storyId ? ` (story ${item.storyId})` : '';

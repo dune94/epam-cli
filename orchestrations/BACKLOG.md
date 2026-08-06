@@ -842,3 +842,58 @@ For the scope-guard specifically, the file set should come from the repository i
 
 ### Verified clean (no action needed)
 - `prd-remediate.sh` — no pattern lists, no domain vocabulary.
+
+## Review: `lexicalMentionCount` in `lib/codeline-structure.js`
+
+Raised 2026-08-06 during the hardcoding sweep, deferred by the operator.
+
+`codeline-structure.js:162` holds `const SKIP = new Set(['.git', 'node_modules'])` — a
+directory-walk skip list inside `lexicalMentionCount`.
+
+**Review the function before touching the list.** Its own docstring says it is "the OLD
+signal, kept only to compare against": `rankByStructure` decides on declared dependencies
+and buildability, and this raw term count exists so the structural score can be shown to
+beat it. If that comparison is no longer being made, the function goes and the list goes
+with it — which is a smaller change than replacing the list.
+
+If it stays, the file list should come from `git ls-files` like the rest of the pipeline.
+`.git` is git's own directory, which `git ls-files` never returns; `node_modules` is the
+only genuinely stack-specific entry, and it is already excluded for any repo whose
+`.gitignore` declares it. So the skip list is largely redundant on the git path either way.
+
+Not urgent: nothing in the decision path reads it.
+
+## Write perimeter: "not the baseline" is not "safe to write"
+
+Found live 2026-08-06, deferred by the operator (does not impair the current run — the
+codelines it leaves open are not the one being modified).
+
+`perimeter_is_write_allowed` (lib/codeline-write-perimeter.sh) infers a story branch by
+elimination: a repo that is not on the configured baseline branch and is not detached is
+assumed to be a worktree or story branch, and is left WRITABLE. That holds only if every
+repository under JIRA_CODELINE_ROOT shares one branch name.
+
+They do not. Of 33 repositories the perimeter locked 23 and left 10 open, every one of them
+on its OWN mainline: `Development` (azure.metrolinx.psme.com, c365,
+construction-notice-pdf-service), `master` (cx-shared, docs.tools.com,
+metrolinx.powerbi.com), `main` (docs.ads.com), `development` (login.metrolinx.com).
+
+None is a story branch. The perimeter exists because ~1050 lines of client source were
+destroyed by an agent, and it is leaving a third of the repositories unprotected — including
+c365, which codeline discovery has ranked as a top candidate before.
+
+**The fix** is to make the test POSITIVE rather than by elimination: permit writes only in a
+worktree, or on a branch the ENGINE created. git-ops.sh:172 builds it as
+`${EPAM_BRANCH_PREFIX:-}AI-${story_id}`, so the pattern is engine self-knowledge and needs no
+per-project configuration. Anything else is somebody's mainline, whatever it is called.
+
+Add a test asserting the perimeter's pattern still matches what git-ops.sh constructs, so the
+two cannot drift.
+
+**Correction (same day)**: I recorded here that the perimeter's own test suite was failing —
+`bash` writing to a locked file, the "writer may write" case false. That was wrong. The file
+had been destroyed by a bad edit of mine and recovered from the session transcript, and the
+recovered copy was an EARLY DRAFT whose REPO_ROOT resolved to `test/` instead of the repo
+root. Every path it built was wrong, so the perimeter library was never sourced and the
+functions under test did not exist. With the path corrected the suite is 16/16 green. The
+perimeter behaves correctly; only the baseline-branch assumption above is a real defect.

@@ -451,15 +451,28 @@ Respond with JSON only — no markdown, no preamble:
       perClAcs[`${cl}Acs`] = classification[`${cl}Acs`] || [];
     }
 
+    // THE TICKET PASSES THROUGH. This used to enumerate the fields to keep, one by one,
+    // which made the gate a WHITELIST: anything not named here was destroyed on its way to
+    // the PRD, silently, with no error and no log line.
+    //
+    // It cost the same defect twice. 2026-07-23: `issueType` was dropped, the Bug → defect
+    // anchor never fired, and the fix was to add one more name to the list — leaving the
+    // shape that caused it. 2026-08-06, live: the ticket's `description`, `comments`,
+    // `commentLinks` and `components` were all dropped, so a brownfield story reached the
+    // spec pass with its description replaced by its own title (43 characters), zero
+    // comments, and zero of the two vendor documentation links its thread contained. The
+    // ticket-link agent then had nothing to review, and everything downstream reasoned
+    // about a ticket that had been emptied.
+    //
+    // The gate's job is to CLASSIFY, not to decide what a ticket consists of. So the issue
+    // spreads first and the gate's own findings override — a field added to a ticket
+    // tomorrow arrives at the PRD without anyone remembering to name it here.
     results.push({
+      ...issue,
       jiraKey:     issue.jiraKey,
       storyId:     issue.storyId,
       title:       issue.title,
       codeline:    resolvedCodeline,
-      // Carry the Jira ticket type through the gate so synthesize-prd can set
-      // story.issueType — without this the defect/novel classification anchor
-      // (Bug → defect) silently never fires (found live 2026-07-23, AMSD-1820:
-      // issueType arrived null at the PRD because the gate dropped it here).
       issueType:   issue.issueType || null,
       effort:      issue.effort,
       verdict,

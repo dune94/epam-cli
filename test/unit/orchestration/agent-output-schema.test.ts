@@ -242,18 +242,36 @@ describe('a schema refusal is diagnostic, not fatal', () => {
 describe('the declared wrapper shape is accepted, not refused', () => {
   const { validateTaggedOutput } = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
 
+  /**
+   * Built FROM the tool definition, not hand-written. The hand-written version listed
+   * url/classification/relevant and broke the moment the contract tightened to also require
+   * fetchStatus and quotes — a fixture that restates a contract drifts exactly like a
+   * validator that restates one, which is the defect this whole file exists to avoid.
+   */
+  function minimalTicketLink() {
+    const { itemSchemaFor } = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
+    const schema = itemSchemaFor('TICKET_LINKS');
+    const item: Record<string, unknown> = {};
+    for (const k of schema.required || []) {
+      const prop = (schema.properties || {})[k] || {};
+      item[k] = prop.type === 'boolean' ? true
+        : prop.type === 'number' ? 1
+        : prop.type === 'array' ? ['evidence']
+        : Array.isArray(prop.enum) ? prop.enum[0]
+        : k === 'url' ? 'https://x.test/d' : 'x';
+    }
+    return item;
+  }
+
   it('a correctly-shaped TICKET_LINKS wrapper passes', () => {
-    const r = validateTaggedOutput('TICKET_LINKS', {
-      links: [{ url: 'https://x.test/d', classification: 'vendor_documentation', relevant: true }],
-    });
+    const r = validateTaggedOutput('TICKET_LINKS', { links: [minimalTicketLink()] });
     expect(r.reason, 'the shape the tool definition itself declares was rejected').toBeNull();
     expect(r.ok).toBe(true);
   });
 
   it('a genuinely bad item inside the wrapper is still caught', () => {
-    const r = validateTaggedOutput('TICKET_LINKS', {
-      links: [{ classification: 'vendor_documentation', relevant: true }],
-    });
+    const bad = minimalTicketLink(); delete bad.url;
+    const r = validateTaggedOutput('TICKET_LINKS', { links: [bad] });
     expect(r.ok, 'unwrapping must not become a way to skip validation entirely').toBe(false);
     expect(r.reason).toMatch(/url/);
   });
@@ -263,8 +281,7 @@ describe('the declared wrapper shape is accepted, not refused', () => {
   });
 
   it('the bare array form still works', () => {
-    expect(validateTaggedOutput('TICKET_LINKS',
-      [{ url: 'https://x.test/d', classification: 'internal_wiki', relevant: false }]).ok).toBe(true);
+    expect(validateTaggedOutput('TICKET_LINKS', [minimalTicketLink()]).ok).toBe(true);
   });
 
   it('every wrapper tag accepts its own declared shape', () => {
@@ -282,5 +299,71 @@ describe('the declared wrapper shape is accepted, not refused', () => {
       const r = validateTaggedOutput(tag, { [map.itemsKey]: [item] });
       expect(r.ok, `${tag} refused its own declared wrapper: ${r.reason}`).toBe(true);
     }
+  });
+});
+
+/**
+ * ACCEPTANCE CRITERIA ARE NOT IN SCOPE IN BROWNFIELD.
+ *
+ * The AC gate skips acceptance-criteria processing for a brownfield ticket and records
+ * "VCs are derived from the description". A brownfield SPEC_AGENT answer therefore has no
+ * acceptanceCriteria — legitimately. Demanding it flagged every brownfield answer on every
+ * run (`missing required field "acceptanceCriteria"`, live 2026-08-06, all three lanes),
+ * and would be FATAL under EPAM_SCHEMA_STRICT=1 — the mode this validator exists to enable.
+ */
+describe('brownfield answers are not judged against greenfield requirements', () => {
+  const { validateTaggedOutput } = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
+  const withEnv = (v: string | undefined, fn: () => void) => {
+    const prev = process.env.EPAM_BROWNFIELD;
+    if (v === undefined) delete process.env.EPAM_BROWNFIELD; else process.env.EPAM_BROWNFIELD = v;
+    try { fn(); } finally {
+      if (prev === undefined) delete process.env.EPAM_BROWNFIELD; else process.env.EPAM_BROWNFIELD = prev;
+    }
+  };
+
+  /** A SPEC_AGENT answer carrying everything its tool declares EXCEPT acceptanceCriteria. */
+  function specAnswerWithoutAcs() {
+    const { itemSchemaFor } = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
+    const schema = itemSchemaFor('SPEC_AGENT');
+    const item: Record<string, unknown> = {};
+    for (const k of schema.required || []) {
+      if (k === 'acceptanceCriteria') continue;
+      const t = ((schema.properties || {})[k] || {}).type;
+      item[k] = t === 'boolean' ? true : t === 'number' ? 1 : t === 'array' ? ['x'] : t === 'object' ? { a: 1 } : 'x';
+    }
+    return item;
+  }
+
+  it('the fixture is meaningful — acceptanceCriteria really is declared required', () => {
+    const { itemSchemaFor } = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
+    expect(
+      (itemSchemaFor('SPEC_AGENT').required || []),
+      'if it is no longer required this test proves nothing',
+    ).toContain('acceptanceCriteria');
+  });
+
+  it('BROWNFIELD: an answer with no ACs is valid', () => {
+    withEnv('1', () => {
+      const r = validateTaggedOutput('SPEC_AGENT', specAnswerWithoutAcs());
+      expect(r.ok, `brownfield answer refused: ${r.reason}`).toBe(true);
+    });
+  });
+
+  it('GREENFIELD is unchanged — there the ACs are the contract', () => {
+    withEnv(undefined, () => {
+      const r = validateTaggedOutput('SPEC_AGENT', specAnswerWithoutAcs());
+      expect(r.ok, 'greenfield must still require acceptance criteria').toBe(false);
+      expect(r.reason).toMatch(/acceptanceCriteria/);
+    });
+  });
+
+  it('brownfield still enforces every OTHER required field', () => {
+    withEnv('1', () => {
+      const item = specAnswerWithoutAcs();
+      const other = Object.keys(item)[0];
+      delete item[other];
+      const r = validateTaggedOutput('SPEC_AGENT', item);
+      expect(r.ok, `dropping "${other}" must still be refused in brownfield`).toBe(false);
+    });
   });
 });

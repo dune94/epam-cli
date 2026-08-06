@@ -361,3 +361,40 @@ describe('ai-run.sh — the receiver — honours the grant it is handed', () => 
     ).not.toContain('--no-tools');
   });
 });
+
+/**
+ * STRUCTURED OUTPUT IS ENFORCED AT THE PROVIDER, NOT ASKED FOR IN THE PROMPT.
+ *
+ * Three live runs on 2026-08-06, three different answer shapes, none of them the declared
+ * one — tool-name-keyed JSON, prose-then-JSON, then pure markdown. Each time the agent had
+ * fetched both vendor pages and found the contradiction; each time the answer was discarded.
+ * The prompt said "Structured output only; do not answer in prose", which is a request.
+ *
+ * `EPAM_RESPONSE_SCHEMA` binds the model's output space at the provider (verified honoured
+ * on the models this pipeline uses). It existed and was wired to exactly one caller. These
+ * agents pass a JSON Schema to runAgentForJson already — the same schema must reach the
+ * provider instead of being restated in English.
+ */
+describe('the link agent’s answer shape is enforced, not requested', () => {
+  it('the tool’s own schema is handed to the provider', async () => {
+    const { runner } = await runChain({});
+    const env = JSON.parse(readFileSync(runner.envFile, 'utf8'));
+    expect(
+      env.EPAM_RESPONSE_SCHEMA,
+      'the agent was asked for a shape in prose and was free to decline — it did, three runs running',
+    ).toBeTruthy();
+    const bound = JSON.parse(env.EPAM_RESPONSE_SCHEMA);
+    expect(bound.name).toBeTruthy();
+    expect(bound.schema, 'no schema was bound').toBeTruthy();
+    // It must be the SAME contract the tool declares, not a second copy that can drift.
+    const spec = require('../../orchestrations/scripts/spec-mode-runner.js');
+    expect(bound.schema).toEqual(spec.TOOL_DEFINITIONS.TOOL_TICKET_LINKS.parameters);
+  });
+
+  it('the fetch grant survives alongside the binding', async () => {
+    const { runner } = await runChain({});
+    const env = JSON.parse(readFileSync(runner.envFile, 'utf8'));
+    expect(env.EPAM_ALLOWED_TOOLS).toContain('fetch_url');
+    expect(env.AI_GATE_ALLOW_TOOLS).toBe('1');
+  });
+});

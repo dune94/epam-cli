@@ -184,7 +184,14 @@ function classificationToStory(c, totalStoryCount) {
     id:                 c.storyId || c.jiraKey,
     jiraKey:            c.jiraKey,
     title:              c.title,
-    description:        tmpl.description || c.title,
+    // THE TICKET'S OWN DESCRIPTION WINS. This read `tmpl.description || c.title`: the
+    // PRD template's text if it had any, otherwise the ticket's TITLE — the description
+    // itself was never consulted. In brownfield the description is the only substantive
+    // content a ticket carries (the AC gate skips acceptance criteria entirely and records
+    // "VCs are derived from the description"), so every story reached the spec pass
+    // described by its own one-line summary. Live 2026-08-06: 43 characters instead of 395.
+    // The template is a fallback for a ticket with no description, never a replacement.
+    description:        c.description || tmpl.description || c.title,
     acceptanceCriteria: acs,
     codeline:           c.codeline || DEFAULT_CODELINE,
     status:             'pending',

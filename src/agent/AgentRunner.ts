@@ -184,6 +184,9 @@ export class AgentRunner {
       }
 
       // A hung forced-answer turn must cost ONE turn, not the whole run.
+      // Whether this turn offers tools at all. Drives BOTH the tools field and the strict
+      // response-schema binding, so the two can never be sent together by accident.
+      const toolsOfferedThisTurn = !budgetSpent && this.options.tools.length > 0;
       const turnDeadline = budgetSpent ? this.options.finalTurnTimeoutMs : undefined;
       const withDeadline = <T>(p: Promise<T>): Promise<T> => {
         if (!turnDeadline) return p;
@@ -218,10 +221,27 @@ export class AgentRunner {
           // it leaves the tool-calling path active with nothing to call, and the
           // model can stall instead of answering. Omitting the field is the
           // request we actually mean.
-          ...(budgetSpent ? {} : { tools: this.options.tools.map(t => t.definition) }),
+          ...(toolsOfferedThisTurn ? { tools: this.options.tools.map(t => t.definition) } : {}),
           model: this.options.model,
           stream: true,
           maxTokens: this.options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+          // BIND THE SHAPE ON EVERY TURN.
+          //
+          // I briefly bound this only on turns where tools were withheld, reasoning that a
+          // schema sent alongside tools invites the model to satisfy the shape immediately
+          // instead of calling anything. That coupling was a bug, and it cost a live run:
+          // `tools` is withheld only once the tool BUDGET is spent, so an agent had to burn
+          // all 8 of its inherited tool calls — eight round trips — before it was allowed to
+          // produce a conforming answer. It timed out at 360s and the guard it feeds aborted
+          // the specification pass. A ceiling on exploration had been turned into a floor on
+          // latency.
+          //
+          // The concern it was meant to address is real but belongs in the SCHEMA, not in
+          // turn placement: make the evidence required. Once TOOL_TICKET_LINKS required
+          // `quotes` (minItems 1) and an explicit `fetchStatus`, the same agent fetched both
+          // documents and returned 21 verbatim quotes — because a bound reply it could
+          // satisfy without reading anything no longer exists. Content requirements force the
+          // read; turn placement never did.
           ...(resolveKbResponseSchema() ? { responseFormat: resolveKbResponseSchema()! } : {}),
         },
         delta => {

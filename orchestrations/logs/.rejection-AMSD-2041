@@ -1,1 +1,1 @@
-unchanged-all:src/context/contentstackContext.tsx,src/interface/content/contentCard.ts,src/components/contentstack/ContentstackLink/ContentstackLink.tsx,src/hooks/useContent.ts,
+unchanged-all:src/context/contentstackContext.tsx,src/components/contentstack/ContentstackAttention/content.mock.ts,src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts,src/interface/content/contentCard.ts,

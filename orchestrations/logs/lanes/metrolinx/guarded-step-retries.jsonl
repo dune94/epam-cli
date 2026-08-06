@@ -41,3 +41,11 @@
 {"timestamp":"2026-08-04T18:58:08.956Z","step":"ac-review","storyId":"AMSD-2041","runId":"20260804T185158Z","agent":"speckit","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"57a9b16"}
 {"timestamp":"2026-08-04T19:00:55Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260804T185158Z","promptVersion":"57a9b16"}
 {"timestamp":"2026-08-04T19:02:10Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260804T185158Z","promptVersion":"57a9b16"}
+{"timestamp":"2026-08-04T21:50:36.256Z","step":"ac-review","storyId":"AMSD-2041","runId":"20260804T214417Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"177a8b5"}
+{"timestamp":"2026-08-04T21:52:39.104Z","step":"ac-review","storyId":"AMSD-2041","runId":"20260804T214417Z","agent":"speckit","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"177a8b5"}
+{"timestamp":"2026-08-04T21:54:13Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260804T214417Z","promptVersion":"177a8b5"}
+{"timestamp":"2026-08-04T21:54:39Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260804T214417Z","promptVersion":"177a8b5"}
+{"timestamp":"2026-08-05T02:34:08.159Z","step":"ac-review","storyId":"AMSD-2041","runId":"20260805T022708Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"78f99b5"}
+{"timestamp":"2026-08-05T02:38:57Z","step":"0.5","phaseId":"core","attempts":2,"outcome":"pass","reason":"the tool call itself failed (non-zero exit) — check /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/lanes/metrolinx/pre-assessment-core.log","violationTypes":["tool_call_failed"],"runId":"20260805T022708Z","promptVersion":"78f99b5"}
+{"timestamp":"2026-08-05T02:39:05Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260805T022708Z","promptVersion":"78f99b5"}
+{"timestamp":"2026-08-06T19:59:23.178Z","step":"ac-review","storyId":"AMSD-2041","runId":"20260806T194356Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"378dbbd"}

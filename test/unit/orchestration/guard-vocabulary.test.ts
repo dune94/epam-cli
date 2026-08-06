@@ -178,3 +178,71 @@ describe('the module itself contains no hardcoded vocabulary', () => {
     expect(bl.items.required).toEqual(expect.arrayContaining(['term', 'reason']));
   });
 });
+
+/**
+ * THE GUARD AGENT'S ANSWER IS SHAPE-BOUND AT THE PROVIDER.
+ *
+ * Live 2026-08-06: this agent answered `submit_guard_vocabulary\n{...}` and `<tool_call>…`.
+ * Neither parsed, so `isVocabularyUsable` said no, and the guards — correctly refusing to run
+ * unarmed — aborted the specification pass on every lane:
+ *
+ *   openspec run failed: VC guard could not be armed … Refusing to proceed.
+ *   speckit review failed: AC guard could not be armed … Refusing to proceed.
+ *   [ERROR] Step 1: Specification pass FAILED for 'core'
+ *
+ * A whole run was lost to answer formatting. The prompt asked for the shape in English; now
+ * the provider binds it, from the SAME tool definition the agent is asked for — one object,
+ * so the request and the enforcement cannot drift apart.
+ */
+describe('the vocabulary agent is bound to its own tool schema', () => {
+  const spec = require('../../../orchestrations/scripts/spec-mode-runner.js');
+
+  it('the binding is the tool definition itself, not a second copy', () => {
+    const bound = JSON.parse(spec.schemaEnv(spec.TOOL_DEFINITIONS.TOOL_GUARD_VOCABULARY));
+    expect(bound.name).toBe(spec.TOOL_DEFINITIONS.TOOL_GUARD_VOCABULARY.name);
+    expect(bound.schema).toEqual(spec.TOOL_DEFINITIONS.TOOL_GUARD_VOCABULARY.parameters);
+  });
+
+  it('the bound schema still requires both lists — an empty guard is the original defect', () => {
+    const bound = JSON.parse(spec.schemaEnv(spec.TOOL_DEFINITIONS.TOOL_GUARD_VOCABULARY));
+    expect(bound.schema.required).toContain('blacklist');
+    expect(bound.schema.required).toContain('whitelist');
+  });
+
+  it('deriveGuardVocabulary hands that schema to the runner', async () => {
+    const { mkdtempSync, writeFileSync, chmodSync, readFileSync, rmSync } = require('node:fs');
+    const { join } = require('node:path');
+    const { tmpdir } = require('node:os');
+    const dir = mkdtempSync(join(tmpdir(), 'vocabbind-'));
+    try {
+      const envFile = join(dir, 'env.json');
+      const capture = join(dir, 'capture.js');
+      writeFileSync(capture,
+        `require('fs').writeFileSync(${JSON.stringify(envFile)}, JSON.stringify(process.env));\n` +
+        `process.stdout.write('<GUARD_VOCABULARY>{"blacklist":[{"term":"x","reason":"r"}],"whitelist":[]}</GUARD_VOCABULARY>');\n`);
+      const runner = join(dir, 'run.sh');
+      writeFileSync(runner, `#!/usr/bin/env bash\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(capture)}\n`);
+      chmodSync(runner, 0o755);
+      const prev = process.env.SPEC_MODE_PROVIDER;
+      delete process.env.SPEC_MODE_PROVIDER;
+      try {
+        await spec.deriveGuardVocabulary({
+          promptExec: { cmd: runner, args: [] },
+          rule: 'a rule', statements: ['a statement'],
+          story: { id: 'T-1', title: 't', description: 'd' },
+          findings: [], manifestFiles: [], logDir: dir, seam: 'test',
+        });
+      } finally {
+        if (prev === undefined) delete process.env.SPEC_MODE_PROVIDER; else process.env.SPEC_MODE_PROVIDER = prev;
+      }
+      const env = JSON.parse(readFileSync(envFile, 'utf8'));
+      expect(
+        env.EPAM_RESPONSE_SCHEMA,
+        'the agent was asked for a shape in prose — it answered with a bare tool name and lost a run',
+      ).toBeTruthy();
+      expect(JSON.parse(env.EPAM_RESPONSE_SCHEMA).name).toBe('submit_guard_vocabulary');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60000);
+});

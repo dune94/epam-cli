@@ -1,8 +1,8 @@
 {
-  "id": "jira-sourced-1785870862980",
+  "id": "jira-sourced-1786057828698",
   "title": "Metrolinx Brownfield — Jira-sourced",
   "version": "1.0.0",
-  "lastUpdated": "2026-08-04",
+  "lastUpdated": "2026-08-06",
   "project": {
     "name": "metrolinx",
     "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
@@ -14,16 +14,8 @@
       "cms": "Contentstack",
       "devEnvironment": "Ubuntu WSL2"
     },
-    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
+    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
     "outputDirs": [
-      {
-        "codeline": "gotransit",
-        "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
-      },
-      {
-        "codeline": "upexpress",
-        "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
-      },
       {
         "codeline": "metrolinx",
         "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
@@ -65,22 +57,54 @@
       "id": "AMSD-2041",
       "jiraKey": "AMSD-2041",
       "title": "[GO, UP, MX] Live Preview of Content in CMS",
-      "description": "[GO, UP, MX] Live Preview of Content in CMS",
+      "description": "Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website\nability to preview draft entries in CMS\nNotes& Assumptions  Limitation: Might not be possible to preview protected pages and content.\nOriginal Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0",
       "acceptanceCriteria": [],
-      "codeline": "gotransit",
+      "codeline": "metrolinx",
       "status": "pending",
       "completed": false,
       "agentRole": "typescript-engineer",
       "agentGroup": "main",
-      "effort": "low",
+      "effort": "medium",
       "estimate": 10,
       "acGateVerdict": "enrichable",
-      "acGateReason": "Auto-elaborated from description (original verdict: insufficient). No acceptance criteria are provided and the description is too vague — 'preview draft entries in CMS' could mean fundamentally different implementations across scope, mechanism, and content types.",
+      "acGateReason": "brownfield story with no acceptance criteria — AC processing skipped (VCs are derived from the description); codeline classified only",
       "issueType": "Story",
-      "codelines": [
-        "gotransit",
-        "upexpress",
-        "metrolinx"
+      "components": [
+        "GO",
+        "Intake & Planning",
+        "MX",
+        "UP"
+      ],
+      "ticketComments": [
+        {
+          "text": "More info needed to understand the gap/learning needed to implement the feature vs a POC; TBD - option to create a story with 2 pages to implement? Confirm if instead a demo from contentstack is the appropriate solve EPAM/IT to discuss next steps at standing meeting more info: cc",
+          "author": "Chenowa George",
+          "created": "2026-07-09T11:21:24.389-0400"
+        },
+        {
+          "text": ", Agreed to have a demo from the Contentstack team on the solution. Once demonstrated, this ticket could be reassessed. Updated Contentstack docs link - CC ,",
+          "author": "V-EPAM-Ivan Mikhailov",
+          "created": "2026-07-27T08:37:09.497-0400"
+        },
+        {
+          "text": ", agreed to have a demo from the Contentstack team on the solution. Once demonstrated, this ticket could be reassessed. For the current pi-11 planning agreed to add this ticket with M estimate Next steps: going to share email to with the current problems will schedule a call with CS team CC Updated Contentstack docs link - CC ,",
+          "author": "V-EPAM-Ivan Mikhailov",
+          "created": "2026-07-27T08:38:26.926-0400"
+        }
+      ],
+      "ticketLinks": [
+        {
+          "url": "https://www.contentstack.com/docs/headless-cms/live-preview-implementation-for-nextjs-csr-app-router",
+          "context": "More info needed to understand the gap/learning needed to implement the feature vs a POC; TBD - option to create a story with 2 pages to implement? Confirm if instead a demo from contentstack is the appropriate solve EPAM/IT to discuss next steps at standing meeting more info: cc",
+          "author": "Chenowa George",
+          "created": "2026-07-09T11:21:24.389-0400"
+        },
+        {
+          "url": "https://www.contentstack.com/docs/headless-cms/custom-preview-urls#configure-custom-preview-urls",
+          "context": ", Agreed to have a demo from the Contentstack team on the solution. Once demonstrated, this ticket could be reassessed. Updated Contentstack docs link - CC ,",
+          "author": "V-EPAM-Ivan Mikhailov",
+          "created": "2026-07-27T08:37:09.497-0400"
+        }
       ]
     }
   ],

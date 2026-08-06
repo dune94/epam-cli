@@ -879,12 +879,18 @@ function buildReviewPayload(stories, isBrownfieldReview, allStories = [], logDir
 }
 
 const MANIFEST_GROUNDING_BLOCK = [
-  'ANSWER IN THIS RESPONSE. This is a single-shot call: there is no later turn, and you',
-  'have NO tools. Do not emit tool calls and do not say you will verify first — an empty',
-  '<SPEC_REVIEW></SPEC_REVIEW> is discarded and the review does not happen.',
+  'ANSWER IN THIS RESPONSE. Your <SPEC_REVIEW> verdict must appear in THIS reply — an',
+  'empty <SPEC_REVIEW></SPEC_REVIEW>, or a promise to verify and answer later, is',
+  'discarded and the review does not happen. There is no follow-up turn to come back in.',
+  '',
+  'You DO have read-only tools this turn (read_file, list_files, search). Use them for',
+  'real if something is genuinely unclear — but never narrate an imagined tool result,',
+  'and never spend the whole turn exploring and run out before writing the verdict.',
+  'Budget is small and the verdict is mandatory: gather at most what you need, then answer.',
   '',
   'MANIFEST EVIDENCE has already been gathered from the repository for you and appears',
-  'above. You do not need to check the filesystem; it has been checked.',
+  'above. Every declared path was checked with a real filesystem stat, so re-checking',
+  'paths is wasted budget — that part is done and is more reliable than a tool call.',
   '  - A story with any MISSING path CANNOT be implemented: the writer is sent to edit a',
   '    file that is not there, and every retry reproduces that. Mark it needs_review, name',
   '    the exact path in reviewNotes, and add the flag "missing_manifest_path".',
@@ -899,10 +905,54 @@ const MANIFEST_GROUNDING_BLOCK = [
   'worse than an uncertain one: it means nothing was checked at all.',
 ].join('\n');
 
-function specAgentEnv(env = process.env) {
+// Root cause fixed 2026-08-06, in two parts:
+//
+// 1. This granted a tool LIST (EPAM_ALLOWED_TOOLS) without ever setting
+//    AI_GATE_ALLOW_TOOLS, so every spec-mode call actually ran with
+//    --no-tools underneath it while being told tools existed.
+//
+// 2. Separately, and more fundamentally: the shared spawn helper never set
+//    `cwd`, so even a genuinely tool-enabled call (AI_GATE_ALLOW_TOOLS=1)
+//    resolved read_file/list_files/search against wherever the ORCHESTRATOR
+//    happened to be running from, not the target codeline — none of those
+//    tools consult PROJECT_ROOT (only the unrelated EscalateDefect.ts does).
+//    Verified live with a real fixture file: identical tool grant returned
+//    "file does not exist" without cwd set, and the file's real,
+//    unguessable content with it set (see the spawn-cwd fix docstring).
+//
+// Both together explain the fabricated <tool_call>/<tool_result> text found
+// live in a vc-agent plan for a real brownfield story — its "tool_result"
+// described a source file's contents that bore no resemblance to the real
+// file on disk. The model was told tools existed, and even when they were
+// nominally enabled they could never have found the real file.
+//
+// repoPath is REQUIRED to actually enable tools: a phase-level call
+// (SPEC_ASSIGNMENTS, SPEC_REVIEW, MODEL_REVIEW) reviews potentially many
+// stories across many codelines at once — there is no single repo a cwd
+// could correctly point at, so those stay tool-less and keep relying on
+// manifestEvidence()'s deterministic per-path checks, which is the
+// architecturally correct answer for a multi-story call, not a workaround.
+// Only a SINGLE-story, single-codeline call (SPEC_AGENT for openspec/
+// speckit) has one real repoPath to hand it, so only those get real tools.
+function specAgentEnv(env = process.env, repoPath = '') {
   const out = {};
   if (env.SPEC_MODE_MAX_OUTPUT_TOKENS) out.EPAM_MAX_OUTPUT_TOKENS = env.SPEC_MODE_MAX_OUTPUT_TOKENS;
   out.EPAM_ALLOWED_TOOLS = env.SPEC_MODE_ALLOWED_TOOLS || 'read_file,list_files,search';
+  // Granted to EVERY spec-mode agent, unconditionally. An earlier cut gated this
+  // on repoPath, which silently excluded the phase-level calls (SPEC_ASSIGNMENTS,
+  // SPEC_REVIEW, MODEL_REVIEW) — narrower than what was approved, and not
+  // disclosed. A tool list without AI_GATE_ALLOW_TOOLS is the original defect
+  // (ai-run.sh defaults to --no-tools), so granting the list and withholding the
+  // switch reproduces exactly the "told tools exist, given none" state that made
+  // agents fabricate <tool_result> blocks.
+  out.AI_GATE_ALLOW_TOOLS = env.SPEC_MODE_ALLOW_TOOLS || '1';
+  out.EPAM_MAX_TOOL_CALLS = env.SPEC_MODE_MAX_TOOL_CALLS || '8';
+  // The tools resolve paths against the process cwd (see the spawn-cwd note in
+  // runClaude). A single-story call knows its codeline; a phase-level call spans
+  // stories, so it falls back to the run's codeline root — which is the correct
+  // scope for a call that reviews several codelines at once.
+  const root = repoPath || env.PROJECT_ROOT || env.JIRA_CODELINE_ROOT || '';
+  if (root) out.PROJECT_ROOT = root;
   return out;
 }
 
@@ -933,7 +983,7 @@ function _validatedOrNull(parsed, tag) {
   return v.fatal ? null : parsed;
 }
 
-async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey, storyId = '') {
+async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey, storyId = '', repoPath = '') {
   const provider = (process.env.AI_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || '').toLowerCase();
   const ladderProvider = (process.env.SPEC_PASS_LADDER_PROVIDER || 'qwen').toLowerCase();
 
@@ -959,7 +1009,7 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     // Spec-mode responses are large JSON blobs — use a higher output-token budget
     // than the implementation default (4096) so speckit never truncates mid-JSON.
     // SPEC_MODE_MAX_OUTPUT_TOKENS is spec-only; it doesn't affect implementation runs.
-    const specEnv = specAgentEnv();
+    const specEnv = specAgentEnv(process.env, repoPath);
     const output = await runClaude(directExec, prompt, logPath, specEnv, { costAgent: tag, costStoryId: storyId });
     return _validatedOrNull(extractTaggedJson(output, tag), tag);
   }
@@ -1909,6 +1959,7 @@ ${reviewPayload}
           // losing it — a flagged hypothesis still beats none.
           if (review.planAlignment === 'unexplained_mismatch' && process.env.EPAM_BROWNFIELD === '1') {
             console.warn(`spec-mode: SPEC_REVIEW flagged an unexplained plan/execution mismatch for ${story.id} — re-invoking the detective once with the rejection as corrective context.`);
+            advanceAgentLadderEscalation(logDir, 'code-graph-detective', story.id);
             try {
               const _priorPlan = readLatestDetectivePlan(logDir, opts.phase, story.id);
               const _priorFindings = Array.isArray(story.fixSiteAnalysis) ? story.fixSiteAnalysis : [];
@@ -2584,7 +2635,7 @@ async function enforceVerificationCriteria(story, initialVc, opts = {}) {
 // speckit's dedicated SPEC_MODE_SPECKIT_MODEL_HIGH was silently never
 // consulted for VC review, despite existing and being used everywhere else
 // speckit runs (see the escalation ladder at line ~968).
-async function _vcLlmCall(prompt, cycle, logPath, storyId = '', role = 'openspec') {
+async function _vcLlmCall(prompt, cycle, logPath, storyId = '', role = 'openspec', repoPath = '') {
   const baseModel = role === 'speckit'
     ? (process.env.SPEC_MODE_SPECKIT_MODEL_HIGH || process.env.SPEC_MODE_SPECKIT_MODEL || process.env.ESCALATION_MODEL_HIGH || 'z-ai/glm-5.1')
     : (process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH || process.env.ESCALATION_MODEL_HIGH || 'z-ai/glm-5.1');
@@ -2593,6 +2644,17 @@ async function _vcLlmCall(prompt, cycle, logPath, storyId = '', role = 'openspec
   const model = useEsc ? escalated : baseModel;
   const provider = useEsc ? (resolveModelProvider(model, process.env) || resolvePromptProvider(process.env)) : resolvePromptProvider(process.env);
   const exec = { cmd: process.env.AI_RUNNER_CMD || path.join(__dirname, 'ai-run.sh'), args: ['--provider', provider, '--model', model] };
+  // Same fix as specAgentEnv (2026-08-06): real tools + correct cwd, only
+  // when a single story's repoPath is resolvable (brownfield, real
+  // codeline) — see specAgentEnv's docstring for why this can't be
+  // unconditional. This is what let a vc-agent plan invent a source file's
+  // contents wholesale instead of reading the real one.
+  const toolEnv = repoPath ? {
+    AI_GATE_ALLOW_TOOLS: process.env.SPEC_MODE_ALLOW_TOOLS || '1',
+    EPAM_ALLOWED_TOOLS: process.env.SPEC_MODE_ALLOWED_TOOLS || 'read_file,list_files,search',
+    EPAM_MAX_TOOL_CALLS: process.env.SPEC_MODE_MAX_TOOL_CALLS || '8',
+    PROJECT_ROOT: repoPath,
+  } : {};
   return runClaude(exec, prompt, logPath, {
     EPAM_MAX_OUTPUT_TOKENS: process.env.CODEGRAPH_DETECTIVE_MAX_OUTPUT_TOKENS || '24576',
     EPAM_MAX_ITERATIONS: '2',
@@ -2604,6 +2666,7 @@ async function _vcLlmCall(prompt, cycle, logPath, storyId = '', role = 'openspec
     // (scoped to this child env, so the wider run's temperature/effort are untouched).
     EPAM_TEMPERATURE: process.env.VC_LLM_TEMPERATURE || '0',
     EPAM_REASONING_EFFORT: process.env.VC_LLM_REASONING_EFFORT || 'low',
+    ...toolEnv,
   }, { costAgent: 'vc-agent', costStoryId: storyId, salvageOutputOnFailure: true, timeoutMs: Number(process.env.CODEGRAPH_DETECTIVE_TIMEOUT_MS || '450000') });
 }
 function _firstJsonArray(out) {
@@ -2630,7 +2693,7 @@ ${VC_OBSERVABILITY_RULES}
 
 FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
 Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.`;
-  const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-review.log`) : null, story.id, 'speckit');
+  const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-review.log`) : null, story.id, 'speckit', resolveCodelinePath(story));
   const arr = _firstJsonArray(out);
   return Array.isArray(arr) ? arr.filter((x) => typeof x === 'string') : [];
 }
@@ -2661,7 +2724,7 @@ ${VC_OBSERVABILITY_RULES}
 
 Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
 Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.`;
-  const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-regen.log`) : null, story.id);
+  const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-regen.log`) : null, story.id, 'openspec', resolveCodelinePath(story));
   const arr = _firstJsonArray(out);
   if (!arr) return null;
   const cleaned = arr.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim());
@@ -2871,6 +2934,29 @@ function inferStoryKindHint(story) {
   return t === 'bug' ? 'defect' : 'novel';
 }
 
+// A rejection-driven re-invocation (the SPEC_REVIEW corrective re-call below)
+// must count against the agent's own inference ladder, exactly like Step
+// 3.6's writer re-implementation and team-lead-review.sh's own review-agent
+// ladder now do (2026-08-06, "the ladder logic applies to ALL agents, not
+// only Step 3.6"). ai-run.sh resumes an agent's ladder across separate
+// process invocations automatically (see lib/story-retry-state.sh), but only
+// for escalations IT decided on internally (a transport-level failure) — it
+// has no way to know a reviewer rejected a call that technically succeeded.
+// Shells out to the real bash helper (not a JS reimplementation) so the key
+// derivation can never drift from what ai-run.sh itself reads.
+function advanceAgentLadderEscalation(logDir, agentName, storyId) {
+  if (!logDir) return;
+  try {
+    const lib = path.join(__dirname, 'lib', 'story-retry-state.sh');
+    execSync(
+      `source ${JSON.stringify(lib)}; ` +
+      `key="$(ai_ladder_state_key ${JSON.stringify(agentName)} ${JSON.stringify(storyId || 'global')})"; ` +
+      `advance_ladder_escalation ${JSON.stringify(logDir)} "$key"`,
+      { shell: '/bin/bash', stdio: 'ignore' },
+    );
+  } catch { /* best-effort — a failed advance must never block the corrective call itself */ }
+}
+
 // runCodeGraphDetective(story, logDir) — invokes the code-graph-detective
 // agent: a tool-using LLM (GLM-5.1, upper-tier ladder) that iterates CodeGraph
 // queries and traces callers to find the CAUSAL fix site for a symptom-worded
@@ -2959,6 +3045,12 @@ CRITICAL REALITY ANCHOR: if the CodeGraph tool does not return a file or symbol,
     bash orchestrations/scripts/ripgrep-search.sh --string "<exact symbol>" [--glob "*.ts"]
     bash orchestrations/scripts/ripgrep-search.sh --file "<part of a filename>"
 
+If your fix calls a method or function from a THIRD-PARTY package (not this repo's own code), a name existing somewhere in that package is not the same as it being the RIGHT way to call it — a symbol can be a real, internal implementation detail the package's own docs never call directly, or a static class method vs. an instance method, and picking the wrong one produces code that type-checks and fails at runtime. PROVE the real shape before naming it:
+
+    bash orchestrations/scripts/resolve-package-symbol.sh "<package name>" "<method or function name>"
+
+It reports whether the symbol is a direct/static call or needs an instance, and surfaces the package's own documented usage examples (README and JSDoc) so you can prefer the intended pattern over an internal detail that happens to exist.
+
 That searches the real working tree, so a hit is ground truth and "NOT FOUND" is definitive absence. If both tools come back empty, the thing does not exist — say so and revise your hypothesis. Never write a name into your answer that no tool has shown you.
 
 CRITICAL — HOW TO ANSWER: Emit the JSON array as TEXT directly in your reply. Do NOT call WriteFile and do NOT write your answer to any file — the pipeline reads your reply text, not a file. If you write your answer to a file, it is LOST and the whole investigation is wasted. Use the Bash tool ONLY to run the CodeGraph query script above (including its \`show\` subcommand, which you MUST use before quoting a line); use no other tool.
@@ -2968,6 +3060,8 @@ NAME THE FORMAT, DO NOT DESCRIBE IT. If your fix depends on the SHAPE of a strin
 PREFER THE PARSER OVER THE WRITER. If a helper CONSTRUCTS the value (getX/buildX/toX) and another READS it (parseX/fromX), prescribe the reader. Naming the writer invites the implementer to reconstruct the format by hand — which is how the above happened. The best fix does no string surgery at all, because the helper owns the format.
 
 SHOW THE BROKEN CODE — "brokenLine" is REQUIRED and is machine-verified. Quote the EXACT source expression, copied verbatim from the file you name, that is wrong today. It is checked against that file's real contents: if what you quote is not in the file, your answer is rejected as ungrounded and you will be asked again. This is the difference between a diagnosis and a guess — a confident story about code that is not there reads exactly like a correct one until this check runs. If you cannot point at a real line that is wrong, you have not found the cause yet: go back to the tool and trace further.
+
+VERIFY THIRD-PARTY METHOD CALLS with resolve-package-symbol.sh before prescribing them (see above) — a name existing in a package is not proof it is called the way you assume.
 
 DECLARE ANY PACKAGE YOUR FIX NEEDS — "requiredPackages" is REQUIRED and is machine-verified. List the BARE package names, exactly as they appear in this project's manifest (e.g. "some-sdk", "@scope/pkg"), for every third-party package your fix imports or configures. Use [] when the fix needs none — that is the common case and is not a failure. Each name is checked against what this codeline actually declares and installs: a package that is not there means your fix CANNOT be implemented as written, and prescribing it produces a change that type-checks, passes tests, and fails for a real user. Prefer a fix built on what is already installed; if the work genuinely requires a package this project does not have, still declare it — that is the honest answer and the pipeline needs to see it, whereas an approach invented to avoid naming it is the failure this field exists to prevent.
 
@@ -3419,7 +3513,7 @@ ${storyPayload}${publishedContracts(repoPath, story)}
   try {
     const payload = await runAgentForJson(
       promptExec, prompt, TOOL_SPEC_AGENT, 'SPEC_AGENT',
-      path.join(logDir, `${story.id}-${agent}-spec.log`), null, story.id
+      path.join(logDir, `${story.id}-${agent}-spec.log`), null, story.id, repoPath
     );
     // Merge fix-site candidates into locationHint. PRIMARY: the code-graph-
     // detective — a tool-using agent (GLM-5.1) that iterates CodeGraph queries
@@ -3660,6 +3754,9 @@ async function runSpeckitReview({ promptExec, story, openspecOutput, phase, runI
   // Same primacy placement as runSpecAgent's forcedRetryBlock — highest-salience
   // position in the prompt for a same-session forced retry.
   const forcedRetryBlock = forcedRetryNote ? `${forcedRetryNote}\n\n` : '';
+  // Single story, single codeline — real tools can be safely enabled (see
+  // specAgentEnv's docstring for why phase-level calls cannot do this).
+  const repoPath = resolveCodelinePath(story);
   // Full agent audit, 2026-07-31: `validateMidExecutionSplits` called this
   // function expecting per-child AC refinement back via
   // `result.payload.splitStories`, but every call site shared ONE prompt
@@ -3706,10 +3803,13 @@ Produce your refined output as raw JSON only (no XML tags, no markdown fences, n
 - "splitStories": array of {"id": "<same child id>", "acceptanceCriteria": [...], "notes": "what you changed and why"} — one entry per child id above, same ids, no new/removed ids.
 - "notes": overall summary of what you changed and why.
 
-You have NO tools in this request and cannot call any — do not emit a tool call in any
-syntax (<tool_call>, <tool_use>, <function_call>). Nothing executes them, so a response
-containing one is discarded in full and the work is lost. Everything you may use is
-already in this prompt.
+You may have read-only tools (read_file, list_files, search) available this turn for a
+brownfield story with a real codeline — if so, USE them for real to verify a file's actual
+contents before relying on it; do not invent what a tool would return. For a greenfield
+story with no existing codeline, you have none — answer from what is already in this
+prompt rather than guessing at file contents. Either way, never emit tool-call syntax
+(<tool_call>, <tool_use>, <function_call>) narrating an imagined result — a fabricated
+"tool_result" is worse than an honest "I don't know."
 `
     : `${forcedRetryBlock}You are the speckit specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.
 
@@ -3757,20 +3857,21 @@ Produce your refined output as raw JSON only (no XML tags, no markdown fences, n
 - "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
 - "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
 
-You have NO tools in this request and cannot call any — do not emit a tool call in any
-syntax (<tool_call>, <tool_use>, <function_call>). Nothing executes them, so a response
-containing one is discarded in full and the work is lost. Observed live (2026-07-28)
-died exactly this way: asked to review a story with an empty criteria list, the model
-requested the four files named above via <tool_call>read_file(...) and produced no answer
-at all. Everything you may use is already in this prompt. File PATHS are given without
-their contents by design — if the contents would have changed your answer, say so in
-"notes" and give your best answer from the description, title and paths you were given.
-An answer with a caveat is worth everything; a tool call is worth nothing.
+For a brownfield story with a real codeline, you may have read-only tools (read_file,
+list_files, search) available this turn — if so, USE them for real to check a file's
+actual contents before relying on it; do not invent what a tool would return. For a
+greenfield story with no existing codeline, you have none — give your best answer from
+the description, title and paths you were given, and say so in "notes" if the file
+contents would have changed your answer. Either way, never narrate an imagined tool
+result: a real answer with an honest caveat is worth everything; fabricated tool-call
+syntax (<tool_call>, <tool_use>, <function_call>) is worth nothing — it is discarded in
+full and the work is lost (observed live, 2026-07-28: exactly this, on an empty-criteria
+story that got no answer at all).
 `;
   try {
     const payload = await runAgentForJson(
       promptExec, prompt, TOOL_SPEC_AGENT, 'SPEC_AGENT',
-      path.join(logDir, `${story.id}-speckit-review.log`), null, story.id
+      path.join(logDir, `${story.id}-speckit-review.log`), null, story.id, repoPath
     );
     if (payload) {
       payload.agent = 'speckit';
@@ -5078,9 +5179,25 @@ function runClaude(execSpec, prompt, logPath, envOverrides = {}, opts = {}) {
       return reject(new Error('prompt runner exited with code 1: no execSpec.cmd — set EPAM_ORCHESTRATION_PROVIDER'));
     }
     const args = Array.isArray(execSpec?.args) ? execSpec.args : [];
+    // ROOT CAUSE, verified live (2026-08-06): read_file/list_files/search
+    // (src/tools/builtin/ReadFile.ts et al.) resolve paths via
+    // `path.resolve(filePath)` against the CLI process's OWN cwd — none of
+    // them consult PROJECT_ROOT (grep confirms only the unrelated
+    // EscalateDefect.ts tool ever reads that env var). Without an explicit
+    // cwd here, every tool-enabled spec-mode call (detective, openspec,
+    // speckit, coordinator, coordinator-review, vc-agent, PRD-change-
+    // reviewer — all funnel through this one spawn) pointed its tools at
+    // wherever the ORCHESTRATOR happened to be running from, not the target
+    // repo. A live probe against a real fixture file proved this precisely:
+    // identical env/tool grant returned "file does not exist" without cwd
+    // set, and the file's real, unguessable content with it set. This was
+    // very likely the true cause of the SPEC_REVIEW live-tool-call failure
+    // documented in test/integration/spec-reviewer-live.test.ts, not an
+    // absence of any tool-execution loop.
+    const cwd = env.PROJECT_ROOT || process.cwd();
     // detached:true puts the child in its own process group so we can kill the
     // entire group (child + grandchildren like epam CLI) on timeout.
-    const proc = spawn(cmd, args, { env, detached: true });
+    const proc = spawn(cmd, args, { env, cwd, detached: true });
     let stdout = '';
     let stderr = '';
     let settled = false;
@@ -5734,6 +5851,7 @@ module.exports = {
     TOOL_MODEL_REVIEW,
   },
   specAgentEnv,
+  advanceAgentLadderEscalation,
   recordDetectiveRound,
   classifySpecFailure,
   specCorrectiveNote,

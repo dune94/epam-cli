@@ -521,6 +521,9 @@ if [ -f "$PROJECT_ROOT/$_target_rel" ] && [ "${_test_validated:-0}" = "1" ]; the
         _commit_rc=$?
         if [ "$_commit_rc" -eq 0 ]; then
             log "committed reproducing test: $_target_rel"
+            # Reindex CodeGraph so this commit's writes are visible to the
+            # reviewer's codegraph_query tool (see codegraph-reindex.sh).
+            [ -f "$SCRIPT_DIR/codegraph-reindex.sh" ] && bash "$SCRIPT_DIR/codegraph-reindex.sh" "$PROJECT_ROOT" "post-commit repro-test ${STORY_ID}" || true
         else
             warning "commit failed — repro-gate will report. Output:"
             warning "$_commit_output"

@@ -93,10 +93,10 @@ fail()    {
 # ── Load .env then metrolinx project env ─────────────────────────────────────
 load_env_file_safe "$REPO_ROOT/.env"
 ENV_FILE="$SCRIPT_DIR/../jira/metrolinx.env"
-[ -f "$ENV_FILE" ] && { set -a; source "$ENV_FILE"; set +a; } || fail "metrolinx.env not found at $ENV_FILE"
+[ -f "$ENV_FILE" ] && load_env_file_safe "$ENV_FILE" preserve || fail "metrolinx.env not found at $ENV_FILE"
 # Project-level config (pipeline flags, semble, AC gate settings)
 PROJECT_CONFIG="$SCRIPT_DIR/../projects/metrolinx/config.env"
-[ -f "$PROJECT_CONFIG" ] && { set -a; source "$PROJECT_CONFIG"; set +a; }
+[ -f "$PROJECT_CONFIG" ] && load_env_file_safe "$PROJECT_CONFIG" preserve
 
 # Project-level tool config (dependency-check.json, etc.) — lives in epam-cli's
 # own codeline, never in a client repo. See run_dependency_check in claude.sh.

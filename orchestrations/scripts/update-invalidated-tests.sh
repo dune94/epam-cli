@@ -153,6 +153,9 @@ if [ -n "$_dirty" ]; then
     _commit_rc=$?
     if [ "$_commit_rc" -eq 0 ]; then
         log "committed updated test(s) — suite green"
+        # Reindex CodeGraph so this commit's writes are visible to the
+        # reviewer's codegraph_query tool (see codegraph-reindex.sh).
+        [ -f "$SCRIPT_DIR/codegraph-reindex.sh" ] && bash "$SCRIPT_DIR/codegraph-reindex.sh" "$PROJECT_ROOT" "post-commit test-update ${STORY_ID}" || true
     else
         log "commit failed. Output: $_commit_output"
     fi

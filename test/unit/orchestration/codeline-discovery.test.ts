@@ -350,21 +350,26 @@ describe('codeline-discovery.js — source invariants', () => {
     expect(scoreFn).not.toMatch(/queryCodeGraph\([^)]*cgQuery[^)]*,\s*20\s*\)/);
   });
 
-  it('CodeGraph query filters domain stopwords before querying FTS5', () => {
-    // Generic transit words ("trip","ticket","return","schedule") flood every repo
-    // equally and collapse score separation. They must be stripped from the cgQuery.
-    const scoreIdx = src.indexOf('function scoreRepos');
-    const scoreFn  = src.slice(scoreIdx, scoreIdx + 5000);
-    expect(scoreFn).toMatch(/DOMAIN_STOPWORDS/);
-    expect(scoreFn).toMatch(/cgSpecificWords/);
-    expect(scoreFn).toMatch(/cgSpecificWords.*slice|cgQuery.*cgSpecificWords/);
+  it('term selection uses NO hand-written domain vocabulary — IDF does that job', () => {
+    // 2026-08-06: a DOMAIN_STOPWORDS list used to sit in scoreRepos naming one
+    // client industry's everyday nouns (trip, ticket, fare, station, passenger,
+    // train, bus). That is hardcoded domain knowledge in engine code: wrong for
+    // the next project, and a maintenance burden nobody can keep correct.
+    //
+    // It was also redundant. crossRepoTermScores computes IDF across the actual
+    // candidate set — a term present in every repo is demoted by measurement
+    // (log(1 + N/N) ~ 0.69) while a term unique to one repo is amplified
+    // (log(1 + N/1)). That adapts to whatever corpus the pipeline is pointed at;
+    // a hand-written transit list cannot.
+    expect(src, 'a hardcoded domain vocabulary is back in the scorer').not.toMatch(/DOMAIN_STOPWORDS/);
+    expect(src, 'engine code must not name one industry\'s nouns').not.toMatch(/'trip'|'fare'|'passenger'|'turnstile'/);
   });
 
-  it('DOMAIN_STOPWORDS contains common transit terms that would flood all repos', () => {
-    expect(src).toMatch(/'trip'/);
-    expect(src).toMatch(/'ticket'|'tickets'/);
-    expect(src).toMatch(/'schedule'|'schedules'/);
-    expect(src).toMatch(/'station'|'stations'/);
+  it('IDF is what demotes ubiquitous terms — the mechanism the stopword list duplicated', () => {
+    const scoreSrc = readFileSync(
+      join(__dirname, '../../../orchestrations/scripts/lib/codeline-score.js'), 'utf8');
+    expect(scoreSrc, 'nothing demotes ubiquitous terms at all now').toMatch(/idf/i);
+    expect(scoreSrc).toMatch(/docFreq/);
   });
 });
 

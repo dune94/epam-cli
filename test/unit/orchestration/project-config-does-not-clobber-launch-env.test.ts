@@ -31,7 +31,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -58,18 +58,37 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-const CONFIGS = walk(ORCH);
+// TRACKED files only. An untracked .env is an operator's own machine config,
+// not something this repo ships and not something a test may quietly rewrite.
+// (Untracked files can still carry the unsupported `${VAR:-default}` idiom —
+// the data loader takes values LITERALLY, so such a line yields the string
+// "${VAR:-default}". That is reported to the operator, not silently fixed.)
+const TRACKED = new Set(
+  execFileSync('git', ['-C', join(__dirname, '../../../'), 'ls-files'], { encoding: 'utf8' })
+    .split('\n').filter(Boolean).map((f) => join(__dirname, '../../../', f)),
+);
+const CONFIGS = walk(ORCH).filter((f) => TRACKED.has(f));
 
 /**
- * Source the config the way the launcher does (`set -a; source; set +a`) and
- * report what the variable ends up as. This EXECUTES the file — it does not
- * pattern-match the assignment, so a fix that looks right but evaluates wrong
+ * Load the config the way the launcher ACTUALLY does and report what the
+ * variable ends up as.
+ *
+ * 2026-08-06: this used to run `set -a; source <config>` — but a config file is
+ * DATA and the launchers no longer execute one (this repo's own .env begins with
+ * a bare `cd`, which relocated every sourcing script to $HOME). Loading is now
+ * `load_env_file_safe <file> preserve`, where "preserve" means an already-set,
+ * non-empty value is not overwritten — the same semantics the old
+ * `VAR="${VAR:-default}"` idiom provided, without evaluating the file.
+ *
+ * This still EXECUTES the real loader against the real config file; it does not
+ * pattern-match the assignment, so a fix that looks right but behaves wrong
  * still fails here.
  */
 function sourced(config: string, name: string, launchEnv?: string): string {
+  const LOADER = join(__dirname, '../../../orchestrations/scripts/lib/env-file.sh');
   const r = spawnSync(
     'bash',
-    ['-c', `set -a; source ${JSON.stringify(config)} >/dev/null 2>&1; set +a; printf '%s' "\${${name}-<unset>}"`],
+    ['-c', `. ${JSON.stringify(LOADER)}; load_env_file_safe ${JSON.stringify(config)} preserve >/dev/null 2>&1; printf '%s' "\${${name}-<unset>}"`],
     {
       encoding: 'utf8',
       timeout: 30000,
@@ -133,8 +152,12 @@ describe('the composed launch environment, not one file at a time', () => {
   // be — so this keeps holding when a launcher adds or reorders its sources.
   for (const flag of BYPASS_FLAGS) {
     it(`${flag}=true survives sourcing every env file together`, () => {
-      const script = CONFIGS.map((c) => `source ${JSON.stringify(c)} >/dev/null 2>&1 || true`).join('\n');
-      const r = spawnSync('bash', ['-c', `set -a\n${script}\nset +a\nprintf '%s' "\${${flag}-<unset>}"`], {
+      // Loaded the way the launchers now do: as DATA, in preserve mode. A
+      // config file is never executed (this repo's own .env starts with a bare
+      // `cd`). Preserve mode is what makes an already-set launch value win.
+      const LOADER = join(__dirname, '../../../orchestrations/scripts/lib/env-file.sh');
+      const script = CONFIGS.map((c) => `load_env_file_safe ${JSON.stringify(c)} preserve >/dev/null 2>&1 || true`).join('\n');
+      const r = spawnSync('bash', ['-c', `. ${JSON.stringify(LOADER)}\n${script}\nprintf '%s' "\${${flag}-<unset>}"`], {
         encoding: 'utf8',
         timeout: 60000,
         env: { ...process.env, [flag]: 'true' },

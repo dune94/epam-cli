@@ -60,11 +60,20 @@ fi
 # Jira connection vars for a different project.
 # Pass 1: global .env + project config → get SECRETS_FILE path
 load_env_file_safe "$REPO_ROOT/.env"
-set -a; source "$CONFIG"; set +a
-# Pass 2: source secrets file (tokens, not connection config) if declared
-[ -n "${SECRETS_FILE:-}" ] && [ -f "${SECRETS_FILE}" ] && { set -a; source "${SECRETS_FILE}"; set +a; }
-# Pass 3: re-source project config so it wins over anything in the secrets file
-set -a; source "$CONFIG"; set +a
+load_env_file_safe "$CONFIG"
+# Pass 2: load secrets file (tokens, not connection config) if declared.
+# SECRETS_FILE is declared repo-relative so the config file needs no ${REPO_ROOT}
+# interpolation — a config file is DATA and must not be evaluated. Resolve it
+# here, where REPO_ROOT is genuinely known, rather than making the file executable.
+if [ -n "${SECRETS_FILE:-}" ]; then
+  case "$SECRETS_FILE" in
+    /*) _secrets_abs="$SECRETS_FILE" ;;
+     *) _secrets_abs="$REPO_ROOT/$SECRETS_FILE" ;;
+  esac
+  [ -f "$_secrets_abs" ] && load_env_file_safe "$_secrets_abs"
+fi
+# Pass 3: re-load project config so it wins over anything in the secrets file
+load_env_file_safe "$CONFIG"
 
 LOG_FILE="/tmp/tier3-${PROJECT}-$(date +%Y%m%dT%H%M%S).log"
 TIER3_PID_FILE="${TIER3_PID_FILE:-/tmp/tier3-${PROJECT}-run.pid}"
@@ -147,6 +156,11 @@ fi
 if [ "${EPAM_BROWNFIELD:-0}" != "1" ]; then
   [ -z "${OUTPUT_DIR:-}" ] && fail "OUTPUT_DIR must be set in config.env for greenfield projects"
   [ -z "${PRD_CANONICAL:-}" ] && fail "PRD_CANONICAL must be set in config.env for greenfield projects"
+  # Paths in a config file are repo-relative: a config file is DATA and cannot
+  # interpolate ${REPO_ROOT}. Resolve here, where REPO_ROOT is genuinely known.
+  case "$PRD_CANONICAL" in /*) ;; *) PRD_CANONICAL="$REPO_ROOT/$PRD_CANONICAL" ;; esac
+  case "${PRD_FILE:-}" in ""|/*) ;; *) PRD_FILE="$REPO_ROOT/$PRD_FILE" ;; esac
+  export PRD_CANONICAL PRD_FILE
   [ -f "$PRD_CANONICAL" ] || fail "PRD canonical file not found: $PRD_CANONICAL"
   export OUTPUT_DIR PROJECT_ROOT="$OUTPUT_DIR"
 

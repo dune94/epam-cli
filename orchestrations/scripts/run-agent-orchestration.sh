@@ -60,6 +60,7 @@ source "$SCRIPT_DIR/lib/flags.sh"
 source "$SCRIPT_DIR/lib/run-checkpoint.sh"
 # shellcheck source=lib/git-ops.sh
 source "$SCRIPT_DIR/lib/git-ops.sh"
+source "$SCRIPT_DIR/lib/story-retry-state.sh"
 
 # Load timeout config from EPAM_PROJECT_CONFIG_DIR/llm-settings.json BEFORE
 # any call to the watchdog wrapper defined further below — its `timeout`
@@ -7329,7 +7330,25 @@ _reset_story_for_reimplementation() {
     return 0
 }
 
-_review_max_cycles="${REVIEW_MAX_CYCLES:-2}"
+# The ladder-exhaustion default: same default MAX_RETRIES claude.sh itself
+# uses (rung = retry_count/2, so MAX_RETRIES=7 -> 4 rungs, top rung 3).
+_review_max_retries="${EPAM_MAX_RETRIES:-7}"
+# SAFETY VALVE ONLY, not the primary escalation trigger. Standing requirement:
+# "Retries MUST proceed up the rungs — nothing is allowed to intercede." A
+# story may only be escalated once ITS OWN ladder is exhausted (checked below
+# via story_ladder_exhausted), never on a bare cycle count. This cap exists
+# purely so a misconfigured or never-settling reviewer cannot loop forever;
+# set comfortably above the ladder's own depth so it should not fire in
+# normal operation — if it does, that itself is a signal worth investigating,
+# logged as such below rather than silently treated as ordinary exhaustion.
+# DERIVED from the ladder's real depth, never a magic number. The ladder is
+# 2 attempts per rung (rung = retry_count/2), so it has (MAX_RETRIES/2)+1 rungs;
+# a review cycle can advance at most one rung, and +2 leaves headroom for the
+# cycles that re-run the REVIEWER rather than the writer (review_feedback_is_
+# incomplete). Ladder exhaustion is what actually stops the loop — this only
+# has to be large enough never to fire first. An explicit REVIEW_MAX_CYCLES
+# still wins for an operator who wants a hard ceiling.
+_review_max_cycles="${REVIEW_MAX_CYCLES:-$(( _review_max_retries / 2 + 3 ))}"
 _review_cycle=1
 # Direct escalation flag. The hard-block below USED to rely solely on stories
 # being tagged reviewStatus=escalated by iterating review-feedback-*.json files —
@@ -7339,6 +7358,45 @@ _review_cycle=1
 # through to PASSED. The loop itself knows it escalated; block on that fact
 # directly, independent of any file the reviewer may or may not have written.
 _review_escalated=0
+
+# Marks ONE rejected story escalated: persists the reviewer's blockers to both
+# the review-agent KB and the writer's own profile, then tags
+# reviewStatus:"escalated" on the PRD. Factored out because it now fires from
+# TWO places — a story whose ladder is exhausted, and (rarely) every
+# still-climbable story caught by the safety valve above — and both must
+# behave identically.
+_escalate_review_story() {
+    local _fb="$1" _fb_story="$2"
+    mkdir -p "$LOG_DIR/kb-scratchpad" 2>/dev/null || true
+    # Stamp provenance. A blocker sentence written once becomes a standing
+    # "LEARNED REVIEW RULE" applied to all later work, so it must say which
+    # story and run produced it — otherwise a rule learned from a bad input is
+    # indistinguishable from a well-founded one, and neither can be expired.
+    jq -r --arg sid "$_fb_story" --arg run "${ORCH_RUN_ID:-unknown}" \
+        '.issues[]? | select((.severity // "") == "blocker") | "- [" + $sid + " @" + $run + "] " + (.description // "")' "$_fb" \
+        >> "$LOG_DIR/kb-scratchpad/KB-review-agent.md" 2>/dev/null || true
+    # Also persist the SAME lesson to the WRITER's own profile (found live,
+    # 2026-08-02: only the reviewer's own KB got this — nothing ever told the
+    # WRITER across runs, so a story that repeatedly fails review for the
+    # identical reason had no accumulating guidance, unlike FailureAnalyst's
+    # tsc/test-failure diagnoses, which already persist via
+    # _persist_skill_note_simple's stricter cousin in claude.sh). Gated
+    # through the same deterministic anti-pattern check (lib/story-guards.sh)
+    # for consistency/safety.
+    local _fb_role _fb_blockers
+    _fb_role=$(jq -r --arg id "$_fb_story" '.stories[] | select(.id == $id) | .agentRole // ""' "$PRD_FILE" 2>/dev/null)
+    _fb_blockers=$(jq -r '.issues[]? | select((.severity // "") == "blocker") | "- " + (.description // "")' "$_fb" 2>/dev/null)
+    if [ -n "$_fb_role" ] && [ -n "$_fb_blockers" ]; then
+        _persist_skill_note_simple "$AGENT_PROFILES_FILE" "$_fb_role" \
+            "Review REPEATEDLY rejected ${_fb_story} (ladder exhausted) for:
+${_fb_blockers}"
+    fi
+    local _tmp_prd
+    _tmp_prd="$(mktemp)"; jq --arg id "$_fb_story" \
+        '(.stories[] | select(.id == $id)) |= (. + {reviewStatus: "escalated"})' \
+        "$PRD_FILE" > "$_tmp_prd" 2>/dev/null && mv "$_tmp_prd" "$PRD_FILE" || rm -f "$_tmp_prd"
+}
+
 while true; do
     if "$SCRIPT_DIR/team-lead-review.sh" "$PHASE"; then
         success "Team Lead code review APPROVED for phase '$PHASE' (cycle $_review_cycle)"
@@ -7361,44 +7419,6 @@ while true; do
         break
     fi
     # changes_requested — team-lead-review.sh wrote review-feedback-<id>.json per story.
-    if [ "$_review_cycle" -ge "$_review_max_cycles" ]; then
-        warning "Step 3.6: review still requesting changes after $_review_max_cycles cycle(s) — escalating"
-        _review_escalated=1
-        for _fb in "$LOG_DIR"/review-feedback-*.json; do
-            [ -f "$_fb" ] || continue
-            _fb_story="$(basename "$_fb" | sed 's/^review-feedback-//; s/\.json$//')"
-            # Persist a reusable review lesson to the review-agent KB (reviewer
-            # self-heal: it improves across runs) and mark the story escalated.
-            mkdir -p "$LOG_DIR/kb-scratchpad" 2>/dev/null || true
-            # Stamp provenance. A blocker sentence written once becomes a standing
-            # "LEARNED REVIEW RULE" applied to all later work, so it must say which
-            # story and run produced it — otherwise a rule learned from a bad input is
-            # indistinguishable from a well-founded one, and neither can be expired.
-            jq -r --arg sid "$_fb_story" --arg run "${ORCH_RUN_ID:-unknown}" \
-                '.issues[]? | select((.severity // "") == "blocker") | "- [" + $sid + " @" + $run + "] " + (.description // "")' "$_fb" \
-                >> "$LOG_DIR/kb-scratchpad/KB-review-agent.md" 2>/dev/null || true
-            # Also persist the SAME lesson to the WRITER's own profile (found
-            # live, 2026-08-02: only the reviewer's own KB got this — nothing
-            # ever told the WRITER across runs, so a story that repeatedly
-            # fails review for the identical reason had no accumulating
-            # guidance, unlike FailureAnalyst's tsc/test-failure diagnoses,
-            # which already persist via _persist_skill_note_simple's stricter
-            # cousin in claude.sh). Gated through the same deterministic
-            # anti-pattern check (lib/story-guards.sh) for consistency/safety.
-            _fb_role=$(jq -r --arg id "$_fb_story" '.stories[] | select(.id == $id) | .agentRole // ""' "$PRD_FILE" 2>/dev/null)
-            _fb_blockers=$(jq -r '.issues[]? | select((.severity // "") == "blocker") | "- " + (.description // "")' "$_fb" 2>/dev/null)
-            if [ -n "$_fb_role" ] && [ -n "$_fb_blockers" ]; then
-                _persist_skill_note_simple "$AGENT_PROFILES_FILE" "$_fb_role" \
-                    "Review REPEATEDLY rejected ${_fb_story} (unresolved after ${_review_max_cycles} cycles) for:
-${_fb_blockers}"
-            fi
-            _tmp_prd="$(mktemp)"; jq --arg id "$_fb_story" \
-                '(.stories[] | select(.id == $id)) |= (. + {reviewStatus: "escalated"})' \
-                "$PRD_FILE" > "$_tmp_prd" 2>/dev/null && mv "$_tmp_prd" "$PRD_FILE" || rm -f "$_tmp_prd"
-        done
-        _emit_agent complete "review-agent" "Code review escalated (unresolved after retries)"
-        break
-    fi
     # B24 — is this "the code needs changing" or "the REVIEWER failed"?
     # (predicate: review_feedback_is_incomplete, defined near the top)
     # team-lead-review.sh fails SAFE when its agent produces no verdict: it emits a
@@ -7414,11 +7434,59 @@ ${_fb_blockers}"
         _review_cycle=$((_review_cycle + 1))
         continue
     fi
-    warning "Step 3.6: review requested changes — re-implementing (cycle $_review_cycle → $((_review_cycle + 1)))"
+    # Partition rejected stories: a story whose ladder is ALREADY exhausted
+    # (its persisted rung has reached the top — see lib/story-retry-state.sh)
+    # has nothing left to try and escalates now, regardless of cycle count. A
+    # story that can still climb is re-implemented. Standing requirement:
+    # "Retries MUST proceed up the rungs — nothing is allowed to intercede" —
+    # a fixed cycle cap must never cut a climbable story off early.
+    _review_climbable_stories=()
     for _fb in "$LOG_DIR"/review-feedback-*.json; do
         [ -f "$_fb" ] || continue
         _fb_story="$(basename "$_fb" | sed 's/^review-feedback-//; s/\.json$//')"
-        # Without this, the retry below is a guaranteed no-op. Step 8 marks a
+        if story_ladder_exhausted "$LOG_DIR" "$_fb_story" "$_review_max_retries"; then
+            warning "Step 3.6: $_fb_story's ladder is exhausted (already tried its top rung) — escalating"
+            _review_escalated=1
+            _escalate_review_story "$_fb" "$_fb_story"
+        else
+            _review_climbable_stories+=("$_fb_story:$_fb")
+        fi
+    done
+
+    if [ "${#_review_climbable_stories[@]}" -eq 0 ]; then
+        # Every rejected story has exhausted its ladder — nothing left to retry.
+        _emit_agent complete "review-agent" "Code review escalated (every rejected story's ladder is exhausted)"
+        break
+    fi
+
+    if [ "$_review_cycle" -ge "$_review_max_cycles" ]; then
+        # Safety valve. Should not fire in normal operation — ladder
+        # exhaustion above bounds this first at 4 rungs (default
+        # MAX_RETRIES=7). If it does fire, that itself means the ladder-
+        # exhaustion accounting is out of sync with reality; log loudly
+        # rather than silently treating it as ordinary exhaustion.
+        warning "Step 3.6: hit the ${_review_max_cycles}-cycle SAFETY VALVE with ${#_review_climbable_stories[@]} stor(y/ies) still not ladder-exhausted — escalating anyway. This should not happen; investigate the ladder-exhaustion accounting."
+        _review_escalated=1
+        for _entry in "${_review_climbable_stories[@]}"; do
+            _fb_story="${_entry%%:*}"; _fb="${_entry#*:}"
+            _escalate_review_story "$_fb" "$_fb_story"
+        done
+        _emit_agent complete "review-agent" "Code review escalated (safety-valve cycle cap)"
+        break
+    fi
+
+    warning "Step 3.6: review requested changes — re-implementing (cycle $_review_cycle → $((_review_cycle + 1)))"
+    for _entry in "${_review_climbable_stories[@]}"; do
+        _fb_story="${_entry%%:*}"
+        # A review rejection is itself evidence this attempt did not succeed,
+        # even when the code built/tested fine internally — advance the
+        # story's persisted rung BEFORE re-invoking, or the next claude.sh
+        # subprocess (run_story_with_watchdog spawns a fresh one) silently
+        # resumes at the SAME rung, and the ladder never climbs on a
+        # review-rejection-only failure. This is the exact live bug fixed
+        # this session: two review cycles both logged Rung0/R1.
+        advance_story_retry_rung "$LOG_DIR" "$_fb_story" "$_review_max_retries"
+        # Without this reset, the retry below is a guaranteed no-op. Step 8 marks a
         # story `completed` the moment the agent's turn ends — regardless of
         # whether the reviewer will accept it — and run_story_with_watchdog
         # invokes claude.sh "$story_id", whose FIRST check is
@@ -7446,7 +7514,7 @@ _escalated=$(jq -r --arg phase "$PHASE" \
       select(.reviewStatus == "escalated")] | length' \
     "$PRD_FILE" 2>/dev/null || echo "0")
 if [ "${_review_escalated:-0}" -eq 1 ] || [ "${_escalated:-0}" -gt 0 ]; then
-    error "Step 3.6: review changes unresolved after $_review_max_cycles cycle(s) (escalated: flag=${_review_escalated:-0} tagged-stories=${_escalated:-0})"
+    error "Step 3.6: review changes unresolved after $_review_cycle cycle(s), ladder exhausted (escalated: flag=${_review_escalated:-0} tagged-stories=${_escalated:-0})"
     error "         A change the reviewer never approved must NOT proceed — human review required."
     exit 2
 fi

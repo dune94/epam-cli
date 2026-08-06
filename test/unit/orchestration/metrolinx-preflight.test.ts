@@ -135,9 +135,16 @@ describe.skipIf(!HAVE_CODELINES)('metrolinx pre-flight — real codelines, real 
 });
 
 describe('the pre-flight itself is wired correctly', () => {
-  it('reads the codeline set from the pinned config', () => {
-    // If this returns nothing the suite above skips silently, which would hide
-    // exactly the failures it exists to catch.
-    expect(CODELINES.length, 'pre-flight found no codelines in config.env').toBeGreaterThan(1);
+  it('the codeline set comes from discovery, not a pinned config', () => {
+    // 2026-08-06: config.env no longer declares JIRA_CODELINES — codelines are
+    // discovered agentically via CodeGraph (see pinned-codeline-scope.test.ts).
+    // The suites above are therefore correctly SKIPPED when nothing is declared;
+    // they assert on real checkouts, which only exist once discovery has run.
+    // What must stay true is that nothing re-pins the scope behind our back.
+    expect(
+      CODELINES.length,
+      'codelines are declared somewhere again — discovery is disabled whenever ' +
+        'JIRA_CODELINES is non-empty',
+    ).toBe(0);
   });
 });

@@ -37,8 +37,10 @@ function extractBlock(startMarker: string, endMarker: string): string {
   return orchSrc.slice(start, end + endMarker.length);
 }
 
+const STORY_RETRY_LIB = join(REPO_ROOT, 'orchestrations/scripts/lib/story-retry-state.sh');
+
 const REVIEW_LOOP_BLOCK = extractBlock(
-  '_review_max_cycles="${REVIEW_MAX_CYCLES:-2}"',
+  '_review_max_retries="${EPAM_MAX_RETRIES:-7}"',
   'error "         A change the reviewer never approved must NOT proceed — human review required."\n    exit 2\nfi',
 );
 
@@ -106,6 +108,7 @@ function runReviewLoop(opts: {
       // $3 (the note text) legitimately contains embedded newlines, so records
       // are field/record-separated with \x1f/\x1e rather than tab/newline.
       `_persist_skill_note_simple() { printf '%s\\x1f%s\\x1f%s\\x1e' "$1" "$2" "$3" >> ${JSON.stringify(callLogPath)}; }`,
+      `source ${JSON.stringify(STORY_RETRY_LIB)}`,
       REVIEW_LOOP_BLOCK,
       'echo "REACHED_END"',
     ].join('\n'),

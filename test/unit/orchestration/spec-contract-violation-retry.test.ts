@@ -108,8 +108,12 @@ describe('prevention: the prompt forbids what the model reached for', () => {
     // An earlier draft matched /no tools|do not emit.*tool|tool call/i and passed
     // BEFORE the prohibition was written — the words "tool call" already appeared
     // nearby. Assert the prohibition itself, and that it names the syntaxes.
-    expect(fn, 'speckit is not told it has no tools — it can invent a tool call again')
-      .toMatch(/You have NO tools in this request and cannot call any/);
+    // Reworded 2026-08-06: speckit MAY now have real tools (brownfield, real
+    // codeline) after the tool-provisioning fix, so a flat "you have NO tools"
+    // is no longer true. The load-bearing prohibition is unchanged and is what
+    // this asserts: never NARRATE an imagined tool result.
+    expect(fn, 'speckit is not told to avoid fabricating tool results — it can invent one again')
+      .toMatch(/never (narrate an imagined tool result|emit tool-call syntax)|do not invent what a tool would return/i);
     expect(fn, 'the prohibition names no concrete syntax, so it is easy to sidestep')
       .toMatch(/<tool_call>[\s\S]{0,80}<function_call>/);
   });

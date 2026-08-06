@@ -221,7 +221,9 @@ function normalizeIssue(issue) {
     // inferring scope from the summary text.
     components:         Array.isArray(f.components) ? f.components.map(c => c && c.name).filter(Boolean) : [],
     codeline,
-    effort:             pointsToEffort(f.customfield_10016),
+    // Story points, then a t-shirt-size label if set, then the neutral default.
+    // Never a fabricated 'low' for an unestimated ticket.
+    effort:             pointsToEffort(f.customfield_10016) || sizeLabelToEffort(labels) || 'medium',
     // Ground-truth ticket type ("Bug", "Story", "Task"). Used downstream to
     // anchor the brownfield defect/novel classification so a bug ticket is
     // treated as a defect regardless of the spec model's own judgment.
@@ -270,14 +272,18 @@ function extractAcFromText(text) {
     .filter(l => l.length > 5);
 }
 
-function pointsToEffort(points) {
-  const p = Number(points) || 0;
-  if (p <= 2) return 'low';
-  if (p <= 5) return 'medium';
-  return 'high';
-}
+// Was an independent copy of jira-adapter.js's identical function — two places to
+// remember to fix in sync is itself the risk (this file's copy would have kept
+// fabricating 'low' for an unestimated ticket even after the other copy was fixed).
+// One implementation now; see jira-adapter.js's pointsToEffort for the full rationale.
+const { pointsToEffort, sizeLabelToEffort } = require('./jira-adapter');
 
 module.exports = {
   getIssue, searchIssues, getBoardIssues, getProjectIssues,
   CONFIGURED,
+  // Exported for direct testing — the effort/points normalization has broken twice
+  // (two independent copies of pointsToEffort, both defaulting an unestimated ticket
+  // to a fabricated "low"); testing it only indirectly through an HTTP-mocked getIssue
+  // call is how the first copy's bug went uncaught this long.
+  normalizeIssue,
 };

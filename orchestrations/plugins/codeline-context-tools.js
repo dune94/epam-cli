@@ -317,6 +317,176 @@ const checkAntiPatternsTool = {
   },
 };
 
+/**
+ * Scans a package's REAL installed .d.ts files for a symbol declaration, tracking class
+ * context so a caller can tell "instance method, needs `new X()`" from "direct export,
+ * call it as-is". Bounded, best-effort: any single unreadable file is skipped, never
+ * fatal — a package with unusual layout should degrade to "found nothing" rather than
+ * crash the tool.
+ */
+function scanDeclarations(pkgDir, symbol) {
+  const declarations = [];
+  const symbolRe = new RegExp(`\\b${symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b\\s*[:(]`);
+  const classOpenRe = /\bclass\s+([A-Za-z_$][A-Za-z0-9_$]*)/;
+
+  const usageExamples = [];
+  // JSDoc/comment lines (leading *, //, /**) show WORKED EXAMPLES, not type
+  // declarations — real signal, but mixing them into `declarations` under a
+  // requiresInstantiation label is misleading (a doc example isn't itself a
+  // declaration). Caught live scanning the real @contentstack/live-preview-utils
+  // package: its own JSDoc examples for unsubscribeOnEntryChange read
+  // "ContentstackLivePreview.unsubscribeOnEntryChange(callbackUid);" inside a
+  // comment block, which is exactly the package's own documented usage.
+  const commentLineRe = /^\s*(\*|\/\/|\/\*)/;
+
+  const walk = (dir, depth) => {
+    if (depth > 6) return;
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === 'node_modules') continue;
+        walk(full, depth + 1);
+      } else if (entry.name.endsWith('.d.ts') || entry.name.endsWith('.d.cts')) {
+        let content;
+        try { content = fs.readFileSync(full, 'utf-8'); } catch { continue; }
+        const lines = content.split('\n');
+        // Simple brace-depth class tracker: good enough for the flat, single-class-per-
+        // scope shape every real .d.ts emitted by tsc actually has.
+        let classStack = [];
+        let braceDepth = 0;
+        for (const line of lines) {
+          const classMatch = classOpenRe.exec(line);
+          if (classMatch && /\bclass\b/.test(line)) {
+            classStack.push({ name: classMatch[1], atDepth: braceDepth });
+          }
+          for (const ch of line) {
+            if (ch === '{') braceDepth += 1;
+            else if (ch === '}') {
+              braceDepth -= 1;
+              classStack = classStack.filter((c) => c.atDepth < braceDepth);
+            }
+          }
+          if (!symbolRe.test(line)) continue;
+          if (commentLineRe.test(line)) {
+            usageExamples.push({ file: path.relative(pkgDir, full), example: line.trim().replace(/^\*\s?/, '') });
+            continue;
+          }
+          const enclosing = classStack.length ? classStack[classStack.length - 1].name : null;
+          // A `static` member is called directly on the class/export itself — no `new`
+          // needed. Missing this distinction was a real accuracy bug caught live: this
+          // exact package's ContentstackLivePreview.unsubscribeOnEntryChange (the
+          // writer's actual call, and the default export's own name) IS a static method,
+          // genuinely callable as written — flagging it "requires instantiation" would
+          // have been WRONG guidance from the tool meant to prevent wrong guidance.
+          const isStatic = /^\s*static\b/.test(line);
+          declarations.push({
+            file: path.relative(pkgDir, full),
+            className: enclosing,
+            requiresInstantiation: enclosing !== null && !isStatic,
+            isStatic,
+            declaration: line.trim(),
+          });
+        }
+      }
+    }
+  };
+  walk(pkgDir, 0);
+  return { declarations, usageExamples };
+}
+
+/** README usage mentions — the package's OWN documented usage, separate from what .d.ts declares. */
+function scanReadmeMentions(pkgDir, symbol) {
+  const mentions = [];
+  const symbolRe = new RegExp(`\\b${symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+  let entries;
+  try { entries = fs.readdirSync(pkgDir); } catch { return mentions; }
+  for (const name of entries) {
+    if (!/^readme/i.test(name)) continue;
+    let content;
+    try { content = fs.readFileSync(path.join(pkgDir, name), 'utf-8'); } catch { continue; }
+    const lines = content.split('\n');
+    for (let i = 0; i < lines.length; i += 1) {
+      if (symbolRe.test(lines[i])) {
+        mentions.push(lines[i].trim());
+      }
+    }
+  }
+  return mentions;
+}
+
+const resolvePackageSymbolTool = {
+  name: 'resolve_package_symbol',
+  pluginApiVersion: PLUGIN_API_VERSION,
+  description:
+    'Given a package name and a symbol (method/function/property), reports the symbol\'s REAL declared shape from the package\'s actually-installed .d.ts files — including whether it is an instance method requiring instantiation (e.g. `new SomeClass()`) or a direct export — and separately reports whether the package\'s own README documents real usage of that symbol. Use this BEFORE calling a third-party SDK method you have not seen used in this codebase: a symbol that technically exists in a .d.ts file is not the same as the package\'s intended, documented usage — an internal class-instance method the README never calls directly is exactly the kind of near-miss that produces code that type-checks and fails at runtime.',
+  permission: 'safe',
+  definition: {
+    name: 'resolve_package_symbol',
+    description:
+      'Report the real declared shape of a package symbol (class-instance method vs direct export) and any README-documented usage, checked against the actually-installed package.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        packageName: {
+          type: 'string',
+          description: 'The npm package name, including any scope (e.g. "@scope/package-name")',
+        },
+        symbol: {
+          type: 'string',
+          description: 'The method, function, or property name to look up, e.g. "onEntryChange"',
+        },
+      },
+      required: ['packageName', 'symbol'],
+    },
+  },
+  async execute(input) {
+    try {
+      const packageName = input && input.packageName;
+      const symbol = input && input.symbol;
+      if (!packageName || typeof packageName !== 'string') {
+        return { toolUseId: '', content: 'Error: packageName (string) is required.', isError: true };
+      }
+      if (!symbol || typeof symbol !== 'string') {
+        return { toolUseId: '', content: 'Error: symbol (string) is required.', isError: true };
+      }
+      const projectRoot = process.cwd();
+      const pkgDir = path.join(projectRoot, 'node_modules', ...packageName.split('/'));
+      if (!fs.existsSync(path.join(pkgDir, 'package.json'))) {
+        return {
+          toolUseId: '',
+          content: `Package "${packageName}" is not installed at ${pkgDir} (no package.json found).`,
+          isError: true,
+        };
+      }
+
+      const { declarations, usageExamples } = scanDeclarations(pkgDir, symbol);
+      const readmeMentions = scanReadmeMentions(pkgDir, symbol);
+
+      const result = {
+        packageName,
+        symbol,
+        found: declarations.length > 0,
+        declarations,
+        readmeMentions,
+        docUsageExamples: usageExamples,
+      };
+      if (declarations.length === 0) {
+        result.note = readmeMentions.length > 0
+          ? 'Not found in any .d.ts declaration, but the README mentions this symbol — check the README example directly rather than assuming a type signature.'
+          : 'Not found anywhere in this package\'s .d.ts files or README. Do not use this symbol — it does not exist in the installed version.';
+      } else if (declarations.some((d) => d.requiresInstantiation) && readmeMentions.length === 0) {
+        result.note = 'This symbol only appears as a class-instance method, and the README does not document calling it directly — this may be an internal implementation detail rather than the intended public API. Prefer a documented pattern if one exists for what you are trying to do.';
+      }
+
+      return { toolUseId: '', content: JSON.stringify(result, null, 2), isError: false };
+    } catch (err) {
+      return { toolUseId: '', content: `Error resolving package symbol: ${err.message}`, isError: true };
+    }
+  },
+};
+
 module.exports = {
-  tools: [resolveTestFileTool, codelineFactsTool, gitStateTool, checkAntiPatternsTool],
+  tools: [resolveTestFileTool, codelineFactsTool, gitStateTool, checkAntiPatternsTool, resolvePackageSymbolTool],
 };

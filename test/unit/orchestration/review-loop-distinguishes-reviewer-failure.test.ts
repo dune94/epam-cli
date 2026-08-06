@@ -49,10 +49,15 @@ describe('B24 — reviewer failure is distinguishable from changes-requested', (
   });
 
   it('does NOT run re-implementation when there is no per-story feedback', () => {
-    // The live failure: two cycles that re-implemented nothing at all.
+    // The live failure: two cycles that re-implemented nothing at all. The
+    // guard now lives in the partition-by-ladder-exhaustion loop (2026-08-06:
+    // re-implementation only fires for stories collected from a REAL
+    // review-feedback-*.json existence check into _review_climbable_stories) —
+    // a wider window than before, since the ladder-exhaustion/safety-valve
+    // logic sits between that partition and the actual re-implement call.
     const i = ORCH.indexOf('Re-implementing $_fb_story');
     expect(i).toBeGreaterThan(-1);
-    const near = ORCH.slice(Math.max(0, i - 900), i);
+    const near = ORCH.slice(Math.max(0, i - 2500), i);
     expect(near, 'must guard the re-implement loop on feedback existing').toMatch(/-f "\$_fb"|_fb_count|feedback/);
   });
 

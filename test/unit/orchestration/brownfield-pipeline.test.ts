@@ -43,6 +43,11 @@ const INGEST_SH    = join(REPO_ROOT, 'orchestrations/scripts/ingest-jira-tickets
 const DISCOVERY_JS = join(REPO_ROOT, 'orchestrations/scripts/lib/codeline-discovery.js');
 const SKY_ENV      = join(REPO_ROOT, 'orchestrations/jira/.env');
 const MTX_ENV      = join(REPO_ROOT, 'orchestrations/jira/metrolinx.env');
+// 2026-08-06: metrolinx.env is now the SECRETS file only; project config lives in
+// projects/metrolinx/config.env. BF18 asserts the project SUPPLIES these values —
+// which file holds them is not the contract, and duplicating them across both is
+// what let ESCALATION_MODEL_HIGH silently drift (glm-5.1 vs MiniMax-M3).
+const MTX_CFG      = join(REPO_ROOT, 'orchestrations/projects/metrolinx/config.env');
 const NODE_BIN     = '/home/bradleyjerome/.nvm/versions/node/v20.20.0/bin/node';
 
 const orchSrc   = readFileSync(ORCH_SH,   'utf8');
@@ -479,12 +484,12 @@ describe('BF17: deriveCodelineName strips decoration, keeps identity', () => {
 
 // ─── BF18: metrolinx.env has all required brownfield vars ────────────────────
 
-describe('BF18: metrolinx.env contains required brownfield configuration', () => {
+describe('BF18: the metrolinx project supplies required brownfield configuration', () => {
   it('metrolinx.env exists', () => {
     expect(existsSync(MTX_ENV)).toBe(true);
   });
 
-  const mtxSrc = existsSync(MTX_ENV) ? readFileSync(MTX_ENV, 'utf8') : '';
+  const mtxSrc = existsSync(MTX_ENV) ? (readFileSync(MTX_ENV, 'utf8') + '\n' + readFileSync(MTX_CFG, 'utf8')) : '';
 
   it('EPAM_BROWNFIELD=1 is set', () => {
     expect(mtxSrc).toContain('EPAM_BROWNFIELD=1');
@@ -514,7 +519,7 @@ describe('BF18: metrolinx.env contains required brownfield configuration', () =>
 // ─── BF19: metrolinx.env has no hardcoded JIRA_CODELINES or JIRA_WORKTREE_* ─
 
 describe('BF19: metrolinx.env is discovery-driven — no hardcoded codelines', () => {
-  const mtxSrc = existsSync(MTX_ENV) ? readFileSync(MTX_ENV, 'utf8') : '';
+  const mtxSrc = existsSync(MTX_ENV) ? (readFileSync(MTX_ENV, 'utf8') + '\n' + readFileSync(MTX_CFG, 'utf8')) : '';
 
   it('JIRA_CODELINES is not declared in metrolinx.env', () => {
     expect(mtxSrc).not.toMatch(/^JIRA_CODELINES=/m);

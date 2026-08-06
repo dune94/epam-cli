@@ -49,6 +49,7 @@ REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
 AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 source "$SCRIPT_DIR/lib/project-tools.sh"
+source "$SCRIPT_DIR/lib/story-retry-state.sh"
 ORCH_GATE_MODEL="${ORCH_GATE_MODEL:-z-ai/glm-5.2}"
 
 # Look up a model's HIGH-ladder successor (EPAM_MODEL_LADDER_HIGH is "from=to|...",
@@ -106,6 +107,29 @@ run_review_prompt() {
         return 0
     fi
     local _base_model="$ORCH_GATE_MODEL"
+    # Cross-process ladder resume (2026-08-06): team-lead-review.sh is
+    # invoked as a BRAND-NEW subprocess every Step 3.6 review cycle, so this
+    # function's own 2-attempt ladder used to silently reset to
+    # ORCH_GATE_MODEL every cycle regardless of how many cycles had already
+    # run — the reviewer never actually climbed past its first escalation no
+    # matter how many rejections it issued. Same root cause, same fix
+    # pattern as claude.sh's writer ladder and ai-run.sh's shared ladder: a
+    # review-scoped key (distinct from the WRITER's own key for the same
+    # story) so escalating the reviewer never collides with escalating the
+    # writer for the same story_id.
+    local _review_ladder_key _review_progress=0
+    _review_ladder_key="$(ai_ladder_state_key "review-agent" "${story_id:-global}")"
+    if [ -n "${LOG_DIR:-}" ]; then
+        _review_progress="$(read_story_retry_count "$LOG_DIR" "$_review_ladder_key")"
+        if [ "${_review_progress:-0}" -gt 0 ] 2>/dev/null; then
+            warning "  review-agent resuming ladder at escalation ${_review_progress} for ${story_id:-?} (persisted from an earlier review cycle)"
+            local _rr _rn
+            for ((_rr = 0; _rr < _review_progress; _rr++)); do
+                _rn="$(_ladder_next_model "$_base_model")"
+                [ -n "$_rn" ] && _base_model="$_rn"
+            done
+        fi
+    fi
     local _next_model; _next_model="$(_ladder_next_model "$_base_model")"
     [ -z "$_next_model" ] && warning "  review-agent has NO ladder escalation available — $(_ladder_skip_reason "$_base_model" "${EPAM_MODEL_LADDER_HIGH:-${EPAM_MODEL_LADDER:-}}")"
     local _max_attempts="${REVIEW_MAX_ATTEMPTS:-2}"
@@ -114,6 +138,7 @@ run_review_prompt() {
         if [ "$_attempt" -ge 2 ] && [ -n "$_next_model" ]; then
             _model="$_next_model"; _provider="$(_provider_for_model "$_model")"
             warning "  review-agent ladder escalation (attempt $_attempt/$_max_attempts) — model $_base_model → $_model"
+            [ -n "${LOG_DIR:-}" ] && advance_ladder_escalation "$LOG_DIR" "$_review_ladder_key" >/dev/null
         else
             _model="$_base_model"; _provider="${EPAM_ORCHESTRATION_PROVIDER:-claude}"
         fi

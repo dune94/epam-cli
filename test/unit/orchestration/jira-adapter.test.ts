@@ -9,6 +9,7 @@ import { describe, it, expect } from 'vitest';
 const {
   adapt,
   pointsToEffort,
+  sizeLabelToEffort,
   mapStatus,
   extractAC,
 } = require('../../../orchestrations/scripts/lib/jira-adapter.js');
@@ -32,16 +33,59 @@ describe('pointsToEffort', () => {
   it('maps a large number to high', () => {
     expect(pointsToEffort(21)).toBe('high');
   });
-  it('treats undefined/null/non-numeric as 0 -> low', () => {
-    expect(pointsToEffort(undefined)).toBe('low');
-    expect(pointsToEffort(null)).toBe('low');
-    expect(pointsToEffort('not-a-number')).toBe('low');
+  it('THE BUG, fixed 2026-08-06: an UNESTIMATED ticket is undefined, never a fabricated "low"', () => {
+    // AMSD-2041 (title-only, blank description, zero ACs — never groomed in Jira) got
+    // effort:"low" from exactly this — Number(undefined) is NaN, NaN || 0 is 0, and a
+    // never-estimated ticket landed in the same bucket as a verified-trivial one. The
+    // detective later found this story touches a shared context consumed by 30+
+    // components. Absence of an estimate is not evidence the work is small.
+    expect(pointsToEffort(undefined)).toBeUndefined();
+    expect(pointsToEffort(null)).toBeUndefined();
+    expect(pointsToEffort('')).toBeUndefined();
+    expect(pointsToEffort('not-a-number')).toBeUndefined();
+  });
+  it('a GENUINELY VERIFIED 0-point ticket is still low — this is not the same as absence', () => {
+    expect(pointsToEffort(0)).toBe('low');
+    expect(pointsToEffort('0')).toBe('low');
   });
   it('treats a negative number as <= 2 -> low', () => {
     expect(pointsToEffort(-5)).toBe('low');
   });
   it('accepts a numeric string', () => {
     expect(pointsToEffort('8')).toBe('high');
+  });
+});
+
+describe('sizeLabelToEffort — a real Jira grooming signal, consulted before the neutral default', () => {
+  it('maps size-s / size-small to low', () => {
+    expect(sizeLabelToEffort(['size-s'])).toBe('low');
+    expect(sizeLabelToEffort(['size-small'])).toBe('low');
+  });
+  it('maps size-m / size-medium to medium', () => {
+    expect(sizeLabelToEffort(['size-m'])).toBe('medium');
+    expect(sizeLabelToEffort(['size-medium'])).toBe('medium');
+  });
+  it('maps size-l and size-xl to high', () => {
+    expect(sizeLabelToEffort(['size-l'])).toBe('high');
+    expect(sizeLabelToEffort(['size-xl'])).toBe('high');
+  });
+  it('accepts the "t-shirt-" and "tshirt-" prefix forms too', () => {
+    expect(sizeLabelToEffort(['t-shirt-s'])).toBe('low');
+    expect(sizeLabelToEffort(['tshirt-l'])).toBe('high');
+  });
+  it('is case-insensitive', () => {
+    expect(sizeLabelToEffort(['SIZE-L'])).toBe('high');
+  });
+  it('accepts object-shaped labels ({name: ...}), matching the urgent-label convention', () => {
+    expect(sizeLabelToEffort([{ name: 'size-l' }])).toBe('high');
+  });
+  it('returns undefined when no size label is present — never invents one', () => {
+    expect(sizeLabelToEffort(['urgent', 'codeline-metrolinx'])).toBeUndefined();
+    expect(sizeLabelToEffort([])).toBeUndefined();
+    expect(sizeLabelToEffort(undefined)).toBeUndefined();
+  });
+  it('ignores an unrecognized size word rather than guessing', () => {
+    expect(sizeLabelToEffort(['size-gigantic'])).toBeUndefined();
   });
 });
 
@@ -252,6 +296,30 @@ describe('adapt — full payload normalization', () => {
     const result = adapt(flatPayload);
     expect(result).not.toBeNull();
     expect(result?.jiraKey).toBe('AMSD-99');
+  });
+
+  it('a t-shirt-size label wins over the neutral default when story points are absent', () => {
+    const noPoints = makeIssuePayload({ labels: ['size-l'] });
+    delete noPoints.issue.fields.story_points;
+    const result = adapt(noPoints);
+    expect(result?.effort).toBe('high');
+  });
+
+  it('THE BUG, fixed 2026-08-06: adapt() gives an unestimated ticket effort:"medium", never "low"', () => {
+    const noPoints = makeIssuePayload();
+    delete noPoints.issue.fields.story_points;
+    const result = adapt(noPoints);
+    expect(
+      result?.effort,
+      'AMSD-2041 was unestimated and got effort:"low" from this exact path — an absent ' +
+        'story-point estimate must fall back to the same neutral default the batch-ingest ' +
+        'path (synthesize-prd-from-jira.js) already uses, not a fabricated cheap bucket',
+    ).toBe('medium');
+  });
+
+  it('a genuinely 0-point ticket still resolves to "low" through adapt() — not conflated with absence', () => {
+    const result = adapt(makeIssuePayload({ story_points: 0 }));
+    expect(result?.effort).toBe('low');
   });
 
   it('run 10x in a row against the same real payload — fully deterministic output', () => {

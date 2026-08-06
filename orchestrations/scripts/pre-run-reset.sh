@@ -286,15 +286,19 @@ done
 
 # ── Step 3: Clear KB scratchpad (per-run attempt files — stale notes from failed
 # runs contaminate future attempts with wrong diagnoses; reset before every run)
-KB_DIR="$LOG_DIR/kb-scratchpad"
-if [ -d "$KB_DIR" ]; then
-  KB_COUNT=$(find "$KB_DIR" -name "*.md" | wc -l)
-  if [ "$KB_COUNT" -gt 0 ]; then
-    find "$KB_DIR" -name "*.md" -delete
-    success "Cleared $KB_COUNT KB scratchpad file(s) from $KB_DIR"
-  else
-    info "  KB scratchpad already empty"
-  fi
+# Scoped to EVERY kb-scratchpad under LOG_DIR, not just the top-level one.
+# Found 2026-08-06: this cleared only "$LOG_DIR/kb-scratchpad", but a parallel
+# run writes its review lessons per lane — orchestrations/logs/lanes/<lane>/
+# kb-scratchpad/KB-review-agent.md (see Step 3.6's _escalate_review_story in
+# run-agent-orchestration.sh, which appends there). All three lane files
+# survived every reset and were still being injected into later runs, which is
+# precisely the cross-run contamination this step exists to prevent.
+KB_COUNT=$(find "$LOG_DIR" -type d -name kb-scratchpad -exec find {} -name "*.md" \; 2>/dev/null | wc -l)
+if [ "$KB_COUNT" -gt 0 ]; then
+  find "$LOG_DIR" -type d -name kb-scratchpad -exec find {} -name "*.md" -delete \; 2>/dev/null
+  success "Cleared $KB_COUNT KB scratchpad file(s) from all kb-scratchpad dirs under $LOG_DIR"
+else
+  info "  KB scratchpad already empty (all lanes)"
 fi
 
 # ── Step 3b: Restore the KB to its canonical state ──────────────────────────

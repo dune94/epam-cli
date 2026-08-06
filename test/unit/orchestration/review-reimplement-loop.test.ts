@@ -68,9 +68,20 @@ describe('Step 3.6 → review→re-implement→re-review loop', () => {
     expect(orchSrc).toMatch(/review requested changes — re-implementing/);
     expect(orchSrc).toMatch(/run_story_with_watchdog "\$_fb_story"/);
   });
-  it('is bounded by REVIEW_MAX_CYCLES', () => {
-    expect(orchSrc).toMatch(/_review_max_cycles="\$\{REVIEW_MAX_CYCLES:-2\}"/);
+  it('is bounded PRIMARILY by per-story ladder exhaustion, with REVIEW_MAX_CYCLES as a safety valve', () => {
+    // 2026-08-06: a fixed cycle cap used to be the ONLY bound, which cut a
+    // story off before its inference ladder ever climbed past rung 0 across
+    // review-rejection cycles (each cycle re-invokes claude.sh as a fresh
+    // subprocess). A story now escalates only once story_ladder_exhausted()
+    // says its OWN ladder has nothing left to offer; REVIEW_MAX_CYCLES
+    // remains purely as a safety valve far above the ladder's own depth.
+    expect(orchSrc).toMatch(/story_ladder_exhausted "\$LOG_DIR" "\$_fb_story"/);
+    expect(orchSrc).toMatch(/advance_story_retry_rung "\$LOG_DIR" "\$_fb_story"/);
+    // DERIVED from the ladder's real depth, not a magic number — an explicit
+    // REVIEW_MAX_CYCLES still wins for an operator who wants a hard ceiling.
+    expect(orchSrc).toMatch(/_review_max_cycles="\$\{REVIEW_MAX_CYCLES:-\$\(\( _review_max_retries \/ 2 \+ 3 \)\)\}"/);
     expect(orchSrc).toMatch(/_review_cycle" -ge "\$_review_max_cycles"/);
+    expect(orchSrc).toMatch(/SAFETY VALVE/);
   });
   it('on exhaustion marks the story escalated, appends a reviewer-KB lesson, and hard-blocks', () => {
     expect(orchSrc).toMatch(/reviewStatus: "escalated"/);

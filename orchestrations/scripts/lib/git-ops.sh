@@ -316,6 +316,17 @@ commit_completed_story() {
     set -e
     if [ "$_commit_rc" -eq 0 ]; then
         log "  Committed ${_changed_count} file(s) for ${story_id}"
+        # Refresh the CodeGraph index now that this story's writes are final
+        # on disk. Until 2026-08-06 the index was built ONCE per run, before
+        # any writer ran, and never rebuilt — so the reviewer's codegraph_query
+        # tool (team-lead-review.sh hands it out explicitly to check "does a
+        # helper already exist?") was reading a pre-writer snapshot and could
+        # not see the writer's own output. See codegraph-reindex.sh's docstring
+        # for the full diagnosis. Never blocks: the script always exits 0.
+        local _cg_reindex="${SCRIPT_DIR:-}/codegraph-reindex.sh"
+        if [ -n "${SCRIPT_DIR:-}" ] && [ -f "$_cg_reindex" ]; then
+            bash "$_cg_reindex" "$_commit_root" "post-commit ${story_id}" || true
+        fi
     elif [ "$_commit_rc" -eq 124 ]; then
         warning "  [commit_completed_story] git commit timed out after ${_git_timeout}s for ${story_id} — work remains staged/uncommitted"
     else

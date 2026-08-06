@@ -88,7 +88,10 @@ describe('runSpeckitReview() — accepts forcedRetryNote with the same primacy p
     // refineExistingChildren ternary (two prompt variants) — forcedRetryBlock
     // must still lead BOTH variants.
     const idx = src.indexOf('async function runSpeckitReview(');
-    const body = src.slice(idx, idx + 4000);
+    // Widened from 4000 (2026-08-06): the tool-provisioning fix added a
+    // repoPath resolution + comment near the top of runSpeckitReview, pushing
+    // the second prompt variant past the old window.
+    const body = src.slice(idx, idx + 5200);
     expect(body).toMatch(/const forcedRetryBlock = forcedRetryNote \? `\$\{forcedRetryNote\}\\n\\n` : '';/);
     const promptOccurrences = (body.match(/`\$\{forcedRetryBlock\}You are the speckit specification agent/g) || []).length;
     expect(promptOccurrences, 'both the refineExistingChildren and normal-review prompt variants must lead with forcedRetryBlock').toBe(2);

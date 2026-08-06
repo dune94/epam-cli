@@ -51,13 +51,14 @@ async function runTool(name: string, repo: string, input: Record<string, unknown
 }
 
 describe('plugin module — loads via the real PluginLoader contract', () => {
-  it('exports exactly the 4 expected tools, each pluginApiVersion 1.0.0', () => {
+  it('exports exactly the 5 expected tools, each pluginApiVersion 1.0.0', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { tools } = require(PLUGIN_PATH) as { tools: Array<{ name: string; pluginApiVersion: string }> };
     expect(tools.map((t) => t.name).sort()).toEqual([
       'check_anti_patterns',
       'codeline_facts',
       'git_state',
+      'resolve_package_symbol',
       'resolve_test_file',
     ]);
     expect(tools.every((t) => t.pluginApiVersion === '1.0.0')).toBe(true);
@@ -421,5 +422,208 @@ describe('every plugin tool, run against all 3 REAL codelines (not synthetic tem
           'miss that caused AMSD-2041\'s review to loop forever on a false "no tests" claim',
       ).toBeGreaterThan(0);
     });
+  });
+});
+
+describe('resolve_package_symbol — real API surface, not "does the string exist"', () => {
+  // Built after a live, confirmed regression on AMSD-2041, 2026-08-05: the writer called
+  // `ContentstackLivePreview.unsubscribeOnEntryChange` — a real declared symbol (verified
+  // directly against the installed @contentstack/live-preview-utils package), but an
+  // INTERNAL CLASS INSTANCE METHOD requiring `new LivePreview()`, not the top-level call
+  // the writer made. The package's own README documents `onEntryChange` as an `init()`
+  // config callback instead — a completely different, simpler usage shape. A plain
+  // "grep node_modules for the string" check would have said the symbol exists and missed
+  // the actual defect: wrong layer, wrong invocation shape.
+  //
+  // This tool reports BOTH what .d.ts declares (with class context, so a caller can tell
+  // "instance method, needs instantiation" from "direct export") AND what the README's own
+  // documented usage shows, so a detective/writer/reviewer can prefer the real, intended
+  // pattern over a technically-real internal implementation detail.
+
+  function makeFixturePackage(repo: string, opts: {
+    dts: string;
+    readme?: string;
+  }): void {
+    const pkgDir = join(repo, 'node_modules', '@fixture', 'sdk');
+    mkdirSync(pkgDir, { recursive: true });
+    writeFileSync(join(pkgDir, 'package.json'), JSON.stringify({ name: '@fixture/sdk', version: '1.0.0', types: 'index.d.ts' }));
+    writeFileSync(join(pkgDir, 'index.d.ts'), opts.dts);
+    if (opts.readme) writeFileSync(join(pkgDir, 'README.md'), opts.readme);
+  }
+
+  it('THE CONFIRMED CASE: a class-instance method is distinguished from the README\'s documented usage', async () => {
+    const repo = makeRepo();
+    makeFixturePackage(repo, {
+      dts: [
+        'declare class LivePreview {',
+        '    constructor();',
+        '    subscribeToOnEntryChange(callback: Function, uid: string): string;',
+        '    unsubscribeOnEntryChange(callback: Function): void;',
+        '}',
+        'export { LivePreview as default };',
+      ].join('\n'),
+      readme: [
+        '# Usage',
+        '',
+        '```js',
+        'ContentstackLivePreview.init({',
+        '  onEntryChange: (data) => setContent(data),',
+        '});',
+        '```',
+      ].join('\n'),
+    });
+
+    const result = await runTool('resolve_package_symbol', repo, {
+      packageName: '@fixture/sdk',
+      symbol: 'unsubscribeOnEntryChange',
+    });
+    const parsed = JSON.parse(result.content);
+
+    expect(result.isError).toBe(false);
+    expect(parsed.declarations.length, 'the symbol genuinely exists in the package').toBeGreaterThan(0);
+    expect(
+      parsed.declarations[0].requiresInstantiation,
+      'unsubscribeOnEntryChange is an instance method of LivePreview, not a direct call',
+    ).toBe(true);
+    expect(parsed.declarations[0].className).toBe('LivePreview');
+    expect(
+      parsed.readmeMentions,
+      'this exact symbol is NOT how the README documents real usage — the caller should know that',
+    ).toEqual([]);
+  });
+
+  it('reports a documented README usage example when the symbol appears there', async () => {
+    const repo = makeRepo();
+    makeFixturePackage(repo, {
+      dts: 'export declare function onEntryChange(cb: Function): void;',
+      readme: [
+        '# Usage',
+        '```js',
+        'ContentstackLivePreview.onEntryChange((data) => setContent(data));',
+        '```',
+      ].join('\n'),
+    });
+
+    const result = await runTool('resolve_package_symbol', repo, {
+      packageName: '@fixture/sdk',
+      symbol: 'onEntryChange',
+    });
+    const parsed = JSON.parse(result.content);
+
+    expect(parsed.declarations[0].requiresInstantiation).toBe(false);
+    expect(parsed.readmeMentions.length, 'the README documents real usage of this symbol').toBeGreaterThan(0);
+    expect(parsed.readmeMentions[0]).toContain('onEntryChange');
+  });
+
+  it('a symbol that does not exist anywhere is reported as not found, never fabricated', async () => {
+    const repo = makeRepo();
+    makeFixturePackage(repo, {
+      dts: 'export declare function realThing(): void;',
+    });
+
+    const result = await runTool('resolve_package_symbol', repo, {
+      packageName: '@fixture/sdk',
+      symbol: 'imaginaryMethodThatDoesNotExist',
+    });
+    const parsed = JSON.parse(result.content);
+
+    expect(result.isError).toBe(false);
+    expect(parsed.declarations).toEqual([]);
+    expect(parsed.readmeMentions).toEqual([]);
+    expect(parsed.found).toBe(false);
+  });
+
+  it('a package that is not installed is a clear, non-crashing error', async () => {
+    const repo = makeRepo();
+    const result = await runTool('resolve_package_symbol', repo, {
+      packageName: '@fixture/not-installed',
+      symbol: 'anything',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content).toMatch(/not installed|not found/i);
+  });
+
+  it('returns an error result when packageName or symbol is missing', async () => {
+    const repo = makeRepo();
+    const result = await runTool('resolve_package_symbol', repo, { packageName: '@fixture/sdk' });
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain('symbol');
+  });
+
+  it('THE REAL-WORLD CORRECTION: a static class method needs no instantiation either', async () => {
+    // Caught testing against the REAL installed @contentstack/live-preview-utils package,
+    // not invented: ContentstackLivePreview.unsubscribeOnEntryChange — the writer's actual
+    // call in the AMSD-2041 regression — genuinely IS a `static` method on the default-
+    // exported class. Calling it directly (no `new`) is valid. An earlier version of this
+    // tool flagged every class-body method as requiring instantiation and would have given
+    // WRONG guidance here — exactly the mistake this tool exists to prevent, just aimed at
+    // itself first.
+    const repo = makeRepo();
+    makeFixturePackage(repo, {
+      dts: [
+        'declare class ContentstackLivePreview {',
+        '    static init(config: unknown): void;',
+        '    static unsubscribeOnEntryChange(callback: Function): void;',
+        '}',
+        'export { ContentstackLivePreview as default };',
+      ].join('\n'),
+    });
+
+    const result = await runTool('resolve_package_symbol', repo, {
+      packageName: '@fixture/sdk',
+      symbol: 'unsubscribeOnEntryChange',
+    });
+    const parsed = JSON.parse(result.content);
+
+    expect(parsed.declarations[0].isStatic).toBe(true);
+    expect(
+      parsed.declarations[0].requiresInstantiation,
+      'a static method is called directly on the class — no `new` needed',
+    ).toBe(false);
+  });
+
+  it('a JSDoc comment usage example is separated from real declarations, not mislabeled as one', async () => {
+    // Real shape found scanning @contentstack/live-preview-utils's own .d.ts: JSDoc comment
+    // blocks show worked examples ("* ContentstackLivePreview.unsubscribeOnEntryChange(...)")
+    // right next to the real `static` declaration. Counting the comment line as its own
+    // "declaration" would double-count and could mislabel a static call as needing an
+    // instance, since the comment line itself carries no `static` keyword.
+    const repo = makeRepo();
+    makeFixturePackage(repo, {
+      dts: [
+        'declare class Widget {',
+        '    /**',
+        '     * @example',
+        '     * Widget.doThing(arg);',
+        '     */',
+        '    static doThing(arg: unknown): void;',
+        '}',
+        'export { Widget as default };',
+      ].join('\n'),
+    });
+
+    const result = await runTool('resolve_package_symbol', repo, { packageName: '@fixture/sdk', symbol: 'doThing' });
+    const parsed = JSON.parse(result.content);
+
+    expect(parsed.declarations, 'exactly one real declaration, the comment line must not count as a second one').toHaveLength(1);
+    expect(parsed.declarations[0].isStatic).toBe(true);
+    expect(parsed.docUsageExamples.length, 'the JSDoc example is still surfaced, just separately').toBeGreaterThan(0);
+    expect(parsed.docUsageExamples[0].example).toContain('Widget.doThing(arg)');
+  });
+
+  it('a direct top-level export needs no instantiation', async () => {
+    const repo = makeRepo();
+    makeFixturePackage(repo, {
+      dts: 'export declare const config: { hash: string };\nexport declare function setPageContext(ctx: unknown): void;',
+    });
+
+    const result = await runTool('resolve_package_symbol', repo, {
+      packageName: '@fixture/sdk',
+      symbol: 'setPageContext',
+    });
+    const parsed = JSON.parse(result.content);
+
+    expect(parsed.declarations[0].requiresInstantiation).toBe(false);
+    expect(parsed.declarations[0].className).toBeNull();
   });
 });

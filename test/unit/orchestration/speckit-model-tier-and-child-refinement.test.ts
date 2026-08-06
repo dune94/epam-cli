@@ -37,7 +37,9 @@ const specModeRunner = require('../../../orchestrations/scripts/spec-mode-runner
 
 describe('_vcLlmCall — role-aware model-tier resolution', () => {
   function vcLlmCallBody(): string {
-    const i = SRC.indexOf('async function _vcLlmCall(prompt, cycle, logPath, storyId = \'\', role = \'openspec\')');
+    // repoPath param added 2026-08-06 (tool-provisioning fix) — anchor on the
+    // stable prefix so a future param addition doesn't break this again.
+    const i = SRC.indexOf('async function _vcLlmCall(prompt, cycle, logPath, storyId');
     expect(i, '_vcLlmCall signature is gone — this is anchored to nothing').toBeGreaterThan(-1);
     return SRC.slice(i, i + 700);
   }
@@ -67,7 +69,7 @@ describe('_vcLlmCall — role-aware model-tier resolution', () => {
     const callIdx = body.indexOf('const out = await _vcLlmCall(');
     expect(callIdx).toBeGreaterThan(-1);
     const callLine = body.slice(callIdx, body.indexOf(';', callIdx) + 1);
-    expect(callLine).toMatch(/story\.id, 'speckit'\)/);
+    expect(callLine).toMatch(/story\.id, 'speckit'/);
   });
 });
 

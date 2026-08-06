@@ -32,6 +32,8 @@ source "$SCRIPT_DIR/lib/flags.sh"
 source "$SCRIPT_DIR/lib/project-tools.sh"
 # shellcheck source=lib/git-ops.sh
 source "$SCRIPT_DIR/lib/git-ops.sh"
+# shellcheck source=lib/story-retry-state.sh
+source "$SCRIPT_DIR/lib/story-retry-state.sh"
 PROGRESS_LOG="$LOG_DIR/progress.txt"
 AGENTS_FILE="$AUTOMATION_DIR/agents/AGENTS.md"
 CLAUDE_OUTPUT_DIR="$LOG_DIR/claude_outputs"
@@ -7601,7 +7603,17 @@ print(json.dumps({\"extend\": False, \"extraRetries\": 0, \"reason\": \"unparsea
 # Invoke Claude CLI to implement a story
 implement_story() {
     local story_id=$1
-    local retry_count=0
+    # Seeded from persisted state, NOT hardcoded 0 — a Step 3.6 review
+    # rejection re-invokes this whole script as a brand-new process, and
+    # without this the ladder silently restarted at rung 0 every review
+    # cycle (see lib/story-retry-state.sh's docstring for the live incident
+    # this fixes). Cleared for free by teardown at the start of every run,
+    # since the state file lives under LOG_DIR.
+    local retry_count
+    retry_count="$(read_story_retry_count "$LOG_DIR" "$story_id")"
+    if [ "$retry_count" -gt 0 ] 2>/dev/null; then
+        log "  [InferenceLadder] $story_id resuming at retry_count=$retry_count (persisted from an earlier invocation)"
+    fi
     # Shadows the script-global MAX_RETRIES for the duration of THIS story
     # only. run_retry_extension_coordinator() (below) can bump this local
     # copy when it grants a bounded extension -- shadowing it here (rather
@@ -7758,7 +7770,8 @@ BROWNFIELD SURGEON MODE — NOVEL CAPABILITY (non-negotiable, applies to this st
 6. FIND THE ATTACHMENT POINT: There is no existing bug and no existing code path implementing this capability — searching for one wastes time. Before writing code, locate the existing file/function/provider/hook/route/component this new capability must plug INTO (Search, Glob, or Read). Do not skip this step.
 7. SMALLEST INTEGRATION, NOT A REWRITE: Extend the attachment point with the minimal addition that provides the new capability. Do not restructure, refactor, or rewrite surrounding code that already works.
 8. NEW FILES ARE EXPECTED WHEN THE CAPABILITY GENUINELY NEEDS THEM: Do not withhold a new file, component, or module waiting for the story description to say 'create' or 'add new' — a bare or underspecified description is not evidence the work is smaller than it is. Create what the capability requires; do not invent an abstraction it does not.
-9. USE EXISTING HELPERS: Before writing any new function or utility, search the codebase for an existing one that already serves the same purpose."
+9. USE EXISTING HELPERS: Before writing any new function or utility, search the codebase for an existing one that already serves the same purpose.
+10. VERIFY THIRD-PARTY SDK CALLS: before calling a method on a package you did not write, confirm its real shape with the codegraph_query tool or \`bash orchestrations/scripts/resolve-package-symbol.sh <package> <method>\` — a symbol existing in node_modules is not proof it is a static call, an instance method, or the package's own intended usage. Calling it wrong produces code that type-checks and fails at runtime."
         else
             DYNAMIC_CONSTITUTION="${DYNAMIC_CONSTITUTION}
 
@@ -7766,7 +7779,8 @@ BROWNFIELD SURGEON MODE — non-negotiable (applies to every story in this run):
 6. FIND FIRST: Before writing a single line of code, locate the existing code path that handles the behavior described in this story. Use Search, Glob, or Read. Do not skip this step.
 7. FIX MINIMALLY: Make the smallest change that corrects the behavior. Do not restructure, refactor, or extend surrounding code.
 8. NO NEW FILES BY DEFAULT: Do not create new files, services, or abstractions unless the story description explicitly uses the words 'create', 'add new', or 'build new'. A bug report or a change request means modifying existing code.
-9. USE EXISTING HELPERS: Before writing any new function or utility, search the codebase for an existing one that already serves the same purpose."
+9. USE EXISTING HELPERS: Before writing any new function or utility, search the codebase for an existing one that already serves the same purpose.
+10. VERIFY THIRD-PARTY SDK CALLS: before calling a method on a package you did not write, confirm its real shape with the codegraph_query tool or \`bash orchestrations/scripts/resolve-package-symbol.sh <package> <method>\` — a symbol existing in node_modules is not proof it is a static call, an instance method, or the package's own intended usage. Calling it wrong produces code that type-checks and fails at runtime."
         fi
     fi
     # GAP-P17: inject outputSchema instruction when story defines one
@@ -8689,6 +8703,10 @@ ${_trimmed_amendment}"
             _rung_attribute_changes "$story_id" "$_rung" "${STORY_MODEL:-}"
             _generate_rung_contribution_report "$story_id"
             rm -f "$(_rung_snapshot_path "$story_id")" 2>/dev/null || true
+            # Persisted even on success: a technically-successful attempt can
+            # still be REJECTED by Step 3.6's review — the next
+            # re-implementation must resume from here, not rung 0.
+            write_story_retry_count "$LOG_DIR" "$story_id" "$retry_count"
             post_completion_message "$story_id" "completed"
             return 0
         else
@@ -8925,6 +8943,9 @@ Apply the above diagnosis AND fix the deterministic check violation — both mus
                 warning "  [FailureDiversity] Pinning temperature to 0 for the remainder of $story_id — non-repeating failures indicate token-variance, not a capability gap"
                 export EPAM_TEMPERATURE="0"
             fi
+            # Persist BEFORE the sleep, not after — a killed/timed-out process
+            # must not lose the rung it already reached.
+            write_story_retry_count "$LOG_DIR" "$story_id" "$retry_count"
             if [ $retry_count -le $MAX_RETRIES ]; then
                 warning "$story_cli failed, retrying in ${RETRY_DELAY}s..."
                 sleep $RETRY_DELAY

@@ -59,9 +59,12 @@ describe('orchestrate.sh — project config load order (Bug 2)', () => {
     // The secrets file (e.g. orchestrations/jira/.env) may contain stale
     // JIRA_URL/JIRA_PROJECT_KEY for a different project; project config must
     // be sourced last to override those values.
-    const secretsSourceIdx = launcherSrc.indexOf('source "${SECRETS_FILE}"');
+    const secretsSourceIdx = launcherSrc.indexOf('load_env_file_safe "$_secrets_abs"');
     // Final source of CONFIG must come after secrets sourcing
-    const configSources = [...launcherSrc.matchAll(/source "\$CONFIG"/g)].map(m => m.index ?? -1);
+    // 2026-08-06: config files are loaded as DATA (load_env_file_safe), never
+    // `source`d — a config file must not be able to execute anything. The
+    // ORDERING property this test exists for is unchanged and still asserted.
+    const configSources = [...launcherSrc.matchAll(/load_env_file_safe "\$CONFIG"/g)].map(m => m.index ?? -1);
     expect(secretsSourceIdx).toBeGreaterThan(-1);
     expect(configSources.length).toBeGreaterThanOrEqual(2); // sourced at least twice
     const lastConfigSource = Math.max(...configSources);

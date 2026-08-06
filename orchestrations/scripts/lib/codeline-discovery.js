@@ -30,6 +30,7 @@ const fs           = require('fs');
 const path         = require('path');
 const { execSync } = require('child_process');
 const { crossRepoTermScores, applyRecency, repoRecency, orderCodelines, rankingConfidence } = require('./codeline-score');
+const { rankByStructure } = require('./codeline-structure');
 
 // Semble removed from codeline scoring — all repos are CodeGraph-indexed,
 // making Tier 3 probabilistic scoring redundant and a source of re-ranking noise.
@@ -168,23 +169,13 @@ function scoreRepos(issues, manifest, topN = 8) {
   const cgEnabled = process.env.CODEGRAPH_ENABLED === '1';
   const cg        = cgEnabled ? getCodeGraph() : null;
 
-  // CodeGraph query uses ONLY high-specificity terms — words that are rare in the
-  // transit domain and therefore discriminate between repos. Generic transit nouns
-  // ("trip", "ticket", "return", "schedule", "route", "station", "fare", "service",
-  // "booking", "departure", "arrival") appear in every repo and flood FTS5 results
-  // equally, collapsing score separation. Stripping them forces the query to match
-  // on product names (mozio, promo), business concepts (discount, confirmation), and
-  // integration specifics (email, dispatch, amount) that only the right repo handles.
-  const DOMAIN_STOPWORDS = new Set([
-    'trip','trips','ticket','tickets','return','schedule','schedules','route','routes',
-    'station','stations','fare','fares','service','services','booking','bookings',
-    'departure','departures','arrival','arrivals','transit','passenger','passengers',
-    'platform','journey','journeys','stop','stops','line','lines','train','trains',
-    'bus','buses','payment','payments','order','orders','account','accounts',
-    'user','users','status','request','response','data','item','items','list',
-    'number','code','type','name','time','date','from','path','info',
-  ]);
-  const cgSpecificWords = words.filter(w => !DOMAIN_STOPWORDS.has(w));
+  // Terms are NOT filtered against a hand-written vocabulary. A stopword list
+  // used to sit here naming one client industry's everyday nouns — hardcoded
+  // domain knowledge in engine code, wrong for the next project, and redundant
+  // anyway: crossRepoTermScores computes IDF over the actual candidate set, so
+  // a term appearing in every repo is demoted by measurement rather than by a
+  // list somebody has to maintain. Removed 2026-08-06.
+const cgSpecificWords = words;
   const cgQuery = cgSpecificWords.slice(0, 10).join(' ');
 
   // Tier 2 is computed for ALL repos at once, because cross-repo document
@@ -288,9 +279,61 @@ function scoreRepos(issues, manifest, topN = 8) {
     return { ...repo, score, tier2: tier2Score, tier2Breakdown: t2 ? t2.breakdown : {} };
   });
 
-  scored.sort((a, b) => b.score - a.score);
-  const top = scored.slice(0, topN);
-  log(`Repo scoring: top ${top.length} candidate(s) from ${manifest.length} repos (scores: ${top.map(r => `${r.name}=${r.score}`).join(', ')})`);
+  // ── Tier 0 — STRUCTURE (dominant, and a hard eligibility gate) ────────────
+  // Tiers 1 and 2 both measure the same thing: how often the ticket's WORDS
+  // appear in a repo's text. That cannot separate "implements this capability"
+  // from "mentions this library". Live: a .NET CRM integration scored 143
+  // against the real target's 152 on 25 hits that were all accessibility-request
+  // validators — it had no live-preview code and no installed toolchain, so it
+  // could not have run its own gates, and the model selected it on the fifth of
+  // five runs. Pinning the codeline list was the response; fixing the signal is
+  // this.
+  //
+  // Two structural facts, neither gameable by word count (see codeline-structure.js):
+  //   canRunItsOwnGates    declared deps actually installed -> can be a lane at all
+  //   declaredDependencies the repo's OWN manifest says it uses this technology
+  //
+  // A repo that cannot build is REMOVED, not demoted: selecting it guarantees a
+  // failed lane whatever its relevance. A declared-dependency match then
+  // outweighs any amount of lexical mention, and lexical score only orders
+  // repos that are structurally equal.
+  let structural = [];
+  try {
+    structural = rankByStructure(manifest, cgSpecificWords.length ? cgSpecificWords : words);
+  } catch (e) {
+    warn(`structural ranking unavailable (${e.message}) — falling back to lexical only`);
+    structural = manifest.map(r => ({ ...r, structuralScore: 0, dependencyHits: [] }));
+  }
+  const structByPath = new Map(structural.map(r => [r.path, r]));
+
+  const excluded = manifest.filter(r => !structByPath.has(r.path));
+  for (const r of excluded) {
+    log(`  EXCLUDED '${r.name}': declares dependencies it has not installed — cannot run its own gates, so it cannot be a lane at any relevance score`);
+  }
+
+  // Weight chosen so ONE declared-dependency match outranks a maximal lexical
+  // score (Tier 1 ~30 + Tier 2 ~100). Structure is evidence; word count is a hint.
+  const STRUCT_WEIGHT = Number(process.env.CODELINE_STRUCTURAL_WEIGHT || 500);
+
+  const eligible = scored
+    .filter(r => structByPath.has(r.path))
+    .map(r => {
+      const st = structByPath.get(r.path);
+      return {
+        ...r,
+        structuralScore: st.structuralScore,
+        dependencyHits: st.dependencyHits,
+        lexicalScore: r.score,
+        score: r.score + st.structuralScore * STRUCT_WEIGHT,
+      };
+    });
+
+  eligible.sort((a, b) => b.score - a.score);
+  const top = eligible.slice(0, topN);
+  log(`Repo scoring: top ${top.length} of ${eligible.length} eligible (${excluded.length} excluded as unbuildable) from ${manifest.length} repos`);
+  for (const r of top) {
+    log(`  ${r.name}: total=${r.score} (structural=${r.structuralScore}${r.dependencyHits.length ? ` [${r.dependencyHits.join(', ')}]` : ''}, lexical=${r.lexicalScore})`);
+  }
   return top;
 }
 

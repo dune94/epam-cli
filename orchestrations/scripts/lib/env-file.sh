@@ -25,8 +25,17 @@
 #
 # Usage:  . lib/env-file.sh ; load_env_file_safe "$REPO_ROOT/.env"
 
+# Second argument: "preserve" — do not overwrite a variable that is already set and
+# non-empty in the environment. This reproduces the `KEY="${KEY:-default}"` idiom that
+# config files used to rely on, WITHOUT evaluating the file. Those lines only worked
+# under `source`, which is the very thing this loader exists to stop: a config file
+# declaring a project default must not clobber a value the operator exported at launch
+# (live: config.env's SKIP_REGRESSION_GUARD overwrote SKIP_REGRESSION_GUARD=true from
+# the launch environment, and the guard blocked a run it had been told to bypass).
+# Default (no second argument) keeps the original always-assign behaviour.
 load_env_file_safe() {
   local env_file="${1:-}"
+  local _mode="${2:-}"
   [ -n "$env_file" ] && [ -f "$env_file" ] || return 0
 
   local line key value
@@ -58,6 +67,11 @@ load_env_file_safe() {
       \"*\") value="${value:1:${#value}-2}" ;;
       \'*\') value="${value:1:${#value}-2}" ;;
     esac
+
+    # preserve mode: an already-set, non-empty value wins over the file's default.
+    if [ "$_mode" = "preserve" ] && [ -n "${!key:-}" ]; then
+      continue
+    fi
 
     # printf -v assigns without evaluating: the value is text, whatever it contains.
     printf -v "$key" '%s' "$value" 2>/dev/null || continue

@@ -1,93 +1,125 @@
 /**
- * A pinned codeline scope must actually resolve to repositories.
+ * CODELINE SCOPE MUST NOT BE PINNED. It is discovered agentically, or not at all.
  *
- * Pinning JIRA_CODELINES makes the scope declared and replayable instead of
- * re-decided by a model each run. The first attempt at it failed the run
- * outright, and silently in the sense that mattered — the pipeline did not say
- * "your scope is malformed", it just produced one bogus lane:
+ * This file previously asserted the OPPOSITE — it required
+ * `JIRA_CODELINES="gotransit,upexpress,metrolinx"` to be declared in
+ * projects/metrolinx/config.env, and validated that the hand-written list parsed
+ * into three resolvable repositories. That test locked in the violation.
  *
- *   project.outputDirs: [{"codeline":"cdts","path":".../azure.commerce.cdts"}]
- *   story.codeline:     "gotransit upexpress metrolinx"     <- the whole list
- *   [orch] Codeline 'cdts': no stories — skipping
- *   Tier 3 Metrolinx FAILED — stories not completed
+ * Why the pin existed: the scorer produced a near-tie (gotransit=152, c365=143,
+ * top1/top2=1.06) and the LLM wrongly included c365 on the fifth of five runs.
+ * c365 is a .NET CRM integration with zero live-preview code and no node_modules.
+ * The response was to pin the list rather than fix the scorer.
  *
- * TWO MISTAKES, both invisible in the config itself:
+ * Why that is not acceptable: ingest-jira-tickets.sh runs codeline-discovery.js
+ * ONLY when JIRA_CODELINES is empty. Declaring it did not "make the scope
+ * replayable" — it switched agentic discovery off entirely, so the discovery
+ * path never executed on any run. A hand-maintained list of client repository
+ * names became load-bearing, and the neighbouring config file
+ * (orchestrations/jira/metrolinx.env) documents the exact opposite in its own
+ * header: "Codelines are discovered at runtime ... no JIRA_CODELINES or
+ * JIRA_WORKTREE_* needed here."
  *
- *   synthesize-prd-from-jira.js does `JIRA_CODELINES.split(',')`. A
- *   SPACE-separated value is therefore one codeline whose name happens to
- *   contain spaces — syntactically fine, semantically nonsense.
+ * Standing instruction (2026-08-06): codelines MUST be found agentically via
+ * CodeGraph, never hardcoded. A config file is not an exemption from the
+ * no-hardcoding rule. If discovery picks wrongly, the defect is in the
+ * scorer/discovery agent — pinning hides it.
  *
- *   Each name resolves its repository through
- *   `JIRA_WORKTREE_${codeline.toUpperCase()}`. Names without those mappings
- *   point at nothing.
- *
- * A config file cannot fail a type check, so this test does the checking: it
- * parses the real config with the SAME rules the consumer uses, and requires
- * every declared codeline to resolve to a directory that exists on disk. It is
- * deliberately about the CONSUMER's rules rather than "does the file look
- * right" — the file looked right.
+ * These tests assert the ABSENCE of the pin, and that the mechanism which
+ * consumes it stays gated on emptiness.
  */
-
 import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 
-const CONFIG = join(__dirname, '../../../orchestrations/projects/metrolinx/config.env');
-const SYNTH = join(__dirname, '../../../orchestrations/scripts/synthesize-prd-from-jira.js');
+const REPO_ROOT = join(__dirname, '../../../');
+const PROJECTS_DIR = join(REPO_ROOT, 'orchestrations/projects');
 
-/** Read a shell-style KEY="value" out of the project config. */
-function cfg(key: string): string | undefined {
-  const src = readFileSync(CONFIG, 'utf8');
-  const m = src.match(new RegExp(`^${key}="?([^"\\n]*)"?$`, 'm'));
-  return m ? m[1] : undefined;
+/** Every project config + secrets env file in the repo — no project is exempt. */
+function everyProjectEnvFile(): string[] {
+  const files: string[] = [];
+  for (const p of readdirSync(PROJECTS_DIR, { withFileTypes: true })) {
+    if (!p.isDirectory()) continue;
+    const cfg = join(PROJECTS_DIR, p.name, 'config.env');
+    if (existsSync(cfg)) files.push(cfg);
+  }
+  const jiraDir = join(REPO_ROOT, 'orchestrations/jira');
+  if (existsSync(jiraDir)) {
+    for (const f of readdirSync(jiraDir)) {
+      if (f.endsWith('.env')) files.push(join(jiraDir, f));
+    }
+  }
+  // TRACKED files only. An untracked local .env is a developer's own machine
+  // config for their own project — not something this repo ships, and not
+  // something a test may quietly rewrite. What the engine SHIPS is what this
+  // suite governs. (A local file can still pin codelines and is still a real
+  // hazard, because run-agent-orchestration.sh auto-sources orchestrations/
+  // jira/.env when JIRA_URL is unset — that is reported to the operator, not
+  // silently edited.)
+  const tracked = new Set(
+    execFileSync('git', ['-C', REPO_ROOT, 'ls-files'], { encoding: 'utf8' })
+      .split('\n').filter(Boolean).map((f) => join(REPO_ROOT, f)),
+  );
+  return files.filter((f) => tracked.has(f));
 }
 
-describe('the consumer\'s parsing rules are what the config must satisfy', () => {
-  it('the synthesiser still splits on comma', () => {
-    // If this ever changes, the config's separator must change with it — which
-    // is the point of asserting it here rather than hardcoding "comma" as lore.
-    expect(readFileSync(SYNTH, 'utf8'),
-      'JIRA_CODELINES is no longer comma-split; the pinned scope may now be wrong')
-      .toMatch(/JIRA_CODELINES\.split\(','\)/);
+/** Real assignments only — a commented-out mention is documentation, not a pin. */
+function assignsKey(file: string, key: string): boolean {
+  return readFileSync(file, 'utf8')
+    .split('\n')
+    .some((l) => new RegExp(`^\\s*(export\\s+)?${key}\\s*=`).test(l));
+}
+
+describe('no project pins its codeline scope', () => {
+  const files = everyProjectEnvFile();
+
+  it('finds project env files to check — otherwise this suite proves nothing', () => {
+    expect(files.length, 'no project config.env or jira/*.env found at all').toBeGreaterThan(0);
   });
 
-  it('the synthesiser still resolves paths via JIRA_WORKTREE_<NAME>', () => {
-    expect(readFileSync(SYNTH, 'utf8'))
-      .toMatch(/JIRA_WORKTREE_\$\{codeline\.toUpperCase\(\)\}/);
+  it('NO env file assigns JIRA_CODELINES — that assignment disables discovery', () => {
+    const offenders = files.filter((f) => assignsKey(f, 'JIRA_CODELINES'));
+    expect(
+      offenders.map((f) => f.replace(REPO_ROOT, '')),
+      'JIRA_CODELINES is assigned. ingest-jira-tickets.sh only runs codeline-discovery.js ' +
+        'when it is EMPTY, so this silently switches agentic discovery off.',
+    ).toEqual([]);
+  });
+
+  it('NO env file assigns JIRA_WORKTREE_<NAME> — those are hardcoded client repo paths', () => {
+    const offenders: string[] = [];
+    for (const f of files) {
+      for (const line of readFileSync(f, 'utf8').split('\n')) {
+        if (/^\s*(export\s+)?JIRA_WORKTREE_[A-Z0-9_]+\s*=/.test(line)) {
+          offenders.push(`${f.replace(REPO_ROOT, '')}: ${line.trim().split('=')[0]}`);
+        }
+      }
+    }
+    expect(offenders, 'worktree paths are resolved from discovery, never declared').toEqual([]);
+  });
+
+  it('JIRA_CODELINE_ROOT (the directory discovery SCANS) is still declared — that is the input, not the answer', () => {
+    // Distinguishes the legitimate config value from the banned one: pointing the
+    // discovery agent at a search root is configuration; naming the repos it must
+    // return is the answer, and the agent must produce that itself.
+    const anyRoot = files.some((f) => assignsKey(f, 'JIRA_CODELINE_ROOT'));
+    expect(anyRoot, 'discovery has nothing to scan — it cannot run at all').toBe(true);
   });
 });
 
-describe('metrolinx declares a usable scope', () => {
-  const raw = cfg('JIRA_CODELINES');
+describe('the consumer stays gated on JIRA_CODELINES being empty', () => {
+  const ingest = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/ingest-jira-tickets.sh'), 'utf8');
 
-  it('pins the scope at all', () => {
-    expect(raw, 'JIRA_CODELINES is unset — discovery decides scope again, and it flip-flopped on c365')
-      .toBeTruthy();
+  it('discovery runs only when JIRA_CODELINES is empty — the gate that made the pin lethal', () => {
+    expect(
+      ingest,
+      'if this gate is removed or inverted, a future pin would no longer disable discovery ' +
+        'and this whole suite would stop meaning anything',
+    ).toMatch(/-z\s+"\$\{JIRA_CODELINES:-\}"/);
   });
 
-  it('parses to three distinct codelines under the consumer\'s own rule', () => {
-    const names = (raw || '').split(',').map((s) => s.trim()).filter(Boolean);
-    expect(names,
-      `parsed as ${names.length} codeline(s): ${JSON.stringify(names)} — a space-separated ` +
-      'value yields ONE codeline whose name contains spaces, which is how the ' +
-      'first pin produced a single bogus lane')
-      .toEqual(['gotransit', 'upexpress', 'metrolinx']);
-  });
-
-  it('gives every codeline a worktree path that exists', () => {
-    const names = (raw || '').split(',').map((s) => s.trim()).filter(Boolean);
-    for (const n of names) {
-      const key = `JIRA_WORKTREE_${n.toUpperCase()}`;
-      const path = cfg(key);
-      expect(path, `${n} has no ${key} — it resolves to no repository`).toBeTruthy();
-      expect(existsSync(path!), `${key} points at a missing directory: ${path}`).toBe(true);
-    }
-  });
-
-  it('does not include c365', () => {
-    // Inspected 2026-07-29: a .NET CRM integration with zero live-preview code
-    // and no node_modules. Discovery asserted the opposite once out of five runs
-    // on a scorer tie it labels "CLOSE — genuine ambiguity".
-    expect((raw || '').toLowerCase()).not.toContain('c365');
+  it('discovery is invoked at all', () => {
+    expect(ingest).toMatch(/codeline-discovery\.js/);
   });
 });

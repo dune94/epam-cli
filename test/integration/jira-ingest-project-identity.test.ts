@@ -138,6 +138,19 @@ describe('the synthesized PRD carries the running project\'s identity', () => {
     expect(r.prd.project?.name).toBe('explicit-choice');
   }, 150000);
 
+  it('THE BUG, fixed 2026-08-06: an unestimated real ticket gets effort:"medium" through the full real ingest, never a fabricated "low"', () => {
+    // The mock ticket (like the real AMSD-2041) declares no story-point estimate at all.
+    // Number(undefined) is NaN, NaN || 0 was 0, and an ungroomed ticket landed in the same
+    // effort bucket as a verified-trivial one-line fix — through the REAL ac-gate ->
+    // synthesize-prd-from-jira.js path, not a unit in isolation.
+    const r = runIngest({ port, projectConfigDir: projectConfig('unestimated-effort') });
+    expect(r.status, `ingest failed:\n${r.log.slice(-1500)}`).toBe(0);
+    expect(
+      r.prd.stories[0]?.effort,
+      'an unestimated ticket must default to the neutral bucket, not a fabricated cheap one',
+    ).toBe('medium');
+  }, 150000);
+
   it('no LLM was called — the brownfield-without-ACs path must stay free', () => {
     const r = runIngest({ port, projectConfigDir: projectConfig('no-spend') });
     // The codeline-only path DOES emit a verdict line — it says the AC work was skipped.

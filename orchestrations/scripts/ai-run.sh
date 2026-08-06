@@ -18,6 +18,7 @@ INVOKE_PYTHON="${INVOKE_PYTHON:-$_SCRIPT_DIR_AIRUN/.venv/bin/python3}"
 
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
+. "$_SCRIPT_DIR_AIRUN/lib/story-retry-state.sh"
 # Delegates to lib/env-file.sh: loading configuration must not EXECUTE it. This function
 # used to `. "$env_file"`, and a bare `cd` on line 1 of the repo's .env sent this script —
 # the agent invoker — to $HOME every time it started.
@@ -296,6 +297,49 @@ fi
 # It must never become a new way to fail: if the planning call produces nothing,
 # the execute call runs exactly as it does today.
 _plan_text=""
+# The project's ladder. Shared here rather than copied a fourth time.
+# Defined THIS early (ahead of the plan-pass block below) because the
+# cross-process ladder-resume seed right after it must take effect BEFORE the
+# plan pass fires — the plan pass recurses into `bash "$0" --model
+# "$AI_MODEL"`, so if AI_MODEL were resumed only later, the plan-pass
+# sub-call would still use the un-resumed base model on every invocation.
+_ai_ladder_next_model() {
+  local _m="$1" _map="${EPAM_MODEL_LADDER_HIGH:-${EPAM_MODEL_LADDER:-}}" _pair
+  [ -z "$_map" ] && return 0
+  IFS='|' read -ra _pairs <<< "$_map"
+  for _pair in "${_pairs[@]}"; do
+    case "$_pair" in "${_m}="*) echo "${_pair#*=}"; return 0 ;; esac
+  done
+}
+
+# Cross-process ladder resume (backlog: "retries must proceed up the rungs,
+# nothing is allowed to intercede" — generalized from claude.sh's writer-only
+# fix to every agent, since ai-run.sh is the ONE seam all of them pass
+# through). A caller that re-invokes ai-run.sh for the SAME agent+story after
+# THIS process exits (whether from its own exhausted attempts, or an outer
+# reviewer rejecting a technically-successful call — see
+# advance_ladder_escalation) must not silently restart at the base model.
+# Only active when LOG_DIR is set (every real orchestration run sets it; a
+# standalone/manual invocation with no LOG_DIR behaves exactly as before).
+# Skipped entirely for a plan-pass sub-invocation (the flag this script sets
+# on its own recursive planning call, further below) —
+# it inherits AI_MODEL from its already-resumed parent via --model, and has
+# no ladder state of its own to resume (its key would be the parent's
+# key+":plan", which the parent never advances).
+_ai_ladder_key="$(ai_ladder_state_key "${EPAM_AGENT_NAME:-agent}" "${EPAM_STORY_ID:-global}")"
+_ai_ladder_progress=0
+if [ -n "${LOG_DIR:-}" ] && [ "${_EPAM_IN_PLAN_PASS:-0}" != "1" ]; then
+  _ai_ladder_progress="$(read_story_retry_count "$LOG_DIR" "$_ai_ladder_key")"
+  if [ "${_ai_ladder_progress:-0}" -gt 0 ] 2>/dev/null; then
+    echo "[ai-run] '${EPAM_AGENT_NAME:-agent}' resuming ladder at escalation ${_ai_ladder_progress} (persisted from an earlier invocation)" >&2
+    for _ai_replay in $(seq 1 "$_ai_ladder_progress"); do
+      _ai_next="$(_ai_ladder_next_model "${AI_MODEL:-}")"
+      [ -n "$_ai_next" ] && AI_MODEL="$_ai_next"
+    done
+    export AI_MODEL
+  fi
+fi
+
 _plan_cost_json=""
 if [ "${EPAM_PLAN_EXECUTE:-1}" = "1" ] && [ "${_EPAM_IN_PLAN_PASS:-0}" != "1" ]; then
   _plan_file="$(mktemp)"
@@ -308,7 +352,13 @@ if [ "${EPAM_PLAN_EXECUTE:-1}" = "1" ] && [ "${_EPAM_IN_PLAN_PASS:-0}" != "1" ];
     printf 'know if you are wrong. If the task above sets a requirement your\n'
     printf 'answer must satisfy, say in one line how your plan satisfies it.\n\n'
     printf 'Do NOT produce the final answer yet. Do NOT emit the output format\n'
-    printf 'the task asks for. Plain prose, at most 200 words.\n'
+    printf 'the task asks for. Plain prose, at most 200 words.\n\n'
+    printf 'You have NO tools available for THIS plan and cannot call any — do not\n'
+    printf 'emit tool-call syntax (<tool_call>, <tool_use>, <function_call>) or\n'
+    printf 'invent what a tool would return. Nothing executes it, so any such text\n'
+    printf 'is fiction, not evidence — state your INTENT to examine a target, not a\n'
+    printf 'fabricated result from having done so. If tools are available for the\n'
+    printf 'answer that follows this plan, you will use them for real then.\n'
   } > "$_plan_file"
 
   _plan_json=""
@@ -428,15 +478,8 @@ _merge_plan_cost() {
 #              now (explicitly by the caller, or derived from /proc above), so
 #              every agent accumulates its own KB.
 
-# The project's ladder. Shared here rather than copied a fourth time.
-_ai_ladder_next_model() {
-  local _m="$1" _map="${EPAM_MODEL_LADDER_HIGH:-${EPAM_MODEL_LADDER:-}}" _pair
-  [ -z "$_map" ] && return 0
-  IFS='|' read -ra _pairs <<< "$_map"
-  for _pair in "${_pairs[@]}"; do
-    case "$_pair" in "${_m}="*) echo "${_pair#*=}"; return 0 ;; esac
-  done
-}
+# (_ai_ladder_next_model is defined earlier, ahead of the plan-pass block —
+# see that definition's docstring for why.)
 
 # Self-heal is best-effort: a missing or broken KB must never take a model call
 # down with it, which is why every hook is guarded and `|| true`.
@@ -510,6 +553,10 @@ if [ "$_call_attempt" -gt 1 ]; then
   if [ -n "$_ai_next" ] && [ "$_ai_next" != "${AI_MODEL:-}" ]; then
     echo "[ai-run] attempt ${_call_attempt}/${_ai_max_attempts} for '${EPAM_AGENT_NAME:-agent}' — escalating ${AI_MODEL} -> ${_ai_next}" >&2
     AI_MODEL="$_ai_next"; export AI_MODEL
+    if [ -n "${LOG_DIR:-}" ]; then
+      _ai_ladder_progress=$((_ai_ladder_progress + 1))
+      write_story_retry_count "$LOG_DIR" "$_ai_ladder_key" "$_ai_ladder_progress"
+    fi
   else
     echo "[ai-run] attempt ${_call_attempt}/${_ai_max_attempts} for '${EPAM_AGENT_NAME:-agent}' — no further ladder rung, retrying on ${AI_MODEL:-default}" >&2
   fi

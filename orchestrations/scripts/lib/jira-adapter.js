@@ -29,11 +29,47 @@
 
 // ── Effort mapping from story points ──────────────────────────────────────
 
+// pointsToEffort(points) — maps a Jira story-point estimate to a coarse effort bucket.
+//
+// `Number(points) || 0` used to treat a genuinely UNESTIMATED ticket (points === undefined,
+// because the ticket was never groomed) identically to a verified 0-point ticket — both
+// collapsed to the same 'low' bucket. Live 2026-08-05 (AMSD-2041: title-only, blank
+// description, zero acceptance criteria — never groomed) that put a story the detective
+// itself found touches a shared React context consumed by 30+ components into the cheapest
+// effort bucket, same as a trivial one-line fix. Absence of an estimate is not evidence the
+// work is small; it is evidence nobody looked. Callers get `undefined` back for "no real
+// estimate" and are expected to fall back to a neutral default (synthesize-prd-from-jira.js
+// already does `tmpl.effort || c.effort || 'medium'`) rather than trust a fabricated number.
 function pointsToEffort(points) {
-  const p = Number(points) || 0;
+  if (points === undefined || points === null || points === '') return undefined;
+  const p = Number(points);
+  if (Number.isNaN(p)) return undefined;
   if (p <= 2) return 'low';
   if (p <= 5) return 'medium';
   return 'high';
+}
+
+// sizeLabelToEffort(labels) — a Jira LABEL-derived t-shirt-size signal, consulted when a
+// ticket carries no story-point estimate at all rather than falling straight to a neutral
+// default. Matches the same label-prefix convention this file already uses for codeline
+// ("codeline-metrolinx") and urgency ("urgent") labels — a real grooming signal a human
+// actually set on the ticket, preferred over a value nobody chose. Recognizes "size-<x>"
+// and "t-shirt-<x>" / "tshirt-<x>" prefixes (S/M/L/XL and their spelled-out forms);
+// unrecognized or absent labels return undefined so the neutral 'medium' default still
+// applies — this never invents a size that was not actually set.
+const SIZE_TO_EFFORT = {
+  xs: 'low', s: 'low', small: 'low',
+  m: 'medium', medium: 'medium',
+  l: 'high', large: 'high', xl: 'high', xxl: 'high',
+};
+function sizeLabelToEffort(labels) {
+  if (!Array.isArray(labels)) return undefined;
+  for (const raw of labels) {
+    const label = (typeof raw === 'string' ? raw : (raw && raw.name) || '').toLowerCase();
+    const match = label.match(/^(?:size|t-?shirt)[-:]\s*(xs|xxl|xl|s|m|l|small|medium|large)$/);
+    if (match && SIZE_TO_EFFORT[match[1]]) return SIZE_TO_EFFORT[match[1]];
+  }
+  return undefined;
 }
 
 // ── Status mapping from Jira status category ──────────────────────────────
@@ -105,8 +141,10 @@ function adapt(payload) {
   const description = fields.description || '';
   const status      = (fields.status && fields.status.name) || 'To Do';
   const labels      = Array.isArray(fields.labels) ? fields.labels : [];
-  const points      = fields.story_points || fields.customfield_10016 ||
-                      fields.storyPoints || 0;
+  // No `|| 0` default here — an absent estimate must reach pointsToEffort as absent,
+  // not as a fabricated verified-zero. See pointsToEffort's own comment.
+  const points      = fields.story_points ?? fields.customfield_10016 ??
+                      fields.storyPoints ?? undefined;
   const epicLink    = fields.epic || fields['customfield_10014'] ||
                       (fields.parent && fields.parent.key) || null;
   const issueType   = (fields.issuetype && fields.issuetype.name) || 'Story';
@@ -134,7 +172,10 @@ function adapt(payload) {
     title:              summary,
     description:        descText.slice(0, 2000),
     acceptanceCriteria: extractAC(descText, fields),
-    effort:             pointsToEffort(points),
+    // Story points, then a t-shirt-size label if a human actually set one, then the
+    // same neutral fallback synthesize-prd-from-jira.js's ingest path already uses.
+    // Never a fabricated 'low' from an unestimated ticket.
+    effort:             pointsToEffort(points) || sizeLabelToEffort(labels) || 'medium',
     status:             mapStatus(status),
     urgent:             labels.some(l => (typeof l === 'string' ? l : l.name || '').toLowerCase() === 'urgent'),
     agentRole,
@@ -143,4 +184,4 @@ function adapt(payload) {
   };
 }
 
-module.exports = { adapt, pointsToEffort, mapStatus, extractAC };
+module.exports = { adapt, pointsToEffort, sizeLabelToEffort, mapStatus, extractAC };

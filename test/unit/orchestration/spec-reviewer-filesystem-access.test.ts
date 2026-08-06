@@ -179,8 +179,13 @@ describe('the reviewer is told to answer now, with the evidence it was given', (
   });
 
   it('it forbids deferring the verdict — the exact live failure', () => {
+    // 2026-08-06: the block no longer claims "NO tools", because the spec agents
+    // now genuinely have them (the original defect was a tool LIST granted without
+    // AI_GATE_ALLOW_TOOLS, plus a spawn with no cwd, so tools were advertised and
+    // never worked). What must survive is the property this test was written for:
+    // the verdict lands in THIS reply and is never deferred to a turn that never comes.
     expect(block).toMatch(/ANSWER IN THIS RESPONSE/);
-    expect(block).toMatch(/no later turn|NO tools/i);
+    expect(block).toMatch(/no follow-up turn|answer later|discarded/i);
   });
 
   it('it does NOT ask for tool calls, which nothing would execute', () => {

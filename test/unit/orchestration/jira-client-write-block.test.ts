@@ -64,8 +64,11 @@ describe('jira-client.js — write functions do not exist (not blocked — absen
   it('the exported API surface is exactly the read-only set — nothing else', () => {
     const jira = loadFreshJiraClient(ENV);
     const exported = Object.keys(jira).sort();
+    // normalizeIssue added 2026-08-06: a pure transform (Jira issue -> PRD story shape,
+    // no I/O), exported so its effort-field logic can be tested directly rather than only
+    // indirectly through an HTTP-mocked call — the effort bug went unnoticed that way once.
     expect(exported).toEqual(
-      ['CONFIGURED', 'getBoardIssues', 'getIssue', 'getProjectIssues', 'searchIssues'].sort()
+      ['CONFIGURED', 'getBoardIssues', 'getIssue', 'getProjectIssues', 'normalizeIssue', 'searchIssues'].sort()
     );
   });
 

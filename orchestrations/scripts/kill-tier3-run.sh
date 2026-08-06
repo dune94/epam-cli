@@ -40,8 +40,22 @@ set -uo pipefail
 MAX_ROUNDS="${KILL_TIER3_MAX_ROUNDS:-5}"
 did_something=0
 
-# EVERY process that can outlive the process-group kill must appear here.
-orphan_pattern='orchestrations/scripts/tier3-travel-app-run\.sh|orchestrations/scripts/tier3-metrolinx-run\.sh|orchestrations/scripts/tier3-skyscanner-app-run\.sh|orchestrations/scripts/tier3-mock-run\.sh|orchestrations/scripts/tier3-paid-run\.sh|orchestrations/scripts/orchestrate\.sh|orchestrations/scripts/run-agent-orchestration\.sh|orchestrations/scripts/spec-mode-runner\.js|orchestrations/scripts/ai-run\.sh|orchestrations/scripts/claude\.sh|orchestrations/scripts/brownfield-repro-test-writer\.sh|orchestrations/scripts/team-lead-review\.sh|orchestrations/scripts/post-impl-tc-writer\.sh|orchestrations/scripts/agent-attempt-analyst\.sh|epam run --provider|epam\.js run --provider'
+# EVERY process that can outlive the process-group kill must be matched here.
+#
+# The per-project LAUNCHERS are discovered from disk, never listed: naming them meant a
+# client's project name sat in engine source, and a new project silently would not be
+# killed until someone remembered to add it. Whatever tier3-*-run.sh / mock*-run.sh files
+# exist ARE the launchers.
+# Resolved here: this script defines no SCRIPT_DIR of its own, and an unset variable would
+# make the glob below match nothing — the kill would silently stop finding launchers.
+_KILL_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_launchers=""
+for _l in "$_KILL_SCRIPT_DIR"/tier[0-9]*-*-run.sh "$_KILL_SCRIPT_DIR"/mock*run.sh; do
+  [ -f "$_l" ] || continue
+  _launchers="${_launchers}orchestrations/scripts/$(basename "$_l" | sed 's/\./\\./g')|"
+done
+# The engine's own long-lived processes are structural, not project-specific.
+orphan_pattern="${_launchers}orchestrations/scripts/orchestrate\.sh|orchestrations/scripts/run-agent-orchestration\.sh|orchestrations/scripts/spec-mode-runner\.js|orchestrations/scripts/ai-run\.sh|orchestrations/scripts/claude\.sh|orchestrations/scripts/brownfield-repro-test-writer\.sh|orchestrations/scripts/team-lead-review\.sh|orchestrations/scripts/post-impl-tc-writer\.sh|orchestrations/scripts/agent-attempt-analyst\.sh|epam run --provider|epam\.js run --provider"
 
 # Our own process group. Group-killing this would take down whatever invoked us —
 # a terminal, a CI step, or the test runner. Found immediately after B32 landed:

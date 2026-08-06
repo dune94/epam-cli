@@ -17,7 +17,7 @@
  *   node codeline-discovery.js --issues <path> --root <dir> --out <path> [--dry-run]
  *
  * Output JSON (written to --out):
- *   { "codelines": [{ "name": "cdts", "path": "/abs/path", "reason": "..." }] }
+ *   { "codelines": [{ "name": "<identifier>", "path": "/abs/path", "reason": "..." }] }
  *
  * Env vars consumed:
  *   ORCH_GATE_MODEL   — LLM model for classification (falls back to EPAM_MODEL)
@@ -494,9 +494,10 @@ Rules:
 Output format (strict JSON, no markdown fences, no preamble, no trailing text):
 {
   "codelines": [
-    { "name": "cdts", "path": "/absolute/path/to/repo",
+    { "name": "<short-identifier-derived-from-the-directory-name>",
+      "path": "/absolute/path/to/repo",
       "reason": "what part of the ticket this repo covers",
-      "evidence": "ticket component \\"GO\\"" }
+      "evidence": "ticket component \\"<the-component-verbatim>\\"" }
   ],
   "unsure": [
     { "part": "the part of the ticket you could not place",

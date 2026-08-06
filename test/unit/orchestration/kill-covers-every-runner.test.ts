@@ -22,6 +22,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 
 const SCRIPTS = join(__dirname, '../../../orchestrations/scripts');
@@ -61,8 +62,37 @@ describe('kill-tier3-run.sh — covers every runner', () => {
     expect(wrong, 'pid file does not match its runner (copy-paste)').toEqual([]);
   });
 
-  it('the orphan sweep pattern names every tier3 runner', () => {
-    const missing = runners.filter(r => !killSrc.includes(r.replace(/\./g, '\\.')));
-    expect(missing, 'these runners survive a kill and keep relaunching phases').toEqual([]);
+  /**
+   * 2026-08-06: the sweep pattern no longer LISTS the runners — a hardcoded list put a
+   * client's project name into engine source, and a new project silently went unswept
+   * until someone remembered to add it. The launchers are now discovered from disk.
+   *
+   * So this asserts the PROPERTY rather than the text: build the pattern the way the
+   * script does, and require that it matches every runner actually present. A list in the
+   * source would satisfy the old assertion while missing a runner added yesterday; this
+   * one cannot.
+   */
+  it('the orphan sweep pattern MATCHES every runner present on disk', () => {
+    const built = execFileSync('bash', ['-c', `
+      _KILL_SCRIPT_DIR=${JSON.stringify(SCRIPTS)}
+      _launchers=""
+      for _l in "$_KILL_SCRIPT_DIR"/tier[0-9]*-*-run.sh "$_KILL_SCRIPT_DIR"/mock*run.sh; do
+        [ -f "$_l" ] || continue
+        _launchers="\${_launchers}orchestrations/scripts/$(basename "$_l" | sed 's/\\./\\\\./g')|"
+      done
+      printf '%s' "$_launchers"
+    `], { encoding: 'utf8' });
+
+    const unmatched = runners.filter((r) => !new RegExp(built.replace(/\|$/, '')).test(`orchestrations/scripts/${r}`));
+    expect(unmatched, 'these runners survive a kill and keep relaunching phases').toEqual([]);
+  });
+
+  it('the pattern is DERIVED, not written down — no runner is named in the source', () => {
+    const named = runners.filter((r) => killSrc.includes(r));
+    expect(
+      named,
+      'a hardcoded runner list puts a project name in engine source and silently misses ' +
+        'any launcher added later',
+    ).toEqual([]);
   });
 });

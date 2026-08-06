@@ -74,6 +74,8 @@ const TAG_TO_TOOL = {
   // answer must be schema-bound: a prose reply leaves the guard with nothing to
   // apply, and an unvalidated one puts arbitrary text into an enforcement path.
   GUARD_VOCABULARY: { tool: 'TOOL_GUARD_VOCABULARY', itemsKey: null },
+  // Ticket links enter an EVIDENCE path — a prose answer cannot be persisted or acted on.
+  TICKET_LINKS: { tool: 'TOOL_TICKET_LINKS', itemsKey: 'links' },
 };
 
 // Lazy + cached: this module is required BY spec-mode-runner.js, so the require must not

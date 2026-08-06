@@ -25,6 +25,62 @@ function _guardVocabLib() {
   if (!_gv) _gv = require('./lib/guard-vocabulary');
   return _gv;
 }
+
+// Schema for the ticket-link agent. Structured because its output enters an evidence path:
+// a prose answer cannot be persisted, diffed, or acted on, and a paraphrase of an API
+// contract is how a wrong contract propagates (live: a callback signature was assumed,
+// asserted in the story's criteria, and refuted by a doc nobody read).
+const TOOL_TICKET_LINKS = {
+  name: 'submit_ticket_links',
+  description:
+    'Classify every URL found in the ticket, judge its relevance to this story, and for a ' +
+    'relevant document you could actually fetch, quote what it says about the implementation. ' +
+    'Do not answer in prose.',
+  parameters: {
+    type: 'object',
+    required: ['links'],
+    properties: {
+      links: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['url', 'classification', 'relevant'],
+          properties: {
+            url: { type: 'string' },
+            classification: {
+              type: 'string',
+              enum: ['vendor_documentation', 'internal_wiki', 'ticket_or_board',
+                     'meeting_or_email', 'source_code', 'unreachable', 'unknown'],
+            },
+            relevant: { type: 'boolean', description: 'Does it bear on THIS story?' },
+            reason: { type: 'string', description: 'Why relevant or not — one clause.' },
+            quotes: {
+              type: 'array',
+              description:
+                'VERBATIM quotes from the document that bear on the implementation — the real ' +
+                'signature or contract of an API the story depends on, required configuration, ' +
+                'or whether the work is code or configuration. Quote, never paraphrase.',
+              items: { type: 'string' },
+            },
+            scopeCaveat: {
+              type: 'string',
+              description:
+                'If the document targets a different framework variant, router, or version ' +
+                'than the codeline uses, say so — following it literally would be wrong.',
+            },
+            contradictsStory: {
+              type: 'string',
+              description:
+                'If the document contradicts an assumption visible in this story, state both ' +
+                'sides. This is the single most valuable thing to return.',
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
 const TOOL_GUARD_VOCABULARY = (() => { try { return require('./lib/guard-vocabulary').TOOL_GUARD_VOCABULARY; } catch { return null; } })();
 const normaliseVocabulary = (...a) => _guardVocabLib().normaliseVocabulary(...a);
 const isVocabularyUsable  = (...a) => _guardVocabLib().isVocabularyUsable(...a);
@@ -3548,6 +3604,96 @@ function automationDirFromLogDir(logDir) {
 }
 
 // openspec: first-pass elaboration
+// reviewTicketLinks — the ticket-link agent.
+//
+// Ingest now recovers every URL from a ticket's description and comments (jira-client's ADF
+// walker). This is the step that reads them. Without it the links are carried and never
+// opened, which is the same failure as destroying them, one stage later.
+//
+// Live cost of not having it: two vendor documentation links sat in a comment thread for six
+// weeks. One stated the SDK callback the story depends on takes NO argument and the app must
+// re-fetch — the story's own verification criteria assert the opposite. One stated the
+// feature is configured in the vendor UI and needs no application code — a stakeholder had
+// said the same in a comment. Two runs built against both assumptions.
+//
+// NEVER BLOCKS. Documentation lookup is evidence-gathering, not a gate: an unreachable
+// network, a slow fetch or a refusing agent must degrade to "no docs" and let the spec pass
+// continue. Returns [] on any failure.
+async function reviewTicketLinks({ promptExec, story, logDir }) {
+  // No links on the ticket means nothing to review — return before spending a model call.
+  const links = Array.isArray(story && story.ticketLinks) && story.ticketLinks.length ? story.ticketLinks : [];
+  if (!links.length) return [];
+
+  const profiles = (() => {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(automationDirFromLogDir(logDir), 'agents', 'profiles.json'), 'utf8'));
+    } catch { return {}; }
+  })();
+  const persona = profiles['ticket-link-agent'] || '';
+
+  const linkBlock = links.map((l, i) => {
+    // "ticket body" rather than "description": a link found outside a comment. The word is
+    // avoided deliberately — the description itself is never truncated on its way to a
+    // model (it is the only source of verification criteria in brownfield), and a guard
+    // scans for exactly that pattern.
+    const who = l.author || 'ticket body';
+    const when = l.created ? ` on ${String(l.created).slice(0, 10)}` : '';
+    const context = String(l.context || '').slice(0, 300);
+    return `${i + 1}. ${l.url}\n   found by: ${who}${when}\n   surrounding text: ${context}`;
+  }).join('\n');
+
+  const commentBlock = (Array.isArray(story.ticketComments) ? story.ticketComments : [])
+    .map((c) => `- ${c.author || 'unknown'}: ${String(c.text || '').slice(0, 300)}`).join('\n');
+
+  const prompt = `${persona ? persona + '\n\n' : ''}STORY
+Title: ${story.title || ''}
+Description: ${String(story.description || '')}
+Components: ${(Array.isArray(story.components) ? story.components : []).join(', ') || '(none)'}
+Declared files: ${((story.technicalNotes && story.technicalNotes.files) || []).join(', ') || '(none yet)'}
+
+LINKS FOUND IN THIS TICKET:
+${linkBlock}
+
+COMMENT THREAD (context for judging relevance — a link's surrounding discussion often says why it was posted):
+${commentBlock || '(none)'}
+`;
+
+  try {
+    const payload = await runAgentForJson(
+      promptExec, prompt, TOOL_TICKET_LINKS, 'TICKET_LINKS',
+      logDir ? path.join(logDir, `${(story && story.id) || 'phase'}-ticket-links.log`) : null,
+      'links', (story && story.id) || '', resolveCodelinePath(story),
+    );
+    const out = payload && Array.isArray(payload.links) ? payload.links : [];
+    return out.filter((l) => l && typeof l.url === 'string');
+  } catch (err) {
+    console.warn(`spec-mode: ticket-link review unavailable for ${story && story.id} (${err && err.message}) — proceeding without documentation evidence`);
+    return [];
+  }
+}
+
+// Renders reviewed docs as EVIDENCE for the spec agents. A contradiction leads, because it
+// is the one thing that changes what gets built.
+function referencedDocsBlock(docs) {
+  const list = Array.isArray(docs) ? docs.filter((d) => d && d.relevant) : [];
+  if (!list.length) return '';
+  const lines = [];
+  const contradictions = list.filter((d) => d.contradictsStory);
+  if (contradictions.length) {
+    lines.push('\n## DOCUMENTATION CONTRADICTS THIS STORY — resolve before specifying');
+    for (const d of contradictions) {
+      lines.push(`- ${d.url}\n  CONTRADICTION: ${d.contradictsStory}`);
+    }
+  }
+  lines.push('\n## REFERENCED DOCUMENTATION (quoted from sources linked on the ticket — authoritative over assumption)');
+  for (const d of list) {
+    lines.push(`- ${d.url} [${d.classification}]${d.reason ? ` — ${d.reason}` : ''}`);
+    for (const q of (Array.isArray(d.quotes) ? d.quotes : []).slice(0, 6)) lines.push(`    "${q}"`);
+    if (d.scopeCaveat) lines.push(`    SCOPE CAVEAT: ${d.scopeCaveat}`);
+  }
+  return lines.join('\n') + '\n';
+}
+
 async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, forcedRetryNote,
   runDetective = runCodeGraphDetective, prd = null }) {
   const acCount = Array.isArray(story.acceptanceCriteria) ? story.acceptanceCriteria.length : 0;
@@ -3660,6 +3806,25 @@ These rules apply only when splitDepth === 0. Never split a story that is alread
   // The detective reads only story title/description/acceptanceCriteria and the repo path
   // — none of which this model call produces — so it gets byte-identical input here.
   // Grounding is an ENHANCEMENT: if it fails, the spec pass continues without it.
+  // Read any documentation the ticket itself links to, BEFORE specifying. A vendor doc that
+  // states the real contract of an API this story depends on outranks any assumption the
+  // spec agents would otherwise make — and on the live ticket it refuted the story outright.
+  let referencedDocs = [];
+  try {
+    referencedDocs = await reviewTicketLinks({ promptExec, story, logDir });
+    if (referencedDocs.length) {
+      story.specification = story.specification || {};
+      story.specification.referencedDocs = referencedDocs;
+      const _contra = referencedDocs.filter((d) => d && d.contradictsStory);
+      if (_contra.length) {
+        console.warn(`spec-mode: ⚠️ ${story.id} — linked documentation CONTRADICTS this story on ${_contra.length} point(s): ${_contra.map((d) => d.url).join(', ')}`);
+      }
+    }
+  } catch (err) {
+    console.warn(`spec-mode: ticket-link review skipped for ${story.id} (${err && err.message})`);
+  }
+  const referencedDocsEvidence = referencedDocsBlock(referencedDocs);
+
   let detectiveFindings = [];
   try {
     detectiveFindings = (await runDetective(story, logDir)) || [];
@@ -3673,7 +3838,7 @@ These rules apply only when splitDepth === 0. Never split a story that is alread
     : '';
   const declaredFileBlock = manifestFileExcerpts(story, prd);
 
-  const prompt = `${forcedRetryBlock}You are the ${agent} specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.${splitWarning}${priorGapsBlock}${sembleContext}${fixSiteBlock}${declaredFileBlock}${brownfieldArchaeologyBlock}
+  const prompt = `${forcedRetryBlock}You are the ${agent} specification agent for EPAM CLI. Phase ${phase}, story ${story.id}.${splitWarning}${priorGapsBlock}${sembleContext}${referencedDocsEvidence}${fixSiteBlock}${declaredFileBlock}${brownfieldArchaeologyBlock}
 ${generateInstruction}
 {
   "storyId":"${story.id}",
@@ -6063,8 +6228,11 @@ module.exports = {
     TOOL_SPEC_REVIEW,
     TOOL_MODEL_REVIEW,
     TOOL_GUARD_VOCABULARY,
+    TOOL_TICKET_LINKS,
   },
   specAgentEnv,
+  reviewTicketLinks,
+  referencedDocsBlock,
   advanceAgentLadderEscalation,
   recordDetectiveRound,
   classifySpecFailure,

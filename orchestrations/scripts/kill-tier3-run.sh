@@ -162,6 +162,30 @@ if [ -n "$remaining" ]; then
   exit 1
 fi
 
+# ── Give the operator their repositories back ────────────────────────────────
+#
+# The write perimeter chmods a codeline's tracked files read-only at run start
+# (lib/codeline-write-perimeter.sh) and reopens them only once a story branch exists.
+# Nothing unlocked on kill — so stopping a run left the operator unable to edit their own
+# source. Found live: one kill left 6,027 files across three codelines read-only.
+#
+# The codeline root comes from whatever project config is loaded; there is no list of
+# codelines here, and no project name. Best-effort by design: a kill must never fail
+# because a chmod did.
+_perim_lib="$_KILL_SCRIPT_DIR/lib/codeline-write-perimeter.sh"
+if [ -f "$_perim_lib" ] && [ -n "${JIRA_CODELINE_ROOT:-}" ] && [ -d "${JIRA_CODELINE_ROOT}" ]; then
+  # shellcheck source=lib/codeline-write-perimeter.sh
+  . "$_perim_lib" 2>/dev/null || true
+  if command -v perimeter_unlock >/dev/null 2>&1; then
+    _unlocked=0
+    for _cl in "$JIRA_CODELINE_ROOT"/*/; do
+      [ -e "${_cl}.git" ] || continue
+      perimeter_unlock "${_cl%/}" >/dev/null 2>&1 && _unlocked=$((_unlocked + 1))
+    done
+    [ "$_unlocked" -gt 0 ] && echo "[kill-tier3] Released the write perimeter on $_unlocked codeline(s) — your source is editable again."
+  fi
+fi
+
 if [ "$did_something" -eq 1 ]; then
   echo "[kill-tier3] ✓ Done — verified no orchestration processes remain."
 else

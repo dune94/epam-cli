@@ -1082,7 +1082,11 @@ function _validatedOrNull(parsed, tag) {
   return v.fatal ? null : parsed;
 }
 
-async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey, storyId = '', repoPath = '') {
+async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey, storyId = '', repoPath = '', envOverride = null) {
+  // envOverride: per-agent tool grant. Most spec-mode agents share specAgentEnv's
+  // read-only set; an agent with a different need (the ticket-link agent must FETCH a
+  // document, not just read the repo) supplies its own here rather than widening the
+  // shared grant for everyone.
   const provider = (process.env.AI_PROVIDER || process.env.EPAM_ORCHESTRATION_PROVIDER || '').toLowerCase();
   const ladderProvider = (process.env.SPEC_PASS_LADDER_PROVIDER || 'qwen').toLowerCase();
 
@@ -1108,7 +1112,7 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     // Spec-mode responses are large JSON blobs — use a higher output-token budget
     // than the implementation default (4096) so speckit never truncates mid-JSON.
     // SPEC_MODE_MAX_OUTPUT_TOKENS is spec-only; it doesn't affect implementation runs.
-    const specEnv = specAgentEnv(process.env, repoPath);
+    const specEnv = Object.assign(specAgentEnv(process.env, repoPath), envOverride || {});
     const output = await runClaude(directExec, prompt, logPath, specEnv, { costAgent: tag, costStoryId: storyId });
     return _validatedOrNull(extractTaggedJson(output, tag), tag);
   }
@@ -3658,11 +3662,28 @@ COMMENT THREAD (context for judging relevance — a link's surrounding discussio
 ${commentBlock || '(none)'}
 `;
 
+  // THE AGENT MUST BE ABLE TO OPEN THE LINK.
+  //
+  // Its schema has a `quotes` field — verbatim extracts from the document, the entire point
+  // of this step, because a paraphrase of an API contract is how a wrong contract
+  // propagates. With only read_file/list_files/search it could classify a URL from its
+  // address and the surrounding comment and nothing more, so `quotes` could never be
+  // populated and the documentation still did not inform the pipeline.
+  //
+  // fetch_url is the read-only network tool (src/tools/builtin/FetchUrl.ts). Granting a
+  // tool LIST without AI_GATE_ALLOW_TOOLS silently runs --no-tools, so both are set.
+  // Configurable per project; a project that forbids outbound HTTP sets it to the
+  // read-only subset and the agent degrades to classification, which is still useful.
+  const _linkTools = {
+    AI_GATE_ALLOW_TOOLS: process.env.TICKET_LINK_ALLOW_TOOLS || '1',
+    EPAM_ALLOWED_TOOLS: process.env.TICKET_LINK_ALLOWED_TOOLS || 'fetch_url,read_file,list_files,search',
+    EPAM_MAX_TOOL_CALLS: process.env.TICKET_LINK_MAX_TOOL_CALLS || String(Math.min(links.length + 2, 12)),
+  };
   try {
     const payload = await runAgentForJson(
       promptExec, prompt, TOOL_TICKET_LINKS, 'TICKET_LINKS',
       logDir ? path.join(logDir, `${(story && story.id) || 'phase'}-ticket-links.log`) : null,
-      'links', (story && story.id) || '', resolveCodelinePath(story),
+      'links', (story && story.id) || '', resolveCodelinePath(story), _linkTools,
     );
     const out = payload && Array.isArray(payload.links) ? payload.links : [];
     return out.filter((l) => l && typeof l.url === 'string');

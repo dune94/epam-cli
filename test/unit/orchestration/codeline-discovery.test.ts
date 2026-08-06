@@ -29,6 +29,24 @@ const REPO_ROOT    = join(__dirname, '../../../');
 const DISCOVERY_JS = join(REPO_ROOT, 'orchestrations/scripts/lib/codeline-discovery.js');
 const NODE         = process.execPath;
 
+/**
+ * The WHOLE body of scoreRepos, not a fixed character window.
+ *
+ * These invariants used to slice `scoreIdx + 4000` / `+ 5000` characters. That is a guess
+ * about how long the function is, and it silently becomes wrong the moment anyone adds a
+ * comment: on 2026-08-06 a note explaining why terms are ordered by TF-IDF pushed the real
+ * `queryCodeGraph` call past the 4000-char mark, and the test failed while the behaviour it
+ * checks was untouched. A test that fails on prose length teaches people to delete
+ * explanations to keep it green.
+ */
+function scoreReposSource(): string {
+  const src = readFileSync(DISCOVERY_JS, 'utf8');
+  const start = src.indexOf('function scoreRepos');
+  if (start < 0) throw new Error('scoreRepos not found — the invariant cannot be checked');
+  const end = src.indexOf('\n}', start);
+  return src.slice(start, end < 0 ? src.length : end);
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function makeGitRepo(root: string, name: string): string {
@@ -254,8 +272,7 @@ describe('codeline-discovery.js — source invariants', () => {
   const src = require('fs').readFileSync(DISCOVERY_JS, 'utf8');
 
   it('scoreRepos uses CodeGraph FTS5, not grep or Semble', () => {
-    const scoreIdx = src.indexOf('function scoreRepos');
-    const scoreFn  = src.slice(scoreIdx, scoreIdx + 4000);
+    const scoreFn = scoreReposSource();
     expect(scoreFn).toMatch(/CODEGRAPH_ENABLED.*=.*'1'/);
     expect(scoreFn).toMatch(/queryCodeGraph/);
     // Semble removed from scoring — all repos are indexed
@@ -284,10 +301,13 @@ describe('codeline-discovery.js — source invariants', () => {
   });
 
   it('main dry-run branch uses selectBestCandidate, not old dryRunDiscovery', () => {
-    // Find the `if (DRY_RUN)` branch inside the async main, not the variable declaration
-    const mainBranchIdx = src.indexOf('if (DRY_RUN)');
-    expect(mainBranchIdx).toBeGreaterThan(-1);
-    const mainBlock = src.slice(mainBranchIdx, mainBranchIdx + 600);
+    // Scoped to main. DRY_RUN is also branched on by the vocabulary deriver, which runs no
+    // agent in the model-free mode — searching the whole file finds that one first and
+    // reports a failure about a function this invariant is not about.
+    const main = src.slice(src.indexOf('\u2500\u2500 Main'));
+    const mainBranchIdx = main.indexOf('if (DRY_RUN)');
+    expect(mainBranchIdx, 'no DRY_RUN branch in main at all').toBeGreaterThan(-1);
+    const mainBlock = main.slice(mainBranchIdx, mainBranchIdx + 600);
     expect(mainBlock).toMatch(/selectBestCandidate/);
     expect(mainBlock).not.toMatch(/dryRunDiscovery/);
   });
@@ -299,9 +319,12 @@ describe('codeline-discovery.js — source invariants', () => {
   });
 
   it('scoreRepos always runs before the DRY_RUN branch so fallback has scores', () => {
-    // scoreRepos must be called BEFORE the if (DRY_RUN) conditional in main
-    const scoringCallIdx  = src.indexOf('const candidates = scoreRepos');
-    const dryRunBranchIdx = src.indexOf('if (DRY_RUN)');
+    // scoreRepos must be called BEFORE the if (DRY_RUN) conditional in main. Both indexes are
+    // taken WITHIN main: the vocabulary deriver branches on DRY_RUN too, earlier in the file,
+    // and matching that one compares two unrelated positions.
+    const main = src.slice(src.indexOf('\u2500\u2500 Main'));
+    const scoringCallIdx  = main.indexOf('const candidates = scoreRepos');
+    const dryRunBranchIdx = main.indexOf('if (DRY_RUN)');
     expect(scoringCallIdx).toBeGreaterThan(-1);
     expect(dryRunBranchIdx).toBeGreaterThan(-1);
     expect(scoringCallIdx).toBeLessThan(dryRunBranchIdx);
@@ -321,8 +344,7 @@ describe('codeline-discovery.js — source invariants', () => {
   });
 
   it('Semble is not used in scoring (all repos indexed; removed as noise source)', () => {
-    const scoreIdx = src.indexOf('function scoreRepos');
-    const scoreFn  = src.slice(scoreIdx, scoreIdx + 5000);
+    const scoreFn = scoreReposSource();
     expect(scoreFn).not.toMatch(/sembleScore|sembleSearch|SEMBLE_ENABLED/);
   });
 
@@ -339,8 +361,7 @@ describe('codeline-discovery.js — source invariants', () => {
     // BM25-sum ranked c365 HIGHER (140 vs 128) — the deterministic evidence argued
     // for the WRONG repo. Scoring is now document-frequency based across the repo
     // SET (see lib/codeline-score.js + codeline-score-cross-repo.test.ts).
-    const scoreIdx = src.indexOf('function scoreRepos');
-    const scoreFn  = src.slice(scoreIdx, scoreIdx + 5000);
+    const scoreFn = scoreReposSource();
     expect(scoreFn).toMatch(/crossRepoTermScores/);
     // Terms must be queried INDIVIDUALLY — a single joined query lets generic
     // tokens flood a shared result window and drown the discriminating one.
@@ -586,10 +607,31 @@ describe('codeline-discovery.js — LLM returns empty/invalid selection: determi
     outPath = join(root, 'out.json');
   }
 
+  /**
+   * Discovery makes TWO model calls now: the vocabulary agent that supplies the term filter
+   * (it replaced a word list hardcoded in the pipeline), then the codeline selection. A stub
+   * that answers only the second aborts the run before selection is ever reached — which is
+   * correct behaviour, and is asserted directly in discovery-vocabulary-agent.test.ts.
+   *
+   * The vocabulary answer here blacklists a term taken FROM THE PROMPT the stub was handed,
+   * so this stub carries no word list of its own either.
+   */
   function makeAiRunStub(responseJson: string): string {
     const stubDir = mkdtempSync(join(tmpdir(), 'ai-run-stub-'));
     const stubPath = join(stubDir, 'ai-run.sh');
-    writeFileSync(stubPath, `#!/usr/bin/env bash\ncat <<'STUBEOF'\n${responseJson}\nSTUBEOF\n`);
+    writeFileSync(stubPath, `#!/usr/bin/env bash
+prompt="$(cat)"
+if [[ "$prompt" == *"DISCOVERY_VOCABULARY"* ]]; then
+  # The least informative term the prompt actually contains: the last 4+ letter word of the
+  # ticket block. Derived from the input, never written down here.
+  term="$(grep -oE '[a-z]{4,}' <<< "$prompt" | tail -1)"
+  echo "<DISCOVERY_VOCABULARY>{\\"blacklist\\":[{\\"term\\":\\"$term\\",\\"reason\\":\\"stub\\"}],\\"whitelist\\":[]}</DISCOVERY_VOCABULARY>"
+  exit 0
+fi
+cat <<'STUBEOF'
+${responseJson}
+STUBEOF
+`);
     execFileSync('chmod', ['+x', stubPath]);
     return stubPath;
   }

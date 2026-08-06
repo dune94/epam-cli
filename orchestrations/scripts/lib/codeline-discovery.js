@@ -124,15 +124,40 @@ function buildRepoManifest(rootDir) {
       stack = 'go';
     }
 
-    // Short README excerpt for extra context (first non-empty line after headings)
+    // README PROSE — what the repository says it is.
+    //
+    // This used to take the FIRST non-heading line and clip it to 120 characters. On real
+    // repositories the first non-heading line is a badge row or a table-of-contents entry,
+    // so the manifest for two live codelines carried `readme: - [Prerequisites](#prerequisites)`
+    // — a field that contributed nothing to a decision about which client repo gets modified,
+    // while looking like it contributed something.
+    //
+    // Select PROSE instead: skip headings, badge/image rows, link-only list items, code
+    // fences and raw HTML, and keep the sentences that describe the project. The budget is a
+    // PROMPT budget (every candidate repo contributes one of these to one prompt), not a
+    // judgement about how much of the README matters — so it is configurable and applied to
+    // prose that was chosen, never to the first line that happened to appear.
     let readmeExcerpt = '';
+    const _readmeBudget = Number(process.env.EPAM_CODELINE_README_CHARS || 1200);
     for (const readmeName of ['README.md', 'readme.md', 'README.txt']) {
       const readmePath = path.join(full, readmeName);
       if (fs.existsSync(readmePath)) {
         try {
-          const lines = fs.readFileSync(readmePath, 'utf8').split('\n');
-          const excerpt = lines.find(l => l.trim() && !l.startsWith('#'));
-          readmeExcerpt = (excerpt || '').slice(0, 120);
+          const prose = [];
+          let inFence = false;
+          for (const raw of fs.readFileSync(readmePath, 'utf8').split('\n')) {
+            const l = raw.trim();
+            if (/^(```|~~~)/.test(l)) { inFence = !inFence; continue; }
+            if (inFence || !l) continue;
+            if (l.startsWith('#')) continue;                       // heading
+            if (/^[-*+>|]/.test(l) && !/[a-z]{4,}\s+[a-z]{4,}/i.test(l)) continue; // TOC/list/table row, no sentence
+            if (/^<\/?[a-z]/i.test(l)) continue;                   // raw HTML
+            if (/^\s*[[!]/.test(l) && !/[a-z]{4,}\s+[a-z]{4,}/i.test(l)) continue; // badge / bare link
+            if (!/[a-z]{4,}\s+[a-z]{4,}/i.test(l)) continue;       // not a sentence at all
+            prose.push(l);
+            if (prose.join(' ').length >= _readmeBudget) break;
+          }
+          readmeExcerpt = prose.join(' ').slice(0, _readmeBudget);
         } catch { /* ignore */ }
         break;
       }
@@ -156,15 +181,161 @@ function buildRepoManifest(rootDir) {
 //
 // Returns repos sorted descending by combined score, sliced to topN.
 
-function scoreRepos(issues, manifest, topN = 8) {
-  const text = issues.map(i => `${i.title || ''} ${(i.description || '').slice(0, 500)}`).join(' ');
-  const words = [...new Set(
-    text.toLowerCase()
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .split(/\s+/)
-      .filter(w => w.length >= 4)
-      .filter(w => !['with','that','this','from','have','will','when','then','also','been','were','they','them'].includes(w))
-  )];
+/**
+ * deriveDiscoveryVocabulary — the terms that carry no repository-selection signal, decided
+ * per ticket by an agent that can see the ticket AND the candidates.
+ *
+ * WHY THIS EXISTS. A list of words sat in scoreRepos filtering the ticket's terms. It was
+ * hardcoded domain-and-language knowledge inside the generic pipeline: wrong for the next
+ * project, wrong for a ticket written in another language, and maintained by nobody. The
+ * comment four lines below it claimed stopwords had been removed, which was true of one list
+ * and not of the other — the exact shape of a rule that erodes.
+ *
+ * WHY AN AGENT AND NOT A BETTER FORMULA. Measurement alone cannot do this. IDF over the
+ * candidate repositories demotes a term every repo mentions, but a filler word appears in NO
+ * repository text, so document frequency scores it as maximally discriminating and PROMOTES
+ * it. Rarity and meaninglessness are indistinguishable by counting. Deciding that a word
+ * carries no signal requires reading it.
+ *
+ * WHAT IT RECEIVES (context as input, never a fixed list):
+ *   - the ticket: title, whole description, components
+ *   - the candidates: every repository name, package name and description in the codeline root
+ * so it judges "carries no signal HERE" against the actual choice being made, not in general.
+ *
+ * WHAT IT RETURNS is schema-bound (blacklist/whitelist, each term with a reason) — the same
+ * contract lib/guard-vocabulary.js defines, applied by the same pure applier. This file holds
+ * no terms of its own, in any language.
+ */
+function deriveDiscoveryVocabulary(issues, manifest) {
+  const { normaliseVocabulary, isVocabularyUsable } = require('./guard-vocabulary.js');
+  const persona = (() => {
+    try {
+      const p = JSON.parse(fs.readFileSync(
+        path.join(SCRIPT_DIR, '..', 'agents', 'profiles.json'), 'utf8'));
+      return p['discovery-vocabulary-agent'] || '';
+    } catch { return ''; }
+  })();
+
+  const ticketBlock = issues.map((i, n) => [
+    `TICKET ${n + 1}`,
+    `Title: ${i.title || ''}`,
+    `Components: ${(Array.isArray(i.components) ? i.components : []).join(', ') || '(none)'}`,
+    `Description:\n${i.description || ''}`,
+  ].join('\n')).join('\n\n');
+
+  const candidateBlock = manifest.map((r) => [
+    `- ${r.name}`,
+    r.packageName && r.packageName !== r.name ? `  package: ${r.packageName}` : '',
+    r.description ? `  description: ${r.description}` : '',
+    r.readmeExcerpt ? `  readme: ${r.readmeExcerpt}` : '',
+  ].filter(Boolean).join('\n')).join('\n');
+
+  const prompt = `${persona ? persona + '\n\n' : ''}TICKETS UNDER DISCOVERY
+${ticketBlock}
+
+CANDIDATE REPOSITORIES IN THE CODELINE ROOT
+${candidateBlock}
+
+TASK
+The ticket text above is about to be broken into terms and searched against the code of every
+candidate repository, to decide which one gets modified. Some of those terms cannot separate
+one candidate from another: grammatical filler, process and workflow words, and words that
+describe the request rather than the software.
+
+Return the vocabulary as JSON inside <DISCOVERY_VOCABULARY></DISCOVERY_VOCABULARY>:
+
+<DISCOVERY_VOCABULARY>
+{"blacklist":[{"term":"<a lowercase term from the ticket text that cannot discriminate between these candidates>","reason":"<why it carries no selection signal here>"}],
+ "whitelist":[{"term":"<a term that must survive filtering because it names something in the software>","reason":"<why>"}]}
+</DISCOVERY_VOCABULARY>
+
+RULES
+- Every term must appear in the ticket text above. Do not invent vocabulary.
+- Judge against THESE candidates. A word that is filler on another project may be the product
+  name here; a word that names a component of one of the candidates above is never filler.
+- An identifier, symbol, filename, endpoint, product or component name is NEVER blacklisted,
+  even when it is rare or looks like an abbreviation. Whitelist it if in doubt.
+- The blacklist may not be empty: if the ticket really contains no filler at all, say so by
+  returning the single least informative term with that reason.
+- No prose outside the tags.`;
+
+  const raw = callLlm(prompt, { rawText: true });
+  const m = String(raw || '').match(/<DISCOVERY_VOCABULARY>([\s\S]*?)<\/DISCOVERY_VOCABULARY>/);
+  if (!m) throw new Error('discovery-vocabulary-agent returned no tagged JSON');
+  const vocab = normaliseVocabulary(JSON.parse(m[1].trim().replace(/^```(?:json)?/i, '').replace(/```$/, '')));
+  if (!isVocabularyUsable(vocab)) throw new Error('discovery-vocabulary-agent returned an empty blacklist');
+  return vocab;
+}
+
+/**
+ * Derive the vocabulary, or stop the run. There is deliberately no third outcome: a built-in
+ * word list used as a fallback here would reinstate exactly what was removed, and discovery
+ * chooses which client repository gets written to — proceeding on a filter nobody derived is
+ * worse than not launching.
+ *
+ * The one case that is not a failure is the explicitly model-free mode, where no agent runs
+ * at all and every term is kept. Unfiltered scoring is noisier; it is not invented.
+ */
+function deriveVocabularyOrAbort(issues, manifest) {
+  if (DRY_RUN) {
+    warn('DRY-RUN mode — no vocabulary agent; scoring on unfiltered terms.');
+    return null;
+  }
+  log('Deriving discovery vocabulary for this ticket...');
+  try {
+    const v = deriveDiscoveryVocabulary(issues, manifest);
+    log(`Vocabulary derived: ${v.blacklist.length} term(s) carry no selection signal, ` +
+        `${v.whitelist.length} protected.`);
+    return v;
+  } catch (e) {
+    process.stderr.write(
+      `[codeline-discovery] ERROR: discovery-vocabulary-agent failed (${e.message}).\n` +
+      '  Term filtering is agent-supplied by design — there is no built-in word list to fall\n' +
+      '  back to, and inventing one here is the defect this replaced. Aborting.\n');
+    process.exit(1);
+  }
+  return null;
+}
+
+function scoreRepos(issues, manifest, topN = 8, vocabulary = null) {
+  // The WHOLE description. It used to be clipped to 500 characters here and to 300 in
+  // buildDiscoveryPrompt — the same field, the same file, two different picked numbers,
+  // neither with a comment. In brownfield the description is the only substantive content a
+  // ticket carries (the AC gate skips acceptance criteria and records "VCs are derived from
+  // the description"), and this function chooses which client repository gets modified.
+  const text = issues.map(i => `${i.title || ''} ${i.description || ''}`).join(' ');
+  // The term filter holds NO words. A list of them used to sit on this line — English
+  // grammatical filler, hardcoded in the generic pipeline, silently wrong for a ticket
+  // written in any other language and for any project whose product name it happened to
+  // contain. It is now supplied per ticket by discovery-vocabulary-agent, which sees this
+  // ticket and these candidates, and applied by the shared pure applier.
+  const { applyVocabulary } = require('./guard-vocabulary.js');
+  const _raw = text.toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length >= 4);
+  const _flagged = vocabulary ? applyVocabulary([...new Set(_raw)], vocabulary) : [];
+  const _dropped = new Set(_flagged.map(f => f.item));
+  const _tokens = _raw.filter(w => !_dropped.has(w));
+
+  // PERSISTED, because it is generated and because it is the only evidence of what the
+  // filter actually did. The count in a log line says a vocabulary was DERIVED; this file
+  // says which terms were APPLIED, which is the part that changes the repository chosen.
+  // Written beside the discovery output so it survives whatever cleared the logs.
+  try {
+    const _vocabPath = path.join(path.dirname(OUT_PATH), 'discovery-vocabulary.json');
+    fs.writeFileSync(_vocabPath, JSON.stringify({
+      derived: !!vocabulary,
+      vocabulary: vocabulary || null,
+      termsDropped: _flagged.map(f => ({ term: f.item, reason: f.reason })),
+      termsUsed: [...new Set(_tokens)],
+    }, null, 2));
+  } catch { /* never let evidence-writing change the outcome of discovery */ }
+  // How often each term occurs in the ticket. Used to ORDER terms below; a term the
+  // description returns to repeatedly is more central to the request than one mentioned once.
+  const _tf = new Map();
+  for (const w of _tokens) _tf.set(w, (_tf.get(w) || 0) + 1);
+  const words = [...new Set(_tokens)];
 
   const cgEnabled = process.env.CODEGRAPH_ENABLED === '1';
   const cg        = cgEnabled ? getCodeGraph() : null;
@@ -175,8 +346,29 @@ function scoreRepos(issues, manifest, topN = 8) {
   // anyway: crossRepoTermScores computes IDF over the actual candidate set, so
   // a term appearing in every repo is demoted by measurement rather than by a
   // list somebody has to maintain. Removed 2026-08-06.
-const cgSpecificWords = words;
-  const cgQuery = cgSpecificWords.slice(0, 10).join(' ');
+  //
+  // ORDER MATTERS, because the term list is capped below. It used to be capped in DOCUMENT
+  // ORDER — whichever terms happened to appear first in the title, then whatever followed in
+  // the description until the count ran out. Now that the full description flows through
+  // (the 500/300-char clips are gone) there are far more terms available and document order
+  // decides which survive, which is not a relevance judgement at all.
+  //
+  // Order by measurement over the actual candidate set — TF-IDF, the same principle
+  // codeline-score already applies, not a list somebody maintains:
+  //   tf  = occurrences in the ticket        (a term the description returns to is central)
+  //   idf = log(N / (1 + repos mentioning it)) (a term every repo mentions cannot separate them)
+  // A term no repo mentions keeps a high idf deliberately: CodeGraph searches CODE, and the
+  // symbol that decides the answer is routinely absent from any README or package name.
+  const _repoTexts = (Array.isArray(manifest) ? manifest : []).map(
+    r => `${r.name || ''} ${r.packageName || ''} ${r.description || ''} ${r.readmeExcerpt || ''}`.toLowerCase());
+  const _N = Math.max(_repoTexts.length, 1);
+  const _specificity = (w) => {
+    const df = _repoTexts.reduce((n, t) => n + (t.includes(w) ? 1 : 0), 0);
+    return (_tf.get(w) || 1) * Math.log(_N / (1 + df));
+  };
+  const _rank = new Map(words.map((w, i) => [w, i]));
+  const cgSpecificWords = [...words].sort(
+    (a, b) => (_specificity(b) - _specificity(a)) || (_rank.get(a) - _rank.get(b)));
 
   // Tier 2 is computed for ALL repos at once, because cross-repo document
   // frequency is only knowable across the whole candidate set — see
@@ -411,7 +603,10 @@ function buildDiscoveryPrompt(issues, manifest) {
       // hint to be weighed against the summary, it is the field maintained for
       // exactly this purpose.
       (comps.length ? `\n  components: ${comps.join(', ')}` : '') +
-      `\n  description: ${(i.description || '').slice(0, 300)}`;
+      // Whole description — see scoreRepos. Discovery sends one small prompt containing a
+      // handful of candidate repositories; nothing about its size justified clipping the
+      // one field that carries the requirement.
+      `\n  description: ${i.description || ''}`;
   }).join('\n\n');
 
   return `You are the codeline-discovery agent for a brownfield engineering pipeline.
@@ -558,7 +753,11 @@ function dropUngroundedCodelines(parsed) {
   return { ...parsed, codelines: kept };
 }
 
-function callLlm(prompt) {
+// opts.rawText: return the model's text untouched instead of parsing a codeline selection
+// out of it. The vocabulary agent shares this seam deliberately — the same provider, the same
+// retry and ladder budget, the same stderr capture. A second hand-rolled spawn would be a
+// second set of failure modes to discover in production.
+function callLlm(prompt, opts = {}) {
   const tmpPrompt = `/tmp/codeline-discovery-prompt-${process.pid}.txt`;
   fs.writeFileSync(tmpPrompt, prompt);
   const debug = process.env.DEBUG_CODELINE_DISCOVERY === '1';
@@ -605,6 +804,8 @@ function callLlm(prompt) {
       throw new Error('Empty response from ai-run.sh' + (why ? ` — stderr: ${why}` : ' (no stderr captured)'));
     }
 
+    if (opts.rawText) return raw;
+
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error(`No JSON in LLM response: ${raw.slice(0, 200)}`);
 
@@ -629,8 +830,14 @@ function callLlm(prompt) {
     process.exit(1);
   }
 
+  // The term vocabulary is DERIVED, before anything is scored. It is not optional and it is
+  // not defaulted: a hardcoded fallback list here would reinstate exactly what was removed,
+  // so a derivation failure aborts. Discovery chooses which client repository gets written
+  // to — proceeding on a filter nobody derived is worse than not launching.
+  const vocabulary = deriveVocabularyOrAbort(issues, manifest);
+
   // Score + rank repos (always — used for both the LLM candidate list and fallback selection).
-  const candidates = scoreRepos(issues, manifest);
+  const candidates = scoreRepos(issues, manifest, 8, vocabulary);
 
   let result;
   if (DRY_RUN) {

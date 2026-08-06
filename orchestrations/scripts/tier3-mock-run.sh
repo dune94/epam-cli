@@ -176,7 +176,10 @@ fi
 # were not among them — see lib/preflight.sh.
 # shellcheck source=lib/preflight.sh
 . "$SCRIPT_DIR/lib/preflight.sh"
-require_preflight || exit 1
+# Route through fail(), never a bare exit: fail() archives the run artefacts first.
+# A bare `exit 1` here made a pre-flight abort the ONE outcome that recorded nothing —
+# no run folder, no outcome.txt, no log — which is the outcome most worth keeping.
+require_preflight || fail "Pre-flight assessment failed"
 echo ""
 
 # ── Step 2: run_phase — copied verbatim from tier3-metrolinx-run.sh's own

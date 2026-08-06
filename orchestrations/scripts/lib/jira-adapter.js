@@ -170,7 +170,13 @@ function adapt(payload) {
     epicKey:            epicLink,
     storyId:            key,
     title:              summary,
-    description:        descText.slice(0, 2000),
+    // WHOLE description. It was clipped to 2000 characters here — at the source, so every
+    // consumer inherited a truncated field no matter what they did downstream. In brownfield
+    // the description IS the contract: the AC gate skips acceptance criteria entirely and
+    // records "VCs are derived from the description", and codeline discovery uses it to
+    // choose which client repository gets modified. A cap here silently removes requirement
+    // text from every one of those decisions, and nothing reports that it happened.
+    description:        descText,
     acceptanceCriteria: extractAC(descText, fields),
     // Story points, then a t-shirt-size label if a human actually set one, then the
     // same neutral fallback synthesize-prd-from-jira.js's ingest path already uses.

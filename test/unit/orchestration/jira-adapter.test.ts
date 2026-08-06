@@ -275,10 +275,18 @@ describe('adapt — full payload normalization', () => {
     expect(result?.completed).toBe(true);
   });
 
-  it('truncates a very long description to 2000 chars', () => {
+  /**
+   * INVERTED 2026-08-06. This asserted the description was CLIPPED to 2000 characters, at
+   * the adapter — the source, so every consumer downstream inherited a clipped ticket. In
+   * brownfield the description is the only substantive content a ticket carries: the AC gate
+   * skips acceptance criteria and records that VCs are derived from the description, and
+   * codeline discovery chooses which client repository gets modified from it. The cap was
+   * the defect; the test guarding it made the defect look intentional.
+   */
+  it('a long description is passed through WHOLE, never clipped', () => {
     const longDesc = 'x'.repeat(5000);
     const result = adapt(makeIssuePayload({ description: longDesc }));
-    expect(result?.description.length).toBe(2000);
+    expect(result?.description.length, 'the adapter clipped the ticket at the source').toBe(5000);
   });
 
   it('handles the payload.fields (flat, no nested issue) shape as an alternative to payload.issue', () => {

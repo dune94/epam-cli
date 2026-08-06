@@ -16,13 +16,25 @@
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 
 const REPO = join(__dirname, '../../../');
-const FILES = [
-  'orchestrations/scripts/lib/ac-gate.js',
-  'orchestrations/scripts/spec-mode-runner.js',
-];
+/**
+ * EVERY pipeline file, discovered — not a list.
+ *
+ * This scanned exactly two files. A 2000-character cap sat in lib/jira-adapter.js, at the
+ * SOURCE of the description, so every consumer inherited a clipped field no matter what it
+ * did downstream — and this guard reported clean the whole time, because that file was not
+ * in the list. Scoping a search to where the bug was last seen is how the same bug survives
+ * its own fix; the pinned-codeline check and the hardcoding audit failed the same way.
+ */
+const FILES = execFileSync('git', ['-C', REPO, 'ls-files'], { encoding: 'utf8' })
+  .split('\n')
+  .filter(Boolean)
+  .filter((f) => (f.startsWith('orchestrations/scripts/') || f.startsWith('orchestrations/plugins/') || f.startsWith('src/'))
+    && /\.(js|ts|sh)$/.test(f)
+    && !/\.test\.|\.spec\./.test(f));
 
 /** Lines that truncate a DESCRIPTION before it reaches a prompt. */
 function descriptionTruncations(rel: string): string[] {
@@ -31,6 +43,15 @@ function descriptionTruncations(rel: string): string[] {
     .map((l, i) => ({ l, n: i + 1 }))
     .filter(({ l }) => !l.trim().startsWith('//') && !l.trim().startsWith('*'))
     .filter(({ l }) => /description[^\n]*\.slice\(0,\s*\d{2,}\)/i.test(l))
+    // A HUMAN-FACING LABEL is not a prompt. SquadRunner clips a description to 60 chars to
+    // name a row in the task registry, and passes the FULL description to the agent on the
+    // very next line. Clipping a label loses nothing a model needed.
+    //
+    // Deliberately narrow: only a call that is plainly building a display string qualifies,
+    // and only on the same line as the slice. Anything broader would become the escape
+    // hatch that lets a real prompt truncation back in — which is exactly how the 2000-char
+    // cap at the source survived a guard that already existed.
+    .filter(({ l }) => !/(TaskRegistry\.register|console\.(log|warn|error)|\blog\(|\bwarn\(|\binfo\(|label|title:)/i.test(l))
     .map(({ l, n }) => `${rel}:${n}: ${l.trim()}`);
 }
 

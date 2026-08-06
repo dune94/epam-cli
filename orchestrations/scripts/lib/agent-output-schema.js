@@ -153,6 +153,25 @@ function validateTaggedOutput(tag, parsed) {
     }
     return pass();
   }
+
+  // THE WRAPPER. A tag with an itemsKey declares its answer as an OBJECT holding an array
+  // — TOOL_TICKET_LINKS is `{ required: ['links'], properties: { links: [...] } }` — and a
+  // model that answers in exactly the declared shape returns that object. This branch used
+  // to hand the wrapper straight to checkItem against the ITEM schema, so it looked for
+  // `url` on `{links: [...]}` and refused every correctly-shaped answer with
+  // 'missing required field "url"'. Diagnostic-only refusals hid it: the warning printed on
+  // every single call and the payload flowed anyway. Under EPAM_SCHEMA_STRICT=1 — the mode
+  // this file exists to make reachable — it would have dropped valid work on four tags.
+  const itemsKey = (TAG_TO_TOOL[tag] || {}).itemsKey;
+  if (itemsKey && parsed && typeof parsed === 'object' && Array.isArray(parsed[itemsKey])) {
+    const items = parsed[itemsKey];
+    if (!items.length) return fail(`${tag}: "${itemsKey}" is empty — a report about nothing is not a report`);
+    for (let i = 0; i < items.length; i += 1) {
+      const r = checkItem(items[i], schema, tag, i);
+      if (!r.ok) return r;
+    }
+    return pass();
+  }
   return checkItem(parsed, schema, tag, null);
 }
 

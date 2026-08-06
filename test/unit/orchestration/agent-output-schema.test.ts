@@ -224,3 +224,63 @@ describe('a schema refusal is diagnostic, not fatal', () => {
     expect(validateTaggedOutput('SPEC_AGENT', good).fatal).not.toBe(true);
   });
 });
+
+/**
+ * THE WRAPPER BUG, found 2026-08-06 by the ticket-link integration test.
+ *
+ * A tag with an itemsKey declares its answer as an OBJECT holding an array — TOOL_TICKET_LINKS
+ * is `{ required:['links'], properties:{ links:{ type:'array', items:{...} } } }`. A model
+ * answering in EXACTLY that declared shape returned the wrapper, and validateTaggedOutput
+ * handed the wrapper to checkItem against the ITEM schema: it looked for `url` on
+ * `{links:[...]}` and refused with 'missing required field "url"'.
+ *
+ * It printed on every call and nobody saw it, because a refusal is diagnostic by default and
+ * the payload flows anyway. EPAM_SCHEMA_STRICT=1 — the mode this file exists to make
+ * reachable — turns the same refusal FATAL, so switching it on would have dropped valid
+ * answers on all four wrapper tags at once.
+ */
+describe('the declared wrapper shape is accepted, not refused', () => {
+  const { validateTaggedOutput } = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
+
+  it('a correctly-shaped TICKET_LINKS wrapper passes', () => {
+    const r = validateTaggedOutput('TICKET_LINKS', {
+      links: [{ url: 'https://x.test/d', classification: 'vendor_documentation', relevant: true }],
+    });
+    expect(r.reason, 'the shape the tool definition itself declares was rejected').toBeNull();
+    expect(r.ok).toBe(true);
+  });
+
+  it('a genuinely bad item inside the wrapper is still caught', () => {
+    const r = validateTaggedOutput('TICKET_LINKS', {
+      links: [{ classification: 'vendor_documentation', relevant: true }],
+    });
+    expect(r.ok, 'unwrapping must not become a way to skip validation entirely').toBe(false);
+    expect(r.reason).toMatch(/url/);
+  });
+
+  it('an empty wrapper array is a report about nothing', () => {
+    expect(validateTaggedOutput('TICKET_LINKS', { links: [] }).ok).toBe(false);
+  });
+
+  it('the bare array form still works', () => {
+    expect(validateTaggedOutput('TICKET_LINKS',
+      [{ url: 'https://x.test/d', classification: 'internal_wiki', relevant: false }]).ok).toBe(true);
+  });
+
+  it('every wrapper tag accepts its own declared shape', () => {
+    const { TAG_TO_TOOL, itemSchemaFor } = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
+    for (const [tag, map] of Object.entries<any>(TAG_TO_TOOL)) {
+      if (!map.itemsKey) continue;
+      const schema = itemSchemaFor(tag);
+      if (!schema) continue;
+      // One minimal item satisfying whatever that tag declares required.
+      const item: Record<string, unknown> = {};
+      for (const k of schema.required || []) {
+        const t = ((schema.properties || {})[k] || {}).type;
+        item[k] = t === 'boolean' ? true : t === 'number' ? 1 : t === 'array' ? ['x'] : t === 'object' ? { a: 1 } : 'x';
+      }
+      const r = validateTaggedOutput(tag, { [map.itemsKey]: [item] });
+      expect(r.ok, `${tag} refused its own declared wrapper: ${r.reason}`).toBe(true);
+    }
+  });
+});

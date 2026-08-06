@@ -242,7 +242,11 @@ function normalizeIssue(issue) {
     for (const url of urls) {
       if (seenUrls.has(url)) continue;
       seenUrls.add(url);
-      linkRecords.push({ url, context: String(context || '').slice(0, 300), author: author || null, created: created || null });
+      // The WHOLE surrounding text, never a clip. This context is how the ticket-link agent
+      // judges whether a document is relevant and what it was posted FOR — and the sentence
+      // explaining why someone linked a doc is exactly the part that runs past a short cap,
+      // because it comes after the link, not before it.
+      linkRecords.push({ url, context: String(context || ''), author: author || null, created: created || null });
     }
   };
   // The description carries links too — a spec URL is as load-bearing as one in a comment.

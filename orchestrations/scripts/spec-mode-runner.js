@@ -1142,14 +1142,21 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
     // which always wins. Without this fix the ladder calls MiniMax again.
     const ladderExec = { cmd: execSpec.cmd, args: ['--provider', ladderProvider] };
     const output = await Promise.race([
-      runClaude(ladderExec, prompt, logPath, {}, { costAgent: tag, costStoryId: storyId }),
+      runClaude(ladderExec, prompt, logPath, envOverride || {}, { costAgent: tag, costStoryId: storyId }),
       new Promise((_, reject) => setTimeout(() => reject(new Error(`ladder hard-timeout after ${ladderTimeout}ms`)), ladderTimeout + 5000))
     ]);
     return _validatedOrNull(extractTaggedJson(output, tag), tag);
   }
 
   // Non-minimax: existing raw text path with tag extraction + jsonrepair
-  const output = await runClaude(execSpec, prompt, logPath, {}, { costAgent: tag, costStoryId: storyId });
+  //
+  // envOverride MUST be forwarded here. It used to be honoured on the SPEC_MODE_PROVIDER
+  // fast-path only, and dropped on this path and on the minimax ladder — so an agent that
+  // supplies its own tool grant (the ticket-link agent needs fetch_url) silently got none,
+  // and ai-run.sh forces --no-tools without AI_GATE_ALLOW_TOOLS. The agent could then only
+  // classify a URL from its address; its `quotes` field could never be populated, which is
+  // the whole reason the step exists. Silent, and invisible in the output.
+  const output = await runClaude(execSpec, prompt, logPath, envOverride || {}, { costAgent: tag, costStoryId: storyId });
   return _validatedOrNull(extractTaggedJson(output, tag), tag);
 }
 
@@ -3642,12 +3649,14 @@ async function reviewTicketLinks({ promptExec, story, logDir }) {
     // scans for exactly that pattern.
     const who = l.author || 'ticket body';
     const when = l.created ? ` on ${String(l.created).slice(0, 10)}` : '';
-    const context = String(l.context || '').slice(0, 300);
+    // Whole context, whole comment. Clipping here would undo the un-clipping in
+    // jira-client: this prompt IS the agent's only view of why the link was posted.
+    const context = String(l.context || '');
     return `${i + 1}. ${l.url}\n   found by: ${who}${when}\n   surrounding text: ${context}`;
   }).join('\n');
 
   const commentBlock = (Array.isArray(story.ticketComments) ? story.ticketComments : [])
-    .map((c) => `- ${c.author || 'unknown'}: ${String(c.text || '').slice(0, 300)}`).join('\n');
+    .map((c) => `- ${c.author || 'unknown'}: ${String(c.text || '')}`).join('\n');
 
   const prompt = `${persona ? persona + '\n\n' : ''}STORY
 Title: ${story.title || ''}

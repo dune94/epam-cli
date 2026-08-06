@@ -86,6 +86,26 @@ else
   fail "preflight-required-env.json missing — cannot tell which variables this run needs"
 fi
 
+# Is PRD_FILE about to be OVERWRITTEN by this run's own Jira ingest, before anything
+# downstream ever reads today's content? ingest-jira-tickets.sh writes to
+# JIRA_SYNTH_PRD_PATH if set, else falls through to PRD_FILE (run-agent-orchestration.sh
+# `"${JIRA_SYNTH_PRD_PATH:-${PRD_FILE:-...}}"`). Whenever that target IS PRD_FILE, whatever
+# is on disk right now is LAST run's leftover, not this run's input — checking its content
+# is checking the wrong PRD.
+#
+# Caught live 2026-08-05: a metrolinx pre-flight failed on "pre-baked specification blocks"
+# on AMSD-2041 in orchestrations/projects/metrolinx/prd.json — real contamination, but from
+# the PREVIOUS run, about to be discarded by ingest before the writer ever runs. The earlier
+# version of this guard only recognised a genuinely EMPTY placeholder (mock1's shape) and
+# missed this — a non-empty stale file about to be overwritten is the same situation.
+_prd_pending_ingest=0
+if [[ -n "${JIRA_URL:-}" ]] && [[ -n "$PRD_FILE" ]]; then
+  _synth_target="${JIRA_SYNTH_PRD_PATH:-$PRD_FILE}"
+  if [[ -n "$_synth_target" ]] && [[ "$(cd "$(dirname "$_synth_target")" 2>/dev/null && pwd)/$(basename "$_synth_target")" == "$PRD_FILE" ]]; then
+    _prd_pending_ingest=1
+  fi
+fi
+
 # ── 3. PRD integrity gate ────────────────────────────────────────────────────
 echo "[ PRD integrity ]"
 if [[ -z "$PRD_FILE" ]]; then
@@ -120,8 +140,11 @@ import json
 d = json.load(open('$PRD_FILE'))
 print(','.join(s['id'] for s in d.get('stories', []) if s.get('specification') and not s.get('completed')))
 " 2>/dev/null || echo "")
-    if [[ -n "$_stale_spec" ]]; then
+    if [[ -n "$_stale_spec" ]] && [[ "$_prd_pending_ingest" != "1" ]]; then
       fail "Canonical PRD has pre-baked 'specification' blocks on base stories (must be lean/unelaborated): $_stale_spec"
+    elif [[ -n "$_stale_spec" ]]; then
+      ok "PRD carries stale specification data from a prior run, but Jira ingest overwrites this exact file before anything reads it — deferred"
+      PASS=$((PASS+1))
     else
       _base_count=$(python3 -c "import json; print(len(json.load(open('$PRD_FILE'))['stories']))" 2>/dev/null || echo "?")
       ok "PRD integrity OK — $_base_count base user stories (canonical/pre-spec-pass — strict phase checks deferred until after spec pass elaboration)"
@@ -156,6 +179,8 @@ else
   OUTPUT_DIR_VAL=$(python3 -c "import json; d=json.load(open('$PRD_FILE')); print(d.get('project',{}).get('outputDir',''))" 2>/dev/null || true)
   if [[ -n "$OUTPUT_DIR_VAL" ]]; then
     ok "PRD project.outputDir = $OUTPUT_DIR_VAL"
+  elif [[ "$_prd_pending_ingest" == "1" ]]; then
+    ok "PRD content is pending Jira ingest for this run — outputDir check deferred"
   else
     fail "PRD project.outputDir is NOT set — deliverables check will use wrong path"
   fi

@@ -57,13 +57,22 @@ export class TracedProvider implements LLMProvider {
     return agent || story || `${this.name} call`;
   }
 
-  /** First user message, trimmed — enough to identify the call from a list. */
+  /**
+   * First user message, full capture. This used to hard-cap at 600 characters — a
+   * truncation the earlier hardcoding sweep should have caught and did not, because it
+   * lived here rather than in an orchestration script. It fed the trace's top-level
+   * `input`, which Langfuse renders directly in the list/summary view, so a prompt fully
+   * captured one level down (the generation) still read as cut off in the view a user
+   * scans first. Same rationale as `truncateForCapture`: this traces to a self-hosted,
+   * local-only Langfuse instance, so there is no third-party exposure to guard against —
+   * only the 200k safety net against a truly pathological payload.
+   */
   private tracePreview(request: ProviderRequest): string {
     const firstUser = request.messages?.find(m => m.role === 'user');
     const text = typeof firstUser?.content === 'string'
       ? firstUser.content
       : JSON.stringify(firstUser?.content ?? '');
-    return text.length > 600 ? text.slice(0, 600) + ' …' : text;
+    return this.truncateForCapture(text);
   }
 
   async complete(request: ProviderRequest): Promise<ProviderResponse> {

@@ -48,7 +48,14 @@ function candidateTestPaths(projectRoot, sourceFile) {
   const dir = path.dirname(rel);
   const ext = path.extname(rel);
   const base = path.basename(rel, ext);
-  const extsToTry = SOURCE_EXTENSIONS.includes(ext) ? [ext] : SOURCE_EXTENSIONS;
+  // ALWAYS try every source extension, not just the source file's own. Real convention
+  // across every codeline this plugin runs against (surveyed live 2026-08-06 across
+  // next.metrolinx.com, next.gotransit.com, next.upexpress.com): .ts and .tsx test files
+  // both exist in real numbers in EVERY one (e.g. 106 vs 139, 370 vs 366, 104 vs 137) — a
+  // .tsx source paired with a .spec.ts test is common, not an edge case. Restricting to
+  // the source's own extension made a real, committed, on-topic test file for a .tsx page
+  // component invisible to every review cycle, because its test file used .ts.
+  const extsToTry = SOURCE_EXTENSIONS;
 
   const candidates = [];
   for (const e of extsToTry) {
@@ -66,6 +73,32 @@ function candidateTestPaths(projectRoot, sourceFile) {
     for (const marker of TEST_EXTENSIONS) {
       candidates.push(path.join('test', relFromSrc, `${base}${marker}${e}`));
       candidates.push(path.join('test', 'unit', relFromSrc, `${base}${marker}${e}`));
+    }
+  }
+
+  // 4. Top-level src/__tests__/ mirror, KEEPING the src/ prefix — confirmed live 2026-08-06
+  //    as the real, actual convention across all 3 codelines this plugin runs against:
+  //      next.metrolinx.com:  src/__tests__/[[...slug]].spec.ts        (flat)
+  //      next.gotransit.com:  src/__tests__/[...slug].spec.ts          (flat)
+  //      next.upexpress.com:  src/__tests__/pages/[[...slug]].spec.ts  (nested)
+  //    Distinct from strategy 3's test/ mirror (drops src/, project-root test/ dir) — this
+  //    keeps src/ and nests directly under src/__tests__/. Missing this meant the tool
+  //    never found a real, correctly-placed baseline test, which is very likely how the
+  //    ORIGINAL incident this plugin exists to prevent happened: a writer created a new
+  //    file at the wrong location because the real one was invisible to this tool.
+  if (dir !== 'src' && dir.startsWith('src/')) {
+    const relFromSrcTests = dir.slice('src/'.length);
+    for (const e of extsToTry) {
+      for (const marker of TEST_EXTENSIONS) {
+        candidates.push(path.join('src', '__tests__', relFromSrcTests, `${base}${marker}${e}`));
+      }
+    }
+  }
+  // Flat form: base directly in src/__tests__/, no subdirectory (metrolinx/gotransit's
+  // actual convention for a src/pages/ file — NOT nested under src/__tests__/pages/).
+  for (const e of extsToTry) {
+    for (const marker of TEST_EXTENSIONS) {
+      candidates.push(path.join('src', '__tests__', `${base}${marker}${e}`));
     }
   }
 

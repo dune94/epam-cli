@@ -29,26 +29,23 @@ import { join } from 'node:path';
 const root = (p: string) => join(__dirname, '../../../', p);
 const INGEST = readFileSync(root('orchestrations/scripts/ingest-jira-tickets.sh'), 'utf8');
 const SYNTH = root('orchestrations/scripts/synthesize-prd-from-jira.js');
-const NODE20 = '/home/bradleyjerome/.nvm/versions/node/v20.20.0/bin/node';
+// DERIVED, never a machine path: the interpreter already running this test.
+const NODE20 = process.execPath;
 
-describe('Jira ingest — PRD template is configurable per project', () => {
-  it('ingest passes --template through to synthesize-prd-from-jira.js', () => {
-    expect(INGEST).toMatch(/--template/);
-  });
-
-  it('the template comes from an env var so each project supplies its own', () => {
-    expect(INGEST).toMatch(/JIRA_PRD_TEMPLATE/);
-  });
-
-  it('behaviour is unchanged when the env var is unset (safe default)', () => {
-    // The flag must be conditional — an empty --template would break every
-    // existing project that relies on the built-in canonical.
-    const i = INGEST.indexOf('JIRA_PRD_TEMPLATE');
-    const near = INGEST.slice(Math.max(0, i - 400), i + 400);
-    expect(near).toMatch(/if \[ -n|:-|\[ -f/);
-  });
-});
-
+/**
+ * REMOVED 2026-08-05 — three assertions of the form `expect(INGEST).toMatch(/--template/)`.
+ *
+ * They asserted that the ingest SCRIPT CONTAINS the string "--template" and the string
+ * "JIRA_PRD_TEMPLATE", and passed for months while every Jira-sourced run inherited a
+ * different project's identity: no project ever set JIRA_PRD_TEMPLATE, so synthesis always
+ * fell through to a built-in canonical. mock1 run 20260805T192100Z executed hello-dolly and
+ * shipped project.name "skyscanner-app".
+ *
+ * A string in a file cannot show which template a run actually used. That is now proven by
+ * running the chain: test/integration/jira-ingest-project-identity.test.ts drives the real
+ * mock Jira server, the real ingest, the real ac-gate and the real synthesis, and reads
+ * project.name out of the PRD on disk.
+ */
 describe('synthesis preserves topology from the supplied template', () => {
   it('agentGroup / agentRole survive synthesis, keyed by story id', () => {
     const dir = mkdtempSync(join(tmpdir(), 'synth-tmpl-'));

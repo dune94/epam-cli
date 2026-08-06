@@ -30,6 +30,14 @@ function extractSnippet(): string {
 
 const SNIPPET = extractSnippet();
 
+function extractFunctionBody(name: string): string {
+  const start = orchSrc.indexOf(`${name}() {`);
+  if (start === -1) throw new Error(`${name}() not found in run-agent-orchestration.sh`);
+  const end = orchSrc.indexOf('\n}', start) + 2;
+  return orchSrc.slice(start, end);
+}
+const PROVISION_ENV_LOCAL_FN = extractFunctionBody('provision_env_local_from_sample');
+
 const cleanupDirs: string[] = [];
 afterEach(() => {
   for (const d of cleanupDirs.splice(0)) rmSync(d, { recursive: true, force: true });
@@ -45,6 +53,7 @@ function runSnippet(cl: string, wt: string, configDir: string | null): string {
       '#!/usr/bin/env bash',
       configDir ? `EPAM_PROJECT_CONFIG_DIR=${JSON.stringify(configDir)}` : '',
       'log() { echo "LOG: $*"; }',
+      PROVISION_ENV_LOCAL_FN,
       'run_snippet() {',
       `  local _cl=${JSON.stringify(cl)}`,
       `  local _wt=${JSON.stringify(wt)}`,
@@ -174,50 +183,37 @@ describe('plugin provisioning wiring — both files together, per real Metrolinx
   });
 });
 
-describe('plugin provisioning wiring — env-vars.json (git-ignored .env.local)', () => {
-  it("writes only THIS codeline's key/value entries as a flat KEY=value .env.local", () => {
+/**
+ * env-vars.json (a hand-maintained, git-committed, per-codeline list) was removed
+ * 2026-08-05: it hard-picked CONTENTSTACK_* keys on 2026-08-02 by trial and error, never
+ * had MANAGEMENT_TOKEN, and nothing kept it in sync as the client codeline's own
+ * requirements changed. .env.local is now DERIVED from the codeline's own
+ * .env.local.sample — see provision_env_local_from_sample() and
+ * env-local-from-sample.test.ts for the derivation logic itself. This block only proves
+ * the WIRING: the codeline-provisioning snippet actually calls it, at the right point.
+ */
+describe('plugin provisioning wiring — .env.local (derived from the codeline\'s own sample)', () => {
+  it('provisions .env.local from THIS codeline\'s own .env.local.sample', () => {
     const { wt, configDir } = makeFixture();
-    writeFileSync(
-      join(configDir, 'env-vars.json'),
-      JSON.stringify({
-        gotransit: { CONTENTSTACK_API_KEY: 'placeholder-key', CONTENTSTACK_BRANCH: 'main' },
-        upexpress: { CONTENTSTACK_API_KEY: 'must-not-leak-into-gotransit' },
-      }),
-    );
+    writeFileSync(join(wt, '.env.local.sample'), 'CONTENTSTACK_API_KEY=\nCONTENTSTACK_BRANCH=main\n');
 
     const out = runSnippet('gotransit', wt, configDir);
 
     const envPath = join(wt, '.env.local');
     expect(existsSync(envPath)).toBe(true);
     const content = readFileSync(envPath, 'utf8');
-    expect(content).toContain('CONTENTSTACK_API_KEY=placeholder-key');
-    expect(content).toContain('CONTENTSTACK_BRANCH=main');
-    expect(content).not.toContain('must-not-leak-into-gotransit');
+    expect(content).toMatch(/^CONTENTSTACK_API_KEY=\S+/m);
+    expect(content).toMatch(/^CONTENTSTACK_BRANCH=\S+/m);
     expect(out).toContain("Provisioned .env.local for 'gotransit'");
   });
 
-  it('is a silent no-op when the codeline has no entry in env-vars.json', () => {
+  it('is a silent no-op when the codeline has no .env.local.sample of its own', () => {
     const { wt, configDir } = makeFixture();
-    writeFileSync(join(configDir, 'env-vars.json'), JSON.stringify({ upexpress: { X: 'y' } }));
 
     const out = runSnippet('gotransit', wt, configDir);
 
     expect(existsSync(join(wt, '.env.local'))).toBe(false);
     expect(out).not.toContain('Provisioned .env.local');
-  });
-
-  it('is a silent no-op when env-vars.json does not exist', () => {
-    const { wt, configDir } = makeFixture();
-    const out = runSnippet('gotransit', wt, configDir);
-    expect(existsSync(join(wt, '.env.local'))).toBe(false);
-    expect(out).not.toContain('Provisioned .env.local');
-  });
-
-  it('is a silent no-op when EPAM_PROJECT_CONFIG_DIR is unset', () => {
-    const { wt } = makeFixture();
-    const out = runSnippet('gotransit', wt, null);
-    expect(existsSync(join(wt, '.env.local'))).toBe(false);
-    expect(out).not.toContain('Provisioned');
   });
 });
 

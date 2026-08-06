@@ -843,23 +843,39 @@ function manifestEvidence(stories, prd) {
  * Measured effect of adding them, same prompt four times: score spread 0.17 -> 0.08, mean
  * 0.65 -> 0.70.
  */
-function buildReviewPayload(stories, isBrownfieldReview, allStories = []) {
-  return JSON.stringify((stories || []).map((s) => ({
-    id: s.id,
-    title: s.title,
-    acceptanceCriteria: s.acceptanceCriteria,
-    // The observable checks — on brownfield these ARE the deliverable under review.
-    verificationCriteria: s.verificationCriteria || [],
-    // The manifest is part of what is being reviewed; the evidence block above the prompt
-    // reports whether each of these exists.
-    technicalNotes: s.technicalNotes,
-    specification: s.specification,
-    ...(isBrownfieldReview ? {} : {
-      splitChildren: (allStories || [])
-        .filter((c) => c.specification && c.specification.createdFrom === s.id)
-        .map((c) => ({ id: c.id, title: c.title, acceptanceCriteria: c.acceptanceCriteria })),
-    }),
-  })), null, 2);
+function buildReviewPayload(stories, isBrownfieldReview, allStories = [], logDir = null, phase = 'unknown') {
+  return JSON.stringify((stories || []).map((s) => {
+    // PLAN/EXECUTION EVIDENCE — precomputed, deterministic, and NOT the verdict. A bare
+    // term-overlap check cannot tell a JUSTIFIED pivot ("useContent turned out to be a
+    // dead end; the real integration point is X") from genuine unexplained drift — only
+    // judgment can. So this hands the reviewer the raw plan text plus the deterministic
+    // signal (same architecture as MANIFEST EVIDENCE above: "it has been checked, you
+    // decide what it means") instead of asking a second, differently-fallible LLM call to
+    // re-derive what is already on disk, or asking a regex to be the final arbiter.
+    const _plan = (isBrownfieldReview && logDir) ? readLatestDetectivePlan(logDir, phase, s.id) : null;
+    const _fixSiteAnalysis = Array.isArray(s.fixSiteAnalysis) ? s.fixSiteAnalysis : [];
+    const planAlignmentEvidence = _plan
+      ? { detectivePlan: _plan, ...checkPlanExecutionAlignment(_plan, _fixSiteAnalysis) }
+      : null;
+    return {
+      id: s.id,
+      title: s.title,
+      acceptanceCriteria: s.acceptanceCriteria,
+      // The observable checks — on brownfield these ARE the deliverable under review.
+      verificationCriteria: s.verificationCriteria || [],
+      // The manifest is part of what is being reviewed; the evidence block above the prompt
+      // reports whether each of these exists.
+      technicalNotes: s.technicalNotes,
+      specification: s.specification,
+      fixSiteAnalysis: _fixSiteAnalysis,
+      planAlignmentEvidence,
+      ...(isBrownfieldReview ? {} : {
+        splitChildren: (allStories || [])
+          .filter((c) => c.specification && c.specification.createdFrom === s.id)
+          .map((c) => ({ id: c.id, title: c.title, acceptanceCriteria: c.acceptanceCriteria })),
+      }),
+    };
+  }), null, 2);
 }
 
 const MANIFEST_GROUNDING_BLOCK = [
@@ -1773,12 +1789,25 @@ ${storiesPayload}
     // real technical-depth value-add and whether a story needs human eyes —
     // without losing any judgment brownfield ever used.
     const isBrownfieldReview = process.env.EPAM_BROWNFIELD === '1';
-    const reviewPayload = buildReviewPayload(specifiedStories, isBrownfieldReview, prd.stories || []);
+    const reviewPayload = buildReviewPayload(specifiedStories, isBrownfieldReview, prd.stories || [], logDir, opts.phase);
 
     const reviewCriteria = isBrownfieldReview
       ? `For each story, evaluate the quality of the collaborative spec work:
 1. Did both agents add meaningful, non-overlapping value?
 2. Flag any story needing human review.
+3. PLAN ALIGNMENT — where planAlignmentEvidence is present, it tells you what the
+   code-graph-detective SAID it would investigate (detectivePlan) and a deterministic,
+   cheap signal (aligned: true/false) for whether the final fixSiteAnalysis shares any
+   named symbol/file with that plan. This signal is NOT your verdict — it is evidence, the
+   same as MANIFEST EVIDENCE below. A plan can legitimately turn out wrong once real
+   exploration starts. Read detectivePlan and fixSiteAnalysis yourself and judge: did the
+   detective explain WHY it moved from its plan to its final answer (a stated pivot,
+   reasoning that connects the two), or did the answer just change with no explanation?
+   The latter is a real defect (a fix has shipped that shared no term with the detective's
+   own stated plan, with no explanation, more than once on the same ticket) — set
+   planAlignment to justified_deviation when the detective justifies its pivot, or
+   unexplained_mismatch when it does not, and say why in reviewNotes. aligned:true needs
+   no action.
 
 (Brownfield tickets never split and their acceptance criteria are immutable —
 do not evaluate split quality or AC completeness; there is nothing there for
@@ -1825,7 +1854,7 @@ score belongs at 0.7 or above.
 
 Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
 [
-  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[],"planAlignment":"aligned|justified_deviation|unexplained_mismatch|not_applicable"}
 ]
 
 Stories to review:
@@ -1867,8 +1896,35 @@ ${reviewPayload}
             reviewNotes: review.reviewNotes || '',
             qualityScore: typeof review.qualityScore === 'number' ? review.qualityScore : null,
             flags: Array.isArray(review.flags) ? review.flags : [],
+            planAlignment: review.planAlignment || 'not_applicable',
             reviewedAt: new Date().toISOString()
           };
+
+          // ONE bounded corrective re-invocation of the detective — not a loop, not a
+          // pipeline abort. The reviewer judged (not a regex) that the detective's answer
+          // diverged from its own plan with no stated reason; feed that judgment back as
+          // corrective context, mirroring the existing PRIOR COORDINATOR FLAGS pattern
+          // already used for openspec/speckit re-elaboration. Best-effort: a failed
+          // correction keeps the original (already-persisted) fixSiteAnalysis rather than
+          // losing it — a flagged hypothesis still beats none.
+          if (review.planAlignment === 'unexplained_mismatch' && process.env.EPAM_BROWNFIELD === '1') {
+            console.warn(`spec-mode: SPEC_REVIEW flagged an unexplained plan/execution mismatch for ${story.id} — re-invoking the detective once with the rejection as corrective context.`);
+            try {
+              const _priorPlan = readLatestDetectivePlan(logDir, opts.phase, story.id);
+              const _priorFindings = Array.isArray(story.fixSiteAnalysis) ? story.fixSiteAnalysis : [];
+              const _corrected = await runCodeGraphDetective(story, logDir, {
+                correctiveContext: { priorPlan: _priorPlan, priorFindings: _priorFindings, reviewNotes: review.reviewNotes || '' },
+              });
+              if (Array.isArray(_corrected) && _corrected.length) {
+                story.fixSiteAnalysis = _corrected.filter((f) => f.reason);
+                story.fixSiteAnalysisCoverage = checkFixSiteCoverage(story.fixSiteAnalysis, story.verificationCriteria || []);
+                console.warn(`spec-mode: ${story.id} — detective correction produced ${story.fixSiteAnalysis.length} revised fix-site(s).`);
+              }
+            } catch (err) {
+              console.warn(`spec-mode: detective correction failed for ${story.id} (${err && err.message}) — keeping the original fixSiteAnalysis.`);
+            }
+          }
+
           const summaryEntry = summary.stories.find(s => s.storyId === story.id);
           if (summaryEntry) {
             summaryEntry.coordinatorReview = story.specification.coordinatorReview;
@@ -2688,6 +2744,79 @@ function recordDetectiveRound(logDir, row) {
 // This does not try to re-diagnose the story — it only flags VCs whose
 // wording is entirely absent from what the detective found, so downstream
 // budget/prompt logic can react to a known gap instead of an invisible one.
+// readLatestDetectivePlan(logDir, phase, storyId) — best-effort read of the plan the
+// code-graph-detective wrote for THIS story via ai-run.sh's plan-execute mechanism
+// (ai-run.sh:298-374, plans-<phase>.jsonl). Takes the LATEST matching entry so a
+// ladder-escalated retry's plan is what gets checked against the final answer, not a
+// stale first attempt. Returns null on any failure (file absent — plan-execute disabled
+// or Langfuse-only fallback path; nothing parses) — this must never break the detective
+// pass it is only auditing.
+function readLatestDetectivePlan(logDir, phase, storyId) {
+  try {
+    if (!logDir) return null;
+    const p = require('path').join(logDir, `plans-${phase || 'unknown'}.jsonl`);
+    const lines = require('fs').readFileSync(p, 'utf8').split('\n').filter(Boolean);
+    let latest = null;
+    for (const line of lines) {
+      let row;
+      try { row = JSON.parse(line); } catch { continue; }
+      if (row && row.agent === 'code-graph-detective' && row.story === storyId && typeof row.plan === 'string') {
+        latest = row.plan;
+      }
+    }
+    return latest;
+  } catch { return null; }
+}
+
+// checkPlanExecutionAlignment(planText, findings) — deterministic (no LLM), term-overlap
+// check: does the detective's OWN stated plan share vocabulary with its OWN final answer?
+//
+// Confirmed empirically 2026-08-05 on AMSD-2041: three separate detective runs each
+// planned to investigate `useContent` ("I'll trace useContent to its definition and
+// callees... the fix likely belongs in the content-fetching layer"), then landed on
+// completely different final files — none of them useContent — sharing no term with the
+// plan. The execute-phase prompt explicitly permits abandoning the plan ("If carrying out
+// the plan showed it to be wrong, say so and answer correctly rather than following it"),
+// but nothing checked whether that happened, so the drift was invisible. This does not
+// try to force the model to follow its plan — a plan legitimately can turn out wrong once
+// real exploration starts, and a plan that says so ("useContent turned out to be wrong,
+// pivoting to X") is aligned by construction, since X then appears in the plan text too.
+// It only makes an UNEXPLAINED divergence observable.
+function checkPlanExecutionAlignment(planText, findings) {
+  const plan = String(planText || '').trim();
+  const findingList = Array.isArray(findings) ? findings : [];
+  if (!plan || findingList.length === 0) return { aligned: true, planTerms: [], findingTerms: [] };
+
+  // High-signal terms only — the detective's own prompt style consistently backtick-quotes
+  // the symbols/files it names ("I'll trace `useContent` to its definition"), and a
+  // camelCase/PascalCase identifier is itself distinctive. Generic prose words (the plan's
+  // and the finding's "reason" text both being about the same feature) trivially share
+  // topic vocabulary ("content", "preview") and would false-positive on every comparison —
+  // this is the same reason checkFixSiteCoverage filters recurring topic terms, just done
+  // here by only ever looking at identifier-shaped tokens in the first place.
+  const backticked = (s) => [...String(s || '').matchAll(/`([A-Za-z_][A-Za-z0-9_.]*)`/g)].map((m) => m[1]);
+  const camelOrPathLike = (s) => (String(s || '').match(/\b[A-Za-z_][A-Za-z0-9_]*[A-Z][A-Za-z0-9_]*\b|[A-Za-z0-9_-]+\.[a-z]{2,4}\b/g) || []);
+  const norm = (t) => t.toLowerCase().replace(/\.[a-z]{2,4}$/i, '').replace(/[^a-z0-9]/g, '');
+
+  const planIdents = [...new Set([...backticked(plan), ...camelOrPathLike(plan)].map(norm).filter((t) => t.length >= 4))];
+  const findingIdents = [...new Set(
+    findingList.flatMap((f) => [
+      ...backticked(f.file), ...camelOrPathLike(f.file),
+      ...backticked(f.function), ...camelOrPathLike(f.function),
+      f.function || '',
+      (f.file || '').split('/').pop() || '',
+    ]).map(norm).filter((t) => t.length >= 4)
+  )];
+  // A plan with no identifiable symbol/file names (pure prose) has nothing concrete to
+  // check — that is not evidence of misalignment, only of an unstructured plan.
+  if (!planIdents.length) return { aligned: true, planTerms: planIdents, findingTerms: findingIdents };
+
+  const aligned = planIdents.some((pt) =>
+    findingIdents.some((ft) => ft === pt || ft.includes(pt) || pt.includes(ft))
+  );
+  return { aligned, planTerms: planIdents, findingTerms: findingIdents };
+}
+
 function checkFixSiteCoverage(findings, verificationCriteria) {
   const STOPWORDS = new Set([
     'the', 'a', 'an', 'and', 'or', 'to', 'of', 'in', 'on', 'for', 'is', 'are',
@@ -2727,6 +2856,21 @@ function checkFixSiteCoverage(findings, verificationCriteria) {
   return { complete: uncovered.length === 0, uncoveredVerificationCriteria: uncovered };
 }
 
+// inferStoryKindHint(story) — a cheap, deterministic, zero-LLM-cost PRE-classification
+// signal for the code-graph-detective, which runs BEFORE the real storyKind
+// classification exists (see the comment at runCodeGraphDetective's call site: it runs
+// early so downstream stages can ground on its findings). Reuses the exact trust
+// direction already established downstream (line ~3273: "anchoring storyKind=defect...
+// Jira ground truth") — a ticket Jira itself typed as "Bug" is almost always a genuine
+// defect; anything else defaults to novel rather than guessing wrong in the more
+// expensive direction (inventing a nonexistent "cause" for new work). This is a HINT the
+// detective's own prompt tells it to trust ticket content over, not an override of the
+// later authoritative SPEC_AGENT classification.
+function inferStoryKindHint(story) {
+  const t = String((story && (story.issueType || story.issuetype)) || '').toLowerCase();
+  return t === 'bug' ? 'defect' : 'novel';
+}
+
 // runCodeGraphDetective(story, logDir) — invokes the code-graph-detective
 // agent: a tool-using LLM (GLM-5.1, upper-tier ladder) that iterates CodeGraph
 // queries and traces callers to find the CAUSAL fix site for a symptom-worded
@@ -2736,7 +2880,7 @@ function checkFixSiteCoverage(findings, verificationCriteria) {
 // converges on the cause. Returns an array of repo-relative fix-site files
 // (may be empty). Best-effort: any failure (no repo, tool unavailable, parse
 // error, timeout) returns [] so the spec pass proceeds unblocked.
-async function runCodeGraphDetective(story, logDir) {
+async function runCodeGraphDetective(story, logDir, opts = {}) {
   if (process.env.EPAM_BROWNFIELD !== '1') return [];
   const repoPath = resolveCodelinePath(story);
   if (!repoPath || !fs.existsSync(repoPath)) return [];
@@ -2770,8 +2914,21 @@ async function runCodeGraphDetective(story, logDir) {
     ? `\nYOUR FIRST \`explore\` HAS ALREADY BEEN RUN FOR YOU — these are its real results (domain nouns only, symptom/presentation words stripped). Treat this as call 1 of your budget; do NOT re-run it. Start from step 2: decide whether the top hit COMPUTES the wrong value or only READS it, and trace from there.\n\n=== PRE-COMPUTED \`explore\` RESULTS ===\n${preseed}\n=== END PRE-COMPUTED RESULTS ===\n`
     : '';
 
-  const prompt = `${detectiveProfile ? detectiveProfile + '\n\n' : ''}You are investigating this bug ticket. The repository is at: ${repoPath}
+  const _kindHint = inferStoryKindHint(story);
+  const _kindHintBlock = _kindHint === 'defect'
+    ? `\nJIRA CLASSIFIES THIS AS A DEFECT (issue type: Bug). This is a HINT, not a certainty — if the ticket's own text below clearly describes a capability that does not exist yet rather than broken existing behavior, trust the ticket over this hint. Assuming defect: there IS an existing bug and an existing symptom. Your job is the CAUSE, not the symptom (see CORE PRINCIPLE below).\n`
+    : `\nJIRA DOES NOT CLASSIFY THIS AS A BUG (issue type: ${story.issueType || story.issuetype || 'unset'}). This is a HINT, not a certainty — if the ticket's own text below clearly describes existing behavior that is wrong, trust the ticket over this hint. Assuming novel: there is likely NO existing bug and no wrong value to trace. Inventing a "cause" for a capability that does not exist yet produces a confident wrong answer. Your job is the ATTACHMENT POINT — the existing file/function/provider/hook/route/component this new capability must plug into, and anything already present the implementation should REUSE — not a fix site.\n`;
 
+  // CORRECTIVE CONTEXT — set only on a Step 4 re-invocation after SPEC_REVIEW flagged
+  // planAlignment: "unexplained_mismatch" for this story's FIRST answer. Mirrors the
+  // existing PRIOR COORDINATOR FLAGS pattern (openspec/speckit re-elaboration, line
+  // ~3273) — the same feedback shape this file already trusts, applied to the detective.
+  const correctiveContext = opts.correctiveContext
+    ? `\nREVIEWER REJECTED YOUR PREVIOUS ANSWER for this exact ticket. Your previous plan was:\n"${opts.correctiveContext.priorPlan || '(no plan recorded)'}"\nYour previous final answer was:\n${JSON.stringify(opts.correctiveContext.priorFindings || [], null, 2)}\nThe reviewer's reason: "${opts.correctiveContext.reviewNotes || ''}"\nAddress this explicitly: either explain why your plan was wrong and justify the new direction, or return to what your plan identified. Do not silently repeat the same unexplained jump.\n`
+    : '';
+
+  const prompt = `${detectiveProfile ? detectiveProfile + '\n\n' : ''}You are investigating this ticket. The repository is at: ${repoPath}
+${_kindHintBlock}${correctiveContext}
 TICKET (read it, then decide for YOURSELF which few domain nouns matter — do not treat every word as a search term):
 Title: ${story.title || ''}
 ${story.description ? 'Description: ' + String(story.description) + '\n' : ''}Acceptance criteria:
@@ -3001,6 +3158,21 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
           console.warn(`spec-mode: code-graph-detective phase-2 extraction recovered ${findings.length} fix-site(s) for ${story.id} from a narrative phase-1 answer.`);
         }
       }
+      // PLAN/EXECUTION ALIGNMENT. Confirmed empirically 2026-08-05 on AMSD-2041: the
+      // detective's own plan (ai-run.sh's plan-execute pass, persisted to
+      // plans-<phase>.jsonl) named `useContent` across three separate runs, and the final
+      // answer landed on a completely different, unrelated file each time — the
+      // execute-phase prompt permits deviating from the plan, but nothing checked whether
+      // that happened, so the drift was invisible. This does not block or retry on a
+      // mismatch — a plan legitimately can turn out wrong once real exploration starts —
+      // it only makes an UNEXPLAINED divergence observable, the same way every other
+      // silent-failure mode in this function already is.
+      const _detectivePlan = readLatestDetectivePlan(logDir, process.env.PHASE || 'unknown', (story && story.id) || '');
+      const _planAlignment = checkPlanExecutionAlignment(_detectivePlan, findings);
+      if (_detectivePlan && Array.isArray(findings) && findings.length && !_planAlignment.aligned) {
+        console.warn(`spec-mode: ⚠️ code-graph-detective plan/execution MISMATCH for ${story.id} — plan named [${_planAlignment.planTerms.join(', ')}], final answer named [${_planAlignment.findingTerms.join(', ')}], no shared term and no stated reason for the change.`);
+      }
+
       // Round telemetry: what this attempt cost and what it actually yielded.
       // phase2Used distinguishes "explored and answered" from "explored, ended
       // in prose, needed a second call to extract" — the latter is pure waste.
@@ -3015,6 +3187,7 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
         phase1Findings: _phase1Findings,
         phase2Used: _phase1Findings === 0 && Array.isArray(findings) && findings.length > 0,
         findings: Array.isArray(findings) ? findings.length : 0,
+        planExecutionAligned: _detectivePlan ? _planAlignment.aligned : null,
         exploreChars: String(out || '').length,
         hitIterationCap: /reached maximum iterations/i.test(String(out || '')),
       });

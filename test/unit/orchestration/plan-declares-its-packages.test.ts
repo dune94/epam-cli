@@ -115,7 +115,12 @@ describe('the spec pass checks the declaration deterministically', () => {
   const src = readFileSync(SPEC_RUNNER, 'utf8');
 
   it('runs the availability check beside the existing coverage check', () => {
-    const i = src.indexOf('story.fixSiteAnalysisCoverage = checkFixSiteCoverage');
+    // lastIndexOf, not indexOf: fixed 2026-08-05, a SECOND, textually-earlier call site
+    // (Step 4's bounded corrective re-invocation of the detective on a reviewer-flagged
+    // plan/execution mismatch) now shares this exact call text. The canonical site this
+    // test targets — immediately following the detective's own findings assignment — is
+    // still the LAST occurrence in the file.
+    const i = src.lastIndexOf('story.fixSiteAnalysisCoverage = checkFixSiteCoverage');
     expect(i, 'the coverage check moved').toBeGreaterThan(-1);
     const block = src.slice(i, i + 2500);
     expect(

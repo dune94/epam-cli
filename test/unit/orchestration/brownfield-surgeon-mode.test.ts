@@ -60,14 +60,22 @@ describe('claude.sh — brownfield surgeon preamble (Change 1)', () => {
   });
 
   it('preamble is not injected in the greenfield path (no unconditional write to DYNAMIC_CONSTITUTION with surgeon text)', () => {
-    // The surgeon text must only appear INSIDE a brownfield guard — never outside one
+    // The surgeon text must only appear INSIDE a brownfield guard — never outside one.
+    // The rules 6-9 block now also branches on storyKind (novel vs defect, fixed
+    // 2026-08-05 — AMSD-2041 had no existing code path to "find first"), nesting an
+    // additional if/else INSIDE the brownfield guard. So the nearest preceding `if [` is
+    // no longer necessarily the brownfield one — check instead that the ENCLOSING
+    // brownfield guard (found the same way the test above finds it) has not already
+    // closed (no `fi` at ITS OWN 4-space indentation) before reaching the marker.
     const surgeonIdx = claudeSrc.indexOf('BROWNFIELD SURGEON MODE');
     expect(surgeonIdx).toBeGreaterThan(-1);
-    // The nearest preceding if-guard must be the brownfield one
-    const beforeSurgeon = claudeSrc.slice(0, surgeonIdx);
-    const lastIfIdx = beforeSurgeon.lastIndexOf('if [');
-    const lastIf = claudeSrc.slice(lastIfIdx, surgeonIdx);
-    expect(lastIf).toMatch(/EPAM_BROWNFIELD/);
+    const guardIdx = claudeSrc.lastIndexOf('EPAM_BROWNFIELD:-0}" = "1"', surgeonIdx);
+    expect(guardIdx).toBeGreaterThan(-1);
+    const between = claudeSrc.slice(guardIdx, surgeonIdx);
+    expect(
+      between,
+      'the outer EPAM_BROWNFIELD guard closed (4-space `fi`) before the surgeon text — it is no longer gated',
+    ).not.toMatch(/\n    fi\n/);
   });
 });
 

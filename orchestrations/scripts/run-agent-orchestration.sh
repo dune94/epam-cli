@@ -547,6 +547,43 @@ detect_node() {
 # codeline declares no engines.node, fnm is unavailable, or the declared
 # range can't be resolved/installed for any reason — this must never be the
 # thing that blocks a run outright.
+# provision_env_local_from_sample <codeline_root> <dest_.env.local_path>
+#
+# Some client apps throw at config-load time (e.g. a CMS SDK guard) when an
+# expected env var is merely ABSENT, well before any network call is made —
+# blocking local tooling (type-check/lint via a pre-commit hook) even though
+# nothing here ever talks to the real service. Values only need to be
+# PRESENT, never real credentials.
+#
+# This used to be a per-codeline block hand-written into an engine-side
+# env-vars.json (added 2026-08-02, commit 359f7fa) — keys picked by trial and
+# error against whatever `tsc`/lint failure was visible at the time. It
+# missed MANAGEMENT_TOKEN entirely (AMSD-2041, 2026-08-05) because nothing
+# ever went back to keep that hand-picked list in sync with what the
+# codeline's OWN config actually reads. A codeline that already declares its
+# full set of expected vars in its own `.env.local.sample` makes any
+# engine-side copy of that list redundant and guaranteed to drift.
+#
+# So: read the codeline's own sample file and derive placeholders from ITS
+# keys, not a list a human maintains here. A new var the client adds is
+# picked up on the next run with zero edits to this repo. A codeline with no
+# sample file gets nothing — inventing keys nobody declared would be the same
+# mistake in the other direction.
+provision_env_local_from_sample() {
+    local codeline_root="$1" dest="$2"
+    local sample="$codeline_root/.env.local.sample"
+    [ -f "$sample" ] || return 0
+
+    # Every `KEY=` line (KEY is the only part that means anything — the
+    # sample's own values are just whatever placeholder or blank the client
+    # left there, not credentials to reuse). One deterministic placeholder
+    # per key, not a fixed table, so this needs no maintenance as the
+    # codeline's own required-var set changes.
+    grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$sample" | while IFS='=' read -r key _; do
+        printf '%s=sandbox-placeholder-%s\n' "$key" "$(printf '%s' "$key" | tr '[:upper:]_' '[:lower:]-')"
+    done > "$dest"
+}
+
 resolve_codeline_node() {
     local codeline_root="$1"
     local pkg="$codeline_root/package.json"
@@ -2793,26 +2830,11 @@ KNOWNFIXES_EOF
         fi
       fi
 
-      # env-vars.json (optional, per-project): keyed by codeline name, each
-      # value a flat {KEY: "value"} map written verbatim as a git-ignored
-      # .env.local in the codeline root. This script has no idea what the
-      # keys mean or why a codeline needs them — some client apps throw at
-      # config-load time (e.g. a CMS SDK guard) when an expected env var is
-      # merely ABSENT, well before any network call is made, which blocks
-      # local tooling (type-check/lint run via a pre-commit hook) even though
-      # nothing here ever talks to the real service. Values therefore only
-      # need to be present, never real credentials — the project config
-      # supplies whatever placeholder its own app requires. .env* is
-      # universally gitignored by convention, so this is never part of a
-      # story's diff and is never committed.
-      local _envvars_cfg="${EPAM_PROJECT_CONFIG_DIR}/env-vars.json"
-      if [ -f "$_envvars_cfg" ]; then
-        local _cl_envvars
-        _cl_envvars=$(jq -r --arg cl "$_cl" '.[$cl] // {} | to_entries[] | "\(.key)=\(.value)"' "$_envvars_cfg" 2>/dev/null)
-        if [ -n "$_cl_envvars" ]; then
-          printf '%s\n' "$_cl_envvars" > "$_wt/.env.local"
-          log "[orch] Provisioned .env.local for '${_cl}' from ${_envvars_cfg}"
-        fi
+      # .env.local: derived from the codeline's OWN .env.local.sample, not an
+      # engine-side list. See provision_env_local_from_sample().
+      provision_env_local_from_sample "$_wt" "$_wt/.env.local"
+      if [ -s "$_wt/.env.local" ]; then
+        log "[orch] Provisioned .env.local for '${_cl}' from ${_wt}/.env.local.sample"
       fi
 
       # anti-patterns.json (optional, per-project): not keyed by codeline —

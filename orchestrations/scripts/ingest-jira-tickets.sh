@@ -219,14 +219,30 @@ log "Synthesizing PRD from classified tickets..."
 # --template it silently fell back to the built-in travel-app canonical for EVERY
 # project. JIRA_PRD_TEMPLATE lets a project supply its own; unset keeps the previous
 # default exactly, so existing projects are unaffected.
+# Resolution order: the operator's explicit choice, then the PROJECT'S OWN canonical, then
+# nothing (synthesize-prd-from-jira.js applies its built-in default).
+#
+# The middle step was missing, and no project set JIRA_PRD_TEMPLATE, so EVERY Jira-sourced
+# run fell through to a built-in canonical belonging to one project and inherited its
+# `project` block. Run 20260805T192100Z executed hello-dolly and produced
+# project.name "skyscanner-app". Giving hello-dolly its own prd.canonical.json changed
+# nothing, because nothing read it. A project's identity now comes from the directory that
+# holds the project's facts, which every run already exports.
 _synth_template_args=()
 if [ -n "${JIRA_PRD_TEMPLATE:-}" ]; then
   if [ -f "$JIRA_PRD_TEMPLATE" ]; then
     _synth_template_args=(--template "$JIRA_PRD_TEMPLATE")
     log "Using PRD template: ${JIRA_PRD_TEMPLATE}"
   else
+    # Deliberately NOT falling through to the derived template: that would hide the typo
+    # behind a run that looks fine until its project block is read.
     log "WARN: JIRA_PRD_TEMPLATE set but not found: ${JIRA_PRD_TEMPLATE} — using default canonical"
   fi
+elif [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] && [ -f "${EPAM_PROJECT_CONFIG_DIR}/prd.canonical.json" ]; then
+  _synth_template_args=(--template "${EPAM_PROJECT_CONFIG_DIR}/prd.canonical.json")
+  log "Using PRD template: ${EPAM_PROJECT_CONFIG_DIR}/prd.canonical.json (this project's own canonical)"
+elif [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ]; then
+  log "WARN: no prd.canonical.json in ${EPAM_PROJECT_CONFIG_DIR} — this run will inherit ANOTHER project's identity from the built-in canonical"
 fi
 
 _out_prd_required

@@ -254,3 +254,172 @@ describe('check_anti_patterns', () => {
     expect(result.isError).toBe(true);
   });
 });
+
+describe('resolve_test_file — cross-extension conventions (real across all 3 metrolinx codelines)', () => {
+  // Surveyed live 2026-08-06 across next.metrolinx.com, next.gotransit.com,
+  // next.upexpress.com: every codeline mixes .ts and .tsx test files roughly evenly
+  // (106/139, 370/366, 104/137). A .tsx source paired with a .spec.ts test — exactly
+  // AMSD-2041's shape — is common, not an edge case. The tool only tried the SOURCE
+  // file's own extension when building candidates, so a .tsx source never got .ts
+  // candidates checked at all: a real, committed, on-topic test file was invisible to
+  // every review cycle, and no amount of retrying could ever satisfy that check.
+  it('THE BUG: a .tsx source file with a real, existing .spec.ts test is found, not missed', async () => {
+    const repo = makeRepo();
+    mkdirSync(join(repo, 'src/pages'), { recursive: true });
+    writeFileSync(join(repo, 'src/pages/[[...slug]].tsx'), 'export default function Page() { return null; }\n');
+    writeFileSync(join(repo, 'src/pages/[[...slug]].spec.ts'), 'describe("Page", () => {});\n');
+
+    const result = await runTool('resolve_test_file', repo, { sourceFile: 'src/pages/[[...slug]].tsx' });
+    const parsed = JSON.parse(result.content);
+
+    expect(
+      parsed.existingTestFiles,
+      'a real, committed, on-topic test file existed and was reported missing on every review cycle',
+    ).toContain('src/pages/[[...slug]].spec.ts');
+  });
+
+  it('the reverse also holds: a .ts source with an existing .spec.tsx test is found', async () => {
+    const repo = makeRepo();
+    mkdirSync(join(repo, 'src/hooks'), { recursive: true });
+    writeFileSync(join(repo, 'src/hooks/useContent.ts'), 'export function useContent() {}\n');
+    writeFileSync(join(repo, 'src/hooks/useContent.spec.tsx'), 'describe("useContent", () => {});\n');
+
+    const result = await runTool('resolve_test_file', repo, { sourceFile: 'src/hooks/useContent.ts' });
+    const parsed = JSON.parse(result.content);
+
+    expect(parsed.existingTestFiles).toContain('src/hooks/useContent.spec.tsx');
+  });
+
+  it('a co-located __tests__ dir with a cross-extension file is found too, not just sibling files', async () => {
+    const repo = makeRepo();
+    mkdirSync(join(repo, 'src/components/__tests__'), { recursive: true });
+    writeFileSync(join(repo, 'src/components/Gallery.tsx'), 'export default function Gallery() { return null; }\n');
+    writeFileSync(join(repo, 'src/components/__tests__/Gallery.test.ts'), 'describe("Gallery", () => {});\n');
+
+    const result = await runTool('resolve_test_file', repo, { sourceFile: 'src/components/Gallery.tsx' });
+    const parsed = JSON.parse(result.content);
+
+    expect(parsed.existingTestFiles).toContain('src/components/__tests__/Gallery.test.ts');
+  });
+});
+
+describe('resolve_test_file — the src/__tests__/ top-level mirror (real across all 3 codelines)', () => {
+  // Confirmed live 2026-08-06 by checking the actual files, not inventing a convention:
+  //   next.metrolinx.com:  src/__tests__/[[...slug]].spec.ts        (flat)
+  //   next.gotransit.com:  src/__tests__/[...slug].spec.ts          (flat)
+  //   next.upexpress.com:  src/__tests__/pages/[[...slug]].spec.ts  (nested, mirrors src/pages/)
+  // None of the tool's three existing strategies (co-located __tests__, sibling, project-root
+  // test/ mirror) cover a top-level src/__tests__/ mirror that KEEPS the src/ prefix. This is
+  // very likely why the original writer (the incident this plugin exists to prevent) created a
+  // new file at the wrong location: the tool never found the real, correctly-placed baseline
+  // test for [[...slug]].tsx, because src/__tests__/[[...slug]].spec.ts was never a candidate.
+  it('finds a FLAT src/__tests__/ mirror (metrolinx and gotransit\'s real convention)', async () => {
+    const repo = makeRepo();
+    mkdirSync(join(repo, 'src/__tests__'), { recursive: true });
+    mkdirSync(join(repo, 'src/pages'), { recursive: true });
+    writeFileSync(join(repo, 'src/pages/[[...slug]].tsx'), 'export default function Page() { return null; }\n');
+    writeFileSync(join(repo, 'src/__tests__/[[...slug]].spec.ts'), 'describe("Page", () => {});\n');
+
+    const result = await runTool('resolve_test_file', repo, { sourceFile: 'src/pages/[[...slug]].tsx' });
+    const parsed = JSON.parse(result.content);
+
+    expect(
+      parsed.existingTestFiles,
+      'the real baseline test for this exact page (metrolinx\'s actual convention) was never checked',
+    ).toContain('src/__tests__/[[...slug]].spec.ts');
+  });
+
+  it('finds a NESTED src/__tests__/<subdir>/ mirror (upexpress\'s real convention)', async () => {
+    const repo = makeRepo();
+    mkdirSync(join(repo, 'src/__tests__/pages'), { recursive: true });
+    mkdirSync(join(repo, 'src/pages'), { recursive: true });
+    writeFileSync(join(repo, 'src/pages/[[...slug]].tsx'), 'export default function Page() { return null; }\n');
+    writeFileSync(join(repo, 'src/__tests__/pages/[[...slug]].spec.ts'), 'describe("Page", () => {});\n');
+
+    const result = await runTool('resolve_test_file', repo, { sourceFile: 'src/pages/[[...slug]].tsx' });
+    const parsed = JSON.parse(result.content);
+
+    expect(parsed.existingTestFiles).toContain('src/__tests__/pages/[[...slug]].spec.ts');
+  });
+
+  it('does not report a src/__tests__/ file for an UNRELATED source (no false positives)', async () => {
+    const repo = makeRepo();
+    mkdirSync(join(repo, 'src/__tests__'), { recursive: true });
+    mkdirSync(join(repo, 'src/pages'), { recursive: true });
+    writeFileSync(join(repo, 'src/pages/other.tsx'), 'export default function Other() { return null; }\n');
+    writeFileSync(join(repo, 'src/__tests__/[[...slug]].spec.ts'), 'describe("Page", () => {});\n');
+
+    const result = await runTool('resolve_test_file', repo, { sourceFile: 'src/pages/other.tsx' });
+    const parsed = JSON.parse(result.content);
+
+    expect(parsed.existingTestFiles).toEqual([]);
+  });
+});
+
+describe('every plugin tool, run against all 3 REAL codelines (not synthetic temp repos)', () => {
+  // Directive: plugin coverage must be rooted in the actual project codelines this plugin
+  // runs against, not one narrow invented case. All 4 tools, all 3 real repos.
+  const REAL_CODELINES = [
+    '/home/bradleyjerome/projects/metrolinx/next.metrolinx.com',
+    '/home/bradleyjerome/projects/metrolinx/next.gotransit.com',
+    '/home/bradleyjerome/projects/metrolinx/next.upexpress.com',
+  ].filter((p) => {
+    try { return require('node:fs').statSync(p).isDirectory(); } catch { return false; }
+  });
+
+  it('at least the 3 expected real codelines are present on this machine to test against', () => {
+    expect(REAL_CODELINES.length, 'no real codelines found — this suite would silently test nothing').toBe(3);
+  });
+
+  describe.each(REAL_CODELINES)('%s', (repoPath) => {
+    it('git_state reports the SAME branch and HEAD as real git, directly verified', async () => {
+      const realBranch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoPath, encoding: 'utf8' }).trim();
+      const realHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoPath, encoding: 'utf8' }).trim();
+
+      const result = await runTool('git_state', repoPath);
+      const parsed = JSON.parse(result.content);
+
+      expect(result.isError).toBe(false);
+      expect(parsed.branch).toBe(realBranch);
+      expect(parsed.head).toBe(realHead);
+    });
+
+    it('codeline_facts does not crash and returns a real, well-formed result against the real repo', async () => {
+      const result = await runTool('codeline_facts', repoPath);
+      expect(result.isError).toBe(false);
+      expect(typeof result.content).toBe('string');
+    });
+
+    it('check_anti_patterns does not crash against the real repo (no rules configured is a valid, silent result)', async () => {
+      const result = await runTool('check_anti_patterns', repoPath, { content: 'export const x = 1;' });
+      expect(result.isError).toBe(false);
+    });
+
+    it('resolve_test_file finds the REAL, pre-existing baseline test for the slug catch-all page', async () => {
+      // The exact file this whole investigation started from — AMSD-2041's real fix site.
+      const fs = require('node:fs');
+      const candidates = [
+        'src/pages/[[...slug]].tsx',
+        'src/pages/[...slug].tsx',
+      ].filter((f) => fs.existsSync(join(repoPath, f)));
+      if (candidates.length === 0) return; // this codeline doesn't have a catch-all page — nothing to assert
+
+      const result = await runTool('resolve_test_file', repoPath, { sourceFile: candidates[0] });
+      const parsed = JSON.parse(result.content);
+
+      // gotransit is a known exception: its page was renamed [...slug].tsx -> [[...slug]].tsx
+      // at some point without renaming the test file (still src/__tests__/[...slug].spec.ts,
+      // a genuinely different basename) — a real pre-existing inconsistency in that repo, not
+      // a gap in this tool. A same-basename match correctly does not paper over that.
+      if (repoPath.includes('gotransit')) {
+        expect(parsed.existingTestFiles).toEqual([]);
+        return;
+      }
+      expect(
+        parsed.existingTestFiles.length,
+        `the real baseline test for ${candidates[0]} was not found in ${repoPath} — the exact class of ` +
+          'miss that caused AMSD-2041\'s review to loop forever on a false "no tests" claim',
+      ).toBeGreaterThan(0);
+    });
+  });
+});

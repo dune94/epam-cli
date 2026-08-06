@@ -91,9 +91,12 @@ describe('spec coordinator-review — brownfield-aware criteria (cycle-time fix)
     expect(block).toMatch(/\$\{reviewCriteria\}/);
   });
 
-  it('the output JSON schema is unchanged regardless of mode (storyId/verdict/reviewNotes/qualityScore/flags)', () => {
+  it('the output JSON schema is unchanged regardless of mode (storyId/verdict/reviewNotes/qualityScore/flags/planAlignment)', () => {
+    // planAlignment added 2026-08-05 (the reviewer's own judgment on detective plan/answer
+    // consistency) — the invariant under test is that ONE schema serves both modes, which
+    // still holds; only its content grew.
     expect(block).toMatch(
-      /\{"storyId":"REM-xxx","verdict":"approved\|needs_review","reviewNotes":"coordinator observations","qualityScore":0\.0-1\.0,"flags":\[\]\}/,
+      /\{"storyId":"REM-xxx","verdict":"approved\|needs_review","reviewNotes":"coordinator observations","qualityScore":0\.0-1\.0,"flags":\[\],"planAlignment":"aligned\|justified_deviation\|unexplained_mismatch\|not_applicable"\}/,
     );
   });
 });

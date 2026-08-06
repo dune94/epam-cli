@@ -7737,13 +7737,37 @@ implement_story() {
     # Brownfield surgeon preamble — injected when EPAM_BROWNFIELD=1; never active in greenfield.
     # Rules numbered from 6 to extend the five already in AGENT_CONSTITUTION without overlap.
     if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
-        DYNAMIC_CONSTITUTION="${DYNAMIC_CONSTITUTION}
+        # Rules 6-9 branch on storyKind — same lookup already used above for reasoning
+        # effort (line ~5402), same story, reused rather than a second query. Found live
+        # 2026-08-05 on AMSD-2041 (storyKind: novel, description is its own title
+        # repeated): rule 6 as written asked the writer to "locate the existing code path
+        # that handles the behavior" for a capability that does not exist yet, and rule 8
+        # required the description to literally contain the word "create"/"add new"/
+        # "build new" before permitting a new file — a trigger AMSD-2041's bare-title
+        # description could never contain. A defect DOES have a known, bounded fix site;
+        # a novel story does not, and forcing the same "find it, fix minimally, no new
+        # files" framing onto both is the same defect-only-prompt blind spot already fixed
+        # in the code-graph-detective (spec-mode-runner.js) and SPEC_AGENT prompts.
+        _bfw_story_kind=$(jq -r --arg id "$story_id" \
+            '.stories[] | select(.id == $id) | .storyKind // ""' \
+            "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
+        if [ "$_bfw_story_kind" = "novel" ]; then
+            DYNAMIC_CONSTITUTION="${DYNAMIC_CONSTITUTION}
+
+BROWNFIELD SURGEON MODE — NOVEL CAPABILITY (non-negotiable, applies to this story):
+6. FIND THE ATTACHMENT POINT: There is no existing bug and no existing code path implementing this capability — searching for one wastes time. Before writing code, locate the existing file/function/provider/hook/route/component this new capability must plug INTO (Search, Glob, or Read). Do not skip this step.
+7. SMALLEST INTEGRATION, NOT A REWRITE: Extend the attachment point with the minimal addition that provides the new capability. Do not restructure, refactor, or rewrite surrounding code that already works.
+8. NEW FILES ARE EXPECTED WHEN THE CAPABILITY GENUINELY NEEDS THEM: Do not withhold a new file, component, or module waiting for the story description to say 'create' or 'add new' — a bare or underspecified description is not evidence the work is smaller than it is. Create what the capability requires; do not invent an abstraction it does not.
+9. USE EXISTING HELPERS: Before writing any new function or utility, search the codebase for an existing one that already serves the same purpose."
+        else
+            DYNAMIC_CONSTITUTION="${DYNAMIC_CONSTITUTION}
 
 BROWNFIELD SURGEON MODE — non-negotiable (applies to every story in this run):
 6. FIND FIRST: Before writing a single line of code, locate the existing code path that handles the behavior described in this story. Use Search, Glob, or Read. Do not skip this step.
 7. FIX MINIMALLY: Make the smallest change that corrects the behavior. Do not restructure, refactor, or extend surrounding code.
 8. NO NEW FILES BY DEFAULT: Do not create new files, services, or abstractions unless the story description explicitly uses the words 'create', 'add new', or 'build new'. A bug report or a change request means modifying existing code.
 9. USE EXISTING HELPERS: Before writing any new function or utility, search the codebase for an existing one that already serves the same purpose."
+        fi
     fi
     # GAP-P17: inject outputSchema instruction when story defines one
     local schema_block=""

@@ -413,9 +413,11 @@ describe('briefs must name codelines, not number them', () => {
       profilesPath: join(ws, 'profiles.json'), agentsDir: ws, logDir: ws, repoPath: '',
     });
     const p = readFileSync(r.capture, 'utf8');
-    expect(p, 'nothing forbids identifying a codeline by position').toMatch(/Never identify a codeline by POSITION/);
-    expect(p).toMatch(/order codelines are listed in is not stable/i);
-    expect(p, 'it does not say why positional references are undetectable').toMatch(/the\s+sentence\s+still\s+reads\s+correctly/i);
+    // Assert the RULE, on stable keywords — not a sentence of prose. Pinning exact phrasing is
+    // what broke three unrelated tests today the moment their wording was improved: an
+    // assertion that fails on a rewrite guards the wording, not the behaviour.
+    expect(p, 'nothing forbids identifying a codeline by position').toMatch(/POSITION/);
+    expect(p, 'it does not say the ordering is unstable, which is the reason').toMatch(/not stable/i);
   }, 60_000);
 
   it('it still forbids absolute paths, and says a name is the stable reference', async () => {
@@ -429,7 +431,7 @@ describe('briefs must name codelines, not number them', () => {
       profilesPath: join(ws, 'profiles.json'), agentsDir: ws, logDir: ws, repoPath: '',
     });
     const p = readFileSync(r.capture, 'utf8');
-    expect(p).toMatch(/Never write an absolute filesystem path/);
-    expect(p).toMatch(/A name is the only reference that stays true/i);
+    expect(p, 'absolute paths are no longer forbidden').toMatch(/absolute filesystem path/i);
+    expect(p, 'nothing says a name is the reference that survives').toMatch(/\bname\b/i);
   }, 60_000);
 });

@@ -7,8 +7,8 @@
 # and applyToolAllowlist() filters by tool NAME, dropping everything not listed. A project
 # registers its plugins in EPAM_PROJECT_CONFIG_DIR/plugins.json, the orchestrator provisions
 # them into each worktree's .epam/settings.json, createTools() loads them — and then the gate
-# threw every one of them away. Metrolinx grants codeline_facts, resolve_package_symbol,
-# resolve_test_file, dependency_available and dependency_contract; at these four seams the
+# threw every one of them away. A live project granted five plugin tools — codeline facts,
+# symbol and test-file resolution, and two dependency checks — and at these four seams the
 # model was handed none of them. The project configured a capability and the generic pipeline
 # overrode it with a literal, which is the same defect class as the agent roster.
 #

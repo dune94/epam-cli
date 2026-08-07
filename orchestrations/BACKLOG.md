@@ -1068,7 +1068,7 @@ investigation is skipped where the work does not reach.
 
 ## ROSTER-1 — Build the implementer roster BY STACK, resolve the role per lane
 
-**Status:** `deferred` (parked 2026-08-07, design agreed, not built)
+**Status:** `pending` — unparked 2026-08-07 the same day, on evidence (see below)
 **Source:** operator direction after reviewing the AMSD-2041 roster.
 
 ### The defect this fixes
@@ -1118,9 +1118,31 @@ Touches assignment (`assignAgentRoles`, `candidateRoles`), the write-gate check 
 seam, the writer seam itself, and `assert_phase_stories_have_roles` — all currently assume one
 role per story. All are tested, so it is tractable; it is not a prompt edit.
 
-### Why it was parked
+### Why it was parked, and why that reason did not survive the day
 
-It changes nothing for this estate. All three codelines share a stack, so a by-stack mint would
-produce exactly the roster that already exists — the value is entirely in the next estate that
-mixes stacks. Deferred in favour of testing the roster in hand.
+Parked on the claim that it "changes nothing for this estate — all three codelines share a
+stack, so a by-stack mint would produce exactly the roster that already exists".
+
+That claim was wrong, and the roster reviewer disproved it within hours on its first live run.
+The three codelines share a FRAMEWORK, not a stack. Their tooling genuinely differs, and five
+of the reviewer's seven blocking findings are the same defect: a brief generalising a
+convention across all three that only two of them actually use.
+
+  - one codeline transpiles its tests with a different transpiler than the brief asserted
+  - an import-ordering plugin is absent from one codeline, present in two
+  - an environment-variable package is absent from one codeline, present in two
+  - a class-name utility is absent from a DIFFERENT one of the three
+  - a sitemap tool is absent from one codeline, present in two
+
+Note the fourth: the odd-one-out is not always the same codeline. There is no single
+"exception" to special-case — the estate genuinely has more than one tooling profile, which is
+exactly the condition this item exists to handle. A roster minted per stack group would state
+each convention only for the codelines that hold it.
+
+The remaining two findings were roster COHERENCE rather than stack divergence — two implementer
+briefs claiming the same files, so neither is accountable — which no dependency grouping fixes
+and which the reviewer catches instead.
+
+Unparked on that evidence. The reviewer makes the cost of NOT doing this visible every run;
+it does not remove it.
 

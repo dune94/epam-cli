@@ -136,6 +136,12 @@ invoke_agent() {
                 [ -n "${EPAM_MAX_ITERATIONS:-}" ]    && _max_iter="$EPAM_MAX_ITERATIONS"
                 [ -n "${EPAM_REASONING_EFFORT:-}" ]  && _effort="$EPAM_REASONING_EFFORT"
                 [ -n "${EPAM_ALLOWED_TOOLS:-}" ]     && _tools="$EPAM_ALLOWED_TOOLS"
+                # TEMPERATURE IS A KNOB A CONSTRAINT MAY TURN. It was missing from this list,
+                # which went unnoticed only because no profile set a temperature — an empty
+                # profile value left the constraint's own export in place. The moment a seam
+                # was given a temperature, the static profile silently overrode a learned
+                # constraint, which is the exact inversion this block exists to prevent.
+                [ -n "${EPAM_TEMPERATURE:-}" ]       && _temp="$EPAM_TEMPERATURE"
                 [ -n "${EPAM_ALLOWED_WRITE_PATHS:-}" ] && _write_paths="$EPAM_ALLOWED_WRITE_PATHS"
                 [ -n "$_kb_fired" ] && echo "[agent-invoke] self-heal constraints applied: $_kb_fired" >&2
             fi

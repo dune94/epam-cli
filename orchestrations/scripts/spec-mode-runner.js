@@ -3114,6 +3114,18 @@ brief — it is specific to one machine and wrong everywhere else.
 A brief may only rely on what the codelines actually declare above. If the work plainly needs
 something that is not declared, say so in the rationale rather than assuming it is present.
 
+EVERY ROLE MUST BE ABLE TO AUTHOR CODE. Each brief must name the files or directories, relative
+to a codeline root, that the role edits. A role whose work happens only in a vendor's web
+console, or only in prose, cannot implement a story: this pipeline's agents change files in a
+repository, and a story assigned to such a role produces a configuration note and no working
+software. If part of the work genuinely is console-only, that belongs in one role's brief as
+context it must WRITE CODE around — never as a role of its own.
+
+TEST RESPONSIBILITY MUST BE OWNED, EXPLICITLY. Say in the brief, for whichever role owns it,
+how this codeline's tests are written: where test files live, how they are named, and which
+runner executes them — taken from what the codelines declare above, not from habit. Work with
+no named owner for its tests arrives at review untested and cannot be approved.
+
 Do not propose a role that duplicates one of the canonical roles already listed above.`;
 
   const payload = await runAgentForJson(
@@ -3231,7 +3243,14 @@ ${storyBlock}
 
 Pick the role whose stated expertise actually covers the work the story describes. If two
 roles could plausibly own a story, prefer the one whose brief names the surface the story
-touches. Every story must be assigned exactly one role.`;
+touches. Every story must be assigned exactly one role.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, the code owner is the assignee.`;
 
   // VALIDATE, DO NOT REGENERATE. On a resume the operator has inspected the roster at the
   // pause and may have edited profiles.json, the project-roles registry, or the stories'

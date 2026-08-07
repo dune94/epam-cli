@@ -1146,3 +1146,116 @@ and which the reviewer catches instead.
 Unparked on that evidence. The reviewer makes the cost of NOT doing this visible every run;
 it does not remove it.
 
+---
+
+# Architectural issues — found 2026-08-07, three-codeline run 20260807T212714Z
+
+That run reached the lanes for the first time: roster clean on the first review cycle, three
+lanes forked, per-codeline investigators invoked, 6 verification criteria per lane. Two lanes
+paused cleanly before the writer; the metrolinx lane was halted by the spec review gate at
+quality 0.68 against a 0.7 bar. These are the structural causes found while diagnosing it.
+
+Priority order agreed with the operator. NOTE: the roster pause and writer pause are temporary
+scaffolding and will be REMOVED once the pipeline stabilises — which sharpens ARCH-2 and
+ARCH-3 considerably, because today they cost a pause and afterwards they will decide whether a
+client codeline receives code while its siblings have already merged.
+
+## ARCH-1 — a per-lane fact read from a singular field  `in progress`
+
+The detective resolves which investigator to use from `story.codeline`, the story's PRIMARY
+codeline. For a story spanning three codelines that value is the same in every lane, so all
+three lanes used the first lane's investigator — briefed on a different repository's layout,
+conventions and module structure. Exactly the contamination the per-codeline split exists to
+prevent, through a door left open.
+
+  log: 4 x "detective for gotransit = gotransit-investigator", never the other two
+  story.codeline  = "gotransit"                           (primary)
+  story.codelines = [gotransit, upexpress, metrolinx]      (the lanes that run)
+
+The same shape produced two other defects: `agentRole` singular while a spanning story runs in
+N lanes (fixed b62f90b), and `project.outputDir` vs `outputDirs` (which produced a wrong
+"1 lane" claim in an operator-facing report). A singular field that is right for exactly one
+lane in three is a trap, not a convenience.
+
+FIX: the per-lane PRD is the seam. `_filtered_prd` already writes `<codeline>-prd.json` per
+lane and copies stories through unchanged; stamping the lane's own codeline onto the stories it
+emits makes `story.codeline` TRUE within that lane, and every consumer — present and future —
+becomes correct without knowing lanes exist. Plus the detective preferring `EPAM_CODELINE`, as
+the writer seam already does.
+
+## ARCH-2 — a model-invented scalar wired to a hard gate  `pending`
+
+`qualityScore` is a bare number the reviewer emits. Nothing constrains its derivation and
+nothing checks it, and story-guards.sh compares it against SPEC_REVIEW_MIN_QUALITY (0.7).
+metrolinx scored 0.68: a 0.02 margin on a number with nothing behind it.
+
+The code's own comments record the instability — lanes at 0.78/0.72/0.65 with the gate stopping
+ones ABOVE the bar, and elsewhere every lane sailing through at 0.45. That is archaeology of
+people fighting the number rather than what it measures.
+
+Everything else a model asserts here is now either structurally constrained (enums, schema-bound
+output, required fields) or independently re-checked (roster findings are re-run against the
+repository). This is neither, and it cannot be: "0.68" is not a claim about anything checkable.
+
+FIX: gate on the reviewer's SPECIFIC objections — `flags[]` and `verdict`, which are enumerable
+and verifiable the way roster findings now are. Keep qualityScore as telemetry. If a numeric bar
+is wanted, derive it from something countable (flag count by severity), not from a model
+compressing judgement into a float whose third decimal decides delivery.
+
+## ARCH-3 — lane independence ends at the first failure  `pending — operator decision`
+
+Lanes have their own log dir, PRD, worktree, investigator and writer, run in parallel, and the
+code notes "no lane is upstream of another". Then the outcome collapses to one exit code: one
+lane's gate decision failed a run in which two lanes had cleared.
+
+Consequences: partial success cannot be acted on (there is no per-lane resume — the checkpoint
+is per run); and "failed" reads identically to "the pipeline broke" when it means "one of three
+lanes was blocked by a quality gate".
+
+Once the pauses are removed this stops being cosmetic: the two cleared lanes will have written
+and MERGED code before the third lane's gate fails, so the run aborts with two client codelines
+already modified.
+
+DECISION NEEDED: is a story spanning codelines all-or-nothing, or may lanes land independently?
+Both are defensible — partial delivery of one change across an estate may be worse than none —
+but it must be stated as policy rather than implied by an exit code.
+
+## ARCH-4 — cross-run learning is dead because the KEY is regenerated  `pending`
+
+KB-<role>.md survives the per-run reset by design. But the roster is ephemeral and the mint
+invents a NEW role name each run for essentially the same agent, so the next run looks up a KB
+file that does not exist and starts blank. Twenty-odd KB files have accumulated, each holding
+what one run learned, none reachable by any later run. The store persists; the address does not.
+
+AGREED FIX: key agent knowledge on the CODELINE, which is stable, discovered, already the
+investigator key, and the subject of most durable learning ("this codeline's tests are
+transpiled with X", "the SDK init lives here"). Does not cover project-wide implementer lessons;
+that gap is accepted for now.
+
+## ARCH-5 — the roster mutates after it is set  `pending`
+
+Operator direction: after the mint, the roster is SET. Today the self-heal `skill` target
+appends into profiles.json, claiming in its own comment that "future runs inherit this
+learning" — they cannot, because pre-run-reset restores profiles.json from its original at the
+start of every run. A second write path (the syntax-class escalation) does an unlocked
+read-modify-write on the same file while the main path is properly flocked.
+
+FIX: nothing writes profiles.json after the mint. Self-heal guidance still reaches the retry
+prompt in flight, which is the part that helps. Durable lessons go to the KB under ARCH-4's
+key. This also stops profiles.json drifting from its original, which has broken the same
+invariant test repeatedly.
+
+## ARCH-6 — one script serving two roles  `pending`
+
+Lanes re-invoke `bash "$0" --reset`, so every stage must know whether it is the parent or a
+lane (JIRA_CODELINE_RUN), and getting it wrong is invisible. This is why resume was evaluated
+after a dispatch that exits and never ran on a Jira project (fixed d7f2a65), why the roster
+reset needed a top-level guard, and why the writer pause fires once per lane rather than once.
+Project-wide orchestration and per-lane execution are different programs sharing an entry point.
+
+## ARCH-7 — correction is total, not incremental  `pending`
+
+A single blocking roster finding clears the ENTIRE roster and re-proposes, discarding good
+briefs with the bad one. Cycle counts have swung 1->9 and 10->0 between runs. Repair should
+touch the brief that was wrong.
+

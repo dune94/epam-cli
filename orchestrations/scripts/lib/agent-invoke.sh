@@ -81,7 +81,7 @@ invoke_agent() {
 
     agent_profile_validate "$role" || return 2
 
-    local _out_tok _max_iter _effort _timeout _capture _tools _temp
+    local _out_tok _max_iter _effort _timeout _capture _tools _temp _ladder
     _out_tok=$(agent_profile_get  "$role" maxOutputTokens)
     _max_iter=$(agent_profile_get "$role" maxIterations)
     _effort=$(agent_profile_get   "$role" reasoningEffort)
@@ -89,6 +89,14 @@ invoke_agent() {
     _capture=$(agent_profile_get  "$role" captureCost)
     _tools=$(agent_profile_get    "$role" allowedTools  || echo "")
     _temp=$(agent_profile_get     "$role" temperature   || echo "")
+    # WHICH LADDER THIS SEAM CLIMBS — data, not policy in code.
+    #
+    # The profile names a ladder ("ladder": "<name>"); the models in it come from the
+    # project's own config as EPAM_MODEL_LADDER_<NAME>. So which seams get a stronger
+    # ladder is an edit to the registry, and which models that ladder contains is an edit
+    # to the project — neither is a change to this script, and no seam, ladder or model
+    # name appears here.
+    _ladder=$(agent_profile_get   "$role" ladder        || echo "")
 
     # Per-role env override, for one-off tuning without editing the registry:
     #   AGENT_INVOKE_<ROLE>_MAX_OUTPUT_TOKENS   (role upper-cased, - → _)
@@ -97,6 +105,7 @@ invoke_agent() {
     _ov="AGENT_INVOKE_${_rk}_MAX_OUTPUT_TOKENS"; [ -n "${!_ov:-}" ] && _out_tok="${!_ov}"
     _ov="AGENT_INVOKE_${_rk}_TIMEOUT_SECS";      [ -n "${!_ov:-}" ] && _timeout="${!_ov}"
     _ov="AGENT_INVOKE_${_rk}_REASONING_EFFORT";  [ -n "${!_ov:-}" ] && _effort="${!_ov}"
+    _ov="AGENT_INVOKE_${_rk}_LADDER";            [ -n "${!_ov:-}" ] && _ladder="${!_ov}"
 
     local _cmd="${_runner:-${AI_RUNNER_CMD:-$_AGENT_INVOKE_DIR/../ai-run.sh}}"
 
@@ -158,6 +167,17 @@ invoke_agent() {
         "EPAM_REASONING_EFFORT=$_effort"
     )
     [ -n "$_temp" ]        && _env+=("EPAM_TEMPERATURE=$_temp")
+    # Resolve the named ladder from the project's config. Absent or unset: this seam simply
+    # climbs whatever ladder the run already provides — never a silent fallback to something
+    # this script chose.
+    if [ -n "$_ladder" ]; then
+        local _ladder_var="EPAM_MODEL_LADDER_$(printf '%s' "$_ladder" | tr '[:lower:]-' '[:upper:]_')"
+        if [ -n "${!_ladder_var:-}" ]; then
+            _env+=("EPAM_MODEL_LADDER_HIGH=${!_ladder_var}" "EPAM_MODEL_LADDER=${!_ladder_var}")
+        else
+            echo "[agent-invoke] role '$role' asks for ladder '$_ladder' but $_ladder_var is not set — using the run's default ladder" >&2
+        fi
+    fi
     [ -n "$_tools" ]       && _env+=("EPAM_ALLOWED_TOOLS=$_tools" "AI_GATE_ALLOW_TOOLS=1")
     [ -n "$_write_paths" ] && _env+=("EPAM_ALLOWED_WRITE_PATHS=$_write_paths" "EPAM_DANGEROUS_SKIP_APPROVAL=1")
     [ -n "$_json_result" ] && _env+=("ORCH_JSON_RESULT=$_json_result")

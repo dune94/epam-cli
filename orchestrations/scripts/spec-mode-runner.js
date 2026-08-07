@@ -3285,6 +3285,50 @@ function candidateRoles(profiles, agentsDir) {
  * system prompt or the string "unknown", which is what the 15 `.agentRole // "unknown"`
  * consumers downstream would silently do with a null.
  */
+/**
+ * seamInvocationEnv(seam) — the model settings this seam is configured to run with.
+ *
+ * WHICH seam climbs WHICH ladder is data: agents/invocation-profiles.json names a ladder per
+ * seam. WHAT models that ladder contains is the project's: EPAM_MODEL_LADDER_<NAME> in its own
+ * config. Neither a seam name, a ladder name nor a model appears in this function — changing
+ * either is an edit to a registry or a project, never to the engine.
+ *
+ * Returns {} when the seam has no entry, so a seam without configuration simply runs on the
+ * run's defaults rather than on something this code chose for it.
+ */
+function seamInvocationEnv(seam, logDir) {
+  if (!seam) return {};
+  let profile = null;
+  try {
+    const registry = process.env.AGENT_PROFILES_REGISTRY
+      || path.join(automationDirFromLogDir(logDir), 'agents', 'invocation-profiles.json');
+    const parsed = JSON.parse(fs.readFileSync(registry, 'utf8'));
+    profile = (parsed.profiles || {})[seam] || null;
+  } catch { return {}; }
+  if (!profile) return {};
+
+  const env = {};
+  if (profile.reasoningEffort) env.EPAM_REASONING_EFFORT = String(profile.reasoningEffort);
+  if (profile.temperature !== undefined && profile.temperature !== '') {
+    env.EPAM_TEMPERATURE = String(profile.temperature);
+  }
+  if (profile.ladder) {
+    const key = 'EPAM_MODEL_LADDER_' + String(profile.ladder).toUpperCase().replace(/[^A-Z0-9]/g, '_');
+    const rungs = process.env[key];
+    if (rungs) {
+      env.EPAM_MODEL_LADDER_HIGH = rungs;
+      env.EPAM_MODEL_LADDER = rungs;
+      // The first rung is where this seam STARTS; without it the seam begins on the run's
+      // default model and the ladder only changes where it escalates to.
+      const first = String(rungs).split('|')[0].split('=')[0].trim();
+      if (first) env.EPAM_MODEL = first;
+    } else {
+      console.warn(`spec-mode: seam '${seam}' asks for ladder '${profile.ladder}' but ${key} is unset — using the run's default ladder`);
+    }
+  }
+  return env;
+}
+
 const TOOL_ROSTER_REVIEW = {
   name: 'submit_roster_review',
   description:
@@ -3317,6 +3361,30 @@ const TOOL_ROSTER_REVIEW = {
             checked: { type: 'string', description: 'What you did to test it — the tool and the target.' },
             found: { type: 'string', description: 'What you actually found.' },
             remedy: { type: 'string', description: 'What the brief should say instead.' },
+            verification: {
+              type: 'object',
+              description:
+                'When your finding rests on whether a NAMED THING is present in a codeline, state it ' +
+                'here as well as in prose, so the pipeline can re-run exactly that check itself. ' +
+                'Omit when the finding is a judgement no mechanical check settles — an ownership ' +
+                'overlap, work nobody owns, a brief that is merely vague.',
+              properties: {
+                kind: {
+                  type: 'string',
+                  enum: ['dependency_declared', 'path_exists', 'not_mechanically_checkable'],
+                  description:
+                    'dependency_declared = the subject is a dependency name. path_exists = the ' +
+                    'subject is a path relative to the codeline root. Otherwise the third.',
+                },
+                codeline: { type: 'string', description: 'Which codeline, named exactly as listed.' },
+                subject: { type: 'string', description: 'The dependency or path, exactly as it would be written.' },
+                expected: {
+                  type: 'string',
+                  enum: ['present', 'absent'],
+                  description: 'What you found: is the subject present in that codeline, or absent?',
+                },
+              },
+            },
           },
         },
       },
@@ -3419,9 +3487,17 @@ async function reviewRoster({
     toolLine,
     '',
     'Return every defect you can evidence, and nothing you cannot.',
+    '',
+    'Where a finding turns on whether a named dependency or path is present in a codeline, fill in',
+    'the verification field as well as writing the prose. The pipeline re-runs that exact check',
+    'against the repository and DISCARDS any finding the check refutes — so a careless reading',
+    'costs nothing, and a correct one is confirmed independently of how convincingly you argued it.',
   ].join('\n');
 
-  const env = { EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROSTER_REVIEW) };
+  const env = {
+    EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROSTER_REVIEW),
+    ...seamInvocationEnv('roster-review', logDir),
+  };
   if (toolGrant) { env.AI_GATE_ALLOW_TOOLS = '1'; env.EPAM_ALLOWED_TOOLS = toolGrant; }
 
   const payload = await runAgentForJson(
@@ -3430,11 +3506,29 @@ async function reviewRoster({
     null, '', repoPath || '', env,
   );
 
-  const findings = (payload && Array.isArray(payload.findings)) ? payload.findings : [];
+  const raw = (payload && Array.isArray(payload.findings)) ? payload.findings : [];
+
+  // RE-RUN THE REVIEWER'S OWN CHECK. A finding that turns on whether a named dependency or
+  // path is present is mechanically settleable, and the reviewer states it in a structured
+  // field for exactly that reason. Live 2026-08-07: it reported a package absent from a
+  // codeline that declares it in devDependencies and has it installed — a careless read that
+  // a retry reproduces and a stronger model does not reliably prevent. Refuted findings are
+  // dropped; judgements it cannot settle are kept untouched.
+  let findings = raw;
+  let refuted = [];
+  try {
+    const v = require('./lib/verify-findings.js').verifyFindings(raw, codelines);
+    findings = v.kept;
+    refuted = v.refuted;
+    for (const f of refuted) console.warn(`spec-mode: roster finding DISCARDED — ${f._refutedBy}`);
+  } catch (err) {
+    console.warn(`spec-mode: could not verify roster findings (${err && err.message}) — keeping all of them`);
+  }
+
   // The verdict is DERIVED, never taken on the model's word: a reviewer that lists defects and
   // then calls the roster sound is the fail-open shape these gates exist to prevent.
   const verdict = findings.length ? 'defects_found' : 'sound';
-  return { verdict, findings, reviewed: _minted.length };
+  return { verdict, findings, refuted, reviewed: _minted.length };
 }
 
 async function assignAgentRoles({ promptExec, stories, profilesPath, logDir, repoPath, validateOnly }) {
@@ -4378,6 +4472,10 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
         // (Distinct from VC generation, which stays LOW: that is a restate task where
         // high effort drives prescriptive drift.) Env-overridable.
         EPAM_REASONING_EFFORT: process.env.CODEGRAPH_DETECTIVE_REASONING_EFFORT || 'high',
+        // Whatever this seam is configured to run with — ladder, effort, temperature — read
+        // from the registry by name. An explicit env override above still wins, and a seam
+        // with no entry simply runs on the run's defaults.
+        ...seamInvocationEnv('code-graph-detective', logDir),
       }, { costAgent: 'code-graph-detective', costStoryId: story && story.id ? story.id : '',
         // Salvage the detective's JSON even if its process exits non-zero/null
         // (it emits the answer, then a detached grandchild teardown trips the
@@ -7642,6 +7740,7 @@ module.exports = {
   TOOL_ROLE_ASSIGNMENTS,
   reviewRoster,
   TOOL_ROSTER_REVIEW,
+  seamInvocationEnv,
   schemaEnv,
   referencedDocsBlock,
   advanceAgentLadderEscalation,

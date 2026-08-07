@@ -972,3 +972,95 @@ above it did not, but the field currently makes dishonesty VISIBLE, not impossib
 object, query, argument or call while declaring a human observer is contradicting itself, and
 that contradiction is decidable without any vocabulary of domain terms. Care needed: the
 check must not become a word list, which is what the guard's vocabulary agent exists to avoid.
+
+---
+
+## DET-1 — Detective-before-roster: holistic parent + per-codeline children
+
+**Status:** `deferred` (parked 2026-08-07, design agreed, not built)
+**Source:** live roster runs 2026-08-07, and the design discussion that followed them.
+
+### The problem it solves
+
+The agent roster is minted from the ticket, the documents linked on it, and each codeline's
+declared dependencies. It has no knowledge of what the code actually looks like. Two live
+consequences:
+
+- Briefs name files the model believes should exist rather than files that do. Run 2 proposed
+  roles owning "the Stack initialization module" without anything having looked for it.
+- Scope is taken from ticket labels. AMSD-2041 is titled `[GO, UP, MX]` with components
+  `GO, Intake & Planning, MX, UP`, and nothing verified which codelines the work truly touches.
+
+The detective already answers both questions — it grounds a story in the existing repository —
+but it runs inside the per-story spec pass, i.e. AFTER the roster it should inform.
+
+### Agreed design
+
+Order: **Ingest (all codelines) → Detective (all codelines) → Roster (all codelines) → PAUSE
+→ per-codeline processes.** Everything project-wide completes before lanes fork, so no two
+lanes write the same artefact — the shared-state hazard that has bitten cross-lane work before.
+
+**Parent (holistic) detective**, before the roster, sweeping every codeline. Two SEPARATE
+outputs, and they must stay separate all the way through:
+  1. survey findings — breadth, not fix-site depth: which codelines this work touches, which
+     surfaces are involved;
+  2. a recommendation for which per-codeline child detectives this estate needs.
+A recommendation arriving in the same blob as evidence would be read as something discovered
+about the code.
+
+**The roster consumes both** and mints two classes: project engineers, and the per-codeline
+child detectives the parent recommended. The pause then reviews the whole agent team,
+investigators included — a bad detective brief corrupts everything downstream of it, and today
+that would be invisible.
+
+**Per-codeline processes** each run their own child detective. Isolation is structural: a lane
+sees one repository, so no filtering rule has to be remembered at each consumption point.
+
+**The parent then watches the children.** The children are isolated by design and therefore
+nobody can see across them — yet these codelines share a stack. The parent is the only
+vantage point from which "all three share this module" or "two found it and the third
+returned nothing, so re-investigate" is visible. Recommended shape: one reconciliation pass
+after the children complete, rather than continuous supervision — same value, far less
+machinery, and it fits the sequential lane structure.
+
+### Constraints that MUST hold if this is built
+
+- **The parent may report ABOUT the investigation; never supply findings FOR a codeline it did
+  not investigate.** Its output is a judgement on investigation quality and consistency, with
+  its own schema, structurally unable to be read as a `fixSiteAnalysis` entry. Its remedy is
+  *re-investigate*, never *substitute*. If parent output can become a fix site, every
+  contamination route below reopens through the supervisor.
+- **Contamination routes to keep closed** (all live today if findings are pooled naively —
+  a finding carries `{file, function, reason, fix}` and no codeline):
+  - a file found in codeline A entering codeline B's writer manifest (`manifestFileExcerpts`);
+  - `checkFixSiteCoverage` passing on another repo's evidence — a fail-open gate;
+  - `locationHint` pointing into the wrong repository;
+  - reviewers rejecting correct work because a declared file is a phantom there.
+- **Investigators must never write.** Already enforced (698b56f): minted investigators are
+  registered in `project-investigators.json`, which the write perimeter does not read and
+  story assignment never offers. An unrecognised `kind` is refused rather than coerced.
+- **Capability comes from the seam, not the brief.** A minted detective must run at the
+  detective invocation seam to receive CodeGraph tools and its response schema; invoked
+  elsewhere it is a name that cannot investigate.
+- **Three states, not two.** "Investigated and found nothing" is evidence that the story does
+  not apply to that codeline. It must be distinguishable from "not investigated" and from
+  "investigation failed", or an empty artefact reads as a clean bill of health.
+- **An empty result must not block.** A codeline with no fix site proceeds as "nothing to do
+  here"; otherwise adding a codeline to the estate breaks runs for stories that do not touch it.
+- **The lane must consume, not re-run.** If the spec pass keeps invoking the detective itself,
+  the run pays twice and the two investigations can disagree — roster grounded in one answer,
+  manifest in another.
+
+### Cost
+
+Investigations scale with codelines x stories. One story across three codelines is three
+before the pause; a ten-story phase is thirty. The parent's survey is the mitigation: it is
+cheap by construction and identifies which codelines are genuinely in scope, so deep
+investigation is skipped where the work does not reach.
+
+### Already delivered from this design
+
+- `698b56f` — implementer/investigator registry split; investigators cannot write or be assigned.
+- `698b56f` — ingest persists `codeline-discovery.json` to `LOG_DIR`; all codelines are now
+  visible to project-wide stages (verified: 149/103/93 declared dependencies across the three).
+

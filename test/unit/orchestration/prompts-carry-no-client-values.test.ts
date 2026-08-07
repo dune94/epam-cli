@@ -152,3 +152,4 @@ describe('worked examples use placeholders, never real values', () => {
       .not.toMatch(/ticket component \\?"(?!<|X\b)[A-Z]{2,}\\?"/);
   });
 });
+

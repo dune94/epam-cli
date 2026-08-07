@@ -2591,6 +2591,42 @@ An acceptance criterion is FORBIDDEN if it names a specific library, framework, 
 const SEARCH_TERM_RULE = `A search term is USEFUL when it names something that exists in the repository being searched — a symbol, function, file, module, or a domain noun the code itself uses. It is NOISE when it names the ticket's packaging rather than its subject: routing tags, brand or product labels, ticket prefixes, status words, people, or generic prose.
 Return as BLACKLIST every candidate that names packaging rather than subject, or that resolves to nothing in the index. Return as WHITELIST the terms that name the capability or code under discussion.`;
 
+/**
+ * vcFormSamples(env) — worked examples of FORM for the VC producer, supplied PER PROJECT.
+ *
+ * Rules alone did not stop the same three shapes being produced and then deleted across the
+ * runs of 2026-08-06/07: an assertion about internal structure, an assertion about an internal
+ * call path, and a criterion beginning outside the boundary a test can drive. Contrast pairs
+ * teach those shapes in a way a prohibition does not.
+ *
+ * They are NOT written here. Authored examples in engine code are content in the generic
+ * pipeline — wrong for the next project, and maintained by nobody. They live in the project's
+ * own config directory, where a project's specifics belong, and a project that supplies none
+ * simply gets no examples section.
+ *
+ * EVERY NOUN IN THEM MUST BE A PLACEHOLDER. The guard-vocabulary agent's persona carried one
+ * worked example naming a real vendor callback, and the guard deleted criteria quoting that
+ * callback on three consecutive runs. An example is the strongest line in a prompt, so it is
+ * the worst place to put a real name — see the test that enforces this on whatever file a
+ * project supplies.
+ *
+ * PRODUCER ONLY. The guard derives what it enforces from VC_OBSERVABILITY_RULES plus this
+ * story's own evidence; authored examples must never reach an enforcement path.
+ */
+function vcFormSamples(env = process.env) {
+  const explicit = env.VC_FORM_SAMPLES_FILE;
+  const projectDir = env.EPAM_PROJECT_CONFIG_DIR;
+  const candidate = explicit || (projectDir ? path.join(projectDir, 'vc-form-samples.md') : '');
+  if (!candidate) return '';
+  try {
+    const text = fs.readFileSync(candidate, 'utf8').trim();
+    return text || '';
+  } catch {
+    // A project without samples is the normal case, not an error.
+    return '';
+  }
+}
+
 const VC_OBSERVABILITY_RULES = `A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
 A verification criterion is FORBIDDEN if it:
 - prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
@@ -2624,61 +2660,6 @@ function isThinContext(story, env = process.env) {
 // "halve/×0.5", "calculate independently", "per segment/leg") plus new-code-
 // structure directives. Distinct from the AC prescriptiveness guard (which catches
 // test/code mechanics like vi.mock/import). Returns the flagged VCs with reasons.
-/**
- * documentGroundedVocabulary(vocabulary, referencedDocs) -> vocabulary
- *
- * A term the ticket's OWN documentation states verbatim is a published contract, not an
- * implementation choice — so it is whitelisted, and the applier already lets the whitelist win.
- *
- * The VC guard strips criteria that name a mechanism, which is right when the mechanism is
- * something this team picked and could change. It is wrong for a vendor's published API. Live
- * 2026-08-07 the guard deleted the three sharpest criteria on the story, all three quoting
- * `onEntryChange` — the callback the vendor's own guide documents, which the pipeline had just
- * fetched. The better the documentation grounding got, the more the guard deleted, because
- * documentation content IS mechanism.
- *
- * Only a BLACKLISTED term that appears in a FETCHED document is grounded: this cannot invent
- * vocabulary, cannot whitelist prose the guard never objected to, and cannot act on a document
- * that was never opened. Nothing is written down here — the terms come from the evidence.
- */
-function documentGroundedVocabulary(vocabulary, referencedDocs) {
-  const v = vocabulary && typeof vocabulary === 'object' ? vocabulary : {};
-  const docs = (Array.isArray(referencedDocs) ? referencedDocs : [])
-    .filter((d) => d && d.fetchStatus === 'fetched' && Array.isArray(d.quotes) && d.quotes.length);
-  const black = Array.isArray(v.blacklist) ? v.blacklist : [];
-  if (!docs.length || !black.length) return vocabulary;
-
-  // Only an IDENTIFIER can be grounded. A published API name carries structure that ordinary
-  // prose does not: camelCase, snake_case, a dot or a dash — `onEntryChange`, `live_preview`,
-  // `preview_token`. A plain lowercase English word in a quoted sentence ("displays", "page")
-  // is prose, and whitelisting it because a document happened to use it would disarm the guard
-  // wholesale. Structural, so it needs no vocabulary of its own; conservative, so a genuinely
-  // lowercase API name stays flagged rather than opening a hole.
-  const looksLikeIdentifier = (t) => /[A-Z]/.test(t) || /[._-]/.test(t) || /\d/.test(t);
-
-  const grounded = [];
-  for (const entry of black) {
-    const term = entry && entry.term;
-    if (!term || !looksLikeIdentifier(String(term))) continue;
-    // Whole-term, case-insensitive: the same matching the applier uses, so a term is grounded
-    // exactly when the applier would have flagged it against this text.
-    const esc = String(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(`(^|[^a-z0-9])${esc}([^a-z0-9]|$)`, 'i');
-    const source = docs.find((d) => d.quotes.some((q) => re.test(String(q))));
-    if (!source) continue;
-    grounded.push({
-      term,
-      reason: `quoted verbatim in documentation linked on the ticket (${source.url}) — a vendor's published contract, not an implementation choice`,
-    });
-  }
-  if (!grounded.length) return vocabulary;
-  const existing = new Set((Array.isArray(v.whitelist) ? v.whitelist : []).map((w) => w && w.term));
-  return {
-    ...v,
-    whitelist: [...(Array.isArray(v.whitelist) ? v.whitelist : []), ...grounded.filter((g) => !existing.has(g.term))],
-  };
-}
-
 function findVcMechanism(vc, storyId, vocabulary) {
   // PURE APPLIER — holds no terms, no patterns, no domain nouns, no stack assumptions.
   // What counts as a violation is DERIVED per story by the guard-vocabulary agent
@@ -2794,7 +2775,7 @@ function partitionFlaggedVc(vc, flags) {
 //
 // Returns a normalised vocabulary, or null. NULL IS NOT "NOTHING TO FLAG" — callers must
 // treat it as "the guard could not be armed" and say so loudly.
-async function deriveGuardVocabulary({ promptExec, rule, statements, story, findings, manifestFiles, logDir, seam, repoPath, codegraphTool }) {
+async function deriveGuardVocabulary({ promptExec, rule, statements, story, findings, manifestFiles, logDir, seam, repoPath, codegraphTool, referencedDocs }) {
   const _statements = (Array.isArray(statements) ? statements : []).filter(Boolean);
   if (!_statements.length) return null;
 
@@ -2802,6 +2783,23 @@ async function deriveGuardVocabulary({ promptExec, rule, statements, story, find
     .map((f) => `- ${f.file || ''}${f.function ? ` :: ${f.function}` : ''}${f.reason ? ` — ${String(f.reason).slice(0, 300)}` : ''}${f.helper ? ` [existing helper: ${f.helper}]` : ''}`)
     .join('\n');
   const manifest = (Array.isArray(manifestFiles) ? manifestFiles : []).map((f) => `- ${f}`).join('\n');
+
+  // DOCUMENTATION LINKED ON THIS TICKET — evidence for a judgement no rule can make.
+  //
+  // A term the vendor publishes is a contract, not a choice this team made, so flagging it as
+  // "mechanism" deletes the sharpest criteria a story has. But that cuts only so far: on
+  // 20260806T204217Z a criterion asserted that "the options object passed to
+  // contentstack.Stack() includes a live_preview key" — `live_preview` is in the vendor's
+  // guide, and the assertion is still about the shape of an internal object rather than
+  // anything observable. The reviewer said so and the spec gate halted the run at 0.68.
+  //
+  // Which of those two a criterion is doing requires reading it. A structural rule cannot
+  // tell them apart, and a list of allowed words is the thing this pipeline does not do. So
+  // the agent gets the documents and makes the call, with its reason recorded per term.
+  const docBlock = (Array.isArray(referencedDocs) ? referencedDocs : [])
+    .filter((d) => d && d.fetchStatus === 'fetched' && Array.isArray(d.quotes) && d.quotes.length)
+    .map((d) => `- ${d.url}\n${d.quotes.map((q) => `    "${String(q).replace(/\s+/g, ' ')}"`).join('\n')}`)
+    .join('\n');
 
   const profiles = (() => {
     try {
@@ -2821,7 +2819,16 @@ ${_statements.map((c, i) => `${i + 1}. ${c}`).join('\n')}
 DECLARED MANIFEST (the files this story says it will touch):
 ${manifest || '- (none declared)'}
 
-CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
+${docBlock ? `DOCUMENTATION LINKED ON THIS TICKET (fetched and quoted verbatim — the vendor's published contract):
+${docBlock}
+
+A name that appears above is something the VENDOR publishes, not something this team chose.
+Do NOT flag it when a statement uses it to describe OBSERVABLE behaviour — what a user or a
+test can see happen. DO still flag it when the statement asserts the shape or contents of an
+INTERNAL object, argument or call, even if the name itself is documented: that is an
+implementation detail wearing a published name.
+
+` : ''}CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
 ${evidence || '- (none available)'}
 
 STORY CONTEXT:
@@ -2932,19 +2939,37 @@ async function enforceVerificationCriteria(story, initialVc, opts = {}) {
   const guardClean = vc.filter((c) => !mechCriteria.includes(c));
 
   const { clean, flagged, unattributable } = partitionFlaggedVc(vc, lastFlags);
+
+  // AN ADVISORY DROP MUST BE A CLEAR MINORITY.
+  //
+  // The reviewer's flags may delete — a modest, well-aimed objection is worth acting on, and
+  // this function's own tests rightly insist on that. But the rule was "at least half
+  // survive", which lets a review condemning exactly half delete half. Live 2026-08-07 (run
+  // 20260807T010410Z) it deleted two of four, including "the preview page updates ... without
+  // requiring a manual page refresh" — the central behaviour of the feature, naming no
+  // mechanism at all. The story reached the writer with that unverified.
+  //
+  // Deleting half a set is a rewrite, not a correction, and this function already holds the
+  // instinct that a review condemning most of a set is more likely an outlier than the set is
+  // to be worthless. Half counts as most.
+  //
+  // The deterministic guard is untouched: what it flags is mechanism by construction and is
+  // always dropped, above. Regeneration still acts on reviewer flags every cycle; this only
+  // decides what happens once the cycles are spent.
   const absFloor = Number(process.env.VC_MIN_RETAINED || '2');
   const fraction = Number(process.env.VC_MIN_RETAINED_FRACTION || '0.5');
   const floor = Math.max(Math.min(absFloor, vc.length), Math.ceil(fraction * vc.length));
+  const isMinority = flagged.length * 2 < vc.length;
 
-  if (!unattributable && clean.length >= floor && clean.length < vc.length) {
-    console.warn(`spec-mode: ⚠️ VC still flagged for ${story && story.id} after ${maxCycles} cycle(s) — dropping ${flagged.length} flagged criterion/criteria, retaining ${clean.length} clean. Dropped: ${flagged.map((c) => `"${String(c).slice(0, 60)}"`).join(' | ')}`);
+  if (!unattributable && isMinority && clean.length >= floor && clean.length < vc.length) {
+    console.warn(`spec-mode: \u26a0\ufe0f VC still flagged for ${story && story.id} after ${maxCycles} cycle(s) — dropping ${flagged.length} flagged criterion/criteria, retaining ${clean.length} clean. Dropped: ${flagged.map((c) => `"${String(c).slice(0, 60)}"`).join(' | ')}`);
     return { vc: clean, source: 'partial', cycles: maxCycles, flags: lastFlags, dropped: flagged };
   }
 
-  // Acting on the advisory flags would take the set below the floor (or they could not be
-  // attributed at all). Keep what the deterministic guard certified, and say so loudly.
+  // Not a minority (or unattributable): keep what the deterministic guard certified and
+  // record the disagreement on the story.
   if (guardClean.length) {
-    console.warn(`spec-mode: ⚠️ VC review DISPUTED for ${story && story.id} — the reviewer's flags would leave ${clean.length}/${vc.length} criteria, below the floor of ${floor}. Keeping the ${guardClean.length} the deterministic guard certified; a review that condemns most of a set is treated as an outlier. Flags: ${lastFlags.slice(0, 3).join(' | ')}`);
+    console.warn(`spec-mode: ⚠️ VC review DISPUTED for ${story && story.id} — the reviewer flagged ${unattributable ? 'the set' : `${flagged.length}/${vc.length}`} criteria, not a clear minority. Keeping the ${guardClean.length} the deterministic guard certified; deleting half a set is a rewrite, not a correction. Flags: ${lastFlags.slice(0, 3).join(' | ')}`);
     return {
       vc: guardClean,
       source: 'disputed',
@@ -3022,7 +3047,7 @@ Apply these rules EXACTLY (the producer is held to the same text — do not inve
 ${VC_OBSERVABILITY_RULES}
 
 FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
-Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.`;
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes <an approach> — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.`;
   const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-review.log`) : null, story.id, 'speckit', resolveCodelinePath(story));
   const arr = _firstJsonArray(out);
   return Array.isArray(arr) ? arr.filter((x) => typeof x === 'string') : [];
@@ -3051,7 +3076,7 @@ ${(story.acceptanceCriteria || []).map((a) => '- ' + a).join('\n') || '- (none)'
 Description: ${String(story.description || '')}
 
 ${VC_OBSERVABILITY_RULES}
-
+${vcFormSamples() ? `\n${vcFormSamples()}\n` : ''}
 Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
 Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.`;
   const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-regen.log`) : null, story.id, 'openspec', resolveCodelinePath(story));
@@ -3120,7 +3145,7 @@ Set "locationHint" to [{"file":"<repo-relative path>","function":"<function name
 If no relevant code appears above, set locationHint to []. Do NOT invent a plausible file: a named file whose contents you cannot see in this prompt is a fabrication, and an empty locationHint is a usable answer while a fabricated one is not.
 
 ${_acPreamble} a "verificationCriteria" array — concrete, OBSERVABLE checks that confirm the change is correct — derived from ${_sources.join(' AND ')}. Apply these rules to EVERY verification criterion (a strict reviewer holds you to this SAME text, so a VC that breaks any rule will be flagged and rejected):
-${VC_OBSERVABILITY_RULES}
+${VC_OBSERVABILITY_RULES}${vcFormSamples(env) ? `\n\n${vcFormSamples(env)}\n` : ''}
 - If the ticket describes a SYMPTOM, the VCs verify that symptom is resolved AND that related existing behavior does not regress.
 Set "vcSource" to one of ${_vcSourceValues.split('|').map((v) => `"${v}"`).join(', ')} — where you actually derived the VCs from.${unreachableExternalsConstraint()}
 `
@@ -4364,19 +4389,26 @@ ${storyPayload}${publishedContracts(repoPath, story)}
             // sharpest criteria of run 20260807T000054Z — all quoting `onEntryChange`, from
             // the guide the pipeline had just fetched — so better documentation grounding
             // produced more deletions.
-            deriveVocabulary: async (vcToCheck) => documentGroundedVocabulary(
-              await deriveGuardVocabulary({
-                promptExec,
-                rule: VC_OBSERVABILITY_RULES,
-                statements: vcToCheck,
-                story,
-                findings: detectiveFindings,
-                manifestFiles: (story && story.technicalNotes && story.technicalNotes.files) || [],
-                logDir,
-                seam: 'verification-criteria',
-              }),
+            // The documents go to the AGENT as evidence; it decides which terms are the
+            // vendor's published contract and which are this codeline's internals, and says
+            // why per term. A structural whitelist was tried here first — whitelist any
+            // blacklisted term quoted verbatim in a fetched document — and it was too
+            // permissive: it forced through a criterion asserting the SHAPE of an internal
+            // options object because the key name happened to be documented. The reviewer
+            // caught it and the spec gate halted the run at quality 0.68. Whether a
+            // documented name is being used to describe behaviour or to assert internal
+            // structure requires reading the statement, which is a judgement, not a rule.
+            deriveVocabulary: (vcToCheck) => deriveGuardVocabulary({
+              promptExec,
+              rule: VC_OBSERVABILITY_RULES,
+              statements: vcToCheck,
+              story,
+              findings: detectiveFindings,
+              manifestFiles: (story && story.technicalNotes && story.technicalNotes.files) || [],
+              logDir,
+              seam: 'verification-criteria',
               referencedDocs,
-            ),
+            }),
           });
           story.verificationCriteria = enforced.vc;
           // 'disputed' is NOT fallback: the criteria are the author's real ones, kept
@@ -6763,6 +6795,7 @@ module.exports = {
   // The tool definitions ARE the contract. Exported so lib/agent-output-schema.js can
   // validate answers against them instead of restating the shapes — a restated copy
   // drifted within hours and rejected valid coordinator output on a live run.
+  vcFormSamples,
   TOOL_DEFINITIONS: {
     TOOL_SPEC_ASSIGNMENTS,
     TOOL_SPEC_AGENT,
@@ -6774,7 +6807,6 @@ module.exports = {
   specAgentEnv,
   reviewTicketLinks,
   normaliseTicketLinks,
-  documentGroundedVocabulary,
   persistReferencedDocs,
   fetchTicketDocuments,
   manifestFileExcerpts,

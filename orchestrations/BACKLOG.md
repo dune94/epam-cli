@@ -897,3 +897,37 @@ recovered copy was an EARLY DRAFT whose REPO_ROOT resolved to `test/` instead of
 root. Every path it built was wrong, so the perimeter library was never sourced and the
 functions under test did not exist. With the path corrected the suite is 16/16 green. The
 perimeter behaves correctly; only the baseline-branch assumption above is a real defect.
+
+## Prompt hardcoding: the persona guard cannot see vendor or domain terms
+
+Found 2026-08-07 while chasing why the VC guard kept deleting documentation-derived criteria.
+
+Three client/vendor values were sitting in agent personas — prompt text sent to a model on
+every run — and `prompts-carry-no-client-values.test.ts` passed the whole time:
+
+- `guard-vocabulary-agent`: `"onEntryChange" is a useful blacklist term`. This is why criteria
+  quoting that vendor callback were deleted for three consecutive runs: the guard had been
+  TOLD to blacklist it, by example.
+- `code-graph-detective`: `the business concepts (promo code, discount, amount, return trip,
+  dispatch, report, line item), the data fields named (report.price.discount), and the
+  domain/integration (Mozio)` — the entire domain vocabulary of a fare-discount bug, sent on
+  every ticket. A plausible cause of the plan/execution MISMATCH warnings seen on unrelated
+  stories, which remain untraced.
+- `kb-change-reviewer`: `references a specific story ID (SKY-xxx, EPAM-xxx, etc.)`.
+
+All three are fixed in the three persona files. **The gap in the guard is not.** Its `VOCAB`
+is derived from the running project's CONFIG — codeline names, project key — so it cannot see
+a vendor's API name, a domain noun left over from another ticket, or a tracker-ID prefix.
+
+**Two rules were tried and REJECTED as too noisy to ship** (a permanently red test teaches
+people to ignore it):
+
+- tracker-ID shape `[A-Z]{2,6}-\d+`: matches `MPL-2` (the Mozilla licence) and epam-cli's own
+  scaffolding story IDs (`INIT-001`, `DASH-001`, `SKILLS-001`), which are engine
+  self-reference, not client leakage.
+- terms derived from every project's canonical PRD: matches `Node`, `Express`, `Jira`,
+  `Without`, `implementationOrder`, `phasesConfig` — ordinary prose and engine field names.
+
+A workable rule probably has to distinguish the CLIENT project's vocabulary from the engine's
+own, which the current layout does not cleanly separate. Until then this class is caught only
+by reading the personas.

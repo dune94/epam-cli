@@ -248,94 +248,105 @@ describe('the vocabulary agent is bound to its own tool schema', () => {
 });
 
 /**
- * A CONTRACT THE VENDOR PUBLISHES IS NOT AN IMPLEMENTATION DETAIL.
+ * SUPERSEDED, same day. A structural whitelist lived here: any blacklisted term quoted
+ * verbatim in a fetched document was whitelisted, on the grounds that a vendor's published
+ * API is a contract rather than a choice.
  *
- * The VC guard strips criteria that name a MECHANISM — the right rule when the mechanism is
- * an implementation choice the team is free to make differently.
+ * It was too permissive. Run 20260806T204217Z kept a criterion asserting that "the options
+ * object passed to contentstack.Stack() includes a live_preview key" — the key name IS
+ * documented, and the assertion is still about the shape of an internal object rather than
+ * anything observable. The reviewer flagged exactly that and the spec-review gate halted the
+ * run at quality 0.68.
  *
- * But on 2026-08-07, run 20260807T000054Z, it deleted the three best criteria on the story,
- * and all three came straight from the vendor documentation the pipeline had just fetched:
- *
- *   "Given the Live Preview SDK is mocked to invoke the registered onEntryChange callback,
- *    when onEntryChange fires, the ContentstackContext.Provider ..."
- *   "The onEntryChange callback is registered exactly once during the provider's lifecycle
- *    (not on every render), and it triggers a data refresh"
- *   "... onEntryChange fires for a page that requires authentication, the application does
- *    not throw"
- *
- * Those are the sharpest and most testable checks the run produced, and they are observable:
- * `onEntryChange` is the vendor's published callback, quoted verbatim in their guide. It is
- * not something this team chose and could change.
- *
- * So the better the documentation grounding gets, the more the guard deletes — because
- * documentation content IS mechanism. A term the ticket's own documentation states is
- * whitelisted: the applier already lets the whitelist win, and the terms are DERIVED from the
- * fetched documents rather than written down anywhere.
+ * "The vendor names this term" and "asserting this is observable behaviour" are different
+ * questions, and only the second one matters to the guard. Telling them apart requires
+ * reading the statement. So the documents became evidence for the agent that already derives
+ * this vocabulary — see the suite below — and the structural rule was removed.
  */
-describe('terms the ticket’s documentation states are not treated as implementation detail', () => {
+/**
+ * WHETHER A DOCUMENTED TERM IS OK IS A JUDGEMENT, NOT A RULE I CAN WRITE.
+ *
+ * My first attempt whitelisted any blacklisted term quoted verbatim in a fetched document,
+ * on the grounds that a vendor's published API is a contract rather than a choice. It kept
+ * the right criteria and one wrong one. Run 20260806T204217Z produced:
+ *
+ *   VC1  "the options object passed to contentstack.Stack() includes a live_preview key"
+ *
+ * which the reviewer flagged — correctly — as "references internal options object, restate
+ * as observable outcome on rendered page". The gate then halted the run at quality 0.68.
+ *
+ * `live_preview` IS in the vendor's guide. That did not make an assertion about the shape of
+ * an internal config object observable. I had conflated "the vendor names this term" with
+ * "asserting this is observable behaviour" — two different questions, and only the second
+ * one matters to the guard.
+ *
+ * The second question needs reading, not a structural rule. So the DOCUMENTS become evidence
+ * for the agent that already derives this vocabulary, and the structural whitelist goes.
+ */
+describe('the vocabulary agent is given the ticket’s documentation as evidence', () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, chmodSync, readFileSync, rmSync } = require('node:fs');
+  const { join } = require('node:path');
+  const { tmpdir } = require('node:os');
   const spec = require('../../../orchestrations/scripts/spec-mode-runner.js');
-  const { applyVocabulary } = require('../../../orchestrations/scripts/lib/guard-vocabulary.js');
 
-  const DOCS = [{
-    url: 'https://vendor.test/docs/live-preview',
-    fetchStatus: 'fetched',
-    quotes: [
-      'React.useEffect(() => { onEntryChange(updateData); }, []);',
-      "live_preview: { preview_token: preview_token, enable: true, host: 'rest-preview.contentstack.com' }",
-    ],
-  }];
+  async function promptFor(docs: any) {
+    const dir = mkdtempSync(join(tmpdir(), 'vocabdocs-'));
+    const promptFile = join(dir, 'prompt.txt');
+    const capture = join(dir, 'c.js');
+    writeFileSync(capture,
+      `let p='';process.stdin.on('data',d=>p+=d);process.stdin.on('end',()=>{` +
+      `require('fs').writeFileSync(${JSON.stringify(promptFile)},p);` +
+      `process.stdout.write('<GUARD_VOCABULARY>{"blacklist":[{"term":"x","reason":"r"}],"whitelist":[]}</GUARD_VOCABULARY>')});`);
+    const runner = join(dir, 'run.sh');
+    writeFileSync(runner, `#!/usr/bin/env bash\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(capture)}\n`);
+    chmodSync(runner, 0o755);
+    const prev = process.env.SPEC_MODE_PROVIDER;
+    delete process.env.SPEC_MODE_PROVIDER;
+    try {
+      await spec.deriveGuardVocabulary({
+        promptExec: { cmd: runner, args: [] },
+        rule: 'a rule', statements: ['a statement'],
+        story: { id: 'T-1', title: 't', description: 'd' },
+        findings: [], manifestFiles: [], logDir: dir, seam: 'verification-criteria',
+        referencedDocs: docs,
+      });
+    } finally {
+      if (prev === undefined) delete process.env.SPEC_MODE_PROVIDER; else process.env.SPEC_MODE_PROVIDER = prev;
+    }
+    const out = readFileSync(promptFile, 'utf8');
+    rmSync(dir, { recursive: true, force: true });
+    return out;
+  }
 
-  const VC = 'When onEntryChange fires, the previewed page displays the updated draft entry.';
-  const BLACKLIST = { blacklist: [{ term: 'onEntryChange', reason: 'names a mechanism' }], whitelist: [] };
+  const DOCS = [{ url: 'https://vendor.test/docs/lp', fetchStatus: 'fetched',
+    quotes: ['ContentstackLivePreview.init({ stackSdk: Stack })', 'onEntryChange(updateData)'] }];
 
-  it('the fixture is real — without the documents the term IS flagged', () => {
-    const flagged = applyVocabulary([VC], BLACKLIST);
-    expect(flagged.length, 'the guard no longer flags mechanism at all — this test proves nothing').toBe(1);
-  });
+  it('THE FIX: the quotes reach the agent that decides what counts as mechanism', async () => {
+    const p = await promptFor(DOCS);
+    expect(p, 'the agent judges vendor API vs internal code with no sight of the vendor documentation')
+      .toContain('onEntryChange(updateData)');
+    expect(p).toContain('vendor.test');
+  }, 60000);
 
-  it('THE FIX: a term quoted in the ticket’s documentation is whitelisted', () => {
-    const grounded = spec.documentGroundedVocabulary(BLACKLIST, DOCS);
-    expect(
-      applyVocabulary([VC], grounded),
-      'the sharpest criteria on the story were deleted because the vendor’s own callback was called a mechanism',
-    ).toEqual([]);
-  });
+  it('it is told the distinction that actually matters', async () => {
+    const p = await promptFor(DOCS);
+    // Published contract used to describe BEHAVIOUR is fine; asserting the shape of an
+    // internal object is not, even when the key name is documented.
+    expect(p).toMatch(/observable|behaviour|behavior/i);
+    expect(p).toMatch(/internal/i);
+  }, 60000);
 
-  it('the whitelist entry says WHY, and names the source', () => {
-    const grounded = spec.documentGroundedVocabulary(BLACKLIST, DOCS);
-    const entry = grounded.whitelist.find((w: any) => w.term === 'onEntryChange');
-    expect(entry, 'onEntryChange was not whitelisted').toBeTruthy();
-    expect(entry.reason).toMatch(/document|vendor|quoted/i);
-    expect(entry.reason).toContain('vendor.test');
-  });
+  it('no documents means no documentation section — never an empty heading', async () => {
+    const p = await promptFor([]);
+    expect(p).not.toMatch(/DOCUMENTATION LINKED ON THIS TICKET/);
+  }, 60000);
 
-  it('a mechanism the documents do NOT mention is still flagged', () => {
-    const grounded = spec.documentGroundedVocabulary(
-      { blacklist: [{ term: 'useReducer', reason: 'names a mechanism' }], whitelist: [] }, DOCS);
-    expect(
-      applyVocabulary(['The page uses useReducer to hold draft state.'], grounded),
-      'grounding must not become a blanket amnesty',
-    ).toHaveLength(1);
-  });
-
-  it('prose words in a quote do not become whitelist entries', () => {
-    const grounded = spec.documentGroundedVocabulary(
-      { blacklist: [{ term: 'displays', reason: 'x' }], whitelist: [] },
-      [{ url: 'u', fetchStatus: 'fetched', quotes: ['the page displays the entry'] }]);
-    expect(
-      grounded.whitelist.map((w: any) => w.term),
-      'whitelisting ordinary prose would disarm the guard entirely',
-    ).not.toContain('displays');
-  });
-
-  it('no documents means the vocabulary is unchanged', () => {
-    expect(spec.documentGroundedVocabulary(BLACKLIST, [])).toEqual(BLACKLIST);
-    expect(spec.documentGroundedVocabulary(BLACKLIST, null)).toEqual(BLACKLIST);
-  });
-
-  it('an unfetched document grounds nothing — it has no verified text', () => {
-    const grounded = spec.documentGroundedVocabulary(BLACKLIST,
-      [{ url: 'u', fetchStatus: 'unreachable', quotes: ['onEntryChange'] }]);
-    expect(grounded.whitelist.map((w: any) => w.term)).not.toContain('onEntryChange');
-  });
+  it('an unfetched document contributes nothing — it has no verified text', async () => {
+    const p = await promptFor([{ url: 'https://unreachable.test/doc', fetchStatus: 'unreachable', quotes: ['someUnfetchedSymbol'] }]);
+    // Scoped to the documentation section: the persona itself legitimately talks about terms,
+    // so asserting on the whole prompt tests the persona, not the wiring.
+    expect(p).not.toMatch(/DOCUMENTATION LINKED ON THIS TICKET/);
+    expect(p).not.toContain('someUnfetchedSymbol');
+    expect(p).not.toContain('unreachable.test');
+  }, 60000);
 });

@@ -432,3 +432,119 @@ describe('an outlier LLM review cannot strip a deterministically-clean set', () 
     expect(r.source).toBe('fallback');
   });
 });
+
+/**
+ * THE REVIEWER ADVISES; ONLY THE DETERMINISTIC GUARD DELETES.
+ *
+ * Live 2026-08-07, run 20260807T010410Z. Four criteria went in and two came out. The two
+ * that were deleted:
+ *
+ *   "When a content author edits and saves a draft entry in the CMS, the preview page
+ *    updates to display the newly saved content without requiring a manual page refresh."
+ *   "The preview page displays the full content of draft entries — including all text,
+ *    media, and referenced content — as they exist in the draft version."
+ *
+ * Neither names a mechanism. The first is the ESSENCE of the feature — "live" preview means
+ * updating without a refresh — and the story went to the writer with it unverified.
+ *
+ * Both were flagged by the REVIEWER, not by the deterministic guard, and the retention rule
+ * let advisory flags delete because the survivors still cleared a floor of
+ * max(VC_MIN_RETAINED, half the set). On a set of four, that permits deleting two.
+ *
+ * The floor already encodes the right instinct — "a review that condemns most of a set is an
+ * outlier" — but applies it by COUNT, so a review that condemns exactly half deletes half.
+ * The two flag sources are not equivalent and should not have equivalent power:
+ *
+ *   - the deterministic guard applies vocabulary DERIVED for this story, and what it flags
+ *     is mechanism by construction. It deletes. (Unchanged.)
+ *   - the reviewer is a second opinion in prose. It annotates, and its objections are
+ *     recorded on the story — it does not delete work the guard certified.
+ *
+ * The regeneration cycles still act on reviewer flags: this is only about what happens when
+ * the cycles are exhausted and something must be decided.
+ */
+describe('advisory review flags annotate; they do not delete guard-clean criteria', () => {
+  const FOUR = [
+    'When a page is viewed in preview mode, it renders draft content that has been saved but not published.',
+    'Protected pages are not rendered in preview mode.',
+    'When an entry is saved, the preview page shows the new content without a manual refresh.',
+    'The preview page shows the draft values of text and media where they differ from published.',
+  ];
+
+  it('the fixture is real — the guard itself flags nothing here', async () => {
+    const mech = findVcMechanism(FOUR, null, await _ARM_GUARD.deriveVocabulary());
+    expect(mech, 'the guard flags one of these, so this suite would prove nothing').toEqual([]);
+  });
+
+  it('THE LOSS: two guard-clean criteria survive a reviewer that condemns half', async () => {
+    const r = await enforceVerificationCriteria(STORY, FOUR, {
+      ..._ARM_GUARD,
+      maxCycles: 1,
+      reviewVc: async () => ['VC 3 is not observable', 'VC 4 is not observable'],
+      regenerateVc: async () => null,
+    });
+    expect(
+      r.vc.length,
+      'the reviewer deleted the criteria the deterministic guard had certified — including ' +
+        'the one describing the feature\'s central behaviour',
+    ).toBe(4);
+    expect(r.vc.join(' ')).toContain('without a manual refresh');
+  });
+
+  it('the disagreement is recorded when the objection is not a minority', async () => {
+    const r = await enforceVerificationCriteria(STORY, FOUR, {
+      ..._ARM_GUARD,
+      maxCycles: 1,
+      reviewVc: async () => ['VC 3 is not observable', 'VC 4 is not observable'],
+      regenerateVc: async () => null,
+    });
+    expect(r.source, 'a kept-over-objection set must be distinguishable from a clean one').toBe('disputed');
+    expect(r.flags.join(' ')).toContain('VC 3');
+  });
+
+  it('a MINORITY objection is still honoured — the reviewer is not ignored', async () => {
+    const r = await enforceVerificationCriteria(STORY, FOUR, {
+      ..._ARM_GUARD,
+      maxCycles: 1,
+      reviewVc: async () => ['VC 4 is not observable'],
+      regenerateVc: async () => null,
+    });
+    expect(r.source).toBe('partial');
+    expect(r.vc.length, 'one well-aimed objection should still remove one criterion').toBe(3);
+  });
+
+  it('the deterministic guard still deletes — its flags are not advisory', async () => {
+    const withMech = [...FOUR, 'The total is halved per segment and applied independently.'];
+    const r = await enforceVerificationCriteria(STORY, withMech, {
+      ..._ARM_GUARD,
+      maxCycles: 1,
+      reviewVc: async () => [],
+      regenerateVc: async () => null,
+    });
+    expect(r.vc, 'a criterion the guard flagged as mechanism survived').not.toContain(
+      'The total is halved per segment and applied independently.');
+    expect(r.vc.length).toBe(4);
+  });
+
+  it('a review that flags everything still cannot empty the set', async () => {
+    const r = await enforceVerificationCriteria(STORY, FOUR, {
+      ..._ARM_GUARD,
+      maxCycles: 1,
+      reviewVc: async () => ['VC 1 no', 'VC 2 no', 'VC 3 no', 'VC 4 no'],
+      regenerateVc: async () => null,
+    });
+    expect(r.vc.length).toBe(4);
+    expect(r.source).toBe('disputed');
+  });
+
+  it('regeneration still gets to act on reviewer flags before any of this', async () => {
+    let regenerated = false;
+    await enforceVerificationCriteria(STORY, FOUR, {
+      ..._ARM_GUARD,
+      maxCycles: 2,
+      reviewVc: async () => ['VC 3 is not observable'],
+      regenerateVc: async () => { regenerated = true; return null; },
+    });
+    expect(regenerated, 'the reviewer must still drive regeneration — it is only DELETION that stops').toBe(true);
+  });
+});

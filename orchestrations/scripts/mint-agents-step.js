@@ -69,20 +69,43 @@ function resolveRepoPath(prd, stories, repoArg) {
  */
 function declaredDependencies(repoPath) {
   if (!repoPath) return [];
-  const manifests = ['package.json', 'requirements.txt', 'go.mod', 'Gemfile', 'pom.xml', 'build.gradle', 'Cargo.toml'];
-  for (const m of manifests) {
-    const file = path.join(repoPath, m);
-    if (!fs.existsSync(file)) continue;
-    try {
-      const raw = fs.readFileSync(file, 'utf8');
-      if (m === 'package.json') {
-        const pkg = JSON.parse(raw);
-        return [...Object.keys(pkg.dependencies || {}), ...Object.keys(pkg.devDependencies || {})];
-      }
-      return raw.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 200);
-    } catch { /* try the next manifest */ }
+  // WHICH manifest, and WHICH keys inside it, are PROJECT facts — not the engine's to know.
+  // This function briefly carried a list of ecosystem manifest filenames, which is stack
+  // knowledge hardcoded into the generic pipeline. The project already declares both in
+  // .epam/dependency-check.json (provisioned per codeline from the project's own config, and
+  // the same file the dependency-contract plugin reads), so there is one declaration and the
+  // engine names no ecosystem.
+  //
+  // Fails CLOSED and SAYS SO: no config means no dependency evidence, never a guessed
+  // manifest. A guessed manifest that happens to miss is indistinguishable from a project
+  // that genuinely declares nothing.
+  let cfg = null;
+  try {
+    cfg = JSON.parse(fs.readFileSync(path.join(repoPath, '.epam', 'dependency-check.json'), 'utf8'));
+  } catch {
+    process.stderr.write(
+      '[mint-step] no .epam/dependency-check.json in the codeline — the mint gets no dependency ' +
+      'evidence (the engine will not guess which manifest this project uses)\n');
+    return [];
   }
-  return [];
+  const manifestFile = typeof cfg.manifestFile === 'string' ? cfg.manifestFile : '';
+  const manifestKeys = Array.isArray(cfg.manifestKeys) ? cfg.manifestKeys : [];
+  if (!manifestFile || !manifestKeys.length) {
+    process.stderr.write('[mint-step] dependency-check.json declares no manifestFile/manifestKeys — no dependency evidence\n');
+    return [];
+  }
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(repoPath, manifestFile), 'utf8'));
+    const names = [];
+    for (const key of manifestKeys) {
+      const section = manifest[key];
+      if (section && typeof section === 'object') names.push(...Object.keys(section));
+    }
+    return [...new Set(names)];
+  } catch (err) {
+    process.stderr.write(`[mint-step] could not read ${manifestFile}: ${err && err.message}\n`);
+    return [];
+  }
 }
 
 if (require.main === module && (!PRD_PATH || !fs.existsSync(PRD_PATH))) {
@@ -220,6 +243,16 @@ if (require.main !== module) return;
   fs.mkdirSync(LOG_DIR, { recursive: true });
   const aiRunnerCmd = process.env.AI_RUNNER_CMD || path.join(__dirname, 'ai-run.sh');
   const promptExec = spec.resolvePromptExec(aiRunnerCmd);
+  // RE-APPLY THIS PROJECT'S BRIEFS FIRST. profiles.json was restored from its canonical
+  // original at launch, which deletes anything minted on a previous run while the role
+  // registry and the KB files survive. Without this the three disagree: on a resume the
+  // registry names roles that have no profile, assignment finds zero candidates and refuses.
+  const { applyProjectProfiles } = require('./lib/agent-roster.js');
+  const reapplied = applyProjectProfiles(PROFILES_PATH, AGENTS_DIR);
+  if (reapplied.length) {
+    process.stderr.write(`[mint-step] re-applied ${reapplied.length} project brief(s) after the per-run restore: ${reapplied.join(', ')}\n`);
+  }
+
   const REPO_PATH = resolveRepoPath(prd, stories, REPO_ARG);
   if (!REPO_PATH) {
     process.stderr.write('[mint-step] WARNING: no codeline repository resolved — the mint cannot read the stack\n');

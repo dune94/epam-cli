@@ -35,6 +35,13 @@ function estate() {
     dependencies: { '@somevendor/management': '1.0.0', 'some-framework': '2.0.0' },
     devDependencies: { 'a-test-runner': '3.0.0' },
   }));
+  // The project declares WHICH manifest and WHICH keys — the engine names no ecosystem.
+  // This is provisioned into every codeline from the project's own config, and is the same
+  // file the dependency-contract plugin reads.
+  mkdirSync(join(repo, '.epam'), { recursive: true });
+  writeFileSync(join(repo, '.epam', 'dependency-check.json'), JSON.stringify({
+    manifestFile: 'package.json', manifestKeys: ['dependencies', 'devDependencies'],
+  }));
   mkdirSync(join(root, 'another-repo', '.git'), { recursive: true });
   return { root, repo };
 }
@@ -114,6 +121,16 @@ describe('the step resolves a REPOSITORY, not the estate root', () => {
     const deps = helpers('').declaredDependencies(repo);
     expect(deps).toContain('@somevendor/management');
     expect(deps).toContain('a-test-runner');
+  });
+
+  it('a codeline that declares no manifest config yields nothing — the engine does not guess', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'no-cfg-')); dirs.push(dir);
+    mkdirSync(join(dir, '.git'), { recursive: true });
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ dependencies: { x: '1' } }));
+    expect(
+      helpers('').declaredDependencies(dir),
+      'the engine guessed a manifest filename — that is stack knowledge in generic code',
+    ).toEqual([]);
   });
 
   it('an estate root yields no dependencies — it is not a repository', () => {

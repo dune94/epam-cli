@@ -140,6 +140,23 @@ function mergeProjectAgents(opts) {
   const registered = registerProjectRoles(agentsDir, minted.map((m) => m.name));
   for (const m of minted) if (registered.includes(m.name)) m.surfaces.push('project-roles');
 
+  // Persist the BRIEFS to the project's own store as well.
+  //
+  // profiles.json is restored from profiles.json.original at the start of every run — the
+  // ephemeral-roster design, correct when only skill addendums were project-specific. Now
+  // that identities are generated, that restore deleted the minted briefs while the registry
+  // and the KB files survived, leaving three halves disagreeing. On a resume (mint skipped)
+  // the registry named roles that had no profile, so assignment found zero candidates and
+  // refused. Live 2026-08-07.
+  //
+  // The project's store — not profiles.json.original: writing one project's agents into the
+  // engine's canonical base is the contamination this whole change exists to remove.
+  const savedProfiles = saveProjectProfiles(agentsDir, minted.reduce((acc, m) => {
+    acc[m.name] = profiles[m.name];
+    return acc;
+  }, {}));
+  for (const m of minted) if (savedProfiles.includes(m.name)) m.surfaces.push('project-profiles');
+
   return { minted, rejected, unchanged, projectRoles: registered };
 }
 
@@ -190,6 +207,67 @@ function registerProjectRoles(agentsDir, names) {
   return roles;
 }
 
+const PROJECT_PROFILES_FILE = 'agent-profiles.json';
+
+/** Where this project's minted briefs live — beside its role registry. */
+function projectProfilesPath(agentsDir) {
+  if (process.env.EPAM_PROJECT_PROFILES_FILE) return process.env.EPAM_PROJECT_PROFILES_FILE;
+  if (process.env.EPAM_PROJECT_CONFIG_DIR) {
+    return path.join(process.env.EPAM_PROJECT_CONFIG_DIR, PROJECT_PROFILES_FILE);
+  }
+  return path.join(agentsDir, PROJECT_PROFILES_FILE);
+}
+
+/** Additive and idempotent, like the registry: a brief already stored is never rewritten. */
+function saveProjectProfiles(agentsDir, briefs) {
+  const file = projectProfilesPath(agentsDir);
+  let store = {};
+  try { store = JSON.parse(fs.readFileSync(file, 'utf8')).profiles || {}; } catch { store = {}; }
+  for (const [name, brief] of Object.entries(briefs || {})) {
+    if (typeof name === 'string' && name && typeof brief === 'string' && brief.trim()
+        && !Object.prototype.hasOwnProperty.call(store, name)) {
+      store[name] = brief;
+    }
+  }
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({
+      _what: "This project's minted agent briefs. profiles.json is restored from its canonical " +
+             'original at the start of every run, which would otherwise delete them; they are ' +
+             're-applied from here. Kept out of the engine base so one project\'s agents never ' +
+             "reach another's roster.",
+      profiles: store,
+    }, null, 2), 'utf8');
+  } catch { /* caller still gets the list */ }
+  return Object.keys(store);
+}
+
+/**
+ * Re-apply this project's stored briefs onto the live roster.
+ *
+ * Called after the per-run restore and before anything reads the roster. ADDITIVE: an entry
+ * already present wins, so a canonical role can never be replaced by a stored one and a brief
+ * that accumulated skill notes this run is not reverted.
+ */
+function applyProjectProfiles(profilesPath, agentsDir) {
+  let store = {};
+  try { store = JSON.parse(fs.readFileSync(projectProfilesPath(agentsDir), 'utf8')).profiles || {}; }
+  catch { return []; }
+  const names = Object.keys(store);
+  if (!names.length) return [];
+
+  let profiles = {};
+  try { profiles = JSON.parse(fs.readFileSync(profilesPath, 'utf8')); }
+  catch { return []; }
+
+  const applied = [];
+  for (const n of names) {
+    if (!Object.prototype.hasOwnProperty.call(profiles, n)) { profiles[n] = store[n]; applied.push(n); }
+  }
+  if (applied.length) fs.writeFileSync(profilesPath, JSON.stringify(profiles, null, 2), 'utf8');
+  return applied;
+}
+
 /** Read the registry. Returns [] when absent — callers must fail CLOSED on an empty list. */
 function projectRoles(agentsDir) {
   try {
@@ -201,4 +279,5 @@ function projectRoles(agentsDir) {
 module.exports = {
   mergeProjectAgents, isUsableProposal, ROLE_NAME_RE,
   registerProjectRoles, projectRoles, projectRolesPath, PROJECT_ROLES_FILE,
+  saveProjectProfiles, applyProjectProfiles, projectProfilesPath, PROJECT_PROFILES_FILE,
 };

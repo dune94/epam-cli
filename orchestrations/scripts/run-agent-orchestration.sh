@@ -3033,6 +3033,7 @@ KNOWNFIXES_EOF
       log "[orch] Phase '${_phase}' — codeline '${_cl}'..."
       local _pex=0
       JIRA_CODELINE_RUN=1 \
+      EPAM_CODELINE="$_cl" \
       LOG_DIR="$_lane_log_dir" \
       PRD_FILE="$_cl_prd" \
       PROJECT_ROOT="$_wt" \
@@ -3050,6 +3051,7 @@ KNOWNFIXES_EOF
         log "[orch] Gate remediation applied for '${_phase}' ('${_cl}') — retrying with SKIP_GATE_REMEDIATION=1"
         _pex=0
         JIRA_CODELINE_RUN=1 \
+      EPAM_CODELINE="$_cl" \
       LOG_DIR="$_lane_log_dir" \
         PRD_FILE="$_cl_prd" \
         PROJECT_ROOT="$_wt" \

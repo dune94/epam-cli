@@ -2984,8 +2984,10 @@ const TOOL_PROJECT_AGENTS = {
             codeline: {
               type: 'string',
               description:
-                'For an investigator: the ONE codeline it investigates, named exactly as listed ' +
-                'in scope. Omit for an implementer, which spans the project.',
+                'REQUIRED for an investigator: the ONE codeline it investigates, named exactly as ' +
+                'listed in scope above. An investigator without this is rejected — the lane looks ' +
+                'its investigator up by codeline and cannot find one that names none. Omit only ' +
+                'for an implementer, which spans the project.',
             },
             systemPrompt: {
               type: 'string',
@@ -3231,6 +3233,13 @@ const TOOL_ROLE_ASSIGNMENTS = {
           required: ['storyId', 'agentRole', 'reason'],
           properties: {
             storyId: { type: 'string' },
+            codeline: {
+              type: 'string',
+              description:
+                'The codeline this assignment is for. A story that spans codelines gets ONE ' +
+                'assignment PER codeline — the repositories differ, so the right owner can differ ' +
+                'too. Omit only for a story that spans none.',
+            },
             agentRole: { type: 'string', description: 'MUST be one of the offered roles, verbatim.' },
             reason: { type: 'string', description: 'One sentence: why this role owns this story.' },
           },
@@ -3455,7 +3464,13 @@ async function assignAgentRoles({ promptExec, stories, profilesPath, logDir, rep
   // fifth different number for one field across this file — five caps for one field means none
   // was chosen.
   const storyBlock = _stories
-    .map((s) => `- ${s.id}: ${s.title || ''}\n    ${String(s.description || '').replace(/\s+/g, ' ')}`)
+    .map((s) => {
+      const cls = Array.isArray(s.codelines) && s.codelines.length ? s.codelines : (s.codeline ? [s.codeline] : []);
+      const clLine = cls.length > 1
+        ? `\n    codelines (assign one role for EACH): ${cls.join(', ')}`
+        : (cls.length ? `\n    codeline: ${cls[0]}` : '');
+      return `- ${s.id}: ${s.title || ''}${clLine}\n    ${String(s.description || '').replace(/\s+/g, ' ')}`;
+    })
     .join('\n');
 
   const prompt = `Assign an implementation agent role to every story below.
@@ -3464,7 +3479,7 @@ AVAILABLE ROLES — these are this project's own engineering roles. Choose from 
 nothing else; the name you return must match one of them verbatim:
 ${roleBlock}
 
-STORIES:
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
 ${storyBlock}
 
 Pick the role whose stated expertise actually covers the work the story describes. If two
@@ -3499,6 +3514,10 @@ both console configuration and code, the code owner is the assignee.`;
     );
     rows = (payload && Array.isArray(payload.assignments)) ? payload.assignments : [];
   }
+  // KEYED BY STORY AND CODELINE. One story spanning three repositories is three assignments:
+  // the repositories differ in tooling, so the right owner can differ too. Assigning one role
+  // to the story and handing it to every lane is how a role briefed for one codeline ends up
+  // working in another.
   const byStory = new Map();
   const fixed = new Set(fixedRoles);
   const allowed = new Set(candidates);
@@ -3518,10 +3537,22 @@ both console configuration and code, the code owner is the assignee.`;
         'profile entry, so the writer would run with an empty system prompt.',
       );
     }
-    byStory.set(row.storyId, { role, reason: row.reason || '' });
+    const key = row.storyId + '\u0000' + (typeof row.codeline === 'string' ? row.codeline.trim() : '');
+    byStory.set(key, { storyId: row.storyId, codeline: (row.codeline || '').trim(), role, reason: row.reason || '' });
   }
 
-  const missing = _stories.filter((s) => !byStory.has(s.id)).map((s) => s.id);
+  // Every (story, codeline) pair must be covered. A story spanning three codelines with one
+  // assignment leaves two lanes with no owner — and a null role is read as "unknown" downstream
+  // rather than failing.
+  const _pairs = [];
+  for (const s of _stories) {
+    const cls = Array.isArray(s.codelines) && s.codelines.length ? s.codelines : (s.codeline ? [s.codeline] : ['']);
+    for (const cl of cls) _pairs.push({ story: s, codeline: cl });
+  }
+  const _lookup = (storyId, cl) =>
+    byStory.get(storyId + '\u0000' + cl) || (cl ? byStory.get(storyId + '\u0000' + '') : null);
+  const missing = _pairs.filter((x) => !_lookup(x.story.id, x.codeline))
+    .map((x) => x.story.id + (x.codeline ? ' @ ' + x.codeline : ''));
   if (missing.length) {
     throw new Error(
       `[assign] unassigned after the agent's full retry/ladder budget: ${missing.join(', ')}. ` +
@@ -3531,9 +3562,18 @@ both console configuration and code, the code owner is the assignee.`;
 
   const assigned = [];
   for (const s of _stories) {
-    const a = byStory.get(s.id);
-    s.agentRole = a.role;
-    assigned.push({ storyId: s.id, agentRole: a.role, reason: a.reason });
+    const cls = Array.isArray(s.codelines) && s.codelines.length ? s.codelines : (s.codeline ? [s.codeline] : ['']);
+    const perCodeline = {};
+    for (const cl of cls) {
+      const a = _lookup(s.id, cl);
+      if (cl) perCodeline[cl] = a.role;
+      assigned.push({ storyId: s.id, codeline: cl, agentRole: a.role, reason: a.reason });
+    }
+    // agentRoles is authoritative for a spanning story; agentRole stays as the primary so every
+    // existing consumer keeps working until each is taught to read per codeline.
+    if (Object.keys(perCodeline).length) s.agentRoles = perCodeline;
+    const primary = _lookup(s.id, s.codeline || cls[0]);
+    s.agentRole = (primary && primary.role) || _lookup(s.id, cls[0]).role;
   }
   return { assigned, stories: _stories };
 }

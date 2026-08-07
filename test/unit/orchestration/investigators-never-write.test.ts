@@ -32,7 +32,9 @@ beforeEach(() => { prev = process.env.EPAM_PROJECT_CONFIG_DIR; delete process.en
 afterAll(() => { if (prev !== undefined) process.env.EPAM_PROJECT_CONFIG_DIR = prev; });
 
 const IMPL = { name: 'a-domain-engineer', kind: 'implementer', systemPrompt: 'owns src/. '.repeat(20), rationale: 'r' };
-const INV = { name: 'a-codeline-detective', kind: 'investigator', systemPrompt: 'reads and reports. '.repeat(20), rationale: 'r' };
+// codeline is REQUIRED for an investigator: the lane resolves it by codeline, so one
+// naming none is unreachable and the merge refuses it.
+const INV = { name: 'a-codeline-detective', kind: 'investigator', codeline: 'alpha', systemPrompt: 'reads and reports. '.repeat(20), rationale: 'r' };
 
 function ws() {
   const dir = mkdtempSync(join(tmpdir(), 'kinds-')); dirs.push(dir);

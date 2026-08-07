@@ -7645,8 +7645,12 @@ implement_story() {
     # producing changes nobody sanctioned.
     if command -v perimeter_role_may_write >/dev/null 2>&1; then
         local _iw_role
-        _iw_role=$(jq -r --arg id "$story_id" \
-            '.stories[] | select(.id == $id) | .agentRole // ""' \
+        # PER CODELINE. A story spanning three repositories carries one role per codeline in
+        # agentRoles; agentRole is only the primary. Reading the primary in every lane is how a
+        # role briefed for one codeline ends up working in another.
+        _iw_role=$(jq -r --arg id "$story_id" --arg cl "${EPAM_CODELINE:-}" \
+            '.stories[] | select(.id == $id)
+             | (.agentRoles[$cl] // .agentRole // "")' \
             "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
         if [ -n "$_iw_role" ] && ! perimeter_role_may_write "$_iw_role"; then
             error "Story ${story_id} is assigned to '${_iw_role}', which is not permitted to author code."

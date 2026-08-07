@@ -80,6 +80,17 @@ function isUsableProposal(p) {
   if (!ROLE_NAME_RE.test(p.name)) return 'name is not a plain kebab-case identifier';
   if (typeof p.systemPrompt !== 'string' || !p.systemPrompt.trim()) return 'no systemPrompt';
   if (!proposalKind(p)) return `unrecognised kind "${p.kind}" (expected one of: ${AGENT_KINDS.join(', ')})`;
+  // AN INVESTIGATOR WITHOUT A CODELINE CANNOT BE BOUND TO ANYTHING.
+  //
+  // The lane resolves its investigator BY CODELINE. One minted without that field is registered,
+  // briefed, given a KB — and unreachable: every lane falls through to the canonical detective
+  // and the per-codeline briefs are inert. Live 2026-08-07: one run supplied the field and the
+  // next did not, so the whole mechanism silently stopped working between two runs of identical
+  // code. The schema marks it optional because JSON Schema cannot make it conditional on kind;
+  // that makes it this function's job, not the model's.
+  if (proposalKind(p) === 'investigator' && (typeof p.codeline !== 'string' || !p.codeline.trim())) {
+    return 'an investigator must name the one codeline it investigates — without it, no lane can find it';
+  }
   return null;
 }
 

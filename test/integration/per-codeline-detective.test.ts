@@ -105,3 +105,68 @@ describe('the codeline mapping survives a re-read', () => {
     expect(roster.investigatorForCodeline(dir, 'alpha')).toBe('');
   });
 });
+
+/**
+ * AN INVESTIGATOR WITHOUT A CODELINE IS UNREACHABLE, AND MUST BE REFUSED.
+ *
+ * The lane resolves its investigator BY CODELINE. One minted without that field is registered,
+ * briefed, given a KB — and bound to nothing: every lane falls through to the canonical
+ * detective and the per-codeline briefs never run.
+ *
+ * Live 2026-08-07: one run supplied the field, the next did not, and the whole mechanism
+ * silently stopped working between two runs of IDENTICAL code. The schema marks codeline
+ * optional because JSON Schema cannot make it conditional on kind — which makes refusing it
+ * the merge's job, not the model's.
+ */
+describe('an investigator must name its codeline', () => {
+  function ws2() {
+    const dir = mkdtempSync(join(tmpdir(), 'unbound-')); dirs.push(dir);
+    const profilesPath = join(dir, 'profiles.json');
+    writeFileSync(profilesPath, JSON.stringify({ 'code-graph-detective': 'canonical' }, null, 2));
+    return { dir, profilesPath };
+  }
+  const brief = 'reads and reports. '.repeat(20);
+
+  it('THE REGRESSION: one with no codeline is rejected, not registered', () => {
+    const { dir, profilesPath } = ws2();
+    const res = roster.mergeProjectAgents({
+      profilesPath, agentsDir: dir,
+      proposals: [{ name: 'an-investigator', kind: 'investigator', systemPrompt: brief, rationale: 'r' }],
+    });
+    expect(res.minted, 'an unbound investigator was minted — no lane can ever reach it').toHaveLength(0);
+    expect(res.rejected[0].reason).toMatch(/must name the one codeline/i);
+    expect(roster.projectInvestigators(dir)).toEqual([]);
+  });
+
+  it('an empty or whitespace codeline is refused too', () => {
+    const { dir, profilesPath } = ws2();
+    const res = roster.mergeProjectAgents({
+      profilesPath, agentsDir: dir,
+      proposals: [
+        { name: 'blank-one', kind: 'investigator', codeline: '', systemPrompt: brief, rationale: 'r' },
+        { name: 'spaces-one', kind: 'investigator', codeline: '   ', systemPrompt: brief, rationale: 'r' },
+      ],
+    });
+    expect(res.minted).toHaveLength(0);
+    expect(res.rejected).toHaveLength(2);
+  });
+
+  it('an IMPLEMENTER needs no codeline — it spans the project', () => {
+    const { dir, profilesPath } = ws2();
+    const res = roster.mergeProjectAgents({
+      profilesPath, agentsDir: dir,
+      proposals: [{ name: 'an-engineer', kind: 'implementer', systemPrompt: brief, rationale: 'r' }],
+    });
+    expect(res.minted).toHaveLength(1);
+    expect(roster.projectRoles(dir)).toEqual(['an-engineer']);
+  });
+
+  it('a bound investigator still mints and still resolves', () => {
+    const { dir, profilesPath } = ws2();
+    roster.mergeProjectAgents({
+      profilesPath, agentsDir: dir,
+      proposals: [{ name: 'alpha-inv', kind: 'investigator', codeline: 'alpha', systemPrompt: brief, rationale: 'r' }],
+    });
+    expect(roster.investigatorForCodeline(dir, 'alpha')).toBe('alpha-inv');
+  });
+});

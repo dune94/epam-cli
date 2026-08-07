@@ -834,3 +834,33 @@ phase_stories_for_repro_gate() {
                      | .id' "$_prd" 2>/dev/null || true
     return 0
 }
+
+# assert_phase_stories_have_roles — refuse to run a phase whose stories have no agent.
+#
+# agentRole is deliberately null between synthesis and assignment: at synthesis nothing has
+# analysed the codeline, so there is no roster to choose from, and synthesize-prd-from-jira.js
+# no longer invents one (it used to hardcode a single role, which is how every client ticket
+# ended up on an agent briefed on THIS repo's CLI). assignAgentRoles() fills it after the
+# project's roles are minted.
+#
+# Past that point a null is a defect, and it is a SILENT one: fifteen consumers read the field
+# as `.agentRole // "unknown"`, so an unassigned story is handed to the writer with an empty
+# system prompt and the run completes with nobody the wiser. "unknown" is rejected for the same
+# reason — it is the substituted value, never a role anyone assigned.
+#
+# One guard here rather than fifteen patched call sites.
+assert_phase_stories_have_roles() {
+    local _prd="${1:-${PRD_FILE:-}}" _phase="${2:-${PHASE:-}}"
+    [ -n "$_prd" ] && [ -f "$_prd" ] || return 0
+    local _bad
+    _bad=$(jq -r --arg phase "$_phase" \
+        '(.implementationOrder[$phase] // []) as $ids |
+         .stories[]? | select(.id != null)
+                     | select(.id as $id | $ids | index($id) != null)
+                     | select((.agentRole // "") == "" or (.agentRole // "") == "unknown")
+                     | .id' "$_prd" 2>/dev/null || true)
+    [ -z "$_bad" ] && return 0
+    printf '[story-guards] no agent role assigned for: %s\n' "$(printf '%s' "$_bad" | tr '\n' ' ')" >&2
+    printf '[story-guards] a story with no role runs with an empty system prompt and is read as "unknown" by every consumer downstream. Refusing to run the phase.\n' >&2
+    return 1
+}

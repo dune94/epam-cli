@@ -130,7 +130,75 @@ function mergeProjectAgents(opts) {
   }
 
   fs.writeFileSync(profilesPath, JSON.stringify(profiles, null, 2), 'utf8');
-  return { minted, rejected, unchanged };
+
+  // Register the minted roles. Downstream needs to know which roles are THIS PROJECT'S
+  // implementation roles, and "everything in the roster that isn't canonical" cannot
+  // answer that: of 38 non-canonical roles in a live roster, only ~9 implement anything —
+  // the rest is engine machinery (doc-*, failure-analyst, code-graph-detective, the
+  // vocabulary agents). Deriving from that set handed write access to the detective.
+  // The mint knows exactly what it created, so it says so explicitly.
+  const registered = registerProjectRoles(agentsDir, minted.map((m) => m.name));
+  for (const m of minted) if (registered.includes(m.name)) m.surfaces.push('project-roles');
+
+  return { minted, rejected, unchanged, projectRoles: registered };
 }
 
-module.exports = { mergeProjectAgents, isUsableProposal, ROLE_NAME_RE };
+const PROJECT_ROLES_FILE = 'project-roles.json';
+
+/**
+ * Where this project's role registry lives.
+ *
+ * PER PROJECT when EPAM_PROJECT_CONFIG_DIR is set, which is what keeps one project's roles
+ * out of another's. The engine-level registry holds epam-cli's own implementation roles (it
+ * orchestrates itself); a client codeline must not inherit those. That inheritance is the
+ * whole defect: a Metrolinx ticket was assigned typescript-engineer, an agent whose brief
+ * describes THIS repo's src/cli internals.
+ */
+function projectRolesPath(agentsDir) {
+  if (process.env.EPAM_PROJECT_ROLES_FILE) return process.env.EPAM_PROJECT_ROLES_FILE;
+  if (process.env.EPAM_PROJECT_CONFIG_DIR) {
+    return path.join(process.env.EPAM_PROJECT_CONFIG_DIR, PROJECT_ROLES_FILE);
+  }
+  return path.join(agentsDir, PROJECT_ROLES_FILE);
+}
+
+/**
+ * The registry of this project's implementation roles. Additive and idempotent: a re-run
+ * adds nothing it already contains and never drops a role, because a role dropped here
+ * silently loses write access and its stories become unassignable.
+ */
+function registerProjectRoles(agentsDir, names) {
+  const file = projectRolesPath(agentsDir);
+  try { fs.mkdirSync(path.dirname(file), { recursive: true }); } catch { /* best effort */ }
+  let roles = [];
+  try {
+    const existing = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (Array.isArray(existing.roles)) roles = existing.roles.filter((r) => typeof r === 'string');
+  } catch { /* first run, or unreadable — rebuilt below */ }
+
+  for (const n of Array.isArray(names) ? names : []) {
+    if (typeof n === 'string' && n && !roles.includes(n)) roles.push(n);
+  }
+  try {
+    fs.writeFileSync(file, JSON.stringify({
+      _what: 'This project\'s own implementation roles, written by the agent mint. Read by the ' +
+             'write perimeter (which roles may author code) and by role assignment (which roles ' +
+             'may own a story). Canonical process roles are never listed here.',
+      roles,
+    }, null, 2), 'utf8');
+  } catch { /* registry unwritable — caller still gets the list back */ }
+  return roles;
+}
+
+/** Read the registry. Returns [] when absent — callers must fail CLOSED on an empty list. */
+function projectRoles(agentsDir) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(projectRolesPath(agentsDir), 'utf8'));
+    return Array.isArray(parsed.roles) ? parsed.roles.filter((r) => typeof r === 'string') : [];
+  } catch { return []; }
+}
+
+module.exports = {
+  mergeProjectAgents, isUsableProposal, ROLE_NAME_RE,
+  registerProjectRoles, projectRoles, projectRolesPath, PROJECT_ROLES_FILE,
+};

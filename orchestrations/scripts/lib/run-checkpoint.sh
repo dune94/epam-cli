@@ -72,7 +72,7 @@ checkpoint_dir() {
 #                 the point at which its inputs can be inspected before code is generated.
 #
 # Keep this list and the case in resume_skip_env in step.
-CHECKPOINT_STAGES="post-spec pre-writer"
+CHECKPOINT_STAGES="post-roster post-spec pre-writer"
 
 # The ENGINE's commit — resolved against this library's own location, never against the
 # current working directory.
@@ -100,18 +100,30 @@ _is_known_stage() {
     case " $CHECKPOINT_STAGES " in *" ${1:-} "*) return 0 ;; *) return 1 ;; esac
 }
 
-# should_pause_before_writer — the ONE pause setting.
+# The TWO pause settings.
 #
 # EPAM_PAUSE_BEFORE_WRITER stops the run after the spec pass, CPA pre-pass, skill
-# assessment and detective have all completed, and before any story is written. That is
-# the only point worth stopping at: everything the writer consumes is settled and
-# inspectable, and no code has been generated yet.
+# assessment and detective have all completed, and before any story is written:
+# everything the writer consumes is settled and inspectable, and no code exists yet.
 #
-# There is deliberately no second pause point. An earlier stop (after the spec pass) has
-# a checkpoint holding none of what the writer actually consumes, and two settings meant
-# a run could halt somewhere the operator did not intend.
+# EPAM_PAUSE_AFTER_AGENT_MINT stops earlier still — after the project's agent roster has
+# been minted and every story assigned a role, and BEFORE the spec phase runs. This exists
+# because the roster is now derived per project rather than inherited: which roles were
+# minted, how they were briefed, and which story each one owns are decisions that shape
+# every later stage, and they are cheap to correct here and expensive to correct after the
+# spec pass has built on them. Operator direction, 2026-08-07: assess the agents and look
+# for gaps before proceeding into spec.
+#
+# This file previously stated there was deliberately no second pause point, on the grounds
+# that an earlier checkpoint holds none of what the writer consumes. That reasoning still
+# holds for the WRITER — and the roster pause is not about the writer. It is about the
+# agents themselves, which did not used to be generated at all.
 should_pause_before_writer() {
     is_truthy "${EPAM_PAUSE_BEFORE_WRITER:-}"
+}
+
+should_pause_after_agent_mint() {
+    is_truthy "${EPAM_PAUSE_AFTER_AGENT_MINT:-}"
 }
 
 # resume_skip_env <run-id> — emit the env assignments a resume must apply, derived from
@@ -125,11 +137,19 @@ resume_skip_env() {
 
     local _stage; _stage=$(jq -r '.stage // empty' "$_dir/checkpoint.json" 2>/dev/null)
     case "$_stage" in
+        post-roster)
+            # The roster and the assignments are on disk and the mint is not repeated —
+            # re-minting would propose against an already-minted roster and the merge is
+            # additive, so a resume would accumulate near-duplicate roles.
+            echo "EPAM_SKIP_AGENT_MINT=1"
+            ;;
         post-spec)
             echo "EPAM_SPEC_MODE=0"
+            echo "EPAM_SKIP_AGENT_MINT=1"
             ;;
         pre-writer)
             echo "EPAM_SPEC_MODE=0"
+            echo "EPAM_SKIP_AGENT_MINT=1"
             echo "SKIP_CPA=1"
             echo "SKIP_SKILL_ASSESSMENT=1"
             ;;

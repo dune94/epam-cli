@@ -3067,6 +3067,158 @@ Do not propose a role that duplicates one of the canonical roles already listed 
   return { ...result, proposed: proposals.length, protectedRoles: fixedRoles.length };
 }
 
+const TOOL_ROLE_ASSIGNMENTS = {
+  name: 'submit_role_assignments',
+  description:
+    'Assign exactly one implementation agent role to every story, chosen from the roles ' +
+    'offered. Do not answer in prose and do not invent a role.',
+  parameters: {
+    type: 'object',
+    required: ['assignments'],
+    properties: {
+      assignments: {
+        type: 'array',
+        minItems: 1,
+        items: {
+          type: 'object',
+          required: ['storyId', 'agentRole', 'reason'],
+          properties: {
+            storyId: { type: 'string' },
+            agentRole: { type: 'string', description: 'MUST be one of the offered roles, verbatim.' },
+            reason: { type: 'string', description: 'One sentence: why this role owns this story.' },
+          },
+        },
+      },
+    },
+  },
+};
+
+/**
+ * candidateRoles — which roles may implement a story.
+ *
+ * Read from the mint's registry (agents/project-roles.json), intersected with the roster so
+ * a registered role with no profile is never offered — the writer would run with an empty
+ * system prompt.
+ *
+ * NOT "the roster minus the canonical core". That derivation was tried and is wrong: a live
+ * roster has 38 non-canonical roles of which only about nine implement anything, the rest
+ * being engine machinery (doc-*, failure-analyst, the vocabulary agents, code-graph-detective).
+ * Offering those as implementation roles is the same class of error as offering one that does
+ * not exist — and the identical mistake in the write perimeter handed the detective write
+ * access, which the perimeter suite caught.
+ */
+function candidateRoles(profiles, agentsDir) {
+  let registered = [];
+  try { registered = require('./lib/agent-roster.js').projectRoles(agentsDir); } catch { registered = []; }
+  return registered.filter((r) => Object.prototype.hasOwnProperty.call(profiles || {}, r));
+}
+
+/**
+ * assignAgentRoles — give every story a role that actually exists.
+ *
+ * Runs after minting, because until the project's roles exist there is nothing to choose
+ * from. Synthesis deliberately leaves agentRole null; this is the only step that fills it.
+ *
+ * Refuses rather than repairs. A hallucinated role, a process role, or a story the agent
+ * simply skipped all throw — because the alternative is a story that runs with an empty
+ * system prompt or the string "unknown", which is what the 15 `.agentRole // "unknown"`
+ * consumers downstream would silently do with a null.
+ */
+async function assignAgentRoles({ promptExec, stories, profilesPath, logDir, repoPath }) {
+  const _stories = Array.isArray(stories) ? stories : [];
+  if (!_stories.length) return { assigned: [], stories: [] };
+
+  let profiles = {};
+  try { profiles = JSON.parse(fs.readFileSync(profilesPath, 'utf8')); } catch (e) {
+    throw new Error(`[assign] cannot read the roster at ${profilesPath}: ${e && e.message}`);
+  }
+
+  let fixedRoles = [];
+  try {
+    fixedRoles = require(path.join(__dirname, '..', '..', 'dist', 'sdk.js')).FIXED_AGENT_ROLES || [];
+  } catch (e) {
+    throw new Error(`[assign] cannot read FIXED_AGENT_ROLES from dist/sdk.js: ${e && e.message}`);
+  }
+
+  const candidates = candidateRoles(profiles, path.dirname(profilesPath));
+  if (!candidates.length) {
+    throw new Error(
+      '[assign] no project implementation roles are registered for this project — nothing was ' +
+      'minted, so there is no role any story could honestly be assigned.',
+    );
+  }
+
+  const roleBlock = candidates
+    .map((r) => `- ${r}\n    ${String(profiles[r] || '').replace(/\s+/g, ' ').slice(0, 400)}`)
+    .join('\n');
+  // NOT truncated. The description is the only substantive field a brownfield ticket carries,
+  // and cutting it is how a role gets chosen from half a sentence. A cap here would also be a
+  // fifth different number for one field across this file — five caps for one field means none
+  // was chosen.
+  const storyBlock = _stories
+    .map((s) => `- ${s.id}: ${s.title || ''}\n    ${String(s.description || '').replace(/\s+/g, ' ')}`)
+    .join('\n');
+
+  const prompt = `Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+${roleBlock}
+
+STORIES:
+${storyBlock}
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches. Every story must be assigned exactly one role.`;
+
+  const payload = await runAgentForJson(
+    promptExec, prompt, TOOL_ROLE_ASSIGNMENTS, 'ROLE_ASSIGNMENTS',
+    logDir ? path.join(logDir, 'role-assignments.log') : null,
+    null, '', repoPath || '',
+    { EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROLE_ASSIGNMENTS) },
+  );
+
+  const rows = (payload && Array.isArray(payload.assignments)) ? payload.assignments : [];
+  const byStory = new Map();
+  const fixed = new Set(fixedRoles);
+  const allowed = new Set(candidates);
+
+  for (const row of rows) {
+    if (!row || typeof row.storyId !== 'string' || typeof row.agentRole !== 'string') continue;
+    const role = row.agentRole.trim();
+    if (fixed.has(role)) {
+      throw new Error(
+        `[assign] ${row.storyId} was assigned "${role}", a canonical process role — it is not an ` +
+        'implementation role and cannot own a story.',
+      );
+    }
+    if (!allowed.has(role)) {
+      throw new Error(
+        `[assign] ${row.storyId} was assigned "${role}", which is not in the roster — it has no ` +
+        'profile entry, so the writer would run with an empty system prompt.',
+      );
+    }
+    byStory.set(row.storyId, { role, reason: row.reason || '' });
+  }
+
+  const missing = _stories.filter((s) => !byStory.has(s.id)).map((s) => s.id);
+  if (missing.length) {
+    throw new Error(
+      `[assign] unassigned after the agent's full retry/ladder budget: ${missing.join(', ')}. ` +
+      'A null agentRole is read as "unknown" by every consumer downstream rather than failing.',
+    );
+  }
+
+  const assigned = [];
+  for (const s of _stories) {
+    const a = byStory.get(s.id);
+    s.agentRole = a.role;
+    assigned.push({ storyId: s.id, agentRole: a.role, reason: a.reason });
+  }
+  return { assigned, stories: _stories };
+}
+
 async function enforceVerificationCriteria(story, initialVc, opts = {}) {
   const { regenerateVc = null, reviewVc = null, findings = null, deriveVocabulary = null,
           maxCycles = Number(process.env.VC_MAX_CYCLES || '2') } = opts;
@@ -7087,6 +7239,9 @@ module.exports = {
   deriveGuardVocabulary,
   mintProjectAgents,
   TOOL_PROJECT_AGENTS,
+  assignAgentRoles,
+  candidateRoles,
+  TOOL_ROLE_ASSIGNMENTS,
   schemaEnv,
   referencedDocsBlock,
   advanceAgentLadderEscalation,

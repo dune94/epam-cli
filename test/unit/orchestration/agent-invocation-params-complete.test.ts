@@ -51,6 +51,7 @@ const AGENT_SITES = [
   'contextualize-stories.sh',
   'claude.sh',
   'spec-mode-runner.js',
+  'mint-agents-step.js',
   'lib/cpa-inference.js',
   'lib/ac-gate.js',
   'lib/codeline-discovery.js',

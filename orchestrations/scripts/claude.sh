@@ -38,6 +38,18 @@ PROGRESS_LOG="$LOG_DIR/progress.txt"
 AGENTS_FILE="$AUTOMATION_DIR/agents/AGENTS.md"
 CLAUDE_OUTPUT_DIR="$LOG_DIR/claude_outputs"
 AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
+
+# Read-only gate tool allowlist. Normally exported by run-agent-orchestration.sh; computed
+# here too so claude.sh invoked standalone gives its gates the same capability. Derived from
+# the project's own registered plugins rather than a literal — the literal silently dropped
+# every project plugin tool at three seams below.
+# shellcheck source=lib/gate-tools.sh
+. "$SCRIPT_DIR/lib/gate-tools.sh" 2>/dev/null || true
+if [ -z "${ORCH_GATE_ALLOWED_TOOLS:-}" ] && command -v gate_allowed_tools >/dev/null 2>&1; then
+    ORCH_GATE_ALLOWED_TOOLS="$(gate_allowed_tools "${JIRA_CODELINE_ROOT:-${PROJECT_ROOT:-$PWD}}")"
+fi
+ORCH_GATE_ALLOWED_TOOLS="${ORCH_GATE_ALLOWED_TOOLS:-bash,read_file,list_files,search}"
+export ORCH_GATE_ALLOWED_TOOLS
 MONITOR_STATUS_FILE="${MONITOR_FILE:-$LOG_DIR/agent-status.json}"
 # Single source of truth for the skill_note/kb_entry imperative-opener rule
 # (the reviewer's own stated format rule -- see prd-change-reviewer's profile
@@ -5111,7 +5123,7 @@ ${dependency_contracts}"
         AI_MODEL="${ORCH_GATE_MODEL:-}" \
         EPAM_CLI="$EPAM_CLI" \
         AI_GATE_ALLOW_TOOLS=1 \
-        EPAM_ALLOWED_TOOLS="${ORCH_GATE_ALLOWED_TOOLS:-bash,read_file,list_files,search}" \
+        EPAM_ALLOWED_TOOLS="$ORCH_GATE_ALLOWED_TOOLS" \
         EPAM_MAX_TOOL_CALLS="${PLAN_REVIEW_MAX_TOOL_CALLS:-6}" \
         bash "$SCRIPT_DIR/ai-run.sh" --provider "$_orch_provider" \
         ${ORCH_GATE_MODEL:+--model "$ORCH_GATE_MODEL"} \
@@ -5723,7 +5735,7 @@ Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[\"<issue1>\"],\"reason\":\"<15
         EPAM_REASONING_EFFORT="high" \
         EPAM_TEMPERATURE="0.7" \
         AI_GATE_ALLOW_TOOLS=1 \
-        EPAM_ALLOWED_TOOLS="${ORCH_GATE_ALLOWED_TOOLS:-bash,read_file,list_files,search}" \
+        EPAM_ALLOWED_TOOLS="$ORCH_GATE_ALLOWED_TOOLS" \
         EPAM_MAX_TOOL_CALLS="${PRD_CHANGE_REVIEWER_MAX_TOOL_CALLS:-6}" \
         bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \
         ${gate_model:+--model "$gate_model"} \
@@ -6286,7 +6298,7 @@ ANALYST_PROMPT_END
                 EPAM_REASONING_EFFORT="high" \
                 EPAM_TEMPERATURE="0.7" \
                 AI_GATE_ALLOW_TOOLS=1 \
-                EPAM_ALLOWED_TOOLS="${ORCH_GATE_ALLOWED_TOOLS:-bash,read_file,list_files,search}" \
+                EPAM_ALLOWED_TOOLS="$ORCH_GATE_ALLOWED_TOOLS" \
                 EPAM_MAX_TOOL_CALLS="${FAILURE_ANALYST_MAX_TOOL_CALLS:-6}" \
                 bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \
                 ${gate_model:+--model "$gate_model"} \

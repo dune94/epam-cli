@@ -1115,7 +1115,17 @@ PYEOF
 # hunts the project for the file the model wrote). Prompt instructions could not
 # prevent it; removing the capability does. Those work-arounds stay as a
 # backstop for any model that finds another way to avoid answering.
+# Derived, not literal. The base built-in read-only set PLUS whatever plugins this project
+# registered for the codeline — a project that adds a plugin gets it at the gates without
+# editing this script. The literal here filtered every project plugin tool out before the
+# model ever saw it, while the project had explicitly registered them.
+# shellcheck source=lib/gate-tools.sh
+. "${SCRIPT_DIR}/lib/gate-tools.sh" 2>/dev/null || true
+if [ -z "${ORCH_GATE_ALLOWED_TOOLS:-}" ] && command -v gate_allowed_tools >/dev/null 2>&1; then
+    ORCH_GATE_ALLOWED_TOOLS="$(gate_allowed_tools "${JIRA_CODELINE_ROOT:-${PROJECT_ROOT:-$PWD}}")"
+fi
 ORCH_GATE_ALLOWED_TOOLS="${ORCH_GATE_ALLOWED_TOOLS:-bash,read_file,list_files,search}"
+export ORCH_GATE_ALLOWED_TOOLS
 
 # _brownfield_gate_scope <gate-name>
 # The brownfield addendum every QA gate prompt gets. Empty on greenfield, whose
@@ -3465,8 +3475,9 @@ _run_jira_pipeline() {
   # run_phase "scaffold" call fires the pre-phase assessment agent. The scaffold phase
   # has 0 implementation stories but runs Step 3 (skill assessment) over ALL synthesized
   # Jira stories — this assesses and injects project-specific skills into each agent's
-  # profile before any core implementation begins. Agent identities (profiles) are kept
-  # from the canonical; only skills are project-specific and must be assessed per project.
+  # profile before any core implementation begins. Agent SKILLS are assessed per project
+  # here; agent IDENTITIES are minted per project immediately below — they used to be kept
+  # wholesale from the canonical, which is how a client codeline ran epam-cli's own roster.
   "$NODE_BIN" -e "
     const fs = require('fs');
     const prd = JSON.parse(fs.readFileSync('${_synth_prd}', 'utf8'));
@@ -3476,6 +3487,59 @@ _run_jira_pipeline() {
     }
     fs.writeFileSync('${_synth_prd}', JSON.stringify(prd, null, 2));
   " 2>/dev/null && log "[jira] Injected empty scaffold phase for pre-phase skill assessment"
+
+  # ── Mint this project's agents, then assign every story one ────────────────
+  #
+  # Ordering (operator direction, 2026-08-07): after ingest, before spec. The inputs that make
+  # a proposed role project-specific rather than a restatement of the canonical core are the
+  # tickets and the documents linked on them, and both exist only once ingest has run.
+  #
+  # Until now the roster was inherited wholesale: a client codeline ran with epam-cli's OWN
+  # first-commit agents, and synthesize-prd-from-jira.js assigned every ticket to one of them
+  # with a hardcoded literal. Nothing errored — it was simply always the wrong agent.
+  if [ "${EPAM_SKIP_AGENT_MINT:-0}" != "1" ] || [ -n "${EPAM_RESUME_RUN:-}" ]; then
+    log "[jira] Minting project agents and assigning roles..."
+    if ! "$NODE_BIN" "$SCRIPT_DIR/mint-agents-step.js" \
+        --prd "$_synth_prd" \
+        --agents-dir "$AUTOMATION_DIR/agents" \
+        --log-dir "$LOG_DIR" \
+        --codeline-root "${JIRA_CODELINE_ROOT:-}" 2>&1 | tee -a "$_log_file"; then
+      error "[jira] Agent mint/assignment failed — refusing to run stories with no assigned agent."
+      return 1
+    fi
+    if [ "${PIPESTATUS[0]}" != "0" ]; then
+      error "[jira] Agent mint/assignment failed — refusing to run stories with no assigned agent."
+      return 1
+    fi
+  fi
+
+  # PAUSE 1 of 2 — the roster is minted and every story assigned, and nothing has been
+  # specified or written yet. Which roles exist, how they are briefed, and which story each
+  # owns shape every later stage, and they are cheap to correct here and expensive to correct
+  # after the spec pass has built on them.
+  if command -v should_pause_after_agent_mint >/dev/null 2>&1 && should_pause_after_agent_mint; then
+    local _rckpt=""
+    if _rckpt=$(save_run_checkpoint "${PHASE:-core}" post-roster 2>&1); then
+      info "[orch] post-roster checkpoint saved: ${_rckpt}"
+    else
+      warning "[orch] could not save the post-roster checkpoint: ${_rckpt}"
+    fi
+    echo ""
+    echo -e "${GREEN}╔════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║  PAUSED — agents minted and assigned, spec NOT started             ║${NC}"
+    echo -e "${GREEN}╚════════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "  RUN NUMBER:  ${GREEN}${ORCH_RUN_ID:-unknown}${NC}"
+    echo -e "  Roster:      ${AUTOMATION_DIR}/agents/profiles.json"
+    echo -e "  Project roles: ${AUTOMATION_DIR}/agents/project-roles.json"
+    echo -e "  Minted:      ${LOG_DIR}/agent-mint.json"
+    echo -e "  Assignments: ${LOG_DIR}/role-assignments.json"
+    echo ""
+    echo -e "  Resume with:"
+    echo -e "    ${GREEN}EPAM_RESUME_RUN=${ORCH_RUN_ID:-<run-id>}${NC} <your launcher>"
+    echo ""
+    return 0
+  fi
 
   _run_codeline_loop "$_synth_prd" "$_log_file"
 }

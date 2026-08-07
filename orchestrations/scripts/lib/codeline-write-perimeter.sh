@@ -149,12 +149,72 @@ perimeter_unlock() {
 # writer re-implementation cycle, which is exactly what Step 3.6 already does.
 #
 # Configurable per project, never hardcoded to one pipeline's role names.
-_PERIMETER_DEFAULT_WRITE_ROLES="writer,typescript-engineer,test-engineer,repro-test-writer,lint-fix"
+#
+# This list USED TO name them: "writer,typescript-engineer,test-engineer,repro-test-writer,
+# lint-fix". Two of those five are epam-cli's own agents, carried from its first commit, and a
+# role minted for some other project was in none of them. It would be proposed, briefed, wired,
+# given inputs and tools, assigned a story — and then be unable to write a byte, because this
+# gate is enforced with chmod below the tool layer. Every attempt fails, the ladder climbs, the
+# budget exhausts, and nothing in the logs says the agent was never allowed to write.
+#
+# What remains here is the AUTHORING SEAMS: pipeline stages that write, which are not roster
+# roles at all. Project roles are derived from the roster instead (see below), so a role minted
+# tomorrow is covered without editing this file.
+_PERIMETER_AUTHORING_SEAMS="writer,repro-test-writer,lint-fix"
+
+# _perimeter_project_roles — this project's implementation roles, from the mint's registry.
+#
+# NOT derived as "the roster minus the canonical core". That was tried and it is wrong: of 38
+# non-canonical roles in a live roster, only about nine implement anything — the rest is engine
+# machinery (doc-*, failure-analyst, the vocabulary agents, code-graph-detective). Deriving from
+# that set handed write access to the DETECTIVE, the exact agent whose lack of it is why this
+# perimeter exists. The existing perimeter suite caught it.
+#
+# So the mint states what it created, in agents/project-roles.json, and this reads that.
+#
+# Fails CLOSED. Registry missing or unreadable → contributes nothing, and only the authoring
+# seams may write. A perimeter that fails open is not a perimeter.
+_perimeter_project_roles() {
+    if [ -n "${_PERIM_PROJECT_ROLES_CACHE+x}" ]; then
+        printf '%s' "$_PERIM_PROJECT_ROLES_CACHE"
+        return 0
+    fi
+    local _lib_dir _agents_dir _registry _out
+    _lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+    if [ -n "${AGENT_PROFILES_FILE:-}" ]; then
+        _agents_dir="$(cd "$(dirname "$AGENT_PROFILES_FILE")" 2>/dev/null && pwd)"
+    else
+        _agents_dir="${_lib_dir}/../../agents"
+    fi
+    # Per project when the project declares a config dir — a client codeline must not
+    # inherit the engine's own implementation roles.
+    if [ -n "${EPAM_PROJECT_ROLES_FILE:-}" ]; then
+        _registry="$EPAM_PROJECT_ROLES_FILE"
+    elif [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] && [ -f "${EPAM_PROJECT_CONFIG_DIR}/project-roles.json" ]; then
+        _registry="${EPAM_PROJECT_CONFIG_DIR}/project-roles.json"
+    else
+        _registry="${_agents_dir}/project-roles.json"
+    fi
+    _out=""
+    if [ -f "$_registry" ]; then
+        _out=$(jq -r '[.roles[]? | select(type == "string")] | join(",")' "$_registry" 2>/dev/null) || _out=""
+        [ "$_out" = "null" ] && _out=""
+    fi
+    _PERIM_PROJECT_ROLES_CACHE="$_out"
+    printf '%s' "$_out"
+}
 
 perimeter_role_may_write() {
     local role="${1:-${EPAM_AGENT_NAME:-}}"
     [ -n "$role" ] || return 1                    # unknown caller: no writes
-    local allowed="${EPAM_PERIMETER_WRITE_ROLES:-$_PERIMETER_DEFAULT_WRITE_ROLES}"
+    local allowed
+    if [ -n "${EPAM_PERIMETER_WRITE_ROLES:-}" ]; then
+        # An explicit operator override replaces the rule entirely — it is the escape hatch,
+        # so it must not be silently unioned with anything derived.
+        allowed="$EPAM_PERIMETER_WRITE_ROLES"
+    else
+        allowed="${_PERIMETER_AUTHORING_SEAMS},$(_perimeter_project_roles)"
+    fi
     local r
     IFS=',' read -ra _roles <<< "$allowed"
     for r in "${_roles[@]}"; do

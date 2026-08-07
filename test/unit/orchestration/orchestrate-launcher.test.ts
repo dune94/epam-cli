@@ -471,10 +471,16 @@ describe('run-agent-orchestration.sh — _run_jira_pipeline AC gate exit-2 propa
     })();
     // Must inject scaffold key into implementationOrder
     expect(pipelineFn).toMatch(/scaffold.*\[\]|implementationOrder.*scaffold/);
-    // Must happen AFTER successful ingest (after _ingest_exit check) and BEFORE _run_codeline_loop
-    const afterIngest = pipelineFn.slice(pipelineFn.indexOf('_run_codeline_loop') - 1000,
-                                          pipelineFn.indexOf('_run_codeline_loop'));
-    expect(afterIngest).toMatch(/scaffold/);
+    // Must happen AFTER successful ingest (after the _ingest_exit check) and BEFORE
+    // _run_codeline_loop. Asserted by ORDER, not by a fixed-size window: the window was 1000
+    // characters, so inserting the agent-mint step between the injection and the loop moved
+    // 'scaffold' out of view and failed a test whose stated requirement still held.
+    const idxIngest = pipelineFn.indexOf('_ingest_exit');
+    const idxScaffold = pipelineFn.indexOf('scaffold');
+    const idxLoop = pipelineFn.indexOf('_run_codeline_loop');
+    expect(idxIngest, 'the ingest exit check is gone').toBeGreaterThan(-1);
+    expect(idxScaffold, 'the scaffold phase is never injected').toBeGreaterThan(idxIngest);
+    expect(idxLoop, 'the codeline loop is gone').toBeGreaterThan(idxScaffold);
   });
 });
 

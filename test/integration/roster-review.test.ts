@@ -182,3 +182,70 @@ describe('an empty roster is not reviewed', () => {
     expect(existsSync(r.capture), 'an agent was invoked with no roster to review').toBe(false);
   }, 60_000);
 });
+
+/**
+ * A REVIEWER WHOSE FINDINGS NOTHING CONSUMES IS A CRITIC.
+ *
+ * Its first live run produced seven blocking defects and the roster reached the pause
+ * unchanged — every one of those briefs would have been inherited by an implementer. The
+ * findings must feed a correction, in the reviewer's own words: the claim, what was checked,
+ * what was found. Not "try again" — the previous roster was confident and specific, and a
+ * re-proposal with no account of the defect tends to reproduce it in new wording.
+ */
+describe('a corrective mint is told what was wrong', () => {
+  function capture() {
+    const dir = mkdtempSync(join(tmpdir(), 'corrective-')); dirs.push(dir);
+    const capturePath = join(dir, 'p.txt');
+    const sh = join(dir, 'r.sh');
+    writeFileSync(sh, `#!/usr/bin/env bash\ncat > ${JSON.stringify(capturePath)}\ncat <<'A'\n<PROJECT_AGENTS>{"proposedAgents":[{"name":"a-engineer","kind":"implementer","systemPrompt":"xxxxxxxxxxxxxxxxxxxxxx","rationale":"r"}]}</PROJECT_AGENTS>\nA\n`);
+    chmodSync(sh, 0o755);
+    writeFileSync(join(dir, 'profiles.json'), '{}');
+    return { dir, capturePath, exec: { cmd: sh, args: [] as string[] } };
+  }
+
+  const FINDING = {
+    agent: 'an-engineer', severity: 'blocking',
+    claim: 'Tests use one transpiler across all codelines',
+    checked: 'read each codeline manifest and searched for it',
+    found: 'one codeline declares a different transpiler entirely',
+    remedy: 'state the convention only for the codelines that hold it',
+  };
+
+  it('the finding reaches the corrective prompt with its evidence', async () => {
+    const c = capture();
+    await spec.mintProjectAgents({
+      promptExec: c.exec, tickets: [{ id: 'T-1', title: 't', description: 'd' }],
+      referencedDocs: [], declaredDependencies: [], codelines: [],
+      profilesPath: join(c.dir, 'profiles.json'), agentsDir: c.dir, logDir: c.dir, repoPath: '',
+      correctiveFindings: [FINDING],
+    });
+    const p = readFileSync(c.capturePath, 'utf8');
+    expect(p).toMatch(/REVIEWED AND REJECTED/);
+    expect(p, 'the corrective pass got a verdict without the evidence').toContain('one codeline declares a different transpiler');
+    expect(p).toContain('Tests use one transpiler across all codelines');
+    expect(p).toContain('state the convention only for the codelines that hold it');
+  }, 60_000);
+
+  it('it is told not to merely reword the defect', async () => {
+    const c = capture();
+    await spec.mintProjectAgents({
+      promptExec: c.exec, tickets: [{ id: 'T-1', title: 't', description: 'd' }],
+      referencedDocs: [], declaredDependencies: [], codelines: [],
+      profilesPath: join(c.dir, 'profiles.json'), agentsDir: c.dir, logDir: c.dir, repoPath: '',
+      correctiveFindings: [FINDING],
+    });
+    const p = readFileSync(c.capturePath, 'utf8');
+    expect(p).toMatch(/do not\s+merely reword them/i);
+    expect(p).toMatch(/stated only for the ones that hold it/i);
+  }, 60_000);
+
+  it('a first mint carries no corrective block', async () => {
+    const c = capture();
+    await spec.mintProjectAgents({
+      promptExec: c.exec, tickets: [{ id: 'T-1', title: 't', description: 'd' }],
+      referencedDocs: [], declaredDependencies: [], codelines: [],
+      profilesPath: join(c.dir, 'profiles.json'), agentsDir: c.dir, logDir: c.dir, repoPath: '',
+    });
+    expect(readFileSync(c.capturePath, 'utf8')).not.toMatch(/REVIEWED AND REJECTED/);
+  }, 60_000);
+});

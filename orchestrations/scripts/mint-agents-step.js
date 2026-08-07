@@ -496,36 +496,92 @@ if (require.main !== module) return;
 
   // assignAgentRoles mutates the story objects in place; they are the PRD's own objects.
   fs.writeFileSync(PRD_PATH, JSON.stringify(prd, null, 2));
-  // THE ROSTER'S ONLY ADVERSARY. Every other stage has one; this had none, and it decides who
-  // does all the later work and what they believe about the codebase. Runs before the pause so
-  // the operator reviews the roster AND what a reviewer made of it.
-  let review = { verdict: 'not_run', findings: [], reviewed: 0 };
-  if (_mintedDetail.length) {
+  // THE ROSTER'S ONLY ADVERSARY, AND A LOOP THAT ACTS ON IT.
+  //
+  // A reviewer whose findings nothing consumes is a critic. Its first live run produced seven
+  // blocking defects and the roster reached the pause unchanged — every one of those briefs
+  // would have been inherited by an implementer.
+  //
+  // Same shape as enforceVerificationCriteria: findings feed a regeneration, the regeneration is
+  // re-reviewed, and the cycle is capped. Corrective mints REPLACE rather than accumulate, so a
+  // correction cannot leave defective briefs behind beside their replacements.
+  const runRosterReview = async () => {
+    if (!_mintedDetail.length) return { verdict: 'sound', findings: [], reviewed: 0 };
     process.env.EPAM_AGENT_NAME = 'roster-reviewer';
     try {
       const liveProfiles = JSON.parse(fs.readFileSync(PROFILES_PATH, 'utf8'));
-      review = await spec.reviewRoster({
+      return await spec.reviewRoster({
         promptExec, minted: _mintedDetail, profiles: liveProfiles,
         codelines, tickets: stories, referencedDocs: docs,
         logDir: LOG_DIR, repoPath: REPO_PATH, toolGrant,
       });
     } catch (err) {
-      // A reviewer that cannot run must not silently read as "no defects" — that is the
-      // fail-open shape these gates exist to prevent.
-      review = { verdict: 'review_failed', findings: [], reviewed: 0, error: String(err && err.message) };
+      // A review that cannot run must not read as "no defects" — that is the fail-open shape
+      // these gates exist to prevent.
       process.stderr.write(`[mint-step] roster review FAILED: ${err && err.message}\n`);
+      return { verdict: 'review_failed', findings: [], reviewed: 0, error: String(err && err.message) };
     }
-    fs.writeFileSync(path.join(LOG_DIR, 'roster-review.json'), JSON.stringify(review, null, 2));
-    const blocking = review.findings.filter((f) => f && f.severity === 'blocking');
+  };
+
+  const reportReview = (rv, n) => {
+    const blocking = rv.findings.filter((f) => f && f.severity === 'blocking');
     process.stderr.write(
-      `[mint-step] roster review: ${review.verdict} — ${review.findings.length} finding(s), ` +
+      `[mint-step] roster review (cycle ${n}): ${rv.verdict} — ${rv.findings.length} finding(s), ` +
       `${blocking.length} blocking\n`);
-    for (const f of review.findings) {
+    for (const f of rv.findings) {
       process.stderr.write(`[mint-step]   [${f.severity}] ${f.agent}: ${f.claim}\n`);
       process.stderr.write(`[mint-step]      checked: ${f.checked}\n`);
       process.stderr.write(`[mint-step]      found:   ${f.found}\n`);
       if (f.remedy) process.stderr.write(`[mint-step]      remedy:  ${f.remedy}\n`);
     }
+  };
+
+  const maxCycles = Number(process.env.EPAM_ROSTER_REVIEW_CYCLES || '2');
+  let cycle = 1;
+  let review = { verdict: 'not_run', findings: [], reviewed: 0 };
+
+  while (_mintedDetail.length && cycle <= maxCycles) {
+    review = await runRosterReview();
+    const blocking = review.findings.filter((f) => f && f.severity === 'blocking');
+    reportReview(review, cycle);
+    if (!blocking.length || cycle === maxCycles) break;
+
+    process.stderr.write(
+      `[mint-step] cycle ${cycle}: ${blocking.length} blocking finding(s) — re-minting with them as input\n`);
+    const cleared = rosterLib.clearProjectRoster(AGENTS_DIR, PROFILES_PATH);
+    process.stderr.write(`[mint-step]   cleared the defective roster (${cleared.length}) before re-proposing\n`);
+
+    const remint = await spec.mintProjectAgents({
+      promptExec, tickets: stories, referencedDocs: docs, declaredDependencies: deps,
+      codelines, toolGrant, profilesPath: PROFILES_PATH, agentsDir: AGENTS_DIR,
+      logDir: LOG_DIR, repoPath: REPO_PATH, correctiveFindings: blocking,
+    });
+    _mintedNames = remint.minted.map((m) => m.name);
+    _mintedDetail = remint.minted;
+    fs.writeFileSync(path.join(LOG_DIR, `agent-mint-cycle${cycle + 1}.json`), JSON.stringify(remint, null, 2));
+    for (const m of remint.minted) {
+      const tag = m.kind === 'investigator' ? `investigator:${m.codeline || '(no codeline!)'}` : 'implementer';
+      process.stderr.write(`[mint-step]   + [${tag}] ${m.name} — ${m.rationale}\n`);
+    }
+    cycle += 1;
+  }
+
+  review.cycles = cycle;
+  fs.writeFileSync(path.join(LOG_DIR, 'roster-review.json'), JSON.stringify(review, null, 2));
+
+  // Still defective after the full correction budget. With the pause on, the operator sees it
+  // and decides. With the pause OFF nothing downstream would ever mention it, so it halts here.
+  const _stillBlocking = review.findings.filter((f) => f && f.severity === 'blocking');
+  if (_stillBlocking.length) {
+    process.stderr.write(
+      `[mint-step] ${_stillBlocking.length} blocking finding(s) remain after ${cycle} cycle(s)\n`);
+    if (!/^(1|true|yes)$/i.test(process.env.EPAM_PAUSE_AFTER_AGENT_MINT || '')) {
+      throw new Error(
+        `roster review: ${_stillBlocking.length} blocking finding(s) survive after ${cycle} correction ` +
+        'cycle(s), and no roster pause is configured for anyone to see them. Refusing to hand these ' +
+        'briefs to implementers. See roster-review.json.');
+    }
+    process.stderr.write('[mint-step] the roster pause is on — surfacing them for review rather than halting\n');
   }
 
   writeRosterDiff(PROFILES_PATH, AGENTS_DIR, LOG_DIR, _mintedNames, _mintedDetail);

@@ -3021,7 +3021,7 @@ const TOOL_PROJECT_AGENTS = {
  */
 async function mintProjectAgents({
   promptExec, tickets, referencedDocs, profilesPath, agentsDir, logDir, repoPath,
-  declaredDependencies, codelines, toolGrant,
+  declaredDependencies, codelines, toolGrant, correctiveFindings,
 }) {
   const { mergeProjectAgents } = require('./lib/agent-roster.js');
 
@@ -3099,7 +3099,28 @@ async function mintProjectAgents({
       }).join('\n')
     : 'THE CODELINES IN SCOPE: (none resolved)';
 
-  const prompt = `${basePrompt}
+  // A CORRECTIVE PASS IS TOLD WHAT WAS WRONG, IN THE REVIEWER'S OWN WORDS.
+  //
+  // Not "try again" — the previous roster was confident and specific, and a re-proposal with no
+  // account of the defect tends to reproduce it in new wording. Each finding carries the claim,
+  // what was checked and what was found, so the correction has the evidence rather than a verdict.
+  const _cf = Array.isArray(correctiveFindings) ? correctiveFindings : [];
+  const correctiveBlock = _cf.length
+    ? ['A PREVIOUS ROSTER FOR THIS PROJECT WAS REVIEWED AND REJECTED. These defects were found by',
+       'checking the briefs against the repositories themselves. Do not repeat them, and do not',
+       'merely reword them — a convention that is true of some codelines and not others must be',
+       'stated only for the ones that hold it, or not stated at all:',
+       '',
+       ..._cf.map((f) => [
+         `- ${f.agent || '(unnamed role)'} claimed: "${String(f.claim || '').replace(/\s+/g, ' ')}"`,
+         `    checked: ${String(f.checked || '').replace(/\s+/g, ' ')}`,
+         `    found:   ${String(f.found || '').replace(/\s+/g, ' ')}`,
+         f.remedy ? `    remedy:  ${String(f.remedy).replace(/\s+/g, ' ')}` : '',
+       ].filter(Boolean).join('\n')),
+       ''].join('\n')
+    : '';
+
+  const prompt = `${correctiveBlock}${basePrompt}
 
 THE WORK THIS PROJECT HAS BEEN ASKED TO DO (real tickets from the tracker):
 ${ticketBlock || '- (no tickets available)'}

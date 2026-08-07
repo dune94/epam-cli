@@ -2868,7 +2868,7 @@ async function deriveGuardVocabulary({ promptExec, rule, statements, story, find
   // A term the vendor publishes is a contract, not a choice this team made, so flagging it as
   // "mechanism" deletes the sharpest criteria a story has. But that cuts only so far: on
   // 20260806T204217Z a criterion asserted that "the options object passed to
-  // contentstack.Stack() includes a live_preview key" — `live_preview` is in the vendor's
+  // the SDK client constructor includes a live_preview key" — `live_preview` is in the vendor's
   // guide, and the assertion is still about the shape of an internal object rather than
   // anything observable. The reviewer said so and the spec gate halted the run at 0.68.
   //
@@ -5578,8 +5578,8 @@ function capSplitACs(story, parentId) {
  * The test that already covers a declared file, found by IMPORT rather than guessed by name.
  *
  * The writer is responsible for tests, and it only writes inside its manifest. On AMSD-2041
- * the manifest named src/services/contentstack.ts and nothing else, so the covering suite —
- * src/services/__tests__/contentstack.spec.ts, which imports that exact module and already
+ * the manifest named src/services/<module>.ts and nothing else, so the covering suite —
+ * src/services/__tests__/<module>.spec.ts, which imports that exact module and already
  * exercises analogous config — was never in scope. The reviewer asked for tests on seven
  * cycles across two runs and the writer had nowhere sanctioned to put them.
  *
@@ -5609,8 +5609,8 @@ function coveringTestFiles(repoPath, files, env = process.env) {
         let body = '';
         try { body = fs.readFileSync(path.join(repoPath, t), 'utf8'); } catch { continue; }
         // RESOLVE the import, do not pattern-match its tail. Matching on basename alone
-        // accepted "constants/contentstack" and "interface/contentstack" as covering
-        // "services/contentstack.ts" — 21 unrelated suites for one declared file, which would
+        // accepted "constants/<module>" and "interface/<module>" as covering
+        // "services/<module>.ts" — 21 unrelated suites for one declared file, which would
         // have handed the writer a manifest naming most of the test tree.
         let covers = false;
         for (const m of body.matchAll(/(?:from\s*|require\(\s*)['"]([^'"]+)['"]/g)) {
@@ -5620,8 +5620,8 @@ function coveringTestFiles(repoPath, files, env = process.env) {
             resolved = path.posix.normalize(path.posix.join(path.posix.dirname(t), spec));
           } else {
             // Non-relative (alias or baseUrl) import: it covers the declared file only when
-            // the declared path ENDS with the specifier — "services/contentstack" matches
-            // "src/services/contentstack.ts", "constants/contentstack" does not.
+            // the declared path ENDS with the specifier — "services/<module>" matches
+            // "src/services/<module>.ts", "constants/<module>" does not.
             resolved = spec;
             if (srcNoExt.endsWith(`/${spec}`) || srcNoExt === spec) { covers = true; break; }
             continue;

@@ -65,7 +65,12 @@ function codeline(opts: {
 /** Run the assessor. NO_INSTALL keeps tests offline and fast. */
 function assess(paths: string[], env: Record<string, string> = {}) {
   const r = spawnSync('bash', [HEALTH, ...paths], {
-    encoding: 'utf8', timeout: 60000,
+    // 60s was starvation, not a ceiling on the work. The assessor answers an empty
+    // codeline in ~0s standalone, but this file does ~340s of real subprocess work in
+    // total, and under full-suite parallel load these children were killed at 60s while
+    // merely waiting for CPU — two tests failed in the suite and all 14 passed alone.
+    // A genuine hang still fails here, just later; contention no longer reads as a defect.
+    encoding: 'utf8', timeout: 180000,
     env: { ...process.env, CODELINE_HEALTH_NO_INSTALL: '1', ...env },
   });
   return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };

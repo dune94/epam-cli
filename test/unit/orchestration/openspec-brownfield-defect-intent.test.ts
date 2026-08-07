@@ -37,14 +37,36 @@ describe('buildBrownfieldArchaeologyBlock — brownfield classification', () => 
     expect(schemaLine).toMatch(/"storyKind":"defect\|novel"/);
   });
 
-  it('makes ACs immutable and produces the VC (verification criteria) layer instead', () => {
+  it('produces the VC (verification criteria) layer', () => {
     // VC model (2026-07-24): ACs are never elaborated for ANY brownfield story;
     // verification lives in a separate, mechanism-free VC layer.
-    expect(archaeologyBlock).toMatch(/VERIFICATION CRITERIA \(do NOT touch the acceptance criteria\)/);
-    expect(archaeologyBlock).toMatch(/IMMUTABLE ticket intent/);
-    expect(archaeologyBlock).toMatch(/copy the existing array through VERBATIM/);
-    expect(schemaLine).toMatch(/"verificationCriteria":/);
+    //
+    // The schema key is verificationCriteriaDetail, not verificationCriteria: a VC now
+    // declares WHO observes it and on WHAT surface, because a criterion nobody can be
+    // named to observe is not observable. This asserted the old flat key.
+    expect(archaeologyBlock).toMatch(/VERIFICATION CRITERIA/);
+    expect(schemaLine).toMatch(/"verificationCriteriaDetail":/);
+    expect(schemaLine).toMatch(/"observer":/);
     expect(schemaLine).toMatch(/"vcSource":/);
+  });
+
+  it('mentions acceptance criteria ONLY when the story has them', () => {
+    // A brownfield ticket has no ACs — the AC gate skips them entirely and records that
+    // VCs come from the description. This block previously spent three sentences on AC
+    // immutability regardless, i.e. ceremony about an array that is empty by design.
+    // With ACs present (greenfield, or a ticket that really carries them) the
+    // immutability instruction must still be intact.
+    const withAcs = buildBrownfieldArchaeologyBlock(
+      { EPAM_BROWNFIELD: '1' }, { hasAcceptanceCriteria: true }).archaeologyBlock;
+    expect(withAcs).toMatch(/IMMUTABLE ticket intent/);
+    expect(withAcs).toMatch(/copy the existing array through VERBATIM/);
+
+    const withoutAcs = buildBrownfieldArchaeologyBlock(
+      { EPAM_BROWNFIELD: '1' }, { hasAcceptanceCriteria: false }).archaeologyBlock;
+    expect(
+      withoutAcs,
+      'the prompt talks about acceptance criteria to a ticket that has none',
+    ).not.toMatch(/acceptance criteria|acceptanceCriteria/i);
   });
 
   it('forbids any implementation mechanism in a VC (the AC-quality guard)', () => {

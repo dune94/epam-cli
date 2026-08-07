@@ -93,7 +93,15 @@ describe('kb-change-reviewer — profile', () => {
   });
 
   it('profile rejects entries referencing specific story IDs', () => {
-    expect(agent).toMatch(/story ID|SKY-xxx|EPAM-xxx/i);
+    // Assert the RULE, not one phrasing of it. This pinned the literal "SKY-xxx, EPAM-xxx"
+    // — sample ticket IDs from an unrelated project, carried in a generic engine persona.
+    // Removing that hardcoding broke a test that was reading the examples rather than the
+    // instruction, while the instruction itself never moved.
+    expect(
+      agent,
+      'the reviewer no longer refuses KB entries pinned to one ticket, so rules stop generalising',
+    ).toMatch(/specific story or ticket ID|story ID|ticket ID/i);
+    expect(agent).toMatch(/generaliz|generalis/i);
   });
 
   it('profile requires entries to be generalizable (not one-time workarounds)', () => {

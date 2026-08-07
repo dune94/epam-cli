@@ -11,9 +11,20 @@
 # "Retries MUST proceed up the rungs — nothing is allowed to intercede."
 #
 # State lives under LOG_DIR (already lane-scoped — see
-# project_parallel_lanes_shared_state), one file per story, so it is wiped
-# for free by the existing teardown/clean-slate reset at the start of every
-# run. No separate reset logic is needed or wanted here.
+# project_parallel_lanes_shared_state), one file per story.
+#
+# CORRECTED 2026-08-07: this used to claim the state was "wiped for free by the
+# existing teardown/clean-slate reset at the start of every run. No separate
+# reset logic is needed or wanted here." That was never true. pre-run-reset.sh's
+# sweep matches *.log, story-outputs-*.txt and eslint-baseline-*.json, and never
+# matched *.count. AMSD-2041.count held 6 across every run of 2026-08-06/07, so a
+# fresh writer attempt started at rung 3 of 4: one review rejection exhausted the
+# ladder, Step 3.6 escalated without a single re-implementation cycle, and the
+# phase halted. Left alone, a story that exhausts its ladder once is escalated
+# after one rejection on EVERY later run, forever.
+#
+# pre-run-reset.sh now clears these counters explicitly. Within a run they must
+# still persist across claude.sh subprocesses — that is the requirement above.
 #
 # Sourced by both claude.sh (reads/writes retry_count) and
 # run-agent-orchestration.sh (Step 3.6 advances the rung + checks exhaustion).

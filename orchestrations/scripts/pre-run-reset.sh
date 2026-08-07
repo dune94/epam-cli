@@ -271,6 +271,32 @@ while IFS= read -r _lf; do
     mkdir -p "$(dirname "$_dest")" 2>/dev/null || true
     mv "$_lf" "$_dest" 2>/dev/null && _ARCHIVED_LOGS=$((_ARCHIVED_LOGS+1)) || true
 done < <(find "$LOG_DIR" -type f \( -name '*.log' -o -name 'story-outputs-*.txt' -o -name 'eslint-baseline-*.json' \) -not -path "$ARCHIVE_DIR/*" -not -path "$LOG_DIR/archive/*" 2>/dev/null || true)
+
+# ── The inference ladder's rung counters ────────────────────────────────────
+# story-retry-state/<story>.count records how far up the model ladder a story
+# has climbed. It MUST survive across claude.sh subprocesses within one run —
+# that is the whole reason it is on disk, and "retries must proceed up the
+# rungs, nothing is allowed to intercede" is a standing requirement.
+#
+# It must NOT survive a run. lib/story-retry-state.sh assumed this reset wiped
+# it "for free"; the archive sweep above matches *.log / story-outputs-*.txt /
+# eslint-baseline-*.json and never touched it, so the assumption was false from
+# the day it was written. AMSD-2041.count sat at 6 across every run of
+# 2026-08-06/07, and a resumed writer attempt began already at rung 3 of 4: the
+# reviewer requested changes ONCE, the ladder was declared exhausted, and the
+# phase halted without a single re-implementation cycle.
+#
+# The failure mode is not limited to a resume. A story that exhausts its ladder
+# is escalated after one rejection on EVERY future run, forever, until someone
+# deletes the file by hand.
+_RETRY_STATE_DIR="$LOG_DIR/story-retry-state"
+if [ -d "$_RETRY_STATE_DIR" ]; then
+    _RETRY_CLEARED=$(find "$_RETRY_STATE_DIR" -maxdepth 1 -type f -name '*.count' 2>/dev/null | wc -l)
+    find "$_RETRY_STATE_DIR" -maxdepth 1 -type f -name '*.count' -delete 2>/dev/null || true
+    [ "$_RETRY_CLEARED" -gt 0 ] \
+        && info "  Cleared $_RETRY_CLEARED inference-ladder rung counter(s) — every story starts this run at rung 0" \
+        || true
+fi
 [ "$_ARCHIVED_LOGS" -gt 0 ] \
   && success "Moved $_ARCHIVED_LOGS stale *.log / manifest / baseline-cache file(s) → $ARCHIVE_DIR (absence now means 'this run did not write it')" \
   || info "  No stale .log files to move"

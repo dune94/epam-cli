@@ -795,6 +795,34 @@ phase_stories_brownfield_scope() {
 # story with no prior bug can never satisfy — it was blocking AMSD-2041 on an
 # unsatisfiable bar. An UNCLASSIFIED story is still gated: absent classification
 # defaults to the safe side.
+# phase_stories_for_tc_writer — the EXACT COMPLEMENT of the repro gate.
+#
+# The bug-reproduction gate excludes storyKind "novel", and rightly: a new capability has no
+# prior bug to reproduce, so RED→GREEN against a pre-fix baseline is unsatisfiable. Step 10
+# then skipped the TC writer for ALL brownfield work, on the stated grounds that the
+# reproduction gate covers it.
+#
+# For a novel brownfield story neither is true. Live 2026-08-07 (AMSD-2041, storyKind novel):
+# Step 10 skipped, Step 3.55 "passed for all phase stories" because it had none to check, and
+# NO step in the pipeline was responsible for tests. The team-lead reviewer asked for them as
+# an opinion on seven review cycles across two runs; the writer, under a minimal-fix
+# instruction, never wrote any; the reviewer never approved; the phase halted every time.
+# Two mechanisms handing off to each other, and novel work falling between them.
+#
+# So: defects are proven by reproduction, novel work is proven by test criteria, and this
+# selector is the other half of that split.
+phase_stories_for_tc_writer() {
+    local _prd="${1:-${PRD_FILE:-}}" _phase="${2:-${PHASE:-}}"
+    [ -n "$_prd" ] && [ -f "$_prd" ] || return 0
+    jq -r --arg phase "$_phase" \
+        '(.implementationOrder[$phase] // []) as $ids |
+         .stories[]? | select(.id != null)
+                     | select(.id as $id | $ids | index($id) != null)
+                     | select((.storyKind // "") == "novel")
+                     | .id' "$_prd" 2>/dev/null || true
+    return 0
+}
+
 phase_stories_for_repro_gate() {
     local _prd="${1:-${PRD_FILE:-}}" _phase="${2:-${PHASE:-}}"
     [ -n "$_prd" ] && [ -f "$_prd" ] || return 0

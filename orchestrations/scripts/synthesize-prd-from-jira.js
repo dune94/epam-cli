@@ -196,7 +196,17 @@ function classificationToStory(c, totalStoryCount) {
     codeline:           c.codeline || DEFAULT_CODELINE,
     status:             'pending',
     completed:          false,
-    agentRole:          tmpl.agentRole || 'typescript-engineer',
+    // NO DEFAULT ROLE. At synthesis time nothing has analysed this codeline yet, so no
+    // roster exists to choose from — a step that cannot know the answer must not invent
+    // one. This read `tmpl.agentRole || 'typescript-engineer'`, which put EVERY brownfield
+    // ticket without a template role onto a single agent whose system prompt describes
+    // epam-cli's own src/cli internals (Commander.js, Repl.ts, SlashCommands.ts). Live
+    // 2026-08-07: AMSD-2041 -> typescript-engineer, writing Contentstack code against a
+    // Metrolinx Angular codeline. The literal never errored, so it was never noticed; it
+    // was just always wrong. null means DEFERRED — assignment happens after the project's
+    // roles are minted, against the live roster. Downstream must fail loudly on an
+    // unassigned role rather than substitute another literal.
+    agentRole:          tmpl.agentRole || null,
     agentGroup:         tmpl.agentGroup || defaultGroup,
     effort:             tmpl.effort || c.effort || 'medium',
     estimate:           tmpl.estimate || 10,

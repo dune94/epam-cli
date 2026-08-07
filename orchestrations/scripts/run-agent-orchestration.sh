@@ -6233,9 +6233,22 @@ fi
 # source, and give the writer a second, overlapping requirement list to drift
 # from. Greenfield has no bug to reproduce and no baseline to run against, so
 # there TCs remain the mechanism that says what "done" means.
-if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
-    step_emit "10" "skip" "Step 10: TC writer gate" "brownfield — VCs + bug-reproduction gate instead"
-    info "Step 10: TC writer gate skipped — brownfield proves changes with verification criteria and the bug-reproduction gate, not test criteria"
+# NOVEL BROWNFIELD WORK STILL NEEDS TEST CRITERIA.
+#
+# The reasoning above holds for a DEFECT: the bug-reproduction gate executes a failing test
+# against pre-fix and post-fix code, which beats a written intention. It does not hold for a
+# novel story — phase_stories_for_repro_gate excludes storyKind "novel" because there is no
+# prior bug to reproduce, so skipping the TC writer for ALL brownfield left novel work with
+# NO test mechanism at all.
+#
+# Live 2026-08-07, AMSD-2041 (novel): Step 10 skipped, Step 3.55 "passed" with nothing to
+# check, and no step owned tests. The reviewer requested them on seven cycles across two runs,
+# the writer never wrote any, the reviewer never approved, and the phase halted every time.
+_tc_novel_stories="$(phase_stories_for_tc_writer "$PRD_FILE" "$PHASE" 2>/dev/null || true)"
+_tc_novel_count=$(printf '%s\n' "$_tc_novel_stories" | awk 'NF{n++} END{print n+0}')
+if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ "$_tc_novel_count" -eq 0 ]; then
+    step_emit "10" "skip" "Step 10: TC writer gate" "brownfield defects — bug-reproduction gate proves them instead"
+    info "Step 10: TC writer gate skipped — every phase story is a defect, proven by the bug-reproduction gate rather than by test criteria"
 elif [ "${_tc_writer_needed:-0}" -gt 0 ]; then
     step_emit "10" "running" "Step 10: TC writer gate"
     log "Step 10: TC writer gate — ${_tc_writer_needed} test story/stories need testCriteria..."

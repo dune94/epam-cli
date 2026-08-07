@@ -2952,6 +2952,121 @@ rarity for signal.
   return isVocabularyUsable(vocab) ? vocab : null;
 }
 
+// ── Project agent roster ───────────────────────────────────────────────────
+//
+// The shape of a proposal. The SDK's proposeAgents() asks for exactly these three fields;
+// this binds them so the answer arrives parsed instead of as prose the pipeline has to
+// guess at (the failure that lost the guard-vocabulary answer on 2026-08-06).
+const TOOL_PROJECT_AGENTS = {
+  name: 'submit_project_agents',
+  description:
+    'Propose the project-specific engineering agent roles this codeline needs, on top of ' +
+    'the canonical core. One role per distinct domain of the project. Do not answer in prose.',
+  parameters: {
+    type: 'object',
+    required: ['proposedAgents'],
+    properties: {
+      proposedAgents: {
+        type: 'array',
+        minItems: 1,
+        items: {
+          type: 'object',
+          required: ['name', 'systemPrompt', 'rationale'],
+          properties: {
+            name: { type: 'string', description: 'kebab-case role name, e.g. "<domain>-engineer"' },
+            systemPrompt: {
+              type: 'string',
+              description:
+                "The role's full briefing: its expertise, the conventions of THIS codeline, the " +
+                'files and directories it owns, the patterns it follows and the tools it uses.',
+            },
+            rationale: { type: 'string', description: 'One sentence: why this codeline needs this role.' },
+          },
+        },
+      },
+    },
+  },
+};
+
+/**
+ * mintProjectAgents — derive this project's own engineering roles, and wire them in.
+ *
+ * WHY IT RUNS HERE, THROUGH THIS SEAM. proposeAgents() in the SDK calls an LLMProvider
+ * directly. That is correct for `epam new`, where a human is watching the output, and wrong
+ * here: it would put the single call that decides the whole roster outside the invocation
+ * gateway — no ladder, no retry, no self-heal, no timeout budget, no cost capture. The one
+ * agent whose failure silently degrades every downstream agent would be the only agent with
+ * no resilience. So the SDK's PROMPT is reused verbatim (single definition of what a project
+ * role is) and driven through runAgentForJson, exactly like deriveGuardVocabulary.
+ *
+ * WHY IT RUNS AFTER INGEST. The inputs that make a role project-specific rather than a
+ * restatement of the canonical core are the tickets and the documents linked on them. Both
+ * exist only once ingest has run. A proposer given just a repo path proposes generic roles.
+ *
+ * Read tools are granted (repoPath) so the proposer can VERIFY the codeline's shape instead
+ * of asserting it from the ticket text alone.
+ */
+async function mintProjectAgents({
+  promptExec, tickets, referencedDocs, profilesPath, agentsDir, logDir, repoPath,
+}) {
+  const { mergeProjectAgents } = require('./lib/agent-roster.js');
+
+  let basePrompt = '';
+  let fixedRoles = [];
+  try {
+    const sdk = require(path.join(automationDirFromLogDir(logDir), '..', 'dist', 'sdk.js'));
+    basePrompt = sdk.getAgentProposalPrompt();
+    fixedRoles = sdk.FIXED_AGENT_ROLES || [];
+  } catch (_) {
+    try {
+      const sdk = require(path.join(__dirname, '..', '..', 'dist', 'sdk.js'));
+      basePrompt = sdk.getAgentProposalPrompt();
+      fixedRoles = sdk.FIXED_AGENT_ROLES || [];
+    } catch (e) {
+      // Loud. Minting silently from a locally-invented prompt would produce a roster that
+      // looks right and was derived from different instructions than the scaffold path.
+      throw new Error(`[mint] cannot load the agent proposal prompt from dist/sdk.js: ${e && e.message}`);
+    }
+  }
+
+  const ticketBlock = (Array.isArray(tickets) ? tickets : []).map((t) => {
+    const comps = Array.isArray(t.components) && t.components.length ? `\nComponents: ${t.components.join(', ')}` : '';
+    return `- ${t.jiraKey || t.id || ''}: ${t.title || ''}${comps}\n  ${String(t.description || '').replace(/\s+/g, ' ')}`;
+  }).join('\n');
+
+  // The vendor's own published contract, quoted verbatim by the link agent. This is the
+  // sharpest signal about which domains this work actually spans.
+  const docBlock = (Array.isArray(referencedDocs) ? referencedDocs : [])
+    .filter((d) => d && d.fetchStatus === 'fetched' && Array.isArray(d.quotes) && d.quotes.length)
+    .map((d) => `- ${d.url}\n${d.quotes.map((q) => `    "${String(q).replace(/\s+/g, ' ')}"`).join('\n')}`)
+    .join('\n');
+
+  const prompt = `${basePrompt}
+
+THE WORK THIS PROJECT HAS BEEN ASKED TO DO (real tickets from the tracker):
+${ticketBlock || '- (no tickets available)'}
+
+${docBlock ? `DOCUMENTATION LINKED ON THESE TICKETS (fetched, quoted verbatim — the vendor's published contract):
+${docBlock}
+
+` : ''}THE CODELINE ITSELF: ${repoPath || '(not available)'}
+Read it before you answer. Propose roles for the domains this codebase and this work
+actually span — not the domains you would expect a project like this to have.
+
+Do not propose a role that duplicates one of the canonical roles already listed above.`;
+
+  const payload = await runAgentForJson(
+    promptExec, prompt, TOOL_PROJECT_AGENTS, 'PROJECT_AGENTS',
+    logDir ? path.join(logDir, 'project-agents-mint.log') : null,
+    null, '', repoPath || '',
+    { EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_PROJECT_AGENTS) },
+  );
+
+  const proposals = (payload && Array.isArray(payload.proposedAgents)) ? payload.proposedAgents : [];
+  const result = mergeProjectAgents({ profilesPath, agentsDir, proposals });
+  return { ...result, proposed: proposals.length, protectedRoles: fixedRoles.length };
+}
+
 async function enforceVerificationCriteria(story, initialVc, opts = {}) {
   const { regenerateVc = null, reviewVc = null, findings = null, deriveVocabulary = null,
           maxCycles = Number(process.env.VC_MAX_CYCLES || '2') } = opts;
@@ -5457,6 +5572,69 @@ function capSplitACs(story, parentId) {
 // detective-grounded file list along with a rejected AC rewrite it had
 // nothing to do with). Returns technicalNotes unchanged when locationHint is
 // empty/absent.
+/**
+ * coveringTestFiles(repoPath, files) -> [test file paths]
+ *
+ * The test that already covers a declared file, found by IMPORT rather than guessed by name.
+ *
+ * The writer is responsible for tests, and it only writes inside its manifest. On AMSD-2041
+ * the manifest named src/services/contentstack.ts and nothing else, so the covering suite —
+ * src/services/__tests__/contentstack.spec.ts, which imports that exact module and already
+ * exercises analogous config — was never in scope. The reviewer asked for tests on seven
+ * cycles across two runs and the writer had nowhere sanctioned to put them.
+ *
+ * Derivation, in order:
+ *   1. tracked files only (git ls-files) — never build output or vendored copies
+ *   2. files the TEST RUNNER would collect. jest's documented default is __tests__ directories
+ *      plus *.spec / *.test; EPAM_TEST_FILE_PATTERN overrides it for a project whose runner
+ *      differs. This is the runner's own contract, not a convention invented here.
+ *   3. of those, the ones that IMPORT the declared module. An import is evidence of coverage;
+ *      a matching filename is a coincidence.
+ */
+function coveringTestFiles(repoPath, files, env = process.env) {
+  const out = [];
+  try {
+    if (!repoPath || !fs.existsSync(repoPath)) return out;
+    const declared = (Array.isArray(files) ? files : []).filter((f) => typeof f === 'string' && f);
+    if (!declared.length) return out;
+    const testPattern = new RegExp(env.EPAM_TEST_FILE_PATTERN || '(^|/)__tests__/|\\.(spec|test)\\.[jt]sx?$');
+    const tracked = require('child_process')
+      .execFileSync('git', ['-C', repoPath, 'ls-files'], { encoding: 'utf8', maxBuffer: 1 << 26 })
+      .split('\n').filter(Boolean);
+    const candidates = tracked.filter((f) => testPattern.test(f));
+    for (const src of declared) {
+      const srcNoExt = src.replace(/\.[jt]sx?$/, '');
+      for (const t of candidates) {
+        if (out.includes(t) || declared.includes(t)) continue;
+        let body = '';
+        try { body = fs.readFileSync(path.join(repoPath, t), 'utf8'); } catch { continue; }
+        // RESOLVE the import, do not pattern-match its tail. Matching on basename alone
+        // accepted "constants/contentstack" and "interface/contentstack" as covering
+        // "services/contentstack.ts" — 21 unrelated suites for one declared file, which would
+        // have handed the writer a manifest naming most of the test tree.
+        let covers = false;
+        for (const m of body.matchAll(/(?:from\s*|require\(\s*)['"]([^'"]+)['"]/g)) {
+          const spec = m[1];
+          let resolved;
+          if (spec.startsWith('.')) {
+            resolved = path.posix.normalize(path.posix.join(path.posix.dirname(t), spec));
+          } else {
+            // Non-relative (alias or baseUrl) import: it covers the declared file only when
+            // the declared path ENDS with the specifier — "services/contentstack" matches
+            // "src/services/contentstack.ts", "constants/contentstack" does not.
+            resolved = spec;
+            if (srcNoExt.endsWith(`/${spec}`) || srcNoExt === spec) { covers = true; break; }
+            continue;
+          }
+          if (resolved === srcNoExt || resolved === src) { covers = true; break; }
+        }
+        if (covers) out.push(t);
+      }
+    }
+  } catch { /* a manifest without a covering test is a fact, not an error */ }
+  return out;
+}
+
 function mergeLocationHintFiles(technicalNotes, locationHint) {
   if (!Array.isArray(locationHint) || !locationHint.length) return technicalNotes;
   const hintFiles = locationHint
@@ -6902,10 +7080,13 @@ module.exports = {
   specAgentEnv,
   reviewTicketLinks,
   normaliseTicketLinks,
+  coveringTestFiles,
   persistReferencedDocs,
   fetchTicketDocuments,
   manifestFileExcerpts,
   deriveGuardVocabulary,
+  mintProjectAgents,
+  TOOL_PROJECT_AGENTS,
   schemaEnv,
   referencedDocsBlock,
   advanceAgentLadderEscalation,

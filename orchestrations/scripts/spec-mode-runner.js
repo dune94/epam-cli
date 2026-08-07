@@ -2971,9 +2971,22 @@ const TOOL_PROJECT_AGENTS = {
         minItems: 1,
         items: {
           type: 'object',
-          required: ['name', 'systemPrompt', 'rationale'],
+          required: ['name', 'kind', 'systemPrompt', 'rationale'],
           properties: {
             name: { type: 'string', description: 'kebab-case role name, e.g. "<domain>-engineer"' },
+            kind: {
+              type: 'string',
+              enum: ['implementer', 'investigator'],
+              description:
+                'implementer = authors code and can own a story. investigator = reads code and ' +
+                'reports what is there; never writes, never owns a story.',
+            },
+            codeline: {
+              type: 'string',
+              description:
+                'For an investigator: the ONE codeline it investigates, named exactly as listed ' +
+                'in scope. Omit for an implementer, which spans the project.',
+            },
             systemPrompt: {
               type: 'string',
               description:
@@ -3125,6 +3138,22 @@ TEST RESPONSIBILITY MUST BE OWNED, EXPLICITLY. Say in the brief, for whichever r
 how this codeline's tests are written: where test files live, how they are named, and which
 runner executes them — taken from what the codelines declare above, not from habit. Work with
 no named owner for its tests arrives at review untested and cannot be approved.
+
+PROPOSE TWO CLASSES OF AGENT.
+
+IMPLEMENTERS (kind: "implementer") author code, as described above. One roster of them spans
+every codeline.
+
+INVESTIGATORS (kind: "investigator") read code and report what is there — they never write and
+never own a story. Propose EXACTLY ONE per codeline listed in scope, each naming its codeline
+in the "codeline" field, exactly as spelled above. Its brief should describe how to find things
+in THAT codebase: where the modules relevant to this work live, what the layout and naming
+conventions are, and which of its declared dependencies matter here. An investigator that
+merely restates the ticket adds nothing — its value is knowing one repository well.
+
+Keep each investigator to its own codeline. It reports on the repository it was briefed for and
+says nothing about the others; a claim about a repository it has not read is a guess wearing the
+authority of an investigation.
 
 Do not propose a role that duplicates one of the canonical roles already listed above.`;
 
@@ -3821,7 +3850,29 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
       return JSON.parse(fs.readFileSync(p, 'utf8'));
     } catch { return {}; }
   })();
-  const detectiveProfile = profiles['code-graph-detective'] || '';
+  // THE CODELINE'S OWN DETECTIVE, WHEN ONE WAS MINTED FOR IT.
+  //
+  // The roster mints one investigator per codeline, briefed on that repository's layout,
+  // conventions and the dependencies that matter in it. A lane uses its own; the canonical
+  // code-graph-detective remains the fallback for a codeline with none, and for greenfield.
+  //
+  // Looked up BY CODELINE, never by position: two lanes running the same story must not be
+  // able to pick up each other's investigator. A detective briefed on another repository is
+  // the contamination this per-codeline split exists to prevent.
+  const _mintedDetective = (() => {
+    try {
+      const agentsDir = path.join(automationDirFromLogDir(logDir), 'agents');
+      const cl = (story && story.codeline) || process.env.JIRA_DEFAULT_CODELINE || '';
+      const name = require('./lib/agent-roster.js').investigatorForCodeline(agentsDir, cl);
+      return (name && profiles[name]) ? { name, brief: profiles[name] } : null;
+    } catch { return null; }
+  })();
+  const detectiveProfile = _mintedDetective
+    ? _mintedDetective.brief
+    : (profiles['code-graph-detective'] || '');
+  if (_mintedDetective) {
+    console.log(`spec-mode: detective for ${(story && story.codeline) || 'story'} = ${_mintedDetective.name} (minted for this codeline)`);
+  }
   const scriptDir = path.join(__dirname); // orchestrations/scripts
   const toolPath = path.join(scriptDir, 'codegraph-agent-query.sh');
 

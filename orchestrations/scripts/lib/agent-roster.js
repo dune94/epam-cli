@@ -147,7 +147,11 @@ function mergeProjectAgents(opts) {
       rejected.push({ name: p.name, reason: `kb seed failed: ${e.message}` });
     }
 
-    minted.push({ name: p.name, kind: proposalKind(p), rationale: p.rationale || '', surfaces });
+    minted.push({
+      name: p.name, kind: proposalKind(p),
+      codeline: typeof p.codeline === 'string' ? p.codeline.trim() : '',
+      rationale: p.rationale || '', surfaces,
+    });
   }
 
   fs.writeFileSync(profilesPath, JSON.stringify(profiles, null, 2), 'utf8');
@@ -162,7 +166,7 @@ function mergeProjectAgents(opts) {
   const registered = registerProjectRoles(
     agentsDir, minted.filter((m) => m.kind === 'implementer').map((m) => m.name));
   const registeredInv = registerProjectInvestigators(
-    agentsDir, minted.filter((m) => m.kind === 'investigator').map((m) => m.name));
+    agentsDir, minted.filter((m) => m.kind === 'investigator').map((m) => ({ name: m.name, codeline: m.codeline })));
   for (const m of minted) {
     if (m.kind === 'implementer' && registered.includes(m.name)) m.surfaces.push('project-roles');
     if (m.kind === 'investigator' && registeredInv.includes(m.name)) m.surfaces.push('project-investigators');
@@ -249,12 +253,19 @@ function projectInvestigatorsPath(agentsDir) {
 function registerProjectInvestigators(agentsDir, names) {
   const file = projectInvestigatorsPath(agentsDir);
   let roles = [];
+  let byCodeline = {};
   try {
     const existing = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (Array.isArray(existing.investigators)) roles = existing.investigators.filter((r) => typeof r === 'string');
+    if (existing.byCodeline && typeof existing.byCodeline === 'object') byCodeline = existing.byCodeline;
   } catch { /* first run */ }
   for (const n of Array.isArray(names) ? names : []) {
-    if (typeof n === 'string' && n && !roles.includes(n)) roles.push(n);
+    const nm = typeof n === 'string' ? n : (n && n.name);
+    const cl = (n && typeof n === 'object' && typeof n.codeline === 'string') ? n.codeline : '';
+    if (typeof nm === 'string' && nm && !roles.includes(nm)) roles.push(nm);
+    // The lane looks its detective up BY CODELINE, so the mapping is what makes the mint
+    // usable at all; a list of names alone leaves each lane guessing which one is its own.
+    if (nm && cl) byCodeline[cl] = nm;
   }
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -263,9 +274,19 @@ function registerProjectInvestigators(agentsDir, names) {
              'code and never author it. The write perimeter does not read this file, and story ' +
              'assignment never offers these names.',
       investigators: roles,
+      byCodeline,
     }, null, 2), 'utf8');
   } catch { /* caller still gets the list */ }
   return roles;
+}
+
+/** The investigator briefed for one codeline, or '' when none was minted for it. */
+function investigatorForCodeline(agentsDir, codeline) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(projectInvestigatorsPath(agentsDir), 'utf8'));
+    const m = parsed.byCodeline || {};
+    return (codeline && typeof m[codeline] === 'string') ? m[codeline] : '';
+  } catch { return ''; }
 }
 
 function projectInvestigators(agentsDir) {
@@ -368,6 +389,10 @@ function clearProjectRoster(agentsDir, profilesPath) {
     const file = projectInvestigatorsPath(agentsDir);
     const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
     parsed.investigators = [];
+    // The codeline mapping too. Left behind, it points a lane at a detective whose brief no
+    // longer exists — resolving to a name with no profile, which reads as "minted" and
+    // investigates with nothing.
+    parsed.byCodeline = {};
     fs.writeFileSync(file, JSON.stringify(parsed, null, 2), 'utf8');
   } catch { /* none registered */ }
 
@@ -410,6 +435,6 @@ module.exports = {
   registerProjectRoles, projectRoles, projectRolesPath, PROJECT_ROLES_FILE,
   saveProjectProfiles, applyProjectProfiles, projectProfilesPath, PROJECT_PROFILES_FILE,
   clearProjectRoster, rosterRunId,
-  registerProjectInvestigators, projectInvestigators, projectInvestigatorsPath,
+  registerProjectInvestigators, projectInvestigators, projectInvestigatorsPath, investigatorForCodeline,
   proposalKind, AGENT_KINDS, PROJECT_INVESTIGATORS_FILE,
 };

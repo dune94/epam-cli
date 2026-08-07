@@ -224,8 +224,11 @@ async function referencedDocs(logDir, stories) {
  * hoping. This states it: roles added, roles whose brief differs, and roles present in
  * canonical but missing here.
  */
-function writeRosterDiff(profilesPath, agentsDir, logDir, mintedThisRun) {
+function writeRosterDiff(profilesPath, agentsDir, logDir, mintedThisRun, mintedDetail) {
   const minted = new Set(Array.isArray(mintedThisRun) ? mintedThisRun : []);
+  const detail = new Map((Array.isArray(mintedDetail) ? mintedDetail : []).map((m) => [m.name, m]));
+  const kindOf = (n) => (detail.get(n) || {}).kind || 'implementer';
+  const codelineOf = (n) => (detail.get(n) || {}).codeline || '';
   const canonicalPath = path.join(agentsDir, 'profiles.canonical.json');
   let live = {}, canonical = {};
   try { live = JSON.parse(fs.readFileSync(profilesPath, 'utf8')); } catch { return null; }
@@ -258,9 +261,15 @@ function writeRosterDiff(profilesPath, agentsDir, logDir, mintedThisRun) {
     `canonical: ${canonicalPath} (${canonKeys.length} roles)`,
     `live:      ${profilesPath} (${liveKeys.length} roles)`,
     ``,
-    `## MINTED BY THIS RUN (${added.filter((k) => minted.has(k)).length})`,
-    ...(added.filter((k) => minted.has(k)).length
-      ? added.filter((k) => minted.has(k)).map((k) => `- ${k}  [${String(live[k] || '').length} chars]`)
+    `## MINTED BY THIS RUN — IMPLEMENTERS, may author code (${added.filter((k) => minted.has(k) && kindOf(k) !== 'investigator').length})`,
+    ...(added.filter((k) => minted.has(k) && kindOf(k) !== 'investigator').length
+      ? added.filter((k) => minted.has(k) && kindOf(k) !== 'investigator').map((k) => `- ${k}  [${String(live[k] || '').length} chars]`)
+      : ['- (none)']),
+    ``,
+    `## MINTED BY THIS RUN — INVESTIGATORS, read-only, never own a story (${added.filter((k) => minted.has(k) && kindOf(k) === 'investigator').length})`,
+    ...(added.filter((k) => minted.has(k) && kindOf(k) === 'investigator').length
+      ? added.filter((k) => minted.has(k) && kindOf(k) === 'investigator')
+          .map((k) => `- ${k}  [codeline: ${codelineOf(k) || '(none)'}]  [${String(live[k] || '').length} chars]`)
       : ['- (none)']),
     ``,
     `## In live but not canonical, NOT minted this run (pre-existing drift) (${added.filter((k) => !minted.has(k)).length})`,
@@ -356,6 +365,7 @@ if (require.main !== module) return;
   const sameRun = !!storedRunId && storedRunId === thisRunId;
   const remint = process.env.EPAM_REMINT_AGENTS === '1';
   let _mintedNames = [];
+  let _mintedDetail = [];
   if (existingRoles.length && sameRun && !remint) {
     process.stderr.write(
       `[mint-step] roster already minted in THIS run (${thisRunId}): ${existingRoles.join(', ')} ` +
@@ -392,7 +402,16 @@ if (require.main !== module) return;
       `[mint-step] proposed=${mint.proposed} minted=${mint.minted.length} ` +
       `unchanged=${mint.unchanged.length} rejected=${mint.rejected.length}\n`);
     for (const m of mint.minted) {
-      process.stderr.write(`[mint-step]   + ${m.name} (${m.surfaces.join(', ')}) — ${m.rationale}\n`);
+      const tag = m.kind === 'investigator' ? `investigator:${m.codeline || '(no codeline!)'}` : 'implementer';
+      process.stderr.write(`[mint-step]   + [${tag}] ${m.name} (${m.surfaces.join(', ')}) — ${m.rationale}\n`);
+    }
+    // A codeline with no investigator gets the canonical detective — workable, but the
+    // operator should see it at the pause rather than infer it from a log line later.
+    for (const cl of codelines) {
+      const hasInv = mint.minted.some((m) => m.kind === 'investigator' && m.codeline === cl.name);
+      if (!hasInv) {
+        process.stderr.write(`[mint-step]   ! no investigator minted for codeline "${cl.name}" — it will use the canonical detective\n`);
+      }
     }
     for (const r of mint.rejected) {
       process.stderr.write(`[mint-step]   ! refused ${r.name || '(unnamed)'}: ${r.reason}\n`);
@@ -400,6 +419,7 @@ if (require.main !== module) return;
     // Persisted at generation time — an artefact that exists only in a log line is a defect.
     fs.writeFileSync(path.join(LOG_DIR, 'agent-mint.json'), JSON.stringify(mint, null, 2));
     _mintedNames = mint.minted.map((m) => m.name);
+    _mintedDetail = mint.minted;
   }
 
   process.env.EPAM_AGENT_NAME = 'role-assigner';
@@ -413,7 +433,7 @@ if (require.main !== module) return;
 
   // assignAgentRoles mutates the story objects in place; they are the PRD's own objects.
   fs.writeFileSync(PRD_PATH, JSON.stringify(prd, null, 2));
-  writeRosterDiff(PROFILES_PATH, AGENTS_DIR, LOG_DIR, _mintedNames);
+  writeRosterDiff(PROFILES_PATH, AGENTS_DIR, LOG_DIR, _mintedNames, _mintedDetail);
   process.stderr.write(`[mint-step] ✓ roster and assignments written to ${PRD_PATH}\n`);
 })().catch((err) => {
   process.stderr.write(`[mint-step] FAILED: ${(err && err.message) || err}\n`);

@@ -3542,7 +3542,7 @@ _run_jira_pipeline() {
     echo -e "    ${_synth_prd}   (each story's agentRole)"
     echo ""
     echo -e "  Then CONTINUE into the spec phase with:"
-    echo -e "    ${GREEN}EPAM_RESUME_RUN=${ORCH_RUN_ID:-<run-id>} ${TIER3_LAUNCHER:-orchestrations/scripts/tier3-metrolinx-run.sh} --yes${NC}"
+    echo -e "    ${GREEN}EPAM_RESUME_RUN=${ORCH_RUN_ID:-<run-id>} ${TIER3_LAUNCHER:-<your launcher>} --yes${NC}"
     echo ""
     echo -e "  Resume re-reads those files and VALIDATES your edits (every story assigned, every"
     echo -e "  role real and not a canonical process role). It does not re-mint and does not"

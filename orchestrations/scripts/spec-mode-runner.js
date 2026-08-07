@@ -3124,7 +3124,7 @@ function candidateRoles(profiles, agentsDir) {
  * system prompt or the string "unknown", which is what the 15 `.agentRole // "unknown"`
  * consumers downstream would silently do with a null.
  */
-async function assignAgentRoles({ promptExec, stories, profilesPath, logDir, repoPath }) {
+async function assignAgentRoles({ promptExec, stories, profilesPath, logDir, repoPath, validateOnly }) {
   const _stories = Array.isArray(stories) ? stories : [];
   if (!_stories.length) return { assigned: [], stories: [] };
 
@@ -3172,14 +3172,27 @@ Pick the role whose stated expertise actually covers the work the story describe
 roles could plausibly own a story, prefer the one whose brief names the surface the story
 touches. Every story must be assigned exactly one role.`;
 
-  const payload = await runAgentForJson(
-    promptExec, prompt, TOOL_ROLE_ASSIGNMENTS, 'ROLE_ASSIGNMENTS',
-    logDir ? path.join(logDir, 'role-assignments.log') : null,
-    null, '', repoPath || '',
-    { EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROLE_ASSIGNMENTS) },
-  );
-
-  const rows = (payload && Array.isArray(payload.assignments)) ? payload.assignments : [];
+  // VALIDATE, DO NOT REGENERATE. On a resume the operator has inspected the roster at the
+  // pause and may have edited profiles.json, the project-roles registry, or the stories'
+  // agentRole directly. Re-running the assignment agent would silently discard exactly the
+  // judgement the pause exists to capture. So when every story already carries a role, the
+  // existing assignment is checked against the same rules a fresh one would face and kept.
+  const preassigned = _stories.every((s) => typeof s.agentRole === 'string' && s.agentRole.trim()
+                                            && s.agentRole !== 'unknown');
+  let rows;
+  if (preassigned || validateOnly) {
+    rows = _stories.map((s) => ({
+      storyId: s.id, agentRole: String(s.agentRole || '').trim(), reason: 'pre-assigned (validated, not regenerated)',
+    }));
+  } else {
+    const payload = await runAgentForJson(
+      promptExec, prompt, TOOL_ROLE_ASSIGNMENTS, 'ROLE_ASSIGNMENTS',
+      logDir ? path.join(logDir, 'role-assignments.log') : null,
+      null, '', repoPath || '',
+      { EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROLE_ASSIGNMENTS) },
+    );
+    rows = (payload && Array.isArray(payload.assignments)) ? payload.assignments : [];
+  }
   const byStory = new Map();
   const fixed = new Set(fixedRoles);
   const allowed = new Set(candidates);

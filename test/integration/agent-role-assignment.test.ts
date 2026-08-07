@@ -19,7 +19,7 @@
  * so an unassigned story does not error anywhere — it silently runs as "unknown".
  */
 import { describe, it, expect, afterAll } from 'vitest';
-import { mkdtempSync, writeFileSync, readFileSync, chmodSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, chmodSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -141,5 +141,53 @@ describe('an unusable assignment is refused, never written', () => {
       assignments: [{ storyId: 'AMSD-2041', agentRole: 'some-domain-engineer', reason: 'r' }],
     });
     await expect(assign(partial, STORIES)).rejects.toThrow(/AMSD-2042|unassigned/i);
+  }, 60_000);
+});
+
+/**
+ * RESUME MUST NOT UNDO THE OPERATOR'S JUDGEMENT.
+ *
+ * The roster pause exists so the agents can be assessed and gaps closed before the spec
+ * phase builds on them: the operator may edit a role's brief, the project-roles registry, or
+ * a story's agentRole directly, then restart the run. If resume re-ran the assignment agent,
+ * it would silently discard exactly the decision the pause was there to capture — and it
+ * would look like it worked, because a fresh assignment is always plausible.
+ */
+describe('a resume validates the roster instead of regenerating it', () => {
+  it('an operator-assigned role is KEPT, and no agent is called', async () => {
+    const ws = workspace();
+    // A runner that fails loudly if invoked — proving the agent was not consulted.
+    const r = runner(JSON.stringify({
+      assignments: [{ storyId: 'AMSD-2041', agentRole: 'another-domain-specialist', reason: 'the agent would have said this' }],
+    }));
+    const stories = [{ ...STORIES[0], agentRole: 'some-domain-engineer' }];
+    const res = await spec.assignAgentRoles({
+      promptExec: r, stories, profilesPath: ws.profilesPath, logDir: ws.dir, repoPath: ws.dir,
+    });
+    expect(
+      res.stories[0].agentRole,
+      'the resume re-ran the assignment agent and overwrote the operator\'s edit',
+    ).toBe('some-domain-engineer');
+    expect(existsSync(r.promptPath), 'an agent was invoked despite every story being assigned').toBe(false);
+  }, 60_000);
+
+  it('an operator edit to something INVALID is still refused', async () => {
+    const ws = workspace();
+    const r = runner(GOOD);
+    const stories = [{ ...STORIES[0], agentRole: 'a-role-that-does-not-exist' }];
+    await expect(spec.assignAgentRoles({
+      promptExec: r, stories, profilesPath: ws.profilesPath, logDir: ws.dir, repoPath: ws.dir,
+    })).rejects.toThrow(/not in the roster|no profile/i);
+  }, 60_000);
+
+  it('a partially-assigned set still goes to the agent — that is not an operator decision', async () => {
+    const ws = workspace();
+    const r = runner(GOOD);
+    const stories = [{ ...STORIES[0], agentRole: 'some-domain-engineer' }, { ...STORIES[1] }];
+    const res = await spec.assignAgentRoles({
+      promptExec: r, stories, profilesPath: ws.profilesPath, logDir: ws.dir, repoPath: ws.dir,
+    });
+    expect(res.assigned).toHaveLength(2);
+    expect(existsSync(r.promptPath), 'the agent was not consulted for the unassigned story').toBe(true);
   }, 60_000);
 });

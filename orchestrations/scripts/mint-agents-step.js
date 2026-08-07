@@ -95,6 +95,71 @@ async function referencedDocs(logDir, stories) {
   return docs;
 }
 
+/**
+ * writeRosterDiff — what this run GENERATED, against the canonical baseline.
+ *
+ * The roster pause is only useful if the operator can see what changed. profiles.json is ~56
+ * entries of prose; eyeballing it against profiles.canonical.json is not review, it is
+ * hoping. This states it: roles added, roles whose brief differs, and roles present in
+ * canonical but missing here.
+ */
+function writeRosterDiff(profilesPath, agentsDir, logDir, mintedThisRun) {
+  const minted = new Set(Array.isArray(mintedThisRun) ? mintedThisRun : []);
+  const canonicalPath = path.join(agentsDir, 'profiles.canonical.json');
+  let live = {}, canonical = {};
+  try { live = JSON.parse(fs.readFileSync(profilesPath, 'utf8')); } catch { return null; }
+  try { canonical = JSON.parse(fs.readFileSync(canonicalPath, 'utf8')); } catch { canonical = {}; }
+
+  const liveKeys = Object.keys(live), canonKeys = Object.keys(canonical);
+  const added = liveKeys.filter((k) => !(k in canonical));
+  const removed = canonKeys.filter((k) => !(k in live));
+  const changed = liveKeys.filter((k) => k in canonical && live[k] !== canonical[k]);
+
+  const diff = {
+    canonicalFile: canonicalPath,
+    canonicalRoles: canonKeys.length,
+    liveRoles: liveKeys.length,
+    generated: added.map((k) => ({
+      role: k, briefChars: String(live[k] || '').length, mintedThisRun: minted.has(k),
+    })),
+    briefChanged: changed.map((k) => ({
+      role: k,
+      canonicalChars: String(canonical[k] || '').length,
+      liveChars: String(live[k] || '').length,
+    })),
+    missingFromLive: removed,
+  };
+  try { fs.writeFileSync(path.join(logDir, 'roster-diff.json'), JSON.stringify(diff, null, 2)); } catch {}
+
+  const md = [
+    `# Roster diff — generated vs canonical`,
+    ``,
+    `canonical: ${canonicalPath} (${canonKeys.length} roles)`,
+    `live:      ${profilesPath} (${liveKeys.length} roles)`,
+    ``,
+    `## MINTED BY THIS RUN (${added.filter((k) => minted.has(k)).length})`,
+    ...(added.filter((k) => minted.has(k)).length
+      ? added.filter((k) => minted.has(k)).map((k) => `- ${k}  [${String(live[k] || '').length} chars]`)
+      : ['- (none)']),
+    ``,
+    `## In live but not canonical, NOT minted this run (pre-existing drift) (${added.filter((k) => !minted.has(k)).length})`,
+    ...(added.filter((k) => !minted.has(k)).length
+      ? added.filter((k) => !minted.has(k)).map((k) => `- ${k}`)
+      : ['- (none)']),
+    ``,
+    `## Brief differs from canonical (${changed.length})`,
+    ...(changed.length ? changed.map((k) => `- ${k}  canonical ${String(canonical[k] || '').length} -> live ${String(live[k] || '').length} chars`) : ['- (none)']),
+    ``,
+    `## In canonical but NOT live (${removed.length})`,
+    ...(removed.length ? removed.map((k) => `- ${k}`) : ['- (none)']),
+    ``,
+  ].join('\n');
+  try { fs.writeFileSync(path.join(logDir, 'roster-diff.md'), md); } catch {}
+
+  process.stderr.write(`[mint-step] roster diff: ${added.length} generated, ${changed.length} brief-changed, ${removed.length} missing vs canonical\n`);
+  return diff;
+}
+
 (async () => {
   const prd = JSON.parse(fs.readFileSync(PRD_PATH, 'utf8'));
   const stories = Array.isArray(prd.stories) ? prd.stories : [];
@@ -108,6 +173,7 @@ async function referencedDocs(logDir, stories) {
   const promptExec = spec.resolvePromptExec(aiRunnerCmd);
   const docs = await referencedDocs(LOG_DIR, stories);
 
+  let _mintedNames = [];
   if (process.env.EPAM_SKIP_AGENT_MINT === '1') {
     process.stderr.write('[mint-step] mint skipped (EPAM_SKIP_AGENT_MINT=1) — resuming from a checkpoint\n');
   } else {
@@ -135,6 +201,7 @@ async function referencedDocs(logDir, stories) {
     }
     // Persisted at generation time — an artefact that exists only in a log line is a defect.
     fs.writeFileSync(path.join(LOG_DIR, 'agent-mint.json'), JSON.stringify(mint, null, 2));
+    _mintedNames = mint.minted.map((m) => m.name);
   }
 
   process.env.EPAM_AGENT_NAME = 'role-assigner';
@@ -148,6 +215,7 @@ async function referencedDocs(logDir, stories) {
 
   // assignAgentRoles mutates the story objects in place; they are the PRD's own objects.
   fs.writeFileSync(PRD_PATH, JSON.stringify(prd, null, 2));
+  writeRosterDiff(PROFILES_PATH, AGENTS_DIR, LOG_DIR, _mintedNames);
   process.stderr.write(`[mint-step] ✓ roster and assignments written to ${PRD_PATH}\n`);
 })().catch((err) => {
   process.stderr.write(`[mint-step] FAILED: ${(err && err.message) || err}\n`);

@@ -3534,10 +3534,22 @@ _run_jira_pipeline() {
     echo -e "  Project roles: ${AUTOMATION_DIR}/agents/project-roles.json"
     echo -e "  Minted:      ${LOG_DIR}/agent-mint.json"
     echo -e "  Assignments: ${LOG_DIR}/role-assignments.json"
+    echo -e "  ${GREEN}WHAT WAS GENERATED (vs canonical): ${LOG_DIR}/roster-diff.md${NC}"
     echo ""
-    echo -e "  Resume with:"
-    echo -e "    ${GREEN}EPAM_RESUME_RUN=${ORCH_RUN_ID:-<run-id>}${NC} <your launcher>"
+    echo -e "  Inspect and EDIT if needed:"
+    echo -e "    ${AUTOMATION_DIR}/agents/profiles.json         (each role's brief)"
+    echo -e "    ${EPAM_PROJECT_CONFIG_DIR:-${AUTOMATION_DIR}/agents}/project-roles.json   (which roles may implement)"
+    echo -e "    ${_synth_prd}   (each story's agentRole)"
     echo ""
+    echo -e "  Then CONTINUE into the spec phase with:"
+    echo -e "    ${GREEN}EPAM_RESUME_RUN=${ORCH_RUN_ID:-<run-id>} ${TIER3_LAUNCHER:-orchestrations/scripts/tier3-metrolinx-run.sh} --yes${NC}"
+    echo ""
+    echo -e "  Resume re-reads those files and VALIDATES your edits (every story assigned, every"
+    echo -e "  role real and not a canonical process role). It does not re-mint and does not"
+    echo -e "  re-assign over your changes."
+    echo ""
+    # END the run. The operator restarts it with the command above; resume validates the
+    # roster rather than regenerating it, so hand edits survive.
     return 0
   fi
 

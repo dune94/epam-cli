@@ -385,3 +385,51 @@ describe('the mint can actually read what it is told to read', () => {
     expect(grant, 'the roster-design stage can write files').not.toMatch(/write_file/);
   });
 });
+
+/**
+ * A CODELINE IS IDENTIFIED BY NAME, NEVER BY POSITION.
+ *
+ * The brief-writing instruction forbade absolute filesystem paths, and the model complied by
+ * referring to codelines as "the repository at the first path in scope", "the second path",
+ * "the third". Every brief in the 20260807T183329Z roster did this.
+ *
+ * Ordinals are order-dependent. If discovery returns the codelines in a different sequence —
+ * and nothing guarantees it will not — every brief silently points at a different repository.
+ * The sentence still reads correctly, so nothing detects it. A name is the only reference that
+ * stays true across runs and across machines.
+ */
+describe('briefs must name codelines, not number them', () => {
+  it('the prompt forbids positional identification', async () => {
+    const ws = mkdtempSync(join(tmpdir(), 'ordinal-')); dirs.push(ws);
+    writeFileSync(join(ws, 'profiles.json'), '{}');
+    const r = capturingRunner(ANSWER);
+    await spec.mintProjectAgents({
+      promptExec: r, tickets: [{ id: 'T-1', title: 't', description: 'd' }],
+      referencedDocs: [], declaredDependencies: [],
+      codelines: [
+        { name: 'alpha', path: '/x/alpha', dependencies: [] },
+        { name: 'beta', path: '/x/beta', dependencies: [] },
+      ],
+      profilesPath: join(ws, 'profiles.json'), agentsDir: ws, logDir: ws, repoPath: '',
+    });
+    const p = readFileSync(r.capture, 'utf8');
+    expect(p, 'nothing forbids identifying a codeline by position').toMatch(/Never identify a codeline by POSITION/);
+    expect(p).toMatch(/order codelines are listed in is not stable/i);
+    expect(p, 'it does not say why positional references are undetectable').toMatch(/the\s+sentence\s+still\s+reads\s+correctly/i);
+  }, 60_000);
+
+  it('it still forbids absolute paths, and says a name is the stable reference', async () => {
+    const ws = mkdtempSync(join(tmpdir(), 'ordinal2-')); dirs.push(ws);
+    writeFileSync(join(ws, 'profiles.json'), '{}');
+    const r = capturingRunner(ANSWER);
+    await spec.mintProjectAgents({
+      promptExec: r, tickets: [{ id: 'T-1', title: 't', description: 'd' }],
+      referencedDocs: [], declaredDependencies: [],
+      codelines: [{ name: 'alpha', path: '/x/alpha', dependencies: [] }],
+      profilesPath: join(ws, 'profiles.json'), agentsDir: ws, logDir: ws, repoPath: '',
+    });
+    const p = readFileSync(r.capture, 'utf8');
+    expect(p).toMatch(/Never write an absolute filesystem path/);
+    expect(p).toMatch(/A name is the only reference that stays true/i);
+  }, 60_000);
+});

@@ -3152,9 +3152,14 @@ domains this work and these codebases actually span, not the domains you would e
 project like this to have. Where the codelines share a stack, one role covers all of them —
 do not mint near-duplicate roles per codeline.
 
-Write each brief so it stays true wherever the project is checked out: describe the codeline
-by NAME and by paths relative to its root. Never write an absolute filesystem path into a
-brief — it is specific to one machine and wrong everywhere else.
+Write each brief so it stays true wherever the project is checked out. Refer to a codeline by
+its NAME, exactly as listed above, and to locations inside it by paths relative to its root.
+
+Never identify a codeline by POSITION — not "the first", not "the second", not "the one listed
+above". The order codelines are listed in is not stable between runs, so a brief written that
+way points at a different repository the moment the order changes, and nothing detects it: the
+sentence still reads correctly. Never write an absolute filesystem path either; it is specific
+to one machine. A name is the only reference that stays true.
 
 A brief may only rely on what the codelines actually declare above. If the work plainly needs
 something that is not declared, say so in the rationale rather than assuming it is present.

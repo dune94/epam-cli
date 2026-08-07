@@ -28,7 +28,11 @@ describe('openspec-brownfield produces a VC layer, ACs immutable', () => {
 
   it('instructs: copy ACs verbatim, produce verificationCriteria from AC ∪ description', () => {
     expect(bf.archaeologyBlock).toMatch(/IMMUTABLE ticket intent/);
-    expect(bf.archaeologyBlock).toMatch(/PRODUCE a "verificationCriteria" array/);
+    // UPDATED 2026-08-07: the producer is now asked for verificationCriteriaDetail — the same
+    // criteria, each declaring who observes it and on what surface. Rules and worked examples
+    // both failed to stop criteria asserting internal structure; a field the model must fill
+    // makes an unobservable criterion visibly unanswerable instead of arguably wrong.
+    expect(bf.archaeologyBlock).toMatch(/PRODUCE a "verificationCriteriaDetail" array/);
     expect(bf.archaeologyBlock).toMatch(/derived from the acceptance criteria AND the description/);
     // SUPERSEDED 2026-08-06. The instruction used to name acceptance criteria and the
     // description as the sources of verification, and to say "lean on the description when
@@ -53,7 +57,10 @@ describe('openspec-brownfield produces a VC layer, ACs immutable', () => {
   });
 
   it('schema exposes verificationCriteria + vcSource (provenance for the sparse-AC case)', () => {
-    expect(bf.schemaLine).toMatch(/"verificationCriteria":\["<observable check/);
+    // UPDATED 2026-08-07: the shape is now one entry per criterion, each declaring its
+    // observer and surface — see vc-declares-its-observer.test.ts for why.
+    expect(bf.schemaLine).toMatch(/"verificationCriteriaDetail":\[\{"criterion"/);
+    expect(bf.schemaLine, 'the declaration must name its observer').toMatch(/"observer"/);
     expect(bf.schemaLine).toMatch(/"vcSource":"acceptance\|description\|both"/);
   });
 });

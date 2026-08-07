@@ -615,6 +615,53 @@ const TOOL_SPEC_AGENT = {
       agent: { type: 'string' },
       notes: { type: 'string' },
       storyKind: { type: 'string', enum: ['defect', 'novel'] },
+      // WHO OBSERVES IT, AND ON WHAT.
+      //
+      // Two rounds of instruction did not stop criteria that assert internal structure or an
+      // internal call path — rules produced them, and contrast pairs naming those exact shapes
+      // as forbidden produced them again on the next run. The producer is grounded in vendor
+      // documentation and source code, both implementation-shaped, and then asked to write
+      // external observations about that material. Prose could not win that argument.
+      //
+      // A declaration can. "Given the Stack initialization options object, it contains a
+      // live_preview property" has to name a person who observes an options object; "the SDK
+      // query includes those parameters" has to name a person who observes a query. Neither
+      // can be answered honestly, so the criterion is visibly wrong rather than arguably wrong.
+      //
+      // `setup` also ends a disagreement the pipeline was having with itself: the producer's
+      // samples treat "given the client is mocked ..." as acceptable while the reviewer flagged
+      // it as "prescribes mocking setup". Declared here, a precondition is a precondition.
+      verificationCriteriaDetail: {
+        type: 'array',
+        description:
+          'One entry per verification criterion, declaring who observes it and where. A '
+          + 'criterion whose observer would have to be the application itself is not observable.',
+        items: {
+          type: 'object',
+          required: ['criterion', 'observer', 'surface'],
+          properties: {
+            criterion: { type: 'string', description: 'The observable check, as a sentence.' },
+            observer: {
+              type: 'string',
+              enum: ['end user', 'tester', 'api client', 'operator'],
+              description: 'WHO sees it. If no human or client can see it, the criterion is not observable.',
+            },
+            surface: {
+              type: 'string',
+              description:
+                'WHAT they look at — the rendered page, the API response, the CLI output, the '
+                + 'generated file. Never an internal object, argument, query or call.',
+            },
+            setup: {
+              type: 'string',
+              description:
+                'Optional precondition the test establishes before observing — for example a '
+                + 'mocked client signalling a change. Preconditions are allowed and are NOT '
+                + 'implementation prescription; state them here rather than inside the criterion.',
+            },
+          },
+        },
+      },
       acceptanceCriteria: { type: 'array', items: { type: 'string' }, minItems: 1 },
       description: { type: 'string' },
       title: { type: 'string' },
@@ -2637,8 +2684,40 @@ Every verification criterion must be observable, testable, and tied to the ticke
 // Validate + normalize the verification criteria openspec produced: an array of
 // non-empty strings. Kept separate so a malformed payload never corrupts the story.
 function normalizeVerificationCriteria(payload) {
+  // The DETAIL is the richer answer, so it wins when present. What is persisted stays an array
+  // of strings: the guard, coverage checking, the writer prompt and claude.sh all read that
+  // shape, and changing it here would be a rewrite of the contract rather than an addition.
+  const detail = vcDeclarations(payload);
+  if (detail.length) return detail.map((d) => d.criterion);
   const vc = payload && Array.isArray(payload.verificationCriteria) ? payload.verificationCriteria : [];
   return vc.filter((v) => typeof v === 'string' && v.trim().length > 0).map((v) => v.trim());
+}
+
+/**
+ * vcDeclarations(payload) -> [{ criterion, observer, surface, setup }]
+ *
+ * The per-criterion standard, normalised. Kept on the story rather than consumed and thrown
+ * away: "who observes this, and on what" is the most useful thing a reviewer or a human can be
+ * shown when deciding whether a criterion is worth verifying, and it is exactly what was
+ * missing when the pipeline argued with itself about whether a mocked precondition was a
+ * violation.
+ *
+ * An older string-only payload yields NOTHING here rather than fabricated declarations: an
+ * invented observer would be worse than an absent one.
+ */
+function vcDeclarations(payload) {
+  const raw = payload && Array.isArray(payload.verificationCriteriaDetail)
+    ? payload.verificationCriteriaDetail : [];
+  return raw
+    .map((d) => (d && typeof d === 'object' ? d : null))
+    .filter(Boolean)
+    .map((d) => ({
+      criterion: String(d.criterion || '').trim(),
+      observer: String(d.observer || '').trim(),
+      surface: String(d.surface || '').trim(),
+      setup: String(d.setup || '').trim(),
+    }))
+    .filter((d) => d.criterion);
 }
 
 // Thin-context signal for the sufficiency gate (step 3): a ticket has too little
@@ -3046,6 +3125,10 @@ ${vc.map((v, i) => `${i + 1}. ${v}`).join('\n')}
 Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
 ${VC_OBSERVABILITY_RULES}
 
+A criterion may declare a PRECONDITION the test establishes (for example a mocked client
+signalling a change). A declared precondition is NOT implementation prescription — do not flag
+it. Flag what the criterion ASSERTS, not what it sets up.
+
 FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
 Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes <an approach> — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.`;
   const out = await _vcLlmCall(prompt, cycle, logDir ? path.join(logDir, `${story.id}-vc-review.log`) : null, story.id, 'speckit', resolveCodelinePath(story));
@@ -3144,14 +3227,20 @@ Use ONLY the EXISTING CODE block already present in this prompt (injected above 
 Set "locationHint" to [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this location — the fix site for a defect, the attachment point for a novel story>"}].
 If no relevant code appears above, set locationHint to []. Do NOT invent a plausible file: a named file whose contents you cannot see in this prompt is a fabrication, and an empty locationHint is a usable answer while a fabricated one is not.
 
-${_acPreamble} a "verificationCriteria" array — concrete, OBSERVABLE checks that confirm the change is correct — derived from ${_sources.join(' AND ')}. Apply these rules to EVERY verification criterion (a strict reviewer holds you to this SAME text, so a VC that breaks any rule will be flagged and rejected):
+For EACH criterion also declare WHO observes it (end user, tester, api client, operator) and
+WHAT SURFACE they look at — the rendered page, the API response, the CLI output, a generated
+file. If no person or client can see it, it is not a verification criterion. A precondition
+the test establishes (for example a mocked client signalling a change) goes in "setup": that
+is allowed and is not implementation prescription.
+
+${_acPreamble} a "verificationCriteriaDetail" array — concrete, OBSERVABLE checks that confirm the change is correct — derived from ${_sources.join(' AND ')}. Apply these rules to EVERY verification criterion (a strict reviewer holds you to this SAME text, so a VC that breaks any rule will be flagged and rejected):
 ${VC_OBSERVABILITY_RULES}${vcFormSamples(env) ? `\n\n${vcFormSamples(env)}\n` : ''}
 - If the ticket describes a SYMPTOM, the VCs verify that symptom is resolved AND that related existing behavior does not regress.
 Set "vcSource" to one of ${_vcSourceValues.split('|').map((v) => `"${v}"`).join(', ')} — where you actually derived the VCs from.${unreachableExternalsConstraint()}
 `
     : '';
   const schemaLine = isBrownfield
-    ? `\n  "storyKind":"defect|novel",\n  "verificationCriteria":["<observable check a tester can confirm>"],\n  "vcSource":"${_vcSourceValues}",\n  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this location — the fix site for a defect, the attachment point it integrates with for a novel story"}],`
+    ? `\n  "storyKind":"defect|novel",\n  "verificationCriteriaDetail":[{"criterion":"<observable check>","observer":"end user|tester|api client|operator","surface":"<what they look at>","setup":"<optional precondition, e.g. a mocked client signalling a change>"}],\n  "vcSource":"${_vcSourceValues}",\n  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this location — the fix site for a defect, the attachment point it integrates with for a novel story"}],`
     : '';
   return { archaeologyBlock, schemaLine };
 }
@@ -4411,6 +4500,12 @@ ${storyPayload}${publishedContracts(repoPath, story)}
             }),
           });
           story.verificationCriteria = enforced.vc;
+          // Kept, not consumed: "who observes this, and on what" is the most useful thing to
+          // show a reviewer or a human deciding whether a criterion is worth verifying — and
+          // it is what was missing when the pipeline argued with itself about whether a mocked
+          // precondition counted as prescribing mechanism.
+          const _vcDecl = vcDeclarations(payload).filter((d) => enforced.vc.includes(d.criterion));
+          if (_vcDecl.length) story.verificationCriteriaDetail = _vcDecl;
           // 'disputed' is NOT fallback: the criteria are the author's real ones, kept
           // because acting on an outlier review would have left the story under-verified.
           story.vcSource = enforced.source === 'fallback'
@@ -6843,6 +6938,7 @@ module.exports = {
   VC_OBSERVABILITY_RULES,
   preserveDefectAcceptanceCriteria,
   normalizeVerificationCriteria,
+  vcDeclarations,
   findVcMechanism,
   safeFallbackVc,
   partitionFlaggedVc,

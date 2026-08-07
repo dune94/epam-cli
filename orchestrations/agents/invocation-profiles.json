@@ -69,7 +69,9 @@
       "maxIterations": 25,
       "reasoningEffort": "high",
       "allowedTools": "bash,read_file,list_files,search",
-      "timeoutSecs": 900
+      "timeoutSecs": 900,
+      "ladder": "HIGHEST",
+      "temperature": "0.1"
     },
     "code-review-cycle": {
       "_what": "Per-iteration code review pass.",
@@ -146,8 +148,9 @@
     "codeline-discovery": {
       "_what": "Picks which local codeline a Jira ticket belongs to.",
       "maxOutputTokens": 16384,
-      "reasoningEffort": "medium",
-      "timeoutSecs": 300
+      "reasoningEffort": "high",
+      "timeoutSecs": 300,
+      "ladder": "HIGHEST"
     },
     "roster-review": {
       "_what": "Falsifies the claims in a generated agent roster before any implementer inherits them.",
@@ -165,6 +168,15 @@
       "temperature": "0.7",
       "maxOutputTokens": 32768,
       "maxIterations": 25,
+      "timeoutSecs": 900
+    },
+    "guard-vocabulary": {
+      "_what": "Derives the vocabulary the verification-criteria guard enforces. A guard armed with the wrong terms reports clean.",
+      "ladder": "HIGHEST",
+      "reasoningEffort": "high",
+      "temperature": "0.1",
+      "maxOutputTokens": 32768,
+      "maxIterations": 6,
       "timeoutSecs": 900
     }
   }

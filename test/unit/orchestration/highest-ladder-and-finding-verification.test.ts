@@ -137,6 +137,29 @@ describe('the ladder binds by configuration, not by code', () => {
     expect(env.EPAM_MODEL).toBeUndefined();
   });
 
+  it('every seam whose failure is SILENT climbs it — reviewer, detective, verdict, scope, guard', () => {
+    process.env.AGENT_PROFILES_REGISTRY = REG;
+    process.env.EPAM_MODEL_LADDER_HIGHEST = 'model-a=model-b';
+    // Each of these makes a judgement nothing downstream re-checks: the roster reviewer, the
+    // detective's fix site, the team lead's verdict, which codelines are in scope at all, and
+    // the vocabulary the VC guard enforces. A weak answer from any of them is not an error —
+    // it is a wrong answer that reads as a right one.
+    for (const seam of ['roster-review', 'code-graph-detective', 'team-lead-review',
+                        'codeline-discovery', 'guard-vocabulary']) {
+      const env = spec.seamInvocationEnv(seam, 'orchestrations/logs');
+      expect(env.EPAM_MODEL_LADDER_HIGH, `${seam} is not on the configured ladder`).toBe('model-a=model-b');
+      expect(env.EPAM_REASONING_EFFORT, `${seam} is not at high effort`).toBe('high');
+    }
+  });
+
+  it('seams that PRODUCE rather than judge are left alone — their output is reviewed', () => {
+    process.env.AGENT_PROFILES_REGISTRY = REG;
+    for (const seam of ['tc-writer', 'ac-elaboration', 'prd-change-summarizer']) {
+      expect(spec.seamInvocationEnv(seam, 'orchestrations/logs').EPAM_MODEL_LADDER_HIGH,
+        `${seam} was bound to a ladder it does not need`).toBeUndefined();
+    }
+  });
+
   it('an unknown seam gets nothing rather than a default someone else chose', () => {
     process.env.AGENT_PROFILES_REGISTRY = REG;
     expect(spec.seamInvocationEnv('no-such-seam', 'orchestrations/logs')).toEqual({});

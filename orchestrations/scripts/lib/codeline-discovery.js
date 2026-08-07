@@ -792,7 +792,15 @@ function callLlm(prompt, opts = {}) {
          Number(process.env.EPAM_CALL_ATTEMPT_BUDGET_MS || 300000))
       ),
       maxBuffer:  10 * 1024 * 1024,
-      env:        { ...process.env, EPAM_AGENT_NAME: 'codeline-discovery' },
+      // Whatever this seam is configured to run with. Discovery decides which codelines are in
+      // scope for the entire run — miss one and that site silently never receives the work —
+      // so it is a seam worth configuring rather than leaving on the run's defaults.
+      env:        {
+        ...process.env,
+        EPAM_AGENT_NAME: 'codeline-discovery',
+        ...(() => { try { return require('./seam-invocation.js').seamInvocationEnv('codeline-discovery'); }
+                    catch { return {}; } })(),
+      },
     }).trim();
 
     if (debug) log(`DEBUG raw LLM response:\n${raw}`);

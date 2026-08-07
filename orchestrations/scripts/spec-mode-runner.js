@@ -2945,7 +2945,8 @@ rarity for signal.
     promptExec, prompt, TOOL_GUARD_VOCABULARY, 'GUARD_VOCABULARY',
     logDir ? path.join(logDir, `${(story && story.id) || 'phase'}-guard-vocabulary.log`) : null,
     null, (story && story.id) || '', _repo,
-    { EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_GUARD_VOCABULARY) },
+    { EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_GUARD_VOCABULARY),
+      ...seamInvocationEnv('guard-vocabulary', logDir) },
   );
   if (!payload) return null;
   const vocab = normaliseVocabulary(payload);
@@ -3285,48 +3286,13 @@ function candidateRoles(profiles, agentsDir) {
  * system prompt or the string "unknown", which is what the 15 `.agentRole // "unknown"`
  * consumers downstream would silently do with a null.
  */
-/**
- * seamInvocationEnv(seam) — the model settings this seam is configured to run with.
- *
- * WHICH seam climbs WHICH ladder is data: agents/invocation-profiles.json names a ladder per
- * seam. WHAT models that ladder contains is the project's: EPAM_MODEL_LADDER_<NAME> in its own
- * config. Neither a seam name, a ladder name nor a model appears in this function — changing
- * either is an edit to a registry or a project, never to the engine.
- *
- * Returns {} when the seam has no entry, so a seam without configuration simply runs on the
- * run's defaults rather than on something this code chose for it.
- */
+// Delegates to lib/seam-invocation.js so every seam — shell or JS — resolves its ladder,
+// effort and temperature through one implementation.
 function seamInvocationEnv(seam, logDir) {
-  if (!seam) return {};
-  let profile = null;
   try {
-    const registry = process.env.AGENT_PROFILES_REGISTRY
-      || path.join(automationDirFromLogDir(logDir), 'agents', 'invocation-profiles.json');
-    const parsed = JSON.parse(fs.readFileSync(registry, 'utf8'));
-    profile = (parsed.profiles || {})[seam] || null;
+    return require('./lib/seam-invocation.js')
+      .seamInvocationEnv(seam, path.join(automationDirFromLogDir(logDir), 'agents'));
   } catch { return {}; }
-  if (!profile) return {};
-
-  const env = {};
-  if (profile.reasoningEffort) env.EPAM_REASONING_EFFORT = String(profile.reasoningEffort);
-  if (profile.temperature !== undefined && profile.temperature !== '') {
-    env.EPAM_TEMPERATURE = String(profile.temperature);
-  }
-  if (profile.ladder) {
-    const key = 'EPAM_MODEL_LADDER_' + String(profile.ladder).toUpperCase().replace(/[^A-Z0-9]/g, '_');
-    const rungs = process.env[key];
-    if (rungs) {
-      env.EPAM_MODEL_LADDER_HIGH = rungs;
-      env.EPAM_MODEL_LADDER = rungs;
-      // The first rung is where this seam STARTS; without it the seam begins on the run's
-      // default model and the ladder only changes where it escalates to.
-      const first = String(rungs).split('|')[0].split('=')[0].trim();
-      if (first) env.EPAM_MODEL = first;
-    } else {
-      console.warn(`spec-mode: seam '${seam}' asks for ladder '${profile.ladder}' but ${key} is unset — using the run's default ladder`);
-    }
-  }
-  return env;
 }
 
 const TOOL_ROSTER_REVIEW = {

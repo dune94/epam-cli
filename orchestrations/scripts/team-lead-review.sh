@@ -48,6 +48,14 @@ AUTO_APPROVE="${AUTO_APPROVE:-false}"
 REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
 AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
+
+# The model settings this seam is configured to run with — ladder, effort, temperature — read
+# from the registry by name. This seam decides whether code is accepted, and it fails silently
+# in both directions: approving work that does not function, or rejecting correct work and
+# burning ladder rungs on a re-implementation nobody needed.
+# shellcheck source=lib/seam-ladder.sh
+. "$SCRIPT_DIR/lib/seam-ladder.sh" 2>/dev/null || true
+command -v seam_ladder_export >/dev/null 2>&1 && seam_ladder_export "team-lead-review"
 source "$SCRIPT_DIR/lib/project-tools.sh"
 source "$SCRIPT_DIR/lib/story-retry-state.sh"
 ORCH_GATE_MODEL="${ORCH_GATE_MODEL:-z-ai/glm-5.2}"

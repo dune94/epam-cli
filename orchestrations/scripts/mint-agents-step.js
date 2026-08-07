@@ -82,6 +82,14 @@ function resolveCodelines(prd, stories, repoArg) {
     out.push({ name: name || path.basename(dir), path: dir });
   };
 
+  // THE PERSISTED DISCOVERY ARTEFACT FIRST. Ingest runs as a child process, so the
+  // JIRA_CODELINES / JIRA_WORKTREE_* exports it makes die when it exits — which is why this
+  // saw one codeline twice while three were in scope. An artefact crosses that boundary.
+  try {
+    const disc = JSON.parse(fs.readFileSync(path.join(LOG_DIR, 'codeline-discovery.json'), 'utf8'));
+    for (const cl of (disc.codelines || [])) add(cl.name, cl.path);
+  } catch { /* fall through to the env, then to single-codeline resolution */ }
+
   for (const name of String(process.env.JIRA_CODELINES || '').split(',').map((x) => x.trim()).filter(Boolean)) {
     add(name, process.env[`JIRA_WORKTREE_${name.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`]);
   }

@@ -54,11 +54,32 @@ function protectedRoles() {
  */
 const ROLE_NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
+/**
+ * The two classes of minted agent, and the reason they must never share a registry.
+ *
+ * An IMPLEMENTER authors code: it is offered to story assignment and the write perimeter
+ * grants it write access. An INVESTIGATOR reads code to report what is there: it must never
+ * be assignable and must never be able to write. Everything minted used to land in one list —
+ * the list the perimeter reads — so minting a detective would have handed an investigator
+ * write access to client source. That is the exact incident the perimeter was built for,
+ * where ~1050 lines were rewritten during a spec pass by agents that only needed to read.
+ */
+const AGENT_KINDS = ['implementer', 'investigator'];
+
+function proposalKind(p) {
+  const k = p && typeof p.kind === 'string' ? p.kind.trim().toLowerCase() : '';
+  // Defaults to implementer ONLY when unstated — an unrecognised value is refused rather
+  // than coerced, because coercing "detective" to implementer grants write access silently.
+  if (!k) return 'implementer';
+  return AGENT_KINDS.includes(k) ? k : '';
+}
+
 function isUsableProposal(p) {
   if (!p || typeof p !== 'object') return 'not an object';
   if (typeof p.name !== 'string' || !p.name.trim()) return 'no name';
   if (!ROLE_NAME_RE.test(p.name)) return 'name is not a plain kebab-case identifier';
   if (typeof p.systemPrompt !== 'string' || !p.systemPrompt.trim()) return 'no systemPrompt';
+  if (!proposalKind(p)) return `unrecognised kind "${p.kind}" (expected one of: ${AGENT_KINDS.join(', ')})`;
   return null;
 }
 
@@ -126,7 +147,7 @@ function mergeProjectAgents(opts) {
       rejected.push({ name: p.name, reason: `kb seed failed: ${e.message}` });
     }
 
-    minted.push({ name: p.name, rationale: p.rationale || '', surfaces });
+    minted.push({ name: p.name, kind: proposalKind(p), rationale: p.rationale || '', surfaces });
   }
 
   fs.writeFileSync(profilesPath, JSON.stringify(profiles, null, 2), 'utf8');
@@ -137,8 +158,15 @@ function mergeProjectAgents(opts) {
   // the rest is engine machinery (doc-*, failure-analyst, code-graph-detective, the
   // vocabulary agents). Deriving from that set handed write access to the detective.
   // The mint knows exactly what it created, so it says so explicitly.
-  const registered = registerProjectRoles(agentsDir, minted.map((m) => m.name));
-  for (const m of minted) if (registered.includes(m.name)) m.surfaces.push('project-roles');
+  // ROUTED BY KIND. Only implementers reach the registry the write perimeter reads.
+  const registered = registerProjectRoles(
+    agentsDir, minted.filter((m) => m.kind === 'implementer').map((m) => m.name));
+  const registeredInv = registerProjectInvestigators(
+    agentsDir, minted.filter((m) => m.kind === 'investigator').map((m) => m.name));
+  for (const m of minted) {
+    if (m.kind === 'implementer' && registered.includes(m.name)) m.surfaces.push('project-roles');
+    if (m.kind === 'investigator' && registeredInv.includes(m.name)) m.surfaces.push('project-investigators');
+  }
 
   // Persist the BRIEFS to the project's own store as well.
   //
@@ -157,7 +185,7 @@ function mergeProjectAgents(opts) {
   }, {}));
   for (const m of minted) if (savedProfiles.includes(m.name)) m.surfaces.push('project-profiles');
 
-  return { minted, rejected, unchanged, projectRoles: registered };
+  return { minted, rejected, unchanged, projectRoles: registered, projectInvestigators: registeredInv };
 }
 
 const PROJECT_ROLES_FILE = 'project-roles.json';
@@ -205,6 +233,46 @@ function registerProjectRoles(agentsDir, names) {
     }, null, 2), 'utf8');
   } catch { /* registry unwritable — caller still gets the list back */ }
   return roles;
+}
+
+const PROJECT_INVESTIGATORS_FILE = 'project-investigators.json';
+
+/** Where this project's read-only investigators are registered — never the write registry. */
+function projectInvestigatorsPath(agentsDir) {
+  if (process.env.EPAM_PROJECT_INVESTIGATORS_FILE) return process.env.EPAM_PROJECT_INVESTIGATORS_FILE;
+  if (process.env.EPAM_PROJECT_CONFIG_DIR) {
+    return path.join(process.env.EPAM_PROJECT_CONFIG_DIR, PROJECT_INVESTIGATORS_FILE);
+  }
+  return path.join(agentsDir, PROJECT_INVESTIGATORS_FILE);
+}
+
+function registerProjectInvestigators(agentsDir, names) {
+  const file = projectInvestigatorsPath(agentsDir);
+  let roles = [];
+  try {
+    const existing = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (Array.isArray(existing.investigators)) roles = existing.investigators.filter((r) => typeof r === 'string');
+  } catch { /* first run */ }
+  for (const n of Array.isArray(names) ? names : []) {
+    if (typeof n === 'string' && n && !roles.includes(n)) roles.push(n);
+  }
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({
+      _what: "This project's minted READ-ONLY agents — investigators. They report what is in the " +
+             'code and never author it. The write perimeter does not read this file, and story ' +
+             'assignment never offers these names.',
+      investigators: roles,
+    }, null, 2), 'utf8');
+  } catch { /* caller still gets the list */ }
+  return roles;
+}
+
+function projectInvestigators(agentsDir) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(projectInvestigatorsPath(agentsDir), 'utf8'));
+    return Array.isArray(parsed.investigators) ? parsed.investigators.filter((r) => typeof r === 'string') : [];
+  } catch { return []; }
 }
 
 const PROJECT_PROFILES_FILE = 'agent-profiles.json';
@@ -291,8 +359,17 @@ function rosterRunId(agentsDir) {
  * Canonical roles are never touched: only names this project registered are removed.
  */
 function clearProjectRoster(agentsDir, profilesPath) {
-  const registered = projectRoles(agentsDir);
+  const registered = [...projectRoles(agentsDir), ...projectInvestigators(agentsDir)];
   if (!registered.length) return [];
+
+  // Both registries. An investigator left behind would be re-applied next run as a role the
+  // roster never proposed — the same aggregation the ephemeral-roster rule forbids.
+  try {
+    const file = projectInvestigatorsPath(agentsDir);
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    parsed.investigators = [];
+    fs.writeFileSync(file, JSON.stringify(parsed, null, 2), 'utf8');
+  } catch { /* none registered */ }
 
   try {
     const file = projectRolesPath(agentsDir);
@@ -333,4 +410,6 @@ module.exports = {
   registerProjectRoles, projectRoles, projectRolesPath, PROJECT_ROLES_FILE,
   saveProjectProfiles, applyProjectProfiles, projectProfilesPath, PROJECT_PROFILES_FILE,
   clearProjectRoster, rosterRunId,
+  registerProjectInvestigators, projectInvestigators, projectInvestigatorsPath,
+  proposalKind, AGENT_KINDS, PROJECT_INVESTIGATORS_FILE,
 };

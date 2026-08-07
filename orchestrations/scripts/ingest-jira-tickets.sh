@@ -135,6 +135,17 @@ if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -z "${JIRA_CODELINES:-}" ]; then
     err "Codeline discovery failed (exit ${DISCOVERY_EXIT}). Cannot synthesize PRD."
     exit 1
   fi
+  # PERSIST IT. Discovery's answer — which codelines exist and where each one lives — is
+  # needed by every project-wide stage that follows: the detective sweep and the agent mint.
+  # It was written only into this script's TMPDIR and exported as environment variables, and
+  # ingest runs as a CHILD process, so both died at the closing brace. Live 2026-08-07: the
+  # mint fell back to a single repository twice while three codelines were in scope, and the
+  # ticket itself named all three. An artefact crosses a process boundary; an export does not.
+  if [ -n "${LOG_DIR:-}" ] && [ -d "${LOG_DIR}" ]; then
+    cp "$DISCOVERY_JSON" "${LOG_DIR}/codeline-discovery.json" 2>/dev/null \
+      && log "Codeline discovery persisted → ${LOG_DIR}/codeline-discovery.json" \
+      || warn "Could not persist codeline discovery to ${LOG_DIR} — later stages will see fewer codelines"
+  fi
   # Export discovered codelines into the current shell so synthesize-prd-from-jira.js
   # inherits JIRA_CODELINES and JIRA_WORKTREE_<NAME> without any hardcoded env vars.
   _discovery_exports=$("$NODE_BIN" - "$DISCOVERY_JSON" <<'NODE_EXPORT_EOF'

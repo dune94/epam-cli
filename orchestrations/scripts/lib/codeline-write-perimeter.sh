@@ -176,3 +176,26 @@ perimeter_apply() {
     fi
     return 0
 }
+
+# perimeter_release_all <codeline-root>
+#
+# Give every repository under the root back to the operator. Called when the RUN ends —
+# including the successful ending, which for these runs is the pause before the writer.
+#
+# Nothing did this. perimeter_apply locked at run start, ensure_story_branch reopened a repo
+# that reached a story branch, and the rest stayed read-only forever. Observed twice on
+# 2026-08-06: after a run paused, 23 of the operator's repositories were still locked and
+# nothing said so. The kill path has the same gap.
+#
+# Idempotent, and never fails the caller: it restores permission, it does not touch content.
+perimeter_release_all() {
+    local root="${1:-}"
+    [ -n "$root" ] && [ -d "$root" ] || return 0
+    local _n=0 _cl
+    for _cl in "$root"/*/; do
+        [ -e "${_cl}.git" ] || continue
+        perimeter_unlock "${_cl%/}" >/dev/null 2>&1 && _n=$((_n + 1))
+    done
+    [ "$_n" -gt 0 ] && _perim_log "released $_n codeline(s) — repositories are writable again"
+    return 0
+}

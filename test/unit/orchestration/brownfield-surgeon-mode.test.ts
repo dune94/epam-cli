@@ -112,8 +112,16 @@ describe('spec-mode-runner.js — brownfield archaeology block, REAL behavior vi
     // GLM-5.1 emitted <search_fi...> XML on the first live run when given
     // "you MUST identify the existing code path" without a no-tools constraint.
     const { archaeologyBlock } = buildBrownfieldArchaeologyBlock({ EPAM_BROWNFIELD: '1' });
-    expect(archaeologyBlock).toMatch(/no tools|no tool/i);
-    expect(archaeologyBlock).toMatch(/JSON only|output JSON/i);
+    // SUPERSEDED 2026-08-06. This asserted the block FORBIDS tool use — while specAgentEnv
+    // granted read_file/list_files/search with AI_GATE_ALLOW_TOOLS=1. The agent was given
+    // tools and told not to use them, so it reasoned about code it could have read, from a
+    // prompt that was 92% an undifferentiated CodeGraph dump. The rule that matters is not
+    // "do not look", it is "do not invent": looking is allowed, fabricating is not.
+    expect(archaeologyBlock).toMatch(/read_file|read the file/i);
+    expect(archaeologyBlock, 'the anti-fabrication rule is what must survive').toMatch(/do NOT invent|fabrication/i);
+    // Wording changed with the tool policy: the block now opens "answer as JSON" rather than
+    // "output JSON only, no tools, no search". The requirement — a JSON answer — is unchanged.
+    expect(archaeologyBlock).toMatch(/answer as JSON|JSON only|output JSON/i);
   });
 
   it('archaeology block constrains locationHint derivation to the Semble context already in the prompt', () => {
@@ -147,7 +155,9 @@ describe('spec-mode-runner.js — brownfield archaeology block, REAL behavior vi
   it('the real prompt-building call site actually uses buildBrownfieldArchaeologyBlock, not a private inline ternary re-implementing the same logic', () => {
     // Guards against a future edit silently reverting to an inline, per-agent
     // condition without touching (or breaking) this test file.
-    expect(specSrc).toMatch(/buildBrownfieldArchaeologyBlock\(process\.env\)/);
+    // The call now passes what the STORY has (hasAcceptanceCriteria / hasReferencedDocs), so
+    // the block can name only sources that exist. Still the shared builder, not an inline copy.
+    expect(specSrc).toMatch(/buildBrownfieldArchaeologyBlock\(process\.env,\s*\{/);
   });
 });
 

@@ -20,7 +20,9 @@ function defaultOf(re: RegExp): number {
 
 describe('detective timeout is not shorter than a normal prompt timeout', () => {
   it('CODEGRAPH_DETECTIVE_TIMEOUT_MS default >= RUNCLAUDE_TIMEOUT_MS default', () => {
-    const general = defaultOf(/RUNCLAUDE_TIMEOUT_MS \|\| '(\d+)'/);
+    // The general default moved from a module-level const into runClaudeTimeoutMs() so it can
+    // be set per call; the number itself is unchanged.
+    const general = defaultOf(/return Number\.isFinite\(v\) && v > 0 \? v : (\d+)/);
     const detective = defaultOf(/CODEGRAPH_DETECTIVE_TIMEOUT_MS \|\| '(\d+)'/);
     expect(general).toBeGreaterThan(0);
     expect(detective).toBeGreaterThanOrEqual(general);

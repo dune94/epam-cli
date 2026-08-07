@@ -30,7 +30,7 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, accessSync, constants } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -201,5 +201,94 @@ describe('wired into the pipeline, not merely available', () => {
       src.indexOf('perimeter_apply'),
       'locking before the reset would leave a dirty tree frozen in place',
     ).toBeGreaterThan(src.indexOf('brownfield-preflight-reset.sh'));
+  });
+});
+
+/**
+ * EVERY EXIT RELEASES THE PERIMETER — including the successful one.
+ *
+ * perimeter_apply() chmods a codeline's tracked files read-only at run start.
+ * ensure_story_branch() reopens a repo once it reaches a story branch. Nothing reopened them
+ * when the RUN ended, and run-agent-orchestration.sh does not even source this library, so no
+ * exit path could.
+ *
+ * Observed twice on 2026-08-06: after a run PAUSED before the writer — the normal successful
+ * ending under EPAM_PAUSE_BEFORE_WRITER — 23 of the operator's repositories were still
+ * read-only, with nothing said about it. The kill path has the same gap (backlogged). Pause is
+ * not an error case; it is how these runs are meant to finish, so this is the common path.
+ *
+ * A release is idempotent and safe: it restores write permission, it does not touch content.
+ */
+describe('the perimeter is released when the run ends', () => {
+  function lockedRepos(count: number): string {
+    const root = mkdtempSync(join(tmpdir(), 'perim-root-'));
+    dirs.push(root);
+    for (let i = 0; i < count; i += 1) {
+      const d = join(root, `repo-${i}`);
+      mkdirSync(join(d, 'src'), { recursive: true });
+      writeFileSync(join(d, 'src', 'a.ts'), 'export const a = 1;\n');
+      spawnSync('git', ['init', '-q', d]);
+      spawnSync('git', ['-C', d, 'config', 'user.email', 't@t']);
+      spawnSync('git', ['-C', d, 'config', 'user.name', 't']);
+      spawnSync('git', ['-C', d, 'add', '-A']);
+      spawnSync('git', ['-C', d, 'commit', '-qm', 'base']);
+      spawnSync('git', ['-C', d, 'branch', '-m', 'develop']);
+      spawnSync('bash', ['-c',
+        `. ${JSON.stringify(PERIMETER)}; JIRA_BASELINE_BRANCH=develop perimeter_apply ${JSON.stringify(d)}`]);
+    }
+    return root;
+  }
+  /**
+   * Writable? — and it must never answer "no" because the CHECK broke.
+   *
+   * The first version swallowed every error, and `constants` was not imported: `constants.W_OK`
+   * threw on every call, so this returned false unconditionally. The "the fixture is really
+   * locked" assertion passed for the wrong reason, and the release assertion could not pass at
+   * all — a perfectly good fix looked broken for twenty minutes. Only ENOENT/EACCES mean
+   * not-writable; anything else is the instrument failing and must be raised.
+   */
+  const writable = (p: string) => {
+    try { accessSync(p, constants.W_OK); return true; } catch (e: any) {
+      if (e && (e.code === 'EACCES' || e.code === 'EPERM' || e.code === 'ENOENT')) return false;
+      throw e;
+    }
+  };
+
+  it('the fixture is really locked — otherwise this proves nothing', () => {
+    const root = lockedRepos(2);
+    expect(writable(join(root, 'repo-0/src/a.ts'))).toBe(false);
+  });
+
+  it('THE GAP: one call releases every codeline under the root', () => {
+    const root = lockedRepos(3);
+    const r = spawnSync('bash', ['-c',
+      `. ${JSON.stringify(PERIMETER)}; perimeter_release_all ${JSON.stringify(root)}`], { encoding: 'utf8' });
+    expect(r.status, `release failed: ${r.stderr}`).toBe(0);
+    for (const i of [0, 1, 2]) {
+      expect(
+        writable(join(root, `repo-${i}/src/a.ts`)),
+        `repo-${i} is still read-only — the operator cannot edit their own repository`,
+      ).toBe(true);
+    }
+  });
+
+  it('it is safe on a root with nothing locked, and on a missing root', () => {
+    const clean = mkdtempSync(join(tmpdir(), 'perim-clean-')); dirs.push(clean);
+    for (const arg of [clean, '/does/not/exist', '']) {
+      const r = spawnSync('bash', ['-c',
+        `. ${JSON.stringify(PERIMETER)}; perimeter_release_all ${JSON.stringify(arg)}`], { encoding: 'utf8' });
+      expect(r.status, `release threw on ${arg || '<empty>'}: ${r.stderr}`).toBe(0);
+    }
+  });
+
+  it('the orchestrator releases on exit, so a PAUSE does not leave repos locked', () => {
+    const orch = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+    expect(
+      orch,
+      'run-agent-orchestration.sh does not even source the perimeter library, so no exit path can release it',
+    ).toMatch(/codeline-write-perimeter/);
+    expect(orch, 'nothing releases the perimeter when the run ends').toMatch(/perimeter_release_all/);
+    expect(orch, 'the release must fire on EVERY exit, not just the happy path')
+      .toMatch(/trap\s+'[^']*_release_write_perimeter[^']*'\s+EXIT|trap[^\n]*perimeter_release_all/);
   });
 });

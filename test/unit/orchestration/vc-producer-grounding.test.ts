@@ -68,10 +68,22 @@ describe('manifestFileExcerpts — the producer can read the files it must reaso
     expect(block).toContain('src/useContent.ts');
   });
 
-  it('skips a path that does not exist rather than throwing', () => {
+  /**
+   * SUPERSEDED 2026-08-06. Silently skipping an unresolvable path is how an EMPTY
+   * DECLARED FILES block went unnoticed for the life of this feature: a prompt with no
+   * section reads exactly like a story that declares no files. On the live run the block was
+   * absent from both agents' prompts and nothing said so.
+   *
+   * A path that cannot be read is now named, with an explicit instruction not to reason about
+   * it — the agent learns the file was expected and is unavailable, rather than never hearing
+   * of it. It is still not fatal, and it still does not throw.
+   */
+  it('reports a path that does not exist instead of silently dropping it', () => {
     const block = manifestFileExcerpts(story(['src/useContent.ts', 'src/nope.ts']), prd());
     expect(block).toContain('src/useContent.ts');
-    expect(block).not.toContain('src/nope.ts');
+    expect(block, 'the missing file is invisible, which reads as "not declared"').toContain('src/nope.ts');
+    expect(block).toMatch(/could not be read/i);
+    expect(block, 'the agent must be told not to reason about it').toMatch(/do not reason about/i);
   });
 
   it('returns empty for a story with no declared files', () => {

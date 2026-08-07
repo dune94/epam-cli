@@ -77,8 +77,13 @@ describe('codeline-discovery.js: discovery scoring uses CodeGraph, not grep or S
   });
 
   it('calls scoreRepos before DRY_RUN branch', () => {
-    const scoringCallIdx  = DISCOVERY_SRC.indexOf('const candidates = scoreRepos');
-    const dryRunBranchIdx = DISCOVERY_SRC.indexOf('if (DRY_RUN)');
+    // Both indexes must be taken WITHIN main. The vocabulary deriver also branches on
+    // DRY_RUN (it runs no agent in the model-free mode) earlier in the file, so searching the
+    // whole source compares two unrelated positions. Same correction already applied in
+    // codeline-discovery.test.ts.
+    const MAIN = DISCOVERY_SRC.slice(DISCOVERY_SRC.indexOf('\u2500\u2500 Main'));
+    const scoringCallIdx  = MAIN.indexOf('const candidates = scoreRepos');
+    const dryRunBranchIdx = MAIN.indexOf('if (DRY_RUN)');
     expect(scoringCallIdx).toBeGreaterThan(-1);
     expect(scoringCallIdx).toBeLessThan(dryRunBranchIdx);
   });

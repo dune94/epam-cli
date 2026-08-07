@@ -246,3 +246,96 @@ describe('the vocabulary agent is bound to its own tool schema', () => {
     }
   }, 60000);
 });
+
+/**
+ * A CONTRACT THE VENDOR PUBLISHES IS NOT AN IMPLEMENTATION DETAIL.
+ *
+ * The VC guard strips criteria that name a MECHANISM — the right rule when the mechanism is
+ * an implementation choice the team is free to make differently.
+ *
+ * But on 2026-08-07, run 20260807T000054Z, it deleted the three best criteria on the story,
+ * and all three came straight from the vendor documentation the pipeline had just fetched:
+ *
+ *   "Given the Live Preview SDK is mocked to invoke the registered onEntryChange callback,
+ *    when onEntryChange fires, the ContentstackContext.Provider ..."
+ *   "The onEntryChange callback is registered exactly once during the provider's lifecycle
+ *    (not on every render), and it triggers a data refresh"
+ *   "... onEntryChange fires for a page that requires authentication, the application does
+ *    not throw"
+ *
+ * Those are the sharpest and most testable checks the run produced, and they are observable:
+ * `onEntryChange` is the vendor's published callback, quoted verbatim in their guide. It is
+ * not something this team chose and could change.
+ *
+ * So the better the documentation grounding gets, the more the guard deletes — because
+ * documentation content IS mechanism. A term the ticket's own documentation states is
+ * whitelisted: the applier already lets the whitelist win, and the terms are DERIVED from the
+ * fetched documents rather than written down anywhere.
+ */
+describe('terms the ticket’s documentation states are not treated as implementation detail', () => {
+  const spec = require('../../../orchestrations/scripts/spec-mode-runner.js');
+  const { applyVocabulary } = require('../../../orchestrations/scripts/lib/guard-vocabulary.js');
+
+  const DOCS = [{
+    url: 'https://vendor.test/docs/live-preview',
+    fetchStatus: 'fetched',
+    quotes: [
+      'React.useEffect(() => { onEntryChange(updateData); }, []);',
+      "live_preview: { preview_token: preview_token, enable: true, host: 'rest-preview.contentstack.com' }",
+    ],
+  }];
+
+  const VC = 'When onEntryChange fires, the previewed page displays the updated draft entry.';
+  const BLACKLIST = { blacklist: [{ term: 'onEntryChange', reason: 'names a mechanism' }], whitelist: [] };
+
+  it('the fixture is real — without the documents the term IS flagged', () => {
+    const flagged = applyVocabulary([VC], BLACKLIST);
+    expect(flagged.length, 'the guard no longer flags mechanism at all — this test proves nothing').toBe(1);
+  });
+
+  it('THE FIX: a term quoted in the ticket’s documentation is whitelisted', () => {
+    const grounded = spec.documentGroundedVocabulary(BLACKLIST, DOCS);
+    expect(
+      applyVocabulary([VC], grounded),
+      'the sharpest criteria on the story were deleted because the vendor’s own callback was called a mechanism',
+    ).toEqual([]);
+  });
+
+  it('the whitelist entry says WHY, and names the source', () => {
+    const grounded = spec.documentGroundedVocabulary(BLACKLIST, DOCS);
+    const entry = grounded.whitelist.find((w: any) => w.term === 'onEntryChange');
+    expect(entry, 'onEntryChange was not whitelisted').toBeTruthy();
+    expect(entry.reason).toMatch(/document|vendor|quoted/i);
+    expect(entry.reason).toContain('vendor.test');
+  });
+
+  it('a mechanism the documents do NOT mention is still flagged', () => {
+    const grounded = spec.documentGroundedVocabulary(
+      { blacklist: [{ term: 'useReducer', reason: 'names a mechanism' }], whitelist: [] }, DOCS);
+    expect(
+      applyVocabulary(['The page uses useReducer to hold draft state.'], grounded),
+      'grounding must not become a blanket amnesty',
+    ).toHaveLength(1);
+  });
+
+  it('prose words in a quote do not become whitelist entries', () => {
+    const grounded = spec.documentGroundedVocabulary(
+      { blacklist: [{ term: 'displays', reason: 'x' }], whitelist: [] },
+      [{ url: 'u', fetchStatus: 'fetched', quotes: ['the page displays the entry'] }]);
+    expect(
+      grounded.whitelist.map((w: any) => w.term),
+      'whitelisting ordinary prose would disarm the guard entirely',
+    ).not.toContain('displays');
+  });
+
+  it('no documents means the vocabulary is unchanged', () => {
+    expect(spec.documentGroundedVocabulary(BLACKLIST, [])).toEqual(BLACKLIST);
+    expect(spec.documentGroundedVocabulary(BLACKLIST, null)).toEqual(BLACKLIST);
+  });
+
+  it('an unfetched document grounds nothing — it has no verified text', () => {
+    const grounded = spec.documentGroundedVocabulary(BLACKLIST,
+      [{ url: 'u', fetchStatus: 'unreachable', quotes: ['onEntryChange'] }]);
+    expect(grounded.whitelist.map((w: any) => w.term)).not.toContain('onEntryChange');
+  });
+});

@@ -30,7 +30,20 @@ describe('openspec-brownfield produces a VC layer, ACs immutable', () => {
     expect(bf.archaeologyBlock).toMatch(/IMMUTABLE ticket intent/);
     expect(bf.archaeologyBlock).toMatch(/PRODUCE a "verificationCriteria" array/);
     expect(bf.archaeologyBlock).toMatch(/derived from the acceptance criteria AND the description/);
-    expect(bf.archaeologyBlock).toMatch(/lean on the description when the ACs are sparse or missing/);
+    // SUPERSEDED 2026-08-06. The instruction used to name acceptance criteria and the
+    // description as the sources of verification, and to say "lean on the description when
+    // the ACs are sparse or missing". A brownfield ticket has NO acceptance criteria — the AC
+    // gate skips them by design — so this sent the model to the two thinnest fields in the
+    // prompt while 4KB of vendor documentation sat above it unnamed. Sources are now the ones
+    // the story actually has; pass hasAcceptanceCriteria to get the AC wording back.
+    const withAcs = require('../../../orchestrations/scripts/spec-mode-runner.js')
+      .buildBrownfieldArchaeologyBlock({ EPAM_BROWNFIELD: '1' }, { hasAcceptanceCriteria: true });
+    expect(withAcs.archaeologyBlock).toMatch(/acceptanceCriteria/);
+    // `bf` above is built with no opts, which means "this story HAS acceptance criteria" —
+    // the greenfield default. The brownfield case must be asked for explicitly.
+    const noAcs = require('../../../orchestrations/scripts/spec-mode-runner.js')
+      .buildBrownfieldArchaeologyBlock({ EPAM_BROWNFIELD: '1' }, { hasAcceptanceCriteria: false });
+    expect(noAcs.archaeologyBlock, 'a story with no ACs must not be told about ACs').not.toMatch(/acceptance criteria/i);
   });
 
   it('forbids mechanism in a VC (the guard the AC-quality problem needs)', () => {

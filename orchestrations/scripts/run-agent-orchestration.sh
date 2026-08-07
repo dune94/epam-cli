@@ -2,6 +2,21 @@
 
 # Master orchestration script for parallel multi-agent execution
 # Coordinates worktree-based parallel Claude agents across all EPAM CLI project phases
+
+# ── Give the repositories back, on every exit ────────────────────────────────
+# The write perimeter locks every codeline at run start. Nothing released them when the run
+# ENDED — not on success, not on the pause before the writer, which is how these runs are
+# meant to finish. Twice on 2026-08-06 a paused run left 23 of the operator's repositories
+# read-only with no message. A trap covers every exit path, including the ones added later.
+_release_write_perimeter() {
+    local _lib
+    _lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/codeline-write-perimeter.sh"
+    [ -f "$_lib" ] || return 0
+    # shellcheck source=lib/codeline-write-perimeter.sh
+    . "$_lib" 2>/dev/null || return 0
+    perimeter_release_all "${JIRA_CODELINE_ROOT:-}" || true
+}
+trap '_release_write_perimeter' EXIT
 #
 # Usage:
 #   ./run-agent-orchestration.sh                                    # Run default phase (finops)

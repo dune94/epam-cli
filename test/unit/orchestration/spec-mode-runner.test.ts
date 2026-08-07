@@ -79,9 +79,26 @@ describe('extractTaggedJson', () => {
     expect(extractTaggedJson('<SPEC_ASSIGNMENTS>\n\n\t\n</SPEC_ASSIGNMENTS>', 'SPEC_ASSIGNMENTS')).toBeNull();
   });
 
-  it('returns null when open tag present but no close tag (truncated response)', () => {
+  /**
+   * SUPERSEDED 2026-08-06. A truncated answer used to be discarded. Live that day, three
+   * agents answered in shapes with no closing tag — `<tool_call>{"name":…` cut off mid-reply,
+   * a bare tool name followed by the payload, prose then JSON — and each time a correct,
+   * complete JSON object was thrown away on punctuation. One of those losses aborted a whole
+   * specification pass ("the guard-vocabulary agent returned no usable terms").
+   *
+   * If the payload is there and parses, it is recovered. Nothing is invented: the object still
+   * has to be valid JSON, and the caller still validates it against the tool definition.
+   */
+  it('recovers a complete payload even when the closing tag never arrived', () => {
     const text = '<SPEC_AGENT>{"storyId":"HW-001"}';
-    expect(extractTaggedJson(text, 'SPEC_AGENT')).toBeNull();
+    expect(
+      extractTaggedJson(text, 'SPEC_AGENT'),
+      'a complete answer was discarded because the model did not close its tag',
+    ).toEqual({ storyId: 'HW-001' });
+  });
+
+  it('a truncated answer with no complete object is still null', () => {
+    expect(extractTaggedJson('<SPEC_AGENT>{"storyId":"HW-0', 'SPEC_AGENT')).toBeNull();
   });
 
   it('returns last parseable match when model echoes empty template block before real output', () => {

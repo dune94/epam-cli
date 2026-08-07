@@ -2624,6 +2624,61 @@ function isThinContext(story, env = process.env) {
 // "halve/×0.5", "calculate independently", "per segment/leg") plus new-code-
 // structure directives. Distinct from the AC prescriptiveness guard (which catches
 // test/code mechanics like vi.mock/import). Returns the flagged VCs with reasons.
+/**
+ * documentGroundedVocabulary(vocabulary, referencedDocs) -> vocabulary
+ *
+ * A term the ticket's OWN documentation states verbatim is a published contract, not an
+ * implementation choice — so it is whitelisted, and the applier already lets the whitelist win.
+ *
+ * The VC guard strips criteria that name a mechanism, which is right when the mechanism is
+ * something this team picked and could change. It is wrong for a vendor's published API. Live
+ * 2026-08-07 the guard deleted the three sharpest criteria on the story, all three quoting
+ * `onEntryChange` — the callback the vendor's own guide documents, which the pipeline had just
+ * fetched. The better the documentation grounding got, the more the guard deleted, because
+ * documentation content IS mechanism.
+ *
+ * Only a BLACKLISTED term that appears in a FETCHED document is grounded: this cannot invent
+ * vocabulary, cannot whitelist prose the guard never objected to, and cannot act on a document
+ * that was never opened. Nothing is written down here — the terms come from the evidence.
+ */
+function documentGroundedVocabulary(vocabulary, referencedDocs) {
+  const v = vocabulary && typeof vocabulary === 'object' ? vocabulary : {};
+  const docs = (Array.isArray(referencedDocs) ? referencedDocs : [])
+    .filter((d) => d && d.fetchStatus === 'fetched' && Array.isArray(d.quotes) && d.quotes.length);
+  const black = Array.isArray(v.blacklist) ? v.blacklist : [];
+  if (!docs.length || !black.length) return vocabulary;
+
+  // Only an IDENTIFIER can be grounded. A published API name carries structure that ordinary
+  // prose does not: camelCase, snake_case, a dot or a dash — `onEntryChange`, `live_preview`,
+  // `preview_token`. A plain lowercase English word in a quoted sentence ("displays", "page")
+  // is prose, and whitelisting it because a document happened to use it would disarm the guard
+  // wholesale. Structural, so it needs no vocabulary of its own; conservative, so a genuinely
+  // lowercase API name stays flagged rather than opening a hole.
+  const looksLikeIdentifier = (t) => /[A-Z]/.test(t) || /[._-]/.test(t) || /\d/.test(t);
+
+  const grounded = [];
+  for (const entry of black) {
+    const term = entry && entry.term;
+    if (!term || !looksLikeIdentifier(String(term))) continue;
+    // Whole-term, case-insensitive: the same matching the applier uses, so a term is grounded
+    // exactly when the applier would have flagged it against this text.
+    const esc = String(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(^|[^a-z0-9])${esc}([^a-z0-9]|$)`, 'i');
+    const source = docs.find((d) => d.quotes.some((q) => re.test(String(q))));
+    if (!source) continue;
+    grounded.push({
+      term,
+      reason: `quoted verbatim in documentation linked on the ticket (${source.url}) — a vendor's published contract, not an implementation choice`,
+    });
+  }
+  if (!grounded.length) return vocabulary;
+  const existing = new Set((Array.isArray(v.whitelist) ? v.whitelist : []).map((w) => w && w.term));
+  return {
+    ...v,
+    whitelist: [...(Array.isArray(v.whitelist) ? v.whitelist : []), ...grounded.filter((g) => !existing.has(g.term))],
+  };
+}
+
 function findVcMechanism(vc, storyId, vocabulary) {
   // PURE APPLIER — holds no terms, no patterns, no domain nouns, no stack assumptions.
   // What counts as a violation is DERIVED per story by the guard-vocabulary agent
@@ -4303,16 +4358,25 @@ ${storyPayload}${publishedContracts(repoPath, story)}
             // Inputs are state-dependent by design: an agent not shown what the guard
             // checks can only guess from the ticket, which is how invented file contents
             // reached the pipeline before.
-            deriveVocabulary: (vcToCheck) => deriveGuardVocabulary({
-              promptExec,
-              rule: VC_OBSERVABILITY_RULES,
-              statements: vcToCheck,
-              story,
-              findings: detectiveFindings,
-              manifestFiles: (story && story.technicalNotes && story.technicalNotes.files) || [],
-              logDir,
-              seam: 'verification-criteria',
-            }),
+            // The derived vocabulary is then GROUNDED against the documents linked on the
+            // ticket: a term the vendor publishes verbatim is a contract, not an
+            // implementation choice this team made. Without it the guard deleted the three
+            // sharpest criteria of run 20260807T000054Z — all quoting `onEntryChange`, from
+            // the guide the pipeline had just fetched — so better documentation grounding
+            // produced more deletions.
+            deriveVocabulary: async (vcToCheck) => documentGroundedVocabulary(
+              await deriveGuardVocabulary({
+                promptExec,
+                rule: VC_OBSERVABILITY_RULES,
+                statements: vcToCheck,
+                story,
+                findings: detectiveFindings,
+                manifestFiles: (story && story.technicalNotes && story.technicalNotes.files) || [],
+                logDir,
+                seam: 'verification-criteria',
+              }),
+              referencedDocs,
+            ),
           });
           story.verificationCriteria = enforced.vc;
           // 'disputed' is NOT fallback: the criteria are the author's real ones, kept
@@ -6710,6 +6774,7 @@ module.exports = {
   specAgentEnv,
   reviewTicketLinks,
   normaliseTicketLinks,
+  documentGroundedVocabulary,
   persistReferencedDocs,
   fetchTicketDocuments,
   manifestFileExcerpts,

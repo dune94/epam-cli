@@ -31,6 +31,22 @@ const CDTS_INDEXED   = existsSync(join(CDTS_PATH, '.codegraph', 'codegraph.db'))
 
 // ── codegraph-context.js: module API ────────────────────────────────────────
 
+/**
+ * The WHOLE body of scoreRepos, not a fixed character window.
+ *
+ * These read `scoreIdx + 5000` characters. That is a guess about the function's length, and
+ * it goes wrong the moment anyone adds a comment: on 2026-08-06 a note explaining TF-IDF term
+ * ordering pushed the isCodeGraphIndexed gate past the 5000th character and the test failed
+ * while the behaviour it checks was untouched. A test that fails on prose length teaches
+ * people to delete explanations to keep it green.
+ */
+function scoreReposBody(): string {
+  const start = DISCOVERY_SRC.indexOf('function scoreRepos');
+  if (start < 0) throw new Error('scoreRepos not found — the invariant cannot be checked');
+  const end = DISCOVERY_SRC.indexOf('\n}', start);
+  return DISCOVERY_SRC.slice(start, end < 0 ? DISCOVERY_SRC.length : end);
+}
+
 describe('codegraph-context.js: module structure', () => {
   it('exports resolveCodeGraphBin', () => {
     expect(CODEGRAPH_SRC).toMatch(/module\.exports.*resolveCodeGraphBin/);
@@ -174,27 +190,23 @@ describe('codeline-discovery.js: CodeGraph Tier 2 in scoreRepos', () => {
   });
 
   it('CodeGraph scoring is gated on CODEGRAPH_ENABLED=1', () => {
-    const scoreIdx = DISCOVERY_SRC.indexOf('function scoreRepos');
-    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 5000);
+    const scoreFn = scoreReposBody();
     expect(scoreFn).toMatch(/CODEGRAPH_ENABLED.*=.*'1'/);
   });
 
   it('CodeGraph scoring only runs for indexed repos (isCodeGraphIndexed check)', () => {
-    const scoreIdx = DISCOVERY_SRC.indexOf('function scoreRepos');
-    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 5000);
+    const scoreFn = scoreReposBody();
     expect(scoreFn).toMatch(/isCodeGraphIndexed/);
   });
 
   it('CodeGraph is the sole scoring tier (Tier 2 comment present, no Tier 3)', () => {
-    const scoreIdx = DISCOVERY_SRC.indexOf('function scoreRepos');
-    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 5000);
+    const scoreFn = scoreReposBody();
     expect(scoreFn).toMatch(/Tier 2/);
     expect(scoreFn).not.toMatch(/Tier 3/);
   });
 
   it('Semble is not present in scoreRepos (removed — all repos indexed, no fallback needed)', () => {
-    const scoreIdx = DISCOVERY_SRC.indexOf('function scoreRepos');
-    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 5000);
+    const scoreFn = scoreReposBody();
     expect(scoreFn).not.toMatch(/sembleSearch|SEMBLE_ENABLED/);
   });
 
@@ -205,8 +217,7 @@ describe('codeline-discovery.js: CodeGraph Tier 2 in scoreRepos', () => {
     // repos. Result: `mozio` hit 50+ times in azure.commerce.cdts and 0 times in
     // c365, yet BM25-sum ranked c365 higher. Scoring is now document-frequency
     // based across the repo SET — see lib/codeline-score.js.
-    const scoreIdx = DISCOVERY_SRC.indexOf('function scoreRepos');
-    const scoreFn  = DISCOVERY_SRC.slice(scoreIdx, scoreIdx + 5000);
+    const scoreFn = scoreReposBody();
     expect(scoreFn).toMatch(/crossRepoTermScores/);
     expect(scoreFn).not.toMatch(/bm25Sum/);
     expect(scoreFn).not.toMatch(/\.length.*\*.*5|5.*\*.*\.length/);
@@ -269,7 +280,9 @@ describe('spec-mode-runner.js: CodeGraph context for brownfield', () => {
   });
 
   it('archaeology block references CodeGraph or Semble generically (not Semble-only)', () => {
-    const blockIdx = SPEC_SRC.indexOf('BROWNFIELD MODE — output JSON only');
+    // The block's opening line changed when the "no tools, no search" policy was replaced
+    // (2026-08-06). Anchor on the marker itself rather than on wording that carries a policy.
+    const blockIdx = SPEC_SRC.indexOf('BROWNFIELD MODE');
     expect(blockIdx).toBeGreaterThan(-1);
     // Window widened: the block now leads with a defect/novel CLASSIFY step, so
     // the "CodeGraph or Semble" grounding phrase (STEP 2 — LOCATE) sits further

@@ -27,7 +27,13 @@ function extractFunctionBodyBraceCounted(src: string, name: string): string {
 
 describe('spec-pass timeout — default timeout raised to 360s', () => {
   it('RUNCLAUDE_TIMEOUT_MS defaults to 360000', () => {
-    expect(specSrc).toContain("RUNCLAUDE_TIMEOUT_MS || '360000'");
+    // SUPERSEDED 2026-08-06. This asserted the literal module-level const. That const was the
+    // defect: the value was fixed when the file was first required, so no agent could be given
+    // its own budget and a caller setting RUNCLAUDE_TIMEOUT_MS after import was ignored. When
+    // the guard-vocabulary agent timed out at 360s and took the spec pass with it, there was
+    // no lever to pull. It is now read at call time; the default is unchanged.
+    expect(specSrc).toMatch(/function runClaudeTimeoutMs/);
+    expect(specSrc).toMatch(/return Number\.isFinite\(v\) && v > 0 \? v : 360000/);
   });
 
   it('MINIMAX_TOOL_TIMEOUT_MS defaults to 180000', () => {

@@ -3044,10 +3044,26 @@ async function mintProjectAgents({
 
   // The vendor's own published contract, quoted verbatim by the link agent. This is the
   // sharpest signal about which domains this work actually spans.
+  // QUOTES OR THE DOCUMENT ITSELF.
+  //
+  // This required d.quotes, which only the ticket-link AGENT produces — it runs in the spec
+  // pass, after this. fetchTicketDocuments returns {url, fetchStatus, path} and no quotes, so
+  // every successfully fetched document was filtered straight back out: 25KB of vendor
+  // documentation retrieved, named the real product, and reached the proposer as nothing.
+  // Verified before the run rather than discovered by it.
   const docBlock = (Array.isArray(referencedDocs) ? referencedDocs : [])
-    .filter((d) => d && d.fetchStatus === 'fetched' && Array.isArray(d.quotes) && d.quotes.length)
-    .map((d) => `- ${d.url}\n${d.quotes.map((q) => `    "${String(q).replace(/\s+/g, ' ')}"`).join('\n')}`)
-    .join('\n');
+    .filter((d) => d && d.fetchStatus === 'fetched')
+    .map((d) => {
+      if (Array.isArray(d.quotes) && d.quotes.length) {
+        return `- ${d.url}\n${d.quotes.map((q) => `    "${String(q).replace(/\s+/g, ' ')}"`).join('\n')}`;
+      }
+      // Not truncated: this is the authoritative statement of what the work involves, and a
+      // cut copy is how a proposer ends up inferring the rest.
+      let body = typeof d.body === 'string' ? d.body : '';
+      if (!body && d.path) { try { body = fs.readFileSync(d.path, 'utf8'); } catch { body = ''; } }
+      return body ? `- ${d.url}\n${body}` : `- ${d.url} (retrieved, no readable text)`;
+    })
+    .join('\n\n');
 
   // WHAT THE CODELINE DECLARES IT USES. Ground truth about the stack, and the correction for
   // a specific live failure: on 2026-08-07 the tickets said only "CMS", both linked documents

@@ -182,3 +182,55 @@ describe('a ticket link reaches the proposer even when the fetch failed', () => 
     ).toContain('somevendor.com');
   }, 60_000);
 });
+
+describe('a fetched document reaches the proposer even without agent-made quotes', () => {
+  it('THE GAP: quotes are produced by the link agent, which has not run yet', async () => {
+    const ws = mkdtempSync(join(tmpdir(), 'mint-docs-')); dirs.push(ws);
+    writeFileSync(join(ws, 'profiles.json'), '{}');
+    const docFile = join(ws, 'vendor-doc.txt');
+    writeFileSync(docFile, 'The SomeVendor SDK exposes livePreviewQuery on the Stack object.');
+    const r = capturingRunner(ANSWER);
+
+    await spec.mintProjectAgents({
+      promptExec: r,
+      tickets: [{ id: 'T-1', title: 'preview drafts in CMS', description: 'names no vendor' }],
+      // Exactly what fetchTicketDocuments returns: no `quotes` field at all.
+      referencedDocs: [{ url: 'https://vendor.example/docs', fetchStatus: 'fetched', path: docFile }],
+      declaredDependencies: [],
+      profilesPath: join(ws, 'profiles.json'), agentsDir: ws, logDir: ws, repoPath: '',
+    });
+
+    expect(
+      readFileSync(r.capture, 'utf8'),
+      '25KB of vendor documentation was fetched and filtered straight back out',
+    ).toContain('livePreviewQuery');
+  }, 60_000);
+
+  it('quotes are still preferred when the link agent HAS run', async () => {
+    const ws = mkdtempSync(join(tmpdir(), 'mint-quotes-')); dirs.push(ws);
+    writeFileSync(join(ws, 'profiles.json'), '{}');
+    const r = capturingRunner(ANSWER);
+    await spec.mintProjectAgents({
+      promptExec: r, tickets: [{ id: 'T-1', title: 't', description: 'd' }],
+      referencedDocs: [{ url: 'https://vendor.example/d', fetchStatus: 'fetched', quotes: ['a chosen quote'] }],
+      declaredDependencies: [],
+      profilesPath: join(ws, 'profiles.json'), agentsDir: ws, logDir: ws, repoPath: '',
+    });
+    expect(readFileSync(r.capture, 'utf8')).toContain('a chosen quote');
+  }, 60_000);
+
+  it('an unreachable document contributes nothing but does not break the block', async () => {
+    const ws = mkdtempSync(join(tmpdir(), 'mint-unreach-')); dirs.push(ws);
+    writeFileSync(join(ws, 'profiles.json'), '{}');
+    const r = capturingRunner(ANSWER);
+    await spec.mintProjectAgents({
+      promptExec: r, tickets: [{ id: 'T-1', title: 't', description: 'd' }],
+      referencedDocs: [{ url: 'https://vendor.example/gone', fetchStatus: 'unreachable', path: '' }],
+      declaredDependencies: [],
+      profilesPath: join(ws, 'profiles.json'), agentsDir: ws, logDir: ws, repoPath: '',
+    });
+    const prompt = readFileSync(r.capture, 'utf8');
+    expect(prompt.length).toBeGreaterThan(200);
+    expect(prompt).not.toContain('vendor.example/gone');
+  }, 60_000);
+});

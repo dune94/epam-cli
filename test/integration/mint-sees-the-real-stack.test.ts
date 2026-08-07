@@ -234,3 +234,95 @@ describe('a fetched document reaches the proposer even without agent-made quotes
     expect(prompt).not.toContain('vendor.example/gone');
   }, 60_000);
 });
+
+/**
+ * ONE ROSTER, ALL CODELINES (operator direction, 2026-08-07).
+ *
+ * Ingest discovered three codelines — "No per-story codeline labels; using discovered
+ * codelines: gotransit, metrolinx, upexpress" — and the mint saw exactly one, the PRD's
+ * outputDir. So the roster was designed against a third of the project, and every brief
+ * named that one repository by absolute path: wrong for the other two, and wrong on any
+ * other machine.
+ */
+describe('one roster spans every codeline in scope', () => {
+  function multiEstate() {
+    const root = mkdtempSync(join(tmpdir(), 'multi-')); dirs.push(root);
+    const mk = (name: string, dep: string) => {
+      const r = join(root, name);
+      mkdirSync(join(r, '.git'), { recursive: true });
+      writeFileSync(join(r, 'package.json'), JSON.stringify({ dependencies: { [dep]: '1.0.0' } }));
+      mkdirSync(join(r, '.epam'), { recursive: true });
+      writeFileSync(join(r, '.epam', 'dependency-check.json'), JSON.stringify({
+        manifestFile: 'package.json', manifestKeys: ['dependencies'],
+      }));
+      return r;
+    };
+    return { alpha: mk('alpha', 'dep-of-alpha'), beta: mk('beta', 'dep-of-beta') };
+  }
+
+  it('every codeline and its stack reaches the proposer', async () => {
+    const { alpha, beta } = multiEstate();
+    const ws = mkdtempSync(join(tmpdir(), 'multi-ws-')); dirs.push(ws);
+    writeFileSync(join(ws, 'profiles.json'), '{}');
+    const r = capturingRunner(ANSWER);
+
+    await spec.mintProjectAgents({
+      promptExec: r, tickets: [{ id: 'T-1', title: 't', description: 'd' }], referencedDocs: [],
+      codelines: [
+        { name: 'alpha', path: alpha, dependencies: ['dep-of-alpha'] },
+        { name: 'beta', path: beta, dependencies: ['dep-of-beta'] },
+      ],
+      profilesPath: join(ws, 'profiles.json'), agentsDir: ws, logDir: ws, repoPath: alpha,
+    });
+
+    const prompt = readFileSync(r.capture, 'utf8');
+    expect(prompt).toContain('alpha');
+    expect(prompt, 'a codeline in scope was invisible to the mint').toContain('beta');
+    expect(prompt).toContain('dep-of-alpha');
+    expect(prompt).toContain('dep-of-beta');
+    expect(prompt).toMatch(/CODELINES IN SCOPE \(2\)/);
+  }, 60_000);
+
+  it('it is told to produce ONE roster, not one per codeline', async () => {
+    const { alpha } = multiEstate();
+    const ws = mkdtempSync(join(tmpdir(), 'multi-ws2-')); dirs.push(ws);
+    writeFileSync(join(ws, 'profiles.json'), '{}');
+    const r = capturingRunner(ANSWER);
+    await spec.mintProjectAgents({
+      promptExec: r, tickets: [{ id: 'T-1', title: 't', description: 'd' }], referencedDocs: [],
+      codelines: [{ name: 'alpha', path: alpha, dependencies: [] }],
+      profilesPath: join(ws, 'profiles.json'), agentsDir: ws, logDir: ws, repoPath: alpha,
+    });
+    const prompt = readFileSync(r.capture, 'utf8');
+    expect(prompt).toMatch(/ONE roster/i);
+    expect(prompt).toMatch(/near-duplicate roles per codeline/i);
+  }, 60_000);
+
+  it('it is told not to bake an absolute path into a brief', async () => {
+    const { alpha } = multiEstate();
+    const ws = mkdtempSync(join(tmpdir(), 'multi-ws3-')); dirs.push(ws);
+    writeFileSync(join(ws, 'profiles.json'), '{}');
+    const r = capturingRunner(ANSWER);
+    await spec.mintProjectAgents({
+      promptExec: r, tickets: [{ id: 'T-1', title: 't', description: 'd' }], referencedDocs: [],
+      codelines: [{ name: 'alpha', path: alpha, dependencies: [] }],
+      profilesPath: join(ws, 'profiles.json'), agentsDir: ws, logDir: ws, repoPath: alpha,
+    });
+    expect(
+      readFileSync(r.capture, 'utf8'),
+      'briefs baked in one machine\'s absolute path, wrong everywhere else',
+    ).toMatch(/Never write an absolute filesystem path/i);
+  }, 60_000);
+
+  it('a codeline that declares nothing says so rather than looking equipped', async () => {
+    const ws = mkdtempSync(join(tmpdir(), 'multi-ws4-')); dirs.push(ws);
+    writeFileSync(join(ws, 'profiles.json'), '{}');
+    const r = capturingRunner(ANSWER);
+    await spec.mintProjectAgents({
+      promptExec: r, tickets: [{ id: 'T-1', title: 't', description: 'd' }], referencedDocs: [],
+      codelines: [{ name: 'alpha', path: '/x/alpha', dependencies: [] }],
+      profilesPath: join(ws, 'profiles.json'), agentsDir: ws, logDir: ws, repoPath: '',
+    });
+    expect(readFileSync(r.capture, 'utf8')).toMatch(/no dependency evidence/i);
+  }, 60_000);
+});

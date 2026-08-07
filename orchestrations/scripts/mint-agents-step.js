@@ -62,6 +62,41 @@ function resolveRepoPath(prd, stories, repoArg) {
 }
 
 /**
+ * EVERY codeline in scope, not one of them.
+ *
+ * Operator direction, 2026-08-07: one roster for the whole project, informed by all its
+ * codelines. Ingest already discovers them and exports JIRA_CODELINES plus a
+ * JIRA_WORKTREE_<NAME> path for each, so this enumerates them generically — no codeline,
+ * client or repository is named here.
+ *
+ * The first run minted against a single repo (the PRD outputDir) while three were in scope,
+ * and wrote that one repository's absolute path into every brief.
+ */
+function resolveCodelines(prd, stories, repoArg) {
+  const isRepo = (d) => { try { return !!d && fs.existsSync(path.join(d, '.git')); } catch { return false; } };
+  const out = [];
+  const seen = new Set();
+  const add = (name, dir) => {
+    if (!isRepo(dir) || seen.has(dir)) return;
+    seen.add(dir);
+    out.push({ name: name || path.basename(dir), path: dir });
+  };
+
+  for (const name of String(process.env.JIRA_CODELINES || '').split(',').map((x) => x.trim()).filter(Boolean)) {
+    add(name, process.env[`JIRA_WORKTREE_${name.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`]);
+  }
+  if (!out.length) {
+    // Single-codeline fallback: whatever the run actually points at.
+    add('', repoArg);
+    add('', prd && prd.project && prd.project.outputDir);
+    for (const st of stories) {
+      try { add(st.codeline, spec.resolveCodelinePath(st)); } catch { /* next */ }
+    }
+  }
+  return out;
+}
+
+/**
  * What this codeline DECLARES it depends on. The single most direct answer to "which vendor
  * is this", and the mint had no access to it: the ticket says only "CMS", and the documents
  * that would have named the SDK failed to fetch. Read from whatever manifest the repo has —
@@ -79,13 +114,23 @@ function declaredDependencies(repoPath) {
   // Fails CLOSED and SAYS SO: no config means no dependency evidence, never a guessed
   // manifest. A guessed manifest that happens to miss is indistinguishable from a project
   // that genuinely declares nothing.
+  // The codeline's provisioned copy first; the project's own config as the fallback. The
+  // orchestrator provisions .epam/dependency-check.json into each worktree LATER, inside the
+  // codeline loop — after the mint. Live 2026-08-07: "declared dependencies: 0" for a codeline
+  // whose project config declares them perfectly well, so the mint lost its second evidence
+  // source and the briefs prescribed a package the codeline does not install.
+  const candidates = [path.join(repoPath, '.epam', 'dependency-check.json')];
+  if (process.env.EPAM_PROJECT_CONFIG_DIR) {
+    candidates.push(path.join(process.env.EPAM_PROJECT_CONFIG_DIR, 'dependency-check.json'));
+  }
   let cfg = null;
-  try {
-    cfg = JSON.parse(fs.readFileSync(path.join(repoPath, '.epam', 'dependency-check.json'), 'utf8'));
-  } catch {
+  for (const c of candidates) {
+    try { cfg = JSON.parse(fs.readFileSync(c, 'utf8')); break; } catch { /* next */ }
+  }
+  if (!cfg) {
     process.stderr.write(
-      '[mint-step] no .epam/dependency-check.json in the codeline — the mint gets no dependency ' +
-      'evidence (the engine will not guess which manifest this project uses)\n');
+      '[mint-step] no dependency-check.json for this codeline or project — the mint gets no ' +
+      'dependency evidence (the engine will not guess which manifest this project uses)\n');
     return [];
   }
   const manifestFile = typeof cfg.manifestFile === 'string' ? cfg.manifestFile : '';
@@ -228,7 +273,7 @@ function writeRosterDiff(profilesPath, agentsDir, logDir, mintedThisRun) {
   return diff;
 }
 
-module.exports = { resolveRepoPath, declaredDependencies, writeRosterDiff };
+module.exports = { resolveRepoPath, resolveCodelines, declaredDependencies, writeRosterDiff };
 
 if (require.main !== module) return;
 
@@ -253,20 +298,25 @@ if (require.main !== module) return;
     process.stderr.write(`[mint-step] re-applied ${reapplied.length} project brief(s) after the per-run restore: ${reapplied.join(', ')}\n`);
   }
 
-  const REPO_PATH = resolveRepoPath(prd, stories, REPO_ARG);
-  if (!REPO_PATH) {
+  const codelines = resolveCodelines(prd, stories, REPO_ARG);
+  if (!codelines.length) {
     process.stderr.write('[mint-step] WARNING: no codeline repository resolved — the mint cannot read the stack\n');
-  } else {
-    process.stderr.write(`[mint-step] codeline: ${REPO_PATH}\n`);
   }
-  const deps = declaredDependencies(REPO_PATH);
-  process.stderr.write(`[mint-step] declared dependencies: ${deps.length}\n`);
+  for (const cl of codelines) {
+    cl.dependencies = declaredDependencies(cl.path);
+    process.stderr.write(`[mint-step] codeline ${cl.name}: ${cl.path} (${cl.dependencies.length} declared deps)\n`);
+  }
+  // Tools operate in one working directory; the first codeline is the anchor, and every
+  // codeline's path and stack is stated in the prompt.
+  const REPO_PATH = codelines.length ? codelines[0].path : '';
+  const deps = [...new Set(codelines.flatMap((c) => c.dependencies))];
   const docs = await referencedDocs(LOG_DIR, stories);
   const fetchedDocs = docs.filter((d) => d && d.fetchStatus === 'fetched').length;
 
   // Surfaced, not buried. 0-of-2 fetched directly weakened the roster and appeared only as a
   // log line; the operator reviewing at the pause must see it without reading the transcript.
   fs.writeFileSync(path.join(LOG_DIR, 'mint-inputs.json'), JSON.stringify({
+    codelines: codelines.map((c) => ({ name: c.name, path: c.path, declaredDependencies: c.dependencies.length })),
     codelineRepo: REPO_PATH || null,
     declaredDependencies: deps.length,
     documentsLinked: docs.length,
@@ -287,6 +337,7 @@ if (require.main !== module) return;
       tickets: stories,
       referencedDocs: docs,
       declaredDependencies: deps,
+      codelines,
       profilesPath: PROFILES_PATH,
       agentsDir: AGENTS_DIR,
       logDir: LOG_DIR,

@@ -3008,7 +3008,7 @@ const TOOL_PROJECT_AGENTS = {
  */
 async function mintProjectAgents({
   promptExec, tickets, referencedDocs, profilesPath, agentsDir, logDir, repoPath,
-  declaredDependencies,
+  declaredDependencies, codelines,
 }) {
   const { mergeProjectAgents } = require('./lib/agent-roster.js');
 
@@ -3072,6 +3072,20 @@ async function mintProjectAgents({
   const depBlock = (Array.isArray(declaredDependencies) ? declaredDependencies : [])
     .slice(0, 300).map((d) => `- ${d}`).join('\n');
 
+  // ONE ROSTER, ALL CODELINES. The first mint saw a single repository while three were in
+  // scope, and wrote that one repository's absolute path into every brief.
+  const _cls = Array.isArray(codelines) && codelines.length
+    ? codelines
+    : (repoPath ? [{ name: '', path: repoPath, dependencies: declaredDependencies }] : []);
+  const codelineBlock = _cls.length
+    ? `THE CODELINES IN SCOPE (${_cls.length}) — one roster covers all of them:\n` + _cls.map((c) => {
+        const d = Array.isArray(c.dependencies) ? c.dependencies : [];
+        return `- ${c.name || '(unnamed)'}  at ${c.path}\n` + (d.length
+          ? `    declares: ${d.join(', ')}`
+          : '    declares: (no manifest configuration for this codeline — no dependency evidence)');
+      }).join('\n')
+    : 'THE CODELINES IN SCOPE: (none resolved)';
+
   const prompt = `${basePrompt}
 
 THE WORK THIS PROJECT HAS BEEN ASKED TO DO (real tickets from the tracker):
@@ -3087,9 +3101,18 @@ ${depBlock}
 ${docBlock ? `DOCUMENTATION LINKED ON THESE TICKETS (fetched, quoted verbatim — the vendor's published contract):
 ${docBlock}
 
-` : ''}THE CODELINE ITSELF: ${repoPath || '(not available)'}
-Read it before you answer. Propose roles for the domains this codebase and this work
-actually span — not the domains you would expect a project like this to have.
+` : ''}${codelineBlock}
+Read them before you answer. Propose ONE roster for the project as a whole: roles for the
+domains this work and these codebases actually span, not the domains you would expect a
+project like this to have. Where the codelines share a stack, one role covers all of them —
+do not mint near-duplicate roles per codeline.
+
+Write each brief so it stays true wherever the project is checked out: describe the codeline
+by NAME and by paths relative to its root. Never write an absolute filesystem path into a
+brief — it is specific to one machine and wrong everywhere else.
+
+A brief may only rely on what the codelines actually declare above. If the work plainly needs
+something that is not declared, say so in the rationale rather than assuming it is present.
 
 Do not propose a role that duplicates one of the canonical roles already listed above.`;
 

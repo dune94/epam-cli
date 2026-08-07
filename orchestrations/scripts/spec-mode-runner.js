@@ -3021,7 +3021,7 @@ const TOOL_PROJECT_AGENTS = {
  */
 async function mintProjectAgents({
   promptExec, tickets, referencedDocs, profilesPath, agentsDir, logDir, repoPath,
-  declaredDependencies, codelines,
+  declaredDependencies, codelines, toolGrant,
 }) {
   const { mergeProjectAgents } = require('./lib/agent-roster.js');
 
@@ -3115,7 +3115,16 @@ ${docBlock ? `DOCUMENTATION LINKED ON THESE TICKETS (fetched, quoted verbatim �
 ${docBlock}
 
 ` : ''}${codelineBlock}
-Read them before you answer. Propose ONE roster for the project as a whole: roles for the
+${toolGrant ? `You have READ-ONLY tools (${toolGrant}). Use them: open the manifests, find the modules
+this work touches, and VERIFY any API or package you are about to name in a brief actually
+exists in these repositories. A vendor's documentation describes its current product; these
+codelines pin the versions they pin, and where the two disagree the repository wins. A brief
+that names a symbol the installed package does not export sends an implementer to write code
+against something that is not there.` : `You have NO tools on this call — you cannot open these
+repositories. Reason only from what is written above, and say in the rationale when a claim
+rests on documentation rather than on this codebase.`}
+
+Propose ONE roster for the project as a whole: roles for the
 domains this work and these codebases actually span, not the domains you would expect a
 project like this to have. Where the codelines share a stack, one role covers all of them —
 do not mint near-duplicate roles per codeline.
@@ -3157,11 +3166,26 @@ authority of an investigation.
 
 Do not propose a role that duplicates one of the canonical roles already listed above.`;
 
+  // TOOLS, OR THE INSTRUCTION TO READ IS A LIE.
+  //
+  // This ran with no tools at all: ai-run.sh forces --no-tools unless AI_GATE_ALLOW_TOOLS=1,
+  // and only EPAM_RESPONSE_SCHEMA was passed. So the agent that designs the entire roster
+  // could not open a file, while the prompt told it to read the codelines before answering —
+  // an instruction it could not follow, and an invitation to narrate an inspection that never
+  // happened. Live 2026-08-07: two briefs prescribed `preview_token`, absent from the pinned
+  // SDK, taken on the vendor documentation's word because nothing could check it.
+  //
+  // Read-only by construction: no bash, no write_file. This stage has no story scope.
+  const _mintEnv = { EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_PROJECT_AGENTS) };
+  if (toolGrant) {
+    _mintEnv.AI_GATE_ALLOW_TOOLS = '1';
+    _mintEnv.EPAM_ALLOWED_TOOLS = toolGrant;
+  }
   const payload = await runAgentForJson(
     promptExec, prompt, TOOL_PROJECT_AGENTS, 'PROJECT_AGENTS',
     logDir ? path.join(logDir, 'project-agents-mint.log') : null,
     null, '', repoPath || '',
-    { EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_PROJECT_AGENTS) },
+    _mintEnv,
   );
 
   const proposals = (payload && Array.isArray(payload.proposedAgents)) ? payload.proposedAgents : [];

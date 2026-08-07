@@ -62,6 +62,65 @@ function resolveRepoPath(prd, stories, repoArg) {
 }
 
 /**
+ * Make the project's plugins reachable BEFORE the mint runs.
+ *
+ * The orchestrator provisions .epam/settings.json into each codeline inside the codeline
+ * loop — which happens after this step. So the mint could not reach dependency_contract or
+ * dependency_available even with tools enabled, and had to trust the vendor documentation
+ * about what the SDK exposes. Live 2026-08-07: two briefs prescribed `preview_token`, which
+ * does not exist in the pinned contentstack 3.15.3, because nothing could check.
+ *
+ * Idempotent and identical to what the lane writes later, so provisioning here changes
+ * nothing downstream.
+ */
+function provisionPlugins(codelines) {
+  const cfgDir = process.env.EPAM_PROJECT_CONFIG_DIR || '';
+  let tools = [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(cfgDir, 'plugins.json'), 'utf8'));
+    if (Array.isArray(parsed.tools)) tools = parsed.tools;
+  } catch { /* no project plugins declared */ }
+  const builtin = path.join(__dirname, '..', 'plugins', 'codegraph-tools.js');
+  if (fs.existsSync(builtin)) tools = [...new Set([builtin, ...tools])];
+  if (!tools.length) return [];
+
+  for (const cl of codelines) {
+    try {
+      fs.mkdirSync(path.join(cl.path, '.epam'), { recursive: true });
+      fs.writeFileSync(path.join(cl.path, '.epam', 'settings.json'), JSON.stringify({ tools }, null, 2));
+    } catch { /* a codeline we cannot write to simply has no plugins for the mint */ }
+  }
+  return tools;
+}
+
+/**
+ * What the mint may call. READ ONLY, by construction.
+ *
+ * The user's choice: builtin reads plus the project's dependency plugins — enough to verify
+ * that an API exists and a package is installed, across every codeline. No bash and no
+ * write_file: this stage has no story scope, and a wide grant at a stage that designs the
+ * agents is not a trade worth making.
+ */
+function mintTools(codelines) {
+  const READ_ONLY_BUILTINS = ['read_file', 'list_files', 'search'];
+  const names = [];
+  for (const cl of codelines) {
+    try {
+      const settings = JSON.parse(fs.readFileSync(path.join(cl.path, '.epam', 'settings.json'), 'utf8'));
+      for (const entry of (settings.tools || [])) {
+        try {
+          for (const t of (require(entry).tools || [])) {
+            const n = t && (t.name || (t.definition && t.definition.name));
+            if (typeof n === 'string' && n) names.push(n);
+          }
+        } catch { /* one unloadable plugin must not blank the grant */ }
+      }
+    } catch { /* this codeline has no plugins */ }
+  }
+  return [...new Set([...READ_ONLY_BUILTINS, ...names])].join(',');
+}
+
+/**
  * EVERY codeline in scope, not one of them.
  *
  * Operator direction, 2026-08-07: one roster for the whole project, informed by all its
@@ -290,7 +349,7 @@ function writeRosterDiff(profilesPath, agentsDir, logDir, mintedThisRun, mintedD
   return diff;
 }
 
-module.exports = { resolveRepoPath, resolveCodelines, declaredDependencies, writeRosterDiff };
+module.exports = { resolveRepoPath, resolveCodelines, declaredDependencies, writeRosterDiff, mintTools, provisionPlugins };
 
 if (require.main !== module) return;
 
@@ -331,6 +390,9 @@ if (require.main !== module) return;
   // codeline's path and stack is stated in the prompt.
   const REPO_PATH = codelines.length ? codelines[0].path : '';
   const deps = [...new Set(codelines.flatMap((c) => c.dependencies))];
+  const provisioned = provisionPlugins(codelines);
+  const toolGrant = mintTools(codelines);
+  process.stderr.write(`[mint-step] plugins provisioned: ${provisioned.length} · mint tools: ${toolGrant}\n`);
   const docs = await referencedDocs(LOG_DIR, stories);
   const fetchedDocs = docs.filter((d) => d && d.fetchStatus === 'fetched').length;
 
@@ -393,6 +455,7 @@ if (require.main !== module) return;
       referencedDocs: docs,
       declaredDependencies: deps,
       codelines,
+      toolGrant,
       profilesPath: PROFILES_PATH,
       agentsDir: AGENTS_DIR,
       logDir: LOG_DIR,

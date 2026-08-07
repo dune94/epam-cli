@@ -326,3 +326,62 @@ describe('one roster spans every codeline in scope', () => {
     expect(readFileSync(r.capture, 'utf8')).toMatch(/no dependency evidence/i);
   }, 60_000);
 });
+
+/**
+ * AN INSTRUCTION TO READ, GIVEN TO AN AGENT THAT CANNOT READ.
+ *
+ * The mint ran with NO tools: ai-run.sh forces --no-tools unless AI_GATE_ALLOW_TOOLS=1, and
+ * only EPAM_RESPONSE_SCHEMA was passed. So the agent designing the entire roster could not
+ * open a single file — while the prompt told it to "read them before you answer". At best
+ * that is ignored; at worst it invites the model to narrate an inspection that never happened.
+ *
+ * Live 2026-08-07: two briefs instructed implementers to set `preview_token` in
+ * Contentstack.Stack(). All three codelines pin contentstack ^3.15.3 and the symbol appears
+ * nowhere in it. The vendor documentation says it; nothing could check it; the brief asserted
+ * it confidently.
+ *
+ * Read-only by construction — no bash, no write_file. This stage has no story scope.
+ */
+describe('the mint can actually read what it is told to read', () => {
+  async function promptWith(toolGrant?: string) {
+    const ws = mkdtempSync(join(tmpdir(), 'mint-tools-')); dirs.push(ws);
+    writeFileSync(join(ws, 'profiles.json'), '{}');
+    const r = capturingRunner(ANSWER);
+    await spec.mintProjectAgents({
+      promptExec: r, tickets: [{ id: 'T-1', title: 't', description: 'd' }],
+      referencedDocs: [], declaredDependencies: [], toolGrant,
+      codelines: [{ name: 'alpha', path: '/x/alpha', dependencies: [] }],
+      profilesPath: join(ws, 'profiles.json'), agentsDir: ws, logDir: ws, repoPath: '',
+    });
+    return readFileSync(r.capture, 'utf8');
+  }
+
+  it('with tools, it is told to VERIFY rather than merely read', async () => {
+    const p = await promptWith('read_file,list_files,search,dependency_contract');
+    expect(p).toMatch(/READ-ONLY tools/);
+    expect(p).toMatch(/dependency_contract/);
+    expect(
+      p,
+      'nothing tells it to check a named API against the installed package',
+    ).toMatch(/VERIFY any API or package/i);
+    expect(p).toMatch(/the repository wins/i);
+  }, 60_000);
+
+  it('with NO tools, it is told so plainly and asked to flag documentation-only claims', async () => {
+    const p = await promptWith(undefined);
+    expect(
+      p,
+      'an agent with no tools is still told to read the codelines',
+    ).toMatch(/NO tools on this call/);
+    expect(p).toMatch(/rests on documentation rather than on this codebase/i);
+    expect(p).not.toMatch(/READ-ONLY tools \(/);
+  }, 60_000);
+
+  it('the grant is read-only — never bash or write_file', async () => {
+    const step = require('../../orchestrations/scripts/mint-agents-step.js');
+    const grant = step.mintTools([{ name: 'x', path: '/nonexistent' }]);
+    expect(grant.split(',')).toEqual(expect.arrayContaining(['read_file', 'list_files', 'search']));
+    expect(grant, 'the roster-design stage can run shell commands').not.toMatch(/\bbash\b/);
+    expect(grant, 'the roster-design stage can write files').not.toMatch(/write_file/);
+  });
+});

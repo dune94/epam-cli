@@ -496,6 +496,38 @@ if (require.main !== module) return;
 
   // assignAgentRoles mutates the story objects in place; they are the PRD's own objects.
   fs.writeFileSync(PRD_PATH, JSON.stringify(prd, null, 2));
+  // THE ROSTER'S ONLY ADVERSARY. Every other stage has one; this had none, and it decides who
+  // does all the later work and what they believe about the codebase. Runs before the pause so
+  // the operator reviews the roster AND what a reviewer made of it.
+  let review = { verdict: 'not_run', findings: [], reviewed: 0 };
+  if (_mintedDetail.length) {
+    process.env.EPAM_AGENT_NAME = 'roster-reviewer';
+    try {
+      const liveProfiles = JSON.parse(fs.readFileSync(PROFILES_PATH, 'utf8'));
+      review = await spec.reviewRoster({
+        promptExec, minted: _mintedDetail, profiles: liveProfiles,
+        codelines, tickets: stories, referencedDocs: docs,
+        logDir: LOG_DIR, repoPath: REPO_PATH, toolGrant,
+      });
+    } catch (err) {
+      // A reviewer that cannot run must not silently read as "no defects" — that is the
+      // fail-open shape these gates exist to prevent.
+      review = { verdict: 'review_failed', findings: [], reviewed: 0, error: String(err && err.message) };
+      process.stderr.write(`[mint-step] roster review FAILED: ${err && err.message}\n`);
+    }
+    fs.writeFileSync(path.join(LOG_DIR, 'roster-review.json'), JSON.stringify(review, null, 2));
+    const blocking = review.findings.filter((f) => f && f.severity === 'blocking');
+    process.stderr.write(
+      `[mint-step] roster review: ${review.verdict} — ${review.findings.length} finding(s), ` +
+      `${blocking.length} blocking\n`);
+    for (const f of review.findings) {
+      process.stderr.write(`[mint-step]   [${f.severity}] ${f.agent}: ${f.claim}\n`);
+      process.stderr.write(`[mint-step]      checked: ${f.checked}\n`);
+      process.stderr.write(`[mint-step]      found:   ${f.found}\n`);
+      if (f.remedy) process.stderr.write(`[mint-step]      remedy:  ${f.remedy}\n`);
+    }
+  }
+
   writeRosterDiff(PROFILES_PATH, AGENTS_DIR, LOG_DIR, _mintedNames, _mintedDetail);
   process.stderr.write(`[mint-step] ✓ roster and assignments written to ${PRD_PATH}\n`);
 })().catch((err) => {

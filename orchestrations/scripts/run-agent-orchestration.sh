@@ -3537,6 +3537,18 @@ _run_jira_pipeline() {
     echo -e "  Assignments: ${LOG_DIR}/role-assignments.json"
     echo -e "  ${GREEN}WHAT WAS GENERATED (vs canonical): ${LOG_DIR}/roster-diff.md${NC}"
     echo -e "  What the mint could SEE:            ${LOG_DIR}/mint-inputs.json"
+    echo -e "  ${GREEN}ROSTER REVIEW:                      ${LOG_DIR}/roster-review.json${NC}"
+    if [ -f "${LOG_DIR}/roster-review.json" ] && command -v jq >/dev/null 2>&1; then
+      _rv=$(jq -r '.verdict // "?"' "${LOG_DIR}/roster-review.json" 2>/dev/null)
+      _rn=$(jq -r '.findings | length' "${LOG_DIR}/roster-review.json" 2>/dev/null)
+      _rb=$(jq -r '[.findings[]? | select(.severity=="blocking")] | length' "${LOG_DIR}/roster-review.json" 2>/dev/null)
+      if [ "${_rb:-0}" != "0" ]; then
+        echo -e "     ${RED}verdict: ${_rv} — ${_rn} finding(s), ${_rb} BLOCKING${NC}"
+      else
+        echo -e "     verdict: ${_rv} — ${_rn} finding(s)"
+      fi
+      jq -r '.findings[]? | "       [\(.severity)] \(.agent): \(.found)"' "${LOG_DIR}/roster-review.json" 2>/dev/null | head -8
+    fi
     if [ -f "${LOG_DIR}/mint-inputs.json" ] && command -v jq >/dev/null 2>&1; then
       _mi_repo=$(jq -r '.codelineRepo // "NONE"' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
       _mi_deps=$(jq -r '.declaredDependencies // 0' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)

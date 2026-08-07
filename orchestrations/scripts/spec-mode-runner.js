@@ -3250,6 +3250,158 @@ function candidateRoles(profiles, agentsDir) {
  * system prompt or the string "unknown", which is what the 15 `.agentRole // "unknown"`
  * consumers downstream would silently do with a null.
  */
+const TOOL_ROSTER_REVIEW = {
+  name: 'submit_roster_review',
+  description:
+    'Report defects in a generated agent roster. Every finding must be grounded in something you ' +
+    'checked with your tools. Do not answer in prose.',
+  parameters: {
+    type: 'object',
+    required: ['verdict', 'findings'],
+    properties: {
+      verdict: {
+        type: 'string',
+        enum: ['sound', 'defects_found'],
+        description: 'sound = every checkable claim held. defects_found = at least one did not.',
+      },
+      findings: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['agent', 'severity', 'claim', 'checked', 'found'],
+          properties: {
+            agent: { type: 'string', description: 'The minted agent whose brief carries the defect.' },
+            severity: {
+              type: 'string',
+              enum: ['blocking', 'advisory'],
+              description:
+                'blocking = an implementer following this brief would write code that cannot work. ' +
+                'advisory = worth fixing, but the work can proceed.',
+            },
+            claim: { type: 'string', description: "The brief's own words, quoted." },
+            checked: { type: 'string', description: 'What you did to test it — the tool and the target.' },
+            found: { type: 'string', description: 'What you actually found.' },
+            remedy: { type: 'string', description: 'What the brief should say instead.' },
+          },
+        },
+      },
+    },
+  },
+};
+
+/**
+ * reviewRoster — the only adversary the roster has.
+ *
+ * Every other stage of this pipeline has one: the spec pass has a reviewer and a guard, the
+ * writer has team-lead review and the gates, the verification criteria have a vocabulary guard
+ * that refuses to run unarmed. The roster had none — and it decides who does all the subsequent
+ * work and what they believe about the codebase.
+ *
+ * Live 2026-08-07, both from an unreviewed roster: a brief prescribed `preview_token`, absent
+ * from the pinned contentstack 3.15.3; and another labelled `@contentstack/utils` "the Live
+ * Preview Utils SDK", which it is not — a general utilities package with no ContentstackLivePreview
+ * and no onEntryChange anywhere in it. The second is the dangerous shape: a missing package fails
+ * loudly at install, a mislabelled one resolves, builds, and does nothing.
+ *
+ * Read-only tools, the same grant as the mint. It exists to falsify claims, so it must be able to
+ * check them; it must never be able to change what it reviews.
+ */
+async function reviewRoster({
+  promptExec, minted, profiles, codelines, tickets, referencedDocs, logDir, repoPath, toolGrant,
+}) {
+  const _minted = Array.isArray(minted) ? minted : [];
+  if (!_minted.length) return { verdict: 'sound', findings: [], reviewed: 0 };
+
+  const briefBlock = _minted.map((m) => {
+    const brief = (profiles && profiles[m.name]) || '';
+    const tag = m.kind + (m.codeline ? ': ' + m.codeline : '');
+    return ['--- ' + m.name + '  [' + tag + ']', brief].join('\n');
+  }).join('\n\n');
+
+  const clBlock = (Array.isArray(codelines) ? codelines : []).map((c) => {
+    const d = Array.isArray(c.dependencies) ? c.dependencies : [];
+    return '- ' + c.name + ' at ' + c.path + '\n    declares: '
+      + (d.length ? d.join(', ') : '(no manifest configuration)');
+  }).join('\n');
+
+  // THE WHOLE TICKET, not a summary. The reviewer decides whether a brief serves the work that
+  // was actually asked for, so it needs the same view of the request the mint had: components
+  // (which say how far the work reaches), the links, and the untruncated description.
+  const ticketBlock = (Array.isArray(tickets) ? tickets : []).map((t) => {
+    const head = '- ' + (t.jiraKey || t.id || '') + ': ' + (t.title || '');
+    const comps = Array.isArray(t.components) && t.components.length
+      ? '\n  Components: ' + t.components.join(', ') : '';
+    const links = (Array.isArray(t.ticketLinks) ? t.ticketLinks : [])
+      .map((l) => (typeof l === 'string' ? l : (l && l.url))).filter(Boolean);
+    const linkLine = links.length ? '\n  Links: ' + links.join(' , ') : '';
+    return head + comps + '\n  ' + String(t.description || '').replace(/\s+/g, ' ') + linkLine;
+  }).join('\n');
+
+  // THE DOCUMENTS THE BRIEFS WERE DERIVED FROM. Without them the reviewer can tell that a brief
+  // disagrees with the repository, but not WHY — and the why decides the remedy. A brief that
+  // followed the vendor's current guide into a symbol this pinned version lacks needs the
+  // version-correct instruction; one that simply invented something needs deleting.
+  const docBlock = (Array.isArray(referencedDocs) ? referencedDocs : [])
+    .filter((d) => d && d.fetchStatus === 'fetched')
+    .map((d) => {
+      if (Array.isArray(d.quotes) && d.quotes.length) {
+        return '- ' + d.url + '\n' + d.quotes.map((q) => '    "' + String(q).replace(/\s+/g, ' ') + '"').join('\n');
+      }
+      let body = typeof d.body === 'string' ? d.body : '';
+      if (!body && d.path) { try { body = fs.readFileSync(d.path, 'utf8'); } catch { body = ''; } }
+      return body ? '- ' + d.url + '\n' + body : '- ' + d.url + ' (retrieved, no readable text)';
+    }).join('\n\n');
+
+  const persona = (profiles && profiles['roster-reviewer']) || '';
+  const toolLine = toolGrant
+    ? 'Your tools: ' + toolGrant + '. Open the repositories. Resolve the packages and symbols these '
+      + 'briefs name. Confirm the files and directories they claim to own exist.'
+    : 'You have NO tools on this call. Report only what the text above lets you establish, and say so.';
+
+  const prompt = [
+    persona,
+    '',
+    'THE ROSTER JUST MINTED FOR THIS PROJECT — review every brief below:',
+    '',
+    briefBlock,
+    '',
+    'THE CODELINES THESE BRIEFS DESCRIBE, and what each one declares:',
+    clBlock || '- (none resolved)',
+    '',
+    'THE WORK THE PROJECT WAS ASKED TO DO:',
+    ticketBlock || '- (no tickets available)',
+    '',
+    docBlock
+      ? 'THE DOCUMENTATION THESE BRIEFS WERE DERIVED FROM (fetched from the ticket\'s own links):\n'
+        + docBlock
+        + '\n\nWhere a brief follows this documentation into something the pinned version does not '
+        + 'have, the documentation is right about the product and wrong about these repositories. '
+        + 'Say which, so the remedy is the version-correct instruction rather than a deletion.'
+      : 'No documentation was fetched for this ticket — briefs resting on vendor knowledge have '
+        + 'nothing here to be checked against, and any such claim must be verified against the '
+        + 'repositories or reported as unverifiable.',
+    '',
+    toolLine,
+    '',
+    'Return every defect you can evidence, and nothing you cannot.',
+  ].join('\n');
+
+  const env = { EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROSTER_REVIEW) };
+  if (toolGrant) { env.AI_GATE_ALLOW_TOOLS = '1'; env.EPAM_ALLOWED_TOOLS = toolGrant; }
+
+  const payload = await runAgentForJson(
+    promptExec, prompt, TOOL_ROSTER_REVIEW, 'ROSTER_REVIEW',
+    logDir ? path.join(logDir, 'roster-review.log') : null,
+    null, '', repoPath || '', env,
+  );
+
+  const findings = (payload && Array.isArray(payload.findings)) ? payload.findings : [];
+  // The verdict is DERIVED, never taken on the model's word: a reviewer that lists defects and
+  // then calls the roster sound is the fail-open shape these gates exist to prevent.
+  const verdict = findings.length ? 'defects_found' : 'sound';
+  return { verdict, findings, reviewed: _minted.length };
+}
+
 async function assignAgentRoles({ promptExec, stories, profilesPath, logDir, repoPath, validateOnly }) {
   const _stories = Array.isArray(stories) ? stories : [];
   if (!_stories.length) return { assigned: [], stories: [] };
@@ -7422,6 +7574,8 @@ module.exports = {
   assignAgentRoles,
   candidateRoles,
   TOOL_ROLE_ASSIGNMENTS,
+  reviewRoster,
+  TOOL_ROSTER_REVIEW,
   schemaEnv,
   referencedDocsBlock,
   advanceAgentLadderEscalation,

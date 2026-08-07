@@ -139,7 +139,12 @@ describe('claude.sh — _total_attempts fixes the amendment-injection gate for f
     // again from 2700 (2026-08-06): retry_count's seed-from-persisted-state
     // block (lib/story-retry-state.sh, "ladder must resume across review
     // cycles" fix) + its comment did the same.
-    const nearby = claudeSrc.slice(fnStart, fnStart + 3100);
+    // The WHOLE function, not a byte window. This window was widened from 2400 to 2700 to
+    // 3100 as declarations and their comments were added above the one being asserted — three
+    // times measuring distance rather than presence. A guard at the top of implement_story
+    // moved it again. The declaration either exists in the function or it does not.
+    const _fnEnd = claudeSrc.indexOf('\n}', fnStart);
+    const nearby = claudeSrc.slice(fnStart, _fnEnd > fnStart ? _fnEnd : fnStart + 20000);
     expect(nearby).toMatch(/local _total_attempts=0/);
     const loopIdx = claudeSrc.indexOf('while [ $retry_count -le $MAX_RETRIES ]; do');
     const afterLoop = claudeSrc.slice(loopIdx, loopIdx + 200);

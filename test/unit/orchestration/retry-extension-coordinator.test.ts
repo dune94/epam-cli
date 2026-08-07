@@ -53,7 +53,13 @@ describe('retry-extension-coordinator — static wiring', () => {
     const implIdx = claudeSrc.indexOf('implement_story() {');
     const shadowIdx = claudeSrc.indexOf('local MAX_RETRIES="$MAX_RETRIES"', implIdx);
     expect(shadowIdx).toBeGreaterThan(implIdx);
-    expect(shadowIdx).toBeLessThan(implIdx + 2000);
+    // INSIDE the function, not within N bytes of its start. `implIdx + 2000` measured
+    // distance rather than containment, so any declaration added above this one failed the
+    // test without changing what it guards — bash `local` semantics hold wherever in the
+    // function the shadow is declared.
+    const implEnd = claudeSrc.indexOf('\n}', implIdx);
+    expect(implEnd, 'implement_story is not closed as expected').toBeGreaterThan(implIdx);
+    expect(shadowIdx, 'MAX_RETRIES is shadowed outside implement_story').toBeLessThan(implEnd);
   });
 
   it('the extension call happens between the inner retry loop\'s "done" and the final failure block', () => {

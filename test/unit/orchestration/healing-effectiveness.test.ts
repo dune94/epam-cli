@@ -479,8 +479,12 @@ describe('regression: agentRole used everywhere (not agentProfile)', () => {
     const funcStart = claudeSrc.indexOf('run_failure_analyst()');
     const funcEnd   = claudeSrc.indexOf('\n}', funcStart + 100);
     const body      = claudeSrc.slice(funcStart, funcEnd);
-    // The jq query that sets story_role must use agentRole
-    expect(body).toMatch(/\.agentRole\s*\/\/\s*["']typescript-engineer["']/);
+    // The jq query that sets story_role must use agentRole, NOT agentProfile — that is the
+    // regression this guards. It used to pin the default too (`// "typescript-engineer"`),
+    // which was a hardcoded role literal in the generic engine and has been removed; pinning
+    // it made this test fail when the defect was fixed.
+    expect(body).toMatch(/\.agentRole\b/);
+    expect(body, 'the failure analyst reads agentProfile again').not.toMatch(/\.agentProfile\b/);
     expect(body).not.toMatch(/\.agentProfile\s*\/\/\s*["']typescript-engineer["']/);
   });
 

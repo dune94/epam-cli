@@ -1064,3 +1064,63 @@ investigation is skipped where the work does not reach.
 - `698b56f` — ingest persists `codeline-discovery.json` to `LOG_DIR`; all codelines are now
   visible to project-wide stages (verified: 149/103/93 declared dependencies across the three).
 
+---
+
+## ROSTER-1 — Build the implementer roster BY STACK, resolve the role per lane
+
+**Status:** `deferred` (parked 2026-08-07, design agreed, not built)
+**Source:** operator direction after reviewing the AMSD-2041 roster.
+
+### The defect this fixes
+
+`agentRole` is a SINGLE value on a story, but a spanning story executes in N lanes. AMSD-2041
+carries `codelines: [nextgotransitcom, nextmetrolinxcom, nextupexpresscom]` and one
+`agentRole: contentstack-preview-engineer`. That role is handed the work in all three lanes.
+
+Today this is harmless — all three codelines are Next.js + TypeScript + Contentstack, so one
+implementer is genuinely valid everywhere. It breaks SILENTLY the moment an estate mixes
+stacks: a role briefed for a React codebase is handed work in a repository its brief does not
+describe, and nothing objects. The story is assigned, the writer runs, the brief is simply
+wrong about where it is.
+
+"One roster for the project" was the right correction to "one roster from one codeline". It is
+not the general answer.
+
+### Agreed design
+
+- **Group codelines by STACK**, derived from evidence already gathered: manifest type and the
+  overlap between declared dependency sets. No stack, language or framework is named in engine
+  code — the grouping falls out of what the repositories declare. (Current estate: 149 / 103 /
+  93 declared dependencies, one group.)
+- **Mint implementers per stack group** — not per project, not per codeline. This bounds roster
+  size by number of stacks rather than by number of codelines or feature domains, which is the
+  operator's stated constraint: "limit number of implementors to a stack".
+- **Investigators stay per codeline.** A repository's layout is its own even when two
+  repositories share a stack. (Already built — b037fe7.)
+- **Resolve the implementer PER LANE, not per story.** `agentRole` becomes "the implementer for
+  this codeline's stack". This is the real mechanical change and the part that does not exist
+  today.
+
+### Why it also settles the reassignment question
+
+A reviewer currently cannot re-route a story to a different implementer; only an operator can,
+by dropping `redirect-<story-id>.json` into LOG_DIR with a `targetAgent`. Adding a
+reviewer-driven path would give one agent authority over another's work.
+
+With a by-stack roster and per-lane resolution, the cross-stack mis-assignment becomes
+impossible by construction — there is nothing for a reviewer to correct. What remains is the
+right-stack/wrong-specialism case (SDK work handed to the routing engineer), which is a genuine
+judgement call and is already covered by the operator redirect.
+
+### Scope
+
+Touches assignment (`assignAgentRoles`, `candidateRoles`), the write-gate check at the writer
+seam, the writer seam itself, and `assert_phase_stories_have_roles` — all currently assume one
+role per story. All are tested, so it is tractable; it is not a prompt edit.
+
+### Why it was parked
+
+It changes nothing for this estate. All three codelines share a stack, so a by-stack mint would
+produce exactly the roster that already exists — the value is entirely in the next estate that
+mixes stacks. Deferred in favour of testing the roster in hand.
+

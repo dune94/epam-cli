@@ -232,6 +232,7 @@ function saveProjectProfiles(agentsDir, briefs) {
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, JSON.stringify({
+      runId: process.env.ORCH_RUN_ID || '',
       _what: "This project's minted agent briefs. profiles.json is restored from its canonical " +
              'original at the start of every run, which would otherwise delete them; they are ' +
              're-applied from here. Kept out of the engine base so one project\'s agents never ' +
@@ -266,6 +267,20 @@ function applyProjectProfiles(profilesPath, agentsDir) {
   }
   if (applied.length) fs.writeFileSync(profilesPath, JSON.stringify(profiles, null, 2), 'utf8');
   return applied;
+}
+
+/**
+ * Which run minted the stored roster, if any.
+ *
+ * The roster is REGENERATED every run, from the canonical base — a run must never start from
+ * a roster another run mutated. But it must stay fixed WITHIN a run, or a resume after the
+ * roster pause would re-propose and the operator would return to different agents than the
+ * ones they reviewed. Stamping the store with the run that made it distinguishes the two
+ * without a separate reset step that could be forgotten.
+ */
+function rosterRunId(agentsDir) {
+  try { return JSON.parse(fs.readFileSync(projectProfilesPath(agentsDir), 'utf8')).runId || ''; }
+  catch { return ''; }
 }
 
 /**
@@ -317,5 +332,5 @@ module.exports = {
   mergeProjectAgents, isUsableProposal, ROLE_NAME_RE,
   registerProjectRoles, projectRoles, projectRolesPath, PROJECT_ROLES_FILE,
   saveProjectProfiles, applyProjectProfiles, projectProfilesPath, PROJECT_PROFILES_FILE,
-  clearProjectRoster,
+  clearProjectRoster, rosterRunId,
 };

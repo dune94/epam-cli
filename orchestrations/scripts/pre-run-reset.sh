@@ -301,6 +301,41 @@ fi
   && success "Moved $_ARCHIVED_LOGS stale *.log / manifest / baseline-cache file(s) → $ARCHIVE_DIR (absence now means 'this run did not write it')" \
   || info "  No stale .log files to move"
 
+# ── The agent roster is EPHEMERAL ───────────────────────────────────────────
+# Every run starts from the CANONICAL base roster, never from one a previous run
+# mutated. Agent identities are generated per project now (the mint), and a
+# generated roster that survives into the next run is a mutated base: two runs of
+# 2026-08-07 left five roles behind, including two whose vendor was wrong, because
+# the merge is additive by design so the second mint simply added to the first.
+# Aggregating a roster over runs is not permitted.
+#
+# Cleared here rather than in the mint step so no launcher can skip it, and so the
+# base is clean even for a run that never reaches the mint.
+#
+# NOT cleared: KB-<role>.md. Per-agent knowledge is the one thing meant to persist
+# across runs (879c705) — profiles.json is ephemeral, the KB files are the store.
+_ROSTER_CLEARED=0
+_PROJECT_CFG_DIR="${EPAM_PROJECT_CONFIG_DIR:-}"
+for _rf in "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/project-roles.json}" \
+           "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/agent-profiles.json}"; do
+    [ -n "$_rf" ] && [ -f "$_rf" ] || continue
+    rm -f "$_rf" 2>/dev/null && _ROSTER_CLEARED=$((_ROSTER_CLEARED+1)) || true
+done
+if [ "$_ROSTER_CLEARED" -gt 0 ]; then
+    info "  Cleared $_ROSTER_CLEARED generated-roster file(s) — this run mints from the canonical base"
+fi
+
+# Restore the live roster from its canonical original, so a run that begins here
+# starts from the base even if its launcher does not restore.
+# Overridable so this block is testable in isolation and so a project that keeps its
+# agents elsewhere is not assumed to keep them here.
+_AGENTS_DIR="${EPAM_AGENTS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../agents" 2>/dev/null && pwd || true)}"
+if [ -n "$_AGENTS_DIR" ] && [ -f "$_AGENTS_DIR/profiles.json.original" ]; then
+    cp "$_AGENTS_DIR/profiles.json.original" "$_AGENTS_DIR/profiles.json" 2>/dev/null \
+        && info "  Roster restored from canonical original — generated agents from prior runs are gone" \
+        || true
+fi
+
 # Clear stale lock files
 for lf in "$LOG_DIR"/*.lock; do
   [ -f "$lf" ] && > "$lf"

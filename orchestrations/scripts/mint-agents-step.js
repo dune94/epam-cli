@@ -292,8 +292,12 @@ if (require.main !== module) return;
   // original at launch, which deletes anything minted on a previous run while the role
   // registry and the KB files survive. Without this the three disagree: on a resume the
   // registry names roles that have no profile, assignment finds zero candidates and refuses.
-  const { applyProjectProfiles } = require('./lib/agent-roster.js');
-  const reapplied = applyProjectProfiles(PROFILES_PATH, AGENTS_DIR);
+  const { applyProjectProfiles, rosterRunId: _rrid } = require('./lib/agent-roster.js');
+  // Only for THIS run. Re-applying a previous run's briefs would reinstate the mutated roster
+  // the restore just removed — the base must be canonical at the start of every run.
+  const reapplied = (_rrid(AGENTS_DIR) && _rrid(AGENTS_DIR) === (process.env.ORCH_RUN_ID || ''))
+    ? applyProjectProfiles(PROFILES_PATH, AGENTS_DIR)
+    : [];
   if (reapplied.length) {
     process.stderr.write(`[mint-step] re-applied ${reapplied.length} project brief(s) after the per-run restore: ${reapplied.join(', ')}\n`);
   }
@@ -334,20 +338,32 @@ if (require.main !== module) return;
   // So the project mints ONCE. Thereafter the stored roster is reused verbatim. Re-minting is
   // possible but must be asked for, and it REPLACES rather than accumulates — otherwise
   // "re-mint" is just another word for drift.
-  const existingRoles = require('./lib/agent-roster.js').projectRoles(AGENTS_DIR);
+  const rosterLib = require('./lib/agent-roster.js');
+  const existingRoles = rosterLib.projectRoles(AGENTS_DIR);
+  const storedRunId = rosterLib.rosterRunId(AGENTS_DIR);
+  const thisRunId = process.env.ORCH_RUN_ID || '';
+  // Fresh every run, fixed within one. A roster carried over from a previous run is a mutated
+  // base, and two runs already left five roles behind — including two whose vendor was wrong.
+  // Same run means a resume: reuse exactly what the operator reviewed at the pause.
+  const sameRun = !!storedRunId && storedRunId === thisRunId;
   const remint = process.env.EPAM_REMINT_AGENTS === '1';
   let _mintedNames = [];
-  if (existingRoles.length && !remint) {
+  if (existingRoles.length && sameRun && !remint) {
     process.stderr.write(
-      `[mint-step] roster already minted for this project (${existingRoles.length} role(s)): ` +
-      `${existingRoles.join(', ')} — reusing, not re-proposing. ` +
-      'Set EPAM_REMINT_AGENTS=1 to replace it.\n');
+      `[mint-step] roster already minted in THIS run (${thisRunId}): ${existingRoles.join(', ')} ` +
+      '— reusing exactly what was reviewed at the pause.\n');
   } else if (process.env.EPAM_SKIP_AGENT_MINT === '1') {
     process.stderr.write('[mint-step] mint skipped (EPAM_SKIP_AGENT_MINT=1) — resuming from a checkpoint\n');
   } else {
-    if (remint && existingRoles.length) {
-      const cleared = require('./lib/agent-roster.js').clearProjectRoster(AGENTS_DIR, PROFILES_PATH);
-      process.stderr.write(`[mint-step] EPAM_REMINT_AGENTS=1 — replaced the previous roster (removed: ${cleared.join(', ') || 'none'})\n`);
+    // Start from the BASE roster, never a mutated one. Anything a previous run minted is
+    // cleared before this run proposes: registry, stored briefs and live entries. Canonical
+    // roles are untouched. The KB files stay — cross-run agent knowledge is the one thing
+    // that is meant to persist (879c705).
+    if (existingRoles.length) {
+      const cleared = rosterLib.clearProjectRoster(AGENTS_DIR, PROFILES_PATH);
+      process.stderr.write(
+        `[mint-step] clearing the previous run's roster before minting (${cleared.length}): ` +
+        `${cleared.join(', ')}\n`);
     }
     // Agent identity reaches ai-run.sh through EPAM_AGENT_NAME and is what makes a cost row
     // attributable. Two distinct agents run here, so each names itself rather than sharing one

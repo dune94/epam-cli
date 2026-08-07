@@ -1859,12 +1859,23 @@ build_implementation_prompt() {
     # existing helper"). This is the reviewer telling the impl agent what to fix.
     local review_feedback="" _review_feedback_file="${LOG_DIR:-$(dirname "$SCRIPT_DIR")/logs}/review-feedback-${story_id}.json"
     if [ -f "$_review_feedback_file" ]; then
+        # BLOCKERS FIRST, AND SEPARATELY. Rendering every finding into one flat list let a
+        # blocker-severity requirement ("no tests were added") sit beside advisory notes about
+        # over-engineering, under a preamble ending "do not add more code". The writer averaged
+        # them and produced nothing three cycles running, and the story was still marked
+        # complete. A required deliverable and a suggestion must not look alike.
         review_feedback=$(jq -r '
-          (.issues // []) | map(
+          def render: map(
             "- [" + (.severity // "issue") + "] " + (.description // "")
             + (if (.file // "") != "" then " (" + .file + (if (.line // 0) > 0 then ":" + (.line|tostring) else "" end) + ")" else "" end)
             + (if (.suggestedFix // "") != "" then "\n  - Suggested fix: " + .suggestedFix else "" end)
-          ) | join("\n")' "$_review_feedback_file" 2>/dev/null || echo "")
+          ) | join("\n");
+          (.issues // []) as $all
+          | ($all | map(select((.severity // "") == "blocker"))) as $blockers
+          | ($all | map(select((.severity // "") != "blocker"))) as $rest
+          | (if ($blockers | length) > 0 then "### BLOCKERS — this attempt is REJECTED until every one is resolved\n" + ($blockers | render) + "\n" else "" end)
+          + (if ($rest | length) > 0 then "### Advisory — apply where it makes the change smaller or clearer\n" + ($rest | render) else "" end)
+          ' "$_review_feedback_file" 2>/dev/null || echo "")
     fi
 
     # Persisted skill notes (cross-run learning — found live 2026-08-02):
@@ -2313,7 +2324,7 @@ $description
 - $acceptance_criteria
 $([ -n "$string_invariants_block" ] && printf '%s\n' "$string_invariants_block" || true)
 $([ -n "$fix_site_analysis" ] && printf '\n## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)\nA code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.\n\nThe Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.\n\nHARD RULES:\n- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.\n- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.\n%s\n' "$fix_site_analysis" || true)
-$([ -n "$review_feedback" ] && printf '\n## Reviewer Feedback — ADDRESS THESE (a prior code review requested changes)\nThe team-lead reviewer examined your previous attempt and requested the changes below. This is the highest priority: make the SMALLEST edits that resolve each point. If a point says the change is over-engineered or a more concise change/existing helper would do, REMOVE the excess and use the minimal approach — do not add more code.\n%s\n' "$review_feedback" || true)
+$([ -n "$review_feedback" ] && printf '\n## Reviewer Feedback — ADDRESS THESE (a prior code review requested changes)\nThe team-lead reviewer examined your previous attempt and requested the changes below. This is the highest priority.\n\nA BLOCKER is a required deliverable, not advice. If a blocker says something is MISSING — a test, a file, a case — the only way to resolve it is to CREATE it; leaving it out repeats the rejection. Minimality governs HOW MUCH you write, never WHETHER you write it.\n\nFor advisory points: make the smallest edits that resolve each one, and where a point says the change is over-engineered or an existing helper would do, REMOVE the excess rather than adding more.\n\nIf you genuinely cannot satisfy a blocker — no seam exists to test against, the behaviour lives entirely in a third-party package — say so explicitly in your final message, naming the blocker and why. An unexplained omission reads as a refusal and will be rejected again.\n%s\n' "$review_feedback" || true)
 $([ -n "$skill_note_block" ] && printf '%s\n' "$skill_note_block" || true)
 $([ -n "$verification_criteria" ] && printf '\n## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)\nThese are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:\n%s\n' "$verification_criteria" || true)
 $([ -n "$codeline_facts_block" ] && printf '%s\n' "$codeline_facts_block" || true)

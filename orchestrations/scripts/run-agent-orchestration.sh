@@ -7412,8 +7412,54 @@ ${_fb_blockers}"
         "$PRD_FILE" > "$_tmp_prd" 2>/dev/null && mv "$_tmp_prd" "$PRD_FILE" || rm -f "$_tmp_prd"
 }
 
+# APPROVAL AFTER AN UNRESOLVED BLOCKER, WITH THE CODE UNCHANGED, IS A GIVE-UP.
+#
+# Live 2026-08-07: the reviewer raised one blocker — "no tests were added" — on three
+# consecutive cycles, no test file was ever created, and cycle 4 APPROVED. The story was
+# marked complete with nothing verifying it.
+#
+# The rule needs no vocabulary and reads nothing about WHAT the blocker said: if the previous
+# cycle rejected with a blocker and the codeline is byte-identical now, the verdict changed
+# while the code did not. That is the reviewer relenting, not the writer fixing.
+#
+# Records a fingerprint of the working tree per cycle. Cheap, and it cannot be fooled by a
+# reworded blocker or a reworded approval.
+_review_tree_fingerprint() {
+    local _root="${JIRA_CODELINE_ROOT:-}" _sum=""
+    [ -n "$_root" ] && [ -d "$_root" ] || { echo "no-codeline-root"; return 0; }
+    local _cl
+    for _cl in "$_root"/*/; do
+        [ -e "${_cl}.git" ] || continue
+        _sum="${_sum}$(git -C "${_cl%/}" diff HEAD 2>/dev/null | sha1sum 2>/dev/null | cut -d' ' -f1)"
+    done
+    printf '%s' "$_sum" | sha1sum 2>/dev/null | cut -d' ' -f1
+}
+
+# Did the last cycle reject with a blocker AND leave the tree unchanged since?
+_review_approval_is_giveup() {
+    local _prev_had_blocker="$1" _prev_fp="$2" _now_fp="$3"
+    [ "$_prev_had_blocker" = "1" ] || return 1
+    # UNKNOWN IS NOT UNCHANGED. With no codeline root — a greenfield run — the fingerprint is a
+    # constant sentinel, so it always compares equal and EVERY approval following a blocker
+    # would be condemned as a give-up. "We cannot tell whether the code changed" must never be
+    # read as "the code did not change".
+    [ "$_prev_fp" = "no-codeline-root" ] && return 1
+    [ -n "$_prev_fp" ] && [ "$_prev_fp" = "$_now_fp" ] || return 1
+    return 0
+}
+
 while true; do
+    _review_fp_now="$(_review_tree_fingerprint)"
     if "$SCRIPT_DIR/team-lead-review.sh" "$PHASE"; then
+        if _review_approval_is_giveup "${_review_prev_blocker:-0}" "${_review_prev_fp:-}" "$_review_fp_now"; then
+            error "Step 3.6: review APPROVED after a blocker-level rejection, with the codeline UNCHANGED since that rejection."
+            error "Step 3.6: the verdict changed and the code did not — the blocker was never resolved. Escalating instead of approving."
+            _emit_agent complete "review-agent" "Code review escalated (approval after unresolved blocker)"
+            for _entry in "${_review_climbable_stories[@]:-}"; do
+                [ -n "$_entry" ] && _escalate_story_review "${_entry%%:*}" || true
+            done
+            break
+        fi
         success "Team Lead code review APPROVED for phase '$PHASE' (cycle $_review_cycle)"
         # Clear a reviewStatus:"escalated" tag left by an EARLIER cycle of
         # this same phase-retry sequence — found live 2026-08-02 (Writer
@@ -7490,6 +7536,16 @@ while true; do
         break
     fi
 
+    # Remember whether THIS rejection carried a blocker, and what the tree looked like, so the
+    # next cycle's approval can be checked against it.
+    _review_prev_blocker=0
+    for _fbf in "${LOG_DIR}"/review-feedback-*.json; do
+        [ -f "$_fbf" ] || continue
+        if jq -e '[.issues // [] | .[] | select((.severity // "") == "blocker")] | length > 0' "$_fbf" >/dev/null 2>&1; then
+            _review_prev_blocker=1; break
+        fi
+    done
+    _review_prev_fp="$_review_fp_now"
     warning "Step 3.6: review requested changes — re-implementing (cycle $_review_cycle → $((_review_cycle + 1)))"
     for _entry in "${_review_climbable_stories[@]}"; do
         _fb_story="${_entry%%:*}"

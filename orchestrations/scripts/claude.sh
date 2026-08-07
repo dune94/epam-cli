@@ -6130,8 +6130,8 @@ run_failure_analyst() {
             "$prd_target" 2>/dev/null || echo "(no ACs found)")
     fi
     story_role=$(jq -r --arg id "$story_id" \
-        '.stories[] | select(.id == $id) | .agentRole // "typescript-engineer"' \
-        "$prd_target" 2>/dev/null || echo "typescript-engineer")
+        '.stories[] | select(.id == $id) | .agentRole // ""' \
+        "$prd_target" 2>/dev/null || echo "")
     profiles_file="$(dirname "$SCRIPT_DIR")/agents/profiles.json"
     skill_addendum=""
     if [ -f "$profiles_file" ]; then
@@ -7626,6 +7626,35 @@ print(json.dumps({\"extend\": False, \"extraRetries\": 0, \"reason\": \"unparsea
 # Invoke Claude CLI to implement a story
 implement_story() {
     local story_id=$1
+
+    # WHO MAY AUTHOR CODE — checked before any work, not after.
+    #
+    # Capability comes from the seam: anything running here holds write_file and bash, which
+    # is correct for an agent whose job is to author code. So the boundary that matters is
+    # WHICH agent reaches this seam. Until now that was guarded in exactly one place —
+    # assignment offering only registered implementers — and perimeter_role_may_write, which
+    # exists and is tested, was called by nothing in production.
+    #
+    # Single-layer protection is thin now that the roster is GENERATED rather than curated.
+    # A hand-edited PRD at the roster pause, a resume carrying a stale assignment, or any
+    # future path that bypasses candidateRoles would put a read-only investigator at the
+    # writer seam with full writer tools, and nothing would object: the chmod perimeter
+    # decides by branch and worktree, never by who.
+    #
+    # Fails CLOSED and LOUD. A story whose role may not write stops here rather than
+    # producing changes nobody sanctioned.
+    if command -v perimeter_role_may_write >/dev/null 2>&1; then
+        local _iw_role
+        _iw_role=$(jq -r --arg id "$story_id" \
+            '.stories[] | select(.id == $id) | .agentRole // ""' \
+            "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
+        if [ -n "$_iw_role" ] && ! perimeter_role_may_write "$_iw_role"; then
+            error "Story ${story_id} is assigned to '${_iw_role}', which is not permitted to author code."
+            error "  Implementers are registered in project-roles.json; investigators are read-only by design."
+            error "  Refusing to run the writer — an agent that may not write must not reach the writer seam."
+            return 1
+        fi
+    fi
     # Seeded from persisted state, NOT hardcoded 0 — a Step 3.6 review
     # rejection re-invokes this whole script as a brand-new process, and
     # without this the ladder silently restarted at rung 0 every review

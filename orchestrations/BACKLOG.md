@@ -931,3 +931,44 @@ people to ignore it):
 A workable rule probably has to distinguish the CLIENT project's vocabulary from the engine's
 own, which the current layout does not cleanly separate. Until then this class is caught only
 by reading the personas.
+
+## The VC declaration standard applies to only one of the two producers
+
+Added 2026-08-07 (run 20260807T015510Z).
+
+`verificationCriteriaDetail` makes each criterion declare who observes it, on what surface,
+and what precondition the test establishes. It works: that run produced four criteria, all
+observable, with zero internal-surface claims and zero placeholder leakage — after two
+earlier attempts (prose rules, then worked examples) failed to stop criteria asserting
+internal structure and internal call paths.
+
+But TWO agents produce criteria, and only one was taught the field:
+
+    openspec   asked for detail = yes    returned detail = yes
+    speckit    asked for detail = NO     returned detail = no
+
+speckit runs second and its criteria win, so the declarations never reach the story
+(`declarations persisted: 0`). The schema hint lives in the brownfield archaeology block,
+which openspec receives and speckit's review prompt does not.
+
+**Fix**: give speckit the same declaration requirement, so the declarations travel with
+whichever agent's criteria survive. Note the persistence filter matches declaration to
+criterion by exact text — fine within one payload, wrong across two, since the second agent
+rewords. Persist from the payload that supplied the final criteria.
+
+## A declared observer is not checked against what the criterion says
+
+Added 2026-08-07, same run.
+
+The declaration makes an unobservable criterion visibly unanswerable — "Given the Stack
+initialization options object, it contains a live_preview property" has to name a person who
+observes an options object. That is the point of the field.
+
+It is not enforced. A model can answer `observer: tester, surface: the rendered page` for a
+criterion that plainly asserts internal structure, and nothing compares the two. On the run
+above it did not, but the field currently makes dishonesty VISIBLE, not impossible.
+
+**Possible fix**: a deterministic consistency check — a criterion whose text asserts a config
+object, query, argument or call while declaring a human observer is contradicting itself, and
+that contradiction is decidable without any vocabulary of domain terms. Care needed: the
+check must not become a word list, which is what the guard's vocabulary agent exists to avoid.

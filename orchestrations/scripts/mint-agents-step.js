@@ -68,7 +68,7 @@ function resolveRepoPath(prd, stories, repoArg) {
  * loop — which happens after this step. So the mint could not reach dependency_contract or
  * dependency_available even with tools enabled, and had to trust the vendor documentation
  * about what the SDK exposes. Live 2026-08-07: two briefs prescribed `preview_token`, which
- * does not exist in the pinned contentstack 3.15.3, because nothing could check.
+ * does not exist in the version of the SDK this estate pins, because nothing could check.
  *
  * Idempotent and identical to what the lane writes later, so provisioning here changes
  * nothing downstream.

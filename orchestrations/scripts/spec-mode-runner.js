@@ -3298,10 +3298,10 @@ const TOOL_ROSTER_REVIEW = {
  * work and what they believe about the codebase.
  *
  * Live 2026-08-07, both from an unreviewed roster: a brief prescribed `preview_token`, absent
- * from the pinned contentstack 3.15.3; and another labelled `@contentstack/utils` "the Live
- * Preview Utils SDK", which it is not — a general utilities package with no ContentstackLivePreview
- * and no onEntryChange anywhere in it. The second is the dangerous shape: a missing package fails
- * loudly at install, a mislabelled one resolves, builds, and does nothing.
+ * from the version of the SDK this estate pins; and another labelled an installed utilities
+ * package as the vendor's preview SDK and told an implementer to call its init(). It is not that
+ * package — the preview entry points appear nowhere in it. The second is the dangerous shape: a
+ * missing package fails loudly at install, a mislabelled one resolves, builds, and does nothing.
  *
  * Read-only tools, the same grant as the mint. It exists to falsify claims, so it must be able to
  * check them; it must never be able to change what it reviews.

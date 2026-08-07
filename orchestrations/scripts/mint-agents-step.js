@@ -324,10 +324,31 @@ if (require.main !== module) return;
     documentsUnfetched: docs.filter((d) => d && d.fetchStatus !== 'fetched').map((d) => ({ url: d.url, status: d.fetchStatus })),
   }, null, 2));
 
+  // NO ROSTER DRIFT ACROSS RUNS OR CODELINES (operator direction, 2026-08-07).
+  //
+  // The merge is additive so a brief is never rewritten — but that also means a second mint
+  // ADDS whatever it proposes this time. Two runs produced five roles: the three from a run
+  // whose vendor was wrong, plus new ones, with one name overlapping. A roster that changes
+  // shape every run is not a roster.
+  //
+  // So the project mints ONCE. Thereafter the stored roster is reused verbatim. Re-minting is
+  // possible but must be asked for, and it REPLACES rather than accumulates — otherwise
+  // "re-mint" is just another word for drift.
+  const existingRoles = require('./lib/agent-roster.js').projectRoles(AGENTS_DIR);
+  const remint = process.env.EPAM_REMINT_AGENTS === '1';
   let _mintedNames = [];
-  if (process.env.EPAM_SKIP_AGENT_MINT === '1') {
+  if (existingRoles.length && !remint) {
+    process.stderr.write(
+      `[mint-step] roster already minted for this project (${existingRoles.length} role(s)): ` +
+      `${existingRoles.join(', ')} — reusing, not re-proposing. ` +
+      'Set EPAM_REMINT_AGENTS=1 to replace it.\n');
+  } else if (process.env.EPAM_SKIP_AGENT_MINT === '1') {
     process.stderr.write('[mint-step] mint skipped (EPAM_SKIP_AGENT_MINT=1) — resuming from a checkpoint\n');
   } else {
+    if (remint && existingRoles.length) {
+      const cleared = require('./lib/agent-roster.js').clearProjectRoster(AGENTS_DIR, PROFILES_PATH);
+      process.stderr.write(`[mint-step] EPAM_REMINT_AGENTS=1 — replaced the previous roster (removed: ${cleared.join(', ') || 'none'})\n`);
+    }
     // Agent identity reaches ai-run.sh through EPAM_AGENT_NAME and is what makes a cost row
     // attributable. Two distinct agents run here, so each names itself rather than sharing one
     // label — an anonymous or shared identity is how per-agent spend becomes unreadable.

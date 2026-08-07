@@ -141,3 +141,66 @@ describe('re-applying is additive and safe', () => {
     expect(Object.keys(JSON.parse(readFileSync(profilesPath, 'utf8'))).length).toBe(2);
   });
 });
+
+/**
+ * NO ROSTER DRIFT (operator direction, 2026-08-07).
+ *
+ * The merge is additive so an existing brief is never rewritten — but that also means a
+ * second mint ADDS whatever it proposes that time. Two live runs left five roles behind:
+ * the three from a run whose vendor was wrong, plus new ones, with one name overlapping.
+ * A roster that changes shape every run is not a roster.
+ */
+describe('the roster does not drift between runs', () => {
+  it('a second mint on an already-minted project adds nothing', () => {
+    const { dir, profilesPath } = ws();
+    roster.mergeProjectAgents({ profilesPath, agentsDir: dir, proposals: [PROPOSAL] });
+    const first = roster.projectRoles(dir);
+    expect(first).toEqual([PROPOSAL.name]);
+
+    // What a second run would propose — different names, same project.
+    roster.mergeProjectAgents({ profilesPath, agentsDir: dir, proposals: [
+      { name: 'a-different-engineer', systemPrompt: 'y'.repeat(80), rationale: 'r' },
+    ] });
+    // The merge itself is additive by design; the STEP is what refuses to re-propose. This
+    // pins the accumulation so the guard above it can never be quietly dropped.
+    expect(roster.projectRoles(dir).length).toBeGreaterThan(first.length);
+  });
+
+  it('an explicit re-mint REPLACES rather than accumulating', () => {
+    const { dir, profilesPath } = ws();
+    roster.mergeProjectAgents({ profilesPath, agentsDir: dir, proposals: [PROPOSAL] });
+
+    const cleared = roster.clearProjectRoster(dir, profilesPath);
+    expect(cleared).toContain(PROPOSAL.name);
+    expect(roster.projectRoles(dir)).toEqual([]);
+
+    roster.mergeProjectAgents({ profilesPath, agentsDir: dir, proposals: [
+      { name: 'the-replacement-engineer', systemPrompt: 'z'.repeat(80), rationale: 'r' },
+    ] });
+    expect(
+      roster.projectRoles(dir),
+      'the previous roster survived a replacement — that is drift wearing a new name',
+    ).toEqual(['the-replacement-engineer']);
+  });
+
+  it('clearing removes the brief from the live roster too', () => {
+    const { dir, profilesPath } = ws();
+    roster.mergeProjectAgents({ profilesPath, agentsDir: dir, proposals: [PROPOSAL] });
+    roster.clearProjectRoster(dir, profilesPath);
+    expect(Object.keys(JSON.parse(readFileSync(profilesPath, 'utf8')))).not.toContain(PROPOSAL.name);
+  });
+
+  it('clearing never touches a canonical role', () => {
+    const { dir, profilesPath } = ws();
+    roster.mergeProjectAgents({ profilesPath, agentsDir: dir, proposals: [PROPOSAL] });
+    roster.clearProjectRoster(dir, profilesPath);
+    const after = JSON.parse(readFileSync(profilesPath, 'utf8'));
+    expect(after[FIXED_AGENT_ROLES[0]]).toBe('canonical brief');
+    expect(after['review-agent']).toBe('reads only');
+  });
+
+  it('clearing an unminted project is a no-op', () => {
+    const { dir, profilesPath } = ws();
+    expect(roster.clearProjectRoster(dir, profilesPath)).toEqual([]);
+  });
+});

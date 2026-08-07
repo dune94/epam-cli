@@ -268,6 +268,43 @@ function applyProjectProfiles(profilesPath, agentsDir) {
   return applied;
 }
 
+/**
+ * Remove this project's minted roster — registry, stored briefs, and the live entries.
+ *
+ * Only ever called for an EXPLICIT re-mint. Without it, "re-mint" means "add more", which is
+ * how two runs left five roles behind including two from a run whose vendor was wrong.
+ * Canonical roles are never touched: only names this project registered are removed.
+ */
+function clearProjectRoster(agentsDir, profilesPath) {
+  const registered = projectRoles(agentsDir);
+  if (!registered.length) return [];
+
+  try {
+    const file = projectRolesPath(agentsDir);
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    parsed.roles = [];
+    fs.writeFileSync(file, JSON.stringify(parsed, null, 2), 'utf8');
+  } catch { /* nothing registered to clear */ }
+
+  try {
+    const file = projectProfilesPath(agentsDir);
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    parsed.profiles = {};
+    fs.writeFileSync(file, JSON.stringify(parsed, null, 2), 'utf8');
+  } catch { /* no store */ }
+
+  try {
+    const profiles = JSON.parse(fs.readFileSync(profilesPath, 'utf8'));
+    let changed = false;
+    for (const r of registered) {
+      if (Object.prototype.hasOwnProperty.call(profiles, r)) { delete profiles[r]; changed = true; }
+    }
+    if (changed) fs.writeFileSync(profilesPath, JSON.stringify(profiles, null, 2), 'utf8');
+  } catch { /* live roster unreadable — registry and store are cleared regardless */ }
+
+  return registered;
+}
+
 /** Read the registry. Returns [] when absent — callers must fail CLOSED on an empty list. */
 function projectRoles(agentsDir) {
   try {
@@ -280,4 +317,5 @@ module.exports = {
   mergeProjectAgents, isUsableProposal, ROLE_NAME_RE,
   registerProjectRoles, projectRoles, projectRolesPath, PROJECT_ROLES_FILE,
   saveProjectProfiles, applyProjectProfiles, projectProfilesPath, PROJECT_PROFILES_FILE,
+  clearProjectRoster,
 };

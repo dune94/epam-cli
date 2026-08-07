@@ -3604,6 +3604,46 @@ for (( _ep_i=1; _ep_i<=$#; _ep_i++ )); do
 done
 unset _ep_i _ep_j
 
+# RESUME IS DECIDED BEFORE ANY WORK, NOT AFTER IT.
+#
+# EPAM_RESUME_RUN restores what a previous run persisted and skips exactly what that
+# checkpoint already paid for — derived from the stage it was taken at, never assumed.
+#
+# This block used to sit past the entry-point dispatch below, and a Jira run calls
+# _run_jira_pipeline and EXITS there, so on that shape it was never reached. The checkpoint was
+# never restored and the skip env was computed for a branch that never ran. Every "resume" was
+# therefore a fresh run: it re-ingested, re-minted, and discarded the roster the operator had
+# just reviewed at the pause — which made the roster pause ceremonial, since you reviewed one
+# roster and ran a different one.
+#
+# A resume that cannot be honoured HALTS. Continuing would silently run against whatever stale
+# state happened to be on disk, which is the failure this exists to prevent.
+#
+# Top level only: lanes re-invoke this script and would each restore the checkpoint over their
+# own state. The parent decides what to resume; the lanes inherit the result.
+if [ -z "${JIRA_CODELINE_RUN:-}" ] && [ -n "${EPAM_RESUME_RUN:-}" ]; then
+    # The roster and its briefs are stored against the run that minted them, so a resumed run
+    # must BE that run — otherwise the store reads as another run's and is not re-applied.
+    export ORCH_RUN_ID="$EPAM_RESUME_RUN"
+
+    if ! restore_run_checkpoint "$EPAM_RESUME_RUN"; then
+        error "[orch] cannot resume run '${EPAM_RESUME_RUN}' — refusing to continue against un-restored state."
+        error "[orch] available checkpoints: $(list_run_checkpoints | tr '\n' ' ' 2>/dev/null || echo none)"
+        exit 1
+    fi
+
+    if ! _resume_env=$(resume_skip_env "$EPAM_RESUME_RUN"); then
+        error "[orch] cannot determine what to skip for run '${EPAM_RESUME_RUN}' — refusing to guess."
+        exit 1
+    fi
+    while IFS= read -r _assign; do
+        [ -n "$_assign" ] || continue
+        export "${_assign?}"
+        info "[orch]   resume: ${_assign}"
+    done <<< "$_resume_env"
+    success "[orch] RESUMED run ${EPAM_RESUME_RUN} — continuing from its checkpoint"
+fi
+
 if [ -z "${JIRA_CODELINE_RUN:-}" ]; then
   if [ "${JIRA_PIPELINE:-0}" = "1" ]; then
     # Jira flow: ingest → synthesize → route codelines
@@ -4014,35 +4054,6 @@ run_specification_pass() {
 }
 
 # ── Resume: start at implementation, not at the beginning ────────────────────
-# EPAM_RESUME_RUN=<run-id> restores the artefacts a previous run persisted after its
-# spec pass and skips the spec pass entirely. The spec pass is the expensive half of a
-# run (~12 agent calls, ~50 min observed); re-deriving it to retry implementation throws
-# that away and re-rolls the dice on a stage that already succeeded.
-#
-# A resume that cannot be honoured HALTS. Continuing would silently run implementation
-# against whatever stale PRD happened to be on disk — the failure mode this exists to
-# prevent.
-if [ -n "${EPAM_RESUME_RUN:-}" ]; then
-    if ! restore_run_checkpoint "$EPAM_RESUME_RUN"; then
-        error "[orch] cannot resume run '${EPAM_RESUME_RUN}' — refusing to continue against un-restored state."
-        error "[orch] available checkpoints: $(list_run_checkpoints | tr '\n' ' ' 2>/dev/null || echo none)"
-        exit 1
-    fi
-    # Skip exactly what this checkpoint already paid for — derived from the stage it was
-    # taken at, never assumed. Skipping too little wastes the pause; skipping too much
-    # silently drops work that was never done.
-    if ! _resume_env=$(resume_skip_env "$EPAM_RESUME_RUN"); then
-        error "[orch] cannot determine what to skip for run '${EPAM_RESUME_RUN}' — refusing to guess."
-        exit 1
-    fi
-    while IFS= read -r _assign; do
-        [ -n "$_assign" ] || continue
-        export "${_assign?}"
-        info "[orch]   resume: ${_assign}"
-    done <<< "$_resume_env"
-    success "[orch] RESUMED run ${EPAM_RESUME_RUN} — continuing from its checkpoint"
-fi
-
 if [ "$DRY_RUN" = true ]; then
     step_emit "1" "skip" "Step 1: Specification pass" "dry-run"
     step_emit "1a" "skip" "  openspec (elaboration)" "dry-run"

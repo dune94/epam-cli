@@ -38,9 +38,54 @@ const PRD_PATH = getArg('--prd');
 const AGENTS_DIR = getArg('--agents-dir', path.join(__dirname, '..', 'agents'));
 const PROFILES_PATH = getArg('--profiles', path.join(AGENTS_DIR, 'profiles.json'));
 const LOG_DIR = getArg('--log-dir', process.env.OUTPUT_DIR || path.join(__dirname, '..', 'logs'));
-const REPO_PATH = getArg('--codeline-root', process.env.JIRA_CODELINE_ROOT || '');
+const REPO_ARG = getArg('--codeline-root', '');
 
-if (!PRD_PATH || !fs.existsSync(PRD_PATH)) {
+/**
+ * The repo the work actually lands in — NOT the estate root.
+ *
+ * Live 2026-08-07: this got /projects/<client>, the directory holding 33 repositories, so
+ * "read the codeline before you answer" pointed somewhere the answer is not. With no repo and
+ * no fetched documents, the mint invented a CMS vendor and briefed all three roles on the
+ * wrong product's APIs. A path that is not a repository is worse than no path: it reads as
+ * evidence and contains none.
+ */
+function resolveRepoPath(prd, stories, repoArg) {
+  const isRepo = (d) => { try { return !!d && fs.existsSync(path.join(d, '.git')); } catch { return false; } };
+  const arg = repoArg !== undefined ? repoArg : REPO_ARG;
+  if (isRepo(arg)) return arg;
+  const out = prd && prd.project && prd.project.outputDir;
+  if (isRepo(out)) return out;
+  for (const s of stories) {
+    try { const p2 = spec.resolveCodelinePath(s); if (isRepo(p2)) return p2; } catch { /* next */ }
+  }
+  return '';
+}
+
+/**
+ * What this codeline DECLARES it depends on. The single most direct answer to "which vendor
+ * is this", and the mint had no access to it: the ticket says only "CMS", and the documents
+ * that would have named the SDK failed to fetch. Read from whatever manifest the repo has —
+ * no vendor, language or ecosystem is named here.
+ */
+function declaredDependencies(repoPath) {
+  if (!repoPath) return [];
+  const manifests = ['package.json', 'requirements.txt', 'go.mod', 'Gemfile', 'pom.xml', 'build.gradle', 'Cargo.toml'];
+  for (const m of manifests) {
+    const file = path.join(repoPath, m);
+    if (!fs.existsSync(file)) continue;
+    try {
+      const raw = fs.readFileSync(file, 'utf8');
+      if (m === 'package.json') {
+        const pkg = JSON.parse(raw);
+        return [...Object.keys(pkg.dependencies || {}), ...Object.keys(pkg.devDependencies || {})];
+      }
+      return raw.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 200);
+    } catch { /* try the next manifest */ }
+  }
+  return [];
+}
+
+if (require.main === module && (!PRD_PATH || !fs.existsSync(PRD_PATH))) {
   process.stderr.write('[mint-step] --prd <path> is required and must exist\n');
   process.exit(2);
 }
@@ -160,6 +205,10 @@ function writeRosterDiff(profilesPath, agentsDir, logDir, mintedThisRun) {
   return diff;
 }
 
+module.exports = { resolveRepoPath, declaredDependencies, writeRosterDiff };
+
+if (require.main !== module) return;
+
 (async () => {
   const prd = JSON.parse(fs.readFileSync(PRD_PATH, 'utf8'));
   const stories = Array.isArray(prd.stories) ? prd.stories : [];
@@ -171,7 +220,26 @@ function writeRosterDiff(profilesPath, agentsDir, logDir, mintedThisRun) {
   fs.mkdirSync(LOG_DIR, { recursive: true });
   const aiRunnerCmd = process.env.AI_RUNNER_CMD || path.join(__dirname, 'ai-run.sh');
   const promptExec = spec.resolvePromptExec(aiRunnerCmd);
+  const REPO_PATH = resolveRepoPath(prd, stories, REPO_ARG);
+  if (!REPO_PATH) {
+    process.stderr.write('[mint-step] WARNING: no codeline repository resolved — the mint cannot read the stack\n');
+  } else {
+    process.stderr.write(`[mint-step] codeline: ${REPO_PATH}\n`);
+  }
+  const deps = declaredDependencies(REPO_PATH);
+  process.stderr.write(`[mint-step] declared dependencies: ${deps.length}\n`);
   const docs = await referencedDocs(LOG_DIR, stories);
+  const fetchedDocs = docs.filter((d) => d && d.fetchStatus === 'fetched').length;
+
+  // Surfaced, not buried. 0-of-2 fetched directly weakened the roster and appeared only as a
+  // log line; the operator reviewing at the pause must see it without reading the transcript.
+  fs.writeFileSync(path.join(LOG_DIR, 'mint-inputs.json'), JSON.stringify({
+    codelineRepo: REPO_PATH || null,
+    declaredDependencies: deps.length,
+    documentsLinked: docs.length,
+    documentsFetched: fetchedDocs,
+    documentsUnfetched: docs.filter((d) => d && d.fetchStatus !== 'fetched').map((d) => ({ url: d.url, status: d.fetchStatus })),
+  }, null, 2));
 
   let _mintedNames = [];
   if (process.env.EPAM_SKIP_AGENT_MINT === '1') {
@@ -185,6 +253,7 @@ function writeRosterDiff(profilesPath, agentsDir, logDir, mintedThisRun) {
       promptExec,
       tickets: stories,
       referencedDocs: docs,
+      declaredDependencies: deps,
       profilesPath: PROFILES_PATH,
       agentsDir: AGENTS_DIR,
       logDir: LOG_DIR,

@@ -3503,7 +3503,7 @@ _run_jira_pipeline() {
         --prd "$_synth_prd" \
         --agents-dir "$AUTOMATION_DIR/agents" \
         --log-dir "$LOG_DIR" \
-        --codeline-root "${JIRA_CODELINE_ROOT:-}" 2>&1 | tee -a "$_log_file"; then
+        --codeline-root "${PROJECT_ROOT:-}" 2>&1 | tee -a "$_log_file"; then
       error "[jira] Agent mint/assignment failed — refusing to run stories with no assigned agent."
       return 1
     fi
@@ -3535,6 +3535,20 @@ _run_jira_pipeline() {
     echo -e "  Minted:      ${LOG_DIR}/agent-mint.json"
     echo -e "  Assignments: ${LOG_DIR}/role-assignments.json"
     echo -e "  ${GREEN}WHAT WAS GENERATED (vs canonical): ${LOG_DIR}/roster-diff.md${NC}"
+    echo -e "  What the mint could SEE:            ${LOG_DIR}/mint-inputs.json"
+    if [ -f "${LOG_DIR}/mint-inputs.json" ] && command -v jq >/dev/null 2>&1; then
+      _mi_repo=$(jq -r '.codelineRepo // "NONE"' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
+      _mi_deps=$(jq -r '.declaredDependencies // 0' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
+      _mi_df=$(jq -r '.documentsFetched // 0' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
+      _mi_dl=$(jq -r '.documentsLinked // 0' "${LOG_DIR}/mint-inputs.json" 2>/dev/null)
+      echo -e "     codeline repo:  ${_mi_repo}"
+      echo -e "     declared deps:  ${_mi_deps}"
+      if [ "${_mi_df}" != "${_mi_dl}" ]; then
+        echo -e "     ${RED}documents:      ${_mi_df} of ${_mi_dl} fetched — the roster was derived WITHOUT them${NC}"
+      else
+        echo -e "     documents:      ${_mi_df} of ${_mi_dl} fetched"
+      fi
+    fi
     echo ""
     echo -e "  Inspect and EDIT if needed:"
     echo -e "    ${AUTOMATION_DIR}/agents/profiles.json         (each role's brief)"

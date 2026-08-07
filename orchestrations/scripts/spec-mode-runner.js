@@ -3008,6 +3008,7 @@ const TOOL_PROJECT_AGENTS = {
  */
 async function mintProjectAgents({
   promptExec, tickets, referencedDocs, profilesPath, agentsDir, logDir, repoPath,
+  declaredDependencies,
 }) {
   const { mergeProjectAgents } = require('./lib/agent-roster.js');
 
@@ -3031,7 +3032,14 @@ async function mintProjectAgents({
 
   const ticketBlock = (Array.isArray(tickets) ? tickets : []).map((t) => {
     const comps = Array.isArray(t.components) && t.components.length ? `\nComponents: ${t.components.join(', ')}` : '';
-    return `- ${t.jiraKey || t.id || ''}: ${t.title || ''}${comps}\n  ${String(t.description || '').replace(/\s+/g, ' ')}`;
+    // THE LINK IS EVIDENCE EVEN WHEN THE FETCH FAILED. Live 2026-08-07: both linked documents
+    // came back empty, so they were dropped entirely — and the URLs themselves named the
+    // vendor the tickets never mentioned. The mint then invented a different one.
+    const links = (Array.isArray(t.ticketLinks) ? t.ticketLinks : [])
+      .map((l) => (typeof l === 'string' ? l : (l && l.url)))
+      .filter(Boolean);
+    const linkLine = links.length ? `\n  Links on this ticket: ${links.join(' , ')}` : '';
+    return `- ${t.jiraKey || t.id || ''}: ${t.title || ''}${comps}\n  ${String(t.description || '').replace(/\s+/g, ' ')}${linkLine}`;
   }).join('\n');
 
   // The vendor's own published contract, quoted verbatim by the link agent. This is the
@@ -3041,11 +3049,25 @@ async function mintProjectAgents({
     .map((d) => `- ${d.url}\n${d.quotes.map((q) => `    "${String(q).replace(/\s+/g, ' ')}"`).join('\n')}`)
     .join('\n');
 
+  // WHAT THE CODELINE DECLARES IT USES. Ground truth about the stack, and the correction for
+  // a specific live failure: on 2026-08-07 the tickets said only "CMS", both linked documents
+  // came back empty, and the repo path given was the estate root rather than a repository —
+  // so the mint invented a vendor and briefed every role on the wrong product's APIs.
+  const depBlock = (Array.isArray(declaredDependencies) ? declaredDependencies : [])
+    .slice(0, 300).map((d) => `- ${d}`).join('\n');
+
   const prompt = `${basePrompt}
 
 THE WORK THIS PROJECT HAS BEEN ASKED TO DO (real tickets from the tracker):
 ${ticketBlock || '- (no tickets available)'}
 
+${depBlock ? `WHAT THIS CODELINE DECLARES IT DEPENDS ON (from its own manifest — ground truth
+about the stack, not inference from the ticket text). Where a ticket names a category
+generically, these names say which product is actually in use. Do NOT propose a role built
+around a product that does not appear here:
+${depBlock}
+
+` : ''}
 ${docBlock ? `DOCUMENTATION LINKED ON THESE TICKETS (fetched, quoted verbatim — the vendor's published contract):
 ${docBlock}
 
@@ -4267,8 +4289,20 @@ async function fetchTicketDocuments(links, dir) {
   const tool = new FetchUrlTool();
   const seen = new Set();
   for (const l of list) {
-    const url = l && typeof l.url === 'string' ? l.url : '';
-    if (!url || seen.has(url)) continue;
+    // ACCEPT A BARE STRING TOO, AND NEVER SKIP IN SILENCE.
+    //
+    // This required `{url: "..."}` and discarded anything else without a word. Live 2026-08-07:
+    // the agent-mint passed an array of plain URL strings, every entry failed the type check,
+    // and the function returned [] — reported downstream as "0 fetched of 2 link(s)", which
+    // reads as "the sites were unreachable" rather than "the caller used the other shape".
+    // The roster was then derived with no vendor documentation at all.
+    const url = (typeof l === 'string') ? l : (l && typeof l.url === 'string' ? l.url : '');
+    if (!url) {
+      console.warn(`spec-mode: ticket link entry has no usable url (${JSON.stringify(l).slice(0, 120)}) — skipped`);
+      out.push({ url: '', fetchStatus: 'not_attempted', path: '' });
+      continue;
+    }
+    if (seen.has(url)) continue;
     seen.add(url);
     let body = '';
     try {

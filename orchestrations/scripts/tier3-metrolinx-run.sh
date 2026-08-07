@@ -390,6 +390,26 @@ printf 'OpenRouter usage after: $%s\n' "$_usage_after" >> "$LOG_FILE" 2>/dev/nul
 info "Total spent this run:   \$$_spent"
 echo ""
 
+# ── A PAUSE IS AN ENDING, NOT A FAILURE ───────────────────────────────────────
+#
+# The run is designed to stop at an operator checkpoint: after the roster is minted, and/or
+# before the writer. At those points stories are legitimately still "pending" — no work was
+# meant to happen yet. Reporting FAILED there is a false alarm that hides real failures by
+# training the operator to ignore the line. Live 2026-08-07: the roster pause worked exactly
+# as designed and the launcher declared the run failed.
+_paused_marker=""
+for _d in "${LOG_DIR:-}" "${OUTPUT_DIR:-}" "$SCRIPT_DIR/../logs"; do
+  [ -n "$_d" ] && [ -f "$_d/PAUSED" ] && _paused_marker="$_d/PAUSED" && break
+done
+if [ -n "$_paused_marker" ] || [ -f "${LOG_DIR:-$SCRIPT_DIR/../logs}/roster-diff.md" ] && \
+   { [ "${EPAM_PAUSE_AFTER_AGENT_MINT:-0}" = "1" ] || [ "${EPAM_PAUSE_BEFORE_WRITER:-0}" = "1" ]; }; then
+  info "Run ended at an operator pause — stories are pending BY DESIGN, not by failure."
+  info "  Roster:      ${LOG_DIR:-$SCRIPT_DIR/../logs}/roster-diff.md"
+  info "  Mint inputs: ${LOG_DIR:-$SCRIPT_DIR/../logs}/mint-inputs.json"
+  info "  Review, then resume with EPAM_RESUME_RUN=<run-id>."
+  exit 0
+fi
+
 # ── Validate story completion from dynamically-generated PRD ──────────────────
 if [ -f "$PRD_FILE" ]; then
   info "Validating story completion..."

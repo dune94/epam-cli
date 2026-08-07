@@ -2972,7 +2972,7 @@ const TOOL_PROJECT_AGENTS = {
         minItems: 1,
         items: {
           type: 'object',
-          required: ['name', 'kind', 'systemPrompt', 'rationale'],
+          required: ['name', 'kind', 'codeline', 'systemPrompt', 'rationale'],
           properties: {
             name: { type: 'string', description: 'kebab-case role name, e.g. "<domain>-engineer"' },
             kind: {
@@ -2985,10 +2985,10 @@ const TOOL_PROJECT_AGENTS = {
             codeline: {
               type: 'string',
               description:
-                'REQUIRED for an investigator: the ONE codeline it investigates, named exactly as ' +
-                'listed in scope above. An investigator without this is rejected — the lane looks ' +
-                'its investigator up by codeline and cannot find one that names none. Omit only ' +
-                'for an implementer, which spans the project.',
+                'ALWAYS required. For an investigator: the ONE codeline it investigates, named ' +
+                'exactly as listed in scope above — the lane looks its investigator up by codeline ' +
+                'and cannot find one that names none. For an implementer, which spans the project, ' +
+                'use "*". Never leave it out: a proposal without it is rejected.',
             },
             systemPrompt: {
               type: 'string',
@@ -3182,9 +3182,12 @@ PROPOSE TWO CLASSES OF AGENT.
 IMPLEMENTERS (kind: "implementer") author code, as described above. One roster of them spans
 every codeline.
 
+Every proposal states a "codeline". An implementer spans the project and uses "*". An
+investigator names the ONE codeline it reads, exactly as spelled in scope above. There is no
+third option and no omitting it.
+
 INVESTIGATORS (kind: "investigator") read code and report what is there — they never write and
-never own a story. Propose EXACTLY ONE per codeline listed in scope, each naming its codeline
-in the "codeline" field, exactly as spelled above. Its brief should describe how to find things
+never own a story. Propose EXACTLY ONE per codeline listed in scope. Its brief should describe how to find things
 in THAT codebase: where the modules relevant to this work live, what the layout and naming
 conventions are, and which of its declared dependencies matter here. An investigator that
 merely restates the ticket adds nothing — its value is knowing one repository well.

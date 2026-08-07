@@ -30,8 +30,8 @@ afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true 
 
 const ANSWER = JSON.stringify({
   proposedAgents: [
-    { name: 'some-domain-engineer', systemPrompt: 'You own a domain. '.repeat(20), rationale: 'the codeline has it' },
-    { name: 'another-domain-specialist', systemPrompt: 'You own another. '.repeat(20), rationale: 'and this one' },
+    { name: 'some-domain-engineer', kind: 'implementer', codeline: '*', systemPrompt: 'You own a domain. '.repeat(20), rationale: 'the codeline has it' },
+    { name: 'another-domain-specialist', kind: 'implementer', codeline: '*', systemPrompt: 'You own another. '.repeat(20), rationale: 'and this one' },
   ],
 });
 
@@ -131,7 +131,7 @@ describe('the roster it writes obeys the merge rules', () => {
   it('a proposal colliding with the canonical core cannot overwrite it', async () => {
     const canonical = FIXED_AGENT_ROLES[0];
     const answer = JSON.stringify({
-      proposedAgents: [{ name: canonical, systemPrompt: 'LLM SUGGESTION '.repeat(10), rationale: 'r' }],
+      proposedAgents: [{ name: canonical, kind: 'implementer', codeline: '*', systemPrompt: 'LLM SUGGESTION '.repeat(10), rationale: 'r' }],
     });
     const { profiles, res } = await mint({ answer });
     expect(profiles[canonical]).toBe('CANONICAL BRIEF');

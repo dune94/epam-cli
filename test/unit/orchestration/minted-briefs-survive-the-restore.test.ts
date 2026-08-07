@@ -37,7 +37,7 @@ afterAll(() => { if (prevCfg !== undefined) process.env.EPAM_PROJECT_CONFIG_DIR 
 
 const CANONICAL = { [FIXED_AGENT_ROLES[0]]: 'canonical brief', 'review-agent': 'reads only' };
 const PROPOSAL = {
-  name: 'a-domain-engineer', systemPrompt: 'The brief for this project. '.repeat(10),
+  name: 'a-domain-engineer', codeline: '*', systemPrompt: 'The brief for this project. '.repeat(10),
   rationale: 'this codeline needs it',
 };
 
@@ -159,7 +159,7 @@ describe('the roster does not drift between runs', () => {
 
     // What a second run would propose — different names, same project.
     roster.mergeProjectAgents({ profilesPath, agentsDir: dir, proposals: [
-      { name: 'a-different-engineer', systemPrompt: 'y'.repeat(80), rationale: 'r' },
+      { name: 'a-different-engineer', codeline: '*', systemPrompt: 'y'.repeat(80), rationale: 'r' },
     ] });
     // The merge itself is additive by design; the STEP is what refuses to re-propose. This
     // pins the accumulation so the guard above it can never be quietly dropped.
@@ -175,7 +175,7 @@ describe('the roster does not drift between runs', () => {
     expect(roster.projectRoles(dir)).toEqual([]);
 
     roster.mergeProjectAgents({ profilesPath, agentsDir: dir, proposals: [
-      { name: 'the-replacement-engineer', systemPrompt: 'z'.repeat(80), rationale: 'r' },
+      { name: 'the-replacement-engineer', codeline: '*', systemPrompt: 'z'.repeat(80), rationale: 'r' },
     ] });
     expect(
       roster.projectRoles(dir),

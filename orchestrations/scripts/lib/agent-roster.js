@@ -66,6 +66,10 @@ const ROLE_NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
  */
 const AGENT_KINDS = ['implementer', 'investigator'];
 
+// What an implementer writes in `codeline` to mean "the whole project". A sentinel rather than
+// an omission: a missing field cannot be told apart from a model that skipped it.
+const PROJECT_WIDE = '*';
+
 function proposalKind(p) {
   const k = p && typeof p.kind === 'string' ? p.kind.trim().toLowerCase() : '';
   // Defaults to implementer ONLY when unstated — an unrecognised value is refused rather
@@ -88,8 +92,16 @@ function isUsableProposal(p) {
   // next did not, so the whole mechanism silently stopped working between two runs of identical
   // code. The schema marks it optional because JSON Schema cannot make it conditional on kind;
   // that makes it this function's job, not the model's.
-  if (proposalKind(p) === 'investigator' && (typeof p.codeline !== 'string' || !p.codeline.trim())) {
-    return 'an investigator must name the one codeline it investigates — without it, no lane can find it';
+  const _cl = typeof p.codeline === 'string' ? p.codeline.trim() : '';
+  if (!_cl) {
+    // Required of BOTH kinds now. The schema enforces the field's presence; this enforces that
+    // it says something. An implementer spans the project and states so explicitly, rather than
+    // by omission — silence is indistinguishable from a model that simply skipped the field,
+    // which is precisely what happened on 2026-08-07 and left a run with no roster at all.
+    return 'every proposal must state a codeline — the one it investigates, or "*" for a role that spans the project';
+  }
+  if (proposalKind(p) === 'investigator' && _cl === PROJECT_WIDE) {
+    return 'an investigator must name ONE codeline, not the whole project — the lane looks it up by codeline';
   }
   return null;
 }
@@ -160,7 +172,10 @@ function mergeProjectAgents(opts) {
 
     minted.push({
       name: p.name, kind: proposalKind(p),
-      codeline: typeof p.codeline === 'string' ? p.codeline.trim() : '',
+      codeline: (() => {
+        const c = typeof p.codeline === 'string' ? p.codeline.trim() : '';
+        return c === PROJECT_WIDE ? '' : c;   // project-wide is not a codeline anything binds to
+      })(),
       rationale: p.rationale || '', surfaces,
     });
   }
@@ -445,7 +460,7 @@ module.exports = {
   mergeProjectAgents, isUsableProposal, ROLE_NAME_RE,
   registerProjectRoles, projectRoles, projectRolesPath, PROJECT_ROLES_FILE,
   saveProjectProfiles, applyProjectProfiles, projectProfilesPath, PROJECT_PROFILES_FILE,
-  clearProjectRoster, rosterRunId,
+  clearProjectRoster, rosterRunId, PROJECT_WIDE,
   registerProjectInvestigators, projectInvestigators, projectInvestigatorsPath, investigatorForCodeline,
   proposalKind, AGENT_KINDS, PROJECT_INVESTIGATORS_FILE,
 };

@@ -38,7 +38,7 @@ function workspace(profiles: Record<string, string>) {
 }
 
 const PROPOSAL = {
-  name: 'some-domain-engineer',
+  name: 'some-domain-engineer', codeline: '*',   // implementers span the project, stated not omitted
   systemPrompt: 'You own a distinct domain of this project. '.repeat(12),
   rationale: 'The codeline has a domain that no generic role covers.',
 };

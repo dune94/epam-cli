@@ -4167,7 +4167,13 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
   const _mintedDetective = (() => {
     try {
       const agentsDir = path.join(automationDirFromLogDir(logDir), 'agents');
-      const cl = (story && story.codeline) || process.env.JIRA_DEFAULT_CODELINE || '';
+      // The lane's own codeline first. The lane PRD now stamps story.codeline with the lane
+      // it belongs to, so both agree — but EPAM_CODELINE is set by the lane loop itself and
+      // cannot be stale, and this is the seam where reading the wrong one silently briefs an
+      // investigator on another repository.
+      const cl = process.env.EPAM_CODELINE
+        || (story && story.codeline)
+        || process.env.JIRA_DEFAULT_CODELINE || '';
       const name = require('./lib/agent-roster.js').investigatorForCodeline(agentsDir, cl);
       return (name && profiles[name]) ? { name, brief: profiles[name] } : null;
     } catch { return null; }

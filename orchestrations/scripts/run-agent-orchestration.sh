@@ -2919,7 +2919,20 @@ KNOWNFIXES_EOF
         (Array.isArray(s.codelines) && s.codelines.length
           ? s.codelines.includes(cl)
           : (s.codeline === cl || (!s.codeline && cl === dcl)))
-      );
+      // THIS LANE'S PRD SAYS WHICH LANE IT IS.
+      //
+      // Stories were copied through unchanged, so a story spanning three codelines carried
+      // its PRIMARY codeline into all three lane PRDs. Every consumer reading the singular
+      // field then got the same answer everywhere: the detective resolved the first lane's
+      // investigator in all three lanes and investigated two repositories with a brief written
+      // for a different one. agentRole had the identical defect, and project.outputDir vs
+      // outputDirs a third instance.
+      //
+      // Fixed HERE rather than in each reader. A lane's PRD describing a different lane is the
+      // lie; once it tells the truth, every consumer — the detective, the guards, the manifest,
+      // whatever is added next — is correct without knowing lanes exist. codelines[] is left
+      // intact, so nothing loses the knowledge that the story spans more than this one.
+      ).map(s => ({ ...s, codeline: cl }));
       const ids = new Set(stories.map(s => s.id));
       const order = {};
       for (const [phase, list] of Object.entries(prd.implementationOrder||{})) {

@@ -22,6 +22,10 @@ const fs   = require('fs');
 const path = require('path');
 
 const DEBOUNCE_MS = parseInt(process.env.WEBHOOK_DEBOUNCE_MS || '45000', 10);
+// Declared. This was assigned without declaration, which in sloppy-mode CommonJS quietly
+// creates a GLOBAL — it happened to work because the read below is typeof-guarded, but it
+// leaked across every module in the process and would throw outright under 'use strict'.
+let DEBOUNCE_MS_OVERRIDE;
 
 let _queueFile  = null;
 let _prdOutDir  = null;
@@ -82,7 +86,7 @@ function enqueue(event) {
 
   // Debounce: reset timer on each new event
   if (_timers[key]) clearTimeout(_timers[key]);
-  const delay = (typeof DEBOUNCE_MS_OVERRIDE !== 'undefined') ? DEBOUNCE_MS_OVERRIDE : DEBOUNCE_MS;
+  const delay = (DEBOUNCE_MS_OVERRIDE !== undefined) ? DEBOUNCE_MS_OVERRIDE : DEBOUNCE_MS;
   _timers[key] = setTimeout(() => {
     delete _timers[key];
     flush(key);

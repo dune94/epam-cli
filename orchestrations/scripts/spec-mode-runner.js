@@ -2642,7 +2642,7 @@ function verifyDetectiveEvidence(brokenLine, file, repoPath) {
   const needle = norm(brokenLine);
   // A quote too short to be distinctive (`}`, `=>`) proves nothing — treat it
   // as no claim rather than as evidence.
-  if (needle.length < 8) return null;
+  if (needle.length < minEvidenceChars()) return null;
   if (!file || typeof file !== 'string' || !repoPath) return false;
   try {
     const rel = file.replace(/^\.?\//, '');
@@ -4673,8 +4673,38 @@ function checkFixSiteCoverage(findings, verificationCriteria, vocabulary) {
 // detective's own prompt tells it to trust ticket content over, not an override of the
 // later authoritative SPEC_AGENT classification.
 function inferStoryKindHint(story) {
-  const t = String((story && (story.issueType || story.issuetype)) || '').toLowerCase();
-  return t === 'bug' ? 'defect' : 'novel';
+  // WHICH TRACKER TYPES MEAN "DEFECT" IS PROJECT DATA, DECLARED WHERE THE PROJECT'S OTHER
+  // FACTS ARE. This read `t === 'bug'`. That is this Jira's word; another says "Defect",
+  // "Fault", "Incident", or a localised name — and there EVERY story classified novel, so the
+  // detective was never asked for a causal site or a quoted broken line, real defects got the
+  // feature contract, and grounding dropped from quotation to provenance. Silently: no gate,
+  // no warning, just worse answers. That is the failure this step was built to prevent,
+  // reachable through a config mismatch nobody would see.
+  //
+  // Undeclared means NOVEL, deliberately: inventing a cause for work that has none is the more
+  // expensive error, and the one the reality anchor exists to prevent.
+  const declared = String(process.env.EPAM_DEFECT_ISSUE_TYPES || '')
+    .split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+  if (!declared.length) return 'novel';
+  const t = String((story && (story.issueType || story.issuetype)) || '').toLowerCase().trim();
+  return t && declared.includes(t) ? 'defect' : 'novel';
+}
+
+/**
+ * minEvidenceChars() — how short a quote stops being evidence.
+ *
+ * `if (needle.length < 8)` decided this. `a === b` is 7 characters and `x != y` is 6, so a
+ * defect whose broken expression is genuinely short had every finding scored null, was judged
+ * UNGROUNDED, and retried three times before passing through flagged — no config mismatch
+ * required. Declared now, defaulting to the previous value so nothing changes silently.
+ *
+ * A malformed or zero declaration falls back to the default rather than to zero: zero would
+ * accept "}" as evidence, which is worse than the constant it replaced.
+ */
+function minEvidenceChars() {
+  const DEFAULT = 8;
+  const n = Number(process.env.EPAM_MIN_EVIDENCE_CHARS);
+  return Number.isFinite(n) && n > 1 ? n : DEFAULT;
 }
 
 // A rejection-driven re-invocation (the SPEC_REVIEW corrective re-call below)
@@ -4824,6 +4854,63 @@ function renderDetectiveCorrection(ctx) {
     : '';
 
   return planPart + coveragePart;
+}
+
+/**
+ * detectiveAnswerIsGrounded({findings, kind}) — is this answer backed by real code?
+ *
+ * GROUNDING MEANS DIFFERENT THINGS FOR THE TWO CONTRACTS, and the validator did not know that.
+ * It required `evidenceVerified === true` — a quoted expression found in the named file — for
+ * every story. The novel prescription tells the detective to leave `brokenLine` empty, because
+ * a feature has nothing broken to quote. So a CORRECT novel answer scored zero grounded
+ * findings, was rejected as UNGROUNDED, and was re-tried three times before being passed
+ * through flagged. Live 2026-08-08 on AMSD-2041, three model calls per story to fail a check
+ * that could not pass.
+ *
+ * That is the same defect as the prompt had, committed while fixing it: the demand was moved
+ * out of the instructions and left in the enforcement.
+ *
+ * A feature IS groundable, just not by quotation:
+ *   - defect: a quoted expression that really is in the file it names.
+ *   - novel:  PROVENANCE — the files it names exist. That is what the novel prompt asks for
+ *             ("every file and symbol you name must have been returned to you by a tool"), so
+ *             it is what this checks. A verified quote also grounds a novel answer; it is
+ *             welcome, merely not required.
+ *
+ * Unknown kind is judged as novel: demanding a quote for work that has none is the failure
+ * this exists to prevent.
+ */
+function detectiveAnswerIsGrounded({ findings, kind } = {}) {
+  const list = Array.isArray(findings) ? findings : [];
+  if (!list.length) return { grounded: false, reason: 'no findings at all' };
+
+  if (kind === 'defect') {
+    const quoted = list.filter((f) => f && f.evidenceVerified === true);
+    return quoted.length
+      ? { grounded: true, reason: `${quoted.length} finding(s) quote code verified in the file they name` }
+      : {
+        grounded: false,
+        reason: list.some((f) => f && f.evidenceVerified === false)
+          ? 'the quoted code is not in the file it names — a diagnosis about code that is not there'
+          : 'no finding quoted an existing broken expression, and a defect must name the wrong line',
+      };
+  }
+
+  // novel (and anything unrecognised)
+  if (list.some((f) => f && f.evidenceVerified === true)) {
+    return { grounded: true, reason: 'a finding quotes code verified in the file it names' };
+  }
+  const phantom = list.filter((f) => f && f.fileVerified === false);
+  if (phantom.length) {
+    return {
+      grounded: false,
+      reason: `${phantom.length} finding(s) name a file that does not exist in this codeline — invented, not investigated`,
+    };
+  }
+  const real = list.filter((f) => f && f.fileVerified === true);
+  return real.length
+    ? { grounded: true, reason: `${real.length} finding(s) name files that exist — provenance, the grounding a feature has` }
+    : { grounded: false, reason: 'no finding names a file that could be confirmed to exist' };
 }
 
 // runCodeGraphDetective(story, logDir) — invokes the code-graph-detective
@@ -5033,6 +5120,15 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
         // false = it is not (a diagnosis about code that does not exist —
         // the live 2026-07-26 failure); null = nothing quoted.
         evidenceVerified: verifyDetectiveEvidence(brokenLine, file, repoPath),
+        // PROVENANCE. A feature has no broken line to quote, so "does the file you named
+        // actually exist" is the grounding available to it — and it is the thing the novel
+        // prompt asks for. true = present, false = named but absent (invented), null = could
+        // not be checked.
+        fileVerified: (() => {
+          if (!file || !repoPath) return null;
+          try { return fs.existsSync(path.resolve(repoPath, file.replace(/^\.?\//, ''))); }
+          catch { return null; }
+        })(),
       });
     }
     return findings;
@@ -5245,23 +5341,30 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
         continue;
       }
 
-      const grounded = findings.filter((f) => f.evidenceVerified === true);
-      if (grounded.length === 0) {
-        const quoted = findings.filter((f) => f.evidenceVerified === false);
+      // GROUNDING IS KIND-AWARE. This demanded a verified QUOTE for every story, while the
+      // novel prescription tells the detective to leave brokenLine empty — so a correct
+      // feature answer was rejected and re-tried three times against a check it could never
+      // pass (live 2026-08-08, AMSD-2041). A feature is grounded by provenance instead.
+      const _grounding = detectiveAnswerIsGrounded({ findings, kind: _kindHint });
+      if (!_grounding.grounded) {
         console.warn(
-          `spec-mode: ⚠️ code-graph-detective answer for ${story.id} is UNGROUNDED (attempt ${attempt}/${maxAttempts}) — ` +
-          (quoted.length
-            ? `${quoted.length} finding(s) quote code that is NOT in the file they name (e.g. ${quoted[0].file}: "${String(quoted[0].brokenLine).slice(0, 80)}")`
-            : `no finding quoted an existing broken expression at all`) +
-          ` — the diagnosis is not backed by real code.`);
+          `spec-mode: ⚠️ code-graph-detective answer for ${story.id} is UNGROUNDED (attempt ${attempt}/${maxAttempts}, ${_kindHint}) — ` +
+          `${_grounding.reason}.`);
         if (attempt < maxAttempts) {
           continue; // escalate: a plausible story about absent code is not an answer
         }
         console.warn(`spec-mode: ⛔ code-graph-detective remained UNGROUNDED for ${story.id} after ${maxAttempts} attempts — passing the best hypothesis through, flagged.`);
-      } else if (grounded.length < findings.length) {
+      } else if (findings.some((f) => f.evidenceVerified !== true)) {
         // Grounded findings first: the implementer reads findings[0] as the
         // primary fix site.
-        findings = grounded.concat(findings.filter((f) => f.evidenceVerified !== true));
+        // Verified-quote findings first: the implementer reads findings[0] as the primary
+        // site. Computed here rather than reusing a variable from the gate above — that
+        // coupling is exactly what broke: the gate was rewritten, its `grounded` local went
+        // with it, and this line kept referring to it. Every detective invocation then threw
+        // "grounded is not defined", three attempts per story across three lanes, producing no
+        // fix sites at all while the test suite stayed green.
+        findings = findings.filter((f) => f.evidenceVerified === true)
+          .concat(findings.filter((f) => f.evidenceVerified !== true));
       }
       await _detEmit('spec_update', `[${_detPhase}] code-graph-detective located fix site: ${findings[0].file}${findings[0].helper ? ' (reuse ' + findings[0].helper + ')' : ''}`);
       return findings;
@@ -7102,8 +7205,6 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId, logDi
   if (payload.storyKind === 'defect' || payload.storyKind === 'novel') {
     story.storyKind = payload.storyKind;
   }
-  {
-  }
   // locationHint (brownfield openspec only): CodeGraph/Semble-grounded fix-site
   // file paths, discovered from the "EXISTING CODE" context already injected
   // into this same prompt. The prompt explicitly asks the model for this
@@ -8445,7 +8546,6 @@ module.exports = {
   reviewVcViaSpeckit,
   regenerateVcViaOpenspec,
   manifestEvidence,
-  manifestFileExcerpts,
   manifestPathStatus,
   manifestMissingPaths,
   buildReviewPayload,
@@ -8455,6 +8555,9 @@ module.exports = {
   verifyDetectiveEvidence,
   checkFixSiteCoverage,
   detectiveCorrectionNeeded,
+  detectiveAnswerIsGrounded,
+  inferStoryKindHint,
+  minEvidenceChars,
   renderDetectiveCorrection,
   precomputeDetectiveExplore,
   ladderNextModel,

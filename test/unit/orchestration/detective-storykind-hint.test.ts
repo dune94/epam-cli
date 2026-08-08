@@ -39,12 +39,27 @@ describe('inferStoryKindHint — cheap, deterministic, no LLM call', () => {
     expect(mod.inferStoryKindHint!({ issueType: 'Story', acceptanceCriteria: [] })).toBe('novel');
   });
 
-  it('a Jira "Bug" hints defect', () => {
-    expect(mod.inferStoryKindHint!({ issueType: 'Bug' })).toBe('defect');
+  // DECLARED, NOT ASSUMED (2026-08-08): "Bug" was a literal in the engine. It is this Jira's
+  // word; a tracker saying "Defect"/"Fault"/"Incident" silently classified every story as
+  // novel, so defects lost causal tracing with no gate and no warning. The project declares
+  // its own defect types now, and these cases declare them like a project would.
+  it('a declared defect type hints defect', () => {
+    process.env.EPAM_DEFECT_ISSUE_TYPES = 'bug';
+    try {
+      expect(mod.inferStoryKindHint!({ issueType: 'Bug' })).toBe('defect');
+    } finally { delete process.env.EPAM_DEFECT_ISSUE_TYPES; }
   });
 
   it('case-insensitive and tolerates the lowercase Jira field name too', () => {
-    expect(mod.inferStoryKindHint!({ issuetype: 'bug' })).toBe('defect');
+    process.env.EPAM_DEFECT_ISSUE_TYPES = 'bug';
+    try {
+      expect(mod.inferStoryKindHint!({ issuetype: 'bug' })).toBe('defect');
+    } finally { delete process.env.EPAM_DEFECT_ISSUE_TYPES; }
+  });
+
+  it('with nothing declared, even a Bug is treated as new work — the safer contract', () => {
+    delete process.env.EPAM_DEFECT_ISSUE_TYPES;
+    expect(mod.inferStoryKindHint!({ issueType: 'Bug' })).toBe('novel');
   });
 
   it('an absent/unknown issueType defaults to novel, not a silent crash', () => {

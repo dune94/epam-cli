@@ -41,7 +41,8 @@
     "dashboards:build": "npx @11ty/eleventy --config orchestrations/dashboards/.eleventy.js",
     "dashboards:watch": "npx @11ty/eleventy --watch --config orchestrations/dashboards/.eleventy.js",
     "dashboards:serve": "npx @11ty/eleventy --serve --watch --config orchestrations/dashboards/.eleventy.js",
-    "specification:run": "node orchestrations/scripts/spec-mode-runner.js"
+    "specification:run": "node orchestrations/scripts/spec-mode-runner.js",
+    "lint:orchestrations": "eslint -c eslint.orchestrations.config.mjs \"orchestrations/scripts/**/*.js\" --ignore-pattern \"**/.venv-*/**\""
   },
   "keywords": [
     "ai",

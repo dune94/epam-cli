@@ -199,3 +199,70 @@ describe('the partition decides what is replaced and what is kept', () => {
     expect(roster.partitionRosterFindings([{ agent: 'x' }], null).retained).toEqual([]);
   });
 });
+
+describe('the ephemeral-roster clear must consider BOTH registries', () => {
+  // Live 2026-08-08: project-investigators.json carried SIX investigators — three minted that
+  // run plus three left over from 2026-08-07 that had no profile at all. The mint clears the
+  // previous roster only `if (existingRoles.length)`, and `existingRoles` counts ROLES. The
+  // preceding run's mint had failed and left roles empty, so the clear was skipped entirely
+  // and the investigator registry survived into the next run — the cross-run aggregation the
+  // ephemeral-roster rule forbids.
+  //
+  // A registered investigator with no profile is worse than an absent one: it resolves to a
+  // name that reads as minted and investigates with nothing.
+  // NOTE ON AIM: clearProjectRoster itself was never the bug — it already reads both
+  // registries, and the test below confirms that. The defect was the CALLER's guard,
+  // `if (existingRoles.length)`, which asked only about roles before deciding whether there
+  // was anything to clear. hasProjectRoster() makes that decision a single answer both
+  // registries feed, so the caller can no longer ask half the question.
+  it('hasProjectRoster is true when only investigators remain — the live shape', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'roster-has-')); dirs.push(dir);
+    roster.registerProjectRoles(dir, []);
+    roster.registerProjectInvestigators(dir, [{ name: 'stale-investigator', codeline: 'alpha' }]);
+
+    expect(roster.projectRoles(dir), 'fixture must have no roles').toEqual([]);
+    expect(
+      roster.hasProjectRoster(dir),
+      'asking only about roles is how a stale investigator survived into the next run',
+    ).toBe(true);
+  });
+
+  it('hasProjectRoster is false on a genuinely empty project', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'roster-empty-')); dirs.push(dir);
+    expect(roster.hasProjectRoster(dir)).toBe(false);
+  });
+
+  it('the mint step asks hasProjectRoster, not the roles list alone', () => {
+    const step = readFileSync(
+      join(__dirname, '../../../orchestrations/scripts/mint-agents-step.js'), 'utf8');
+    expect(step).toMatch(/hasProjectRoster/);
+    expect(
+      step,
+      'the clear is still gated on the roles list, so an investigator-only roster survives',
+    ).not.toMatch(/if \(existingRoles\.length\)\s*\{/);
+  });
+
+  it('a project with investigators but NO roles still reports something to clear', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'roster-stale-')); dirs.push(dir);
+    const profilesPath = join(dir, 'profiles.json');
+    writeFileSync(profilesPath, JSON.stringify({ 'canonical-agent': 'CANONICAL' }, null, 2));
+
+    // exactly the live shape: a failed mint left no roles, investigators survived
+    roster.registerProjectRoles(dir, []);
+    roster.registerProjectInvestigators(dir, [{ name: 'stale-investigator', codeline: 'alpha' }]);
+
+    expect(
+      roster.projectRoles(dir),
+      'the fixture must have NO roles or it does not reproduce the defect',
+    ).toEqual([]);
+    expect(roster.projectInvestigators(dir)).toEqual(['stale-investigator']);
+
+    const cleared = roster.clearProjectRoster(dir, profilesPath);
+    expect(
+      cleared,
+      'the clear was skipped because no ROLES existed, so a stale investigator survived the run',
+    ).toEqual(['stale-investigator']);
+    expect(readJson(join(dir, 'project-investigators.json')).investigators).toEqual([]);
+    expect(readJson(join(dir, 'project-investigators.json')).byCodeline).toEqual({});
+  });
+});

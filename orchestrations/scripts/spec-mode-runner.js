@@ -3535,6 +3535,34 @@ async function mintProjectAgents({
   //
   // Stated as a rule about this pipeline, naming no framework and no file convention: which
   // tools a project tests with is the project's business, and this says nothing about it.
+  // A BRIEF MAY NOT ASSERT A VENDOR'S API AS ITS OWN KNOWLEDGE.
+  //
+  // On 2026-08-03 a brief stated which token key a vendor's API accepts, in the form "use X,
+  // NOT Y". The claim was invented, contradicted the installed package's own types, and made a
+  // reviewer reject correct work across three codelines. On 2026-08-08 a minted brief said
+  // "preview_token (not management_token)" and named a concrete API host — the same shape,
+  // reached again by a different route, and caught by the shipped-config guard.
+  //
+  // A brief is inherited WHOLE and is not re-checked against anything, so an invented API
+  // detail in one becomes an instruction. What a repository declares is verifiable and welcome;
+  // what a remote API accepts is not, unless a fetched document says so and is credited.
+  const vendorClaimRule = [
+    'WHAT YOU MAY STATE AS FACT.',
+    '',
+    'What a repository contains or declares — you or a survey read it, and the next agent can',
+    'read it too. State it freely.',
+    '',
+    'What an external API, SDK or service accepts — its option names, field names, endpoints,',
+    'hosts, token kinds — you may NOT state as your own knowledge. If a document quoted above',
+    'says it, attribute it ("the linked documentation states..."). Otherwise instruct the role',
+    'to verify it against the installed package before relying on it.',
+    '',
+    'Never write that one API key, field or option is correct and another is wrong. A claim of',
+    'that shape is inherited as an instruction, is not re-checked by anything, and has already',
+    'caused correct work to be rejected across three codelines.',
+    '',
+  ].join('\n');
+
   const testOwnershipRule = [
     'WHO WRITES THE TESTS — NOT THESE ROLES.',
     '',
@@ -3549,7 +3577,7 @@ async function mintProjectAgents({
     '',
   ].join('\n');
 
-  const prompt = `${correctiveBlock}${retainedBlock}${surveyBlock}${testOwnershipRule}${basePrompt}
+  const prompt = `${correctiveBlock}${retainedBlock}${surveyBlock}${vendorClaimRule}${testOwnershipRule}${basePrompt}
 
 THE WORK THIS PROJECT HAS BEEN ASKED TO DO (real tickets from the tracker):
 ${ticketBlock || '- (no tickets available)'}
@@ -3964,7 +3992,30 @@ async function reviewRoster({
     null, '', repoPath || '', env,
   );
 
-  const raw = (payload && Array.isArray(payload.findings)) ? payload.findings : [];
+  // A REVIEW THAT DID NOT RUN IS NOT A CLEAN REVIEW.
+  //
+  // Live 2026-08-08: the reviewer returned completely empty output — 47KB of prompt in, 10
+  // bytes out — and this roster reached the operator pause labelled "sound", unreviewed. A
+  // null payload became an empty finding list, and an empty finding list is exactly what a
+  // genuine clean review looks like, so "produced nothing" and "found nothing wrong" were the
+  // same value. There IS a guard for this a few lines up in the caller, but it only catches a
+  // thrown error and runAgentForJson returns null on unparseable output rather than throwing.
+  //
+  // Deriving the verdict from the findings instead of taking the model's word stays. What was
+  // missing is a third state: the payload must carry a findings ARRAY to count as a review at
+  // all. This is the only agent standing between a generated brief and an implementer
+  // inheriting it whole, so its silence must never read as approval.
+  if (!payload || !Array.isArray(payload.findings)) {
+    return {
+      verdict: 'review_failed',
+      findings: [],
+      refuted: [],
+      reviewed: 0,
+      error: 'the roster reviewer returned no usable findings — the tag was missing, empty, or ' +
+             'not the reviewed shape. The roster is UNREVIEWED, which is not the same as sound.',
+    };
+  }
+  const raw = payload.findings;
 
   // RE-RUN THE REVIEWER'S OWN CHECK. A finding that turns on whether a named dependency or
   // path is present is mechanically settleable, and the reviewer states it in a structured

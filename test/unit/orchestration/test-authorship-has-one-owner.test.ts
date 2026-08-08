@@ -126,6 +126,67 @@ describe('the writer is told tests are not its job — REAL execution', () => {
   });
 });
 
+describe('a brief may not assert a vendor API as its own knowledge', () => {
+  // 2026-08-03: a brief stated which token key a vendor's API accepts, in the form "use X, NOT
+  // Y". Invented, contradicted the installed package's own types, and made a reviewer reject
+  // correct work across three codelines. 2026-08-08: a minted brief said "preview_token (not
+  // management_token)" and named a concrete API host — same shape, different route, caught by
+  // the shipped-config guard in project-facts-attributable.test.ts.
+  //
+  // A brief is inherited whole and re-checked by nothing, so an invented API detail becomes an
+  // instruction. The rule names no vendor and no product: what a repo declares is verifiable,
+  // what a remote API accepts is not.
+  async function mintPrompt() {
+    const dir = mkdtempSync(join(tmpdir(), 'vendor-claim-')); dirs.push(dir);
+    const profilesPath = join(dir, 'profiles.json');
+    writeFileSync(profilesPath, JSON.stringify({ 'canonical-agent': 'CANONICAL' }));
+    const capture = join(dir, 'prompt.txt');
+    const sh = join(dir, 'run.sh');
+    writeFileSync(sh,
+      `#!/usr/bin/env bash\ncat > ${JSON.stringify(capture)}\n` +
+      `cat <<'ANSWER'\n<PROJECT_AGENTS>{"proposedAgents":[]}</PROJECT_AGENTS>\nANSWER\n`);
+    chmodSync(sh, 0o755);
+    delete process.env.SPEC_MODE_PROVIDER;
+    await spec.mintProjectAgents({
+      promptExec: { cmd: sh, args: [] },
+      tickets: [{ id: 'T-1', title: 't', description: 'd' }],
+      referencedDocs: [], codelines: [{ name: 'alpha', path: '/x/alpha' }],
+      profilesPath, agentsDir: dir, logDir: dir, repoPath: dir,
+    });
+    return existsSync(capture) ? readFileSync(capture, 'utf8') : '';
+  }
+
+  it('the proposer is told repository facts are statable and API facts are not', async () => {
+    const prompt = await mintPrompt();
+    expect(prompt.length, 'no prompt reached the proposer').toBeGreaterThan(200);
+    expect(prompt).toMatch(/repository (contains|declares)/i);
+    expect(prompt).toMatch(/may NOT state as your own knowledge/i);
+  }, 60_000);
+
+  it('the "X is right, Y is wrong" shape is forbidden by name', async () => {
+    const prompt = await mintPrompt();
+    expect(
+      prompt,
+      'nothing forbids the exact shape that got correct work rejected across three codelines',
+    ).toMatch(/one API key, field or option is correct and another is wrong/i);
+  }, 60_000);
+
+  it('a documented claim is allowed when attributed, not banned outright', async () => {
+    // Banning vendor facts entirely would throw away the fetched documents, which are the
+    // whole reason those documents are fetched.
+    const prompt = await mintPrompt();
+    expect(prompt).toMatch(/attribute it/i);
+  }, 60_000);
+
+  it('the rule names no vendor, product or package — it is a rule about evidence', async () => {
+    const prompt = await mintPrompt();
+    const start = prompt.indexOf('WHAT YOU MAY STATE AS FACT');
+    const rule = prompt.slice(start, start + 1200);
+    expect(start, 'the rule is missing entirely').toBeGreaterThan(-1);
+    expect(rule).not.toMatch(/contentstack|next\.?js|jest|react/i);
+  }, 60_000);
+});
+
 describe('the seam list is the authority on who may author', () => {
   it('repro-test-writer is an authoring seam, not a roster role', () => {
     const perimeter = readFileSync(

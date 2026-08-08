@@ -316,7 +316,14 @@ fi
 # across runs (879c705) — profiles.json is ephemeral, the KB files are the store.
 _ROSTER_CLEARED=0
 _PROJECT_CFG_DIR="${EPAM_PROJECT_CONFIG_DIR:-}"
+# BOTH registries. project-investigators.json was added after this list and never joined it,
+# so a previous run's investigators survived every reset. Live 2026-08-08: six investigators
+# were registered — three from that run and three from the run before, whose profiles had been
+# restored away by the block just below. A registered investigator with no brief resolves to a
+# name that reads as minted and investigates with nothing, and byCodeline can point a lane
+# straight at it.
 for _rf in "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/project-roles.json}" \
+           "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/project-investigators.json}" \
            "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/agent-profiles.json}"; do
     [ -n "$_rf" ] && [ -f "$_rf" ] || continue
     rm -f "$_rf" 2>/dev/null && _ROSTER_CLEARED=$((_ROSTER_CLEARED+1)) || true

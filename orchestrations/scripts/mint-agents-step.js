@@ -428,7 +428,7 @@ if (require.main !== module) return;
   const remint = process.env.EPAM_REMINT_AGENTS === '1';
   let _mintedNames = [];
   let _mintedDetail = [];
-  if (existingRoles.length && sameRun && !remint) {
+  if (rosterLib.hasProjectRoster(AGENTS_DIR) && sameRun && !remint) {
     process.stderr.write(
       `[mint-step] roster already minted in THIS run (${thisRunId}): ${existingRoles.join(', ')} ` +
       '— reusing exactly what was reviewed at the pause.\n');
@@ -439,7 +439,8 @@ if (require.main !== module) return;
     // cleared before this run proposes: registry, stored briefs and live entries. Canonical
     // roles are untouched. The KB files stay — cross-run agent knowledge is the one thing
     // that is meant to persist (879c705).
-    if (existingRoles.length) {
+    // BOTH registries decide this, never the roles list alone — see hasProjectRoster.
+    if (rosterLib.hasProjectRoster(AGENTS_DIR)) {
       const cleared = rosterLib.clearProjectRoster(AGENTS_DIR, PROFILES_PATH);
       process.stderr.write(
         `[mint-step] clearing the previous run's roster before minting (${cleared.length}): ` +
@@ -637,6 +638,27 @@ if (require.main !== module) return;
 
   review.cycles = cycle;
   fs.writeFileSync(path.join(LOG_DIR, 'roster-review.json'), JSON.stringify(review, null, 2));
+
+  // THE REVIEW NOT RUNNING IS AS SERIOUS AS THE REVIEW FAILING THE ROSTER.
+  //
+  // Live 2026-08-08: the reviewer returned empty output, reviewRoster reported "sound", and
+  // this roster reached the operator pause labelled clean while nothing had checked it. The
+  // reviewer is the only thing standing between a generated brief and an implementer
+  // inheriting it whole, so an absent review gets the SAME treatment as surviving defects:
+  // stated loudly, and refused outright when no pause is configured for anyone to see it.
+  if (review.verdict === 'review_failed' || review.verdict === 'not_run') {
+    process.stderr.write(
+      `[mint-step] ! the roster was NOT reviewed (${review.verdict})` +
+      `${review.error ? `: ${review.error}` : ''}\n`);
+    if (!/^(1|true|yes)$/i.test(process.env.EPAM_PAUSE_AFTER_AGENT_MINT || '')) {
+      throw new Error(
+        'roster review did not run, so these briefs are unchecked, and no roster pause is ' +
+        'configured for anyone to look at them. An unreviewed roster is not a sound one. ' +
+        'See roster-review.json.');
+    }
+    process.stderr.write(
+      '[mint-step] the roster pause is on — surfacing the UNREVIEWED roster for review rather than halting\n');
+  }
 
   // Still defective after the full correction budget. With the pause on, the operator sees it
   // and decides. With the pause OFF nothing downstream would ever mention it, so it halts here.

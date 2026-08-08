@@ -525,8 +525,23 @@ function partitionRosterFindings(blockingFindings, mintedAgents) {
   return { indicted, retained: minted.filter((m) => !indicted.includes(m.name)), gaps };
 }
 
+/**
+ * hasProjectRoster(agentsDir) — is there anything minted from a previous run to clear?
+ *
+ * ONE answer, fed by BOTH registries. The mint used to decide this from the roles list alone:
+ * live 2026-08-08, a failed mint had left roles empty while three investigators from the run
+ * before survived, so the ephemeral-roster clear was skipped entirely and the next run
+ * appended to them — the cross-run aggregation the rule forbids. A registered investigator
+ * with no profile is worse than an absent one: it resolves to a name that reads as minted and
+ * investigates with nothing.
+ */
+function hasProjectRoster(agentsDir) {
+  return projectRoles(agentsDir).length > 0 || projectInvestigators(agentsDir).length > 0;
+}
+
 module.exports = {
   partitionRosterFindings,
+  hasProjectRoster,
   mergeProjectAgents, isUsableProposal, ROLE_NAME_RE,
   registerProjectRoles, projectRoles, projectRolesPath, PROJECT_ROLES_FILE,
   saveProjectProfiles, applyProjectProfiles, projectProfilesPath, PROJECT_PROFILES_FILE,

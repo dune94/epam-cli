@@ -110,7 +110,7 @@ function runGate(prd: unknown, env: Record<string, string> = {}) {
  * the "an approved, high-quality review PASSES" case carried a hard blocker. The fixture,
  * not the gate, was wrong. See spec-review-blocking-policy.test.ts for flag behaviour.
  */
-function storyWithVerdict(verdict: string, qualityScore: number | null, flags: string[] = []) {
+function storyWithVerdict(verdict: string, qualityScore: number | null, flags: unknown[] = []) {
   return {
     id: 'ST-1',
     status: 'pending',
@@ -132,7 +132,7 @@ describe('the spec-review gate reads the path the producer writes', () => {
   });
 
   it('THE LIVE DEFECT: a needs_review verdict, persisted as the pipeline persists it, BLOCKS', () => {
-    const { code, out } = runGate({ stories: [storyWithVerdict('needs_review', 0.45)] });
+    const { code, out } = runGate({ stories: [storyWithVerdict('needs_review', 0.45, [{ flag: 'missing_fix_site', severity: 'blocking' }])] }, { SPEC_REVIEW_BLOCKING_FLAGS: 'missing_fix_site' });
     expect(
       code,
       'the gate passed a story the reviewer refused. Live, all three lanes returned ' +
@@ -141,9 +141,22 @@ describe('the spec-review gate reads the path the producer writes', () => {
     ).not.toBe(0);
   });
 
-  it('a quality score below the bar BLOCKS, at the producer\'s path', () => {
+  it('a low quality score alone does NOT block — it is telemetry', () => {
+    // POLICY CHANGE 2026-08-07 (operator decision): qualityScore is TELEMETRY and never
+    // gates. Unlike a flag, a verdict or a missing manifest path it is not a claim about
+    // anything, so it can be neither structurally constrained nor independently re-checked
+    // — the treatment every other model assertion here now gets. It was the DEFAULT blocker
+    // while the specific enumerable signal defaulted to empty, so the only thing that could
+    // stop a run was the one thing nobody could interrogate: a lane halted on a 0.02 margin
+    // while two cleared. What blocks now is a needs_review verdict carrying at least one
+    // flag, plus the deterministic missing-manifest-path check.
     const { code } = runGate({ stories: [storyWithVerdict('approved', 0.45)] });
-    expect(code, 'a 0.45 review passed a 0.7 bar').not.toBe(0);
+    expect(code, 'a scalar nobody can interrogate still stops a run').toBe(0);
+  });
+
+  it('the score is still REPORTED at the producer\'s path, so a degrading reviewer is visible', () => {
+    const { out } = runGate({ stories: [storyWithVerdict('needs_review', 0.45)] });
+    expect(out).toMatch(/0\.45/);
   });
 
   it('an approved, high-quality review PASSES — the gate is not simply always-on', () => {
@@ -152,7 +165,7 @@ describe('the spec-review gate reads the path the producer writes', () => {
   });
 
   it('the gate NAMES the offending story, so the failure is actionable', () => {
-    const { out } = runGate({ stories: [storyWithVerdict('needs_review', 0.45)] });
+    const { out } = runGate({ stories: [storyWithVerdict('needs_review', 0.45, [{ flag: 'missing_fix_site', severity: 'blocking' }])] }, { SPEC_REVIEW_BLOCKING_FLAGS: 'missing_fix_site' });
     expect(out).toContain('ST-1');
   });
 
@@ -167,7 +180,7 @@ describe('the spec-review gate reads the path the producer writes', () => {
   });
 
   it('a deprecated story is ignored even when flagged', () => {
-    const s = { ...storyWithVerdict('needs_review', 0.1), status: 'deprecated' };
+    const s = { ...storyWithVerdict('needs_review', 0.1, [{ flag: 'missing_fix_site', severity: 'blocking' }]), status: 'deprecated' };
     expect(runGate({ stories: [s] }).code).toBe(0);
   });
 
@@ -179,10 +192,11 @@ describe('the spec-review gate reads the path the producer writes', () => {
     expect(code).toBe(0);
   });
 
-  it('SPEC_REVIEW_MIN_QUALITY moves the bar without touching the engine', () => {
-    const prd = { stories: [storyWithVerdict('approved', 0.5)] };
-    expect(runGate(prd, { SPEC_REVIEW_MIN_QUALITY: '0.9' }).code).not.toBe(0);
-    expect(runGate(prd, { SPEC_REVIEW_MIN_QUALITY: '0.3' }).code).toBe(0);
+  it('a project may NARROW which flags block, without touching the engine', () => {
+    const { code } = runGate(
+      { stories: [storyWithVerdict('needs_review', 0.95, ['style_nit'])] },
+      { SPEC_REVIEW_BLOCKING_FLAGS: 'missing_fix_site' });
+    expect(code, 'an unlisted flag blocked despite the project narrowing the set').toBe(0);
   });
 
   it('the gate does NOT query a field no producer writes', () => {

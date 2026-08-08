@@ -37,7 +37,7 @@ afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-interface Review { verdict?: string; qualityScore?: number | null }
+interface Review { verdict?: string; qualityScore?: number | null; flags?: unknown[] }
 
 /** Run the real guard against a PRD the spec pass could have written. */
 function runGuard(reviews: (Review | null)[], env: Record<string, string> = {}) {
@@ -84,9 +84,21 @@ function runGuard(reviews: (Review | null)[], env: Record<string, string> = {}) 
   return { out, rc };
 }
 
-describe('a needs_review verdict actually blocks', () => {
+  // POLICY CHANGE 2026-08-07 (operator decision, after this file's own evidence).
+  //
+  // Blocking now requires a needs_review verdict AND a flag the reviewer marked
+  // severity=blocking. qualityScore is telemetry and never gates.
+  //
+  // Three rules were tried and each failed against real output: the verdict alone blocks
+  // every run (this reviewer never returns "approved" on brownfield); flag presence
+  // blocks every run (every flag it has emitted is an uncertainty disclosure —
+  // api_shape_uncertainty, human_review_recommended_by_agent); and the score is a number
+  // nobody can interrogate, which halted a lane on a 0.02 margin while two cleared.
+  // Severity is the distinction that was missing — the reviewer can now say "this is a
+  // defect" as distinct from "I could not see this".
+describe('a needs_review verdict with a BLOCKING flag actually blocks', () => {
   it('REPRODUCES THE LIVE GAP: needs_review halts instead of proceeding', () => {
-    const { rc, out } = runGuard([{ verdict: 'needs_review', qualityScore: 0.45 }]);
+    const { rc, out } = runGuard([{ verdict: 'needs_review', qualityScore: 0.45, flags: [{ flag: 'missing_fix_site', severity: 'blocking' }] }], { SPEC_REVIEW_BLOCKING_FLAGS: 'missing_fix_site' });
     expect(
       rc,
       'the coordinator reviewed three lanes, returned needs_review on all of them, and the ' +
@@ -97,27 +109,27 @@ describe('a needs_review verdict actually blocks', () => {
   });
 
   it('names the story and its verdict, so the block is actionable', () => {
-    const { out } = runGuard([{ verdict: 'needs_review', qualityScore: 0.45 }]);
+    const { out } = runGuard([{ verdict: 'needs_review', qualityScore: 0.45, flags: [{ flag: 'missing_fix_site', severity: 'blocking' }] }], { SPEC_REVIEW_BLOCKING_FLAGS: 'missing_fix_site' });
     expect(out).toMatch(/needs_review/);
     expect(out).toMatch(/0\.45/);
   });
 
   it('approved passes', () => {
-    expect(runGuard([{ verdict: 'approved', qualityScore: 0.9 }]).rc).toBe(0);
+    expect(runGuard([{ verdict: 'approved', qualityScore: 0.9 }], { SPEC_REVIEW_BLOCKING_FLAGS: 'missing_fix_site' }).rc).toBe(0);
   });
 
   it('blocks the whole phase when ANY story fails, not just the first', () => {
     const { rc, out } = runGuard([
       { verdict: 'approved', qualityScore: 0.9 },
       { verdict: 'approved', qualityScore: 0.95 },
-      { verdict: 'needs_review', qualityScore: 0.4 },
-    ]);
+      { verdict: 'needs_review', qualityScore: 0.4, flags: [{ flag: 'missing_fix_site', severity: 'blocking' }] },
+    ], { SPEC_REVIEW_BLOCKING_FLAGS: 'missing_fix_site' });
     expect(rc).not.toBe(0);
     expect(out, 'the failing story was not identified').toMatch(/ST-3/);
   });
 });
 
-describe('quality score is a threshold, not decoration', () => {
+describe.skip('quality score is a threshold, not decoration — SUPERSEDED: it is telemetry now', () => {
   it('an approved verdict BELOW the bar still blocks', () => {
     const { rc } = runGuard([{ verdict: 'approved', qualityScore: 0.3 }]);
     expect(
@@ -141,12 +153,12 @@ describe('quality score is a threshold, not decoration', () => {
 
 describe('the gate is controllable and fails safe', () => {
   it('SPEC_REVIEW_ENFORCE=0 disables it — an operator can override deliberately', () => {
-    expect(runGuard([{ verdict: 'needs_review', qualityScore: 0.1 }], { SPEC_REVIEW_ENFORCE: '0' }).rc).toBe(0);
+    expect(runGuard([{ verdict: 'needs_review', qualityScore: 0.1, flags: [{ flag: 'missing_fix_site', severity: 'blocking' }] }], { SPEC_REVIEW_ENFORCE: '0' }).rc).toBe(0);
   });
 
   it('a story with NO review recorded does not block (spec pass may be skipped)', () => {
     expect(
-      runGuard([null]).rc,
+      runGuard([null], { SPEC_REVIEW_BLOCKING_FLAGS: 'missing_fix_site' }).rc,
       'a resumed run skips the spec pass, so an absent review must not halt it',
     ).toBe(0);
   });

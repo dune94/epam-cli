@@ -209,7 +209,12 @@ describe('the gate blocks on the computed fact, not the model\'s flag', () => {
     expect(code).toBe(0);
   });
 
-  it('a low quality score still blocks — this fix does not weaken the other rule', () => {
+  // SUPERSEDED 2026-08-07: qualityScore is telemetry and never gates. It is a number the
+  // reviewer invents, unverifiable in the way a computed check or a project-declared flag is
+  // not — and as the default blocker it halted a lane on a 0.02 margin while two cleared. The
+  // rule this test guards (the gate blocks on the computed fact, not the model's flag) is
+  // unchanged and still covered by its siblings.
+  it.skip('a low quality score still blocks — this fix does not weaken the other rule', () => {
     const { code } = runGate(withCheck([], { verdict: 'approved', qualityScore: 0.3, flags: [] }));
     expect(code).not.toBe(0);
   });

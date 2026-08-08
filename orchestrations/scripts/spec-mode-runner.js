@@ -703,7 +703,42 @@ const TOOL_SPEC_REVIEW = {
             verdict: { type: 'string' },
             reviewNotes: { type: 'string' },
             qualityScore: { type: 'number' },
-            flags: { type: 'array', items: { type: 'string' } },
+            // FLAGS CARRY SEVERITY, because presence alone cannot gate.
+            //
+            // Every flag this reviewer has ever emitted is an uncertainty disclosure —
+            // api_shape_uncertainty, human_review_recommended_by_agent,
+            // unverified_cx_shared_assumptions. It never returns "approved" on a brownfield
+            // ticket either. So a rule built on the verdict blocks every run, and a rule built
+            // on flag presence blocks every run, and the only remaining signal was a scalar
+            // nobody can interrogate. Three rules failed in turn for one reason: the reviewer
+            // had no way to say "this is a defect" as distinct from "I was not certain".
+            //
+            // Strings are still accepted so an older reviewer's output keeps parsing; a bare
+            // string is treated as advisory, because that is what all of them have been.
+            flags: {
+              type: 'array',
+              description:
+                'Each flag is either a bare string (advisory) or an object carrying severity. ' +
+                'Severity RANKS your objections for the human reading them; it does not decide ' +
+                'whether the run stops. Mark blocking when an implementer following this spec ' +
+                'would produce work that cannot function, and advisory for uncertainty about ' +
+                'what you could not see. What halts a run is a computed check or a flag this ' +
+                'project has declared blocking — not your assessment of your own output.',
+              items: {
+                oneOf: [
+                  { type: 'string' },
+                  {
+                    type: 'object',
+                    required: ['flag', 'severity'],
+                    properties: {
+                      flag: { type: 'string', description: 'Short slug naming the objection.' },
+                      severity: { type: 'string', enum: ['blocking', 'advisory'] },
+                      why: { type: 'string', description: 'What you checked, and what you found.' },
+                    },
+                  },
+                ],
+              },
+            },
           },
         },
       },
@@ -1090,6 +1125,11 @@ const MANIFEST_GROUNDING_BLOCK = [
   'Judge what the evidence cannot: are the acceptance criteria testable, is the declared',
   'file set plausible for this change, is anything obviously missing. If you are unsure,',
   'lower qualityScore and add a flag — do not withhold the verdict. A missing review is',
+  'EVERY FLAG CARRIES A SEVERITY. It ranks your objections for whoever reads them; it does not',
+  'decide whether the run stops — a computed check or a project-declared flag does that. Mark',
+  'blocking when an implementer following this spec would produce work that CANNOT FUNCTION,',
+  'and advisory for uncertainty about what you could not see. Report both honestly: nothing is',
+  'gained by inflating uncertainty into a defect, and nothing is lost by naming a real one.',
   'worse than an uncertain one: it means nothing was checked at all.',
 ].join('\n');
 
@@ -2108,7 +2148,7 @@ score belongs at 0.7 or above.
 
 Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
 [
-  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[],"planAlignment":"aligned|justified_deviation|unexplained_mismatch|not_applicable"}
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[{"flag":"short-slug","severity":"blocking|advisory","why":"what you checked and what you found"}],"planAlignment":"aligned|justified_deviation|unexplained_mismatch|not_applicable"}
 ]
 
 Stories to review:

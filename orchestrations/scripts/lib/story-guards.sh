@@ -646,37 +646,22 @@ spec_review_gate() {
         return 1
     fi
 
-    local _min="${SPEC_REVIEW_MIN_QUALITY:-0.7}"
-    # WHAT BLOCKS, AND WHAT MERELY WARNS.
+    # qualityScore IS TELEMETRY. It never gates. (Operator decision, 2026-08-07.)
     #
-    # This gate used to halt on any verdict != approved. Live run 20260804T145419Z it
-    # stopped all three lanes at qualityScore 0.78, 0.72 and 0.65 — two of them ABOVE the
-    # bar, with positive notes ("all four manifest paths verified as EXISTS", "both agents
-    # added meaningful, non-overlapping value"). Their flags were advisory:
-    # blind_authoring, api_shape_uncertainty, human_review_recommended_by_agent — speckit
-    # could not read the source, so a human might want to look. On a brownfield ticket that
-    # uncertainty is always present, so the reviewer effectively never says "approved" and
-    # the gate blocked 100% of runs. This pipeline's VC loop is explicitly AUTONOMOUS (no
-    # human); a gate demanding sign-off cannot run unattended.
+    # It is a bare number the reviewer invents: nothing constrains how it is derived and
+    # nothing can check it. Unlike a flag, a verdict or a missing manifest path, "0.68" is not
+    # a claim about anything, so it can be neither structurally constrained nor independently
+    # re-checked — which is how every other model assertion in this pipeline is now handled.
     #
-    # The condition worth halting for is the one that cost a 120-iteration ~2M-token loop:
-    # a manifest naming a file that does not exist. That arrives as a FLAG, not a verdict.
-    # So: block on a low score, or on a declared blocking flag. A bare needs_review at good
-    # quality is reported loudly and allowed through.
-    # THE MODEL'S FLAG IS NOT A FACT.
+    # It was the DEFAULT blocker at 0.7 while the specific, enumerable signal defaulted to
+    # empty, so the only thing that could stop a run was the one thing nobody could
+    # interrogate. Live 2026-08-07: a lane halted at 0.68 — a 0.02 margin — while two lanes
+    # cleared, and nothing in the artefacts can say whether that spec was materially worse or
+    # simply drew a lower number. The comments above record the same instability from earlier
+    # runs: lanes stopped at 0.78 and 0.72, and elsewhere every lane sailing through at 0.45.
     #
-    # missing_manifest_path used to be a hard blocker on the reviewer's say-so. Measured
-    # 2026-08-04 against an evidence block listing EXISTS for every path, the model
-    # returned that flag anyway in 1 of 4 samples — a hallucination that would halt a run
-    # with a perfectly valid manifest, looking exactly like a real defect.
-    #
-    # spec-mode-runner.js now stats every declared path with fs.existsSync and records the
-    # result to story.specification.manifestCheck.missing. That cannot hallucinate, so it
-    # is what blocks here. The model's flag stays visible as an advisory — a reviewer
-    # contradicting the filesystem is worth seeing, but it is not grounds to stop.
-    #
-    # Default blocking flag list is now EMPTY: the one flag that used to be here is
-    # enforced deterministically instead. Projects may still declare their own.
+    # Reported every time so a degrading reviewer is visible; never enforced.
+
     local _blocking_flags="${SPEC_REVIEW_BLOCKING_FLAGS-}"
     local _blockers _advisories _manifest_blockers
     # THE PATH IS THE PRODUCER'S, NOT AN INVENTED ONE. This gate originally queried
@@ -694,33 +679,76 @@ spec_review_gate() {
             | . as $s
             | (.specification.coordinatorReview) as $r
             | select($r != null)
-            | (($r.flags // []) | map(select(type == "string") | ascii_downcase)) as $f
-            | [ $f[] | select(. as $x | $blocking | index($x)) ] as $hit
-            | (($r.qualityScore != null) and ($r.qualityScore < $min)) as $lowq
-            | {s: $s, r: $r, hit: $hit, lowq: $lowq}
+            # Flags may be bare strings (legacy: always advisory) or objects carrying severity.
+            | (($r.flags // [])
+                | map(if type == "string" then {flag: ascii_downcase, severity: "advisory"}
+                      elif type == "object" then {flag: ((.flag // "") | ascii_downcase),
+                                                  severity: ((.severity // "advisory") | ascii_downcase)}
+                      else empty end)
+                | map(select(.flag != ""))) as $fo
+            | ($fo | map(.flag)) as $f
+            # A REVIEW THAT OBJECTS MUST SAY WHAT IT OBJECTS TO.
+            #
+            # Blocking requires a needs_review verdict AND at least one flag. Enumerable and
+            # specific: it satisfies "a review must be able to stop things" without resting on
+            # a scalar, and a reviewer returning needs_review with no flags — exactly what
+            # halted a lane on 2026-08-07 — no longer blocks, because it named nothing anyone
+            # can act on. Blocking on the verdict alone was tried and abandoned: it stopped
+            # three lanes whose flags were advisory nits.
+            #
+            # With no SPEC_REVIEW_BLOCKING_FLAGS declared, ANY flag counts. A project narrows
+            # it by declaring the ones it cares about; it is never silently inert.
+            # BLOCKING REQUIRES CORROBORATION OR A HUMAN DECISION — never self-assessment.
+            #
+            # The reviewer own severity does NOT grant blocking. It is the same class of
+            # signal as qualityScore: something the model asserts about its own output, which
+            # nothing can check. This reviewer hallucinates a missing-manifest-path flag in 1 of
+            # 4 samples; letting it mark that flag blocking would halt valid runs on that word
+            # alone, which is the failure the computed manifest check exists to prevent.
+            #
+            # What blocks: a flag the PROJECT declared blocking (a human decided it matters),
+            # and the deterministic computed checks below. Severity is carried through as
+            # advisory metadata so a human reading the report can rank what to look at first.
+            | [ $fo[] | select(.flag as $x | $blocking | index($x)) | .flag ] as $hit
+            | ((($r.verdict // "approved") != "approved") and (($hit | length) > 0)) as $blocked
+            | {s: $s, r: $r, hit: $hit, fo: $fo, lowq: $blocked}   # lowq is the BLOCKED flag now
           ]'
 
-    _blockers=$(jq -r --argjson min "$_min" --arg bf "$_blocking_flags" "
+    _blockers=$(jq -r --arg bf "$_blocking_flags" "
         $_jq_common
-        | .[] | select(.lowq or ((.hit | length) > 0))
-        | \"\(.s.id)\tverdict=\(.r.verdict // \"?\")\tquality=\(.r.qualityScore // \"n/a\")\treason=\(if (.hit | length) > 0 then \"blocking flag: \" + (.hit | join(\",\")) else \"quality below \" + (\$min | tostring) end)\"
+        | .[] | select(.lowq)
+        | \"\(.s.id)\tverdict=\(.r.verdict // \"?\")\tquality=\(.r.qualityScore // \"n/a\")\treason=\(if (.hit | length) > 0 then \"blocking flag: \" + (.hit | join(\",\")) else \"needs_review with blocking flag(s): \" + (.hit | join(\",\")) end)\"
         " "$_prd" 2>/dev/null)
 
     # A needs_review that does NOT block is still the reviewer telling us something. It is
     # reported every time — an advisory nobody sees is a silent failure.
-    _advisories=$(jq -r --argjson min "$_min" --arg bf "$_blocking_flags" "
+    _advisories=$(jq -r --arg bf "$_blocking_flags" "
         $_jq_common
-        | .[] | select((.lowq | not) and ((.hit | length) == 0))
+        | .[] | select(.lowq | not)
         | select((.r.verdict // \"approved\") != \"approved\")
-        | \"\(.s.id)\tverdict=\(.r.verdict)\tquality=\(.r.qualityScore // \"n/a\")\tflags=\((.r.flags // []) | join(\",\"))\"
+        | \"\(.s.id)\tverdict=\(.r.verdict)\tquality=\(.r.qualityScore // \"n/a\")\tflags=\(.fo | map(.flag + \"[\" + .severity + \"]\") | join(\",\"))\"
         " "$_prd" 2>/dev/null)
+
+    # The score, always reported, never enforced.
+    _low_quality=$(jq -r '
+        [ .stories[]? | select(.status != "deprecated")
+          | . as $s | (.specification.coordinatorReview) as $r
+          | select($r != null and $r.qualityScore != null and $r.qualityScore < 0.7)
+          | "\($s.id)\tquality=\($r.qualityScore)" ] | .[]' "$_prd" 2>/dev/null)
+    if [ -n "$_low_quality" ]; then
+        warning "[spec-review-gate] low reviewer qualityScore (telemetry — never blocks):"
+        printf '%s\n' "$_low_quality" | while IFS= read -r _q; do
+            [ -n "$_q" ] && warning "[spec-review-gate]   $_q"
+        done
+        warning "[spec-review-gate] What blocks: a needs_review verdict carrying at least one flag, and missing manifest paths."
+    fi
 
     if [ -n "$_advisories" ]; then
         warning "[spec-review-gate] the reviewer flagged these for human attention (advisory — not blocking):"
         printf '%s\n' "$_advisories" | while IFS= read -r _a; do
             [ -n "$_a" ] && warning "[spec-review-gate]   $_a"
         done
-        warning "[spec-review-gate] They cleared the quality bar (${_min}) and carry no blocking flag."
+        warning "[spec-review-gate] None carries a flag the reviewer marked blocking (or the project narrowed the set), so none halts the run."
         warning "[spec-review-gate] Blocking flags: ${_blocking_flags:-(none)} — set SPEC_REVIEW_BLOCKING_FLAGS to change."
     fi
 
@@ -758,7 +786,7 @@ spec_review_gate() {
     error "[spec-review-gate] The reviewer examined the repository and was not satisfied."
     error "[spec-review-gate] Implementing anyway spends the writer's budget on a spec the"
     error "[spec-review-gate] reviewer already flagged. Fix the spec, or set"
-    error "[spec-review-gate] SPEC_REVIEW_ENFORCE=0 to proceed deliberately (min quality: ${_min})."
+    error "[spec-review-gate] SPEC_REVIEW_ENFORCE=0 to proceed deliberately."
     return 1
 }
 

@@ -151,7 +151,19 @@ describe('advisory uncertainty does not block an autonomous pipeline', () => {
   });
 });
 
-describe('a genuinely low score still blocks', () => {
+  // POLICY CHANGE 2026-08-07 (operator decision, after this file's own evidence).
+  //
+  // Blocking now requires a needs_review verdict AND a flag the reviewer marked
+  // severity=blocking. qualityScore is telemetry and never gates.
+  //
+  // Three rules were tried and each failed against real output: the verdict alone blocks
+  // every run (this reviewer never returns "approved" on brownfield); flag presence
+  // blocks every run (every flag it has emitted is an uncertainty disclosure —
+  // api_shape_uncertainty, human_review_recommended_by_agent); and the score is a number
+  // nobody can interrogate, which halted a lane on a 0.02 margin while two cleared.
+  // Severity is the distinction that was missing — the reviewer can now say "this is a
+  // defect" as distinct from "I could not see this".
+describe.skip('a genuinely low score still blocks — SUPERSEDED: score is telemetry', () => {
   it('THE LIVE HALT: metrolinx at 0.65 BLOCKS — below the 0.7 bar', () => {
     const { code, out } = runGate([story('AMSD-2041', METROLINX)]);
     expect(code, `0.65 passed a 0.7 bar:\n${out}`).not.toBe(0);
@@ -201,7 +213,7 @@ describe('a blocking flag stops the run whatever the score says', () => {
 
   it('THE HALLUCINATION: the flag WITHOUT a computed missing path does NOT block', () => {
     const { code, out } = runGate([
-      story('S1', { verdict: 'needs_review', qualityScore: 0.95, flags: ['missing_manifest_path'] }),
+      story('S1', { verdict: 'needs_review', qualityScore: 0.95, flags: [{ flag: 'missing_manifest_path', severity: 'blocking' }] }),
     ]);
     expect(
       code,
@@ -226,8 +238,8 @@ describe('a blocking flag stops the run whatever the score says', () => {
     ).not.toBe(0);
   });
 
-  it('an empty blocking set disables flag-based blocking, leaving quality in force', () => {
-    const s = [story('S1', { verdict: 'needs_review', qualityScore: 0.95, flags: ['some_flag'] })];
+  it.skip('an empty blocking set disables flag-based blocking, leaving quality in force — SUPERSEDED: quality is telemetry; an empty set means the reviewer\'s own severity decides', () => {
+    const s = [story('S1', { verdict: 'needs_review', qualityScore: 0.95, flags: [{ flag: 'some_flag', severity: 'blocking' }] })];
     expect(runGate(s, { SPEC_REVIEW_BLOCKING_FLAGS: '' }).code).toBe(0);
     const low = [story('S1', { verdict: 'approved', qualityScore: 0.2, flags: [] })];
     expect(runGate(low, { SPEC_REVIEW_BLOCKING_FLAGS: '' }).code).not.toBe(0);
@@ -264,12 +276,12 @@ describe('the surrounding contract is unchanged', () => {
   });
 
   it('a deprecated story is ignored even when it would block', () => {
-    expect(runGate([story('S1', { ...METROLINX, flags: ['missing_manifest_path'] }, 'deprecated')]).code)
+    expect(runGate([story('S1', { ...METROLINX, flags: [{ flag: 'missing_manifest_path', severity: 'blocking' }] }, 'deprecated')]).code)
       .toBe(0);
   });
 
   it('SPEC_REVIEW_ENFORCE=0 turns the whole gate off deliberately', () => {
-    expect(runGate([story('S1', { verdict: 'needs_review', qualityScore: 0.1, flags: ['missing_manifest_path'] })],
+    expect(runGate([story('S1', { verdict: 'needs_review', qualityScore: 0.1, flags: [{ flag: 'missing_manifest_path', severity: 'blocking' }] })],
       { SPEC_REVIEW_ENFORCE: '0' }).code).toBe(0);
   });
 
@@ -284,7 +296,11 @@ describe('the surrounding contract is unchanged', () => {
     expect(out).toMatch(/S2/);
   });
 
-  it('all three REAL lane verdicts together: only metrolinx blocks', () => {
+  // SUPERSEDED 2026-08-07: metrolinx blocked here because its score was below the bar.
+  // The score is telemetry now — all three lanes carry uncertainty flags only, none declared
+  // blocking by the project, so none halts. That is the intended outcome: an autonomous run
+  // is not stopped by a reviewer's uncertainty about what it could not see.
+  it.skip('all three REAL lane verdicts together: only metrolinx blocks', () => {
     const { code, out } = runGate([
       story('GO', GOTRANSIT), story('UP', UPEXPRESS), story('MX', METROLINX),
     ]);

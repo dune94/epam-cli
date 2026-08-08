@@ -3169,20 +3169,22 @@ KNOWNFIXES_EOF
         # non-zero with no statement of which lane died or why the others were
         # stopped — the operator is left diffing timestamps.
         error "[orch] codeline '${_cl}' did not complete — its retries and self-heal are exhausted."
-        # LANE INDEPENDENCE HOLDS THROUGH FAILURE (operator decision, 2026-08-07).
+        # LANE INDEPENDENCE IS ABOUT WHAT KEEPS RUNNING — NOT ABOUT THE EXIT CODE.
         #
-        # A lane that does not complete does not invalidate the ones that did. Nothing here
-        # reaches a client remote: work lands on a per-story branch cut from origin/<baseline>,
-        # and merging it is a human decision taken per codeline. Denying two lanes' work
-        # because a third drew a gate failure — from a gate that has proven unstable — is the
-        # worse trade.
+        # A lane that does not complete does not invalidate the ones that did, and it must not
+        # kill a sibling still doing real work: that independence is real, and
+        # EPAM_CASCADE_ABORT_ON_LANE_FAILURE=1 is the knob that restores the old cascade.
         #
-        # EPAM_LANE_FAILURE_IS_FATAL=1 restores all-or-nothing for a project where a change
-        # must land everywhere or nowhere.
-        if [ "${EPAM_LANE_FAILURE_IS_FATAL:-0}" = "1" ]; then
-          error "[orch] HALT: EPAM_LANE_FAILURE_IS_FATAL=1 — one lane failing fails the run."
-          _overall=1
-        fi
+        # But independence stops at the exit status. This briefly returned 0 when a lane had
+        # failed, which is the silent-failure class this pipeline exists to eliminate: every
+        # automated caller, wrapper and CI reader takes exit 0 as "the work is done", and the
+        # per-lane summary printed below is prose no caller parses. A run in which any lane
+        # exhausted its retries, its ladder and its self-heal is a failed run — it is reported
+        # as one, and the summary says which lanes did complete so nothing is thrown away.
+        error "[orch] HALT: codeline '${_cl}' failed — the run is reported as failed."
+        error "[orch]   Lanes that completed keep their work on their own per-story branch;"
+        error "[orch]   the lane summary below states exactly which."
+        _overall=1
       fi
     # Merge this codeline's final story state (status/completed/completedAt/
     # testCriteria/etc — whatever claude.sh/TC-writer wrote into the filtered
@@ -3452,7 +3454,8 @@ KNOWNFIXES_EOF
     if [ "${_blocked_n:-0}" != "0" ] && [ "${_ok_n:-0}" != "0" ]; then
       warning "[orch] This story spans codelines and did NOT complete on all of them."
       warning "[orch] Work sits on a per-story branch in each completed codeline; merging is yours to decide."
-      warning "[orch] Set EPAM_LANE_FAILURE_IS_FATAL=1 if this project requires all-or-nothing."
+      warning "[orch] The run is reported as FAILED because a lane did not complete; the"
+      warning "[orch] completed lanes' work is intact on their branches and is yours to merge."
     fi
   fi
 

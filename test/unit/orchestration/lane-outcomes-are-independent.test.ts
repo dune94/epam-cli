@@ -15,7 +15,13 @@
  * never happen is someone merging two of three WITHOUT KNOWING the third is missing — so the
  * summary carries that, loudly.
  *
- * A project needing all-or-nothing sets EPAM_LANE_FAILURE_IS_FATAL=1.
+ * CORRECTED 2026-08-07, same day: the first version of this took independence one step too
+ * far and let the run exit 0 with a lane failed. That is the silent-failure class the pipeline
+ * exists to eliminate — every automated caller reads the exit code, and the per-lane summary
+ * below it is prose no caller parses. Independence governs WHAT KEEPS RUNNING (a failed lane
+ * does not kill a sibling mid-work; EPAM_CASCADE_ABORT_ON_LANE_FAILURE=1 restores the cascade),
+ * never the exit status. A run with any failed lane is a failed run, and the summary states
+ * which lanes did complete so their work is not thrown away.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -24,24 +30,20 @@ import { join } from 'node:path';
 const ORCH = readFileSync(
   join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
 
-describe('a lane that fails no longer fails the run by default', () => {
-  it('the unconditional _overall=1 on lane failure is gone', () => {
+describe('a failed lane always fails the run — independence never touches the exit code', () => {
+  it('lane failure sets _overall=1 unconditionally, under no flag', () => {
     const i = ORCH.indexOf('did not complete — its retries and self-heal are exhausted');
     expect(i, 'the lane-failure branch is gone entirely').toBeGreaterThan(-1);
-    const branch = ORCH.slice(i, i + 1200);
-    // _overall=1 must be reachable ONLY under the explicit opt-in
-    const overallIdx = branch.indexOf('_overall=1');
-    const fatalIdx = branch.indexOf('EPAM_LANE_FAILURE_IS_FATAL');
-    expect(overallIdx, 'lane failure no longer marks the run at all').toBeGreaterThan(-1);
+    const branch = ORCH.slice(i, i + 1600);
+    expect(branch, 'lane failure no longer marks the run at all').toMatch(/_overall=1/);
     expect(
-      fatalIdx,
-      'a failed lane still fails the run unconditionally',
-    ).toBeLessThan(overallIdx);
+      branch,
+      'the exit code was put back behind a flag — a caller reading exit 0 would be told a failed run succeeded',
+    ).not.toMatch(/if \[ "\$\{EPAM_LANE_FAILURE_IS_FATAL[^\n]*\n[^\n]*_overall=1/);
   });
 
-  it('all-or-nothing remains available as an explicit project choice', () => {
-    expect(ORCH).toMatch(/EPAM_LANE_FAILURE_IS_FATAL:-0/);
-    expect(ORCH).toMatch(/one lane failing fails the run/i);
+  it('no opt-in flag can suppress the failure exit code', () => {
+    expect(ORCH, 'the suppression knob is back').not.toMatch(/EPAM_LANE_FAILURE_IS_FATAL/);
   });
 });
 
@@ -82,9 +84,12 @@ describe('a partial outcome is stated, never implied', () => {
     expect(block).toMatch(/merging is yours to decide/i);
   });
 
-  it('it points at the all-or-nothing switch for projects that need it', () => {
+  it('it states plainly that the run is reported as failed', () => {
     const i = ORCH.indexOf('did NOT complete on all of them');
-    expect(ORCH.slice(i, i + 600)).toMatch(/EPAM_LANE_FAILURE_IS_FATAL=1/);
+    expect(
+      ORCH.slice(i, i + 600),
+      'the summary lists partial success without saying the run failed',
+    ).toMatch(/reported as FAILED/);
   });
 
   it('the warning fires only on a MIXED result, not when every lane failed', () => {

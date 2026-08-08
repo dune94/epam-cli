@@ -1,6 +1,6 @@
 /**
  * run_failure_analyst's "kb" case must not append a duplicate (or
- * near-duplicate) entry to a role's KB-<role>.md file.
+ * near-duplicate) entry to a codeline's KB file.
  *
  * Root cause this fixes (found live via manual audit, 2026-07-12,
  * tier3-travel-app run): unlike the "skill" case (which does an exact-
@@ -64,10 +64,20 @@ describe('run_failure_analyst kb case — REAL execution', () => {
   } {
     const dir = mkdtempSync(join(tmpdir(), 'kb-dup-'));
     try {
-      const kbPath = join(dir, 'KB-test-engineer.md');
+      const kbPath = join(dir, 'KB-test-codeline.md');
       writeFileSync(kbPath, opts.existingKbContent);
 
       const kbCaseBody = extractKbCaseBody();
+      // ADDRESS CHANGED 2026-08-07 (ARCH-4): the kb branch no longer builds the filename
+      // inline from story_role — it calls _kb_file_for_story(), which keys the KB on the
+      // CODELINE. The harness extracts the REAL resolver out of claude.sh rather than
+      // reimplementing it, so a change to the addressing rule fails this test instead of
+      // silently diverging from it.
+      const resolver = claudeSrc.slice(
+        claudeSrc.indexOf('_kb_file_for_story() {'),
+        claudeSrc.indexOf('\n}', claudeSrc.indexOf('_kb_file_for_story() {')) + 2,
+      );
+      expect(resolver, 'the KB address resolver vanished from claude.sh').toContain('KB-shared.md');
       const scriptPath = join(dir, 'run.sh');
       writeFileSync(
         scriptPath,
@@ -75,7 +85,10 @@ describe('run_failure_analyst kb case — REAL execution', () => {
           '#!/usr/bin/env bash',
           'log() { echo "LOG: $*"; }',
           'warning() { echo "WARN: $*"; }',
+          resolver,
           `SCRIPT_DIR=${JSON.stringify(join(dir, 'scripts'))}`,
+          // the lane exports its codeline; the resolver prefers it over a PRD lookup
+          `export EPAM_CODELINE="test-codeline"`,
           `story_role="test-engineer"`,
           `story_id="SKY-003-test"`,
           `skill_note=${JSON.stringify(opts.skillNote)}`,
@@ -83,7 +96,7 @@ describe('run_failure_analyst kb case — REAL execution', () => {
           // dirname "$SCRIPT_DIR")/agents must resolve to $dir/agents -- put the
           // real KB file there.
           `mkdir -p ${JSON.stringify(join(dir, 'agents'))}`,
-          `cp ${JSON.stringify(kbPath)} ${JSON.stringify(join(dir, 'agents', 'KB-test-engineer.md'))}`,
+          `cp ${JSON.stringify(kbPath)} ${JSON.stringify(join(dir, 'agents', 'KB-test-codeline.md'))}`,
           'run_change_with_reviewer_retry() {',
           `  printf '%s' "$4" > "\${TMPDIR:-/tmp}/.reviewer-retry-text-$$"`,
           `  echo ${opts.reviewerVerdict}`,
@@ -97,7 +110,7 @@ describe('run_failure_analyst kb case — REAL execution', () => {
         ].join('\n'),
       );
       const logOutput = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
-      const kbAfter = readFileSync(join(dir, 'agents', 'KB-test-engineer.md'), 'utf8');
+      const kbAfter = readFileSync(join(dir, 'agents', 'KB-test-codeline.md'), 'utf8');
       return { kbAfter, logOutput };
     } finally {
       rmSync(dir, { recursive: true, force: true });

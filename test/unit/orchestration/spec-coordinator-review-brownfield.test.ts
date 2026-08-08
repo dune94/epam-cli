@@ -96,7 +96,10 @@ describe('spec coordinator-review — brownfield-aware criteria (cycle-time fix)
     // consistency) — the invariant under test is that ONE schema serves both modes, which
     // still holds; only its content grew.
     expect(block).toMatch(
-      /\{"storyId":"REM-xxx","verdict":"approved\|needs_review","reviewNotes":"coordinator observations","qualityScore":0\.0-1\.0,"flags":\[\],"planAlignment":"aligned\|justified_deviation\|unexplained_mismatch\|not_applicable"\}/,
+      // flags grew from bare slugs to objects carrying severity and the evidence behind the
+      // call (2026-08-07) — severity is advisory metadata, not what the gate blocks on.
+      // The invariant under test is unchanged: ONE schema serves both modes.
+      /\{"storyId":"REM-xxx","verdict":"approved\|needs_review","reviewNotes":"coordinator observations","qualityScore":0\.0-1\.0,"flags":\[\{"flag":"short-slug","severity":"blocking\|advisory","why":"[^"]*"\}\],"planAlignment":"aligned\|justified_deviation\|unexplained_mismatch\|not_applicable"\}/,
     );
   });
 });

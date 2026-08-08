@@ -57,11 +57,16 @@ describe('claude.sh — target=kb structural contract', () => {
     expect(body).toMatch(/\bkb\)/);
   });
 
-  it('kb case writes to KB-${story_role}.md (agent-specific, not monolithic KB.md)', () => {
+  it('kb case writes to the codeline KB (not monolithic KB.md)', () => {
     const kbCaseStart = claudeSrc.indexOf('\n                kb)');
     const kbCaseEnd   = claudeSrc.indexOf('\n                    ;;', kbCaseStart);
     const kbBody      = claudeSrc.slice(kbCaseStart, kbCaseEnd);
-    expect(kbBody).toMatch(/KB-\$\{story_role\}/);
+    // ADDRESS CHANGED 2026-08-07 (ARCH-4): the KB is keyed on the CODELINE, not on an
+    // agent role. The roster is ephemeral and the mint invents role names per run, so
+    // KB-<role>.md was an address that moved every run — entries accumulated in files no
+    // later run could find. _kb_file_for_story() resolves the stable codeline address.
+    // The concern this test guards is unchanged: the entry must NOT go to a monolithic KB.md.
+    expect(kbBody).toMatch(/_kb_file_for_story/);
     expect(kbBody).not.toMatch(/\/KB\.md/);
   });
 
@@ -94,11 +99,11 @@ describe('claude.sh — target=kb structural contract', () => {
     expect(kbBody).toContain('_profile_updated="true"');
   });
 
-  it('logs [FailureAnalyst] message with KB filename', () => {
+  it('logs [FailureAnalyst] message with the KB filename', () => {
     const kbCaseStart = claudeSrc.indexOf('\n                kb)');
     const kbCaseEnd   = claudeSrc.indexOf('\n                    ;;', kbCaseStart);
     const kbBody      = claudeSrc.slice(kbCaseStart, kbCaseEnd);
-    expect(kbBody).toMatch(/FailureAnalyst.*KB-/);
+    expect(kbBody).toMatch(/FailureAnalyst.*basename "\$kb_file"/);
   });
 });
 
@@ -108,11 +113,13 @@ describe('claude.sh — get_relevant_kb_entries uses agent-specific KB + bounded
     expect(claudeSrc).toMatch(/get_relevant_kb_entries\s*\(\)/);
   });
 
-  it('reads from KB-{agentProfile}.md (not KB.md)', () => {
+  it('reads the codeline KB (not KB.md)', () => {
     const funcStart = claudeSrc.indexOf('get_relevant_kb_entries()');
     const funcEnd   = claudeSrc.indexOf('\n}', funcStart + 50);
     const body      = claudeSrc.slice(funcStart, funcEnd);
-    expect(body).toMatch(/KB-\$\{agent_profile\}/);
+    // Same address change as above — the reader must resolve through the same helper as
+    // the writer, or the run reads a file nothing writes.
+    expect(body).toMatch(/_kb_file_for_story/);
   });
 
   it('also reads KB-shared.md for cross-cutting rules', () => {
@@ -512,13 +519,23 @@ describe('regression: agentRole used everywhere (not agentProfile)', () => {
 // profiles.json is {role: "prompt string"} — NOT {profiles: {role: {addendum: ""}}}
 // The old nested-write silently printed an error and left profiles unchanged.
 describe('regression: skill persistence handles flat profiles.json structure', () => {
-  it('skill case python uses profiles[role] (flat) not profiles["profiles"][role]["addendum"]', () => {
+  it('skill case appends to the codeline KB, not into profiles.json', () => {
+    // DESTINATION CHANGED 2026-08-07 (ARCH-5): this used to assert the flat `profiles[role] =`
+    // python write. profiles.json is now SET after the mint and nothing writes it afterwards:
+    // pre-run-reset erases it at the start of every run, so a note persisted there was claimed
+    // to survive into future runs and never did, while three parallel lanes read it. The note
+    // goes to the codeline KB, which is not reset. The original concern — that the write must
+    // not use the nested `profiles['profiles'][role]` path that silently failed — is preserved
+    // as a negative: no shape of profiles.json write may reappear here.
     const skillStart = claudeSrc.indexOf("\n                skill)");
     const skillEnd   = claudeSrc.indexOf('\n                    ;;\n', skillStart);
     const body       = claudeSrc.slice(skillStart, skillEnd);
-    // Flat write: profiles[role] = ...
-    expect(body).toMatch(/profiles\[role\]\s*=/);
-    // Must NOT use the nested nested path that failed
+    expect(skillStart, 'the skill branch vanished — every assertion below is vacuous').toBeGreaterThan(0);
+
+    expect(body).toMatch(/_kb_file_for_story/);
+    expect(body).toMatch(/>>\s*"\$_skill_kb_file"/);
+
+    expect(body, 'a skill note is being written back into the ephemeral roster').not.toMatch(/profiles\[role\]\s*=/);
     expect(body).not.toMatch(/profiles\['profiles'\]\[role\]/);
     expect(body).not.toMatch(/profiles\.get\(['"]profiles['"]/);
   });

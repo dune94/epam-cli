@@ -183,9 +183,18 @@ describe('claude.sh — reviewer-retry wired into kb_entry and skill_note self-h
     expect(callBlock).toMatch(/3\)/);
   });
 
-  it('skill) case persists REVIEWER_RETRY_TEXT to profiles.json, not the original skill_note variable', () => {
+  // DESTINATION CHANGED 2026-08-07 (ARCH-5): the reviewed text is appended to the codeline KB
+  // rather than written into profiles.json. The concern is exactly as before — what gets
+  // persisted is the REVIEWER'S text, not the raw skill_note the reviewer just rewrote.
+  it('skill) case persists REVIEWER_RETRY_TEXT to the KB, not the original skill_note variable', () => {
     const skillCaseIdx = claudeSrc.indexOf('_skill_review_verdict=$(run_change_with_reviewer_retry');
-    const pythonCallIdx = claudeSrc.indexOf('python3 - "$REVIEWER_RETRY_TEXT"', skillCaseIdx);
-    expect(pythonCallIdx).toBeGreaterThan(skillCaseIdx);
+    expect(skillCaseIdx).toBeGreaterThan(-1);
+    const appendIdx = claudeSrc.indexOf('>> "$_skill_kb_file"', skillCaseIdx);
+    expect(appendIdx).toBeGreaterThan(skillCaseIdx);
+    const appendLine = claudeSrc.slice(claudeSrc.lastIndexOf('\n', appendIdx), appendIdx + 24);
+    expect(
+      appendLine,
+      'the raw pre-review note is being persisted, discarding the reviewer rewrite',
+    ).toMatch(/REVIEWER_RETRY_TEXT/);
   });
 });

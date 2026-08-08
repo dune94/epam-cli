@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -116,7 +116,20 @@ describe('check_syntax_class_error — REAL execution', () => {
       const role = opts.role ?? 'test-engineer';
       writeFileSync(prdFile, JSON.stringify({ stories: [{ id: 'SKY-999', agentRole: role }] }));
       const profilesFile = join(dir, 'profiles.json');
-      writeFileSync(profilesFile, JSON.stringify({ [role]: opts.existingProfileText ?? 'Base profile text.' }));
+      writeFileSync(profilesFile, JSON.stringify({ [role]: 'canonical brief — must be left alone' }));
+
+      // DESTINATION CHANGED 2026-08-07 (ARCH-5): the note is appended to the codeline KB,
+      // not into profiles.json. The concerns asserted below are unchanged — the note is
+      // generic, under 200 chars, and targets the story's own agent rather than a hardcoded
+      // role — they are simply verified at the store the note actually lands in.
+      const agentsDir = join(dir, 'agents');
+      mkdirSync(agentsDir, { recursive: true });
+      const kbFile = join(agentsDir, 'KB-test-codeline.md');
+      writeFileSync(kbFile, opts.existingProfileText ?? 'Base profile text.');
+      const resolver = claudeSrc.slice(
+        claudeSrc.indexOf('_kb_file_for_story() {'),
+        claudeSrc.indexOf('\n}', claudeSrc.indexOf('_kb_file_for_story() {')) + 2,
+      );
 
       const fnBody = extractFunctionBody('check_syntax_class_error');
       const reviewerFn = extractReviewerRetryFn();
@@ -129,6 +142,9 @@ describe('check_syntax_class_error — REAL execution', () => {
         `MAIN_PRD_FILE=${JSON.stringify(prdFile)}`,
         `PRD_FILE=${JSON.stringify(prdFile)}`,
         `AGENT_PROFILES_FILE=${JSON.stringify(profilesFile)}`,
+        `SCRIPT_DIR=${JSON.stringify(join(dir, 'scripts'))}`,
+        `export EPAM_CODELINE="test-codeline"`,
+        resolver,
         // No ORCH_GATE_PROVIDER means run_change_with_reviewer_retry's own
         // internal gate-model call would fail/be skipped -- fine, since the
         // format-check path inside it handles skill_note without a live LLM
@@ -141,7 +157,11 @@ describe('check_syntax_class_error — REAL execution', () => {
       const scriptPath = join(dir, 'run.sh');
       writeFileSync(scriptPath, script);
       execFileSync('bash', [scriptPath], { encoding: 'utf8' });
-      const profileAfter = JSON.parse(readFileSync(profilesFile, 'utf8'))[role] as string;
+      const profileAfter = readFileSync(kbFile, 'utf8');
+      expect(
+        JSON.parse(readFileSync(profilesFile, 'utf8'))[role],
+        'the escalation note was written back into the ephemeral roster',
+      ).toBe('canonical brief — must be left alone');
       return { healingBroken: '1', profileAfter };
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -203,7 +223,10 @@ describe('check_syntax_class_error — REAL execution', () => {
       diagnosis: 'Missing closing brace in cli.test.ts at line 260',
       role: 'test-engineer',
     });
-    const noteMatch = profileAfter.match(/\[Self-Heal\] (.+)$/);
+    // KB entries are timestamped bullets (`- [<iso>] <note>`); the `[Self-Heal]` prefix
+    // was the profiles.json note format this no longer writes. The bound being guarded —
+    // a persisted note stays short enough to inject as context — is unchanged.
+    const noteMatch = profileAfter.match(/^- \[[^\]]+\] (.+)$/m);
     expect(noteMatch).not.toBeNull();
     expect((noteMatch as RegExpMatchArray)[1].length).toBeLessThanOrEqual(200);
   });

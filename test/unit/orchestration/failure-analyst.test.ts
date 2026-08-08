@@ -137,14 +137,20 @@ describe('claude.sh — target=skill persists skill note to profiles.json (not j
     expect(skillBlock).toMatch(/profiles_file/);
   });
 
-  it('skill branch uses python3 to safely update profiles.json addendum', () => {
+  // MECHANISM CHANGED 2026-08-07 (ARCH-5): persisting a skill note was a python3
+  // read-modify-write of profiles.json; it is now a locked append to the codeline KB. The
+  // concern — the note is durably written, not merely injected into the retry prompt and lost
+  // — is unchanged.
+  it('skill branch appends the note to the codeline KB', () => {
     const funcStart  = src.indexOf('run_failure_analyst()');
     const funcEnd    = src.indexOf('\n}', funcStart + 50);
     const body       = src.slice(funcStart, funcEnd);
     const skillStart = body.indexOf('skill)');
     const skillEnd   = body.indexOf(';;', skillStart);
     const skillBlock = body.slice(skillStart, skillEnd);
-    expect(skillBlock).toMatch(/python3/);
+    expect(skillStart, 'the skill branch vanished — this assertion is vacuous').toBeGreaterThan(-1);
+    expect(skillBlock).toMatch(/_kb_file_for_story/);
+    expect(skillBlock).toMatch(/>> "\$_skill_kb_file"/);
   });
 
   it('skill branch sets _profile_updated=true after successful write', () => {

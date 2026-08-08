@@ -37,7 +37,15 @@ function block(startAnchor: string, endAnchor: string): string {
   return orchSrc.slice(i, j);
 }
 
-const RESUME_BLOCK = () => block('if [ -n "${EPAM_RESUME_RUN:-}" ]; then', 'if [ "$DRY_RUN" = true ]');
+// ANCHOR MOVED 2026-08-07: the resume block used to sit BELOW `_run_jira_pipeline; exit $?`,
+// so it was unreachable — every "resume" silently ran a fresh run from the top. It is now
+// hoisted above the dispatch, and guarded by `-z JIRA_CODELINE_RUN` so that the per-lane
+// re-invocations of this same script do not each try to resume the parent's checkpoint.
+const RESUME_BLOCK = () =>
+  block(
+    'if [ -z "${JIRA_CODELINE_RUN:-}" ] && [ -n "${EPAM_RESUME_RUN:-}" ]; then',
+    'if [ -z "${JIRA_CODELINE_RUN:-}" ]; then\n  if [ "${JIRA_PIPELINE:-0}" = "1" ]; then',
+  );
 /** The post-spec SAVE. The pause that used to follow it was removed: one setting only. */
 const SAVE_BLOCK = () =>
   block('if _ckpt_path=$(save_run_checkpoint "$PHASE" 2>&1); then', '# ── Infra test gate');

@@ -22,7 +22,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -53,6 +53,12 @@ describe('run_failure_analyst skill case — REAL execution', () => {
     return claudeSrc.slice(start, end);
   }
 
+  // DESTINATION CHANGED 2026-08-07 (ARCH-5): skill notes are appended to the codeline KB,
+  // not written into profiles.json — that file is now SET after the mint and wiped by
+  // pre-run-reset each run, so a note persisted there never survived. The harness seeds and
+  // inspects the KB, and extracts the REAL address resolver rather than assuming a filename.
+  // Every behaviour asserted below (exact-duplicate discard, unreviewed-fallback rescue,
+  // normal persist) is the same concern as before, checked at the new destination.
   function run(opts: { existingProfileText: string; skillNote: string; reviewerVerdict: 'pass' | 'fail' }): {
     profilesAfter: string;
     logOutput: string;
@@ -60,8 +66,17 @@ describe('run_failure_analyst skill case — REAL execution', () => {
     const dir = mkdtempSync(join(tmpdir(), 'skill-dup-'));
     try {
       const profilesPath = join(dir, 'profiles.json');
-      writeFileSync(profilesPath, JSON.stringify({ 'test-engineer': opts.existingProfileText }));
+      writeFileSync(profilesPath, JSON.stringify({ 'test-engineer': 'canonical brief — must be left alone' }));
 
+      const agentsDir = join(dir, 'agents');
+      mkdirSync(agentsDir, { recursive: true });
+      const kbPath = join(agentsDir, 'KB-test-codeline.md');
+      writeFileSync(kbPath, opts.existingProfileText);
+
+      const resolver = claudeSrc.slice(
+        claudeSrc.indexOf('_kb_file_for_story() {'),
+        claudeSrc.indexOf('\n}', claudeSrc.indexOf('_kb_file_for_story() {')) + 2,
+      );
       const skillCaseBody = extractSkillCaseBody();
       const scriptPath = join(dir, 'run.sh');
       writeFileSync(
@@ -70,6 +85,10 @@ describe('run_failure_analyst skill case — REAL execution', () => {
           '#!/usr/bin/env bash',
           'log() { echo "LOG: $*"; }',
           'warning() { echo "WARN: $*"; }',
+          resolver,
+          `_text_violates_anti_pattern() { :; }`,
+          `SCRIPT_DIR=${JSON.stringify(join(dir, 'scripts'))}`,
+          `export EPAM_CODELINE="test-codeline"`,
           `profiles_file=${JSON.stringify(profilesPath)}`,
           `story_role="test-engineer"`,
           `story_id="SKY-003-test"`,
@@ -94,7 +113,13 @@ describe('run_failure_analyst skill case — REAL execution', () => {
         ].join('\n'),
       );
       const logOutput = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
-      const profilesAfter = readFileSync(profilesPath, 'utf8');
+      // `profilesAfter` now carries the KB text the assertions read; profiles.json is
+      // asserted separately to prove nothing writes it any more.
+      const profilesAfter = readFileSync(kbPath, 'utf8');
+      expect(
+        JSON.parse(readFileSync(profilesPath, 'utf8'))['test-engineer'],
+        'a skill note was written back into the ephemeral roster',
+      ).toBe('canonical brief — must be left alone');
       return { profilesAfter, logOutput };
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -108,10 +133,9 @@ describe('run_failure_analyst skill case — REAL execution', () => {
       skillNote: note,
       reviewerVerdict: 'fail', // the reviewer correctly flags this as a duplicate
     });
-    const profiles = JSON.parse(profilesAfter);
-    const occurrences = (profiles['test-engineer'].match(/Do not reuse validation logic/g) || []).length;
+    const occurrences = (profilesAfter.match(/Do not reuse validation logic/g) || []).length;
     expect(occurrences).toBe(1); // still just the original — nothing new persisted
-    expect(profiles['test-engineer']).not.toMatch(/unreviewed-fallback/);
+    expect(profilesAfter).not.toMatch(/unreviewed-fallback/);
     expect(logOutput).toMatch(/exact duplicate/);
   });
 
@@ -121,9 +145,8 @@ describe('run_failure_analyst skill case — REAL execution', () => {
       skillNote: 'Always export a main function from CLI entry points for testability',
       reviewerVerdict: 'fail',
     });
-    const profiles = JSON.parse(profilesAfter);
-    expect(profiles['test-engineer']).toMatch(/unreviewed-fallback/);
-    expect(profiles['test-engineer']).toMatch(/Always export a main function/);
+    expect(profilesAfter).toMatch(/unreviewed-fallback/);
+    expect(profilesAfter).toMatch(/Always export a main function/);
   });
 
   it('still persists a genuinely new note that the reviewer approves (no regression to the normal pass path)', () => {
@@ -132,8 +155,7 @@ describe('run_failure_analyst skill case — REAL execution', () => {
       skillNote: 'Always export a main function from CLI entry points for testability',
       reviewerVerdict: 'pass',
     });
-    const profiles = JSON.parse(profilesAfter);
-    expect(profiles['test-engineer']).toMatch(/Always export a main function/);
-    expect(profiles['test-engineer']).not.toMatch(/unreviewed-fallback/);
+    expect(profilesAfter).toMatch(/Always export a main function/);
+    expect(profilesAfter).not.toMatch(/unreviewed-fallback/);
   });
 });

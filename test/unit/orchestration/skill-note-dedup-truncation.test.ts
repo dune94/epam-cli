@@ -60,14 +60,26 @@ describe('claude.sh — skill_note before-text call site (static)', () => {
     expect(block).not.toMatch(/head -c 500/);
   });
 
-  it('still reads the profile role via jq -c', () => {
-    // Moved earlier (2026-07-11) to feed a duplicate-check guard as well as
-    // the reviewer call — search from the skill) case's start rather than
-    // anchoring immediately before the reviewer-retry call site.
+  // SOURCE CHANGED 2026-08-07 (ARCH-5): this read the role's text out of profiles.json with
+  // jq, because that was where notes were persisted. Notes now go to the codeline KB, so
+  // reading profiles.json meant the dedup context was permanently EMPTY — the same structural
+  // blindness this file was written about (head -c 500), arrived at by a different route.
+  // The invariant is unchanged: the reviewer and the exact-duplicate check must both see ALL
+  // prior notes, untruncated.
+  it('reads the FULL existing notes from the store the note is persisted to', () => {
     const caseIdx = claudeSrc.indexOf('                skill)');
     const reviewerIdx = claudeSrc.indexOf('_skill_review_verdict=$(run_change_with_reviewer_retry', caseIdx);
+    expect(reviewerIdx).toBeGreaterThan(caseIdx);
     const block = claudeSrc.slice(caseIdx, reviewerIdx + 100);
-    expect(block).toMatch(/jq -c --arg role "\$story_role" '\.\[\$role\] \/\/ ""'/);
+
+    expect(block).toMatch(/_dedup_kb_file=\$\(_kb_file_for_story/);
+    expect(block).toMatch(/_existing_notes=\$\(\[ -f "\$_dedup_kb_file" \] && cat "\$_dedup_kb_file"/);
+    // the whole file, never a window of it — checked against CODE only, since the comment
+    // here deliberately quotes the original `head -c 500` defect it exists to explain
+    const code = block.split('\n').filter(l => !l.trim().startsWith('#')).join('\n');
+    expect(code).not.toMatch(/head -c|tail -n|head -n/);
+    // and it is that text the reviewer is handed
+    expect(claudeSrc.slice(reviewerIdx, reviewerIdx + 200)).toMatch(/\$_existing_notes/);
   });
 });
 

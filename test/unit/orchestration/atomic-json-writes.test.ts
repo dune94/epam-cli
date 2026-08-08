@@ -47,12 +47,27 @@ describe('atomic JSON writes — profiles.json / PRD write sites (static)', () =
     expect(atomicWrites).toBeGreaterThanOrEqual(4);
   });
 
-  it('claude.sh: the skill-note persistence write to profiles.json uses os.replace', () => {
+  // WRITE REPLACED 2026-08-07 (ARCH-5): the skill note is no longer a read-modify-write of
+  // profiles.json (that file is now SET after the mint and wiped by pre-run-reset) — it is an
+  // append to the codeline KB. Atomicity is therefore no longer tmp+os.replace but a locked
+  // O_APPEND write, which is the correct primitive for an append and is not torn by
+  // concurrent lanes. The concern is identical: three lanes write this store in parallel and
+  // neither a partial file nor a lost entry is acceptable.
+  it('claude.sh: the skill-note persistence append to the codeline KB is lock-guarded', () => {
     const text = src('orchestrations/scripts/claude.sh');
-    const idx = text.indexOf("profiles[role] = existing + sep + note");
-    const block = text.slice(idx, idx + 300);
-    expect(block).toMatch(/_tmp_profiles_path = profiles_path \+ '\.tmp'/);
-    expect(block).toMatch(/os\.replace\(_tmp_profiles_path, profiles_path\)/);
+    const idx = text.indexOf('>> "$_skill_kb_file"');
+    expect(idx, 'the skill-note persistence write is gone entirely').toBeGreaterThan(-1);
+    const block = text.slice(Math.max(0, idx - 400), idx + 100);
+    expect(block).toMatch(/flock -w 10 201/);
+    expect(block).toMatch(/201>"\$\{_skill_kb_file\}\.lock"|201>/);
+  });
+
+  it('claude.sh: no read-modify-write of profiles.json survives anywhere', () => {
+    // profiles.json is written once, by the mint. A read-modify-write here would both race
+    // the parallel lanes and persist into a file the next run erases.
+    const text = src('orchestrations/scripts/claude.sh');
+    expect(text).not.toMatch(/profiles\[role\]\s*=\s*existing/);
+    expect(text).not.toMatch(/os\.replace\(_tmp_profiles_path, profiles_path\)/);
   });
 
   it('run-agent-orchestration.sh: PRD model coordinator fallback write uses os.replace', () => {

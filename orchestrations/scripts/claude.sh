@@ -6551,7 +6551,7 @@ PYEOF
                 skill)
                     if [ -n "$skill_note" ]; then
                         log "  [FailureAnalyst] Injected skill guidance into retry prompt (${#skill_note} chars)"
-                        # Persist skill note to profiles.json so future runs inherit this learning
+                        # Persist skill note to the codeline KB so later runs inherit this learning
                         if [ -f "$profiles_file" ]; then
                             # Deterministic anti-pattern gate (found live, 2026-08-02): a skill
                             # note can be a 100%-correct reading of a WRONG ground truth (e.g. a
@@ -6567,8 +6567,20 @@ PYEOF
                             if [ -n "$_skill_anti_pattern_msg" ]; then
                                 warning "  [FailureAnalyst] Skill note contradicts a known anti-pattern — refusing to persist: $_skill_anti_pattern_msg"
                             else
-                            local _current_role_profile
-                            _current_role_profile=$(jq -c --arg role "$story_role" '.[$role] // ""' "$profiles_file" 2>/dev/null)
+                            # DEDUP SOURCE CORRECTED 2026-08-07 (ARCH-5). This read the role's
+                            # text out of profiles.json, which was where skill notes used to be
+                            # persisted. They are now appended to the codeline KB, and
+                            # profiles.json is wiped by pre-run-reset at the start of every run.
+                            # Left pointing at profiles.json, both uses below silently degraded:
+                            # the exact-duplicate check could never match (so every duplicate
+                            # paid for a reviewer call before being caught by the KB check
+                            # further down), and the reviewer was handed empty dedup context, so
+                            # its near-duplicate judgment had nothing to compare against. Both
+                            # must read the file the note actually lands in.
+                            local _existing_notes _dedup_kb_dir _dedup_kb_file
+                            _dedup_kb_dir="$(dirname "$SCRIPT_DIR")/agents"
+                            _dedup_kb_file=$(_kb_file_for_story "$story_id" "$_dedup_kb_dir")
+                            _existing_notes=$([ -f "$_dedup_kb_file" ] && cat "$_dedup_kb_file" 2>/dev/null || echo "")
                             # Duplicate guard (fixed 2026-07-11, after a live run persisted an
                             # exact duplicate note): the reviewer call below already correctly
                             # rejects an exact-duplicate skill note as a "fail" verdict (same
@@ -6580,8 +6592,8 @@ PYEOF
                             # defeating the entire dedup mechanism it sits next to. Check for
                             # an exact duplicate FIRST and skip the whole reviewer+persist
                             # flow when found -- there is nothing to review or fall back to.
-                            if echo "$_current_role_profile" | grep -qF -- "$skill_note"; then
-                                log "  [FailureAnalyst] Skill note is an exact duplicate of an existing note in [${story_role}] — discarding, not persisting again"
+                            if echo "$_existing_notes" | grep -qF -- "$skill_note"; then
+                                log "  [FailureAnalyst] Skill note is an exact duplicate of an existing note in $(basename "$_dedup_kb_file") — discarding, not persisting again"
                             else
                             # Reviewer validates skill note before persisting. Rejections
                             # get up to 3 summarize-and-resubmit rounds (same mechanism as
@@ -6600,7 +6612,7 @@ PYEOF
                             # one story's retry loop. Pass the FULL profile text so the
                             # exact-duplicate check (grep -qF) can actually see prior notes.
                             _skill_review_verdict=$(run_change_with_reviewer_retry "$story_id" "skill_note" \
-                                "$_current_role_profile" \
+                                "$_existing_notes" \
                                 "$skill_note" 3)
                             # run_change_with_reviewer_retry ran inside the $(...) above, so its
                             # REVIEWER_RETRY_TEXT assignment was scoped to that subshell — read
@@ -7171,8 +7183,15 @@ check_syntax_class_error() {
             # LLM gate-model call needed for a note this mechanical, and no
             # dependency on ORCH_GATE_PROVIDER being configured at all.
             local _syntax_note="Always patch only the broken line range on a repeated syntax-error retry -- never regenerate the whole file, since a full rewrite tends to reproduce the same corruption elsewhere."
-            local _syntax_role_profile
-            _syntax_role_profile=$(jq -c --arg role "$_syntax_story_role" '.[$role] // ""' "$AGENT_PROFILES_FILE" 2>/dev/null)
+            # DEDUP SOURCE CORRECTED 2026-08-07 (ARCH-5): same defect as the skill branch in
+            # run_failure_analyst. The note is appended to the codeline KB below, so reading
+            # prior notes out of profiles.json meant the "already learned this" check could
+            # never fire and the reviewer got empty dedup context — this note would be
+            # re-proposed and re-reviewed on every syntax escalation of every run.
+            local _syntax_role_profile _syntax_dedup_dir _syntax_dedup_file
+            _syntax_dedup_dir="$(dirname "$SCRIPT_DIR")/agents"
+            _syntax_dedup_file=$(_kb_file_for_story "$story_id" "$_syntax_dedup_dir")
+            _syntax_role_profile=$([ -f "$_syntax_dedup_file" ] && cat "$_syntax_dedup_file" 2>/dev/null || echo "")
             if ! echo "$_syntax_role_profile" | grep -qF -- "$_syntax_note"; then
                 local _syntax_verdict
                 _syntax_verdict=$(run_change_with_reviewer_retry "$story_id" "skill_note" \

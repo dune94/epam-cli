@@ -48,8 +48,11 @@ describe('file locking — wiring (static)', () => {
     expect(count).toBe(4);
   });
 
-  it('claude.sh: the skill-note persistence write acquires flock', () => {
-    expect(claudeSrc).toMatch(/flock -w 10 200 \|\| \{ error "  \[FailureAnalyst\] Could not acquire lock on \$profiles_file"; return 1; \}/);
+  // TARGET CHANGED 2026-08-07 (ARCH-5): the skill note is appended to the codeline KB, not
+  // written into profiles.json, so the lock that matters is the one on the KB file. Same
+  // concern, new file: parallel lanes append to this store concurrently.
+  it('claude.sh: the skill-note persistence append acquires flock on the KB file', () => {
+    expect(claudeSrc).toMatch(/flock -w 10 201 \|\| \{ error "  \[FailureAnalyst\] Could not acquire lock on \$_skill_kb_file"; return 1; \}/);
   });
 
   it('run-agent-orchestration.sh: PRD model coordinator fallback write acquires flock', () => {

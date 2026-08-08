@@ -254,10 +254,15 @@ describe('_text_violates_anti_pattern — textMatchPattern: full branch/boundary
 
 describe('claude.sh — skill-note persistence wiring', () => {
   it('the skill-note persistence block calls _text_violates_anti_pattern before persisting', () => {
-    const idx = claudeSrc.indexOf('# Persist skill note to profiles.json so future runs inherit this learning');
-    expect(idx).toBeGreaterThan(-1);
+    // ANCHORS UPDATED 2026-08-07 (ARCH-5): the note is appended to the codeline KB rather
+    // than written into profiles.json, so the persist anchor is the KB append, not the old
+    // python write. The ordering this guards is unchanged: the anti-pattern gate must run
+    // BEFORE anything is persisted, so a note contradicting a known-correct prior review
+    // can never be re-argued into the store.
+    const idx = claudeSrc.indexOf('# Persist skill note to the codeline KB so later runs inherit this learning');
+    expect(idx, 'the skill-note persistence block moved — the ordering below is unverified').toBeGreaterThan(-1);
     const gateIdx = claudeSrc.indexOf('_text_violates_anti_pattern "$skill_note"', idx);
-    const persistIdx = claudeSrc.indexOf("print(f'Skill note appended to", idx);
+    const persistIdx = claudeSrc.indexOf('>> "$_skill_kb_file"', idx);
     expect(gateIdx).toBeGreaterThan(idx);
     expect(persistIdx).toBeGreaterThan(gateIdx);
   });

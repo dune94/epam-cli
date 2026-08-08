@@ -448,6 +448,44 @@ if (require.main !== module) return;
     // Agent identity reaches ai-run.sh through EPAM_AGENT_NAME and is what makes a cost row
     // attributable. Two distinct agents run here, so each names itself rather than sharing one
     // label — an anonymous or shared identity is how per-agent spend becomes unreadable.
+    // DET-1: LOOK AT THE CODE BEFORE ASSEMBLING THE TEAM.
+    //
+    // Everything the mint has had until now — the ticket, its documents, the declared
+    // dependencies — is a CLAIM about the estate. None of it is an observation of it, which is
+    // how briefs came to own modules nobody had searched for, and how scope came to be taken
+    // from ticket labels that are routinely wrong about which repositories are involved.
+    //
+    // The survey is cheap by construction: it decides where to look, not what to change. Its
+    // failure is not fatal — an estate that cannot be surveyed is the state the roster was
+    // minted in until today.
+    process.env.EPAM_AGENT_NAME = 'estate-surveyor';
+    const survey = await spec.surveyEstate({
+      promptExec,
+      tickets: stories,
+      referencedDocs: docs,
+      declaredDependencies: deps,
+      codelines,
+      toolGrant,
+      logDir: LOG_DIR,
+      repoPath: REPO_PATH,
+    });
+    if (survey.ran) {
+      for (const c of survey.codelines) {
+        process.stderr.write(`[mint-step]   survey: ${c.codeline} — ${c.state}` +
+          `${c.surfaces && c.surfaces.length ? ` (${c.surfaces.join(', ')})` : ''}\n`);
+      }
+      for (const r of survey.recommendedInvestigators) {
+        process.stderr.write(`[mint-step]   survey recommends an investigator for ${r.codeline}: ${r.focus}\n`);
+      }
+    } else {
+      process.stderr.write('[mint-step]   survey did not run — the roster is minted from the ticket alone\n');
+    }
+    // A boundary crossed is reported, never swallowed: the surveyor is structurally barred
+    // from naming fix sites, and an attempt to name one says something about the prompt.
+    for (const v of survey.violations || []) {
+      process.stderr.write(`[mint-step]   ! survey boundary: ${v}\n`);
+    }
+
     process.env.EPAM_AGENT_NAME = 'agent-mint';
     const mint = await spec.mintProjectAgents({
       promptExec,
@@ -456,6 +494,7 @@ if (require.main !== module) return;
       declaredDependencies: deps,
       codelines,
       toolGrant,
+      estateSurvey: survey,
       profilesPath: PROFILES_PATH,
       agentsDir: AGENTS_DIR,
       logDir: LOG_DIR,

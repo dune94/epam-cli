@@ -2993,6 +2993,269 @@ rarity for signal.
   return isVocabularyUsable(vocab) ? vocab : null;
 }
 
+// ── DET-1: the estate survey — breadth before the roster ───────────────────
+//
+// The roster is minted from the ticket, the documents linked on it, and each codeline's
+// declared dependencies. Nothing has looked at the CODE. Two live consequences: briefs named
+// files the model believed should exist ("the Stack initialization module", proposed by a run
+// that had searched for nothing), and scope came from ticket labels — AMSD-2041 is titled
+// [GO, UP, MX] with four components, and nothing verified which codelines the work truly
+// touches.
+//
+// The detective already answers both questions, but it runs inside the per-story spec pass,
+// i.e. AFTER the roster it should inform. This is a cheap holistic pass that runs BEFORE.
+//
+// TWO OUTPUTS, STRUCTURALLY SEPARATE. Survey findings are evidence about the estate;
+// recommendedInvestigators is a recommendation about the TEAM. A recommendation arriving in
+// the same blob as evidence gets read as something discovered about the code.
+//
+// THE HARD CONSTRAINT: this agent reports ABOUT the estate. It may never supply a FIX SITE
+// for a codeline. A finding today carries {file, function, reason, fix} and no codeline, so
+// if this output could become one, four contamination routes open at once — a file found in
+// codeline A entering B's writer manifest, checkFixSiteCoverage passing on another repo's
+// evidence, locationHint pointing into the wrong repository, and reviewers rejecting correct
+// work over a file that is a phantom there. The schema therefore has no such fields, and
+// sanitizeSurvey() strips them if a model volunteers them anyway. Its remedy is always
+// "investigate this codeline", never "here is the answer for it".
+const SURVEY_STATES = ['in_scope', 'no_work_found', 'not_investigated', 'failed'];
+
+// Fix-site vocabulary. Present so the sanitizer can PROVE the parent never emitted one —
+// three states are not enough if a fourth arrives smuggled inside a survey entry.
+const FIX_SITE_KEYS = ['file', 'files', 'function', 'fix', 'patch', 'locationHint', 'lineRange', 'diff'];
+
+const TOOL_ESTATE_SURVEY = {
+  name: 'submit_estate_survey',
+  description:
+    'Report which codelines of this estate the described work actually touches, and which ' +
+    'per-codeline investigators the team needs. Breadth, not depth: you are deciding where ' +
+    'to look, not what to change. Do not answer in prose.',
+  parameters: {
+    type: 'object',
+    required: ['codelines', 'recommendedInvestigators'],
+    properties: {
+      codelines: {
+        type: 'array',
+        minItems: 1,
+        description: 'One entry per codeline offered to you. Never omit one — silence is not a state.',
+        items: {
+          type: 'object',
+          required: ['codeline', 'state', 'evidence'],
+          properties: {
+            codeline: { type: 'string', description: 'Exactly as named in the scope list.' },
+            state: {
+              type: 'string',
+              enum: SURVEY_STATES,
+              description:
+                'in_scope = you looked and the work reaches this codeline. no_work_found = you ' +
+                'looked and it does not — that is EVIDENCE, and it is not the same as having ' +
+                'skipped it. not_investigated = you did not look. failed = you tried and could ' +
+                'not. Never report no_work_found for a codeline you did not open.',
+            },
+            evidence: {
+              type: 'string',
+              description:
+                'What you actually checked and what you saw — a path you listed, a symbol you ' +
+                'searched for. Not an inference from the ticket text.',
+            },
+            surfaces: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                'Areas of the repository involved: directories or modules. NOT specific files ' +
+                'to change and NOT a fix — deciding that is the per-codeline investigator\'s ' +
+                'job, working in that repository. Breadth only.',
+            },
+          },
+        },
+      },
+      recommendedInvestigators: {
+        type: 'array',
+        description:
+          'Which codelines need their own investigator agent, and what each should concentrate ' +
+          'on. A recommendation about the TEAM — deliberately not mixed into the findings above.',
+        items: {
+          type: 'object',
+          required: ['codeline', 'focus', 'why'],
+          properties: {
+            codeline: { type: 'string' },
+            focus: { type: 'string', description: 'What this investigator should concentrate on.' },
+            why: { type: 'string', description: 'What you saw that makes this codeline need one.' },
+          },
+        },
+      },
+    },
+  },
+};
+
+/**
+ * sanitizeSurvey — enforce the parent/child boundary in code, not in the prompt.
+ *
+ * Returns { codelines, recommendedInvestigators, violations }. Any fix-site-shaped key on a
+ * survey entry is REMOVED and recorded: the parent may report about an investigation, never
+ * supply findings for a codeline it did not investigate. A codeline that was offered but not
+ * reported is filled in as not_investigated — an absent entry must never read as a clean bill
+ * of health, which is the whole reason "no_work_found" and "not_investigated" are different.
+ */
+function sanitizeSurvey(payload, codelines) {
+  const offered = (Array.isArray(codelines) ? codelines : [])
+    .map((c) => (typeof c === 'string' ? c : c && c.name))
+    .filter(Boolean);
+  const violations = [];
+  const byName = new Map();
+
+  for (const raw of (payload && Array.isArray(payload.codelines) ? payload.codelines : [])) {
+    if (!raw || typeof raw.codeline !== 'string') continue;
+    // A codeline the survey invented is not a codeline. Reporting on a repository that is not
+    // in scope is the same contamination as reporting a file from the wrong one.
+    if (offered.length && !offered.includes(raw.codeline)) {
+      violations.push(`survey reported on "${raw.codeline}", which is not in scope`);
+      continue;
+    }
+    const stripped = FIX_SITE_KEYS.filter((k) => raw[k] !== undefined);
+    if (stripped.length) {
+      violations.push(
+        `survey entry for "${raw.codeline}" carried fix-site field(s) ${stripped.join(', ')} — ` +
+        'the estate survey reports WHERE TO LOOK, never what to change; dropped');
+    }
+    byName.set(raw.codeline, {
+      codeline: raw.codeline,
+      state: SURVEY_STATES.includes(raw.state) ? raw.state : 'not_investigated',
+      evidence: typeof raw.evidence === 'string' ? raw.evidence : '',
+      surfaces: Array.isArray(raw.surfaces) ? raw.surfaces.filter((s) => typeof s === 'string') : [],
+    });
+  }
+
+  // Silence is not a state. Anything offered and unreported is explicitly not_investigated.
+  for (const name of offered) {
+    if (!byName.has(name)) {
+      byName.set(name, {
+        codeline: name, state: 'not_investigated',
+        evidence: 'the survey returned no entry for this codeline', surfaces: [],
+      });
+    }
+  }
+
+  const recommendedInvestigators =
+    (payload && Array.isArray(payload.recommendedInvestigators) ? payload.recommendedInvestigators : [])
+      .filter((r) => r && typeof r.codeline === 'string'
+        && (!offered.length || offered.includes(r.codeline)))
+      .map((r) => ({
+        codeline: r.codeline,
+        focus: typeof r.focus === 'string' ? r.focus : '',
+        why: typeof r.why === 'string' ? r.why : '',
+      }));
+
+  return { codelines: [...byName.values()], recommendedInvestigators, violations };
+}
+
+/**
+ * surveyEstate — the holistic pass that runs BEFORE the roster.
+ *
+ * Runs through runAgentForJson like every other agent, so it inherits the ladder, retries,
+ * self-heal, timeout profile and cost capture. Read tools are granted over the estate root so
+ * it can VERIFY rather than infer — that grant is the entire point of running it at all.
+ *
+ * Cheap by construction: it decides WHERE to look. Deep investigation is then skipped for the
+ * codelines it reports as no_work_found, which is what keeps investigations from scaling as
+ * codelines x stories.
+ *
+ * A failure here must never stop the run. An estate that could not be surveyed is an estate
+ * the roster is minted without — exactly the state before this existed — so the caller gets
+ * an all-'failed' survey and proceeds, with the reason recorded.
+ */
+async function surveyEstate({
+  promptExec, tickets, referencedDocs, codelines, logDir, repoPath, toolGrant, declaredDependencies,
+}) {
+  const _cls = (Array.isArray(codelines) ? codelines : []).filter(Boolean);
+  const _named = _cls.map((c) => (typeof c === 'string' ? { name: c } : c)).filter((c) => c && c.name);
+  if (!_named.length) return { codelines: [], recommendedInvestigators: [], violations: [], ran: false };
+
+  const ticketBlock = (Array.isArray(tickets) ? tickets : []).map((t) =>
+    // WHOLE, never clipped. In brownfield the description is the only source of the
+    // verification criteria — cutting it removes the contract and the agent invents the rest.
+    // It was once cut at five different lengths across the pipeline; there is a guard test.
+    `- ${t.jiraKey || t.id || '(no key)'}: ${t.title || ''}\n    ${String(t.description || '').replace(/\s+/g, ' ')}`
+  ).join('\n');
+
+  const docBlock = (Array.isArray(referencedDocs) ? referencedDocs : []).map((d) => {
+    const body = Array.isArray(d.quotes) && d.quotes.length
+      ? d.quotes.map((q) => `      "${String(q).replace(/\s+/g, ' ')}"`).join('\n')
+      : `      ${String(d.body || '').replace(/\s+/g, ' ')}`;
+    return `- ${d.url || '(no url)'} [${d.fetchStatus || 'unknown'}]\n${body}`;
+  }).join('\n');
+
+  const depBlock = (declaredDependencies && typeof declaredDependencies === 'object')
+    ? Object.entries(declaredDependencies).map(([cl, deps]) =>
+        `- ${cl}: ${(Array.isArray(deps) ? deps : []).join(', ') || '(none declared)'}`).join('\n')
+    : '';
+
+  const prompt = `You are surveying an estate of repositories BEFORE its agent team is assembled.
+
+THE WORK (real tickets from the tracker):
+${ticketBlock || '- (no tickets available)'}
+
+${docBlock ? `DOCUMENTS LINKED ON THOSE TICKETS:\n${docBlock}\n` : ''}
+${depBlock ? `WHAT EACH CODELINE DECLARES IT DEPENDS ON (its own manifest — ground truth about\nthe stack, not inference from ticket text):\n${depBlock}\n` : ''}
+THE CODELINES IN SCOPE, and where each is checked out:
+${_named.map((c) => `- ${c.name}: ${c.path || '(path unknown)'}`).join('\n')}
+
+YOUR JOB, and its limits:
+
+1. For EVERY codeline above, OPEN IT and decide whether this work reaches it. The ticket's
+   labels and components are a claim, not evidence — they are frequently wrong about which
+   repositories are involved, which is why you exist. Report what you actually looked at.
+
+2. "I looked and this work does not reach this codeline" is a VALUABLE answer. Report it as
+   no_work_found, with the evidence. It is not the same as not having looked, and reporting
+   the two as one is how an unexamined repository comes to read as a clean bill of health.
+
+3. Recommend which codelines need their own investigator agent, and what each should focus on.
+   Keep that recommendation OUT of your findings: findings are what you saw, recommendations
+   are about the team.
+
+WHAT YOU MUST NOT DO. You are not fixing anything and you are not choosing files to change.
+Name directories and modules, never a file to edit, a function to patch or a change to make.
+Each codeline gets its own investigator working inside that repository, and it decides. A fix
+site you supply for a repository you swept from the outside is how one codeline's file ends up
+in another's work — so state where to look, and let the investigator look.`;
+
+  const _env = { EPAM_AGENT_NAME: 'estate-surveyor', EPAM_SEAM: 'estate-survey' };
+  if (toolGrant) {
+    _env.AI_GATE_ALLOW_TOOLS = '1';
+    _env.EPAM_ALLOWED_TOOLS = toolGrant;
+  }
+
+  let payload = null;
+  try {
+    payload = await runAgentForJson(
+      promptExec, prompt, TOOL_ESTATE_SURVEY, 'ESTATE_SURVEY',
+      logDir ? path.join(logDir, 'estate-survey.log') : null,
+      null, '', repoPath || '', _env,
+    );
+  } catch (err) {
+    // Never fatal: the roster was minted without any of this until today.
+    const reason = `estate survey failed: ${err && err.message}`;
+    process.stderr && process.stderr.write(`[survey] ${reason}\n`);
+    return {
+      codelines: _named.map((c) => ({ codeline: c.name, state: 'failed', evidence: reason, surfaces: [] })),
+      recommendedInvestigators: [], violations: [], ran: false, error: String(err && err.message),
+    };
+  }
+
+  const clean = sanitizeSurvey(payload, _named);
+  const result = { ...clean, ran: true };
+
+  // Persisted at generation time. What the roster was grounded in has to outlive the process
+  // that produced it, or the pause has nothing to show and a later run cannot tell whether a
+  // codeline was cleared or simply skipped.
+  if (logDir) {
+    try {
+      fs.writeFileSync(path.join(logDir, 'estate-survey.json'), JSON.stringify(result, null, 2));
+    } catch { /* the run must not die for want of an audit file */ }
+  }
+  return result;
+}
+
 // ── Project agent roster ───────────────────────────────────────────────────
 //
 // The shape of a proposal. The SDK's proposeAgents() asks for exactly these three fields;
@@ -3077,7 +3340,7 @@ const TOOL_PROJECT_AGENTS = {
  */
 async function mintProjectAgents({
   promptExec, tickets, referencedDocs, profilesPath, agentsDir, logDir, repoPath,
-  declaredDependencies, codelines, toolGrant, correctiveFindings, retainedAgents,
+  declaredDependencies, codelines, toolGrant, correctiveFindings, retainedAgents, estateSurvey,
 }) {
   const { mergeProjectAgents } = require('./lib/agent-roster.js');
 
@@ -3192,7 +3455,41 @@ async function mintProjectAgents({
        ''].join('\n')
     : '';
 
-  const prompt = `${correctiveBlock}${retainedBlock}${basePrompt}
+  // WHAT THE SURVEY ACTUALLY FOUND IN THE CODE (DET-1).
+  //
+  // The two halves stay separated exactly as the surveyor emitted them: evidence about the
+  // estate, and a recommendation about the team. Merged into one block they read as one kind
+  // of thing, and a recommendation would be inherited as a discovery.
+  //
+  // This is the only input here derived from opening the repositories. Everything else — the
+  // ticket, its documents, the declared dependencies — is a claim about the code rather than
+  // an observation of it, which is how briefs came to name modules that do not exist.
+  const _sv = estateSurvey && Array.isArray(estateSurvey.codelines) ? estateSurvey : null;
+  const _svLines = _sv ? _sv.codelines.map((c) => {
+    const surfaces = c.surfaces && c.surfaces.length ? ` — areas: ${c.surfaces.join(', ')}` : '';
+    return `- ${c.codeline}: ${c.state}${surfaces}\n    evidence: ${String(c.evidence || '').replace(/\s+/g, ' ')}`;
+  }) : [];
+  const surveyBlock = _svLines.length
+    ? ['WHAT A SURVEY OF THESE REPOSITORIES ACTUALLY FOUND. This is observation, not inference',
+       'from the ticket. Propose roles for the codelines the work REACHES; a codeline reported',
+       'no_work_found needs no implementer, and one reported not_investigated or failed was not',
+       'established either way — do not treat either as confirmation that work is needed there:',
+       '',
+       ..._svLines,
+       '',
+       ...(_sv.recommendedInvestigators.length
+         ? ['SEPARATELY — and this is a recommendation about the TEAM, not something discovered',
+            'about the code: a survey of the estate suggests these codelines need their own',
+            'investigator. Propose one per codeline named here, with the stated focus:',
+            '',
+            ..._sv.recommendedInvestigators.map((r) =>
+              `- ${r.codeline}: focus on ${String(r.focus || '').replace(/\s+/g, ' ')}` +
+              `${r.why ? ` (because ${String(r.why).replace(/\s+/g, ' ')})` : ''}`),
+            '']
+         : [])].join('\n')
+    : '';
+
+  const prompt = `${correctiveBlock}${retainedBlock}${surveyBlock}${basePrompt}
 
 THE WORK THIS PROJECT HAS BEEN ASKED TO DO (real tickets from the tracker):
 ${ticketBlock || '- (no tickets available)'}
@@ -7846,6 +8143,9 @@ module.exports = {
   candidateRoles,
   TOOL_ROLE_ASSIGNMENTS,
   reviewRoster,
+  surveyEstate,
+  sanitizeSurvey,
+  SURVEY_STATES,
   TOOL_ROSTER_REVIEW,
   seamInvocationEnv,
   schemaEnv,

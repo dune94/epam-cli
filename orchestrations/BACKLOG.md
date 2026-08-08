@@ -977,7 +977,8 @@ check must not become a word list, which is what the guard's vocabulary agent ex
 
 ## DET-1 — Detective-before-roster: holistic parent + per-codeline children
 
-**Status:** `deferred` (parked 2026-08-07, design agreed, not built)
+**Status:** `partially built 2026-08-08` — the parent survey is in and grounds the roster.
+What remains is listed under "Still to build" at the end of this entry.
 **Source:** live roster runs 2026-08-07, and the design discussion that followed them.
 
 ### The problem it solves
@@ -1278,3 +1279,38 @@ are offset past it. `CODELINE_NAME` was also read but never set anywhere — lan
 NOT done, deliberately: the script was not split in two. The shared body is what gives a lane
 the identical pipeline, and splitting it would duplicate 11k lines to remove a condition that
 is now named and enforced.
+
+
+## DET-1 progress — 2026-08-08
+
+### Built
+
+- `surveyEstate()` (spec-mode-runner.js) — the holistic pass that runs BEFORE the roster,
+  through runAgentForJson, so it inherits ladder/retry/self-heal/timeout/cost like every other
+  agent. Seam `estate-survey` in invocation-profiles.json, bound to HIGHEST.
+- Two structurally separate outputs: `codelines[]` (evidence about the estate) and
+  `recommendedInvestigators[]` (a recommendation about the TEAM). They stay separate through
+  the sanitizer AND into the mint prompt, where each is labelled for what it is.
+- Four states, not two: `in_scope` / `no_work_found` / `not_investigated` / `failed`. A
+  codeline offered but unreported is filled in as `not_investigated` — an absent entry must
+  never read as a clean bill of health.
+- `sanitizeSurvey()` enforces the parent/child boundary IN CODE: any fix-site-shaped key
+  (file, files, function, fix, patch, locationHint, lineRange, diff) on a survey entry is
+  stripped and the breach recorded; a report on a codeline not in scope is discarded. A prompt
+  is a request, and this is the one thing that must not depend on compliance.
+- Persisted to `estate-survey.json` at generation time; the mint consumes it.
+- An empty, broken or failed survey never blocks the run — that is the state the roster was
+  minted in until now.
+
+### Still to build
+
+- **The lane must CONSUME, not re-run.** The per-story spec pass still invokes its own
+  detective. Today the survey grounds the roster and the lane investigates independently, so
+  the run pays twice and the two investigations can disagree — roster grounded in one answer,
+  manifest in another.
+- **The reconciliation pass.** The parent watching the children after they complete: "all three
+  share this module", "two found it and the third returned nothing, so re-investigate". Same
+  constraint applies — its remedy is *re-investigate*, never *substitute*.
+- **Skipping deep investigation for `no_work_found` codelines.** The survey now reports it; the
+  lane loop does not yet act on it. This is the cost mitigation, so it matters: investigations
+  otherwise scale as codelines x stories.

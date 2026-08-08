@@ -39,6 +39,32 @@ AGENTS_FILE="$AUTOMATION_DIR/agents/AGENTS.md"
 CLAUDE_OUTPUT_DIR="$LOG_DIR/claude_outputs"
 AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
 
+# KB IS KEYED BY CODELINE, NOT BY AGENT ROLE.
+#
+# The roster is ephemeral by design — regenerated every run, no aggregation — and the mint
+# invents a new NAME each run for what is essentially the same agent. KB-<role>.md therefore
+# named an address that changed every run: 32 files accumulated, each holding what one run
+# learned, none reachable by any later run. The store persisted; the key did not.
+#
+# A codeline is stable, discovered rather than invented, already the investigator key, and the
+# subject of most durable learning — where the SDK is initialised here, how this repository
+# names its tests. Project-wide lessons that belong to no codeline go to the shared file.
+_kb_file_for_story() {
+    local _story_id="$1" _kb_dir="$2"
+    local _prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    local _cl="${EPAM_CODELINE:-}"
+    if [ -z "$_cl" ] && [ -n "$_story_id" ] && [ -f "$_prd_target" ]; then
+        _cl=$(jq -r --arg id "$_story_id" \
+            '.stories[] | select(.id == $id) | .codeline // ""' "$_prd_target" 2>/dev/null || echo "")
+    fi
+    if [ -n "$_cl" ]; then
+        printf '%s/KB-%s.md' "$_kb_dir" "$_cl"
+    else
+        printf '%s/KB-shared.md' "$_kb_dir"
+    fi
+}
+
+
 # Read-only gate tool allowlist. Normally exported by run-agent-orchestration.sh; computed
 # here too so claude.sh invoked standalone gives its gates the same capability. Derived from
 # the project's own registered plugins rather than a literal — the literal silently dropped
@@ -6590,28 +6616,31 @@ PYEOF
                                 _skill_note_to_persist="[unreviewed-fallback] ${skill_note:0:200}"
                             fi
                             REVIEWER_RETRY_TEXT="$_skill_note_to_persist"
-                            ( flock -w 10 200 || { error "  [FailureAnalyst] Could not acquire lock on $profiles_file"; return 1; }
-                            python3 - "$REVIEWER_RETRY_TEXT" << PYEOF 2>&1 | while IFS= read -r line; do log "  [FailureAnalyst] $line"; done
-import json, sys, os
-profiles_path = '$profiles_file'
-role = '$story_role'
-note = '[Self-Heal] ' + sys.argv[1]
-with open(profiles_path) as f:
-    profiles = json.load(f)
-# profiles.json is flat {role: "prompt string"} — append note to the string value
-if role in profiles:
-    existing = profiles[role]
-    sep = '\n\n' if existing else ''
-    profiles[role] = existing + sep + note
-    _tmp_profiles_path = profiles_path + '.tmp'
-    with open(_tmp_profiles_path, 'w') as f:
-        json.dump(profiles, f, indent=2)
-    os.replace(_tmp_profiles_path, profiles_path)
-    print(f'Skill note appended to [{role}] profile — persisted for future runs')
-else:
-    print(f'Profile role [{role}] not found in profiles.json — skill note NOT persisted', file=sys.stderr)
-PYEOF
-                            ) 200>"${profiles_file}.lock"
+                            # THE ROSTER IS SET AFTER THE MINT. Nothing writes it afterwards.
+                            #
+                            # This appended the note into profiles.json, claiming in its own
+                            # comment that "future runs inherit this learning". They could not:
+                            # pre-run-reset restores profiles.json from its original at the
+                            # start of every run, so the note lived exactly as long as the run
+                            # that produced it. Meanwhile the roster became mutable while three
+                            # lanes read it in parallel, and drifted from its original, which
+                            # broke the same invariant test repeatedly.
+                            #
+                            # The note goes where knowledge actually survives — the codeline KB,
+                            # the same store the kb target uses and that every implementation
+                            # prompt already reads. Duplicate suppression comes free: the file
+                            # is checked before appending.
+                            local _skill_kb_dir _skill_kb_file
+                            _skill_kb_dir="$(dirname "$SCRIPT_DIR")/agents"
+                            _skill_kb_file=$(_kb_file_for_story "$story_id" "$_skill_kb_dir")
+                            if [ -f "$_skill_kb_file" ] && grep -qF -- "$REVIEWER_RETRY_TEXT" "$_skill_kb_file" 2>/dev/null; then
+                                log "  [FailureAnalyst] Skill note already in $(basename "$_skill_kb_file") — not appending again"
+                            else
+                                ( flock -w 10 201 || { error "  [FailureAnalyst] Could not acquire lock on $_skill_kb_file"; return 1; }
+                                  printf '\n- [%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$REVIEWER_RETRY_TEXT" >> "$_skill_kb_file"
+                                ) 201>"${_skill_kb_file}.lock"
+                                log "  [FailureAnalyst] Skill note appended to $(basename "$_skill_kb_file") — survives into later runs"
+                            fi
                             _profile_updated="true"
                             fi
                             fi
@@ -6626,7 +6655,7 @@ PYEOF
                         # Shared rules go to KB-shared.md; agent-specific rules go to role file.
                         local kb_dir
                         kb_dir="$(dirname "$SCRIPT_DIR")/agents"
-                        local kb_file="${kb_dir}/KB-${story_role}.md"
+                        local kb_file; kb_file=$(_kb_file_for_story "$story_id" "$kb_dir")
                         local kb_ts
                         kb_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "unknown")
                         # Truncate to 200 chars — entries are single actionable rules, not essays
@@ -6645,7 +6674,7 @@ PYEOF
                         # case deterministically; genuine near-duplicate rewording is still the
                         # reviewer's call, same scope boundary the skill_note fix drew.
                         if [ -f "$kb_file" ] && grep -qF -- "$short_note" "$kb_file"; then
-                            log "  [FailureAnalyst] KB note is an exact duplicate of an existing entry in KB-${story_role}.md — discarding, not persisting again"
+                            log "  [FailureAnalyst] KB note is an exact duplicate of an existing entry in $(basename "$kb_file") — discarding, not persisting again"
                         else
                         # Read last 3 existing KB entries to give reviewer dedup context
                         local _kb_last3=""
@@ -6697,7 +6726,7 @@ ${_kb_target_role_profile}"
                         else
                             # Compact 2-line format: timestamp + rule only (no verbose headers)
                             printf '\n- [%s] %s\n' "$kb_ts" "$REVIEWER_RETRY_TEXT" >> "$kb_file" 2>/dev/null || true
-                            log "  [FailureAnalyst] KB entry appended to KB-${story_role}.md (${#REVIEWER_RETRY_TEXT} chars)"
+                            log "  [FailureAnalyst] KB entry appended to $(basename "$kb_file") (${#REVIEWER_RETRY_TEXT} chars)"
                             _profile_updated="true"
                         fi
                         fi
@@ -7154,18 +7183,24 @@ check_syntax_class_error() {
                 if [ "$_syntax_verdict" = "pass" ]; then
                     local _syntax_note_final
                     _syntax_note_final=$(cat "${TMPDIR:-/tmp}/.reviewer-retry-text-$$" 2>/dev/null || echo "$_syntax_note")
-                    local _syntax_tmp_profiles
-                    _syntax_tmp_profiles=$(mktemp)
-                    chmod 644 "$_syntax_tmp_profiles" 2>/dev/null
-                    if jq --arg role "$_syntax_story_role" --arg note "
-
-[Self-Heal] ${_syntax_note_final}" \
-                        '(.[$role] // "") |= . + $note' \
-                        "$AGENT_PROFILES_FILE" > "$_syntax_tmp_profiles" 2>/dev/null; then
-                        mv "$_syntax_tmp_profiles" "$AGENT_PROFILES_FILE"
-                        log "  [SyntaxClassEscalation] Persisted targeted-fix-not-full-rewrite skill note to [${_syntax_story_role}] profile"
+                    # Same store as every other durable lesson. This was an UNLOCKED
+                    # read-modify-write on profiles.json — jq to a temp file, then mv — while
+                    # the neighbouring skill-note path was properly flocked. Two writers to one
+                    # mutable file, one of them unguarded, makes the other one's guarantee void
+                    # the moment they interleave, and three lanes run in parallel.
+                    #
+                    # Retired rather than locked: the roster is set after the mint, and this
+                    # note belongs where it survives the per-run restore.
+                    local _sx_kb_dir _sx_kb_file
+                    _sx_kb_dir="$(dirname "$SCRIPT_DIR")/agents"
+                    _sx_kb_file=$(_kb_file_for_story "$story_id" "$_sx_kb_dir")
+                    if [ -f "$_sx_kb_file" ] && grep -qF -- "$_syntax_note_final" "$_sx_kb_file" 2>/dev/null; then
+                        log "  [SyntaxClassEscalation] Skill note already in $(basename "$_sx_kb_file") — not appending again"
                     else
-                        rm -f "$_syntax_tmp_profiles"
+                        ( flock -w 10 202 || { warning "  [SyntaxClassEscalation] Could not acquire lock on $_sx_kb_file"; exit 0; }
+                          printf '\n- [%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$_syntax_note_final" >> "$_sx_kb_file"
+                        ) 202>"${_sx_kb_file}.lock"
+                        log "  [SyntaxClassEscalation] Persisted targeted-fix-not-full-rewrite note to $(basename "$_sx_kb_file")"
                     fi
                 else
                     log "  [SyntaxClassEscalation] Skill note rejected by reviewer — not persisting"
@@ -9305,7 +9340,7 @@ get_relevant_kb_entries() {
     [ -z "$agent_profile" ] && return
 
     # Collect last 10 lines from role-specific KB + shared KB (shared is a fallback)
-    local role_kb="${kb_dir}/KB-${agent_profile}.md"
+    local role_kb; role_kb=$(_kb_file_for_story "$story_id" "$kb_dir")
     local shared_kb="${kb_dir}/KB-shared.md"
     local combined=""
     [ -f "$role_kb"   ] && combined="${combined}$(tail -n 20 "$role_kb" 2>/dev/null)"$'\n'

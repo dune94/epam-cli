@@ -309,13 +309,17 @@ describe('claude.sh — reviewer wired after TC patches', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('claude.sh — reviewer wired before skill note persistence', () => {
-  it('calls run_prd_change_reviewer before writing skill note to profiles.json', () => {
-    // reviewer call must appear BEFORE the python3 block that appends [Self-Heal] to profiles
-    const skillBranchIdx   = claudeSrc.indexOf('_skill_review_verdict');
-    const selfHealWriteIdx = claudeSrc.indexOf("'[Self-Heal] ' + sys.argv[1]");
-    expect(skillBranchIdx).toBeGreaterThan(-1);
-    expect(selfHealWriteIdx).toBeGreaterThan(-1);
-    expect(skillBranchIdx).toBeLessThan(selfHealWriteIdx);
+  it('calls the reviewer before persisting a skill note', () => {
+    // The DESTINATION changed 2026-08-07: notes go to the codeline KB, not into
+    // profiles.json. The roster is set after the mint, and a note appended to profiles.json
+    // was erased by the next run's reset anyway — while making a file three parallel lanes
+    // read mutable. The concern this test guards is unchanged: nothing is persisted until
+    // the reviewer has passed it.
+    const skillBranchIdx = claudeSrc.indexOf('_skill_review_verdict');
+    const persistIdx     = claudeSrc.indexOf('_skill_kb_file=$(_kb_file_for_story');
+    expect(skillBranchIdx, 'the reviewer call is gone').toBeGreaterThan(-1);
+    expect(persistIdx, 'the persist site is gone').toBeGreaterThan(-1);
+    expect(skillBranchIdx, 'a note is written before the reviewer sees it').toBeLessThan(persistIdx);
   });
 
   // 2026-07-06: a genuinely correct skill note was rejected 3 times purely for
@@ -330,12 +334,14 @@ describe('claude.sh — reviewer wired before skill note persistence', () => {
     expect(claudeSrc).toMatch(/\[unreviewed-fallback\] \$\{skill_note:0:200\}/);
   });
 
-  it('the fallback path still goes through the same profiles.json append code as an approved note (not a separate write path)', () => {
-    const skillCaseIdx = claudeSrc.indexOf('_skill_review_verdict');
-    const pythonWriteIdx = claudeSrc.indexOf("'[Self-Heal] ' + sys.argv[1]", skillCaseIdx);
-    const fallbackIdx = claudeSrc.indexOf('persisting raw fallback (unreviewed)', skillCaseIdx);
-    expect(fallbackIdx).toBeGreaterThan(skillCaseIdx);
-    expect(pythonWriteIdx).toBeGreaterThan(fallbackIdx);
+  it('the fallback path goes through the SAME persist code as an approved note', () => {
+    // One write site, so a rescued note cannot bypass the duplicate check or the lock.
+    const fallbackIdx = claudeSrc.indexOf('[unreviewed-fallback]');
+    const persistIdx  = claudeSrc.indexOf('_skill_kb_file=$(_kb_file_for_story');
+    expect(fallbackIdx, 'the unreviewed-fallback rescue is gone').toBeGreaterThan(-1);
+    expect(persistIdx).toBeGreaterThan(fallbackIdx);
+    // and there is exactly one such site
+    expect(claudeSrc.split('_skill_kb_file=$(_kb_file_for_story').length - 1).toBe(1);
   });
 });
 

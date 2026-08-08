@@ -3153,6 +3153,14 @@ KNOWNFIXES_EOF
         fi
       done
 
+      # PER-LANE OUTCOME, RECORDED. Lanes have their own log dir, PRD, worktree, investigator
+      # and writer, run in parallel, and this script states that no lane is upstream of
+      # another — then the result collapsed into one exit code, so one lane's gate decision
+      # failed a run in which the others had cleared. Live 2026-08-07: two lanes reached the
+      # writer pause cleanly and the run reported failure because a third was blocked by the
+      # spec review gate. Nothing said which, or that two-thirds of the work was fine.
+      _LANE_OUTCOMES="${_LANE_OUTCOMES:+${_LANE_OUTCOMES}
+}${_cl}	$([ "$_cl_failed" = "0" ] && echo ok || echo blocked)"
       if [ "$_cl_failed" = "0" ]; then
         _completed_list="${_completed_list:+${_completed_list}:}${_cl_prd}"
       else
@@ -3160,8 +3168,21 @@ KNOWNFIXES_EOF
         # finished by the time the abort poll noticed. Without this the run ends
         # non-zero with no statement of which lane died or why the others were
         # stopped — the operator is left diffing timestamps.
-        error "[orch] HALT: codeline '${_cl}' failed after its retries and self-heal completed."
-        _overall=1
+        error "[orch] codeline '${_cl}' did not complete — its retries and self-heal are exhausted."
+        # LANE INDEPENDENCE HOLDS THROUGH FAILURE (operator decision, 2026-08-07).
+        #
+        # A lane that does not complete does not invalidate the ones that did. Nothing here
+        # reaches a client remote: work lands on a per-story branch cut from origin/<baseline>,
+        # and merging it is a human decision taken per codeline. Denying two lanes' work
+        # because a third drew a gate failure — from a gate that has proven unstable — is the
+        # worse trade.
+        #
+        # EPAM_LANE_FAILURE_IS_FATAL=1 restores all-or-nothing for a project where a change
+        # must land everywhere or nowhere.
+        if [ "${EPAM_LANE_FAILURE_IS_FATAL:-0}" = "1" ]; then
+          error "[orch] HALT: EPAM_LANE_FAILURE_IS_FATAL=1 — one lane failing fails the run."
+          _overall=1
+        fi
       fi
     # Merge this codeline's final story state (status/completed/completedAt/
     # testCriteria/etc — whatever claude.sh/TC-writer wrote into the filtered
@@ -3415,6 +3436,25 @@ KNOWNFIXES_EOF
   # The cross-lane scratch file has no evidentiary value and is still removed.
   rm -f "$_cross_prd" 2>/dev/null || true
   unset CROSS_CODELINE_PRD
+
+  # THE SUMMARY IS THE POINT. A story spanning codelines can now finish with some lanes
+  # complete and some not, and the one thing that must never happen is someone merging two of
+  # three without knowing the third is missing.
+  if [ -n "${_LANE_OUTCOMES:-}" ]; then
+    local _ok_n _blocked_n
+    _ok_n=$(printf '%s\n' "$_LANE_OUTCOMES" | grep -c 'ok$' || true)
+    _blocked_n=$(printf '%s\n' "$_LANE_OUTCOMES" | grep -c 'blocked$' || true)
+    log "[orch] Lane outcomes — ${_ok_n} completed, ${_blocked_n} did not:"
+    printf '%s\n' "$_LANE_OUTCOMES" | while IFS=$'\t' read -r _lc _ls; do
+      [ -n "$_lc" ] || continue
+      if [ "$_ls" = "ok" ]; then log "[orch]   ✓ ${_lc}"; else error "[orch]   ✗ ${_lc} — did not complete"; fi
+    done
+    if [ "${_blocked_n:-0}" != "0" ] && [ "${_ok_n:-0}" != "0" ]; then
+      warning "[orch] This story spans codelines and did NOT complete on all of them."
+      warning "[orch] Work sits on a per-story branch in each completed codeline; merging is yours to decide."
+      warning "[orch] Set EPAM_LANE_FAILURE_IS_FATAL=1 if this project requires all-or-nothing."
+    fi
+  fi
 
   [ "$_overall" = "0" ] \
     && log "[orch] ✅ Pipeline complete." \

@@ -30,10 +30,32 @@ afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true 
 
 const ANSWER = JSON.stringify({
   proposedAgents: [
-    { name: 'some-domain-engineer', kind: 'implementer', codeline: '*', systemPrompt: 'You own a domain. '.repeat(20), rationale: 'the codeline has it' },
-    { name: 'another-domain-specialist', kind: 'implementer', codeline: '*', systemPrompt: 'You own another. '.repeat(20), rationale: 'and this one' },
+    { name: 'some-domain-engineer', kind: 'implementer', codeline: '*', systemPrompt: 'You own a domain. '.repeat(20), rationale: 'This estate has a distinct domain that no canonical role covers.' },
+    { name: 'another-domain-specialist', kind: 'implementer', codeline: '*', systemPrompt: 'You own another. '.repeat(20), rationale: 'A second domain here is owned by nothing in the canonical core.' },
   ],
 });
+
+/**
+ * A runner answering DIFFERENTLY on each successive call, so a re-proposal can be exercised.
+ * Each call appends its prompt to a capture file and emits the next answer in the list.
+ */
+function sequenceRunner(answers: string[]) {
+  const dir = mkdtempSync(join(tmpdir(), 'mint-seq-')); dirs.push(dir);
+  const capture = join(dir, 'prompts.txt');
+  const counter = join(dir, 'n');
+  const sh = join(dir, 'run.sh');
+  const cases = answers
+    .map((a, i) => `  ${i}) cat <<'ANSWER'\n<PROJECT_AGENTS>${a}</PROJECT_AGENTS>\nANSWER\n  ;;`)
+    .join('\n');
+  writeFileSync(sh,
+    `#!/usr/bin/env bash\n` +
+    `n=$(cat ${JSON.stringify(counter)} 2>/dev/null || echo 0)\n` +
+    `{ echo "===PROMPT $n==="; cat; } >> ${JSON.stringify(capture)}\n` +
+    `echo $((n+1)) > ${JSON.stringify(counter)}\n` +
+    `case "$n" in\n${cases}\n  *) echo '<PROJECT_AGENTS>{"proposedAgents":[]}</PROJECT_AGENTS>' ;;\nesac\n`);
+  chmodSync(sh, 0o755);
+  return { cmd: sh, args: [] as string[], capture, counter };
+}
 
 /** A runner that CAPTURES the prompt it is given, then answers. */
 function capturingRunner(answer = ANSWER) {
@@ -131,7 +153,7 @@ describe('the roster it writes obeys the merge rules', () => {
   it('a proposal colliding with the canonical core cannot overwrite it', async () => {
     const canonical = FIXED_AGENT_ROLES[0];
     const answer = JSON.stringify({
-      proposedAgents: [{ name: canonical, kind: 'implementer', codeline: '*', systemPrompt: 'LLM SUGGESTION '.repeat(10), rationale: 'r' }],
+      proposedAgents: [{ name: canonical, kind: 'implementer', codeline: '*', systemPrompt: 'LLM SUGGESTION '.repeat(10), rationale: 'A collision with a canonical role, deliberately proposed.' }],
     });
     const { profiles, res } = await mint({ answer });
     expect(profiles[canonical]).toBe('CANONICAL BRIEF');
@@ -177,6 +199,84 @@ describe('a corrective pass is told what it is replacing AND what it is keeping'
     const { prompt } = await mint();
     expect(prompt).not.toMatch(/ALREADY EXIST/);
     expect(prompt).not.toMatch(/REVIEWED AND REJECTED/);
+  }, 60_000);
+});
+
+describe('a refused proposal is retried, not left as an empty roster', () => {
+  const lazy = JSON.stringify({
+    proposedAgents: [
+      { name: 'lazy-engineer', kind: 'implementer', codeline: '*',
+        systemPrompt: 'You own a domain. '.repeat(20), rationale: '...' },
+    ],
+  });
+  const corrected = JSON.stringify({
+    proposedAgents: [
+      { name: 'lazy-engineer', kind: 'implementer', codeline: '*',
+        systemPrompt: 'You own a domain. '.repeat(20),
+        rationale: 'The estate has a scheduling domain that no canonical role covers.' },
+    ],
+  });
+
+  async function run(answers: string[]) {
+    const ws = workspace();
+    const runner = sequenceRunner(answers);
+    delete process.env.SPEC_MODE_PROVIDER;
+    const res = await spec.mintProjectAgents({
+      promptExec: runner, tickets: TICKETS, referencedDocs: DOCS,
+      profilesPath: ws.profilesPath, agentsDir: ws.dir, logDir: ws.dir, repoPath: ws.dir,
+    });
+    return { res, ws, prompts: readFileSync(runner.capture, 'utf8') };
+  }
+
+  it('a rationale of "..." is refused and the corrected re-proposal is minted', async () => {
+    // The live 2026-08-07 shape: the schema was satisfied, the field said nothing.
+    const { res } = await run([lazy, corrected]);
+    expect(res.attempts).toBe(2);
+    expect(res.minted.map((m: any) => m.name)).toContain('lazy-engineer');
+  }, 60_000);
+
+  it('the retry is told which proposal was refused and why', async () => {
+    const { prompts } = await run([lazy, corrected]);
+    const second = prompts.slice(prompts.indexOf('===PROMPT 1==='));
+    expect(second, 'the retry got no account of the refusal and will repeat it').toContain('lazy-engineer');
+    expect(second).toMatch(/rationale/i);
+    expect(second).toMatch(/PARTLY REFUSED/);
+  }, 60_000);
+
+  it('a first attempt with nothing refused does not retry — no wasted call', async () => {
+    const { res } = await run([ANSWER]);
+    expect(res.attempts).toBe(1);
+  }, 60_000);
+
+  it('retries are bounded — a model that never complies does not loop', async () => {
+    const { res } = await run([lazy, lazy, lazy, lazy]);
+    expect(res.attempts).toBe(2);
+    expect(res.minted).toEqual([]);
+  }, 60_000);
+});
+
+describe('what was proposed is persisted, not just counted', () => {
+  it('the full proposals are written to disk, system prompts included', async () => {
+    // profiles.json is ephemeral and restored from canonical each run, so the briefs survive
+    // nowhere else; a refused proposal previously left no trace of what it had said.
+    const { ws } = await mint();
+    const file = join(ws.dir, 'agent-mint-proposals.json');
+    expect(existsSync(file), 'only a count of the proposals was recorded').toBe(true);
+    const rec = JSON.parse(readFileSync(file, 'utf8'));
+    expect(rec.proposals.map((p: any) => p.name)).toContain('some-domain-engineer');
+    expect(rec.proposals[0].systemPrompt.length).toBeGreaterThan(50);
+  }, 60_000);
+
+  it('a REFUSED proposal is persisted with the reason it was refused', async () => {
+    const answer = JSON.stringify({
+      proposedAgents: [{ name: 'refused-engineer', kind: 'implementer', codeline: '*',
+        systemPrompt: 'x'.repeat(60), rationale: '...' }],
+    });
+    const { ws } = await mint({ answer });
+    const rec = JSON.parse(readFileSync(join(ws.dir, 'agent-mint-proposals.json'), 'utf8'));
+    expect(rec.proposals[0].name).toBe('refused-engineer');
+    expect(rec.refused.length).toBe(1);
+    expect(rec.refused[0].reason).toMatch(/rationale/i);
   }, 60_000);
 });
 

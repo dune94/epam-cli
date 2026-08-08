@@ -103,6 +103,26 @@ function isUsableProposal(p) {
   if (proposalKind(p) === 'investigator' && _cl === PROJECT_WIDE) {
     return 'an investigator must name ONE codeline, not the whole project — the lane looks it up by codeline';
   }
+
+  // A REQUIRED FIELD THAT ACCEPTS ANYTHING IS NOT REQUIRED.
+  //
+  // The schema marks `rationale` required, so a model cannot omit it — and on 2026-08-07 all
+  // five minted agents returned the rationale "...". The schema was satisfied and nothing was
+  // said. That field is the justification the operator reads at the roster pause (which exists
+  // so a human can assess the team before it is given work), the seed line of each agent's KB,
+  // and what a corrective cycle is told about the roles it is keeping.
+  //
+  // Structural check only: count letters and digits after collapsing whitespace. No vocabulary
+  // list, no required phrasing — this constrains that the field argues SOMETHING, never what it
+  // argues. Padding with punctuation buys nothing because punctuation is not counted.
+  const _rationale = typeof p.rationale === 'string' ? p.rationale : '';
+  const _weight = (_rationale.match(/[\p{L}\p{N}]/gu) || []).length;
+  const _min = Number(process.env.EPAM_ROSTER_RATIONALE_MIN_CHARS || '24');
+  if (_weight < _min) {
+    return `rationale says nothing (${_weight} letters/digits, minimum ${_min}) — it is what the ` +
+           'operator reviews at the roster pause and what seeds the agent KB; state why THIS ' +
+           'project needs THIS role';
+  }
   return null;
 }
 

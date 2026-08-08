@@ -31,10 +31,10 @@ let prev: string | undefined;
 beforeEach(() => { prev = process.env.EPAM_PROJECT_CONFIG_DIR; delete process.env.EPAM_PROJECT_CONFIG_DIR; });
 afterAll(() => { if (prev !== undefined) process.env.EPAM_PROJECT_CONFIG_DIR = prev; });
 
-const IMPL = { name: 'a-domain-engineer', kind: 'implementer', codeline: '*', systemPrompt: 'owns src/. '.repeat(20), rationale: 'r' };
+const IMPL = { name: 'a-domain-engineer', kind: 'implementer', codeline: '*', systemPrompt: 'owns src/. '.repeat(20), rationale: 'Nothing in the canonical core owns this part of the estate.' };
 // codeline is REQUIRED for an investigator: the lane resolves it by codeline, so one
 // naming none is unreachable and the merge refuses it.
-const INV = { name: 'a-codeline-detective', kind: 'investigator', codeline: 'alpha', systemPrompt: 'reads and reports. '.repeat(20), rationale: 'r' };
+const INV = { name: 'a-codeline-detective', kind: 'investigator', codeline: 'alpha', systemPrompt: 'reads and reports. '.repeat(20), rationale: 'Nothing in the canonical core owns this part of the estate.' };
 
 function ws() {
   const dir = mkdtempSync(join(tmpdir(), 'kinds-')); dirs.push(dir);
@@ -113,7 +113,7 @@ describe('an unrecognised kind is refused, not coerced', () => {
     const { dir, profilesPath } = ws();
     const res = roster.mergeProjectAgents({
       profilesPath, agentsDir: dir,
-      proposals: [{ name: 'legacy-engineer', codeline: '*', systemPrompt: 'x'.repeat(80), rationale: 'r' }],
+      proposals: [{ name: 'legacy-engineer', codeline: '*', systemPrompt: 'x'.repeat(80), rationale: 'Nothing in the canonical core owns this part of the estate.' }],
     });
     expect(res.minted[0].kind).toBe('implementer');
     expect(roster.projectRoles(dir)).toEqual(['legacy-engineer']);
@@ -157,7 +157,7 @@ describe('every proposal must state a codeline', () => {
     const { dir, profilesPath } = ws3();
     const res = roster.mergeProjectAgents({
       profilesPath, agentsDir: dir,
-      proposals: [{ name: 'an-engineer', kind: 'implementer', systemPrompt: brief, rationale: 'r' }],
+      proposals: [{ name: 'an-engineer', kind: 'implementer', systemPrompt: brief, rationale: 'Nothing in the canonical core owns this part of the estate.' }],
     });
     expect(res.minted).toHaveLength(0);
     expect(res.rejected[0].reason).toMatch(/must state a codeline/i);
@@ -167,7 +167,7 @@ describe('every proposal must state a codeline', () => {
     const { dir, profilesPath } = ws3();
     const res = roster.mergeProjectAgents({
       profilesPath, agentsDir: dir,
-      proposals: [{ name: 'an-engineer', kind: 'implementer', codeline: roster.PROJECT_WIDE, systemPrompt: brief, rationale: 'r' }],
+      proposals: [{ name: 'an-engineer', kind: 'implementer', codeline: roster.PROJECT_WIDE, systemPrompt: brief, rationale: 'Nothing in the canonical core owns this part of the estate.' }],
     });
     expect(res.minted).toHaveLength(1);
     expect(roster.projectRoles(dir)).toEqual(['an-engineer']);
@@ -177,7 +177,7 @@ describe('every proposal must state a codeline', () => {
     const { dir, profilesPath } = ws3();
     roster.mergeProjectAgents({
       profilesPath, agentsDir: dir,
-      proposals: [{ name: 'an-engineer', kind: 'implementer', codeline: roster.PROJECT_WIDE, systemPrompt: brief, rationale: 'r' }],
+      proposals: [{ name: 'an-engineer', kind: 'implementer', codeline: roster.PROJECT_WIDE, systemPrompt: brief, rationale: 'Nothing in the canonical core owns this part of the estate.' }],
     });
     expect(roster.investigatorForCodeline(dir, roster.PROJECT_WIDE)).toBe('');
   });
@@ -186,7 +186,7 @@ describe('every proposal must state a codeline', () => {
     const { dir, profilesPath } = ws3();
     const res = roster.mergeProjectAgents({
       profilesPath, agentsDir: dir,
-      proposals: [{ name: 'an-inv', kind: 'investigator', codeline: roster.PROJECT_WIDE, systemPrompt: brief, rationale: 'r' }],
+      proposals: [{ name: 'an-inv', kind: 'investigator', codeline: roster.PROJECT_WIDE, systemPrompt: brief, rationale: 'Nothing in the canonical core owns this part of the estate.' }],
     });
     expect(res.minted).toHaveLength(0);
     expect(res.rejected[0].reason).toMatch(/must name ONE codeline/i);

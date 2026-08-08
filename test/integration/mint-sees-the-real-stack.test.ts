@@ -56,7 +56,7 @@ function capturingRunner(answer: string) {
 }
 
 const ANSWER = JSON.stringify({
-  proposedAgents: [{ name: 'a-domain-engineer', systemPrompt: 'x'.repeat(200), rationale: 'r' }],
+  proposedAgents: [{ name: 'a-domain-engineer', systemPrompt: 'x'.repeat(200), rationale: 'Nothing in the canonical core owns this part of the estate.' }],
 });
 
 describe('the declared stack reaches the proposer', () => {

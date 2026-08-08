@@ -3036,7 +3036,20 @@ const TOOL_PROJECT_AGENTS = {
                 "The role's full briefing: its expertise, the conventions of THIS codeline, the " +
                 'files and directories it owns, the patterns it follows and the tools it uses.',
             },
-            rationale: { type: 'string', description: 'One sentence: why this codeline needs this role.' },
+            rationale: {
+              type: 'string',
+              // THE PROMPT IS THE CONTRACT. mergeProjectAgents refuses a rationale carrying
+              // fewer than EPAM_ROSTER_RATIONALE_MIN_CHARS letters/digits, so the model is told
+              // that here rather than discovering it as a rejection. Live 2026-08-07: all five
+              // agents came back with "...", which satisfied "required" and said nothing.
+              description:
+                'One sentence: why THIS project needs THIS role, referring to something stated ' +
+                'in the ticket, the documents or the declared dependencies above. A placeholder ' +
+                `("...", "-", "n/a") is refused, as is anything under ` +
+                `${Number(process.env.EPAM_ROSTER_RATIONALE_MIN_CHARS || '24')} letters and ` +
+                'digits. This is what a human reads when reviewing the roster before it is ' +
+                'given any work.',
+            },
           },
         },
       },
@@ -3277,8 +3290,71 @@ Do not propose a role that duplicates one of the canonical roles already listed 
   );
 
   const proposals = (payload && Array.isArray(payload.proposedAgents)) ? payload.proposedAgents : [];
-  const result = mergeProjectAgents({ profilesPath, agentsDir, proposals });
-  return { ...result, proposed: proposals.length, protectedRoles: fixedRoles.length };
+
+  // PERSIST WHAT WAS PROPOSED, NOT A COUNT OF IT.
+  //
+  // The merged result records `proposed: 5` and the briefs themselves land in profiles.json —
+  // which is ephemeral by design and restored from canonical at the next run's start. So the
+  // full text of what the model proposed, system prompts included, survived nowhere, and a
+  // refused proposal left no trace of what it had actually said. Written BEFORE the merge, so
+  // a merge that throws still leaves the evidence behind.
+  const _persistProposals = (attempt, list, merged) => {
+    if (!logDir) return;
+    try {
+      fs.writeFileSync(
+        path.join(logDir, `agent-mint-proposals${attempt > 1 ? `-attempt${attempt}` : ''}.json`),
+        JSON.stringify({ attempt, proposed: list.length, proposals: list, refused: merged || [] }, null, 2));
+    } catch { /* the run must not die for want of an audit file */ }
+  };
+
+  _persistProposals(1, proposals);
+  let result = mergeProjectAgents({ profilesPath, agentsDir, proposals });
+  _persistProposals(1, proposals, result.rejected);
+  let attempts = 1;
+
+  // ONE REFUSAL IS NOT A DEAD RUN.
+  //
+  // Every validation here is a contract the prompt states, so a refusal means the model did not
+  // follow it — which is what a retry is for. Without this a single lazy field (the "..."
+  // rationale, a missing codeline) empties the roster, and role assignment then has no
+  // candidates at all: the failure surfaces far downstream of its cause. The re-proposal is told
+  // exactly what was refused and why. Merging is additive and convergent, so anything minted on
+  // the first attempt is kept and only the gap is re-proposed.
+  const _maxAttempts = Math.max(1, Number(process.env.EPAM_ROSTER_MINT_ATTEMPTS || '2'));
+  while (result.rejected.length && attempts < _maxAttempts) {
+    attempts += 1;
+    const refusedBlock = [
+      'YOUR PREVIOUS PROPOSAL WAS PARTLY REFUSED. Each line is a proposal that was NOT accepted,',
+      'and the reason it failed the roster contract. Re-propose those roles correcting exactly',
+      'that, and do not re-propose any role that was already accepted:',
+      '',
+      ...result.rejected.map((r) => `- ${r.name || '(unnamed)'}: ${r.reason}`),
+      '',
+    ].join('\n');
+
+    const retryPayload = await runAgentForJson(
+      promptExec, `${refusedBlock}${prompt}`, TOOL_PROJECT_AGENTS, 'PROJECT_AGENTS',
+      logDir ? path.join(logDir, `project-agents-mint-attempt${attempts}.log`) : null,
+      null, '', repoPath || '',
+      _mintEnv,
+    );
+    const retryProposals =
+      (retryPayload && Array.isArray(retryPayload.proposedAgents)) ? retryPayload.proposedAgents : [];
+    if (!retryProposals.length) break;
+
+    _persistProposals(attempts, retryProposals);
+    const retryResult = mergeProjectAgents({ profilesPath, agentsDir, proposals: retryProposals });
+    _persistProposals(attempts, retryProposals, retryResult.rejected);
+
+    result = {
+      ...retryResult,
+      minted: [...result.minted, ...retryResult.minted],
+      unchanged: [...result.unchanged, ...retryResult.unchanged],
+    };
+    proposals.push(...retryProposals);
+  }
+
+  return { ...result, proposed: proposals.length, attempts, protectedRoles: fixedRoles.length };
 }
 
 const TOOL_ROLE_ASSIGNMENTS = {

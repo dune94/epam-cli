@@ -141,7 +141,7 @@ describe('malformed proposals are refused, not written', () => {
     const { dir, profilesPath } = workspace({});
     roster.mergeProjectAgents({
       profilesPath, agentsDir: dir,
-      proposals: [{ name: '../escape', systemPrompt: 'x'.repeat(50), rationale: 'r' }],
+      proposals: [{ name: '../escape', systemPrompt: 'x'.repeat(50), rationale: 'Nothing in the canonical core owns this part of the estate.' }],
     });
     expect(existsSync(join(dir, '../KB-escape.md'))).toBe(false);
     expect(Object.keys(JSON.parse(readFileSync(profilesPath, 'utf8')))).toEqual([]);

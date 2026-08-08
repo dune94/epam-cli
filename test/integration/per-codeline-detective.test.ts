@@ -28,9 +28,9 @@ beforeEach(() => { prev = process.env.EPAM_PROJECT_CONFIG_DIR; delete process.en
 afterAll(() => { if (prev !== undefined) process.env.EPAM_PROJECT_CONFIG_DIR = prev; });
 
 const PROPOSALS = [
-  { name: 'an-engineer', kind: 'implementer', codeline: '*', systemPrompt: 'owns src/. '.repeat(20), rationale: 'r' },
-  { name: 'alpha-detective', kind: 'investigator', codeline: 'alpha', systemPrompt: 'knows alpha. '.repeat(20), rationale: 'r' },
-  { name: 'beta-detective', kind: 'investigator', codeline: 'beta', systemPrompt: 'knows beta. '.repeat(20), rationale: 'r' },
+  { name: 'an-engineer', kind: 'implementer', codeline: '*', systemPrompt: 'owns src/. '.repeat(20), rationale: 'Nothing in the canonical core owns this part of the estate.' },
+  { name: 'alpha-detective', kind: 'investigator', codeline: 'alpha', systemPrompt: 'knows alpha. '.repeat(20), rationale: 'Nothing in the canonical core owns this part of the estate.' },
+  { name: 'beta-detective', kind: 'investigator', codeline: 'beta', systemPrompt: 'knows beta. '.repeat(20), rationale: 'Nothing in the canonical core owns this part of the estate.' },
 ];
 
 function ws() {
@@ -131,7 +131,7 @@ describe('an investigator must name its codeline', () => {
     const { dir, profilesPath } = ws2();
     const res = roster.mergeProjectAgents({
       profilesPath, agentsDir: dir,
-      proposals: [{ name: 'an-investigator', kind: 'investigator', systemPrompt: brief, rationale: 'r' }],
+      proposals: [{ name: 'an-investigator', kind: 'investigator', systemPrompt: brief, rationale: 'Nothing in the canonical core owns this part of the estate.' }],
     });
     expect(res.minted, 'an unbound investigator was minted — no lane can ever reach it').toHaveLength(0);
     expect(res.rejected[0].reason).toMatch(/must state a codeline/i);
@@ -143,8 +143,8 @@ describe('an investigator must name its codeline', () => {
     const res = roster.mergeProjectAgents({
       profilesPath, agentsDir: dir,
       proposals: [
-        { name: 'blank-one', kind: 'investigator', codeline: '', systemPrompt: brief, rationale: 'r' },
-        { name: 'spaces-one', kind: 'investigator', codeline: '   ', systemPrompt: brief, rationale: 'r' },
+        { name: 'blank-one', kind: 'investigator', codeline: '', systemPrompt: brief, rationale: 'Nothing in the canonical core owns this part of the estate.' },
+        { name: 'spaces-one', kind: 'investigator', codeline: '   ', systemPrompt: brief, rationale: 'Nothing in the canonical core owns this part of the estate.' },
       ],
     });
     expect(res.minted).toHaveLength(0);
@@ -155,7 +155,7 @@ describe('an investigator must name its codeline', () => {
     const { dir, profilesPath } = ws2();
     const res = roster.mergeProjectAgents({
       profilesPath, agentsDir: dir,
-      proposals: [{ name: 'an-engineer', kind: 'implementer', codeline: '*', systemPrompt: brief, rationale: 'r' }],
+      proposals: [{ name: 'an-engineer', kind: 'implementer', codeline: '*', systemPrompt: brief, rationale: 'Nothing in the canonical core owns this part of the estate.' }],
     });
     expect(res.minted).toHaveLength(1);
     expect(roster.projectRoles(dir)).toEqual(['an-engineer']);
@@ -165,7 +165,7 @@ describe('an investigator must name its codeline', () => {
     const { dir, profilesPath } = ws2();
     roster.mergeProjectAgents({
       profilesPath, agentsDir: dir,
-      proposals: [{ name: 'alpha-inv', kind: 'investigator', codeline: 'alpha', systemPrompt: brief, rationale: 'r' }],
+      proposals: [{ name: 'alpha-inv', kind: 'investigator', codeline: 'alpha', systemPrompt: brief, rationale: 'Nothing in the canonical core owns this part of the estate.' }],
     });
     expect(roster.investigatorForCodeline(dir, 'alpha')).toBe('alpha-inv');
   });

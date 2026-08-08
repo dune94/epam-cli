@@ -80,9 +80,22 @@ describe('required bug-reproducing test — injected for brownfield defects', ()
     expect(out).toMatch(/dedicated test-writer agent/);
   });
 
-  it('non-defect brownfield (no fix site) → no required-test block (VC guidance handles it)', () => {
+  // SUPERSEDED 2026-08-08. This asserted that a brownfield story with no fix site got no
+  // ownership block. That was written when the block was understood as a DEFECT concern, but
+  // it states who AUTHORS tests — and authorship is brownfield-wide, not fix-site-scoped:
+  // brownfield-repro-test-writer.sh gates on brownfield + fix files present + no test already
+  // in the diff (lines 45, 64, 65) and never consults fixSiteAnalysis, which it uses only as a
+  // hint with two fallbacks. So the writer's turn happens either way.
+  //
+  // Leaving the block out meant that on a no-fix-site story the implementer was never told
+  // tests were not its job, and its roster brief — which on AMSD-2041 said "You write Jest
+  // tests... colocated alongside the modules you edit" — was the only instruction in play.
+  // DET-1 makes "investigated, found nothing" a legitimate state, so that path gets more
+  // traffic, not less. The repro-gate still blocks a fix that ships without a test, so a
+  // missing test is caught rather than shipped.
+  it('brownfield with NO fix site still states who owns the tests', () => {
     const out = runRequiredTest({ brownfield: true, fixSite: false });
-    expect(out.trim()).toBe('');
+    expect(out).toMatch(/Tests are NOT your job/);
   });
 
   it('greenfield → no required-test block', () => {

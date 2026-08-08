@@ -1885,8 +1885,18 @@ build_implementation_prompt() {
     #
     # Enforcement is unchanged — the repro-gate still BLOCKS a fix that ships
     # without a reproducing test. Only authorship moved.
+    # CONDITION WIDENED 2026-08-08. This used to require a non-empty fix_site_analysis, so a
+    # story reaching the writer WITHOUT one was never told that tests belong to the dedicated
+    # repro-test-writer turn — and the agent's own roster brief was then the only instruction
+    # in play. On AMSD-2041 that brief said "You write Jest tests... colocated alongside the
+    # modules you edit", the exact opposite. DET-1 makes "investigated, found nothing" a
+    # legitimate state, so the no-fix-site path gets MORE traffic, not less.
+    #
+    # Authorship is a brownfield property, not a fix-site property: brownfield-repro-test-writer
+    # takes its own turn either way. Enforcement is untouched — the repro-gate still blocks a
+    # fix that ships without a reproducing test.
     local test_ownership_block=""
-    if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -n "$fix_site_analysis" ]; then
+    if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
         test_ownership_block=$(printf '\n## Tests are NOT your job this turn\nA dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.\n')
     fi
 

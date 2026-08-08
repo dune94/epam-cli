@@ -103,6 +103,83 @@ describe('the surveyor is told to open the repositories, and told its limits', (
   }, 60_000);
 });
 
+describe('REGRESSION 2026-08-08: the live run returned prose and lost a good investigation', () => {
+  // The surveyor did excellent work — it opened all three repos, read every manifest, searched
+  // for live-preview wiring and spotted that all three share cx-shared at three DIFFERENT
+  // versions. Then it answered in markdown and runAgentForJson discarded every word:
+  //   Failed to parse JSON for tag ESTATE_SURVEY: Unexpected token '#', "# AMSD-204"...
+  // The proposal prompt that DOES work ends with an explicit "respond with ONLY valid JSON"
+  // contract. This one ended with prose instructions and no contract at all.
+  it('the prompt ends with an explicit JSON-only output contract', async () => {
+    const { prompt } = await survey();
+    expect(prompt).toMatch(/ONLY valid JSON/i);
+    expect(prompt, 'nothing told the agent not to wrap its answer in markdown').toMatch(/no markdown fences/i);
+  }, 60_000);
+
+  it('the contract names the exact keys the schema requires', async () => {
+    const { prompt } = await survey();
+    expect(prompt).toContain('"codelines"');
+    expect(prompt).toContain('"recommendedInvestigators"');
+    expect(prompt).toMatch(/in_scope/);
+  }, 60_000);
+});
+
+describe('REGRESSION 2026-08-08: the survey was handed indices instead of dependencies', () => {
+  // declaredDependencies is a flat ARRAY of package names — mintProjectAgents renders it as
+  // one, this rendered Object.entries() of it and produced "- 0: (none declared)" through
+  // "- 9:". The surveyor was given ZERO dependency facts about an estate whose entire ticket
+  // turns on which CMS packages are declared.
+  const DEPS = ['contentstack', '@contentstack/utils', 'next', '@metrolinx/cx-shared'];
+
+  it('dependency NAMES reach the prompt, not array indices', async () => {
+    const dir = logDir();
+    const r = runner('ESTATE_SURVEY', SURVEY_ANSWER);
+    await spec.surveyEstate({
+      promptExec: r, tickets: TICKETS, referencedDocs: [], codelines: CODELINES,
+      declaredDependencies: DEPS, logDir: dir, repoPath: dir,
+    });
+    const prompt = readFileSync(r.capture, 'utf8');
+
+    expect(prompt).toContain('contentstack');
+    expect(prompt).toContain('@metrolinx/cx-shared');
+    expect(prompt, 'the array was enumerated by index — the surveyor got no dependency facts')
+      .not.toMatch(/^- \d+: /m);
+  }, 60_000);
+});
+
+describe('REGRESSION 2026-08-08: fetched document bodies never reached the surveyor', () => {
+  // A fetched doc is {url, fetchStatus, path} — the TEXT is on disk at `path`, and there are
+  // no quotes and no inline body. The mint reads the file; the survey did not, so both vendor
+  // documents arrived as a URL and a blank line. Empty documents are precisely what caused a
+  // mint to invent a vendor on 2026-08-07.
+  it('document text is read from disk and reaches the prompt', async () => {
+    const dir = logDir();
+    const docPath = join(dir, 'doc1.txt');
+    writeFileSync(docPath, 'the options object accepts a live_preview key and a preview token');
+    const r = runner('ESTATE_SURVEY', SURVEY_ANSWER);
+    await spec.surveyEstate({
+      promptExec: r, tickets: TICKETS,
+      referencedDocs: [{ url: 'https://vendor.example/docs', fetchStatus: 'fetched', path: docPath }],
+      codelines: CODELINES, logDir: dir, repoPath: dir,
+    });
+    const prompt = readFileSync(r.capture, 'utf8');
+
+    expect(prompt, 'the document arrived as a URL and a blank line').toContain('live_preview');
+    expect(prompt).toContain('vendor.example');
+  }, 60_000);
+
+  it('a document with no readable text says so rather than rendering blank', async () => {
+    const dir = logDir();
+    const r = runner('ESTATE_SURVEY', SURVEY_ANSWER);
+    await spec.surveyEstate({
+      promptExec: r, tickets: TICKETS,
+      referencedDocs: [{ url: 'https://vendor.example/gone', fetchStatus: 'fetched' }],
+      codelines: CODELINES, logDir: dir, repoPath: dir,
+    });
+    expect(readFileSync(r.capture, 'utf8')).toMatch(/no readable text/);
+  }, 60_000);
+});
+
 describe('the survey is persisted', () => {
   it('estate-survey.json is written at generation time', async () => {
     // What the roster was grounded in must outlive the process that produced it, or the pause

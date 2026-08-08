@@ -1,0 +1,135 @@
+/**
+ * TESTS HAVE ONE OWNER, AND IT IS NOT A ROSTER ROLE.
+ *
+ * Test authorship is a SEAM: _PERIMETER_AUTHORING_SEAMS="writer,repro-test-writer,lint-fix".
+ * brownfield-repro-test-writer.sh takes its own agent turn AFTER the fix commits and owns the
+ * bug-reproducing test. Enforcement never moved — the repro-gate still blocks a fix that ships
+ * without one. Only authorship did.
+ *
+ * On AMSD-2041 the roster contradicted that. The minted brief for the implementer said:
+ *
+ *     "You write Jest tests using ts-jest and jest-environment-jsdom. Test files are colocated
+ *      alongside the modules you edit... Use @testing-library/react..."
+ *
+ * while the writer seam was telling that same agent "Do NOT write, edit, or create any test
+ * file". One agent, two contradictory instructions. Two independent causes, both fixed here:
+ *
+ *   1. the proposal prompt never mentioned test ownership, so nothing stopped a brief from
+ *      claiming it — and a brief is inherited whole;
+ *   2. the writer's "tests are not your job" block only rendered when a fix site had been
+ *      found. With no fix site the writer was never told, and the brief was the only
+ *      instruction in play. DET-1 makes "investigated, found nothing" a legitimate state, so
+ *      that gap widens rather than closes.
+ */
+import { describe, it, expect, afterAll } from 'vitest';
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, chmodSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+
+const spec = require('../../../orchestrations/scripts/spec-mode-runner.js');
+const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
+const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+
+const dirs: string[] = [];
+afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
+
+describe('the roster is told tests are not its job', () => {
+  async function mintPrompt() {
+    const dir = mkdtempSync(join(tmpdir(), 'test-owner-')); dirs.push(dir);
+    const profilesPath = join(dir, 'profiles.json');
+    writeFileSync(profilesPath, JSON.stringify({ 'canonical-agent': 'CANONICAL' }));
+    const capture = join(dir, 'prompt.txt');
+    const sh = join(dir, 'run.sh');
+    writeFileSync(sh,
+      `#!/usr/bin/env bash\ncat > ${JSON.stringify(capture)}\n` +
+      `cat <<'ANSWER'\n<PROJECT_AGENTS>{"proposedAgents":[]}</PROJECT_AGENTS>\nANSWER\n`);
+    chmodSync(sh, 0o755);
+    delete process.env.SPEC_MODE_PROVIDER;
+    await spec.mintProjectAgents({
+      promptExec: { cmd: sh, args: [] },
+      tickets: [{ id: 'T-1', title: 't', description: 'd' }],
+      referencedDocs: [], codelines: [{ name: 'alpha', path: '/x/alpha' }],
+      profilesPath, agentsDir: dir, logDir: dir, repoPath: dir,
+    });
+    return existsSync(capture) ? readFileSync(capture, 'utf8') : '';
+  }
+
+  it('the proposer is told a dedicated seam owns the tests', async () => {
+    const prompt = await mintPrompt();
+    expect(prompt.length, 'no prompt reached the proposer — this assertion would be vacuous')
+      .toBeGreaterThan(200);
+    expect(prompt).toMatch(/test/i);
+    expect(
+      prompt,
+      'nothing tells the proposer who owns tests, so a brief can claim it — and did',
+    ).toMatch(/dedicated .*writes the tests|owns the .*test|tests are not/i);
+  }, 60_000);
+
+  it('the proposer is told not to propose a test-writing role', async () => {
+    const prompt = await mintPrompt();
+    expect(prompt).toMatch(/do not propose[^.]*test/i);
+  }, 60_000);
+
+  it('the proposer is told a brief must not claim test authorship', async () => {
+    // The role NAME is not the only route: a domain engineer whose brief says "you write Jest
+    // tests" produces the same contradiction without ever being called a test role.
+    const prompt = await mintPrompt();
+    expect(prompt).toMatch(/must not (say|claim|state)[^.]*test|do not .* brief[^.]*test/i);
+  }, 60_000);
+});
+
+describe('the writer is told tests are not its job — REAL execution', () => {
+  /**
+   * Runs the real block-building snippet out of claude.sh under the given conditions and
+   * reports whether the instruction was produced.
+   */
+  function ownershipBlock(env: Record<string, string>): string {
+    const marker = 'local test_ownership_block=""';
+    const start = claudeSrc.indexOf(marker);
+    expect(start, 'the test-ownership block is gone from claude.sh').toBeGreaterThan(-1);
+    const end = claudeSrc.indexOf('\n    fi', start);
+    const snippet = claudeSrc.slice(start, end + 7).replace(/^\s*local /m, '');
+
+    const dir = mkdtempSync(join(tmpdir(), 'ownership-')); dirs.push(dir);
+    const sh = join(dir, 'run.sh');
+    writeFileSync(sh,
+      `#!/usr/bin/env bash\nset -u\ntest_ownership_block=""\n` +
+      `${snippet}\nprintf '%s' "$test_ownership_block"\n`);
+    return execFileSync('bash', [sh], { encoding: 'utf8', env: { ...process.env, ...env } });
+  }
+
+  it('the block IS produced in brownfield when a fix site was found', () => {
+    const out = ownershipBlock({ EPAM_BROWNFIELD: '1', fix_site_analysis: 'a fix site' });
+    expect(out, 'the fixture produced nothing — the assertions here would be vacuous').not.toBe('');
+    expect(out).toMatch(/Tests are NOT your job/);
+  });
+
+  it('THE DEFECT: it is produced in brownfield even with NO fix site', () => {
+    // "Investigated and found nothing" is a legitimate DET-1 state. With no fix site the
+    // writer used to be told nothing, leaving the roster brief's claim unopposed.
+    const out = ownershipBlock({ EPAM_BROWNFIELD: '1', fix_site_analysis: '' });
+    expect(
+      out,
+      'with no fix site the writer is never told tests are not its job, and the brief wins',
+    ).toMatch(/Tests are NOT your job/);
+  });
+
+  it('it names the file patterns, so "a test file" is not left to interpretation', () => {
+    const out = ownershipBlock({ EPAM_BROWNFIELD: '1', fix_site_analysis: '' });
+    expect(out).toMatch(/\*\.test\.\*/);
+    expect(out).toMatch(/__tests__/);
+  });
+
+  it('greenfield is untouched — there is no repro-test-writer turn there', () => {
+    expect(ownershipBlock({ EPAM_BROWNFIELD: '0', fix_site_analysis: 'a fix site' })).toBe('');
+  });
+});
+
+describe('the seam list is the authority on who may author', () => {
+  it('repro-test-writer is an authoring seam, not a roster role', () => {
+    const perimeter = readFileSync(
+      join(__dirname, '../../../orchestrations/scripts/lib/codeline-write-perimeter.sh'), 'utf8');
+    expect(perimeter).toMatch(/_PERIMETER_AUTHORING_SEAMS="[^"]*repro-test-writer/);
+  });
+});

@@ -3177,17 +3177,33 @@ async function surveyEstate({
     `- ${t.jiraKey || t.id || '(no key)'}: ${t.title || ''}\n    ${String(t.description || '').replace(/\s+/g, ' ')}`
   ).join('\n');
 
+  // A FETCHED DOCUMENT IS {url, fetchStatus, path} — THE TEXT IS ON DISK.
+  //
+  // Live 2026-08-08: both vendor documents on AMSD-2041 arrived here with no quotes and no
+  // inline body, so this rendered a URL and a blank line and the surveyor was handed nothing.
+  // mintProjectAgents already reads d.path; this did not. Empty documents are exactly what
+  // led a mint to invent a vendor on 2026-08-07.
   const docBlock = (Array.isArray(referencedDocs) ? referencedDocs : []).map((d) => {
-    const body = Array.isArray(d.quotes) && d.quotes.length
-      ? d.quotes.map((q) => `      "${String(q).replace(/\s+/g, ' ')}"`).join('\n')
-      : `      ${String(d.body || '').replace(/\s+/g, ' ')}`;
-    return `- ${d.url || '(no url)'} [${d.fetchStatus || 'unknown'}]\n${body}`;
-  }).join('\n');
+    if (Array.isArray(d.quotes) && d.quotes.length) {
+      return `- ${d.url || '(no url)'} [${d.fetchStatus || 'unknown'}]\n` +
+        d.quotes.map((q) => `      "${String(q).replace(/\s+/g, ' ')}"`).join('\n');
+    }
+    let body = typeof d.body === 'string' ? d.body : '';
+    if (!body && d.path) { try { body = fs.readFileSync(d.path, 'utf8'); } catch { body = ''; } }
+    // Not truncated: this is the vendor's published contract, and a cut copy is how an agent
+    // ends up inferring the rest.
+    return body
+      ? `- ${d.url || '(no url)'} [${d.fetchStatus || 'unknown'}]\n${body}`
+      : `- ${d.url || '(no url)'} (retrieved, no readable text)`;
+  }).join('\n\n');
 
-  const depBlock = (declaredDependencies && typeof declaredDependencies === 'object')
-    ? Object.entries(declaredDependencies).map(([cl, deps]) =>
-        `- ${cl}: ${(Array.isArray(deps) ? deps : []).join(', ') || '(none declared)'}`).join('\n')
-    : '';
+  // declaredDependencies is a FLAT ARRAY of package names, the union across the estate — the
+  // same value mintProjectAgents receives and renders as a list. Enumerating it with
+  // Object.entries produced "- 0: (none declared)" through "- 9:" on 2026-08-08, so the
+  // surveyor got zero dependency facts about an estate whose ticket turns entirely on which
+  // CMS packages are declared.
+  const depBlock = (Array.isArray(declaredDependencies) ? declaredDependencies : [])
+    .map((d) => `- ${d}`).join('\n');
 
   const prompt = `You are surveying an estate of repositories BEFORE its agent team is assembled.
 
@@ -3217,7 +3233,25 @@ WHAT YOU MUST NOT DO. You are not fixing anything and you are not choosing files
 Name directories and modules, never a file to edit, a function to patch or a change to make.
 Each codeline gets its own investigator working inside that repository, and it decides. A fix
 site you supply for a repository you swept from the outside is how one codeline's file ends up
-in another's work — so state where to look, and let the investigator look.`;
+in another's work — so state where to look, and let the investigator look.
+
+Respond with ONLY valid JSON (no markdown fences, no report, no commentary before or after):
+{
+  "codelines": [
+    {
+      "codeline": "<exactly as named in scope above>",
+      "state": "in_scope | no_work_found | not_investigated | failed",
+      "evidence": "<what you opened and what you saw>",
+      "surfaces": ["<directory or module>"]
+    }
+  ],
+  "recommendedInvestigators": [
+    { "codeline": "<name>", "focus": "<what it should concentrate on>", "why": "<what you saw>" }
+  ]
+}
+
+One entry in "codelines" for EVERY codeline listed in scope. Everything you want to say goes
+inside these fields — a prose report outside this JSON is discarded unread, however good it is.`;
 
   const _env = { EPAM_AGENT_NAME: 'estate-surveyor', EPAM_SEAM: 'estate-survey' };
   if (toolGrant) {
@@ -3489,7 +3523,33 @@ async function mintProjectAgents({
          : [])].join('\n')
     : '';
 
-  const prompt = `${correctiveBlock}${retainedBlock}${surveyBlock}${basePrompt}
+  // WHO OWNS THE TESTS. The roster does not, and a brief that says otherwise is inherited
+  // whole by an implementer that is simultaneously forbidden from writing tests.
+  //
+  // Live AMSD-2041: a minted brief read "You write Jest tests using ts-jest... Test files are
+  // colocated alongside the modules you edit", while the writer seam told that same agent
+  // "Do NOT write, edit, or create any test file". One agent, two contradictory instructions,
+  // and six consecutive quality failures were once spent fighting a test the implementer
+  // should never have written. Authorship belongs to a pipeline SEAM (repro-test-writer),
+  // which takes its own turn after the fix commits — not to any role proposed here.
+  //
+  // Stated as a rule about this pipeline, naming no framework and no file convention: which
+  // tools a project tests with is the project's business, and this says nothing about it.
+  const testOwnershipRule = [
+    'WHO WRITES THE TESTS — NOT THESE ROLES.',
+    '',
+    'A dedicated agent of this pipeline writes the tests. It takes its own turn after the fix',
+    'is committed and owns the reproducing test, and the roles you propose are separately',
+    'FORBIDDEN from creating or editing any test file.',
+    '',
+    'So: do not propose a test-writing, QA or test-automation role — that work is already owned.',
+    'And a brief must not say the role writes, owns, colocates or maintains tests, in any words.',
+    'A role whose brief claims test authorship is handed two contradictory instructions and',
+    'spends its turns fighting itself. Describe what the role BUILDS.',
+    '',
+  ].join('\n');
+
+  const prompt = `${correctiveBlock}${retainedBlock}${surveyBlock}${testOwnershipRule}${basePrompt}
 
 THE WORK THIS PROJECT HAS BEEN ASKED TO DO (real tickets from the tracker):
 ${ticketBlock || '- (no tickets available)'}

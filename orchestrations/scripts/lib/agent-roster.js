@@ -405,34 +405,55 @@ function rosterRunId(agentsDir) {
  * how two runs left five roles behind including two from a run whose vendor was wrong.
  * Canonical roles are never touched: only names this project registered are removed.
  */
-function clearProjectRoster(agentsDir, profilesPath) {
-  const registered = [...projectRoles(agentsDir), ...projectInvestigators(agentsDir)];
+/**
+ * clearProjectRoster(agentsDir, profilesPath[, names])
+ *
+ * With no `names`, removes every minted agent — the ephemeral-roster rule: a run starts from
+ * the canonical base, never from a previous run's mutated roster.
+ *
+ * With `names`, removes ONLY those agents. This is what a corrective review cycle uses. It
+ * used to clear wholesale on any blocking finding, so one defective brief discarded every
+ * sound one alongside it and re-derived them all — and since minting is a sampling process, a
+ * correct brief was as likely to come back subtly wrong as to come back the same. A cycle
+ * meant to converge could move the roster sideways, on the reviewer's own limited budget.
+ *
+ * An EMPTY array means "no agent was named" (findings about a GAP in the roster rather than a
+ * defect in a brief) and clears nothing. Only the absent argument means all.
+ */
+function clearProjectRoster(agentsDir, profilesPath, names) {
+  const targeted = Array.isArray(names);
+  const all = [...projectRoles(agentsDir), ...projectInvestigators(agentsDir)];
+  const registered = targeted ? all.filter((r) => names.includes(r)) : all;
   if (!registered.length) return [];
+  const drop = (list) => (Array.isArray(list) ? list.filter((r) => !registered.includes(r)) : []);
 
   // Both registries. An investigator left behind would be re-applied next run as a role the
   // roster never proposed — the same aggregation the ephemeral-roster rule forbids.
   try {
     const file = projectInvestigatorsPath(agentsDir);
     const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
-    parsed.investigators = [];
+    parsed.investigators = drop(parsed.investigators);
     // The codeline mapping too. Left behind, it points a lane at a detective whose brief no
     // longer exists — resolving to a name with no profile, which reads as "minted" and
-    // investigates with nothing.
-    parsed.byCodeline = {};
+    // investigates with nothing. A targeted clear drops only the mappings whose investigator
+    // is going; the lanes whose detective survived keep theirs.
+    parsed.byCodeline = Object.fromEntries(
+      Object.entries(parsed.byCodeline || {}).filter(([, nm]) => !registered.includes(nm)));
     fs.writeFileSync(file, JSON.stringify(parsed, null, 2), 'utf8');
   } catch { /* none registered */ }
 
   try {
     const file = projectRolesPath(agentsDir);
     const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
-    parsed.roles = [];
+    parsed.roles = drop(parsed.roles);
     fs.writeFileSync(file, JSON.stringify(parsed, null, 2), 'utf8');
   } catch { /* nothing registered to clear */ }
 
   try {
     const file = projectProfilesPath(agentsDir);
     const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
-    parsed.profiles = {};
+    parsed.profiles = Object.fromEntries(
+      Object.entries(parsed.profiles || {}).filter(([nm]) => !registered.includes(nm)));
     fs.writeFileSync(file, JSON.stringify(parsed, null, 2), 'utf8');
   } catch { /* no store */ }
 
@@ -456,7 +477,36 @@ function projectRoles(agentsDir) {
   } catch { return []; }
 }
 
+/**
+ * partitionRosterFindings(blockingFindings, mintedAgents)
+ *
+ * Decides what a corrective cycle replaces and what it keeps.
+ *
+ * A finding names the agent whose brief is defective in `agent`. That agent is INDICTED and
+ * will be re-proposed. Everything else the mint produced is RETAINED — it passed the same
+ * adversarial review, and re-deriving it is a fresh sample that can come back worse.
+ *
+ * A finding naming no agent, or naming one not in this roster, indicts nothing: it is a
+ * statement about a GAP in coverage ("no role reads codeline X"). Those are counted, not
+ * matched to a victim — they tell the correction to ADD, and they must never be allowed to
+ * collapse into "clear everything", which is how the wholesale behaviour crept in.
+ *
+ * Returns { indicted: string[], retained: object[], gaps: number }.
+ */
+function partitionRosterFindings(blockingFindings, mintedAgents) {
+  const minted = Array.isArray(mintedAgents) ? mintedAgents.filter((m) => m && m.name) : [];
+  const names = new Set(minted.map((m) => m.name));
+  const findings = Array.isArray(blockingFindings) ? blockingFindings.filter(Boolean) : [];
+
+  const indicted = [...new Set(
+    findings.map((f) => f.agent).filter((n) => typeof n === 'string' && names.has(n)))];
+  const gaps = findings.filter((f) => !(typeof f.agent === 'string' && names.has(f.agent))).length;
+
+  return { indicted, retained: minted.filter((m) => !indicted.includes(m.name)), gaps };
+}
+
 module.exports = {
+  partitionRosterFindings,
   mergeProjectAgents, isUsableProposal, ROLE_NAME_RE,
   registerProjectRoles, projectRoles, projectRolesPath, PROJECT_ROLES_FILE,
   saveProjectProfiles, applyProjectProfiles, projectProfilesPath, PROJECT_PROFILES_FILE,

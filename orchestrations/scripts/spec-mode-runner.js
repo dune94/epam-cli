@@ -3064,7 +3064,7 @@ const TOOL_PROJECT_AGENTS = {
  */
 async function mintProjectAgents({
   promptExec, tickets, referencedDocs, profilesPath, agentsDir, logDir, repoPath,
-  declaredDependencies, codelines, toolGrant, correctiveFindings,
+  declaredDependencies, codelines, toolGrant, correctiveFindings, retainedAgents,
 }) {
   const { mergeProjectAgents } = require('./lib/agent-roster.js');
 
@@ -3163,7 +3163,23 @@ async function mintProjectAgents({
        ''].join('\n')
     : '';
 
-  const prompt = `${correctiveBlock}${basePrompt}
+  // WHAT THE CORRECTION IS KEEPING. A targeted correction replaces only the indicted briefs,
+  // so the roles that survived are already in the roster — and a proposer not told about them
+  // re-proposes the same coverage under a new name. mergeProjectAgents is convergent and would
+  // refuse the duplicate, but the proposal budget is spent either way and the real gap goes
+  // uncovered. Naming them also lets the correction position its replacement against what
+  // already exists rather than overlapping it.
+  const _ra = Array.isArray(retainedAgents) ? retainedAgents.filter((a) => a && a.name) : [];
+  const retainedBlock = _ra.length
+    ? ['THESE ROLES ALREADY EXIST IN THIS ROSTER AND ARE BEING KEPT — they passed review. Do NOT',
+       'propose them again, and do not propose a role whose remit overlaps one of them. Propose',
+       'only what is missing or what replaces a defect named above:',
+       ..._ra.map((a) => `- ${a.name}${a.codeline && a.codeline !== '*' ? ` (codeline: ${a.codeline})` : ''}` +
+                         `${a.rationale ? ` — ${String(a.rationale).replace(/\s+/g, ' ')}` : ''}`),
+       ''].join('\n')
+    : '';
+
+  const prompt = `${correctiveBlock}${retainedBlock}${basePrompt}
 
 THE WORK THIS PROJECT HAS BEEN ASKED TO DO (real tickets from the tracker):
 ${ticketBlock || '- (no tickets available)'}

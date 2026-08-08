@@ -139,6 +139,47 @@ describe('the roster it writes obeys the merge rules', () => {
   }, 60_000);
 });
 
+describe('a corrective pass is told what it is replacing AND what it is keeping', () => {
+  it('the findings reach the proposer as evidence, not as a bare verdict', async () => {
+    const { prompt } = await mint({
+      correctiveFindings: [{
+        agent: 'some-domain-engineer',
+        claim: 'the codeline uses a monorepo layout',
+        checked: 'listed the repository root',
+        found: 'a single package.json and no workspaces field',
+        remedy: 'do not describe the layout the brief cannot verify',
+      }],
+    });
+    expect(prompt).toContain('some-domain-engineer');
+    expect(prompt, 'the correction got a verdict with no evidence and will reword the same defect')
+      .toContain('a single package.json and no workspaces field');
+    expect(prompt).toContain('do not describe the layout the brief cannot verify');
+  }, 60_000);
+
+  it('the retained roles are named so the correction does not re-propose them', async () => {
+    // ARCH-7: a targeted correction replaces only the indicted briefs. A proposer not told
+    // which roles survived re-proposes the same coverage under a new name — mergeProjectAgents
+    // refuses the duplicate, but the proposal budget is spent and the real gap goes uncovered.
+    const { prompt } = await mint({
+      correctiveFindings: [{ agent: 'gone-engineer', claim: 'c', checked: 'k', found: 'f' }],
+      retainedAgents: [
+        { name: 'kept-engineer', codeline: '*', rationale: 'owns a domain nothing else covers' },
+        { name: 'kept-investigator', codeline: 'alpha', rationale: 'reads codeline alpha' },
+      ],
+    });
+    expect(prompt).toContain('kept-engineer');
+    expect(prompt).toContain('owns a domain nothing else covers');
+    expect(prompt, 'a retained investigator lost the codeline that makes it findable').toContain('alpha');
+    expect(prompt).toMatch(/ALREADY EXIST[^]{0,200}KEPT/);
+  }, 60_000);
+
+  it('a first (non-corrective) mint carries neither block — nothing to correct or keep', async () => {
+    const { prompt } = await mint();
+    expect(prompt).not.toMatch(/ALREADY EXIST/);
+    expect(prompt).not.toMatch(/REVIEWED AND REJECTED/);
+  }, 60_000);
+});
+
 describe('failure is honest — a mint that produced nothing says so', () => {
   it('an unusable answer does not silently write an empty roster', async () => {
     const { res, profiles } = await mint({ answer: JSON.stringify({ proposedAgents: [] }) });

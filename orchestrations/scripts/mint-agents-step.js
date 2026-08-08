@@ -505,6 +505,13 @@ if (require.main !== module) return;
   // Same shape as enforceVerificationCriteria: findings feed a regeneration, the regeneration is
   // re-reviewed, and the cycle is capped. Corrective mints REPLACE rather than accumulate, so a
   // correction cannot leave defective briefs behind beside their replacements.
+  //
+  // The replacement is TARGETED (ARCH-7). This first cleared the whole roster on any blocking
+  // finding, so one defective brief took every sound one with it and re-derived them all.
+  // Minting is a sampling process — a re-proposal is a fresh draw, so a brief that had just
+  // passed adversarial review was as likely to come back subtly wrong as to come back the
+  // same, and the reviewer's own capped budget went on re-checking settled work. Only the
+  // agents a blocking finding NAMES are replaced.
   const runRosterReview = async () => {
     if (!_mintedDetail.length) return { verdict: 'sound', findings: [], reviewed: 0 };
     process.env.EPAM_AGENT_NAME = 'roster-reviewer';
@@ -546,18 +553,41 @@ if (require.main !== module) return;
     reportReview(review, cycle);
     if (!blocking.length || cycle === maxCycles) break;
 
+    // Which agents does the reviewer actually indict? A finding names one in `agent`. A
+    // finding that names nothing — or names something not in this roster — is a statement
+    // about a GAP ("no one covers this codeline"), which indicts no brief and must remove
+    // nothing. Those still feed the corrective prompt, where they read as work to add.
+    const { indicted: _indicted, retained: _retained, gaps: _gapFindings } =
+      rosterLib.partitionRosterFindings(blocking, _mintedDetail);
+
     process.stderr.write(
-      `[mint-step] cycle ${cycle}: ${blocking.length} blocking finding(s) — re-minting with them as input\n`);
-    const cleared = rosterLib.clearProjectRoster(AGENTS_DIR, PROFILES_PATH);
-    process.stderr.write(`[mint-step]   cleared the defective roster (${cleared.length}) before re-proposing\n`);
+      `[mint-step] cycle ${cycle}: ${blocking.length} blocking finding(s) — ` +
+      `${_indicted.length} agent(s) indicted, ${_retained.length} retained` +
+      `${_gapFindings ? `, ${_gapFindings} finding(s) name no agent (roster gaps)` : ''}\n`);
+
+    // Nothing indicted and nothing to add would re-mint the same roster forever against the
+    // same findings. Stop and let the operator see them rather than burn the budget.
+    if (!_indicted.length && !_gapFindings) {
+      process.stderr.write(
+        '[mint-step]   no blocking finding names an agent in this roster — nothing to correct; ' +
+        'surfacing the findings instead of re-minting\n');
+      break;
+    }
+
+    const cleared = rosterLib.clearProjectRoster(AGENTS_DIR, PROFILES_PATH, _indicted);
+    for (const c of cleared) process.stderr.write(`[mint-step]   − ${c} (indicted, being replaced)\n`);
+    for (const r of _retained) process.stderr.write(`[mint-step]   = ${r.name} (passed review, kept)\n`);
 
     const remint = await spec.mintProjectAgents({
       promptExec, tickets: stories, referencedDocs: docs, declaredDependencies: deps,
       codelines, toolGrant, profilesPath: PROFILES_PATH, agentsDir: AGENTS_DIR,
       logDir: LOG_DIR, repoPath: REPO_PATH, correctiveFindings: blocking,
+      retainedAgents: _retained,
     });
-    _mintedNames = remint.minted.map((m) => m.name);
-    _mintedDetail = remint.minted;
+    // The next review sees the WHOLE roster, not just the replacements: a new brief can
+    // duplicate or contradict a retained one, and only a review of both would catch it.
+    _mintedDetail = [..._retained, ...remint.minted];
+    _mintedNames = _mintedDetail.map((m) => m.name);
     fs.writeFileSync(path.join(LOG_DIR, `agent-mint-cycle${cycle + 1}.json`), JSON.stringify(remint, null, 2));
     for (const m of remint.minted) {
       const tag = m.kind === 'investigator' ? `investigator:${m.codeline || '(no codeline!)'}` : 'implementer';

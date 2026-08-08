@@ -233,21 +233,12 @@ function fetchSembleContext(story) {
 // causal fix site is where X is COMPUTED, and that code is described by X's
 // domain terms — never by the presentation verb ("displayed"/"shown") that
 // only the symptom uses.
-const SYMPTOM_STOPWORDS = new Set([
-  // GRAMMATICAL FUNCTION WORDS ONLY — articles, prepositions, conjunctions, auxiliaries.
-  // These are structure of the language the tickets are written in, not knowledge of any
-  // client, product or industry, and they carry no discriminating signal in any corpus.
-  //
-  // A second half used to live here: presentation/symptom nouns (displayed, screen, page,
-  // email, confirmation, label, field, value...) taken from one past incident. That was
-  // domain vocabulary hardcoded into engine code — wrong for the next project, and
-  // redundant: this query feeds CodeGraph, whose BM25 ranking already demotes terms that
-  // appear everywhere in the corpus, measured from the actual repository rather than from
-  // a list somebody maintains. Removed 2026-08-06.
-  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'not',
-  'for', 'in', 'of', 'and', 'or', 'to', 'as', 'at', 'by', 'it', 'its', 'that',
-  'this', 'with', 'on', 'from', 'when', 'if', 'but', 'per', 'via', 'into',
-]);
+// The symptom-word list that used to live here is GONE (2026-08-08). It was unreferenced —
+// dead code — but a baked word list sitting in the engine is something the next person
+// reaches for. Word lists are DERIVED here: the guard-vocabulary agent returns them per
+// ticket, in context, and codeline discovery already reports which terms 'carry no selection
+// signal'. Where no list is needed at all, prefer the plan-alignment check's approach: look
+// only at identifier-shaped tokens, which are distinctive without any vocabulary.
 function buildBrownfieldSearchQuery(story, vocabulary) {
   // Seeds the code-graph detective's FIRST `explore` — the query that starts the whole
   // chain (fix sites -> manifest -> ACs -> VCs). Everything downstream inherits it.
@@ -2201,18 +2192,30 @@ ${reviewPayload}
           // already used for openspec/speckit re-elaboration. Best-effort: a failed
           // correction keeps the original (already-persisted) fixSiteAnalysis rather than
           // losing it — a flagged hypothesis still beats none.
-          if (review.planAlignment === 'unexplained_mismatch' && process.env.EPAM_BROWNFIELD === '1') {
-            console.warn(`spec-mode: SPEC_REVIEW flagged an unexplained plan/execution mismatch for ${story.id} — re-invoking the detective once with the rejection as corrective context.`);
+          const _correction = detectiveCorrectionNeeded({
+            review,
+            coverage: story.fixSiteAnalysisCoverage,
+            brownfield: process.env.EPAM_BROWNFIELD === '1',
+          });
+          if (_correction.correct) {
+            console.warn(`spec-mode: re-invoking the detective once for ${story.id} — ${_correction.reasons.join('; ')}.`);
             advanceAgentLadderEscalation(logDir, 'code-graph-detective', story.id);
             try {
               const _priorPlan = readLatestDetectivePlan(logDir, opts.phase, story.id);
               const _priorFindings = Array.isArray(story.fixSiteAnalysis) ? story.fixSiteAnalysis : [];
               const _corrected = await runCodeGraphDetective(story, logDir, {
-                correctiveContext: { priorPlan: _priorPlan, priorFindings: _priorFindings, reviewNotes: review.reviewNotes || '' },
+                correctiveContext: {
+                  priorPlan: _priorPlan,
+                  priorFindings: _priorFindings,
+                  reviewNotes: review.reviewNotes || '',
+                  // Named, not merely counted: a re-invocation told only "try again" re-samples
+                  // the same answer. These are the criteria no site addressed.
+                  uncoveredCriteria: _correction.uncovered,
+                },
               });
               if (Array.isArray(_corrected) && _corrected.length) {
                 story.fixSiteAnalysis = _corrected.filter((f) => f.reason);
-                story.fixSiteAnalysisCoverage = checkFixSiteCoverage(story.fixSiteAnalysis, story.verificationCriteria || []);
+                story.fixSiteAnalysisCoverage = checkFixSiteCoverage(story.fixSiteAnalysis, story.verificationCriteria || [], (story.specification || {}).guardVocabulary);
                 console.warn(`spec-mode: ${story.id} — detective correction produced ${story.fixSiteAnalysis.length} revised fix-site(s).`);
               }
             } catch (err) {
@@ -3702,7 +3705,7 @@ Do not propose a role that duplicates one of the canonical roles already listed 
   };
 
   _persistProposals(1, proposals);
-  let result = mergeProjectAgents({ profilesPath, agentsDir, proposals });
+  let result = mergeProjectAgents({ profilesPath, agentsDir, proposals, codelines });
   _persistProposals(1, proposals, result.rejected);
   let attempts = 1;
 
@@ -3737,7 +3740,7 @@ Do not propose a role that duplicates one of the canonical roles already listed 
     if (!retryProposals.length) break;
 
     _persistProposals(attempts, retryProposals);
-    const retryResult = mergeProjectAgents({ profilesPath, agentsDir, proposals: retryProposals });
+    const retryResult = mergeProjectAgents({ profilesPath, agentsDir, proposals: retryProposals, codelines });
     _persistProposals(attempts, retryProposals, retryResult.rejected);
 
     result = {
@@ -4605,44 +4608,59 @@ function checkPlanExecutionAlignment(planText, findings) {
   return { aligned, planTerms: planIdents, findingTerms: findingIdents };
 }
 
-function checkFixSiteCoverage(findings, verificationCriteria) {
-  const STOPWORDS = new Set([
-    'the', 'a', 'an', 'and', 'or', 'to', 'of', 'in', 'on', 'for', 'is', 'are',
-    'with', 'that', 'this', 'when', 'without', 'from', 'by', 'as', 'at', 'be',
-    'it', 'its', 'their', 'than', 'after', 'before', 'then', 'can', 'into',
-    'not', 'no', 'does', 'should', 'must', 'will', 'has', 'have', 'been',
-  ]);
-  const tokenize = (s) => (String(s || '').toLowerCase().match(/[a-z][a-z0-9]{3,}/g) || [])
-    .filter((t) => !STOPWORDS.has(t));
+function checkFixSiteCoverage(findings, verificationCriteria, vocabulary) {
+  // THE WORD LIST IS DERIVED, NOT BAKED.
+  //
+  // This filtered "unimportant" words with a hardcoded English stopword list living in the
+  // engine — the hardcoding rule's named example, and the thing that decided which criteria
+  // counted as addressed. It also could not work: a list written in English scores criteria
+  // phrased in a project's own domain language by raw word overlap.
+  //
+  // This pipeline already derives word lists with an agent, in context, per ticket — codeline
+  // discovery reports terms that "carry no selection signal", and the guard-vocabulary agent
+  // returns {blacklist, whitelist} at each guard seam. That derived vocabulary is the input
+  // here.
+  //
+  // With no vocabulary there is NO VERDICT. Falling back to a guessed list would produce a
+  // confident answer from nothing, and something downstream would trust it.
+  const noise = new Set(
+    (vocabulary && Array.isArray(vocabulary.blacklist) ? vocabulary.blacklist : [])
+      .map((b) => String((b && b.term) || b || '').toLowerCase())
+      .filter(Boolean),
+  );
+  if (!noise.size) {
+    return {
+      complete: null,
+      uncoveredVerificationCriteria: [],
+      reason: 'no derived vocabulary available — coverage not computed rather than guessed',
+    };
+  }
+
+  const tokenize = (str) => (String(str || '').toLowerCase().match(/[a-z][a-z0-9]{3,}/g) || [])
+    .filter((t) => !noise.has(t));
 
   const findingList = Array.isArray(findings) ? findings : [];
   const findingTermSets = findingList.map((f) =>
-    new Set(tokenize(`${f.file || ''} ${f.function || ''} ${f.reason || ''} ${f.fix || ''}`))
+    new Set(tokenize(`${f.file || ''} ${f.function || ''} ${f.reason || ''} ${f.fix || ''}`)),
   );
   const numFindings = findingList.length;
   const dfFindings = new Map();
   for (const set of findingTermSets) for (const t of set) dfFindings.set(t, (dfFindings.get(t) || 0) + 1);
-  // A term present in EVERY finding is the prescription's own recurring topic
-  // vocabulary (e.g. the product/vendor name shows up in nearly every finding
-  // about the same integration) — it can't prove a SPECIFIC VC is addressed,
-  // since it would trivially match almost anything about the same product.
-  // Only applies once there are 2+ findings to compare.
+  // A term in EVERY finding is the prescription's own recurring topic vocabulary — it cannot
+  // prove a SPECIFIC criterion is addressed, since it would match almost anything about the
+  // same work. Only meaningful once there are 2+ findings to compare.
   const isTopicNoise = (t) => numFindings >= 2 && dfFindings.get(t) === numFindings;
-
-  const findingTerms = new Set();
-  for (const set of findingTermSets) for (const t of set) if (!isTopicNoise(t)) findingTerms.add(t);
 
   const uncovered = [];
   for (const vc of (Array.isArray(verificationCriteria) ? verificationCriteria : [])) {
     const vcTerms = tokenize(vc).filter((t) => !isTopicNoise(t));
     if (!vcTerms.length) continue;
-    const covered = vcTerms.some((t) =>
-      findingTerms.has(t) || [...findingTerms].some((ft) => ft.startsWith(t) || t.startsWith(ft))
-    );
+    const covered = findingTermSets.some((set) => vcTerms.some((t) => set.has(t)));
     if (!covered) uncovered.push(vc);
   }
   return { complete: uncovered.length === 0, uncoveredVerificationCriteria: uncovered };
 }
+
 
 // inferStoryKindHint(story) — a cheap, deterministic, zero-LLM-cost PRE-classification
 // signal for the code-graph-detective, which runs BEFORE the real storyKind
@@ -4680,6 +4698,132 @@ function advanceAgentLadderEscalation(logDir, agentName, storyId) {
       { shell: '/bin/bash', stdio: 'ignore' },
     );
   } catch { /* best-effort — a failed advance must never block the corrective call itself */ }
+}
+
+/**
+ * detectivePrescription(kind) — what the detective is asked to PRODUCE.
+ *
+ * A defect and a feature need different answers, and asking a feature for a defect's answer
+ * gets half the work. Live 2026-08-08 (AMSD-2041): the detective returned ONE fix site — the
+ * SDK init — for a story that also needs a provider wrapped around the app and a refresh
+ * callback wired into every fetch surface. The pipeline flagged it ("Single fix site
+ * prescribed but work spans 5+ files across 3 codelines") and proceeded anyway.
+ *
+ * That was the CONTRACT, not the model. The prompt demanded "the MINIMAL FIX", "the SMALLEST
+ * change", "STOP as soon as you identify the file that computes the wrong value", and a
+ * machine-verified brokenLine quoted from the file. Nothing is broken in a feature, so the
+ * only site expressible under those rules is the one place existing code is touched — every
+ * other layer is unsayable.
+ *
+ * A kind hint already existed and the prompt branched on it for ONE paragraph; the forty
+ * lines after it applied unconditionally, so the defect contract won on a story already
+ * classified novel.
+ *
+ * Unknown kinds take the NOVEL contract: inventing a cause for work that has none is the more
+ * expensive error, and the one the reality anchor exists to prevent.
+ */
+function detectivePrescription(kind) {
+  if (kind === 'defect') {
+    return `CONVERGE FAST — HARD LIMIT: 6 tool calls total. This is not a suggestion.
+By your 6th tool call you MUST stop querying and emit the JSON answer with your BEST current hypothesis. Exploring past 6 calls WITHOUT emitting the JSON means you FAIL and every bit of your investigation is thrown away — a best-guess fix site is infinitely better than no answer. If you are unsure, pick the single most likely file/function from what you have seen and emit it now; do NOT keep exploring to be "sure".
+1. First call: \`explore\` with the DOMAIN NOUNS only (drop symptom/presentation words like displayed/shown/email/confirmation/expected).
+2. Look at the top-ranked symbols. If the top hit's file only READS the wrong field (a mapper/sanitizer/display file), do ONE \`callers\` or \`callees\` (or one more \`explore\` toward the mechanism) to reach the code that COMPUTES/ASSIGNS it.
+3. As SOON as you identify a file whose function body actually computes/assigns the wrong value, STOP tracing and switch to prescribing the fix (step 4). Aim to finish tracing in 2-4 tool calls, never more than 6.
+4. PRESCRIBE THE MINIMAL FIX. This is the most important output. For the causal site:
+   - Name the EXACT broken line/expression (e.g. \`lineItem.id === discount.lineItemId\`) and why it is wrong.
+   - State the SMALLEST change that corrects it. Do NOT describe a re-architecture, a new abstraction, or a "split/recalculate/add-a-field" scheme unless the code genuinely has no simpler fix. Prefer a one-line/one-expression change.
+   - LOCATE AN EXISTING HELPER instead of inventing new logic. Before proposing any new function, use \`explore\` (and \`callers\`/\`callees\`) to search for an already-present util/helper/parser in this repo that does the needed transform (e.g. a key parser, id normalizer, formatter). If one exists, your fix MUST name it (exact symbol + its import path) and reuse it. Writing novel code when a helper already exists is a defect.
+
+
+SHOW THE BROKEN CODE — "brokenLine" is REQUIRED and is machine-verified. Quote the EXACT source expression, copied verbatim from the file you name, that is wrong today. It is checked against that file's real contents: if what you quote is not in the file, your answer is rejected as ungrounded and you will be asked again. This is the difference between a diagnosis and a guess — a confident story about code that is not there reads exactly like a correct one until this check runs. If you cannot point at a real line that is wrong, you have not found the cause yet: go back to the tool and trace further.
+
+`;
+  }
+  return `CONVERGE FAST — HARD LIMIT: 6 tool calls total. This is not a suggestion.
+By your 6th tool call you MUST stop querying and emit the JSON answer. A partial map of the attachment points is infinitely better than no answer.
+1. First call: \`explore\` with the DOMAIN NOUNS only (drop symptom/presentation words).
+2. NOTHING IS BROKEN HERE. This story asks for a capability that does not exist yet, so there is no wrong value to trace and no line to quote. Do not hunt for a cause — you will invent one.
+3. FIND EVERY PLACE THIS WORK MUST TOUCH. This is the most important output, and returning only ONE is the known failure of this step. A new capability almost never lands in a single file. Trace the SHAPE of it through this repository, in whatever terms this repository uses:
+   - WHERE IT IS SET UP — the place the thing being enabled is created, configured or registered. Start here.
+   - WHAT CARRIES IT — anything between that setup and the code that uses it: a shared module, a wrapper, an app-wide registration, a passed-down value. There may be none; there may be several.
+   - EVERYWHERE IT IS USED — every place that reads the affected data or must react when it changes. There is usually MORE THAN ONE. Name them all.
+   Do not force this repository into a shape it does not have, and do not skip a place because it has no obvious name. Describe each site in the vocabulary the codebase itself uses, which you have seen in the tool output — not in the vocabulary of some other project's architecture.
+4. COVER THE ACCEPTANCE CRITERIA. Read them again and check your site list against them: every criterion describing observable behaviour needs a site where that behaviour becomes possible. A criterion with no corresponding site means your map is incomplete — go back and find it.
+5. NAME WHAT TO REUSE at each site — whatever already exists there that the implementation should build on rather than duplicating. Use \`explore\`/\`callers\`/\`callees\` to find it; you cannot reuse what you have not found.
+6. \`brokenLine\` is NOT required for this story and must be left "" — there is no broken expression to quote.
+7. DO NOT INVENT A PATH OR A SYMBOL. Your grounding here is provenance, not a quoted line: every file and symbol you name must have been returned to you by a tool. If you believe something exists and the tools did not show it, PROVE it with ripgrep-search.sh before naming it, or report it absent.
+
+`;
+}
+
+/**
+ * detectiveCorrectionNeeded({review, coverage, brownfield}) — should the detective be
+ * re-invoked once, and what should it be told?
+ *
+ * Two signals, one bounded correction:
+ *
+ *   1. The reviewer judged the detective's answer diverged from its own plan with no stated
+ *      reason. This trigger already existed and works.
+ *   2. Verification criteria that NO prescribed fix site addresses. This was computed, stored
+ *      next to the verdict, and consumed by nothing. Live 2026-08-08 (AMSD-2041): three lanes
+ *      reported uncovered criteria — including the real-time subscription the whole feature
+ *      depends on — and the run reached the writer gate with a manifest missing it. The
+ *      observation surfaced only as a line item in the COST estimate.
+ *
+ * Same lesson as the roster reviewer: findings nothing consumes make a critic, not a gate.
+ *
+ * An UNMEASURED gap is not a gap. coverage.complete === null means no derived vocabulary was
+ * available so coverage was never computed; correcting against that spends a model call
+ * chasing nothing.
+ *
+ * The uncovered criteria travel WITH the decision: "try again" re-samples the same answer,
+ * and the detective can only close a gap it is told about.
+ */
+function detectiveCorrectionNeeded({ review, coverage, brownfield } = {}) {
+  const none = { correct: false, reasons: [], uncovered: [] };
+  if (!brownfield) return none;
+
+  const reasons = [];
+  if (review && review.planAlignment === 'unexplained_mismatch') {
+    reasons.push('the answer diverged from its own plan with no stated reason');
+  }
+
+  const uncovered = (coverage && coverage.complete === false
+    && Array.isArray(coverage.uncoveredVerificationCriteria))
+    ? coverage.uncoveredVerificationCriteria
+    : [];
+  if (uncovered.length) {
+    reasons.push(`${uncovered.length} verification criterion/criteria have no prescribed fix site`);
+  }
+
+  return { correct: reasons.length > 0, reasons, uncovered };
+}
+
+/**
+ * renderDetectiveCorrection(ctx) — what a re-invoked detective is TOLD.
+ *
+ * Two kinds of correction, and the second was missing entirely: the block rendered the prior
+ * plan, the prior findings and the reviewer's note, and dropped the uncovered criteria on the
+ * floor. Carrying them in the decision object is not enough — a correction the agent is never
+ * told about is a re-sample of the same answer.
+ *
+ * The uncovered criteria are quoted VERBATIM, and the instruction is additive: keep the sites
+ * already found and add the ones that close these gaps. A correction that starts over trades
+ * one gap for another.
+ */
+function renderDetectiveCorrection(ctx) {
+  if (!ctx) return '';
+  const uncovered = Array.isArray(ctx.uncoveredCriteria) ? ctx.uncoveredCriteria.filter(Boolean) : [];
+
+  const planPart = (ctx.reviewNotes || ctx.priorPlan)
+    ? `\nYOUR PREVIOUS ANSWER FOR THIS TICKET WAS REJECTED. Your previous plan was:\n"${ctx.priorPlan || '(no plan recorded)'}"\nYour previous final answer was:\n${JSON.stringify(ctx.priorFindings || [], null, 2)}\n${ctx.reviewNotes ? `The reviewer's reason: "${ctx.reviewNotes}"\nAddress this explicitly: either explain why your plan was wrong and justify the new direction, or return to what your plan identified. Do not silently repeat the same unexplained jump.\n` : ''}`
+    : '';
+
+  const coveragePart = uncovered.length
+    ? `\nYOUR PREVIOUS ANSWER LEFT WORK UNACCOUNTED FOR. These verification criteria describe behaviour that NO site you named would produce:\n${uncovered.map((c) => `  - ${String(c)}`).join('\n')}\n\nEach one needs a place where that behaviour becomes possible. KEEP the sites you already found — they were not rejected — and ADD the ones that close these gaps. If a criterion genuinely needs no code change, say which and why; do not silently drop it. If it needs something that does not exist yet, name where it must be created and what it attaches to.\n`
+    : '';
+
+  return planPart + coveragePart;
 }
 
 // runCodeGraphDetective(story, logDir) — invokes the code-graph-detective
@@ -4786,9 +4930,7 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
   // planAlignment: "unexplained_mismatch" for this story's FIRST answer. Mirrors the
   // existing PRIOR COORDINATOR FLAGS pattern (openspec/speckit re-elaboration, line
   // ~3273) — the same feedback shape this file already trusts, applied to the detective.
-  const correctiveContext = opts.correctiveContext
-    ? `\nREVIEWER REJECTED YOUR PREVIOUS ANSWER for this exact ticket. Your previous plan was:\n"${opts.correctiveContext.priorPlan || '(no plan recorded)'}"\nYour previous final answer was:\n${JSON.stringify(opts.correctiveContext.priorFindings || [], null, 2)}\nThe reviewer's reason: "${opts.correctiveContext.reviewNotes || ''}"\nAddress this explicitly: either explain why your plan was wrong and justify the new direction, or return to what your plan identified. Do not silently repeat the same unexplained jump.\n`
-    : '';
+  const correctiveContext = renderDetectiveCorrection(opts.correctiveContext);
 
   const prompt = `${detectiveProfile ? detectiveProfile + '\n\n' : ''}You are investigating this ticket. The repository is at: ${repoPath}
 ${_kindHintBlock}${correctiveContext}
@@ -4805,16 +4947,7 @@ Invoke it with the Bash tool, always passing PROJECT_ROOT:
   PROJECT_ROOT="${repoPath}" bash "${toolPath}" show <file> [startLine] [endLine]
 
 ${preseedBlock}
-CONVERGE FAST — HARD LIMIT: 6 tool calls total. This is not a suggestion.
-By your 6th tool call you MUST stop querying and emit the JSON answer with your BEST current hypothesis. Exploring past 6 calls WITHOUT emitting the JSON means you FAIL and every bit of your investigation is thrown away — a best-guess fix site is infinitely better than no answer. If you are unsure, pick the single most likely file/function from what you have seen and emit it now; do NOT keep exploring to be "sure".
-1. First call: \`explore\` with the DOMAIN NOUNS only (drop symptom/presentation words like displayed/shown/email/confirmation/expected).
-2. Look at the top-ranked symbols. If the top hit's file only READS the wrong field (a mapper/sanitizer/display file), do ONE \`callers\` or \`callees\` (or one more \`explore\` toward the mechanism) to reach the code that COMPUTES/ASSIGNS it.
-3. As SOON as you identify a file whose function body actually computes/assigns the wrong value, STOP tracing and switch to prescribing the fix (step 4). Aim to finish tracing in 2-4 tool calls, never more than 6.
-4. PRESCRIBE THE MINIMAL FIX. This is the most important output. For the causal site:
-   - Name the EXACT broken line/expression (e.g. \`lineItem.id === discount.lineItemId\`) and why it is wrong.
-   - State the SMALLEST change that corrects it. Do NOT describe a re-architecture, a new abstraction, or a "split/recalculate/add-a-field" scheme unless the code genuinely has no simpler fix. Prefer a one-line/one-expression change.
-   - LOCATE AN EXISTING HELPER instead of inventing new logic. Before proposing any new function, use \`explore\` (and \`callers\`/\`callees\`) to search for an already-present util/helper/parser in this repo that does the needed transform (e.g. a key parser, id normalizer, formatter). If one exists, your fix MUST name it (exact symbol + its import path) and reuse it. Writing novel code when a helper already exists is a defect.
-
+${detectivePrescription(_kindHint)}
 READ THE FILE BEFORE YOU QUOTE IT. Once you have a candidate file, run \`show <file>\` and look at the real lines. Your "brokenLine" must be COPIED EXACTLY from that output — it is checked character-for-character against the file, after whitespace normalisation. Do NOT reconstruct the line from symbol names: on 2026-07-26 that produced \`lineItemKey === orderLineItem.id\`, a plausible-looking expression using an identifier that exists nowhere in the repository, and the answer was rejected. \`show\` accepts a line range so you can read just the region you care about.
 
 CRITICAL REALITY ANCHOR: if the CodeGraph tool does not return a file or symbol, it does NOT exist in this codebase. Do not infer, assume, or extrapolate file paths, function signatures, or variable names from naming patterns — that is exactly how \`lineItemKey\` was invented. The index answers only for what it parsed, so a miss is a question, not an answer. If you believe something exists and CodeGraph did not return it, PROVE it before reasoning about it:
@@ -4835,8 +4968,6 @@ CRITICAL — HOW TO ANSWER: Emit the JSON array as TEXT directly in your reply. 
 NAME THE FORMAT, DO NOT DESCRIBE IT. If your fix depends on the SHAPE of a string — a prefix, suffix, separator, delimiter — you must QUOTE THE EXACT LITERAL (e.g. '#') or name the constant that defines it (e.g. DIVIDER). Saying "a prefix match that accounts for the suffix" without stating the suffix is not implementable: on 2026-07-26 exactly that wording made the implementer guess '-' where the repository uses '#', and the fix could never match. This is machine-checked.
 
 PREFER THE PARSER OVER THE WRITER. If a helper CONSTRUCTS the value (getX/buildX/toX) and another READS it (parseX/fromX), prescribe the reader. Naming the writer invites the implementer to reconstruct the format by hand — which is how the above happened. The best fix does no string surgery at all, because the helper owns the format.
-
-SHOW THE BROKEN CODE — "brokenLine" is REQUIRED and is machine-verified. Quote the EXACT source expression, copied verbatim from the file you name, that is wrong today. It is checked against that file's real contents: if what you quote is not in the file, your answer is rejected as ungrounded and you will be asked again. This is the difference between a diagnosis and a guess — a confident story about code that is not there reads exactly like a correct one until this check runs. If you cannot point at a real line that is wrong, you have not found the cause yet: go back to the tool and trace further.
 
 VERIFY THIRD-PARTY METHOD CALLS with resolve-package-symbol.sh before prescribing them (see above) — a name existing in a package is not proof it is called the way you assume.
 
@@ -5842,8 +5973,11 @@ ${storyPayload}${publishedContracts(repoPath, story)}
       // silently-incomplete one.
       story.fixSiteAnalysisCoverage = checkFixSiteCoverage(
         story.fixSiteAnalysis || [], story.verificationCriteria || []
+        (story.specification || {}).guardVocabulary,
       );
-      if (!story.fixSiteAnalysisCoverage.complete) {
+      // complete === null means NO vocabulary was available, so coverage was not computed.
+      // Treating that as "incomplete" would report a gap nobody measured.
+      if (story.fixSiteAnalysisCoverage.complete === false) {
         console.warn(
           `spec-mode: ⚠️ ${story.id} — fixSiteAnalysis does not cover ${story.fixSiteAnalysisCoverage.uncoveredVerificationCriteria.length} verification criterion/criteria (e.g. "${String(story.fixSiteAnalysisCoverage.uncoveredVerificationCriteria[0] || '').slice(0, 100)}"). The prescribed fix may be structurally incomplete.`
         );
@@ -8263,6 +8397,7 @@ module.exports = {
   candidateRoles,
   TOOL_ROLE_ASSIGNMENTS,
   reviewRoster,
+  detectivePrescription,
   surveyEstate,
   sanitizeSurvey,
   SURVEY_STATES,
@@ -8319,6 +8454,8 @@ module.exports = {
   verifyDetectiveHelper,
   verifyDetectiveEvidence,
   checkFixSiteCoverage,
+  detectiveCorrectionNeeded,
+  renderDetectiveCorrection,
   precomputeDetectiveExplore,
   ladderNextModel,
   runClaude,

@@ -1370,3 +1370,29 @@ Sweep every gate rather than waiting to be bitten again.
 roster-review.json is written once at the end into a shared logs dir. Mid-run it still holds
 the PREVIOUS run's verdict, and was very nearly reported as current. Stamp artifacts with
 ORCH_RUN_ID, or refuse to read one whose run id is not this run's.
+
+## Open after 2026-08-08
+
+### TEST-1 — jira-ingest-project-identity flakes under full-suite load
+Failed 4× inside `vitest run` (once as a 120s timeout with `r.prd` null), passed every time in
+isolation (42s for all five cases). Real LLM-backed ingest with a 120s per-case budget that
+does not get CPU under full-suite parallelism. Give it a serial lane or a budget matching a
+loaded machine — a test that fails for reasons unrelated to its subject trains people to ignore
+the suite.
+
+### KB-2 — a relabelled codeline fragments its own store
+KB-1 is fixed: seed and read now agree on one normalised, codeline-keyed address, verified by
+executing the JS and bash implementations against each other. What normalisation CANNOT fix is
+ID-1: the same repository has been labelled `gotransit` on one run and `nextgotransitcom` on
+another, and those are different stores. The KB will now accumulate — and will fragment the
+first time discovery relabels a repo. The stable identifier is the repository itself (path or
+origin URL), not the label an LLM chose for it this run.
+
+### WRITE-1 — an unexplained write to a client file during the spec phase
+Run 20260808T205736Z (first resume): `content.mock.ts` in next.metrolinx.com was rewritten
+during the spec pass — 106 lines of captured fixture replaced with 5 lines of invented
+placeholder, and the export renamed. No commit, no activity-log entry, and Step 8 (the writer)
+never ran. Restored by hand; a live repo-write monitor on the following run caught nothing, so
+it did not recur and the cause is UNKNOWN, not fixed. The perimeter permitted it because that
+codeline was already on its story branch, where tracked files are unlocked by design — so the
+window exists for any agent with Bash between branch creation and the writer.

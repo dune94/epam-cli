@@ -1,0 +1,50 @@
+{
+  "_what": "A disposable multi-codeline ESTATE that approximates the shape of a real client estate, for end-to-end pipeline tests. Canonical: materialised fresh per run by mock-estate-seed.js, never edited in place, never restated inside a test file.",
+  "_why": [
+    "The existing mock estate is one repository containing one function, and a story that edits one line of it. Every parent-vs-lane defect and every cross-cutting-change defect is invisible at that scale: with one lane the parent's wrong answer and the lane's right answer coincide, and with a one-line change there is nothing for an investigator to find that the ticket did not already say.",
+    "This fixture reproduces the three properties that make a real estate hard, and nothing else:",
+    "  1. SEVERAL CODELINES sharing a stack, so a story spans them and the lane loop is exercised for real;",
+    "  2. A SHARED CLIENT vendored into each repository, so the work is cross-cutting rather than local — the same change has to land in every codeline, and an agent that reads only one of them draws the wrong conclusion;",
+    "  3. DIFFERENT WIRING POINTS per codeline, so a single estate-wide sweep cannot produce one answer that fits all three, and a per-codeline investigator is the only way to be right.",
+    "No vendor, product or package name appears anywhere here. The shape is what is being reproduced, not anyone's stack."
+  ],
+  "ticket": {
+    "id": "ESTATE-1",
+    "summary": "Show unpublished content to editors before it goes live",
+    "description": "AS an editor, I WANT to see how an unpublished item will look on the site, SO THAT I can check it before publishing. Today every codeline creates its content client with `draft: false` and renders only published items, so an unpublished item is invisible everywhere. The client already accepts a `draft` option and already exposes an `onContentChange` subscription; neither is used. Enabling this means turning the option on where the client is created, and subscribing to the change callback wherever content is fetched, in EVERY codeline that renders content. The wiring point differs per codeline, so each one has to be located rather than assumed. Limitation noted by the reporter: items behind access control may not be previewable."
+  },
+  "shared": {
+    "src/lib/content-client.ts": "export interface ClientOptions {\n  space: string;\n  token: string;\n  /** When true the client also returns unpublished items. Unused today. */\n  draft?: boolean;\n}\n\nexport interface ContentItem {\n  id: string;\n  title: string;\n  published: boolean;\n}\n\ntype Listener = () => void;\n\n/**\n * The content client every codeline vendors. Created once per app, at the site named in\n * `createClient` below. Both `draft` and `onContentChange` are supported and neither is used.\n */\nexport class ContentClient {\n  private listeners: Listener[] = [];\n\n  constructor(public readonly options: ClientOptions) {}\n\n  async fetchItems(): Promise<ContentItem[]> {\n    const all: ContentItem[] = [\n      { id: 'a', title: 'Published item', published: true },\n      { id: 'b', title: 'Unpublished item', published: false },\n    ];\n    return this.options.draft ? all : all.filter((i) => i.published);\n  }\n\n  /** Fires when content changes upstream. Nothing subscribes to it today. */\n  onContentChange(fn: Listener): () => void {\n    this.listeners.push(fn);\n    return () => { this.listeners = this.listeners.filter((l) => l !== fn); };\n  }\n\n  _emit(): void { for (const l of this.listeners) l(); }\n}\n",
+    "src/lib/index.ts": "export { ContentClient } from './content-client';\nexport type { ClientOptions, ContentItem } from './content-client';\n"
+  },
+  "common": {
+    "src/services/content.ts": "import { ContentClient } from '../lib/content-client';\nimport { SPACE_ID, ACCESS_TOKEN } from '../constants/content';\n\n/**\n * THE one place this codeline creates its content client.\n * Every fetch path below goes through this instance.\n */\nexport const client = new ContentClient({\n  space: SPACE_ID,\n  token: ACCESS_TOKEN,\n  draft: false,\n});\n",
+    "src/constants/content.ts": "export const SPACE_ID = process.env.CONTENT_SPACE_ID ?? 'space-dev';\nexport const ACCESS_TOKEN = process.env.CONTENT_ACCESS_TOKEN ?? 'token-dev';\n",
+    "src/components/content-list.ts": "import type { ContentItem } from '../lib/content-client';\n\nexport function renderList(items: ContentItem[]): string {\n  if (items.length === 0) return '<p>Nothing to show.</p>';\n  return '<ul>' + items.map((i) => `<li>${i.title}</li>`).join('') + '</ul>';\n}\n"
+  },
+  "variants": [
+    {
+      "name": "hook",
+      "_what": "Fetches through a subscribe-capable hook. The wiring point is the hook.",
+      "files": {
+        "src/hooks/use-content.ts": "import { client } from '../services/content';\nimport type { ContentItem } from '../lib/content-client';\n\n/**\n * The single fetch path for this codeline. Callers re-invoke `load` to refresh.\n */\nexport function createContentSource() {\n  let items: ContentItem[] = [];\n  const load = async (): Promise<ContentItem[]> => {\n    items = await client.fetchItems();\n    return items;\n  };\n  const current = (): ContentItem[] => items;\n  return { load, current };\n}\n",
+        "src/pages/index.ts": "import { createContentSource } from '../hooks/use-content';\nimport { renderList } from '../components/content-list';\n\nexport async function renderPage(): Promise<string> {\n  const source = createContentSource();\n  return renderList(await source.load());\n}\n"
+      }
+    },
+    {
+      "name": "page",
+      "_what": "Fetches directly in the page module. The wiring point is the page.",
+      "files": {
+        "src/pages/index.ts": "import { client } from '../services/content';\nimport { renderList } from '../components/content-list';\n\n/** This codeline fetches at the page, with no intermediate layer. */\nexport async function renderPage(): Promise<string> {\n  const items = await client.fetchItems();\n  return renderList(items);\n}\n"
+      }
+    },
+    {
+      "name": "provider",
+      "_what": "Fetches through a shared provider that caches for the whole app. The wiring point is the provider, and it exists in this codeline only.",
+      "files": {
+        "src/context/content-provider.ts": "import { client } from '../services/content';\nimport type { ContentItem } from '../lib/content-client';\n\n/**\n * App-wide content store. Unique to this codeline: every page reads from here rather than\n * fetching for itself, so a refresh has to be wired in ONCE, here.\n */\nclass ContentProvider {\n  private cache: ContentItem[] = [];\n  private loaded = false;\n\n  async items(): Promise<ContentItem[]> {\n    if (!this.loaded) {\n      this.cache = await client.fetchItems();\n      this.loaded = true;\n    }\n    return this.cache;\n  }\n\n  invalidate(): void { this.loaded = false; }\n}\n\nexport const contentProvider = new ContentProvider();\n",
+        "src/pages/index.ts": "import { contentProvider } from '../context/content-provider';\nimport { renderList } from '../components/content-list';\n\nexport async function renderPage(): Promise<string> {\n  return renderList(await contentProvider.items());\n}\n"
+      }
+    }
+  ]
+}

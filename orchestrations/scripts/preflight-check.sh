@@ -296,7 +296,11 @@ fi
 echo "[ Self-heal observability ]"
 
 # 6a. LOG_DIR write path is writable
-LOG_DIR_DEFAULT="$(cd "$(dirname "$0")/../logs" 2>/dev/null && pwd || echo '')"
+# Honour an inherited LOG_DIR. This resolved ../logs unconditionally, so a run told to keep
+# its artefacts elsewhere — a test run inside its own perimeter — still had the SHARED client
+# log directory probed and reported here, and the operator was told artefacts would land in a
+# directory the run never writes to.
+LOG_DIR_DEFAULT="${LOG_DIR:-$(cd "$(dirname "$0")/../logs" 2>/dev/null && pwd || echo '')}"
 if [[ -d "$LOG_DIR_DEFAULT" ]] && touch "$LOG_DIR_DEFAULT/.preflight-write-test" 2>/dev/null; then
   rm -f "$LOG_DIR_DEFAULT/.preflight-write-test"
   ok "LOG_DIR ($LOG_DIR_DEFAULT) is writable — healing-events.jsonl will land here"
@@ -331,16 +335,27 @@ fi
 # Eleventy's full watcher runs; snapshot-watch.js is the lightweight replacement.
 # If the PID file is missing or the process is dead, build-info.json will never
 # update during the run, leaving health.html permanently stale.
-SNAP_PID_FILE="$LOG_DIR_DEFAULT/dashboards-watch.pid"
+# The watcher is a MACHINE-level daemon feeding the dashboards, not a per-run artefact, so its
+# PID file lives with those dashboards rather than in whichever log directory this run happens
+# to own. Reading it from LOG_DIR meant a run keeping its artefacts elsewhere looked for the
+# file in its own empty directory and concluded the watcher was dead.
+SNAP_PID_FILE="$(cd "$(dirname "$0")/../logs" 2>/dev/null && pwd || echo '')/dashboards-watch.pid"
 _snap_ok=false
 if [[ -f "$SNAP_PID_FILE" ]]; then
   _snap_pid="$(cat "$SNAP_PID_FILE" 2>/dev/null || echo '')"
   if [[ -n "$_snap_pid" ]] && ps -p "$_snap_pid" > /dev/null 2>&1; then
     _snap_ok=true
-  else
-    # PID file exists but process gone — check if node child is still running
-    if pgrep -f 'snapshot-watch.js' > /dev/null 2>&1; then _snap_ok=true; fi
   fi
+fi
+# A RUNNING WATCHER WITH NO PID FILE IS STILL A RUNNING WATCHER.
+#
+# This fallback used to sit INSIDE the `-f "$SNAP_PID_FILE"` branch above, so it was reachable
+# only when a PID file already existed. Started by hand — which is exactly what the check's own
+# error message tells you to do — the watcher leaves no PID file, and the check then reported it
+# dead while it was demonstrably polling every ten seconds. The next check (6f) proves it is
+# actually refreshing, so this one only has to establish that it exists.
+if [[ "$_snap_ok" != "true" ]] && pgrep -f 'snapshot-watch.js' > /dev/null 2>&1; then
+  _snap_ok=true
 fi
 if [[ "$_snap_ok" == "true" ]]; then
   ok "snapshot-watch.js is running — build-info.json will refresh every 10s"

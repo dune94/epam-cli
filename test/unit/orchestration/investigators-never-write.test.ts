@@ -72,13 +72,19 @@ describe('the two classes go to separate registries', () => {
     expect(res.minted[0].surfaces).toContain('project-investigators');
   });
 
-  it('both still get a brief and a KB', () => {
+  // KB-1 (2026-08-08): stores are per CODELINE, not per role. A role-keyed file was written
+  // at an address nothing reads — 41 accumulated, all unreadable, KB coverage 0%.
+  it('both still get a brief, and the codeline store exists', () => {
     const { dir, profilesPath } = ws();
-    roster.mergeProjectAgents({ profilesPath, agentsDir: dir, proposals: [IMPL, INV] });
+    roster.mergeProjectAgents({
+      profilesPath, agentsDir: dir, codelines: [{ name: INV.codeline }], proposals: [IMPL, INV],
+    });
     const profiles = JSON.parse(readFileSync(profilesPath, 'utf8'));
     expect(profiles[IMPL.name]).toBeTruthy();
     expect(profiles[INV.name], 'the detective has no brief, so it cannot investigate').toBeTruthy();
-    expect(existsSync(join(dir, `KB-${INV.name}.md`))).toBe(true);
+    // The store the seams actually read: per CODELINE. A role-keyed file was written at an
+    // address nothing reads (41 accumulated, KB coverage 0%).
+    expect(existsSync(roster.kbFileForCodeline(dir, INV.codeline))).toBe(true);
   });
 });
 

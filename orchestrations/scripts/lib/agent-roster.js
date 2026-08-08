@@ -136,7 +136,7 @@ function isUsableProposal(p) {
  * @returns {{minted: object[], rejected: object[], unchanged: string[]}}
  */
 function mergeProjectAgents(opts) {
-  const { profilesPath, proposals } = opts || {};
+  const { profilesPath, proposals, codelines } = opts || {};
   if (!profilesPath) throw new Error('[agent-roster] profilesPath is required');
   const agentsDir = opts.agentsDir || path.dirname(profilesPath);
   const fixed = protectedRoles();
@@ -173,22 +173,10 @@ function mergeProjectAgents(opts) {
     profiles[p.name] = p.systemPrompt;
     const surfaces = ['profiles.json'];
 
-    // Seed the persistent skills store. The seams append to this file across runs; without
-    // it the agent starts every run with no memory of what it learned in the last one.
-    const kbPath = path.join(agentsDir, `KB-${p.name}.md`);
-    try {
-      if (!fs.existsSync(kbPath)) {
-        fs.writeFileSync(kbPath,
-          `# KB — ${p.name}\n\n` +
-          `Persistent, cross-run knowledge for this role. Appended by the pipeline as the\n` +
-          `agent learns; injected into its prompts on subsequent runs.\n\n` +
-          `Minted for this project because: ${p.rationale || '(no rationale recorded)'}\n`,
-          'utf8');
-      }
-      surfaces.push('kb');
-    } catch (e) {
-      rejected.push({ name: p.name, reason: `kb seed failed: ${e.message}` });
-    }
+    // NO per-role KB file. The stores are per CODELINE and are seeded after the merge — a
+    // role-keyed file is written at an address nothing reads, and because role names are
+    // minted fresh each run it would accumulate forever (36 such files were on disk).
+    surfaces.push('kb');
 
     minted.push({
       name: p.name, kind: proposalKind(p),
@@ -209,6 +197,21 @@ function mergeProjectAgents(opts) {
   // vocabulary agents). Deriving from that set handed write access to the detective.
   // The mint knows exactly what it created, so it says so explicitly.
   // ROUTED BY KIND. Only implementers reach the registry the write perimeter reads.
+  // SEED THE STORES THE PIPELINE ACTUALLY READS: one per codeline, plus the shared store for
+  // work that spans the project. Existing files are never overwritten — whatever earlier runs
+  // learned is the point of having them.
+  for (const _cl of [...(Array.isArray(codelines) ? codelines : []).map((c) => (typeof c === 'string' ? c : c && c.name)), '']) {
+    const _kb = kbFileForCodeline(agentsDir, _cl);
+    if (fs.existsSync(_kb)) continue;
+    try {
+      fs.writeFileSync(_kb,
+        `# KB — ${_cl || 'shared'}\n\n` +
+        'Persistent, cross-run knowledge for this codeline. Appended by the pipeline as agents\n' +
+        'learn, and injected into their prompts on later runs. Never reset between runs: this is\n' +
+        'the one store that is meant to survive.\n', 'utf8');
+    } catch { /* a store that cannot be seeded is not fatal — the appenders create on write */ }
+  }
+
   const registered = registerProjectRoles(
     agentsDir, minted.filter((m) => m.kind === 'implementer').map((m) => m.name));
   const registeredInv = registerProjectInvestigators(
@@ -262,6 +265,28 @@ function projectRolesPath(agentsDir) {
  * adds nothing it already contains and never drops a role, because a role dropped here
  * silently loses write access and its stories become unassignable.
  */
+/**
+ * kbFileForCodeline(agentsDir, codeline) — THE address of a codeline's knowledge store.
+ *
+ * One function, because there were two. The mint seeded `KB-<role>.md` while claude.sh read
+ * and appended `KB-<codeline>.md`, so the file written was never the file read. On disk
+ * 2026-08-08: 36 KB files, all role-keyed, none readable — and because role names are minted
+ * fresh every run they accumulated forever (a file from the run that hallucinated a vendor was
+ * still there). The cost estimator reported it plainly: "KB coverage: 0%".
+ *
+ * Cross-run learning is the only reason the KB exists, and it had never once happened.
+ *
+ * Normalised — lowercased, punctuation collapsed — so casing or dots in a codeline label
+ * cannot fork one store into several. That does NOT fix ID-1 (the same repository has been
+ * labelled "gotransit" and "nextgotransitcom" on different runs); it only guarantees this
+ * layer adds no forks of its own. claude.sh's _kb_file_for_story normalises identically, and a
+ * test executes both and compares them character for character.
+ */
+function kbFileForCodeline(agentsDir, codeline) {
+  const slug = String(codeline || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return path.join(agentsDir, `KB-${slug || 'shared'}.md`);
+}
+
 function registerProjectRoles(agentsDir, names) {
   const file = projectRolesPath(agentsDir);
   try { fs.mkdirSync(path.dirname(file), { recursive: true }); } catch { /* best effort */ }
@@ -539,8 +564,29 @@ function hasProjectRoster(agentsDir) {
   return projectRoles(agentsDir).length > 0 || projectInvestigators(agentsDir).length > 0;
 }
 
+/**
+ * rosterReviewIsRequired({verdict, mintSkipped, pauseConfigured})
+ *
+ * Should the step REFUSE to continue because the roster is unreviewed?
+ *
+ * The reviewer is the only thing between a generated brief and an implementer inheriting it,
+ * so silence must never read as approval. But on a RESUME the mint is skipped deliberately and
+ * the review already happened — in the run being resumed, before the operator approved it at
+ * the pause. Live 2026-08-08: this guard refused a roster that had been reviewed and approved,
+ * and killed the resume.
+ *
+ * A configured pause defers to the operator rather than refusing: they are about to look at it.
+ */
+function rosterReviewIsRequired({ verdict, mintSkipped, pauseConfigured } = {}) {
+  if (mintSkipped) return false;          // resumed: reviewed in the run being resumed
+  if (pauseConfigured) return false;      // a human is about to see it
+  return verdict === 'not_run' || verdict === 'review_failed';
+}
+
 module.exports = {
   partitionRosterFindings,
+  kbFileForCodeline,
+  rosterReviewIsRequired,
   hasProjectRoster,
   mergeProjectAgents, isUsableProposal, ROLE_NAME_RE,
   registerProjectRoles, projectRoles, projectRolesPath, PROJECT_ROLES_FILE,

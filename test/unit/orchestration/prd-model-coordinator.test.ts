@@ -193,7 +193,12 @@ describe('run-agent-orchestration.sh — Step 0.9 wiring', () => {
     const idx = orchSrc.indexOf('Step 0.9: PRD model coordinator');
     const block = orchSrc.slice(idx, idx + 9000);
     expect(block).toMatch(/prd-model-coordinator/);
-    expect(block).toMatch(/AUTOMATION_DIR.*agents\/profiles\.json/);
+    // RESOLUTION POINT CHANGED 2026-08-08: the agents directory is resolved once, via
+    // EPAM_AGENTS_DIR defaulting to $AUTOMATION_DIR/agents, so a run keeping its artefacts
+    // elsewhere does not read and write the live roster. Unset, the path is identical to
+    // before — the concern here is unchanged: it must not resolve from SCRIPT_DIR.
+    expect(block).toMatch(/EPAM_AGENTS_DIR:-\$\{?AUTOMATION_DIR\}?\/agents/);
+    expect(block).not.toMatch(/SCRIPT_DIR.*profiles\.json/);
   });
 
   it('grants tool access via AI_GATE_ALLOW_TOOLS=1 (agent must write PRD directly)', () => {

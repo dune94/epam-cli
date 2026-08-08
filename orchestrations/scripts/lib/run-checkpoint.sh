@@ -25,7 +25,22 @@
 # per-lane signal written is project.outputDir, recovered by matching it back against
 # project.outputDirs[] — the same derivation claude.sh's _current_lane() uses.
 _checkpoint_lane() {
-    local _l="${CODELINE_NAME:-}"
+    # THE PARENT IS NOT A LANE, AND MUST NOT BE MISTAKEN FOR ONE.
+    #
+    # The fallback below matches project.outputDir against outputDirs[] — and the synthesizer
+    # sets project.outputDir = outputDirs[0].path, so the PARENT resolved to codeline[0]. The
+    # post-roster checkpoint (saved by the parent, before any lane exists) was written to
+    # runs/<id>/lanes/<first-codeline>/checkpoint, and the parent's resume then looked in
+    # runs/<id>/checkpoint, found nothing, and refused to continue. Live 2026-08-08.
+    #
+    # Identical to the control-plane port defect fixed the same day: any function that infers
+    # "which lane am I" from the PRD resolves the parent to codeline[0]. The role is derived in
+    # exactly one place, so ask that, and only fall through to inference inside a lane.
+    if declare -F is_parent >/dev/null 2>&1 && is_parent; then
+        printf ''
+        return 0
+    fi
+    local _l="${CODELINE_NAME:-${EPAM_CODELINE:-}}"
     if [ -z "$_l" ] && [ -n "${PRD_FILE:-}" ] && [ -f "${PRD_FILE}" ]; then
         _l=$(jq -r '.project as $p | (($p.outputDirs // []) | map(select(.path == $p.outputDir)) | .[0].codeline) // empty' \
             "$PRD_FILE" 2>/dev/null)

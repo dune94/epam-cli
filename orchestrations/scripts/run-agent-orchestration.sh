@@ -171,7 +171,15 @@ if [ -f "$SCRIPT_DIR/lib/dist-freshness.sh" ]; then
   fi
 fi
 
-AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$AUTOMATION_DIR/agents/profiles.json}"
+# WHERE THE AGENTS LIVE. One resolution point, honouring EPAM_AGENTS_DIR.
+#
+# Every site used $AUTOMATION_DIR/agents directly, so a run told to keep its artefacts
+# elsewhere still read and WROTE the live roster. Live 2026-08-08: a test run's mint read the
+# repository's profiles.json, found an agent a previous client run had minted, reported it
+# "unchanged", minted nothing, and the run died at assignment — while also writing into the
+# client's own agents directory. Unset, this is exactly the previous path.
+EPAM_AGENTS_DIR="${EPAM_AGENTS_DIR:-$AUTOMATION_DIR/agents}"
+AGENT_PROFILES_FILE="${AGENT_PROFILES_FILE:-$EPAM_AGENTS_DIR/profiles.json}"
 # Compute PRD path relative to PROJECT_ROOT for injecting into agent prompts.
 # In the codeline-loop path, PRD_FILE is a per-codeline temp copy under /tmp/
 # (e.g. /tmp/orch-<cl>-prd-$$.json) that lives nowhere near PROJECT_ROOT (a
@@ -2554,7 +2562,7 @@ start_dashboards_watch() {
 _run_codeline_bridge() {
   local _bcl="$1" _bwt="$2" _bprd="$3"
   local _bridge_out="${LOG_DIR}/cross-codeline-${_bcl}.md"
-  local _profiles_file="$AUTOMATION_DIR/agents/profiles.json"
+  local _profiles_file="${EPAM_AGENTS_DIR:-$AUTOMATION_DIR/agents}/profiles.json"
   local _bridge_max_retries="${BRIDGE_MAX_RETRIES:-2}"
 
   log "[bridge] Extracting cross-codeline contract for '${_bcl}' → ${_bridge_out}"
@@ -3618,7 +3626,7 @@ _run_jira_pipeline() {
     log "[jira] Minting project agents and assigning roles..."
     if ! "$NODE_BIN" "$SCRIPT_DIR/mint-agents-step.js" \
         --prd "$_synth_prd" \
-        --agents-dir "$AUTOMATION_DIR/agents" \
+        --agents-dir "$EPAM_AGENTS_DIR" \
         --log-dir "$LOG_DIR" \
         --codeline-root "${PROJECT_ROOT:-}" 2>&1 | tee -a "$_log_file"; then
       error "[jira] Agent mint/assignment failed — refusing to run stories with no assigned agent."
@@ -3647,9 +3655,9 @@ _run_jira_pipeline() {
     echo -e "${GREEN}╚════════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
     echo -e "  RUN NUMBER:  ${GREEN}${ORCH_RUN_ID:-unknown}${NC}"
-    echo -e "  Roster:      ${AUTOMATION_DIR}/agents/profiles.json"
-    echo -e "  Implementers:  ${EPAM_PROJECT_CONFIG_DIR:-${AUTOMATION_DIR}/agents}/project-roles.json"
-    echo -e "  Investigators: ${EPAM_PROJECT_CONFIG_DIR:-${AUTOMATION_DIR}/agents}/project-investigators.json"
+    echo -e "  Roster:      ${EPAM_AGENTS_DIR}/profiles.json"
+    echo -e "  Implementers:  ${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR}}/project-roles.json"
+    echo -e "  Investigators: ${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR}}/project-investigators.json"
     echo -e "  Minted:      ${LOG_DIR}/agent-mint.json"
     echo -e "  Assignments: ${LOG_DIR}/role-assignments.json"
     echo -e "  ${GREEN}WHAT WAS GENERATED (vs canonical): ${LOG_DIR}/roster-diff.md${NC}"
@@ -3681,9 +3689,9 @@ _run_jira_pipeline() {
     fi
     echo ""
     echo -e "  Inspect and EDIT if needed:"
-    echo -e "    ${AUTOMATION_DIR}/agents/profiles.json         (each role's brief)"
-    echo -e "    ${EPAM_PROJECT_CONFIG_DIR:-${AUTOMATION_DIR}/agents}/project-roles.json   (implementers — may author code, may own a story)"
-    echo -e "    ${EPAM_PROJECT_CONFIG_DIR:-${AUTOMATION_DIR}/agents}/project-investigators.json   (investigators — read-only, one per codeline)"
+    echo -e "    ${EPAM_AGENTS_DIR}/profiles.json         (each role's brief)"
+    echo -e "    ${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR}}/project-roles.json   (implementers — may author code, may own a story)"
+    echo -e "    ${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR}}/project-investigators.json   (investigators — read-only, one per codeline)"
     echo -e "    ${_synth_prd}   (each story's agentRole)"
     echo ""
     echo -e "  Then CONTINUE into the spec phase with:"
@@ -5538,7 +5546,7 @@ if is_truthy "${SKIP_PRD_MODEL_COORDINATOR:-}"; then
 else
     _mc_phase="${CURRENT_PHASE:-${PHASE:-unknown}}"
     _mc_prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
-    _mc_profiles_file="${AUTOMATION_DIR}/agents/profiles.json"
+    _mc_profiles_file="${EPAM_AGENTS_DIR:-${AUTOMATION_DIR}/agents}/profiles.json"
 
     _mc_missing_count=$(jq -r --arg ph "$_mc_phase" '
         [.stories[] | select((.phase // $ph) == $ph)
@@ -8053,7 +8061,7 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
         #   Agent 3 (profile-augmentor):     records anti-pattern in agent profile
         _lint_remediation_applied=0
         _lint_rem_log="$LOG_DIR/lint-remediation-${PHASE}.log"
-        _profiles_file="${AUTOMATION_DIR}/agents/profiles.json"
+        _profiles_file="${EPAM_AGENTS_DIR:-${AUTOMATION_DIR}/agents}/profiles.json"
 
         if ! is_truthy "${SKIP_GATE_REMEDIATION:-}" && [ -f "$_lint_log" ]; then
             # ── Self-heal KB (episodic tier) ─────────────────────────────────
@@ -9988,7 +9996,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
         [ "${fuzz_exit:-0}"   -ne 0 ] && _failing_logs+=("$fuzz_log")   && _log_labels+=("fuzz-weaver")
         [ "${perf_exit:-0}"   -ne 0 ] && _failing_logs+=("$perf_log")   && _log_labels+=("perf-sentinel")
 
-        local _profiles_file="${AUTOMATION_DIR}/agents/profiles.json"
+        local _profiles_file="${EPAM_AGENTS_DIR:-${AUTOMATION_DIR}/agents}/profiles.json"
 
         if ! is_truthy "${SKIP_GATE_REMEDIATION:-}" && [ ${#_failing_logs[@]} -gt 0 ]; then
             warning "Step 4.2: Testing gates FAILED — running self-healing remediation pipeline..."

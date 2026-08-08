@@ -97,6 +97,44 @@ LOG_FILE="/tmp/tier3-mock-run-$(date +%Y%m%dT%H%M%S)-$$.log"
 export EPAM_PROJECT_CONFIG_DIR="${EPAM_PROJECT_CONFIG_DIR:-$REPO_ROOT/orchestrations/projects/hello-dolly}"
 info "Project config: $EPAM_PROJECT_CONFIG_DIR"
 
+# ── THE TEST PERIMETER ───────────────────────────────────────────────────────
+#
+# A test run and a client run must not share a single byte of state. They did:
+# orchestrations/logs/lanes/ held mock-a and mock-b beside gotransit and metrolinx, this
+# launcher overwrote the repo's own agents/profiles.json on every mock run, and a stale
+# roster-review.json from a client run was read mid-test and nearly reported as current.
+#
+# The comment that justified it was simply wrong. It claimed run-agent-orchestration.sh's
+# LOG_DIR "is not overridable"; line 221 of that script reads
+#     LOG_DIR="${LOG_DIR:-$AUTOMATION_DIR/logs}"
+# which honours an inherited value. Test artefacts were landing in client space on a false
+# premise, and archive/reset then swept client evidence on a test run's schedule.
+#
+# INSIDE the perimeter (a test run owns these, and nothing else):
+#     EPAM_TEST_PERIMETER=1 with LOG_DIR, EPAM_AGENTS_DIR and EPAM_PROJECT_CONFIG_DIR
+#     all pointed at a disposable root, plus its own codelines under JIRA_CODELINE_ROOT.
+# OUTSIDE it (never written by a test run):
+#     orchestrations/logs/**, orchestrations/agents/**, orchestrations/projects/<client>/**
+#     and any real codeline.
+#
+# Both defaults are unchanged when the variables are unset, so a real run behaves exactly as
+# before and only an opted-in test run is redirected.
+MOCK_LOG_DIR="${LOG_DIR:-$REPO_ROOT/orchestrations/logs}"
+MOCK_AGENTS_DIR="${EPAM_AGENTS_DIR:-$REPO_ROOT/orchestrations/agents}"
+export LOG_DIR="$MOCK_LOG_DIR"
+if [ "${EPAM_TEST_PERIMETER:-0}" = "1" ]; then
+  case "$MOCK_LOG_DIR" in
+    "$REPO_ROOT/orchestrations/logs"*)
+      fail "EPAM_TEST_PERIMETER=1 but LOG_DIR is inside the shared log directory ($MOCK_LOG_DIR). A test run must own its own artefacts." ;;
+  esac
+  case "$MOCK_AGENTS_DIR" in
+    "$REPO_ROOT/orchestrations/agents"*)
+      fail "EPAM_TEST_PERIMETER=1 but EPAM_AGENTS_DIR is the shared agents directory ($MOCK_AGENTS_DIR). A test run must not mutate the live roster." ;;
+  esac
+  mkdir -p "$MOCK_LOG_DIR" "$MOCK_AGENTS_DIR"
+  info "test perimeter: logs=$MOCK_LOG_DIR agents=$MOCK_AGENTS_DIR"
+fi
+
 # ── Run artefacts, on EVERY outcome ─────────────────────────────────────────
 # A failed run is the one whose evidence is most perishable. Never allowed to
 # change the run's outcome: `|| true` throughout.
@@ -106,7 +144,7 @@ _archive_run_artifacts() {
   local dir="${EPAM_PROJECT_CONFIG_DIR}/runs/${ORCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
   mkdir -p "$dir" 2>/dev/null || return 0
   AUTOMATION_DIR="$REPO_ROOT/orchestrations" \
-  LOG_DIR="$REPO_ROOT/orchestrations/logs" \
+  LOG_DIR="$MOCK_LOG_DIR" \
   RUN_ARTIFACT_DIR="$dir" \
     bash "$SCRIPT_DIR/archive-run-artifacts.sh" >/dev/null 2>&1 || true
   [ -f "$LOG_FILE" ] && cp "$LOG_FILE" "$dir/run.log" 2>/dev/null || true
@@ -116,10 +154,15 @@ _archive_run_artifacts() {
 # ── Restore profiles.json from canonical original ───────────────────────────
 # Agent mutations must not carry forward between runs — a mock that inherits a
 # previous run's skill notes is testing a state no real run starts from.
+# Restored INTO THE PERIMETER. This used to overwrite the repo's own profiles.json on every
+# mock run, so a test mutated the live roster a client run reads.
 PROFILES_ORIG="$REPO_ROOT/orchestrations/agents/profiles.json.original"
 if [ -f "$PROFILES_ORIG" ]; then
-  cp "$PROFILES_ORIG" "$REPO_ROOT/orchestrations/agents/profiles.json"
-  info "profiles.json restored from canonical original"
+  cp "$PROFILES_ORIG" "$MOCK_AGENTS_DIR/profiles.json"
+  # A perimeter run starts from the canonical roster but keeps it in its own directory; the
+  # seeded copy is what every later step reads, via AGENT_PROFILES_FILE.
+  [ "${EPAM_TEST_PERIMETER:-0}" = "1" ] && export AGENT_PROFILES_FILE="$MOCK_AGENTS_DIR/profiles.json"
+  info "profiles.json restored from canonical original into $MOCK_AGENTS_DIR"
 else
   info "profiles.json.original not found — skipping profiles restore"
 fi
@@ -137,10 +180,12 @@ if [ -n "${JIRA_CODELINE_ROOT:-}" ] && [ -d "${JIRA_CODELINE_ROOT}" ]; then
 fi
 
 # ── Step 1: same reset every real run does — archive/clear logs, reset
-# agent-status.json, wire the dashboard to serve THIS run's PRD. LOG_DIR is
-# left at its default (orchestrations/logs) since run-agent-orchestration.sh's
-# own LOG_DIR always resolves there regardless of PROJECT_ROOT (confirmed:
-# it is not overridable) — this matches how mock data has always landed.
+# agent-status.json, wire the dashboard to serve THIS run's PRD. LOG_DIR comes
+# from the perimeter block above: inherited when a test run sets it, and the
+# shared orchestrations/logs otherwise. (The previous comment here claimed the
+# orchestrator's LOG_DIR "is not overridable" — it reads
+# LOG_DIR="${LOG_DIR:-$AUTOMATION_DIR/logs}", so it always was, and test
+# artefacts were landing in client space because of that mistake.)
 #
 # pre-run-reset.sh requires the PRD file to already EXIST (it only reads the
 # basename to patch nginx's /prd.json alias — content doesn't matter yet).

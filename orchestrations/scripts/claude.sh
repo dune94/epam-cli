@@ -57,8 +57,14 @@ _kb_file_for_story() {
         _cl=$(jq -r --arg id "$_story_id" \
             '.stories[] | select(.id == $id) | .codeline // ""' "$_prd_target" 2>/dev/null || echo "")
     fi
-    if [ -n "$_cl" ]; then
-        printf '%s/KB-%s.md' "$_kb_dir" "$_cl"
+    # NORMALISED IDENTICALLY TO THE SEED SIDE (lib/agent-roster.js kbFileForCodeline):
+    # lowercased, punctuation collapsed to '-'. Without this, "next.gotransit.com" and
+    # "next-gotransit-com" address two different stores and one of them is never read. A test
+    # executes both implementations and compares them character for character.
+    local _slug
+    _slug=$(printf '%s' "$_cl" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]\+/-/g; s/^-*//; s/-*$//')
+    if [ -n "$_slug" ]; then
+        printf '%s/KB-%s.md' "$_kb_dir" "$_slug"
     else
         printf '%s/KB-shared.md' "$_kb_dir"
     fi

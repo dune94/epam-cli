@@ -316,6 +316,20 @@ fi
 # across runs (879c705) — profiles.json is ephemeral, the KB files are the store.
 _ROSTER_CLEARED=0
 _PROJECT_CFG_DIR="${EPAM_PROJECT_CONFIG_DIR:-}"
+# A RESUME KEEPS THE ROSTER IT IS RESUMING WITH.
+#
+# Live 2026-08-08 (run 20260808T203346Z): the operator reviewed a roster at pause 1 and
+# resumed. This cleared all three generated-roster files, the mint was then correctly SKIPPED
+# because it was a resume, so nothing re-registered them, and role assignment died with "no
+# project implementation roles are registered". The pause exists so a human can approve a
+# roster before the spec phase; clearing it on the way back in destroys exactly that.
+#
+# The ephemeral-roster rule is about a FRESH run starting from the canonical base. A resume is
+# the continuation of a run that already did so.
+if [ -n "${EPAM_RESUME_RUN:-}" ]; then
+    _PROJECT_CFG_DIR=""
+    info "  Resuming ${EPAM_RESUME_RUN} — keeping the roster this run already minted and reviewed"
+fi
 # BOTH registries. project-investigators.json was added after this list and never joined it,
 # so a previous run's investigators survived every reset. Live 2026-08-08: six investigators
 # were registered — three from that run and three from the run before, whose profiles had been

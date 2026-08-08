@@ -146,7 +146,8 @@ describe('the roster it writes obeys the merge rules', () => {
     const { res, profiles, ws } = await mint();
     expect(profiles['some-domain-engineer']).toBeTruthy();
     expect(profiles['another-domain-specialist']).toBeTruthy();
-    expect(existsSync(join(ws.dir, 'KB-some-domain-engineer.md'))).toBe(true);
+    // KB-1: stores are per CODELINE, not per role — a role-keyed file is never read.
+    expect(existsSync(join(ws.dir, 'KB-shared.md'))).toBe(true);
     expect(res.minted.map((m: any) => m.name)).toContain('some-domain-engineer');
   }, 60_000);
 

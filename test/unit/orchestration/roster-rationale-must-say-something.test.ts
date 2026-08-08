@@ -120,7 +120,10 @@ describe('the threshold is a length, not a vocabulary', () => {
   });
 });
 
-describe('the KB seed carries the reason, so it is never seeded with an ellipsis', () => {
+// SUPERSEDED 2026-08-08 (KB-1): there is no per-role KB to carry the rationale — stores are
+// per codeline. The rationale still has to say something (that is what the rest of this file
+// tests); it simply is not written into a role-keyed file, because no such file is ever read.
+describe.skip('the KB seed carries the reason, so it is never seeded with an ellipsis', () => {
   it('a minted agent KB states why it exists', () => {
     const { dir } = merge(GOOD.rationale);
     const kb = readFileSync(join(dir, `KB-${GOOD.name}.md`), 'utf8');

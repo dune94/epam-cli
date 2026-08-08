@@ -20,13 +20,25 @@ import { describe, it, expect } from 'vitest';
 
 const { checkFixSiteCoverage } = require('../../../orchestrations/scripts/spec-mode-runner.js');
 
+/**
+ * VOCABULARY IS NOW AN INPUT (2026-08-08). This checked coverage with the engine's own
+ * hardcoded English stopword list — the hardcoding rule's named example. The list is gone; the
+ * derived guard vocabulary is passed in, and with none supplied the function reports
+ * complete:null ("not computed") rather than guessing. These cases supply one.
+ */
+const VOCAB = {
+  blacklist: 'the a an and or to of in on for is are with that this when without from by as at be it its their than after before then can into not no does should must will has have been'
+    .split(' ').map((term) => ({ term, reason: 'no selection signal' })),
+  whitelist: [],
+};
+
 describe('checkFixSiteCoverage', () => {
   it('reports complete when every VC shares a term with some finding', () => {
     const findings = [
       { file: 'src/services/contentstack.ts', function: 'Stack', reason: 'initializes the SDK', fix: 'add live_preview config' },
     ];
     const vcs = ['The Stack live_preview config enables draft content.'];
-    const result = checkFixSiteCoverage(findings, vcs);
+    const result = checkFixSiteCoverage(findings, vcs, VOCAB);
     expect(result.complete).toBe(true);
     expect(result.uncoveredVerificationCriteria).toEqual([]);
   });
@@ -64,7 +76,7 @@ describe('checkFixSiteCoverage', () => {
     // The blocker the 2 findings DO actually address (Stack live_preview config).
     const coveredBlocker = 'The `options` object passed to `contentstack.Stack(options)` has no `live_preview` key, so `Stack.livePreview` is undefined.';
 
-    const result = checkFixSiteCoverage(findings, [...uncoveredBlockers, coveredBlocker]);
+    const result = checkFixSiteCoverage(findings, [...uncoveredBlockers, coveredBlocker], VOCAB);
     expect(result.complete).toBe(false);
     for (const blocker of uncoveredBlockers) {
       expect(result.uncoveredVerificationCriteria, `expected uncovered: "${blocker.slice(0, 60)}..."`).toContain(blocker);
@@ -73,26 +85,26 @@ describe('checkFixSiteCoverage', () => {
   });
 
   it('an empty findings list leaves every non-trivial VC uncovered', () => {
-    const result = checkFixSiteCoverage([], ['The dashboard displays the updated total.']);
+    const result = checkFixSiteCoverage([], ['The dashboard displays the updated total.'], VOCAB);
     expect(result.complete).toBe(false);
     expect(result.uncoveredVerificationCriteria).toHaveLength(1);
   });
 
   it('an empty VC list is trivially complete (nothing to cover)', () => {
-    const result = checkFixSiteCoverage([{ file: 'x.ts', reason: 'r', fix: 'f' }], []);
+    const result = checkFixSiteCoverage([{ file: 'x.ts', reason: 'r', fix: 'f' }], [], VOCAB);
     expect(result.complete).toBe(true);
     expect(result.uncoveredVerificationCriteria).toEqual([]);
   });
 
   it('handles missing/malformed findings fields without throwing', () => {
-    expect(() => checkFixSiteCoverage([{ file: 'x.ts' }], ['some criterion'])).not.toThrow();
-    expect(() => checkFixSiteCoverage(undefined, undefined)).not.toThrow();
+    expect(() => checkFixSiteCoverage([{ file: 'x.ts' }], ['some criterion']), VOCAB).not.toThrow();
+    expect(() => checkFixSiteCoverage(undefined, undefined), VOCAB).not.toThrow();
   });
 
   it('matches on a stem overlap (e.g. "install" vs "installed") not just exact tokens', () => {
     const findings = [{ file: 'package.json', reason: 'install the live-preview SDK dependency', fix: 'npm install @contentstack/live-preview-utils' }];
     const vcs = ['The live-preview SDK is installed as a dependency.'];
-    const result = checkFixSiteCoverage(findings, vcs);
+    const result = checkFixSiteCoverage(findings, vcs, VOCAB);
     expect(result.complete).toBe(true);
   });
 });

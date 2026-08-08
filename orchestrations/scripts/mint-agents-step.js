@@ -635,18 +635,23 @@ if (require.main !== module) return;
   // reviewer is the only thing standing between a generated brief and an implementer
   // inheriting it whole, so an absent review gets the SAME treatment as surviving defects:
   // stated loudly, and refused outright when no pause is configured for anyone to see it.
-  if (review.verdict === 'review_failed' || review.verdict === 'not_run') {
+  const _mintWasSkipped = process.env.EPAM_SKIP_AGENT_MINT === '1';
+  if (rosterLib.rosterReviewIsRequired({
+    verdict: review.verdict,
+    mintSkipped: _mintWasSkipped,
+    pauseConfigured: /^(1|true|yes)$/i.test(process.env.EPAM_PAUSE_AFTER_AGENT_MINT || ''),
+  })) {
     process.stderr.write(
       `[mint-step] ! the roster was NOT reviewed (${review.verdict})` +
       `${review.error ? `: ${review.error}` : ''}\n`);
-    if (!/^(1|true|yes)$/i.test(process.env.EPAM_PAUSE_AFTER_AGENT_MINT || '')) {
-      throw new Error(
-        'roster review did not run, so these briefs are unchecked, and no roster pause is ' +
-        'configured for anyone to look at them. An unreviewed roster is not a sound one. ' +
-        'See roster-review.json.');
-    }
+    throw new Error(
+      'roster review did not run, so these briefs are unchecked, and no roster pause is ' +
+      'configured for anyone to look at them. An unreviewed roster is not a sound one. ' +
+      'See roster-review.json.');
+  }
+  if (_mintWasSkipped) {
     process.stderr.write(
-      '[mint-step] the roster pause is on — surfacing the UNREVIEWED roster for review rather than halting\n');
+      '[mint-step] resumed roster — reviewed in the run being resumed, not re-reviewed here\n');
   }
 
   // Still defective after the full correction budget. With the pause on, the operator sees it

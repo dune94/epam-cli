@@ -73,7 +73,11 @@ describe('advanceAgentLadderEscalation — real execution', () => {
 
 describe('the corrective re-invocation site actually calls it (wiring, not just the helper existing)', () => {
   it('advanceAgentLadderEscalation is called BEFORE runCodeGraphDetective in the unexplained_mismatch branch', () => {
-    const branchStart = orchSrc.indexOf("review.planAlignment === 'unexplained_mismatch'");
+    // ANCHOR MOVED 2026-08-08: the trigger is no longer a bare planAlignment comparison at the
+    // call site — it is detectiveCorrectionNeeded(), which now fires on EITHER an unexplained
+    // plan/execution mismatch OR verification criteria with no prescribed fix site. The
+    // ordering asserted below is unchanged.
+    const branchStart = orchSrc.indexOf('if (_correction.correct) {');
     expect(branchStart, 'the corrective branch itself was not found — has it moved/been renamed?').toBeGreaterThan(-1);
     const advanceIdx = orchSrc.indexOf('advanceAgentLadderEscalation(logDir', branchStart);
     const detectiveCallIdx = orchSrc.indexOf('await runCodeGraphDetective(story, logDir, {', branchStart);

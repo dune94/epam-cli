@@ -28,12 +28,20 @@ describe('runCodeGraphDetective accepts corrective context from a prior rejectio
     expect(body, 'must accept an opts param carrying corrective context').toMatch(/correctiveContext/);
   });
 
+  // MOVED 2026-08-08 into renderDetectiveCorrection(), so this now asserts the RENDERED
+  // OUTPUT rather than grepping the source of the enclosing function. The old form broke on a
+  // pure refactor while the behaviour was intact — the brittleness this suite keeps paying for.
   it('the corrective block tells the model what its PLAN was and what the reviewer said', () => {
-    const body = extractFunctionBody('runCodeGraphDetective');
-    // Anchor near the corrective-context construction, not the whole huge function body.
-    const idx = body.indexOf('correctiveContext');
-    const nearby = body.slice(Math.max(0, idx - 200), idx + 600);
-    expect(nearby).toMatch(/REVIEWER REJECTED|reviewer rejected/i);
+    const spec = require('../../../orchestrations/scripts/spec-mode-runner.js');
+    const out = spec.renderDetectiveCorrection({
+      priorPlan: 'I will trace the client setup',
+      priorFindings: [{ file: 'src/services/client.ts' }],
+      reviewNotes: 'diverged from the plan with no stated reason',
+      uncoveredCriteria: [],
+    });
+    expect(out).toMatch(/REJECTED/i);
+    expect(out, 'the model is not shown its own prior plan').toContain('I will trace the client setup');
+    expect(out, 'the reviewer reason never reaches the model').toContain('diverged from the plan');
   });
 });
 

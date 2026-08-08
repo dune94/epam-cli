@@ -1,0 +1,34 @@
+{
+  "id": "mock-estate",
+  "title": "Mock estate — disposable multi-codeline brownfield project",
+  "version": "1.0.0",
+  "project": {
+    "name": "mock-estate",
+    "description": "Disposable multi-codeline estate used by the pipeline integration tests. Its OWN identity: a run against it must never be labelled with a client project's name, which is what the pre-flight check on prd.canonical.json exists to prevent.",
+    "stack": {
+      "language": "TypeScript",
+      "runtime": "Node.js 20",
+      "framework": "React",
+      "testing": "vitest",
+      "cms": "Contentstack",
+      "devEnvironment": "Ubuntu WSL2"
+    },
+    "outputDir": "",
+    "outputDirs": []
+  },
+  "configuration": {
+    "profilesPath": "profiles.json",
+    "autoCommit": false,
+    "requireTests": true,
+    "budget": 12
+  },
+  "phasesConfig": {
+    "scaffold": { "description": "No-op for brownfield", "parallelWorktrees": false },
+    "core": { "description": "Implementation across the estate's codelines", "parallelWorktrees": true }
+  },
+  "implementationOrder": { "scaffold": [], "core": [] },
+  "stories": [],
+  "currentIteration": 1,
+  "source": "jira",
+  "sourceProject": "ESTATE"
+}

@@ -1,0 +1,7 @@
+{
+  "_what": "The ticket the mock estate is exercised with. Canonical: served by the mock Jira server, never restated inside a test file.",
+  "_why": "It is the same SHAPE as the live ticket this pipeline is being built for: one story, spanning every codeline, whose delivery needs a change where the SDK is configured AND a change wherever content is fetched — and the fetch site differs per codeline. A story that can be satisfied by editing one file in one repository exercises none of the machinery that keeps breaking.",
+  "id": "ESTATE-1",
+  "summary": "Editors cannot preview draft entries before publishing",
+  "description": "AS a content author, I WANT to preview draft entries before they are published, SO THAT I can see how content will appear on the website. Today every site creates its Contentstack Stack without live preview configured, and every fetch path returns published entries only, so a draft entry is invisible on all of them. Delivering this means enabling live preview where the Stack is created, and refreshing content wherever entries are fetched, in EVERY site. The fetch site is not the same in each one, so it has to be found rather than assumed. Note from the reporter: entries behind access control may not be previewable."
+}

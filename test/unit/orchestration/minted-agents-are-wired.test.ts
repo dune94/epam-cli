@@ -97,15 +97,19 @@ describe('a genuinely new role is added AND wired', () => {
     expect(after[PROPOSAL.name]).toBe(PROPOSAL.systemPrompt);
   });
 
-  it('a KB file is seeded so the role has a skills store from its first run', () => {
+  // ADDRESS CHANGED 2026-08-08 (KB-1). This asserted a per-ROLE store. The seams read and
+  // append per CODELINE, so a role-keyed file was written at an address nothing reads — 41 of
+  // them accumulated, all unreadable, and the cost estimator reported "KB coverage: 0%". Role
+  // names are minted fresh each run, so they could never have been read by a later one. The
+  // concern is unchanged: a minted agent must have a store to learn into from its first run.
+  it('a KB store is seeded at the address the seams actually read', () => {
     const { dir, profilesPath } = workspace({});
-    roster.mergeProjectAgents({ profilesPath, agentsDir: dir, proposals: [PROPOSAL] });
+    roster.mergeProjectAgents({
+      profilesPath, agentsDir: dir, codelines: [{ name: 'alpha' }], proposals: [PROPOSAL],
+    });
 
-    const kb = join(dir, `KB-${PROPOSAL.name}.md`);
-    expect(
-      existsSync(kb),
-      'the seams append skills to KB-{role}.md; without it the agent starts every run blank',
-    ).toBe(true);
+    const kb = roster.kbFileForCodeline(dir, 'alpha');
+    expect(existsSync(kb), `nothing seeded at ${kb} — the reader finds an empty store`).toBe(true);
     expect(readFileSync(kb, 'utf8').length).toBeGreaterThan(0);
   });
 

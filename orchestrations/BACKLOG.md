@@ -1259,3 +1259,22 @@ A single blocking roster finding clears the ENTIRE roster and re-proposes, disca
 briefs with the bad one. Cycle counts have swung 1->9 and 10->0 between runs. Repair should
 touch the brief that was wrong.
 
+
+## ARCH-6 — one script, two roles: CLOSED 2026-08-07
+
+The parent/lane role is now derived in one place (`orch_role`/`is_parent`/`is_lane`, top of
+run-agent-orchestration.sh) and `JIRA_CODELINE_RUN` is read nowhere else. A guard test
+(`orchestrator-role-is-explicit.test.ts`) fails if a new site re-tests the raw variable.
+
+Fixed en route: the parent and its FIRST lane derived the same control-plane port. The
+synthesizer sets `project.outputDir = outputDirs[0].path`, so the parent resolved to codeline
+index 0 — the same index the first lane resolves to from its filtered PRD. `start_control_plane`
+kills whatever holds the port before binding, so the first lane killed the parent's control
+plane and took it; the lane's cleanup then stopped it entirely, leaving the port dead while the
+parent still held a PID it believed was live. The parent now reserves the base port and lanes
+are offset past it. `CODELINE_NAME` was also read but never set anywhere — lanes export
+`EPAM_CODELINE`, which the resolver now prefers.
+
+NOT done, deliberately: the script was not split in two. The shared body is what gives a lane
+the identical pipeline, and splitting it would duplicate 11k lines to remove a condition that
+is now named and enforced.

@@ -61,7 +61,9 @@ describe('the resume decision precedes the work', () => {
     expect(
       block,
       'each lane would restore the checkpoint over its own state',
-    ).toMatch(/JIRA_CODELINE_RUN:-}" \] && \[ -n "\$\{EPAM_RESUME_RUN/);
+    // The role is now derived once, at the top of the script, so the guard reads through the
+    // named helper instead of testing the raw variable here.
+    ).toMatch(/if is_parent && \[ -n "\$\{EPAM_RESUME_RUN/);
   });
 });
 

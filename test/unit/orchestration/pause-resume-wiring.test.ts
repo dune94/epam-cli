@@ -39,13 +39,25 @@ function block(startAnchor: string, endAnchor: string): string {
 
 // ANCHOR MOVED 2026-08-07: the resume block used to sit BELOW `_run_jira_pipeline; exit $?`,
 // so it was unreachable — every "resume" silently ran a fresh run from the top. It is now
-// hoisted above the dispatch, and guarded by `-z JIRA_CODELINE_RUN` so that the per-lane
-// re-invocations of this same script do not each try to resume the parent's checkpoint.
+// hoisted above the dispatch, and guarded by is_parent so that the per-lane re-invocations of
+// this same script do not each try to resume the parent's checkpoint. The guard reads through
+// the named role helper rather than testing JIRA_CODELINE_RUN directly, which is why the
+// harness below has to carry those helpers.
 const RESUME_BLOCK = () =>
   block(
-    'if [ -z "${JIRA_CODELINE_RUN:-}" ] && [ -n "${EPAM_RESUME_RUN:-}" ]; then',
-    'if [ -z "${JIRA_CODELINE_RUN:-}" ]; then\n  if [ "${JIRA_PIPELINE:-0}" = "1" ]; then',
+    'if is_parent && [ -n "${EPAM_RESUME_RUN:-}" ]; then',
+    'if is_parent; then\n  if [ "${JIRA_PIPELINE:-0}" = "1" ]; then',
   );
+
+/** The role helpers, lifted from the orchestrator — extracted blocks call is_parent/is_lane. */
+function roleHelpersSrc(): string {
+  const start = orchSrc.indexOf('orch_role() {');
+  const endMark = "is_lane() { [ \"$(orch_role)\" = 'lane' ]; }";
+  const end = orchSrc.indexOf(endMark);
+  expect(start, 'the role helpers are gone from the orchestrator').toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+  return orchSrc.slice(start, end + endMark.length);
+}
 /** The post-spec SAVE. The pause that used to follow it was removed: one setting only. */
 const SAVE_BLOCK = () =>
   block('if _ckpt_path=$(save_run_checkpoint "$PHASE" 2>&1); then', '# ── Infra test gate');
@@ -76,6 +88,8 @@ function runBlock(body: string, w: ReturnType<typeof workspace>, extra: Record<s
       'info(){ echo "[info] $*"; }; warning(){ echo "[warn] $*"; }',
       'error(){ echo "[error] $*" >&2; }; success(){ echo "[ok] $*"; }',
       'step_emit(){ :; }',
+      // extracted blocks guard themselves with is_parent/is_lane
+      roleHelpersSrc(),
       `source ${JSON.stringify(FLAGS)}`,
       `source ${JSON.stringify(LIB)}`,
       body,

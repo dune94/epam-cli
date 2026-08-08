@@ -130,11 +130,14 @@ describe('C3: empty _phase_filter does not suppress any phases', () => {
 // ── C4: entry point pre-parses --phase before routing ─────────────────────────
 
 describe('C4: entry point pre-parses --phase before the multi-codeline routing check', () => {
-  it('_ep_caller_phase pre-parse block exists before JIRA_CODELINE_RUN guard', () => {
-    const epGuardIdx     = orchSrc.indexOf('if [ -z "${JIRA_CODELINE_RUN:-}" ]');
+  it('_ep_caller_phase pre-parse block exists before the parent-only dispatch guard', () => {
+    // The guard reads through is_parent now; what matters is unchanged — --phase must be
+    // parsed before routing, or a --phase call runs every phase across every codeline.
+    const epGuardIdx     = orchSrc.indexOf('if is_parent; then\n  if [ "${JIRA_PIPELINE:-0}" = "1" ]; then');
     const preParseIdx    = orchSrc.indexOf('_ep_caller_phase');
     expect(preParseIdx,  '_ep_caller_phase must be defined').toBeGreaterThan(-1);
-    expect(preParseIdx,  'pre-parse must come before JIRA_CODELINE_RUN guard').toBeLessThan(epGuardIdx);
+    expect(epGuardIdx, 'the parent-only dispatch guard was not found').toBeGreaterThan(-1);
+    expect(preParseIdx,  'pre-parse must come before the dispatch guard').toBeLessThan(epGuardIdx);
   });
 
   it('pre-parse block iterates over positional args looking for --phase', () => {

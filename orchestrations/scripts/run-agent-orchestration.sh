@@ -28,6 +28,38 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
+
+# ── WHICH ROLE IS THIS PROCESS? ──────────────────────────────────────────────
+#
+# This one script is BOTH the parent orchestrator and, re-invoked once per codeline with
+# JIRA_CODELINE_RUN=1, each lane. That is a deliberate design — a lane gets the identical
+# pipeline — but it means every per-run resource is allocated twice, and every parent-only
+# step needs a guard that somebody has to REMEMBER to write. Two defects came from exactly
+# that omission:
+#
+#   - the resume block sat below the dispatch and ran in neither role correctly, so every
+#     "resume" silently started a fresh run;
+#   - the control-plane port derived identically in both roles, so the first lane killed the
+#     parent's control plane and took its port.
+#
+# The role is named here, once, so a step can DECLARE which role it belongs to instead of
+# re-deriving it from a raw environment variable at each site. Defined at the very top
+# because entry guards and port resolution both run before anything else.
+#
+# A lane is a lane by virtue of JIRA_CODELINE_RUN — that variable is the contract between the
+# parent's re-invocation and this block, and is read NOWHERE ELSE. See the guard test in
+# test/unit/orchestration/orchestrator-role-is-explicit.test.ts.
+orch_role() {
+    if [ -n "${JIRA_CODELINE_RUN:-}" ]; then printf 'lane'; else printf 'parent'; fi
+}
+
+# is_parent — true in the top-level orchestrator process. Guard project-wide work with this:
+# anything that allocates a run-global resource, mutates shared state, or must happen exactly
+# once per run regardless of how many codelines are in scope.
+is_parent() { [ "$(orch_role)" = 'parent' ]; }
+
+# is_lane — true in a per-codeline re-invocation. Guard work that is scoped to one repository.
+is_lane() { [ "$(orch_role)" = 'lane' ]; }
 # Config files are DATA: load them without executing them. See lib/env-file.sh.
 . "$AUTOMATION_DIR/scripts/lib/env-file.sh"
 
@@ -39,14 +71,14 @@ AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 # if JIRA_URL is already in the environment (set by orchestrate.sh from the
 # project config) the caller's config must win; sourcing here would clobber it
 # with whatever stale/wrong project is in jira/.env.
-if [ "${JIRA_PIPELINE:-0}" = "1" ] && [ -z "${JIRA_CODELINE_RUN:-}" ] && \
+if [ "${JIRA_PIPELINE:-0}" = "1" ] && is_parent && \
    [ -z "${JIRA_URL:-}" ] && [ -f "$AUTOMATION_DIR/jira/.env" ]; then
   load_env_file_safe "$AUTOMATION_DIR/jira/.env"
 fi
 
 # Setsid guard: re-exec under a new session so parent SIGTERM doesn't propagate
 # to long-running agent subprocesses. Only applies to top-level Jira pipeline runs.
-if [ "${JIRA_PIPELINE:-0}" = "1" ] && [ -z "${JIRA_CODELINE_RUN:-}" ] && \
+if [ "${JIRA_PIPELINE:-0}" = "1" ] && is_parent && \
    [ -z "${_ORCH_SETSID_DONE:-}" ] && command -v setsid >/dev/null 2>&1; then
   export _ORCH_SETSID_DONE=1
   exec setsid bash "$0" "$@"
@@ -264,13 +296,39 @@ DASHBOARD_WATCH_OWNED=false
 # codeline run resolves no lane and keeps the base port, unchanged.
 CONTROL_PLANE_BASE_PORT="${CONTROL_PLANE_BASE_PORT:-8094}"
 _resolve_control_plane_port() {
-    # Self-contained: reads only the environment, so it can be tested in isolation.
+    # Reads only the environment and the PRD — plus is_parent(), the single place the
+    # parent/lane role is derived. A harness testing this in isolation must carry those
+    # helpers with it; duplicating the role check here would be the very thing they exist
+    # to prevent.
     local _base="${CONTROL_PLANE_BASE_PORT:-8094}"
     # An explicit override always wins — the operator can pin a port.
     if [ -n "${CONTROL_PLANE_PORT:-}" ]; then
         printf '%s' "$CONTROL_PLANE_PORT"; return 0
     fi
-    local _lane="${CODELINE_NAME:-}"
+    # THE PARENT AND ITS LANES ARE THE SAME SCRIPT, SO THEY MUST NOT DERIVE THE SAME PORT.
+    #
+    # This script is both the parent orchestrator and, re-invoked with JIRA_CODELINE_RUN=1,
+    # each lane — so every per-run resource is allocated twice. The lane is derived from the
+    # codeline whose outputDirs[].path matches project.outputDir, and the synthesizer sets
+    # project.outputDir = outputDirs[0].path, so the PARENT resolved to codeline index 0 —
+    # exactly what the FIRST LANE resolves to from its own filtered PRD.
+    #
+    # That collision is not benign: start_control_plane kills whatever already holds the port
+    # ("a stale process from a previous run") before binding. The first lane therefore killed
+    # the parent's control plane and took the port, and when the lane finished its cleanup
+    # stopped the control plane entirely — leaving the port dead while the parent still held a
+    # PID it believed was live.
+    #
+    # The parent reserves the base port. Lanes are offset past it, so no lane can ever land on
+    # it. Lanes keep their own control plane — each has its own LOG_DIR to serve.
+    if is_parent; then
+        printf '%s' "$_base"; return 0
+    fi
+
+    # EPAM_CODELINE is what the lane invocation actually exports; CODELINE_NAME is kept as the
+    # documented override. Reading only the latter meant every lane fell through to the PRD
+    # lookup, since nothing in this script has ever set it.
+    local _lane="${CODELINE_NAME:-${EPAM_CODELINE:-}}"
     if [ -z "$_lane" ] && [ -n "${PRD_FILE:-}" ] && [ -f "${PRD_FILE}" ]; then
         _lane=$(jq -r '.project as $p | (($p.outputDirs // []) | map(select(.path == $p.outputDir)) | .[0].codeline) // empty' \
             "$PRD_FILE" 2>/dev/null)
@@ -286,7 +344,8 @@ _resolve_control_plane_port() {
     if [ -z "$_idx" ] || [ "$_idx" = "null" ]; then
         _idx=$(printf '%s' "$_lane" | cksum | awk '{print $1 % 64}')
     fi
-    printf '%s' "$(( _base + _idx ))"
+    # +1 so lane 0 clears the parent's reserved base port.
+    printf '%s' "$(( _base + 1 + _idx ))"
 }
 CONTROL_PLANE_PORT="$(_resolve_control_plane_port)"
 CONTROL_PLANE_PID=""
@@ -2414,7 +2473,7 @@ start_dashboards_watch() {
     # Sequential lanes hid this by never overlapping. A lock would also close the
     # race; not starting it at all is simpler and strictly correct, because the
     # lane has nothing to serve that the parent is not already serving.
-    if [ "${JIRA_CODELINE_RUN:-}" = "1" ]; then
+    if is_lane; then
         return
     fi
     if [ -n "$DASHBOARD_WATCH_PID" ]; then
@@ -3643,7 +3702,7 @@ _run_jira_pipeline() {
 }
 
 # ── Entry point guards ─────────────────────────────────────────────────────────
-# Both guards skip when JIRA_CODELINE_RUN=1 (re-exec for a single codeline/phase).
+# Both guards are parent-only (is_parent) — a lane re-exec must not repeat them.
 
 # Pre-parse --phase from CLI args BEFORE routing so _run_codeline_loop knows which
 # phase the caller is requesting. Without this, the multi-codeline routing fires
@@ -3677,7 +3736,7 @@ unset _ep_i _ep_j
 #
 # Top level only: lanes re-invoke this script and would each restore the checkpoint over their
 # own state. The parent decides what to resume; the lanes inherit the result.
-if [ -z "${JIRA_CODELINE_RUN:-}" ] && [ -n "${EPAM_RESUME_RUN:-}" ]; then
+if is_parent && [ -n "${EPAM_RESUME_RUN:-}" ]; then
     # The roster and its briefs are stored against the run that minted them, so a resumed run
     # must BE that run — otherwise the store reads as another run's and is not re-applied.
     export ORCH_RUN_ID="$EPAM_RESUME_RUN"
@@ -3700,7 +3759,7 @@ if [ -z "${JIRA_CODELINE_RUN:-}" ] && [ -n "${EPAM_RESUME_RUN:-}" ]; then
     success "[orch] RESUMED run ${EPAM_RESUME_RUN} — continuing from its checkpoint"
 fi
 
-if [ -z "${JIRA_CODELINE_RUN:-}" ]; then
+if is_parent; then
   if [ "${JIRA_PIPELINE:-0}" = "1" ]; then
     # Jira flow: ingest → synthesize → route codelines
     _run_jira_pipeline; exit $?

@@ -106,10 +106,11 @@ describe('run-agent-orchestration.sh — jira/.env auto-source guard (Bug 3)', (
       const idx = orchSrc.indexOf('[ -f "$AUTOMATION_DIR/jira/.env" ]');
       return orchSrc.slice(Math.max(0, idx - 300), idx + 50);
     })();
-    // The condition must check JIRA_PIPELINE=1, JIRA_CODELINE_RUN absent, AND
+    // The condition must check JIRA_PIPELINE=1, the PARENT role (is_parent — the role is
+    // derived once at the top of the script rather than re-tested here), AND
     // JIRA_URL absent — all three must be present in the same if-block.
     expect(ifBlock).toMatch(/JIRA_PIPELINE.*1/);
-    expect(ifBlock).toMatch(/JIRA_CODELINE_RUN/);
+    expect(ifBlock).toMatch(/is_parent/);
     expect(ifBlock).toMatch(/JIRA_URL/);
   });
 });

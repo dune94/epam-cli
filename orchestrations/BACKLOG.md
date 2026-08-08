@@ -1314,3 +1314,59 @@ is now named and enforced.
 - **Skipping deep investigation for `no_work_found` codelines.** The survey now reports it; the
   lane loop does not yet act on it. This is the cost mitigation, so it matters: investigations
   otherwise scale as codelines x stories.
+
+## Architectural issues found at pause 1, 2026-08-08 (evidence-based)
+
+Ordered by how much they impede getting to correct code. #1 and #2 fixed same day; the rest
+are open and recorded with their evidence so the next person does not re-derive them.
+
+### FIXED — ORD-1: derived artifacts were never invalidated when their input changed
+Assignment ran BEFORE the roster review/correction loop. Stories were assigned from the
+proposed roster; the reviewer indicted three agents, the correction replaced them, and the
+assignments were never revisited — all three lanes pointed at a role with no profile. ARCH-7's
+targeted correction is what made it reachable: a wholesale re-mint fails loudly, a surgical
+replacement leaves the roster healthy-looking and only the assignments stale. Assignment now
+runs after the loop, plus a deterministic check that every assignment names a role in the
+settled roster.
+
+### FIXED — ORD-2: the survey's leads were laundered into facts
+The replacement brief opened "CRITICAL FACTS — verified by prior investigation:" and restated
+survey findings, one of which was false. Provisional evidence GAINED authority as it
+propagated. The survey now reaches the mint explicitly as leads, and briefs are forbidden from
+restating it as established.
+
+### OPEN — EVID-1: absence of evidence is reported as evidence of absence  ← highest value
+Run 3's survey reported nextgotransitcom had "no Contentstack references in its own source".
+Ground truth: next.gotransit.com/src/services/contentstack.ts exists, 20+ source files match.
+A failed search and a true negative are indistinguishable to the agent, and run 2 flagged the
+same anomaly honestly ("the search tool did not traverse as expected") while run 3 asserted
+absence. DET-1 makes no_work_found a TRUSTED state, so this is load-bearing: had it said
+no_work_found, a codeline needing work would have been skipped with "evidence".
+FIX: corroborate deterministically. A manifest declaring a package while the search returns
+zero source references is a detectable contradiction — force re-investigation, never conclude.
+Same blind spot applies to the per-lane detective, so fix it once, below both.
+
+### OPEN — KB-1: the KB has two addressing schemes that never meet (ARCH-4 is half-done)
+mergeProjectAgents seeds KB-<role>.md; _kb_file_for_story reads/writes KB-<codeline>.md.
+Evidence: 36 KB files on disk, ALL role-keyed, ZERO codeline-keyed. Every seeded brief is
+write-only, and role names are minted fresh each run so they accumulate forever
+(KB-contentful-cms-engineer.md survives from the vendor-hallucination run). Cross-run learning
+— the one thing meant to persist — persists nothing.
+
+### OPEN — ID-1: codeline identity is an unstable derived label
+logs/lanes/ holds both gotransit and nextgotransitcom: the same repository under two names from
+two runs. Discovery scores repos deterministically then hands close calls to an LLM
+("top1/top2=1.33 (CLOSE — genuine ambiguity, LLM judgment matters)"), and the label varies. KB
+files, lane log dirs, byCodeline, branches and checkpoints all key off it, so a resume can
+target a differently-named version of the estate than the pause reviewed. The repo PATH is
+stable; the identity we key on is not. KB-1 cannot be fixed properly until this is.
+
+### OPEN — FAILOPEN-1: a verdict derived from an empty collection reads as clean
+Fixed for the roster reviewer (empty output → review_failed, not sound). The SHAPE is generic:
+any gate that derives a verdict from a collection treats "nothing ran" as "nothing wrong".
+Sweep every gate rather than waiting to be bitten again.
+
+### OPEN — ART-1: run artifacts are not run-scoped
+roster-review.json is written once at the end into a shared logs dir. Mid-run it still holds
+the PREVIOUS run's verdict, and was very nearly reported as current. Stamp artifacts with
+ORCH_RUN_ID, or refuse to read one whose run id is not this run's.

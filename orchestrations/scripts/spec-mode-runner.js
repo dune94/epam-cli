@@ -3504,10 +3504,19 @@ async function mintProjectAgents({
     return `- ${c.codeline}: ${c.state}${surfaces}\n    evidence: ${String(c.evidence || '').replace(/\s+/g, ' ')}`;
   }) : [];
   const surveyBlock = _svLines.length
-    ? ['WHAT A SURVEY OF THESE REPOSITORIES ACTUALLY FOUND. This is observation, not inference',
-       'from the ticket. Propose roles for the codelines the work REACHES; a codeline reported',
-       'no_work_found needs no implementer, and one reported not_investigated or failed was not',
-       'established either way — do not treat either as confirmation that work is needed there:',
+    ? ['WHAT A SURVEY OF THESE REPOSITORIES REPORTED. These are LEADS, not settled facts.',
+       '',
+       'A single pass swept the whole estate with limited tools, and it has been wrong: on',
+       '2026-08-08 it reported that a repository contained no reference to a package that its',
+       'own source uses in twenty files, and a roster was minted on that. Treat every line',
+       'below as what the survey BELIEVES, to be confirmed by the investigator that owns the',
+       'codeline. Do NOT restate any of it in a brief as established, verified, or confirmed —',
+       'a brief is inherited whole and re-checked by nothing, so a wrong lead written as a fact',
+       'becomes an instruction.',
+       '',
+       'Propose roles for the codelines the work appears to REACH. A codeline reported',
+       'no_work_found is not confirmed clear, and one reported not_investigated or failed was',
+       'not established either way — do not treat any of the three as proof about that repo:',
        '',
        ..._svLines,
        '',

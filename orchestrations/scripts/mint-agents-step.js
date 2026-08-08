@@ -525,17 +525,6 @@ if (require.main !== module) return;
     _mintedDetail = mint.minted;
   }
 
-  process.env.EPAM_AGENT_NAME = 'role-assigner';
-  const assignment = await spec.assignAgentRoles({
-    promptExec, stories, profilesPath: PROFILES_PATH, logDir: LOG_DIR, repoPath: REPO_PATH,
-  });
-  for (const a of assignment.assigned) {
-    process.stderr.write(`[mint-step]   ${a.storyId} -> ${a.agentRole} (${a.reason})\n`);
-  }
-  fs.writeFileSync(path.join(LOG_DIR, 'role-assignments.json'), JSON.stringify(assignment.assigned, null, 2));
-
-  // assignAgentRoles mutates the story objects in place; they are the PRD's own objects.
-  fs.writeFileSync(PRD_PATH, JSON.stringify(prd, null, 2));
   // THE ROSTER'S ONLY ADVERSARY, AND A LOOP THAT ACTS ON IT.
   //
   // A reviewer whose findings nothing consumes is a critic. Its first live run produced seven
@@ -674,6 +663,48 @@ if (require.main !== module) return;
     }
     process.stderr.write('[mint-step] the roster pause is on — surfacing them for review rather than halting\n');
   }
+
+  // ASSIGNMENT DERIVES FROM THE ROSTER, SO IT RUNS ONCE THE ROSTER IS SETTLED.
+  //
+  // This used to run BEFORE the review/correction loop. Stories were assigned from the
+  // PROPOSED roster; the reviewer then indicted agents, the correction replaced them, and the
+  // assignments were never revisited. Live 2026-08-08: all three lanes were assigned
+  // 'contentstack-live-preview-engineer' after it had been replaced by
+  // 'contentstack-live-preview-integration-engineer' — a role with no profile. Each lane would
+  // have invoked an agent with an empty system prompt, and the write perimeter would have
+  // refused it, since the name is not in project-roles.json. Exactly the "proposed, briefed,
+  // wired, assigned a story — and then unable to write a byte" failure the perimeter exists to
+  // make impossible.
+  //
+  // Targeted correction (ARCH-7) is what made this reachable: a wholesale re-mint would have
+  // failed loudly and obviously. A surgical replacement leaves the roster looking healthy and
+  // only the assignments stale, which is quieter and worse.
+  process.env.EPAM_AGENT_NAME = 'role-assigner';
+  const assignment = await spec.assignAgentRoles({
+    promptExec, stories, profilesPath: PROFILES_PATH, logDir: LOG_DIR, repoPath: REPO_PATH,
+  });
+  for (const a of assignment.assigned) {
+    process.stderr.write(`[mint-step]   ${a.storyId} -> ${a.agentRole} (${a.reason})\n`);
+  }
+  fs.writeFileSync(path.join(LOG_DIR, 'role-assignments.json'), JSON.stringify(assignment.assigned, null, 2));
+
+  // A LAST DETERMINISTIC CHECK, BECAUSE THIS IS THE SEAM THAT BROKE.
+  //
+  // Every assignment must name a role that exists in the settled roster. The check is cheap
+  // and mechanical, and it fails the step rather than handing a lane a name with no brief.
+  const _finalRoles = new Set(Object.keys(JSON.parse(fs.readFileSync(PROFILES_PATH, 'utf8'))));
+  const _orphaned = assignment.assigned
+    .filter((a) => a && a.agentRole && !_finalRoles.has(a.agentRole))
+    .map((a) => `${a.storyId}${a.codeline ? `/${a.codeline}` : ''} -> ${a.agentRole}`);
+  if (_orphaned.length) {
+    throw new Error(
+      `${_orphaned.length} assignment(s) name a role that is not in the settled roster: ` +
+      `${_orphaned.join('; ')}. A lane would invoke an agent with no brief and no write ` +
+      'permission. Refusing to hand stories to roles that do not exist.');
+  }
+
+  // assignAgentRoles mutates the story objects in place; they are the PRD's own objects.
+  fs.writeFileSync(PRD_PATH, JSON.stringify(prd, null, 2));
 
   writeRosterDiff(PROFILES_PATH, AGENTS_DIR, LOG_DIR, _mintedNames, _mintedDetail);
   process.stderr.write(`[mint-step] ✓ roster and assignments written to ${PRD_PATH}\n`);

@@ -241,11 +241,28 @@ describe('the survey reaches the mint as two distinguishable things', () => {
     expect(prompt).toContain('the preview routing surface');
   }, 60_000);
 
+  it('the survey reaches the mint as LEADS, never as settled fact', async () => {
+    // 2026-08-08: the survey reported a repository had no reference to a package its own
+    // source uses in twenty files, and the replacement brief restated that as
+    // "CRITICAL FACTS — verified by prior investigation". Provisional evidence gained
+    // authority as it propagated. A brief is inherited whole and re-checked by nothing.
+    const { res } = await survey();
+    const prompt = await mintPrompt(res);
+    expect(prompt).toMatch(/LEADS, not settled facts/);
+    expect(prompt).toMatch(/Do NOT restate any of it in a brief as established, verified, or confirmed/);
+  }, 60_000);
+
+  it('no_work_found is explicitly not proof that a codeline is clear', async () => {
+    const { res } = await survey();
+    const prompt = await mintPrompt(res);
+    expect(prompt).toMatch(/no_work_found is not confirmed clear/);
+  }, 60_000);
+
   it('the proposer is warned not to read not_investigated as "work is needed here"', async () => {
     const { res } = await survey(JSON.stringify({ codelines: [], recommendedInvestigators: [] }));
     const prompt = await mintPrompt(res);
     expect(prompt).toMatch(/not_investigated/);
-    expect(prompt).toMatch(/not established either way|do not treat either as confirmation/i);
+    expect(prompt).toMatch(/not established either way|do not treat any of the three as proof/i);
   }, 60_000);
 
   it('no survey at all leaves the block out entirely rather than emitting an empty one', async () => {

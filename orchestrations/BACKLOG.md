@@ -16,6 +16,7 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | # | ID | Title | Status | Source |
 |---|---|---|---|---|
 | 1 | VC-1 | **Investigate VC agent drift — fallback VCs poison the whole downstream chain** | pending | Live metrolinx repro-gate block, 2026-07-25 |
+| 2 | TEST-GAP-1 | **Writer-phase test coverage gaps — see "Writer-Phase Test Coverage Gaps" below** | pending | Coverage audit, 2026-08-09 |
 | 2 | SCHEMA-1 | **Schema-bind agent output — BLOCKED on the reviewer: strict schema suppresses tool calls** | blocked | Live metrolinx failures + probe, 2026-07-25 |
 | 3 | GAP-P5 | Intra-story planner/executor model split | done | Aider, CrewAI |
 | 4 | GAP-P4 | Semantic RAG — replace TF-IDF in CPA | done | CrewAI, OpenHands |
@@ -1396,3 +1397,52 @@ never ran. Restored by hand; a live repo-write monitor on the following run caug
 it did not recur and the cause is UNKNOWN, not fixed. The perimeter permitted it because that
 codeline was already on its story branch, where tracked files are unlocked by design — so the
 window exists for any agent with Bash between branch creation and the writer.
+
+---
+
+## Writer-Phase Test Coverage Gaps (TEST-GAP-1)
+
+Audit of 2026-08-09, after two live defects shipped in code the suite appeared to cover.
+Counts are non-comment mentions of the function across `test/unit/orchestration/`.
+
+**The count did not predict the risk.** `verify_story_deliverables` had 25 mentions and still
+shipped the union-vs-per-codeline bug, because nothing asserted on its jq SELECTOR — only on the
+behaviour around it. `_render_technical_notes` had ONE mention and carried the defect that told
+gotransit's writer to build a metrolinx-only component. Treat the zero and near-zero rows as the
+starting point, not the whole job: the real gap is what the tests assert, not which functions
+they name.
+
+### Zero coverage
+
+| Unit | Why it matters |
+|---|---|
+| `compute_token_cost` | Real cost tracking is the #1 priority; nothing verifies the arithmetic |
+| `normalize_provider_json` | Has a KNOWN past defect (empty `.result` dropped) with no regression test |
+| `update_monitor_status`, `log_to_monitor` | Observability is priority #2; dashboard state is unverified |
+| `resolve_dynamic_constitution` | Injects the constitution into every agent invocation |
+| `resolve_codex_model_settings` | Per-model overrides; silent misroute is plausible |
+| `get_next_story`, `get_story_phase`, `get_phase_stories`, `get_phases`, `list_phases` | Story selection and ordering |
+| `get_story_dependencies`, `story_exists`, `get_story_priority` | Dependency gating |
+| `check_prerequisites`, `check_plan_mode_required` | Pre-flight |
+| `get_next_kb_id`, `update_agents_file`, `increment_iteration` | KB and roster mutation |
+| `get_project_context`, `show_status`, `dry_run` | Lower risk |
+
+### Thin coverage (≤12 mentions) on writer-critical units
+
+| Unit | Mentions | Risk |
+|---|---|---|
+| `_render_technical_notes` | 1 → now 12 | FIXED 2026-08-09 (cfab98a) |
+| `_rejection_repeat_check` | 7 | Decides whether a retry is unwinnable |
+| `record_story_outputs`, `build_generator_prompt` | 8 | Writer-output manifest; generator prompt |
+| `append_cost_record` | 9 | Cost ledger write path |
+| `run_anti_pattern_check`, `run_named_import_check`, `run_mock_completeness_check` | 9–10 | Gates that can fail open |
+| `_scope_lock`, `_vendor_lock` | 10–12 | Write perimeter |
+
+### Residual defect, not yet fixed
+
+`unresolved` paths are rendered into the WRITER prompt. gotransit's prompt still names
+`ContentstackQuote.tsx` once via its own `unresolved` list — spec-pass diagnostics meaning "this
+declared path does not resolve in this repo". The deliverable gate ignores it, so it is no longer
+story-fatal, but naming an unresolvable path in a writer prompt invites the writer to create it.
+Proposal: exclude `unresolved` from the writer prompt (keep it in the spec artefacts).
+

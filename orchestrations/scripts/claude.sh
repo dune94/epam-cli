@@ -4902,6 +4902,100 @@ $_test_tail"
     return 0
 }
 
+# run_repo_lint_verification <story_id> <output_file>
+#
+# THE REPO'S OWN LINT, RUN BEFORE THE COMMIT INSTEAD OF AFTER IT.
+#
+# Live 2026-08-09, AMSD-2041 on gotransit: the writer produced correct code, tsc --noEmit passed,
+# and then the commit fired the repo's husky pre-commit hook. eslint reported ONE unused constant.
+# lint-staged reverts the working tree when a task fails, so that single violation destroyed the
+# whole attempt; the loop reset the worktree to origin/develop ("no validated state to preserve")
+# and started over, and would have hit the identical wall on all 8 attempts because nothing ever
+# told the writer the rule existed.
+#
+# We already run eslint — at Step 20, AFTER the per-story commit at Step 8/9. So it only ever
+# examines work that committed successfully, and never runs for the story that cannot commit.
+# Here the failure is feedback the retry loop can act on rather than a destructive commit failure.
+#
+# SCOPE IS THE CHANGED FILES. That is exactly what lint-staged lints, so this reproduces the
+# hook's verdict. Linting the whole tree would fail every story in any brownfield repo carrying
+# pre-existing violations in files no story touched — the trap run_tsc_verification had to escape
+# with baseline diffing.
+#
+# Runs only where the repo ENFORCES lint at commit time. A repo with no pre-commit hook is held
+# to its own standard, not ours.
+run_repo_lint_verification() {
+    local story_id="$1"
+    local output_file="${2:-/dev/null}"
+    is_truthy "${SKIP_STORY_LINT_GATE:-}" && return 0
+    [ -d "$PROJECT_ROOT/.git" ] || return 0
+
+    # Does this repo check anything at commit time? Honour core.hooksPath (husky v9 sets it),
+    # then the husky default, then the stock hook location.
+    local _hook="" _hooks_path
+    _hooks_path=$(git -C "$PROJECT_ROOT" config --get core.hooksPath 2>/dev/null)
+    for _candidate in \
+        ${_hooks_path:+"$PROJECT_ROOT/$_hooks_path/pre-commit"} \
+        "$PROJECT_ROOT/.husky/pre-commit" \
+        "$PROJECT_ROOT/.git/hooks/pre-commit"; do
+        [ -f "$_candidate" ] && { _hook="$_candidate"; break; }
+    done
+    [ -n "$_hook" ] || return 0
+
+    local _eslint_bin=""
+    for _candidate in "$PROJECT_ROOT/node_modules/.bin/eslint" "$(command -v eslint 2>/dev/null)"; do
+        [ -x "$_candidate" ] && { _eslint_bin="$_candidate"; break; }
+    done
+    [ -n "$_eslint_bin" ] || return 0
+
+    # Changed = modified/added tracked files plus untracked ones, which is the set that will be
+    # staged — minus anything the ENGINE owns. Live next.gotransit.com carries untracked
+    # .epam/settings.json and .epam/codeline-facts.json which are NOT gitignored and which
+    # eslint's flat config happily accepts, so without this filter the gate fails stories over
+    # the engine's own state — work the writer neither produced nor can fix. engine_paths_filter
+    # is the same single definition the commit seam uses (lib/engine-paths.sh); the list is not
+    # restated here, because restating it is how this rule already drifted three ways. Extensions come from what the repo's own eslint will accept, probed below, so no
+    # list is baked in here.
+    local _changed
+    _changed=$( { git -C "$PROJECT_ROOT" diff --name-only --diff-filter=d 2>/dev/null
+                  git -C "$PROJECT_ROOT" diff --cached --name-only --diff-filter=d 2>/dev/null
+                  git -C "$PROJECT_ROOT" ls-files --others --exclude-standard 2>/dev/null; } \
+                | sort -u | engine_paths_filter)
+    [ -n "$_changed" ] || return 0
+
+    local _files=() _f
+    while IFS= read -r _f; do
+        [ -n "$_f" ] || continue
+        [ -f "$PROJECT_ROOT/$_f" ] || continue
+        # Ask eslint whether it has a configuration for this path rather than matching extensions
+        # ourselves; a repo that lints .vue or .svelte is covered without naming those here.
+        (cd "$PROJECT_ROOT" && "$_eslint_bin" --print-config "$_f" >/dev/null 2>&1) || continue
+        _files+=("$_f")
+    done <<< "$_changed"
+    [ ${#_files[@]} -eq 0 ] && return 0
+
+    local _lint_output _lint_exit=0
+    _lint_output=$(cd "$PROJECT_ROOT" && "$_eslint_bin" "${_files[@]}" 2>&1) || _lint_exit=$?
+    [ "$_lint_exit" -eq 0 ] && return 0
+
+    error "  [repo-lint] $story_id: the repository's own eslint rejects ${#_files[@]} changed file(s) —"
+    error "  [repo-lint]   the pre-commit hook will refuse this commit and lint-staged will REVERT the work."
+    printf '%s\n' "$_lint_output" | head -40 >&2
+
+    # Written where the retry loop looks, so the next attempt is told exactly what to fix.
+    {
+        echo ""
+        echo "## Repository Lint Failure — the commit WILL be rejected until these are fixed"
+        echo ""
+        echo "This repository runs its own checks in a pre-commit hook ($_hook)."
+        echo "These violations are in files THIS story changed. They are not optional:"
+        echo "the hook rejects the commit and lint-staged then reverts your work away."
+        echo ""
+        printf '%s\n' "$_lint_output" | head -40
+    } >> "$output_file" 2>/dev/null || true
+    return 1
+}
+
 # run_tsc_verification <story_id> <output_file>
 # Runs `tsc --noEmit` inside the retry loop (not after it) so a TypeScript
 # compile failure re-enters the same failure-analyst/InferenceLadder path as
@@ -8853,6 +8947,16 @@ ${_trimmed_amendment}"
             LAST_ATTEMPT_TSC_PASSED=true
         else
             LAST_ATTEMPT_TSC_PASSED=false
+        fi
+
+        # The repository's OWN lint, before the commit rather than at Step 20. A violation here
+        # is fatal at commit time (husky rejects, lint-staged reverts the work), so it has to be
+        # feedback inside the loop. Placed after tsc so the writer fixes type errors first, and
+        # before the test run so it does not spend a full external verification on a change that
+        # cannot commit.
+        if [ "$invoke_success" = true ] && ! run_repo_lint_verification "$story_id" "$output_file"; then
+            warning "$story_cli deliverables written but the repository's own lint rejects them"
+            invoke_success=false
         fi
 
         # External test verification — runs tests outside the agent loop so the

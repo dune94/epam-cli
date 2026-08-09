@@ -85,6 +85,54 @@ export class BashTool implements Tool {
   }
 
   /**
+   * PILLAR 1b — exploration belongs to the index, not the shell.
+   *
+   * Measured live 2026-08-09 on one story: bash ran 164 times for 261 KB (56 grep, 45 cat,
+   * 21 ls, 16 sed, 10 find) while codegraph_query — provisioned, indexed and permitted, with an
+   * unlimited tool budget — was called once. Its own description already says "instead of
+   * grepping", so the instruction is not the missing piece; enforcement is.
+   *
+   * THE VERB, NOT A SUBSTRING. The KB guard above matches literal substrings, which is right for
+   * a known-bad command but wrong here: `npm test | grep -c fail` is a test run, and blocking
+   * every command containing "grep" would break the writer's real work to save tokens — a worse
+   * trade than the one it fixes. Only the FIRST command's verb is considered, with leading
+   * environment assignments and any directory prefix stripped.
+   *
+   * Opt-in and config-supplied: EPAM_BASH_EXPLORATION_REDIRECT is a JSON map of verb to the
+   * tool that replaces it. Unset, nothing changes — a direct `epam run` is untouched until the
+   * engine sets a policy. Fails OPEN on a malformed value, like the guard above, and says so.
+   */
+  private explorationRedirect(command: string): { verb: string; use: string } | null {
+    const raw = process.env.EPAM_BASH_EXPLORATION_REDIRECT;
+    if (!raw) return null;
+    let map: Record<string, string>;
+    try {
+      map = JSON.parse(raw);
+      if (!map || typeof map !== 'object' || Array.isArray(map)) throw new Error('not an object');
+    } catch (e) {
+      process.stderr.write(
+        `[bash-exploration] ignoring malformed EPAM_BASH_EXPLORATION_REDIRECT ` +
+        `(${String((e as Error).message)}) — exploration commands are NOT being redirected\n`);
+      return null;
+    }
+
+    // Only the leading verb is considered, which is what makes `npm test | grep -c fail` a test
+    // run rather than exploration: everything after a pipe consumes the first command's output.
+    // No split is needed for that — the first token of the whole string IS the first command's
+    // verb — and an earlier version split on pipes for show. Mutation testing showed removing
+    // the split changed nothing, which is the definition of dead logic.
+    // Leading VAR=value assignments are part of the invocation, not the verb.
+    const tokens = command.trim().split(/\s+/).filter(Boolean);
+    let i = 0;
+    while (i < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[i])) i++;
+    if (i >= tokens.length) return null;
+    // A directory prefix does not change what the command is: /usr/bin/grep is grep.
+    const verb = tokens[i].replace(/^.*\//, '');
+    const use = map[verb];
+    return use ? { verb, use } : null;
+  }
+
+  /**
    * Validate the raw command input before any shell sees it.
    *
    * The failure this guards against: upstream template interpolation of an
@@ -146,6 +194,20 @@ export class BashTool implements Tool {
     // and tied to this exact call, the same category as an OS permission error.
     // Deliberately NOT a prompt injection: naming the gate and the pattern is what
     // stops the agent retrying blindly against an invisible wall.
+    const redirect = this.explorationRedirect(command);
+    if (redirect) {
+      return {
+        toolUseId: (input.toolUseId as string) ?? '',
+        content:
+          `'${redirect.verb}' is not available for exploring this codebase. Use ${redirect.use} ` +
+          `instead — it queries a real symbol index rather than scanning text, returns the exact ` +
+          `file and line, and costs a fraction of the output. Re-run your intent through that ` +
+          `tool; do not retry this command.`,
+        isError: true,
+        exitCode: 126,
+      };
+    }
+
     const blocked = this.blockedBy(command);
     if (blocked) {
       return {

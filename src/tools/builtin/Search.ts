@@ -101,17 +101,48 @@ export class SearchTool implements Tool {
         // The earlier fix made this path REACHABLE. It did not make it EQUIVALENT, and an
         // inequivalent fallback reports absence rather than failure — the same class of silent
         // wrong answer as the ENOENT it replaced.
-        const grepArgs = [
-          '-r',
-          '-n',
-          '-E',
-          caseSensitive ? '' : '-i',
-          filePattern ? `--include=${filePattern}` : '',
-          '--',
-          pattern,
-          searchPath,
-        ].filter(Boolean);
-        result = await execa('grep', grepArgs, { reject: false, timeout: 10000 });
+        // ASK THE REPOSITORY WHAT TO SEARCH, exactly as rg does.
+        //
+        // `grep -r` ignores .gitignore, so a repo-root search walks the dependency tree — 1.3 GB
+        // and 75,693 files in the live codeline. On 2026-08-09 that hit this tool's 10s timeout
+        // (23:03:49.559 -> 23:03:59.584) and the call was lost; rg would have skipped it. Third
+        // inequivalence found in this fallback, after the missing -E and the dropped --include:
+        // each earlier fix made it RUN, none made it EQUIVALENT.
+        //
+        // git grep derives the exclusions from the repository instead of a list somebody has to
+        // maintain — 31ms against grep's 285ms at that repo root, and the gap widens as
+        // node_modules grows. --untracked keeps a file the writer just created visible, which
+        // plain `git grep` would not; without it this fix would hide the writer's own work.
+        //
+        // Outside a git work tree there is nothing to derive from, so plain grep -r remains the
+        // last resort.
+        const inGitRepo = (await execa('git', ['-C', searchPath, 'rev-parse', '--is-inside-work-tree'],
+          { reject: false, timeout: 5000 })).exitCode === 0;
+
+        if (inGitRepo) {
+          const gitArgs = [
+            '-C', searchPath,
+            'grep', '--no-color', '-n', '-E', '--untracked',
+            caseSensitive ? '' : '-i',
+            '--', pattern,
+            ...(filePattern ? ['--', `*/${filePattern}`, filePattern] : []),
+          ].filter(Boolean);
+          result = await execa('git', gitArgs, { reject: false, timeout: 10000 });
+        }
+
+        if (!inGitRepo || !ran(result)) {
+          const grepArgs = [
+            '-r',
+            '-n',
+            '-E',
+            caseSensitive ? '' : '-i',
+            filePattern ? `--include=${filePattern}` : '',
+            '--',
+            pattern,
+            searchPath,
+          ].filter(Boolean);
+          result = await execa('grep', grepArgs, { reject: false, timeout: 10000 });
+        }
       }
 
       // Neither searcher ran. Reporting absence here is the one answer that must never be

@@ -30,6 +30,7 @@
 # Usage:
 #   . lib/codeline-write-perimeter.sh
 #   perimeter_apply <repo>          # lock iff repo is on the baseline branch
+#   perimeter_seal <repo>           # RUN START: lock whatever branch it is on
 #   perimeter_unlock <repo>         # reopen (writer step, teardown, reset)
 #   perimeter_is_write_allowed <repo>   # exit 0 if writes are permitted here
 
@@ -235,6 +236,38 @@ perimeter_apply() {
         perimeter_lock "$repo"
     fi
     return 0
+}
+
+# perimeter_seal <repo>
+#
+# THE RUN-START OPERATION. Locks a real checkout whatever branch it is on.
+#
+# perimeter_apply answers a different question — "is this repo in its write window?" — and
+# unlocks whenever the checkout is on a branch other than the baseline, because that is how
+# ensure_story_branch opens the window after resetting and creating the story branch. Calling
+# it at RUN START reads a LEFTOVER branch as authorisation, and at run start no branch this run
+# created can exist yet.
+#
+# Live 2026-08-09: next.metrolinx.com sat on a story branch left by a killed run, which
+# survived the preflight reset. Run start logged "writes permitted, not locking", the repo
+# stayed writable for the entire run, and a client source file was rewritten into an
+# incompatible component during the SPEC PASS — in a run that paused before the writer and
+# never started one. The two codelines on the baseline were sealed and untouched.
+#
+# The writer is unaffected: ensure_story_branch still calls perimeter_apply after it creates
+# the branch, and that reopens the repo exactly as before.
+#
+# A linked worktree is exempt in both, because git's own structure makes it per-story rather
+# than a name anyone can leave lying around.
+perimeter_seal() {
+    local repo="${1:-}"
+    [ -n "$repo" ] && [ -d "$repo" ] || return 0
+    [ -e "$repo/.git" ] || return 0                     # not a repo: not ours to lock
+    if perimeter_is_worktree "$repo"; then
+        _perim_log "$repo is a linked worktree — per-story by construction, not sealing"
+        return 0
+    fi
+    perimeter_lock "$repo"
 }
 
 # perimeter_release_all <codeline-root>

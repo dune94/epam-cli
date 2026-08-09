@@ -229,7 +229,7 @@ echo ""
 . "$SCRIPT_DIR/lib/codeline-write-perimeter.sh"
 for _cl_dir in "$JIRA_CODELINE_ROOT"/*/; do
   [ -e "${_cl_dir}.git" ] || continue
-  perimeter_apply "${_cl_dir%/}" || true
+  perimeter_seal "${_cl_dir%/}" || true
 done
 echo ""
 

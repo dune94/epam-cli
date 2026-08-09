@@ -186,7 +186,11 @@ describe('wired into the pipeline, not merely available', () => {
   it('the launcher locks every codeline before any agent runs', () => {
     const src = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/tier3-metrolinx-run.sh'), 'utf8');
     expect(src).toMatch(/codeline-write-perimeter\.sh/);
-    expect(src).toMatch(/perimeter_apply/);
+    // 2026-08-09: the run-start loop calls perimeter_SEAL, not perimeter_apply. apply answers
+    // "is this repo in its write window?" and unlocks on any non-baseline branch — at run
+    // start that reads a LEFTOVER branch as authorisation, which left a client repo writable
+    // for a whole run and a source file was rewritten during the spec pass.
+    expect(src).toMatch(/perimeter_seal/);
   });
 
   it('ensure_story_branch reopens the repo once it is on the story branch', () => {
@@ -198,7 +202,7 @@ describe('wired into the pipeline, not merely available', () => {
   it('the lock is applied AFTER the baseline reset, never before', () => {
     const src = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/tier3-metrolinx-run.sh'), 'utf8');
     expect(
-      src.indexOf('perimeter_apply'),
+      src.indexOf('perimeter_seal'),
       'locking before the reset would leave a dirty tree frozen in place',
     ).toBeGreaterThan(src.indexOf('brownfield-preflight-reset.sh'));
   });

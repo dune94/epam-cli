@@ -329,7 +329,30 @@ restore_run_checkpoint() {
         return 1
     fi
 
-    cp "$_dir/prd.json" "$PRD_FILE" || return 1
+    # A RESTORE NEVER MOVES THE PRD BACKWARDS.
+    #
+    # The parent's checkpoint PRD is frozen at post-roster — saved before the spec pass, because
+    # `save_run_checkpoint pre-writer` only ever runs inside a lane. Copying it over PRD_FILE on
+    # every resume destroys exactly what the resume exists to preserve. Live 2026-08-09 it turned
+    # the merged three-lane canonical (13 verification criteria, 14 fix sites) into 0 and 0, and
+    # blanked a lane's work-dir PRD as well.
+    #
+    # Before the skip was fixed the loss was masked: the spec pass re-ran and refilled what
+    # restore had emptied, at the cost of ~50 minutes and artefacts nobody had reviewed. With the
+    # skip correct, restoring backwards hands the writer an empty plan instead.
+    #
+    # Measured from the artefacts, not from stage bookkeeping, so it holds even when the stages
+    # are wrong — which is how this got here.
+    local _live_spec=0 _ckpt_spec=0
+    if [ -f "$PRD_FILE" ]; then
+        _live_spec=$(jq '[.stories[]? | ((.verificationCriteria // []) | length) + ((.fixSiteAnalysis // []) | length)] | add // 0' "$PRD_FILE" 2>/dev/null || echo 0)
+    fi
+    _ckpt_spec=$(jq '[.stories[]? | ((.verificationCriteria // []) | length) + ((.fixSiteAnalysis // []) | length)] | add // 0' "$_dir/prd.json" 2>/dev/null || echo 0)
+    if [ "${_live_spec:-0}" -gt "${_ckpt_spec:-0}" ]; then
+        echo "[checkpoint] KEEPING the PRD on disk: it carries ${_live_spec} spec item(s) and the checkpoint carries ${_ckpt_spec} — restoring would discard the spec pass this resume is meant to skip past" >&2
+    else
+        cp "$_dir/prd.json" "$PRD_FILE" || return 1
+    fi
     if [ -f "$_dir/profiles.json" ] && [ -n "${AGENT_PROFILES_FILE:-}" ]; then
         cp "$_dir/profiles.json" "$AGENT_PROFILES_FILE" || return 1
     fi

@@ -111,7 +111,28 @@ function verifyFindings(findings, codelines) {
       if (target.startsWith(path.resolve(repo) + path.sep)) actuallyPresent = fs.existsSync(target);
     }
 
-    if (actuallyPresent === null) { unsettled.push({ ...f, _why: 'the check could not be run' }); kept.push(f); continue; }
+    if (actuallyPresent === null) {
+      // AN OPEN QUESTION IS NOT A DEFECT.
+      //
+      // The finding claimed a mechanical basis and the check could not be executed — the
+      // subject is not resolvable in that codeline, so nothing was verified either way. Live
+      // 2026-08-09 the roster reviewer raised exactly this at severity `blocking`: it could
+      // not resolve a package's symbols because the package is not installed, said in its own
+      // evidence "this is not a defect in the brief — the brief is appropriately cautious",
+      // and both correction cycles were spent on it.
+      //
+      // The finding is KEPT and surfaced — it may well be worth a human's attention — but it
+      // is downgraded so it cannot halt anything. The signal is whether the check ran, never a
+      // reading of the prose.
+      const downgraded = { ...f, _why: 'the check could not be run — kept, but cannot block' };
+      if (downgraded.severity === 'blocking') {
+        downgraded.severity = 'advisory';
+        downgraded._downgraded = 'blocking -> advisory: the mechanical check could not be run';
+      }
+      unsettled.push(downgraded);
+      kept.push(downgraded);
+      continue;
+    }
 
     // TWO questions, in order. They are different and a single comparison cannot answer both.
     //

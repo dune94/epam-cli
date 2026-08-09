@@ -336,9 +336,17 @@ fi
 # restored away by the block just below. A registered investigator with no brief resolves to a
 # name that reads as minted and investigates with nothing, and byCodeline can point a lane
 # straight at it.
+# role-assignments.json lives in LOG_DIR rather than the config dir, so it was never on this
+# list. Live 2026-08-09: a run starting at 23:51 found the file from a run killed at 23:18,
+# naming a role the new roster never minted. The rosters are ephemeral by design, so an
+# assignment that outlives its roster points every consumer at an agent with no brief — and it
+# reads as a successful assignment to anyone diagnosing a failure. Cleared with the registries
+# it derives from, and preserved on a resume for the same reason they are.
+_ASSIGN_DIR="${_PROJECT_CFG_DIR:+${LOG_DIR:-}}"
 for _rf in "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/project-roles.json}" \
            "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/project-investigators.json}" \
-           "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/agent-profiles.json}"; do
+           "${_PROJECT_CFG_DIR:+$_PROJECT_CFG_DIR/agent-profiles.json}" \
+           "${_ASSIGN_DIR:+$_ASSIGN_DIR/role-assignments.json}"; do
     [ -n "$_rf" ] && [ -f "$_rf" ] || continue
     rm -f "$_rf" 2>/dev/null && _ROSTER_CLEARED=$((_ROSTER_CLEARED+1)) || true
 done

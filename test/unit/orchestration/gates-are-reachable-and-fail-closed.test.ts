@@ -197,3 +197,74 @@ describe('DEFECT 4: a failed re-review leaves a trace', () => {
     expect(block).toMatch(/warning|error/);
   });
 });
+
+/**
+ * DEFECT 6, found by the SECOND review pass — the same defect as (2), in a file pass 1 did not
+ * check the same way.
+ *
+ * run_prd_change_reviewer gates changes to the PRD itself: ac_patch, tc_patch, skill_note,
+ * profile_addendum. Acceptance criteria are supposed to be immutable, so this is the gate that
+ * stops them drifting. It defaulted to `pass` in four separate places, including an explicit
+ *
+ *     || echo '{"verdict":"pass","issues":[],"reason":"reviewer unavailable"}'
+ *
+ * — a reviewer that could not be reached approves the change and says so in the reason field.
+ *
+ * Pass 1 missed this because I grepped for the `jq ... // "approved"` shape and found the
+ * python `.get('verdict','pass')` shape only in contextualize-stories.sh. Two files, one
+ * pattern, one search that only covered one of them. That is the argument for the second pass.
+ *
+ * The documented exemption stays: with NO gate model configured the reviewer is disabled and
+ * returns pass, which is a deliberate opt-out rather than a failure to review. The distinction
+ * is between "not asked" and "asked and got no answer".
+ */
+describe('DEFECT 6: an unreviewed PRD change is not approved', () => {
+  function reviewer(opts: { configured?: boolean; output?: string; exit?: number }) {
+    const src = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
+    const start = src.indexOf('run_prd_change_reviewer() {');
+    const fn = src.slice(start, src.indexOf('\n}\n', start) + 3);
+    const dir = mkdtempSync(join(tmpdir(), 'prdrev-')); dirs.push(dir);
+    writeFileSync(join(dir, 'ai-run.sh'),
+      `#!/usr/bin/env bash\ncat > /dev/null\nprintf '%s' ${JSON.stringify(opts.output ?? '')}\nexit ${opts.exit ?? 0}\n`);
+    execFileSync('chmod', ['+x', join(dir, 'ai-run.sh')]);
+    const out = execFileSync('bash', ['-c',
+      `SCRIPT_DIR=${JSON.stringify(dir)}
+       ORCH_GATE_PROVIDER=${JSON.stringify(opts.configured === false ? '' : 'stub')}
+       ORCH_GATE_MODEL="stub-model"
+       ORCH_GATE_ALLOWED_TOOLS=""
+       log() { :; }; warning() { :; }; info() { :; }; success() { :; }; error() { :; }
+${fn}
+       run_prd_change_reviewer S1 ac_patch '{"a":1}' '{"a":2}' 2>/dev/null`,
+    ], { encoding: 'utf8' });
+    return out.trim().split('\n').filter(Boolean).pop() ?? '';
+  }
+
+  it('a clean pass verdict still passes', () => {
+    expect(reviewer({ output: '{"verdict":"pass","issues":[],"reason":"fine"}' })).toBe('pass');
+  });
+
+  it('a clean fail verdict still fails', () => {
+    expect(reviewer({ output: '{"verdict":"fail","issues":["bad"],"reason":"no"}' })).toBe('fail');
+  });
+
+  it('an UNREACHABLE reviewer does not approve the change', () => {
+    expect(
+      reviewer({ output: '', exit: 1 }),
+      'the reviewer could not be reached and the acceptance-criteria change was approved',
+    ).not.toBe('pass');
+  });
+
+  it('UNPARSEABLE output does not approve the change', () => {
+    expect(reviewer({ output: 'I could not decide, sorry' })).not.toBe('pass');
+  });
+
+  it('JSON with no verdict key does not approve the change', () => {
+    expect(reviewer({ output: '{"issues":[],"reason":"forgot the verdict"}' })).not.toBe('pass');
+  });
+
+  it('a reviewer that is NOT CONFIGURED still passes — disabled is not the same as failed', () => {
+    // The documented opt-out: no gate model means the reviewer was never asked. Turning that
+    // into a block would stop every run that does not configure a gate provider.
+    expect(reviewer({ configured: false })).toBe('pass');
+  });
+});

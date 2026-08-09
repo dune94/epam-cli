@@ -6011,21 +6011,33 @@ Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[\"<issue1>\"],\"reason\":\"<15
         EPAM_MAX_TOOL_CALLS="${PRD_CHANGE_REVIEWER_MAX_TOOL_CALLS:-6}" \
         bash "$SCRIPT_DIR/ai-run.sh" --provider "$gate_provider" \
         ${gate_model:+--model "$gate_model"} \
-        2>/dev/null || echo '{"verdict":"pass","issues":[],"reason":"reviewer unavailable"}')
+        2>/dev/null || echo '{"verdict":"fail","issues":["the reviewer could not be reached — the change was NOT reviewed"],"reason":"reviewer unavailable"}')
 
+    # ASKED AND GOT NO ANSWER IS NOT APPROVAL.
+    #
+    # These defaulted to 'pass' in four places, including an explicit
+    # {"verdict":"pass","reason":"reviewer unavailable"} above — a reviewer that could not be
+    # reached approved the change and said so in the reason field. This gate covers ac_patch and
+    # tc_patch, so that silently accepted edits to acceptance criteria, which are supposed to be
+    # immutable. code-review-cycle.sh settled the same question on 2026-07-23: 'SAFE default =
+    # BLOCK, never silently approve an unreviewed change'.
+    #
+    # The documented opt-out above is untouched: with NO gate model configured the reviewer is
+    # disabled and returns pass, because it was never asked. That is a different state from
+    # asking and getting nothing back.
     local verdict=""
     verdict=$(echo "$review_raw" | python3 -c "
 import sys, json, re
 text = sys.stdin.read()
 try:
     obj = json.loads(text.strip())
-    print(obj.get('verdict','pass'))
+    print(obj.get('verdict','fail'))
     sys.exit(0)
 except Exception:
     pass
 m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
-print(m.group(1) if m else 'pass')
-" 2>/dev/null || echo "pass")
+print(m.group(1) if m else 'fail')
+" 2>/dev/null || echo "fail")
 
     local issues=""
     issues=$(echo "$review_raw" | python3 -c "

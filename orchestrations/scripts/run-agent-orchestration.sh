@@ -5211,8 +5211,19 @@ COORD_EOF
 
 $coord_prompt"
         # No story_id — phase-level coordination call, not tied to a single story.
+        # PIPESTATUS, not `[ -s "$coord_log" ]` alone. This is a PIPELINE and its exit status is
+        # tee's — always 0 — so `set -e` cannot help either (no `set -o pipefail`). Judging
+        # success by "the log is non-empty" meant an agent that errored after writing a single
+        # line counted as having coordinated the phase. The same trap is already documented at
+        # the assessment call sites in this file; this one was missed.
+        #
+        # BOTH conditions are required: a clean exit that produced nothing did no work, and
+        # output from a failed run is not a result.
         run_orch_prompt_with_tools "$_hpc_prompt" "spec-coordinator" 2>&1 | tee "$coord_log"
-        if [ -s "$coord_log" ]; then
+        local _hpc_rc="${PIPESTATUS[0]}"
+        if [ "$_hpc_rc" -ne 0 ]; then
+            warning "Hybrid pre-phase coordination attempt $((_hpc_attempt + 1)) FAILED (exit ${_hpc_rc}) — its output is not a result"
+        elif [ -s "$coord_log" ]; then
             _hpc_ok=1
         else
             [ "$_hpc_attempt" -lt 1 ] && warning "Hybrid pre-phase coordination attempt 1 produced no output — retrying" || warning "Hybrid pre-phase coordination had issues — continuing with bash fallback"
@@ -7847,7 +7858,15 @@ while true; do
         # claude.sh reads review-feedback-<id>.json (injects it into the impl
         # prompt) and its existing failure-analyst self-heal + agent-KB run on any
         # test failure during the re-implementation.
-        run_story_with_watchdog "$_fb_story" "$LOG_DIR/main-${_fb_story}-rereview${_review_cycle}.log" || true
+        # NOT `|| true`. This is the one attempt to address a rejection the reviewer already
+        # made; discarding its exit status meant the re-implementation could fail outright and
+        # the loop moved on as though it had run, burning a review cycle on unchanged code with
+        # nothing in the log to say why.
+        _rr_rc=0
+        run_story_with_watchdog "$_fb_story" "$LOG_DIR/main-${_fb_story}-rereview${_review_cycle}.log" || _rr_rc=$?
+        if [ "$_rr_rc" -ne 0 ]; then
+            warning "  Re-implementation of $_fb_story FAILED (exit ${_rr_rc}) — the reviewer's feedback was not addressed this cycle; see $LOG_DIR/main-${_fb_story}-rereview${_review_cycle}.log"
+        fi
     done
     _review_cycle=$((_review_cycle + 1))
 done
@@ -10491,44 +10510,13 @@ if m: print(m.group(1)); sys.exit(0)
 # Step 4.2: Testing gates (SAST + spec validation)
 # ──────────────────────────────────────────────
 run_testing_gates "$PHASE"
+# _run_vitest_check was REMOVED 2026-08-09. It ran vitest and tsc and returned 1/2 on failure,
+# and had ZERO call sites — 25 lines of gate that could never run. run_unit_tests_gate does the
+# same work inline, including the identical "Type check FAILED (tsc)" path, so this was a
+# superseded duplicate rather than a gate someone forgot to wire. A dead gate is worse than no
+# gate: in the log it is indistinguishable from one that passed.
+# gates-are-reachable-and-fail-closed.test.ts now fails if any gate loses its last call site.
 
-# ──────────────────────────────────────────────
-# run_unit_tests_gate <phase_id>
-# Step 4.5: Independent unit test verification.
-# Runs vitest (unit tests) and tsc --noEmit (type check) directly.
-# Blocks phase gate if any suite fails. Skippable with SKIP_UNIT_TEST_GATE=true.
-# ──────────────────────────────────────────────
-# ── _run_vitest_and_tsc <gate_log> ────────────────────────────────────────────
-# Returns 0 if both pass. Outputs vitest_output to stdout for capture.
-# Sets VITEST_OUTPUT and VITEST_EXIT as side-effects via files to avoid
-# subshell scoping issues.
-_run_vitest_check() {
-    local gate_log="$1"
-    local _node_bin="$2"
-    local out_file
-    out_file=$(mktemp)
-
-    local vitest_exit=0
-    timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" "$_node_bin" ./node_modules/.bin/vitest run > "$out_file" 2>&1 || vitest_exit=$?
-    cat "$out_file" >> "$gate_log"
-
-    if [ "$vitest_exit" -ne 0 ]; then
-        cat "$out_file"
-        rm -f "$out_file"
-        return 1
-    fi
-
-    local tsc_exit=0
-    "$_node_bin" ./node_modules/.bin/tsc --noEmit >> "$gate_log" 2>&1 || tsc_exit=$?
-    if [ "$tsc_exit" -ne 0 ]; then
-        error "  Type check FAILED (tsc)"
-        rm -f "$out_file"
-        return 2  # tsc failure — not retryable via bug stories
-    fi
-
-    rm -f "$out_file"
-    return 0
-}
 
 # ── _create_bug_fix_phase <vitest_output> <parent_phase> <bug_phase> <model> <provider> ──
 # Writes BUG-* stories into PRD and registers them under implementationOrder[$bug_phase].
@@ -10745,7 +10733,10 @@ run_unit_tests_gate() {
     if [ "$vitest_exit" -eq 0 ]; then
         log "  Running type check (tsc --noEmit)..."
         local tsc_exit=0
-        cd "$PROJECT_ROOT" && "$_node_bin" ./node_modules/.bin/tsc --noEmit >> "$gate_log" 2>&1 || tsc_exit=$?
+        # Bounded like the npm install and vitest calls above. tsc was the one unbounded
+        # command in this gate, so a type-check that never returns hung the phase with no
+        # watchdog over it.
+        cd "$PROJECT_ROOT" && timeout "${EPAM_TSC_TIMEOUT_SECS:-${EPAM_TEST_TIMEOUT_SECS:-300}}" "$_node_bin" ./node_modules/.bin/tsc --noEmit >> "$gate_log" 2>&1 || tsc_exit=$?
         if [ "$tsc_exit" -eq 0 ]; then
             success "Step 4.5: Unit test gate PASSED"
             "$SCRIPT_DIR/update-monitor.sh" event "unit_test_pass" \

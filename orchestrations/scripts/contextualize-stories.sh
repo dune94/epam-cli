@@ -1288,13 +1288,18 @@ import sys, json, re
 text = sys.stdin.read()
 try:
     obj = json.loads(text.strip())
-    print(obj.get('verdict','pass'))
+    # UNREVIEWED IS NOT APPROVED. Defaulting a missing verdict to 'pass' accepts an estimate
+    # nobody reviewed. code-review-cycle.sh settled this question on 2026-07-23 — 'SAFE default
+    # = BLOCK, never silently approve an unreviewed change' — and this path answered it the
+    # opposite way. 'fail' here reverts to the pre-CPA values, which is the conservative
+    # outcome: the story keeps the estimate it already had.
+    print(obj.get('verdict','fail'))
     sys.exit(0)
 except Exception:
     pass
 m = re.search(r'\"verdict\"\s*:\s*\"(pass|fail)\"', text)
-print(m.group(1) if m else 'pass')
-" 2>/dev/null || echo "pass")
+print(m.group(1) if m else 'fail')
+" 2>/dev/null || echo "fail")
         if [ "$_cpa_verdict" = "fail" ]; then
           warning "  $sid: CPA estimate REJECTED by reviewer — reverting to pre-CPA values"
           jq --arg id "$sid" --argjson before "$_cpa_before" \

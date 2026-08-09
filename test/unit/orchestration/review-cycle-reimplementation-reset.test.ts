@@ -140,8 +140,11 @@ describe('the reset is actually wired into the re-implementation cycle', () => {
     const anchor = 'Re-implementing $_fb_story to address reviewer feedback';
     const i = SRC.indexOf(anchor);
     expect(i, 'the re-implementation log line is gone — this is anchored to nothing').toBeGreaterThan(-1);
-    const before = SRC.slice(Math.max(0, i - 400), i);
-    const after = SRC.slice(i, i + 400);
+    // The window has to cover the whole block, not a fixed 400 chars: a comment added above
+    // the call on 2026-08-09 pushed run_story_with_watchdog outside it, and the test failed
+    // for the distance between two lines rather than for their order.
+    const before = SRC.slice(Math.max(0, i - 600), i);
+    const after = SRC.slice(i, i + 1200);
     expect(before + after, 'the retry never resets the story it is about to re-run — ' +
       'is_story_completed will skip it exactly as it did live on 2026-07-30')
       .toMatch(/_reset_story_for_reimplementation/);

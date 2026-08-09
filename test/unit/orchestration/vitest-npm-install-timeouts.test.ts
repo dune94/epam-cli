@@ -33,10 +33,31 @@ describe('run-agent-orchestration.sh — every vitest/npm install call is now bo
     expect(block).toMatch(/timeout "\$\{EPAM_TEST_TIMEOUT_SECS:-300\}" "\$_node_bin" \.\/node_modules\/\.bin\/vitest run/);
   });
 
-  it('_run_vitest_check() (shared helper, Step 4.5 family) is wrapped with timeout', () => {
-    const idx = orchSrc.indexOf('_run_vitest_check() {');
-    const block = orchSrc.slice(idx, idx + 500);
-    expect(block).toMatch(/timeout "\$\{EPAM_TEST_TIMEOUT_SECS:-300\}" "\$_node_bin" \.\/node_modules\/\.bin\/vitest run/);
+  it("the unit-test gate's tsc run is wrapped with timeout too", () => {
+    // Found while re-pointing the test above: npm install (180s) and vitest (300s) are both
+    // bounded and tsc was not, so a type-check that never returns hangs the phase with no
+    // watchdog above it. The deleted helper had the same gap, which is why removing it did not
+    // surface this on its own.
+    const idx = orchSrc.indexOf('run_unit_tests_gate() {');
+    const body = orchSrc.slice(idx, orchSrc.indexOf('\n}\n', idx));
+    // Match the INVOCATION, not the log line that mentions it: `log "Running type check
+    // (tsc --noEmit)..."` appears first and would make this assert against a string literal.
+    const tscCall = body.split('\n').find((l) => l.includes('.bin/tsc') && !l.trim().startsWith('#'));
+    expect(tscCall, 'the gate no longer type-checks at all').toBeTruthy();
+    expect(tscCall, 'an unbounded tsc hangs the phase indefinitely').toMatch(/timeout /);
+  });
+
+  it("the unit-test gate's own vitest run is wrapped with timeout", () => {
+    // Was asserted against _run_vitest_check, a 25-line helper with ZERO call sites that was
+    // deleted on 2026-08-09 as a superseded duplicate. The requirement is unchanged and now
+    // points at the gate that actually runs: an unbounded vitest hangs the phase forever.
+    const idx = orchSrc.indexOf('run_unit_tests_gate() {');
+    expect(idx, 'run_unit_tests_gate not found').toBeGreaterThan(-1);
+    const body = orchSrc.slice(idx, orchSrc.indexOf('\n}\n', idx));
+    const vitestCall = body.split('\n').find((l) => l.includes('.bin/vitest run'));
+    expect(vitestCall, 'the gate no longer runs vitest at all').toBeTruthy();
+    expect(vitestCall, 'the vitest run is unbounded — a hang stalls the phase indefinitely')
+      .toMatch(/timeout /);
   });
 
   it('Unit Test Gate (Step 4.5) npm install is wrapped with timeout and distinguishes a timeout (124) from a generic failure', () => {

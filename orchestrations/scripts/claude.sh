@@ -3516,6 +3516,30 @@ pattern = re.compile(cfg['importPattern'])
 # languages/stacks rather than hardcoding '.ts'/'.js'.
 scan_extensions = tuple(cfg.get('scanFileExtensions', []))
 imported = set()
+
+# WHICH FILES DID THIS STORY CHANGE?
+#
+# Needed to tell "this repo has always imported that" from "this story started importing that".
+# An installed-but-undeclared package is a brownfield fact of life in the first case and a
+# broken commit in the second, and the check below treats them differently.
+#
+# Uncommitted state is the right question at the point this runs: the writer's work is still in
+# the working tree when the dependency check fires. If git cannot answer, the set stays empty and
+# every import keeps the older, lenient treatment — a missing signal must not invent failures.
+_changed_files = set()
+try:
+    _st = subprocess.run(['git', '-C', project_root, 'status', '--porcelain'],
+                         capture_output=True, text=True, timeout=30)
+    for _line in _st.stdout.splitlines():
+        _p = _line[3:].strip() if len(_line) > 3 else ''
+        if ' -> ' in _p:            # renames report "old -> new"; the new path is the one that exists
+            _p = _p.split(' -> ')[-1]
+        _p = _p.strip('"')
+        if _p:
+            _changed_files.add(os.path.normpath(os.path.join(project_root, _p)))
+except Exception:
+    pass
+imported_in_changed = set()
 # Monorepos can nest an independent sub-project (its own package.json/requirements.txt/
 # etc.) inside project_root — e.g. a standalone React tool under scripts/. Its imports
 # are declared in ITS OWN manifest, not the root's, so scanning into it here would find
@@ -3564,6 +3588,13 @@ for root, dirs, files in os.walk(project_root):
             pkg = next((g for g in m.groups() if g), None)
             if pkg:
                 imported.add(pkg)
+                # A directory the story changed counts too: a NEW file lands inside one, and
+                # git reports the directory rather than each file when it is untracked.
+                _fp = os.path.normpath(fpath)
+                if _fp in _changed_files or any(
+                    _fp.startswith(_c + os.sep) for _c in _changed_files
+                ):
+                    imported_in_changed.add(pkg)
 
 # A declared entry satisfies an import if it matches exactly or is a prefix
 # component (handles npm scoped packages / subpath imports generically,
@@ -3698,7 +3729,24 @@ for pkg in sorted(imported):
     # satisfiable at runtime — skip the install to avoid modifying a brownfield
     # repo's package.json unnecessarily.
     top_pkg = pkg.split('/')[0] if not pkg.startswith('@') else '/'.join(pkg.split('/')[:2])
-    if os.path.isdir(os.path.join(project_root, 'node_modules', top_pkg)):
+    # INSTALLED IS NOT DECLARED.
+    #
+    # This skip exists for brownfield repos carrying undeclared transitive deps and pre-existing
+    # installs, where rewriting the manifest for code no story touched is not our business. That
+    # reasoning does not survive contact with a package THIS STORY introduced: the writer runs
+    # an install, the package lands in node_modules — which is gitignored — and the import ships
+    # declared by nothing.
+    #
+    # Live 2026-08-09, AMSD-2041 on gotransit: the first story this pipeline committed to a
+    # client codeline did not build from a clean checkout for exactly this reason, and tsc
+    # --noEmit passed the whole way because tsc resolves against node_modules, never against
+    # what the manifest can reproduce.
+    #
+    # So the skip now applies only where its reasoning holds: an import in a file the story did
+    # not touch. Satisfiable at runtime in a directory that is never committed is not
+    # satisfiable at all.
+    if os.path.isdir(os.path.join(project_root, 'node_modules', top_pkg)) \
+            and pkg not in imported_in_changed:
         continue
     missing.append(pkg)
 

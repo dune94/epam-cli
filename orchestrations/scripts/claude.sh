@@ -1765,13 +1765,34 @@ _current_lane() {
 _render_technical_notes() {
     local _notes="${1:-}" _cl="${2:-}"
     if [ -z "$_notes" ]; then echo "None specified"; return 0; fi
+    # THIS LANE'S ENTRY SUPERSEDES THE UNION.
+    #
+    # technicalNotes carries a flat `files` (the union across every codeline) beside a
+    # `perCodeline` map holding the correct per-lane lists. The object-scoping below narrows
+    # per-codeline OBJECTS, but `files` is an ARRAY and sailed straight through, so the prompt
+    # stated the union AND the lane's own list. Live 2026-08-09 gotransit's writer prompt named a
+    # component that exists only in next.metrolinx.com, twice, and the writer duly created it.
+    #
+    # perCodeline[$cl] is merged OVER the top level key-by-key, so a key it defines wins and a key
+    # it does not mention is preserved — dropping unrelated guidance would be its own defect. The
+    # map itself is then never rendered raw, which also stops the other lanes' paths reaching the
+    # prompt by that second route. Nothing here names a specific key; whatever the spec pass
+    # produces is scoped the same way.
     echo "$_notes" | jq -r --arg cl "$_cl" '
-        to_entries
+        (if type == "object" then . else {} end) as $all
+        | (($all.perCodeline // {})[$cl] // {}) as $scoped
+        | (($all | del(.perCodeline)) * $scoped)
+        # Coercing a non-object to {} above removed the jq ERROR that used to trigger the
+        # "None specified" fallback, so an empty or malformed notes value rendered as a blank
+        # line instead. Say it explicitly: a prompt section that silently renders nothing reads
+        # as "no constraints" to the writer.
+        | if (. | length) == 0 then "None specified" else (
+          to_entries
         | map(if (.value | type) == "object" and ($cl | length) > 0 and (.value | has($cl))
               then {key: .key, value: (.value[$cl])}
               else . end)
         | map("- \(.key): \(.value)")
-        | join("\n")' 2>/dev/null || echo "None specified"
+        | join("\n")) end' 2>/dev/null || echo "None specified"
 }
 
 build_implementation_prompt() {

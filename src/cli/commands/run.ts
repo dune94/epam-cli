@@ -121,12 +121,12 @@ export function createRunCommand(): Command {
         // already sets, so a direct `epam run` simply records less rather than erroring.
         onToolCall: (toolName, input) => {
           void activityLogger?.emit(agentName, 'tool_run',
-            { tool: toolName, args: summariseToolArgs(input) },
+            { tool: toolLabel(toolName), args: summariseToolArgs(input) },
             { storyId: storyLabel, phase: phaseLabel }).catch(() => {});
         },
         onToolResult: (toolName, _result, isError, meta) => {
           void activityLogger?.emit(agentName, 'tool_result',
-            { tool: toolName, ok: !isError, ms: meta?.durationMs ?? null, bytes: meta?.bytes ?? 0 },
+            { tool: toolLabel(toolName), ok: !isError, ms: meta?.durationMs ?? null, bytes: meta?.bytes ?? 0 },
             { storyId: storyLabel, phase: phaseLabel }).catch(() => {});
         },
       });
@@ -210,4 +210,18 @@ export function summariseToolArgs(
  */
 export function resolveAgentLabel(env: NodeJS.ProcessEnv): string {
   return env.EPAM_AGENT_NAME || env.EPAM_AGENT_ROLE || 'epam-run';
+}
+
+/**
+ * The name an activity event is filed under.
+ *
+ * Live 2026-08-09, 1 event of 193 recorded tool "" — the provider emitted a tool_use block with
+ * real arguments and no name, and the executor answered "Tool '' not found". A genuine event,
+ * but filed under an empty string it aggregates into nothing: it silently under-counts whichever
+ * call it was and leaves a hole in the cost attribution this logging exists to provide. A
+ * measurement that quietly drops rows is worse than one that is obviously missing.
+ */
+export function toolLabel(name: string | undefined | null): string {
+  const trimmed = (name ?? '').trim();
+  return trimmed === '' ? '(unnamed)' : trimmed;
 }

@@ -32,7 +32,7 @@ import { tmpdir } from 'node:os';
 import { AgentActivityLogger } from '../../../src/logging/AgentActivityLogger';
 import { AgentRunner } from '../../../src/agent/AgentRunner';
 import { createTools } from '../../../src/tools/createTools';
-import { resolveAgentLabel } from '../../../src/cli/commands/run';
+import { resolveAgentLabel, toolLabel } from '../../../src/cli/commands/run';
 
 const ROOT = join(__dirname, '../../..');
 const dirs: string[] = [];
@@ -186,5 +186,36 @@ describe('DEFECT 3: events are attributed to the agent the orchestration named',
 
   it('the generic fallback remains for a direct epam run', () => {
     expect(resolveAgentLabel({} as NodeJS.ProcessEnv)).toBe('epam-run');
+  });
+});
+
+/**
+ * DEFECT 4: a tool call with no name was logged as no name at all.
+ *
+ * Live 2026-08-09, 1 event of 193:
+ *
+ *     {"type":"tool_run","detail":{"tool":"","args":{"path":".../src/services/contentstack.ts"}}}
+ *     {"type":"tool_result","detail":{"tool":"","ok":false,"ms":0,"bytes":17}}
+ *
+ * The provider emitted a tool_use block with real arguments and no name; the executor answered
+ * "Tool '' not found" (17 bytes). A genuine event worth recording — but recorded as an empty
+ * string it aggregates into nothing, silently under-counting whichever call it was and leaving a
+ * hole in exactly the cost attribution this logging exists to provide.
+ *
+ * Small — 1 in 193 — and the reason to fix it is that every number in the token investigation
+ * comes from this data. A measurement that quietly drops rows is worse than one that is missing.
+ */
+describe('DEFECT 4: an unnamed tool call is labelled, not blank', () => {
+  it('a missing name becomes an explicit label', () => {
+    expect(toolLabel(undefined)).toBe('(unnamed)');
+    expect(toolLabel('')).toBe('(unnamed)');
+  });
+
+  it('a real name is untouched', () => {
+    expect(toolLabel('read_file')).toBe('read_file');
+  });
+
+  it('whitespace is not a name', () => {
+    expect(toolLabel('   ')).toBe('(unnamed)');
   });
 });

@@ -20,6 +20,14 @@ export class ReadFileTool implements Tool {
           description: 'File encoding (default: utf-8)',
           enum: ['utf-8', 'base64'],
         },
+        startLine: {
+          type: 'integer',
+          description: 'First line to return, 1-based. Omit to start at the beginning.',
+        },
+        endLine: {
+          type: 'integer',
+          description: 'Last line to return, inclusive. Omit to read to the end of the file.',
+        },
         force: {
           type: 'boolean',
           description:
@@ -40,6 +48,33 @@ export class ReadFileTool implements Tool {
    */
   private alreadySent = new Map<string, string>();
 
+  /**
+   * Line bounds, accepting the string forms models actually send. Refused rather than coerced
+   * to a default: a range silently reinterpreted is how the caller comes to believe it saw a
+   * window it never saw.
+   */
+  private parseRange(
+    input: Record<string, unknown>,
+  ): { startLine?: number; endLine?: number } | { error: string } {
+    const read = (key: 'startLine' | 'endLine'): number | undefined | { error: string } => {
+      const raw = input[key];
+      if (raw === undefined || raw === null || raw === '') return undefined;
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < 1) {
+        return { error: `'${key}' must be a 1-based integer line number, got ${JSON.stringify(raw)}.` };
+      }
+      return n;
+    };
+    const startLine = read('startLine');
+    if (startLine && typeof startLine === 'object') return startLine;
+    const endLine = read('endLine');
+    if (endLine && typeof endLine === 'object') return endLine;
+    if (typeof startLine === 'number' && typeof endLine === 'number' && endLine < startLine) {
+      return { error: `'endLine' (${endLine}) is before 'startLine' (${startLine}).` };
+    }
+    return { startLine: startLine as number | undefined, endLine: endLine as number | undefined };
+  }
+
   async execute(input: Record<string, unknown>): Promise<ToolResult> {
     const filePath = input.path as string;
     const encoding = (input.encoding as BufferEncoding) ?? 'utf-8';
@@ -47,7 +82,43 @@ export class ReadFileTool implements Tool {
     try {
       const resolved = path.resolve(filePath);
       const content = await fs.readFile(resolved, encoding);
-      const text = String(content);
+      // The digest identifies the FILE'S STATE, so it is taken from the whole file before any
+      // window is applied. Hashing the excerpt instead made every different window a different
+      // "file" and defeated the dedupe entirely — a full read followed by a windowed read of the
+      // same unchanged file was sent twice.
+      const fullText = String(content);
+      let text = fullText;
+
+      // A REQUESTED WINDOW IS THE WINDOW RETURNED.
+      //
+      // These parameters did not exist. The live writer sent startLine on 20+ calls and received
+      // the ENTIRE 537-line file every time — it believed it was paging through a large file 50
+      // lines at a time while being handed all 537 lines on each call, then asked again because
+      // it never got the window it asked for. That is a second, independent contributor to the
+      // 1.1 MB of read_file traffic measured in one attempt.
+      //
+      // Strings are accepted deliberately: every live call sent startLine: "400", not 400.
+      // Models emit JSON numbers as strings routinely, and a parameter that only works when the
+      // type is exactly right is a parameter that mostly does not work.
+      const range = this.parseRange(input);
+      if ('error' in range) {
+        return { toolUseId: '', content: `Error: ${range.error}`, isError: true };
+      }
+      if (range.startLine !== undefined || range.endLine !== undefined) {
+        const lines = text.split('\n');
+        const total = lines.length;
+        const from = Math.max(1, range.startLine ?? 1);
+        const to = Math.min(total, range.endLine ?? total);
+        if (from > total) {
+          return {
+            toolUseId: '',
+            content: `${resolved} has only ${total} lines; startLine ${from} is past the end. ` +
+              `Nothing was returned — this is a statement about the request, not the file.`,
+            isError: false,
+          };
+        }
+        text = `[${resolved} lines ${from}-${to} of ${total}]\n` + lines.slice(from - 1, to).join('\n');
+      }
 
       // RE-READING A FILE YOU ALREADY HAVE IS THE LARGEST TOKEN COST MEASURED.
       //
@@ -64,7 +135,7 @@ export class ReadFileTool implements Tool {
       // and the notice names the escape hatch, because context compaction can genuinely evict
       // earlier output and an agent that no longer has the file must be able to get it back.
       if (process.env.EPAM_READ_DEDUPE === '1' && input.force !== true) {
-        const digest = createHash('sha256').update(text).digest('hex').slice(0, 16);
+        const digest = createHash('sha256').update(fullText).digest('hex').slice(0, 16);
         const seen = this.alreadySent.get(resolved);
         if (seen === digest) {
           return {

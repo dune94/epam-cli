@@ -166,6 +166,16 @@ git_add_client_outputs() {
     # warning. A non-zero exit with an EMPTY index, when there was something to stage, is a real
     # failure and still fails. The comment above already predicted this class ("returns non-zero
     # in ordinary situations") without handling it.
+    # A TIMEOUT IS NEVER SUCCESS, whatever the index looks like. `timeout` reports 124, and a
+    # wedged git is a different condition from git objecting to an ignored pathspec: the repo
+    # may be locked or the filesystem hung, and a partially-populated index proves nothing about
+    # whether the rest would have staged. Checked BEFORE the index, or the index check silently
+    # converts a hang into a clean commit — which it did, until
+    # per-story-commit-and-partial-merge.test.ts caught it.
+    if [ "$_rc" -eq 124 ]; then
+        return $_rc
+    fi
+
     local _staged _pending
     # wc -l, not `grep -c . || echo 0`: on empty input grep prints 0 AND exits 1, so the
     # fallback appends a second 0 and the numeric comparison below errors out.

@@ -102,22 +102,10 @@ function provisionPlugins(codelines) {
  * agents is not a trade worth making.
  */
 function mintTools(codelines) {
-  const READ_ONLY_BUILTINS = ['read_file', 'list_files', 'search'];
-  const names = [];
-  for (const cl of codelines) {
-    try {
-      const settings = JSON.parse(fs.readFileSync(path.join(cl.path, '.epam', 'settings.json'), 'utf8'));
-      for (const entry of (settings.tools || [])) {
-        try {
-          for (const t of (require(entry).tools || [])) {
-            const n = t && (t.name || (t.definition && t.definition.name));
-            if (typeof n === 'string' && n) names.push(n);
-          }
-        } catch { /* one unloadable plugin must not blank the grant */ }
-      }
-    } catch { /* this codeline has no plugins */ }
-  }
-  return [...new Set([...READ_ONLY_BUILTINS, ...names])].join(',');
+  // One implementation, shared with specAgentEnv. This used to carry its own
+  // READ_ONLY_BUILTINS literal, and the spec pass carried a different one — which is how the
+  // mint could see codegraph_query while every spec-mode agent could not. See lib/agent-tools.js.
+  return require('./lib/agent-tools.js').readOnlyToolGrant(codelines.map((c) => c && c.path));
 }
 
 /**

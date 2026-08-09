@@ -1168,18 +1168,56 @@ const MANIFEST_GROUNDING_BLOCK = [
  * is written here. An explicit SPEC_MODE_MAX_TOOL_CALLS still wins — an operator capping cost
  * must not be silently overridden.
  */
+/**
+ * Spec-pass defaults, read from orchestrations/config beside the other operator knobs.
+ *
+ * NOT cached across calls with a baked fallback: a missing or unusable value THROWS. Falling
+ * back to a literal would put the number back in the engine and would do it silently on the
+ * one run the config failed to load — the shape of every fail-open gate found in this pipeline.
+ * Same stance as protectedRoles(): refuse rather than proceed on an assumed value.
+ */
+function specModeDefaults() {
+  const file = process.env.EPAM_SPEC_MODE_DEFAULTS_FILE
+    || path.join(__dirname, '..', 'config', 'spec-mode-defaults.json');
+  let cfg;
+  try {
+    cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (e) {
+    throw new Error(`[spec-mode] cannot read tool-call budgets from ${file}: ${e.message}`);
+  }
+  const tc = (cfg && cfg.toolCalls) || {};
+  const need = (key) => {
+    const v = tc[key];
+    if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) {
+      throw new Error(`[spec-mode] ${file} — toolCalls.${key} must be a positive number, got ${JSON.stringify(v)}`);
+    }
+    return v;
+  };
+  const perSeam = tc.perSeam && typeof tc.perSeam === 'object' ? tc.perSeam : {};
+  return { perAgent: need('perAgent'), perCodelineSurvey: need('perCodelineSurvey'), perSeam };
+}
+
 function surveyToolBudget(codelines, env = process.env) {
   if (env.SPEC_MODE_MAX_TOOL_CALLS) return String(env.SPEC_MODE_MAX_TOOL_CALLS);
   const n = Math.max(1, (Array.isArray(codelines) ? codelines : []).filter(Boolean).length);
-  const perCodeline = parseInt(env.EPAM_SURVEY_TOOL_CALLS_PER_CODELINE || '', 10);
-  const rate = Number.isFinite(perCodeline) && perCodeline > 0 ? perCodeline : 8;
+  const declared = parseInt(env.EPAM_SURVEY_TOOL_CALLS_PER_CODELINE || '', 10);
+  const rate = Number.isFinite(declared) && declared > 0
+    ? declared
+    : specModeDefaults().perCodelineSurvey;
   return String(n * rate);
 }
 
 function specAgentEnv(env = process.env, repoPath = '') {
   const out = {};
   if (env.SPEC_MODE_MAX_OUTPUT_TOKENS) out.EPAM_MAX_OUTPUT_TOKENS = env.SPEC_MODE_MAX_OUTPUT_TOKENS;
-  out.EPAM_ALLOWED_TOOLS = env.SPEC_MODE_ALLOWED_TOOLS || 'read_file,list_files,search';
+  // DERIVED from the codeline, not listed here. The literal that used to sit on this line
+  // granted read_file,list_files,search and nothing else, so every spec-mode agent — openspec,
+  // speckit, the reviewers — did brownfield archaeology with text search only and had no
+  // access to the symbol index, while that text search was returning "(no matches found)" for
+  // everything. A codeline provisioned with the codegraph plugin now grants codegraph_query
+  // automatically. See lib/agent-tools.js.
+  out.EPAM_ALLOWED_TOOLS = env.SPEC_MODE_ALLOWED_TOOLS
+    || require('./lib/agent-tools.js').readOnlyToolGrant([repoPath || env.PROJECT_ROOT || env.JIRA_CODELINE_ROOT || '']);
   // Granted to every spec-mode agent. An agent told a tool list without
   // AI_GATE_ALLOW_TOOLS runs with --no-tools underneath it (ai-run.sh's
   // default) — it believes it can look, cannot, and fabricates
@@ -1194,7 +1232,7 @@ function specAgentEnv(env = process.env, repoPath = '') {
   // an incident response and was the wrong layer — six other agents hold
   // `bash` against the same repo.
   out.AI_GATE_ALLOW_TOOLS = env.SPEC_MODE_ALLOW_TOOLS || '1';
-  out.EPAM_MAX_TOOL_CALLS = env.SPEC_MODE_MAX_TOOL_CALLS || '8';
+  out.EPAM_MAX_TOOL_CALLS = env.SPEC_MODE_MAX_TOOL_CALLS || String(specModeDefaults().perAgent);
   // Tools resolve paths against the process cwd (see runClaude's spawn cwd).
   // A single-story call knows its codeline; a phase-level call spans stories,
   // so it falls back to the run's codeline root.
@@ -4409,7 +4447,7 @@ async function _vcLlmCall(prompt, cycle, logPath, storyId = '', role = 'openspec
   const toolEnv = repoPath ? {
     AI_GATE_ALLOW_TOOLS: process.env.SPEC_MODE_ALLOW_TOOLS || '1',
     EPAM_ALLOWED_TOOLS: process.env.SPEC_MODE_ALLOWED_TOOLS || 'read_file,list_files,search',
-    EPAM_MAX_TOOL_CALLS: process.env.SPEC_MODE_MAX_TOOL_CALLS || '8',
+    EPAM_MAX_TOOL_CALLS: process.env.SPEC_MODE_MAX_TOOL_CALLS || String(specModeDefaults().perAgent),
     PROJECT_ROOT: repoPath,
   } : {};
   return runClaude(exec, prompt, logPath, {
@@ -5333,7 +5371,7 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
         // being reachable. 7 = the prompt's 6 calls plus the pre-seeded
         // explore already handed over, and one successful live pass used 7
         // round-trips. EPAM_MAX_ITERATIONS stays as the outer backstop.
-        EPAM_MAX_TOOL_CALLS: process.env.CODEGRAPH_DETECTIVE_MAX_TOOL_CALLS || '7',
+        EPAM_MAX_TOOL_CALLS: process.env.CODEGRAPH_DETECTIVE_MAX_TOOL_CALLS || String(specModeDefaults().perSeam.codegraphDetective),
         // Identity for the Langfuse trace. Without it every trace in the run
         // renders as `llm-stream (uuid)` with no agent, no story and no prompt
         // — a list of 35 identical unreadable rows.
@@ -5409,7 +5447,7 @@ Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" fi
         model: attemptModel,
         escalated: !!escalated,
         elapsedSec: Math.round((Date.now() - _roundStarted) / 1000),
-        maxToolCalls: Number(process.env.CODEGRAPH_DETECTIVE_MAX_TOOL_CALLS || '7'),
+        maxToolCalls: Number(process.env.CODEGRAPH_DETECTIVE_MAX_TOOL_CALLS || specModeDefaults().perSeam.codegraphDetective),
         phase1Findings: _phase1Findings,
         phase2Used: _phase1Findings === 0 && Array.isArray(findings) && findings.length > 0,
         findings: Array.isArray(findings) ? findings.length : 0,
@@ -8256,7 +8294,7 @@ Emit ONLY: {"verdict":"pass|fail","issues":["<issue1>"],"reason":"<15 words max>
     const output = await runClaude(gateExec, prompt, logPath, {
       AI_GATE_ALLOW_TOOLS: '1',
       EPAM_ALLOWED_TOOLS: process.env.ORCH_GATE_ALLOWED_TOOLS || 'bash,read_file,list_files,search',
-      EPAM_MAX_TOOL_CALLS: process.env.PRD_CHANGE_REVIEWER_MAX_TOOL_CALLS || '6',
+      EPAM_MAX_TOOL_CALLS: process.env.PRD_CHANGE_REVIEWER_MAX_TOOL_CALLS || String(specModeDefaults().perSeam.prdChangeReviewer),
     }, { costAgent: 'prd-change-reviewer', costStoryId: storyId });
     return parseReviewVerdict(output);
   } catch (err) {
@@ -8685,6 +8723,7 @@ module.exports = {
   },
   specAgentEnv,
   surveyToolBudget,
+  specModeDefaults,
   reviewTicketLinks,
   normaliseTicketLinks,
   coveringTestFiles,

@@ -1,0 +1,24 @@
+{
+  "$comment": "ENGINE-WIDE defaults for the spec pass. These were literals inside spec-mode-runner.js, changeable only by editing a 9,000-line script. An operator overrides any of them per run with the environment variable named beside each.",
+  "toolCalls": {
+    "$comment": "How much an agent may LOOK before it must answer \u2014 the most consequential number in the spec pass. Live 2026-08-08 a survey told to open three repositories ran out of calls, reported 'no existing infrastructure, this is greenfield work' about a brownfield estate with 243 matching source files in the first codeline, and a roster was minted on that verdict.",
+    "perAgent": 8,
+    "perAgentEnv": "SPEC_MODE_MAX_TOOL_CALLS",
+    "perCodelineSurvey": 8,
+    "perCodelineSurveyEnv": "EPAM_SURVEY_TOOL_CALLS_PER_CODELINE",
+    "$perCodelineSurveyNote": "Multiplied by the number of codelines in scope. A single ceiling cannot serve both an agent looking at one repository and a survey instructed to open every repository in the estate.",
+    "perSeam": {
+      "$comment": "Seams that deliberately differ from perAgent. The detective converges by iterating; the PRD change reviewer answers a narrow question.",
+      "codegraphDetective": 7,
+      "prdChangeReviewer": 6
+    }
+  },
+  "tools": {
+    "$comment": "The read-only builtin floor granted to every spec-mode agent. Kept here rather than derived as 'every safe builtin' because fetch_url is also safe, and granting network access to the spec pass is a separate decision that must be made deliberately. Plugin tools are NOT listed: they are derived from each codeline's .epam/settings.json, so a codeline provisioned with the codegraph plugin grants codegraph_query automatically.",
+    "readOnlyBuiltins": [
+      "read_file",
+      "list_files",
+      "search"
+    ]
+  }
+}

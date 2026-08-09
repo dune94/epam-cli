@@ -5460,19 +5460,21 @@ ${dependency_contracts}"
     # every other gate agent draws from. Bounded: this runs before EVERY
     # story's implementation, not just on retry.
     local review_output
+    # Tool budgets below are 24, raised from 6 on 2026-08-09: codegraph_query states in its own
+    # description that "5-10 times is normal", so a budget of 6 was exhausted by one tool's
+    # documented usage with nothing read afterwards, leaving the one-shot grep as the only
+    # affordable option. These bound TOOL calls, not model turns — a read is cheap next to the
+    # wrong answer it prevents.
+    #
+    # NOT inside the continuation chain below: a `\` followed by a comment TERMINATES the
+    # command. Placing it there silently split the pipeline, and the invocation ran with
+    # nothing on stdin — which is exactly how the writer burned 8 attempts at $0 cost.
     review_output=$(echo "$review_prompt" | \
         AI_PROVIDER="$_orch_provider" \
         AI_MODEL="${ORCH_GATE_MODEL:-}" \
         EPAM_CLI="$EPAM_CLI" \
         AI_GATE_ALLOW_TOOLS=1 \
         EPAM_ALLOWED_TOOLS="$ORCH_GATE_ALLOWED_TOOLS" \
-        # 24, raised from 6 on 2026-08-09. codegraph_query tells the agent in its own
-        # description that "5-10 times is normal", so a budget of 6 was exhausted by one tool's
-        # documented usage with nothing read afterwards — leaving the one-shot grep as the only
-        # affordable option, which is exactly the behaviour the tooling review was asked to
-        # explain. These budgets bound TOOL calls, not model turns: a read is cheap next to the
-        # wrong answer it prevents, and every one of these agents exists to avoid a retry that
-        # costs a full attempt.
         EPAM_MAX_TOOL_CALLS="${PLAN_REVIEW_MAX_TOOL_CALLS:-24}" \
         bash "$SCRIPT_DIR/ai-run.sh" --provider "$_orch_provider" \
         ${ORCH_GATE_MODEL:+--model "$ORCH_GATE_MODEL"} \
@@ -8914,8 +8916,6 @@ ${_trimmed_amendment}"
                         EPAM_AGENT_ROLE="${_story_agent_role}" \
                         EPAM_STORY_ID="${story_id}" \
                         EPAM_ACTIVITY_LOG_DIR="${LOG_DIR}" \
-                        # DEFAULT OFF. See toolPolicy.$readDedupeNote — the notice sent the writer
-                        # into a force:true loop and it produced no code at all.
                         EPAM_READ_DEDUPE="${EPAM_READ_DEDUPE:-0}" \
                         EPAM_BASH_EXPLORATION_REDIRECT="${_tool_policy_redirect}" \
                         EPAM_REQUIRED_SYMBOLS="${_req_symbols}" \

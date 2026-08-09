@@ -130,36 +130,49 @@ describe('the per-codeline filter includes a spanning story in every lane', () =
 });
 
 describe('joined state — a spanning story completes only when every lane does', () => {
-  const ORCH = readFileSync(
-    join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+  // These three used to grep the orchestrator's source for /perCodeline/, which proves
+  // nothing: the pattern matches a comment, a dead branch or a deleted call site just as
+  // happily as working code. The merge now lives in lib/story-merge.js, so they run it and
+  // assert on the PRD it produces. (The full per-codeline contract, including verification
+  // criteria, is in lane-merge-aligns-vcs-to-codeline.test.ts.)
+  const { mergeLaneIntoCanonical } = require('../../../orchestrations/scripts/lib/story-merge.js');
 
-  function mergeBack(): string {
-    const i = ORCH.indexOf('Merged codeline');
-    const start = ORCH.lastIndexOf('"$NODE_BIN" -e "', i);
-    return ORCH.slice(start, i);
+  const LANES = ['gotransit', 'upexpress'];
+
+  function canonical() {
+    return { stories: [{ id: 'SPAN-1', codelines: [...LANES], status: 'pending', completed: false }] };
+  }
+  function lane(status: string, completed: boolean) {
+    return { stories: [{ id: 'SPAN-1', codelines: [...LANES], status, completed, completedAt: '2026-08-08T00:00:00Z' }] };
   }
 
   it('does not let one lane overwrite another lane\'s result', () => {
-    // The merge is byId, whole-object. With a story touched by N lanes, the last
-    // iteration's copy replaces the others wholesale — so a story that FAILED in
-    // gotransit and succeeded in upexpress reads as completed, or the reverse,
-    // depending only on loop order.
-    expect(mergeBack(),
-      'a spanning story is merged by last-writer-wins, silently discarding every ' +
-      'other lane\'s outcome')
-      .toMatch(/perCodeline|codelines/);
+    // Whole-object merge was last-writer-wins: a story that FAILED in gotransit and
+    // succeeded in upexpress read as whichever lane happened to run last.
+    const c = canonical();
+    mergeLaneIntoCanonical({ canonical: c, updated: lane('failed', false), codeline: 'gotransit' });
+    mergeLaneIntoCanonical({ canonical: c, updated: lane('completed', true), codeline: 'upexpress' });
+    expect(
+      c.stories[0].completed,
+      'a later lane\'s success erased an earlier lane\'s failure',
+    ).toBe(false);
+    expect((c.stories[0] as any).perCodeline.gotransit.completed).toBe(false);
   });
 
   it('records the outcome PER codeline', () => {
-    expect(mergeBack(), 'nothing records which lane produced which result')
-      .toMatch(/perCodeline/);
+    const c = canonical();
+    for (const cl of LANES) mergeLaneIntoCanonical({ canonical: c, updated: lane('completed', true), codeline: cl });
+    expect(Object.keys((c.stories[0] as any).perCodeline).sort()).toEqual([...LANES].sort());
   });
 
   it('only marks the story complete when no lane is outstanding', () => {
-    const m = mergeBack();
-    expect(m,
-      'the story can report completed while a lane has not run or has failed')
-      .toMatch(/every|all|outstanding|pending/i);
+    const c = canonical();
+    mergeLaneIntoCanonical({ canonical: c, updated: lane('completed', true), codeline: 'gotransit' });
+    expect(c.stories[0].completed, 'one lane of two reported the whole story complete').toBe(false);
+    expect(c.stories[0].status).toBe('in-progress');
+
+    mergeLaneIntoCanonical({ canonical: c, updated: lane('completed', true), codeline: 'upexpress' });
+    expect(c.stories[0].completed).toBe(true);
   });
 });
 

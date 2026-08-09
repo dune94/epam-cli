@@ -3261,51 +3261,27 @@ KNOWNFIXES_EOF
     # canonical PRD (the file every downstream consumer, dashboard, and test
     # actually reads) stayed "pending" forever even after a real, successful
     # run. Found live 2026-07-23 via mock1.
-    "$NODE_BIN" -e "
+    # The merge itself is lib/story-merge.js: it is the same operation on both the
+    # sequential and the parallel path, it decides what survives a multi-lane run,
+    # and inline in a heredoc it could not be tested. See that module for why a
+    # spanning story cannot be merged wholesale.
+    if "$NODE_BIN" -e "
       const fs = require('fs');
+      const { mergeLaneIntoCanonical } = require('${SCRIPT_DIR}/lib/story-merge.js');
       const canonical = JSON.parse(fs.readFileSync('${_prd_path}', 'utf8'));
       const updated = JSON.parse(fs.readFileSync('${_cl_prd}', 'utf8'));
-      const byId = new Map(updated.stories.map(s => [s.id, s]));
-      const CL = '${_cl}';
-      canonical.stories = canonical.stories.map(s => {
-        const u = byId.get(s.id);
-        if (!u) return s;
-        // A story confined to one codeline merges wholesale, exactly as before.
-        const spans = Array.isArray(s.codelines) && s.codelines.length > 1;
-        if (!spans) return u;
-        // A SPANNING story is touched by every lane, so a whole-object merge is
-        // last-writer-wins: a story that failed in one codeline and succeeded in
-        // another would read as whichever lane happened to run last. Record each
-        // lane's outcome separately and derive the story's own state from all of
-        // them — it is complete only when NO lane is outstanding.
-        const perCodeline = { ...(s.perCodeline || {}), [CL]: {
-          status: u.status, completed: !!u.completed, completedAt: u.completedAt || null,
-          reviewStatus: u.reviewStatus || null,
-        } };
-        const everyLaneDone = s.codelines.every(cl =>
-          perCodeline[cl] && perCodeline[cl].completed === true);
-        return {
-          ...u,
-          perCodeline,
-          codelines: s.codelines,
-          completed: everyLaneDone,
-          status: everyLaneDone ? 'completed' : 'in-progress',
-          completedAt: everyLaneDone ? (u.completedAt || new Date().toISOString()) : null,
-        };
-      });
-      // Stories CREATED during the run exist only in the codeline PRD, and a map
-      // over canonical can never add them. The spec pass splits a story into
-      // <id>-impl / <id>-test there and marks the parent deprecated — so without
-      // this, mock1 run 10 implemented, tested, reviewed and committed two child
-      // stories, and canonical kept nothing but a deprecated parent. Every reader
-      // of that PRD — the run report, a rerun deciding what is outstanding, a
-      // human — would conclude the run delivered nothing.
-      const known = new Set(canonical.stories.map(s => s.id));
-      for (const u of updated.stories) {
-        if (!known.has(u.id)) canonical.stories.push(u);
-      }
+      mergeLaneIntoCanonical({ canonical, updated, codeline: '${_cl}' });
       fs.writeFileSync('${_prd_path}', JSON.stringify(canonical, null, 2));
-    " 2>/dev/null && log "[orch] Merged codeline '${_cl}' story state back into canonical PRD"
+    "; then
+      log "[orch] Merged codeline '${_cl}' story state back into canonical PRD"
+    else
+      # Previously 2>/dev/null: a failed merge was indistinguishable from a
+      # successful one that logged nothing, and it silently discards this lane's
+      # entire outcome — status, criteria and all.
+      error "[orch] FAILED to merge codeline '${_cl}' back into the canonical PRD;"
+      error "[orch]   that lane's status and verification criteria are NOT recorded."
+      _overall=1
+    fi
       _lane_idx=$(( _lane_idx + 1 ))
     done
     rm -rf "$_p_statusdir" 2>/dev/null || true
@@ -3399,51 +3375,27 @@ KNOWNFIXES_EOF
     # canonical PRD (the file every downstream consumer, dashboard, and test
     # actually reads) stayed "pending" forever even after a real, successful
     # run. Found live 2026-07-23 via mock1.
-    "$NODE_BIN" -e "
+    # The merge itself is lib/story-merge.js: it is the same operation on both the
+    # sequential and the parallel path, it decides what survives a multi-lane run,
+    # and inline in a heredoc it could not be tested. See that module for why a
+    # spanning story cannot be merged wholesale.
+    if "$NODE_BIN" -e "
       const fs = require('fs');
+      const { mergeLaneIntoCanonical } = require('${SCRIPT_DIR}/lib/story-merge.js');
       const canonical = JSON.parse(fs.readFileSync('${_prd_path}', 'utf8'));
       const updated = JSON.parse(fs.readFileSync('${_cl_prd}', 'utf8'));
-      const byId = new Map(updated.stories.map(s => [s.id, s]));
-      const CL = '${_cl}';
-      canonical.stories = canonical.stories.map(s => {
-        const u = byId.get(s.id);
-        if (!u) return s;
-        // A story confined to one codeline merges wholesale, exactly as before.
-        const spans = Array.isArray(s.codelines) && s.codelines.length > 1;
-        if (!spans) return u;
-        // A SPANNING story is touched by every lane, so a whole-object merge is
-        // last-writer-wins: a story that failed in one codeline and succeeded in
-        // another would read as whichever lane happened to run last. Record each
-        // lane's outcome separately and derive the story's own state from all of
-        // them — it is complete only when NO lane is outstanding.
-        const perCodeline = { ...(s.perCodeline || {}), [CL]: {
-          status: u.status, completed: !!u.completed, completedAt: u.completedAt || null,
-          reviewStatus: u.reviewStatus || null,
-        } };
-        const everyLaneDone = s.codelines.every(cl =>
-          perCodeline[cl] && perCodeline[cl].completed === true);
-        return {
-          ...u,
-          perCodeline,
-          codelines: s.codelines,
-          completed: everyLaneDone,
-          status: everyLaneDone ? 'completed' : 'in-progress',
-          completedAt: everyLaneDone ? (u.completedAt || new Date().toISOString()) : null,
-        };
-      });
-      // Stories CREATED during the run exist only in the codeline PRD, and a map
-      // over canonical can never add them. The spec pass splits a story into
-      // <id>-impl / <id>-test there and marks the parent deprecated — so without
-      // this, mock1 run 10 implemented, tested, reviewed and committed two child
-      // stories, and canonical kept nothing but a deprecated parent. Every reader
-      // of that PRD — the run report, a rerun deciding what is outstanding, a
-      // human — would conclude the run delivered nothing.
-      const known = new Set(canonical.stories.map(s => s.id));
-      for (const u of updated.stories) {
-        if (!known.has(u.id)) canonical.stories.push(u);
-      }
+      mergeLaneIntoCanonical({ canonical, updated, codeline: '${_cl}' });
       fs.writeFileSync('${_prd_path}', JSON.stringify(canonical, null, 2));
-    " 2>/dev/null && log "[orch] Merged codeline '${_cl}' story state back into canonical PRD"
+    "; then
+      log "[orch] Merged codeline '${_cl}' story state back into canonical PRD"
+    else
+      # Previously 2>/dev/null: a failed merge was indistinguishable from a
+      # successful one that logged nothing, and it silently discards this lane's
+      # entire outcome — status, criteria and all.
+      error "[orch] FAILED to merge codeline '${_cl}' back into the canonical PRD;"
+      error "[orch]   that lane's status and verification criteria are NOT recorded."
+      _overall=1
+    fi
 
     # ── Halt once a lane has finally failed ───────────────────────────────────
     # The failure path inside the PHASE loop above ends in a bare `break`, which

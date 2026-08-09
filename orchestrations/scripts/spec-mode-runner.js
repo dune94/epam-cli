@@ -2122,6 +2122,7 @@ ${reviewCriteria}
 
 MANIFEST EVIDENCE (checked against the repository, not asserted):
 ${manifestEvidence(specifiedStories, prd)}
+${codelineScopeBlock(prd, specifiedStories)}
 
 ${MANIFEST_GROUNDING_BLOCK}
 
@@ -2215,7 +2216,7 @@ ${reviewPayload}
               });
               if (Array.isArray(_corrected) && _corrected.length) {
                 story.fixSiteAnalysis = _corrected.filter((f) => f.reason);
-                story.fixSiteAnalysisCoverage = checkFixSiteCoverage(story.fixSiteAnalysis, story.verificationCriteria || [], (story.specification || {}).guardVocabulary);
+                story.fixSiteAnalysisCoverage = coverageForStory(story);
                 console.warn(`spec-mode: ${story.id} — detective correction produced ${story.fixSiteAnalysis.length} revised fix-site(s).`);
               }
             } catch (err) {
@@ -4608,6 +4609,27 @@ function checkPlanExecutionAlignment(planText, findings) {
   return { aligned, planTerms: planIdents, findingTerms: findingIdents };
 }
 
+/**
+ * The coverage check as the pipeline actually calls it: findings, criteria and the derived
+ * vocabulary, pulled off one story.
+ *
+ * This exists because the argument list was written out twice and the two copies disagreed.
+ * The main path was missing a comma between the second and third arguments, so it read as
+ * `verificationCriteria || ([](...).guardVocabulary)` — valid JavaScript that silently passed
+ * TWO arguments. With no vocabulary checkFixSiteCoverage returns `complete: null`, and
+ * claude.sh maps null to true, so the coverage gate was fail-open on every run while
+ * appearing to work. With no criteria at all the same expression CALLS the array literal and
+ * throws. One call site, executed by a test, instead of two hand-written argument lists.
+ */
+function coverageForStory(story) {
+  const s = story || {};
+  return checkFixSiteCoverage(
+    s.fixSiteAnalysis || [],
+    s.verificationCriteria || [],
+    (s.specification || {}).guardVocabulary,
+  );
+}
+
 function checkFixSiteCoverage(findings, verificationCriteria, vocabulary) {
   // THE WORD LIST IS DERIVED, NOT BAKED.
   //
@@ -6074,10 +6096,7 @@ ${storyPayload}${publishedContracts(repoPath, story)}
       // the detective's findings never touch, so the implementer's budget and
       // prompt can react to a known-incomplete prescription instead of a
       // silently-incomplete one.
-      story.fixSiteAnalysisCoverage = checkFixSiteCoverage(
-        story.fixSiteAnalysis || [], story.verificationCriteria || []
-        (story.specification || {}).guardVocabulary,
-      );
+      story.fixSiteAnalysisCoverage = coverageForStory(story);
       // complete === null means NO vocabulary was available, so coverage was not computed.
       // Treating that as "incomplete" would report a gap nobody measured.
       if (story.fixSiteAnalysisCoverage.complete === false) {
@@ -7104,6 +7123,70 @@ function _resolveInCodeline(declared, codelineRoot) {
   };
 }
 
+// codelineScopeBlock(prd, stories) → prompt text telling the spec reviewer which lane it is
+// looking at, or '' when the question does not arise.
+//
+// The spec pass runs per codeline against that codeline's own checkout, so its manifest, fix
+// sites and verification criteria describe THAT repository. The reviewer's prompt never said
+// so. On AMSD-2041 it saw codelines:[three] on the story, criteria naming only metrolinx
+// surfaces, and reported missing_cross_codeline_paths at 0.65 — below the 0.7 halt threshold,
+// so it stopped the run. The reviewer reasoned correctly from what it was shown; it was shown
+// one lane's work and told it was the whole story.
+//
+// This corrects what it is shown. It does NOT tell it to ignore cross-codeline problems —
+// those are real whenever this lane's own change depends on another — and it does not steer
+// the number. Every codeline name comes from the PRD's own project.outputDirs.
+function codelineScopeBlock(prd, stories) {
+  const thisLane = laneCodeline(prd);
+  if (!thisLane) return '';
+  const list = Array.isArray(stories) ? stories : [];
+  const spanning = list.filter((s) => s && Array.isArray(s.codelines) && s.codelines.length > 1);
+  if (!spanning.length) return '';
+
+  const others = [...new Set(spanning.flatMap((s) => s.codelines))]
+    .filter((cl) => cl && cl !== thisLane);
+  if (!others.length) return '';
+
+  return `
+CODELINE SCOPE — you are reviewing ONE lane.
+
+This spec pass ran against '${thisLane}' only, using that codeline's own checkout. The story
+also spans: ${others.join(', ')}. Each of those is specified by its own pass, against its own
+checkout, and the results are recorded per codeline and merged afterwards. You are not seeing
+their work and it is not missing.
+
+So: judge whether this specification is correct, observable and implementable IN '${thisLane}'.
+Do not penalise it because a file, function or criterion it names does not exist in
+${others.join(' or ')} — those codelines wire the same behaviour at their own sites, which
+their own lane locates.
+
+A cross-codeline concern IS in scope, and you should raise it, when '${thisLane}'s own change
+depends on one: a shared contract it consumes, a payload shape another codeline produces, or
+work that cannot function unless another lane changes too. The distinction is dependency, not
+absence.
+`;
+}
+
+// laneCodeline(prd) → the codeline this process is running as, or null.
+//
+// The spec pass runs PER LANE on that lane's own filtered PRD, and several things have to
+// know WHICH lane: the resolved file manifest, and the fix sites the detective found. The
+// derivation is the one used everywhere else in the engine — project.outputDir matched back
+// against project.outputDirs[] — so no codeline or client name is written into the engine;
+// it comes from the PRD's own data.
+//
+// Returns null rather than guessing. A single-codeline run has no lane to derive, and an
+// outputDir matching nothing declared is a condition to leave alone, not to paper over by
+// picking the first entry.
+function laneCodeline(prd) {
+  const outDir = prd && prd.project && prd.project.outputDir;
+  const dirs = (prd && prd.project && Array.isArray(prd.project.outputDirs))
+    ? prd.project.outputDirs : [];
+  if (!outDir || !dirs.length) return null;
+  const hit = dirs.find((d) => d && d.path === outDir);
+  return (hit && hit.codeline) || null;
+}
+
 // buildPerCodelineManifest(story, prd) → { <codeline>: {files, resolved, unresolved} } | null
 //
 // A SINGLE shared technicalNotes.files array cannot be correct when the lanes are
@@ -7229,6 +7312,22 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId, logDi
   // handed a non-existent path could not do the work they were then blocked for. An
   // unresolvable entry is recorded WITH the candidates checked, so a wrong path is
   // visible in the PRD at spec time instead of surfacing as a mystery at write time.
+  // A FIX SITE BELONGS TO A CODELINE. The detective's finding shape — {file, function,
+  // reason, fix, helper, brokenLine, …} — has no codeline on it, so for a spanning story the
+  // array could not say which repository each site lives in. Two things broke on that: the
+  // merge into the canonical PRD was last-writer-wins (AMSD-2041 gave all three lanes
+  // metrolinx's newsService.ts / getEventsList.ts, which exist in neither of the others), and
+  // a finding from one codeline entering another's writer manifest was undetectable.
+  //
+  // Stamped here because this is where the lane is already derived, and it runs after the
+  // detective for every story. A finding that already names a codeline is left alone: a
+  // cross-codeline finding must not be relabelled with the lane that merely observed it.
+  const _laneForSites = laneCodeline(prd);
+  if (_laneForSites && Array.isArray(story.fixSiteAnalysis)) {
+    story.fixSiteAnalysis = story.fixSiteAnalysis.map((f) =>
+      (f && typeof f === 'object' && !f.codeline) ? { ...f, codeline: _laneForSites } : f);
+  }
+
   const _perCodeline = buildPerCodelineManifest(story, prd);
   if (_perCodeline) {
     story.technicalNotes = { ...story.technicalNotes, perCodeline: _perCodeline };
@@ -7249,9 +7348,7 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId, logDi
     // and must be this lane's resolved list. The lane is derived the way it is everywhere
     // else in the engine: project.outputDir matched back against project.outputDirs[].
     // No lane derivable (single-codeline runs) leaves the declared list untouched.
-    const _outDir = prd && prd.project && prd.project.outputDir;
-    const _dirs = (prd && prd.project && prd.project.outputDirs) || [];
-    const _thisLane = _outDir ? (_dirs.find((d) => d && d.path === _outDir) || {}).codeline : null;
+    const _thisLane = laneCodeline(prd);
     const _mine = _thisLane && _perCodeline[_thisLane];
     if (_mine && Array.isArray(_mine.files) && _mine.files.length) {
       story.technicalNotes = { ...story.technicalNotes, files: _mine.files };
@@ -8554,6 +8651,9 @@ module.exports = {
   verifyDetectiveHelper,
   verifyDetectiveEvidence,
   checkFixSiteCoverage,
+  coverageForStory,
+  laneCodeline,
+  codelineScopeBlock,
   detectiveCorrectionNeeded,
   detectiveAnswerIsGrounded,
   inferStoryKindHint,

@@ -38,7 +38,8 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-const ORCH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
+const SCRIPTS_DIR = join(__dirname, '../../../orchestrations/scripts');
+const ORCH = join(SCRIPTS_DIR, 'run-agent-orchestration.sh');
 const src = readFileSync(ORCH, 'utf8');
 
 const dirs: string[] = [];
@@ -48,13 +49,16 @@ afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, f
 function mergeBackScript(canonicalPath: string, codelinePath: string, codeline: string): string {
   const anchor = src.indexOf('Merged codeline');
   const start = src.lastIndexOf('"$NODE_BIN" -e "', anchor);
-  const end = src.indexOf('\n    " 2>/dev/null', start);
+  const end = src.indexOf('\n    "; then', start);
   if (start < 0 || end < 0) throw new Error('merge-back block not found');
 
   return src
     .slice(start + '"$NODE_BIN" -e "'.length, end)
     .split('${_prd_path}').join(canonicalPath)
     .split('${_cl_prd}').join(codelinePath)
+    // The merge itself now lives in lib/story-merge.js, so the extracted body has to
+    // resolve the same require bash does — the real module, not a copy of it.
+    .split('${SCRIPT_DIR}').join(SCRIPTS_DIR)
     .split('${_cl}').join(codeline);
 }
 

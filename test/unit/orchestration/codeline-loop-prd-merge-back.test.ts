@@ -53,7 +53,7 @@ afterEach(() => {
   for (const d of cleanupDirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-function runMergeBack(canonicalPrd: unknown, clPrd: unknown): { canonicalPath: string; result: any; stderr: string } {
+function runMergeBack(canonicalPrd: unknown, clPrd: unknown, codeline = 'be'): { canonicalPath: string; result: any; stderr: string } {
   const dir = mkdtempSync(join(tmpdir(), 'prd-merge-back-'));
   cleanupDirs.push(dir);
   const canonicalPath = join(dir, 'canonical.json');
@@ -65,7 +65,11 @@ function runMergeBack(canonicalPrd: unknown, clPrd: unknown): { canonicalPath: s
   // (${_prd_path}, ${_cl_prd}) with our fixture paths, same as bash would.
   const js = mergeBackJs
     .split('${_prd_path}').join(canonicalPath)
-    .split('${_cl_prd}').join(clPath);
+    .split('${_cl_prd}').join(clPath)
+    // The merge itself now lives in lib/story-merge.js, so the extracted body has to
+    // resolve the same require bash does — the real module, not a copy of it.
+    .split('${SCRIPT_DIR}').join(join(__dirname, '../../../orchestrations/scripts'))
+    .split('${_cl}').join(codeline);
 
   const proc = spawnSync(NODE_BIN, ['-e', js], { encoding: 'utf8' });
   const result = JSON.parse(readFileSync(canonicalPath, 'utf8'));

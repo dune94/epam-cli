@@ -120,7 +120,10 @@ describe('the spec pass checks the declaration deterministically', () => {
     // plan/execution mismatch) now shares this exact call text. The canonical site this
     // test targets — immediately following the detective's own findings assignment — is
     // still the LAST occurrence in the file.
-    const i = src.lastIndexOf('story.fixSiteAnalysisCoverage = checkFixSiteCoverage');
+    // 2026-08-08: both call sites now go through coverageForStory(story). The argument list
+    // had been written out twice and the two copies disagreed — the main one was missing a
+    // comma, so it passed two arguments and the coverage gate was fail-open on every run.
+    const i = src.lastIndexOf('story.fixSiteAnalysisCoverage = coverageForStory');
     expect(i, 'the coverage check moved').toBeGreaterThan(-1);
     const block = src.slice(i, i + 2500);
     expect(

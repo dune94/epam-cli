@@ -3643,6 +3643,25 @@ def _resolves_inside_repo(spec):
     _exts = cfg.get('scanFileExtensions', []) or []
     for _root in _module_roots:
         _base = os.path.join(_root, *spec.split('/'))
+        # A DIRECTORY SETTLES IT.
+        #
+        # The file checks below ask '<root>/<spec><ext>' and '<root>/<spec>/index<ext>'. Live
+        # 2026-08-09 the specifier
+        # 'components/RoutesAndDepartures/DeparturesTab/DepartureDetailsSection' is a directory
+        # holding .tsx files and NO index, so both missed and an internal path alias was
+        # classified as a third-party package — 'Installing missing import: components'.
+        #
+        # This is the surviving tail of the defect that once cost a run its whole budget: three
+        # lanes attempted 346, 553 and 506 installs of 'components', 'api' and 'interface'. The
+        # file-based resolution fixed the common case and left the directory case behind.
+        #
+        # Whatever such an import does at runtime — and this one may well be broken — it is this
+        # repository's own code, and running a package manager against its first path segment is
+        # never the right answer. A broken internal import is a job for the import checks, not
+        # for the dependency installer.
+        if os.path.isdir(_base):
+            _hit = True
+            break
         for _ext in _exts:
             if os.path.isfile(_base + _ext) or os.path.isfile(os.path.join(_base, 'index' + _ext)):
                 _hit = True
@@ -5030,7 +5049,25 @@ run_repo_lint_verification() {
     error "  [repo-lint]   the pre-commit hook will refuse this commit and lint-staged will REVERT the work."
     printf '%s\n' "$_lint_output" | head -40 >&2
 
-    # Written where the retry loop looks, so the next attempt is told exactly what to fix.
+    # THE CHANNEL THE WRITER ACTUALLY READS.
+    #
+    # VERIFICATION_FAILURE is what the failure analyst consumes and turns into
+    # COORDINATOR_PROMPT_AMENDMENT — the text the next attempt sees. Every other gate in this
+    # file sets it. This one only appended to $output_file, the agent's OUTPUT log, which
+    # nothing reads back, so the gate fired correctly and the writer never learned why:
+    #
+    #   [repo-lint] AMSD-2041: the repository's own eslint rejects 5 changed file(s)
+    #
+    # and the next attempt produced the same rejected code. Worse, the analyst still ran, and
+    # with no failure text of its own it diagnosed from stale evidence — 'tsc incremental cache
+    # is stale' about the very constant lint was rejecting — twice, which is what tripped
+    # [HealingBroken]. The self-heal detector was right that healing was broken; it was broken
+    # because this gate fed it nothing.
+    #
+    # Same '## Verification Failure' heading as the others so the analyst parses it identically.
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe repository'"'"'s own lint rejects file(s) THIS story changed. This is not advisory: the pre-commit hook runs these checks, refuses the commit, and lint-staged then REVERTS your work — the story cannot be delivered until every one is fixed. Fix these before anything else:\n\n%s\n' "$_lint_output")
+
+    # Also written to the story log, where a human reading the run afterwards will look.
     {
         echo ""
         echo "## Repository Lint Failure — the commit WILL be rejected until these are fixed"

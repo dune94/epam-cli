@@ -53,7 +53,7 @@ const DECLARED_PKG = 'already-declared-pkg';
  * node_modules from an earlier attempt, the manifest does not declare it, and a source file
  * imports it.
  */
-function repo(opts: { importInChangedFile?: boolean; importInUntouchedFile?: boolean } = {}) {
+function repo(opts: { importInChangedFile?: boolean; importInUntouchedFile?: boolean; internalDirImport?: boolean } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'depcheck-')); dirs.push(dir);
   const git = (...a: string[]) => execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8' });
   mkdirSync(join(dir, 'src'), { recursive: true });
@@ -76,6 +76,14 @@ function repo(opts: { importInChangedFile?: boolean; importInUntouchedFile?: boo
     writeFileSync(join(dir, 'node_modules', ...p.split('/'), 'index.js'), 'x\n');
   }
 
+  if (opts.internalDirImport) {
+    // An internal path-alias import naming a DIRECTORY with no index file — the live shape in
+    // next.gotransit.com, where src/components/RoutesAndDepartures/DeparturesTab/
+    // DepartureDetailsSection is a directory holding .tsx files and no index.
+    mkdirSync(join(dir, 'src', 'widgets', 'panel'), { recursive: true });
+    writeFileSync(join(dir, 'src', 'widgets', 'panel', 'Panel.tsx'), 'export const P = 1;\n');
+    writeFileSync(join(dir, 'src', 'uses-alias.ts'), 'import { P } from "widgets/panel";\nexport const u = P;\n');
+  }
   // THE STORY'S CHANGE: a file it edited now imports the undeclared package.
   if (opts.importInChangedFile) {
     writeFileSync(join(dir, 'src', 'a.ts'), `import LP from "${PKG}";\nexport const a = LP;\n`);
@@ -175,5 +183,55 @@ describe('brownfield lenience is preserved', () => {
     const d = repo({ importInChangedFile: true });
     rmSync(join(d, '.epam', 'dependency-check.json'));
     expect(depCheck(d).installed).toEqual([]);
+  });
+});
+
+/**
+ * INTERNAL SOURCE IS NOT A PACKAGE, EVEN WHEN IT DOES NOT RESOLVE TO A FILE.
+ *
+ * Live 2026-08-09: `[dependency-check] Installing missing import: components (from
+ * 'components/RoutesAndDepartures/DeparturesTab/DepartureDetailsSection')`. That specifier is an
+ * internal path alias — the codelines declare baseUrl "./src" — and `components` is not a
+ * package that exists on any registry.
+ *
+ * _resolves_inside_repo() asks whether the specifier names a FILE: `<root>/<spec><ext>` or
+ * `<root>/<spec>/index<ext>`. The live path is a DIRECTORY holding .tsx files and no index, so
+ * both misses, and an internal directory was classified as a third-party package.
+ *
+ * This is the surviving tail of a defect that once cost a run its entire budget: three lanes
+ * attempted 346, 553 and 506 installs of 'components', 'api' and 'interface'. The file-based
+ * resolution fixed the common case and left the directory case behind.
+ *
+ * A directory under a module root settles the question by itself: whatever the import does at
+ * runtime — and this one may well be broken — it is this repository's own code, and running a
+ * package manager against its first path segment is never the right answer. Deliberately a
+ * filesystem question, like the check it extends: no tsconfig, no baseUrl, no language.
+ */
+describe('an internal path alias is never installed as a package', () => {
+  it('a specifier naming a directory with no index file is not installed', () => {
+    const { installed } = depCheck(repo({ internalDirImport: true }));
+    expect(
+      installed,
+      "the package manager is run against this repository's own source directory",
+    ).not.toContain('widgets');
+  });
+
+  it('nothing at all is installed for it', () => {
+    const { installed } = depCheck(repo({ internalDirImport: true }));
+    expect(installed.filter((p) => p.startsWith('widgets'))).toEqual([]);
+  });
+
+  it('a real undeclared package alongside it is still caught', () => {
+    // The paired positive: ignoring internal directories must not blunt the check.
+    const { installed } = depCheck(repo({ internalDirImport: true, importInChangedFile: true }));
+    expect(installed).toContain(PKG);
+    expect(installed).not.toContain('widgets');
+  });
+
+  it('a specifier that matches no directory and no file is still treated as a package', () => {
+    // The negative: the directory rule must not swallow genuinely missing dependencies.
+    const d = repo();
+    writeFileSync(join(d, 'src', 'a.ts'), 'import x from "definitely-not-here";\nexport const a = x;\n');
+    expect(depCheck(d).installed).toContain('definitely-not-here');
   });
 });

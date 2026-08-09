@@ -127,9 +127,11 @@ function runGate(dir: string, env: Record<string, string> = {}) {
      # engine_paths_filter must be in scope or the gate's pipeline yields nothing and passes.
      . ${JSON.stringify(join(__dirname, '../../../orchestrations/scripts/lib/engine-paths.sh'))}
 ${shippedFn()}
-     run_repo_lint_verification STORY-1 ${JSON.stringify(out)}; echo "RC=$?"`,
+     run_repo_lint_verification STORY-1 ${JSON.stringify(out)}; echo "RC=$?"
+     echo "__VF_START__"; printf '%s' "\${VERIFICATION_FAILURE:-}"; echo "__VF_END__"`,
   ], { encoding: 'utf8' });
-  return { rc: Number((res.match(/RC=(\d+)/) || [])[1]), log: res, feedback: readFileSync(out, 'utf8') };
+  const vf = (res.match(/__VF_START__([\s\S]*)__VF_END__/) || [])[1] ?? '';
+  return { rc: Number((res.match(/RC=(\d+)/) || [])[1]), log: res, feedback: readFileSync(out, 'utf8'), vf };
 }
 
 describe('the fixture reproduces the live condition', () => {
@@ -332,5 +334,66 @@ describe('the hook is found however the repo configures it', () => {
   it('and a repo with none of the three is still left alone', () => {
     // The paired negative: the three branches must not collapse into "always run".
     expect(runGate(repo({ hook: false })).rc).toBe(0);
+  });
+});
+
+/**
+ * A GATE THAT DOES NOT SET VERIFICATION_FAILURE IS NOT WIRED TO THE WRITER.
+ *
+ * Live 2026-08-09, the run after this gate shipped. It fired correctly:
+ *
+ *     [repo-lint] AMSD-2041: the repository's own eslint rejects 5 changed file(s)
+ *
+ * and the writer went on producing the same rejected code, because the finding never reached it.
+ * Every other gate in claude.sh sets VERIFICATION_FAILURE, which the failure analyst reads and
+ * turns into COORDINATOR_PROMPT_AMENDMENT — the text the next attempt actually sees. This one
+ * appended to `$output_file`, the agent's OUTPUT log, which nothing reads back.
+ *
+ * The consequence was not merely a wasted retry. The analyst still ran, and with no failure text
+ * of its own it diagnosed from whatever stale evidence remained, producing:
+ *
+ *     [HealingBroken] CRITICAL: 'CONTENTSTACK_DEFAULT_PREVIEW_HOST is exported from
+ *     src/constants/contentstack.ts line 78 but tsc incremental cache is stale.'
+ *     has recurred 2+ times without a different fix — self-healing is NOT working.
+ *
+ * A confident diagnosis of the wrong thing, twice, about the very constant the lint gate was
+ * complaining about. The self-heal detector was right that healing was broken; it was broken
+ * because the gate fed it nothing.
+ *
+ * I wrote this gate the same morning I wrote tests proving another gate was inert. Being inert
+ * is the default state of a gate, and only an assertion on the channel the writer really reads
+ * distinguishes one that works.
+ */
+describe('the finding reaches the next attempt, not just the log', () => {
+  it('VERIFICATION_FAILURE is set when lint rejects the work', () => {
+    expect(
+      runGate(repo()).vf.trim(),
+      'the writer never learns why it was rejected and repeats the same code',
+    ).not.toBe('');
+  });
+
+  it('it names the file, the rule and the symbol', () => {
+    const { vf } = runGate(repo());
+    expect(vf).toContain('src/services/contentstack.ts');
+    expect(vf).toContain('no-unused-vars');
+    expect(vf).toContain('CONTENTSTACK_DEFAULT_PREVIEW_HOST');
+  });
+
+  it('it says the commit will be refused, so the fix is not treated as optional', () => {
+    expect(runGate(repo()).vf).toMatch(/pre-commit|refuse|revert/i);
+  });
+
+  it('it follows the shape every other gate uses, so the analyst parses it the same way', () => {
+    expect(runGate(repo()).vf).toContain('## Verification Failure');
+  });
+
+  it('a passing gate leaves VERIFICATION_FAILURE empty', () => {
+    // Stale failure text is worse than none: it is what the analyst diagnosed from.
+    expect(runGate(repo({ dirtyFileClean: true })).vf.trim()).toBe('');
+  });
+
+  it('a skipped gate leaves it empty too', () => {
+    expect(runGate(repo({ hook: false })).vf.trim()).toBe('');
+    expect(runGate(repo({ eslint: false })).vf.trim()).toBe('');
   });
 });

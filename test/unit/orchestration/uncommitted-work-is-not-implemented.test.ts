@@ -49,10 +49,17 @@ describe('the lane still survives a failed commit', () => {
 
 describe('THE DEFECT: the outcome is acted on, not discarded', () => {
   it('the commit result is captured', () => {
+    // The CALL must assign the code. Asserting only that `_commit_rc` appears somewhere
+    // passes while the call still ends in `|| true` and the variable is never written — a
+    // mutation slipped through on exactly that.
     expect(
       postStoryBlock(),
       'the return code is thrown away, so a story with uncommitted work still counts as done',
-    ).toMatch(/_commit_rc|commit_completed_story[^\n]*\n\s*\w*_?rc=\$\?/);
+    ).toMatch(/commit_completed_story "\$story_id" \|\| _commit_rc=\$\?/);
+    expect(
+      postStoryBlock(),
+      'the call still discards its result with `|| true`',
+    ).not.toMatch(/commit_completed_story "\$story_id" \|\| true/);
   });
 
   it('a failed commit demotes the story to failed', () => {

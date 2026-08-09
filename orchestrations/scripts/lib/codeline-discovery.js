@@ -583,7 +583,7 @@ function selectBestCandidate(scored, issues) {
 
 // Codeline name derivation lives in lib/codeline-name.js so it can be tested
 // directly — this file is a CLI whose IIFE runs on require.
-const { deriveCodelineName } = require('./codeline-name');
+const { deriveCodelineName, deriveCodelineNames } = require('./codeline-name');
 
 
 // ── LLM discovery call ─────────────────────────────────────────────────────
@@ -819,7 +819,16 @@ function callLlm(prompt, opts = {}) {
 
     const parsed = JSON.parse(jsonMatch[0]);
     if (debug) log(`DEBUG parsed codelines: ${JSON.stringify(parsed.codelines)}`);
-    return dropUngroundedCodelines(parsed);
+    // The model decides WHICH repositories are in scope and why. It does not get to name
+    // them: a codeline name is a primary key (byCodeline, the KB stores, story.codelines,
+    // project.outputDirs, the lane loop) and a sampled key eventually disagrees with itself.
+    // It did on 2026-08-08 — 'gotransit' on one run, 'nextgotransitcom' on the next, and a
+    // resume that re-ran discovery left every investigator unresolvable. See deriveCodelineNames.
+    const named = deriveCodelineNames(parsed);
+    for (const cl of (named.codelines || [])) {
+      if (cl && cl.modelName) log(`  codeline name derived from the repository: '${cl.modelName}' -> '${cl.name}'`);
+    }
+    return dropUngroundedCodelines(named);
   } finally {
     try { fs.unlinkSync(tmpPrompt); } catch { /* ignore */ }
   }

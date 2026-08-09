@@ -142,6 +142,37 @@ _usage_before=$(curl -s "https://openrouter.ai/api/v1/auth/key" \
   -H "Authorization: Bearer $OPENROUTER_API_KEY" 2>/dev/null | \
   node -e "process.stdout.write(''+JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).data.usage)" 2>/dev/null || echo "0")
 info "OpenRouter usage before: \$$_usage_before"
+
+# ── Pre-flight: the built CLI must not be older than its source ──────────────
+#
+# `epam` is `exec node .../dist/epam.js`. Every test in the suite reads src/, so a change that
+# is written, tested, committed and never built looks shipped from every angle a test can see.
+#
+# Live 2026-08-09: tool-usage logging was wired, unit-tested and reported working, and the run
+# emitted nothing — dist had been built eighteen hours earlier. Nine passing tests, zero events.
+#
+# Fails rather than rebuilds: a launcher that silently recompiles under an operator who did not
+# ask for it changes what is being run without saying so. EPAM_SKIP_BUILD_STALENESS_CHECK=1 for
+# the case where an older binary is deliberate.
+if [ "${EPAM_SKIP_BUILD_STALENESS_CHECK:-0}" != "1" ]; then
+  _dist="$REPO_ROOT/dist/epam.js"
+  if [ ! -f "$_dist" ]; then
+    error "[preflight] $_dist does not exist — the pipeline has no binary to run."
+    error "[preflight]   Build: ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsup"
+    exit 1
+  fi
+  _newest_src=$(find "$REPO_ROOT/src" -type f \( -name '*.ts' -o -name '*.js' -o -name '*.json' \) \
+                  ! -name '*.test.ts' ! -name '*.d.ts' -newer "$_dist" -print -quit 2>/dev/null)
+  if [ -n "$_newest_src" ]; then
+    error "[preflight] dist/epam.js is OLDER than $(basename "$_newest_src") — the pipeline would run a stale binary."
+    error "[preflight]   Newer source: ${_newest_src#$REPO_ROOT/}"
+    error "[preflight]   Build: ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsup"
+    error "[preflight]   Override (deliberate): EPAM_SKIP_BUILD_STALENESS_CHECK=1"
+    exit 1
+  fi
+  info "Pre-flight: built CLI is current with src/"
+fi
+
 # Also into $LOG_FILE: the line above goes to stdout, which is the launch log
 # that pre-run-reset deletes. The run report is generated from $LOG_FILE, so a
 # balance recorded only on stdout leaves every report saying "Billed by

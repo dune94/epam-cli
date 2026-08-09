@@ -136,3 +136,74 @@ describe('the work the writer actually has to do still runs', () => {
     expect(r.isError ?? false).toBe(false);
   });
 });
+
+/**
+ * A REDIRECT MUST POINT AT A TOOL THAT CAN ACTUALLY ANSWER.
+ *
+ * The first version of this guard would have made the measured run WORSE. Of the 330 bash calls,
+ * the largest cluster was a dependency, not this repository:
+ *
+ *     41 cat  node_modules/@contentstack/live-preview-utils/...
+ *     16 ls   node_modules/@contentstack/live-preview-utils/
+ *     10 find node_modules/@contentstack/...
+ *
+ * The writer was reading a package's .d.ts files to work out an SDK's API. codegraph_query
+ * indexes THIS repository's symbols and cannot answer that, so blocking `cat` and pointing there
+ * would have walled the writer off from the only source of the answer it needed — with no
+ * working alternative, which is the same shape as the search tool that silently returned nothing
+ * and drove it to bash in the first place.
+ *
+ * resolve_package_symbol and dependency_contract exist for exactly this and were used 7 times
+ * against roughly 67 manual pokes.
+ *
+ * So the redirect is path-aware: a command aimed at a dependency is sent to the dependency
+ * tools, everything else to the codebase tools, and anything no tool can answer is ALLOWED. A
+ * guard with no valid alternative is just a wall.
+ */
+describe('the redirect points at a tool that can answer THIS question', () => {
+  const CONFIG = JSON.stringify({
+    verbs: {
+      grep: 'codegraph_query (mode "explore"/"query") or the search tool',
+      cat: 'read_file',
+      ls: 'list_files',
+      find: 'codegraph_query (mode "explore")',
+    },
+    pathOverrides: [
+      { match: 'node_modules', use: 'resolve_package_symbol or dependency_contract' },
+    ],
+  });
+  beforeEach(() => { process.env.EPAM_BASH_EXPLORATION_REDIRECT = CONFIG; });
+
+  it('a dependency path is sent to the dependency tools, NOT codegraph', async () => {
+    const r = await run('cat node_modules/@contentstack/live-preview-utils/dist/index.d.ts');
+    expect(r.content).toMatch(BLOCKED);
+    expect(r.content, 'pointed at an index that does not cover dependencies').toMatch(/resolve_package_symbol/);
+    expect(r.content).not.toMatch(/codegraph_query/);
+  });
+
+  it('find inside a dependency too', async () => {
+    const r = await run('find node_modules/@contentstack -name "*.d.ts"');
+    expect(r.content).toMatch(/resolve_package_symbol|dependency_contract/);
+  });
+
+  it('the same verb against the repo still goes to the codebase tools', async () => {
+    const r = await run('grep -r "livePreview" src/');
+    expect(r.content).toMatch(/codegraph_query/);
+    expect(r.content).not.toMatch(/resolve_package_symbol/);
+  });
+
+  it('a verb no tool covers is ALLOWED, not blocked', async () => {
+    // awk is not in the map. Blocking it would leave the agent with no route at all.
+    const r = await run('echo x | awk "{print}"');
+    expect(r.content ?? '', 'blocked with no alternative offered').not.toMatch(BLOCKED);
+  });
+
+  it('the older flat-map config still works', async () => {
+    // The first shipped shape was {verb: tool}. A config format change must not silently stop
+    // enforcing on a codeline still carrying the old one.
+    process.env.EPAM_BASH_EXPLORATION_REDIRECT = JSON.stringify({ grep: 'the search tool' });
+    const r = await run('grep -r foo src/');
+    expect(r.content).toMatch(BLOCKED);
+    expect(r.content).toMatch(/search tool/);
+  });
+});

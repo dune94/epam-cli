@@ -105,10 +105,19 @@ export class BashTool implements Tool {
   private explorationRedirect(command: string): { verb: string; use: string } | null {
     const raw = process.env.EPAM_BASH_EXPLORATION_REDIRECT;
     if (!raw) return null;
-    let map: Record<string, string>;
+    let verbs: Record<string, string>;
+    let pathOverrides: Array<{ match?: string; use?: string }> = [];
     try {
-      map = JSON.parse(raw);
-      if (!map || typeof map !== 'object' || Array.isArray(map)) throw new Error('not an object');
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not an object');
+      // Two accepted shapes. {verb: tool} was the first one shipped, and a config-format change
+      // must not silently stop enforcing on a codeline still carrying the old spelling.
+      if (parsed.verbs && typeof parsed.verbs === 'object') {
+        verbs = parsed.verbs as Record<string, string>;
+        pathOverrides = Array.isArray(parsed.pathOverrides) ? parsed.pathOverrides : [];
+      } else {
+        verbs = parsed as Record<string, string>;
+      }
     } catch (e) {
       process.stderr.write(
         `[bash-exploration] ignoring malformed EPAM_BASH_EXPLORATION_REDIRECT ` +
@@ -128,8 +137,24 @@ export class BashTool implements Tool {
     if (i >= tokens.length) return null;
     // A directory prefix does not change what the command is: /usr/bin/grep is grep.
     const verb = tokens[i].replace(/^.*\//, '');
-    const use = map[verb];
-    return use ? { verb, use } : null;
+    const use = verbs[verb];
+    if (!use) return null;   // no tool covers this verb — ALLOW rather than wall it off
+
+    // POINT AT SOMETHING THAT CAN ANSWER. The largest bash cluster measured was a DEPENDENCY,
+    // not this repository: 41 cat, 16 ls and 10 find against one package's .d.ts files, working
+    // out an SDK's API. codegraph_query indexes THIS repo and cannot answer that, so redirecting
+    // there would have left the writer with no route to the answer at all — the same dead end as
+    // the search tool that returned nothing and drove it to bash to begin with.
+    // resolve_package_symbol and dependency_contract exist for it, and were used 7 times against
+    // roughly 67 manual pokes.
+    const target = tokens.slice(i + 1).find(t => !t.startsWith('-')) ?? '';
+    for (const o of pathOverrides) {
+      if (o && typeof o.match === 'string' && o.match && typeof o.use === 'string' && o.use
+          && (target.includes(o.match) || command.includes(o.match))) {
+        return { verb, use: o.use };
+      }
+    }
+    return { verb, use };
   }
 
   /**

@@ -34,5 +34,28 @@
     "maxLinesPerFile": 400,
     "maxLinesPerFileEnv": "EPAM_EXISTING_FILE_MAX_LINES",
     "$note": "Truncation stays visible to the writer either way \u2014 a file silently cut is how an agent concludes an export does not exist and invents one."
+  },
+  "toolPolicy": {
+    "$comment": "What the writer's tools do instead of shelling out. Measured live 2026-08-09 on one story: bash 330 calls / 0.5 MB (56 grep, 45 cat, 21 ls, 16 sed, 10 find) and read_file 202 calls / 1.1 MB, against codegraph_query 1. Three of the four causes were BROKEN TOOLS, fixed the same day: search silently returned '(no matches found)' for patterns that existed (grep fallback lost -E and --include), read_file ignored startLine/endLine and returned whole files, and an unchanged file was re-sent in full on every read. This policy is the fourth part \u2014 it stops the shell being used for work the indexes answer better, and only makes sense now the tools it points at actually work.",
+    "bashExplorationRedirect": {
+      "verbs": {
+        "grep": "codegraph_query (mode \"explore\" for a feature, \"query\"/\"callers\" for a symbol) or the search tool",
+        "find": "codegraph_query (mode \"explore\") or list_files",
+        "cat": "read_file (it takes startLine/endLine for a window)",
+        "head": "read_file with startLine/endLine",
+        "tail": "read_file with startLine/endLine",
+        "ls": "list_files"
+      },
+      "pathOverrides": [
+        {
+          "match": "node_modules",
+          "use": "resolve_package_symbol (a symbol's real declared shape) or dependency_contract (which option keys a dependency accepts) \u2014 codegraph_query indexes THIS repository only and cannot answer questions about a dependency"
+        }
+      ],
+      "$note": "sed is deliberately NOT redirected: it is used for editing as well as reading, and blocking it would break real work. A verb absent from this map is allowed."
+    },
+    "readDedupe": true,
+    "readDedupeEnv": "EPAM_READ_DEDUPE",
+    "bashExplorationRedirectEnv": "EPAM_BASH_EXPLORATION_REDIRECT"
   }
 }

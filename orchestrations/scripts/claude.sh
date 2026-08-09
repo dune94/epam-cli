@@ -31,6 +31,19 @@ source "$SCRIPT_DIR/lib/story-guards.sh"
 source "$SCRIPT_DIR/lib/flags.sh"
 # Prompt-trim budgets, from config rather than literals (see lib/prompt-budget.sh).
 source "$SCRIPT_DIR/lib/prompt-budget.sh"
+
+# The writer's tool policy, read from orchestrations/config/spec-mode-defaults.json rather than
+# spelled out here: which shell verbs redirect to which tool, and what a dependency path should
+# use instead. Empty when the config omits it, which disables the redirect — the CLI treats an
+# unset value as "no policy", so a missing config degrades to today's behaviour rather than to a
+# wall the writer cannot get past.
+_tool_policy_redirect="$("${NODE_BIN:-node}" -e '
+  try {
+    const cfg = require(process.argv[1]);
+    const p = (cfg.toolPolicy || {}).bashExplorationRedirect;
+    process.stdout.write(p ? JSON.stringify(p) : "");
+  } catch (_) { process.stdout.write(""); }
+' "$SCRIPT_DIR/../config/spec-mode-defaults.json" 2>/dev/null || echo "")"
 source "$SCRIPT_DIR/lib/project-tools.sh"
 # shellcheck source=lib/git-ops.sh
 source "$SCRIPT_DIR/lib/git-ops.sh"
@@ -8851,6 +8864,8 @@ ${_trimmed_amendment}"
                         EPAM_AGENT_ROLE="${_story_agent_role}" \
                         EPAM_STORY_ID="${story_id}" \
                         EPAM_ACTIVITY_LOG_DIR="${LOG_DIR}" \
+                        EPAM_READ_DEDUPE="${EPAM_READ_DEDUPE:-1}" \
+                        EPAM_BASH_EXPLORATION_REDIRECT="${_tool_policy_redirect}" \
                         EPAM_REQUIRED_SYMBOLS="${_req_symbols}" \
                         EPAM_REQUIRED_SYMBOL_SCOPE="${_req_scope}" \
                         EPAM_ALLOWED_WRITE_PATHS="${_allowed_write_paths}" \

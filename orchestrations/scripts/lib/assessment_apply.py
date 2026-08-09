@@ -118,11 +118,44 @@ def ungrounded_paths(rule, repo_root):
     A rule citing NO path is left alone — plenty of legitimate guidance names no
     file. Only a claim about a specific file is checkable, and only a false one
     is rejected.
+
+    A citation is judged by how SPECIFIC it is. `src/cli.ts` names a location,
+    so it must resolve exactly or it is fabricated — that is the case above.
+    `_app.tsx` names a file and no location: underspecified, not false, and
+    grounded if a file of that name exists anywhere in the tree.
+
+    Live 2026-08-09 the literal join rejected "the provider wraps the app in
+    _app.tsx", which exists in all three codelines at src/pages/_app.tsx. A
+    true rule was discarded and the agent lost guidance it had earned.
     """
     if not repo_root:
         return []
-    return [p for p in set(_PATHISH.findall(rule or ''))
-            if not os.path.isfile(os.path.join(repo_root, p.lstrip('./')))]
+
+    bad = []
+    for p in set(_PATHISH.findall(rule or '')):
+        rel = p.lstrip('./')
+        if os.path.isfile(os.path.join(repo_root, rel)):
+            continue
+        # A path naming a directory is a claim about WHERE, and must resolve exactly.
+        if '/' in rel:
+            bad.append(p)
+            continue
+        # A bare filename: grounded if the repository contains one by that name.
+        if not _basename_exists(repo_root, rel):
+            bad.append(p)
+    return bad
+
+
+_SKIP_WALK = {'node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.codegraph'}
+
+
+def _basename_exists(repo_root, name):
+    """Does any file in the repository carry this exact name?"""
+    for root, subdirs, files in os.walk(repo_root):
+        subdirs[:] = [d for d in subdirs if d not in _SKIP_WALK]
+        if name in files:
+            return True
+    return False
 
 
 def apply_decision(decision, prd, profiles, phase, repo_root=None):

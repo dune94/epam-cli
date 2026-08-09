@@ -2596,6 +2596,13 @@ verify_prescribed_helper_used() {
         fi
     fi
     STORY_REJECTION_KEY="helper:${_helper}"
+    # STORY_REJECTION_KEY is NOT feedback. _rejection_repeat_check reads it to notice an
+    # identical rejection twice and advance the model ladder — so the loop escalates to a
+    # stronger model and asks it to guess again, with the reason still withheld. Live
+    # 2026-08-09 attempts 1 and 2 produced the identical violation for exactly that reason,
+    # and all eight would have. VERIFICATION_FAILURE is the channel the failure analyst reads
+    # and turns into the next attempt's prompt.
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe prescribed helper `%s` EXISTS in this repository and your change does not use it — you re-implemented logic the repository already owns, which is how a fix comes to match on the wrong format and silently never work. Import and use `%s` instead of hand-rolling it, then make the change again.\n' "$_helper" "$_helper")
     warning "Story $story_id: the prescribed helper \`${_helper}\` EXISTS in this repository but does NOT appear in the change. The agent hand-rolled the logic instead of reusing it — live 2026-07-26 that produced a fix matching on '-' when the repository's own separator is '#', so the fix could never work. Import and use ${_helper}, which owns that format, rather than re-implementing it.${_note}"
     return 1
 }
@@ -2870,6 +2877,9 @@ verify_story_deliverables() {
 
     if [ ${#missing[@]} -gt 0 ]; then
         STORY_REJECTION_KEY="missing:$(printf '%s,' "${missing[@]}")"
+        # Told to the WRITER, not only to the log: a rejection the next attempt cannot read is
+        # a rejection it cannot act on. See every-gate-tells-the-writer-why.test.ts.
+        VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe story declares deliverable(s) that do not exist. Create each one at the exact path listed, or correct the declaration if the path is wrong:\n\n%s\n' "$(printf '  - %s\n' "${missing[@]}")")
         error "Story $story_id is missing ${#missing[@]} declared deliverable(s) in $PROJECT_ROOT:"
         for file in "${missing[@]}"; do
             error "  $file"

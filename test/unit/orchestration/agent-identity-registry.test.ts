@@ -51,6 +51,9 @@ const NOT_INVOKERS: Record<string, string> = {
   'kill-tier3-run.sh': 'sweeps ai-run.sh processes by name when killing a run',
   'lib/cost-emitter.js': 'reads cost records after the fact; makes no model call',
   'lib/agent-invoke.sh': 'the gateway itself — it sets the name for its callers',
+  'lib/agent-tools.js': 'a pure module computing a read-only tool grant; it mentions ai-run.sh in '
+    + 'a comment explaining why an empty grant is unsafe, and executes no process at all '
+    + '(no child_process import anywhere in the file)',
 };
 
 const KNOWN_UNNAMED: string[] = [

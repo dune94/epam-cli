@@ -274,10 +274,20 @@ describe('commit_completed_story() — REAL execution proves a planted secret bl
     }
   });
 
-  it('the real call site in run_implementation() (claude.sh) protects the call with || true, not a bare invocation', () => {
+  it('the real call site in run_implementation() (claude.sh) survives a failing commit AND acts on it', () => {
+    // The requirement is unchanged: under `set -e`, a bare call to a function that legitimately
+    // returns 1 kills the whole lane script, so the call must be protected.
+    //
+    // The MECHANISM changed on 2026-08-09. It was `|| true`, which protected the loop and threw
+    // the verdict away — a story whose work never committed was still reported as delivered.
+    // It now captures the code and demotes the story. Both halves are asserted, because
+    // protecting without acting is the bug that replaced the one this test was written for.
     const loopStart = claudeSrc.indexOf('for story_id in "${stories[@]}"; do');
     const loopBody = claudeSrc.slice(loopStart, claudeSrc.indexOf('EPAM CLI Orchestration Loop Complete', loopStart));
-    expect(loopBody).toMatch(/commit_completed_story "\$story_id" \|\| true/);
+    expect(loopBody, 'a bare call under set -e kills the lane script')
+      .toMatch(/commit_completed_story "\$story_id" (\|\| true|\|\| _commit_rc=\$\?)/);
+    expect(loopBody, 'the commit verdict is discarded — an uncommitted story reads as delivered')
+      .toMatch(/_commit_rc/);
   });
 
   // REPRODUCES the exact live defect (found live, 2026-07-14, tier3-travel-app

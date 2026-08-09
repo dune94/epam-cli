@@ -197,7 +197,15 @@ describe('plugin tools are reachable — enumerated from the real plugin modules
     const reachable = naming.filter(s => {
       // A script with any unrestricted agent invocation can reach every loaded plugin.
       if (!s.restrictsEveryInvocation) return true;
-      return allowlistLiterals(s.path).some(l => allowlistAdmits(l, tool));
+      if (allowlistLiterals(s.path).some(l => allowlistAdmits(l, tool))) return true;
+      // AN ALLOW-LIST MAY BE EXTENDED DYNAMICALLY, and reading only literals cannot see that.
+      // team-lead-review.sh builds EPAM_ALLOWED_TOOLS as
+      //   "bash,read_file,list_files,search${_review_plugin_tools:+,${_review_plugin_tools}}"
+      // where _review_plugin_tools comes from project_tool_names(), which returns every tool
+      // the codeline registered — scan_secrets among them, verified by executing it. A literal
+      // scan reported the tool as filtered out while it was in fact permitted at runtime, and
+      // the honest fix is to recognise the expansion rather than to hardcode the tool name here.
+      return allowlistLiterals(s.path).some(l => /\$\{?\w*(plugin|project)_tools?\w*/i.test(l));
     });
     expect(
       reachable.map(s => s.path),

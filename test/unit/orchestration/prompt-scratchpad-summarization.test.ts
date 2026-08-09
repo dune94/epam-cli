@@ -45,7 +45,13 @@ describe('claude.sh — prompt scratchpad summarization (source inspection)', ()
   });
 
   it('threshold is configurable via EPAM_PROMPT_SCRATCHPAD_THRESHOLD_CHARS and opt-outable via 0', () => {
-    expect(claudeSrc).toMatch(/EPAM_PROMPT_SCRATCHPAD_THRESHOLD_CHARS:-16000/);
+    // The 16000 literal moved to orchestrations/config/spec-mode-defaults.json
+    // (promptTrim.thresholdChars) and reaches claude.sh through lib/prompt-budget.sh. The
+    // requirement is that it stays operator-settable and that 0 disables trimming.
+    expect(claudeSrc).toMatch(/prompt_trim_threshold/);
+    expect(readFileSync(join(__dirname, '../../../orchestrations/config/spec-mode-defaults.json'), 'utf8'))
+      .toMatch(/EPAM_PROMPT_SCRATCHPAD_THRESHOLD_CHARS/);
+    expect(claudeSrc).toMatch(/_scratchpad_threshold" -gt 0/);
     expect(claudeSrc).toMatch(/_scratchpad_threshold" -gt 0/);
   });
 
@@ -54,7 +60,7 @@ describe('claude.sh — prompt scratchpad summarization (source inspection)', ()
     expect(idx).toBeGreaterThan(-1);
     const block = claudeSrc.slice(idx, idx + 600);
     expect(block).toMatch(/heading_idxs = \[i for i, l in enumerate\(lines\) if l\.startswith\('## '\)\]/);
-    expect(block).toMatch(/heading_idxs\[-3\]/);
+    expect(block).toMatch(/heading_idxs\[-KEEP\]/);
   });
 });
 
@@ -65,10 +71,16 @@ describe('claude.sh — prompt scratchpad summarization (source inspection)', ()
  * substitution, not a standalone bash function.
  */
 function extractTrimmerPython(): string {
-  const startMarker = "_trimmed_amendment=$(printf '%s' \"$COORDINATOR_PROMPT_AMENDMENT\" | python3 -c \"";
-  const start = claudeSrc.indexOf(startMarker);
+  // Anchored on the assignment and then on `python3 -c "`, NOT on the exact pipeline text.
+  // The pipeline gained `EPAM_PROMPT_TRIM_KEEP="$_keep_sections"` between the two when the
+  // keep-count moved to config, and a marker pinned to the old spelling threw here — so every
+  // real-execution test in this file stopped exercising the trimmer while still reporting a
+  // failure that looked like the trimmer was gone.
+  const assign = claudeSrc.indexOf("_trimmed_amendment=$(printf");
+  if (assign === -1) throw new Error('trimmer assignment not found');
+  const start = claudeSrc.indexOf('python3 -c "', assign);
   if (start === -1) throw new Error('trimmer start marker not found');
-  const bodyStart = start + startMarker.length;
+  const bodyStart = start + 'python3 -c "'.length;
   const end = claudeSrc.indexOf('\n" 2>/dev/null', bodyStart);
   if (end === -1) throw new Error('trimmer end marker not found');
   return claudeSrc.slice(bodyStart, end).replace(/\\"/g, '"');
@@ -79,7 +91,11 @@ function runTrimmer(input: string): string {
   try {
     const scriptPath = join(dir, 'trim.py');
     writeFileSync(scriptPath, extractTrimmerPython());
-    return execFileSync('python3', [scriptPath], { input, encoding: 'utf8' });
+    // claude.sh supplies the keep-count in the environment; without it the extracted script
+    // raises KeyError and the failure reads as though the trimmer were broken.
+    return execFileSync('python3', [scriptPath], {
+      input, encoding: 'utf8', env: { ...process.env, EPAM_PROMPT_TRIM_KEEP: '3' },
+    });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -152,6 +168,12 @@ describe('claude.sh retry-loop — full prompt-scratchpad integration (REAL exec
       writeFileSync(
         scriptPath,
         [
+          `warning() { :; }`,
+          // The block now reads both budgets through lib/prompt-budget.sh (they were literals
+          // until the 16000 and the keep-count moved to spec-mode-defaults.json). Without it
+          // prompt_trim_threshold is an unknown command and the whole harness aborts — which
+          // reads as "the scratchpad logic is broken" rather than "the harness is stale".
+          `. ${JSON.stringify(join(__dirname, '../../../orchestrations/scripts/lib/prompt-budget.sh'))}`,
           `warning() { :; }`,
           `LOG_DIR="${join(dir, 'logs')}"`,
           `build_implementation_prompt() { echo "${opts.promptBase}"; }`,

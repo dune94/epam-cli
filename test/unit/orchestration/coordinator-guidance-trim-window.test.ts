@@ -37,8 +37,14 @@ const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
 const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
 
 describe('coordinator-guidance trim window — wiring (static)', () => {
-  it('keeps the last 3 headings (heading_idxs[-3]), not just the last 1', () => {
-    expect(claudeSrc).toMatch(/heading_idxs\[-3\] if len\(heading_idxs\) >= 3/);
+  it('keeps the last N headings from config, not just the last 1', () => {
+    // Was pinned to the literal `heading_idxs[-3]`. That 3 moved into
+    // orchestrations/config/spec-mode-defaults.json (keepRecentSections) so an operator can
+    // change it without editing code, and this assertion broke while the behaviour was
+    // unchanged. Assert the SHAPE — a configured count, not a baked-in one — and let the
+    // real-execution tests below prove the value.
+    expect(claudeSrc).toMatch(/heading_idxs\[-KEEP\] if len\(heading_idxs\) >= KEEP/);
+    expect(claudeSrc).toMatch(/EPAM_PROMPT_TRIM_KEEP/);
     expect(claudeSrc).not.toMatch(/print\(chr\(10\)\.join\(lines\[heading_idxs\[-1\]:\]\)/);
   });
 
@@ -52,7 +58,10 @@ describe('coordinator-guidance trim window — wiring (static)', () => {
 describe('coordinator-guidance trim window — REAL execution', () => {
   function extractTrimScript(): string {
     const start = claudeSrc.indexOf('_trimmed_amendment=$(printf');
-    const pyStart = claudeSrc.indexOf('import sys', start);
+    // The python begins `import os, sys` since the keep-count started coming from the
+    // environment; searching for 'import sys' silently found nothing and every test in this
+    // file then ran an EMPTY script and asserted against ''.
+    const pyStart = claudeSrc.indexOf('import os, sys', start);
     const pyEnd = claudeSrc.indexOf('" 2>/dev/null', pyStart);
     return claudeSrc.slice(pyStart, pyEnd);
   }
@@ -60,7 +69,13 @@ describe('coordinator-guidance trim window — REAL execution', () => {
   function runTrim(headings: string[]): string {
     const script = extractTrimScript();
     const input = headings.map((h, i) => `## Heading ${i}\nbody text for heading ${i}`).join('\n');
-    return execFileSync('python3', ['-c', script], { input, encoding: 'utf8' }).trimEnd();
+    // claude.sh passes the keep-count in the environment (EPAM_PROMPT_TRIM_KEEP="$_keep_sections").
+    // Without it the extracted script raises KeyError and the failure reads as though the
+    // trimmer itself were broken. 3 is the shipped default in spec-mode-defaults.json, which is
+    // what these expectations describe.
+    return execFileSync('python3', ['-c', script], {
+      input, encoding: 'utf8', env: { ...process.env, EPAM_PROMPT_TRIM_KEEP: '3' },
+    }).trimEnd();
   }
 
   it('REPRODUCES the exact live defect and proves the fix: with 3 headings accumulated, the FIRST one is still visible after trimming (previously only the last would survive)', () => {
@@ -86,7 +101,10 @@ describe('coordinator-guidance trim window — REAL execution', () => {
 
   it('with no headings at all, falls back to the full text unchanged', () => {
     const script = extractTrimScript();
-    const result = execFileSync('python3', ['-c', script], { input: 'plain text with no headings', encoding: 'utf8' }).trimEnd();
+    const result = execFileSync('python3', ['-c', script], {
+      input: 'plain text with no headings', encoding: 'utf8',
+      env: { ...process.env, EPAM_PROMPT_TRIM_KEEP: '3' },
+    }).trimEnd();
     expect(result).toBe('plain text with no headings');
   });
 });

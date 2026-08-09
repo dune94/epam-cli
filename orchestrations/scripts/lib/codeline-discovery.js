@@ -822,7 +822,7 @@ function callLlm(prompt, opts = {}) {
     // The model decides WHICH repositories are in scope and why. It does not get to name
     // them: a codeline name is a primary key (byCodeline, the KB stores, story.codelines,
     // project.outputDirs, the lane loop) and a sampled key eventually disagrees with itself.
-    // It did on 2026-08-08 — 'gotransit' on one run, 'nextgotransitcom' on the next, and a
+    // It did on 2026-08-08 — one spelling on one run, its punctuation-stripped form on the next, and a
     // resume that re-ran discovery left every investigator unresolvable. See deriveCodelineNames.
     const named = deriveCodelineNames(parsed);
     for (const cl of (named.codelines || [])) {

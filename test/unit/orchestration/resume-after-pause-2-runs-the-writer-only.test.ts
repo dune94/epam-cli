@@ -110,9 +110,13 @@ describe('single-lane and parent-only runs are unchanged', () => {
     expect(skipEnv(base)).toContain('EPAM_SPEC_MODE=0');
   });
 
-  it('a parent-only post-roster run still just skips the mint', () => {
+  it('a parent-only post-roster run skips the mint and the ingest, and nothing else', () => {
+    // The ingest skip joined every stage on 2026-08-09: re-ingesting overwrites PRD_FILE with
+    // the spec-free Jira synthesis, and a PRD already exists at post-roster because ingest runs
+    // before the mint. See resume-does-not-re-ingest-over-the-spec. The set is still asserted
+    // exactly — nothing further may be skipped at post-roster.
     const env = skipEnv(runDir('post-roster'));
-    expect(env).toEqual(['EPAM_SKIP_AGENT_MINT=1']);
+    expect(env.sort()).toEqual(['EPAM_SKIP_AGENT_MINT=1', 'EPAM_SKIP_JIRA_INGEST=1']);
   });
 
   it('no checkpoint at all still refuses rather than guessing', () => {

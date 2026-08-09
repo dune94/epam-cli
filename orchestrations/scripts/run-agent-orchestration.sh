@@ -3533,12 +3533,30 @@ _run_jira_pipeline() {
   # Without pipefail, the pipeline exit code is tee's exit code (almost always 0),
   # so the || never fires even when ingest-jira-tickets.sh exits 1.
   # PIPESTATUS[0] captures bash ingest's exit code REGARDLESS of tee's success.
+  # A RESUME MUST NOT RE-INGEST. ingest writes --out-prd over PRD_FILE, and Jira carries the
+  # story text only: no verification criteria, no fix-site analysis, no per-codeline maps. On a
+  # resume the PRD on disk is strictly richer than anything ingest can synthesize, so re-running
+  # it silently deletes the spec output the resume exists to preserve.
+  #
+  # Live 2026-08-09: restore_run_checkpoint correctly KEPT the merged canonical (27 spec items,
+  # "KEEPING the PRD on disk"), and this call emptied it three steps later. The lane PRDs are
+  # filtered FROM canonical at lane start, so gotransit ran its writer against 0 criteria and the
+  # end-of-lane merge wrote that emptiness back, taking the other two codelines' entries with it.
+  # The restore guard was necessary and not sufficient — it protected one writer, not the file.
+  if [ "${EPAM_SKIP_JIRA_INGEST:-0}" = "1" ]; then
+    if [ ! -s "$_synth_prd" ]; then
+      error "[jira] resume asked to skip ingest but no PRD exists at $_synth_prd — refusing to continue with no stories"
+      return 1
+    fi
+    log "[jira] ⊘ Ingest skipped (resume) — using the PRD on disk: $(jq '[.stories[]?] | length' "$_synth_prd" 2>/dev/null || echo '?') story(ies), $(jq '[.stories[]? | ((.verificationCriteria // []) | length) + ((.fixSiteAnalysis // []) | length)] | add // 0' "$_synth_prd" 2>/dev/null || echo '?') spec item(s)"
+  else
   bash "$SCRIPT_DIR/ingest-jira-tickets.sh" \
     --project "$JIRA_PROJECT_KEY" \
     --status  "${JIRA_STATUS_FILTER:-To Do}" \
     --out-prd "$_synth_prd" \
     2>&1 | tee -a "$_log_file"
   _ingest_exit="${PIPESTATUS[0]}"
+  fi
 
   if [ "$_ingest_exit" = "2" ]; then
     error "[jira] Pipeline halted: insufficient ACs. Review Jira tickets and re-trigger."

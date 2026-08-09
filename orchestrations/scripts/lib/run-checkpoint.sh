@@ -220,16 +220,19 @@ resume_skip_env() {
             # re-minting would propose against an already-minted roster and the merge is
             # additive, so a resume would accumulate near-duplicate roles.
             echo "EPAM_SKIP_AGENT_MINT=1"
+            echo "EPAM_SKIP_JIRA_INGEST=1"
             ;;
         post-spec)
             echo "EPAM_SPEC_MODE=0"
             echo "EPAM_SKIP_AGENT_MINT=1"
+            echo "EPAM_SKIP_JIRA_INGEST=1"
             ;;
         pre-writer)
             echo "EPAM_SPEC_MODE=0"
             echo "EPAM_SKIP_AGENT_MINT=1"
             echo "SKIP_CPA=1"
             echo "SKIP_SKILL_ASSESSMENT=1"
+            echo "EPAM_SKIP_JIRA_INGEST=1"
             ;;
         *)
             echo "[checkpoint] checkpoint for run '${_rid}' records an unrecognised stage '${_stage}' — refusing to guess which steps to skip" >&2

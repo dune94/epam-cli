@@ -70,11 +70,47 @@ export class SearchTool implements Tool {
       // failure, which surfaces as a non-numeric exitCode — means the search DID NOT RUN.
       const ran = (r: { exitCode?: number }) => r.exitCode === 0 || r.exitCode === 1;
 
-      let result = await execa('rg', args, { reject: false, timeout: 10000 });
+      // EPAM_SEARCH_FORCE_GREP exists so the fallback can be tested deterministically on a host
+      // where rg IS installed. The defects below lived only on this path and were invisible to
+      // any test that happened to run where rg existed.
+      // EPAM_SEARCH_FORCE_GREP takes the SAME route a missing rg takes — spawning a binary that
+      // cannot exist — rather than faking a result object. A hand-built stand-in would have to
+      // reproduce execa's shape, and the first version of it silently narrowed the type and
+      // deleted the shortMessage the "search did not run" branch below reports. Forcing the real
+      // failure keeps the fallback under test identical to the one that runs in production.
+      const rgBinary = process.env.EPAM_SEARCH_FORCE_GREP === '1'
+        ? 'epam-force-grep-fallback-no-such-binary'
+        : 'rg';
+      let result = await execa(rgBinary, args, { reject: false, timeout: 10000 });
       if (!ran(result)) {
-        const grepArgs = ['-r', '-n', caseSensitive ? '' : '-i', pattern, searchPath].filter(
-          Boolean
-        );
+        // THE FALLBACK MUST ASK THE SAME QUESTION, not merely run.
+        //
+        // Live 2026-08-09: search("getServerSideProps|getStaticProps", filePattern="*.tsx")
+        // returned "(no matches found)" against 11 files that matched. The writer tried three
+        // times, concluded the codebase was empty, and switched to `bash grep` — 56 times.
+        //
+        //  -E: grep defaults to BASIC regular expressions, where `|` is a LITERAL PIPE. The
+        //      alternation searched for a three-character string and correctly found nothing,
+        //      while rg (Rust regex) would have matched — so the tool's answer depended on
+        //      which binary happened to exist. Patterns without alternation kept working, which
+        //      is exactly the split visible in the live data.
+        //
+        //  --include: the glob reached rg as --glob and simply vanished here, so a search
+        //      scoped to "*.tsx" silently searched everything.
+        //
+        // The earlier fix made this path REACHABLE. It did not make it EQUIVALENT, and an
+        // inequivalent fallback reports absence rather than failure — the same class of silent
+        // wrong answer as the ENOENT it replaced.
+        const grepArgs = [
+          '-r',
+          '-n',
+          '-E',
+          caseSensitive ? '' : '-i',
+          filePattern ? `--include=${filePattern}` : '',
+          '--',
+          pattern,
+          searchPath,
+        ].filter(Boolean);
         result = await execa('grep', grepArgs, { reject: false, timeout: 10000 });
       }
 

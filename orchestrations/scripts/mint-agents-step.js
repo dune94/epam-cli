@@ -489,9 +489,15 @@ if (require.main !== module) return;
       logDir: LOG_DIR,
       repoPath: REPO_PATH,
     });
+    // Every proposal in exactly one bucket. `superseded` is a proposal refused on one attempt
+    // and corrected on a later one — previously invisible, which left the printed line with a
+    // silent remainder on three consecutive runs. `unaccounted` is shown only when the numbers
+    // genuinely do not reconcile, rather than being folded into another bucket.
+    const _tally = spec.reconcileMintTally(mint);
     process.stderr.write(
-      `[mint-step] proposed=${mint.proposed} minted=${mint.minted.length} ` +
-      `unchanged=${mint.unchanged.length} rejected=${mint.rejected.length}\n`);
+      `[mint-step] proposed=${_tally.proposed} minted=${_tally.minted} ` +
+      `unchanged=${_tally.unchanged} rejected=${_tally.rejected} superseded=${_tally.superseded}` +
+      `${_tally.unaccounted ? ` UNACCOUNTED=${_tally.unaccounted}` : ''}\n`);
     for (const m of mint.minted) {
       const tag = m.kind === 'investigator' ? `investigator:${m.codeline || '(no codeline!)'}` : 'implementer';
       process.stderr.write(`[mint-step]   + [${tag}] ${m.name} (${m.surfaces.join(', ')}) — ${m.rationale}\n`);

@@ -162,3 +162,61 @@ describe('the minter is actually SHOWN the files — a collected field nobody re
     expect(line).toContain('opened them');
   });
 });
+
+/**
+ * COMPEL THE EVIDENCE, DO NOT MERELY PERMIT IT.
+ *
+ * Permitting file-level evidence got gotransit to open six files and metrolinx one. A codeline
+ * declared in_scope on the strength of nothing opened is an assertion, not an observation —
+ * and it is the assertion that produced "no existing live preview infrastructure, this is
+ * greenfield work" about a brownfield estate. If the survey says the work reaches a codeline,
+ * it must be able to say what it read there.
+ */
+describe('an in_scope codeline must say what it opened', () => {
+  const entry = (over: Record<string, unknown> = {}) => ({
+    codeline: 'one', state: 'in_scope', evidence: 'it is in scope',
+    surfaces: ['src/hooks/'], filesRead: ['src/hooks/useContent.ts'], ...over,
+  });
+
+  it('the schema REQUIRES filesRead, so the model cannot omit it', () => {
+    const req = TOOL_ESTATE_SURVEY.parameters.properties.codelines.items.required;
+    expect(req, 'filesRead is optional, so it is skipped').toContain('filesRead');
+  });
+
+  it('in_scope with files is unflagged', () => {
+    const out = sanitizeSurvey({ codelines: [entry()] }, CODELINES);
+    expect(out.codelines[0].evidenceGap).toBeFalsy();
+  });
+
+  it('THE DEFECT: in_scope with NO files opened is flagged', () => {
+    const out = sanitizeSurvey({ codelines: [entry({ filesRead: [] })] }, CODELINES);
+    expect(
+      out.codelines[0].evidenceGap,
+      'a codeline was declared in scope without a single file being opened, and nothing said so',
+    ).toBe(true);
+  });
+
+  it('no_work_found without files is NOT flagged — looking and finding nothing is a real answer', () => {
+    const out = sanitizeSurvey({ codelines: [entry({ state: 'no_work_found', filesRead: [] })] }, CODELINES);
+    expect(out.codelines[0].evidenceGap).toBeFalsy();
+  });
+
+  it('not_investigated is not flagged either — it never claimed to have looked', () => {
+    const out = sanitizeSurvey({ codelines: [entry({ state: 'not_investigated', filesRead: [] })] }, CODELINES);
+    expect(out.codelines[0].evidenceGap).toBeFalsy();
+  });
+
+  it('the minter is TOLD when a codeline is in scope on no opened files', () => {
+    const line = spec.surveyLineFor({ ...entry({ filesRead: [] }), evidenceGap: true });
+    expect(line.toLowerCase()).toMatch(/files it opened: none/);
+    expect(line.toLowerCase()).toMatch(/asserted, not observed/);
+  });
+
+  it('the prompt states the requirement', () => {
+    const p = spec.buildSurveyPrompt({
+      codelines: CODELINES, tickets: [{ id: 'T', title: 't', description: 'd' }],
+      referencedDocs: [], declaredDependencies: [],
+    }).toLowerCase();
+    expect(p).toMatch(/in_scope.*(must|name at least one)|at least one file/);
+  });
+});

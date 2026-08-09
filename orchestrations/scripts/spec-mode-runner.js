@@ -3104,7 +3104,7 @@ const TOOL_ESTATE_SURVEY = {
         description: 'One entry per codeline offered to you. Never omit one — silence is not a state.',
         items: {
           type: 'object',
-          required: ['codeline', 'state', 'evidence'],
+          required: ['codeline', 'state', 'evidence', 'filesRead'],
           properties: {
             codeline: { type: 'string', description: 'Exactly as named in the scope list.' },
             state: {
@@ -3191,16 +3191,22 @@ function sanitizeSurvey(payload, codelines) {
         `survey entry for "${raw.codeline}" carried fix-site field(s) ${stripped.join(', ')} — ` +
         'the estate survey reports WHERE TO LOOK, never what to change; dropped');
     }
+    const _state = SURVEY_STATES.includes(raw.state) ? raw.state : 'not_investigated';
+    const _read = Array.isArray(raw.filesRead)
+      ? raw.filesRead.filter((f) => typeof f === 'string' && f.trim())
+      : [];
     byName.set(raw.codeline, {
       codeline: raw.codeline,
-      state: SURVEY_STATES.includes(raw.state) ? raw.state : 'not_investigated',
+      state: _state,
       evidence: typeof raw.evidence === 'string' ? raw.evidence : '',
       surfaces: Array.isArray(raw.surfaces) ? raw.surfaces.filter((s) => typeof s === 'string') : [],
       // Evidence, kept separate from breadth: a directory exists in every codeline and proves
       // nothing about any of them, so a brief grounded on one cannot really be checked.
-      filesRead: Array.isArray(raw.filesRead)
-        ? raw.filesRead.filter((f) => typeof f === 'string' && f.trim())
-        : [],
+      filesRead: _read,
+      // An in_scope claim with nothing opened is an assertion, not an observation. Looking and
+      // finding nothing (no_work_found) is a real answer and is NOT flagged; neither is
+      // not_investigated, which never claimed to have looked.
+      evidenceGap: _state === 'in_scope' && _read.length === 0,
     });
   }
 
@@ -3336,7 +3342,12 @@ YOUR JOB, and its limits:
    Keep that recommendation OUT of your findings: findings are what you saw, recommendations
    are about the team.
 
-REPORT THE EXACT FILES YOU OPENED, in "filesRead". A directory tells a later reader almost
+REPORT THE EXACT FILES YOU OPENED, in "filesRead". If you report a codeline as in_scope you
+must name AT LEAST ONE FILE you opened in it: saying the work reaches a repository you did not
+read is an assertion, and an assertion of exactly that kind produced "no existing
+infrastructure, this is greenfield work" about an estate with 243 matching source files.
+Looking and finding nothing is different, and is a valuable answer — report that as
+no_work_found with what you read. A directory tells a later reader almost
 nothing — src/context/ exists in most codelines — and a claim about it cannot be checked. A
 file path can be verified, and a brief built on one is grounded. Report what you read even
 where you conclude the work does not reach that codeline.
@@ -3513,8 +3524,37 @@ function surveyLineFor(c) {
   const areas = c.surfaces && c.surfaces.length ? ` — areas: ${c.surfaces.join(', ')}` : '';
   const read = c.filesRead && c.filesRead.length
     ? `\n    files it opened: ${c.filesRead.join(', ')}`
-    : '';
+    : (c.evidenceGap ? '\n    files it opened: NONE — in scope is asserted, not observed here' : '');
   return `- ${c.codeline}: ${c.state}${areas}${read}\n    evidence: ${String(c.evidence || '').replace(/\s+/g, ' ')}`;
+}
+
+/**
+ * The mint tally, reconciled so every proposal lands in exactly one bucket.
+ *
+ * The mint retries when proposals are refused. Across attempts `minted` and `unchanged`
+ * accumulate but `rejected` was replaced by the last attempt's list, so a proposal refused on
+ * attempt 1 and corrected on attempt 2 was counted in `proposed`, counted again in `minted`,
+ * and its rejection erased. Three consecutive runs printed a tally with a silent remainder
+ * (6/3/0/1, 8/5/0/0, 7/5/0/0) — the roster was right each time, the account of how it was
+ * reached was not, and the missing numbers sent me looking for agents that had never gone
+ * missing.
+ *
+ * `unaccounted` is reported rather than absorbed: padding a bucket to make the line add up
+ * would recreate the same defect more quietly.
+ */
+function reconcileMintTally(r) {
+  const res = r || {};
+  const len = (x) => (Array.isArray(x) ? x.length : 0);
+  const proposed = Number.isFinite(res.proposed) ? res.proposed : 0;
+  const minted = len(res.minted);
+  const unchanged = len(res.unchanged);
+  const rejected = len(res.rejected);
+  // Refused at some point, but not still refused: corrected on a later attempt.
+  const stillRejected = new Set((res.rejected || []).map((x) => x && x.name));
+  const superseded = (res.rejectedAcrossAttempts || [])
+    .filter((x) => x && !stillRejected.has(x.name)).length;
+  const unaccounted = Math.max(0, proposed - minted - unchanged - rejected - superseded);
+  return { proposed, minted, unchanged, rejected, superseded, unaccounted };
 }
 
 async function mintProjectAgents({
@@ -3886,11 +3926,21 @@ Do not propose a role that duplicates one of the canonical roles already listed 
       ...retryResult,
       minted: [...result.minted, ...retryResult.minted],
       unchanged: [...result.unchanged, ...retryResult.unchanged],
+      // Accumulated, unlike `rejected`, which is deliberately the LAST attempt's list — what
+      // is still refused. Without this a rejection corrected on a later attempt disappears
+      // from the tally and the printed numbers stop adding up.
+      rejectedAcrossAttempts: [...(result.rejectedAcrossAttempts || result.rejected || []), ...retryResult.rejected],
     };
     proposals.push(...retryProposals);
   }
 
-  return { ...result, proposed: proposals.length, attempts, protectedRoles: fixedRoles.length };
+  return {
+    ...result,
+    proposed: proposals.length,
+    rejectedAcrossAttempts: result.rejectedAcrossAttempts || result.rejected || [],
+    attempts,
+    protectedRoles: fixedRoles.length,
+  };
 }
 
 const TOOL_ROLE_ASSIGNMENTS = {
@@ -8813,6 +8863,7 @@ module.exports = {
   sanitizeSurvey,
   buildSurveyPrompt,
   surveyLineFor,
+  reconcileMintTally,
   TOOL_ESTATE_SURVEY,
   SURVEY_STATES,
   TOOL_ROSTER_REVIEW,

@@ -3126,9 +3126,18 @@ const TOOL_ESTATE_SURVEY = {
               type: 'array',
               items: { type: 'string' },
               description:
-                'Areas of the repository involved: directories or modules. NOT specific files ' +
-                'to change and NOT a fix — deciding that is the per-codeline investigator\'s ' +
-                'job, working in that repository. Breadth only.',
+                'Areas of the repository involved: directories or modules. Breadth only. NOT a ' +
+                'fix and NOT which file to change — deciding that is the per-codeline ' +
+                'investigator\'s job, working in that repository.',
+            },
+            filesRead: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                'The exact files you OPENED, as repository-relative paths. This is EVIDENCE — ' +
+                'an observation of what is there, which a later check can verify — not a list ' +
+                'of files to change. Report what you read even when you conclude the work does ' +
+                'not reach this codeline.',
             },
           },
         },
@@ -3187,6 +3196,11 @@ function sanitizeSurvey(payload, codelines) {
       state: SURVEY_STATES.includes(raw.state) ? raw.state : 'not_investigated',
       evidence: typeof raw.evidence === 'string' ? raw.evidence : '',
       surfaces: Array.isArray(raw.surfaces) ? raw.surfaces.filter((s) => typeof s === 'string') : [],
+      // Evidence, kept separate from breadth: a directory exists in every codeline and proves
+      // nothing about any of them, so a brief grounded on one cannot really be checked.
+      filesRead: Array.isArray(raw.filesRead)
+        ? raw.filesRead.filter((f) => typeof f === 'string' && f.trim())
+        : [],
     });
   }
 
@@ -3195,7 +3209,7 @@ function sanitizeSurvey(payload, codelines) {
     if (!byName.has(name)) {
       byName.set(name, {
         codeline: name, state: 'not_investigated',
-        evidence: 'the survey returned no entry for this codeline', surfaces: [],
+        evidence: 'the survey returned no entry for this codeline', surfaces: [], filesRead: [],
       });
     }
   }
@@ -3228,13 +3242,16 @@ function sanitizeSurvey(payload, codelines) {
  * the roster is minted without — exactly the state before this existed — so the caller gets
  * an all-'failed' survey and proceeds, with the reason recorded.
  */
-async function surveyEstate({
-  promptExec, tickets, referencedDocs, codelines, logDir, repoPath, toolGrant, declaredDependencies,
-}) {
+/**
+ * The estate-survey prompt, built where a test can execute it.
+ *
+ * Extracted for the same reason as buildAssignmentPrompt: this prompt's defect was in its own
+ * wording — it forbade naming a file at all, conflating evidence with prescription — and no
+ * test could see that while the string was welded inside a 150-line function.
+ */
+function buildSurveyPrompt({ codelines, tickets, referencedDocs, declaredDependencies } = {}) {
   const _cls = (Array.isArray(codelines) ? codelines : []).filter(Boolean);
   const _named = _cls.map((c) => (typeof c === 'string' ? { name: c } : c)).filter((c) => c && c.name);
-  if (!_named.length) return { codelines: [], recommendedInvestigators: [], violations: [], ran: false };
-
   const ticketBlock = (Array.isArray(tickets) ? tickets : []).map((t) =>
     // WHOLE, never clipped. In brownfield the description is the only source of the
     // verification criteria — cutting it removes the contract and the agent invents the rest.
@@ -3270,7 +3287,7 @@ async function surveyEstate({
   const depBlock = (Array.isArray(declaredDependencies) ? declaredDependencies : [])
     .map((d) => `- ${d}`).join('\n');
 
-  const prompt = `You are surveying an estate of repositories BEFORE its agent team is assembled.
+  return `You are surveying an estate of repositories BEFORE its agent team is assembled.
 
 THE WORK (real tickets from the tracker):
 ${ticketBlock || '- (no tickets available)'}
@@ -3319,11 +3336,18 @@ YOUR JOB, and its limits:
    Keep that recommendation OUT of your findings: findings are what you saw, recommendations
    are about the team.
 
+REPORT THE EXACT FILES YOU OPENED, in "filesRead". A directory tells a later reader almost
+nothing — src/context/ exists in most codelines — and a claim about it cannot be checked. A
+file path can be verified, and a brief built on one is grounded. Report what you read even
+where you conclude the work does not reach that codeline.
+
 WHAT YOU MUST NOT DO. You are not fixing anything and you are not choosing files to change.
-Name directories and modules, never a file to edit, a function to patch or a change to make.
-Each codeline gets its own investigator working inside that repository, and it decides. A fix
-site you supply for a repository you swept from the outside is how one codeline's file ends up
-in another's work — so state where to look, and let the investigator look.
+Do not say which file to edit, which function to patch, or what the change should be. Naming a
+file as something you READ is evidence and is wanted; naming one as the place to fix is a
+decision that is not yours. Each codeline gets its own investigator working inside that
+repository, and it decides. A fix site you supply for a repository you swept from the outside
+is how one codeline's file ends up in another's work — so report what you saw, state where to
+look, and let the investigator look.
 
 Respond with ONLY valid JSON (no markdown fences, no report, no commentary before or after):
 {
@@ -3332,7 +3356,8 @@ Respond with ONLY valid JSON (no markdown fences, no report, no commentary befor
       "codeline": "<exactly as named in scope above>",
       "state": "in_scope | no_work_found | not_investigated | failed",
       "evidence": "<what you opened and what you saw>",
-      "surfaces": ["<directory or module>"]
+      "surfaces": ["<directory or module>"],
+      "filesRead": ["<exact path of a file you opened>"]
     }
   ],
   "recommendedInvestigators": [
@@ -3342,6 +3367,16 @@ Respond with ONLY valid JSON (no markdown fences, no report, no commentary befor
 
 One entry in "codelines" for EVERY codeline listed in scope. Everything you want to say goes
 inside these fields — a prose report outside this JSON is discarded unread, however good it is.`;
+}
+
+async function surveyEstate({
+  promptExec, tickets, referencedDocs, codelines, logDir, repoPath, toolGrant, declaredDependencies,
+}) {
+  const _cls = (Array.isArray(codelines) ? codelines : []).filter(Boolean);
+  const _named = _cls.map((c) => (typeof c === 'string' ? { name: c } : c)).filter((c) => c && c.name);
+  if (!_named.length) return { codelines: [], recommendedInvestigators: [], violations: [], ran: false };
+
+  const prompt = buildSurveyPrompt({ codelines: _named, tickets, referencedDocs, declaredDependencies });
 
   const _env = { EPAM_AGENT_NAME: 'estate-surveyor', EPAM_SEAM: 'estate-survey' };
   if (toolGrant) {
@@ -3466,6 +3501,22 @@ const TOOL_PROJECT_AGENTS = {
  * Read tools are granted (repoPath) so the proposer can VERIFY the codeline's shape instead
  * of asserting it from the ticket text alone.
  */
+/**
+ * One survey entry, as the minter sees it.
+ *
+ * filesRead is rendered SEPARATELY from areas because they carry different weight: an area is
+ * breadth ("src/context/ is involved") and a file is an observation the reader can verify. A
+ * field collected and never shown is inert — this pipeline has produced several — so the
+ * rendering is here, where a test executes it.
+ */
+function surveyLineFor(c) {
+  const areas = c.surfaces && c.surfaces.length ? ` — areas: ${c.surfaces.join(', ')}` : '';
+  const read = c.filesRead && c.filesRead.length
+    ? `\n    files it opened: ${c.filesRead.join(', ')}`
+    : '';
+  return `- ${c.codeline}: ${c.state}${areas}${read}\n    evidence: ${String(c.evidence || '').replace(/\s+/g, ' ')}`;
+}
+
 async function mintProjectAgents({
   promptExec, tickets, referencedDocs, profilesPath, agentsDir, logDir, repoPath,
   declaredDependencies, codelines, toolGrant, correctiveFindings, retainedAgents, estateSurvey,
@@ -3593,10 +3644,7 @@ async function mintProjectAgents({
   // ticket, its documents, the declared dependencies — is a claim about the code rather than
   // an observation of it, which is how briefs came to name modules that do not exist.
   const _sv = estateSurvey && Array.isArray(estateSurvey.codelines) ? estateSurvey : null;
-  const _svLines = _sv ? _sv.codelines.map((c) => {
-    const surfaces = c.surfaces && c.surfaces.length ? ` — areas: ${c.surfaces.join(', ')}` : '';
-    return `- ${c.codeline}: ${c.state}${surfaces}\n    evidence: ${String(c.evidence || '').replace(/\s+/g, ' ')}`;
-  }) : [];
+  const _svLines = _sv ? _sv.codelines.map(surveyLineFor) : [];
   const surveyBlock = _svLines.length
     ? ['WHAT A SURVEY OF THESE REPOSITORIES REPORTED. These are LEADS, not settled facts.',
        '',
@@ -8763,6 +8811,9 @@ module.exports = {
   detectivePrescription,
   surveyEstate,
   sanitizeSurvey,
+  buildSurveyPrompt,
+  surveyLineFor,
+  TOOL_ESTATE_SURVEY,
   SURVEY_STATES,
   TOOL_ROSTER_REVIEW,
   seamInvocationEnv,

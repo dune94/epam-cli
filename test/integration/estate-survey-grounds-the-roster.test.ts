@@ -99,7 +99,14 @@ describe('the surveyor is told to open the repositories, and told its limits', (
 
   it('it is told not to name files to change — that is the investigator\'s job', async () => {
     const { prompt } = await survey();
-    expect(prompt).toMatch(/never a file to edit/i);
+    // 2026-08-09: the prohibition used to read "never a file to edit", which also forbade
+    // naming a file as EVIDENCE and left investigators briefed on directories. The rule now
+    // separates the two — report what you opened, do not choose what to change — so this
+    // asserts the prohibition itself rather than the sentence that used to carry it.
+    expect(prompt).toMatch(/do not say which file to edit/i);
+    expect(prompt).toMatch(/not choosing files to change/i);
+    expect(prompt, 'naming a file as evidence must still be asked for')
+      .toMatch(/files you opened|exact files you opened/i);
   }, 60_000);
 });
 

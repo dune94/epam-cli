@@ -78,6 +78,109 @@ function proposalKind(p) {
   return AGENT_KINDS.includes(k) ? k : '';
 }
 
+/**
+ * Paths a brief names that do NOT exist where that brief will be used.
+ *
+ * The estate survey scopes its evidence per codeline. The mint then renders every codeline's
+ * evidence as one labelled list and writes all the briefs from that pooled view, so nothing
+ * stops a path observed in codeline A being written into codeline B's brief. Live 2026-08-09
+ * the metrolinx investigator was briefed to start at a context module that exists only in
+ * gotransit, plus a directory that exists nowhere.
+ *
+ * That is the failure that cost 120 iterations on an earlier run: an agent handed a path its
+ * checkout does not have assumes a second file exists, creates it, deletes it, declares the
+ * real one out of scope, and every retry reproduces the same error.
+ *
+ * The check is deterministic and total — it reads the filesystem for EVERY path a brief cites,
+ * rather than depending on whether a reviewer happens to raise it. The reviewer's findings are
+ * already re-checked this way (lib/verify-findings.js); the briefs themselves never were.
+ *
+ * An investigator is bound to one codeline, so its paths must exist THERE. An implementer
+ * spans the estate, so its paths need only exist in some codeline. A codeline that cannot be
+ * resolved settles nothing and reports nothing — refusing to guess, as everywhere else here.
+ */
+/**
+ * What a path can START with, read from the repositories rather than assumed.
+ *
+ * This began as a literal alternation — src|test|tests|lib|app|packages — which is one
+ * ecosystem's convention baked into the engine. An estate laid out any other way (cmd/, pkg/,
+ * internal/, Sources/) would have had every brief pass unexamined while the check reported
+ * itself satisfied, which is worse than not running: a gate that looks at nothing and says
+ * "grounded".
+ *
+ * The roots are the top-level directories the codelines actually have, unioned across the
+ * estate — union, because a brief naming a directory that exists in a SIBLING codeline is
+ * exactly the defect being hunted, and it has to be recognised as a path before it can be
+ * reported as missing.
+ */
+function codelineRoots(codelines) {
+  const roots = new Set();
+  for (const c of codelines) {
+    let entries = [];
+    try { entries = fs.readdirSync(c.path, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      if (e.name.startsWith('.')) continue;          // .git, .epam — never cited as work
+      roots.add(e.name);
+    }
+  }
+  return roots;
+}
+
+function ungroundedBriefPaths(proposal, codelines) {
+  const brief = proposal && typeof proposal.systemPrompt === 'string' ? proposal.systemPrompt : '';
+  const list = Array.isArray(codelines) ? codelines.filter((c) => c && c.name && c.path) : [];
+  if (!brief || !list.length) return [];
+
+  const declared = String((proposal && proposal.codeline) || '').trim();
+  const spans = !declared || declared === PROJECT_WIDE;
+  const scope = spans ? list : list.filter((c) => c.name === declared);
+  // Named a codeline this estate does not have: nothing to check it against, and inventing a
+  // verdict from the other repositories would be worse than silence.
+  if (!scope.length) return [];
+
+  // Roots come from the whole estate, so a sibling's directory is still recognised as a path
+  // and can then be reported as absent from THIS codeline.
+  const roots = codelineRoots(list);
+
+  // Every slash-bearing token in the brief, then kept on STRUCTURE rather than vocabulary:
+  //   - its last segment carries an extension  (…/client.go, …/contentstack.ts), or
+  //   - it is written as a directory           (src/providers/), or
+  //   - it starts at a directory the estate actually has (roots, above).
+  // The first two catch a root this estate does not have at all — an invented `vendor/…` is
+  // exactly the kind of path a brief should not carry. The third catches a directory cited
+  // without a trailing slash. Prose like "read/write" or "and/or" satisfies none of them.
+  const CANDIDATE_RE = /\b[A-Za-z0-9_.\-[\]]+(?:\/[A-Za-z0-9_.\-[\]]*)+\/?/g;
+  const looksLikePath = (tok) => {
+    const segs = tok.replace(/\/+$/, '').split('/');
+    if (segs.length < 2) return false;
+    if (tok.endsWith('/')) return true;
+    if (/\.[A-Za-z0-9]+$/.test(segs[segs.length - 1])) return true;
+    return roots.has(segs[0]);
+  };
+
+  const cited = [...new Set(brief.match(CANDIDATE_RE) || [])]
+    .filter(looksLikePath)
+    // Trailing punctuation from prose ("at src/x.ts.") is not part of the path.
+    .map((p) => p.replace(/[.,;:)\]]+$/, ''))
+    .filter(Boolean)
+    // A brief must not send anything outside the repository, and a traversal cannot be
+    // resolved safely — drop rather than stat it.
+    .filter((p) => !p.split('/').includes('..'));
+
+  const missing = [];
+  for (const p of cited) {
+    const foundSomewhere = scope.some((c) => {
+      const target = path.resolve(c.path, p);
+      const root = path.resolve(c.path);
+      if (target !== root && !target.startsWith(root + path.sep)) return false;
+      return fs.existsSync(target);
+    });
+    if (!foundSomewhere) missing.push(p);
+  }
+  return missing;
+}
+
 function isUsableProposal(p) {
   if (!p || typeof p !== 'object') return 'not an object';
   if (typeof p.name !== 'string' || !p.name.trim()) return 'no name';
@@ -162,6 +265,21 @@ function mergeProjectAgents(opts) {
 
     if (fixed.has(p.name)) {
       rejected.push({ name: p.name, reason: 'collides with a protected canonical role' });
+      continue;
+    }
+
+    // A brief is inherited whole and re-checked by nothing, so a path it names becomes an
+    // instruction. Refused here rather than surfaced later: the correction cycle re-mints on
+    // a rejection, and the reason names the exact paths so the replacement can be grounded.
+    const _ungrounded = ungroundedBriefPaths(p, codelines);
+    if (_ungrounded.length) {
+      rejected.push({
+        name: p.name,
+        reason:
+          `brief names ${_ungrounded.length} path(s) that do not exist in ` +
+          `${(p.codeline && p.codeline !== PROJECT_WIDE) ? `codeline '${p.codeline}'` : 'any codeline'}: ` +
+          `${_ungrounded.join(', ')}`,
+      });
       continue;
     }
     if (Object.prototype.hasOwnProperty.call(profiles, p.name)) {
@@ -588,7 +706,7 @@ module.exports = {
   kbFileForCodeline,
   rosterReviewIsRequired,
   hasProjectRoster,
-  mergeProjectAgents, isUsableProposal, ROLE_NAME_RE,
+  mergeProjectAgents, isUsableProposal, ROLE_NAME_RE, ungroundedBriefPaths,
   registerProjectRoles, projectRoles, projectRolesPath, PROJECT_ROLES_FILE,
   saveProjectProfiles, applyProjectProfiles, projectProfilesPath, PROJECT_PROFILES_FILE,
   clearProjectRoster, rosterRunId, PROJECT_WIDE,

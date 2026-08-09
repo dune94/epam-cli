@@ -5052,8 +5052,34 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
       const cl = process.env.EPAM_CODELINE
         || (story && story.codeline)
         || process.env.JIRA_DEFAULT_CODELINE || '';
-      const name = require('./lib/agent-roster.js').investigatorForCodeline(agentsDir, cl);
-      return (name && profiles[name]) ? { name, brief: profiles[name] } : null;
+      const _roster = require('./lib/agent-roster.js');
+      const name = _roster.investigatorForCodeline(agentsDir, cl);
+      if (name && profiles[name]) return { name, brief: profiles[name] };
+
+      // A MISS HERE IS NOT THE SAME AS "NONE WAS MINTED", AND IT USED TO LOOK IDENTICAL.
+      //
+      // The caller falls back to the generic code-graph-detective, which is correct when this
+      // project minted no investigators at all. It is a DEFECT when investigators exist and
+      // none of them answers to this codeline — that means the registry and the lane disagree
+      // about what the codeline is called. Live 2026-08-08: the mint keyed the registry one
+      // way, discovery re-ran across a pause and rewrote the PRD another way, and all three
+      // lanes fell through to the generic detective. Nothing said so; the only signal was the
+      // ABSENCE of a log line, and three freshly minted per-codeline briefs went unused.
+      const _registered = _roster.projectInvestigators(agentsDir);
+      if (_registered.length) {
+        console.warn(
+          `spec-mode: NO INVESTIGATOR for codeline '${cl}' — ${_registered.length} investigator(s) ` +
+          `are registered (${_registered.join(', ')}) but none is bound to this codeline. ` +
+          'Falling back to the generic detective, so this lane runs WITHOUT its per-codeline ' +
+          'brief. This is a codeline-naming mismatch between the roster and the run.',
+        );
+      } else if (name) {
+        console.warn(
+          `spec-mode: investigator '${name}' is registered for codeline '${cl}' but has no brief ` +
+          'in profiles.json — falling back to the generic detective.',
+        );
+      }
+      return null;
     } catch { return null; }
   })();
   const detectiveProfile = _mintedDetective

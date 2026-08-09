@@ -17,7 +17,22 @@ export class Executor {
     return pLimit(tasks, this.options.maxConcurrency);
   }
 
+  /**
+   * Times every tool call. Wraps the real implementation rather than threading a stopwatch
+   * through its several return paths, so a path added later is timed automatically.
+   *
+   * Duration is measured HERE, not around executeAll: tools run concurrently, so a batch
+   * duration attributed to each tool would be fiction — and per-tool cost attribution was the
+   * whole point of adding it (2026-08-09, when "does the writer grep or query the graph?" turned
+   * out to be unanswerable from the logs).
+   */
   private async executeSingle(request: ToolCallRequest): Promise<ToolResult> {
+    const _t0 = Date.now();
+    const _result = await this.executeSingleTimed(request);
+    return { ..._result, durationMs: Date.now() - _t0 };
+  }
+
+  private async executeSingleTimed(request: ToolCallRequest): Promise<ToolResult> {
     const states = this.options.toolRunner.getAllToolStates();
     const toolState = states.find(s => s.tool.name === request.name);
 

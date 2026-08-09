@@ -433,7 +433,11 @@ export class AgentRunner {
         this.options.onToolResult?.(
           toolCallRequests.find(r => r.id === result.toolUseId)?.name ?? '',
           result.content,
-          result.isError
+          result.isError,
+          {
+            durationMs: (result as { durationMs?: number }).durationMs,
+            bytes: result.content?.length ?? 0,
+          },
         );
       }
 

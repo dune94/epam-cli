@@ -59,7 +59,18 @@ export interface AgentRunOptions {
   memoryLoader?: MemoryLoader;
   onTextDelta?: (delta: string) => void;
   onToolCall?: (toolName: string, input: Record<string, unknown>) => void;
-  onToolResult?: (toolName: string, result: string, isError: boolean) => void;
+  /**
+   * Called after each tool call completes. `meta.durationMs` is measured per tool by the
+   * Executor and `meta.bytes` is the size of the result the model will read — together they are
+   * what makes per-tool cost attribution possible. Added 2026-08-09, when the question "does the
+   * writer grep or query the CodeGraph index?" turned out to be unanswerable from the logs.
+   */
+  onToolResult?: (
+    toolName: string,
+    result: string,
+    isError: boolean,
+    meta?: { durationMs?: number; bytes?: number },
+  ) => void;
   onIterationStart?: (iteration: number) => void;
   /**
    * Fired once per iteration with the model-latency / tool-execution split.

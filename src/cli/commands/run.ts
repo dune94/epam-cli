@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { getActivityLogger } from '../../logging/AgentActivityLogger';
 import { resolveConfig } from '../../config/ConfigResolver.js';
 import { AuthManager } from '../../auth/AuthManager.js';
 import { createTools, applyToolAllowlist } from '../../tools/createTools.js';
@@ -87,6 +88,13 @@ export function createRunCommand(): Command {
 
       const provider = wrapWithTracing(chain);
 
+      // Labels come from what the orchestration already exports; a bare `epam run` records the
+      // calls with generic labels rather than not recording them.
+      const agentName = process.env.EPAM_AGENT_NAME || 'epam-run';
+      const storyLabel = process.env.EPAM_STORY_ID || undefined;
+      const phaseLabel = process.env.PHASE || undefined;
+      const activityLogger = config.projectRoot ? getActivityLogger(config.projectRoot) : null;
+
       const runner = new AgentRunner({
         userMessage,
         systemPrompt,
@@ -100,6 +108,27 @@ export function createRunCommand(): Command {
         maxOutputTokens: config.maxOutputTokens,
         dangerousSkipApproval: config.tools.dangerousSkipApproval,
         onTextDelta: jsonMode ? undefined : delta => process.stdout.write(delta),
+        // TOOL USAGE IS RECORDED HERE OR NOWHERE.
+        //
+        // AgentActivityLogger has defined 'tool_run' and 'tool_result' since it was written and
+        // nothing ever emitted them; AgentRunner has exposed onToolCall since it was written and
+        // only the REPL wired it, to the terminal. So every tool call in every automated run —
+        // the runs that actually cost money — went unrecorded, and "does the writer grep or
+        // query the CodeGraph index?" had no answer in the logs.
+        //
+        // Failures here are swallowed deliberately: observability must never be able to fail a
+        // story. The story/phase/agent labels come from the environment the orchestration
+        // already sets, so a direct `epam run` simply records less rather than erroring.
+        onToolCall: (toolName, input) => {
+          void activityLogger?.emit(agentName, 'tool_run',
+            { tool: toolName, args: summariseToolArgs(input) },
+            { storyId: storyLabel, phase: phaseLabel }).catch(() => {});
+        },
+        onToolResult: (toolName, _result, isError, meta) => {
+          void activityLogger?.emit(agentName, 'tool_result',
+            { tool: toolName, ok: !isError, ms: meta?.durationMs ?? null, bytes: meta?.bytes ?? 0 },
+            { storyId: storyLabel, phase: phaseLabel }).catch(() => {});
+        },
       });
 
       const result = await runner.run();
@@ -145,4 +174,25 @@ export function createRunCommand(): Command {
 
       await flushLangfuse();
     });
+}
+
+/**
+ * A short, bounded description of what a tool was asked to do.
+ *
+ * Deliberately NOT the full input: tool arguments can contain an entire file body, and an
+ * observability record that grows with the payload it observes is its own cost problem. Keys are
+ * always kept — knowing a search was `pattern`+`path` is most of the value — and values are
+ * truncated. Nothing is filtered by name, so a new tool's arguments are summarised the same way
+ * without anyone remembering to add it here.
+ */
+export function summariseToolArgs(
+  input: Record<string, unknown>,
+  maxValueChars = Number(process.env.EPAM_ACTIVITY_ARG_CHARS || 120),
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(input ?? {})) {
+    const s = typeof v === 'string' ? v : JSON.stringify(v) ?? String(v);
+    out[k] = s.length > maxValueChars ? `${s.slice(0, maxValueChars)}…(${s.length} chars)` : s;
+  }
+  return out;
 }

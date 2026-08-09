@@ -3,6 +3,8 @@ import type { ToolDefinition } from '../providers/types.js';
 export type ToolPermission = 'safe' | 'review' | 'dangerous';
 
 export interface ToolResult {
+  /** Wall-clock duration of this call, set by the Executor. Used for per-tool cost attribution. */
+  durationMs?: number;
   toolUseId: string;
   content: string;
   isError: boolean;

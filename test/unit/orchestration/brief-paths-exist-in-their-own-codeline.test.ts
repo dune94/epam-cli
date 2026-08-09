@@ -287,3 +287,66 @@ describe('degenerate input does not throw', () => {
     expect(out.every((p: string) => !p.includes('..'))).toBe(true);
   });
 });
+
+/**
+ * THE SAME LITERAL-RESOLUTION DEFECT, WITH A DIFFERENT SYMPTOM.
+ *
+ * assessment_apply rejected a bare filename; this rejected an extension-less path. Live
+ * 2026-08-09 the mint refused all three investigators in one cycle:
+ *
+ *   gotransit-...-investigator: brief names 1 path(s) that do not exist in 'gotransit':
+ *                               src/hooks/useContent
+ *
+ * `src/hooks/useContent.ts` exists in all three codelines. The survey itself reported the file
+ * that way, without its extension, so the brief inherited the form. The correction loop
+ * re-minted and recovered, but it cost a cycle per lane and would have failed permanently on a
+ * brief that did not get corrected.
+ *
+ * A module reference without its extension is how TypeScript and every bundler name a file —
+ * `import { useContent } from 'hooks/useContent'` is the normal spelling. Requiring the
+ * extension makes the check reject the codebase's own convention.
+ */
+describe('an extension-less module path resolves to the real file', () => {
+  function estateWithModule() {
+    const root = mkdtempSync(join(tmpdir(), 'ext-estate-')); dirs.push(root);
+    const repo = join(root, 'one');
+    mkdirSync(join(repo, 'src', 'hooks'), { recursive: true });
+    writeFileSync(join(repo, 'src', 'hooks', 'useContent.ts'), 'export const useContent = 1;\n');
+    mkdirSync(join(repo, 'src', 'context'), { recursive: true });
+    writeFileSync(join(repo, 'src', 'context', 'Ctx.tsx'), 'export const C = 1;\n');
+    return [{ name: 'one', path: repo }];
+  }
+  const check = (brief: string, codelines: any[]) =>
+    roster.ungroundedBriefPaths({ systemPrompt: brief, codeline: 'one', kind: 'investigator' }, codelines);
+
+  it('the fixture really lacks the extension-less file', () => {
+    const cls = estateWithModule();
+    expect(require('node:fs').existsSync(join(cls[0].path, 'src/hooks/useContent'))).toBe(false);
+    expect(require('node:fs').existsSync(join(cls[0].path, 'src/hooks/useContent.ts'))).toBe(true);
+  });
+
+  it('THE DEFECT: the exact path that refused three investigators is accepted', () => {
+    expect(
+      check('Start at src/hooks/useContent and trace the fetch.', estateWithModule()),
+      'an extension-less module path was called a fabrication, refusing a correct brief',
+    ).toEqual([]);
+  });
+
+  it('a .tsx module resolves too', () => {
+    expect(check('See src/context/Ctx for the provider.', estateWithModule())).toEqual([]);
+  });
+
+  it('a path that exists in no form is still reported', () => {
+    expect(check('See src/hooks/useNothing for the provider.', estateWithModule()))
+      .toEqual(['src/hooks/useNothing']);
+  });
+
+  it('an extension-less path in the WRONG directory is still reported', () => {
+    expect(check('See src/wrong/useContent.', estateWithModule())).toEqual(['src/wrong/useContent']);
+  });
+
+  it('a path with an extension still resolves exactly, as before', () => {
+    expect(check('See src/hooks/useContent.ts', estateWithModule())).toEqual([]);
+    expect(check('See src/hooks/useContent.js', estateWithModule())).toEqual(['src/hooks/useContent.js']);
+  });
+});

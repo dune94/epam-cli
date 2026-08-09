@@ -127,6 +127,40 @@ function codelineRoots(codelines) {
   return roots;
 }
 
+/**
+ * Does this cited path name something real in this codeline?
+ *
+ * Literal resolution alone rejects the codebase's own convention. Live 2026-08-09 the mint
+ * refused all three investigators in one cycle, one of them for `src/hooks/useContent` — a file
+ * that exists as useContent.ts in every codeline. The survey had reported it without its
+ * extension, so the brief inherited that form, and `import { x } from 'hooks/useContent'` is how
+ * TypeScript and every bundler spell it. The correction loop re-minted and recovered, at the
+ * cost of a cycle per lane, and a brief that did not get corrected would have been refused
+ * outright.
+ *
+ * So: the literal path, or the same path carrying any extension the directory actually holds.
+ * The location is still exact — an extension-less path in the WRONG directory resolves to
+ * nothing, and a path naming an extension the tree does not have is still reported.
+ */
+function resolvesIn(repoPath, cited) {
+  const root = path.resolve(repoPath);
+  const target = path.resolve(repoPath, cited);
+  // Never resolve outside the repository, whatever the citation says.
+  if (target !== root && !target.startsWith(root + path.sep)) return false;
+  if (fs.existsSync(target)) return true;
+
+  // An extension-less module reference: accept it if the directory holds a file whose name
+  // is this one plus an extension. Derived from the tree, so no extension list appears here.
+  if (path.extname(cited)) return false;
+  const dir = path.dirname(target);
+  const base = path.basename(target);
+  let entries = [];
+  try { entries = fs.readdirSync(dir); } catch { return false; }
+  return entries.some((e) => e.startsWith(base + '.') && !e.slice(base.length + 1).includes('.')
+    ? true
+    : e.startsWith(base + '.'));
+}
+
 function ungroundedBriefPaths(proposal, codelines) {
   const brief = proposal && typeof proposal.systemPrompt === 'string' ? proposal.systemPrompt : '';
   const list = Array.isArray(codelines) ? codelines.filter((c) => c && c.name && c.path) : [];
@@ -170,12 +204,7 @@ function ungroundedBriefPaths(proposal, codelines) {
 
   const missing = [];
   for (const p of cited) {
-    const foundSomewhere = scope.some((c) => {
-      const target = path.resolve(c.path, p);
-      const root = path.resolve(c.path);
-      if (target !== root && !target.startsWith(root + path.sep)) return false;
-      return fs.existsSync(target);
-    });
+    const foundSomewhere = scope.some((c) => resolvesIn(c.path, p));
     if (!foundSomewhere) missing.push(p);
   }
   return missing;

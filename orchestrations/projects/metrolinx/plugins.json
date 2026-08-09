@@ -1,6 +1,7 @@
 {
   "tools": [
     "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/plugins/codeline-context-tools.js",
-    "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/plugins/dependency-contract-tools.js"
+    "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/plugins/dependency-contract-tools.js",
+    "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/plugins/secret-scan-tools.js"
   ]
 }

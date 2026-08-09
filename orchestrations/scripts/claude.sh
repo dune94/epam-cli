@@ -2825,8 +2825,26 @@ verify_story_deliverables() {
                 fi
             fi
         fi
+    # A LANE IS JUDGED BY ITS OWN CODELINE'S FILES.
+    #
+    # .technicalNotes.files is the UNION across every codeline; .technicalNotes.perCodeline holds
+    # the correct per-lane lists. Reading the union asked a question scoped to one lane and
+    # answered it with data scoped to all three: live 2026-08-09 the union carried
+    # ContentstackQuote.tsx, which exists only in next.metrolinx.com, so gotransit's writer was
+    # required to produce a component that does not belong in its repository. It could not, and no
+    # retry could — an unwinnable loop that would have failed upexpress the same way.
+    #
+    # .codeline is authoritative here: _filtered_prd stamps each lane PRD with its own codeline so
+    # consumers need not know lanes exist. Falls back to the flat list when there is no
+    # per-codeline entry (single-codeline runs, or a lane the spec pass produced no list for) —
+    # never to "nothing", which would pass the gate for a story that did no work. An explicitly
+    # EMPTY per-codeline list is honoured as "this lane declares nothing", which is not the same
+    # as having no entry at all.
     done < <(jq -r --arg id "$story_id" \
-        '.stories[] | select(.id == $id) | .technicalNotes.files[]? // empty' \
+        '.stories[] | select(.id == $id) as $s
+         | ($s.technicalNotes // {}) as $tn
+         | ((($tn.perCodeline // {})[$s.codeline // ""]) | if . == null then null else (.files // .) end) as $scoped
+         | (if $scoped == null then ($tn.files // []) else $scoped end)[]? // empty' \
         "$prd_target" 2>/dev/null)
 
     if [ ${#missing[@]} -gt 0 ]; then

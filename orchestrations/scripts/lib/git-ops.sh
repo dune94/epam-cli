@@ -124,6 +124,9 @@ _provision_epam_plugin_config() {
 # beside the WARNING the caller emits; a bare "exit 1" is not a diagnosis.
 _git_add_report_failure() {
     local _repo="$1" _rc="$2" _stderr="$3" _summary="$4"
+    # A "FAILED ... (exit 0)" line is its own defect: it sends the next investigation after a
+    # failure that never happened. Caught by the state sweep the same hour this was added.
+    [ "$_rc" -eq 0 ] && return 0
     echo "[git-add] FAILED in ${_repo} (exit ${_rc}): ${_summary}" >&2
     if [ -n "$_stderr" ]; then
         printf '%s\n' "$_stderr" | head -20 | sed 's/^/[git-add]   /' >&2
@@ -206,7 +209,30 @@ git_add_client_outputs() {
         return 0
     fi
     # Nothing staged. If nothing was stageable either, that is a correct no-op, not a failure.
-    _pending=$(timeout "$_timeout" git -C "$_repo" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+    # ASK THE SAME QUESTION THE STAGING ANSWERED.
+    #
+    # This was a bare `git status --porcelain | wc -l`, which counts EVERYTHING pending —
+    # including .epam/ and the other engine-owned paths that `git add` above deliberately
+    # excludes. So "nothing staged although something is pending" was a false conclusion
+    # whenever the only pending path was one we never intended to stage.
+    #
+    # Live 2026-08-09, gotransit, reproduced exactly by
+    # git-add-verdict-across-repo-states.test.ts: a gitignored top-level node_modules makes
+    # `git add` exit 1 merely for naming the ignored path; nothing stages because there is no
+    # client work; .epam/ is the only thing "pending" — and the story was demoted as
+    # undelivered, the phase aborted, and the codeline HALTed over a repo that had nothing to
+    # commit.
+    #
+    # engine_paths_filter is the same single definition the staging exclusions come from. The
+    # build dirs are dropped here too, for the same reason they are excluded above: a pending
+    # node_modules is not work.
+    _pending=$(timeout "$_timeout" git -C "$_repo" status --porcelain 2>/dev/null \
+        | sed 's/^...//' \
+        | sed 's/^.* -> //' \
+        | engine_paths_filter \
+        | grep -vE '^(node_modules|build|\.next)/' \
+        | grep -vE '(^|/)(node_modules|build|\.next)/' \
+        | wc -l | tr -d ' ')
     if [ "$_rc" -ne 0 ] && [ "${_pending:-0}" -eq 0 ]; then
         # git could not even report status: the repository is genuinely unusable.
         if ! timeout "$_timeout" git -C "$_repo" status --porcelain >/dev/null 2>&1; then

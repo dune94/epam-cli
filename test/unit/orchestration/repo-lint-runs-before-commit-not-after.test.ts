@@ -53,7 +53,7 @@ function shippedFn(): string {
  * A repo shaped like next.gotransit.com: git, a husky pre-commit hook, an eslint binary that
  * reports the real unused-var error, and a committed baseline.
  */
-function repo(opts: { hook?: boolean; eslint?: boolean; dirtyFileClean?: boolean; engineArtifacts?: boolean } = {}) {
+function repo(opts: { hook?: boolean; eslint?: boolean; dirtyFileClean?: boolean; engineArtifacts?: boolean; hooksPath?: string } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'repolint-')); dirs.push(dir);
   const git = (...a: string[]) => execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8' });
   git('init', '-q');
@@ -69,8 +69,15 @@ function repo(opts: { hook?: boolean; eslint?: boolean; dirtyFileClean?: boolean
   git('add', '.'); git('commit', '-qm', 'baseline');
 
   if (opts.hook !== false) {
-    mkdirSync(join(dir, '.husky'), { recursive: true });
-    writeFileSync(join(dir, '.husky', 'pre-commit'), '#!/bin/sh\nnpx lint-staged\n');
+    // The live repo sets core.hooksPath=.husky, so the FIRST discovery branch is the one that
+    // matters in production. Omitting it made the fixture pass through the .husky fallback
+    // instead, and deleting the hooksPath branch outright left every test green — the live path
+    // was untested. hooksPath is configurable to any directory, so it is parameterised here
+    // rather than assumed to equal .husky.
+    const hp = opts.hooksPath ?? '.husky';
+    mkdirSync(join(dir, hp), { recursive: true });
+    writeFileSync(join(dir, hp, 'pre-commit'), '#!/bin/sh\nnpx lint-staged\n');
+    execFileSync('git', ['-C', dir, 'config', 'core.hooksPath', hp]);
   }
   if (opts.eslint !== false) {
     const bin = join(dir, 'node_modules', '.bin');
@@ -300,5 +307,30 @@ ${block}
   it('a clean chain still succeeds', () => {
     const r = runChain({});
     expect(r.success).toBe(true);
+  });
+});
+
+describe('the hook is found however the repo configures it', () => {
+  it('via core.hooksPath pointing somewhere other than .husky', () => {
+    // husky is not the only pre-commit manager, and hooksPath can name any directory. Only the
+    // first discovery branch can find this one.
+    expect(runGate(repo({ hooksPath: '.githooks' })).rc).not.toBe(0);
+  });
+
+  it('via .husky/pre-commit with no core.hooksPath set at all', () => {
+    const d = repo();
+    execFileSync('git', ['-C', d, 'config', '--unset', 'core.hooksPath']);
+    expect(runGate(d).rc).not.toBe(0);
+  });
+
+  it('via the stock .git/hooks/pre-commit', () => {
+    const d = repo({ hook: false });
+    writeFileSync(join(d, '.git', 'hooks', 'pre-commit'), '#!/bin/sh\nexit 0\n');
+    expect(runGate(d).rc).not.toBe(0);
+  });
+
+  it('and a repo with none of the three is still left alone', () => {
+    // The paired negative: the three branches must not collapse into "always run".
+    expect(runGate(repo({ hook: false })).rc).toBe(0);
   });
 });

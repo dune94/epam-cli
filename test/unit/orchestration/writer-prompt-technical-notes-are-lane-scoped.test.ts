@@ -137,3 +137,51 @@ describe('shapes without per-codeline data are unchanged', () => {
     expect(out).not.toContain(MX_ONLY);
   });
 });
+
+/**
+ * The fixture above uses a per-codeline entry of {files}. The REAL one, written by the spec
+ * pass, is {files, resolved, unresolved} — and every one of those keys gets merged into the
+ * prompt. A fixture simpler than the artefact tests a shape that does not exist.
+ */
+describe('the real per-codeline shape, not a simplified one', () => {
+  const realShape = () => ({
+    files: [...SHARED, MX_ONLY],
+    perCodeline: {
+      gotransit: {
+        files: SHARED,
+        resolved: SHARED.map((f) => ({ declared: f, actual: f, match: 'exact' })),
+        unresolved: [],
+      },
+      metrolinx: {
+        files: [...SHARED, MX_ONLY],
+        resolved: [...SHARED, MX_ONLY].map((f) => ({ declared: f, actual: f, match: 'exact' })),
+        unresolved: [],
+      },
+    },
+  });
+
+  it('all three keys are scoped to this lane, not just files', () => {
+    const out = render(realShape(), 'gotransit');
+    expect(out.trim().length).toBeGreaterThan(0);
+    expect(out).not.toContain('None specified');
+    expect(out, "another codeline's path reached the prompt through resolved/unresolved")
+      .not.toContain(MX_ONLY);
+  });
+
+  it("the lane's own resolved detail still reaches the prompt", () => {
+    // Scoping must narrow, not delete: the resolution detail is guidance the writer uses.
+    expect(render(realShape(), 'gotransit')).toContain('exact');
+  });
+
+  it('an unresolved entry belonging to THIS lane is still shown', () => {
+    // Documents current behaviour deliberately. gotransit's live prompt names a component that
+    // does not exist in its repo via its own `unresolved` list — spec-pass diagnostics meaning
+    // "this declared path did not resolve here". The deliverable gate ignores it, so it is no
+    // longer story-fatal, but naming an unresolvable path in a writer prompt invites the writer
+    // to create it. Tracked in BACKLOG as the residual item; if that is fixed, this expectation
+    // is the one to invert.
+    const notes = realShape();
+    notes.perCodeline.gotransit.unresolved = [{ declared: MX_ONLY, reason: 'not found in this codeline' }] as never;
+    expect(render(notes, 'gotransit')).toContain(MX_ONLY);
+  });
+});

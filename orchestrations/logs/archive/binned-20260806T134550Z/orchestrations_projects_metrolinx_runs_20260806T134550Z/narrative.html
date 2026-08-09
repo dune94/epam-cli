@@ -1,0 +1,125 @@
+<title>Run narrative — AMSD-2041</title>
+<style>
+:root { color-scheme: light dark; --fg:#1a1a1a; --bg:#fff; --muted:#666; --line:#e2e2e2;
+        --ok:#0a7c42; --warn:#a86500; --bad:#c02626; --card:#fafafa; --code:#f4f4f5; }
+@media (prefers-color-scheme: dark) {
+  :root { --fg:#e8e8e8; --bg:#141416; --muted:#9a9a9a; --line:#2c2c30;
+          --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --card:#1c1c20; --code:#202024; } }
+* { box-sizing:border-box; }
+body { margin:0; padding:2rem 1.25rem 4rem; font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       color:var(--fg); background:var(--bg); }
+main { max-width:60rem; margin:0 auto; }
+h1 { font-size:1.6rem; margin:0 0 .25rem; letter-spacing:-.01em; }
+h2 { font-size:1.15rem; margin:2.5rem 0 .75rem; padding-bottom:.35rem; border-bottom:1px solid var(--line); }
+h3 { font-size:1rem; margin:1.5rem 0 .5rem; }
+.sub { color:var(--muted); margin:0 0 1.5rem; }
+table { border-collapse:collapse; width:100%; margin:.5rem 0 1rem; font-size:14px; }
+th,td { text-align:left; padding:.45rem .6rem; border-bottom:1px solid var(--line); vertical-align:top; }
+th { font-weight:600; color:var(--muted); font-weight:600; }
+td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+code,pre { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+code { background:var(--code); padding:.1rem .3rem; border-radius:3px; font-size:.9em; }
+pre { background:var(--code); padding:.8rem 1rem; border-radius:6px; overflow-x:auto; font-size:13px; line-height:1.5; }
+.cards { display:flex; flex-wrap:wrap; gap:.75rem; margin:1rem 0 0; }
+.card { flex:1 1 8rem; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:.7rem .85rem; }
+.card .k { color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; }
+.card .v { font-size:1.25rem; font-variant-numeric:tabular-nums; margin-top:.15rem; }
+.ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+.missing { color:var(--muted); font-style:italic; }
+.note { background:var(--card); border-left:3px solid var(--warn); padding:.7rem .9rem; border-radius:0 6px 6px 0; margin:1rem 0; }
+.note.bad { border-left-color:var(--bad); }
+ul { padding-left:1.2rem; } li { margin:.2rem 0; }
+footer { margin-top:3rem; padding-top:1rem; border-top:1px solid var(--line); color:var(--muted); font-size:13px; }
+.diff-add{color:var(--ok)} .diff-del{color:var(--bad)}
+
+.tl { border-left:2px solid var(--line); margin:1rem 0 0 .5rem; padding-left:0; list-style:none; }
+.tl li { position:relative; padding:.55rem 0 .55rem 1.4rem; }
+.tl li::before { content:""; position:absolute; left:-.42rem; top:1.05rem; width:.7rem; height:.7rem;
+                 border-radius:50%; background:var(--muted); border:2px solid var(--bg); }
+.tl li.ok::before{background:var(--ok)} .tl li.warn::before{background:var(--warn)}
+.tl li.bad::before{background:var(--bad)} .tl li.skip::before{background:var(--line)}
+.tl .t { font-variant-numeric:tabular-nums; color:var(--muted); font-size:12px; margin-right:.5rem; }
+.tl .h { font-weight:600; }
+.tl li.ok .h{color:var(--ok)} .tl li.warn .h{color:var(--warn)} .tl li.bad .h{color:var(--bad)}
+.tl li.skip .h{color:var(--muted); font-weight:400;}
+.tl .n { display:block; color:var(--muted); font-size:13.5px; margin-top:.15rem; }
+.lede { font-size:16.5px; }
+.detail { margin:1.2rem 0; padding:.9rem 1.1rem; border-left:3px solid var(--warn,#b58900); background:rgba(128,128,128,.06); border-radius:4px; }
+.detail h4 { margin:0 0 .4rem; font-size:.95rem; }
+.detail li { margin:.55rem 0; line-height:1.5; }
+.soft { opacity:.75; }
+.intro { color:var(--fg); opacity:.85; margin:.35rem 0 .6rem; max-width:46rem; line-height:1.65; }
+/* The middle paragraph is the mechanism — retries, escalation, self-healing.
+   It is the part worth reading, so it is not styled as filler. */
+.intro.cont { margin:.55rem 0; }
+.intro.cont:first-of-type ~ .intro.cont:last-of-type { opacity:.8; }
+.phase { margin:1.75rem 0 .35rem; font-size:.78rem; text-transform:uppercase; letter-spacing:.07em;
+         color:var(--muted); font-weight:700; }
+</style>
+<main>
+<h1>Run narrative — AMSD-2041</h1>
+<p class="sub">A play-by-play of the run, in the order it happened. Every beat is read from the run&rsquo;s own log.</p>
+<div class="cards"><div class="card"><div class="k">Outcome</div><div class="v bad">DID NOT COMPLETE</div></div><div class="card"><div class="k">Cost</div><div class="v">$0.0007</div></div><div class="card"><div class="k">Window</div><div class="v">13:47:42&ndash;13:59:03</div></div><div class="card"><div class="k">Story</div><div class="v">AMSD-2041</div></div></div><h2>What you are looking at</h2><p class="lede">This is an automated software pipeline. It was given one thing: the number of a bug ticket. No human wrote any of the code in this report, chose which file to change, or wrote the test that proves the change works.</p><p>The pipeline works the way a careful developer would. It reads the ticket, finds the right repository among many, investigates the codebase to find the true cause of the bug rather than the place the symptom appears, writes the smallest fix it can, writes a test that fails without that fix, has the change reviewed, and runs a series of quality checks before accepting it. Each of those jobs is done by a different AI agent, and — importantly — the pipeline does not simply believe what those agents report. It verifies their claims against the actual code and the actual test results, and rejects them when they do not hold up. Several such rejections appear below.</p><p><strong>The bug it was asked to fix:</strong> &ldquo;[GO, UP, MX] Live Preview of Content in CMS&rdquo;</p><p><strong>Outcome.</strong> It did not run to completion — the timeline below shows how far it got. The whole run took 13:47:42 to 13:59:03 and cost $0.0007 (summed from the per-call records).</p><p class="note bad"><strong>Integration with an external service was NOT verified.</strong> This project declares it cannot reach contentstack.io,contentstack.com,api.contentstack.io,cdn.contentstack.io at test time &mdash; there are no credentials and no local substitute &mdash; so that client was mocked and the criteria were written to our side of the boundary. Everything below is true of the code this run wrote and of how it behaves against a stubbed client. It is <em>not</em> evidence that the real integration works. Every other dependency was exercised normally.</p><p class="intro">Everything below is read from the run&rsquo;s own logs. Where a fact has no supporting record it is marked <span class="missing">not recorded</span> rather than guessed at.</p>
+<h2>How the run unfolded</h2>
+<div class="phase">Ingest &amp; selection</div>
+<p class="intro">It is handed one Jira ticket identifier. Nothing else &mdash; not the repository, not the branch, not the file, not even which of the organisation&rsquo;s many codebases the bug lives in.</p>
+<p class="intro cont">So it fetches the ticket and reads it the way a new engineer would: the summary, the description, the comments, any linked pull requests. From that it has to infer a repository. This is a genuine decision and it is made in the open &mdash; the candidate repositories are considered, one is selected, and the reason is recorded rather than assumed. Once a repository is chosen it is cloned at a specific commit, so that everything downstream &mdash; the diagnosis, the fix, the test run against the original code &mdash; is anchored to one exact version of the codebase and cannot drift underneath the run.</p>
+<p class="intro cont">What it hands forward is a working copy pinned to a known commit, and a written statement of the problem in the reporter&rsquo;s own words.</p>
+<ul class="tl">
+<li class="info"><span class="t">13:47:42</span><span class="h">Ticket pulled from Jira</span><span class="n">The pipeline reads the ticket straight from https://metrolinx.atlassian.net (project AMSD). Nothing about the bug is hand-written for the run &mdash; the agents see the same words a developer would.</span></li>
+<li class="info"><span class="t">13:47:42</span><span class="h">Searching 31 repositories for the right codebase</span><span class="n">The ticket does not say which repository the bug lives in. The pipeline has to work that out itself from 31 candidates.</span></li>
+<li class="info"><span class="t">13:47:42</span><span class="h">Strongest match: next.gotransit.com</span><span class="n">Chosen on the ticket&rsquo;s domain words appearing far more often in this repository than in the others &mdash; author(hits=34, in 10/31 repos), content(hits=200, in 25/31 repos), live(hits=12, in 21/31 repos). Presentation words like &ldquo;displayed&rdquo; are deliberately stripped first, because they describe the symptom rather than the code that causes it.</span></li>
+<li class="info"><span class="t">13:47:42</span><span class="h">Model z-ai/glm-5.2 picks from the shortlist</span><span class="n">The final choice is a judgement call, so it goes to a model &mdash; but only after the arithmetic has removed the obviously-wrong candidates.</span></li>
+<li class="info"><span class="t">13:47:42</span><span class="h">Acceptance-criteria gate: enrichable</span><span class="n">This ticket has no acceptance criteria written on it. The gate judged whether the description alone says enough to work from; &ldquo;enrichable&rdquo; means yes &mdash; the symptom and the expected behaviour are both stated, so the pipeline may proceed and derive its own verification criteria.</span></li>
+<li class="ok"><span class="t">13:48:48</span><span class="h">Codeline selected: /home/bradleyjerome/projects/metrolinx/next.metrolinx.com</span><span class="n">This is the repository the run will actually change. Everything after this point happens inside it.</span></li>
+<li class="info"><span class="t">13:48:48</span><span class="h">Baseline pinned at develop @ 42b81c44</span><span class="n">A fixed reference point. Every later question &mdash; what changed, what lint findings are new, does the test fail without the fix &mdash; is answered against this exact commit, so pre-existing problems are never blamed on this run.</span></li>
+</ul>
+<div class="phase">Pipeline steps</div>
+<p class="intro">The run advances through a fixed, numbered sequence. Each step is either work, a check, or a step that recognises it does not apply to this kind of change and stands down.</p>
+<p class="intro cont">The sequence is deliberately rigid. An agent cannot choose to skip a gate it expects to fail, and it cannot reorder the work so that its own output is checked before the thing that would contradict it runs. Steps that do not apply announce that they are not applicable rather than silently passing, because a check that quietly returns success when it did nothing is indistinguishable from a check that ran and approved &mdash; and that distinction is exactly the one a reader of this report needs.</p>
+<p class="intro cont">What it hands forward is the shape of the run: which stages engaged, which stood down, and in what order.</p>
+<ul class="tl">
+<li class="ok"><span class="t">13:48:50</span><span class="h">Step 1: Specification pass — took 7m 10s</span><span class="n">Reads the ticket and turns a symptom described in prose into verification criteria a test can be written against.</span></li>
+</ul>
+<div class="phase">Diagnosis</div>
+<p class="intro">The investigating agent is handed the ticket text and a codebase it has never seen. It is handed no file names, no starting point and no hints.</p>
+<p class="intro cont">This is the hardest stage and the one most likely to go wrong, because the ticket describes a <em>symptom</em> in everyday language &mdash; &ldquo;the discount is not displayed&rdquo; &mdash; while the code responsible almost certainly contains none of those words. The agent has to search the codebase, follow the data backwards from where the wrong value is displayed to where it is actually computed, and name the single line at fault. The failure mode here is not silence but confidence: a model that has seen enough plausible symbol names will happily assemble a line of code that looks exactly right and does not exist. So the pipeline does not take the diagnosis on trust. The agent must quote the broken line <em>verbatim</em>, and that quotation is then checked character for character against the real file on disk. If the quote does not appear in the source, the diagnosis is rejected and the agent is asked again &mdash; and if it keeps failing, the work escalates to a stronger and more expensive model. To make that demand answerable rather than impossible, the agent is given a tool that prints real numbered source lines, so quoting is an act of copying rather than of recollection.</p>
+<p class="intro cont">What it hands forward is a verified diagnosis: a file, a line, the actual text of that line, an explanation of why it is wrong, and a prescription for the smallest change that would fix it.</p>
+<ul class="tl">
+<li class="ok"><span class="t">13:48:50</span><span class="h">7 verification criteria written</span><span class="n">Plain-language statements of what must be observably true once the bug is fixed. They describe outcomes, never implementation, so they cannot quietly dictate how the fix is written.</span></li>
+</ul>
+<div class="phase">Pipeline steps</div>
+<ul class="tl">
+<li class="ok"><span class="t">13:56:00</span><span class="h">Step 2: CPA pre-pass — took 1m 3s</span><span class="n">Forecasts what this story should cost and how long it should take, so a run that goes wildly over its estimate can be caught rather than discovered on the invoice.</span></li>
+<li class="ok"><span class="t">13:57:03</span><span class="h">Step 3: Skill assessment</span><span class="n">Decides which skills the change needs and which agent role should own it, before any code is touched.</span></li>
+<li class="skip"><span class="t">13:57:28</span><span class="h">Step 5: Regression guard — did not apply</span><span class="n">The pipeline recognised this stage had nothing to do for this change and stood down, which is a different statement from passing. Reason recorded: <code>SKIP_REGRESSION_GUARD=true</code>.</span></li>
+<li class="ok"><span class="t">13:57:28</span><span class="h">Step 7: PRD model coordinator</span><span class="n">Assigns a model to each piece of work — cheaper models for mechanical steps, stronger ones where judgement is required.</span></li>
+<li class="skip"><span class="t">13:57:28</span><span class="h">Step 8: Main-branch stories — did not apply</span><span class="n">The pipeline recognised this stage had nothing to do for this change and stood down, which is a different statement from passing. Reason recorded: <code>paused before the writer (EPAM_PAUSE_BEFORE_WRITER)</code>.</span></li>
+</ul>
+<div class="phase">Outcome</div>
+<p class="intro">The final position: what the run produced, and what it cost.</p>
+<p class="intro cont">The cost is a real billed figure measured against the balance recorded at the very start, not a total the pipeline accumulated as it went. Retries, escalations to stronger models and self-healing attempts all land in that number, which is why it is worth reading next to the account of how much healing the run needed.</p>
+<p class="intro cont">What it hands forward is the merged branch, this report, and the money spent to get here.</p>
+<ul class="tl">
+<li class="ok"><span class="t">13:59:03</span><span class="h">Pipeline complete</span></li>
+</ul>
+<h2>Commits</h2>
+<table><tr><th>SHA</th><th>Subject</th><th>When</th></tr><tr><td colspan="3"><span class="missing">not recorded</span></td></tr></table>
+<h2>Code produced</h2><p><span class="missing">not recorded</span></p><h2>Self-healing and the knowledge base</h2>
+<p class="intro">This is the part of the pipeline that improves itself. When an agent fails, the failure is not simply retried — it is diagnosed, and the diagnosis is turned into a <strong>machine-checked constraint</strong> stored in a knowledge base. On the next attempt, and on every future run, that constraint is enforced at the point the agent is invoked. Crucially it is enforced as a rule, not appended to the prompt as more advice: an instruction a model can ignore is not a safeguard, and this pipeline has repeatedly proved that models do ignore them.</p>
+<h3>What healed during this run</h3><p>Nothing needed to heal — no agent failure occurred that required diagnosis or a new constraint.</p>
+<h3>How it would have worked — a real example</h3><p>On 26 July a run failed at the code-style gate. The defect was not in the fix: it was a string literal repeated five times in the fixture data of the test that had just proved the bug was fixed. <code>sonarjs/no-duplicate-string</code>. The run had done everything it existed to do — correct diagnosis, a two-line change reusing an existing helper, a test proven to fail before the fix and pass after, an approving review — and it was discarded over a duplicated string, because the only remedy available was to rewrite the story and rebuild the entire phase. Roughly twenty minutes and a dollar, to arrive back at the same place, since nothing in that loop actually fixed the literal.</p><p>Now watch the same failure through the healing path. When the gate rejects the change, the failure is <em>recorded as an episode</em>: the agent role that produced it, and a signature read directly out of the tool&rsquo;s own output — <code>sonarjs/no-duplicate-string</code>, not a phrase summarised from the agent&rsquo;s explanation of itself. That distinction is load bearing. When signatures were derived from prose, they keyed correctly about half the time; read from the linter or the compiler, they key reliably. A failure that cannot be keyed cannot be learned from, so the system refuses to guess and records nothing rather than something plausible.</p><p>One episode teaches nothing — a single failure may be noise, and promoting noise to a permanent rule is precisely the drift this design exists to prevent. It is the <em>second</em> occurrence of the same signature, from the same role, that triggers synthesis: the episodes are collapsed into a single proposed rule. And here the design does something unusual. The rule is not allowed to be advice. It must take one of three enforceable shapes — a gate to run, a parameter to set at the point of invocation, or a narrowing of which files and tools the agent may touch. A rule that is merely a sentence of guidance is <strong>structurally impossible to express</strong>; the schema has no field for it. That is deliberate, and it comes from this project&rsquo;s own logs: a prose instruction was once injected to prevent a specific mistake, was ignored, and the identical failure recurred sixteen more times.</p><p>The compiled rule is then applied at the moment the agent is next invoked — as an environment variable it cannot override, a gate it must pass, or a tool scope it cannot widen. The next attempt runs materially differently from the one that failed, and the change is traceable: the rule names the constraint, the constraint names the signature, and the signature names the episodes that produced it. Rules that keep firing stay; rules that stop firing age out and are archived for revalidation rather than trusted forever, because a codebase that has moved on should not be governed by a lesson learned about the version before it.</p><p>Two safeguards are worth stating plainly, because they are what separate this from a system that merely retries. A healed constraint can only ever <em>narrow</em> what an agent may do — scopes intersect, they never widen — so a failure cannot teach the system to grant itself more permission. And conflicts between rules are resolved structurally, by comparing what they constrain, never by asking a model to arbitrate: an arbiter that can be persuaded is one more thing that can drift.</p><p class="soft">On this run none of that fired, because nothing failed. The mechanism is proven in test — episodes keyed from real compiler output, collapsed into one rule, compiled, and applied to a following attempt that demonstrably ran with a parameter the first did not have — but it has not yet been exercised end to end by a live failure. That remains the honest gap.</p>
+<h3>Knowledge base state</h3><table><tr><th>Measure</th><th>Value</th></tr><tr><td>Compiled constraints in force</td><td>1</td></tr><tr><td>Healing episodes recorded to date</td><td>0</td></tr></table>
+<p class="intro">Read from this run’s archived copy.</p>
+<h3>Rules currently enforced</h3><ul><li><code>repro-test-writer-ts2769</code></li></ul><p class="intro">Each began as a real failure in an earlier run and is now checked automatically, so that failure cannot silently recur.</p>
+<h2>Verification criteria</h2>
+<ul><li>When the application is loaded with Live Preview enabled (e.g. via a query parameter or configuration flag), the Contentstack Live Preview SDK is initialized and its onEntryChange callback is registered before any content is rendered.</li><li>Given the Contentstack client is mocked to invoke onEntryChange with updated entry data, the page content re-renders with the updated values without requiring a full page reload.</li><li>When the application is loaded without Live Preview enabled, the existing content-fetching and rendering behavior is unchanged — pages load and display exactly as they do today.</li><li>Live Preview initialization and content-update propagation work identically across the GO, UP, and MX brand contexts (each brand&#x27;s ContentstackContext receives and applies onEntryChange updates).</li><li>The useContent hook continues to return the same getContentByKey interface after Live Preview integration; all existing consumers (NavigationBar, Footer, CookiesBanner, QuickMenu, TopBar, FeatureListing, DynamicEventsListContainer, MobileNav, etc.) render correctly without code changes.</li><li>When onEntryChange delivers a partial or malformed entry, the application does not throw an unhandled error; it either applies the valid portion or retains the last-known-good content.</li><li>Given the Contentstack Live Preview SDK client is mocked, the initialization call includes the correct stack details (stack API key, environment, and any required host configuration) derived from the application&#x27;s existing Contentstack configuration.</li></ul>
+
+<h2>Cost</h2>
+<table><tr><th>Agent</th><th class="num">Cost</th><th class="num">Tokens in</th><th class="num">Tokens out</th><th class="num">Calls</th></tr>
+<tr><td><code>team-lead-agent</code></td><td class="num">$0.0007</td><td class="num">3,042</td><td class="num">39</td><td class="num">1</td></tr>
+<tr><th>Tracked total</th><th class="num">$0.0007</th><th colspan="3"></th></tr>
+<tr><th>Billed by provider</th><th class="num">$0.0007</th><th colspan="3" class="soft">summed from the per-call records &mdash; the provider’s own usage counter was not captured for this run</th></tr></table>
+
+<footer>Generated from <code>/tmp/tier3-metrolinx-jira-20260806T094550-3147993.log</code>, the gate logs, <code>agent-activity.jsonl</code> and the codeline git history. Anything without a supporting artefact is marked <span class="missing">not recorded</span> rather than inferred.</footer>
+</main>

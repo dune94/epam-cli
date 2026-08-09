@@ -1,0 +1,24 @@
+{
+  "codelines": [
+    {
+      "name": "gotransit",
+      "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
+      "declaredDependencies": 149
+    },
+    {
+      "name": "upexpress",
+      "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com",
+      "declaredDependencies": 93
+    },
+    {
+      "name": "metrolinx",
+      "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
+      "declaredDependencies": 103
+    }
+  ],
+  "codelineRepo": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
+  "declaredDependencies": 179,
+  "documentsLinked": 2,
+  "documentsFetched": 2,
+  "documentsUnfetched": []
+}

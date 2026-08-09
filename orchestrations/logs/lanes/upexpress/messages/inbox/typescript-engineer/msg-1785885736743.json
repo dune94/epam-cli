@@ -1,0 +1,88 @@
+{
+  "message_id": "msg-1785885736743",
+  "timestamp": "2026-08-04T23:22:16+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.ts",
+          "line": 1,
+          "description": "PRESCRIBED ROOT CAUSE NOT ADDRESSED. The RCA requires: (1) importing ContentstackLivePreview from '@contentstack/live-preview-utils', (2) calling ContentstackLivePreview.init() at module level, (3) replacing the static context with useState + useEffect that subscribes to onEntryChange callbacks to update content state when the CMS pushes preview changes. The actual implementation does NONE of this. Instead it reads URL params (live_preview, preview_token) from window.location.search and creates a separate LivePreviewContext that only carries isLivePreview/previewToken booleans. No CMS-pushed content updates ever reach components. The original ContentstackContext (holding all page content) is still createContext<IContentstackContext>({}) — static and empty. None of the four verification criteria can be satisfied because no live preview content data ever reaches any component at runtime.",
+          "suggestedFix": "Install @contentstack/live-preview-utils (or request the dependency-add task), then implement the prescribed minimal fix: import ContentstackLivePreview from '@contentstack/live-preview-utils', call ContentstackLivePreview.init() at module level, and replace the static context with useState + useEffect subscribing to onEntryChange callbacks that update the content state. The existing defaultContent prop remains the initial state. Remove all the URL-param-driven LivePreviewContext, readLivePreviewFromLocation, and ILivePreviewContext code — it does not address the root cause.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.ts",
+          "line": 38,
+          "description": "ContentstackProvider NO LONGER PROVIDES ContentstackContext. The provider now only creates LivePreviewContext.Provider, completely dropping ContentstackContext.Provider. All 236+ components that call useContent → useContext(ContentstackContext) will receive the empty default {} — a critical regression. Page content (header, footer, page, directories, etc.) is never supplied to any consumer.",
+          "suggestedFix": "ContentstackProvider must continue to provide ContentstackContext with the defaultContent prop as initial state, AND add the live preview SDK subscription to update that state. Do not replace ContentstackContext.Provider with LivePreviewContext.Provider.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.spec.ts",
+          "line": 1,
+          "description": "TEST FILE DELETED — test count decreased. The diff deletes the entire ContentstackContext.spec.ts (179 lines, 10+ test cases). Criterion (2) requires that the total test count is not decreased. No replacement tests were added. The deleted tests, while trivial, at least existed; the new code has zero test coverage for the LivePreviewContext, readLivePreviewFromLocation, ContentstackProvider, or ContentstackLink live-preview URL param logic.",
+          "suggestedFix": "Add vitest unit tests in test/unit/ (or co-located .spec) mirroring src/ paths. Tests must cover: (1) unchanged content fields display correct values during preview, (2) malformed preview updates don't break rendering, (3) non-preview sessions show correct content, (4) exiting preview restores correct content. These tests must exercise the actual SDK subscription behavior (mock onEntryChange callback), not just assert object shapes.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.ts",
+          "line": 1,
+          "description": "CONCISION & REUSE: The change is massively over-engineered vs the prescribed minimal fix. The RCA prescribed ~10 lines (SDK import + init + useState/useEffect with onEntryChange). The actual diff adds 50+ lines across 4 files (new ILivePreviewContext, readLivePreviewFromLocation, LivePreviewContext, ILivePreviewMetadata, ContentstackLink URL-param appending, useContent skipLivePreview option) — none of which addresses the root cause. A more concise change (the prescribed SDK init + onEntryChange subscription) would actually meet the acceptance criteria in fewer lines and with real functionality.",
+          "suggestedFix": "Replace all the URL-param-driven live preview machinery with the prescribed minimal fix: SDK init + onEntryChange subscription in ContentstackProvider. Delete ILivePreviewContext, LivePreviewContext, readLivePreviewFromLocation, ILivePreviewMetadata, the ContentstackLink URL-param logic, and the useContent skipLivePreview option.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/ContentstackContext.ts",
+          "line": 15,
+          "description": "TypeScript strict: header?: [any] and pageSpecificData?: Record<string, any> use untyped any without explanatory comments. The existing TODO comment covers header/footer but not pageSpecificData.",
+          "suggestedFix": "Add proper types or explanatory comments for each any usage as required by TypeScript strict compliance rules.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/ContentstackContext.ts",
+          "line": 29,
+          "description": "readLivePreviewFromLocation has no explicit return type annotation. Function parameters and return types should be explicitly typed per review criteria.",
+          "suggestedFix": "Add explicit return type: const readLivePreviewFromLocation = (): { isLivePreview: boolean; previewToken?: string } => { ... }",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+          "line": 18,
+          "description": "ContentstackLink now depends on useContent() for isLivePreview/previewToken and appends URL params to outbound links. This is unrelated to the prescribed fix (receiving CMS-pushed content updates) and adds unnecessary complexity. The IIFE pattern for resolvedHref is also not idiomatic.",
+          "suggestedFix": "Remove this change entirely — it does not contribute to the live preview content subscription prescribed by the RCA. If link param propagation is needed, it should be a separate story.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/interface/content/contentCard.ts",
+          "line": 7,
+          "description": "ILivePreviewMetadata interface added with token/timestamp fields that don't match Contentstack's live_preview shape (hash, content_type_uid, entry_uid). This interface is unused by any runtime code and doesn't correspond to the SDK's data structure.",
+          "suggestedFix": "Remove ILivePreviewMetadata. If live preview metadata is needed on content cards, it should come from the SDK's onEntryChange callback data, not a hand-rolled interface.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

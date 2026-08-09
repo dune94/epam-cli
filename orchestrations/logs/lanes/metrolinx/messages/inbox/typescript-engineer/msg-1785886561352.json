@@ -1,0 +1,96 @@
+{
+  "message_id": "msg-1785886561352",
+  "timestamp": "2026-08-04T23:36:01+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 1,
+          "description": "Over-engineered implementation far exceeds the prescribed minimal fix. The prescribed fix is: add a useState/useReducer in the existing ContentstackProvider, subscribe to onEntryChange, and merge preview data into the existing ContentstackContext value. Instead, the implementation adds a separate ContentstackPreviewContext, ContentstackPreviewState interface, IContentstackPreviewContext interface, resolvePreviewFlag(), resolvePreviewToken(), LivePreviewUtilsLike interface, stackDetails prop, and a dual-context pattern. A more concise change (~30-40 lines modifying the existing provider's useMemo to merge preview state) would meet all 7 acceptance criteria. Fewer lines of code is always better.",
+          "suggestedFix": "Remove ContentstackPreviewContext, ContentstackPreviewState, IContentstackPreviewContext, resolvePreviewFlag, resolvePreviewToken, LivePreviewUtilsLike, and the dual-context pattern. Instead, in the existing ContentstackProvider, add a single useState<Record<string, unknown>>({}) for preview overrides, subscribe to onEntryChange in a useEffect, deep-merge the received entry into the existing context value via useMemo, and export that merged value through the existing ContentstackContext.Provider.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.ts",
+          "line": 17,
+          "description": "Shallow merge instead of deep merge. `{ ...(content ?? {}), ...overrides }` replaces entire top-level keys (e.g. the whole `page` array) rather than deep-merging preview data into the content tree. The prescribed fix says to 'merge defaultContent with live preview updates' — a deep merge. A shallow merge will lose nested published fields that aren't included in the preview entry, causing blank or missing content areas (violating AC #5 and #6).",
+          "suggestedFix": "Use a deep-merge utility to merge overrides into the content tree. Check codegraph_query for an existing deepMerge helper. If none exists, implement a targeted deep merge that overlays the preview entry's fields onto the corresponding nodes in the published content tree, preserving fields the preview entry doesn't include.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 1,
+          "description": "No server-side Contentstack Stack configuration for live_preview. The prescribed fix explicitly requires the server-side Stack initialization to be configured with live_preview: { enable: true, preview_token: process.env.CONTENTSTACK_PREVIEW_TOKEN, host: process.env.CONTENTSTACK_PREVIEW_HOST } so that preview queries return draft content. No such configuration appears in any of the changed files. Without it, the SDK may initialize on the client but the Contentstack API will never return draft/preview content, making the entire feature non-functional end-to-end.",
+          "suggestedFix": "Locate the server-side Contentstack Stack initialization (likely in cx-shared or a server-side API util) and add the live_preview configuration object with enable: true, preview_token from process.env.CONTENTSTACK_PREVIEW_TOKEN, and host from process.env.CONTENTSTACK_PREVIEW_HOST.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 1,
+          "description": "No unit tests exist for any of the 4 changed files. resolve_test_file confirmed zero test files for contentstackContext.tsx, useContent.ts, ContentstackLink.tsx, and contentCard.ts. The review criteria require new features to have corresponding vitest unit tests in test/unit/ mirroring the src/ path, and the total test count must not decrease. None of the 7 acceptance criteria are covered by tests.",
+          "suggestedFix": "Create test files at the recommended paths: src/context/__tests__/contentstackContext.spec.tsx, src/hooks/__tests__/useContent.spec.ts, and src/components/contentstack/ContentstackLink/__tests__/ContentstackLink.spec.tsx. Each test file should cover: (1) preview override merging for text fields, (2) image field updates, (3) link URL/display text updates, (4) card title/description updates, (5) fallback to published content when preview is inactive, (6) no preview indicators on production pages, (7) card list add/remove/reorder.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/interface/content/contentCard.ts",
+          "line": 30,
+          "description": "The ContentCard interface and its JSDoc are unnecessary scope expansion. No acceptance criterion or prescribed fix step references a ContentCard interface. No other changed file imports it. This adds ~25 lines of code that do not contribute to meeting any AC.",
+          "suggestedFix": "Remove the ContentCard interface and its JSDoc from contentCard.ts. Revert this file to its original state.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+          "line": 20,
+          "description": "The withPreviewParams function and its usage are unnecessary scope expansion. No acceptance criterion requires links to carry preview query params when navigated. The AC says links should reflect updated URL and display text from CMS edits — not that links should preserve preview state across navigation. This adds ~20 lines of code and a new useContentstackContext dependency that the prescribed fix does not call for.",
+          "suggestedFix": "Remove withPreviewParams, the useContentstackContext import, and the previewAwareHref useMemo. Revert ContentstackLink to use getContentByKey for href and title directly, which already picks up preview overrides through the content context.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 100,
+          "description": "ContentstackProvider prop interface is breaking. The provider now requires defaultContent, contentType, entryUid, and stackDetails props that did not exist in the original IContentstackProviderProps (which had only children). All existing call sites that render <ContentstackProvider> would need to be updated. No evidence in the diff that these call sites were updated.",
+          "suggestedFix": "If the prescribed minimal fix is followed (modifying the existing provider in place), these new props are unnecessary. The existing provider already receives defaultContent via import and provides it through ContentstackContext. The preview subscription can be self-contained within the provider without new props.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/hooks/useContent.ts",
+          "line": 3,
+          "description": "Duplicate import from the same module. `import { ContentstackContext } from 'context/contentstackContext'` and `import { useContentstackContext } from 'context/contentstackContext'` should be combined into a single import statement.",
+          "suggestedFix": "Combine into: import { ContentstackContext, useContentstackContext } from 'context/contentstackContext';",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 12,
+          "description": "Untyped `any` without explanatory comment: `footer?: [any]` in IContentstackContext violates TypeScript strict compliance. All types should be explicit or have an explanatory comment for any usage.",
+          "suggestedFix": "Replace `[any]` with a proper type, e.g. `[IContentstackFooter]` or add an explanatory comment: `footer?: [any]; // TODO: type with IContentstackFooter once interface is available`",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

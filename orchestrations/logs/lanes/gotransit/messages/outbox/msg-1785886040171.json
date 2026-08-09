@@ -1,0 +1,104 @@
+{
+  "message_id": "msg-1785886040171",
+  "timestamp": "2026-08-04T23:27:20+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+          "line": 5,
+          "description": "The prescribed minimal fix explicitly states 'all 236+ consumers get preview support with zero component-level changes.' This diff modifies ContentstackLink.tsx, adding a duplicated isPreviewMode() function and preview detection logic — exactly what the prescribed fix says is unnecessary. Additionally, the old code appended live_preview hash to link URLs (preserving preview state across navigation); the new code removes this and replaces it with a data-cs-preview attribute, which is a functional regression. The hook-level change in useContent.ts already handles preview for all consumers.",
+          "suggestedFix": "Revert ContentstackLink.tsx entirely. The useContent hook enhancement alone is sufficient per the prescribed fix. If a data-cs-preview attribute is genuinely needed, it should be driven by useContent, not by re-implementing preview detection in each component.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+          "line": 7,
+          "description": "Hardcoded string \"live_preview\" violates criterion 6 (no hardcoded strings — all use named constants). The same constant PREVIEW_HASH_KEY already exists in useContent.ts. This is also a DRY violation — isPreviewMode is already defined in useContent.ts with the named constant.",
+          "suggestedFix": "If this function is needed (it shouldn't be per the prescribed fix), export isPreviewMode and PREVIEW_HASH_KEY from useContent.ts or a shared constants file and import them. Do not duplicate.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/interface/content/contentCard.ts",
+          "line": 14,
+          "description": "Renaming isPreview to previewMode on IContentCard is an unnecessary component-level interface change not prescribed by the root cause analysis. The prescribed fix says the change should be localized to the useContent hook. This field is not used by the hook enhancement. If any existing code references isPreview, this is a silent breaking change.",
+          "suggestedFix": "Revert this change. The hook-based approach does not require any interface modifications.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.ts",
+          "line": 44,
+          "description": "useContent has no explicit return type annotation: `export const useContent = () => {`. The old code returned IUseContentReturn. This violates TypeScript strict compliance (all function return types explicitly typed). The inferred return type is fragile — any change to the returned object shape silently changes the public API.",
+          "suggestedFix": "Define and annotate the return type explicitly, e.g., `export const useContent = (): IUseContentReturn => {` with an updated IUseContentReturn interface that reflects the new shape (just getContentByKey).",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.ts",
+          "line": 30,
+          "description": "Security vulnerability: the module-level postMessage listener processes event.data without validating event.origin. Any malicious page or iframe can dispatch a message with type 'contentstack-live-preview' and inject arbitrary content into the rendered page. This is an OWASP concern (untrusted origin processing postMessage data).",
+          "suggestedFix": "Add origin validation against a known Contentstack origin (from constants), e.g., `if (event.origin !== CONTENTSTACK_PREVIEW_ORIGIN) return;` before processing the message. The origin should be a named constant from src/config/constants.ts.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/hooks/useContent.ts",
+          "line": 21,
+          "description": "Module-scoped previewOverlay and previewListeners have no reset mechanism and are not exported. This makes the overlay state impossible to clean between test runs, leading to cross-test contamination. The test file itself acknowledges this: 'module-scoped state persists across renders.' The test 'returns draft content from overlay when live preview mode is active' depends on state leaked from a prior test's act() call.",
+          "suggestedFix": "Export a __resetPreviewOverlay function for test use (guarded by NODE_ENV), or restructure to use a class/singleton with a reset method. At minimum, add a beforeEach reset in the test file.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/hooks/useContent.ts",
+          "line": 25,
+          "description": "The postMessage listener is registered at module load time as a side effect. This is an anti-pattern — module side effects make the code harder to test, harder to tree-shake, and can cause issues in SSR environments. The listener is never removed.",
+          "suggestedFix": "Register the listener inside the hook's useEffect (or a lazy initializer) so it's bound to the React lifecycle and properly cleaned up. Alternatively, use a ref-counted approach where the listener is added when the first consumer mounts and removed when the last unmounts.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/hooks/useContent.ts",
+          "line": 47,
+          "description": "The getContentByKey uses Object.prototype.hasOwnProperty.call(previewOverlay, path) to check if the overlay has a value for the exact path key. But getValue supports nested dot-notation paths (e.g., 'hero.title'). The overlay stores top-level content fields (e.g., 'hero_title'), not nested paths. If a component requests 'hero.title' but the overlay has { hero: { title: 'Draft' } }, the hasOwnProperty check fails and published content is returned instead of the draft. The check should use getValue to resolve the path and compare against the default value, or the overlay should be checked differently.",
+          "suggestedFix": "In preview mode, always call getValue on the overlay first and only fall back to published content if the overlay returns undefined/default. E.g.: `if (isPreviewMode()) { const draftValue = getValue(previewOverlay, path, undefined); if (draftValue !== undefined) return draftValue as T; } return getValue(content, path, defaultValue);`",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/hooks/useContent.ts",
+          "line": 24,
+          "description": "The overlay merge is shallow: `previewOverlay = { ...previewOverlay, ...data.content }`. If Contentstack sends partial nested object updates, entire nested structures will be replaced rather than deep-merged, potentially losing sibling fields that were present in a previous draft update.",
+          "suggestedFix": "Use a deep merge utility if partial nested updates are expected, or document that Contentstack always sends complete content objects.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/hooks/useContent.spec.ts",
+          "line": 85,
+          "description": "The test 'updates rendered content in real time when a new draft value arrives via postMessage' asserts valueAfter !== valueBefore, but valueBefore may already be 'Updated Draft' if module-scoped state leaked from a prior test. The assertion is fragile and order-dependent. The test comment even acknowledges this: 'module-scoped state persists across renders.'",
+          "suggestedFix": "Reset the module-scoped overlay before each test, or assert against a known initial value rather than relying on valueBefore being different.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

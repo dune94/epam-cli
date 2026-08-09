@@ -1,0 +1,96 @@
+{
+  "minted": [
+    {
+      "name": "gotransit-investigator",
+      "kind": "investigator",
+      "codeline": "gotransit",
+      "rationale": "The implementer needs to know where Contentstack Stack is initialized, how pages fetch CMS data, and what conventions gotransit follows before writing live preview integration code.",
+      "surfaces": [
+        "profiles.json",
+        "kb",
+        "project-investigators",
+        "project-profiles"
+      ]
+    },
+    {
+      "name": "upexpress-investigator",
+      "kind": "investigator",
+      "codeline": "upexpress",
+      "rationale": "The implementer needs to know where Contentstack Stack is initialized, how pages fetch CMS data, and what conventions upexpress follows before writing live preview integration code.",
+      "surfaces": [
+        "profiles.json",
+        "kb",
+        "project-investigators",
+        "project-profiles"
+      ]
+    },
+    {
+      "name": "metrolinx-investigator",
+      "kind": "investigator",
+      "codeline": "metrolinx",
+      "rationale": "The implementer needs to know where Contentstack Stack is initialized, how pages fetch CMS data, and what conventions metrolinx follows before writing live preview integration code.",
+      "surfaces": [
+        "profiles.json",
+        "kb",
+        "project-investigators",
+        "project-profiles"
+      ]
+    },
+    {
+      "name": "contentstack-live-preview-integration-engineer",
+      "kind": "implementer",
+      "codeline": "",
+      "rationale": "A single implementer is needed to add Contentstack Live Preview initialization, entry-change listeners, and preview-aware data fetching across all three codelines, because the work is the same pattern in each repository and splitting it would create near-duplicate roles.",
+      "surfaces": [
+        "profiles.json",
+        "kb",
+        "project-roles",
+        "project-profiles"
+      ]
+    }
+  ],
+  "rejected": [
+    {
+      "name": "gotransit-contentstack-investigator",
+      "reason": "brief names 1 path(s) that do not exist in codeline 'gotransit': src/lib/"
+    },
+    {
+      "name": "upexpress-contentstack-investigator",
+      "reason": "brief names 1 path(s) that do not exist in codeline 'upexpress': src/lib/"
+    },
+    {
+      "name": "metrolinx-contentstack-investigator",
+      "reason": "brief names 1 path(s) that do not exist in codeline 'metrolinx': src/lib/"
+    }
+  ],
+  "unchanged": [],
+  "projectRoles": [
+    "contentstack-live-preview-integration-engineer"
+  ],
+  "projectInvestigators": [
+    "gotransit-investigator",
+    "upexpress-investigator",
+    "metrolinx-investigator"
+  ],
+  "rejectedAcrossAttempts": [
+    {
+      "name": "contentstack-live-preview-engineer",
+      "reason": "brief names 3 path(s) that do not exist in any codeline: lib/contentstack-live-preview.ts, utils/live-preview.ts, ts/.tsx"
+    },
+    {
+      "name": "gotransit-contentstack-investigator",
+      "reason": "brief names 1 path(s) that do not exist in codeline 'gotransit': src/lib/"
+    },
+    {
+      "name": "upexpress-contentstack-investigator",
+      "reason": "brief names 1 path(s) that do not exist in codeline 'upexpress': src/lib/"
+    },
+    {
+      "name": "metrolinx-contentstack-investigator",
+      "reason": "brief names 1 path(s) that do not exist in codeline 'metrolinx': src/lib/"
+    }
+  ],
+  "proposed": 8,
+  "attempts": 2,
+  "protectedRoles": 21
+}

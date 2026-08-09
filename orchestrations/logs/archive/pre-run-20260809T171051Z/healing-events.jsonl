@@ -1,0 +1,1 @@
+{"ts":"2026-08-09T17:01:50Z","story_id":"AMSD-2041","retry":0,"rung":0,"target":"skill","diagnosis":"Local interfaces lack live_preview field; options uses preview_token but SDK LivePreview requires management_token and host.","patches_applied":0,"profile_updated":true}

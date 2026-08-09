@@ -1,0 +1,72 @@
+{
+  "message_id": "msg-1785885837978",
+  "timestamp": "2026-08-04T23:23:57+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 44,
+          "description": "The onEntryChange callback discards the actual preview entry data. `setPreviewOverrides((prev) => ({ ...prev }))` creates a shallow clone of the existing state (always `{}`), ignoring the entry argument that the SDK passes to the callback. The `previewOverrides` state is therefore never populated with any content — it remains an empty object for the entire session. None of the 7 acceptance criteria about live updates can be satisfied because no override data ever reaches `useContent.getContentByKey`.",
+          "suggestedFix": "Capture the entry argument from onEntryChange and store it: `LivePreview.onEntryChange((entry) => { if (!cancelled) setPreviewOverrides(entry); });` — or whatever shape the SDK delivers, then transform it to match the dotted-path lookup used in useContent.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.ts",
+          "line": 14,
+          "description": "The override lookup assumes `livePreview` is a flat Record keyed by the same dotted-path strings (e.g. `page[0].card[0].card_title`) that `getValue` uses to traverse the published content tree. Contentstack's onEntryChange delivers a structured entry object (the full entry JSON), not a flat map of dotted paths. Even if the entry data were stored (fixing the blocker above), `Object.prototype.hasOwnProperty.call(livePreview, path)` will never match because the path format and the entry shape are incompatible. The prescribed fix says to 'merge defaultContent with live preview updates' — a deep merge into the content tree, not a flat key lookup.",
+          "suggestedFix": "Deep-merge the preview entry into the content object (or into the relevant subtree) so that getValue traverses through preview data naturally. Alternatively, flatten the entry to the dotted-path format before storing it in previewOverrides. Either way, the lookup mechanism must be consistent with the data shape stored.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 0,
+          "description": "The prescribed fix requires server-side Contentstack Stack initialization to be configured with `live_preview: { enable: true, preview_token: process.env.CONTENTSTACK_PREVIEW_TOKEN, host: process.env.CONTENTSTACK_PREVIEW_HOST }` so that preview queries return draft content. No such configuration appears in the diff. Without it, the SDK may initialize on the client but the Contentstack API will never return draft/preview content, making the entire feature non-functional end-to-end.",
+          "suggestedFix": "Locate the Contentstack Stack initialization (likely in cx-shared or an API util) and add the live_preview configuration object with enable, preview_token, and host from environment variables.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 0,
+          "description": "No unit tests exist for any of the changed files. resolve_test_file confirmed zero test files for contentstackContext.tsx, useContent.ts, or ContentstackLink.tsx. The review criteria require new features to have corresponding vitest unit tests mirroring the src/ path, and the total test count must not decrease. None of the 7 acceptance criteria are covered by tests.",
+          "suggestedFix": "Add test files at src/context/__tests__/contentstackContext.spec.tsx, src/hooks/__tests__/useContent.spec.ts, and src/components/contentstack/ContentstackLink/__tests__/ContentstackLink.spec.tsx covering: (1) preview overrides take precedence over published content, (2) fallback to published content when preview is off, (3) graceful degradation when SDK import fails, (4) link/card/image text updates without page reload.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 22,
+          "description": "Hardcoded query parameter strings `\"live_preview\"`, `\"entry_uid\"`, `\"content_type_uid\"` violate the no-hardcoded-strings criterion. These should use named constants from src/config/constants.ts.",
+          "suggestedFix": "Define constants for these query parameter names in src/config/constants.ts and import them.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 35,
+          "description": "The `.catch(() => { /* silent */ })` swallows the error completely with only a comment. While graceful degradation is correct behavior, the catch block should at minimum log a warning (e.g. console.warn) so developers can diagnose why Live Preview is not working during development. A completely silent failure makes debugging impossible.",
+          "suggestedFix": "Add `console.warn('Contentstack Live Preview SDK failed to load:', err);` in the catch block.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

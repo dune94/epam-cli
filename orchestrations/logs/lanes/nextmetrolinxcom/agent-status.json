@@ -1,0 +1,52 @@
+{
+  "events": [
+    {
+      "type": "spec_update",
+      "story": "AMSD-2041",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on AMSD-2041 ([GO, UP, MX] Live Preview of Content in CMS)",
+      "timestamp": "2026-08-06T20:11:52+00:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "AMSD-2041",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on AMSD-2041 — tracing the causal fix site",
+      "timestamp": "2026-08-06T20:12:20+00:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "AMSD-2041",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/services/contentstack.ts",
+      "timestamp": "2026-08-06T20:13:15+00:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "AMSD-2041",
+      "lane": "main",
+      "role": "openspec",
+      "message": "[core] openspec started on AMSD-2041 ([GO, UP, MX] Live Preview of Content in CMS)",
+      "timestamp": "2026-08-08T23:40:17+00:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "AMSD-2041",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective started on AMSD-2041 — tracing the causal fix site",
+      "timestamp": "2026-08-08T23:40:32+00:00"
+    },
+    {
+      "type": "spec_update",
+      "story": "AMSD-2041",
+      "lane": "main",
+      "role": "code-graph-detective",
+      "message": "[core] code-graph-detective located fix site: src/pages/[[...slug]].tsx (reuse pageService)",
+      "timestamp": "2026-08-08T23:44:37+00:00"
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "message_id": "msg-1785884753667",
+  "timestamp": "2026-08-04T23:05:53+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.ts",
+          "line": 1,
+          "description": "PRESCRIBED ROOT CAUSE NOT ADDRESSED. The root cause analysis explicitly requires integrating @contentstack/live-preview-utils inside ContentstackProvider: import ContentstackLivePreview, call ContentstackLivePreview.init() at module level, and replace the static useMemo with useState + useEffect subscribing to onEntryChange callbacks. The diff adds only a passive IContentstackLivePreview interface and a livePreview field on the context shape — zero SDK import, zero init(), zero useState/useEffect subscription, zero onEntryChange wiring. No component in the codebase actually receives or reacts to CMS preview updates. Every acceptance criterion (unchanged fields display correctly, malformed updates don't break, non-preview sessions work, post-exit values correct) depends on the SDK integration existing; without it, none can be satisfied at runtime.",
+          "suggestedFix": "Implement the prescribed minimal fix: (1) import ContentstackLivePreview from '@contentstack/live-preview-utils'; (2) call ContentstackLivePreview.init() at module level (or inside the provider with a guard); (3) in ContentstackProvider, replace the static useMemo that builds the context value with useState(initialContent=defaultContent) + useEffect that calls ContentstackLivePreview.onEntryChange(({ entry }) => setState(prev => mergeEntry(prev, entry))). The existing defaultContent prop becomes the initial state. Remove the unused IContentstackLivePreview.setLivePreview callback field — the SDK callback is the update mechanism, not a manual setter.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.spec.ts",
+          "line": 1,
+          "description": "TESTS DO NOT VERIFY ANY ACCEPTANCE CRITERION AT RUNTIME. Every test creates plain TypeScript objects and asserts field values — they verify that interfaces can hold data, not that live preview works. None of the 4 verification criteria (unchanged fields display correctly during preview, malformed updates don't break rendering, non-preview sessions show complete content, post-exit values correct) are tested because there is no provider, no rendering, no SDK callback, and no state update being exercised. The test file is 179 lines of shape assertions that would pass even if live preview is entirely unimplemented — which it is.",
+          "suggestedFix": "After implementing the actual SDK integration in ContentstackProvider, write tests that: (1) render the provider with defaultContent and a child consuming useContent; (2) simulate an onEntryChange callback firing with updated entry data and assert the child re-renders with new values; (3) simulate a malformed/empty entry update and assert the child still renders previous content without error; (4) render without any preview session and assert all content is present; (5) simulate exiting preview (callback fires with null/clear) and assert content reverts to defaults. Use @testing-library/react renderHook or render.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.spec.ts",
+          "line": 35,
+          "description": "Multiple untyped `as any` casts without explanatory comments violate TypeScript strict compliance: `basePage as any` appears on lines 35, 55, 82, 107, 131, 155, and `[{}] as [any]` on lines 81-82. The basePage object should be typed as IContentstackPage (or a partial cast with a comment explaining why).",
+          "suggestedFix": "Type basePage as `Partial<IContentstackPage> as IContentstackPage` or construct a minimal valid IContentstackPage. Add explanatory comments for any remaining `as any` casts, or eliminate them entirely.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/ContentstackContext.ts",
+          "line": 6,
+          "description": "IContentstackLivePreview.setLivePreview callback field is dead code. No component sets this callback, no consumer invokes it in production code, and the SDK's onEntryChange is the prescribed update mechanism. Including it in the interface suggests a manual-update pattern that contradicts the prescribed SDK-driven approach.",
+          "suggestedFix": "Remove setLivePreview from IContentstackLivePreview. The SDK callback handles state updates internally inside the provider; consumers should never need to manually set preview state.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/interface/content/contentCard.ts",
+          "line": 8,
+          "description": "IContentCardLivePreview and the live_preview field on IContentCard are added but never consumed by any component or hook. ContentstackLink.tsx and useContent.ts (listed as relevant files) show no changes. Without the SDK integration merging incoming entry data into the content state, these metadata fields serve no purpose — they are never read, never populated by a callback, and never affect rendering.",
+          "suggestedFix": "These fields become meaningful only after the SDK integration is implemented. If the SDK's onEntryChange delivers full entry objects (which already include live_preview metadata from Contentstack), this manual interface may be unnecessary. Verify whether Contentstack entries already carry live_preview; if so, remove the hand-rolled interface and rely on the SDK-provided shape.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

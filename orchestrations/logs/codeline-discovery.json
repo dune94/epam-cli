@@ -1,0 +1,22 @@
+{
+  "codelines": [
+    {
+      "name": "gotransit",
+      "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com",
+      "reason": "Covers the GO product area's front-end implementation of live preview for draft CMS content.",
+      "evidence": "ticket component \"GO\""
+    },
+    {
+      "name": "upexpress",
+      "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com",
+      "reason": "Covers the UP product area's front-end implementation of live preview for draft CMS content.",
+      "evidence": "ticket component \"UP\""
+    },
+    {
+      "name": "metrolinx",
+      "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
+      "reason": "Covers the MX product area's front-end implementation of live preview for draft CMS content.",
+      "evidence": "ticket component \"MX\""
+    }
+  ]
+}

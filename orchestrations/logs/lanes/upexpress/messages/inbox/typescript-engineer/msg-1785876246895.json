@@ -1,0 +1,40 @@
+{
+  "message_id": "msg-1785876246895",
+  "timestamp": "2026-08-04T20:44:06+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "major",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 0,
+          "description": "No test coverage for the live_preview config. The test file already tests the analogous CONTENTSTACK_FETCH_TIMEOUT conditional config (two it() blocks verifying options includes/excludes fetchOptions based on env var presence), but there are zero tests for the live_preview conditional. Searched for 'live_preview', 'preview_host', 'PREVIEW_HOST', 'preview_token', 'management_token' in the test file — no matches found. This means the new conditional config logic is untested.",
+          "suggestedFix": "Add two test cases mirroring the existing fetch-timeout tests: (1) when CONTENTSTACK_PREVIEW_HOST is set, assert options.live_preview equals { enable: true, host: <host>, management_token: <token> }; (2) when CONTENTSTACK_PREVIEW_HOST is unset, assert options does not contain a live_preview key.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 69,
+          "description": "The else branch `{ management_token: \"\" }` is unnecessary — when CONTENTSTACK_PREVIEW_TOKEN is absent, simply omit the key entirely (as the prescribed fix does). Setting management_token to an empty string adds a meaningless key to the config object. The SDK does not require the key to be present when there is no token.",
+          "suggestedFix": "Replace `: { management_token: \"\" }` with `: {}` or restructure to only spread when the token exists: `...(CONTENTSTACK_PREVIEW_TOKEN ? { management_token: CONTENTSTACK_PREVIEW_TOKEN } : {})`.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

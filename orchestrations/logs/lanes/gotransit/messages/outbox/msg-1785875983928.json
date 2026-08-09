@@ -1,0 +1,40 @@
+{
+  "message_id": "msg-1785875983928",
+  "timestamp": "2026-08-04T20:39:43+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 0,
+          "description": "No tests were added for the live_preview feature. The diff modifies only src/services/contentstack.ts and adds zero test coverage for the four verification criteria. Specifically: (1) No test verifies that the `options` object includes a `live_preview` configuration with `enable: true` and a `host` — a simple `expect(options.live_preview).toEqual({ enable: true, host: expect.any(String), management_token: expect.any(String) })` assertion is absent. (2) No test mocks the Contentstack client to return draft/unpublished entry data and verifies the rendered page displays draft content when live_preview query parameters are present (VC2). (3) No test verifies that published content is displayed with no regressions when live_preview params are absent (VC3) — existing tests cover the non-preview path but none assert the absence of live_preview params in API requests. (4) No test verifies that API requests include live_preview parameters from the URL when present and omit them when absent (VC4). The existing test file at src/services/__tests__/contentstack.spec.ts was extended for `contentstack fetch timeout` config assertions but not for `live_preview` config. Searched the test file for 'live_preview', 'preview', 'draft', 'management_token' — none found.",
+          "suggestedFix": "Add a `describe('live_preview configuration', ...)` block to src/services/__tests__/contentstack.spec.ts with at minimum: (a) an assertion that `options.live_preview` equals `{ enable: true, host: expect.any(String), management_token: expect.any(String) }` when CONTENTSTACK_PREVIEW_HOST and CONTENTSTACK_MANAGEMENT_TOKEN are set; (b) a test that mocks Stack to return draft entries and verifies getEntry returns them (simulating the SDK's live_preview data path); (c) a test that verifies the options object does not break existing fetch behavior when preview env vars are unset.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 69,
+          "description": "The `management_token` field was added beyond the prescribed minimal fix, which specified only `live_preview: { enable: true, host: CONTENTSTACK_PREVIEW_HOST || '' }`. While the dependency_contract tool confirms `management_token` IS consumed by the contentstack SDK (verdict: 'consumed' across all dist bundles), and it is likely required for Live Preview to fetch draft/unpublished entries (satisfying VC2), this deviation from the prescribed fix should be explicitly justified. If the Contentstack SDK's live_preview can function with just `enable` and `host` (using the delivery token already in options), then `management_token` is unnecessary config surface area and a potential security concern (management token exposed in client-side config). If it IS required, a comment should explain why.",
+          "suggestedFix": "Verify whether Contentstack Live Preview requires `management_token` in addition to the existing `delivery_token` for fetching draft entries. If yes, add an explanatory comment: `// management_token required by SDK to fetch unpublished entries for live preview`. If no, remove the `management_token` line and the `CONTENTSTACK_MANAGEMENT_TOKEN` env var destructure to match the prescribed minimal fix exactly.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

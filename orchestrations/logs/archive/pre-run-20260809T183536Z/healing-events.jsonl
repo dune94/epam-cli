@@ -1,0 +1,1 @@
+{"ts":"2026-08-09T18:00:45Z","story_id":"AMSD-2041","retry":0,"rung":0,"target":"skill","diagnosis":"SDK types lack livePreview() on Query/Entry and interfaces lack live_preview field; both need type assertions or interface additions.","patches_applied":0,"profile_updated":true}

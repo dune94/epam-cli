@@ -1,0 +1,72 @@
+{
+  "message_id": "msg-1785876070734",
+  "timestamp": "2026-08-04T20:41:10+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 155,
+          "description": "DOES NOT IMPLEMENT THE PRESCRIBED ROOT CAUSE FIX. The prescribed minimal fix was: replace the static useMemo with useState initialized from defaultContent, and register onEntryChange to call setContent with the updated entry — making the context reactive. The diff instead keeps content as a static value via useMemo([defaultContent, isPreviewMode]) and delegates to an external onEntryChange callback described in its own JSDoc as 'typically router.replace(router.asPath)'. router.replace IS a page reload, not a reactive in-place update. This directly violates AC #2 ('updates without requiring a manual page reload'), AC #4 ('continues to display the last-rendered content without errors'), and AC #5 ('updates to show the reverted value'). The onEntryChange handler (line 102) calls onEntryChangeRef.current?.() but never updates any content state — the context value never changes in response to CMS edits.",
+          "suggestedFix": "Replace the static useMemo with: const [content, setContent] = useState<IContentstackContext>(defaultContent); Then in the onEntryChange handler, call setContent with the updated entry data from the Live Preview SDK. Remove the external onEntryChange callback prop entirely — the provider should own the content state and update it reactively, as prescribed. The minimal fix is ~10-15 lines, not 131.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 0,
+          "description": "NO UNIT TESTS. resolve_test_file found zero existing test files for contentstackContext.tsx, and the diff includes no test files. New features require corresponding vitest unit tests in test/unit/ mirroring the src/ path. None of the 5 acceptance criteria have any test coverage.",
+          "suggestedFix": "Add test/unit/context/contentstackContext.spec.tsx (or src/context/__tests__/contentstackContext.spec.tsx per codebase convention) with tests covering: (1) non-preview mode renders default content unchanged, (2) entry change updates rendered content without page reload, (3) multiple simultaneous field changes each propagate, (4) session end preserves last-rendered content, (5) revert to published value updates the rendered page.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 115,
+          "description": "unsubscribeOnEntryChange API MISMATCH. The dependency's type declaration (node_modules/@contentstack/live-preview-utils/dist/modern/light-sdk.d.ts) shows 'static unsubscribeOnEntryChange(): void' — it takes NO parameters. The diff calls ContentstackLivePreview.unsubscribeOnEntryChange(unsubscribeUid) with an argument. The argument is silently ignored at runtime, so the unsubscribe will not target the specific callback UID. The return type of onEntryChange is OnEntryChangeCallbackUID (a string), but unsubscribeOnEntryChange does not accept it.",
+          "suggestedFix": "Check the actual SDK API. If unsubscribeOnEntryChange truly takes no args, it likely unsubscribes all listeners — call it without arguments. If per-callback unsubscribe is needed, verify whether the SDK supports it via a different method or return value.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 0,
+          "description": "ContentstackProvider IS NEVER USED. A search across the entire src/ directory found zero imports or usages of ContentstackProvider. The diff adds 131 lines of new component code but nothing wires it in to replace the existing bare <ContentstackContext.Provider> usage. The Live Preview feature is dead code — no page will actually use it.",
+          "suggestedFix": "Find and update all existing usages of <ContentstackContext.Provider value={...}> to use <ContentstackProvider defaultContent={...}> instead. At minimum, update the app-level _app.tsx or equivalent wrapper that provides content to the component tree.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 0,
+          "description": "OVER-ENGINEERED vs PRESCRIBED MINIMAL FIX. The prescribed fix was: useState for content + onEntryChange → setContent (~10-15 lines). The diff adds 131 lines: an external callback prop pattern, isPreviewMode flag, useRef for callback management, async init with try/catch, cleanup logic, and extensive JSDoc. A more concise change: const [content, setContent] = useState(defaultContent); useEffect(() => { if (typeof window === 'undefined') return; ContentstackLivePreview.init(); ContentstackLivePreview.onEntryChange(() => setContent(updatedEntry)); }, []); — fewer lines, meets all ACs, no external callback indirection.",
+          "suggestedFix": "Remove the onEntryChange callback prop, isPreviewMode flag, onEntryChangeRef, and the async setupPreview wrapper. Replace with a simple useState + useEffect that calls setContent directly in the onEntryChange handler.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/context/contentstackContext.tsx",
+          "line": 66,
+          "description": "Malformed/truncated comment: 'On the server and in production this component is effectively a thin pass-through around `<Content is unchanged.' — the sentence is cut off mid-word.",
+          "suggestedFix": "Complete the comment: 'thin pass-through around <ContentstackContext.Provider>.'",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

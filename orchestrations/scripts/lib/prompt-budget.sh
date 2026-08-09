@@ -24,8 +24,14 @@ _prompt_budget_file() {
 }
 
 # _prompt_budget_value <jq-key> <override-env-name>
+# _prompt_budget_value <key> <env_var> [section]
+#
+# `section` defaults to promptTrim, which is where every budget lived when this file was
+# written. It became a parameter when the existing-file injection budget arrived: that value
+# belongs beside the others but is not a trim setting, and duplicating this loader to say so
+# would be how the two drift apart.
 _prompt_budget_value() {
-    local key="$1" env_name="$2" file val
+    local key="$1" env_name="$2" section="${3:-promptTrim}" file val
     val="$(eval "printf '%s' \"\${$env_name:-}\"")"
     # An explicit operator override wins, including the documented 0 opt-out.
     if [ -n "$val" ]; then printf '%s' "$val"; return 0; fi
@@ -35,15 +41,20 @@ _prompt_budget_value() {
         echo "[prompt-budget] cannot read $key: $file does not exist" >&2
         return 1
     fi
-    val="$(jq -er --arg k "$key" '.promptTrim[$k]' "$file" 2>/dev/null)" || {
-        echo "[prompt-budget] $file — promptTrim.$key is missing" >&2
+    val="$(jq -er --arg k "$key" --arg s "$section" '.[$s][$k]' "$file" 2>/dev/null)" || {
+        echo "[prompt-budget] $file — ${section}.$key is missing" >&2
         return 1
     }
     case "$val" in
-        ''|*[!0-9]*) echo "[prompt-budget] $file — promptTrim.$key must be a number, got '$val'" >&2; return 1 ;;
+        ''|*[!0-9]*) echo "[prompt-budget] $file — ${section}.$key must be a number, got '$val'" >&2; return 1 ;;
     esac
     printf '%s' "$val"
 }
 
 prompt_trim_threshold()     { _prompt_budget_value thresholdChars      EPAM_PROMPT_SCRATCHPAD_THRESHOLD_CHARS; }
 prompt_trim_keep_sections() { _prompt_budget_value keepRecentSections  EPAM_PROMPT_TRIM_KEEP_SECTIONS; }
+
+# existing_file_max_lines — how many lines of each declared file are injected verbatim into the
+# writer prompt. The largest single term in prompt size (39% of a live 86,809-char prompt), so it
+# belongs where an operator can reach it rather than inside build_implementation_prompt.
+existing_file_max_lines() { _prompt_budget_value maxLinesPerFile EPAM_EXISTING_FILE_MAX_LINES existingFileInjection; }

@@ -1,0 +1,273 @@
+{
+  "launch_log": "/tmp/tier3-metrolinx-jira-20260806T094550-3147993.log",
+  "logs_dir": "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs",
+  "timeline": [
+    {
+      "t": "13:47:42",
+      "kind": "ingest",
+      "status": "info",
+      "head": "Ticket pulled from Jira",
+      "note": "The pipeline reads the ticket straight from https://metrolinx.atlassian.net (project AMSD). Nothing about the bug is hand-written for the run &mdash; the agents see the same words a developer would."
+    },
+    {
+      "t": "13:47:42",
+      "kind": "ingest",
+      "status": "info",
+      "head": "Searching 31 repositories for the right codebase",
+      "note": "The ticket does not say which repository the bug lives in. The pipeline has to work that out itself from 31 candidates."
+    },
+    {
+      "t": "13:47:42",
+      "kind": "ingest",
+      "status": "info",
+      "head": "Strongest match: next.gotransit.com",
+      "note": "Chosen on the ticket&rsquo;s domain words appearing far more often in this repository than in the others &mdash; author(hits=34, in 10/31 repos), content(hits=200, in 25/31 repos), live(hits=12, in 21/31 repos). Presentation words like &ldquo;displayed&rdquo; are deliberately stripped first, because they describe the symptom rather than the code that causes it."
+    },
+    {
+      "t": "13:47:42",
+      "kind": "ingest",
+      "status": "info",
+      "head": "Model z-ai/glm-5.2 picks from the shortlist",
+      "note": "The final choice is a judgement call, so it goes to a model &mdash; but only after the arithmetic has removed the obviously-wrong candidates."
+    },
+    {
+      "t": "13:47:42",
+      "kind": "ingest",
+      "status": "info",
+      "head": "Acceptance-criteria gate: enrichable",
+      "note": "This ticket has no acceptance criteria written on it. The gate judged whether the description alone says enough to work from; &ldquo;enrichable&rdquo; means yes &mdash; the symptom and the expected behaviour are both stated, so the pipeline may proceed and derive its own verification criteria."
+    },
+    {
+      "t": "13:48:48",
+      "kind": "ingest",
+      "status": "ok",
+      "head": "Codeline selected: /home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
+      "note": "This is the repository the run will actually change. Everything after this point happens inside it."
+    },
+    {
+      "t": "13:48:48",
+      "kind": "ingest",
+      "status": "info",
+      "head": "Baseline pinned at develop @ 42b81c44",
+      "note": "A fixed reference point. Every later question &mdash; what changed, what lint findings are new, does the test fail without the fix &mdash; is answered against this exact commit, so pre-existing problems are never blamed on this run."
+    },
+    {
+      "t": "13:48:50",
+      "kind": "step",
+      "status": "ok",
+      "head": "Step 1: Specification pass \u2014 took 7m 10s",
+      "note": "Reads the ticket and turns a symptom described in prose into verification criteria a test can be written against."
+    },
+    {
+      "t": "13:48:50",
+      "kind": "spec",
+      "status": "ok",
+      "head": "7 verification criteria written",
+      "note": "Plain-language statements of what must be observably true once the bug is fixed. They describe outcomes, never implementation, so they cannot quietly dictate how the fix is written."
+    },
+    {
+      "t": "13:56:00",
+      "kind": "step",
+      "status": "ok",
+      "head": "Step 2: CPA pre-pass \u2014 took 1m 3s",
+      "note": "Forecasts what this story should cost and how long it should take, so a run that goes wildly over its estimate can be caught rather than discovered on the invoice."
+    },
+    {
+      "t": "13:57:03",
+      "kind": "step",
+      "status": "ok",
+      "head": "Step 3: Skill assessment",
+      "note": "Decides which skills the change needs and which agent role should own it, before any code is touched."
+    },
+    {
+      "t": "13:57:28",
+      "kind": "step",
+      "status": "skip",
+      "head": "Step 5: Regression guard \u2014 did not apply",
+      "note": "The pipeline recognised this stage had nothing to do for this change and stood down, which is a different statement from passing. Reason recorded: <code>SKIP_REGRESSION_GUARD=true</code>."
+    },
+    {
+      "t": "13:57:28",
+      "kind": "step",
+      "status": "ok",
+      "head": "Step 7: PRD model coordinator",
+      "note": "Assigns a model to each piece of work \u2014 cheaper models for mechanical steps, stronger ones where judgement is required."
+    },
+    {
+      "t": "13:57:28",
+      "kind": "step",
+      "status": "skip",
+      "head": "Step 8: Main-branch stories \u2014 did not apply",
+      "note": "The pipeline recognised this stage had nothing to do for this change and stood down, which is a different statement from passing. Reason recorded: <code>paused before the writer (EPAM_PAUSE_BEFORE_WRITER)</code>."
+    },
+    {
+      "t": "13:59:03",
+      "kind": "terminal",
+      "status": "ok",
+      "head": "Pipeline complete",
+      "note": ""
+    }
+  ],
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "codeline_path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
+  "repo_count": "31",
+  "scoring": null,
+  "scoring_driver": "author(hits=34, in 10/31 repos), content(hits=200, in 25/31 repos), live(hits=12, in 21/31 repos)",
+  "shortlist": null,
+  "selector_model": "z-ai/glm-5.2",
+  "story": "AMSD-2041",
+  "cost_before": "442.665415891",
+  "cost_after": "442.86143066",
+  "cost_total": null,
+  "mocked_externals": "contentstack.io,contentstack.com,api.contentstack.io,cdn.contentstack.io",
+  "pipeline_complete": true,
+  "passed": false,
+  "codeline": "metrolinx",
+  "t_start": "13:47:42",
+  "t_end": "13:59:03",
+  "detective_ungrounded": 0,
+  "detective_bad_quote": null,
+  "detective_escalation": null,
+  "detective_maxiter": 0,
+  "repro_gate": null,
+  "review_decision": null,
+  "review_cycle": null,
+  "lint_scope": null,
+  "lint_result": null,
+  "lint_baseline_warning": false,
+  "mutation_score": null,
+  "mutant_verdict": null,
+  "implemented": null,
+  "failed": null,
+  "unchanged_warnings": 0,
+  "selfheal_constraints": [],
+  "test_writer_attempts": null,
+  "test_writer_rejected": 0,
+  "manifest": [],
+  "manifest_source": "commits",
+  "costs": [
+    [
+      "team-lead-agent",
+      0.0007,
+      3042,
+      39,
+      1
+    ]
+  ],
+  "cost_tracked": 0.0007,
+  "gate_logs": [
+    {
+      "name": "sast-sentinel",
+      "size": null,
+      "verdict": null,
+      "detail": [],
+      "gsummary": null,
+      "wrote_file_instead": false
+    },
+    {
+      "name": "spec-validator",
+      "size": null,
+      "verdict": null,
+      "detail": [],
+      "gsummary": null,
+      "wrote_file_instead": false
+    },
+    {
+      "name": "review-ranger",
+      "size": null,
+      "verdict": null,
+      "detail": [],
+      "gsummary": null,
+      "wrote_file_instead": false
+    },
+    {
+      "name": "mutant-hunter",
+      "size": null,
+      "verdict": null,
+      "detail": [],
+      "gsummary": null,
+      "wrote_file_instead": false
+    },
+    {
+      "name": "fuzz-weaver",
+      "size": null,
+      "verdict": null,
+      "detail": [],
+      "gsummary": null,
+      "wrote_file_instead": false
+    },
+    {
+      "name": "perf-sentinel",
+      "size": null,
+      "verdict": null,
+      "detail": [],
+      "gsummary": null,
+      "wrote_file_instead": false
+    }
+  ],
+  "commits": [],
+  "fix_sites": [
+    {
+      "file": "src/context/contentstackContext.tsx",
+      "function": "ContentstackContext",
+      "reason": "This is the central React context that holds all Contentstack page content (header, footer, page, etc.). Every component reads content via useContent \u2192 useContext(ContentstackContext). Live Preview must plug into this context \u2014 either by wrapping it with a LivePreviewProvider or by updating its value via onEntryChange when the CMS editor changes content. This is the primary attachment point for the new capability.",
+      "fix": "Wrap the ContentstackContext with @contentstack/live-preview-utils integration: (1) Call LivePreview.init() at app startup (in _app.tsx or a dedicated provider component). (2) Create a new ContentstackLivePreviewProvider component that wraps ContentstackContext.Provider and subscribes to LivePreview.onEntryChange to update the context value when content changes in the CMS editor, causing all useContent consumers to re-render with preview data. The existing useContent hook and getValue utility require no changes \u2014 they already traverse the context object reactively.",
+      "helper": "",
+      "brokenLine": "export const ContentstackContext = createContext<IContentstackContext>({});",
+      "fixVerified": null,
+      "evidenceVerified": true,
+      "prescriptionNote": "",
+      "prescriptionUnderspecified": false
+    },
+    {
+      "file": "src/hooks/useContent.ts",
+      "function": "useContent",
+      "reason": "The hook consumed by 30+ Contentstack components to read content. It reads from ContentstackContext and provides getContentByKey. Once the context is updated by Live Preview, this hook automatically propagates changes. It may also need to pass live_preview parameters to the Contentstack SDK if server-side data fetching (getStaticProps/getServerSideProps) is made preview-aware.",
+      "fix": "After the ContentstackLivePreviewProvider is in place (attachment point #1), this line automatically receives updated preview content because it reads from the same context. If server-side content fetching needs to include live_preview hash parameters, add a helper that reads the preview hash from the URL (provided by @contentstack/live-preview-utils) and passes it through the context so getStaticProps/getServerSideProps can include it in Contentstack SDK queries.",
+      "helper": "getValue",
+      "brokenLine": "const content = useContext(ContentstackContext);",
+      "fixVerified": true,
+      "evidenceVerified": true,
+      "prescriptionNote": "",
+      "prescriptionUnderspecified": false
+    }
+  ],
+  "vcs": [
+    "When the application is loaded with Live Preview enabled (e.g. via a query parameter or configuration flag), the Contentstack Live Preview SDK is initialized and its onEntryChange callback is registered before any content is rendered.",
+    "Given the Contentstack client is mocked to invoke onEntryChange with updated entry data, the page content re-renders with the updated values without requiring a full page reload.",
+    "When the application is loaded without Live Preview enabled, the existing content-fetching and rendering behavior is unchanged \u2014 pages load and display exactly as they do today.",
+    "Live Preview initialization and content-update propagation work identically across the GO, UP, and MX brand contexts (each brand's ContentstackContext receives and applies onEntryChange updates).",
+    "The useContent hook continues to return the same getContentByKey interface after Live Preview integration; all existing consumers (NavigationBar, Footer, CookiesBanner, QuickMenu, TopBar, FeatureListing, DynamicEventsListContainer, MobileNav, etc.) render correctly without code changes.",
+    "When onEntryChange delivers a partial or malformed entry, the application does not throw an unhandled error; it either applies the valid portion or retains the last-known-good content.",
+    "Given the Contentstack Live Preview SDK client is mocked, the initialization call includes the correct stack details (stack API key, environment, and any required host configuration) derived from the application's existing Contentstack configuration."
+  ],
+  "declared_files": [
+    "src/context/contentstackContext.tsx",
+    "src/hooks/useContent.ts",
+    "src/components/contentstack/ContentstackAttention/content.mock.ts",
+    "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+    "src/interface/content/contentCard.ts"
+  ],
+  "vc_count": "7",
+  "vc_resolution": "disputed",
+  "vc_regenerated": false,
+  "vc_mechanism_flagged": null,
+  "prd_available": true,
+  "selfheal": {
+    "constraints_applied": [],
+    "analyst_runs": 0,
+    "typecheck_rejections": 0,
+    "failure_classes": [],
+    "recovered_on_attempt": null,
+    "escalations": [],
+    "deliverable_retries": 0,
+    "ungrounded_rejections": 0,
+    "kb_source": "this run\u2019s archived copy",
+    "constraint_count": 1,
+    "healing_events": 0,
+    "constraint_ids": [
+      "repro-test-writer-ts2769"
+    ],
+    "scratchpad": []
+  }
+}

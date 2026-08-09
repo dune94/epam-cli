@@ -1,0 +1,6 @@
+{
+  "state": "not_checked",
+  "story": "AMSD-2041",
+  "results": [],
+  "reason": "no test file in the writer manifest for this story — nothing to check the verification criteria against"
+}

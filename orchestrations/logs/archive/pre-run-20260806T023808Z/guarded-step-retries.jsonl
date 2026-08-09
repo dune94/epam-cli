@@ -1,0 +1,3 @@
+{"timestamp":"2026-08-06T02:24:49.445Z","step":"ac-review","storyId":"AMSD-2041","runId":"20260806T021820Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"32cae42"}
+{"timestamp":"2026-08-06T02:33:21Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260806T021820Z","promptVersion":"32cae42"}
+{"timestamp":"2026-08-06T02:33:48Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260806T021820Z","promptVersion":"32cae42"}

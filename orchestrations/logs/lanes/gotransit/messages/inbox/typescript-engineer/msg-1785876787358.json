@@ -1,0 +1,48 @@
+{
+  "message_id": "msg-1785876787358",
+  "timestamp": "2026-08-04T20:53:07+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 0,
+          "description": "No unit test verifies VC1 — that the `options` object includes a `live_preview` configuration with `enable: true` and a `host`. The existing test file covers `fetchOptions`/timeout config assertions but contains zero assertions about `live_preview`. Searched the visible test file content for 'live_preview', 'preview', 'draft' — none found. This directly violates the review criterion: 'New features have corresponding vitest unit tests.' The test is trivial to add alongside the existing `describe('contentstack fetch timeout')` block.",
+          "suggestedFix": "Add a test: `describe('live_preview config', () => { it('should include live_preview with enable and host', () => { const testedModule = require('../contentstack.ts'); expect(testedModule.options.live_preview).toEqual({ enable: true, host: expect.any(String) }); }); });` Also add a test verifying that `CONTENTSTACK_PREVIEW_HOST` is wired through: set `process.env.CONTENTSTACK_PREVIEW_HOST = 'https://preview.example.com'` and assert `options.live_preview.host === 'https://preview.example.com'`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 0,
+          "description": "No tests verify VC2, VC3, or VC4. VC2: no test mocks the Contentstack client to return draft/unpublished entry data and verifies draft content is rendered when live_preview query parameters are present. VC3: no test verifies published content displays with no regressions when live_preview params are absent (existing tests cover the non-preview path but none assert the absence of live_preview params in API requests). VC4: no test verifies that API requests include live preview parameters from the URL when present and omit them when absent. While VC2–VC4 are partly SDK-driven, the test suite should at minimum verify that the Stack is initialized with `live_preview.enable: true` (which gates the SDK's preview data pipeline) and that the config does not interfere with existing query behavior.",
+          "suggestedFix": "Add integration-style tests that mock the Contentstack Stack and verify: (1) when `live_preview.enable` is true, the Stack constructor receives the config; (2) existing query methods (find, fetch, findOne) still return published data unchanged when no preview params are present; (3) document or assert that the SDK's internal preview parameter forwarding is enabled by the config.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 68,
+          "description": "The `as unknown as Config` double-cast is a TypeScript escape hatch that bypasses type safety entirely. It is not part of the prescribed minimal fix and was not present in the prior code (`contentstack.Stack(options)` compiled without a cast). The `Config` type import was also added unnecessarily. If the original code compiled without the cast, these additions are superfluous and reduce type safety. If a type error prompted the cast, the root cause should be addressed (e.g., the SDK's `Config` type may not declare `live_preview` even though the runtime consumes it — confirmed by dependency_contract as 'consumed' in runtime but potentially absent from .d.ts).",
+          "suggestedFix": "Remove the `Config` import and the `as unknown as Config` cast. Revert to `export const Stack = contentstack.Stack(options);`. If TypeScript reports an error, suppress it with a targeted `// @ts-expect-error live_preview is consumed by SDK runtime but not declared in Config type` comment rather than a double-cast that silences all type errors on the object.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

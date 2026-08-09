@@ -1,0 +1,48 @@
+{
+  "message_id": "msg-1785876136499",
+  "timestamp": "2026-08-04T20:42:16+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 62,
+          "description": "Conciseness: The 11-line nested conditional spread is over-engineered. A single-line ternary achieves the same acceptance criteria with fewer lines: `live_preview: CONTENTSTACK_PREVIEW_HOST ? { enable: true, host: CONTENTSTACK_PREVIEW_HOST, ...(CONTENTSTACK_PREVIEW_TOKEN ? { management_token: CONTENTSTACK_PREVIEW_TOKEN } : {}) } : { enable: false },`. The implementation conditionally spreads the entire `live_preview` object and then nests another conditional spread inside it — two layers of conditional spreading where one ternary suffices. Note: the prescribed fix used `preview_token` but dependency_contract confirms that key is 'absent' from the contentstack SDK (v3.17.2) — `management_token` is the correct consumed key, so the one-liner above uses `management_token`.",
+          "suggestedFix": "Replace lines 62-72 with: `live_preview: CONTENTSTACK_PREVIEW_HOST ? { enable: true, host: CONTENTSTACK_PREVIEW_HOST, ...(CONTENTSTACK_PREVIEW_TOKEN ? { management_token: CONTENTSTACK_PREVIEW_TOKEN } : {}) } : { enable: false },`",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 69,
+          "description": "The else branch sets `management_token: \"\"` (empty string) when CONTENTSTACK_PREVIEW_TOKEN is unset. The dependency_contract confirms `management_token` is 'consumed' by the SDK runtime — passing an empty string may cause the SDK to attempt preview authentication with an empty token, potentially causing silent failures or errors. The prescribed fix pattern omits the key entirely via `...(CONDITION ? { key: value } : {})` when no token is available, letting the SDK fall back to its default behavior.",
+          "suggestedFix": "Remove the `: { management_token: \"\" }` else branch. Use `...(CONTENTSTACK_PREVIEW_TOKEN ? { management_token: CONTENTSTACK_PREVIEW_TOKEN } : {})` so the key is absent when no token is set.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 0,
+          "description": "Missing test coverage for live_preview configuration. The existing test file has tests for CONTENTSTACK_FETCH_TIMEOUT (lines ~120-140) but no test cases for the live_preview config — e.g., verifying that options.live_preview is correct when CONTENTSTACK_PREVIEW_HOST is set with/without a token, and absent/disabled when unset. Searched for 'live_preview' and 'preview' in the test file; no matching `it(`/`test(` block found. The diff modifies a configuration path that has no corresponding test.",
+          "suggestedFix": "Add test cases to src/services/__tests__/contentstack.spec.ts mirroring the existing CONTENTSTACK_FETCH_TIMEOUT tests: (1) when CONTENTSTACK_PREVIEW_HOST is set, options.live_preview.enable is true and host matches; (2) when CONTENTSTACK_PREVIEW_HOST is set with CONTENTSTACK_PREVIEW_TOKEN, options.live_preview.management_token equals the token; (3) when CONTENTSTACK_PREVIEW_HOST is unset, live_preview is disabled or absent.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

@@ -1,0 +1,65 @@
+{
+  "runId": "20260807T212714Z",
+  "phase": "core",
+  "startedAt": "2026-08-07T21:31:47.108Z",
+  "stories": [
+    {
+      "storyId": "AMSD-2041",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "notes": "Story has zero acceptance criteria and involves security-sensitive draft preview functionality (auth, token expiry, protected-page limitations). openspec must elaborate requirements and flesh out ACs first; speckit then hardens for testability, security, and edge cases. No prd.json or providerPolicies found in project, so no hand-curation skip or provider constraints detected. spec field is null — no prior spec work exists.",
+      "acceptanceUpdated": true,
+      "status": "completed",
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Live Preview does not exist in this codebase yet — no @contentstack/live-preview-utils dependency, no LivePreviewEditingProvider, no onEntryChange wiring. The app uses Next.js Pages Router with getStaticProps (SSG), which differs from the vendor docs targeting CSR/App Router. The vendor SDK (LivePreviewEditingProvider + onEntryChange) handles draft fetching internally; the story's description of 'detecting parameters and fetching draft entries' is the SDK's job, not application code. The attachment points are: (1) src/pages/_app.tsx where LivePreviewEditingProvider wraps the app, (2) src/pages/[[...slug]].tsx getStaticProps where the content object is built and fed into ContentstackContext.Provider, and (3) src/context/contentstackContext.tsx which all 147+ useContent consumers read from. The SDK's onEntryChange callback updates the context client-side so no getStaticProps changes are needed for the live-editing flow itself — but initial SSR must still serve published content when preview parameters are absent. Protected pages (auth-gated) are acknowledged as a known limitation per the story.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-07T21:45:20.459Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided an empty acceptanceCriteria array with rich architectural notes. I built all 14 ACs from scratch based on those notes and direct examination of the codebase. Key findings from code review: (1) ContentstackContext is a simple createContext with no state mechanism — the Provider in [[...slug]].tsx receives a static `content` prop from getStaticProps, meaning client-side updates from onEntryChange will require the context value to become reactive (observable outcome captured in AC-4/AC-13). (2) No @contentstack/live-preview-utils dependency exists yet (confirmed via package.json). (3) No existing live preview wiring at all (confirmed via search). (4) ContentstackContext.Provider is in [[...slug]].tsx, not _app.tsx — the SDK's provider must wrap above this level, but the ACs describe the behavior not the wiring. (5) getStaticPaths uses fallback: false — AC-14 addresses the edge case of unpublished entries. (6) No auth-gated page patterns were found in search, but AC-7 covers the story's stated limitation. AC-11 addresses code-splitting since the SDK is only needed during preview sessions. AC-12 covers accessibility. AC-6 covers error resilience. AC-10 covers multi-content-type partial updates. AC-8 ensures SSR is unaffected.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-07T21:46:28.108Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "needs_review",
+        "reviewNotes": "Both agents added meaningful, non-overlapping value: OpenSpec performed strong architectural analysis (identified that live preview does not exist yet, flagged the vendor-doc contradiction between CSR/App Router guidance and the codebase's Pages Router/SSG architecture, identified attachment points). Speckit then built 14 verification criteria from scratch with good edge-case coverage (auth-gated pages, code-splitting, accessibility, error resilience, multi-content-type partial updates, SSR safety). The collaboration is solid.\n\nTwo concrete defects require human review before implementation:\n\n1. fixSiteAnalysis contradicts both the vendor documentation and the verification criteria. The fixSiteAnalysis prescribes a server-side approach: inspect query params in getStaticProps, manually fetch the draft entry via the Contentstack SDK, and merge it into the content object. But the referencedDocs explicitly state that onEntryChange takes NO argument and that the SDK (LivePreviewEditingProvider) handles draft fetching internally — a client-side mechanism. OpenSpec itself acknowledged this contradiction. Verification criteria 2 (re-render without page reload) and 6 (provider in root component tree) describe client-side behavior consistent with the vendor docs, NOT with the fixSiteAnalysis. A writer following fixSiteAnalysis would implement server-side draft fetching in getStaticProps, which cannot satisfy criterion 2 (getStaticProps runs at build/request time, not client-side). This contradiction must be resolved: either the fixSiteAnalysis needs to be revised to describe the client-side SDK wiring approach, or the verification criteria need to be reconciled with a server-side strategy.\n\n2. Guard vocabulary was authored but never applied. The blacklist identifies 14 internal terms (e.g., 'Contentstack live preview SDK callback,' 'onEntryChange callback,' 'ContentstackContext,' 'useContent consumers,' 'client-side,' 'unhandled error,' 're-renders,' 'root component tree,' 'Contentstack live preview provider,' 'preview parameters in the request'), yet the verification criteria still contain nearly all of them. The vocabulary analysis is correct but was not enforced on the criteria themselves, leaving implementation-prescriptive language in what should be observable checks.\n\nManifest: All 8 declared paths exist in the primary metrolinx codeline — no missing paths. However, the perCodeline analysis shows that 2 of the 8 paths (src/components/contentstack/ContentstackAttention/content.mock.ts and src/components/contentstack/ContentstackFeaturedNews/ContentstackFeaturedNews.tsx) do not exist in the gotransit or upexpress codelines. This is a cross-codeline portability gap, not a blocking manifest failure for the primary codeline, but the writer should be aware that those two files are metrolinx-only.\n\nPlan alignment: The detective's plan said it would trace from IContentstackContext/useContent to find where the context value is populated, anticipating 'likely _app.tsx or a provider wrapper' and explicitly stating 'if the context provider accepts a value prop from a data-fetching layer, that's the attachment point.' The final answer (getStaticProps in [[...slug]].tsx) is a different file, but the plan's own conditional reasoning directly connects to the finding — the provider does receive its value from getStaticProps. The pivot is explained by the plan's stated logic. This is justified_deviation.",
+        "qualityScore": 0.68,
+        "flags": [
+          "fixsite_contradicts_vendor_docs",
+          "guard_vocabulary_not_applied"
+        ],
+        "planAlignment": "justified_deviation",
+        "reviewedAt": "2026-08-07T21:46:58.946Z"
+      }
+    }
+  ],
+  "stats": {
+    "acceptanceUpdated": 0,
+    "splits": 0,
+    "agents": {
+      "openspec": 1,
+      "speckit": 1
+    },
+    "agentFailures": 0,
+    "agentAttempts": 2,
+    "coordinatorReviewCompleted": true,
+    "approved": 0,
+    "needsReview": 1
+  },
+  "completedAt": "2026-08-07T21:47:06.827Z",
+  "storyCount": 1
+}

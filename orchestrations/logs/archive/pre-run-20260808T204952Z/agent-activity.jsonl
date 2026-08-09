@@ -1,0 +1,1 @@
+{"event_id":"evt-cost-20260808203824308-626683","timestamp":"2026-08-08T20:38:24.308Z","agent":"ROSTER_REVIEW","story_id":null,"phase":null,"type":"cost_snapshot","model":"z-ai/glm-5.2","provider":"qwen","detail":{"costUsd":0.0013,"tokensIn":0,"tokensOut":0,"costUnknown":false,"turns":1,"source":"spec-mode-runner"}}

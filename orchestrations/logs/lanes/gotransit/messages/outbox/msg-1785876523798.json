@@ -1,0 +1,56 @@
+{
+  "message_id": "msg-1785876523798",
+  "timestamp": "2026-08-04T20:48:43+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 0,
+          "description": "No test coverage for any of the 4 verification criteria. Searched src/services/__tests__/ for 'live_preview|preview|draft|management_token' — zero matches. VC1 (options.live_preview shape), VC2 (draft content rendered when preview params present), VC3 (published content no regressions when params absent), and VC4 (API requests include/omit preview params) are all untested. The existing test file covers fetch timeout config and query methods but has no live_preview assertions whatsoever.",
+          "suggestedFix": "Add test cases to src/services/__tests__/contentstack.spec.ts: (1) Assert options.live_preview equals { enable: true, host: expect.any(String) }. (2) Mock the Contentstack Stack to return draft entries and verify they surface through getEntry/getSingleEntry when live_preview query params are present. (3) Assert that when no preview params exist, the query path is unchanged (existing tests partially cover this but none assert the absence of preview params in the SDK calls). (4) Verify the Stack initialization passes live_preview config to contentstack.Stack().",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/services/contentstack.ts",
+          "line": 69,
+          "description": "The `as unknown as Config` double-cast bypasses TypeScript's type system entirely, masking any real type mismatch between the options object and the SDK's expected Config type. This cast is NOT part of the prescribed minimal fix and adds unnecessary complexity. The Config type is imported solely to enable this unsafe cast. If the options object genuinely doesn't match Config, the correct approach is to align the object's type (e.g., annotate `options` with the SDK's expected type or fix the shape), not to silence the compiler with a double assertion.",
+          "suggestedFix": "Remove the `Config` import and the `as unknown as Config` cast. If TypeScript complains about the options type, either (a) type the options object explicitly as `contentstack.Config` and fix any shape mismatches, or (b) if the SDK's types are stale/incorrect, add a targeted `// @ts-expect-error` with an explanatory comment on the specific property that mismatches — not a blanket double-cast of the entire object.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/services/contentstack.ts",
+          "line": 68,
+          "description": "`management_token` was removed from the live_preview config, but dependency_contract confirms the contentstack SDK (v3.17.2) consumes `management_token` within the live_preview configuration. The SDK uses this token to authenticate requests for draft/unpublished content during live preview. Without it, VC2 ('rendered page displays draft content from those entries') may fail at runtime — the SDK may be unable to fetch unpublished entries without the management token. While the prescribed fix omits it, the dependency contract evidence suggests this is a functional risk.",
+          "suggestedFix": "Restore `management_token: CONTENTSTACK_MANAGEMENT_TOKEN || ''` to the live_preview config object and re-add `CONTENTSTACK_MANAGEMENT_TOKEN` to the destructured env vars. If the token is genuinely unnecessary, add a comment citing evidence (e.g., SDK docs or runtime test proving draft content is fetched without it).",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 1,
+          "description": "The `Config` type import (`import contentstack, { Config } from \"contentstack\"`) is added solely to support the unsafe double-cast on line 69. If the cast is removed (as recommended), this import becomes unused and should also be removed, reverting to the original `import contentstack from \"contentstack\"`.",
+          "suggestedFix": "Revert the import to `import contentstack from \"contentstack\"` once the double-cast is removed.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

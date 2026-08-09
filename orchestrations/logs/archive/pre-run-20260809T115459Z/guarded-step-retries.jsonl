@@ -1,0 +1,8 @@
+{"timestamp":"2026-08-09T10:32:03.457Z","step":"ac-review","storyId":"AMSD-2041","runId":"20260809T045158Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"8f15dd6"}
+{"timestamp":"2026-08-09T10:37:24Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260809T045158Z","promptVersion":"8f15dd6"}
+{"timestamp":"2026-08-09T10:38:38Z","step":"0.9","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260809T045158Z","promptVersion":"8f15dd6"}
+{"timestamp":"2026-08-09T10:59:30.674Z","step":"ac-review","storyId":"AMSD-2041","runId":"20260809T045158Z","agent":"openspec","attempts":2,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"8f15dd6"}
+{"timestamp":"2026-08-09T11:02:33Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260809T045158Z","promptVersion":"8f15dd6"}
+{"timestamp":"2026-08-09T11:18:54.415Z","step":"ac-review","storyId":"AMSD-2041","runId":"20260809T045158Z","agent":"openspec","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"8f15dd6"}
+{"timestamp":"2026-08-09T11:20:47.512Z","step":"ac-review","storyId":"AMSD-2041","runId":"20260809T045158Z","agent":"speckit","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"promptVersion":"8f15dd6"}
+{"timestamp":"2026-08-09T11:23:21Z","step":"0.5","phaseId":"core","attempts":1,"outcome":"pass","reason":"","violationTypes":[],"runId":"20260809T045158Z","promptVersion":"8f15dd6"}

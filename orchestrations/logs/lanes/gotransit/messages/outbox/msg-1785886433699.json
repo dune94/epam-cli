@@ -1,0 +1,80 @@
+{
+  "message_id": "msg-1785886433699",
+  "timestamp": "2026-08-04T23:33:53+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+          "line": 5,
+          "description": "ContentstackLink is over-engineered. The prescribed fix explicitly states 'zero component-level changes' — all 236+ consumers should get preview support through the hook alone. The only required change here is removing the now-removed `livePreview`/`previewHash` destructuring and the `finalHref` computation. Instead, 12+ lines were added: a duplicated `isPreviewMode` function, `useState`, `useEffect`, and a `data-cs-preview` attribute that appears in no acceptance criterion. A more concise change: `const { getContentByKey } = useContent(); const { href } = getContentByKey(contentKey, {} as IContentstackLink); return <CustomLink {...props} href={href} className={linkClasses}>{children}</CustomLink>;`",
+          "suggestedFix": "Remove `isPreviewMode`, `useState`, `useEffect`, and the `data-cs-preview` spread. Keep only the minimal diff: remove `livePreview`/`previewHash` from destructuring, remove `finalHref`, use `href` directly.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+          "line": 5,
+          "description": "`isPreviewMode` is hand-rolled identically in two files: `useContent.ts` (line 22) and `ContentstackLink.tsx` (line 5). This violates the concision/reuse rule — the function already exists in `useContent.ts` and should be exported and imported rather than duplicated.",
+          "suggestedFix": "Export `isPreviewMode` from `useContent.ts` and import it in `ContentstackLink.tsx` (if still needed after removing the over-engineered changes).",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/hooks/useContent.ts",
+          "line": 42,
+          "description": "Missing explicit return type on `useContent`. The old code declared `(): IUseContentReturn`. The new code has no return type annotation, relying on inference. TypeScript strict compliance requires all function return types to be explicitly typed. The exported `IUseContentReturn` interface was also removed, which is a breaking change for any consumer importing it.",
+          "suggestedFix": "Add an explicit return type interface (e.g., `IUseContentReturn` with `getContentByKey`) and annotate the function: `export const useContent = (): IUseContentReturn => {`.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/hooks/useContent.ts",
+          "line": 30,
+          "description": "Implementation deviates from the prescribed minimal fix, which states: 'use Contentstack's live preview SDK to fetch/subscribe to draft content for the given contentKey.' The old code used `Stack.livePreviewQuery()` from `services/contentstack`. The new implementation removes the SDK import entirely and replaces it with a custom `window.postMessage` listener. While the postMessage approach may functionally work for iframe-based previews, it does not use the Contentstack SDK as prescribed and may not integrate with Contentstack's actual preview protocol.",
+          "suggestedFix": "Verify whether Contentstack's live preview SDK provides a postMessage-based API or a programmatic fetch API. If the SDK provides a method to subscribe to draft content, use it instead of the hand-rolled postMessage listener. If postMessage IS the SDK's protocol, document this in the code comment.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/interface/content/contentCard.ts",
+          "line": 18,
+          "description": "Renaming `isPreview` to `previewMode` is unnecessary scope creep. The prescribed fix is localized to `useContent.ts`. A search confirmed `isPreview` was never used in `src/`, so the rename is safe but adds diff noise without addressing the root cause.",
+          "suggestedFix": "Revert this change unless there is a specific reason the rename is needed for the preview feature.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/hooks/useContent.ts",
+          "line": 26,
+          "description": "Module-scoped `previewOverlay` is never cleared. While functionally safe (guarded by `isPreviewMode()`), this causes test isolation issues — the overlay persists across test cases, making tests order-dependent. The test in 'returns draft content from overlay' relies on state from a prior test's postMessage dispatch.",
+          "suggestedFix": "Export a `resetPreviewOverlay` function (or use a class/closure pattern) and call it in `beforeEach` in the test file. Alternatively, clear the overlay when `isPreviewMode()` transitions from true to false.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/hooks/useContent.ts",
+          "line": 47,
+          "description": "The `useEffect` that registers the preview listener has an empty dependency array `[]`, meaning it only runs on mount. If a user enters preview mode after the component has mounted (e.g., by changing the URL hash without navigation), the re-render listener won't be registered. `getContentByKey` still checks `isPreviewMode()` on every call so content resolution is correct, but real-time updates won't trigger re-renders in this edge case.",
+          "suggestedFix": "Add `isPreviewMode()` as a dependency or re-check preview mode on hash change events.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

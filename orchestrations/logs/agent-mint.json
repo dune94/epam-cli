@@ -1,0 +1,68 @@
+{
+  "minted": [
+    {
+      "name": "contentstack-live-preview-implementer",
+      "kind": "implementer",
+      "codeline": "",
+      "rationale": "A single implementer spans all three codelines because they share the same Contentstack SDK, the same @metrolinx/cx-shared dependency, and the same live preview integration pattern; the work is greenfield live preview wiring, not codeline-specific domain logic.",
+      "surfaces": [
+        "profiles.json",
+        "kb",
+        "project-roles",
+        "project-profiles"
+      ]
+    }
+  ],
+  "rejected": [
+    {
+      "name": "gotransit-contentstack-live-preview-investigator",
+      "reason": "brief names 1 path(s) that do not exist in codeline 'gotransit': src/hooks/useContent"
+    },
+    {
+      "name": "upexpress-contentstack-live-preview-investigator",
+      "reason": "brief names 2 path(s) that do not exist in codeline 'upexpress': git/lost-found/other/, pages/_app.tsx"
+    },
+    {
+      "name": "metrolinx-contentstack-live-preview-investigator",
+      "reason": "brief names 1 path(s) that do not exist in codeline 'metrolinx': metrolinx/cx-shared/package.json"
+    }
+  ],
+  "unchanged": [],
+  "projectRoles": [
+    "contentstack-live-preview-implementer"
+  ],
+  "projectInvestigators": [],
+  "rejectedAcrossAttempts": [
+    {
+      "name": "contentstack-live-preview-integration-engineer",
+      "reason": "brief names 1 path(s) that do not exist in any codeline: src/services/contentstack-live-preview.ts"
+    },
+    {
+      "name": "gotransit-investigator",
+      "reason": "brief names 1 path(s) that do not exist in codeline 'gotransit': src/hooks/useContent"
+    },
+    {
+      "name": "upexpress-investigator",
+      "reason": "brief names 1 path(s) that do not exist in codeline 'upexpress': pages/_app.tsx"
+    },
+    {
+      "name": "metrolinx-investigator",
+      "reason": "brief names 3 path(s) that do not exist in codeline 'metrolinx': contentstack/live-preview-utils/, metrolinx/cx-shared/, contentstack/live-preview-utils/package.json"
+    },
+    {
+      "name": "gotransit-contentstack-live-preview-investigator",
+      "reason": "brief names 1 path(s) that do not exist in codeline 'gotransit': src/hooks/useContent"
+    },
+    {
+      "name": "upexpress-contentstack-live-preview-investigator",
+      "reason": "brief names 2 path(s) that do not exist in codeline 'upexpress': git/lost-found/other/, pages/_app.tsx"
+    },
+    {
+      "name": "metrolinx-contentstack-live-preview-investigator",
+      "reason": "brief names 1 path(s) that do not exist in codeline 'metrolinx': metrolinx/cx-shared/package.json"
+    }
+  ],
+  "proposed": 8,
+  "attempts": 2,
+  "protectedRoles": 21
+}

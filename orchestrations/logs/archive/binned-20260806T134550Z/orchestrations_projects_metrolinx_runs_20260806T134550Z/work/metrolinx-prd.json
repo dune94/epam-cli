@@ -1,0 +1,231 @@
+{
+  "id": "jira-sourced-1786024127296",
+  "title": "Metrolinx Brownfield \u2014 Jira-sourced",
+  "version": "1.0.0",
+  "lastUpdated": "2026-08-06",
+  "project": {
+    "name": "metrolinx",
+    "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira \u2014 defects AND new features.",
+    "stack": {
+      "language": "TypeScript",
+      "runtime": "Node.js 20",
+      "framework": "Next.js",
+      "testing": "jest",
+      "cms": "Contentstack",
+      "devEnvironment": "Ubuntu WSL2"
+    },
+    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com",
+    "outputDirs": [
+      {
+        "codeline": "metrolinx",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+      }
+    ]
+  },
+  "configuration": {
+    "profilesPath": "profiles.json",
+    "autoCommit": false,
+    "requireTests": true,
+    "budget": 12,
+    "aiRuntime": {
+      "provider": "claude",
+      "defaultModel": "claude-sonnet-4-6"
+    }
+  },
+  "implementationOrder": {
+    "core": [
+      "AMSD-2041"
+    ]
+  },
+  "phasesConfig": {
+    "scaffold": {
+      "description": "Project scaffolding and TypeScript configuration",
+      "parallelWorktrees": false
+    },
+    "core": {
+      "description": "API client, CLI, and Express server implementation",
+      "parallelWorktrees": true
+    },
+    "ui_and_review": {
+      "description": "HTML dashboard and code review",
+      "parallelWorktrees": true
+    }
+  },
+  "stories": [
+    {
+      "id": "AMSD-2041",
+      "jiraKey": "AMSD-2041",
+      "title": "[GO, UP, MX] Live Preview of Content in CMS",
+      "description": "[GO, UP, MX] Live Preview of Content in CMS",
+      "acceptanceCriteria": [],
+      "codeline": "metrolinx",
+      "status": "pending",
+      "completed": false,
+      "agentRole": "typescript-engineer",
+      "agentGroup": "main",
+      "effort": "medium",
+      "estimate": 10,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "brownfield story with no acceptance criteria \u2014 AC processing skipped (VCs are derived from the description); codeline classified only",
+      "issueType": "Story",
+      "codelines": [
+        "metrolinx"
+      ],
+      "verificationCriteria": [
+        "When the application is loaded with Live Preview enabled (e.g. via a query parameter or configuration flag), the Contentstack Live Preview SDK is initialized and its onEntryChange callback is registered before any content is rendered.",
+        "Given the Contentstack client is mocked to invoke onEntryChange with updated entry data, the page content re-renders with the updated values without requiring a full page reload.",
+        "When the application is loaded without Live Preview enabled, the existing content-fetching and rendering behavior is unchanged \u2014 pages load and display exactly as they do today.",
+        "Live Preview initialization and content-update propagation work identically across the GO, UP, and MX brand contexts (each brand's ContentstackContext receives and applies onEntryChange updates).",
+        "The useContent hook continues to return the same getContentByKey interface after Live Preview integration; all existing consumers (NavigationBar, Footer, CookiesBanner, QuickMenu, TopBar, FeatureListing, DynamicEventsListContainer, MobileNav, etc.) render correctly without code changes.",
+        "When onEntryChange delivers a partial or malformed entry, the application does not throw an unhandled error; it either applies the valid portion or retains the last-known-good content.",
+        "Given the Contentstack Live Preview SDK client is mocked, the initialization call includes the correct stack details (stack API key, environment, and any required host configuration) derived from the application's existing Contentstack configuration."
+      ],
+      "vcSource": "description",
+      "vcResolution": "disputed",
+      "fixSiteAnalysis": [
+        {
+          "file": "src/context/contentstackContext.tsx",
+          "function": "ContentstackContext",
+          "reason": "This is the central React context that holds all Contentstack page content (header, footer, page, etc.). Every component reads content via useContent \u2192 useContext(ContentstackContext). Live Preview must plug into this context \u2014 either by wrapping it with a LivePreviewProvider or by updating its value via onEntryChange when the CMS editor changes content. This is the primary attachment point for the new capability.",
+          "fix": "Wrap the ContentstackContext with @contentstack/live-preview-utils integration: (1) Call LivePreview.init() at app startup (in _app.tsx or a dedicated provider component). (2) Create a new ContentstackLivePreviewProvider component that wraps ContentstackContext.Provider and subscribes to LivePreview.onEntryChange to update the context value when content changes in the CMS editor, causing all useContent consumers to re-render with preview data. The existing useContent hook and getValue utility require no changes \u2014 they already traverse the context object reactively.",
+          "helper": "",
+          "brokenLine": "export const ContentstackContext = createContext<IContentstackContext>({});",
+          "fixVerified": null,
+          "evidenceVerified": true,
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false
+        },
+        {
+          "file": "src/hooks/useContent.ts",
+          "function": "useContent",
+          "reason": "The hook consumed by 30+ Contentstack components to read content. It reads from ContentstackContext and provides getContentByKey. Once the context is updated by Live Preview, this hook automatically propagates changes. It may also need to pass live_preview parameters to the Contentstack SDK if server-side data fetching (getStaticProps/getServerSideProps) is made preview-aware.",
+          "fix": "After the ContentstackLivePreviewProvider is in place (attachment point #1), this line automatically receives updated preview content because it reads from the same context. If server-side content fetching needs to include live_preview hash parameters, add a helper that reads the preview hash from the URL (provided by @contentstack/live-preview-utils) and passes it through the context so getStaticProps/getServerSideProps can include it in Contentstack SDK queries.",
+          "helper": "getValue",
+          "brokenLine": "const content = useContext(ContentstackContext);",
+          "fixVerified": true,
+          "evidenceVerified": true,
+          "prescriptionNote": "",
+          "prescriptionUnderspecified": false
+        }
+      ],
+      "fixSiteAnalysisCoverage": {
+        "complete": true,
+        "uncoveredVerificationCriteria": []
+      },
+      "storyKind": "novel",
+      "technicalNotes": {
+        "files": [
+          "src/context/contentstackContext.tsx",
+          "src/hooks/useContent.ts",
+          "src/components/contentstack/ContentstackAttention/content.mock.ts",
+          "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+          "src/interface/content/contentCard.ts"
+        ],
+        "perCodeline": {
+          "metrolinx": {
+            "files": [
+              "src/context/contentstackContext.tsx",
+              "src/hooks/useContent.ts",
+              "src/components/contentstack/ContentstackAttention/content.mock.ts",
+              "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+              "src/interface/content/contentCard.ts"
+            ],
+            "resolved": [
+              {
+                "declared": "src/context/contentstackContext.tsx",
+                "actual": "src/context/contentstackContext.tsx",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+              },
+              {
+                "declared": "src/hooks/useContent.ts",
+                "actual": "src/hooks/useContent.ts",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+              },
+              {
+                "declared": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+                "actual": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+              },
+              {
+                "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+                "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+              },
+              {
+                "declared": "src/interface/content/contentCard.ts",
+                "actual": "src/interface/content/contentCard.ts",
+                "match": "exact",
+                "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+              }
+            ],
+            "unresolved": []
+          }
+        }
+      },
+      "specification": {
+        "runId": "20260806T134550Z",
+        "assignedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "coordinatorNotes": "Stub story with empty acceptance criteria and null spec spanning three platforms (GO, UP, MX) for live preview in CMS. Openspec must elaborate requirements and define scope across all three systems; speckit must then harden testability, security, and edge cases. High priority due to cross-platform complexity and complete absence of elaborated requirements.",
+        "status": "completed",
+        "updatedAt": "2026-08-06T13:54:44.901Z",
+        "appliedAgents": [
+          "openspec",
+          "speckit"
+        ],
+        "agentContributions": [
+          {
+            "agent": "openspec",
+            "applied": true,
+            "notes": "Novel capability \u2014 Live Preview integration with Contentstack CMS. No existing fix site; the work attaches into the central content context and its consumer hook. VCs derived entirely from description since ACs are empty. Criteria stop at our side of the Contentstack API boundary.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-08-06T13:53:37.057Z"
+          },
+          {
+            "agent": "speckit",
+            "applied": true,
+            "notes": "Openspec provided empty acceptanceCriteria, so all criteria are new. I examined the actual codebase to ground them: (1) contentstackContext.tsx exports only a context object and interface \u2014 no provider component, so Live Preview integration must supply a provider that wraps the app and manages state. (2) useContent.ts exposes getContentByKey via getValue \u2014 Live Preview must ensure merged data is accessible through this existing API. (3) The mock data reveals Contentstack entry shapes including rich-text docs (type:'doc', children, uid), modular blocks with Cloudinary images, and metadata fields (_version, publish_details) \u2014 AC-9 and AC-10 ensure these nested structures survive the merge. (4) No @contentstack/live-preview-sdk package is currently installed, so AC-5 guards against bad initialization config. (5) AC-2 is the critical regression guard: production behavior must be unchanged. AC-6 and AC-12 address error resilience and race conditions respectively. AC-7 ensures cross-content-type isolation. AC-8 covers session teardown. I could not locate the provider component or page-level integration point \u2014 the context file only defines the shape \u2014 so these ACs are written against the observable behavior of the context + hook contract, not a specific provider file.",
+            "acceptanceChanged": false,
+            "splitCount": 0,
+            "timestamp": "2026-08-06T13:54:44.901Z"
+          }
+        ],
+        "manifestCheck": {
+          "missing": [],
+          "checkedAt": "2026-08-06T13:55:50.119Z"
+        },
+        "coordinatorReview": {
+          "verdict": "approved",
+          "reviewNotes": "Both agents added meaningful, non-overlapping value. Openspec derived 7 verification criteria from an empty brownfield stub, covering initialization, re-rendering, backward compatibility, cross-brand behavior, hook contract stability, malformed-data resilience, and SDK config correctness. Speckit then grounded the criteria in the actual codebase: it correctly identified that contentstackContext.tsx exports only a context object and interface (no provider component \u2014 confirmed by reading the file), that useContent.ts reads via useContext + getValue (confirmed), that no @contentstack/live-preview-sdk package is installed, and that mock data reveals nested Contentstack entry shapes. Speckit's observation that it could not locate a provider component is accurate and correctly scoped \u2014 the context file contains only createContext. The fixSiteAnalysis is plausible: the primary attachment point is contentstackContext.tsx (wrapping with a LivePreviewProvider) and useContent.ts automatically propagates changes once the context updates. All 5 manifest paths verified as exact matches. Verification criteria are observable and testable (mocked onEntryChange, query-parameter flag, cross-brand context, existing consumers unchanged, malformed entry handling). The detective plan mentioned useContent and Contentstack provider/init as targets; the fixSiteAnalysis found contentstackContext.tsx and useContent.ts \u2014 the plan terms overlap with finding terms and the reasoning connects naturally (trace useContent \u2192 context \u2192 provider). No unexplained pivot. Ordinary open questions remain (where the new provider component file lives, how server-side preview hash parameters flow), but these are implementation details a competent writer resolves.",
+          "qualityScore": 0.85,
+          "flags": [],
+          "planAlignment": "aligned",
+          "reviewedAt": "2026-08-06T13:55:50.119Z"
+        }
+      },
+      "estimatedAiMinutes": 3.276,
+      "estimatedCost": 0.6326,
+      "estimatedTokens": 1065575,
+      "estimatedTurns": 31,
+      "estimatedHours": 0.0546,
+      "cpaEffortTier": "high",
+      "cpaConfidence": 0.7,
+      "cpaGate": "review",
+      "ladderTier": "high",
+      "cpaIterationEstimate": 1,
+      "model": "MiniMax-M3",
+      "aiProvider": "minimax",
+      "reasoningEffort": "medium"
+    }
+  ],
+  "currentIteration": 8,
+  "source": "jira",
+  "sourceProject": "AMSD"
+}

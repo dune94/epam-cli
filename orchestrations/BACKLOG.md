@@ -16,6 +16,7 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | # | ID | Title | Status | Source |
 |---|---|---|---|---|
 | 1 | VC-1 | **Investigate VC agent drift — fallback VCs poison the whole downstream chain** | pending | Live metrolinx repro-gate block, 2026-07-25 |
+| 2 | TOKEN-VISIBILITY-1 | **Tool usage is not recorded, so grep-vs-codegraph and per-tool tokens cannot be measured** | pending | Agent tooling review, 2026-08-09 |
 | 2 | PROMPT-BUDGET-1 | **Prompt trim measures total size but cuts only guidance — file injection is 39% and untrimmable** | pending | Live AMSD-2041, 2026-08-09 |
 | 2 | TEST-GAP-1 | **Writer-phase test coverage gaps — see "Writer-Phase Test Coverage Gaps" below** | pending | Coverage audit, 2026-08-09 |
 | 2 | SCHEMA-1 | **Schema-bind agent output — BLOCKED on the reviewer: strict schema suppresses tool calls** | blocked | Live metrolinx failures + probe, 2026-07-25 |
@@ -1485,3 +1486,63 @@ orchestrations/config/spec-mode-defaults.json — no new literals.
 
 **Interim:** `EPAM_PROMPT_SCRATCHPAD_THRESHOLD_CHARS=0` disables trimming so no guidance is
 discarded. Used for the 2026-08-09 clean-run attempt.
+
+---
+
+## Agent Tooling: grep vs CodeGraph, and where the tokens actually go (TOKEN-VISIBILITY-1)
+
+Review of 2026-08-09, asked as "review all agents' use of grep versus giving them code graph and
+schema/pydantic to reduce token consumption gaps".
+
+### What already exists and is wired
+
+`codegraph_query` (orchestrations/plugins/codegraph-tools.js) is a real static symbol index with
+seven modes — explore, query, callers, callees, impact, helpers, show — and its description tells
+the agent to prefer it over grepping and to call it iteratively. It is discovered per codeline
+via `project_tool_names()` and reaches allow-lists dynamically, verified by execution: the
+gotransit codeline exposes nine plugin tools including `codegraph_query`, `resolve_test_file`,
+`check_anti_patterns`, `dependency_contract` and `scan_secrets`. The reviewer and the writer are
+both told the tools exist AND permitted to call them.
+
+So the capability is not missing. What is missing is any way to know whether it is used.
+
+### Finding 1 — tool usage is invisible (this is the blocker for everything else)
+
+`agent-activity.jsonl` records `agent, model, phase, provider, story_id, type, detail, timestamp`
+and NOT the tool name. Nothing in the logs distinguishes an agent that ran one `codegraph_query`
+from one that ran forty `search` calls, and per-tool token attribution is impossible. Cost
+tracking is the stated #1 priority and observability #2; this is the gap that makes both
+unanswerable for tool spend. Fix before tuning anything: emit tool name + token cost per call
+into the activity log, then measure.
+
+### Finding 2 — the prompt pre-pays for reading, then forbids it
+
+The writer prompt injects every declared file verbatim under "## Existing File Contents
+(injected once, deterministically — do NOT ReadFile these)". Live AMSD-2041: 34,510 of 86,809
+chars, 39% of the prompt, re-paid on every one of up to 8 attempts.
+
+That block exists for a good reason (2026-07-23: an agent told "do NOT investigate" invented a
+non-existent `@eps/utils` import across 8 attempts at every model tier). But it pays the full
+read cost up front for 12 declared files whether the writer needs them or not, and it is exactly
+the cost `codegraph_query` exists to avoid. The two mechanisms solve the same problem and are
+both switched on.
+
+Worth measuring once Finding 1 is fixed: injection at a lower line budget plus an explicit
+"query the graph for anything not shown" directive, against the current all-up-front injection.
+The per-file budget is now configurable (`existingFileInjection.maxLinesPerFile`, env
+`EPAM_EXISTING_FILE_MAX_LINES`), so this is an experiment rather than a code change.
+
+### Finding 3 — structured output exists at the invocation seam, not for tools
+
+Agent I/O is schema-bound via the invocation gateway (`agent-output-schema.js`,
+invocation-profiles.json), which is where the Pydantic-style contract already lives. Tool
+RESULTS, by contrast, come back as prose the model re-reads and re-summarises. `codegraph_query`
+returns formatted text rather than a typed record, so a caller wanting one field pays for the
+whole rendering. A typed result shape for the high-traffic tools is the natural next reduction —
+but again, only measurable after Finding 1.
+
+### Not a finding
+
+`_EXISTING_FILE_MAX_LINES = 400` WAS a literal inside build_implementation_prompt and is now
+configuration, since it is the single largest term in prompt size and an operator could not
+reach it. Fixed 2026-08-09.

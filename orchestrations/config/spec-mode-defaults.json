@@ -28,5 +28,11 @@
     "$thresholdNote": "0 disables trimming entirely.",
     "keepRecentSections": 3,
     "keepRecentSectionsEnv": "EPAM_PROMPT_TRIM_KEEP_SECTIONS"
+  },
+  "existingFileInjection": {
+    "$comment": "How much of each declared file is injected verbatim into the writer prompt under '## Existing File Contents'. Measured live 2026-08-09 on AMSD-2041: that block was 34,510 of 86,809 prompt chars \u2014 39% \u2014 and is paid again on every attempt. It is the term that DOMINATES prompt size: the guidance trim can only cut accumulated coordinator notes, and no amount of trimming touches the injected files. Lowering this shrinks the prompt directly and pushes the writer toward codegraph_query and ReadFile for what it actually needs. Was a literal 400 inside build_implementation_prompt.",
+    "maxLinesPerFile": 400,
+    "maxLinesPerFileEnv": "EPAM_EXISTING_FILE_MAX_LINES",
+    "$note": "Truncation stays visible to the writer either way \u2014 a file silently cut is how an agent concludes an export does not exist and invents one."
   }
 }

@@ -2038,7 +2038,14 @@ $(printf '%s\n' "$string_invariants" | sed 's/^/- /')
     # at a small, fixed, one-time cost instead of a cost that multiplies with
     # every tool-call turn the agent takes.
     local existing_file_contents=""
-    local _EXISTING_FILE_MAX_LINES=400
+    # From orchestrations/config/spec-mode-defaults.json (existingFileInjection.maxLinesPerFile),
+    # not a literal: this is the largest single term in writer prompt size — 34,510 of 86,809
+    # chars live on AMSD-2041, re-paid on every attempt — and the guidance trim cannot touch it.
+    local _EXISTING_FILE_MAX_LINES
+    # `|| return 1`, matching prompt_trim_threshold rather than falling back to a silent
+    # default: an unreadable budget means the config is wrong, and a hidden 400 would hide that
+    # while quietly re-introducing the literal this moved out of the code.
+    _EXISTING_FILE_MAX_LINES="$(existing_file_max_lines)" || return 1
     # Inject FULL content ONLY for the detective's fix-site file(s). Injecting every
     # declared file (5 for AMSD-1820) ballooned the impl prompt to 137-189K input tokens,
     # and the agent burned its whole output budget exploring before ever calling WriteFile

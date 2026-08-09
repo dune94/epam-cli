@@ -1,0 +1,32 @@
+{
+  "message_id": "msg-1785875650385",
+  "timestamp": "2026-08-04T20:34:10+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "major",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 1,
+          "description": "No test coverage for the new `live_preview` config. The existing test file already tests `fetchOptions` config in a 'contentstack fetch timeout' describe block using the same require-and-assert-on-options pattern, but there is no corresponding test verifying that `live_preview` is correctly populated from CONTENTSTACK_PREVIEW_HOST / CONTENTSTACK_PREVIEW_TOKEN env vars, nor that `enable` is false when the host is absent. The diff adds a new feature (live preview configuration) but does not extend the existing test file to cover it.",
+          "suggestedFix": "Add a describe('live_preview config') block to src/services/__tests__/contentstack.spec.ts with at minimum two tests mirroring the existing 'contentstack fetch timeout' pattern: (1) when CONTENTSTACK_PREVIEW_HOST and CONTENTSTACK_PREVIEW_TOKEN are set, assert options.live_preview equals { enable: true, host: <host>, management_token: <token> }; (2) when CONTENTSTACK_PREVIEW_HOST is unset, assert options.live_preview.enable is false.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

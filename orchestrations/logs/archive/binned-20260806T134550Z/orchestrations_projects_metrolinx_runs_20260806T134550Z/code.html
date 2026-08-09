@@ -1,0 +1,71 @@
+<title>Code — AMSD-2041</title>
+<style>
+:root { color-scheme: light dark; --fg:#1a1a1a; --bg:#fff; --muted:#666; --line:#e2e2e2;
+        --ok:#0a7c42; --warn:#a86500; --bad:#c02626; --card:#fafafa; --code:#f4f4f5; }
+@media (prefers-color-scheme: dark) {
+  :root { --fg:#e8e8e8; --bg:#141416; --muted:#9a9a9a; --line:#2c2c30;
+          --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --card:#1c1c20; --code:#202024; } }
+* { box-sizing:border-box; }
+body { margin:0; padding:2rem 1.25rem 4rem; font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       color:var(--fg); background:var(--bg); }
+main { max-width:60rem; margin:0 auto; }
+h1 { font-size:1.6rem; margin:0 0 .25rem; letter-spacing:-.01em; }
+h2 { font-size:1.15rem; margin:2.5rem 0 .75rem; padding-bottom:.35rem; border-bottom:1px solid var(--line); }
+h3 { font-size:1rem; margin:1.5rem 0 .5rem; }
+.sub { color:var(--muted); margin:0 0 1.5rem; }
+table { border-collapse:collapse; width:100%; margin:.5rem 0 1rem; font-size:14px; }
+th,td { text-align:left; padding:.45rem .6rem; border-bottom:1px solid var(--line); vertical-align:top; }
+th { font-weight:600; color:var(--muted); font-weight:600; }
+td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+code,pre { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+code { background:var(--code); padding:.1rem .3rem; border-radius:3px; font-size:.9em; }
+pre { background:var(--code); padding:.8rem 1rem; border-radius:6px; overflow-x:auto; font-size:13px; line-height:1.5; }
+.cards { display:flex; flex-wrap:wrap; gap:.75rem; margin:1rem 0 0; }
+.card { flex:1 1 8rem; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:.7rem .85rem; }
+.card .k { color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; }
+.card .v { font-size:1.25rem; font-variant-numeric:tabular-nums; margin-top:.15rem; }
+.ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+.missing { color:var(--muted); font-style:italic; }
+.note { background:var(--card); border-left:3px solid var(--warn); padding:.7rem .9rem; border-radius:0 6px 6px 0; margin:1rem 0; }
+.note.bad { border-left-color:var(--bad); }
+ul { padding-left:1.2rem; } li { margin:.2rem 0; }
+footer { margin-top:3rem; padding-top:1rem; border-top:1px solid var(--line); color:var(--muted); font-size:13px; }
+.diff-add{color:var(--ok)} .diff-del{color:var(--bad)}
+
+.tl { border-left:2px solid var(--line); margin:1rem 0 0 .5rem; padding-left:0; list-style:none; }
+.tl li { position:relative; padding:.55rem 0 .55rem 1.4rem; }
+.tl li::before { content:""; position:absolute; left:-.42rem; top:1.05rem; width:.7rem; height:.7rem;
+                 border-radius:50%; background:var(--muted); border:2px solid var(--bg); }
+.tl li.ok::before{background:var(--ok)} .tl li.warn::before{background:var(--warn)}
+.tl li.bad::before{background:var(--bad)} .tl li.skip::before{background:var(--line)}
+.tl .t { font-variant-numeric:tabular-nums; color:var(--muted); font-size:12px; margin-right:.5rem; }
+.tl .h { font-weight:600; }
+.tl li.ok .h{color:var(--ok)} .tl li.warn .h{color:var(--warn)} .tl li.bad .h{color:var(--bad)}
+.tl li.skip .h{color:var(--muted); font-weight:400;}
+.tl .n { display:block; color:var(--muted); font-size:13.5px; margin-top:.15rem; }
+.lede { font-size:16.5px; }
+.detail { margin:1.2rem 0; padding:.9rem 1.1rem; border-left:3px solid var(--warn,#b58900); background:rgba(128,128,128,.06); border-radius:4px; }
+.detail h4 { margin:0 0 .4rem; font-size:.95rem; }
+.detail li { margin:.55rem 0; line-height:1.5; }
+.soft { opacity:.75; }
+.intro { color:var(--fg); opacity:.85; margin:.35rem 0 .6rem; max-width:46rem; line-height:1.65; }
+/* The middle paragraph is the mechanism — retries, escalation, self-healing.
+   It is the part worth reading, so it is not styled as filler. */
+.intro.cont { margin:.55rem 0; }
+.intro.cont:first-of-type ~ .intro.cont:last-of-type { opacity:.8; }
+.phase { margin:1.75rem 0 .35rem; font-size:.78rem; text-transform:uppercase; letter-spacing:.07em;
+         color:var(--muted); font-weight:700; }
+</style>
+<main>
+<h1>Code — AMSD-2041</h1>
+<p class="sub">What the pipeline wrote, how it decided to write it, and what proves it works.</p>
+<div class="cards"><div class="card"><div class="k">Files changed</div><div class="v">0</div></div><div class="card"><div class="k">Lines +/&minus;</div><div class="v">0 / 0</div></div><div class="card"><div class="k">Proof</div><div class="v bad">MISSING</div></div><div class="card"><div class="k">Review</div><div class="v">?</div></div></div>
+<h2>How this code was arrived at</h2>
+<ol><li><strong>The defect was located and quoted.</strong> The investigating agent traced the symptom back to the code that computes the wrong value and quoted the exact broken expression: <code>export const ContentstackContext = createContext&lt;IContentstackContext&gt;({});</code> in <code>src/context/contentstackContext.tsx</code>. That quote is checked character-for-character against the real file, so a confident-sounding but invented diagnosis is refused before any code is written. <strong>Verified: True</strong>.</li><li><strong>The change was specified before it was written:</strong> Wrap the ContentstackContext with @contentstack/live-preview-utils integration: (1) Call LivePreview.init() at app startup (in _app.tsx or a dedicated provider component). (2) Create a new ContentstackLivePreviewProvider component that wraps ContentstackContext.Provider and subscribes to LivePreview.onEntryChange to update the context value when content changes in the CMS editor, causing all useCo</li></ol>
+<h2>The change itself</h2>
+<p><span class="missing">not recorded</span></p>
+<h2>Is this the minimum change?</h2>
+<table><tr><th>File</th><th>Body lines</th><th>Imports</th></tr></table>
+<p><span class="missing">not recorded</span> — no source change to assess.</p>
+<h2>Proof the change works</h2><div class="note bad"><strong>PROBLEM — there is no RED/GREEN proof for this change.</strong> No bug-reproduction gate result was recorded, so nothing here demonstrates that the reported bug existed or that this change fixes it. The code may be correct; it is <em>unproven</em>. Treat it as a proposal, not a verified fix, and do not merge it on the strength of the review alone — a reviewer reads intent, while the RED run is the only thing that tests reality.</div>
+<footer>Every claim on this page is derived from the run&rsquo;s own artefacts — the diff, the fix-site analysis and the gate logs. Nothing is inferred.</footer></main>

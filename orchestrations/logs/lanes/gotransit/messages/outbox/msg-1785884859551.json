@@ -1,0 +1,72 @@
+{
+  "message_id": "msg-1785884859551",
+  "timestamp": "2026-08-04T23:07:39+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.ts",
+          "line": 40,
+          "description": "Root cause not addressed — getContentByKey calls Stack.livePreviewQuery() as a fire-and-forget side effect but then returns the same static published content via getValue(content, path, defaultValue). The return value of livePreviewQuery is completely discarded. The prescribed fix says to 'merge or replace the static content lookup with a live preview fetch when preview mode is active.' This implementation does neither — it calls livePreviewQuery and ignores its result, then returns published content. VC1 ('rendered page displays the draft version') and VC2 ('updates in real time') are not met because draft content is never returned.",
+          "suggestedFix": "Capture the result of the live preview fetch and return it (or merge it with the static content) instead of always returning getValue(content, path, defaultValue). When livePreview is active, getContentByKey should resolve to the draft content from the preview SDK response, not the static context object.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.ts",
+          "line": 34,
+          "description": "Stack.livePreviewQuery does not exist on the Contentstack SDK Stack object. CodeGraph query for 'livePreviewQuery' returned no results. The Stack object is contentstack.Stack(options) from the Contentstack delivery SDK (src/services/contentstack.ts:69) and has no livePreviewQuery method. This would cause a TypeScript compile error (property does not exist on type) or a runtime TypeError. The tests pass only because Stack is fully mocked in the test file.",
+          "suggestedFix": "Use the actual Contentstack live preview SDK API (e.g., Stack.livePreviewQuery from @contentstack/live-preview-utils or the correct method from the Contentstack SDK). Verify the method exists on the real Stack object before calling it. If the SDK needs configuration (live_preview options with enable, host, management_token), that must be set up in src/services/contentstack.ts first.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+          "line": 25,
+          "description": "Unnecessary component-level change — the prescribed minimal fix explicitly states 'all 236+ consumers get preview support with zero component-level changes.' Modifying ContentstackLink to append live_preview to hrefs is a component-level change that should not be needed if useContent properly returns draft content. This violates the concision/reuse criterion: a more concise change (fixing useContent only) would meet the same acceptance criteria.",
+          "suggestedFix": "Remove the ContentstackLink changes entirely. If useContent correctly returns draft content in preview mode, ContentstackLink will automatically render the draft href value with no component modification needed.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/hooks/useContent.spec.ts",
+          "line": 56,
+          "description": "Tests do not verify the actual acceptance criteria. The test 'enables live preview and calls livePreviewQuery' asserts that livePreviewQuery is *called* with the right params, but never verifies that draft content is actually *returned* by getContentByKey. The mock for Stack.livePreviewQuery returns undefined (jest.fn() with no return value), and getValue is mocked to return from the static content object. No test asserts that getContentByKey returns draft content different from the published content. VC1, VC2 are not demonstrably met by these tests.",
+          "suggestedFix": "Add tests that mock livePreviewQuery to return draft content data, then assert getContentByKey returns the draft value (not the published value from context). Add a test verifying that when preview params change (simulating a CMS draft update), getContentByKey returns the updated draft value. Assert the actual return value of getContentByKey, not just that livePreviewQuery was called.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/hooks/useContent.ts",
+          "line": 33,
+          "description": "No real-time subscription mechanism — the prescribed fix says to 'fetch/subscribe to draft content.' The implementation only does a synchronous call inside getContentByKey with no subscription or event listener for real-time updates. VC2 ('updates in real time without a manual page refresh') requires a subscription pattern, not a one-time fetch per render.",
+          "suggestedFix": "Implement a subscription to the Contentstack live preview SDK's update events (e.g., via useEffect with cleanup) so that when the CMS pushes a draft update, the hook state updates and triggers a re-render with the new draft content.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/hooks/useContent.spec.ts",
+          "line": 1,
+          "description": "Test file uses jest.mock/jest.fn/jest.clearAllMocks but the project uses vitest. While vitest has jest compatibility mode, the review criteria specify vitest unit tests. Confirm the project's vitest config supports jest-compatible globals, or convert to vi.mock/vi.fn/vi.clearAllMocks.",
+          "suggestedFix": "Replace jest.* with vi.* from vitest, or confirm the project's vitest configuration has globals: true and jest compatibility enabled.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

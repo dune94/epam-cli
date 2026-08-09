@@ -1,0 +1,64 @@
+{
+  "message_id": "msg-1785885145171",
+  "timestamp": "2026-08-04T23:12:25+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.ts",
+          "line": 1,
+          "description": "The prescribed minimal fix is completely absent. The Root Cause Analysis explicitly requires: (1) importing ContentstackLivePreview from '@contentstack/live-preview-utils', (2) calling ContentstackLivePreview.init() at module level, and (3) replacing the static context creation with useState + useEffect that subscribes to onEntryChange callbacks to update content state when the CMS pushes preview changes. The diff only adds an IContentstackLivePreview interface as an optional field on the context type — no SDK import, no init() call, no state subscription, no re-render mechanism. None of the four verification criteria can be satisfied by this change because no live preview data ever reaches components at runtime. The context is still created as a static empty object: createContext<IContentstackContext>({}).",
+          "suggestedFix": "Implement the prescribed minimal fix: import ContentstackLivePreview from '@contentstack/live-preview-utils'; call ContentstackLivePreview.init() at module level; create a ContentstackProvider component that accepts defaultContent as a prop, holds content in useState, and uses useEffect to subscribe to ContentstackLivePreview.onEntryChange() callbacks that update the content state, causing all useContent consumers to re-render with preview data. The existing defaultContent prop remains the initial state.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.spec.ts",
+          "line": 1,
+          "description": "Tests verify only that TypeScript interfaces can hold certain object shapes — they do not test any live preview behavior. Every acceptance criterion (unchanged fields display correct values, malformed updates don't break rendering, non-preview sessions show correct content, exiting preview restores correct content) requires actual SDK integration to be testable. These tests assert trivially true facts like 'an object with card_title=\"Test Card\" has card_title=\"Test Card\"'. No test invokes onEntryChange, no test renders a component, no test verifies re-rendering on preview updates.",
+          "suggestedFix": "After implementing the actual SDK integration, write tests that render ContentstackProvider, simulate onEntryChange callbacks (mock @contentstack/live-preview-utils), and verify that useContent consumers receive updated content. Test: (1) unchanged fields retain values after a partial preview update, (2) malformed preview data doesn't cause blank/error state, (3) non-preview rendering shows complete content, (4) exiting preview restores original content.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "blocker",
+          "file": "src/context/ContentstackContext.ts",
+          "line": 1,
+          "description": "Concursion & Reuse: The change does not address the prescribed root cause. The RCA states 'This is the single provider that supplies all content to the entire app... It currently creates a static, immutable context from defaultContent (fetched once at build time via getStaticProps) and never subscribes to Contentstack Live Preview SDK updates.' The diff adds type definitions but zero runtime behavior change. A more concise change that actually meets the AC would be: add the SDK init + onEntryChange subscription in the provider (fewer lines than the current diff's type-only additions + test file, and actually functional). The current diff is 100% dead code from a runtime perspective.",
+          "suggestedFix": "Replace the type-only additions with the actual SDK integration described in the prescribed minimal fix. The IContentstackLivePreview interface can remain, but it must be populated by real SDK callbacks, not just declared as an optional field.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "major",
+          "file": "src/context/ContentstackContext.spec.ts",
+          "line": 21,
+          "description": "Multiple uses of `as any` without explanatory comments: `[basePage as any]` (lines 21, 39, 62, 75, 85, 99, 120, 139, 155) and `[{}] as [any]` (lines 62, 63). TypeScript strict compliance requires no untyped any without justification.",
+          "suggestedFix": "Cast to the proper type (e.g., `[basePage] as [IContentstackPage]`) or create a minimal IContentstackPage fixture. Add explanatory comments if any is truly necessary.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/interface/content/contentCard.ts",
+          "line": 7,
+          "description": "IContentCardLivePreview is added to IContentCard but no code in the diff or the existing codebase reads or populates live_preview on content cards. Without the SDK integration that actually populates this field from Contentstack API responses, this field is dead code.",
+          "suggestedFix": "Only add this interface once the SDK integration is implemented and the field is actually populated and consumed.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

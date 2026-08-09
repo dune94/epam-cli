@@ -1,0 +1,2 @@
+src/interface/contentstack.ts
+src/services/contentstack.ts

@@ -1,0 +1,4 @@
+BINNED 2026-08-06 by operator instruction.
+Reason: its VC #2 rested on a premise the vendor documentation linked from the ticket refutes
+(onEntryChange takes no argument). The run was killed during Step 1 and never reached the
+ticket-link agent, so nothing in it was informed by that documentation.

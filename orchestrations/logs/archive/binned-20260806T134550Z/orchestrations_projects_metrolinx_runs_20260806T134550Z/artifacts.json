@@ -1,0 +1,5 @@
+{
+  "capturedAt": "2026-08-06T13:59:03+00:00",
+  "captured": ["working-prd.json", "profiles.json", "kb/kb-scratchpad", "kb/constraints.json", "kb/healing-events.jsonl"],
+  "missing": ["kb/unmapped-rules.jsonl"]
+}

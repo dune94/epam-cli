@@ -1,0 +1,92 @@
+<title>QA test summary — AMSD-2041</title>
+<style>
+:root { color-scheme: light dark; --fg:#1a1a1a; --bg:#fff; --muted:#666; --line:#e2e2e2;
+        --ok:#0a7c42; --warn:#a86500; --bad:#c02626; --card:#fafafa; --code:#f4f4f5; }
+@media (prefers-color-scheme: dark) {
+  :root { --fg:#e8e8e8; --bg:#141416; --muted:#9a9a9a; --line:#2c2c30;
+          --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --card:#1c1c20; --code:#202024; } }
+* { box-sizing:border-box; }
+body { margin:0; padding:2rem 1.25rem 4rem; font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+       color:var(--fg); background:var(--bg); }
+main { max-width:60rem; margin:0 auto; }
+h1 { font-size:1.6rem; margin:0 0 .25rem; letter-spacing:-.01em; }
+h2 { font-size:1.15rem; margin:2.5rem 0 .75rem; padding-bottom:.35rem; border-bottom:1px solid var(--line); }
+h3 { font-size:1rem; margin:1.5rem 0 .5rem; }
+.sub { color:var(--muted); margin:0 0 1.5rem; }
+table { border-collapse:collapse; width:100%; margin:.5rem 0 1rem; font-size:14px; }
+th,td { text-align:left; padding:.45rem .6rem; border-bottom:1px solid var(--line); vertical-align:top; }
+th { font-weight:600; color:var(--muted); font-weight:600; }
+td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+code,pre { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+code { background:var(--code); padding:.1rem .3rem; border-radius:3px; font-size:.9em; }
+pre { background:var(--code); padding:.8rem 1rem; border-radius:6px; overflow-x:auto; font-size:13px; line-height:1.5; }
+.cards { display:flex; flex-wrap:wrap; gap:.75rem; margin:1rem 0 0; }
+.card { flex:1 1 8rem; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:.7rem .85rem; }
+.card .k { color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; }
+.card .v { font-size:1.25rem; font-variant-numeric:tabular-nums; margin-top:.15rem; }
+.ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+.missing { color:var(--muted); font-style:italic; }
+.note { background:var(--card); border-left:3px solid var(--warn); padding:.7rem .9rem; border-radius:0 6px 6px 0; margin:1rem 0; }
+.note.bad { border-left-color:var(--bad); }
+ul { padding-left:1.2rem; } li { margin:.2rem 0; }
+footer { margin-top:3rem; padding-top:1rem; border-top:1px solid var(--line); color:var(--muted); font-size:13px; }
+.diff-add{color:var(--ok)} .diff-del{color:var(--bad)}
+
+.tl { border-left:2px solid var(--line); margin:1rem 0 0 .5rem; padding-left:0; list-style:none; }
+.tl li { position:relative; padding:.55rem 0 .55rem 1.4rem; }
+.tl li::before { content:""; position:absolute; left:-.42rem; top:1.05rem; width:.7rem; height:.7rem;
+                 border-radius:50%; background:var(--muted); border:2px solid var(--bg); }
+.tl li.ok::before{background:var(--ok)} .tl li.warn::before{background:var(--warn)}
+.tl li.bad::before{background:var(--bad)} .tl li.skip::before{background:var(--line)}
+.tl .t { font-variant-numeric:tabular-nums; color:var(--muted); font-size:12px; margin-right:.5rem; }
+.tl .h { font-weight:600; }
+.tl li.ok .h{color:var(--ok)} .tl li.warn .h{color:var(--warn)} .tl li.bad .h{color:var(--bad)}
+.tl li.skip .h{color:var(--muted); font-weight:400;}
+.tl .n { display:block; color:var(--muted); font-size:13.5px; margin-top:.15rem; }
+.lede { font-size:16.5px; }
+.detail { margin:1.2rem 0; padding:.9rem 1.1rem; border-left:3px solid var(--warn,#b58900); background:rgba(128,128,128,.06); border-radius:4px; }
+.detail h4 { margin:0 0 .4rem; font-size:.95rem; }
+.detail li { margin:.55rem 0; line-height:1.5; }
+.soft { opacity:.75; }
+.intro { color:var(--fg); opacity:.85; margin:.35rem 0 .6rem; max-width:46rem; line-height:1.65; }
+/* The middle paragraph is the mechanism — retries, escalation, self-healing.
+   It is the part worth reading, so it is not styled as filler. */
+.intro.cont { margin:.55rem 0; }
+.intro.cont:first-of-type ~ .intro.cont:last-of-type { opacity:.8; }
+.phase { margin:1.75rem 0 .35rem; font-size:.78rem; text-transform:uppercase; letter-spacing:.07em;
+         color:var(--muted); font-weight:700; }
+</style>
+<main>
+<h1>QA test summary — AMSD-2041</h1>
+<p class="sub">Testing and quality events in the order they happened, then the structured summary.</p>
+<div class="cards"><div class="card"><div class="k">Bug reproduction</div><div class="v bad">?</div></div><div class="card"><div class="k">Code review</div><div class="v warn">?</div></div><div class="card"><div class="k">Mutation score</div><div class="v">?</div></div><div class="card"><div class="k">Gates reporting</div><div class="v">0/6</div></div></div>
+<h2>Play-by-play — testing &amp; quality</h2>
+<div class="phase">Outcome</div>
+<ul class="tl">
+<li class="ok"><span class="t">13:59:03</span><span class="h">Pipeline complete</span></li>
+</ul>
+<h2>Testing summary</h2>
+<h3>1 &middot; Does the change fix the reported bug?</h3>
+<table><tr><th>Check</th><th>Result</th><th>Evidence</th></tr>
+<tr><td>Bug reproduced by a test</td><td><span class="missing">not recorded</span></td><td></td></tr>
+<tr><td>Fails on baseline, passes with fix</td><td><span class="missing">not recorded</span></td><td>executed by the repro gate against both states</td></tr>
+<tr><td>Pre-existing suite still green</td><td><span class="missing">not recorded</span></td><td>Step 5 regression guard</td></tr>
+<tr><td>Type check</td><td><span class="missing">not recorded</span></td><td>Step 20 <code>tsc --noEmit</code></td></tr></table>
+<h3>2 &middot; Test artifacts produced</h3>
+<table><tr><th>File</th><th>Role</th></tr><tr><td colspan="2"><span class="missing">not recorded</span></td></tr></table>
+<h3>3 &middot; Quality gates</h3>
+<table><tr><th>Gate</th><th>Verdict</th><th class="num">Log</th><th>Note</th></tr><tr><td><code>sast-sentinel</code></td><td><span class="bad">did not run</span></td><td class="num">&mdash;</td><td>no log written</td></tr><tr><td><code>spec-validator</code></td><td><span class="bad">did not run</span></td><td class="num">&mdash;</td><td>no log written</td></tr><tr><td><code>review-ranger</code></td><td><span class="bad">did not run</span></td><td class="num">&mdash;</td><td>no log written</td></tr><tr><td><code>mutant-hunter</code></td><td><span class="bad">did not run</span></td><td class="num">&mdash;</td><td>no log written</td></tr><tr><td><code>fuzz-weaver</code></td><td><span class="bad">did not run</span></td><td class="num">&mdash;</td><td>no log written</td></tr><tr><td><code>perf-sentinel</code></td><td><span class="bad">did not run</span></td><td class="num">&mdash;</td><td>no log written</td></tr></table>
+<p>Mutation testing: <strong>&lt;span class=&quot;missing&quot;&gt;not recorded&lt;/span&gt;</strong></p><div class="note bad"><strong>6 of 6 gates produced no verdict.</strong> A gate that returns nothing has not reviewed the change; the phase passed on the remaining 0.</div>
+<h3>4 &middot; Lint</h3>
+<table><tr><th>Check</th><th>Result</th></tr>
+<tr><td>Scope</td><td>? file(s), from the writer-output manifest</td></tr>
+<tr><td>Result</td><td>&lt;span class=&quot;missing&quot;&gt;not recorded&lt;/span&gt;</td></tr>
+<tr><td>Baseline subtraction</td><td><span class="ok">ran</span></td></tr></table>
+<h3>5 &middot; Review &amp; self-healing</h3>
+<table><tr><th>Check</th><th>Result</th></tr>
+<tr><td>Team-lead decision</td><td>?</td></tr>
+<tr><td>Cycles needed</td><td>&lt;span class=&quot;missing&quot;&gt;not recorded&lt;/span&gt;</td></tr>
+<tr><td>Reproducing test rejected before commit</td><td>0</td></tr>
+<tr><td>Self-heal constraints applied</td><td>none</td></tr></table>
+<footer>Generated from the run&rsquo;s own logs. Gate rows reflect what each log actually contains, including gates that produced no verdict.</footer>
+</main>

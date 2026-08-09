@@ -1,0 +1,1 @@
+{"event_id":"evt-1786281615170050870-25936","timestamp":"2026-08-09T13:20:15+00:00","agent":"openspec","story_id":"AMSD-2041","phase":null,"type":"spec_update","model":null,"provider":null,"detail":{"lane":"main","message":"[core] openspec started on AMSD-2041 ([GO, UP, MX] Live Preview of Content in CMS)","source":"update-monitor.sh","rawType":"spec_update","prevModel":null}}

@@ -1,0 +1,22 @@
+[
+  {
+    "id": "repro-test-writer-ts2769",
+    "scope": {
+      "agent_role": "repro-test-writer"
+    },
+    "trigger": {
+      "signature": "TS2769"
+    },
+    "enforcement": {
+      "kind": "gate",
+      "check": "prevent-ts2769-error"
+    },
+    "reason": "Adds a deterministic TypeScript compilation check to prevent TS2769 errors by validating test file types before execution.",
+    "origin_episodes": [
+      "evt-1785972656275-981883"
+    ],
+    "ttl_cycles": 20,
+    "status": "active",
+    "cycles_idle": 7
+  }
+]

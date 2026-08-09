@@ -1,0 +1,171 @@
+{
+  "id": "jira-sourced-1786045621339",
+  "title": "Metrolinx Brownfield — Jira-sourced",
+  "version": "1.0.0",
+  "lastUpdated": "2026-08-06",
+  "project": {
+    "name": "metrolinx",
+    "description": "Brownfield changes against the Metrolinx codelines, sourced from Jira — defects AND new features.",
+    "stack": {
+      "language": "TypeScript",
+      "runtime": "Node.js 20",
+      "framework": "Next.js",
+      "testing": "jest",
+      "cms": "Contentstack",
+      "devEnvironment": "Ubuntu WSL2"
+    },
+    "outputDir": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com",
+    "outputDirs": [
+      {
+        "codeline": "gotransit",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+      },
+      {
+        "codeline": "upexpress",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+      },
+      {
+        "codeline": "metrolinx",
+        "path": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+      }
+    ]
+  },
+  "configuration": {
+    "profilesPath": "profiles.json",
+    "autoCommit": false,
+    "requireTests": true,
+    "budget": 12,
+    "aiRuntime": {
+      "provider": "claude",
+      "defaultModel": "claude-sonnet-4-6"
+    }
+  },
+  "implementationOrder": {
+    "core": [
+      "AMSD-2041"
+    ]
+  },
+  "phasesConfig": {
+    "scaffold": {
+      "description": "Project scaffolding and TypeScript configuration",
+      "parallelWorktrees": false
+    },
+    "core": {
+      "description": "API client, CLI, and Express server implementation",
+      "parallelWorktrees": true
+    },
+    "ui_and_review": {
+      "description": "HTML dashboard and code review",
+      "parallelWorktrees": true
+    }
+  },
+  "stories": [
+    {
+      "id": "AMSD-2041",
+      "jiraKey": "AMSD-2041",
+      "title": "[GO, UP, MX] Live Preview of Content in CMS",
+      "description": "Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website\nability to preview draft entries in CMS\nNotes& Assumptions  Limitation: Might not be possible to preview protected pages and content.\nOriginal Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0",
+      "acceptanceCriteria": [],
+      "codeline": "gotransit",
+      "status": "pending",
+      "completed": false,
+      "agentRole": "typescript-engineer",
+      "agentGroup": "main",
+      "effort": "medium",
+      "estimate": 10,
+      "acGateVerdict": "enrichable",
+      "acGateReason": "brownfield story with no acceptance criteria — AC processing skipped (VCs are derived from the description); codeline classified only",
+      "issueType": "Story",
+      "components": [
+        "GO",
+        "Intake & Planning",
+        "MX",
+        "UP"
+      ],
+      "ticketComments": [
+        {
+          "text": "/ , the interactive Maps stack has to be included in this Live Preview Implementation as well. Please confirm this ticket covers the following stacks: GO Transit UP Express Metrolinx.com Interactive Maps Thanks, Ibrahim CC: / / /",
+          "author": "Ibrahim Didi",
+          "created": "2026-06-17T11:07:46.456-0400"
+        },
+        {
+          "text": "Hi , As agreed , please: review the code available in github (Mykyta demonstraged) ideally we want to: restore it, fix dependencies/etc. connect with Contentstack check how it works to pre-estimate the task. Ideas for the estimation: Spike needed? Estimate separately - GO/MX/UP Placeholder for the future: Pre-estimated in the following state: Current status: Breakdown: Spike needed? Live edit Verify that user can edit the content type from the \"Visual experience\" tab ( somehow ) If so - Life edit could became much easier Estimate page by page ( start from the obvious ones to present several options to PO's ) Estimate only the first part for certain pages of a single website GO UP MX Interactive Maps EXD - Assumption: No live edit Links wont work The functionality is available only through the \"Visual experience\" tab in Contentstack It wont work from the Content type level (there is a \"Live preview\" CTA) Its a CS bug (TBD) Dependencies Risks T-shirt",
+          "author": "V-EPAM-Ivan Mikhailov",
+          "created": "2026-06-26T05:08:24.800-0400"
+        },
+        {
+          "text": "Pre-estimated in the following state: Current status: POC needed, and it’s estimated Breakdown: POC: Verify whether there is a change to navigate through pages within the Live view (will the links work?) Related assumption - #a Verify that user can edit the content type from the \"Visual experience\" tab If so - Live Edit could become much easier Related assumption - #b Implement Live View and Live Edit for 2 GO Transit pages: Homepage Details Page - Standard PI11 planning update, : MX. Homepage MX. Discover Article page (aka News Article page) After POC , devs should be able to properly estimate the following: GO. Live View and Live Edit UP. Live View and Live Edit MX. Live View and Live Edit Interactive Maps. Live View and Live Edit EXD - Assumption: Most probably links inside the Live view wont work (Live edit limitation, but TBD by the dev team) The functionality is available only through the \"Visual experience\" tab in Contentstack It wont work from the Content type level (there is a \"Live preview\" CTA) Its a CS bug (TBD in #2.a.ii) Dependencies - Risks Potential Contentstack limitations, TBD after the POC implemenmtation (see more details in #2.a) T-shirt For POC - M Estimate for MX/GO/UP TBD after the POC",
+          "author": "V-EPAM-Ivan Mikhailov",
+          "created": "2026-07-02T06:25:55.579-0400"
+        },
+        {
+          "text": ", please review and confirm if we should add POC (M-size) to PI-10.",
+          "author": "V-Oksana Seleznova",
+          "created": "2026-07-02T12:09:20.279-0400"
+        },
+        {
+          "text": "to review and confirm",
+          "author": "Chenowa George",
+          "created": "2026-07-03T10:03:29.792-0400"
+        },
+        {
+          "text": "More info needed to understand the gap/learning needed to implement the feature vs a POC; TBD - option to create a story with 2 pages to implement? Confirm if instead a demo from contentstack is the appropriate solve EPAM/IT to discuss next steps at standing meeting more info: cc",
+          "author": "Chenowa George",
+          "created": "2026-07-09T11:21:24.389-0400"
+        },
+        {
+          "text": ", please follow up on this",
+          "author": "V-Oksana Seleznova",
+          "created": "2026-07-22T10:16:20.459-0400"
+        },
+        {
+          "text": "As recommended by we will await for demo from ContentStack. Its possible, no code changes are needed and its more of configure and use. After the demo if any code changes required we can plan this story for development team.",
+          "author": "V-NandaKumar KR",
+          "created": "2026-07-22T10:35:25.154-0400"
+        },
+        {
+          "text": ", Agreed to have a demo from the Contentstack team on the solution. Once demonstrated, this ticket could be reassessed. Updated Contentstack docs link - CC ,",
+          "author": "V-EPAM-Ivan Mikhailov",
+          "created": "2026-07-27T08:37:09.497-0400"
+        },
+        {
+          "text": ", agreed to have a demo from the Contentstack team on the solution. Once demonstrated, this ticket could be reassessed. For the current pi-11 planning agreed to add this ticket with M estimate Next steps: going to share email to with the current problems will schedule a call with CS team CC Updated Contentstack docs link - CC ,",
+          "author": "V-EPAM-Ivan Mikhailov",
+          "created": "2026-07-27T08:38:26.926-0400"
+        },
+        {
+          "text": "During the PI-11 planning we agreed to update the: Scope of this ticket from GO. Homepage GO. Details Page - Standard to the following: MX. Homepage MX. Discover Article page (aka News Article page) Move this ticket closer to the middle of the PI (waiting for the Demo from Contentstack to clarify the implementation, and most probably convert the Spike to the delivereable) CC",
+          "author": "V-EPAM-Ivan Mikhailov",
+          "created": "2026-07-28T10:36:34.485-0400"
+        },
+        {
+          "text": "Hi , Please schedule a demo with CS once possible. More details/issues/agenda/etc. are in the email from : “Content Stack Live Preview demo request “ CC , ,",
+          "author": "V-EPAM-Ivan Mikhailov",
+          "created": "2026-07-31T06:18:27.110-0400"
+        }
+      ],
+      "ticketLinks": [
+        {
+          "url": "https://www.contentstack.com/docs/headless-cms/live-preview-implementation-for-nextjs-csr-app-router",
+          "context": "More info needed to understand the gap/learning needed to implement the feature vs a POC; TBD - option to create a story with 2 pages to implement? Confirm if instead a demo from contentstack is the appropriate solve EPAM/IT to discuss next steps at standing meeting more info: cc",
+          "author": "Chenowa George",
+          "created": "2026-07-09T11:21:24.389-0400"
+        },
+        {
+          "url": "https://www.contentstack.com/docs/headless-cms/custom-preview-urls#configure-custom-preview-urls",
+          "context": ", Agreed to have a demo from the Contentstack team on the solution. Once demonstrated, this ticket could be reassessed. Updated Contentstack docs link - CC ,",
+          "author": "V-EPAM-Ivan Mikhailov",
+          "created": "2026-07-27T08:37:09.497-0400"
+        }
+      ],
+      "codelines": [
+        "gotransit",
+        "upexpress",
+        "metrolinx"
+      ]
+    }
+  ],
+  "currentIteration": 8,
+  "source": "jira",
+  "sourceProject": "AMSD"
+}

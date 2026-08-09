@@ -1,0 +1,40 @@
+{
+  "message_id": "msg-1785875788617",
+  "timestamp": "2026-08-04T20:36:28+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "major",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 0,
+          "description": "No test coverage for the new live_preview config. The existing test file already tests other config options (e.g., CONTENTSTACK_FETCH_TIMEOUT at the 'contentstack fetch timeout' describe block) but contains zero assertions for live_preview. A search for 'live_preview|livePreview|live preview|CONTENTSTACK_PREVIEW' in the test file returned no matches. Per review criterion #2, new features/config changes require corresponding unit tests. Missing scenarios: (1) live_preview.enable is true and host/management_token are populated when CONTENTSTACK_PREVIEW_HOST is set; (2) live_preview.enable is false when CONTENTSTACK_PREVIEW_HOST is absent.",
+          "suggestedFix": "Add a describe('live_preview config') block to src/services/__tests__/contentstack.spec.ts with two it() blocks: one setting CONTENTSTACK_PREVIEW_HOST and CONTENTSTACK_PREVIEW_TOKEN and asserting options.live_preview.enable === true, options.live_preview.host === <set value>, options.live_preview.management_token === <set value>; and one with CONTENTSTACK_PREVIEW_HOST unset asserting options.live_preview.enable === false. Mirror the pattern already used for the CONTENTSTACK_FETCH_TIMEOUT tests.",
+          "story_id": "AMSD-2041"
+        },
+        {
+          "severity": "minor",
+          "file": "src/services/contentstack.ts",
+          "line": 62,
+          "description": "The live_preview object always includes host and management_token as empty strings when live preview is disabled (enable: false). While functionally harmless (the SDK ignores these when enable is false), the prescribed minimal fix used a conditional spread to omit them entirely, which is cleaner and avoids leaking empty-string fields into the config object.",
+          "suggestedFix": "Consider using the conditional spread pattern from the prescribed fix: live_preview: CONTENTSTACK_PREVIEW_HOST ? { enable: true, host: CONTENTSTACK_PREVIEW_HOST, ...(CONTENTSTACK_PREVIEW_TOKEN ? { management_token: CONTENTSTACK_PREVIEW_TOKEN } : {}) } : { enable: false }. This is optional since the current approach works correctly at runtime.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}

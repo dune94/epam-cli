@@ -1,0 +1,32 @@
+{
+  "message_id": "msg-1785875763239",
+  "timestamp": "2026-08-04T20:36:03+00:00",
+  "from_agent": "team-lead-agent",
+  "to_agent": "typescript-engineer",
+  "type": "review_feedback",
+  "priority": "high",
+  "subject": "Code review: Changes requested for AMSD-2041",
+  "story_id": "AMSD-2041",
+  "phase_id": "core",
+  "body": {
+    "text": "Code review identified issues that need to be addressed.",
+    "story_id": "AMSD-2041",
+    "phase_id": "core",
+    "data": {
+      "review_status": "changes_requested",
+      "issues": [
+        {
+          "severity": "major",
+          "file": "src/services/__tests__/contentstack.spec.ts",
+          "line": 1,
+          "description": "No unit test verifies the new live_preview configuration in the exported options object. The existing test file already tests options.fetchOptions (lines ~120-140) but does not assert that options.live_preview is present with enable, host, and management_token. Per review criterion #2, new features require corresponding unit tests. A trivial test checking `expect(testedModule.options.live_preview).toEqual({ enable: true, host: expect.any(String), management_token: expect.any(String) })` would close this gap.",
+          "suggestedFix": "Add an it() block inside the existing `describe('contentstack', ...)` that requires the module and asserts `options.live_preview` contains `enable: true`, `host`, and `management_token`, mirroring the existing fetch-timeout option tests.",
+          "story_id": "AMSD-2041"
+        }
+      ]
+    }
+  },
+  "in_reply_to": null,
+  "requires_response": false,
+  "status": "sent"
+}
